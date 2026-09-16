@@ -6,6 +6,8 @@ import { SectionCard } from "./section-card";
 
 interface HistoryCardProps {
   order: NonNullable<GetOrderResult["order"]>;
+  /** Descargar la factura: es un documento del pedido, no un ajuste de tipo. */
+  action?: React.ReactNode;
 }
 
 const fmt = (value: Date | string | null | undefined) => {
@@ -51,11 +53,16 @@ function buildEvents(order: HistoryCardProps["order"]): HistoryEvent[] {
   return events.sort((a, b) => a.at.getTime() - b.at.getTime());
 }
 
-export function HistoryCard({ order }: HistoryCardProps) {
+export function HistoryCard({ order, action }: HistoryCardProps) {
   const events = buildEvents(order);
   const requests = (order as typeof order & { quoteRequests?: Parameters<typeof QuoteRequestsList>[0]["requests"] }).quoteRequests;
   return (
-    <SectionCard id="historial" title="Historial" description="Fechas que constan en el pedido.">
+    <SectionCard
+      id="historial"
+      title="Historial y documentos"
+      description="Fechas que constan en el pedido."
+      action={action}
+    >
       <ol className="flex flex-col gap-2.5">
         {events.map((event, index) => (
           <li key={`${event.label}-${index}`} className="flex gap-3">

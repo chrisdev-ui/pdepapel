@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { WhatsappButton } from "@/components/whatsapp-button";
 import { getInventoryIssueBadge, getOrderChannel, getPaymentBadge, getShippingBadge } from "@/lib/order-queues";
-import { buildOrderTimeline, getNextStepCard, type TimelineOrder } from "@/lib/order-timeline";
+import { buildOrderTimeline, type TimelineOrder } from "@/lib/order-timeline";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { Check, Clock } from "lucide-react";
 import Link from "next/link";
 import { CHANNEL_TONE, TintBadge } from "../../components/order-badges";
-import { NextStepPanel } from "./next-step-panel";
 
 interface OrderWorkspaceHeaderProps {
   storeId: string;
@@ -32,7 +31,6 @@ export function OrderWorkspaceHeader({ storeId, order }: OrderWorkspaceHeaderPro
   const shipping = getShippingBadge(order);
   const inventoryIssue = getInventoryIssueBadge(order);
   const steps = buildOrderTimeline(order);
-  const next = getNextStepCard(order, storeId);
 
   return (
     <div className="flex flex-col gap-4">
@@ -98,7 +96,6 @@ export function OrderWorkspaceHeader({ storeId, order }: OrderWorkspaceHeaderPro
         ))}
       </ol>
 
-      {next && <NextStepPanel next={next} />}
     </div>
   );
 }

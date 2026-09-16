@@ -1,4 +1,5 @@
 import { getDaneLocations } from "@/actions/get-dane-locations";
+import { getNextStepCard } from "@/lib/order-timeline";
 import { getShippingChargeState } from "@/lib/order-totals";
 import prismadb from "@/lib/prismadb";
 import { OrderForm } from "./components/order-form";
@@ -70,6 +71,14 @@ export default async function OrderPage({
           boxes={boxes}
           freeShippingThreshold={freeShippingThreshold}
           inventoryIssues={order?.inventoryIssues ?? []}
+          nextStep={
+            order
+              ? getNextStepCard(
+                  { ...order, openInventoryIssues: order.inventoryIssues.length },
+                  params.storeId,
+                )
+              : null
+          }
           shippingInfo={
             order?.shipping ? (
               <ShippingInfo

@@ -197,3 +197,23 @@ export function reconcileShipmentStatus({ from, to, shippingStatus, requestedShi
 
   return result;
 }
+
+/**
+ * Por qué no se puede borrar un pedido todavía.
+ *
+ * Borrar arrastra en cascada la fila de envío, y con ella el id de la guía:
+ * la guía seguiría cobrada y activa en la transportadora sin nada que la ate
+ * a un pedido. Devuelve el motivo, o null si se puede borrar.
+ */
+export function describeDeletionBlock(order: {
+  orderNumber: string;
+  shipping?: {
+    envioClickIdOrder?: string | number | null;
+    trackingCode?: string | null;
+  } | null;
+}): string | null {
+  const guia = order.shipping?.envioClickIdOrder;
+  if (!guia) return null;
+  const referencia = order.shipping?.trackingCode ?? guia;
+  return `El pedido ${order.orderNumber} tiene una guía de EnvioClick activa (${referencia}). Cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro.`;
+}

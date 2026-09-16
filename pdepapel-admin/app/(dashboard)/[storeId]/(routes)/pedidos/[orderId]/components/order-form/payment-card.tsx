@@ -38,7 +38,7 @@ import type { GetOrderResult } from "../../server/get-order";
 import { PaymentStatusWatcher } from "./payment-status-watcher";
 import { parseOrderDetails, type OrderFormValues } from "./schema";
 import { SectionCard } from "./section-card";
-import { StatusActions, type TransitionPayload } from "./status-actions";
+import { type TransitionPayload } from "./status-actions";
 
 interface PaymentCardProps {
   storeId: string;
@@ -285,18 +285,6 @@ export function PaymentCard({
 
       {initialData && (
         <div className="flex flex-col gap-2">
-          <StatusActions
-            status={initialData.status}
-            type={type}
-            paymentMethod={savedMethod}
-            shippingProvider={shippingProvider ?? ShippingProvider.NONE}
-            trackingCode={trackingCode}
-            transactionId={transactionId}
-            guideRate={guideRate}
-            loading={loading}
-            variant="card"
-            onTransition={onTransition}
-          />
           {methodPendingSave && !locked && (
             <p className="text-xs text-muted-foreground">
               Guarda el pedido para que el nuevo método aplique a los cobros.

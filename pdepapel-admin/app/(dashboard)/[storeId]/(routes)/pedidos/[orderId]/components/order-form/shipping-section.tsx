@@ -57,6 +57,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 
 import type { GetOrderResult } from "../../server/get-order";
 import type { OrderFormValues, ShippingQuote } from "./schema";
+import { RequoteAndGuideButton } from "./requote-and-guide-button";
 import { SectionCard } from "./section-card";
 
 interface ShippingSectionProps {
@@ -769,17 +770,24 @@ export function ShippingSection({
                   )}
                 </span>
               </p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="shrink-0 text-destructive hover:text-destructive"
-                disabled={loading || discarding}
-                onClick={() => (savedRateId ? setDiscardOpen(true) : discard())}
-              >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Descartar tarifa
-              </Button>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {savedRateId === rateId && !hasGuide &&
+                  (Boolean(initialData?.shipping?.guideError) ||
+                    (savedAgoMs !== null && savedAgoMs > QUOTE_TTL_MS)) && (
+                    <RequoteAndGuideButton disabled={loading || discarding} />
+                  )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="shrink-0 text-destructive hover:text-destructive"
+                  disabled={loading || discarding}
+                  onClick={() => (savedRateId ? setDiscardOpen(true) : discard())}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Descartar tarifa
+                </Button>
+              </div>
             </div>
           )}
         </div>

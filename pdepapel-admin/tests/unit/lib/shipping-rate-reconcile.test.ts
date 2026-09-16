@@ -169,3 +169,70 @@ describe("reconciliar la tarifa tras re-cotizar", () => {
     expect(r.outcome === "unavailable" && r.alternatives).toEqual([]);
   });
 });
+
+/**
+ * «Recotizar y crear guía»: la única pregunta es la plata. Estos casos fijan
+ * cuándo sigue sola y cuándo se para a preguntar.
+ */
+describe("recuperar una tarifa vencida en un solo paso", () => {
+  const rate = (over: Partial<RequotedRate> = {}): RequotedRate =>
+    ({
+      idRate: 999, idCarrier: 1, idProduct: 1,
+      carrier: "TCC", product: "Estándar",
+      flete: 14000, minimumInsurance: 1000, totalCost: 15000,
+      deliveryDays: 2, isCOD: false, ...over,
+    }) as RequotedRate;
+
+  it("mismo precio: sigue sola, sin preguntar", () => {
+    const r = reconcileShippingRate({
+      rateId: 111, previousCost: 15000, previousCarrier: "TCC",
+      freshRates: [rate()],
+    });
+    expect(r.outcome).toBe("same");
+  });
+
+  it("sube menos del 5 %: sigue sola", () => {
+    const r = reconcileShippingRate({
+      rateId: 111, previousCost: 15000, previousCarrier: "TCC",
+      freshRates: [rate({ totalCost: 15600 })],
+    });
+    expect(r.outcome).toBe("same");
+  });
+
+  it("sube poco en plata aunque sea mucho en porcentaje: sigue sola", () => {
+    // $2.000 sobre $5.000 es un 40 %, pero son monedas: el tope absoluto manda.
+    const r = reconcileShippingRate({
+      rateId: 111, previousCost: 5000, previousCarrier: "TCC",
+      freshRates: [rate({ totalCost: 7000 })],
+    });
+    expect(r.outcome).toBe("same");
+  });
+
+  it("sube de verdad: se para y lo confirma quien mira el pedido", () => {
+    const r = reconcileShippingRate({
+      rateId: 111, previousCost: 15000, previousCarrier: "TCC",
+      freshRates: [rate({ totalCost: 22000 })],
+    });
+    expect(r.outcome).toBe("price_changed");
+    if (r.outcome === "price_changed") {
+      expect(r.previousCost).toBe(15000);
+      expect(r.rate.totalCost).toBe(22000);
+    }
+  });
+
+  it("la transportadora ya no cubre el destino: no se elige por nadie", () => {
+    const r = reconcileShippingRate({
+      rateId: 111, previousCost: 15000, previousCarrier: "TCC",
+      freshRates: [rate({ carrier: "Servientrega", totalCost: 16000 })],
+    });
+    expect(r.outcome).toBe("unavailable");
+  });
+
+  it("sin precio anterior no se adivina: se pregunta", () => {
+    const r = reconcileShippingRate({
+      rateId: 111, previousCost: null, previousCarrier: "TCC",
+      freshRates: [rate()],
+    });
+    expect(r.outcome).toBe("price_changed");
+  });
+});

@@ -53,6 +53,7 @@ import { isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
 import { currencyFormatter } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
+import type { NextStepCard } from "@/lib/order-timeline";
 import type { GetOrderResult, ProductOption } from "../server/get-order";
 import { CustomerCard, type CustomerOption } from "./order-form/customer-card";
 import { DiscountsSection } from "./order-form/discounts-section";
@@ -74,11 +75,9 @@ import {
   type ShippingQuote,
 } from "./order-form/schema";
 import { SectionCard } from "./order-form/section-card";
+import { OrderStatusBar } from "./order-form/status-bar";
 import { ShippingSection } from "./order-form/shipping-section";
-import {
-  StatusActions,
-  type TransitionPayload,
-} from "./order-form/status-actions";
+import { type TransitionPayload } from "./order-form/status-actions";
 import { SummaryCard } from "./order-form/summary-card";
 import { useOrderTotals } from "./order-form/use-order-totals";
 
@@ -111,6 +110,8 @@ interface OrderFormProps {
   shippingInfo?: React.ReactNode;
   /** Líneas de inventario que fallaron al mover y siguen abiertas. */
   inventoryIssues?: OpenInventoryIssue[];
+  /** Qué toca ahora, calculado en el servidor con `getNextStepCard`. */
+  nextStep?: NextStepCard | null;
 }
 
 const TYPE_PARAM: Record<string, CreatableOrderType> = {
@@ -160,6 +161,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   freeShippingThreshold = null,
   shippingInfo,
   inventoryIssues = [],
+  nextStep = null,
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -229,6 +231,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     control: form.control,
     name: "shipping.cost",
   });
+  const watchedTracking = useWatch({
+    control: form.control,
+    name: "shipping.trackingCode",
+  });
+  const watchedTransaction = useWatch({
+    control: form.control,
+    name: "payment.transactionId",
+  });
   const { isDirty } = form.formState;
 
   const [loading, setLoading] = useState(false);
@@ -244,9 +254,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [conflict, setConflict] = useState<string | null>(null);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
-  const [selectedRateId, setSelectedRateId] = useState<number | null>(
-    initialData?.shipping?.envioClickIdRate || null,
-  );
   const [recommendedBox, setRecommendedBox] = useState<{
     name: string;
     width: number;
@@ -254,6 +261,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     length: number;
   } | null>(null);
   const [quotedAt, setQuotedAt] = useState<Date | null>(null);
+
+  // La tarifa elegida vive SOLO en el formulario (`envioClickIdRate`). Antes
+  // había además un `useState` con el mismo dato y había que mantenerlos a
+  // mano en cada camino: elegir, descartar y recotizar.
+  const selectedRateId = watchedRateId ?? null;
 
   const { clearStorage } = useFormPersist({
     form,
@@ -514,7 +526,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         // para que no llegue a la guía. La sección vuelve a elegir una.
         const currentRate = form.getValues("envioClickIdRate");
         if (currentRate && !quotes.some((q) => q.idRate === currentRate)) {
-          setSelectedRateId(null);
           form.setValue("envioClickIdRate", undefined, { shouldDirty: true });
           form.setValue("shipping.cost", 0, { shouldDirty: true });
           form.setValue("shipping.carrierName", "", { shouldDirty: true });
@@ -545,7 +556,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const onSelectRate = useCallback(
     (quote: ShippingQuote, options: { silent?: boolean } = {}) => {
-      setSelectedRateId(quote.idRate);
       form.setValue("shippingProvider", ShippingProvider.ENVIOCLICK, {
         shouldDirty: true,
       });
@@ -600,7 +610,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         return;
       }
     }
-    setSelectedRateId(null);
     setShippingQuotes([]);
     setQuotedAt(null);
     setRecommendedBox(null);
@@ -759,6 +768,22 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
           {/* Columna principal: productos, envío y descuentos. En el teléfono cada bloque usa `order-*`. */}
           <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
+            {initialData && (
+              <div className="order-1 lg:order-none">
+                <OrderStatusBar
+                  status={initialData.status}
+                  type={watchedType}
+                  paymentMethod={initialData.payment?.method ?? null}
+                  shippingProvider={watchedProvider}
+                  trackingCode={watchedTracking}
+                  transactionId={watchedTransaction}
+                  guideRate={guideRate}
+                  nextStep={nextStep}
+                  loading={loading}
+                  onTransition={onTransition}
+                />
+              </div>
+            )}
             {initialData &&
               isCreatableOrderType(initialData.type) &&
               !locked && (
@@ -792,12 +817,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       </FormItem>
                     )}
                   />
-                  {invoiceData && (
-                    <InvoiceDownloadButton
-                      data={invoiceData}
-                      disabled={loading}
-                    />
-                  )}
                 </div>
               )}
             <div className="order-2 lg:order-none">
@@ -860,22 +879,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   id="zona-de-cuidado"
                   title="Zona de cuidado"
                   tone="care"
-                  description="Acciones que cierran o borran el pedido. Cada una confirma antes de aplicarse."
+                  description="Lo que no se puede deshacer. Los cambios de estado viven arriba, en la barra del pedido."
                 >
                   <InventoryIssuesPanel storeId={storeId} issues={inventoryIssues} />
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusActions
-                      status={initialData.status}
-                      type={watchedType}
-                      paymentMethod={initialData.payment?.method ?? null}
-                      shippingProvider={form.getValues("shippingProvider")}
-                      trackingCode={form.getValues("shipping.trackingCode")}
-                      transactionId={form.getValues("payment.transactionId")}
-                      guideRate={guideRate}
-                      loading={loading}
-                      variant="care"
-                      onTransition={onTransition}
-                    />
                     <Button
                       type="button"
                       variant="outline"
@@ -935,7 +942,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             )}
             {initialData && (
               <div className="order-9 lg:order-none">
-                <HistoryCard order={initialData} />
+                <HistoryCard
+                  order={initialData}
+                  action={
+                    invoiceData ? (
+                      <InvoiceDownloadButton data={invoiceData} disabled={loading} />
+                    ) : undefined
+                  }
+                />
               </div>
             )}
           </aside>

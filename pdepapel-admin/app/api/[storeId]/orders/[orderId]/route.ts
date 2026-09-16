@@ -33,6 +33,7 @@ import {
   isPaidLike,
   ORDER_STATUS_LABELS,
   reconcileShipmentStatus,
+  describeDeletionBlock,
 } from "@/lib/order-transitions";
 import { round2 } from "@/lib/order-totals";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
@@ -1128,11 +1129,8 @@ export async function DELETE(
       // viva: al borrar el pedido se borra en cascada la fila `Shipping` que
       // guarda `envioClickIdOrder`, y la guia queda cobrada y activa en el
       // transportador sin ningun registro que la ate a nada.
-      if (order.shipping?.envioClickIdOrder) {
-        throw ErrorFactory.Conflict(
-          `El pedido ${order.orderNumber} tiene una guía de EnvioClick activa (${order.shipping.trackingCode ?? order.shipping.envioClickIdOrder}). Cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro.`,
-        );
-      }
+      const bloqueo = describeDeletionBlock(order);
+      if (bloqueo) throw ErrorFactory.Conflict(bloqueo);
 
       // La mercancia vuelve a bodega si el pedido todavia la tenia descontada.
       // PAGADO y ENVIADO descuentan igual (`isPaidLike`); un CANCELADO ya la

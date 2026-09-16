@@ -28,65 +28,14 @@ export async function getOrder(orderId: string, storeId: string) {
     },
   });
 
-  const availableProducts = await prismadb.product.findMany({
-    where: {
-      storeId,
-      isArchived: false,
-      stock: {
-        gt: 0,
-      },
-    },
-    select: {
-      id: true,
-      categoryId: true,
-      name: true,
-      price: true,
-      stock: true,
-      productGroupId: true,
-      sku: true,
-      size: {
-        select: {
-          name: true,
-        },
-      },
-      color: {
-        select: {
-          name: true,
-          value: true,
-        },
-      },
-      design: {
-        select: {
-          name: true,
-        },
-      },
-      images: {
-        select: {
-          url: true,
-          isMain: true,
-        },
-        orderBy: {
-          isMain: "desc",
-        },
-        take: 1,
-      },
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
+  // Solo los productos que ya están en el pedido. El catálogo entero no se
+  // manda: el buscador de productos lo pide por API según se escribe.
+  const existingProductIds = (order?.orderItems ?? [])
+    .map((item: { productId: string | null }) => item.productId)
+    .filter((id): id is string => id !== null);
 
-  type ExistingOrderProduct = (typeof availableProducts)[0] & {
-    isArchived: boolean;
-  };
-
-  let existingOrderProducts: ExistingOrderProduct[] = [];
-  if (order && order.orderItems.length > 0) {
-    const existingProductIds = order.orderItems
-      .map((item: { productId: string | null }) => item.productId)
-      .filter((id): id is string => id !== null);
-
-    existingOrderProducts = await prismadb.product.findMany({
+  const existingOrderProducts = existingProductIds.length
+    ? await prismadb.product.findMany({
       where: {
         id: {
           in: existingProductIds,
@@ -129,13 +78,12 @@ export async function getOrder(orderId: string, storeId: string) {
           take: 1,
         },
       },
-    });
-  }
+    })
+    : [];
 
   // Calculate discounted prices for all products
   const { getProductsPrices } = await import("@/lib/discount-engine");
-  const allProducts = [...availableProducts, ...existingOrderProducts];
-  const pricesMap = await getProductsPrices(allProducts, storeId);
+  const pricesMap = await getProductsPrices(existingOrderProducts, storeId);
 
   type ProductOption = {
     value: string;
@@ -156,30 +104,7 @@ export async function getOrder(orderId: string, storeId: string) {
 
   const allProductsMap = new Map<string, ProductOption>();
 
-  availableProducts.forEach((product: (typeof availableProducts)[0]) => {
-    const priceInfo = pricesMap.get(product.id);
-
-    allProductsMap.set(product.id, {
-      value: product.id,
-      label: product.name,
-      name: product.name,
-      sku: product.sku,
-      price: product.price,
-      discountedPrice: priceInfo?.price ?? product.price,
-      offerLabel: priceInfo?.offerLabel ?? undefined,
-      stock: product.stock,
-      image: product.images[0]?.url || "",
-      isAvailable: true,
-      isArchived: false,
-      size: product.size?.name,
-      color: product.color
-        ? { name: product.color.name, value: product.color.value }
-        : undefined,
-      design: product.design?.name,
-    });
-  });
-
-  existingOrderProducts.forEach((product: ExistingOrderProduct) => {
+  existingOrderProducts.forEach((product) => {
     const isAvailable = !product.isArchived && product.stock > 0;
 
     const priceInfo = pricesMap.get(product.id);
