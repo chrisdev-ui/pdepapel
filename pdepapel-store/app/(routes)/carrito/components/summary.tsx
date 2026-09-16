@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CreditCard, ShieldCheck, TicketPercent, X } from "lucide-react";
+import { Check, CreditCard, MapPin, ShieldCheck, TicketPercent, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -13,6 +13,7 @@ import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import { toast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { NATIONWIDE_SHIPPING_COPY } from "@/lib/trust-points";
 import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 
@@ -124,6 +125,11 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
           <dd className={cn("font-sans text-xs", freeShipping ? "font-bold text-green-700" : "text-gray-500")}>{freeShipping ? "Gratis" : "Se calcula con tu dirección"}</dd>
         </div>
       </dl>
+      {/* Va pegado a la fila de envío: es justo ahí donde surge la duda. */}
+      <p className="-mt-2.5 flex items-center gap-1.5 font-sans text-xs text-gray-500">
+        <MapPin aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+        {NATIONWIDE_SHIPPING_COPY}
+      </p>
 
       {!coupon && (
         <div className="rounded-xl border border-border bg-white p-3">

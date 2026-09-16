@@ -37,6 +37,10 @@ describe("Summary", () => {
     expect(screen.getByText("Subtotal (3 productos)")).toBeInTheDocument();
     expect(screen.getByText("Ahorros en ofertas")).toBeInTheDocument();
     expect(screen.getByText("Se calcula con tu dirección")).toBeInTheDocument();
+    // Junto a «se calcula»: quien no sabe si le llega, lo lee ahí mismo.
+    expect(
+      screen.getByText("Desde Medellín enviamos a toda Colombia."),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Te faltan/)).toHaveTextContent("85.000");
     expect(screen.getAllByText("Total")[0].nextSibling).toHaveTextContent("35.000");
   });
