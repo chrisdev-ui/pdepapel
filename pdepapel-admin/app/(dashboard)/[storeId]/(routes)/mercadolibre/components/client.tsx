@@ -67,14 +67,20 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
   const result = searchParams.get("mercadolibre");
   const reason = searchParams.get("reason");
   const requested = searchParams.get(TAB_PARAM);
-  const initialTab: MercadoLibreTab = isTab(requested)
+  // La URL manda; el estado local solo cubre el hueco hasta que Next refleja
+  // el replaceState. Mismo patrón que en Atributos.
+  const requestedTab: MercadoLibreTab = isTab(requested)
     ? requested
     : searchParams.get("listing")
       ? "publicaciones"
       : searchParams.get("order")
         ? "ventas"
         : "resumen";
-  const [tab, setTabState] = useState<MercadoLibreTab>(initialTab);
+  const [selected, setSelected] = useState<{
+    base: MercadoLibreTab;
+    tab: MercadoLibreTab;
+  } | null>(null);
+  const tab = selected?.base === requestedTab ? selected.tab : requestedTab;
   const [isActivatingQueue, setIsActivatingQueue] = useState(false);
   const [queueFeedback, setQueueFeedback] = useState<QueueFeedback | null>(null);
 
@@ -90,14 +96,14 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
 
   const setTab = useCallback(
     (next: MercadoLibreTab) => {
-      setTabState(next);
+      setSelected({ base: requestedTab, tab: next });
       const query = new URLSearchParams(searchParams.toString());
       if (next === "resumen") query.delete(TAB_PARAM);
       else query.set(TAB_PARAM, next);
       const suffix = query.toString();
       window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, requestedTab],
   );
 
   const resultMessage =
