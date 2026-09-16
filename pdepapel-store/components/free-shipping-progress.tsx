@@ -7,16 +7,23 @@ import { cn, currencyFormatter } from "@/lib/utils";
 interface FreeShippingProgressProps {
   subtotal: number;
   threshold: number | null;
+  /**
+   * El subtotal aún no se conoce: en la ficha del producto depende del carrito,
+   * que vive en el navegador. Mientras tanto NO se enseña una cifra calculada
+   * con el carrito vacío —diría que falta más de lo que falta— sino este estado
+   * neutro, del mismo alto para que nada se mueva al resolverse.
+   */
+  pending?: boolean;
   className?: string;
 }
 
 /** Cuánto falta para el envío gratis; no se muestra si la tienda no tiene umbral. */
-export function FreeShippingProgress({ subtotal, threshold, className }: FreeShippingProgressProps) {
+export function FreeShippingProgress({ subtotal, threshold, pending = false, className }: FreeShippingProgressProps) {
   if (!threshold || threshold <= 0) return null;
 
   const remaining = Math.max(threshold - subtotal, 0);
-  const unlocked = remaining === 0;
-  const percent = Math.min(Math.round((subtotal / threshold) * 100), 100);
+  const unlocked = !pending && remaining === 0;
+  const percent = pending ? 0 : Math.min(Math.round((subtotal / threshold) * 100), 100);
 
   return (
     <div role="status" className={cn("flex flex-col gap-1.5 font-sans text-sm text-blue-yankees", className)}>
@@ -26,7 +33,9 @@ export function FreeShippingProgress({ subtotal, threshold, className }: FreeShi
         ) : (
           <Truck aria-hidden="true" className="h-4 w-4 shrink-0" />
         )}
-        {unlocked ? (
+        {pending ? (
+          <span className="text-gray-500">Calculando tu envío gratis…</span>
+        ) : unlocked ? (
           <span>¡Tu pedido tiene envío gratis!</span>
         ) : (
           <span>
@@ -37,9 +46,10 @@ export function FreeShippingProgress({ subtotal, threshold, className }: FreeShi
       <div
         role="progressbar"
         aria-label="Progreso hacia el envío gratis"
+        aria-busy={pending || undefined}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={percent}
+        aria-valuenow={pending ? undefined : percent}
         className="h-2 w-full overflow-hidden rounded-full bg-blue-baby/60"
       >
         <div

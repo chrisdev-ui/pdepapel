@@ -2,6 +2,7 @@
 
 import { CalendarClock, Check, CreditCard, Flame, PackageX, ShieldCheck, Truck, Undo2 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { NotifyMeForm } from "@/components/notify-me-form";
@@ -39,9 +40,20 @@ export function ProductSignals({ product, availability, quantity, className }: P
   const items = useCart((state) => state.items);
   const { freeShippingThreshold, deliveryEstimate } = useStorefrontSettings();
   const tone = TONES[availability.tone];
+
+  // El carrito vive en el navegador: en el servidor no existe. Si se usara
+  // igual, el servidor pintaría «te faltan X» contando un carrito vacío —más
+  // de lo que de verdad falta— y React encima se quejaría al hidratar.
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const inCart = items.some((item) => item.id === product.id);
-  const projectedSubtotal =
-    calculateTotals(items, null).subtotal + (inCart || !availability.canBuy ? 0 : Number(product.price) * quantity);
+  const projectedSubtotal = isMounted
+    ? calculateTotals(items, null).subtotal +
+      (inCart || !availability.canBuy ? 0 : Number(product.price) * quantity)
+    : 0;
 
   return (
     <div className={cn("flex flex-col gap-2.5 rounded-xl px-4 py-3.5 font-sans text-sm text-blue-yankees", tone.bg, className)}>
@@ -90,7 +102,11 @@ export function ProductSignals({ product, availability, quantity, className }: P
               </Link>
             </span>
           </p>
-          <FreeShippingProgress subtotal={projectedSubtotal} threshold={freeShippingThreshold} />
+          <FreeShippingProgress
+            subtotal={projectedSubtotal}
+            threshold={freeShippingThreshold}
+            pending={!isMounted}
+          />
         </>
       )}
       {!availability.canBuy && availability.status !== "archived" && (

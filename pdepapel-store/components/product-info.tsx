@@ -9,7 +9,7 @@ import {
   Truck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { RefObject, useEffect, useMemo } from "react";
+import { RefObject, useEffect, useMemo, useState } from "react";
 
 import { ProductDetailsAccordion } from "@/components/product-details-accordion";
 import { ProductSignals } from "@/components/product-signals";
@@ -76,7 +76,14 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   const productInCart = useCart((state) =>
     state.items.find((item) => item.id === data.id),
   );
-  const quantity = controlledQuantity ?? productInCart?.quantity ?? 1;
+  // Igual que arriba: hasta montar no hay carrito, así que la cantidad arranca
+  // en 1 —lo mismo que pinta el servidor— y se sincroniza después.
+  const [isCartReady, setIsCartReady] = useState(false);
+  useEffect(() => {
+    setIsCartReady(true);
+  }, []);
+  const quantity =
+    controlledQuantity ?? (isCartReady ? productInCart?.quantity : undefined) ?? 1;
 
   const allVariants = useMemo(
     () => getStableProductVariants(data, siblings),
