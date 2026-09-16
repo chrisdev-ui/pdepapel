@@ -1259,7 +1259,7 @@ describe("cuando el modelo tarda", () => {
       });
       await vi.advanceTimersByTimeAsync(PRODUCT_CLASSIFIER_SLOW_NOTICE_MS + 10);
       soltar({
-        output: { intent: "product.search", productType: "lapicero", character: null, descriptor: null },
+        output: { intent: "product.search", productType: "lapicero", character: null, descriptor: "gel" },
       });
       await vi.advanceTimersByTimeAsync(10);
 
@@ -1273,7 +1273,7 @@ describe("cuando el modelo tarda", () => {
 
   it("sin `onSlow` no monta ningún temporizador", async () => {
     mocks.generateText.mockResolvedValue({
-      output: { intent: "product.search", productType: "lapicero", character: null, descriptor: null },
+      output: { intent: "product.search", productType: "lapicero", character: null, descriptor: "gel" },
     });
     mocks.findMany.mockResolvedValue([]);
     mocks.count.mockResolvedValue(0);

@@ -1076,6 +1076,108 @@ describe("ritmo humano", () => {
     expect(mocks.send).toHaveBeenCalled();
   });
 
+  describe("no contestar de más ni repetirse", () => {
+    const LLEGO = new Date("2026-09-15T23:53:30.000Z");
+
+    // Este bloque juega con el último mensaje del bot; se deja como estaba
+    // para que no se le cuele a los de al lado.
+    beforeEach(() => mocks.messageFindFirst.mockResolvedValue(null));
+    afterEach(() => mocks.messageFindFirst.mockResolvedValue(null));
+
+    it("si ya llegó otro mensaje después, contesta ese y no este", async () => {
+      // La ráfaga real del 2026-09-15: «Holaa», «Buenas noches» y la pregunta
+      // de verdad en 23 segundos. Antes salían dos saludos iguales seguidos.
+      mocks.messageFindFirst.mockResolvedValue({ id: "wamid.mas-nuevo" });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "Holaa", inboundAt: LLEGO }),
+      ).resolves.toEqual({ outcome: "skipped_superseded" });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("el último de la ráfaga sí se contesta", async () => {
+      mocks.messageFindFirst.mockResolvedValue(null);
+
+      await expect(
+        runWhatsAppBot({ ...input, inboundAt: LLEGO }),
+      ).resolves.toMatchObject({ outcome: "replied" });
+    });
+
+    it("un toque de botón nunca se salta: es una elección suya", async () => {
+      mocks.messageFindFirst.mockResolvedValue({ id: "wamid.mas-nuevo" });
+
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "Hablar con Paula",
+          interactiveReplyId: TALK_TO_OWNER_BUTTON_ID,
+          inboundAt: LLEGO,
+        }),
+      ).resolves.toEqual({ outcome: "escalated_owner_requested" });
+    });
+
+    it("sin fecha del mensaje no se salta nada", async () => {
+      mocks.messageFindFirst.mockResolvedValue({ id: "wamid.mas-nuevo" });
+      await expect(runWhatsAppBot(input)).resolves.toMatchObject({
+        outcome: "replied",
+      });
+    });
+
+    it("no manda dos veces seguidas el mismo texto", async () => {
+      // `justSaid` mira el último mensaje del bot; si es idéntico, no repite.
+      mocks.messageFindFirst.mockResolvedValue({ body: "Abrimos de 9 a 6." });
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "replied",
+        trigger: "horario",
+      });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("lo que escribió Paula gana a lo que adivina el catálogo", () => {
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+
+    beforeEach(() => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí 💛 Tengo 4 que te pueden servir…",
+        photo: null,
+        shownIds: ["p1"],
+      });
+    });
+
+    it("una palabra clave suya se contesta sin pasar por el catálogo", async () => {
+      // «tienes» haría que esto entrara al buscador; la respuesta de Paula
+      // para «envio» va primero.
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "tienes envio a mi ciudad?",
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({ outcome: "replied", trigger: "envio" });
+      expect(mocks.answerProduct).not.toHaveBeenCalled();
+      expect(mocks.send.mock.calls[0][1]).toBe("Enviamos a todo el país.");
+    });
+
+    it("sin palabra clave suya, sigue buscando en el catálogo", async () => {
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "tienes cuadernos de Stitch?",
+          settings: aprobado,
+        }),
+      ).resolves.toMatchObject({ outcome: "replied_product" });
+      expect(mocks.answerProduct).toHaveBeenCalled();
+    });
+  });
+
   describe("después de devolverle la conversación al bot", () => {
     const AYER = new Date("2026-09-15T20:00:00.000Z");
 

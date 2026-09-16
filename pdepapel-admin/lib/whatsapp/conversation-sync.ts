@@ -617,6 +617,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       interactiveReplyId: string | null;
       inboundMessageId: string | null;
       mediaForOwner?: boolean;
+      inboundAt?: Date | null;
     }> = [];
 
     for (const message of extracted.messages) {
@@ -635,6 +636,8 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
         interactiveReplyId: message.interactiveReplyId,
         // Hace falta para mostrar «escribiendo…» y marcar como leído.
         inboundMessageId: message.externalId,
+        // Para saber, al decidir, si ya llegó otro mensaje después de este.
+        inboundAt: message.sentAt ?? null,
         ...(paraPaula ? { mediaForOwner: true } : {}),
       });
     }

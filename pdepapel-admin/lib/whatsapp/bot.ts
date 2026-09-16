@@ -114,6 +114,8 @@ export type WhatsAppBotOutcome =
   | "replied_reference_lost"
   /** Llegó un adjunto sin texto: no hay nada que clasificar, va para Paula. */
   | "escalated_unprocessable_media"
+  /** Ya llegó otro mensaje después: contesta ese, no este. */
+  | "skipped_superseded"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -243,6 +245,61 @@ async function readSettings(
   }
 }
 
+function buttonIdOf(input: { interactiveReplyId?: string | null }): string | null {
+  return input.interactiveReplyId?.trim() || null;
+}
+
+/**
+ * ¿Entró algo de la clienta después de este mensaje?
+ *
+ * Se mira en el momento de decidir, no al recibir: entre que llega el webhook
+ * y que se contesta pasan segundos —la pausa humana—, y en ese rato es cuando
+ * suele llegar el resto de la ráfaga.
+ */
+async function hasNewerInbound(
+  conversationId: string,
+  inboundAt: Date | null | undefined,
+): Promise<boolean> {
+  if (!inboundAt) return false;
+  const masNuevo = await prismadb.conversationMessage.findFirst({
+    where: {
+      conversationId,
+      direction: ConversationMessageDirection.INBOUND,
+      sentBy: ConversationMessageSentBy.CUSTOMER,
+      createdAt: { gt: inboundAt },
+    },
+    select: { id: true },
+  });
+  return masNuevo !== null;
+}
+
+/**
+ * Un minuto, no cinco.
+ *
+ * Esto es una red contra un envío doble —dos webhooks de lo mismo, una carrera—
+ * y ya no contra las ráfagas, que se resuelven antes dejando pasar el mensaje
+ * que tiene otro más nuevo detrás.
+ *
+ * La ventana es corta a propósito: si una clienta vuelve a preguntar lo mismo
+ * a los tres minutos, merece que se le vuelva a contestar. Callarle sería
+ * justo lo que este bot no puede hacer nunca, y por ahorrar una repetición
+ * que ya casi no ocurre.
+ */
+export const REPEAT_WINDOW_MS = 60 * 1000;
+
+async function justSaid(conversationId: string, reply: string): Promise<boolean> {
+  const ultimo = await prismadb.conversationMessage.findFirst({
+    where: {
+      conversationId,
+      sentBy: ConversationMessageSentBy.BOT,
+      createdAt: { gte: new Date(Date.now() - REPEAT_WINDOW_MS) },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { body: true },
+  });
+  return ultimo?.body === reply;
+}
+
 async function escalate(conversationId: string) {
   await prismadb.conversation.update({
     where: { id: conversationId },
@@ -263,6 +320,8 @@ export async function runWhatsAppBot(input: {
   interactiveReplyId?: string | null;
   /** Una foto, un audio, un video o un documento: lo mira Paula. */
   mediaForOwner?: boolean;
+  /** Cuándo llegó este mensaje, para saber si ya llegó otro después. */
+  inboundAt?: Date | null;
   /** `wamid` del mensaje entrante: hace falta para «escribiendo…». */
   inboundMessageId?: string | null;
   /**
@@ -290,6 +349,20 @@ export async function runWhatsAppBot(input: {
       await escalate(conversation.id);
     }
     return { outcome: "skipped_owner_active" };
+  }
+
+  // 0 bis. ¿Ya llegó otro mensaje después de este?
+  //
+  // Una clienta escribe «Holaa», «Buenas noches» y la pregunta de verdad en
+  // veintitrés segundos. Contestando uno por uno salían dos saludos iguales
+  // seguidos y después una respuesta a destiempo. Una persona lee los tres y
+  // contesta una vez, al último. Eso es lo que se hace aquí: si hay algo más
+  // reciente, este mensaje se deja pasar y lo contesta el que venga.
+  //
+  // Los toques de botón no entran en esto: cada toque es una elección suya y
+  // merece su respuesta.
+  if (!buttonIdOf(input) && (await hasNewerInbound(conversation.id, input.inboundAt))) {
+    return { outcome: "skipped_superseded" };
   }
 
   const buttonId = input.interactiveReplyId?.trim() || null;
@@ -585,7 +658,26 @@ export async function runWhatsAppBot(input: {
     }
   }
 
-  // 5. Productos: si tienen algo y si queda. A diferencia del paso 4, aquí
+  // 5. Lo que Paula escribió gana.
+  //
+  //    Estaba después de la búsqueda de productos, y eso hacía que una
+  //    respuesta suya —escrita a mano, aprobada por ella— perdiera contra un
+  //    listado sacado del catálogo por dos palabras sueltas. Si ella ya
+  //    escribió qué contestar a algo, se contesta eso.
+  const keywords =
+    input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
+  const match = matchWhatsAppKeyword(input.body, keywords);
+  if (match) {
+    return respond(
+      conversation.id,
+      input.phone,
+      match.keyword,
+      match.trigger,
+      pacing(input),
+    );
+  }
+
+  // 6. Productos: si tienen algo y si queda. A diferencia del paso 4, aquí
   //    hace falta un modelo para entender la pregunta, así que TODO lo que
   //    pueda salir mal —sin clave, sin cuota, lento, o una respuesta que no
   //    cuadra— acaba igual: sin contestar aquí y siguiendo al paso 6.
@@ -644,34 +736,20 @@ export async function runWhatsAppBot(input: {
     }
   }
 
-  // 6. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
-  //    respuestas las escribe la dueña desde el panel; si no ha creado
-  //    ninguna, el bot calla y la conversación queda para ella.
-  const keywords =
-    input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
-  const match = matchWhatsAppKeyword(input.body, keywords);
-  if (!match) {
-    // El orden importa: se marca primero. La pausa humana de `deliver` dura
-    // segundos y en ese rato puede entrar otro mensaje; con la conversación ya
-    // marcada, ese segundo mensaje se salta y no se avisa dos veces.
-    await escalate(conversation.id);
-    await deliver(
-      conversation.id,
-      input.phone,
-      NO_MATCH_ACKNOWLEDGEMENT,
-      [],
-      pacing(input),
-    );
-    return { outcome: "escalated_no_match" };
-  }
-
-  return respond(
+  // 7. Nada encajó: no se inventa una respuesta, se le pasa a Paula.
+  //
+  //    El orden importa: se marca primero. La pausa humana de `deliver` dura
+  //    segundos y en ese rato puede entrar otro mensaje; con la conversación
+  //    ya marcada, ese segundo mensaje se salta y no se avisa dos veces.
+  await escalate(conversation.id);
+  await deliver(
     conversation.id,
     input.phone,
-    match.keyword,
-    match.trigger,
+    NO_MATCH_ACKNOWLEDGEMENT,
+    [],
     pacing(input),
   );
+  return { outcome: "escalated_no_match" };
 }
 
 interface Pacing {
@@ -735,6 +813,17 @@ async function deliver(
 ): Promise<{ ok: boolean; error?: string }> {
   const { photo, shown, list } = extras;
   const reply = formatBotReply(answer);
+
+  // Red de seguridad: nunca dos veces lo mismo seguido.
+  //
+  // No sustituye a no contestar de más —eso se resuelve antes, dejando pasar
+  // los mensajes que ya tienen uno más nuevo detrás—, pero si algo se cuela,
+  // que no sea un mensaje idéntico al anterior. Medido: de 16 repeticiones
+  // reales, 10 estaban a menos de cinco minutos.
+  if (await justSaid(conversationId, reply)) {
+    console.info("[WHATSAPP_BOT] Se evita repetir lo mismo", { conversationId });
+    return { ok: true };
+  }
 
   // «Escribiendo…» primero y después la espera. Si el indicador falla no se
   // interrumpe nada: es adorno, la respuesta es lo que importa.

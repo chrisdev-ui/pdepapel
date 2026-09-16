@@ -63,6 +63,12 @@ export const PRODUCT_CLASSIFIER_TIMEOUT_MS = 20000;
  * rápido y un «dame un segundo» antes de contestar sobra.
  */
 export const PRODUCT_CLASSIFIER_SLOW_NOTICE_MS = 3500;
+
+/**
+ * Palabras que hacen falta para que buscar sea buscar y no adivinar. Dos:
+ * una sola —«útiles», «papel», «cuadernos»— describe un estante entero.
+ */
+export const MIN_SEARCH_TOKENS = 2;
 /**
  * Nueve, no tres.
  *
@@ -216,7 +222,25 @@ export function looksLikeProductQuestion(body: string): boolean {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-  return PRODUCT_SIGNALS.some((signal) => text.includes(signal));
+  return PRODUCT_SIGNALS.some((signal) => matchesSignal(text, signal));
+}
+
+/**
+ * Por palabras enteras, no por trozos.
+ *
+ * Buscar «como es» dentro del texto tal cual encontraba «como estas», y un
+ * «hola vecina como estas» acababa en el buscador de productos. Pasaba con
+ * tres saludos de conversaciones reales. Exigir que la señal termine donde
+ * termina una palabra lo arregla sin tocar la lista.
+ */
+function matchesSignal(text: string, signal: string): boolean {
+  const i = text.indexOf(signal);
+  if (i === -1) return false;
+  // Algunas señales ya traen su propio final, como «hay »: ahí no hay nada
+  // que comprobar, el espacio ya hizo de frontera.
+  if (!/[a-z0-9]$/.test(signal)) return true;
+  const siguiente = text[i + signal.length];
+  return siguiente === undefined || !/[a-z0-9]/.test(siguiente);
 }
 
 // --- 2. Buscar de verdad ---------------------------------------------------
@@ -1045,7 +1069,21 @@ export async function answerProductQuestion(
       });
     }
   }
-  if (searchTokens(consulta).length === 0) return null;
+  // Con UNA sola palabra no se contesta.
+  //
+  // «útiles» encontraba ocho productos y se los enseñaba como si fueran la
+  // respuesta; era un listado al azar con cara de respuesta. Nombrar algo
+  // concreto lleva casi siempre dos palabras —«lapiceros gel», «cuaderno
+  // Stitch»—, y con una sola lo honesto es pasárselo a Paula, que sí puede
+  // preguntar qué necesita.
+  if (searchTokens(consulta).length < MIN_SEARCH_TOKENS) {
+    if (searchTokens(consulta).length > 0) {
+      console.info("[WHATSAPP_BOT] Pregunta demasiado vaga; no se adivina", {
+        storeId, consulta,
+      });
+    }
+    return null;
+  }
   // A partir de aquí se busca `consulta`, no las ranuras sueltas.
   const buscar: ProductClassification = {
     ...c,
