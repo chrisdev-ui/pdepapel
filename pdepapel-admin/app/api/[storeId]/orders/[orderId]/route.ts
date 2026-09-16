@@ -803,7 +803,11 @@ export async function PATCH(
             : {}),
         },
         include: {
-          orderItems: { include: { product: true } },
+          // `size` hace falta para calcular la caja cuando la cotización venció;
+          // sin él, crear la guía reventaba al leer `product.size.value`.
+          orderItems: {
+            include: { product: { include: { size: true } } },
+          },
           payment: true,
           shipping: true,
           coupon: true,

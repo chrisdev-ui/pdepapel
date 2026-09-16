@@ -30,10 +30,7 @@ interface CartItem {
 interface Product {
   id: string;
   name: string;
-  size: {
-    name: string;
-    value: string;
-  };
+  size?: { name: string; value: string } | null;
 }
 
 /**
@@ -186,10 +183,12 @@ export function calculatePackageDimensions(
     const product = productMap.get(item.productId);
     if (!product) continue;
 
-    let parsed = parseSizeValue(product.size.value);
+    // Sin talla no se revienta: un producto sin tamaño no puede impedir que
+    // salga la guía. Se asume M-L, igual que con una talla ilegible.
+    let parsed = product.size ? parseSizeValue(product.size.value) : null;
     if (!parsed) {
       console.warn(
-        `Tamaño inválido para producto ${product.id}: ${product.size.value}. Usando tamaño por defecto M-L`,
+        `Tamaño ausente o inválido para producto ${product.id}: ${product.size?.value ?? "sin talla"}. Usando tamaño por defecto M-L`,
       );
       parsed = { dimension: "M", weight: "L" };
     }
