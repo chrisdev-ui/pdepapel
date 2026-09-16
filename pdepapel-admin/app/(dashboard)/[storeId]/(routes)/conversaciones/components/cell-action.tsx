@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { CheckCircle2, MessageSquare, MoreHorizontal, RotateCcw } from "lucide-react";
+import { Bot, CheckCircle2, MessageSquare, MoreHorizontal, RotateCcw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -57,6 +57,28 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     }
   };
 
+  /** Le devuelve la conversación al bot. No le manda nada a la clienta. */
+  const handBack = async () => {
+    try {
+      setLoading(true);
+      await axios.post(`/api/${storeId}/conversations/${data.id}/handback`);
+      router.refresh();
+      toast({
+        title: "Listo, el bot vuelve a contestar",
+        description: "No se le envió nada a la clienta.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo devolver al bot",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -71,6 +93,9 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           onClick={() => router.push(`/${storeId}/conversaciones/${data.id}`)}
         >
           <MessageSquare className="mr-2 h-4 w-4" /> Ver conversación
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handBack}>
+          <Bot className="mr-2 h-4 w-4" /> Devolver al bot
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isResolved ? (

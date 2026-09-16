@@ -1076,6 +1076,63 @@ describe("ritmo humano", () => {
     expect(mocks.send).toHaveBeenCalled();
   });
 
+  describe("después de devolverle la conversación al bot", () => {
+    const AYER = new Date("2026-09-15T20:00:00.000Z");
+
+    it("con Paula dentro, el bot calla", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "NEEDS_OWNER",
+        storeId: "store-1",
+        lastOwnerAt: new Date(),
+      });
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "skipped_owner_active",
+      });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("con la parada quitada, vuelve a contestar el mensaje siguiente", async () => {
+      // Justo lo que deja escrito «Devolver al bot»: abierta y sin dueña.
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: null,
+      });
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "replied",
+        trigger: "horario",
+      });
+      expect(mocks.send.mock.calls[0][1]).toBe("Abrimos de 9 a 6.");
+    });
+
+    it("lee el estado FRESCO en cada mensaje, no uno leído antes", async () => {
+      // Si la devolución entra a mitad de una tanda de mensajes, el siguiente
+      // ya la ve: cada llamada vuelve a consultar la conversación.
+      mocks.conversationFindUnique
+        .mockResolvedValueOnce({
+          id: "conversation-1", status: "NEEDS_OWNER", storeId: "store-1",
+          lastOwnerAt: AYER,
+        })
+        .mockResolvedValueOnce({
+          id: "conversation-1", status: "OPEN", storeId: "store-1",
+          lastOwnerAt: null,
+        });
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "skipped_owner_active",
+      });
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "replied",
+        trigger: "horario",
+      });
+      expect(mocks.conversationFindUnique).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe("una foto sin una sola palabra", () => {
     const soloFoto = { ...input, body: "", mediaForOwner: true };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -180,6 +180,31 @@ export function ConversationThread({
     }
   };
 
+  /**
+   * «Ya terminé, sigue tú». Quita la parada de 24 horas que deja Paula al
+   * contestar desde el celular; no le manda nada a la clienta.
+   */
+  const handBack = async () => {
+    try {
+      setLoading(true);
+      await axios.post(`/api/${storeId}/conversations/${conversation.id}/handback`);
+      router.refresh();
+      toast({
+        title: "Listo, el bot vuelve a contestar",
+        description: "No se le envió nada a la clienta.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo devolver al bot",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const setStatus = async (status: ConversationStatus) => {
     try {
       setLoading(true);
@@ -224,6 +249,9 @@ export function ConversationThread({
               <Receipt className="mr-2 h-4 w-4" /> Crear pedido
             </Button>
           ) : null}
+          <Button variant="outline" size="sm" disabled={loading} onClick={handBack}>
+            <Bot className="mr-2 h-4 w-4" /> Reanudar
+          </Button>
           <Button
             variant="outline"
             size="sm"

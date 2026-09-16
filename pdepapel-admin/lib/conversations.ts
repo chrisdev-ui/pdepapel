@@ -6,6 +6,8 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 
+import prismadb from "@/lib/prismadb";
+
 /**
  * Conversaciones de WhatsApp para el panel: tipos de vista, etiquetas en
  * español y la resolución del carrito que manda una clienta desde el catálogo.
@@ -224,3 +226,52 @@ export const conversationStatusUpdateSchema = z.object({
 });
 
 export type ConversationStatusUpdate = z.infer<typeof conversationStatusUpdateSchema>;
+
+/**
+ * Devolver la conversación al bot.
+ *
+ * Cuando Paula contesta desde el celular, `fileOwnerEcho` le pone
+ * `lastOwnerAt` y el bot se aparta 24 horas. Eso está bien mientras ella está
+ * en la conversación, pero cuando termina no había forma de decir «ya, sigue
+ * tú»: había que esperar el día entero. Esto es esa forma.
+ *
+ * Se pone `lastOwnerAt` en null y no una fecha vieja: null es justo lo que ese
+ * campo ya significa —Paula no está en esta conversación— y `isOwnerActive` lo
+ * entiende sin más. Una fecha inventada sería mentira en la ficha que ella lee.
+ *
+ * No manda ningún mensaje. Solo deja al bot escuchando otra vez.
+ */
+export async function handBackToBot(
+  storeId: string,
+  conversationId: string,
+): Promise<
+  | { ok: true; changed: boolean }
+  | { ok: false; reason: "not_found" | "conflict" }
+> {
+  const actual = await prismadb.conversation.findFirst({
+    where: { id: conversationId, storeId },
+    select: { id: true, status: true, lastOwnerAt: true },
+  });
+  if (!actual) return { ok: false, reason: "not_found" };
+
+  // Ya estaba devuelta: tocar el botón dos veces no es un error, no hace nada.
+  if (actual.status === ConversationStatus.OPEN && actual.lastOwnerAt === null) {
+    return { ok: true, changed: false };
+  }
+
+  // Escritura condicionada a lo que se acaba de leer: si entre la lectura y
+  // esto entró un mensaje de la clienta o Paula volvió a escribir, no se pisa
+  // lo nuevo, se avisa y que lo mire otra vez.
+  const escrito = await prismadb.conversation.updateMany({
+    where: {
+      id: actual.id,
+      storeId,
+      status: actual.status,
+      lastOwnerAt: actual.lastOwnerAt,
+    },
+    data: { status: ConversationStatus.OPEN, lastOwnerAt: null },
+  });
+  if (escrito.count === 0) return { ok: false, reason: "conflict" };
+
+  return { ok: true, changed: true };
+}
