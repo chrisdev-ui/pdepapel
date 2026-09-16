@@ -12,6 +12,7 @@ import { Reviews } from "@/components/reviews/reviews";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { ProductBadge } from "@/components/ui/product-badge";
+import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { getProductAvailability } from "@/lib/product-availability";
 import { getProductCardBadges, isRecentlyCreated } from "@/lib/product-card";
@@ -29,6 +30,9 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
   const [selectedProduct, setSelectedProduct] = useState(product);
   const [isVariantLoading, setIsVariantLoading] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const cartQuantity = useCart(
+    (state) => state.items.find((item) => item.id === selectedProduct.id)?.quantity,
+  );
   const selectedProductRef = useRef(product);
   const variantRequestRef = useRef(0);
   const ctaRef = useRef<HTMLDivElement>(null);
@@ -42,6 +46,10 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
     setIsVariantLoading(false);
     setQuantity(1);
   }, [product]);
+
+  useEffect(() => {
+    setQuantity(cartQuantity ?? 1);
+  }, [selectedProduct.id, cartQuantity]);
 
   const selectVariant = useCallback(async (variant: Product | ProductVariant, updateHistory = true) => {
     if (variant.id === selectedProductRef.current.id) return;
