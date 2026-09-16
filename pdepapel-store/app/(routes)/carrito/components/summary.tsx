@@ -12,6 +12,12 @@ import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import { toast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
+import type { CartSurface } from "@/lib/checkout-analytics";
+import {
+  getAnalyticsValue,
+  toAnalyticsItem,
+  trackCustomerEvent,
+} from "@/lib/customer-analytics";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { NATIONWIDE_SHIPPING_COPY } from "@/lib/trust-points";
 import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
@@ -82,7 +88,21 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
     return () => observer.disconnect();
   }, []);
 
-  const goToCheckout = () => router.push(STOREFRONT_ROUTES.checkout);
+  const goToCheckout = () => {
+    // Lo disparan el botón principal y la barra fija del móvil: los dos son
+    // «page», que es lo que se compara luego contra el cajón y el aviso.
+    const analyticsItems = items.map((item) =>
+      toAnalyticsItem(item, item.quantity ?? 1),
+    );
+    trackCustomerEvent("checkout_initiated", {
+      cart_surface: "page" satisfies CartSurface,
+      currency: "COP",
+      item_count: count,
+      items: analyticsItems,
+      value: getAnalyticsValue(analyticsItems),
+    });
+    router.push(STOREFRONT_ROUTES.checkout);
+  };
   const applyCoupon = (event: React.FormEvent) => {
     event.preventDefault();
     const trimmed = code.trim();

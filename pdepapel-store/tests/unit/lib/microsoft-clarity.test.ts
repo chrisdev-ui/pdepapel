@@ -115,6 +115,44 @@ describe("Microsoft Clarity integration", () => {
     expect(clarityMocks.event).toHaveBeenCalledTimes(1);
   });
 
+  it("tags the cart surface a checkout started from, and only known ones", async () => {
+    const {
+      configureMicrosoftClarity,
+      initializeMicrosoftClarity,
+      trackMicrosoftClarityEvent,
+      updateMicrosoftClarityContext,
+    } = await loadClarityModule();
+
+    configureMicrosoftClarity({ enabled: true, projectId: "sc857ich8n" });
+    updateMicrosoftClarityContext({
+      analyticsConsent: true,
+      pathname: "/carrito",
+    });
+    await initializeMicrosoftClarity();
+    vi.clearAllMocks();
+
+    trackMicrosoftClarityEvent("checkout_initiated", {
+      cart_surface: "drawer",
+      email: "never-forward-this@example.com",
+    });
+
+    expect(clarityMocks.setTag).toHaveBeenCalledWith("cart_surface", "drawer");
+    // Entra al mismo paso que begin_checkout para que el embudo case.
+    expect(clarityMocks.setTag).toHaveBeenCalledWith("checkout_step", "inicio");
+    expect(clarityMocks.event).toHaveBeenCalledWith("checkout_initiated");
+
+    vi.clearAllMocks();
+    trackMicrosoftClarityEvent("checkout_initiated", {
+      cart_surface: "algo-que-alguien-inventó",
+    });
+
+    expect(clarityMocks.setTag).not.toHaveBeenCalledWith(
+      "cart_surface",
+      expect.anything(),
+    );
+    expect(clarityMocks.event).toHaveBeenCalledWith("checkout_initiated");
+  });
+
   it("distinguishes manual and automatic cart preview dismissals", async () => {
     const {
       configureMicrosoftClarity,

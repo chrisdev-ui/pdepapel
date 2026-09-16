@@ -17,7 +17,12 @@ import { useCart } from "@/hooks/use-cart";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { markCartTouched } from "@/lib/cart-session";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
-import { trackCustomerEvent } from "@/lib/customer-analytics";
+import type { CartSurface } from "@/lib/checkout-analytics";
+import {
+  getAnalyticsValue,
+  toAnalyticsItem,
+  trackCustomerEvent,
+} from "@/lib/customer-analytics";
 import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
 import { Product } from "@/types";
 
@@ -129,9 +134,28 @@ export function CartPreviewProvider({
         presentation: currentPreview.presentation,
         source: currentPreview.source,
       });
+
+      // cart_preview_action se queda como estaba —hay informes colgando de
+      // él—; encima va el evento común a las tres superficies.
+      if (action === "checkout") {
+        const analyticsItems = cartItems.map((item) =>
+          toAnalyticsItem(item, item.quantity ?? 1),
+        );
+        trackCustomerEvent("checkout_initiated", {
+          cart_surface: "preview" satisfies CartSurface,
+          currency: "COP",
+          item_count: cartItems.reduce(
+            (sum, item) => sum + Number(item.quantity ?? 1),
+            0,
+          ),
+          items: analyticsItems,
+          value: getAnalyticsValue(analyticsItems),
+        });
+      }
+
       dismiss("action");
     },
-    [dismiss],
+    [cartItems, dismiss],
   );
 
   const image =

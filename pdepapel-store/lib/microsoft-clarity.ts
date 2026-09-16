@@ -39,6 +39,7 @@ const TRACKED_CLARITY_EVENTS = new Set([
 
 const CHECKOUT_STEP_BY_EVENT: Record<string, string> = {
   begin_checkout: "inicio",
+  checkout_initiated: "inicio",
   add_shipping_info: "envio",
   add_payment_info: "pago",
   checkout_stock_unavailable: "stock_no_disponible",
@@ -57,7 +58,11 @@ const SAFE_CHECKOUT_STEP_TAGS = new Set([
   "revision",
 ]);
 
+/** Clarity solo recibe el nombre del evento: la superficie viaja como etiqueta. */
+const SAFE_CART_SURFACE_TAGS = new Set(["drawer", "page", "preview"]);
+
 type QueuedClarityEvent = {
+  cartSurface?: string;
   checkoutStep?: string;
   eventName: string;
 };
@@ -147,6 +152,15 @@ function getCheckoutStepTag(
   return CHECKOUT_STEP_BY_EVENT[eventName];
 }
 
+function getCartSurfaceTag(
+  parameters: Record<string, unknown>,
+): string | undefined {
+  const surface = parameters.cart_surface;
+  return typeof surface === "string" && SAFE_CART_SURFACE_TAGS.has(surface)
+    ? surface
+    : undefined;
+}
+
 function getClarityEventName(
   eventName: string,
   parameters: Record<string, unknown>,
@@ -163,8 +177,9 @@ function flushQueuedEvents(client: ClarityClient): void {
   const events = queuedEvents;
   queuedEvents = [];
 
-  for (const { checkoutStep, eventName } of events) {
+  for (const { cartSurface, checkoutStep, eventName } of events) {
     if (checkoutStep) client.setTag("checkout_step", checkoutStep);
+    if (cartSurface) client.setTag("cart_surface", cartSurface);
     client.event(eventName);
   }
 }
@@ -245,15 +260,21 @@ export function trackMicrosoftClarityEvent(
   if (!TRACKED_CLARITY_EVENTS.has(eventName) || !canCollect()) return;
 
   const checkoutStep = getCheckoutStepTag(eventName, parameters);
+  const cartSurface = getCartSurfaceTag(parameters);
   const clarityEventName = getClarityEventName(eventName, parameters);
 
   if (!clarityClient) {
     if (queuedEvents.length < MAX_QUEUED_EVENTS) {
-      queuedEvents.push({ checkoutStep, eventName: clarityEventName });
+      queuedEvents.push({
+        cartSurface,
+        checkoutStep,
+        eventName: clarityEventName,
+      });
     }
     return;
   }
 
   if (checkoutStep) clarityClient.setTag("checkout_step", checkoutStep);
+  if (cartSurface) clarityClient.setTag("cart_surface", cartSurface);
   clarityClient.event(clarityEventName);
 }

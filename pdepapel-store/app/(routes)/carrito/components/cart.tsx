@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
+import type { CartSurface } from "@/lib/checkout-analytics";
 import {
   getAnalyticsValue,
   toAnalyticsItem,
@@ -64,7 +65,7 @@ const Cart: React.FC<CartProps> = ({ suggestions = [], categories = [] }) => {
       toAnalyticsItem(item, item.quantity ?? 1),
     );
     trackCustomerEvent("view_cart", {
-      cart_surface: "page",
+      cart_surface: "page" satisfies CartSurface,
       currency: "COP",
       items,
       value: getAnalyticsValue(items),

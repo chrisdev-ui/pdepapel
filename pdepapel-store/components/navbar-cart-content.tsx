@@ -19,7 +19,12 @@ import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { useCartSheet } from "@/hooks/use-cart-sheet";
 import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
-import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
+import type { CartSurface } from "@/lib/checkout-analytics";
+import {
+  getAnalyticsValue,
+  toAnalyticsItem,
+  trackCustomerEvent,
+} from "@/lib/customer-analytics";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { calculateTotals } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
@@ -50,7 +55,7 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
       toAnalyticsItem(item, item.quantity ?? 1),
     );
     trackCustomerEvent("view_cart", {
-      cart_surface: "drawer",
+      cart_surface: "drawer" satisfies CartSurface,
       currency: "COP",
       items,
       value: Number(total),
@@ -63,11 +68,18 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
   };
 
   const onCheckout = () => {
+    const analyticsItems = cart.items.map((item) =>
+      toAnalyticsItem(item, item.quantity ?? 1),
+    );
     trackCustomerEvent("checkout_initiated", {
+      cart_surface: "drawer" satisfies CartSurface,
       currency: "COP",
-      items: cart.items.map((item) => toAnalyticsItem(item, item.quantity)),
-      item_count: cart.items.length,
-      total: Number(total),
+      item_count: cart.items.reduce(
+        (sum, item) => sum + Number(item.quantity ?? 1),
+        0,
+      ),
+      items: analyticsItems,
+      value: getAnalyticsValue(analyticsItems),
     });
     onClose();
     router.push(STOREFRONT_ROUTES.checkout);

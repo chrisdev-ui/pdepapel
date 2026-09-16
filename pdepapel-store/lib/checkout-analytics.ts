@@ -12,6 +12,15 @@ export const CHECKOUT_STEP_NAMES = {
 export type CheckoutStepNumber = keyof typeof CHECKOUT_STEP_NAMES;
 export type CheckoutStepName = (typeof CHECKOUT_STEP_NAMES)[CheckoutStepNumber];
 
+/**
+ * Desde dónde arrancó el pago. Va con el mismo nombre en `view_cart` y en
+ * `checkout_initiated`, que es lo que permite comparar cuánto convierte cada
+ * superficie sin cruzar dos dimensiones distintas.
+ */
+export const CART_SURFACES = ["page", "drawer", "preview"] as const;
+
+export type CartSurface = (typeof CART_SURFACES)[number];
+
 const CHECKOUT_FIELD_GROUPS: Record<string, string> = {
   address1: "direccion_entrega",
   address2: "direccion_entrega",
