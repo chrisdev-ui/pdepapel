@@ -61,7 +61,11 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
   const searchParams = useSearchParams();
   const params = useParams();
   const storeId = String(params.storeId);
-  const [view, setViewState] = useState<InventoryView>(normalizeInventoryView(initialView ?? searchParams.get(VIEW_PARAM)) ?? DEFAULT_VIEW);
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: InventoryView = normalizeInventoryView(initialView ?? searchParams.get(VIEW_PARAM)) ?? DEFAULT_VIEW;
+  const [selected, setSelected] = useState<{ base: InventoryView; view: InventoryView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
   const [grouped, setGroupedState] = useState(initialGrouped || searchParams.get(GROUP_PARAM) === "proveedor");
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
@@ -88,7 +92,7 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
     window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
   };
   const setView = (next: InventoryView) => {
-    setViewState(next);
+    setSelected({ base: requestedView, view: next });
     replaceQuery(next, grouped);
   };
   const setGrouped = (next: boolean) => {

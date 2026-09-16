@@ -48,7 +48,11 @@ export default function CustomerClient({ data, storeName, storeUrl }: CustomerCl
   const storeId = String(params.storeId);
 
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<CustomerView>(isCustomerView(requested) ? requested : DEFAULT_CUSTOMER_VIEW);
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: CustomerView = isCustomerView(requested) ? requested : DEFAULT_CUSTOMER_VIEW;
+  const [selected, setSelected] = useState<{ base: CustomerView; view: CustomerView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
   const [reactivating, setReactivating] = useState<ReactivationTarget[] | null>(null);
 
   const summary = useMemo(() => summarizeCustomers(data.map((customer) => customer.segment)), [data]);
@@ -63,14 +67,14 @@ export default function CustomerClient({ data, storeName, storeUrl }: CustomerCl
 
   const setView = useCallback(
     (next: CustomerView) => {
-      setViewState(next);
+      setSelected({ base: requestedView, view: next });
       const query = new URLSearchParams(searchParams.toString());
       if (next === DEFAULT_CUSTOMER_VIEW) query.delete(VIEW_PARAM);
       else query.set(VIEW_PARAM, next);
       const suffix = query.toString();
       window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, requestedView],
   );
 
   const metrics = [

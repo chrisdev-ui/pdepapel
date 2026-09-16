@@ -58,7 +58,11 @@ export function FairEventsClient({ data }: { data: FairEventSummary[] }) {
   const storeId = String(params.storeId);
   const { toast } = useToast();
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<FairView>(isFairView(requested) ? requested : DEFAULT_FAIR_VIEW);
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: FairView = isFairView(requested) ? requested : DEFAULT_FAIR_VIEW;
+  const [selected, setSelected] = useState<{ base: FairView; view: FairView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
   const [isCreating, setIsCreating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -71,14 +75,14 @@ export function FairEventsClient({ data }: { data: FairEventSummary[] }) {
 
   const setView = useCallback(
     (next: FairView) => {
-      setViewState(next);
+      setSelected({ base: requestedView, view: next });
       const query = new URLSearchParams(searchParams.toString());
       if (next === DEFAULT_FAIR_VIEW) query.delete(VIEW_PARAM);
       else query.set(VIEW_PARAM, next);
       const suffix = query.toString();
       window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, requestedView],
   );
 
   async function createFairEvent(event: FormEvent<HTMLFormElement>) {

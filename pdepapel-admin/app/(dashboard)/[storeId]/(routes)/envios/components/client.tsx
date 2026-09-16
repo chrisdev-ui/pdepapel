@@ -59,7 +59,11 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
   const { toast } = useToast();
 
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<ShipmentView>(isShipmentView(requested) ? requested : DEFAULT_SHIPMENT_VIEW);
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: ShipmentView = isShipmentView(requested) ? requested : DEFAULT_SHIPMENT_VIEW;
+  const [selected, setSelected] = useState<{ base: ShipmentView; view: ShipmentView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
   const [exporting, setExporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [openManualModal, setOpenManualModal] = useState(false);
@@ -79,14 +83,14 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
 
   const setView = useCallback(
     (next: ShipmentView) => {
-      setViewState(next);
+      setSelected({ base: requestedView, view: next });
       const query = new URLSearchParams(searchParams.toString());
       if (next === DEFAULT_SHIPMENT_VIEW) query.delete(VIEW_PARAM);
       else query.set(VIEW_PARAM, next);
       const suffix = query.toString();
       window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, requestedView],
   );
 
   const handleExport = async () => {

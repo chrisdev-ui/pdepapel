@@ -77,9 +77,11 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<ProductView>(
-    isProductView(requested) ? requested : DEFAULT_VIEW,
-  );
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: ProductView = isProductView(requested) ? requested : DEFAULT_VIEW;
+  const [selected, setSelected] = useState<{ base: ProductView; view: ProductView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
 
   const fetchCatalogData = useCallback(async () => {
     try {
@@ -149,7 +151,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
   );
 
   const setView = (next: ProductView) => {
-    setViewState(next);
+    setSelected({ base: requestedView, view: next });
     const query = new URLSearchParams(searchParams.toString());
     if (next === DEFAULT_VIEW) query.delete(VIEW_PARAM);
     else query.set(VIEW_PARAM, next);

@@ -50,10 +50,14 @@ export function ReviewsPanel({ data }: ReviewsPanelProps) {
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<ReviewView>(isReviewView(requested) ? requested : DEFAULT_VIEW);
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: ReviewView = isReviewView(requested) ? requested : DEFAULT_VIEW;
+  const [selected, setSelected] = useState<{ base: ReviewView; view: ReviewView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
 
   const setView = (next: ReviewView) => {
-    setViewState(next);
+    setSelected({ base: requestedView, view: next });
     const query = new URLSearchParams(searchParams.toString());
     if (next === DEFAULT_VIEW) query.delete(VIEW_PARAM);
     else query.set(VIEW_PARAM, next);

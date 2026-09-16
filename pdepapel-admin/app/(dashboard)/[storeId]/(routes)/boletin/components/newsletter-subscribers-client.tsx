@@ -62,20 +62,24 @@ export function NewsletterSubscribersClient({ storeId, subscribers, counts, tota
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<View>(VIEWS.some((item) => item.id === requested) ? (requested as View) : DEFAULT_VIEW);
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: View = VIEWS.some((item) => item.id === requested) ? (requested as View) : DEFAULT_VIEW;
+  const [selected, setSelected] = useState<{ base: View; view: View } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [unsubscribeTarget, setUnsubscribeTarget] = useState<NewsletterSubscriberRow | null>(null);
 
   const setView = useCallback(
     (next: View) => {
-      setViewState(next);
+      setSelected({ base: requestedView, view: next });
       const query = new URLSearchParams(searchParams.toString());
       if (next === DEFAULT_VIEW) query.delete(VIEW_PARAM);
       else query.set(VIEW_PARAM, next);
       const suffix = query.toString();
       window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, requestedView],
   );
 
   const viewCounts = useMemo(() => {

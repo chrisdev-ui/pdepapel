@@ -34,7 +34,11 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
   const storeId = String(params.storeId);
 
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<OrderView>(isOrderView(requested) ? requested : DEFAULT_ORDER_VIEW);
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: OrderView = isOrderView(requested) ? requested : DEFAULT_ORDER_VIEW;
+  const [selected, setSelected] = useState<{ base: OrderView; view: OrderView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
 
   const queued = useMemo(() => data.map((order) => ({ order, queue: getOrderQueue(order) })), [data]);
   const counts = useMemo(() => {
@@ -52,7 +56,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
 
   const setView = useCallback(
     (next: OrderView) => {
-      setViewState(next);
+      setSelected({ base: requestedView, view: next });
       const query = new URLSearchParams(searchParams.toString());
       if (next === DEFAULT_ORDER_VIEW) query.delete(VIEW_PARAM);
       else query.set(VIEW_PARAM, next);
@@ -60,7 +64,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
       // La URL cambia al instante (sin volver a cargar la página) para que se pueda compartir o abrir desde la barra de comando.
       window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, requestedView],
   );
 
   const visibleViews = ORDER_VIEWS.filter((item) => item.id !== "con-novedad" || counts["con-novedad"] > 0 || view === "con-novedad");

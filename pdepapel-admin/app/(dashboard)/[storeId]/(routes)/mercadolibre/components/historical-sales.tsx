@@ -44,9 +44,11 @@ export function MercadoLibreHistoricalSales({
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const requested = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<SalesView>(
-    isSalesView(requested) ? requested : DEFAULT_SALES_VIEW,
-  );
+  // La URL manda; el estado local solo cubre el hueco hasta que Next
+  // refleja el replaceState.
+  const requestedView: SalesView = isSalesView(requested) ? requested : DEFAULT_SALES_VIEW;
+  const [selected, setSelected] = useState<{ base: SalesView; view: SalesView } | null>(null);
+  const view = selected?.base === requestedView ? selected.view : requestedView;
   const [sales, setSales] = useState<SalesResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -102,22 +104,22 @@ export function MercadoLibreHistoricalSales({
 
   const setView = useCallback(
     (next: SalesView) => {
-      setViewState(next);
+      setSelected({ base: requestedView, view: next });
       const query = new URLSearchParams(searchParams.toString());
       if (next === DEFAULT_SALES_VIEW) query.delete(VIEW_PARAM);
       else query.set(VIEW_PARAM, next);
       const suffix = query.toString();
       window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
     },
-    [pathname, searchParams],
+    [pathname, searchParams, requestedView],
   );
 
   // Con la vista «Por atender» vacía se aterriza en «Todas»: nada que hacer no es una pantalla vacía.
   useEffect(() => {
     if (!isSalesView(requested) && sales && counts["por-atender"] === 0 && view === "por-atender") {
-      setViewState("todas");
+      setSelected({ base: requestedView, view: "todas" });
     }
-  }, [counts, requested, sales, view]);
+  }, [counts, requested, requestedView, sales, view]);
 
   return (
     <div className="flex flex-col gap-4">
