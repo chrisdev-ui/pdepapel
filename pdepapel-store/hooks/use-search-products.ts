@@ -6,10 +6,10 @@ export default function useSearchProducts(searchTerm?: string) {
 
   return useQuery({
     queryKey,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       // Pass empty string if searchTerm is undefined
       const query = searchTerm || "";
-      const result = await searchProducts(query);
+      const result = await searchProducts(query, signal);
 
       // Robust handling for Array or Object response
       if (Array.isArray(result)) {

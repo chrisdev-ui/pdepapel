@@ -5,12 +5,12 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { getProducts } from "@/actions/get-products";
 import { SaveSearchButton } from "@/components/shop/save-search-button";
 import { MobileToolbar, ShopToolbar } from "@/components/shop/shop-toolbar";
 import { ShopSidebar } from "@/components/shop/shop-sidebar";
 import { NoResultsPanel, SuggestionChip } from "@/components/ui/no-results";
 import { LIMIT_SHOP_ITEMS } from "@/constants";
+import { fetchCatalogFromClient } from "@/lib/catalog-client";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { filtersToQuery } from "@/hooks/use-filter-count";
 import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
@@ -86,7 +86,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["products", fixedCategoryId, effectiveFilters],
-    queryFn: () => getProducts({ ...filtersToQuery(effectiveFilters, fixedCategoryId), page: effectiveFilters.page, itemsPerPage: LIMIT_SHOP_ITEMS }),
+    queryFn: ({ signal }) => fetchCatalogFromClient({ ...filtersToQuery(effectiveFilters, fixedCategoryId), page: effectiveFilters.page, itemsPerPage: LIMIT_SHOP_ITEMS }, signal),
     initialData: isMounted ? undefined : { products: initialProducts, totalPages: initialTotalPages, totalItems: initialTotalItems, facets: initialFacets, searchCorrection: initialSearchCorrection },
     initialDataUpdatedAt: isMounted ? undefined : Date.now(),
     staleTime: 60_000,

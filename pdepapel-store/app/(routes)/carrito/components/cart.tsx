@@ -4,7 +4,6 @@ import { ArrowLeft, Heart, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { getProducts } from "@/actions/get-products";
 import { ProductList } from "@/components/product-list";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +23,7 @@ import { Category, Product } from "@/types";
 
 import { PresaleCartNotice } from "@/components/presale-cart-notice";
 import { getPurchasableUnits, isPresaleItem } from "@/lib/purchasable-units";
+import { fetchCatalogFromClient } from "@/lib/catalog-client";
 
 import { CartItem, PriceChange } from "./cart-item";
 import { SavedForLater } from "./saved-for-later";
@@ -88,7 +88,8 @@ const Cart: React.FC<CartProps> = ({ suggestions = [], categories = [] }) => {
       cart.items.map((item) => [item.id, Number(item.price)]),
     );
 
-    getProducts({ ids })
+    const controller = new AbortController();
+    fetchCatalogFromClient({ ids }, controller.signal)
       .then(({ products }) => {
         const changes: Record<string, PriceChange> = {};
         products.forEach((product) => {
@@ -100,9 +101,11 @@ const Cart: React.FC<CartProps> = ({ suggestions = [], categories = [] }) => {
         if (Object.keys(changes).length > 0)
           setPriceChanges((current) => ({ ...current, ...changes }));
       })
-      .catch((error) =>
-        console.error("No se pudo actualizar el carrito", error),
-      );
+      .catch((error) => {
+        if ((error as Error)?.name === "AbortError") return;
+        console.error("No se pudo actualizar el carrito", error);
+      });
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted, cart.items.length]);
 

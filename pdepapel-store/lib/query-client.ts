@@ -31,10 +31,13 @@ const isBounded = (fn: unknown): boolean =>
  *
  * A promise that neither resolves nor rejects leaves its query at
  * `fetchStatus: "fetching"` forever — no error, no retry, nothing to recover
- * from except a reload. That is what the catalog filters hit: `getProducts` is
- * a server action, and one queued behind an in-flight action while the router
- * navigates is simply dropped. Bounding it here turns "hangs forever" into an
- * ordinary failed query the UI already knows how to handle.
+ * from except a reload. Eso es lo que pasaba en los filtros del catálogo:
+ * Next pone las server actions en fila, y cualquier escritura de la URL
+ * —incluido el `history.replaceState` de nuqs con `shallow: true`, no hace
+ * falta navegar— tira todas las que sigan en la cola sin resolverlas ni
+ * rechazarlas. El catálogo y el buscador de ciudades ya no pasan por ahí, pero
+ * esto se queda: cualquier consulta que no responda termina siendo un error
+ * normal que la UI sabe manejar.
  *
  * Mutations are deliberately untouched: checkout, shipping quotes and coupon
  * validation run through those, and they own their own error handling.

@@ -2,8 +2,8 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
-import { getProducts } from "@/actions/get-products";
 import type { ProductFilters } from "@/hooks/use-product-filters";
+import { fetchCatalogFromClient } from "@/lib/catalog-client";
 
 const join = (values: string[]) => (values.length ? values.join(",") : undefined);
 
@@ -31,8 +31,8 @@ export function filtersToQuery(filters: ProductFilters, fixedCategoryId?: string
 export function useFilterCount(filters: ProductFilters, fixedCategoryId?: string, enabled = true) {
   return useQuery({
     queryKey: ["products-count", fixedCategoryId, filtersToQuery(filters, fixedCategoryId)],
-    queryFn: async () => {
-      const response = await getProducts({ ...filtersToQuery(filters, fixedCategoryId), page: 1, itemsPerPage: 1 });
+    queryFn: async ({ signal }) => {
+      const response = await fetchCatalogFromClient({ ...filtersToQuery(filters, fixedCategoryId), page: 1, itemsPerPage: 1 }, signal);
       return response.isUnavailable ? null : response.totalItems;
     },
     enabled,

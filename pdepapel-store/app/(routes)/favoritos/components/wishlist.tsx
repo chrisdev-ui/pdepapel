@@ -8,7 +8,6 @@ import { encodeSharedList, SHARED_LIST_PARAM } from "@/lib/shared-wishlist";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { getProducts } from "@/actions/get-products";
 import { ProductList } from "@/components/product-list";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +21,7 @@ import {
 } from "@/lib/routes";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { Category, Product } from "@/types";
+import { fetchCatalogFromClient } from "@/lib/catalog-client";
 
 import { FavoriteCard } from "./favorite-card";
 
@@ -66,14 +66,17 @@ export function Wishlist({ suggestions = [], categories = [] }: WishlistProps) {
     const stored = Object.fromEntries(
       items.map((item) => [item.id, Number(item.price)]),
     );
-    getProducts({ ids })
+    const controller = new AbortController();
+    fetchCatalogFromClient({ ids }, controller.signal)
       .then(({ products }) => {
         setPreviousPrices((current) => ({ ...current, ...stored }));
         refreshItems(products);
       })
-      .catch((error) =>
-        console.error("No se pudieron actualizar los favoritos", error),
-      );
+      .catch((error) => {
+        if ((error as Error)?.name === "AbortError") return;
+        console.error("No se pudieron actualizar los favoritos", error);
+      });
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted, isHydrated, items.length]);
 

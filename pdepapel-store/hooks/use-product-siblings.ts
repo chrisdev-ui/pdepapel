@@ -1,19 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getProducts } from "@/actions/get-products";
-import { ProductVariant } from "@/types";
+import { fetchCatalogFromClient } from "@/lib/catalog-client";
 
 export const useProductSiblings = (productGroupId?: string | null) => {
   const queryKey = ["product-siblings", productGroupId];
 
   return useQuery({
     queryKey,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!productGroupId) return [];
 
-      const { products } = await getProducts({
-        productGroupId,
-      });
+      const { products } = await fetchCatalogFromClient(
+        { productGroupId },
+        signal,
+      );
 
       return products;
     },
