@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { push, validate, toast } = vi.hoisted(() => ({ push: vi.fn(), validate: vi.fn(), toast: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/carrito" }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => null }), SignedOut: () => null, SignedIn: () => null }));
 vi.mock("@/hooks/use-validate-coupon", () => ({ default: () => ({ mutate: validate, status: "idle" }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast }));
@@ -37,6 +37,13 @@ describe("Summary", () => {
     expect(screen.getByText("Subtotal (3 productos)")).toBeInTheDocument();
     expect(screen.getByText("Ahorros en ofertas")).toBeInTheDocument();
     expect(screen.getByText("Se calcula con tu dirección")).toBeInTheDocument();
+    // WhatsApp vive dentro de la barra fija, no flotando encima del botón.
+    // `hidden`: la barra está aria-hidden hasta que el botón grande se va.
+    const whatsapp = screen.getByRole("link", {
+      name: /Chatear con Papelería P de Papel por WhatsApp/,
+      hidden: true,
+    });
+    expect(whatsapp.getAttribute("href")).toContain("wa.me");
     // Junto a «se calcula»: quien no sabe si le llega, lo lee ahí mismo.
     expect(
       screen.getByText("Desde Medellín enviamos a toda Colombia."),

@@ -1,10 +1,15 @@
 "use client";
 
 import { Check, CreditCard, MapPin, ShieldCheck, TicketPercent, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountPrompt } from "@/components/account-prompt";
+import { Icons } from "@/components/icons";
+import {
+  trackWhatsAppClick,
+  WHATSAPP_URL,
+} from "@/components/whatsapp-floating-button";
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
@@ -37,6 +42,7 @@ const ROW = "flex items-center justify-between gap-3 font-sans text-sm text-blue
  */
 export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const items = useCart((state) => state.items);
   const { freeShippingThreshold } = useStorefrontSettings();
   const couponState = useCheckoutStore((state) => state.couponState);
@@ -111,7 +117,7 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
   };
 
   return (
-    <aside aria-labelledby="resumen-titulo" className="mt-10 flex flex-col gap-4 rounded-2xl bg-blue-baby/20 p-5 sm:p-6 lg:sticky lg:top-[calc(var(--storefront-header-offset)+1rem)] lg:mt-0 lg:p-7">
+    <aside aria-labelledby="resumen-titulo" className="mt-10 flex flex-col gap-4 rounded-2xl bg-blue-baby/20 p-5 pb-24 sm:p-6 sm:pb-24 lg:sticky lg:top-[calc(var(--storefront-header-offset)+1rem)] lg:mt-0 lg:p-7 lg:pb-7">
       <h2 id="resumen-titulo" className="font-serif text-xl font-bold text-blue-yankees">
         Resumen del pedido
       </h2>
@@ -211,18 +217,32 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
       <div
         aria-hidden={!stickyVisible}
         className={cn(
-          "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-3 right-[5.25rem] z-40 transition-all duration-200 motion-reduce:transition-none lg:hidden",
+          "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-3 right-3 z-40 transition-all duration-200 motion-reduce:transition-none lg:hidden",
           stickyVisible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
         )}
       >
-        <div className="flex h-14 items-center gap-3 rounded-full bg-white pl-4 pr-1.5 shadow-[0_8px_24px_rgba(34,27,65,0.22)] ring-1 ring-blue-baby">
-          <span className="flex min-w-0 flex-col leading-tight">
+        {/* Total · comprar · WhatsApp en una sola fila. El total manda sobre el
+            ancho —un carrito de siete cifras no puede partirse— y lo que cede
+            es la etiqueta del botón. */}
+        <div className="flex h-14 items-center gap-2 rounded-full bg-white pl-4 pr-1.5 shadow-[0_8px_24px_rgba(34,27,65,0.22)] ring-1 ring-blue-baby">
+          <span className="flex shrink-0 flex-col leading-tight">
             <span className="font-sans text-xs text-gray-500">Total</span>
             <span className="font-quicksand text-[15px] font-bold text-blue-yankees">{currencyFormatter.format(total)}</span>
           </span>
-          <Button onClick={goToCheckout} disabled={disabled} tabIndex={stickyVisible ? 0 : -1} className="ml-auto h-11 rounded-full bg-blue-yankees px-5 font-sans text-sm font-semibold text-white">
-            Finalizar compra
+          <Button onClick={goToCheckout} disabled={disabled} tabIndex={stickyVisible ? 0 : -1} className="h-11 min-w-0 flex-1 rounded-full bg-blue-yankees px-4 font-sans text-sm font-semibold text-white">
+            <span className="truncate">Finalizar compra</span>
           </Button>
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            tabIndex={stickyVisible ? 0 : -1}
+            aria-label="Chatear con Papelería P de Papel por WhatsApp"
+            onClick={() => trackWhatsAppClick("cart_sticky_bar", pathname)}
+            className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-[#25D366] text-white transition hover:bg-[#20bd5a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128C7E] focus-visible:ring-offset-2"
+          >
+            <Icons.whatsapp aria-hidden="true" className="h-5 w-5" />
+          </a>
         </div>
       </div>
     </aside>
