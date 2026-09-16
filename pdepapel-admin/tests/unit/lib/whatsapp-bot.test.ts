@@ -1180,6 +1180,18 @@ describe("ritmo humano", () => {
 
   describe("después de devolverle la conversación al bot", () => {
     const AYER = new Date("2026-09-15T20:00:00.000Z");
+    // La ventana de 24 h se mide contra el reloj real: sin congelarlo, esta
+    // tanda pasaba solo el día que se escribió y desde entonces falla sola.
+    // Doce horas después de AYER, o sea todavía dentro de la parada.
+    const AHORA = new Date("2026-09-16T08:00:00.000Z");
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(AHORA);
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
     it("con Paula dentro, el bot calla", async () => {
       mocks.conversationFindUnique.mockResolvedValue({
