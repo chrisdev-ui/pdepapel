@@ -63,6 +63,8 @@ interface ShippingInfoStepProps {
   form: UseFormReturn<CheckoutFormValue>;
   isLoading?: boolean;
   allowSavedAddresses?: boolean;
+  /** Server's answer, used until Clerk loads so the block does not pop in late. */
+  isGuest?: boolean;
   cartItems: { id: string; quantity: number }[];
   orderTotal: number;
   /** The order already qualifies for free shipping: rates show «Gratis». */
@@ -109,6 +111,7 @@ export const ShippingInfoStep = ({
   form,
   isLoading,
   allowSavedAddresses = true,
+  isGuest = true,
   cartItems,
   orderTotal,
   freeShipping = false,
@@ -505,7 +508,8 @@ export const ShippingInfoStep = ({
     }
   };
 
-  const showSavedAddresses = allowSavedAddresses && Boolean(userId);
+  const showSavedAddresses =
+    allowSavedAddresses && (isAuthLoaded ? Boolean(userId) : !isGuest);
   const selectedSavedAddress = savedAddresses.find(
     (address) => address.id === selectedSavedAddressId,
   );
@@ -716,7 +720,7 @@ export const ShippingInfoStep = ({
                   Escribe y elige de la lista. Si no aparece, escríbenos por
                   WhatsApp.
                 </FormDescription>
-                <FormMessage />
+                <FormMessage reserveSpace />
               </FormItem>
             )}
           />
@@ -738,7 +742,7 @@ export const ShippingInfoStep = ({
                 <FormDescription>
                   Calle, carrera o vereda con número.
                 </FormDescription>
-                <FormMessage />
+                <FormMessage reserveSpace />
               </FormItem>
             )}
           />
@@ -778,7 +782,7 @@ export const ShippingInfoStep = ({
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage reserveSpace />
                   </FormItem>
                 )}
               />
@@ -796,7 +800,7 @@ export const ShippingInfoStep = ({
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage reserveSpace />
                   </FormItem>
                 )}
               />
@@ -818,7 +822,7 @@ export const ShippingInfoStep = ({
                       />
                     </FormControl>
                     <FormDescription>Hasta 25 caracteres.</FormDescription>
-                    <FormMessage />
+                    <FormMessage reserveSpace />
                   </FormItem>
                 )}
               />
@@ -839,7 +843,7 @@ export const ShippingInfoStep = ({
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage reserveSpace />
                   </FormItem>
                 )}
               />
@@ -890,7 +894,7 @@ export const ShippingInfoStep = ({
                         Opcional. Si lo dejas vacío aparecerá como «Dirección
                         guardada».
                       </FormDescription>
-                      <FormMessage />
+                      <FormMessage reserveSpace />
                     </FormItem>
                   )}
                 />
@@ -984,7 +988,7 @@ export const ShippingInfoStep = ({
                   })}
                 </RadioGroup>
               </FormControl>
-              <FormMessage />
+              <FormMessage reserveSpace />
             </FormItem>
           )}
         />
@@ -1057,7 +1061,7 @@ export const ShippingInfoStep = ({
                   )}
                 </div>
                 <FormControl>
-                  <div>
+                  <div className="min-h-[212px]">
                     <input
                       type="hidden"
                       name={field.name}
@@ -1149,13 +1153,12 @@ export const ShippingInfoStep = ({
                     )}
                   </div>
                 </FormControl>
-                {groupedQuotes.length > 0 && (
-                  <FormDescription>
-                    Mostramos una tarifa por transportadora, la más barata. La
-                    tarifa se mantiene si eliges pago contra entrega.
-                  </FormDescription>
-                )}
-                <FormMessage />
+                <FormDescription className="min-h-10">
+                  {groupedQuotes.length > 0
+                    ? "Mostramos una tarifa por transportadora, la más barata. La tarifa se mantiene si eliges pago contra entrega."
+                    : null}
+                </FormDescription>
+                <FormMessage reserveSpace />
               </FormItem>
             )}
           />

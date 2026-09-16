@@ -32,10 +32,14 @@ export default async function CheckoutPage() {
     email: user?.emailAddresses[0]?.emailAddress,
   };
 
+  const isGuest = !user;
+
   return (
     <Container>
-      <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      {/* On phones the prompt is ordered last: Clerk resolves it late, and from
+          there it can only push the page's end instead of the form fields. */}
+      <div className="flex w-full flex-col gap-4 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-4">
+        <div className="order-1 sm:col-start-1 sm:row-start-1">
           <h1 className="font-serif text-3xl font-bold text-blue-yankees sm:text-4xl">
             Finaliza tu compra
           </h1>
@@ -45,19 +49,24 @@ export default async function CheckoutPage() {
               : "Tres pasos, sin crear cuenta. Pago seguro."}
           </p>
         </div>
-        {!user && (
-          <AccountPrompt
-            className="w-full sm:w-auto sm:max-w-md"
-            variant="compact"
-            source="checkout"
-            redirectPath={STOREFRONT_ROUTES.checkout}
-          />
+        {isGuest && (
+          <div className="order-3 sm:col-start-2 sm:row-start-1 sm:min-h-[148px]">
+            <AccountPrompt
+              className="w-full sm:w-auto sm:max-w-md"
+              variant="compact"
+              source="checkout"
+              redirectPath={STOREFRONT_ROUTES.checkout}
+            />
+          </div>
         )}
+        <div className="order-2 sm:col-span-2 sm:row-start-2">
+          <MultiStepCheckoutForm
+            currentUser={formattedUser}
+            freeShippingThreshold={storefrontSettings.freeShippingThreshold}
+            isGuest={isGuest}
+          />
+        </div>
       </div>
-      <MultiStepCheckoutForm
-        currentUser={formattedUser}
-        freeShippingThreshold={storefrontSettings.freeShippingThreshold}
-      />
     </Container>
   );
 }

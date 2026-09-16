@@ -130,7 +130,7 @@ export const CouponField = ({
               Cupón {couponState.coupon.code} aplicado.
             </p>
           ) : null}
-          <FormMessage />
+          <FormMessage reserveSpace />
         </FormItem>
       )}
     />

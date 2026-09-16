@@ -97,6 +97,10 @@ export const PaymentInfoStep = ({
       ? [values.shipping?.carrierName, deliveryDays].filter(Boolean).join(" · ")
       : values.shipping?.carrierName;
 
+  const hasPaymentAlert =
+    Boolean(shippingRecovery) || stockConflicts.length > 0;
+  const isAwaitingOrderAnswer = Boolean(isLoading) || isSubmittingRecovery;
+
   return (
     <div className="space-y-6 duration-500 animate-in fade-in-0 slide-in-from-right-4">
       <div className="space-y-1">
@@ -108,79 +112,89 @@ export const PaymentInfoStep = ({
         </p>
       </div>
 
-      {shippingRecovery && (
-        <ShippingRateRecovery
-          recovery={shippingRecovery}
-          onConfirm={onConfirmShippingRate}
-          onChooseAnother={onChooseAnotherShipping}
-          isSubmitting={isSubmittingRecovery}
-        />
-      )}
-
-      {stockConflicts.length > 0 && (
-        <div
-          className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm"
-          role="alert"
-        >
-          <p className="flex items-start gap-2 text-destructive">
-            <AlertTriangle
-              className="mt-0.5 h-4 w-4 shrink-0"
-              aria-hidden="true"
+      {/* Both of these land after the order request comes back. The slot opens
+          the moment the submit starts, so the answer drops into space that
+          already exists instead of pushing the payment options down. It is not
+          rendered at rest, or the parent's space-y would leave a gap. */}
+      {(hasPaymentAlert || isAwaitingOrderAnswer) && (
+        <div className={hasPaymentAlert ? undefined : "min-h-[260px]"}>
+          {shippingRecovery && (
+            <ShippingRateRecovery
+              recovery={shippingRecovery}
+              onConfirm={onConfirmShippingRate}
+              onChooseAnother={onChooseAnotherShipping}
+              isSubmitting={isSubmittingRecovery}
             />
-            <span>
-              <strong>Se agotó parte de tu pedido mientras comprabas.</strong>{" "}
-              Ajusta las cantidades para continuar; no se creó ningún pedido ni
-              se cobró nada.
-            </span>
-          </p>
-          <ul className="space-y-2">
-            {stockConflicts.map((item) => (
-              <li
-                key={item.productId}
-                className="flex flex-wrap items-center gap-2 rounded-lg bg-background p-3"
-              >
-                <span className="min-w-0 flex-1 text-sm">
-                  <span className="block font-semibold">{item.name}</span>
-                  <span className="text-muted-foreground">
-                    Pediste {item.requested} ·{" "}
-                    {item.available > 0
-                      ? `queda${item.available === 1 ? "" : "n"} ${item.available}`
-                      : "ya no hay unidades"}
-                  </span>
+          )}
+
+          {stockConflicts.length > 0 && (
+            <div
+              className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm"
+              role="alert"
+            >
+              <p className="flex items-start gap-2 text-destructive">
+                <AlertTriangle
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  aria-hidden="true"
+                />
+                <span>
+                  <strong>
+                    Se agotó parte de tu pedido mientras comprabas.
+                  </strong>{" "}
+                  Ajusta las cantidades para continuar; no se creó ningún pedido
+                  ni se cobró nada.
                 </span>
-                {item.available > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-full"
-                    onClick={() =>
-                      onAdjustStock(item.productId, item.available)
-                    }
+              </p>
+              <ul className="space-y-2">
+                {stockConflicts.map((item) => (
+                  <li
+                    key={item.productId}
+                    className="flex flex-wrap items-center gap-2 rounded-lg bg-background p-3"
                   >
-                    Dejar {item.available}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 rounded-full"
-                  onClick={() => onAdjustStock(item.productId, 0)}
-                >
-                  Quitar
-                </Button>
-              </li>
-            ))}
-          </ul>
-          <Button
-            type="button"
-            size="sm"
-            className="h-10 rounded-full"
-            onClick={onDismissStockConflicts}
-          >
-            Actualizar y continuar
-          </Button>
+                    <span className="min-w-0 flex-1 text-sm">
+                      <span className="block font-semibold">{item.name}</span>
+                      <span className="text-muted-foreground">
+                        Pediste {item.requested} ·{" "}
+                        {item.available > 0
+                          ? `queda${item.available === 1 ? "" : "n"} ${item.available}`
+                          : "ya no hay unidades"}
+                      </span>
+                    </span>
+                    {item.available > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 rounded-full"
+                        onClick={() =>
+                          onAdjustStock(item.productId, item.available)
+                        }
+                      >
+                        Dejar {item.available}
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 rounded-full"
+                      onClick={() => onAdjustStock(item.productId, 0)}
+                    >
+                      Quitar
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                type="button"
+                size="sm"
+                className="h-10 rounded-full"
+                onClick={onDismissStockConflicts}
+              >
+                Actualizar y continuar
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -217,7 +231,7 @@ export const PaymentInfoStep = ({
                 }
               />
             </FormControl>
-            <FormMessage />
+            <FormMessage reserveSpace />
           </FormItem>
         )}
       />

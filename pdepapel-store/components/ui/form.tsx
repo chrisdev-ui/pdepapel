@@ -147,12 +147,19 @@ FormDescription.displayName = "FormDescription";
 
 const FormMessage = React.forwardRef<
   HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, children, ...props }, ref) => {
+  React.HTMLAttributes<HTMLParagraphElement> & {
+    /**
+     * Opt in to holding the line's height while there is no error, so the
+     * fields below do not jump when one appears. Off by default: only forms
+     * that have a measured layout-stability problem should pay the extra space.
+     */
+    reserveSpace?: boolean;
+  }
+>(({ className, children, reserveSpace = false, ...props }, ref) => {
   const { error, formMessageId } = useFormField();
   const body = error ? String(error?.message) : children;
 
-  if (!body) {
+  if (!body && !reserveSpace) {
     return null;
   }
 
@@ -161,7 +168,11 @@ const FormMessage = React.forwardRef<
       ref={ref}
       id={formMessageId}
       aria-live="polite"
-      className={cn("text-sm font-medium text-destructive", className)}
+      className={cn(
+        "text-sm font-medium text-destructive",
+        reserveSpace && "min-h-5",
+        className,
+      )}
       {...props}
     >
       {body}

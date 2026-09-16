@@ -19,6 +19,12 @@ interface ShippingRatesSelectorProps {
   ariaLabelledBy?: string;
 }
 
+/**
+ * Rows are a fixed two lines tall, so the loading placeholder, the loaded list
+ * and a row whose badges would otherwise wrap all occupy the same height.
+ */
+const SHIPPING_RATE_SKELETON_ROWS = 3;
+
 const formatDelivery = (days: GroupedShippingQuote["deliveryDays"]) => {
   const value = Number(days);
   if (!Number.isFinite(value)) return `${days}`;
@@ -50,10 +56,15 @@ export const ShippingRatesSelector = ({
 }: ShippingRatesSelectorProps) => {
   if (isLoading) {
     return (
-      <div className="space-y-2" aria-busy="true" aria-live="polite">
+      <div
+        className="grid grid-cols-1 gap-2.5"
+        aria-busy="true"
+        aria-live="polite"
+      >
         <span className="sr-only">Calculando tarifas de envío</span>
-        <Skeleton className="h-[72px] w-full rounded-xl" />
-        <Skeleton className="h-[72px] w-full rounded-xl" />
+        {Array.from({ length: SHIPPING_RATE_SKELETON_ROWS }, (_, index) => (
+          <Skeleton key={index} className="h-16 w-full rounded-xl" />
+        ))}
       </div>
     );
   }
@@ -86,7 +97,7 @@ export const ShippingRatesSelector = ({
             <Label
               htmlFor={`rate-${quote.idRate}`}
               className={cn(
-                "flex min-h-[64px] cursor-pointer items-center gap-3 rounded-xl border-2 border-muted bg-card px-3.5 py-3 font-sans transition-[border-color,background-color] hover:border-primary/50",
+                "flex h-16 cursor-pointer items-center gap-3 overflow-hidden rounded-xl border-2 border-muted bg-card px-3.5 py-3 font-sans transition-[border-color,background-color] hover:border-primary/50",
                 "peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-blue-purple/10",
                 "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2",
                 disabled && "cursor-not-allowed opacity-60",
@@ -124,32 +135,35 @@ export const ShippingRatesSelector = ({
               )}
 
               <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-sm font-semibold text-foreground">
+                <span className="flex items-center gap-x-2 overflow-hidden">
+                  <span className="truncate text-sm font-semibold text-foreground">
                     {formatCarrierName(quote.carrier)}
                     {quote.product && quote.product.toLowerCase() !== "normal"
                       ? ` · ${quote.product}`
                       : ""}
                   </span>
                   {quote.badges.includes("cheapest") && (
-                    <span className="rounded-full bg-kawaii-yellow-light px-2 py-0.5 text-[11px] font-bold text-yellow-900">
+                    <span className="shrink-0 rounded-full bg-kawaii-yellow-light px-2 py-0.5 text-[11px] font-bold text-yellow-900">
                       Más económica
                     </span>
                   )}
                   {quote.badges.includes("fastest") && (
-                    <span className="rounded-full bg-kawaii-blue-light px-2 py-0.5 text-[11px] font-bold text-sky-900">
+                    <span className="shrink-0 rounded-full bg-kawaii-blue-light px-2 py-0.5 text-[11px] font-bold text-sky-900">
                       Más rápida
                     </span>
                   )}
                 </span>
-                <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
+                <span className="flex items-center gap-x-3 overflow-hidden text-xs text-muted-foreground">
+                  <span className="inline-flex shrink-0 items-center gap-1">
                     <Clock className="h-3.5 w-3.5" aria-hidden="true" />
                     {formatDelivery(quote.deliveryDays)}
                   </span>
                   {quote.isCOD && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-kawaii-mint-light px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-                      <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-kawaii-mint-light px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+                      <Check
+                        className="h-3 w-3 stroke-[3]"
+                        aria-hidden="true"
+                      />
                       Contraentrega disponible
                     </span>
                   )}

@@ -19,11 +19,17 @@ import { CheckoutFormValue } from "../multi-step-checkout-form";
 interface BasicInfoStepProps {
   form: UseFormReturn<CheckoutFormValue>;
   isLoading?: boolean;
+  /** Server's answer, used until Clerk loads so the hint does not pop in late. */
+  isGuest?: boolean;
 }
 
-export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
+export const BasicInfoStep = ({
+  form,
+  isLoading,
+  isGuest = true,
+}: BasicInfoStepProps) => {
   const { isLoaded, userId } = useAuth();
-  const showSignInHint = isLoaded && !userId;
+  const showSignInHint = isLoaded ? !userId : isGuest;
 
   return (
     <div className="space-y-6 duration-500 animate-in fade-in-0 slide-in-from-right-4">
@@ -74,7 +80,7 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
               <FormDescription>
                 Como aparece en tu documento, para la transportadora.
               </FormDescription>
-              <FormMessage />
+              <FormMessage reserveSpace />
             </FormItem>
           )}
         />
@@ -102,7 +108,7 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
               <FormDescription>
                 Aquí te enviamos la confirmación y el seguimiento.
               </FormDescription>
-              <FormMessage />
+              <FormMessage reserveSpace />
             </FormItem>
           )}
         />
@@ -127,7 +133,7 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
               <FormDescription>
                 Te escribimos solo si hay novedades con tu pedido.
               </FormDescription>
-              <FormMessage />
+              <FormMessage reserveSpace />
             </FormItem>
           )}
         />
@@ -153,7 +159,7 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
               <FormDescription>
                 Lo pide la transportadora para entregar el paquete.
               </FormDescription>
-              <FormMessage />
+              <FormMessage reserveSpace />
             </FormItem>
           )}
         />

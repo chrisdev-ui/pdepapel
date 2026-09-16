@@ -13,7 +13,6 @@ import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Currency } from "@/components/ui/currency";
 import { Form } from "@/components/ui/form";
 import { NoResults } from "@/components/ui/no-results";
-import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_SAD, PaymentMethod, ShippingStatus } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
@@ -74,7 +73,9 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isValidPhoneNumber } from "react-phone-number-input";
+import { CheckoutSkeleton } from "./checkout-skeleton";
 import { MultiStepForm } from "./multi-step-form";
+import { FORM_STEPS } from "./checkout-steps";
 import { StepNavigation } from "./step-navigation";
 import { BasicInfoStep } from "./steps/basic-info-step";
 import { useDeferredResubmit } from "@/hooks/use-deferred-resubmit";
@@ -219,6 +220,8 @@ interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
   /** Store free-shipping threshold (COP) on the product subtotal; null = off. */
   freeShippingThreshold?: number | null;
+  /** Resolved on the server, so guest-only blocks render without waiting for Clerk. */
+  isGuest?: boolean;
 }
 
 export interface CouponState {
@@ -226,15 +229,10 @@ export interface CouponState {
   isValid: boolean | null;
 }
 
-const FORM_STEPS = [
-  { id: 1, name: "Datos", description: "Contacto" },
-  { id: 2, name: "Entrega", description: "Dirección y envío" },
-  { id: 3, name: "Pago", description: "Confirmar y pagar" },
-];
-
 export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
   freeShippingThreshold = null,
+  isGuest = true,
 }) => {
   const { userId, getToken } = useAuth();
   const router = useRouter();
@@ -898,7 +896,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   };
 
   if (!isMounted) {
-    return <CheckoutFormSkeleton />;
+    return <CheckoutSkeleton isGuest={isGuest} />;
   }
 
   if (completedOrderPath) {
@@ -1431,12 +1429,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                         <BasicInfoStep
                           form={form}
                           isLoading={isPendingSubmit}
+                          isGuest={isGuest}
                         />
                       )}
                       {currentStep === 2 && (
                         <ShippingInfoStep
                           form={form}
                           isLoading={isPendingSubmit}
+                          isGuest={isGuest}
                           allowSavedAddresses
                           cartItems={activeItems.map((item) => ({
                             id: item.id,
@@ -1550,40 +1550,3 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     </>
   );
 };
-
-const CheckoutFormSkeleton = () => (
-  <div
-    className="mt-4 space-y-6 lg:mt-8 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8 lg:space-y-0"
-    aria-busy="true"
-    aria-live="polite"
-  >
-    <span className="sr-only">Cargando formulario de compra</span>
-    <div className="space-y-6 rounded-xl border border-blue-baby/60 p-4 sm:p-6 lg:col-span-8">
-      <Skeleton className="h-11 w-full" />
-      <Skeleton className="h-8 w-3/5" />
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-11 w-full" />
-      </div>
-      <div className="flex justify-end pt-6">
-        <Skeleton className="h-12 w-52 rounded-full" />
-      </div>
-    </div>
-    <div className="hidden space-y-4 rounded-xl border border-blue-baby/60 p-5 lg:col-span-4 lg:block">
-      <Skeleton className="h-7 w-40" />
-      {Array.from({ length: 2 }, (_, index) => (
-        <div key={index} className="flex gap-3">
-          <Skeleton className="h-16 w-16 shrink-0" />
-          <div className="flex-1 space-y-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        </div>
-      ))}
-      <Skeleton className="h-px w-full" />
-      <Skeleton className="h-7 w-full" />
-    </div>
-  </div>
-);
