@@ -231,6 +231,7 @@ async function createCheckout(
       envioClickIdRate, // ⭐ ID de tarifa de EnvioClick (top level)
       documentId, // ⭐ Cédula/NIT (opcional)
       analyticsClientId,
+      analyticsConsent,
       saveAddress,
       savedAddressId,
       addressLabel,
@@ -239,6 +240,12 @@ async function createCheckout(
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
+    // Misma higiene que el client id: el tráfico interno no se mide. Del
+    // cliente sólo se guarda si aceptó o no, nada más.
+    const normalizedAnalyticsConsent =
+      isStoreOwner || typeof analyticsConsent !== "boolean"
+        ? null
+        : analyticsConsent;
 
     // Fix implicit any for orderItems
     const typedOrderItems = (orderItems || []) as {
@@ -826,6 +833,9 @@ async function createCheckout(
           ...(normalizedAnalyticsClientId
             ? { analyticsClientId: normalizedAnalyticsClientId }
             : {}),
+          ...(normalizedAnalyticsConsent === null
+            ? {}
+            : { analyticsConsent: normalizedAnalyticsConsent }),
           orderItems: { create: orderItemsData },
           shipping: {
             create: buildShippingPayload(params.storeId, selectedQuote),

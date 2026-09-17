@@ -38,6 +38,7 @@ import {
   getStepFields,
   joinFullName,
 } from "@/lib/checkout-steps";
+import { hasAnalyticsConsent } from "@/lib/analytics-consent";
 import {
   getAnalyticsValue,
   getGoogleAnalyticsClientId,
@@ -1028,6 +1029,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
             )
           : null);
       analyticsClientIdRef.current = analyticsClientId;
+      // Sólo el sí o el no, para poder medir después cuántas ventas pagadas
+      // quedan fuera de GA4. De quien dice que no no se manda nada más.
+      const analyticsConsent = hasAnalyticsConsent();
       const formattedData = {
         fullName: fullName.trim(),
         phone: telephone,
@@ -1058,6 +1062,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         subtotal,
         total,
         analyticsClientId,
+        analyticsConsent,
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,
         addressLabel: saveAddress ? addressLabel || null : null,

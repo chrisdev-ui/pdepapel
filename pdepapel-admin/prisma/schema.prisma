@@ -676,6 +676,9 @@ model Order {
   // The client ID is cleared once the server-side purchase event is confirmed.
   analyticsClientId          String?   @db.VarChar(128)
   analyticsPurchaseTrackedAt DateTime?
+  // Sólo el sí o el no, para poder medir cuántas ventas pagadas quedan fuera
+  // de GA4. De quien no acepta no se guarda nada más.
+  analyticsConsent           Boolean?
 
   // -- BI Financial Fields --
   totalProductCost Float?

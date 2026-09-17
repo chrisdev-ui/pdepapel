@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  currentUser: vi.fn(),
   calculateOrderTotals: vi.fn(),
   checkIfStoreOwner: vi.fn(),
   findCoupon: vi.fn(),
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@clerk/nextjs/server", () => ({
   auth: mocks.auth,
+  currentUser: mocks.currentUser,
   clerkClient: async () => ({ users: { getUser: vi.fn() } }),
 }));
 /** Cliente de transacción: los mismos mocks que el cliente global. */
@@ -145,6 +147,7 @@ describe("POST /api/[storeId]/checkout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockReturnValue({ userId: null, user: null });
+    mocks.currentUser.mockResolvedValue(null);
     mocks.checkIfStoreOwner.mockResolvedValue(false);
     mocks.findShippingQuotes.mockResolvedValue([]);
     mocks.findProducts.mockResolvedValue([product]);
@@ -257,6 +260,69 @@ describe("POST /api/[storeId]/checkout", () => {
       expect.objectContaining({
         data: expect.objectContaining({ analyticsClientId: "123.456" }),
       }),
+    );
+  });
+
+  it("records that the shopper accepted analytics", async () => {
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue("123.456");
+
+    await POST(
+      createCheckoutRequest({
+        analyticsClientId: "123.456",
+        analyticsConsent: true,
+      }),
+      { params: { storeId } },
+    );
+
+    expect(mocks.orderCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ analyticsConsent: true }),
+      }),
+    );
+  });
+
+  it("records a refusal too: that is what makes the gap measurable", async () => {
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue(null);
+
+    await POST(createCheckoutRequest({ analyticsConsent: false }), {
+      params: { storeId },
+    });
+
+    const data = mocks.orderCreate.mock.calls.at(-1)?.[0]?.data;
+    expect(data).toMatchObject({ analyticsConsent: false });
+    // De quien no acepta no se guarda nada más.
+    expect(data).not.toHaveProperty("analyticsClientId");
+  });
+
+  it("leaves the flag unset when the store owner is the one buying", async () => {
+    mocks.auth.mockReturnValue({ userId: "owner-user", user: null });
+    mocks.currentUser.mockResolvedValue({
+      id: "owner-user",
+      emailAddresses: [{ emailAddress: "duena@example.com" }],
+    });
+    mocks.checkIfStoreOwner.mockResolvedValue(true);
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue("123.456");
+
+    await POST(
+      createCheckoutRequest({
+        analyticsClientId: "123.456",
+        analyticsConsent: true,
+      }),
+      { params: { storeId } },
+    );
+
+    const data = mocks.orderCreate.mock.calls.at(-1)?.[0]?.data;
+    expect(data).not.toHaveProperty("analyticsConsent");
+    expect(data).not.toHaveProperty("analyticsClientId");
+  });
+
+  it("leaves the flag unset when the storefront does not send it", async () => {
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue(null);
+
+    await POST(createCheckoutRequest({}), { params: { storeId } });
+
+    expect(mocks.orderCreate.mock.calls.at(-1)?.[0]?.data).not.toHaveProperty(
+      "analyticsConsent",
     );
   });
 });
