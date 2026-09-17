@@ -1,3 +1,21 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "overrides": [
+    {
+      "files": ["tests/e2e/**/*.spec.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@playwright/test",
+                "message": "Importa test y expect desde ./helpers/safe-test: traen el guardia que corta las peticiones capaces de crear pedidos reales contra la API de producción."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

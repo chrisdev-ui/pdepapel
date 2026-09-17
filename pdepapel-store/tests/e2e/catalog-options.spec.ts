@@ -1,4 +1,4 @@
-import { expect, Page, test } from "@playwright/test";
+import { expect, Page, test } from "./helpers/safe-test";
 
 import { gotoPublicPage, skipPrivacyBanner } from "./helpers/public-page";
 
