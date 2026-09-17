@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   calculateOrderFinancials: vi.fn(),
   createGuideForOrder: vi.fn(),
   createInventoryMovementBatchResilient: vi.fn().mockResolvedValue({ success: [], failed: [] }),
+  eventCreate: vi.fn().mockResolvedValue({ id: "evt-1" }),
+  eventUpdate: vi.fn().mockResolvedValue({}),
   getWebhookSecretKey: vi.fn(),
   findUpdatedOrder: vi.fn(),
   verifyWebhookSignature: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock("@/lib/prismadb", () => ({
       findFirst: mocks.findOrder,
       findUnique: mocks.findUpdatedOrder,
     },
+    paymentWebhookEvent: { create: mocks.eventCreate, update: mocks.eventUpdate },
     $transaction: mocks.transaction,
   },
 }));
@@ -83,6 +86,43 @@ describe("POST /api/webhook/bold", () => {
       error: "Firma de webhook Bold inválida",
     });
     expect(mocks.findOrder).not.toHaveBeenCalled();
+  });
+
+  it("keeps a row for a rejected delivery, written before the signature check", async () => {
+    mocks.verifyWebhookSignature.mockReturnValue(false);
+    const payload = { type: "SALE_APPROVED", data: {} };
+
+    await POST(createWebhookRequest(payload));
+
+    expect(mocks.eventCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.eventCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.verifyWebhookSignature.mock.invocationCallOrder[0],
+    );
+    expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({
+      provider: "BOLD",
+      rawBody: JSON.stringify(payload),
+      signature: "signature",
+      payload,
+    });
+    expect(mocks.eventUpdate).toHaveBeenCalledWith({
+      where: { id: "evt-1" },
+      data: expect.objectContaining({
+        status: "REJECTED",
+        statusCode: 400,
+        error: "Firma de webhook Bold inválida",
+      }),
+    });
+  });
+
+  it("still answers Bold when the event row cannot be written", async () => {
+    mocks.eventCreate.mockRejectedValueOnce(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.verifyWebhookSignature.mockReturnValue(false);
+
+    const response = await POST(createWebhookRequest({ type: "SALE_APPROVED", data: {} }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.eventUpdate).not.toHaveBeenCalled();
   });
 
   it("acknowledges repeated approved events without changing paid orders again", async () => {

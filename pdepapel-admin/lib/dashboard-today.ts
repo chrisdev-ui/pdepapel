@@ -3,10 +3,11 @@ import { compareUrgency, computeReplenishment, describeCover } from "@/lib/reple
 import { getUnitsOnOrderByProduct, getUnitsSoldByProduct } from "@/lib/replenishment-db";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
 import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS } from "@/lib/order-queues";
+import { countRecentPaymentWebhookIssues } from "@/lib/payment-webhook-events";
 import { ORDER_READY_TO_DISPATCH } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, PaymentWebhookProvider, ShippingStatus } from "@prisma/client";
 import { addDays, startOfDay, subDays, subHours } from "date-fns";
 import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
 
@@ -34,7 +35,7 @@ const ONLINE_METHODS: PaymentMethod[] = [PaymentMethod.Bold, PaymentMethod.Wompi
 export type SalesChannel = "tienda" | "presencial" | "feria" | "mercadolibre";
 
 export interface TodayPendingAction {
-  kind: "inventory-issue" | "shipping-issue" | "verify-payment" | "awaiting-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
+  kind: "inventory-issue" | "shipping-issue" | "payment-webhook-issue" | "verify-payment" | "awaiting-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
   title: string;
   meta: string;
   href: string;
@@ -118,6 +119,8 @@ export interface TodayRawInput {
   inventoryIssues?: { open: number; orphans: number };
   /** Envíos con novedad de la transportadora o en tránsito sin cambios en más de STALE_IN_TRANSIT_DAYS. */
   shippingIssues?: { count: number; sample: { orderNumber: string; fullName: string; status: ShippingStatus; stale: boolean }[] };
+  /** Webhooks de Bold/Wompi rechazados o fallidos en la última semana: firma, monto, pedido no encontrado. */
+  paymentWebhookIssues?: { count: number; latest: { provider: PaymentWebhookProvider; error: string | null; createdAt: Date } | null };
   unansweredQuestions: { id: string; question: string; productName: string | null; askedAt: Date | null }[];
   unansweredCount: number;
   expiringQuotes: { id: string; orderNumber: string; fullName: string; total: number; expiresAt: Date | null }[];
@@ -127,6 +130,11 @@ export interface TodayRawInput {
   previousWeekMarketplaceNet: number;
   weekItems: { productId: string | null; name: string; quantity: number }[];
 }
+
+const PAYMENT_PROVIDER_LABEL: Record<PaymentWebhookProvider, string> = {
+  BOLD: "Bold",
+  WOMPI: "Wompi",
+};
 
 const SHIPPING_ISSUE_LABEL: Partial<Record<ShippingStatus, string>> = {
   FailedDelivery: "entrega fallida",
@@ -225,6 +233,22 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       href: orphans > 0 && orphans === open ? `/${storeId}/movimientos-inventario#incidencias-inventario` : `/${storeId}/pedidos?vista=por-atender`,
       action: "Cuadrar",
       weight: -1,
+    });
+  }
+  if ((input.paymentWebhookIssues?.count ?? 0) > 0) {
+    const { count, latest } = input.paymentWebhookIssues!;
+    const provider = latest ? PAYMENT_PROVIDER_LABEL[latest.provider] : "la pasarela";
+    pending.push({
+      kind: "payment-webhook-issue",
+      title: `${count} ${count === 1 ? "aviso de pago rechazado" : "avisos de pago rechazados"}`,
+      meta: latest
+        ? `${provider} avisó y no se pudo aplicar: ${latest.error ?? "sin detalle"}${count > 1 ? " y más" : ""}. Si alguien dice que pagó y el pedido sigue pendiente, empieza por aquí.`
+        : "La pasarela envió avisos que no se pudieron aplicar.",
+      // Todavía no hay pantalla que liste estos avisos: la cola «Por atender»
+      // muestra los pedidos con pago en línea sin completar, que es donde se nota.
+      href: `/${storeId}/pedidos?vista=por-atender`,
+      action: "Revisar",
+      weight: -0.5,
     });
   }
   if ((input.shippingIssues?.count ?? 0) > 0) {
@@ -474,6 +498,8 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     prismadb.order.count({ where: shippingIssueWhere }),
   ]);
 
+  const paymentWebhookIssues = await countRecentPaymentWebhookIssues(storeId, now);
+
   return buildTodaySummary(
     {
       now,
@@ -500,6 +526,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       weekItems,
       brokenImageProducts,
       inventoryIssues: { open: openInventoryIssues, orphans: orphanInventoryIssues },
+      paymentWebhookIssues,
       shippingIssues: {
         count: shippingIssueCount,
         sample: shippingIssueSample.map((o) => ({

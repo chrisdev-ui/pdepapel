@@ -91,6 +91,7 @@ model Store {
   settings                       StoreSettings?
   jobRuns                        JobRun[]
   shippingWebhookEvents          ShippingWebhookEvent[]
+  paymentWebhookEvents           PaymentWebhookEvent[]
 }
 
 model Offer {
@@ -1406,6 +1407,34 @@ model ShippingWebhookEvent {
   @@index([myShipmentReference])
 }
 
+/// Cada llamada de Bold o Wompi al webhook de pagos, incluidas las rechazadas.
+/// Se escribe antes de verificar la firma, así que una clave rotada o un monto
+/// que no cuadra dejan rastro en vez de un `console.warn` que se pierde.
+model PaymentWebhookEvent {
+  id             String                    @id @default(uuid())
+  storeId        String?
+  provider       PaymentWebhookProvider
+  eventType      String?
+  transactionId  String?
+  orderReference String?
+  orderId        String?
+  statusCode     Int?
+  status         PaymentWebhookEventStatus @default(RECEIVED)
+  rawBody        String                    @db.Text
+  signature      String?
+  payload        Json?
+  error          String?                   @db.Text
+  createdAt      DateTime                  @default(now())
+  completedAt    DateTime?
+
+  store Store? @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, status, createdAt])
+  @@index([provider, transactionId])
+  @@index([orderId])
+  @@index([status, completedAt])
+}
+
 model InventoryMovement {
   id            String                @id @default(uuid())
   storeId       String
@@ -2425,6 +2454,23 @@ enum MarketplaceWebhookEventStatus {
   PROCESSING
   PROCESSED
   RETRY
+  FAILED
+}
+
+enum PaymentWebhookProvider {
+  BOLD
+  WOMPI
+}
+
+/// RECEIVED se escribe al entrar; si el proceso muere a medias, la fila queda
+/// así y eso también es una señal. REJECTED es cualquier 4xx (firma, cuerpo,
+/// referencia, pedido, monto, moneda); IGNORED es un 200 sin efecto (evento
+/// desconocido, pedido ya pagado); FAILED es un 5xx.
+enum PaymentWebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  REJECTED
   FAILED
 }
 

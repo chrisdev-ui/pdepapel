@@ -13,7 +13,8 @@ export type JobName =
   | "google-merchant-feed"
   | "image-health"
   | "storefront-revalidation"
-  | "whatsapp-webhook-retention";
+  | "whatsapp-webhook-retention"
+  | "payment-webhook-retention";
 
 export interface JobDefinition {
   name: JobName;
@@ -52,6 +53,12 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     name: "whatsapp-webhook-retention",
     label: "Retención de eventos de WhatsApp",
+    expectedEveryHours: 24,
+    perStore: false,
+  },
+  {
+    name: "payment-webhook-retention",
+    label: "Retención de eventos de pago",
     expectedEveryHours: 24,
     perStore: false,
   },

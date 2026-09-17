@@ -30,12 +30,52 @@ import {
 } from "@/lib/webhook-auth";
 import { NextResponse } from "next/server";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
+import {
+  completePaymentWebhookEvent,
+  completePaymentWebhookEventWithError,
+  PaymentWebhookContext,
+  recordPaymentWebhookReceived,
+} from "@/lib/payment-webhook-events";
 
+/**
+ * La fila se escribe antes de mirar la firma y se cierra con lo que respondió
+ * el handler: así también quedan los rechazos, que antes sólo eran un
+ * `console.warn`. Registrar nunca tumba el pago: si la base falla, el webhook
+ * sigue igual que siempre.
+ */
 export async function POST(req: Request) {
-  try {
-    const scopedStoreId = readWebhookStoreId(req);
-    const rawPayload = await req.text();
+  const scopedStoreId = readWebhookStoreId(req);
+  const rawPayload = await req.text();
+  const context: PaymentWebhookContext = { storeId: scopedStoreId };
+  const eventId = await recordPaymentWebhookReceived({
+    provider: "BOLD",
+    request: req,
+    rawBody: rawPayload,
+    storeId: scopedStoreId,
+  });
 
+  try {
+    const response = await handleBoldWebhook(
+      req,
+      rawPayload,
+      scopedStoreId,
+      context,
+    );
+    await completePaymentWebhookEvent(eventId, response, context);
+    return response;
+  } catch (error) {
+    await completePaymentWebhookEventWithError(eventId, error, context);
+    throw error;
+  }
+}
+
+async function handleBoldWebhook(
+  req: Request,
+  rawPayload: string,
+  scopedStoreId: string | null,
+  context: PaymentWebhookContext,
+) {
+  try {
     if (!rawPayload) {
       return NextResponse.json(
         { error: "Payload no recibido" },
@@ -77,6 +117,7 @@ export async function POST(req: Request) {
 
     const eventType = payload.type || payload.event || payload.action;
     const transactionData = payload.data || payload.transaction || payload;
+    context.eventType = typeof eventType === "string" ? eventType : null;
 
     if (!eventType || !transactionData) {
       return NextResponse.json(
@@ -93,6 +134,7 @@ export async function POST(req: Request) {
           transactionData,
           OrderStatus.PAID,
           scopedStoreId,
+          context,
         );
 
       case "SALE_REJECTED":
@@ -103,6 +145,7 @@ export async function POST(req: Request) {
           transactionData,
           OrderStatus.CANCELLED,
           scopedStoreId,
+          context,
         );
 
       default:
@@ -125,12 +168,20 @@ async function processBoldPayment(
   transaction: any,
   targetStatus: OrderStatus,
   scopedStoreId: string | null,
+  context: PaymentWebhookContext,
 ) {
   const orderReference =
     transaction.metadata?.reference ||
     transaction.reference ||
     transaction.order_id ||
     transaction.orderId;
+  context.orderReference =
+    typeof orderReference === "string" ? orderReference : null;
+  context.transactionId =
+    transaction.payment_id ||
+    transaction.id ||
+    transaction.transaction_id ||
+    null;
 
   if (!orderReference) {
     return NextResponse.json(
@@ -167,6 +218,8 @@ async function processBoldPayment(
       { status: 404 },
     );
   }
+  context.orderId = order.id;
+  context.storeId = order.storeId;
 
   if (order.payment?.method !== PaymentMethod.Bold) {
     return NextResponse.json(

@@ -25,12 +25,53 @@ import { safeHexEquals } from "@/lib/webhook-auth";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
+import {
+  completePaymentWebhookEvent,
+  completePaymentWebhookEventWithError,
+  PaymentWebhookContext,
+  recordPaymentWebhookReceived,
+} from "@/lib/payment-webhook-events";
 
 const HASH_ALGORITHM = "sha256";
 
+/**
+ * Mismo esquema que Bold: la fila se escribe antes de mirar el checksum y se
+ * cierra con la respuesta. El cuerpo se lee como texto para guardarlo tal
+ * cual; el JSON se arma después, con la misma tolerancia de antes.
+ */
 export async function POST(req: Request) {
+  const rawBody = await req.text();
+  const context: PaymentWebhookContext = {};
+  const eventId = await recordPaymentWebhookReceived({
+    provider: "WOMPI",
+    request: req,
+    rawBody,
+  });
+
   try {
-    const response = await req.json().catch(() => null);
+    const response = await handleWompiWebhook(rawBody, context);
+    await completePaymentWebhookEvent(eventId, response, context);
+    return response;
+  } catch (error) {
+    await completePaymentWebhookEventWithError(eventId, error, context);
+    throw error;
+  }
+}
+
+function parseWompiBody(rawBody: string): any {
+  try {
+    return rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleWompiWebhook(
+  rawBody: string,
+  context: PaymentWebhookContext,
+) {
+  try {
+    const response = parseWompiBody(rawBody);
 
     if (!response) {
       return NextResponse.json(
@@ -40,10 +81,12 @@ export async function POST(req: Request) {
     }
 
     if (response && response.event) {
+      context.eventType =
+        typeof response.event === "string" ? response.event : null;
       switch (response.event) {
         case "transaction.updated":
         case "nequi_token.updated":
-          return await processWebhookPayment(response);
+          return await processWebhookPayment(response, context);
 
         default:
           return NextResponse.json(
@@ -70,12 +113,21 @@ export async function POST(req: Request) {
   }
 }
 
-async function processWebhookPayment(response: any) {
+async function processWebhookPayment(
+  response: any,
+  context: PaymentWebhookContext,
+) {
   if (isValidChecksum(response)) {
     const {
       data: { transaction },
     } = response;
     if (transaction) {
+      context.transactionId =
+        typeof transaction.id === "string" ? transaction.id : null;
+      context.orderReference =
+        typeof transaction.reference === "string"
+          ? transaction.reference
+          : null;
       try {
         const order = await prismadb.order.findFirst({
           where: {
@@ -106,6 +158,8 @@ async function processWebhookPayment(response: any) {
             { error: `Order not found: ${transaction.reference}` },
             { status: 400 },
           );
+        context.orderId = order.id;
+        context.storeId = order.storeId;
 
         if (isPaymentValid(order, transaction)) {
           return await updateOrderData(order, transaction);

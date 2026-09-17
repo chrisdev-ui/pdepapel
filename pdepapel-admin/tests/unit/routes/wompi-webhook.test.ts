@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   calculateOrderFinancials: vi.fn(),
   createGuideForOrder: vi.fn(),
   createInventoryMovementBatchResilient: vi.fn(),
+  eventCreate: vi.fn().mockResolvedValue({ id: "evt-1" }),
+  eventUpdate: vi.fn().mockResolvedValue({}),
   findOrder: vi.fn(),
   findUpdatedOrder: vi.fn(),
   invalidateStoreProductsCache: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("@/lib/prismadb", () => ({
       findUnique: mocks.findUpdatedOrder,
     },
     paymentDetails: { upsert: mocks.paymentUpsert },
+    paymentWebhookEvent: { create: mocks.eventCreate, update: mocks.eventUpdate },
     shipping: { upsert: mocks.shippingUpsert },
     $transaction: mocks.transaction,
   },
@@ -117,6 +120,21 @@ describe("POST /api/webhook/wompi", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.findOrder).not.toHaveBeenCalled();
+    expect(mocks.eventCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({
+      provider: "WOMPI",
+      signature: null,
+      payload: expect.objectContaining({ event: "transaction.updated" }),
+    });
+    expect(mocks.eventUpdate).toHaveBeenCalledWith({
+      where: { id: "evt-1" },
+      data: expect.objectContaining({
+        status: "REJECTED",
+        statusCode: 400,
+        error: "Checksum of transaction is not valid",
+        eventType: "transaction.updated",
+      }),
+    });
   });
 
   it("processes an approved payment once and prevents duplicate stock deductions", async () => {
@@ -292,6 +310,11 @@ describe("POST /api/webhook/wompi", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.findOrder).not.toHaveBeenCalled();
+    expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({ rawBody: "no soy json" });
+    expect(mocks.eventUpdate).toHaveBeenCalledWith({
+      where: { id: "evt-1" },
+      data: expect.objectContaining({ status: "REJECTED", statusCode: 400 }),
+    });
   });
 
   it("rejects a signed event whose signed property is missing, without a 500", async () => {

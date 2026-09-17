@@ -154,6 +154,21 @@ describe("dashboard today", () => {
     expect(kinds.indexOf("shipping-issue")).toBeLessThan(kinds.indexOf("create-guide"));
   });
 
+  it("surfaces rejected payment webhooks on Inicio ahead of the payment queue", () => {
+    const summary = buildTodaySummary(
+      { ...base(), paymentWebhookIssues: { count: 2, latest: { provider: "BOLD", error: "Firma inválida", createdAt: new Date("2026-09-17T10:00:00.000Z") } } },
+      "store",
+    );
+    const item = summary.pending.find((entry) => entry.kind === "payment-webhook-issue");
+    expect(item).toMatchObject({ title: "2 avisos de pago rechazados", href: "/store/pedidos?vista=por-atender", action: "Revisar" });
+    expect(item?.meta).toContain("Bold avisó y no se pudo aplicar: Firma inválida y más");
+    const kinds = summary.pending.map((entry) => entry.kind);
+    expect(kinds.indexOf("payment-webhook-issue")).toBeLessThan(kinds.indexOf("verify-payment"));
+
+    const none = buildTodaySummary({ ...base(), paymentWebhookIssues: { count: 0, latest: null } }, "store");
+    expect(none.pending.some((entry) => entry.kind === "payment-webhook-issue")).toBe(false);
+  });
+
   describe("replenishment loader", () => {
     beforeEach(() => {
       db.product.findMany.mockReset().mockResolvedValue([]);
