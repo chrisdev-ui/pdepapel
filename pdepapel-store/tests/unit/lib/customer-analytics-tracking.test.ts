@@ -189,16 +189,15 @@ describe("customer analytics tracking", () => {
   });
 
   it("resolves the GA4 client id only with consent and a loaded tag", async () => {
-    await expect(getGoogleAnalyticsClientId("G-TEST123")).resolves.toBeNull();
-
-    grantConsent();
-    await expect(getGoogleAnalyticsClientId("G-TEST123")).resolves.toBeNull();
-    await expect(getGoogleAnalyticsClientId("")).resolves.toBeNull();
-
     window.gtag = vi.fn((...args: unknown[]) => {
       const callback = args[3];
       if (typeof callback === "function") callback("123.456");
     });
+
+    await expect(getGoogleAnalyticsClientId("G-TEST123")).resolves.toBeNull();
+
+    grantConsent();
+    await expect(getGoogleAnalyticsClientId("")).resolves.toBeNull();
     await expect(getGoogleAnalyticsClientId("G-TEST123")).resolves.toBe(
       "123.456",
     );
@@ -210,13 +209,54 @@ describe("customer analytics tracking", () => {
     await expect(getGoogleAnalyticsClientId("G-TEST123")).resolves.toBeNull();
   });
 
-  it("gives up on the client id after 250 ms if the tag never answers", async () => {
+  it("answers right away without consent, instead of waiting for the tag", async () => {
+    vi.useFakeTimers();
+    delete (window as { gtag?: unknown }).gtag;
+
+    // Sin adelantar el reloj: quien no aceptó no espera ningún plazo.
+    await expect(getGoogleAnalyticsClientId("G-TEST123")).resolves.toBeNull();
+  });
+
+  it("still captures the client id when the tag loads after the old 250 ms window", async () => {
+    vi.useFakeTimers();
+    grantConsent();
+    delete (window as { gtag?: unknown }).gtag;
+
+    const pending = getGoogleAnalyticsClientId("G-TEST123");
+    await vi.advanceTimersByTimeAsync(800);
+
+    window.gtag = vi.fn((...args: unknown[]) => {
+      const callback = args[3];
+      if (typeof callback === "function") callback("999.888");
+    });
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(pending).resolves.toBe("999.888");
+  });
+
+  it("still captures the client id when the tag answers slowly", async () => {
+    vi.useFakeTimers();
+    grantConsent();
+    window.gtag = vi.fn((...args: unknown[]) => {
+      const callback = args[3];
+      if (typeof callback === "function") {
+        window.setTimeout(() => callback("555.444"), 900);
+      }
+    });
+
+    const pending = getGoogleAnalyticsClientId("G-TEST123");
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(pending).resolves.toBe("555.444");
+  });
+
+  it("gives up once the wait window closes if the tag never answers", async () => {
     vi.useFakeTimers();
     grantConsent();
     window.gtag = vi.fn();
 
-    const pending = getGoogleAnalyticsClientId("G-TEST123");
-    await vi.advanceTimersByTimeAsync(300);
+    const pending = getGoogleAnalyticsClientId("G-TEST123", { timeoutMs: 400 });
+    await vi.advanceTimersByTimeAsync(500);
 
     await expect(pending).resolves.toBeNull();
   });

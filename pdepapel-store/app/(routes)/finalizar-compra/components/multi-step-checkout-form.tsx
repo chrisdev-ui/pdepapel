@@ -93,6 +93,10 @@ type CheckoutFormUser = {
   email?: string | null;
 };
 
+const GA_CLIENT_ID_ATTEMPTS = 5;
+const GA_CLIENT_ID_RETRY_MS = 3_000;
+const GA_CLIENT_ID_SUBMIT_WAIT_MS = 800;
+
 const getProductImageUrl = (product: Product) =>
   product.images.find((image) => image.isMain)?.url ?? product.images[0]?.url;
 
@@ -510,9 +514,33 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
     if (!measurementId) return;
 
-    void getGoogleAnalyticsClientId(measurementId).then((clientId) => {
-      analyticsClientIdRef.current = clientId;
-    });
+    let isDisposed = false;
+    let attemptsLeft = GA_CLIENT_ID_ATTEMPTS;
+    let retryId: number | undefined;
+
+    // Se reintenta mientras la persona llena el formulario: si `gtag` todavía
+    // no había bajado —o si aceptó la analítica después de entrar— la siguiente
+    // vuelta lo alcanza, y al enviar el pedido el identificador ya está.
+    const capture = () => {
+      attemptsLeft -= 1;
+      void getGoogleAnalyticsClientId(measurementId).then((clientId) => {
+        if (isDisposed) return;
+        if (clientId) {
+          analyticsClientIdRef.current = clientId;
+          return;
+        }
+        if (attemptsLeft > 0) {
+          retryId = window.setTimeout(capture, GA_CLIENT_ID_RETRY_MS);
+        }
+      });
+    };
+
+    capture();
+
+    return () => {
+      isDisposed = true;
+      if (retryId !== undefined) window.clearTimeout(retryId);
+    };
   }, []);
 
   const validateStep = async (step: number) => {
@@ -989,11 +1017,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         guestUserId = generateGuestId();
         setGuestId(guestUserId);
       }
+      // Última oportunidad, con un plazo corto: enviar el pedido no puede
+      // quedarse esperando a la analítica.
       const analyticsClientId =
         analyticsClientIdRef.current ??
         (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
           ? await getGoogleAnalyticsClientId(
               process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+              { timeoutMs: GA_CLIENT_ID_SUBMIT_WAIT_MS },
             )
           : null);
       analyticsClientIdRef.current = analyticsClientId;

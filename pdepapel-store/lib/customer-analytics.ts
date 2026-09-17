@@ -166,32 +166,56 @@ export function trackGooglePageView(path: string, title: string): void {
   });
 }
 
+export const GA_CLIENT_ID_WAIT_MS = 2_000;
+
+/**
+ * Sin permiso no hay identificador, y eso se responde de una vez: quien no
+ * aceptó no espera nada. Con permiso sí vale la pena esperar, porque `gtag`
+ * empieza siendo una cola en `dataLayer` y sólo contesta cuando termina de
+ * bajar el script; con 250 ms una conexión lenta se quedaba sin identificador
+ * y la compra nunca llegaba a GA4.
+ */
 export function getGoogleAnalyticsClientId(
   measurementId: string,
+  { timeoutMs = GA_CLIENT_ID_WAIT_MS }: { timeoutMs?: number } = {},
 ): Promise<string | null> {
   if (
     typeof window === "undefined" ||
     !measurementId ||
-    !hasAnalyticsConsent() ||
-    !window.gtag
+    !hasAnalyticsConsent()
   ) {
     return Promise.resolve(null);
   }
 
-  const gtag = window.gtag;
-
   return new Promise((resolve) => {
     let settled = false;
+    let pollId: number | undefined;
+
     const settle = (clientId: string | null) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timeoutId);
+      if (pollId !== undefined) window.clearInterval(pollId);
       resolve(clientId);
     };
-    const timeoutId = window.setTimeout(() => settle(null), 250);
 
-    gtag("get", measurementId, "client_id", (clientId: unknown) => {
-      settle(typeof clientId === "string" ? clientId : null);
-    });
+    const timeoutId = window.setTimeout(() => settle(null), timeoutMs);
+
+    const ask = () => {
+      const gtag = window.gtag;
+      if (!gtag) return false;
+      gtag("get", measurementId, "client_id", (clientId: unknown) => {
+        settle(typeof clientId === "string" ? clientId : null);
+      });
+      return true;
+    };
+
+    // `enableGoogleAnalytics` puede no haber corrido todavía cuando el
+    // checkout monta: se espera a que exista la cola, sin pasarse del plazo.
+    if (!ask()) {
+      pollId = window.setInterval(() => {
+        if (ask() && pollId !== undefined) window.clearInterval(pollId);
+      }, 50);
+    }
   });
 }
