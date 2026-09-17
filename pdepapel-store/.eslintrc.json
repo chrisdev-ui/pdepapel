@@ -2,7 +2,9 @@
   "extends": "next/core-web-vitals",
   "overrides": [
     {
-      "files": ["tests/e2e/**/*.spec.ts"],
+      "files": [
+        "tests/e2e/**/*.spec.ts"
+      ],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -15,7 +17,10 @@
             ]
           }
         ]
-      }
+      },
+      "excludedFiles": [
+        "tests/e2e/local/**"
+      ]
     }
   ]
 }

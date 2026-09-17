@@ -1,11 +1,15 @@
-import { expect, Page, Route, test } from "./helpers/safe-test";
+import { expect, Page, Route, test } from "@playwright/test";
 
-import { gotoPublicPage, skipPrivacyBanner } from "./helpers/public-page";
+import { gotoPublicPage, skipPrivacyBanner } from "../helpers/public-page";
+import { stubDaneLookup } from "./helpers/local-environment";
 
 /**
- * The checkout is exercised end to end with the admin API mocked in the
- * browser: shipping quotes, order creation and the online-payment handshake
- * never reach the real backend, so no order is created wherever this runs.
+ * Comportamiento de la interfaz del checkout: los casos de error —sin stock,
+ * servidor caído— se provocan con respuestas simuladas, que es la única forma
+ * de producirlos a voluntad. Vive en el proyecto local, contra una
+ * administración con base desechable, así que aunque un mock faltara no habría
+ * nada que tocar en producción. Los pedidos de verdad, sin simular nada, están
+ * en `checkout-order.spec.ts`.
  */
 
 const PRODUCT_ID = "checkout-flow-e2e-product";
@@ -63,6 +67,7 @@ const json = (route: Route, status: number, body: unknown) =>
 
 async function seedCheckout(page: Page) {
   await skipPrivacyBanner(page);
+  await stubDaneLookup(page);
   // Init scripts run on every navigation: seed only once per tab so a
   // second visit sees what the first one saved (cart, pending order).
   await page.addInitScript((cart) => {
