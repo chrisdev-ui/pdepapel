@@ -3,7 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
-import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
+import {
+  deleteGroupedVariantKeepingUrls,
+  synchronizeProductGroupSlugs,
+} from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { resolveProductGroupVariantStock } from "@/lib/product-group-variant-stock";
@@ -185,6 +188,12 @@ export async function PATCH(
         );
       }
 
+      // La hermana más antigua que sigue en el grupo hereda las URLs de las
+      // variantes que se borran; las nuevas de este mismo guardado aún no existen.
+      const survivor = existingProducts
+        .filter((p) => payloadIds.has(p.id) && !p.isArchived)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+
       // Process Deletions
       for (const product of productsToDelete) {
         if (product.orderItems.length > 0) {
@@ -192,6 +201,12 @@ export async function PATCH(
           await tx.product.update({
             where: { id: product.id },
             data: { isArchived: true },
+          });
+        } else if (survivor) {
+          await deleteGroupedVariantKeepingUrls(tx, {
+            storeId: params.storeId,
+            product,
+            redirectToProductId: survivor.id,
           });
         } else {
           // Hard delete

@@ -122,6 +122,38 @@ export async function preserveProductSlugAlias(
   });
 }
 
+interface DeleteGroupedVariantOptions {
+  storeId: string;
+  product: { id: string; slug: string };
+  redirectToProductId: string;
+}
+
+/**
+ * Borrar una variante se llevaba su URL: la fila desaparece y la cascada
+ * borra sus alias, así que el enlace viejo daba 404 sin remedio. Antes de
+ * borrar se guardan su slug y los alias que ya tenía y, borrada, se apuntan
+ * a una hermana viva del grupo.
+ */
+export async function deleteGroupedVariantKeepingUrls(
+  client: ProductSlugClient,
+  { storeId, product, redirectToProductId }: DeleteGroupedVariantOptions,
+) {
+  const aliases = await client.productSlugAlias.findMany({
+    where: { storeId, productId: product.id },
+    select: { slug: true },
+  });
+
+  await client.product.delete({ where: { id: product.id } });
+
+  for (const slug of [product.slug, ...aliases.map((alias) => alias.slug)]) {
+    await preserveProductSlugAlias(client, {
+      storeId,
+      productId: redirectToProductId,
+      slug,
+    });
+  }
+}
+
 export async function synchronizeProductGroupSlugs(
   client: ProductSlugClient,
   storeId: string,
