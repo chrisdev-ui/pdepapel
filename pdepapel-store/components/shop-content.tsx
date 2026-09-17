@@ -1,10 +1,10 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import MobileFilters from "@/components/mobile-filters";
 import { SaveSearchButton } from "@/components/shop/save-search-button";
 import { MobileToolbar, ShopToolbar } from "@/components/shop/shop-toolbar";
 import { ShopSidebar } from "@/components/shop/shop-sidebar";
@@ -24,11 +24,6 @@ import { ProductListSkeleton } from "../app/(routes)/tienda/components/skeletons
 
 /** How long the grid may show its loading tint before giving up on it. */
 const CATALOG_BUSY_HINT_MS = 8_000;
-
-const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
-  ssr: false,
-  loading: () => <div aria-hidden="true" className="h-11 flex-1 rounded-full border-[1.5px] border-blue-yankees/30" />,
-});
 
 interface ShopContentProps {
   initialProducts: Product[];
