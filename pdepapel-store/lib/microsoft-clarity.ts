@@ -59,7 +59,16 @@ const SAFE_CHECKOUT_STEP_TAGS = new Set([
 /** Clarity solo recibe el nombre del evento: la superficie viaja como etiqueta. */
 const SAFE_CART_SURFACE_TAGS = new Set(["drawer", "page", "preview"]);
 
+/** Lo mismo para el navegador desde el que se compra. */
+const SAFE_BROWSER_CONTEXT_TAGS = new Set([
+  "facebook",
+  "instagram",
+  "standard",
+  "whatsapp",
+]);
+
 type QueuedClarityEvent = {
+  browserContext?: string;
   cartSurface?: string;
   checkoutStep?: string;
   eventName: string;
@@ -159,6 +168,15 @@ function getCartSurfaceTag(
     : undefined;
 }
 
+function getBrowserContextTag(
+  parameters: Record<string, unknown>,
+): string | undefined {
+  const context = parameters.browser_context;
+  return typeof context === "string" && SAFE_BROWSER_CONTEXT_TAGS.has(context)
+    ? context
+    : undefined;
+}
+
 function getClarityEventName(
   eventName: string,
   parameters: Record<string, unknown>,
@@ -175,9 +193,10 @@ function flushQueuedEvents(client: ClarityClient): void {
   const events = queuedEvents;
   queuedEvents = [];
 
-  for (const { cartSurface, checkoutStep, eventName } of events) {
+  for (const { browserContext, cartSurface, checkoutStep, eventName } of events) {
     if (checkoutStep) client.setTag("checkout_step", checkoutStep);
     if (cartSurface) client.setTag("cart_surface", cartSurface);
+    if (browserContext) client.setTag("browser_context", browserContext);
     client.event(eventName);
   }
 }
@@ -259,11 +278,13 @@ export function trackMicrosoftClarityEvent(
 
   const checkoutStep = getCheckoutStepTag(eventName, parameters);
   const cartSurface = getCartSurfaceTag(parameters);
+  const browserContext = getBrowserContextTag(parameters);
   const clarityEventName = getClarityEventName(eventName, parameters);
 
   if (!clarityClient) {
     if (queuedEvents.length < MAX_QUEUED_EVENTS) {
       queuedEvents.push({
+        browserContext,
         cartSurface,
         checkoutStep,
         eventName: clarityEventName,
@@ -274,5 +295,6 @@ export function trackMicrosoftClarityEvent(
 
   if (checkoutStep) clarityClient.setTag("checkout_step", checkoutStep);
   if (cartSurface) clarityClient.setTag("cart_surface", cartSurface);
+  if (browserContext) clarityClient.setTag("browser_context", browserContext);
   clarityClient.event(clarityEventName);
 }

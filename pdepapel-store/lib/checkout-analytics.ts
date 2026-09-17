@@ -21,6 +21,29 @@ export const CART_SURFACES = ["page", "drawer", "preview"] as const;
 
 export type CartSurface = (typeof CART_SURFACES)[number];
 
+/**
+ * Desde qué navegador se compra. Mucho tráfico llega por Instagram o WhatsApp
+ * y esos navegadores integrados se portan distinto; sin esto no hay forma de
+ * saber si el checkout les funciona igual de bien.
+ */
+export const BROWSER_CONTEXTS = [
+  "facebook",
+  "instagram",
+  "standard",
+  "whatsapp",
+] as const;
+
+export type BrowserContext = (typeof BROWSER_CONTEXTS)[number];
+
+/** Instagram va primero: su navegador también anuncia las marcas de Facebook. */
+export function getBrowserContext(userAgent?: string | null): BrowserContext {
+  if (!userAgent) return "standard";
+  if (/Instagram/i.test(userAgent)) return "instagram";
+  if (/FBAN|FBAV|FB_IAB/i.test(userAgent)) return "facebook";
+  if (/WhatsApp/i.test(userAgent)) return "whatsapp";
+  return "standard";
+}
+
 const CHECKOUT_FIELD_GROUPS: Record<string, string> = {
   address1: "direccion_entrega",
   address2: "direccion_entrega",

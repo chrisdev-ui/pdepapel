@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getBrowserContext,
   getCheckoutRequestFailureAnalytics,
   getCheckoutStepName,
   summarizeCheckoutValidationErrors,
@@ -42,5 +43,41 @@ describe("checkout analytics", () => {
     expect(getCheckoutRequestFailureAnalytics(new Error("offline"))).toEqual({
       failure_type: "network_or_client_error",
     });
+  });
+});
+
+describe("browser context", () => {
+  it("names the in-app browsers we care about", () => {
+    expect(
+      getBrowserContext(
+        "Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Instagram 302.0.0.23.109",
+      ),
+    ).toBe("instagram");
+    expect(
+      getBrowserContext("Mozilla/5.0 (iPhone) [FBAN/FBIOS;FBAV/450.0.0.38.108]"),
+    ).toBe("facebook");
+    expect(
+      getBrowserContext("Mozilla/5.0 (Linux; Android 13) WhatsApp/2.23.20.79"),
+    ).toBe("whatsapp");
+  });
+
+  it("calls an ordinary browser standard", () => {
+    expect(
+      getBrowserContext(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605.1.15 Version/17.0 Mobile Safari/604.1",
+      ),
+    ).toBe("standard");
+  });
+
+  it("prefers Instagram, whose browser also carries the Facebook markers", () => {
+    expect(
+      getBrowserContext("Mozilla/5.0 (iPhone) [FBAN/FBIOS] Instagram 302.0"),
+    ).toBe("instagram");
+  });
+
+  it("falls back to standard when there is no user agent", () => {
+    expect(getBrowserContext(undefined)).toBe("standard");
+    expect(getBrowserContext(null)).toBe("standard");
+    expect(getBrowserContext("")).toBe("standard");
   });
 });

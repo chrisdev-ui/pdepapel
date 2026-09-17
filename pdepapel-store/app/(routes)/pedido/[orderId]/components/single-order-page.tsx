@@ -19,6 +19,7 @@ import { useConfetti } from "@/hooks/use-confetti";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import useTrackShipment from "@/hooks/use-track-shipment";
+import { cartMatchesOrder } from "@/lib/cart-matches-order";
 import { formatOrderDate } from "@/lib/order-dates";
 import {
   ORDER_STATUS_POLL_INTERVAL_MS,
@@ -53,6 +54,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     [],
   );
   const removeAll = useCart((state) => state.removeAll);
+  const cartItems = useCart((state) => state.items);
   const pendingOrder = useCheckoutStore((state) => state.pendingOrder);
   const setPendingOrder = useCheckoutStore((state) => state.setPendingOrder);
   const resetCheckout = useCheckoutStore((state) => state.resetCheckout);
@@ -67,14 +69,21 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   useEffect(() => {
     if (activeOrder.status !== OrderStatus.PAID) return;
 
-    if (pendingOrder?.id === order.id) {
-      removeAll();
-      resetCheckout();
-      setPendingOrder(null);
-    }
+    // El camino normal: este navegador arrancó el pedido y lo recuerda.
+    // El segundo: se pagó en otro navegador —pasa al abrir el enlace desde
+    // Instagram o WhatsApp— y aquí quedó el mismo carrito sin vaciar.
+    const isRememberedOrder = pendingOrder?.id === order.id;
+    const leftoverCartWasPaid = cartMatchesOrder(cartItems, order.orderItems);
+    if (!isRememberedOrder && !leftoverCartWasPaid) return;
+
+    removeAll();
+    resetCheckout();
+    if (isRememberedOrder) setPendingOrder(null);
   }, [
     activeOrder.status,
+    cartItems,
     order.id,
+    order.orderItems,
     pendingOrder?.id,
     removeAll,
     resetCheckout,

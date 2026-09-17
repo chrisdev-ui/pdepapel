@@ -145,7 +145,9 @@ export const ShippingInfoStep = ({
   const wantsToSaveAddress = form.watch("saveAddress");
   const shippingOptionType = form.watch("shippingOptionType") || "ENVIOCLICK";
   const selectedRateId = form.watch("envioClickIdRate");
-  const locationsDisabled = isLoading || isLoadingLocations;
+  // La búsqueda de ciudades no bloquea la dirección: antes cada pulsación
+  // dejaba estos campos deshabilitados un instante y el toque se perdía.
+  const addressFieldsDisabled = isLoading;
 
   const hasOptionalDetails = Boolean(
     address2 || neighborhood || company || addressReference,
@@ -733,7 +735,7 @@ export const ShippingInfoStep = ({
                 <FormControl>
                   <Input
                     className={optionalInputClass}
-                    disabled={locationsDisabled}
+                    disabled={addressFieldsDisabled}
                     autoComplete="street-address"
                     placeholder="Ej. Calle 12 AA Sur #55D-30"
                     {...field}
@@ -776,7 +778,7 @@ export const ShippingInfoStep = ({
                     <FormControl>
                       <Input
                         className={optionalInputClass}
-                        disabled={locationsDisabled}
+                        disabled={addressFieldsDisabled}
                         autoComplete="address-line2"
                         placeholder="Ej. Torre 2, apto 1801"
                         {...field}
@@ -795,7 +797,7 @@ export const ShippingInfoStep = ({
                     <FormControl>
                       <Input
                         className={optionalInputClass}
-                        disabled={locationsDisabled}
+                        disabled={addressFieldsDisabled}
                         placeholder="Ej. Belén"
                         {...field}
                       />
@@ -815,7 +817,7 @@ export const ShippingInfoStep = ({
                     <FormControl>
                       <Input
                         className={optionalInputClass}
-                        disabled={locationsDisabled}
+                        disabled={addressFieldsDisabled}
                         maxLength={25}
                         placeholder="Ej. Portería, frente al parque"
                         {...field}
@@ -837,7 +839,7 @@ export const ShippingInfoStep = ({
                     <FormControl>
                       <Input
                         className={optionalInputClass}
-                        disabled={locationsDisabled}
+                        disabled={addressFieldsDisabled}
                         autoComplete="organization"
                         placeholder="Nombre de la empresa"
                         {...field}

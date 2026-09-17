@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
 import {
+  getBrowserContext,
   getCheckoutRequestFailureAnalytics,
   getCheckoutStepName,
   summarizeCheckoutValidationErrors,
@@ -488,6 +489,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
     checkoutStartedRef.current = true;
     trackCustomerEvent("begin_checkout", {
+      browser_context: getBrowserContext(navigator.userAgent),
       currency: "COP",
       items: analyticsItems,
       value: getAnalyticsValue(analyticsItems),
@@ -1075,6 +1077,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         value: getAnalyticsValue(analyticsItems),
       });
       trackCustomerEvent("checkout_order_submitted", {
+        browser_context: getBrowserContext(navigator.userAgent),
         currency: "COP",
         items: analyticsItems,
         payment_type: paymentMethod,
