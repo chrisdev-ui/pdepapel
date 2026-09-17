@@ -5,8 +5,38 @@ import {
   expireCheckoutStorage,
   isPendingOrderUsable,
   migrateCheckoutStorage,
+  normalizeCouponState,
   PENDING_ORDER_MAX_AGE_MS,
+  sanitizeCheckoutStorage,
+  useCheckoutStore,
 } from "@/hooks/use-checkout-store";
+
+describe("normalizeCouponState", () => {
+  const empty = { coupon: null, isValid: null };
+  const coupon = { id: "c1", code: "HOLA", type: "PERCENT", amount: 10 } as never;
+
+  it("convierte lo que no es un estado de cupón en «sin cupón»", () => {
+    expect(normalizeCouponState(null)).toEqual(empty);
+    expect(normalizeCouponState(undefined)).toEqual(empty);
+    expect(normalizeCouponState("HOLA")).toEqual(empty);
+    expect(normalizeCouponState({})).toEqual(empty);
+    expect(normalizeCouponState({ coupon, isValid: "yes" })).toEqual(empty);
+  });
+
+  it("conserva un estado válido tal cual", () => {
+    expect(normalizeCouponState({ coupon, isValid: true })).toEqual({ coupon, isValid: true });
+    expect(normalizeCouponState({ coupon: null, isValid: false })).toEqual({ coupon: null, isValid: false });
+  });
+
+  it("se aplica al hidratar y al guardar, para que /carrito nunca lea null", () => {
+    expect(sanitizeCheckoutStorage({ couponState: null as never, currentStep: 2 })).toEqual({
+      couponState: empty,
+      currentStep: 2,
+    });
+    useCheckoutStore.getState().setCouponState(null as never);
+    expect(useCheckoutStore.getState().couponState).toEqual(empty);
+  });
+});
 
 describe("migrateCheckoutStorage", () => {
   it("une nombre y apellidos guardados en un solo campo", () => {

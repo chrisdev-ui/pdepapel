@@ -47,13 +47,12 @@ interface CheckoutStore {
   resetCheckout: () => void;
 }
 
+const EMPTY_COUPON_STATE: CouponState = { coupon: null, isValid: null };
+
 const initialState = {
   currentStep: 1,
   formData: {},
-  couponState: {
-    coupon: null,
-    isValid: null,
-  },
+  couponState: EMPTY_COUPON_STATE,
   quoteData: null,
   quoteKey: null,
   quoteFetchedAt: null,
@@ -77,6 +76,27 @@ type PersistedCheckoutState = Partial<
     lastName?: string;
   };
 };
+
+/**
+ * `localStorage` is not under our control: a `couponState: null` left by an
+ * older build crashed /carrito on `couponState.isValid`. Anything that is not
+ * a coupon state becomes «sin cupón».
+ */
+export function normalizeCouponState(value: unknown): CouponState {
+  if (!value || typeof value !== "object") return EMPTY_COUPON_STATE;
+  const { coupon, isValid } = value as Partial<CouponState>;
+  if (typeof isValid !== "boolean" && isValid !== null && isValid !== undefined) {
+    return EMPTY_COUPON_STATE;
+  }
+  return { coupon: coupon ?? null, isValid: isValid ?? null };
+}
+
+/** Runs on every hydration, after migration and expiry. */
+export function sanitizeCheckoutStorage(
+  state: PersistedCheckoutState,
+): PersistedCheckoutState {
+  return { ...state, couponState: normalizeCouponState(state.couponState) };
+}
 
 /**
  * Brings older `checkout-storage` payloads to the current shape: the first
@@ -136,7 +156,7 @@ export const useCheckoutStore = create(
           updatedAt: Date.now(),
         })),
       setCouponState: (state) =>
-        set({ couponState: state, updatedAt: Date.now() }),
+        set({ couponState: normalizeCouponState(state), updatedAt: Date.now() }),
       setQuoteData: (data, key = null) =>
         set({
           quoteData: data,
@@ -152,12 +172,14 @@ export const useCheckoutStore = create(
       version: CHECKOUT_STORAGE_VERSION,
       storage: createJSONStorage(() => localStorage),
       migrate: (persisted, version) =>
-        expireCheckoutStorage(
-          migrateCheckoutStorage(persisted, version),
+        sanitizeCheckoutStorage(
+          expireCheckoutStorage(migrateCheckoutStorage(persisted, version)),
         ) as CheckoutStore,
       merge: (persisted, current) => ({
         ...current,
-        ...expireCheckoutStorage((persisted ?? {}) as PersistedCheckoutState),
+        ...sanitizeCheckoutStorage(
+          expireCheckoutStorage((persisted ?? {}) as PersistedCheckoutState),
+        ),
       }),
     },
   ),

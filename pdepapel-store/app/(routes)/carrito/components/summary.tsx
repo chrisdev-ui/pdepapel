@@ -51,7 +51,7 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
   const [showCoupon, setShowCoupon] = useState(false);
   const [stickyVisible, setStickyVisible] = useState(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
-  const coupon = couponState.isValid ? couponState.coupon : null;
+  const coupon = couponState?.isValid ? couponState.coupon : null;
 
   const { total, subtotal, productSavings, couponDiscount, freeShipping } = useMemo(
     () => calculateTotals(items, coupon, 0, freeShippingThreshold),

@@ -81,6 +81,14 @@ describe("Summary", () => {
     expect(screen.queryByText("Cupón GRANDE")).not.toBeInTheDocument();
   });
 
+  it("renders when an old localStorage left couponState as null instead of crashing", () => {
+    // Producción, 2026-09-17: «Cannot read properties of null (reading 'isValid')».
+    useCheckoutStore.setState({ couponState: null as never });
+    expect(() => render(<Summary />)).not.toThrow();
+    expect(screen.getByText("Subtotal (3 productos)")).toBeInTheDocument();
+    expect(screen.getAllByText("Total")[0].nextSibling).toHaveTextContent("35.000");
+  });
+
   it("explains why checkout is blocked and disables the button", () => {
     render(<Summary disabledReason="Revisa «Producto a»: está agotado." />);
     expect(screen.getByRole("alert")).toHaveTextContent("está agotado");
