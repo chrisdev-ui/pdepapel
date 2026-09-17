@@ -19,7 +19,6 @@ import { useConfetti } from "@/hooks/use-confetti";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import useTrackShipment from "@/hooks/use-track-shipment";
-import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { formatOrderDate } from "@/lib/order-dates";
 import {
   ORDER_STATUS_POLL_INTERVAL_MS,
@@ -64,7 +63,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   // The checkout keeps the cart until the gateway confirms the payment. Once
   // this order is PAID, the cart and the saved checkout are cleared here —
   // whether the confirmation arrives by polling, by redirect or on a later
-  // visit — and the conversion is reported once per order.
+  // visit. The purchase itself is reported by the admin once payment is verified.
   useEffect(() => {
     if (activeOrder.status !== OrderStatus.PAID) return;
 
@@ -73,29 +72,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       resetCheckout();
       setPendingOrder(null);
     }
-
-    const trackedKey = `pdepapel:purchase-tracked:${order.id}`;
-    try {
-      if (window.localStorage.getItem(trackedKey)) return;
-      window.localStorage.setItem(trackedKey, new Date().toISOString());
-    } catch {
-      // Storage unavailable: report anyway.
-    }
-    trackCustomerEvent("purchase", {
-      currency: "COP",
-      transaction_id: order.orderNumber || order.id,
-      value: Number(order.total) || 0,
-      shipping: Number(order.shipping?.cost ?? 0) || 0,
-      items: order.orderItems.map((orderItem) => ({
-        item_id: orderItem.product?.id ?? orderItem.id,
-        item_name:
-          orderItem.name || orderItem.product?.name || "Producto sin nombre",
-        quantity: orderItem.quantity || 1,
-      })),
-    });
   }, [
     activeOrder.status,
-    order,
+    order.id,
     pendingOrder?.id,
     removeAll,
     resetCheckout,
