@@ -12,7 +12,7 @@ import { SingleProductPage } from "@/components/single-product-page";
 import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
 import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
-import { getStructuredProductSize } from "@/lib/product-options";
+import { buildProductMetaTitle } from "@/lib/product-metadata";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
 import { createRichTextExcerpt } from "@/lib/rich-text";
 import { categoryPath, productPath } from "@/lib/routes";
@@ -31,8 +31,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     url: image.url,
     alt: index === 0 ? product.name : `${product.name}, vista ${index + 1}`,
   }));
-  const variantAttributes = [product.design?.name, product.color?.name, getStructuredProductSize(product)].filter(Boolean).join(", ");
-  const title = variantAttributes ? `${product.name} - ${variantAttributes}` : product.name;
+  const title = buildProductMetaTitle(product);
   const description = createRichTextExcerpt(
     product.description,
     `Descubre ${product.name} en Papelería P de Papel. Papelería kawaii y de oficina con envío a toda Colombia.`,

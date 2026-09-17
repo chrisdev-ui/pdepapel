@@ -98,6 +98,57 @@ describe("SingleProductPage", () => {
     );
   });
 
+  it("moves the title and the canonical onto the variant being shown", async () => {
+    document.head.innerHTML = `
+      <title>Cuaderno Snoopy - Snoopy, Rosa</title>
+      <link rel="canonical" href="https://papeleriapdepapel.com/producto/cuaderno-snoopy" />
+      <meta property="og:title" content="Cuaderno Snoopy - Snoopy, Rosa" />
+    `;
+    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+
+    await waitFor(() => expect(document.title).toBe("Cuaderno Snoopy - Snoopy, Lila"));
+    expect(document.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe(
+      "https://papeleriapdepapel.com/producto/cuaderno-snoopy-lila",
+    );
+    expect(document.querySelector('meta[property="og:title"]')?.getAttribute("content")).toBe(
+      "Cuaderno Snoopy - Snoopy, Lila",
+    );
+  });
+
+  it("updates the title in the same commit that rewrites the url", async () => {
+    const pushState = vi.spyOn(window.history, "pushState");
+    document.head.innerHTML = `<title>Cuaderno Snoopy - Snoopy, Rosa</title>`;
+    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    // Si el título llegara tarde, el page_view de GA4 saldría con la variante vieja.
+    expect(document.title).toBe("Cuaderno Snoopy - Snoopy, Lila");
+    pushState.mockRestore();
+  });
+
+  it("puts the title back when the shopper goes back to the previous variant", async () => {
+    document.head.innerHTML = `<title>Cuaderno Snoopy - Snoopy, Rosa</title>`;
+    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+    await waitFor(() => expect(document.title).toBe("Cuaderno Snoopy - Snoopy, Lila"));
+
+    vi.mocked(getProduct).mockResolvedValue(product);
+    window.history.pushState(null, "", "/producto/cuaderno-snoopy");
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    await waitFor(() => expect(document.title).toBe("Cuaderno Snoopy - Snoopy, Rosa"));
+  });
+
   it("drops back to one unit when the new variant is not in the cart", async () => {
     useCart.setState({ items: [{ ...product, quantity: 3 } as unknown as Product] });
     vi.mocked(getProduct).mockResolvedValue(otherColor);

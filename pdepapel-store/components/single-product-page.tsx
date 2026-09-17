@@ -16,6 +16,7 @@ import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { getProductAvailability } from "@/lib/product-availability";
 import { getProductCardBadges, isRecentlyCreated } from "@/lib/product-card";
+import { syncProductDocumentMetadata } from "@/lib/product-metadata";
 import { getStableProductVariants } from "@/lib/product-variants";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Product, ProductVariant } from "@/types";
@@ -65,6 +66,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
       selectedProductRef.current = nextProduct;
       setSelectedProduct(nextProduct);
       setQuantity(1);
+      syncProductDocumentMetadata(nextProduct);
       if (updateHistory) window.history.pushState(null, "", productPath(nextProduct.slug || nextProduct.id));
     } catch {
       if (requestId === variantRequestRef.current) toast({ description: "No pudimos cargar esta opción. Inténtalo de nuevo.", variant: "destructive" });
