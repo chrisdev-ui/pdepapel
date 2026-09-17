@@ -261,3 +261,138 @@ describe("customer analytics tracking", () => {
     await expect(pending).resolves.toBeNull();
   });
 });
+
+describe("cola de eventos de Google", () => {
+  const measurementId = "G-TEST123";
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    delete window.dataLayer;
+    delete (window as { gtag?: unknown }).gtag;
+    document.head.innerHTML = "";
+    // La cola vive en el módulo: se vacía retirando el consentimiento.
+    disableGoogleAnalytics();
+    vi.clearAllMocks();
+  });
+
+  it("guarda el evento que se midió antes de que existiera gtag, en vez de perderlo", () => {
+    grantConsent();
+    delete (window as { gtag?: unknown }).gtag;
+
+    // Esto es lo que hacía `view_item` al entrar directo a una ficha.
+    trackCustomerEvent("view_item", { currency: "COP", value: 18500 });
+
+    enableGoogleAnalytics(measurementId);
+
+    const events = (window.dataLayer ?? []).map((entry) =>
+      Array.from(entry as IArguments),
+    );
+    const viewItem = events.find(
+      (entry) => entry[0] === "event" && entry[1] === "view_item",
+    );
+    expect(viewItem).toBeTruthy();
+    expect(viewItem?.[2]).toMatchObject({ currency: "COP", value: 18500 });
+  });
+
+  it("suelta lo guardado después de `config`, para que el evento tenga propiedad", () => {
+    grantConsent();
+    delete (window as { gtag?: unknown }).gtag;
+    trackCustomerEvent("view_item", {});
+
+    enableGoogleAnalytics(measurementId);
+
+    const commands = (window.dataLayer ?? []).map(
+      (entry) => Array.from(entry as IArguments)[0],
+    );
+    expect(commands.indexOf("config")).toBeLessThan(commands.lastIndexOf("event"));
+  });
+
+  it("no vuelve a mandar lo mismo si se enciende dos veces", () => {
+    grantConsent();
+    delete (window as { gtag?: unknown }).gtag;
+    trackCustomerEvent("view_item", {});
+
+    enableGoogleAnalytics(measurementId);
+    enableGoogleAnalytics(measurementId);
+
+    const viewItems = (window.dataLayer ?? [])
+      .map((entry) => Array.from(entry as IArguments))
+      .filter((entry) => entry[0] === "event" && entry[1] === "view_item");
+    expect(viewItems).toHaveLength(1);
+  });
+
+  it("tira lo guardado si se retira el consentimiento", () => {
+    grantConsent();
+    delete (window as { gtag?: unknown }).gtag;
+    trackCustomerEvent("view_item", {});
+
+    disableGoogleAnalytics();
+    grantConsent();
+    enableGoogleAnalytics(measurementId);
+
+    const viewItems = (window.dataLayer ?? [])
+      .map((entry) => Array.from(entry as IArguments))
+      .filter((entry) => entry[0] === "event" && entry[1] === "view_item");
+    expect(viewItems).toHaveLength(0);
+  });
+
+  it("no guarda nada de quien no aceptó la analítica", () => {
+    grantConsent(false);
+    delete (window as { gtag?: unknown }).gtag;
+
+    trackCustomerEvent("view_item", {});
+    trackGooglePageView("/producto/x", "Producto");
+
+    grantConsent();
+    enableGoogleAnalytics(measurementId);
+
+    const events = (window.dataLayer ?? [])
+      .map((entry) => Array.from(entry as IArguments))
+      .filter((entry) => entry[0] === "event");
+    expect(events).toHaveLength(0);
+  });
+
+  it("no guarda más de 40 eventos", () => {
+    grantConsent();
+    delete (window as { gtag?: unknown }).gtag;
+
+    for (let index = 0; index < 45; index += 1) {
+      trackCustomerEvent("view_item", { index });
+    }
+
+    enableGoogleAnalytics(measurementId);
+
+    const viewItems = (window.dataLayer ?? [])
+      .map((entry) => Array.from(entry as IArguments))
+      .filter((entry) => entry[0] === "event" && entry[1] === "view_item");
+    expect(viewItems).toHaveLength(40);
+    // Se queda con los primeros: los de la carga inicial, que son los que se perdían.
+    expect(viewItems[0]?.[2]).toMatchObject({ index: 0 });
+  });
+
+  it("también guarda la vista de página", () => {
+    grantConsent();
+    delete (window as { gtag?: unknown }).gtag;
+
+    trackGooglePageView("/producto/x", "Producto");
+    enableGoogleAnalytics(measurementId);
+
+    const pageViews = (window.dataLayer ?? [])
+      .map((entry) => Array.from(entry as IArguments))
+      .filter((entry) => entry[0] === "event" && entry[1] === "page_view");
+    expect(pageViews).toHaveLength(1);
+    expect(pageViews[0]?.[2]).toMatchObject({ page_path: "/producto/x" });
+  });
+
+  it("cuando gtag ya existe, manda directo y no guarda nada", () => {
+    grantConsent();
+    const gtag = vi.fn();
+    window.gtag = gtag;
+
+    trackCustomerEvent("add_to_cart", { currency: "COP" });
+
+    expect(gtag).toHaveBeenCalledWith("event", "add_to_cart", {
+      currency: "COP",
+    });
+  });
+});

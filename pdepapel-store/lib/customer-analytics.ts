@@ -26,6 +26,48 @@ export type AnalyticsEventParameters = Record<string, unknown>;
 
 const GOOGLE_ANALYTICS_SCRIPT_ID = "pdepapel-google-analytics";
 
+/** El mismo tope que usa la cola de Clarity. */
+const MAX_QUEUED_EVENTS = 40;
+
+interface PendingGoogleEvent {
+  name: string;
+  parameters: AnalyticsEventParameters;
+}
+
+/**
+ * Lo que se midió antes de que existiera `gtag`.
+ *
+ * El proveedor de analítica enciende Google después de leer el
+ * consentimiento, y para entonces la página ya montó: `view_item` en una
+ * ficha a la que se entra directo salía antes de tiempo y se perdía sin
+ * dejar rastro. Se guarda y se suelta cuando la etiqueta existe, igual que
+ * hace Clarity con sus eventos.
+ */
+let pendingGoogleEvents: PendingGoogleEvent[] = [];
+
+function sendOrQueueGoogleEvent(
+  name: string,
+  parameters: AnalyticsEventParameters,
+): void {
+  if (window.gtag) {
+    window.gtag("event", name, parameters);
+    return;
+  }
+
+  if (pendingGoogleEvents.length < MAX_QUEUED_EVENTS) {
+    pendingGoogleEvents.push({ name, parameters });
+  }
+}
+
+function flushGoogleEvents(): void {
+  const queued = pendingGoogleEvents;
+  pendingGoogleEvents = [];
+
+  for (const { name, parameters } of queued) {
+    window.gtag?.("event", name, parameters);
+  }
+}
+
 function getProductPrice(product: Product): number {
   const candidates = [
     product.discountedPrice,
@@ -111,6 +153,9 @@ export function enableGoogleAnalytics(measurementId: string): void {
     anonymize_ip: true,
     send_page_view: false,
   });
+  // Después de `config`: `dataLayer` se procesa en orden y un evento que
+  // llegue antes no tendría a qué propiedad pertenecer.
+  flushGoogleEvents();
   appendScript(
     GOOGLE_ANALYTICS_SCRIPT_ID,
     `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`,
@@ -118,6 +163,9 @@ export function enableGoogleAnalytics(measurementId: string): void {
 }
 
 export function disableGoogleAnalytics(): void {
+  // Nada de lo que quedó esperando puede sobrevivir a un «no».
+  pendingGoogleEvents = [];
+
   window.gtag?.("consent", "update", {
     ad_storage: "denied",
     ad_user_data: "denied",
@@ -152,14 +200,14 @@ export function trackCustomerEvent(
     }
   }
   trackVercelEvent(eventName, vercelParameters);
-  window.gtag?.("event", eventName, parameters);
+  sendOrQueueGoogleEvent(eventName, parameters);
   trackMicrosoftClarityEvent(eventName, parameters);
 }
 
 export function trackGooglePageView(path: string, title: string): void {
   if (typeof window === "undefined" || !hasAnalyticsConsent()) return;
 
-  window.gtag?.("event", "page_view", {
+  sendOrQueueGoogleEvent("page_view", {
     page_location: window.location.href,
     page_path: path,
     page_title: title,
