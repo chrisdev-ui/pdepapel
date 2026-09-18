@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CouponForm } from "@/app/(dashboard)/[storeId]/(routes)/cupones/[couponId]/components/coupon-form";
 import type { CouponDetail } from "@/lib/coupon-availability";
@@ -50,6 +51,15 @@ const coupon: CouponDetail = {
 };
 
 describe("CouponForm", () => {
+  beforeAll(() => {
+    Object.defineProperties(HTMLElement.prototype, {
+      hasPointerCapture: { value: () => false, configurable: true },
+      releasePointerCapture: { value: () => undefined, configurable: true },
+      setPointerCapture: { value: () => undefined, configurable: true },
+    });
+    Object.defineProperty(Element.prototype, "scrollIntoView", { value: () => undefined, configurable: true });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.patch.mockResolvedValue({ data: {} });
@@ -57,7 +67,7 @@ describe("CouponForm", () => {
   afterEach(cleanup);
 
   it("shows the real usage, the reservations, the recent orders and blocks deleting a referenced coupon", () => {
-    render(<CouponForm initialData={coupon} />);
+    render(<CouponForm initialData={coupon} activeWelcomeCode={null} />);
 
     expect(screen.getByRole("heading", { name: "Editar cupón" })).toBeInTheDocument();
     expect(screen.getByText("de 50 usos")).toBeInTheDocument();
@@ -70,8 +80,40 @@ describe("CouponForm", () => {
     expect(screen.getByRole("button", { name: /Desactivar/ })).toBeEnabled();
   });
 
+  it("warns before saving when another welcome benefit is already active", () => {
+    render(<CouponForm initialData={coupon} activeWelcomeCode="BIENVENIDA10" />);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Beneficio de bienvenida" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("BIENVENIDA10 ya es el beneficio de bienvenida activo");
+    fireEvent.click(screen.getByRole("switch", { name: "Cupón activo" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("empties the amount when the discount type changes", async () => {
+    const user = userEvent.setup();
+    render(<CouponForm initialData={coupon} activeWelcomeCode={null} />);
+    expect(screen.getByPlaceholderText("10")).toHaveValue(10);
+    await user.click(screen.getByRole("combobox", { name: /Tipo de descuento/ }));
+    await user.click(await screen.findByRole("option", { name: "Monto fijo" }));
+    expect(screen.queryByPlaceholderText("10")).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("$ 10.000")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(screen.getByText("Escribe el descuento")).toBeInTheDocument());
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it("previews the new coupon and lists what is still missing", () => {
+    render(<CouponForm initialData={null} activeWelcomeCode={null} />);
+    expect(screen.getByRole("heading", { name: "Nuevo cupón" })).toBeInTheDocument();
+    expect(screen.getByText("Falta el código (4 a 20 caracteres)")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Código/), { target: { value: "vuelve-2026" } });
+    expect(screen.getByText("Código listo")).toBeInTheDocument();
+    expect(screen.getByText("VUELVE-2026")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Elige el tipo primero")).toBeDisabled();
+  });
+
   it("submits calendar days and the usage limit, then returns to the coupons tab", async () => {
-    render(<CouponForm initialData={coupon} />);
+    render(<CouponForm initialData={coupon} activeWelcomeCode={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
@@ -83,7 +125,7 @@ describe("CouponForm", () => {
   });
 
   it("sends a null limit when the coupon has no usage cap", async () => {
-    render(<CouponForm initialData={{ ...coupon, maxUses: null, usage: { ...coupon.usage, limit: null, remaining: null } }} />);
+    render(<CouponForm initialData={{ ...coupon, maxUses: null, usage: { ...coupon.usage, limit: null, remaining: null } }} activeWelcomeCode={null} />);
 
     expect(screen.getByText("usos, sin límite")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
