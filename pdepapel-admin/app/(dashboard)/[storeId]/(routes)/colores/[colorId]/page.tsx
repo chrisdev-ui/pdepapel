@@ -8,7 +8,7 @@ export default async function ColorPage({
 }: {
   params: { colorId: string; storeId: string };
 }) {
-  const isNew = params.colorId === "new";
+  const isNew = params.colorId === "nuevo";
 
   // Siempre acotado por tienda: un id ajeno o inexistente no abre el formulario de «nuevo».
   const color = isNew ? null : await prismadb.color.findFirst({ where: { id: params.colorId, storeId: params.storeId } });

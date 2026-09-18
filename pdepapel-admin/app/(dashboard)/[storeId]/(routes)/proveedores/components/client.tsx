@@ -26,7 +26,7 @@ const SupplierClient: React.FC<SupplierClientProps> = ({ data }) => {
         />
         <Button
           onClick={() =>
-            router.push(`/${params.storeId}/${Models.Suppliers}/new`)
+            router.push(`/${params.storeId}/${Models.Suppliers}/nuevo`)
           }
         >
           <Plus className="mr-2 h-4 w-4" aria-hidden="true" />

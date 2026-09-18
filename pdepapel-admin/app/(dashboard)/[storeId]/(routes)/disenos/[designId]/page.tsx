@@ -8,7 +8,7 @@ export default async function DesignPage({
 }: {
   params: { designId: string; storeId: string };
 }) {
-  const isNew = params.designId === "new";
+  const isNew = params.designId === "nuevo";
 
   // Siempre acotado por tienda: un id ajeno o inexistente no abre el formulario de «nuevo».
   const design = isNew ? null : await prismadb.design.findFirst({ where: { id: params.designId, storeId: params.storeId } });

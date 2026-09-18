@@ -23,7 +23,7 @@ export function BoxesPanel({ data }: { data: BoxColumn[] }) {
           <p className="text-sm text-muted-foreground">Medidas que usa el cotizador de envíos para elegir la caja. {data.length} en total.</p>
         </div>
         <Button asChild>
-          <Link href={`/${storeId}/cajas/new`}>
+          <Link href={`/${storeId}/cajas/nuevo`}>
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Nueva caja
           </Link>
@@ -36,7 +36,7 @@ export function BoxesPanel({ data }: { data: BoxColumn[] }) {
         data={data}
         getRowId={(row) => row.id}
         onRowClick={(row) => router.push(`/${storeId}/cajas/${row.id}`)}
-        emptyState={{ title: "Aún no hay cajas", description: "Sin cajas, el cotizador usa las medidas por defecto de la tienda.", action: <Button asChild><Link href={`/${storeId}/cajas/new`}>Nueva caja</Link></Button> }}
+        emptyState={{ title: "Aún no hay cajas", description: "Sin cajas, el cotizador usa las medidas por defecto de la tienda.", action: <Button asChild><Link href={`/${storeId}/cajas/nuevo`}>Nueva caja</Link></Button> }}
       />
     </section>
   );

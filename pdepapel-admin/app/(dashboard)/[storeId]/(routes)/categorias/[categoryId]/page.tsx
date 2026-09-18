@@ -10,7 +10,7 @@ export default async function CategoryPage({
 }: {
   params: { categoryId: string; storeId: string };
 }) {
-  const isNew = params.categoryId === "new";
+  const isNew = params.categoryId === "nuevo";
 
   // Siempre acotado por tienda: un id ajeno o inexistente no abre el formulario de «nueva».
   const category = isNew

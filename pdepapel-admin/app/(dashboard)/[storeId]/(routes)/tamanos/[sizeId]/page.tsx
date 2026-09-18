@@ -8,7 +8,7 @@ export default async function SizePage({
 }: {
   params: { sizeId: string; storeId: string };
 }) {
-  const isNew = params.sizeId === "new";
+  const isNew = params.sizeId === "nuevo";
 
   // Siempre acotado por tienda: un id ajeno o inexistente no abre el formulario de «nuevo».
   const size = isNew ? null : await prismadb.size.findFirst({ where: { id: params.sizeId, storeId: params.storeId } });

@@ -9,7 +9,7 @@ export default async function TypePage({
 }: {
   params: { typeId: string; storeId: string };
 }) {
-  const isNew = params.typeId === "new";
+  const isNew = params.typeId === "nuevo";
   const type = isNew ? null : await getType(params.storeId, params.typeId);
 
   // Un id de otra tienda o inexistente no debe abrir el formulario de «nueva».

@@ -10,7 +10,7 @@ const BoxPage = async ({
 }: {
   params: { boxId: string; storeId: string };
 }) => {
-  const isNew = params.boxId === "new";
+  const isNew = params.boxId === "nuevo";
   const [result, store] = await Promise.all([
     isNew ? Promise.resolve(null) : getBox(params.boxId, params.storeId),
     prismadb.store.findFirst({

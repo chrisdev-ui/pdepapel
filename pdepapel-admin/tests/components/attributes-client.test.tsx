@@ -61,7 +61,7 @@ describe("AttributesClient", () => {
     expect(within(mainTabs()).getByRole("tab", { name: /Subcategorías/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText(/Sub-Categor/)).not.toBeInTheDocument();
     expect(screen.getAllByText("Agendas").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /Nueva subcategoría/ })).toHaveAttribute("href", "/store-1/categorias/new");
+    expect(screen.getByRole("link", { name: /Nueva subcategoría/ })).toHaveAttribute("href", "/store-1/categorias/nuevo");
   });
 
   it("follows a later change of ?tab= (sidebar click while the page is open)", () => {
@@ -97,16 +97,16 @@ describe("AttributesClient", () => {
     navigation.search = "tab=tamanos";
     renderHub();
     expect(screen.getByText("Aún no hay tamaños")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Crear el primer tamaño/ })).toHaveAttribute("href", "/store-1/tamanos/new");
+    expect(screen.getByRole("link", { name: /Crear el primer tamaño/ })).toHaveAttribute("href", "/store-1/tamanos/nuevo");
 
     navigation.search = "tab=subcategorias";
     cleanup();
     renderHub({ categories: [] });
-    expect(screen.getByRole("link", { name: /Crear la primera subcategoría/ })).toHaveAttribute("href", "/store-1/categorias/new");
+    expect(screen.getByRole("link", { name: /Crear la primera subcategoría/ })).toHaveAttribute("href", "/store-1/categorias/nuevo");
 
     navigation.search = "";
     cleanup();
     renderHub({ types: [] });
-    expect(screen.getByRole("link", { name: /Crear la primera categoría/ })).toHaveAttribute("href", "/store-1/tipos/new");
+    expect(screen.getByRole("link", { name: /Crear la primera categoría/ })).toHaveAttribute("href", "/store-1/tipos/nuevo");
   });
 });
