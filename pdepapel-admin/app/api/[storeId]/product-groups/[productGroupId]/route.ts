@@ -8,7 +8,8 @@ import {
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import { assertNoStandaloneNameConflicts } from "@/lib/product-group-conflicts";
+import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
+import { resolveVariantImages } from "@/lib/variant-images";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { resolveProductGroupVariantStock } from "@/lib/product-group-variant-stock";
 import {
@@ -92,6 +93,7 @@ export async function PATCH(
       defaultStock,
       defaultSupplier,
       isFeatured,
+      isArchived,
       categoryId,
       variants: variantsPayload,
       preserveSlug = false,
@@ -120,11 +122,12 @@ export async function PATCH(
 
     // Igual que al crear el grupo: una variante nueva no puede llamarse como
     // un producto suelto que ya existe.
-    await assertNoStandaloneNameConflicts(
+    await assertNoStandaloneConflicts(
       prismadb,
       params.storeId,
       variantsPayload,
       name,
+      { images, imageMapping },
     );
 
     const updatedGroup = await prismadb.$transaction(async (tx) => {
@@ -269,25 +272,13 @@ export async function PATCH(
           }
 
           // Determine Image Logic
-          let applicableImages: { url: string }[] = [];
-
-          // 1. Check for Explicit Images (Manual Override from Variant Grid)
-          if (variant.images && variant.images.length > 0) {
-            applicableImages = variant.images.map((url: string) => ({ url }));
-          } else {
-            // 2. Fallback to Smart Mapping
-            applicableImages = images.filter((img: { url: string }) => {
-              const mapping = imageMapping?.find((m: any) => m.url === img.url);
-              if (!mapping || mapping.scope === "all") return true;
-
-              if (mapping.scope.startsWith("COMBO|")) {
-                const [, cId, dId] = mapping.scope.split("|");
-                return colorId === cId && designId === dId;
-              }
-
-              return mapping.scope === colorId || mapping.scope === designId;
-            });
-          }
+          const applicableImages = resolveVariantImages({
+            variantImages: variant.images,
+            groupImages: images,
+            imageMapping,
+            colorId,
+            designId,
+          });
 
           // Prepare Data
           const finalPrice =
@@ -347,7 +338,12 @@ export async function PATCH(
             stock: stockResolution.productStock,
             supplierId: finalSupplierId,
             isFeatured: variant.isFeatured ?? isFeatured ?? false,
-            isArchived: variant.isArchived || false,
+            // La casilla «Archivado» del grupo manda sobre las variantes: no
+            // hay columna en ProductGroup, archivar el grupo es archivarlas.
+            isArchived:
+              typeof isArchived === "boolean"
+                ? isArchived
+                : variant.isArchived || false,
             // Sin esto la variante quedaba para siempre "sin identificador".
             ...variantIdentifiers,
           };

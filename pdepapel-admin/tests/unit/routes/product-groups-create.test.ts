@@ -81,9 +81,11 @@ describe("POST /product-groups", () => {
   });
 
   it("answers 409 instead of duplicating a standalone product with the same name", async () => {
-    mocks.findMany.mockResolvedValue([
-      { id: "p-existing", name: "Cartuchera Lucky Girls", sku: "CLG-0" },
-    ]);
+    mocks.findMany
+      .mockResolvedValueOnce([
+        { id: "p-existing", name: "Cartuchera Lucky Girls", sku: "CLG-0" },
+      ])
+      .mockResolvedValueOnce([]);
 
     const response = await call([variant()]);
 
@@ -93,12 +95,68 @@ describe("POST /product-groups", () => {
       details: {
         code: "STANDALONE_PRODUCT_EXISTS",
         conflicts: [
-          { id: "p-existing", name: "Cartuchera Lucky Girls", sku: "CLG-0" },
+          {
+            id: "p-existing",
+            name: "Cartuchera Lucky Girls",
+            sku: "CLG-0",
+            reason: "name",
+            variant: "Cartuchera lucky girls",
+          },
         ],
       },
     });
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.productCreate).not.toHaveBeenCalled();
+  });
+
+  it("answers 409 for a different name whose photos are exactly a standalone product's", async () => {
+    const urls = [
+      "https://res.cloudinary.com/test/a.jpg",
+      "https://res.cloudinary.com/test/b.jpg",
+    ];
+    mocks.findMany
+      .mockResolvedValueOnce([]) // por nombre: nada
+      .mockResolvedValueOnce([
+        {
+          id: "p-lucky",
+          name: "Cartuchera Lucky Girls",
+          sku: "CLG-0",
+          images: urls.map((url) => ({ url })),
+        },
+      ]);
+
+    const response = POST(
+      new Request("https://admin.test/api/store-1/product-groups", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Cartuchera Kawaii",
+          categoryId: "cat-1",
+          images: urls.map((url) => ({ url })),
+          defaultPrice: 15000,
+          variants: [variant({ name: "Cartuchera Kawaii lila" })],
+        }),
+      }),
+      { params: { storeId: "store-1" } },
+    );
+    const result = await response;
+
+    expect(result.status).toBe(409);
+    await expect(result.json()).resolves.toMatchObject({
+      error: expect.stringContaining("mismas fotos"),
+      details: {
+        code: "STANDALONE_PRODUCT_EXISTS",
+        conflicts: [
+          {
+            id: "p-lucky",
+            name: "Cartuchera Lucky Girls",
+            sku: "CLG-0",
+            reason: "images",
+            variant: "Cartuchera Kawaii lila",
+          },
+        ],
+      },
+    });
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it("still adopts a variant that carries an id, even if it is that same standalone product", async () => {

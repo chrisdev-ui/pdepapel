@@ -1,7 +1,15 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle, ArrowLeft, Eraser, Loader2, PackageCheckIcon, Settings2, Trash } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Eraser,
+  Loader2,
+  PackageCheckIcon,
+  Settings2,
+  Trash,
+} from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -63,6 +71,7 @@ import {
   Supplier,
 } from "@prisma/client";
 import axios from "axios";
+import { imageUrlKey, resolveVariantImages } from "@/lib/variant-images";
 import { useParams, useRouter } from "next/navigation";
 import { currencyFormatter } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -219,6 +228,41 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     standaloneByName.current.set(key, taken);
     return taken;
   };
+  // Mismas fotos que un producto suelto: es el mismo producto aunque el nombre
+  // generado sea otro (así se duplicó «cartuchera lucky girls»).
+  const standaloneByImages = useRef(new Map<string, string | null>());
+  const isStandaloneImagesTaken = async (
+    colorId: string,
+    designId: string,
+  ): Promise<string | null> => {
+    const urls = resolveVariantImages({
+      groupImages: form.getValues("images") || [],
+      imageMapping: form.getValues("imageMapping") || [],
+      colorId,
+      designId,
+    }).map((image) => image.url);
+    if (urls.length === 0) return null;
+    const key = imageUrlKey(urls);
+    const cached = standaloneByImages.current.get(key);
+    if (cached !== undefined) return cached;
+    let match: string | null = null;
+    try {
+      const response = await axios.get(
+        `/api/${params.storeId}/search/products/isolated`,
+        { params: { imageUrls: urls.join(","), limit: 10 } },
+      );
+      const rows: { name: string; images?: { url: string }[] }[] =
+        response.data?.data ?? [];
+      match =
+        rows.find(
+          (row) => imageUrlKey((row.images ?? []).map((i) => i.url)) === key,
+        )?.name ?? null;
+    } catch {
+      match = null;
+    }
+    standaloneByImages.current.set(key, match);
+    return match;
+  };
   const warnStandalone = (variantName: string) => {
     const key = variantName.trim().toLowerCase();
     if (warnedStandalone.current.has(key)) return;
@@ -226,6 +270,16 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     toast({
       title: "Ese producto ya existe",
       description: `Ya existe un producto suelto llamado «${variantName}». Usa «Importar productos existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
+      variant: "warning",
+    });
+  };
+  const warnStandaloneImages = (variantName: string, existing: string) => {
+    const key = `img:${existing.trim().toLowerCase()}`;
+    if (warnedStandalone.current.has(key)) return;
+    warnedStandalone.current.add(key);
+    toast({
+      title: "Ese producto ya existe",
+      description: `«${variantName}» llevaría exactamente las mismas fotos que el producto suelto «${existing}». Usa «Importar productos existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
       variant: "warning",
     });
   };
@@ -798,6 +852,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             warnStandalone(gen.name);
             continue;
           }
+          const sameImagesAs = initialData
+            ? null
+            : await isStandaloneImagesTaken(gen.colorId, gen.designId);
+          if (sameImagesAs) {
+            warnStandaloneImages(gen.name, sameImagesAs);
+            continue;
+          }
           mergedVariants.push({
             sku: gen.sku,
             name: gen.name,
@@ -861,7 +922,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   });
 
   useFormValidationToast({ form });
-  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
+  const { confirmLeave, confirmationDialog: leaveDialog } =
+    useUnsavedChangesGuard(form, { enabled: !loading });
 
   const onClear = async () => {
     // Diff Logic to clean up orphan images
@@ -1131,6 +1193,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         // CREATE NEW
         if (!initialData && (await isStandaloneTaken(gen.name))) {
           warnStandalone(gen.name);
+          continue;
+        }
+        const sameImagesAs = initialData
+          ? null
+          : await isStandaloneImagesTaken(gen.colorId, gen.designId);
+        if (sameImagesAs) {
+          warnStandaloneImages(gen.name, sameImagesAs);
           continue;
         }
         finalVariants.push({
@@ -1490,7 +1559,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             size="icon-sm"
             aria-label="Volver a productos"
             onClick={async () => {
-              if (await confirmLeave()) router.push(`/${params.storeId}/productos`);
+              if (await confirmLeave())
+                router.push(`/${params.storeId}/productos`);
             }}
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />

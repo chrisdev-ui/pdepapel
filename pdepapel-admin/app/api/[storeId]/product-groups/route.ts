@@ -6,7 +6,8 @@ import { generateProductSlug, slugify } from "@/lib/slugify";
 import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
-import { assertNoStandaloneNameConflicts } from "@/lib/product-group-conflicts";
+import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
+import { resolveVariantImages } from "@/lib/variant-images";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
@@ -44,6 +45,7 @@ export async function POST(
       defaultCost,
       acqPrice, // Alias for defaultCost
       isFeatured,
+      isArchived,
       variants: variantsPayload, // Array of manually created/edited variants
     } = body;
 
@@ -72,11 +74,12 @@ export async function POST(
 
     // Una variante sin id que se llama como un producto suelto sería un
     // duplicado con el inventario en el otro: 409 antes de crear nada.
-    await assertNoStandaloneNameConflicts(
+    await assertNoStandaloneConflicts(
       prismadb,
       params.storeId,
       variantsPayload,
       name,
+      { images, imageMapping },
     );
     const productGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
@@ -140,36 +143,13 @@ export async function POST(
             variantSlug = slugify(variantName) || `variant-${Date.now()}`;
 
           // Determine Applicable Images
-          let applicableImages: { url: string }[] = [];
-
-          // 1. Check for Explicit Images (Manual Override from Variant Grid)
-          if (variant.images && variant.images.length > 0) {
-            applicableImages = variant.images.map((url: string) => ({ url }));
-          } else {
-            // 2. Fallback to Smart Mapping
-            applicableImages = images.filter((img: { url: string }) => {
-              const mapping = imageMapping?.find((m: any) => m.url === img.url);
-              // Default to 'all' if no mapping found, or explicit 'all'
-              if (!mapping || mapping.scope === "all") return true;
-
-              if (mapping.scope.startsWith("COMBO|")) {
-                const [, cId, dId] = mapping.scope.split("|");
-                return colorId === cId && designId === dId;
-              }
-
-              if (mapping.scope.startsWith("COLOR|")) {
-                const [, cId] = mapping.scope.split("|");
-                return colorId === cId;
-              }
-
-              if (mapping.scope.startsWith("DESIGN|")) {
-                const [, dId] = mapping.scope.split("|");
-                return designId === dId;
-              }
-
-              return true;
-            });
-          }
+          const applicableImages = resolveVariantImages({
+            variantImages: variant.images,
+            groupImages: images,
+            imageMapping,
+            colorId,
+            designId,
+          });
 
           const finalPrice =
             variant.price !== undefined
@@ -224,7 +204,12 @@ export async function POST(
             colorId,
             designId,
             isFeatured: variant.isFeatured ?? isFeatured ?? false,
-            isArchived: variant.isArchived || false,
+            // La casilla «Archivado» del grupo manda sobre las variantes: no
+            // hay columna en ProductGroup, archivar el grupo es archivarlas.
+            isArchived:
+              typeof isArchived === "boolean"
+                ? isArchived
+                : variant.isArchived || false,
             // Sin esto toda variante creada desde el grupo quedaba para siempre
             // "sin identificador" y Google Merchant la rechazaba.
             ...variantIdentifiers,

@@ -10,10 +10,10 @@ vi.mock("@/lib/prismadb", () => ({
 
 import { GET } from "@/app/api/[storeId]/search/products/isolated/route";
 
-const call = (query: string) =>
+const call = (query: string, extra = "") =>
   GET(
     new Request(
-      `https://admin.test/api/store-1/search/products/isolated?query=${encodeURIComponent(query)}`,
+      `https://admin.test/api/store-1/search/products/isolated?query=${encodeURIComponent(query)}${extra}`,
     ),
     {
       params: { storeId: "store-1" },
@@ -53,5 +53,18 @@ describe("GET /search/products/isolated", () => {
       { description: { contains: "CLG-1" } },
       { sku: { contains: "CLG-1" } },
     ]);
+  });
+
+  it("filters by shared image urls when asked", async () => {
+    mocks.findMany.mockResolvedValue([]);
+    await call(
+      "",
+      "&imageUrls=" + encodeURIComponent("https://a/1.jpg,https://a/2.jpg"),
+    );
+    const where = mocks.findMany.mock.calls[0][0].where;
+    expect(where.images).toEqual({
+      some: { url: { in: ["https://a/1.jpg", "https://a/2.jpg"] } },
+    });
+    expect(where.OR).toBeUndefined();
   });
 });

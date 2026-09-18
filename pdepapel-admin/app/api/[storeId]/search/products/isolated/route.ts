@@ -54,6 +54,16 @@ export async function GET(
       whereClause.categoryId = categoryId;
     }
 
+    // Productos sueltos que usan alguna de estas fotos: el formulario de grupo
+    // lo consulta antes de crear una variante generada.
+    const imageUrls = (searchParams.get("imageUrls") || "")
+      .split(",")
+      .map((url) => url.trim())
+      .filter(Boolean);
+    if (imageUrls.length > 0) {
+      whereClause.images = { some: { url: { in: imageUrls } } };
+    }
+
     // Limit + 1 Strategy to avoid Count query
     const products = await prismadb.product.findMany({
       where: whereClause,
