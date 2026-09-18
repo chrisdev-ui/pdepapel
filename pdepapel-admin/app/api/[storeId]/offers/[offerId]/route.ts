@@ -103,3 +103,25 @@ export async function DELETE(
     return handleErrorResponse(error, "OFFER_DELETE");
   }
 }
+
+/** «Terminar ahora»: apaga la oferta; la vigencia y los destinos se conservan. */
+export async function PUT(
+  _req: Request,
+  { params }: { params: { storeId: string; offerId: string } },
+) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.offerId) throw ErrorFactory.InvalidRequest("ID de oferta requerido");
+    await verifyStoreOwner(userId, params.storeId);
+    const offer = await prismadb.offer.findFirst({ where: { id: params.offerId, storeId: params.storeId }, select: { id: true, isActive: true } });
+    if (!offer) throw ErrorFactory.NotFound("Oferta no encontrada");
+    if (!offer.isActive) throw ErrorFactory.Conflict("La oferta ya estaba terminada");
+    const ended = await prismadb.offer.update({ where: { id: params.offerId, storeId: params.storeId }, data: { isActive: false } });
+    await invalidateStorePromotionsCache(params.storeId);
+    return NextResponse.json(ended, { headers: CACHE_HEADERS.NO_CACHE });
+  } catch (error) {
+    return handleErrorResponse(error, "OFFER_END");
+  }
+}

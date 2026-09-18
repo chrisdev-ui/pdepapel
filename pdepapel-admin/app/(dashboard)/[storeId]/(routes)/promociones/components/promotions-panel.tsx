@@ -24,10 +24,11 @@ import { cn, currencyFormatter } from "@/lib/utils";
 
 import { CouponBatchDialog } from "../../cupones/components/coupon-batch-dialog";
 import { CouponBulkActions } from "../../cupones/components/coupon-bulk-actions";
+import { OfferBulkActions } from "../../ofertas/components/offer-bulk-actions";
 import { CellAction as CouponCellAction } from "../../cupones/components/cell-action";
 import { buildCouponColumns, CouponStatusBadge, type CouponColumn } from "../../cupones/components/columns";
 import { CellAction as OfferCellAction } from "../../ofertas/components/cell-action";
-import { buildOfferColumns, offerScope, OfferStatusBadge, type OfferColumn } from "../../ofertas/components/columns";
+import { buildOfferColumns, OfferLabel, offerSample, offerScope, OfferStatusBadge, offerWindow, type OfferColumn } from "../../ofertas/components/columns";
 
 type PromotionsPanelProps = { kind: "ofertas"; data: OfferColumn[] } | { kind: "cupones"; data: CouponColumn[] };
 
@@ -102,8 +103,7 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         <RefreshButton />
-        {props.kind === "cupones" && (
-          <Button
+        <Button
             type="button"
             variant={selectMode ? "secondary" : "outline"}
             className="sm:hidden"
@@ -115,7 +115,6 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
             <ListChecks className="mr-2 h-4 w-4" aria-hidden="true" />
             {selectMode ? "Listo" : "Seleccionar"}
           </Button>
-        )}
         {props.kind === "cupones" && <CouponBatchDialog />}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -147,23 +146,31 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
           getRowId={(row) => row.id}
           onRowClick={(row) => router.push(`/${storeId}/ofertas/${row.id}`)}
           filters={[{ columnKey: "status", title: "Estado", options: statusFilter }]}
+          rowSelection={rowSelection}
+          onRowSelectionChange={setRowSelection}
+          bulkActions={(table) => <OfferBulkActions table={table} />}
           renderMobileCard={(row) => (
-            <article className="flex flex-col gap-2 rounded-xl border bg-white p-3.5 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <Link href={`/${storeId}/ofertas/${row.original.id}`} className="truncate text-sm font-bold text-primary">
-                  {row.original.name}
-                </Link>
-                <OfferStatusBadge offer={row.original} />
-              </div>
-              <p className="text-sm">
-                <span className="font-semibold">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>
-                <span className="text-muted-foreground"> · {offerScope(row.original)}</span>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {SHORT_DATE.format(new Date(row.original.startDate))} – {SHORT_DATE.format(new Date(row.original.endDate))}
-              </p>
-              <div className="flex items-center justify-end">
-                <OfferCellAction data={row.original} />
+            <article className={cn("flex gap-3 rounded-xl border bg-white p-3.5 shadow-sm", row.getIsSelected() && "border-primary")}>
+              {selectMode && (
+                <Checkbox className="mt-0.5" checked={row.getIsSelected()} onCheckedChange={(checked) => row.toggleSelected(checked === true)} aria-label={`Seleccionar ${row.original.name}`} />
+              )}
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <Link href={`/${storeId}/ofertas/${row.original.id}`} className="truncate text-sm font-bold text-primary">
+                    {row.original.name}
+                  </Link>
+                  <OfferStatusBadge offer={row.original} />
+                </div>
+                <OfferLabel offer={row.original} />
+                <p className="text-sm">
+                  <span className="font-semibold">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>
+                  <span className="text-muted-foreground"> · {offerScope(row.original)}</span>
+                </p>
+                {offerSample(row.original) && <p className="truncate text-xs text-muted-foreground">{offerSample(row.original)}</p>}
+                <p className="text-xs text-muted-foreground">{offerWindow(row.original)}</p>
+                <div className="flex items-center justify-end">
+                  <OfferCellAction data={row.original} />
+                </div>
               </div>
             </article>
           )}

@@ -1,22 +1,20 @@
 "use client";
 
-import { AlertModal } from "@/components/modals/alert-modal";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Models } from "@/constants";
-import { useToast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
-import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { Ban, Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { OfferColumn } from "./columns";
+
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
+import { getPromotionStatus } from "@/lib/promotion-status";
+
+import type { OfferColumn } from "./columns";
+import { OFFER_DELETE_COPY, OFFER_END_COPY } from "./offer-copy";
 
 interface CellActionProps {
   data: OfferColumn;
@@ -26,33 +24,23 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const storeId = String(params.storeId);
+  const status = getPromotionStatus(data);
+  const canEnd = data.isActive && (status === "vigente" || status === "programada");
 
-  const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast({
-      description: "ID de la oferta copiada al portapapeles",
-      variant: "success",
-    });
-  };
-
-  const onValidate = async () => {
+  const onEnd = async () => {
+    const confirmed = await requestConfirmation({ title: OFFER_END_COPY.title(data.name), description: OFFER_END_COPY.description, confirmLabel: OFFER_END_COPY.confirmLabel });
+    if (!confirmed) return;
     try {
       setLoading(true);
-      await axios.post(
-        `/api/${params.storeId}/${Models.Offers}/${data.id}/validate`,
-      );
+      await axios.put(`/api/${storeId}/offers/${data.id}`);
       router.refresh();
-      toast({
-        description: "Vigencia recalculada: si ya venció, la oferta quedó apagada",
-        variant: "success",
-      });
+      toast({ description: `Oferta ${data.name} terminada`, variant: "success" });
     } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -61,17 +49,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/${Models.Offers}/${data.id}`);
+      await axios.delete(`/api/${storeId}/offers/${data.id}`);
       router.refresh();
-      toast({
-        description: "Oferta eliminada",
-        variant: "success",
-      });
+      toast({ description: "Oferta eliminada", variant: "success" });
     } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
       setOpen(false);
@@ -80,38 +62,33 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   return (
     <>
-      <AlertModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onConfirm={onDelete}
-        loading={loading}
-      />
+      {confirmationDialog}
+      <AlertModal isOpen={open} onClose={() => setOpen(false)} onConfirm={onDelete} loading={loading} title={OFFER_DELETE_COPY.title(data.name)} description={OFFER_DELETE_COPY.description} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={`Acciones de la oferta ${data.name}`}>
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onCopy(data.id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              router.push(`/${params.storeId}/${Models.Offers}/${data.id}`)
-            }
-          >
-            <Edit className="mr-2 h-4 w-4" />
+          <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(`/${storeId}/ofertas/${data.id}`)}>
+            <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
             Editar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={onValidate} disabled={loading}>
-            <MoreHorizontal className="mr-2 h-4 w-4" />
-            Recalcular vigencia
+          <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(`/${storeId}/ofertas/nuevo?desde=${data.id}`)}>
+            <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+            Duplicar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setOpen(true)}>
-            <Trash className="mr-2 h-4 w-4" />
+          <DropdownMenuItem className="cursor-pointer" onClick={() => void onEnd()} disabled={loading || !canEnd}>
+            <Ban className="mr-2 h-4 w-4" aria-hidden="true" />
+            <span className="flex flex-col">
+              Terminar ahora
+              {!canEnd && <span className="text-xs text-muted-foreground">Ya terminó</span>}
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={() => setOpen(true)}>
+            <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
             Eliminar
           </DropdownMenuItem>
         </DropdownMenuContent>

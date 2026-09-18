@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   offerUpdate: vi.fn(),
   offerDelete: vi.fn(),
   offerUpdateMany: vi.fn(),
+  offerCount: vi.fn(),
+  offerDeleteMany: vi.fn(),
   productCount: vi.fn(),
   productFindMany: vi.fn(),
   categoryCount: vi.fn(),
@@ -24,15 +26,15 @@ vi.mock("@/lib/utils", () => ({
 vi.mock("@/lib/cache", () => ({ invalidateStorePromotionsCache: mocks.invalidate }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
-    offer: { findFirst: mocks.offerFindFirst, create: mocks.offerCreate, update: mocks.offerUpdate, delete: mocks.offerDelete, updateMany: mocks.offerUpdateMany },
+    offer: { findFirst: mocks.offerFindFirst, create: mocks.offerCreate, update: mocks.offerUpdate, delete: mocks.offerDelete, updateMany: mocks.offerUpdateMany, count: mocks.offerCount, deleteMany: mocks.offerDeleteMany },
     product: { count: mocks.productCount, findMany: mocks.productFindMany },
     category: { count: mocks.categoryCount },
     productGroup: { count: mocks.groupCount },
   },
 }));
 
-import { POST } from "@/app/api/[storeId]/offers/route";
-import { DELETE, PATCH } from "@/app/api/[storeId]/offers/[offerId]/route";
+import { DELETE as bulkDelete, PATCH as bulkEnd, POST } from "@/app/api/[storeId]/offers/route";
+import { DELETE, PATCH, PUT } from "@/app/api/[storeId]/offers/[offerId]/route";
 import { POST as updateValidity } from "@/app/api/[storeId]/offers/update-validity/route";
 import { POST as validate } from "@/app/api/[storeId]/offers/[offerId]/validate/route";
 
@@ -111,5 +113,40 @@ describe("offer routes", () => {
     const response = await validate(json("POST"), { params: itemParams });
     expect(await response.json()).toMatchObject({ status: "desactivada" });
     expect(mocks.offerUpdate).not.toHaveBeenCalled();
+  });
+
+  it("PUT ends a running offer once and refreshes the store", async () => {
+    mocks.offerFindFirst.mockResolvedValue({ id: "o1", isActive: true });
+    mocks.offerUpdate.mockResolvedValue({ id: "o1", isActive: false });
+    const response = await PUT(json("PUT"), { params: itemParams });
+    expect(response.status).toBe(200);
+    expect(mocks.offerUpdate.mock.calls[0][0]).toEqual({ where: { id: "o1", storeId: "store-1" }, data: { isActive: false } });
+    expect(mocks.invalidate).toHaveBeenCalledTimes(1);
+    mocks.offerFindFirst.mockResolvedValue({ id: "o1", isActive: false });
+    expect((await PUT(json("PUT"), { params: itemParams })).status).toBe(409);
+  });
+
+  it("bulk DELETE only removes offers of the store and refreshes it", async () => {
+    mocks.offerCount.mockResolvedValue(1);
+    const missing = await bulkDelete(json("DELETE", { ids: ["a", "b"] }), { params });
+    expect(missing.status).toBe(404);
+    expect(mocks.offerDeleteMany).not.toHaveBeenCalled();
+    mocks.offerCount.mockResolvedValue(2);
+    mocks.offerDeleteMany.mockResolvedValue({ count: 2 });
+    const response = await bulkDelete(json("DELETE", { ids: ["a", "b"] }), { params });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: 2 });
+    expect(mocks.offerDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["a", "b"] }, storeId: "store-1" } });
+    expect(mocks.invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("bulk PATCH switches off only the running offers and keeps their dates", async () => {
+    mocks.offerCount.mockResolvedValue(2);
+    mocks.offerUpdateMany.mockResolvedValue({ count: 1 });
+    const response = await bulkEnd(json("PATCH", { ids: ["a", "b"] }), { params });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ended: 1 });
+    expect(mocks.offerUpdateMany.mock.calls[0][0]).toEqual({ where: { id: { in: ["a", "b"] }, storeId: "store-1", isActive: true }, data: { isActive: false } });
+    expect(mocks.invalidate).toHaveBeenCalledTimes(1);
   });
 });
