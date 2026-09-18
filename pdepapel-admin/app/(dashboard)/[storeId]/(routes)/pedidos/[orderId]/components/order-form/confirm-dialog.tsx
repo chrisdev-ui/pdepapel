@@ -91,9 +91,11 @@ export function ConfirmDialog({
           </ul>
         )}
         {children}
-        <DialogFooter className="items-center gap-2 sm:justify-between">
-          <span className="text-xs text-muted-foreground">{footnote}</span>
-          <div className="flex items-center gap-2">
+        <DialogFooter className="gap-2 sm:items-center sm:justify-between">
+          {footnote && (
+            <span className="text-xs text-muted-foreground">{footnote}</span>
+          )}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <Button
               type="button"
               variant="outline"

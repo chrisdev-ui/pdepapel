@@ -771,27 +771,29 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           />
           {/* Columna principal, en el orden en que Paula llena un pedido:
               cliente, productos, envío, descuentos, notas. */}
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
             {initialData && (
-              <OrderStatusBar
-                status={initialData.status}
-                type={watchedType}
-                paymentMethod={initialData.payment?.method ?? null}
-                shippingProvider={watchedProvider}
-                trackingCode={watchedTracking}
-                transactionId={watchedTransaction}
-                guideRate={guideRate}
-                hasGuide={Boolean(initialData.shipping?.envioClickIdOrder)}
-                nextStep={nextStep}
-                steps={timeline}
-                loading={loading}
-                onTransition={onTransition}
-              />
+              <div className="order-1 lg:order-none">
+                <OrderStatusBar
+                  status={initialData.status}
+                  type={watchedType}
+                  paymentMethod={initialData.payment?.method ?? null}
+                  shippingProvider={watchedProvider}
+                  trackingCode={watchedTracking}
+                  transactionId={watchedTransaction}
+                  guideRate={guideRate}
+                  hasGuide={Boolean(initialData.shipping?.envioClickIdOrder)}
+                  nextStep={nextStep}
+                  steps={timeline}
+                  loading={loading}
+                  onTransition={onTransition}
+                />
+              </div>
             )}
             {initialData &&
               isCreatableOrderType(initialData.type) &&
               !locked && (
-                <div className="flex flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="order-2 flex flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between lg:order-none">
                   <FormField
                     control={form.control}
                     name="type"
@@ -823,130 +825,153 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   />
                 </div>
               )}
-            <CustomerCard
-              storeId={storeId}
-              users={users}
-              locations={locations}
-              loading={loading}
-              initialData={initialData}
-              total={totals.total}
-            />
-            <ItemsSection
-              fieldArray={fieldArray}
-              watchedItems={watchedItems}
-              locked={locked}
-              allowManualItems={allowManualItems}
-              loading={loading}
-              onConvert={setConversionIndex}
-            />
-            <ShippingSection
-              storeId={storeId}
-              boxes={boxes}
-              initialData={initialData}
-              loading={loading}
-              loadingQuotes={loadingQuotes}
-              shippingQuotes={shippingQuotes}
-              quotedAt={quotedAt}
-              recommendedBox={recommendedBox}
-              onGetShippingQuotes={onGetShippingQuotes}
-              onSelectRate={onSelectRate}
-              onDiscardRate={onDiscardRate}
-            >
-              {shippingInfo}
-            </ShippingSection>
-            <DiscountsSection
-              storeId={storeId}
-              availableCoupons={availableCoupons}
-              coupon={coupon}
-              setCoupon={setCoupon}
-              initialCoupon={initialData?.coupon ?? null}
-              subtotal={totals.subtotal}
-              locked={locked}
-              loading={loading}
-            />
-            <NotesCard preset={editPreset} />
-            {initialData && (
-              <SectionCard
-                id="zona-de-cuidado"
-                title="Zona de cuidado"
-                tone="care"
-                description="Solo lo que no se puede deshacer. Cancelar y cambiar de estado viven arriba, en la barra del pedido."
+            <div className="order-3 lg:order-none">
+              <CustomerCard
+                storeId={storeId}
+                users={users}
+                locations={locations}
+                loading={loading}
+                initialData={initialData}
+                total={totals.total}
+              />
+            </div>
+            <div className="order-4 lg:order-none">
+              <ItemsSection
+                fieldArray={fieldArray}
+                watchedItems={watchedItems}
+                locked={locked}
+                allowManualItems={allowManualItems}
+                loading={loading}
+                onConvert={setConversionIndex}
+              />
+            </div>
+            <div className="order-5 lg:order-none">
+              <ShippingSection
+                storeId={storeId}
+                boxes={boxes}
+                initialData={initialData}
+                loading={loading}
+                loadingQuotes={loadingQuotes}
+                shippingQuotes={shippingQuotes}
+                quotedAt={quotedAt}
+                recommendedBox={recommendedBox}
+                onGetShippingQuotes={onGetShippingQuotes}
+                onSelectRate={onSelectRate}
+                onDiscardRate={onDiscardRate}
               >
-                <InventoryIssuesPanel
-                  storeId={storeId}
-                  issues={inventoryIssues}
-                />
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {initialData?.shipping?.envioClickIdOrder
-                      ? "Este pedido tiene una guía de EnvioClick activa: cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro."
-                      : "Eliminar borra el pedido de forma definitiva; si ya estaba pagado o enviado, el inventario vuelve con un movimiento."}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={loading}
-                    onClick={() => setDeleteOpen(true)}
-                    className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash className="h-4 w-4" aria-hidden="true" />
-                    Eliminar pedido
-                  </Button>
-                </div>
-              </SectionCard>
+                {shippingInfo}
+              </ShippingSection>
+            </div>
+            <div className="order-8 lg:order-none">
+              <DiscountsSection
+                storeId={storeId}
+                availableCoupons={availableCoupons}
+                coupon={coupon}
+                setCoupon={setCoupon}
+                initialCoupon={initialData?.coupon ?? null}
+                subtotal={totals.subtotal}
+                locked={locked}
+                loading={loading}
+              />
+            </div>
+            <div className="order-9 lg:order-none">
+              <NotesCard preset={editPreset} />
+            </div>
+            {initialData && (
+              <div className="order-11 lg:order-none">
+                <SectionCard
+                  id="zona-de-cuidado"
+                  title="Zona de cuidado"
+                  tone="care"
+                  description="Solo lo que no se puede deshacer. Cancelar y cambiar de estado viven arriba, en la barra del pedido."
+                >
+                  <InventoryIssuesPanel
+                    storeId={storeId}
+                    issues={inventoryIssues}
+                  />
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      {initialData?.shipping?.envioClickIdOrder
+                        ? "Este pedido tiene una guía de EnvioClick activa: cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro."
+                        : "Eliminar borra el pedido de forma definitiva; si ya estaba pagado o enviado, el inventario vuelve con un movimiento."}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={loading}
+                      onClick={() => setDeleteOpen(true)}
+                      className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash className="h-4 w-4" aria-hidden="true" />
+                      Eliminar pedido
+                    </Button>
+                  </div>
+                </SectionCard>
+              </div>
             )}
           </div>
           {/* Columna lateral: consulta (resumen, pago, historial). Cliente y
               Notas viven en la principal: son largos y dejaban la lateral sin
               poder fijarse. */}
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
-            <SummaryCard
-              totals={totals}
-              shippingChargeState={shippingChargeState}
-              shippingCost={shippingCost}
-              coupon={coupon}
-              itemCount={(watchedItems ?? []).reduce(
-                (sum, item) => sum + Number(item.quantity || 0),
-                0,
+          <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-4">
+            {/* En tableta Pago y Resumen comparten fila, justo después del envío. */}
+            <div className="order-6 grid gap-4 md:grid-cols-2 lg:contents">
+              {(editPreset.showPayment || initialData) && (
+                <PaymentCard
+                  storeId={storeId}
+                  initialData={initialData}
+                  type={watchedType}
+                  loading={loading}
+                  isDirty={isDirty}
+                  showMethod={
+                    editPreset.showPayment || Boolean(initialData?.payment)
+                  }
+                  onTransition={onTransition}
+                />
               )}
-            />
-            {(editPreset.showPayment || initialData) && (
-              <PaymentCard
-                storeId={storeId}
-                initialData={initialData}
-                type={watchedType}
-                loading={loading}
-                isDirty={isDirty}
-                showMethod={
-                  editPreset.showPayment || Boolean(initialData?.payment)
-                }
-                onTransition={onTransition}
+              <SummaryCard
+                totals={totals}
+                shippingChargeState={shippingChargeState}
+                shippingCost={shippingCost}
+                coupon={coupon}
+                itemCount={(watchedItems ?? []).reduce(
+                  (sum, item) => sum + Number(item.quantity || 0),
+                  0,
+                )}
               />
-            )}
+            </div>
             {initialData && (
-              <HistoryCard
-                order={initialData}
-                action={
-                  invoiceData ? (
-                    <InvoiceDownloadButton
-                      data={invoiceData}
-                      disabled={loading}
-                    />
-                  ) : undefined
-                }
-              />
+              <div className="order-10 lg:order-none">
+                <HistoryCard
+                  order={initialData}
+                  action={
+                    invoiceData ? (
+                      <InvoiceDownloadButton
+                        data={invoiceData}
+                        disabled={loading}
+                      />
+                    ) : undefined
+                  }
+                />
+              </div>
             )}
           </aside>
-          <div className="sticky bottom-[84px] z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4 lg:col-span-2">
-            <p className="text-xs text-muted-foreground">
+          <div className="sticky bottom-[84px] z-20 order-12 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4 lg:order-none lg:col-span-2">
+            <div className="flex items-center justify-between gap-3 lg:hidden">
+              <span className="text-xs text-muted-foreground">Total</span>
+              <span className="text-base font-bold text-primary">
+                {currencyFormatter(totals.total)}
+              </span>
+            </div>
+            <p className="hidden text-xs text-muted-foreground lg:block">
               {initialData
                 ? locked
                   ? "Pagado: se guardan cliente, envío y notas. Productos y precios quedan como registro."
                   : "Guardar solo guarda los datos. El estado cambia con las acciones de la barra de arriba."
                 : `Se creará como «${ORDER_STATUS_LABELS[preset.status]}». ${preset.status === OrderStatus.DRAFT ? "Podrás activarlo cuando esté listo." : "Nada se descuenta hasta marcarlo pagado."}`}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
               {initialData ? (
                 <Button
                   type="button"
@@ -985,7 +1010,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       ? "Guardando…"
                       : "Creando…"
                 }
-                className="min-w-[160px]"
+                className="sm:min-w-[160px]"
               >
                 {initialData ? "Guardar cambios" : "Crear pedido"}
               </Button>

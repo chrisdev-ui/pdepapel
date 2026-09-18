@@ -175,7 +175,9 @@ export function StatusActions({
           ]
         : []),
       ...(hasGuide
-        ? ["Ya hay guía: cancela el envío con la transportadora desde «Envío y empaque»."]
+        ? [
+            "Ya hay guía: cancela el envío con la transportadora desde «Envío y empaque».",
+          ]
         : []),
       "Si tenía cupón, se libera para que el cliente lo use otra vez.",
       "El cliente recibe un correo de cancelación.",
@@ -184,11 +186,7 @@ export function StatusActions({
 
   return (
     <>
-      <div
-        className={
-          variant === "care" ? "flex flex-wrap gap-2" : "flex flex-wrap gap-2"
-        }
-      >
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {actions.map((action) => (
           <Button
             key={action.to}
@@ -207,6 +205,7 @@ export function StatusActions({
                 ? "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 : undefined
             }
+            size="default"
           >
             {action.label}
           </Button>
