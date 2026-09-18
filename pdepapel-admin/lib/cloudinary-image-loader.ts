@@ -3,6 +3,15 @@ import type { ImageLoaderProps } from "next/image";
 const CLOUDINARY_HOSTNAME = "res.cloudinary.com";
 const UPLOAD_SEGMENT = "/image/upload/";
 const VERSION_SEGMENT = /^v\d+$/;
+/**
+ * Un segmento de transformación de Cloudinary: `c_limit,w_640`, `f_auto`,
+ * `q_auto:eco`, `e_blur:300`… Sirve para limpiar URLs sin versión que ya
+ * traían una transformación; si se dejaran, la nuestra se encadenaría encima
+ * (`c_limit,w_640/c_limit,w_640/…`) y cada combinación sería otra copia.
+ */
+const TRANSFORMATION_PARAM =
+  "(?:a|ac|af|ar|b|bo|br|c|co|cs|dl|dn|dpr|du|e|eo|f|fl|fn|fps|g|h|if|ki|l|o|p|pg|q|r|so|sp|t|u|vc|vs|w|x|y|z)_[^/,]*";
+const TRANSFORMATION_SEGMENT = new RegExp(`^${TRANSFORMATION_PARAM}(?:,${TRANSFORMATION_PARAM})*$`);
 
 /**
  * Anchos que se piden a Cloudinary. Cinco y solo cinco: cada ancho es una copia
@@ -68,7 +77,15 @@ export function getCloudinaryImageUrl(src: string, width: number): string {
     .split("/")
     .filter(Boolean);
   const versionIndex = segments.findIndex((segment) => VERSION_SEGMENT.test(segment));
-  const assetPath = (versionIndex === -1 ? segments : segments.slice(versionIndex)).join("/");
+  // Con versión, todo lo anterior a ella son transformaciones; sin versión,
+  // se descartan los segmentos iniciales que parezcan transformaciones.
+  let assetSegments = versionIndex === -1 ? segments : segments.slice(versionIndex);
+  if (versionIndex === -1) {
+    while (assetSegments.length > 1 && TRANSFORMATION_SEGMENT.test(assetSegments[0])) {
+      assetSegments = assetSegments.slice(1);
+    }
+  }
+  const assetPath = assetSegments.join("/");
   const boundedWidth = snapCloudinaryWidth(width);
 
   url.pathname = `${cloudPath}${UPLOAD_SEGMENT}${DELIVERY_TRANSFORMATION},w_${boundedWidth}/${assetPath}`;

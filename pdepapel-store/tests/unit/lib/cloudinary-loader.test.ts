@@ -59,6 +59,28 @@ describe("cloudinaryLoader", () => {
     ).toBe("https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_640/v1785967604/product.jpg");
   });
 
+  /**
+   * Informe de entrega de 2026-09: `c_limit,w_3840/c_limit,w_3840/f_auto/q_auto`
+   * era el cuarto consumidor de ancho de banda. Sin versión en la URL, la
+   * transformación previa se quedaba y la nuestra se encadenaba encima.
+   */
+  it("drops a previous transformation even when the url has no version segment", () => {
+    const base = "https://res.cloudinary.com/demo/image/upload/";
+    for (const legacy of [
+      "c_limit,w_3840/c_limit,w_3840/f_auto/q_auto/product.jpg",
+      "f_auto,q_auto:eco,c_limit,w_3840/product.jpg",
+      "c_limit,w_640/product.jpg",
+      "e_blur:300,q_auto/t_named/category-covers/pic.jpg",
+    ]) {
+      const url = getCloudinaryImageUrl(base + legacy, 640);
+      expect(url, legacy).toBe(`${base}f_auto,q_auto,c_limit,w_640/${legacy.split("/").slice(-1 - (legacy.includes("category-covers") ? 1 : 0)).join("/")}`);
+      expect(url.match(/c_limit/g)?.length).toBe(1);
+      expect(url.match(/w_\d+/g)?.length).toBe(1);
+    }
+    // Una carpeta con guion bajo no es una transformación.
+    expect(getCloudinaryImageUrl(`${base}ml_fotos/foto.png`, 640)).toBe(`${base}f_auto,q_auto,c_limit,w_640/ml_fotos/foto.png`);
+  });
+
   it("inserts the transformation when the url has no version segment", () => {
     expect(cloudinaryLoader({ src: "https://res.cloudinary.com/demo/image/upload/product.jpg", width: 256 })).toBe(
       "https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_384/product.jpg",

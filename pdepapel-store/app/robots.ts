@@ -33,9 +33,18 @@ const PRIVATE_PATHS = [
  */
 const FILTERED_PATHS = ["/tienda?", "/categoria/*?", "/shop?"];
 
+/**
+ * Rastreadores SEO de terceros que descargan todas las fotos del catálogo
+ * (Cloudinary las cobra como ancho de banda) sin traer visitas: AhrefsBot
+ * fue el 6 % del ancho de banda de septiembre de 2026. Googlebot-Image no
+ * va aquí: alimenta Google Imágenes y Merchant.
+ */
+const BLOCKED_CRAWLERS = ["AhrefsBot"];
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
+      ...BLOCKED_CRAWLERS.map((userAgent) => ({ userAgent, disallow: "/" })),
       {
         userAgent: "Clarity-Bot",
         allow: ["/", "/_next/static/", "/_next/image"],

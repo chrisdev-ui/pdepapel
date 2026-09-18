@@ -61,6 +61,18 @@ describe("cloudinaryImageLoader", () => {
     ).toBe("https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_128/v1785967604/product.jpg");
   });
 
+  /** Sin versión en la URL, una transformación previa se encadenaba con la nuestra (`c_limit,w_640/c_limit,w_640`). */
+  it("drops a previous transformation even when the url has no version segment", () => {
+    const base = "https://res.cloudinary.com/demo/image/upload/";
+    expect(cloudinaryImageLoader({ src: `${base}c_limit,w_3840/c_limit,w_3840/f_auto/q_auto/product.jpg`, width: 640 })).toBe(
+      `${base}f_auto,q_auto,c_limit,w_640/product.jpg`,
+    );
+    expect(cloudinaryImageLoader({ src: `${base}f_auto,q_auto:eco,c_limit,w_640/category-covers/pic.png`, width: 384 })).toBe(
+      `${base}f_auto,q_auto,c_limit,w_384/category-covers/pic.png`,
+    );
+    expect(cloudinaryImageLoader({ src: `${base}ml_fotos/foto.png`, width: 384 })).toBe(`${base}f_auto,q_auto,c_limit,w_384/ml_fotos/foto.png`);
+  });
+
   it("leaves placeholders, carrier logos, data urls and videos untouched", () => {
     for (const src of [
       "/placeholder.png",

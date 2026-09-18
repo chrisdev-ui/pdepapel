@@ -43,4 +43,14 @@ describe("storefront robots policy", () => {
       ]),
     );
   });
+
+  /** AhrefsBot descargaba el catálogo entero de fotos (6 % del ancho de banda de Cloudinary). */
+  it("blocks AhrefsBot entirely and leaves Googlebot-Image on the public rule", () => {
+    const policy = robots();
+    const rules = Array.isArray(policy.rules) ? policy.rules : [policy.rules];
+
+    expect(rules.find((rule) => rule.userAgent === "AhrefsBot")).toEqual({ userAgent: "AhrefsBot", disallow: "/" });
+    expect(rules.some((rule) => String(rule.userAgent).includes("Googlebot"))).toBe(false);
+    expect(rules.find((rule) => rule.userAgent === "*")?.allow).toBe("/");
+  });
 });

@@ -70,6 +70,18 @@ cld admin usage            # créditos por almacenamiento, ancho de banda y tran
 cld search "resource_type:image" -n 0   # total de originales
 ```
 
+El informe **Delivery** de la consola (Reports → Delivery, últimos 30 días)
+dice qué transformaciones, páginas y rastreadores consumen el ancho de banda.
+Lectura de 2026-09-18: `c_limit,w_3840/c_limit,w_3840/f_auto/q_auto` (6 % del
+ancho de banda) y las cadenas duplicadas venían del código anterior al
+2026-09-11 (`next/image` con los anchos por defecto hasta 3840 y la
+transformación encadenada dos veces) y de páginas cacheadas de esa época; el
+código actual solo emite los cinco anchos, y ambos loaders limpian también
+las URL sin versión que ya traían una transformación. AhrefsBot bajaba el
+catálogo entero (otro 6 %): está bloqueado en `app/robots.ts`
+(`BLOCKED_CRAWLERS`); Googlebot-Image se deja pasar porque alimenta Google
+Imágenes y Merchant.
+
 Señales de alarma: `derived_resources` muy por encima de `resources × 6`,
 almacenamiento muy superior al peso de los originales, o un salto de
 transformaciones el mes en que se cambió un `sizes` o la cadena.
