@@ -43,9 +43,17 @@ distintas de pedir la misma imagen y por listas de anchos demasiado largas.
    catálogo (serviría el original completo); sí a placeholders locales, logos
    de transportadoras y otros orígenes ajenos.
 4. **Listas de anchos** (`images.deviceSizes` / `imageSizes` en cada
-   `next.config.mjs`): cada entrada es una copia derivada más por foto. No se
-   amplían sin necesidad; nunca se vuelve a los valores por defecto de Next
-   (hasta 3840 px).
+   `next.config.mjs`): cada entrada es una copia derivada más por foto. Desde
+   2026-09-18 son cinco anchos en las dos apps, `128, 384, 640, 1080, 1600`
+   (`CLOUDINARY_DELIVERY_WIDTHS`), y el loader **redondea cualquier ancho que
+   pida `next/image` al siguiente de esa lista** (`snapCloudinaryWidth`), así
+   que un `sizes` mal calculado ya no inventa anchos nuevos. Los tests
+   `tests/unit/lib/cloudinary-*loader*.test.ts` fallan si el loader emite otro
+   ancho o si alguien vuelve a ampliar las listas. `f_auto` se mantiene a
+   propósito: cada ancho se materializa en uno o dos formatos (webp y jpg/png,
+   según el navegador), y fijar un formato regeneraría todas las copias del
+   catálogo (unas 15 000 transformaciones), lo que no cabe en un ciclo del
+   plan gratuito.
 5. **Subidas**: el widget del panel reduce la foto en el navegador a 2000 px
    por lado (`maxImageWidth`/`maxImageHeight`), así el original nunca pesa
    varios MB. Los scripts que suben por API (`prisma/scripts/category-covers.ts`)
@@ -68,19 +76,62 @@ transformaciones el mes en que se cambió un `sizes` o la cadena.
 
 ## Purga de copias derivadas (mantenimiento)
 
-Después de desplegar un cambio que reduce las variantes (como el de 2026-09),
-las copias antiguas siguen ocupando espacio. Se borran **conservando los
-originales** con la Admin API (`delete_resources` con `keep_original: true`),
-en lotes de hasta 100 `public_id`, respetando el límite de 500 llamadas por
-hora del plan gratuito. Cloudinary vuelve a generar bajo demanda solo las
-variantes que los visitantes piden de verdad, que con la cadena única son
-pocas. No se usa `delete_all_resources` ni `delete_resources_by_prefix`: sin
-`keep_original` borran las fotos.
+**Regla previa: nunca se purgan copias derivadas antes de que una reducción
+de anchos o de cadena esté desplegada y sirviendo.** Cada copia purgada que
+un visitante vuelve a pedir es otra transformación (un crédito por cada
+1 000): la purga del 2026-09-11 bajó las derivadas de 83 000 a 955, pero el
+catálogo se regeneró con la matriz vieja y en una semana volvió a 9 800
+copias y 19 000 transformaciones, que fue lo que llevó la cuenta al 127 %
+del plan. Primero se reduce la matriz, se espera a que el tráfico haya
+pedido las copias nuevas, y solo entonces se borran las viejas.
+
+Después de desplegar un cambio que reduce las variantes, las copias antiguas
+siguen ocupando espacio. Se borran **conservando los originales** con la
+Admin API (`delete_resources` con `keep_original: true`), en lotes de hasta
+100 `public_id`, respetando el límite de 500 llamadas por hora del plan
+gratuito. Cloudinary vuelve a generar bajo demanda solo las variantes que los
+visitantes piden de verdad, que con la cadena única son pocas. No se usa
+`delete_all_resources` ni `delete_resources_by_prefix`: sin `keep_original`
+borran las fotos.
 
 La purga se hace desde la CLI ya autenticada (`cld`), nunca desde el panel ni
-desde un cron. El endpoint `GET/DELETE /api/[storeId]/cleanup-images` del panel
-solo detecta y borra **originales huérfanos** (fotos que ya no referencia ningún
-producto), que es otra cosa.
+desde un cron.
+
+## Originales huérfanos y rutas que borran
+
+- `GET /api/[storeId]/cleanup-images` lista los originales que **ninguna fila
+  de la base** referencia (`lib/cloudinary-orphans.ts`): fotos de productos y
+  grupos, historial de pedidos (`OrderItem.imageUrl`), videos, portadas de
+  categoría, contenido del inicio, logo y políticas de la tienda, guías de
+  envío, descripciones con imágenes y medios de conversaciones. Antes solo
+  miraba las fotos de productos y una foto que solo conservaba un pedido salía
+  como «huérfana». `DELETE` vuelve a comprobar cada id contra la base en ese
+  momento y responde 409 nombrando quién lo usa si alguno dejó de ser huérfano.
+- Toda ruta que quita filas de `Image` o reemplaza una portada borra el archivo
+  **después de confirmar la transacción** con
+  `lib/cloudinary-cleanup.ts › deleteCloudinaryImages`, que salta cualquier URL
+  que otra fila siga usando (las variantes comparten fotos por URL, los pedidos
+  las guardan como historial). Cubiertas: `PATCH/DELETE /products/[id]`,
+  `DELETE /products` (lote), `POST /product-groups` (fotos previas de los
+  productos adoptados), `PATCH /product-groups/[id]` (foto del grupo
+  reemplazada y variantes quitadas), `DELETE /product-groups/[id]` (con o sin
+  variantes), `POST /products/[id]/convert-to-variants/review`,
+  `PATCH/DELETE /categories/[id]` (portadas, también en carpeta
+  `category-covers/`) y `DELETE /stores/[id]`. Prueba de todas:
+  `tests/integration/cloudinary-orphan-paths.test.ts`.
+- `getPublicIdFromCloudinaryUrl` (`lib/utils.ts`) entiende ids en carpeta,
+  URLs sin versión y URLs con transformación; antes solo ids en la raíz.
+
+## Copias de seguridad y originales grandes
+
+- La cuenta tiene activo el **backup automático** de Cloudinary para los
+  3 673 originales (≈1,15 GB duplicados, ≈1,15 créditos por ciclo). Es un
+  ajuste de cuenta (Settings → Upload → Backup), no del preset ni de la API:
+  se apaga solo desde la consola y con decisión explícita.
+- 319 originales subidos antes del tope de 2000 px pesan 346 MB; re-encodarlos
+  a 2000 px dejaría unos 94 MB. Es solo almacenamiento (la entrega ya está
+  limitada a 1600 px), así que se hace con `explicit`/re-subida controlada y
+  con lista revisada, nunca con un borrado masivo.
 
 ## Qué no hacer
 
@@ -89,3 +140,5 @@ producto), que es otra cosa.
   variante nueva es otra copia por foto.
 - Borrar recursos en Cloudinary desde el Media Library sin comprobar que la
   base de datos no los referencia (`cleanup-images` lo comprueba por ti).
+- Purgar derivadas «para liberar espacio» sin haber reducido antes la matriz:
+  el espacio vuelve y las transformaciones se pagan otra vez.

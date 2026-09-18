@@ -12,14 +12,10 @@ import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
 import { resolveVariantImages } from "@/lib/variant-images";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { resolveProductGroupVariantStock } from "@/lib/product-group-variant-stock";
-import {
-  CACHE_HEADERS,
-  getPublicIdFromCloudinaryUrl,
-  verifyStoreOwner,
-} from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
-import cloudinaryInstance from "@/lib/cloudinary";
+import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 
 const corsHeaders = {
@@ -127,6 +123,19 @@ export async function PATCH(
       name,
       { images, imageMapping },
     );
+
+    // Fotos que existían antes (grupo y variantes): las que ninguna fila
+    // conserve después del guardado se borran de Cloudinary tras confirmar.
+    const previousImages = await prismadb.image.findMany({
+      where: {
+        OR: [
+          { productGroupId: params.productGroupId },
+          { product: { productGroupId: params.productGroupId } },
+        ],
+      },
+      select: { url: true },
+    });
+    const previousImageUrls = previousImages.map((image) => image.url);
 
     const updatedGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
@@ -420,6 +429,7 @@ export async function PATCH(
       return group;
     });
 
+    await deleteCloudinaryImages(previousImageUrls, "PRODUCT_GROUP_PATCH");
     await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(updatedGroup, { headers: corsHeaders });
@@ -448,12 +458,18 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
+    const imageUrlsToDelete: string[] = [];
     const deletedGroup = await prismadb.$transaction(async (tx) => {
       // 1. Fetch children to check constraints
       const children = await tx.product.findMany({
         where: { productGroupId: params.productGroupId },
-        include: { orderItems: true },
+        include: { orderItems: true, images: { select: { url: true } } },
       });
+      const groupImages = await tx.image.findMany({
+        where: { productGroupId: params.productGroupId },
+        select: { url: true },
+      });
+      imageUrlsToDelete.push(...groupImages.map((image) => image.url));
 
       if (deleteVariants) {
         // Enforce Strict Policy: Cannot delete if ANY child has orders
@@ -464,11 +480,11 @@ export async function DELETE(
           );
         }
 
-        // Delete children images first (Cloudinary cleanup usually handled via separate cleanup job or detailed logic)
-        // ideally we should delete images too, but that requires calling external service which might fail transaction.
-        // For now, we delete DB records. The cleanup job handles orphaned images.
-
-        // Delete children
+        // Las fotos de las variantes se borran de Cloudinary después de
+        // confirmar (solo las que ninguna otra fila use).
+        imageUrlsToDelete.push(
+          ...children.flatMap((child) => child.images.map((image) => image.url)),
+        );
         await tx.product.deleteMany({
           where: { productGroupId: params.productGroupId },
         });
@@ -492,6 +508,7 @@ export async function DELETE(
       });
     });
 
+    await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCT_GROUP_DELETE");
     await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(deletedGroup, { headers: corsHeaders });

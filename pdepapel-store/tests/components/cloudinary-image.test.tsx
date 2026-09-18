@@ -24,8 +24,9 @@ describe("CloudinaryImage", () => {
 
     const image = screen.getByAltText("Miniatura");
 
+    // 64 y 128 px caben en la misma copia de 128: un solo archivo para 1x y 2x.
     expect(parseSrcSet(image)).toEqual([
-      { url: "https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_64/v1785967604/product.jpg", descriptor: "1x", width: 64 },
+      { url: "https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_128/v1785967604/product.jpg", descriptor: "1x", width: 128 },
       { url: "https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_128/v1785967604/product.jpg", descriptor: "2x", width: 128 },
     ]);
     expect(image.getAttribute("src")).toContain("/image/upload/f_auto,q_auto,c_limit,w_128/");

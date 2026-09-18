@@ -1,193 +1,136 @@
-import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-import prismadb from "@/lib/prismadb";
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinary from "@/lib/cloudinary";
-import { checkIfStoreOwner } from "@/lib/utils";
+import {
+  collectReferencedPublicIds,
+  findOrphanResources,
+  findStillReferenced,
+} from "@/lib/cloudinary-orphans";
+import prismadb from "@/lib/prismadb";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
+
+type CloudinaryResource = {
+  public_id: string;
+  secure_url: string;
+  created_at: string;
+  bytes: number;
+  format: string;
+  url: string;
+};
+
+async function listAllUploads(): Promise<CloudinaryResource[]> {
+  const all: CloudinaryResource[] = [];
+  let nextCursor: string | undefined;
+  do {
+    const page: { resources?: CloudinaryResource[]; next_cursor?: string } =
+      await cloudinary.v2.api.resources({
+        type: "upload",
+        max_results: 500,
+        next_cursor: nextCursor,
+      });
+    all.push(...(page.resources ?? []));
+    nextCursor = page.next_cursor;
+  } while (nextCursor);
+  return all;
+}
+
+/**
+ * Huérfanos: archivos de Cloudinary que ninguna fila de la base referencia.
+ * Las referencias se recogen de todas las tablas que guardan una URL (fotos
+ * de productos y grupos, historial de pedidos, videos, portadas, inicio,
+ * logo, guías, descripciones), no solo de las fotos de productos: antes las
+ * fotos que solo conservaba un pedido salían como huérfanas.
+ */
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
     const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    await verifyStoreOwner(userId, params.storeId);
 
-    if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 401 });
-    }
-    if (!(await checkIfStoreOwner(userId, params.storeId))) {
-      return new NextResponse("Unauthorized", { status: 403 });
-    }
-
-    if (!params.storeId) {
-      return new NextResponse("Store ID is required", { status: 400 });
-    }
-
-    // 1. Fetch ALL active image URLs from database
-    const [
-      store,
-      homeContents,
-      categories,
-      productImages,
-      shippings,
-      products,
-      productGroups,
-    ] = await Promise.all([
-      prismadb.store.findUnique({
-        where: { id: params.storeId },
-        select: { logoUrl: true, policies: true },
-      }),
-      prismadb.homeContent.findMany({
-        where: { storeId: params.storeId },
-        select: { imageUrl: true },
-      }),
-      prismadb.category.findMany({
-        where: { storeId: params.storeId },
-        select: { imageUrl: true },
-      }),
-      prismadb.image.findMany({
-        where: {
-          OR: [
-            { product: { storeId: params.storeId } },
-            { productGroup: { storeId: params.storeId } },
-          ],
-        },
-        select: { url: true },
-      }),
-      prismadb.shipping.findMany({
-        where: { storeId: params.storeId },
-        select: { guideUrl: true, trackingUrl: true },
-      }),
-      prismadb.product.findMany({
-        where: { storeId: params.storeId },
-        select: { description: true },
-      }),
-      prismadb.productGroup.findMany({
-        where: { storeId: params.storeId },
-        select: { description: true },
-      }),
+    const [referenced, resources] = await Promise.all([
+      collectReferencedPublicIds(prismadb),
+      listAllUploads(),
     ]);
-
-    // Consolidate active URLs into a Set for fast lookup
-    const activeUrls = new Set<string>();
-
-    if (store?.logoUrl) activeUrls.add(store.logoUrl);
-    homeContents.forEach((entry) => {
-      if (entry.imageUrl) activeUrls.add(entry.imageUrl);
-    });
-    categories.forEach((category) => {
-      if (category.imageUrl) activeUrls.add(category.imageUrl);
-    });
-    productImages.forEach((i) => activeUrls.add(i.url));
-    shippings.forEach((s) => {
-      if (s.guideUrl) activeUrls.add(s.guideUrl);
-      if (s.trackingUrl) activeUrls.add(s.trackingUrl);
-    });
-
-    // Deep Scan: Extract URLs from Rich Text & Policies
-    const urlRegex = /https?:\/\/res\.cloudinary\.com\/[^\s"')]+/g;
-
-    const scanText = (text: string | null | undefined) => {
-      if (!text) return;
-      const matches = text.match(urlRegex);
-      if (matches) {
-        matches.forEach((url) => activeUrls.add(url));
-      }
-    };
-
-    // Scan Products & Groups
-    products.forEach((p) => scanText(p.description));
-    productGroups.forEach((pg) => scanText(pg.description));
-
-    // Scan Store Policies (JSON)
-    if (store?.policies) {
-      scanText(JSON.stringify(store.policies));
-    }
-
-    // 2. Fetch all assets from Cloudinary
-    // We use a loop with next_cursor to fetch ALL resources, not just the first 500.
-    let allResources: any[] = [];
-    let nextCursor = null;
-
-    do {
-      const cloudinaryResult: any = await cloudinary.v2.api.resources({
-        type: "upload",
-        prefix: "",
-        max_results: 500,
-        next_cursor: nextCursor,
-      });
-
-      if (cloudinaryResult.resources) {
-        allResources = [...allResources, ...cloudinaryResult.resources];
-      }
-
-      nextCursor = cloudinaryResult.next_cursor;
-    } while (nextCursor);
-
-    const resources = allResources as {
-      public_id: string;
-      secure_url: string;
-      created_at: string;
-      bytes: number;
-      format: string;
-      url: string;
-    }[];
-
-    // 3. Find Orphans
-    // Cloudinary returns 'secure_url' (https) and 'url' (http). We should check both or normalize.
-    // DB usually stores the secure_url.
-    const orphans = resources.filter((resource) => {
-      return (
-        !activeUrls.has(resource.secure_url) && !activeUrls.has(resource.url)
-      );
-    });
-
+    const orphans = findOrphanResources(resources, referenced);
     const totalBytes = orphans.reduce((acc, curr) => acc + curr.bytes, 0);
 
-    return NextResponse.json({
-      orphans,
-      stats: {
-        count: orphans.length,
-        totalSize: totalBytes, // in bytes
-        scannedCount: resources.length,
+    return NextResponse.json(
+      {
+        orphans,
+        stats: {
+          count: orphans.length,
+          totalSize: totalBytes,
+          scannedCount: resources.length,
+          referencedCount: referenced.size,
+        },
       },
-    });
+      { headers: CACHE_HEADERS.NO_CACHE },
+    );
   } catch (error) {
-    console.error("[CLOUDINARY_GET]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    return handleErrorResponse(error, "CLOUDINARY_ORPHANS_GET", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
+/**
+ * Borra solo lo que sigue siendo huérfano en el momento de borrar. La lista
+ * del cuerpo es una sugerencia del cliente, no una orden: cada id se vuelve
+ * a comprobar contra la base antes de tocar Cloudinary.
+ */
 export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
     const { userId } = await auth();
-    const body = await req.json();
-    const { publicIds } = body;
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    await verifyStoreOwner(userId, params.storeId);
 
-    if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 401 });
+    const body = await req.json().catch(() => ({}));
+    const publicIds: unknown = body?.publicIds;
+    if (
+      !Array.isArray(publicIds) ||
+      publicIds.length === 0 ||
+      !publicIds.every((id) => typeof id === "string" && id.trim())
+    ) {
+      throw ErrorFactory.InvalidRequest("Indica los archivos a borrar");
     }
-    if (!(await checkIfStoreOwner(userId, params.storeId))) {
-      return new NextResponse("Unauthorized", { status: 403 });
+    const requested = Array.from(new Set(publicIds as string[]));
+
+    const referenced = await collectReferencedPublicIds(prismadb);
+    const stillReferenced = findStillReferenced(requested, referenced);
+    if (stillReferenced.length > 0) {
+      throw ErrorFactory.Conflict(
+        `${stillReferenced.length} ${stillReferenced.length === 1 ? "archivo sigue en uso" : "archivos siguen en uso"} y no se borra: ${stillReferenced
+          .slice(0, 5)
+          .map((entry) => `${entry.publicId} (${entry.sources.join(", ")})`)
+          .join("; ")}${stillReferenced.length > 5 ? "…" : ""}. Vuelve a revisar la lista.`,
+        { publicIds: stillReferenced.map((entry) => entry.publicId).join(", ") },
+      );
     }
 
-    if (!publicIds || !Array.isArray(publicIds) || publicIds.length === 0) {
-      return new NextResponse("Public IDs are required", { status: 400 });
-    }
+    const result = await cloudinary.v2.api.delete_resources(requested, {
+      type: "upload",
+      resource_type: "image",
+    });
 
-    if (!params.storeId) {
-      return new NextResponse("Store ID is required", { status: 400 });
-    }
-
-    // Delete from Cloudinary
-    const result = await cloudinary.v2.api.delete_resources(publicIds);
-
-    return NextResponse.json(result);
+    return NextResponse.json(
+      { deleted: requested.length, result },
+      { headers: CACHE_HEADERS.NO_CACHE },
+    );
   } catch (error) {
-    console.error("[CLOUDINARY_DELETE]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    return handleErrorResponse(error, "CLOUDINARY_ORPHANS_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

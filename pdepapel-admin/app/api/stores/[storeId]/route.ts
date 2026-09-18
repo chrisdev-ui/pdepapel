@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
+import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import prismadb from "@/lib/prismadb";
 import {
   CACHE_HEADERS,
@@ -214,6 +215,42 @@ export async function DELETE(
       );
     }
 
+    // Portadas, imágenes de inicio, logo y fotos de productos o grupos de la
+    // tienda: se borran de Cloudinary después de confirmar.
+    const [storeImages, storeCategories, storeHome, storeRow] = await Promise.all([
+      prismadb.image.findMany({
+        where: {
+          OR: [
+            { product: { storeId: params.storeId } },
+            { productGroup: { storeId: params.storeId } },
+          ],
+        },
+        select: { url: true },
+      }),
+      prismadb.category.findMany({
+        where: { storeId: params.storeId },
+        select: { imageUrl: true },
+      }),
+      prismadb.homeContent.findMany({
+        where: { storeId: params.storeId },
+        select: { imageUrl: true, primaryUrl: true, secondaryUrl: true },
+      }),
+      prismadb.store.findUnique({
+        where: { id: params.storeId },
+        select: { logoUrl: true },
+      }),
+    ]);
+    const imageUrlsToDelete = [
+      ...storeImages.map((image) => image.url),
+      ...storeCategories.map((category) => category.imageUrl),
+      ...storeHome.flatMap((content) => [
+        content.imageUrl,
+        content.primaryUrl,
+        content.secondaryUrl,
+      ]),
+      storeRow?.logoUrl,
+    ].filter((url): url is string => Boolean(url));
+
     await prismadb.$transaction(async (tx) => {
       const where = {
         where: {
@@ -242,6 +279,8 @@ export async function DELETE(
         },
       });
     });
+
+    await deleteCloudinaryImages(imageUrlsToDelete, "STORE_DELETE");
 
     return NextResponse.json("Tu tienda ha sido eliminada correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,

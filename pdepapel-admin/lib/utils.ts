@@ -70,12 +70,34 @@ export const generateOrderNumber = () =>
 export const generateRandomSKU = () =>
   `SKU-${String(Date.now()).slice(-5)}-${Math.floor(Math.random() * 10000)}`;
 
+/**
+ * `public_id` de una URL de Cloudinary: con o sin versión, con carpetas
+ * (`category-covers/agendas-20260909`) y descartando transformaciones y
+ * parámetros. Antes solo entendía ids en la raíz con versión, así que un
+ * archivo en carpeta nunca se borraba.
+ */
 export function getPublicIdFromCloudinaryUrl(url: string) {
-  // Use a regex pattern to match the structure of the URL and extract the public ID
-  const match = url.match(/\/v\d+\/([\w-]+)\.\w+$/);
-
-  // Return the matched public ID or null if not found
-  return match ? match[1] : null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!parsed.hostname.endsWith("cloudinary.com")) return null;
+  const match = parsed.pathname.match(/\/(?:image|video|raw)\/upload\/(.+)$/);
+  if (!match) return null;
+  const segments = match[1].split("/").filter(Boolean);
+  const versionIndex = segments.findIndex((segment) => /^v\d+$/.test(segment));
+  const isTransformation = (segment: string) =>
+    /^(?:[a-z]{1,3}_[^/]*)(?:,[a-z]{1,3}_[^/]*)*$/.test(segment);
+  const assetSegments =
+    versionIndex === -1
+      ? segments.filter((segment) => !isTransformation(segment))
+      : segments.slice(versionIndex + 1);
+  if (assetSegments.length === 0) return null;
+  const last = assetSegments[assetSegments.length - 1].replace(/\.[a-zA-Z0-9]+$/, "");
+  const publicId = [...assetSegments.slice(0, -1), last].join("/");
+  return publicId || null;
 }
 
 export async function generateIntegritySignature({

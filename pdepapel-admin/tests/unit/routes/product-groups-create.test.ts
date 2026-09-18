@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   productUpdate: vi.fn(),
 }));
 
+// La ruta ahora borra fotos en Cloudinary después de confirmar; aquí no se prueba.
+vi.mock("@/lib/cloudinary-cleanup", () => ({
+  deleteCloudinaryImages: vi.fn().mockResolvedValue({ deleted: 0, kept: 0 }),
+}));
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
@@ -17,6 +21,8 @@ vi.mock("@/lib/product-slugs", () => ({
 vi.mock("@/lib/prismadb", () => ({
   default: {
     product: { findMany: mocks.findMany },
+    // Fotos previas del producto adoptado (se borran de Cloudinary al final).
+    image: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: mocks.transaction,
   },
 }));

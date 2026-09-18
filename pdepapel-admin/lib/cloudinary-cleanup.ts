@@ -7,12 +7,24 @@ type ReferenceDb = {
   orderItem: {
     count: (args: { where: { imageUrl: string } }) => Promise<number>;
   };
+  category?: {
+    count: (args: { where: { imageUrl: string } }) => Promise<number>;
+  };
+  homeContent?: {
+    count: (args: {
+      where: {
+        OR: { imageUrl?: string; primaryUrl?: string; secondaryUrl?: string }[];
+      };
+    }) => Promise<number>;
+  };
+  store?: { count: (args: { where: { logoUrl: string } }) => Promise<number> };
 };
 
 /**
  * URLs que otra fila sigue usando: las variantes de un grupo comparten la
- * misma foto por URL y los pedidos guardan la foto como historial. Borrar el
- * archivo por quitarlo de UN producto rompía a los demás.
+ * misma foto por URL, los pedidos guardan la foto como historial y las
+ * portadas de categoría, del inicio y el logo viven en otras tablas. Borrar
+ * el archivo por quitarlo de UNA fila rompía a las demás.
  */
 export async function filterUnreferencedImageUrls(
   urls: string[],
@@ -21,11 +33,24 @@ export async function filterUnreferencedImageUrls(
   const unique = Array.from(new Set(urls.filter(Boolean)));
   const checks = await Promise.all(
     unique.map(async (url) => {
-      const [images, orders] = await Promise.all([
+      const counts = await Promise.all([
         db.image.count({ where: { url } }),
         db.orderItem.count({ where: { imageUrl: url } }),
+        typeof db.category?.count === "function"
+          ? db.category.count({ where: { imageUrl: url } })
+          : 0,
+        typeof db.homeContent?.count === "function"
+          ? db.homeContent.count({
+              where: {
+                OR: [{ imageUrl: url }, { primaryUrl: url }, { secondaryUrl: url }],
+              },
+            })
+          : 0,
+        typeof db.store?.count === "function"
+          ? db.store.count({ where: { logoUrl: url } })
+          : 0,
       ]);
-      return images === 0 && orders === 0 ? url : null;
+      return counts.every((count) => count === 0) ? url : null;
     }),
   );
   return checks.filter((url): url is string => url !== null);

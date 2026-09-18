@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { CLOUDINARY_MAX_WIDTH, cloudinaryLoader, getCloudinaryImageUrl, isCloudinaryUrl } from "@/lib/cloudinary-loader";
+import { CLOUDINARY_DELIVERY_WIDTHS, CLOUDINARY_MAX_WIDTH, cloudinaryLoader, getCloudinaryImageUrl, isCloudinaryUrl, snapCloudinaryWidth } from "@/lib/cloudinary-loader";
 
 const IMAGE_URL = "https://res.cloudinary.com/demo/image/upload/v1785967604/product.jpg";
+const widthOf = (url: string) => Number(url.match(/w_(\d+)\//)?.[1]);
 
 describe("cloudinaryLoader", () => {
   it("builds one delivery transformation with automatic format and quality", () => {
@@ -21,6 +23,27 @@ describe("cloudinaryLoader", () => {
     );
   });
 
+  /** Nueve anchos por foto fueron el incidente de 2026-09: la lista corta es la única salida posible. */
+  it("only ever requests one of the allowed widths, whatever width next/image asks for", () => {
+    const allowed = new Set<number>(CLOUDINARY_DELIVERY_WIDTHS);
+    for (let width = 1; width <= 4000; width += 7) {
+      expect(allowed.has(widthOf(getCloudinaryImageUrl(IMAGE_URL, width))), `width ${width}`).toBe(true);
+    }
+    expect(snapCloudinaryWidth(56)).toBe(128);
+    expect(snapCloudinaryWidth(500)).toBe(640);
+    expect(snapCloudinaryWidth(720)).toBe(1080);
+    expect(CLOUDINARY_DELIVERY_WIDTHS).toEqual([128, 384, 640, 1080, 1600]);
+  });
+
+  it("keeps next.config inside the allowed widths", () => {
+    const config = readFileSync(new URL("../../../next.config.mjs", import.meta.url), "utf8");
+    const configured = Array.from(config.matchAll(/(?:deviceSizes|imageSizes):\s*\[([^\]]+)\]/g)).flatMap((match) =>
+      match[1].split(",").map((value: string) => Number(value.trim())),
+    );
+    expect(configured.length).toBeGreaterThan(0);
+    for (const width of configured) expect(CLOUDINARY_DELIVERY_WIDTHS).toContain(width);
+  });
+
   it("keeps folders after the version segment", () => {
     expect(cloudinaryLoader({ src: "https://res.cloudinary.com/demo/image/upload/v1/category-covers/pic.jpg", width: 384 })).toBe(
       "https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_384/v1/category-covers/pic.jpg",
@@ -33,12 +56,12 @@ describe("cloudinaryLoader", () => {
         src: "https://res.cloudinary.com/demo/image/upload/c_limit,w_384/c_limit,w_384/f_auto/q_auto/v1785967604/product.jpg?_a=old",
         width: 512,
       }),
-    ).toBe("https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_512/v1785967604/product.jpg");
+    ).toBe("https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_640/v1785967604/product.jpg");
   });
 
   it("inserts the transformation when the url has no version segment", () => {
     expect(cloudinaryLoader({ src: "https://res.cloudinary.com/demo/image/upload/product.jpg", width: 256 })).toBe(
-      "https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_256/product.jpg",
+      "https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_384/product.jpg",
     );
   });
 

@@ -7,8 +7,11 @@ const nextConfig = {
     // Cada ancho de esta lista es una copia derivada más por foto en Cloudinary
     // (ver docs/imagenes-cloudinary.md). Las miniaturas fijas usan width/height
     // (dos candidatos); fill + sizes elige entre estos anchos.
-    deviceSizes: [640, 750, 1080, 1200, 1600],
-    imageSizes: [64, 128, 256, 384],
+    // Solo anchos de lib/cloudinary-loader.ts › CLOUDINARY_DELIVERY_WIDTHS;
+    // el loader redondea cualquier otro, y tests/unit/lib/cloudinary-loader.test.ts
+    // comprueba que estas listas no se salgan de ella.
+    deviceSizes: [640, 1080, 1600],
+    imageSizes: [128, 384],
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {

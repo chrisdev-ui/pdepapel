@@ -54,8 +54,10 @@ const nextConfig = {
     // derivada más por foto en Cloudinary (ver docs/imagenes-cloudinary.md).
     loader: "custom",
     loaderFile: "./lib/cloudinary-image-loader.ts",
+    // Solo anchos de lib/cloudinary-image-loader.ts › CLOUDINARY_DELIVERY_WIDTHS
+    // (tests/unit/lib/cloudinary-image-loader.test.ts lo comprueba).
     deviceSizes: [640, 1080, 1600],
-    imageSizes: [64, 128, 256, 384],
+    imageSizes: [128, 384],
     remotePatterns: [
       {
         protocol: "https",

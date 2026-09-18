@@ -1,3 +1,4 @@
+import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { auth } from "@clerk/nextjs/server";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -212,6 +213,7 @@ export async function POST(
         "Distribuye exactamente todo el inventario actual entre las opciones",
       );
     }
+    const droppedImageUrls: string[] = [];
 
     const result = await prismadb.$transaction(async (tx) => {
       const category = await tx.category.findFirst({
@@ -294,6 +296,13 @@ export async function POST(
         );
       }
 
+      // Las fotos que el producto pierde se borran de Cloudinary tras
+      // confirmar, si ninguna variante nueva las conserva.
+      droppedImageUrls.push(
+        ...product.images
+          .map((image) => image.url)
+          .filter((url) => url !== existingVariant.imageUrl),
+      );
       await tx.image.deleteMany({ where: { productId: product.id } });
       await tx.image.create({
         data: {
@@ -374,6 +383,7 @@ export async function POST(
       return { group, createdProducts };
     });
 
+    await deleteCloudinaryImages(droppedImageUrls, "PRODUCT_CONVERT_REVIEW");
     await invalidateStoreProductsCache(params.storeId);
     return NextResponse.json({
       productGroupId: result.group.id,

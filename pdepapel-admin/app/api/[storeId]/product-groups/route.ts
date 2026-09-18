@@ -11,6 +11,7 @@ import { resolveVariantImages } from "@/lib/variant-images";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
+import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 
 const corsHeaders = {
@@ -82,6 +83,19 @@ export async function POST(
       name,
       { images, imageMapping },
     );
+    // Fotos previas de los productos que se adoptan: se reemplazan por las del
+    // grupo y, si ninguna fila las conserva, se borran de Cloudinary al final.
+    const adoptedIds = (variantsPayload as { id?: string }[])
+      .map((variant) => variant.id)
+      .filter((id): id is string => Boolean(id));
+    const adoptedImages = adoptedIds.length
+      ? await prismadb.image.findMany({
+          where: { productId: { in: adoptedIds } },
+          select: { url: true },
+        })
+      : [];
+    const previousImageUrls = adoptedImages.map((image) => image.url);
+
     const productGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
       // 1. Create Product Group
@@ -292,6 +306,7 @@ export async function POST(
       return group;
     });
 
+    await deleteCloudinaryImages(previousImageUrls, "PRODUCT_GROUPS_POST");
     await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(productGroup, { headers: corsHeaders });

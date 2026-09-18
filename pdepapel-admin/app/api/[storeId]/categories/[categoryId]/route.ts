@@ -1,6 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import {
   getCategoryRevalidationPaths,
@@ -126,6 +127,7 @@ export async function PATCH(
     if (!canonicalName) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("category", "nombre"));
 
     let previousSlug = "";
+    let previousImageUrl: string | null = null;
     const updatedCategory = await prismadb
       .$transaction(async (tx) => {
         const category = await tx.category.findFirst({
@@ -133,6 +135,7 @@ export async function PATCH(
         });
 
         if (!category) throw ErrorFactory.NotFound(missingTaxonomyMessage("category"));
+        previousImageUrl = category.imageUrl;
 
         const type = await tx.type.findFirst({
           where: { id: typeId, storeId: params.storeId },
@@ -185,6 +188,11 @@ export async function PATCH(
       .catch((error) => {
         throw mapTaxonomyUniqueError(error, "category", canonicalName, "type");
       });
+
+    // La portada anterior se borra de Cloudinary si ya no la usa nadie.
+    if (previousImageUrl && previousImageUrl !== updatedCategory.imageUrl) {
+      await deleteCloudinaryImages([previousImageUrl], "CATEGORY_PATCH");
+    }
 
     await Promise.all([
       triggerStorefrontRevalidation({
@@ -250,6 +258,10 @@ export async function DELETE(
 
       return category;
     });
+
+    if (deletedCategory.imageUrl) {
+      await deleteCloudinaryImages([deletedCategory.imageUrl], "CATEGORY_DELETE");
+    }
 
     await Promise.all([
       triggerStorefrontRevalidation({

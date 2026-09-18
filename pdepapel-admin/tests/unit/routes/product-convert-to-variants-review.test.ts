@@ -16,6 +16,10 @@ class AppError extends Error {
   }
 }
 
+// La ruta ahora borra fotos en Cloudinary después de confirmar; aquí no se prueba.
+vi.mock("@/lib/cloudinary-cleanup", () => ({
+  deleteCloudinaryImages: vi.fn().mockResolvedValue({ deleted: 0, kept: 0 }),
+}));
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/cache", () => ({
   invalidateStoreProductsCache: vi.fn(),
