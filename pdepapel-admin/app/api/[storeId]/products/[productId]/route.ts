@@ -25,6 +25,14 @@ import {
   normalizeProductIdentifiers,
 } from "@/lib/product-identifiers";
 import { isPriceBelowCost, priceBelowCostMessage } from "@/lib/product-pricing-rules";
+import {
+  assertValidKitComponents,
+  KIT_COMPOSITION_REASON,
+  KIT_CONVERSION_REASON,
+  KIT_DISSOLUTION_REASON,
+  settleKitStock,
+} from "@/lib/product-kit-conversion";
+import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
@@ -311,6 +319,16 @@ export async function PATCH(
         `El Producto ${params.productId} no existe en esta tienda`,
       );
 
+    if (isKit) {
+      await assertValidKitComponents(prismadb, {
+        storeId: params.storeId,
+        kitId: params.productId,
+        components,
+      });
+    }
+    const becomesKit = Boolean(isKit) && !productToUpdate.isKit;
+    const stopsBeingKit = !isKit && productToUpdate.isKit;
+
     const [categoryObj, designObj, colorObj, sizeObj] = await Promise.all([
       prismadb.category.findUnique({ where: { id: categoryId } }),
       prismadb.design.findUnique({ where: { id: designId } }),
@@ -382,6 +400,8 @@ export async function PATCH(
           description: sanitizedDescription,
           // [NEW] Update Kit info
           isKit: isKit || false,
+          // Al dejar de ser kit se sueltan los componentes; antes quedaban
+          // filas huérfanas y el stock congelado sin movimiento.
           kitComponents: isKit
             ? {
                 deleteMany: {}, // Wipe old
@@ -390,9 +410,30 @@ export async function PATCH(
                   quantity: c.quantity || 1,
                 })),
               }
-            : undefined,
+            : stopsBeingKit
+              ? { deleteMany: {} }
+              : undefined,
         },
       });
+
+      // El stock de un kit se deriva de sus componentes. Cualquier salto de
+      // la columna queda como movimiento, dentro de la misma transacción.
+      if (becomesKit || stopsBeingKit || isKit) {
+        const settled = await settleKitStock(tx, {
+          storeId: params.storeId,
+          productId: params.productId,
+          reason: becomesKit
+            ? KIT_CONVERSION_REASON
+            : stopsBeingKit
+              ? KIT_DISSOLUTION_REASON
+              : KIT_COMPOSITION_REASON,
+          createdBy: `USER_${userId}`,
+          skipWhenUnchanged: !becomesKit && !stopsBeingKit,
+        });
+        if (settled.quantity !== 0) {
+          await queueMarketplaceStockSyncEvents(tx, [params.productId]);
+        }
+      }
 
       // Prisma 6: explicit image replacement for optional relations
       await tx.image.deleteMany({
@@ -443,13 +484,6 @@ export async function PATCH(
       // Actually we need to wait for this update to finish before calculating stock?
       // No, we are in transaction 'tx'. We can recalculate using 'tx'.
     });
-
-    // Perform Recalculation OUTSIDE transaction (or inside if we used tx)
-    // To play safe with imports and async, we do it after result.
-    if (isKit) {
-      const { recalculateKitStock } = await import("@/lib/inventory");
-      await recalculateKitStock(prismadb, [params.productId]);
-    }
 
     // Las fotos quitadas se borran de Cloudinary solo después de que la base
     // confirmó el guardado; antes iban dentro de la transacción y un fallo a

@@ -64,6 +64,8 @@ interface ComponentSelectorProps {
   value: KitComponent[];
   onChange: (value: KitComponent[]) => void;
   disabled?: boolean;
+  /** Id del kit que se edita: se excluye de la lista. */
+  excludeId?: string | null;
 }
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
@@ -72,6 +74,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
   value,
   onChange,
   disabled,
+  excludeId,
 }) => {
   const params = useParams();
   const [open, setOpen] = React.useState(false);
@@ -100,7 +103,8 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
     // excludeProducts excludes ALREADY selected items if we wanted, but we'll filter client side to avoid layout shifts or complex queries,
     // OR just show them as "Selected".
     // Let's keep it simple: fetch all, and mark selected visually.
-    return `/api/${params.storeId}/products/selectable?search=${debouncedSearch}&limit=20&page=${pageIndex + 1}&v=2`;
+    const exclude = excludeId ? `&excludeId=${encodeURIComponent(excludeId)}` : "";
+    return `/api/${params.storeId}/products/selectable?search=${encodeURIComponent(debouncedSearch)}&limit=20&page=${pageIndex + 1}&v=3${exclude}`;
   };
 
   const { data, size, setSize, isLoading, isValidating } = useSWRInfinite(
@@ -483,8 +487,8 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
         )}
       </div>
       <div className="text-center text-xs text-muted-foreground">
-        * El stock del Kit se calculará en base al componente con menor
-        disponibilidad proporcional.
+        Este kit, otros kits y los productos archivados no aparecen en la
+        lista. El stock del kit lo limita el componente más escaso.
       </div>
     </div>
   );

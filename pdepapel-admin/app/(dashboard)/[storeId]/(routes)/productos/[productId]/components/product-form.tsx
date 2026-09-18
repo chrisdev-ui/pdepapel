@@ -1742,6 +1742,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                             value={field.value || []}
                             onChange={(val) => field.onChange(val)}
                             disabled={loading}
+                            excludeId={initialData?.id ?? null}
                           />
                         </FormControl>
                         <FormMessage />

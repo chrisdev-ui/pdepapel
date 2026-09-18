@@ -49,6 +49,7 @@ import {
   normalizeProductIdentifiers,
 } from "@/lib/product-identifiers";
 import { isPriceBelowCost, priceBelowCostMessage } from "@/lib/product-pricing-rules";
+import { assertValidKitComponents } from "@/lib/product-kit-conversion";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
@@ -227,6 +228,12 @@ export async function POST(
       throw ErrorFactory.InvalidRequest(
         priceBelowCostMessage(Number(price), Number(acqPrice), currencyFormatter),
       );
+    }
+    if (isKit) {
+      await assertValidKitComponents(prismadb, {
+        storeId: params.storeId,
+        components,
+      });
     }
 
     const gtinOwner = await findProductWithGtin(prismadb, {

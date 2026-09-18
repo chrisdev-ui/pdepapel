@@ -31,11 +31,14 @@ export async function GET(
     const page = parseInt(searchParams.get("page") || "1");
     // Limit is hardcoded to 20 in ComponentSelector, but good to handle param
     const limit = parseInt(searchParams.get("limit") || "20");
+    // El propio kit nunca aparece como componente de sí mismo.
+    const excludeId = searchParams.get("excludeId") || undefined;
 
     const whereClause = {
       storeId: params.storeId,
       isArchived: false,
       isKit: false, // STRICTLY EXCLUDE KITS
+      ...(excludeId ? { NOT: { id: excludeId } } : {}),
       OR: query
         ? [
             { name: { contains: query } },
