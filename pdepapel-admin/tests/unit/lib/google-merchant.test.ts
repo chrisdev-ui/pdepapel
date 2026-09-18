@@ -58,13 +58,15 @@ describe("Google Merchant feed links and images", () => {
   /** Los rastreadores de catálogo (sin Referer) bajaban el original completo de cada foto. */
   it("serves supported Cloudinary formats as the sized copy, format kept", () => {
     const base = "https://res.cloudinary.com/pdepapel/image/upload/";
-    expect(toGoogleMerchantImageUrl(`${base}v1/products/agenda.jpg`)).toBe(`${base}c_limit,w_1600,q_auto/v1/products/agenda.jpg`);
-    expect(toGoogleMerchantImageUrl(`${base}v1/products/agenda.PNG`)).toBe(`${base}c_limit,w_1600,q_auto/v1/products/agenda.PNG`);
+    expect(toGoogleMerchantImageUrl(`${base}v1/products/agenda.jpg`)).toBe(`${base}c_limit%2Cw_1600%2Cq_auto/v1/products/agenda.jpg`);
+    expect(toGoogleMerchantImageUrl(`${base}v1/products/agenda.PNG`)).toBe(`${base}c_limit%2Cw_1600%2Cq_auto/v1/products/agenda.PNG`);
     // Una transformación previa se reemplaza, nunca se encadena.
     expect(toGoogleMerchantImageUrl(`${base}f_auto,q_auto,c_limit,w_640/v1/products/agenda.jpg?x=1`)).toBe(
-      `${base}c_limit,w_1600,q_auto/v1/products/agenda.jpg`,
+      `${base}c_limit%2Cw_1600%2Cq_auto/v1/products/agenda.jpg`,
     );
-    expect(toGoogleMerchantImageUrl(`${base}c_limit,w_640/agenda.jpg`)).toBe(`${base}c_limit,w_1600,q_auto/agenda.jpg`);
+    expect(toGoogleMerchantImageUrl(`${base}c_limit,w_640/agenda.jpg`)).toBe(`${base}c_limit%2Cw_1600%2Cq_auto/agenda.jpg`);
+    // `additional_image_link` separa URL con coma: ninguna coma literal dentro de la URL.
+    expect(toGoogleMerchantImageUrl(`${base}v1/products/agenda.jpg`)).not.toContain(",");
   });
 
   it("re-requests unsupported Cloudinary formats as PNG", () => {
@@ -73,21 +75,21 @@ describe("Google Merchant feed links and images", () => {
         "https://res.cloudinary.com/pdepapel/image/upload/v1/products/agenda.webp",
       ),
     ).toBe(
-      "https://res.cloudinary.com/pdepapel/image/upload/c_limit,w_1600,q_auto/v1/products/agenda.png",
+      "https://res.cloudinary.com/pdepapel/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/products/agenda.png",
     );
     expect(
       toGoogleMerchantImageUrl(
         "https://res.cloudinary.com/pdepapel/image/upload/v1/products/agenda.avif",
       ),
     ).toBe(
-      "https://res.cloudinary.com/pdepapel/image/upload/c_limit,w_1600,q_auto/v1/products/agenda.png",
+      "https://res.cloudinary.com/pdepapel/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/products/agenda.png",
     );
     expect(
       toGoogleMerchantImageUrl(
         "https://res.cloudinary.com/pdepapel/image/upload/v1/products/agenda",
       ),
     ).toBe(
-      "https://res.cloudinary.com/pdepapel/image/upload/c_limit,w_1600,q_auto/v1/products/agenda.png",
+      "https://res.cloudinary.com/pdepapel/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/products/agenda.png",
     );
   });
 

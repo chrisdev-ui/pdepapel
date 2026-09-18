@@ -63,9 +63,11 @@ const CLOUDINARY_UPLOAD_SEGMENT = "/image/upload/";
  * fijado por la extensión porque esos servicios no aceptan WebP/AVIF. Antes
  * apuntaban al original completo, y esos rastreadores (sin Referer) eran una
  * parte grande del ancho de banda de Cloudinary. Una sola combinación: cada
- * variante distinta es otra copia derivada por foto.
+ * variante distinta es otra copia derivada por foto. Las comas van como
+ * `%2C` (Cloudinary las acepta igual) porque `additional_image_link` separa
+ * varias URL con coma y una coma literal partiría la URL.
  */
-export const GOOGLE_MERCHANT_IMAGE_TRANSFORMATION = "c_limit,w_1600,q_auto";
+export const GOOGLE_MERCHANT_IMAGE_TRANSFORMATION = "c_limit%2Cw_1600%2Cq_auto";
 
 function getUrlExtension(pathname: string) {
   const lastSegment = pathname.split("/").pop() ?? "";

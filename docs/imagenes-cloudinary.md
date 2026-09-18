@@ -89,9 +89,10 @@ y Mercado Libre. Todos recibían el original completo. Desde 2026-09-18:
 `og:image`, `twitter:image` y el `image` del JSON-LD de productos y categorías
 apuntan a la copia de 1600 px `f_auto` que ya existe para la galería (ninguna
 transformación nueva), y `image_link` de los feeds y `pictures` de Mercado
-Libre pasan por `toGoogleMerchantImageUrl` → `c_limit,w_1600,q_auto` con el
-formato fijado por la extensión (esos servicios no aceptan WebP), una copia
-nueva por foto la primera vez que la piden.
+Libre pasan por `toGoogleMerchantImageUrl` → `c_limit%2Cw_1600%2Cq_auto` con
+el formato fijado por la extensión (esos servicios no aceptan WebP), una copia
+nueva por foto la primera vez que la piden. Las comas van codificadas porque
+`additional_image_link` separa varias URL con coma.
 
 Señales de alarma: `derived_resources` muy por encima de `resources × 6`,
 almacenamiento muy superior al peso de los originales, o un salto de

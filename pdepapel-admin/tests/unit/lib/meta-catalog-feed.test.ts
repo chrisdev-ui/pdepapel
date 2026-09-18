@@ -179,8 +179,8 @@ describe("buildMetaCatalogFeed", () => {
       condition: "new",
       link: "https://papeleriapdepapel.com/producto/producto-1",
       // Meta solo acepta JPEG o PNG: la imagen WebP se sirve reescrita.
-      image_link: "https://res.cloudinary.com/demo/image/upload/c_limit,w_1600,q_auto/v1/a.png",
-      additional_image_link: "https://res.cloudinary.com/demo/image/upload/c_limit,w_1600,q_auto/v1/b.jpg",
+      image_link: "https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/a.png",
+      additional_image_link: "https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/b.jpg",
       brand: "P de Papel",
       product_type: "Papelería > Cuadernos",
     });
