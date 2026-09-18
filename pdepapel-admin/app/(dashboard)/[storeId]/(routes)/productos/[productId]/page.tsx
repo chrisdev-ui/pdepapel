@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import { ProductForm } from "./components/product-form";
 import {
   ProductWorkspaceAside,
-  ProductWorkspaceHeader,
+  productFormSections,
 } from "./components/product-workspace";
+import { MobileSectionNav } from "./components/section-nav";
 import { NEW_PRODUCT_SEGMENT } from "@/lib/product-routes";
 import { getProduct, getProductSeed } from "./server/get-product";
 
@@ -45,23 +46,7 @@ export default async function ProductPage({
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
-      {product ? (
-        <ProductWorkspaceHeader
-          product={product}
-          storeUrl={env.FRONTEND_STORE_URL}
-        />
-      ) : (
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-primary">
-            {seed ? `Copia de «${seed.sourceName}»` : "Nuevo producto"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {seed
-              ? "Se copiaron nombre, precio, costo, clasificación y descripción. Sube fotos nuevas y revisa el stock inicial; el SKU y la URL se generan al guardar."
-              : "Sube la foto, completa nombre, precio y categoría; la lista de la derecha te dice qué falta para venderlo."}
-          </p>
-        </div>
-      )}
+      <MobileSectionNav sections={productFormSections(product)} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <ProductForm
@@ -78,6 +63,7 @@ export default async function ProductPage({
             productGroups={productGroups}
             activePresale={activePresale}
             seed={seed}
+            storeUrl={env.FRONTEND_STORE_URL}
           />
         </div>
         <ProductWorkspaceAside product={product} storeId={params.storeId} />

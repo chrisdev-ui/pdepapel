@@ -10,15 +10,19 @@ import {
   ReviewProductVariantsModal,
   type ProductVariantReviewPayload,
 } from "@/components/modals/review-product-variants-modal";
-import { ProductTintBadge } from "../../components/product-badges";
+import { ProductTintBadge, ShapeBadge } from "../../components/product-badges";
+import { ProductDeleteDialog } from "../../components/product-delete-dialog";
 import { ProductShapePicker } from "./product-shape-picker";
 import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
 import { type ProductImageAnalysis } from "@/lib/product-image-analysis";
 import { mergeProductCatalogAttributes } from "@/lib/product-catalog-attributes";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  ArrowLeft,
+  Archive,
+  ArchiveRestore,
+  Copy,
   Eraser,
+  ExternalLink,
   Info,
   Loader2,
   Package,
@@ -32,7 +36,6 @@ import z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { PRODUCT_DESCRIPTION_TEMPLATES } from "@/lib/product-description-templates";
-import { AlertModal } from "@/components/modals/alert-modal";
 import { ConvertProductToVariantsModal } from "@/components/modals/convert-product-to-variants-modal";
 import { IntakeModal } from "@/components/modals/intake-modal";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +54,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  FormPageHeader,
+  FormStickyFooter,
+} from "@/components/ui/form-page-chrome";
 import { Heading } from "@/components/ui/heading";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
@@ -62,7 +69,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { SectionCard } from "@/components/ui/section-card";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
@@ -100,6 +106,8 @@ import {
   unsavedUploadsToCleanup,
 } from "@/lib/product-images";
 import { gtinValidationMessage } from "@/lib/product-identifiers";
+import { getProductReadiness, getProductShape } from "@/lib/product-readiness";
+import { getProductStatus, PRODUCT_STATUS } from "@/lib/product-status";
 import { isPriceBelowCost } from "@/lib/product-pricing-rules";
 import { generateProductSlug } from "@/lib/slugify";
 import { KitPriceSuggestion } from "./kit-price-calculator";
@@ -266,6 +274,8 @@ interface ProductFormProps {
   activePresale?: ProductPresaleSummary | null;
   /** «Duplicar»: datos del original para sembrar un producto nuevo. */
   seed?: ProductSeed | null;
+  /** URL pública de la tienda para «Ver en la tienda». */
+  storeUrl?: string | null;
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -286,6 +296,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   catalogOptions,
   activePresale = null,
   seed = null,
+  storeUrl = null,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -465,7 +476,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const { confirmLeave, confirmationDialog: leaveDialog } =
     useUnsavedChangesGuard(form, { enabled: !loading });
 
-  const onClear = async () => {
+  const onClear = useCallback(async () => {
     const currentImages = form.getValues("images") || [];
     const currentUrls = currentImages
       .map((img: any) => img.url)
@@ -493,7 +504,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       title: "Formulario limpiado",
       description: "Los datos han sido restablecidos.",
     });
-  };
+  }, [form, initialData, defaultValues, clearStorage, toast]);
 
   const watchedGroupId = form.watch("productGroupId");
   const watchedIsKit = form.watch("isKit");
@@ -563,6 +574,22 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [form.watch("name")],
   );
+  const isDirty = form.formState.isDirty || pendingRemovals.length > 0;
+  const headerStatus = initialData
+    ? getProductStatus({
+        isArchived: Boolean(initialData.isArchived),
+        stock: initialData.stock,
+        availableAt: initialData.availableAt,
+      })
+    : "a-la-venta";
+  const headerMargin =
+    initialData && initialData.acqPrice && initialData.price
+      ? Math.round(
+          ((initialData.price - initialData.acqPrice) / initialData.price) *
+            100,
+        )
+      : null;
+  const headerReadiness = getProductReadiness(initialData ?? {});
   const watchedName = form.watch("name");
   const watchedCategoryId = form.watch("categoryId");
   const watchedColorId = form.watch("colorId");
@@ -725,28 +752,57 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       refreshSlug,
     ],
   );
-  const onDelete = useCallback(async () => {
+  /** Archivar o restaurar desde el encabezado, sin pasar por Guardar. */
+  const toggleArchive = useCallback(async () => {
+    if (!initialData) return;
+    const archive = !initialData.isArchived;
+    const ok = await requestConfirmation({
+      title: archive
+        ? `¿Archivar «${initialData.name}»?`
+        : `¿Restaurar «${initialData.name}»?`,
+      description: archive
+        ? "Sale de la tienda y del buscador, y su publicación activa en Mercado Libre se pausa. Conserva pedidos, kardex y URL; se puede restaurar."
+        : "Vuelve a la tienda con su stock y precio actuales. La publicación de Mercado Libre no se reactiva sola.",
+      confirmLabel: archive ? "Archivar" : "Restaurar",
+    });
+    if (!ok) return;
     try {
       setLoading(true);
-      await axios.delete(
-        `/api/${params.storeId}/${Models.Products}/${params.productId}`,
+      const response = await axios.post<{ pausedListings: number }>(
+        `/api/${params.storeId}/${Models.Products}/bulk-update`,
+        { productIds: [initialData.id], field: "isArchived", value: archive },
       );
-      router.push(`/${params.storeId}/${Models.Products}`);
-      router.refresh();
+      form.setValue("isArchived", archive, { shouldDirty: false });
       toast({
-        description: "Producto eliminado",
+        description: archive
+          ? `«${initialData.name}» quedó archivado.${response.data.pausedListings ? " Su publicación en Mercado Libre se pausa." : ""}`
+          : `«${initialData.name}» vuelve a estar a la venta.`,
         variant: "success",
       });
+      router.refresh();
     } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
-      setOpen(false);
     }
-  }, [params.storeId, params.productId, router, toast]);
+  }, [initialData, params.storeId, requestConfirmation, form, toast, router]);
+
+  const onClearConfirmed = useCallback(async () => {
+    const ok = await requestConfirmation({
+      title: initialData
+        ? "¿Descartar los cambios?"
+        : "¿Limpiar el formulario?",
+      description: initialData
+        ? "Se vuelve a lo último guardado. Las fotos que subiste en esta sesión y no guardaste se borran."
+        : "Se borra todo lo escrito y las fotos subidas en esta sesión.",
+      confirmLabel: initialData ? "Descartar" : "Limpiar",
+      destructive: true,
+    });
+    if (ok) {
+      setPendingRemovals([]);
+      await onClear();
+    }
+  }, [initialData, onClear, requestConfirmation]);
 
   const onConvertToVariants = useCallback(
     async (groupName: string) => {
@@ -1084,12 +1140,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     <>
       {leaveDialog}
       {identifierConfirmation}
-      <AlertModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onConfirm={onDelete}
-        loading={loading}
-      />
+      {initialData && (
+        <ProductDeleteDialog
+          productId={initialData.id}
+          productName={initialData.name}
+          isArchived={Boolean(initialData.isArchived)}
+          open={open}
+          onOpenChange={setOpen}
+          onDone={(outcome) => {
+            if (outcome === "deleted") {
+              router.push(`/${params.storeId}/${Models.Products}`);
+            }
+            router.refresh();
+          }}
+        />
+      )}
       {initialData && (
         <ConvertProductToVariantsModal
           defaultName={initialData.name}
@@ -1122,49 +1187,124 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           sizes={availableSizes}
         />
       )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="self-start"
-        aria-label="Volver a productos"
-        onClick={async () => {
+      <FormPageHeader
+        title={
+          initialData
+            ? initialData.name
+            : seed
+              ? `Copia de «${seed.sourceName}»`
+              : "Nuevo producto"
+        }
+        badge={
+          initialData ? (
+            <>
+              <ProductTintBadge
+                label={PRODUCT_STATUS[headerStatus].label}
+                tone={PRODUCT_STATUS[headerStatus].tone}
+              />
+              <ShapeBadge shape={getProductShape(initialData)} />
+            </>
+          ) : (
+            <ProductTintBadge
+              label="Borrador · aún no está en la tienda"
+              tone="slate"
+            />
+          )
+        }
+        summary={
+          initialData
+            ? `${initialData.sku} · ${currencyFormatter(initialData.price)}${headerMargin !== null ? ` · margen ${headerMargin} %` : ""} · ${initialData.stock} und${!headerReadiness.complete ? ` · faltan ${headerReadiness.total - headerReadiness.done} para vender` : ""}`
+            : seed
+              ? "Se copiaron nombre, precio, costo, clasificación y descripción. Sube fotos nuevas y revisa el stock inicial; el SKU y la URL se generan al guardar."
+              : "Sube la foto, completa nombre, precio y categoría; la lista te dice qué falta para venderlo."
+        }
+        backLabel="Volver a productos"
+        onBack={async () => {
           if (await confirmLeave())
             router.push(`/${params.storeId}/${Models.Products}`);
         }}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-        Volver a productos
-      </Button>
-      {(!initialData || !initialData.productGroupId) && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-            {initialData && !initialData.productGroupId && (
+        actions={
+          initialData ? (
+            <>
+              {storeUrl && initialData.slug && !initialData.isArchived && (
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={`${storeUrl.replace(/\/$/, "")}/producto/${initialData.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Ver en la tienda
+                  </a>
+                </Button>
+              )}
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
-                type="button"
-                onClick={() => requestVariantConversion()}
                 disabled={loading}
+                onClick={async () => {
+                  if (await confirmLeave())
+                    router.push(
+                      `/${params.storeId}/${Models.Products}/nuevo?desde=${initialData.id}`,
+                    );
+                }}
               >
-                <Package className="mr-2 h-4 w-4" aria-hidden="true" />
-                Convertir en variantes
+                <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                Duplicar
               </Button>
-            )}
-            {!initialData && (
+              {!initialData.productGroupId && !initialData.isKit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => requestVariantConversion()}
+                  disabled={loading}
+                >
+                  <Package className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Convertir en variantes
+                </Button>
+              )}
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
-                onClick={onClear}
-                type="button"
+                disabled={loading}
+                onClick={() => void toggleArchive()}
               >
-                <Eraser className="mr-2 h-4 w-4" aria-hidden="true" />
-                Limpiar formulario
+                {initialData.isArchived ? (
+                  <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
+                )}
+                {initialData.isArchived ? "Restaurar" : "Archivar"}
               </Button>
-            )}
-          </div>
-        </div>
-      )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loading}
+                onClick={() => setOpen(true)}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
+                Eliminar…
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void onClearConfirmed()}
+              type="button"
+              disabled={loading}
+            >
+              <Eraser className="mr-2 h-4 w-4" aria-hidden="true" />
+              Limpiar formulario
+            </Button>
+          )
+        }
+      />
       {!initialData && (
         <ProductShapePicker
           storeId={params.storeId as string}
@@ -2318,7 +2458,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             <SectionCard
               id="descripcion"
               title="Descripción"
-              description="Se muestra en la tienda y en Google; sin emojis y con formato."
+              description="Se muestra en la tienda y en Google. Usa las plantillas para medidas, materiales y cuidados."
             >
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
                 <FormField
@@ -2329,7 +2469,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       <FormLabel>Descripción</FormLabel>
                       <FormControl>
                         <RichTextEditor
-                          placeholder="Describe las características y beneficios del producto 🚀..."
+                          placeholder="Describe las características y beneficios del producto…"
                           value={field.value || ""}
                           onChange={field.onChange}
                           templates={PRODUCT_DESCRIPTION_TEMPLATES}
@@ -2352,18 +2492,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               id="zona-de-cuidado"
               title="Zona de cuidado"
               tone="care"
-              description="Limpiar descarta lo escrito sin guardar. Eliminar borra el producto de la tienda; si tiene pedidos, prefiere archivarlo desde Visibilidad."
+              description="Eliminar borra el producto y sus fotos. Antes se revisa qué lo usa (pedidos, kits, Mercado Libre, ferias, reposición); si algo lo bloquea, se ofrece archivar."
             >
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onClear}
-                  disabled={loading}
-                >
-                  <Eraser className="h-4 w-4" aria-hidden="true" />
-                  Limpiar formulario
-                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -2377,13 +2508,34 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               </div>
             </SectionCard>
           )}
-          <div className="sticky bottom-[84px] z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4">
-            <p className="text-xs text-muted-foreground">
-              {initialData
-                ? "Los cambios se aplican al guardar y la tienda se actualiza sola."
-                : "Revisa nombre, imágenes, precio y stock; el producto se crea al guardar."}
-            </p>
-            <Button disabled={loading} type="submit" className="min-w-[180px]">
+          <FormStickyFooter
+            className="bottom-[84px] z-20 lg:bottom-2"
+            note={
+              <>
+                {isDirty && (
+                  <ProductTintBadge
+                    label="Cambios sin guardar"
+                    tone="cream"
+                    className="mr-2"
+                  />
+                )}
+                {initialData
+                  ? "Los cambios se aplican al guardar y la tienda se actualiza sola."
+                  : "Revisa nombre, fotos, precio y stock; el producto se crea al guardar."}
+              </>
+            }
+          >
+            {initialData && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading || !isDirty}
+                onClick={() => void onClearConfirmed()}
+              >
+                Descartar
+              </Button>
+            )}
+            <Button disabled={loading} type="submit" className="min-w-[160px]">
               {loading ? (
                 <>
                   <Loader2
@@ -2396,18 +2548,23 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 action
               )}
             </Button>
-          </div>
+          </FormStickyFooter>
         </form>
       </Form>
-      <Separator />
-      <Heading title="Reseñas" description="Reseñas de este producto" />
-      <Separator />
-      <DataTable
-        tableKey={Models.Reviews}
-        searchKey="name"
-        columns={columns}
-        data={reviews ?? []}
-      />
+      {initialData && (
+        <SectionCard
+          id="resenas"
+          title="Reseñas"
+          description="Lo que las clientas escribieron sobre este producto en la tienda."
+        >
+          <DataTable
+            tableKey={Models.Reviews}
+            searchKey="name"
+            columns={columns}
+            data={reviews ?? []}
+          />
+        </SectionCard>
+      )}
     </>
   );
 };
