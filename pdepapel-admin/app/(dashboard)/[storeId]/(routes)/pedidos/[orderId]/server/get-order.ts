@@ -15,11 +15,6 @@ export async function getOrder(orderId: string, storeId: string) {
       payment: true,
       shipping: true,
       coupon: true,
-      quoteRequests: {
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
       inventoryIssues: {
         where: { resolvedAt: null },
         orderBy: { createdAt: "asc" },

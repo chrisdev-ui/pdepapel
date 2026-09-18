@@ -1,7 +1,6 @@
 import { OrderStatus, ShippingStatus } from "@prisma/client";
 
 import type { GetOrderResult } from "../../server/get-order";
-import { QuoteRequestsList } from "../quote-requests-list";
 import { SectionCard } from "./section-card";
 
 interface HistoryCardProps {
@@ -55,7 +54,6 @@ function buildEvents(order: HistoryCardProps["order"]): HistoryEvent[] {
 
 export function HistoryCard({ order, action }: HistoryCardProps) {
   const events = buildEvents(order);
-  const requests = (order as typeof order & { quoteRequests?: Parameters<typeof QuoteRequestsList>[0]["requests"] }).quoteRequests;
   return (
     <SectionCard
       id="historial"
@@ -77,7 +75,6 @@ export function HistoryCard({ order, action }: HistoryCardProps) {
           </li>
         ))}
       </ol>
-      {requests && requests.length > 0 && <QuoteRequestsList requests={requests} />}
     </SectionCard>
   );
 }
