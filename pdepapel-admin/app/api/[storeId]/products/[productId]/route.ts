@@ -33,6 +33,11 @@ import {
   settleKitStock,
 } from "@/lib/product-kit-conversion";
 import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
+import { pauseMarketplaceListingsForProducts } from "@/lib/product-archive";
+import {
+  describeDeleteBlockers,
+  getProductDeleteCheck,
+} from "@/lib/product-deletion";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
@@ -328,6 +333,7 @@ export async function PATCH(
     }
     const becomesKit = Boolean(isKit) && !productToUpdate.isKit;
     const stopsBeingKit = !isKit && productToUpdate.isKit;
+    let pausedListings = 0;
 
     const [categoryObj, designObj, colorObj, sizeObj] = await Promise.all([
       prismadb.category.findUnique({ where: { id: categoryId } }),
@@ -416,6 +422,14 @@ export async function PATCH(
         },
       });
 
+      // Archivar saca el producto de la tienda; su publicación en Mercado
+      // Libre seguía vendiendo. Se encola la pausa. Restaurar no la reactiva.
+      if (isArchived && !productToUpdate.isArchived) {
+        pausedListings = await pauseMarketplaceListingsForProducts(tx, [
+          params.productId,
+        ]);
+      }
+
       // El stock de un kit se deriva de sus componentes. Cualquier salto de
       // la columna queda como movimiento, dentro de la misma transacción.
       if (becomesKit || stopsBeingKit || isKit) {
@@ -493,9 +507,12 @@ export async function PATCH(
     // Invalidate product cache & trigger instant storefront revalidation
     await invalidateStoreProductsCache(params.storeId, params.productId);
 
-    return NextResponse.json(result, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(
+      { ...result, pausedListings },
+      {
+        headers: CACHE_HEADERS.NO_CACHE,
+      },
+    );
   } catch (error) {
     return handleErrorResponse(error, "PRODUCT_PATCH", {
       headers: CACHE_HEADERS.NO_CACHE,
@@ -518,29 +535,31 @@ export async function DELETE(
 
     const imageUrlsToDelete: string[] = [];
     await prismadb.$transaction(async (tx) => {
+      // Se nombra lo que bloquea (pedidos, kits, Mercado Libre, ferias,
+      // reposición, preventa, kardex) en vez de un error genérico de relación.
+      const check = await getProductDeleteCheck(tx, {
+        storeId: params.storeId,
+        productId: params.productId,
+      });
+      if (!check)
+        throw ErrorFactory.NotFound(
+          `El Producto ${params.productId} no existe en esta tienda`,
+        );
+      if (check.blocked) {
+        throw ErrorFactory.Conflict(
+          `No se puede eliminar «${check.name}». ${describeDeleteBlockers(check)} Archívalo en su lugar.`,
+          { blockers: JSON.stringify(check.blockers) },
+        );
+      }
+
       const product = await tx.product.findUnique({
         where: { id: params.productId, storeId: params.storeId },
-        include: {
-          images: true,
-          orderItems: true,
-        },
+        include: { images: true },
       });
-
       if (!product)
         throw ErrorFactory.NotFound(
           `El Producto ${params.productId} no existe en esta tienda`,
         );
-
-      const productWithOrders = product.orderItems.length > 0;
-      if (productWithOrders) {
-        throw ErrorFactory.Conflict(
-          `No se puede eliminar el producto ${product.name} porque tiene ${product.orderItems.length} órdenes asociadas. Elimina o reasigna las órdenes asociadas primero`,
-          {
-            product: product.name,
-            orders: product.orderItems.map((order) => order.orderId).join(", "),
-          },
-        );
-      }
 
       imageUrlsToDelete.push(...product.images.map((image) => image.url));
 

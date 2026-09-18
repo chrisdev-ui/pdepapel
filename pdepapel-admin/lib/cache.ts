@@ -12,36 +12,51 @@ function getRedis(): Redis {
 }
 
 /**
+ * Llaves de Redis que cambian cuando cambia un producto. La búsqueda de la
+ * tienda (1 h) y el selector del panel se quedaban rancios porque solo se
+ * purgaba `products:*`: un producto archivado seguía apareciendo en el
+ * buscador durante una hora.
+ */
+export function productCacheKeyPatterns(storeId: string): string[] {
+  return [
+    `store:${storeId}:products:*`,
+    `store:${storeId}:search:*`,
+    `store:${storeId}:search-vocabulary:*`,
+    `store:${storeId}:admin-select:*`,
+  ];
+}
+
+/**
  * Purges cached product queries for a specific store from Redis.
  */
 async function purgeRedisProductKeys(storeId: string): Promise<void> {
   try {
     const redisClient = getRedis();
-    const pattern = `store:${storeId}:products:*`;
-    let cursor = 0;
-    let maxIterations = 500;
+    for (const pattern of productCacheKeyPatterns(storeId)) {
+      let cursor = 0;
+      let maxIterations = 500;
 
-    do {
-      const result = await redisClient.scan(cursor, {
-        match: pattern,
-        count: 250,
-      });
-      cursor = Number(result[0]);
-      const keys = result[1];
+      do {
+        const result = await redisClient.scan(cursor, {
+          match: pattern,
+          count: 250,
+        });
+        cursor = Number(result[0]);
+        const keys = result[1];
 
-      if (keys.length > 0) {
-        await redisClient.del(...keys);
+        if (keys.length > 0) {
+          await redisClient.del(...keys);
+        }
+        maxIterations--;
+      } while (cursor !== 0 && maxIterations > 0);
+
+      if (maxIterations === 0) {
+        console.warn(
+          `Cache invalidation for store ${storeId} (${pattern}) hit iteration limit.`,
+        );
       }
-      maxIterations--;
-    } while (cursor !== 0 && maxIterations > 0);
-
-    if (maxIterations === 0) {
-      console.warn(
-        `Cache invalidation for store ${storeId} hit iteration limit.`,
-      );
-    } else {
-      console.log(`Cache invalidated for store ${storeId}`);
     }
+    console.log(`Cache invalidated for store ${storeId}`);
   } catch (error) {
     console.error(`Redis cache purge error for store ${storeId}:`, error);
   }

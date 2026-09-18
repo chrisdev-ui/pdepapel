@@ -54,6 +54,7 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "product-groups/[productGroupId]", methods: ["GET", "PATCH", "DELETE"], params: { productGroupId: "x" } },
   // Leían el cuerpo antes de comprobar la sesión: un cuerpo vacío sin sesión respondía 500 (Productos 2A).
   { path: "products/[productId]/convert-to-variants", methods: ["POST"], params: { productId: "x" } },
+  { path: "products/[productId]/delete-check", methods: ["GET"], params: { productId: "x" } },
   { path: "suppliers", methods: ["GET"] },
   { path: "suppliers/[supplierId]", methods: ["GET"], params: { supplierId: "x" } },
   { path: "products/catalog", methods: ["GET"] },

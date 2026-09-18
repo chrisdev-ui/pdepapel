@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   auth: vi.fn(),
   invalidate: vi.fn(),
+  imageCount: vi.fn(),
+  orderItemCount: vi.fn(),
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
@@ -35,6 +37,8 @@ vi.mock("@/lib/prismadb", () => ({
   default: {
     $transaction: mocks.transaction,
     product: { findUnique: mocks.findUnique },
+    image: { count: mocks.imageCount },
+    orderItem: { count: mocks.orderItemCount },
     supplier: { findFirst: vi.fn() },
     productGroup: { findFirst: vi.fn() },
     category: { findUnique: vi.fn().mockResolvedValue(null) },
@@ -74,6 +78,8 @@ const request = () =>
 describe("PATCH /products/[id] image cleanup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.imageCount.mockResolvedValue(0);
+    mocks.orderItemCount.mockResolvedValue(0);
     mocks.auth.mockResolvedValue({ userId: "owner" });
     mocks.findUnique.mockResolvedValue({
       id: "p1",
@@ -138,5 +144,22 @@ describe("PATCH /products/[id] image cleanup", () => {
     const response = await PATCH(request(), { params: { storeId: "store-1", productId: "p1" } });
     expect(response.status).toBe(200);
     errorSpy.mockRestore();
+  });
+
+  it("keeps a photo that another variant or an order still references", async () => {
+    mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        product: { update: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: "p1", images: [] }), findFirst: vi.fn() },
+        image: { deleteMany: vi.fn(), createMany: vi.fn() },
+        inventoryMovement: { create: vi.fn() },
+        productKit: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn() },
+        marketplaceListing: { findMany: vi.fn().mockResolvedValue([]) },
+        marketplaceOutboxEvent: { upsert: vi.fn() },
+      }),
+    );
+    mocks.imageCount.mockResolvedValue(1);
+    const response = await PATCH(request(), { params: { storeId: "store-1", productId: "p1" } });
+    expect(response.status).toBe(200);
+    expect(mocks.deleteResources).not.toHaveBeenCalled();
   });
 });
