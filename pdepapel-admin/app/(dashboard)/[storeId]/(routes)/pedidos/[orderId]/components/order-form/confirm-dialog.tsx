@@ -95,7 +95,7 @@ export function ConfirmDialog({
           {footnote && (
             <span className="text-xs text-muted-foreground">{footnote}</span>
           )}
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center [&>button]:w-full sm:[&>button]:w-auto">
             <Button
               type="button"
               variant="outline"
