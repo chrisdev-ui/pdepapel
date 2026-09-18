@@ -298,7 +298,7 @@ export function PaymentCard({
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Cobrar
           </span>
-          {savedMethod === PaymentMethod.Bold && (
+          {(savedMethod === PaymentMethod.Bold || !savedMethod) && (
             <>
               <Button
                 type="button"
@@ -335,7 +335,7 @@ export function PaymentCard({
               </Button>
             </>
           )}
-          {(savedMethod === PaymentMethod.Wompi || !savedMethod) && (
+          {savedMethod === PaymentMethod.Wompi && (
             <Button
               type="button"
               variant="outline"
@@ -356,6 +356,12 @@ export function PaymentCard({
             <p className="text-xs text-muted-foreground">
               Los enlaces y el datáfono solo aplican con «Pago en línea». Cambia
               el método y guarda para usarlos.
+            </p>
+          )}
+          {(savedMethod === PaymentMethod.Bold || !savedMethod) && (
+            <p className="text-xs text-muted-foreground">
+              El enlace lleva a Bold. Wompi solo aparece en pedidos antiguos que
+              ya lo usaban.
             </p>
           )}
           <Button

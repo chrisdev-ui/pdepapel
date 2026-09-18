@@ -334,3 +334,25 @@ export function describeGuideBlock(
     ? "La orden debe estar en estado PAGADA o PENDIENTE para crear la guía de pago contra entrega"
     : "La orden debe estar en estado PAGADA para crear la guía";
 }
+
+export type StatusTone =
+  | "mint"
+  | "cream"
+  | "sky"
+  | "slate"
+  | "pink"
+  | "lavender";
+
+/** Tinte de la insignia de cada estado del pedido (mismo sistema que la lista). */
+export const ORDER_STATUS_TONE: Record<OrderStatus, StatusTone> = {
+  DRAFT: "slate",
+  QUOTATION: "lavender",
+  VIEWED: "lavender",
+  ACCEPTED: "lavender",
+  REJECTED: "slate",
+  CREATED: "cream",
+  PENDING: "cream",
+  PAID: "mint",
+  SENT: "sky",
+  CANCELLED: "slate",
+};

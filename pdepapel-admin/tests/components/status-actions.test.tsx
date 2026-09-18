@@ -18,7 +18,7 @@ describe("StatusActions", () => {
     expect(screen.getByLabelText("Número de guía (opcional)")).toBeInTheDocument();
     expect(screen.getByText(/déjalo vacío/)).toBeInTheDocument();
 
-    const confirm = screen.getAllByRole("button", { name: "Marcar como enviado" }).at(-1)!;
+    const confirm = screen.getByRole("button", { name: "Sí, marcar como enviado" });
     expect(confirm).not.toBeDisabled();
     await act(async () => {
       fireEvent.click(confirm);
@@ -32,6 +32,6 @@ describe("StatusActions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Marcar como enviado" }));
     expect(screen.getByLabelText("Número de guía")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Marcar como enviado" }).at(-1)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sí, marcar como enviado" })).toBeDisabled();
   });
 });

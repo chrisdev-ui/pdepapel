@@ -68,6 +68,7 @@ export function DiscountsSection({
     return (
       <SectionCard
         id="descuentos"
+        step={4}
         title="Descuentos y cupones"
         description="Pagado: el descuento ya se cobró y no cambia."
         action={
@@ -87,8 +88,9 @@ export function DiscountsSection({
   return (
     <SectionCard
       id="descuentos"
+      step={4}
       title="Descuentos y cupones"
-      description="Se aplican sobre el subtotal de productos. O descuento manual o cupón, no ambos."
+      description="Sobre el subtotal de productos. O descuento manual o cupón, no ambos."
       action={
         discountType ? (
           <Button
@@ -109,6 +111,13 @@ export function DiscountsSection({
         ) : undefined
       }
     >
+      {(coupon || discountType) && (
+        <p className="rounded-md bg-muted px-3 py-2 text-xs text-primary">
+          {coupon
+            ? `Con el cupón ${coupon.code} aplicado no hay descuento manual: quita el cupón para usarlo.`
+            : "Con descuento manual no se puede aplicar un cupón: quita el descuento para usar uno."}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <FormField
           control={form.control}

@@ -49,16 +49,18 @@ import { getErrorMessage } from "@/lib/api-errors";
 import type { OpenInventoryIssue } from "@/lib/order-inventory-issues";
 import { InventoryIssuesPanel } from "@/components/inventory/inventory-issues-panel";
 import { focusFirstInvalidField } from "@/lib/focus-invalid-field";
+import { getFirstFormErrorMessage } from "@/lib/form-errors";
 import { isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
 import { currencyFormatter } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
-import type { NextStepCard } from "@/lib/order-timeline";
+import type { NextStepCard, TimelineStep } from "@/lib/order-timeline";
 import type { GetOrderResult, ProductOption } from "../server/get-order";
 import { CustomerCard, type CustomerOption } from "./order-form/customer-card";
 import { DiscountsSection } from "./order-form/discounts-section";
 import { HistoryCard } from "./order-form/history-card";
 import { ItemsSection } from "./order-form/items-section";
+import { LeaveGuard } from "./order-form/leave-guard";
 import { NotesCard } from "./order-form/notes-card";
 import { OrderTypePicker } from "./order-form/order-type-picker";
 import { PaymentCard } from "./order-form/payment-card";
@@ -112,30 +114,14 @@ interface OrderFormProps {
   inventoryIssues?: OpenInventoryIssue[];
   /** Qué toca ahora, calculado en el servidor con `getNextStepCard`. */
   nextStep?: NextStepCard | null;
+  /** Línea de tiempo del pedido, calculada en el servidor. */
+  timeline?: TimelineStep[];
 }
 
 const TYPE_PARAM: Record<string, CreatableOrderType> = {
   tienda: OrderType.STANDARD,
   personalizado: OrderType.CUSTOM,
 };
-
-/** Primer mensaje de error del formulario, buscando en profundidad (líneas de productos incluidas). */
-function firstErrorMessage(errors: unknown): string | undefined {
-  if (!errors || typeof errors !== "object") return undefined;
-  for (const value of Object.values(errors as Record<string, unknown>)) {
-    if (!value) continue;
-    if (
-      typeof value === "object" &&
-      "message" in (value as object) &&
-      typeof (value as { message?: unknown }).message === "string"
-    ) {
-      return (value as { message: string }).message;
-    }
-    const nested = firstErrorMessage(value);
-    if (nested) return nested;
-  }
-  return undefined;
-}
 
 interface SubmitOptions {
   status?: OrderStatus;
@@ -162,6 +148,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   shippingInfo,
   inventoryIssues = [],
   nextStep = null,
+  timeline = [],
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -262,11 +249,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   } | null>(null);
   const [quotedAt, setQuotedAt] = useState<Date | null>(null);
 
-  // La tarifa elegida vive SOLO en el formulario (`envioClickIdRate`). Antes
-  // había además un `useState` con el mismo dato y había que mantenerlos a
-  // mano en cada camino: elegir, descartar y recotizar.
-  const selectedRateId = watchedRateId ?? null;
-
   const { clearStorage } = useFormPersist({
     form,
     // Existing orders never persist nor restore drafts: the server is authoritative.
@@ -289,15 +271,33 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const allowManualItems =
     editPreset.allowManualItems && !isRealOrderStatus(currentStatus) && !locked;
 
-  useEffect(() => {
-    if (!isDirty) return;
-    const handler = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
+  const CHANGED_LABELS: Record<string, string> = {
+    fullName: "el cliente",
+    phone: "el cliente",
+    email: "el cliente",
+    documentId: "el cliente",
+    city: "la ciudad",
+    department: "la ciudad",
+    daneCode: "la ciudad",
+    address: "la dirección",
+    orderItems: "los productos",
+    shipping: "el envío",
+    shippingProvider: "el envío",
+    envioClickIdRate: "la tarifa",
+    payment: "el pago",
+    discount: "el descuento",
+    couponCode: "el cupón",
+    notes: "las notas",
+    internalNotes: "las notas",
+    type: "el tipo",
+  };
+  const changed = Array.from(
+    new Set(
+      Object.keys(form.formState.dirtyFields)
+        .map((key) => CHANGED_LABELS[key])
+        .filter((label): label is string => Boolean(label)),
+    ),
+  );
 
   const submitOrder = useCallback(
     async (data: OrderFormValues, options: SubmitOptions = {}) => {
@@ -430,7 +430,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       const valid = await form.trigger();
       if (!valid) {
         form.setValue("status", initialData?.status ?? preset.status);
-        const first = firstErrorMessage(form.formState.errors);
+        const first = getFirstFormErrorMessage(form.formState.errors);
         console.error(
           "[order-form] transición bloqueada por validación",
           form.formState.errors,
@@ -765,29 +765,33 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           {initialData?.orderNumber && (
             <h2 className="sr-only">Pedido {initialData.orderNumber}</h2>
           )}
-
-          {/* Columna principal: productos, envío y descuentos. En el teléfono cada bloque usa `order-*`. */}
-          <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
+          <LeaveGuard
+            when={isDirty && !loading && !isNavigating}
+            changed={changed}
+          />
+          {/* Columna principal, en el orden en que Paula llena un pedido:
+              cliente, productos, envío, descuentos, notas. */}
+          <div className="flex min-w-0 flex-col gap-4">
             {initialData && (
-              <div className="order-1 lg:order-none">
-                <OrderStatusBar
-                  status={initialData.status}
-                  type={watchedType}
-                  paymentMethod={initialData.payment?.method ?? null}
-                  shippingProvider={watchedProvider}
-                  trackingCode={watchedTracking}
-                  transactionId={watchedTransaction}
-                  guideRate={guideRate}
-                  nextStep={nextStep}
-                  loading={loading}
-                  onTransition={onTransition}
-                />
-              </div>
+              <OrderStatusBar
+                status={initialData.status}
+                type={watchedType}
+                paymentMethod={initialData.payment?.method ?? null}
+                shippingProvider={watchedProvider}
+                trackingCode={watchedTracking}
+                transactionId={watchedTransaction}
+                guideRate={guideRate}
+                hasGuide={Boolean(initialData.shipping?.envioClickIdOrder)}
+                nextStep={nextStep}
+                steps={timeline}
+                loading={loading}
+                onTransition={onTransition}
+              />
             )}
             {initialData &&
               isCreatableOrderType(initialData.type) &&
               !locked && (
-                <div className="order-1 flex flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between lg:order-none">
+                <div className="flex flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                   <FormField
                     control={form.control}
                     name="type"
@@ -819,147 +823,127 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   />
                 </div>
               )}
-            <div className="order-2 lg:order-none">
-              <ItemsSection
-                fieldArray={fieldArray}
-                watchedItems={watchedItems}
-                locked={locked}
-                allowManualItems={allowManualItems}
-                loading={loading}
-                onConvert={setConversionIndex}
-              />
-            </div>
-            <div className="order-6 lg:order-none">
-              <ShippingSection
-                boxes={boxes}
-                initialData={initialData}
-                loading={loading}
-                loadingQuotes={loadingQuotes}
-                shippingQuotes={shippingQuotes}
-                quotedAt={quotedAt}
-                selectedRateId={selectedRateId}
-                recommendedBox={recommendedBox}
-                onGetShippingQuotes={onGetShippingQuotes}
-                onSelectRate={onSelectRate}
-                onDiscardRate={onDiscardRate}
-              >
-                {shippingInfo}
-              </ShippingSection>
-            </div>
-            <div className="order-7 lg:order-none">
-              <DiscountsSection
-                storeId={storeId}
-                availableCoupons={availableCoupons}
-                coupon={coupon}
-                setCoupon={setCoupon}
-                initialCoupon={initialData?.coupon ?? null}
-                subtotal={totals.subtotal}
-                locked={locked}
-                loading={loading}
-              />
-            </div>
-            {/* Cliente y Notas conservan su `order-*`, asi que el orden en el
-                telefono no cambia; solo dejan de inflar la columna lateral. */}
-            <div className="order-4 lg:order-none">
-              <CustomerCard
-                storeId={storeId}
-                users={users}
-                locations={locations}
-                loading={loading}
-                initialData={initialData}
-                total={totals.total}
-              />
-            </div>
-            <div className="order-8 lg:order-none">
-              <NotesCard preset={editPreset} />
-            </div>
+            <CustomerCard
+              storeId={storeId}
+              users={users}
+              locations={locations}
+              loading={loading}
+              initialData={initialData}
+              total={totals.total}
+            />
+            <ItemsSection
+              fieldArray={fieldArray}
+              watchedItems={watchedItems}
+              locked={locked}
+              allowManualItems={allowManualItems}
+              loading={loading}
+              onConvert={setConversionIndex}
+            />
+            <ShippingSection
+              storeId={storeId}
+              boxes={boxes}
+              initialData={initialData}
+              loading={loading}
+              loadingQuotes={loadingQuotes}
+              shippingQuotes={shippingQuotes}
+              quotedAt={quotedAt}
+              recommendedBox={recommendedBox}
+              onGetShippingQuotes={onGetShippingQuotes}
+              onSelectRate={onSelectRate}
+              onDiscardRate={onDiscardRate}
+            >
+              {shippingInfo}
+            </ShippingSection>
+            <DiscountsSection
+              storeId={storeId}
+              availableCoupons={availableCoupons}
+              coupon={coupon}
+              setCoupon={setCoupon}
+              initialCoupon={initialData?.coupon ?? null}
+              subtotal={totals.subtotal}
+              locked={locked}
+              loading={loading}
+            />
+            <NotesCard preset={editPreset} />
             {initialData && (
-              <div className="order-10 lg:order-none">
-                <SectionCard
-                  id="zona-de-cuidado"
-                  title="Zona de cuidado"
-                  tone="care"
-                  description="Lo que no se puede deshacer. Los cambios de estado viven arriba, en la barra del pedido."
-                >
-                  <InventoryIssuesPanel storeId={storeId} issues={inventoryIssues} />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={loading}
-                      onClick={() => setDeleteOpen(true)}
-                      className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash className="h-4 w-4" aria-hidden="true" />
-                      Eliminar pedido
-                    </Button>
-                  </div>
+              <SectionCard
+                id="zona-de-cuidado"
+                title="Zona de cuidado"
+                tone="care"
+                description="Solo lo que no se puede deshacer. Cancelar y cambiar de estado viven arriba, en la barra del pedido."
+              >
+                <InventoryIssuesPanel
+                  storeId={storeId}
+                  issues={inventoryIssues}
+                />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted-foreground">
                     {initialData?.shipping?.envioClickIdOrder
                       ? "Este pedido tiene una guía de EnvioClick activa: cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro."
                       : "Eliminar borra el pedido de forma definitiva; si ya estaba pagado o enviado, el inventario vuelve con un movimiento."}
                   </p>
-                </SectionCard>
-              </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={loading}
+                    onClick={() => setDeleteOpen(true)}
+                    className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash className="h-4 w-4" aria-hidden="true" />
+                    Eliminar pedido
+                  </Button>
+                </div>
+              </SectionCard>
             )}
           </div>
-
-          {/* Columna lateral: solo tarjetas compactas de consulta (resumen, pago
-              e historial). Cliente y Notas viven en la columna principal: son
-              formularios largos (11 campos y dos editores de texto enriquecido)
-              que sumaban 2.400px en una columna de 380px. Como las dos columnas
-              comparten fila de la grilla, la más alta fijaba el alto y dejaba
-              ~1.600px en blanco debajo de la principal; además una barra lateral
-              más alta que la ventana nunca llega a fijarse. */}
-          <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-4">
-            <div className="order-3 lg:order-none">
-              <SummaryCard
-                totals={totals}
-                shippingChargeState={shippingChargeState}
-                shippingCost={shippingCost}
-                coupon={coupon}
-                itemCount={(watchedItems ?? []).reduce(
-                  (sum, item) => sum + Number(item.quantity || 0),
-                  0,
-                )}
-              />
-            </div>
+          {/* Columna lateral: consulta (resumen, pago, historial). Cliente y
+              Notas viven en la principal: son largos y dejaban la lateral sin
+              poder fijarse. */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
+            <SummaryCard
+              totals={totals}
+              shippingChargeState={shippingChargeState}
+              shippingCost={shippingCost}
+              coupon={coupon}
+              itemCount={(watchedItems ?? []).reduce(
+                (sum, item) => sum + Number(item.quantity || 0),
+                0,
+              )}
+            />
             {(editPreset.showPayment || initialData) && (
-              <div className="order-5 lg:order-none">
-                <PaymentCard
-                  storeId={storeId}
-                  initialData={initialData}
-                  type={watchedType}
-                  loading={loading}
-                  isDirty={isDirty}
-                  showMethod={
-                    editPreset.showPayment || Boolean(initialData?.payment)
-                  }
-                  onTransition={onTransition}
-                />
-              </div>
+              <PaymentCard
+                storeId={storeId}
+                initialData={initialData}
+                type={watchedType}
+                loading={loading}
+                isDirty={isDirty}
+                showMethod={
+                  editPreset.showPayment || Boolean(initialData?.payment)
+                }
+                onTransition={onTransition}
+              />
             )}
             {initialData && (
-              <div className="order-9 lg:order-none">
-                <HistoryCard
-                  order={initialData}
-                  action={
-                    invoiceData ? (
-                      <InvoiceDownloadButton data={invoiceData} disabled={loading} />
-                    ) : undefined
-                  }
-                />
-              </div>
+              <HistoryCard
+                order={initialData}
+                action={
+                  invoiceData ? (
+                    <InvoiceDownloadButton
+                      data={invoiceData}
+                      disabled={loading}
+                    />
+                  ) : undefined
+                }
+              />
             )}
           </aside>
-
-          <div className="sticky bottom-[84px] z-20 order-11 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4 lg:col-span-2">
+          <div className="sticky bottom-[84px] z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4 lg:col-span-2">
             <p className="text-xs text-muted-foreground">
               {initialData
                 ? locked
                   ? "Pagado: se guardan cliente, envío y notas. Productos y precios quedan como registro."
-                  : "Guardar solo guarda los datos. El estado cambia con las acciones de Pago."
+                  : "Guardar solo guarda los datos. El estado cambia con las acciones de la barra de arriba."
                 : `Se creará como «${ORDER_STATUS_LABELS[preset.status]}». ${preset.status === OrderStatus.DRAFT ? "Podrás activarlo cuando esté listo." : "Nada se descuenta hasta marcarlo pagado."}`}
             </p>
             <div className="flex items-center gap-2">

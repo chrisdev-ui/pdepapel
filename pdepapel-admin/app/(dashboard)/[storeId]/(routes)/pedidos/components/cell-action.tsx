@@ -25,7 +25,7 @@ import {
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
 import { OrderColumn } from "./columns";
 
 const STORE_URL =
@@ -46,7 +46,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   const isClosedOrder =
     data.status === OrderStatus.PAID || data.status === OrderStatus.SENT;
-  const isPointOfSale = data.type === "POINT_OF_SALE";
+  const isPointOfSale = data.type === OrderType.POINT_OF_SALE;
   const isBoldPayment = data.payment?.method === PaymentMethod.Bold;
 
   // Copiar el enlace de Wompi cambia el método del pedido a Wompi: solo se
@@ -200,9 +200,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem
             className="cursor-pointer"
-            onClick={() =>
-              onCopy(data.id, "ID del pedido copiado")
-            }
+            onClick={() => onCopy(data.id, "ID del pedido copiado")}
           >
             <Copy className="mr-2 h-4 w-4" />
             Copiar ID
@@ -267,10 +265,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           <DropdownMenuItem
             className="cursor-pointer"
             onClick={() =>
-              onCopy(
-                data.orderNumber,
-                "Número del pedido copiado",
-              )
+              onCopy(data.orderNumber, "Número del pedido copiado")
             }
           >
             <Copy className="mr-2 h-4 w-4" />

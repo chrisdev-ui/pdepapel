@@ -37,7 +37,6 @@ describe("ShippingInfo cost block", () => {
     render(
       <ShippingInfo
         shipping={quotedShipping}
-        orderStatus="PENDING"
         freeShipping
       />,
     );
@@ -53,7 +52,6 @@ describe("ShippingInfo cost block", () => {
     render(
       <ShippingInfo
         shipping={{ ...quotedShipping, cost: 7280 }}
-        orderStatus="PENDING"
       />,
     );
 

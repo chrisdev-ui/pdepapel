@@ -1,19 +1,9 @@
 "use client";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { TintBadge } from "@/components/ui/tint-badge";
 import { shippingOptions } from "@/constants";
 import { getCarrierInfo } from "@/constants/shipping";
 import { useToast } from "@/hooks/use-toast";
@@ -24,24 +14,18 @@ import axios from "axios";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  AlertCircle,
   Calendar,
-  Check,
   Download,
   ExternalLink,
   Package,
-  PackageCheck,
-  PackageOpen,
-  PackageX,
   RefreshCw,
-  Truck,
   XCircle,
 } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { useReducer } from "react";
+import { useState } from "react";
 
-// --- Types ---
+import { ConfirmDialog } from "./order-form/confirm-dialog";
 
 interface ShippingData {
   id: string;
@@ -66,608 +50,334 @@ interface ShippingData {
 
 interface ShippingInfoProps {
   shipping?: ShippingData | null;
-  orderStatus: string;
   /** The order reached the store free-shipping threshold (or saved a zero-charge quote). */
   freeShipping?: boolean;
 }
 
-interface ShippingState {
-  loadingAction: "create-guide" | "cancel-shipment" | "track-shipment" | null;
-  activeModal: "create-guide" | "cancel-shipment" | null;
-}
-
-type ShippingAction =
-  | { type: "OPEN_MODAL"; payload: "create-guide" | "cancel-shipment" }
-  | { type: "CLOSE_MODAL" }
-  | {
-      type: "START_ACTION";
-      payload: "create-guide" | "cancel-shipment" | "track-shipment";
-    }
-  | { type: "ACTION_SUCCESS" }
-  | { type: "ACTION_FAILURE" };
-
-// --- Reducer ---
-
-const initialState: ShippingState = {
-  loadingAction: null,
-  activeModal: null,
+/** Mismo tinte que la insignia de envío de la lista. */
+const STATUS_TONE: Record<ShippingStatus, string> = {
+  Preparing: "lavender",
+  Shipped: "sky",
+  PickedUp: "sky",
+  InTransit: "sky",
+  OutForDelivery: "sky",
+  Delivered: "mint",
+  FailedDelivery: "pink",
+  Returned: "pink",
+  Cancelled: "slate",
+  Exception: "pink",
 };
 
-const shippingReducer = (
-  state: ShippingState,
-  action: ShippingAction,
-): ShippingState => {
-  switch (action.type) {
-    case "OPEN_MODAL":
-      return { ...state, activeModal: action.payload };
+const CLOSED: ShippingStatus[] = [
+  ShippingStatus.Delivered,
+  ShippingStatus.Cancelled,
+  ShippingStatus.Returned,
+];
 
-    case "CLOSE_MODAL":
-      return { ...state, activeModal: null };
-
-    case "START_ACTION":
-      return { ...state, loadingAction: action.payload };
-
-    case "ACTION_SUCCESS":
-      return {
-        ...state,
-        loadingAction: null,
-        activeModal: null,
-      };
-
-    case "ACTION_FAILURE":
-      return {
-        ...state,
-        loadingAction: null,
-      };
-
-    default:
-      return state;
-  }
-};
-
-// --- Helper ---
-
-const getStatusConfig = (status: ShippingStatus) => {
-  switch (status) {
-    case ShippingStatus.Preparing:
-      return {
-        icon: PackageOpen,
-        color: "bg-blue-100 text-blue-800 border-blue-200",
-        animation: "animate-pulse",
-      };
-    case ShippingStatus.Shipped:
-    case ShippingStatus.PickedUp:
-      return {
-        icon: PackageCheck,
-        color: "bg-purple-100 text-purple-800 border-purple-200",
-        animation: "animate-in fade-in slide-in-from-top-2 duration-1000",
-      };
-    case ShippingStatus.InTransit:
-    case ShippingStatus.OutForDelivery:
-      return {
-        icon: Truck,
-        color: "bg-yellow-100 text-yellow-800 border-yellow-200",
-        animation: "animate-pulse",
-      };
-    case ShippingStatus.Delivered:
-      return {
-        icon: Check,
-        color: "bg-green-100 text-green-800 border-green-200",
-        animation: "",
-      };
-    case ShippingStatus.FailedDelivery:
-    case ShippingStatus.Returned:
-      return {
-        icon: PackageX,
-        color: "bg-red-100 text-red-800 border-red-200",
-        animation: "",
-      };
-    case ShippingStatus.Cancelled:
-    case ShippingStatus.Exception:
-      return {
-        icon: AlertCircle,
-        color: "bg-gray-100 text-gray-800 border-gray-200",
-        animation: "",
-      };
-    default:
-      return {
-        icon: Package,
-        color: "bg-gray-100 text-gray-800 border-gray-200",
-        animation: "",
-      };
-  }
-};
-
-// --- Component ---
-
+/**
+ * Estado real del envío: guía, seguimiento, fechas y costo. Solo lectura
+ * salvo actualizar el rastreo y cancelar la guía; crearla vive en la sección
+ * de envío, con un único botón.
+ */
 export const ShippingInfo: React.FC<ShippingInfoProps> = ({
   shipping,
-  orderStatus,
   freeShipping = false,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
-  const [state, dispatch] = useReducer(shippingReducer, {
-    ...initialState,
-  });
+  const [tracking, setTracking] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
-  const { loadingAction, activeModal } = state;
+  if (!shipping) return null;
 
-  const hasGuide = !!shipping?.envioClickIdOrder;
-  const hasRateWithoutGuide = !!shipping?.envioClickIdRate && !hasGuide;
-  const canCreateGuide =
-    hasRateWithoutGuide &&
-    (orderStatus === "PAID" || (shipping?.isCOD && orderStatus === "PENDING"));
-  const carrierInfo = shipping?.carrierName
+  const hasGuide = Boolean(shipping.envioClickIdOrder);
+  const carrierInfo = shipping.carrierName
     ? getCarrierInfo(shipping.carrierName)
-    : shipping?.courier
+    : shipping.courier
       ? getCarrierInfo(shipping.courier)
       : null;
-  const bgColor = carrierInfo?.color || "#FFFFFF";
-  const statusConfig = shipping ? getStatusConfig(shipping.status) : null;
+  const canCancel = hasGuide && !CLOSED.includes(shipping.status);
 
-  const canCancel =
-    shipping &&
-    hasGuide &&
-    !(
-      [
-        ShippingStatus.Delivered,
-        ShippingStatus.Cancelled,
-        ShippingStatus.Returned,
-      ] as ShippingStatus[]
-    ).includes(shipping.status);
-
-  const handleCreateGuide = async () => {
+  const trackShipment = async () => {
+    setTracking(true);
     try {
-      dispatch({ type: "START_ACTION", payload: "create-guide" });
-
-      const response = await axios.post(
-        `/api/${params.storeId}/orders/${params.orderId}/shipping/create-guide`,
-      );
-
-      const tracker = response.data?.data?.tracker;
-      toast({
-        title: "Guía creada",
-        description: tracker
-          ? `Número de guía ${tracker}. La etiqueta aparece abajo al recargar.`
-          : "La etiqueta aparece abajo al recargar.",
-        variant: "success",
+      await axios.post(`/api/${params.storeId}/shipment/track`, {
+        shippingId: shipping.id,
       });
-
-      dispatch({ type: "ACTION_SUCCESS" });
-
+      toast({ description: "Seguimiento actualizado", variant: "success" });
       router.refresh();
     } catch (error) {
-      dispatch({ type: "ACTION_FAILURE" });
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setTracking(false);
     }
   };
 
-  const handleCancelShipment = async () => {
-    if (!shipping) return;
-
-    dispatch({ type: "START_ACTION", payload: "cancel-shipment" });
-
+  const cancelShipment = async () => {
+    setCancelling(true);
     try {
       await axios.post(`/api/${params.storeId}/shipment/cancel`, {
         shippingId: shipping.id,
       });
-
-      toast({
-        description: "Envío cancelado",
-        variant: "success",
-      });
-
-      dispatch({ type: "ACTION_SUCCESS" });
+      toast({ description: "Envío cancelado", variant: "success" });
+      setCancelOpen(false);
       router.refresh();
     } catch (error) {
-      dispatch({ type: "ACTION_FAILURE" });
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setCancelling(false);
     }
   };
-
-  const handleTrackShipment = async () => {
-    if (!shipping) return;
-    try {
-      dispatch({ type: "START_ACTION", payload: "track-shipment" });
-
-      const response = await axios.post(
-        `/api/${params.storeId}/shipment/track`,
-        {
-          shippingId: shipping.id,
-        },
-      );
-
-      toast({
-        description: "Seguimiento actualizado",
-        variant: "success",
-      });
-
-      dispatch({ type: "ACTION_SUCCESS" });
-      router.refresh();
-    } catch (error) {
-      dispatch({ type: "ACTION_FAILURE" });
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    }
-  };
-
-  if (!shipping) return null;
 
   return (
     <div
       id="envio-estado"
       className="flex scroll-mt-24 flex-col gap-4 rounded-lg border bg-white p-4"
     >
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-primary">
-            <Package className="h-4 w-4" aria-hidden="true" />
-            Estado del envío
-          </h3>
-          {statusConfig && (
-            <div
-              className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium ${statusConfig.color}`}
-            >
-              <statusConfig.icon
-                className={`h-4 w-4 ${statusConfig.animation}`}
-              />
-              {shippingOptions[shipping.status]}
-            </div>
-          )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-primary">
+          <Package className="h-4 w-4" aria-hidden="true" />
+          Estado del envío
+        </h3>
+        <TintBadge
+          label={shippingOptions[shipping.status]}
+          tone={STATUS_TONE[shipping.status] ?? "slate"}
+        />
+      </div>
+
+      <div className="flex items-center gap-4">
+        {carrierInfo && (
+          <div
+            className="flex h-14 w-20 flex-shrink-0 items-center justify-center rounded-md p-2"
+            style={{ backgroundColor: carrierInfo.color || "#FFFFFF" }}
+          >
+            <Image
+              src={carrierInfo.logoUrl}
+              alt={carrierInfo.comercialName}
+              width={72}
+              height={40}
+              className="h-full w-full object-contain"
+              unoptimized
+            />
+          </div>
+        )}
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">
+              Transportadora
+            </span>
+            <span className="text-sm font-medium">
+              {shipping.carrierName || "No especificada"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">Proveedor</span>
+            <span className="text-sm font-medium">{shipping.provider}</span>
+          </div>
         </div>
       </div>
-      <div className="space-y-4">
-        {/* Carrier Info with Logo */}
-        <div className="flex items-center gap-4">
-          {carrierInfo && (
-            <div
-              className="flex h-16 w-24 flex-shrink-0 items-center justify-center rounded-md p-2"
-              style={{ backgroundColor: bgColor }}
-            >
-              <Image
-                src={carrierInfo.logoUrl}
-                alt={carrierInfo.comercialName}
-                width={80}
-                height={48}
-                className="h-full w-full object-contain"
-                unoptimized
-              />
-            </div>
-          )}
 
-          <div className="flex-1 space-y-2">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Transportadora</p>
-                <p className="font-medium">
-                  {shipping.carrierName || "No especificada"}
-                </p>
+      {shipping.envioClickIdRate && (
+        <>
+          <Separator />
+          <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-4">
+            {shipping.productName && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-muted-foreground">Servicio</span>
+                <span className="text-sm font-medium">
+                  {shipping.productName}
+                </span>
               </div>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Proveedor</p>
-                <p className="font-medium">{shipping.provider}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quotation Details */}
-        {shipping.envioClickIdRate && (
-          <>
-            <Separator />
-            <div className="space-y-3 rounded-lg bg-muted/50 p-4">
-              <p className="text-sm font-semibold">Detalles de la cotización</p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {shipping.productName && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      Tipo de producto
-                    </p>
-                    <p className="text-sm font-medium">
-                      {shipping.productName}
-                    </p>
-                  </div>
-                )}
-                {shipping.deliveryDays !== null &&
-                  shipping.deliveryDays !== undefined && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Días de entrega
-                      </p>
-                      <p className="text-sm font-medium">
-                        {shipping.deliveryDays}{" "}
-                        {shipping.deliveryDays === 1 ? "día" : "días"}
-                      </p>
-                    </div>
-                  )}
-                {shipping.flete !== null && shipping.flete !== undefined && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Flete base</p>
-                    <p className="text-sm font-medium">
-                      {currencyFormatter(shipping.flete)}
-                    </p>
-                  </div>
-                )}
-                {shipping.minimumInsurance !== null &&
-                  shipping.minimumInsurance !== undefined && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Seguro mínimo
-                      </p>
-                      <p className="text-sm font-medium">
-                        {currencyFormatter(shipping.minimumInsurance)}
-                      </p>
-                    </div>
-                  )}
-                {shipping.isCOD && (
-                  <div className="col-span-2 space-y-1">
-                    <Badge variant="secondary" className="text-xs">
-                      Pago contra entrega
-                    </Badge>
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Tracking */}
-        {shipping.trackingCode && (
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">
-              Número de seguimiento
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="break-all font-mono font-medium">
-                {shipping.trackingCode}
-              </p>
-              {shipping.trackingUrl && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => window.open(shipping.trackingUrl!, "_blank")}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
+            )}
+            {shipping.deliveryDays !== null &&
+              shipping.deliveryDays !== undefined && (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground">Entrega</span>
+                  <span className="text-sm font-medium">
+                    {shipping.deliveryDays}{" "}
+                    {shipping.deliveryDays === 1 ? "día" : "días"}
+                  </span>
+                </div>
               )}
+            {shipping.flete !== null && shipping.flete !== undefined && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-muted-foreground">
+                  Flete base
+                </span>
+                <span className="text-sm font-medium">
+                  {currencyFormatter(shipping.flete)}
+                </span>
+              </div>
+            )}
+            {shipping.minimumInsurance !== null &&
+              shipping.minimumInsurance !== undefined && (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground">
+                    Seguro mínimo
+                  </span>
+                  <span className="text-sm font-medium">
+                    {currencyFormatter(shipping.minimumInsurance)}
+                  </span>
+                </div>
+              )}
+            {shipping.isCOD && (
+              <div className="col-span-2 sm:col-span-4">
+                <TintBadge label="Pago contra entrega" tone="mint" />
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {shipping.trackingCode && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            Número de seguimiento
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="break-all font-mono text-sm font-medium">
+              {shipping.trackingCode}
+            </span>
+            {shipping.trackingUrl && (
               <Button
+                type="button"
                 variant="ghost"
-                size="icon"
-                onClick={handleTrackShipment}
-                disabled={loadingAction === "track-shipment"}
-                title="Actualizar rastreo"
-                aria-label="Actualizar rastreo"
+                size="icon-sm"
+                aria-label="Abrir seguimiento"
+                onClick={() => window.open(shipping.trackingUrl!, "_blank")}
               >
-                <RefreshCw
-                  className={`h-4 w-4 ${loadingAction === "track-shipment" ? "animate-spin" : ""}`}
-                />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Dates */}
-        {(shipping.estimatedDeliveryDate || shipping.actualDeliveryDate) && (
-          <>
-            <Separator />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {shipping.estimatedDeliveryDate && (
-                <div className="space-y-1">
-                  <p className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    Entrega estimada
-                  </p>
-                  <p className="text-sm font-medium">
-                    {format(new Date(shipping.estimatedDeliveryDate), "PPP", {
-                      locale: es,
-                    })}
-                  </p>
-                </div>
-              )}
-              {shipping.actualDeliveryDate && (
-                <div className="space-y-1">
-                  <p className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    Entrega real
-                  </p>
-                  <p className="text-sm font-medium">
-                    {format(new Date(shipping.actualDeliveryDate), "PPP", {
-                      locale: es,
-                    })}
-                  </p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Cost */}
-        {(freeShipping ||
-          (shipping.cost !== null && shipping.cost !== undefined)) && (
-          <>
-            <Separator />
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Costo de envío</p>
-              {freeShipping ? (
-                <div className="flex items-center gap-2">
-                  <Badge variant="success">Gratis</Badge>
-                  <p className="text-xs text-muted-foreground">
-                    El pedido alcanzó el monto de envío gratis; el flete lo
-                    asume la tienda.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-lg font-bold">
-                  {currencyFormatter(shipping.cost ?? 0)}
-                </p>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Guide Download */}
-        {hasGuide &&
-          shipping.guideUrl &&
-          shipping.status !== ShippingStatus.Cancelled && (
-            <>
-              <Separator />
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => window.open(shipping.guideUrl!, "_blank")}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Descargar guía (PDF)
-                </Button>
-
-                {canCancel && (
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() =>
-                      dispatch({
-                        type: "OPEN_MODAL",
-                        payload: "cancel-shipment",
-                      })
-                    }
-                    disabled={loadingAction === "cancel-shipment"}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancelar envío
-                  </Button>
-                )}
-              </div>
-            </>
-          )}
-
-        {/* Sin guía todavía: crearla desde aquí cuando el pedido lo permite. */}
-        {hasRateWithoutGuide && (
-          <>
-            <Alert>
-              <AlertDescription className="space-y-1">
-                <p>
-                  {canCreateGuide
-                    ? "La tarifa está guardada y el pedido ya permite pedir la guía."
-                    : "La tarifa está guardada. La guía se crea al marcar el pedido como pagado, o desde aquí una vez pagado."}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Las tarifas de EnvioClick valen 2 horas: si esta cotización es
-                  más vieja, descártala arriba y cotiza de nuevo antes de crear
-                  la guía.
-                </p>
-              </AlertDescription>
-            </Alert>
-            {canCreateGuide && (
-              <Button
-                size="sm"
-                className="w-full sm:w-auto"
-                onClick={() =>
-                  dispatch({ type: "OPEN_MODAL", payload: "create-guide" })
-                }
-                disabled={loadingAction === "create-guide"}
-              >
-                {loadingAction === "create-guide" ? (
-                  <>
-                    <Package className="mr-2 h-4 w-4 animate-spin" />
-                    Creando…
-                  </>
-                ) : (
-                  <>
-                    <Package className="mr-2 h-4 w-4" />
-                    Crear guía ahora
-                  </>
-                )}
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={trackShipment}
+              disabled={tracking}
+              aria-label="Actualizar rastreo"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${tracking ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {(shipping.estimatedDeliveryDate || shipping.actualDeliveryDate) && (
+        <>
+          <Separator />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {shipping.estimatedDeliveryDate && (
+              <div className="flex flex-col gap-0.5">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Calendar className="h-3 w-3" aria-hidden="true" />
+                  Entrega estimada
+                </span>
+                <span className="text-sm font-medium">
+                  {format(new Date(shipping.estimatedDeliveryDate), "PPP", {
+                    locale: es,
+                  })}
+                </span>
+              </div>
+            )}
+            {shipping.actualDeliveryDate && (
+              <div className="flex flex-col gap-0.5">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Calendar className="h-3 w-3" aria-hidden="true" />
+                  Entrega real
+                </span>
+                <span className="text-sm font-medium">
+                  {format(new Date(shipping.actualDeliveryDate), "PPP", {
+                    locale: es,
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {(freeShipping ||
+        (shipping.cost !== null && shipping.cost !== undefined)) && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">
+              Costo de envío
+            </span>
+            {freeShipping ? (
+              <div className="flex items-center gap-2">
+                <Badge variant="success">Gratis</Badge>
+                <span className="text-xs text-muted-foreground">
+                  El pedido alcanzó el monto de envío gratis; el flete lo asume
+                  la tienda.
+                </span>
+              </div>
+            ) : (
+              <span className="text-lg font-bold">
+                {currencyFormatter(shipping.cost ?? 0)}
+              </span>
+            )}
+          </div>
+        </>
+      )}
+
+      {hasGuide &&
+        shipping.guideUrl &&
+        shipping.status !== ShippingStatus.Cancelled && (
+          <>
+            <Separator />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                onClick={() => window.open(shipping.guideUrl!, "_blank")}
+                variant="outline"
+                className="flex-1"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Descargar guía (PDF)
+              </Button>
+              {canCancel && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setCancelOpen(true)}
+                  disabled={cancelling}
+                >
+                  <XCircle className="h-4 w-4" aria-hidden="true" />
+                  Cancelar envío
+                </Button>
+              )}
+            </div>
           </>
         )}
-      </div>
 
-      {/* Create guide confirmation: it costs money and cannot be undone. */}
-      <AlertDialog
-        open={activeModal === "create-guide"}
-        onOpenChange={(open) => !open && dispatch({ type: "CLOSE_MODAL" })}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Crear la guía de envío?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se solicita la guía a EnvioClick con{" "}
-              {shipping.carrierName ||
-                shipping.courier ||
-                "la transportadora cotizada"}
-              {shipping.cost
-                ? ` por ${currencyFormatter(Number(shipping.cost))}`
-                : ""}
-              . Esto genera un cobro con la transportadora y no se puede
-              deshacer desde aquí; si hace falta, tendrás que cancelar el envío.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={loadingAction === "create-guide"}
-              onClick={() => dispatch({ type: "CLOSE_MODAL" })}
-            >
-              Volver
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCreateGuide}
-              disabled={loadingAction === "create-guide"}
-            >
-              {loadingAction === "create-guide" ? "Creando…" : "Crear guía"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Cancel Shipment Dialog */}
-      <AlertDialog
-        open={activeModal === "cancel-shipment"}
-        onOpenChange={(open) => !open && dispatch({ type: "CLOSE_MODAL" })}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Cancelar el envío?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>Se anula la guía con la transportadora.</p>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>La transportadora puede cobrar por la cancelación.</li>
-                <li>
-                  No se puede deshacer: habría que cotizar y crear otra guía.
-                </li>
-              </ul>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={loadingAction === "cancel-shipment"}
-              onClick={() => dispatch({ type: "CLOSE_MODAL" })}
-            >
-              Volver
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCancelShipment}
-              disabled={loadingAction === "cancel-shipment"}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {loadingAction === "cancel-shipment"
-                ? "Cancelando..."
-                : "Sí, cancelar envío"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title="Cancelar el envío"
+        from={{
+          label: shippingOptions[shipping.status],
+          tone: STATUS_TONE[shipping.status] ?? "slate",
+        }}
+        to={{ label: "Envío cancelado", tone: "slate" }}
+        meta={shipping.carrierName ?? undefined}
+        consequences={[
+          "Se anula la guía con la transportadora.",
+          "La transportadora puede cobrar por la cancelación.",
+          "No se puede deshacer: habría que cotizar y crear otra guía.",
+        ]}
+        confirmLabel="Sí, cancelar envío"
+        destructive
+        loading={cancelling}
+        onConfirm={cancelShipment}
+      />
     </div>
   );
 };

@@ -47,6 +47,7 @@ export function ItemsSection({
     return (
       <SectionCard
         id="productos"
+        step={2}
         title="Productos"
         description="Pagado: estos productos y precios son el registro histórico de la venta. Para cambiarlos, cancela el pedido y crea uno nuevo."
         action={
@@ -89,6 +90,7 @@ export function ItemsSection({
   return (
     <SectionCard
       id="productos"
+      step={2}
       title="Productos"
       description="Cada línea se descuenta del inventario al marcar el pedido como pagado."
     >

@@ -151,8 +151,9 @@ export function CustomerCard({
   return (
     <SectionCard
       id="cliente"
+      step={1}
       title="Cliente"
-      description="Quién compra y a dónde va."
+      description="Quién compra y a dónde va. La ciudad es la que cotiza el envío."
     >
       <div className="grid grid-cols-1 gap-4">
         <FormField

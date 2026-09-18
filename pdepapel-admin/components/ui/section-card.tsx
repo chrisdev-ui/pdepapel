@@ -9,6 +9,8 @@ interface SectionCardProps {
   children: ReactNode;
   className?: string;
   tone?: "default" | "care";
+  /** Número del paso en un formulario largo: «1 · Cliente». */
+  step?: number;
 }
 
 /** Tarjeta de sección de un formulario largo (pedido, producto): título, ayuda de una línea y contenido. */
@@ -20,6 +22,7 @@ export function SectionCard({
   children,
   className,
   tone = "default",
+  step,
 }: SectionCardProps) {
   return (
     <section
@@ -37,6 +40,9 @@ export function SectionCard({
             id={`${id}-titulo`}
             className="text-[15px] font-bold text-primary"
           >
+            {step !== undefined && (
+              <span className="text-muted-foreground">{step} · </span>
+            )}
             {title}
           </h2>
           {description && (
