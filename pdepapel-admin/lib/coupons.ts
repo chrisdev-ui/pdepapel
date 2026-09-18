@@ -15,6 +15,19 @@ const optionalLimit = z.preprocess(
   z.union([z.coerce.number().int("El máximo de usos debe ser un número entero").min(1, "El máximo de usos debe ser al menos 1"), z.null()]),
 );
 
+/** Regla única del monto según el tipo; la comparten el formulario, el lote y la API. */
+export function discountAmountIssue(type: DiscountType | undefined, amount: number | undefined): string | null {
+  if (type !== DiscountType.PERCENTAGE || amount === undefined || Number.isNaN(amount)) return null;
+  if (amount > 100) return "El porcentaje no puede ser mayor a 100";
+  if (!Number.isInteger(amount)) return "El porcentaje debe ser un número entero";
+  return null;
+}
+
+export function refineDiscountAmount(value: { type?: DiscountType; amount?: number }, ctx: z.RefinementCtx): void {
+  const message = discountAmountIssue(value.type, value.amount);
+  if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message });
+}
+
 export const couponInputSchema = z
   .object({
     code: z
@@ -33,14 +46,7 @@ export const couponInputSchema = z
     isActive: z.boolean().optional().default(true),
     isWelcomeBenefit: z.boolean().optional().default(false),
   })
-  .superRefine((value, ctx) => {
-    if (value.type === DiscountType.PERCENTAGE && value.amount > 100) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message: "El porcentaje no puede ser mayor a 100" });
-    }
-    if (value.type === DiscountType.PERCENTAGE && !Number.isInteger(value.amount)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message: "El porcentaje debe ser un número entero" });
-    }
-  });
+  .superRefine(refineDiscountAmount);
 
 export type CouponInput = Omit<z.output<typeof couponInputSchema>, "startDate" | "endDate"> & PromotionWindow;
 
@@ -111,11 +117,7 @@ export const couponBatchInputSchema = z
     startDate: dateInput,
     endDate: dateInput,
   })
-  .superRefine((value, ctx) => {
-    if (value.type === DiscountType.PERCENTAGE && value.amount > 100) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message: "El porcentaje no puede ser mayor a 100" });
-    }
-  });
+  .superRefine(refineDiscountAmount);
 
 export type CouponBatchInput = Omit<z.output<typeof couponBatchInputSchema>, "startDate" | "endDate"> & PromotionWindow;
 

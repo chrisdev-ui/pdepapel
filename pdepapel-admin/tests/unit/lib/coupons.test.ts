@@ -48,4 +48,12 @@ describe("coupon batches", () => {
     expect(() => parseCouponBatchInput({ prefix: "x", quantity: 500, type: "FIXED", amount: 1000, startDate: "2026-10-01", endDate: "2026-10-31" })).toThrow("Hasta 100 cupones por lote");
     expect(() => parseCouponBatchInput({ prefix: "fe ria", quantity: 5, type: "FIXED", amount: 1000, startDate: "2026-10-01", endDate: "2026-10-31" })).toThrow("El prefijo solo admite letras y números");
   });
+
+  it("applies the same percentage rule to batches as to single coupons", () => {
+    const batch = { prefix: "feria", quantity: 5, type: "PERCENTAGE", amount: 12.5, startDate: "2026-10-01", endDate: "2026-10-31" };
+    expect(() => parseCouponBatchInput(batch)).toThrow("El porcentaje debe ser un número entero");
+    expect(() => parseCouponBatchInput({ ...batch, amount: 120 })).toThrow("El porcentaje no puede ser mayor a 100");
+    expect(parseCouponBatchInput({ ...batch, type: "FIXED" }).amount).toBe(12.5);
+    expect(parseCouponBatchInput({ ...batch, amount: 15 }).amount).toBe(15);
+  });
 });
