@@ -1,3 +1,4 @@
+import { isValidGtin } from "@/lib/product-identifiers";
 import { createHash } from "node:crypto";
 
 import { normalizeProductNamePart } from "@/lib/product-naming";
@@ -475,22 +476,6 @@ function sanitizeVariantCandidates(
       },
     ];
   });
-}
-
-function isValidGtin(value: string) {
-  if (!/^(\d{8}|\d{12,14})$/.test(value)) return false;
-
-  const digits = value.split("").map(Number);
-  const checkDigit = digits[digits.length - 1];
-  const sum = digits
-    .slice(0, -1)
-    .reverse()
-    .reduce(
-      (total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1),
-      0,
-    );
-
-  return (10 - (sum % 10)) % 10 === checkDigit;
 }
 
 function sanitizeIdentifierSuggestion(

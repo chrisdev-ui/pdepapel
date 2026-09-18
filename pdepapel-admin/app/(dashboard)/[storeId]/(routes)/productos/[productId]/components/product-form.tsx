@@ -16,7 +16,16 @@ import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
 import { type ProductImageAnalysis } from "@/lib/product-image-analysis";
 import { mergeProductCatalogAttributes } from "@/lib/product-catalog-attributes";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Eraser, Info, Loader2, Package, PackageCheckIcon, Plus, Trash } from "lucide-react";
+import {
+  ArrowLeft,
+  Eraser,
+  Info,
+  Loader2,
+  Package,
+  PackageCheckIcon,
+  Plus,
+  Trash,
+} from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -56,7 +65,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SectionCard } from "@/components/ui/section-card";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
-import { SuggestionStrip } from "@/components/ui/suggestion-strip";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { focusFirstInvalidField } from "@/lib/focus-invalid-field";
 import {
@@ -70,13 +78,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  INITIAL_MISC_COST,
-  INITIAL_PERCENTAGE_INCREASE,
-  INITIAL_TRANSPORTATION_COST,
-  Models,
-} from "@/constants";
+import { INITIAL_PERCENTAGE_INCREASE, Models } from "@/constants";
 import { generateSizeName, generateSizeValue } from "@/constants/sizes";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
@@ -95,6 +99,9 @@ import {
   normalizeProductImages,
   unsavedUploadsToCleanup,
 } from "@/lib/product-images";
+import { gtinValidationMessage } from "@/lib/product-identifiers";
+import { isPriceBelowCost } from "@/lib/product-pricing-rules";
+import { generateProductSlug } from "@/lib/slugify";
 import { KitPriceSuggestion } from "./kit-price-calculator";
 
 const formSchema = z
@@ -111,16 +118,18 @@ const formSchema = z
     acqPrice: z.coerce
       .number()
       .min(0, "El precio de compra no puede ser negativo"),
-    percentageIncrease: z.coerce
-      .number()
-      .min(0, "El porcentaje de incremento no puede ser negativo"),
-    transportationCost: z.coerce
-      .number()
-      .min(0, "El costo de transporte no puede ser negativo"),
-    miscCost: z.coerce
-      .number()
-      .min(0, "El costo de misceláneo no puede ser negativo"),
+    // «Envío y otros gastos»: vacío = no registrado. Antes se rellenaba con
+    // una constante y se guardaba como si fuera un dato real.
+    transportationCost: z.preprocess(
+      (value) => (value === "" || value === undefined ? null : value),
+      z.coerce
+        .number()
+        .min(0, "El costo de envío no puede ser negativo")
+        .nullable(),
+    ),
     price: z.coerce.number().min(1, "El precio de venta debe ser mayor a 0"),
+    /** Solo para liquidaciones: permite guardar por debajo del costo. No se guarda. */
+    sellAtLoss: z.boolean().default(false).optional(),
     categoryId: z.string().min(1, "Elige una subcategoría"),
     colorId: z.string().min(1, "Elige un color"),
     sizeId: z.string().min(1, "Elige un tamaño"),
@@ -162,10 +171,10 @@ const formSchema = z
     brand: z.string().max(120).optional(),
     gtin: z
       .string()
-      .refine(
-        (value) => !value || /^(\d{8}|\d{12,14})$/.test(value),
-        "El GTIN debe tener 8, 12, 13 o 14 dígitos",
-      )
+      .superRefine((value, ctx) => {
+        const message = gtinValidationMessage(value);
+        if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+      })
       .optional(),
     mpn: z.string().max(70).optional(),
     hasNoProductIdentifier: z.boolean().default(false).optional(),
@@ -209,6 +218,14 @@ const formSchema = z
         code: z.ZodIssueCode.custom,
         path: ["components"],
         message: "Un kit necesita al menos un componente",
+      });
+    }
+    if (!data.sellAtLoss && isPriceBelowCost(data.price, data.acqPrice)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["price"],
+        message:
+          "Está por debajo del costo de compra. Súbelo, corrige el costo o marca «Vender con pérdida a propósito».",
       });
     }
   });
@@ -337,13 +354,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             // Se respeta la principal guardada; antes se reasignaba a la
             // primera fila en cada carga y podía cambiar sola al guardar.
             images: normalizeProductImages(initialData.images),
-            percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
-            // Se guarda con el producto; el valor sembrado solo aplica a los
-            // productos creados antes de que existiera la columna.
-            transportationCost:
-              initialData.transportationCost ??
-              INITIAL_TRANSPORTATION_COST + INITIAL_MISC_COST,
-            miscCost: 0,
+            transportationCost: initialData.transportationCost ?? null,
+            sellAtLoss: false,
             productGroupId: initialData.productGroupId || "",
             stock: initialData.stock,
             isKit: initialData.isKit || false,
@@ -390,14 +402,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             brand: "",
             gtin: "",
             mpn: "",
-            // Los productos nuevos nacen sin identificador; se desmarca al tener un GTIN real.
-            hasNoProductIdentifier: true,
+            // GTIN, MPN y el escáner quedan habilitados desde el inicio. Si no
+            // se escribe ninguno ni se toca la casilla, el servidor marca el
+            // producto «sin código» al crearlo (la mayoría del catálogo).
+            hasNoProductIdentifier: false,
             isFeatured: false,
             isArchived: false,
             availableAt: "",
-            percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
-            transportationCost: INITIAL_TRANSPORTATION_COST + INITIAL_MISC_COST,
-            miscCost: 0,
+            transportationCost: null,
+            sellAtLoss: false,
             productGroupId: productGroup?.id || "",
             kitDiscountPercent: 0,
             isKit: false,
@@ -421,7 +434,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   });
 
   useFormValidationToast({ form });
-  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
+  const { confirmLeave, confirmationDialog: leaveDialog } =
+    useUnsavedChangesGuard(form, { enabled: !loading });
 
   const onClear = async () => {
     const currentImages = form.getValues("images") || [];
@@ -453,33 +467,28 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     });
   };
 
-  const calculatePrice = useCallback((values: Partial<ProductFormValues>) => {
-    const acqPrice = Number(values.acqPrice) || 0;
-    const percentageIncrease = Number(values.percentageIncrease) || 0;
-    const transportationCost = Number(values.transportationCost) || 0;
-    const miscCost = Number(values.miscCost) || 0;
-
-    if (acqPrice > 0) {
-      return Number(
-        (
-          acqPrice * (1 + percentageIncrease / 100) +
-          transportationCost +
-          miscCost
-        ).toFixed(2),
-      );
-    }
-    return 0;
-  }, []);
-
   const watchedGroupId = form.watch("productGroupId");
   const watchedIsKit = form.watch("isKit");
   const watchedComponents = form.watch("components");
   const watchedAcqPrice = form.watch("acqPrice");
   const watchedPrice = form.watch("price");
-  const watchedPercentageIncrease = form.watch("percentageIncrease");
   const watchedTransportationCost = form.watch("transportationCost");
-  const watchedMiscCost = form.watch("miscCost");
   const watchedKitDiscount = form.watch("kitDiscountPercent");
+  const watchedSellAtLoss = form.watch("sellAtLoss");
+  const watchedGtin = form.watch("gtin");
+  const watchedMpn = form.watch("mpn");
+  const watchedHasNoIdentifier = form.watch("hasNoProductIdentifier");
+  // La calculadora vive fuera del formulario: no se guarda con el producto.
+  const [calculatorIncrease, setCalculatorIncrease] = useState<number>(
+    INITIAL_PERCENTAGE_INCREASE,
+  );
+  // Si la dueña no toca la casilla y deja GTIN y MPN vacíos al crear, el
+  // servidor marca el producto «sin código» (como hasta ahora).
+  const [identifierTouched, setIdentifierTouched] = useState(false);
+  // Cambiar la URL es un acto explícito: la anterior queda como redirección.
+  const [refreshSlug, setRefreshSlug] = useState(false);
+  const { requestConfirmation, confirmationDialog: identifierConfirmation } =
+    useActionConfirmation();
 
   /** Lo que cuesta armar el kit. Un kit no tiene costo propio. */
   const kitComponentCost = useMemo(
@@ -501,29 +510,31 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     return ((price - cost) / price) * 100;
   }, [watchedPrice, watchedIsKit, kitComponentCost, watchedAcqPrice]);
 
-  // El precio NO se recalcula solo. Al abrir un producto existente los tres
-  // campos de costo se siembran con constantes (no se guardan en la base), asi
-  // que cualquier tecla en ellos reescribia en silencio un precio puesto a
-  // mano. Ahora se ofrece como sugerencia y solo cambia con el boton.
+  // Precio sugerido = costo × (1 + incremento) + envío. Solo se escribe con
+  // el botón; el precio nunca se recalcula solo.
   const suggestedPrice = useMemo(() => {
-    const values = form.getValues();
-    return calculatePrice({
-      acqPrice: watchedAcqPrice ?? 0,
-      percentageIncrease: values.percentageIncrease ?? 0,
-      transportationCost: values.transportationCost ?? 0,
-      miscCost: values.miscCost ?? 0,
-    });
-    // Los tres costos se leen con `getValues`, pero son dependencias reales:
-    // sin ellas la sugerencia se queda congelada al teclear en esos campos.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const cost = watchedIsKit ? kitComponentCost : Number(watchedAcqPrice) || 0;
+    if (cost <= 0) return 0;
+    const extra = Number(watchedTransportationCost) || 0;
+    return Math.round(
+      cost * (1 + (Number(calculatorIncrease) || 0) / 100) + extra,
+    );
   }, [
-    calculatePrice,
-    form,
+    watchedIsKit,
+    kitComponentCost,
     watchedAcqPrice,
-    watchedPercentageIncrease,
     watchedTransportationCost,
-    watchedMiscCost,
+    calculatorIncrease,
   ]);
+  const priceBelowCost = isPriceBelowCost(
+    Number(watchedPrice) || 0,
+    watchedIsKit ? kitComponentCost : Number(watchedAcqPrice) || 0,
+  );
+  const slugPreview = useMemo(
+    () => generateProductSlug({ name: form.watch("name") || "" }) || "producto",
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form.watch("name")],
+  );
   const watchedName = form.watch("name");
   const watchedCategoryId = form.watch("categoryId");
   const watchedColorId = form.watch("colorId");
@@ -613,27 +624,42 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       if (images.length === 0) {
         form.setError("images", {
           type: "manual",
-          message: "Necesitas al menos una foto; deshaz la que quitaste o sube otra.",
+          message:
+            "Necesitas al menos una foto; deshaz la que quitaste o sube otra.",
         });
         window.setTimeout(focusFirstInvalidField, 0);
         return;
       }
       try {
         setLoading(true);
-        const payload = { ...data, images };
+        const { sellAtLoss, ...rest } = data;
+        const payload: Record<string, unknown> = {
+          ...rest,
+          images,
+          allowBelowCost: Boolean(sellAtLoss),
+        };
+        if (!initialData && !identifierTouched && !data.gtin && !data.mpn) {
+          // Sin código y sin decisión explícita: el servidor aplica «sin código».
+          delete payload.hasNoProductIdentifier;
+        }
         if (initialData) {
           await axios.patch(
             `/api/${params.storeId}/${Models.Products}/${params.productId}`,
-            { ...payload, preserveSlug: true },
+            { ...payload, preserveSlug: !refreshSlug },
           );
         } else {
-          await axios.post(`/api/${params.storeId}/${Models.Products}`, payload);
+          await axios.post(
+            `/api/${params.storeId}/${Models.Products}`,
+            payload,
+          );
         }
         // Las fotos quitadas que ya estaban guardadas las borra el servidor;
         // las subidas y descartadas en esta sesión no existen en la base.
         const orphans = unsavedUploadsToCleanup(
           pendingRemovals,
-          (initialData?.images ?? []).map((image: { url: string }) => image.url),
+          (initialData?.images ?? []).map(
+            (image: { url: string }) => image.url,
+          ),
         );
         if (orphans.length > 0) {
           const { cleanupImages } = await import("@/actions/cleanup-images");
@@ -667,6 +693,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       clearStorage,
       pendingRemovals,
       form,
+      identifierTouched,
+      refreshSlug,
     ],
   );
   const onDelete = useCallback(async () => {
@@ -1027,6 +1055,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   return (
     <>
       {leaveDialog}
+      {identifierConfirmation}
       <AlertModal
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -1072,7 +1101,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         className="self-start"
         aria-label="Volver a productos"
         onClick={async () => {
-          if (await confirmLeave()) router.push(`/${params.storeId}/${Models.Products}`);
+          if (await confirmLeave())
+            router.push(`/${params.storeId}/${Models.Products}`);
         }}
       >
         <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -1347,8 +1377,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             </SectionCard>
             <SectionCard
               id="informacion"
-              title="Información básica"
-              description="Nombre comercial claro (50–65 caracteres) y marca. La URL se conserva aunque cambies el nombre."
+              title="Nombre y URL"
+              description="Nombre comercial claro (50–65 caracteres) y marca. La URL se conserva al renombrar; puedes actualizarla y la anterior seguirá funcionando."
             >
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
                 <FormField
@@ -1369,6 +1399,41 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     </FormItem>
                   )}
                 />
+                <FormItem className="col-span-full">
+                  <FormLabel>URL en la tienda</FormLabel>
+                  {initialData ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Input
+                          readOnly
+                          aria-label="URL actual"
+                          className="bg-muted/50 font-mono text-xs sm:text-sm"
+                          value={`/producto/${refreshSlug ? slugPreview : initialData.slug}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="shrink-0"
+                          disabled={loading}
+                          onClick={() => setRefreshSlug((value) => !value)}
+                        >
+                          {refreshSlug
+                            ? "Conservar la URL actual"
+                            : "Actualizar URL"}
+                        </Button>
+                      </div>
+                      <FormDescription>
+                        {refreshSlug
+                          ? `Al guardar, la URL pasará a /producto/${slugPreview}${initialData.productGroupId ? " (puede sumar el color o tamaño de la variante)" : ""} y /producto/${initialData.slug} redirigirá a la nueva.`
+                          : "Se conserva aunque cambies el nombre. Nunca cambia sola."}
+                      </FormDescription>
+                    </div>
+                  ) : (
+                    <FormDescription>
+                      Se genera del nombre al guardar: /producto/{slugPreview}
+                    </FormDescription>
+                  )}
+                </FormItem>
                 <div className="col-span-full">
                   <CatalogAttributesEditor
                     value={watchedCatalogAttributes}
@@ -1408,8 +1473,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             </SectionCard>
             <SectionCard
               id="precio"
-              title="Precio y margen"
-              description="El margen sale del costo de compra registrado; el precio de Mercado Libre es independiente."
+              title="Precio y costo"
+              description="Se guardan el costo de compra, el precio de venta y los gastos por unidad. La calculadora solo sugiere; el precio de Mercado Libre es aparte."
             >
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
                 <FormField
@@ -1418,7 +1483,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel isRequired={!watchedIsKit}>
-                        Precio de compra
+                        Costo de compra
                       </FormLabel>
                       <FormControl>
                         <CurrencyInput
@@ -1439,41 +1504,22 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 />
                 <FormField
                   control={form.control}
-                  name="percentageIncrease"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel isRequired>Porcentaje de incremento</FormLabel>
-                      <FormControl>
-                        <PercentageInput
-                          disabled={loading}
-                          placeholder="30"
-                          value={field.value}
-                          onChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Se usa solo para calcular el precio de venta actual.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
                   name="transportationCost"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Envío y otros gastos</FormLabel>
+                      <FormLabel>Envío y otros gastos por unidad</FormLabel>
                       <FormControl>
                         <CurrencyInput
-                          placeholder="$ 0"
+                          placeholder="Sin registrar"
                           disabled={loading}
-                          value={field.value}
-                          onChange={field.onChange}
+                          value={field.value ?? undefined}
+                          onChange={(value) => field.onChange(value ?? null)}
                         />
                       </FormControl>
                       <FormDescription>
-                        Por unidad. Se guarda con el producto: entra en el precio sugerido y en el piso de precio de Mercado Libre.
+                        Vacío = no registrado; no se rellena con un valor
+                        inventado. Entra en el precio sugerido y en el piso de
+                        precio de Mercado Libre.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -1493,29 +1539,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           onChange={field.onChange}
                         />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormItem>
-                  <FormLabel>Margen resultante</FormLabel>
-                  <div
-                    className={cn(
-                      "flex h-10 items-center gap-2 rounded-md border px-3 text-sm",
-                      marginPct === null
-                        ? "bg-muted/40 text-muted-foreground"
-                        : marginPct >= 0
-                          ? "border-tint-mint bg-tint-mint/40 text-primary"
-                          : "border-destructive/40 bg-destructive/10 text-destructive",
-                    )}
-                  >
-                    {marginPct === null ? (
-                      <span>Sin precio de venta</span>
-                    ) : (
-                      <>
-                        <strong>{marginPct.toFixed(1)} %</strong>
-                        <span className="text-xs">
-                          ={" "}
+                      {marginPct !== null && !priceBelowCost && (
+                        <FormDescription className="font-semibold text-primary">
+                          Margen {marginPct.toFixed(1)} % ·{" "}
                           {currencyFormatter(
                             (Number(watchedPrice) || 0) -
                               (watchedIsKit
@@ -1523,11 +1549,58 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                                 : Number(watchedAcqPrice) || 0),
                           )}{" "}
                           por unidad
-                        </span>
-                      </>
+                        </FormDescription>
+                      )}
+                      {priceBelowCost && (
+                        <FormDescription className="font-semibold text-destructive">
+                          Está por debajo del costo (
+                          {currencyFormatter(
+                            watchedIsKit
+                              ? kitComponentCost
+                              : Number(watchedAcqPrice) || 0,
+                          )}
+                          ): perderías{" "}
+                          {currencyFormatter(
+                            (watchedIsKit
+                              ? kitComponentCost
+                              : Number(watchedAcqPrice) || 0) -
+                              (Number(watchedPrice) || 0),
+                          )}{" "}
+                          por unidad.
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {priceBelowCost && (
+                  <FormField
+                    control={form.control}
+                    name="sellAtLoss"
+                    render={({ field }) => (
+                      <FormItem className="col-span-full flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm text-primary">
+                          <strong>No se puede guardar con pérdida.</strong> Sube
+                          el precio o corrige el costo. Si es intencional
+                          (liquidación), márcalo.
+                        </p>
+                        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm">
+                          <FormControl>
+                            <Checkbox
+                              checked={Boolean(field.value)}
+                              disabled={loading}
+                              onCheckedChange={(checked) => {
+                                field.onChange(checked === true);
+                                void form.trigger("price");
+                              }}
+                            />
+                          </FormControl>
+                          Vender con pérdida a propósito
+                        </label>
+                      </FormItem>
                     )}
-                  </div>
-                </FormItem>
+                  />
+                )}
                 {watchedIsKit ? (
                   <>
                     <FormField
@@ -1561,26 +1634,53 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     />
                   </>
                 ) : (
-                  suggestedPrice > 0 &&
-                  suggestedPrice !== Number(watchedPrice) && (
-                    <SuggestionStrip
-                      className="col-span-full"
-                      actionLabel={`Usar ${currencyFormatter(suggestedPrice)}`}
-                      disabled={loading}
-                      onApply={() =>
-                        form.setValue("price", suggestedPrice, {
-                          shouldDirty: true,
-                        })
-                      }
-                    >
-                      Con el costo, el incremento y los gastos de arriba, el
-                      precio sugerido es{" "}
-                      <strong className="text-foreground">
-                        {currencyFormatter(suggestedPrice)}
-                      </strong>
-                      . El precio de venta no se recalcula solo.
-                    </SuggestionStrip>
-                  )
+                  <details className="col-span-full rounded-lg border border-dashed p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-primary">
+                      Calculadora de precio (no se guarda)
+                    </summary>
+                    <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-end">
+                      <FormItem>
+                        <FormLabel htmlFor="calculadora-incremento">
+                          Incremento sobre el costo
+                        </FormLabel>
+                        <PercentageInput
+                          id="calculadora-incremento"
+                          disabled={loading}
+                          value={calculatorIncrease}
+                          onChange={(value) =>
+                            setCalculatorIncrease(value ?? 0)
+                          }
+                        />
+                      </FormItem>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">
+                          Precio sugerido
+                        </span>
+                        <span className="text-xl font-bold text-primary">
+                          {suggestedPrice > 0
+                            ? currencyFormatter(suggestedPrice)
+                            : "—"}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={loading || suggestedPrice <= 0}
+                        onClick={() =>
+                          form.setValue("price", suggestedPrice, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                      >
+                        Usar como precio de venta
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Costo × (1 + incremento) + envío por unidad. El precio de
+                      venta solo cambia si pulsas el botón.
+                    </p>
+                  </details>
                 )}
               </div>
             </SectionCard>
@@ -1780,7 +1880,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             <SectionCard
               id="identificadores"
               title="Identificadores"
-              description="SKU interno, GTIN real del código de barras (nunca inventado) y código del fabricante."
+              description="GTIN real del código de barras (nunca inventado) y referencia del fabricante. Ambos habilitados desde el inicio; se valida el dígito de control y que no esté en otro producto."
             >
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
                 <FormField
@@ -1792,15 +1892,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       <div className="flex gap-2">
                         <FormControl>
                           <Input
-                            disabled={
-                              loading || form.watch("hasNoProductIdentifier")
-                            }
+                            disabled={loading || watchedHasNoIdentifier}
                             inputMode="numeric"
                             placeholder="8, 12, 13 o 14 dígitos"
                             {...field}
                           />
                         </FormControl>
-                        {!form.watch("hasNoProductIdentifier") && (
+                        {!watchedHasNoIdentifier && (
                           <BarcodeScanner
                             label="Escanear"
                             description="Apunta la cámara al código de barras del empaque."
@@ -1815,7 +1913,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         )}
                       </div>
                       <FormDescription>
-                        Regístralo solo si corresponde a esta variante.
+                        {watchedHasNoIdentifier
+                          ? "Desmarca «No tiene código de barras» para escribir o escanear uno."
+                          : "Regístralo solo si corresponde a este producto."}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -1829,9 +1929,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       <FormLabel>Referencia del fabricante (MPN)</FormLabel>
                       <FormControl>
                         <Input
-                          disabled={
-                            loading || form.watch("hasNoProductIdentifier")
-                          }
+                          disabled={loading || watchedHasNoIdentifier}
                           placeholder="Referencia del fabricante"
                           {...field}
                         />
@@ -1849,22 +1947,35 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         <Checkbox
                           checked={field.value}
                           disabled={loading}
-                          onCheckedChange={(checked) => {
+                          onCheckedChange={async (checked) => {
                             const hasNoIdentifier = checked === true;
+                            setIdentifierTouched(true);
+                            if (
+                              hasNoIdentifier &&
+                              (watchedGtin || watchedMpn)
+                            ) {
+                              const ok = await requestConfirmation({
+                                title: "¿Borrar el código registrado?",
+                                description: `Al marcar «No tiene código de barras» se borra ${watchedGtin ? `el GTIN ${watchedGtin}` : ""}${watchedGtin && watchedMpn ? " y " : ""}${watchedMpn ? `la referencia ${watchedMpn}` : ""}. Puedes volver a escribirlos después.`,
+                                confirmLabel: "Borrar y marcar",
+                                destructive: true,
+                              });
+                              if (!ok) return;
+                            }
                             field.onChange(hasNoIdentifier);
-
                             if (hasNoIdentifier) {
-                              form.setValue("gtin", "");
-                              form.setValue("mpn", "");
+                              form.setValue("gtin", "", { shouldDirty: true });
+                              form.setValue("mpn", "", { shouldDirty: true });
                             }
                           }}
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
-                        <FormLabel>No tiene identificador global</FormLabel>
+                        <FormLabel>No tiene código de barras</FormLabel>
                         <FormDescription>
-                          Úsalo únicamente para productos sin GTIN ni MPN del
-                          fabricante. Al activarlo se eliminan ambos valores.
+                          Solo si el empaque no trae GTIN ni MPN del fabricante.
+                          {!initialData &&
+                            " Si dejas ambos vacíos y no tocas esta casilla, el producto se crea marcado así."}
                         </FormDescription>
                       </div>
                     </FormItem>

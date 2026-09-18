@@ -36,6 +36,7 @@ import { PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
 import { Prisma } from "@prisma/client";
 import {
   CACHE_HEADERS,
+  currencyFormatter,
   generateRandomSKU,
   getPublicIdFromCloudinaryUrl,
   parseErrorDetails,
@@ -43,7 +44,11 @@ import {
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
-import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
+import {
+  findProductWithGtin,
+  normalizeProductIdentifiers,
+} from "@/lib/product-identifiers";
+import { isPriceBelowCost, priceBelowCostMessage } from "@/lib/product-pricing-rules";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
@@ -164,6 +169,7 @@ export async function POST(
       isKit, // [NEW]
       components, // [NEW] Array of { componentId, quantity }
       catalogAttributes,
+      allowBelowCost = false,
     } = body;
     const normalizedSupplierId =
       typeof supplierId === "string" && supplierId !== "none"
@@ -214,6 +220,23 @@ export async function POST(
     if (isKit && (!components || components.length === 0)) {
       throw ErrorFactory.InvalidRequest(
         "Un Kit debe tener productos (componentes).",
+      );
+    }
+
+    if (!allowBelowCost && isPriceBelowCost(price, acqPrice)) {
+      throw ErrorFactory.InvalidRequest(
+        priceBelowCostMessage(Number(price), Number(acqPrice), currencyFormatter),
+      );
+    }
+
+    const gtinOwner = await findProductWithGtin(prismadb, {
+      storeId: params.storeId,
+      gtin: productIdentifiers.gtin,
+    });
+    if (gtinOwner) {
+      throw ErrorFactory.Conflict(
+        `Ese GTIN ya está en «${gtinOwner.name}». Un código de barras identifica un solo producto.`,
+        { productId: gtinOwner.id },
       );
     }
 

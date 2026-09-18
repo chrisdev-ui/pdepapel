@@ -6,11 +6,11 @@ describe("normalizeProductIdentifiers", () => {
   it("normalizes valid identifiers before persisting them", () => {
     expect(
       normalizeProductIdentifiers({
-        gtin: " 7701234567890 ",
+        gtin: " 7701234567897 ",
         mpn: " REF-001 ",
       }),
     ).toEqual({
-      gtin: "7701234567890",
+      gtin: "7701234567897",
       mpn: "REF-001",
       hasNoProductIdentifier: false,
     });
@@ -19,7 +19,7 @@ describe("normalizeProductIdentifiers", () => {
   it("clears identifiers when the product has none", () => {
     expect(
       normalizeProductIdentifiers({
-        gtin: "7701234567890",
+        gtin: "7701234567897",
         mpn: "REF-001",
         hasNoProductIdentifier: true,
       }),
@@ -42,8 +42,8 @@ describe("normalizeProductIdentifiers", () => {
       mpn: null,
       hasNoProductIdentifier: true,
     });
-    expect(normalizeProductIdentifiers({ gtin: "7701234567890", defaultNoIdentifierWhenEmpty: true })).toMatchObject({
-      gtin: "7701234567890",
+    expect(normalizeProductIdentifiers({ gtin: "7701234567897", defaultNoIdentifierWhenEmpty: true })).toMatchObject({
+      gtin: "7701234567897",
       hasNoProductIdentifier: false,
     });
     expect(normalizeProductIdentifiers({ mpn: "REF-1", defaultNoIdentifierWhenEmpty: true })).toMatchObject({
@@ -54,5 +54,18 @@ describe("normalizeProductIdentifiers", () => {
       hasNoProductIdentifier: false,
     });
     expect(normalizeProductIdentifiers({ gtin: "" })).toMatchObject({ hasNoProductIdentifier: false });
+  });
+});
+
+describe("GTIN check digit", () => {
+  it("rejects a code with a wrong check digit and accepts real ones", async () => {
+    const { gtinValidationMessage, isValidGtin } = await import("@/lib/product-identifiers");
+    expect(isValidGtin("7701234567897")).toBe(true);
+    expect(isValidGtin("7701234567890")).toBe(false);
+    expect(isValidGtin("96385074")).toBe(true);
+    expect(gtinValidationMessage("")).toBeNull();
+    expect(gtinValidationMessage("123")).toMatch(/8, 12, 13 o 14/);
+    expect(gtinValidationMessage("7701234567890")).toMatch(/dígito|control/);
+    expect(() => normalizeProductIdentifiers({ gtin: "7701234567890" })).toThrow(/control/);
   });
 });

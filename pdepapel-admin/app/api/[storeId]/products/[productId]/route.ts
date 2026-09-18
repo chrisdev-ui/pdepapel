@@ -13,13 +13,18 @@ import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import {
   CACHE_HEADERS,
   checkIfStoreOwner,
+  currencyFormatter,
   verifyStoreOwner,
   generateRandomSKU,
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
 import { parseAvailableAt } from "@/lib/product-availability";
-import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
+import {
+  findProductWithGtin,
+  normalizeProductIdentifiers,
+} from "@/lib/product-identifiers";
+import { isPriceBelowCost, priceBelowCostMessage } from "@/lib/product-pricing-rules";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
@@ -197,6 +202,7 @@ export async function PATCH(
       availableAt,
       productGroupId,
       preserveSlug = false,
+      allowBelowCost = false,
 
       isKit,
       components,
@@ -255,6 +261,25 @@ export async function PATCH(
     if (isKit && (!components || components.length === 0)) {
       throw ErrorFactory.InvalidRequest(
         "Un Kit debe tener productos (componentes).",
+      );
+    }
+
+    // Un precio por debajo del costo casi siempre es un error de dedo.
+    if (!allowBelowCost && isPriceBelowCost(price, acqPrice)) {
+      throw ErrorFactory.InvalidRequest(
+        priceBelowCostMessage(Number(price), Number(acqPrice), currencyFormatter),
+      );
+    }
+
+    const gtinOwner = await findProductWithGtin(prismadb, {
+      storeId: params.storeId,
+      gtin: productIdentifiers.gtin,
+      excludeProductId: params.productId,
+    });
+    if (gtinOwner) {
+      throw ErrorFactory.Conflict(
+        `Ese GTIN ya está en «${gtinOwner.name}». Un código de barras identifica un solo producto.`,
+        { productId: gtinOwner.id },
       );
     }
 
@@ -391,10 +416,9 @@ export async function PATCH(
       }
 
       if (!preserveSlug) {
-        if (
-          affectedProductGroupIds.length === 0 &&
-          productToUpdate.slug !== uniqueSlug
-        ) {
+        // La URL anterior queda como redirección SIEMPRE que cambie, también
+        // en variantes de grupo: antes se saltaba y el enlace viejo daba 404.
+        if (productToUpdate.slug !== uniqueSlug) {
           await preserveProductSlugAlias(tx, {
             storeId: params.storeId,
             productId: productToUpdate.id,
