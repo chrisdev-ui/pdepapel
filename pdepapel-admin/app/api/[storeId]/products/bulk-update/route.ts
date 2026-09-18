@@ -54,17 +54,18 @@ export async function POST(
         "Campo no permitido para edición en lote",
       );
     }
-    if (isRelation && (typeof value !== "string" || !value)) {
+    // La vista previa solo cuenta filas: el valor se valida al aplicar.
+    if (!preview && isRelation && (typeof value !== "string" || !value)) {
       throw ErrorFactory.InvalidRequest("Elige un valor para aplicar");
     }
-    if (isFlag && typeof value !== "boolean") {
+    if (!preview && isFlag && typeof value !== "boolean") {
       throw ErrorFactory.InvalidRequest(
         "Archivar, destacar o marcar sin identificador requiere un valor verdadero o falso",
       );
     }
 
     let dateValue: Date | null = null;
-    if (isDate) {
+    if (isDate && !preview) {
       try {
         dateValue = parseAvailableAt(value);
       } catch (error) {
@@ -105,7 +106,7 @@ export async function POST(
 
     const finalProductIds = Array.from(productsToUpdateIds);
 
-    if (isRelation) {
+    if (isRelation && !preview) {
       // El valor debe ser de esta tienda; sin claves foráneas nada lo impedía.
       const table = {
         categoryId: prismadb.category,

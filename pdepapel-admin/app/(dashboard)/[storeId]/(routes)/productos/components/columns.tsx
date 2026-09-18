@@ -15,6 +15,7 @@ import { getProducts } from "../server/get-products";
 import { CellAction } from "./cell-action";
 import {
   FeaturedBadge,
+  OfferBadge,
   ProductTintBadge,
   ReadinessBadge,
   ShapeBadge,
@@ -31,6 +32,7 @@ export const productImage = (row: ProductColumn) =>
 export const buildColumns = (
   storeId: string,
   lowStockThreshold: number = DEFAULT_LOW_STOCK_THRESHOLD,
+  storeUrl?: string | null,
 ): ColumnDef<ProductColumn>[] => [
   {
     id: "image",
@@ -41,7 +43,6 @@ export const buildColumns = (
         src={productImage(row.original)}
         alt={row.original.name}
         ratio={1 / 1}
-        numberOfImages={row.original.images.length}
       />
     ),
     enableSorting: false,
@@ -50,7 +51,9 @@ export const buildColumns = (
   {
     id: "name",
     accessorFn: (row) =>
-      [row.name, row.sku, row.productGroup?.name].filter(Boolean).join(" "),
+      [row.name, row.sku, row.gtin, row.productGroup?.name]
+        .filter(Boolean)
+        .join(" "),
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Producto" />
     ),
@@ -65,9 +68,19 @@ export const buildColumns = (
         </Link>
         <span className="truncate text-xs text-muted-foreground">
           {row.original.sku}
-          {row.original.productGroup
-            ? ` · ${row.original.productGroup.name}`
-            : ""}
+          {row.original.productGroup && (
+            <>
+              {" · "}
+              <Link
+                href={`/${storeId}/productos/grupo/${row.original.productGroup.id}`}
+                className="text-primary hover:underline"
+                data-no-row-click
+                title="Abrir el grupo de variantes"
+              >
+                {row.original.productGroup.name} ›
+              </Link>
+            </>
+          )}
         </span>
         <FeaturedBadge isFeatured={row.original.isFeatured} />
       </div>
@@ -118,9 +131,12 @@ export const buildColumns = (
       <div className="flex flex-col items-end gap-0.5">
         <DataTableCellCurrency value={row.original.discountedPrice} />
         {row.original.hasDiscount && (
-          <span className="text-[11px] text-muted-foreground line-through">
-            <DataTableCellCurrency value={row.original.price} />
-          </span>
+          <>
+            <span className="text-[11px] text-muted-foreground line-through">
+              <DataTableCellCurrency value={row.original.price} />
+            </span>
+            <OfferBadge label={row.original.offerLabel} />
+          </>
         )}
       </div>
     ),
@@ -144,9 +160,9 @@ export const buildColumns = (
   {
     id: "readiness",
     accessorFn: (row) =>
-      getListReadiness(row).complete ? "Listo" : "Sin completar",
+      getListReadiness(row).complete ? "Lista" : "Sin completar",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Listo para vender" />
+      <DataTableColumnHeader column={column} title="Lista para vender" />
     ),
     cell: ({ row }) => (
       <ReadinessBadge readiness={getListReadiness(row.original)} />
@@ -165,7 +181,7 @@ export const buildColumns = (
         </span>
       ) : row.original.hasNoProductIdentifier ? (
         <ProductTintBadge
-          label="Sin identificador"
+          label="Sin código"
           tone="slate"
           title="Marcado como producto sin GTIN ni MPN"
         />
@@ -173,9 +189,10 @@ export const buildColumns = (
         <ProductTintBadge
           label="Falta"
           tone="cream"
-          title="Sin GTIN y sin la marca «No tiene identificador global»"
+          title="Sin GTIN y sin la marca «No tiene código de barras»"
         />
       ),
+    enableGlobalFilter: false,
   },
   {
     accessorKey: "createdAt",
@@ -190,7 +207,7 @@ export const buildColumns = (
     header: () => <span className="sr-only">Acciones</span>,
     cell: ({ row }) => (
       <div className="flex justify-end" data-no-row-click>
-        <CellAction data={row.original} />
+        <CellAction data={row.original} storeUrl={storeUrl} />
       </div>
     ),
     enableSorting: false,

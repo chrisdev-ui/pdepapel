@@ -90,7 +90,7 @@ import { Color, Design, Size, Supplier, Type } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getProduct } from "../server/get-product";
+import { getProduct, getProductSeed } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
 import { ComponentSelector } from "./component-selector";
 import { computeKitStockLimit, sumKitComponentCost } from "@/lib/kit-pricing";
@@ -235,6 +235,7 @@ type ProductFormValues = z.infer<typeof formSchema>;
 type Categories = Awaited<ReturnType<typeof getProduct>>["categories"][number];
 
 type InitialData = Awaited<ReturnType<typeof getProduct>>["product"];
+type ProductSeed = Awaited<ReturnType<typeof getProductSeed>>;
 
 type ProductGroup = Awaited<ReturnType<typeof getProduct>>["productGroup"];
 type ProductGroups = Awaited<ReturnType<typeof getProduct>>["productGroups"];
@@ -263,6 +264,8 @@ interface ProductFormProps {
   catalogOptions: CatalogOptionSuggestion[];
   /** Preventa activa del producto, si tiene una abierta. */
   activePresale?: ProductPresaleSummary | null;
+  /** «Duplicar»: datos del original para sembrar un producto nuevo. */
+  seed?: ProductSeed | null;
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -282,6 +285,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   productGroups,
   catalogOptions,
   activePresale = null,
+  seed = null,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -389,17 +393,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               })) || [],
           }
         : {
-            name: "",
-            description: "",
+            name: seed?.name ?? "",
+            description: seed?.description ?? "",
             stock: 0,
             images: [],
-            price: 0,
-            categoryId: "",
-            colorId: "",
-            sizeId: "",
-            designId: "",
-            supplierId: "",
-            brand: "",
+            price: seed?.price ?? 0,
+            acqPrice: seed?.acqPrice ?? 0,
+            categoryId: seed?.categoryId ?? "",
+            colorId: seed?.colorId ?? "",
+            sizeId: seed?.sizeId ?? "",
+            designId: seed?.designId ?? "",
+            supplierId: seed?.supplierId ?? "",
+            brand: seed?.brand ?? "",
             gtin: "",
             mpn: "",
             // GTIN, MPN y el escáner quedan habilitados desde el inicio. Si no
@@ -409,15 +414,38 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             isFeatured: false,
             isArchived: false,
             availableAt: "",
-            transportationCost: null,
+            transportationCost: seed?.transportationCost ?? null,
             sellAtLoss: false,
             productGroupId: productGroup?.id || "",
             kitDiscountPercent: 0,
-            isKit: false,
-            components: [],
-            catalogAttributes: [],
+            isKit: seed?.isKit ?? false,
+            components:
+              seed?.kitComponents?.map((c: any) => ({
+                componentId: c.componentId,
+                quantity: c.quantity,
+                name: c.component?.name || "",
+                sku: c.component?.sku || "",
+                stock: c.component?.stock || 0,
+                price: c.component?.price || 0,
+                acqPrice: Number(c.component?.acqPrice || 0),
+                image:
+                  c.component?.images?.find((i: any) => i.isMain)?.url ||
+                  c.component?.images?.[0]?.url ||
+                  "",
+                categoryName: c.component?.category?.name,
+                sizeName: c.component?.size?.name,
+                colorName: c.component?.color?.name,
+                designName: c.component?.design?.name,
+              })) ?? [],
+            catalogAttributes:
+              seed?.catalogOptionValues?.map((item) => ({
+                key: item.option.key,
+                name: item.option.name,
+                value: item.optionValue.name,
+                evidence: "Copiado del producto original",
+              })) ?? [],
           },
-    [initialData, productGroup],
+    [initialData, productGroup, seed],
   );
 
   const form = useForm<ProductFormValues>({
@@ -429,7 +457,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   // dejarlo activo al editar escribia cada tecla en storage sin leerla nunca.
   const { clearStorage } = useFormPersist({
     form,
-    key: `product-form-${params.storeId}-${initialData?.id ?? "new"}`,
+    key: `product-form-${params.storeId}-${initialData?.id ?? (seed ? `copia-${seed.id}` : "new")}`,
     enabled: !initialData,
   });
 

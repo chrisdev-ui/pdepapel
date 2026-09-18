@@ -204,3 +204,49 @@ export async function getProduct(id: string, storeId: string) {
     productGroups,
   };
 }
+
+/**
+ * «Duplicar»: los datos del original para sembrar el formulario de creación.
+ * Sin fotos (las variantes comparten archivos por URL y borrar en una rompería
+ * la otra), sin SKU, sin GTIN ni MPN, sin stock y sin grupo.
+ */
+export async function getProductSeed(storeId: string, sourceId: string) {
+  const source = await prismadb.product.findFirst({
+    where: { id: sourceId, storeId },
+    include: {
+      catalogOptionValues: { include: { option: true, optionValue: true } },
+      kitComponents: {
+        include: {
+          component: {
+            include: {
+              images: true,
+              category: true,
+              size: true,
+              color: true,
+              design: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!source) return null;
+  return {
+    id: source.id,
+    name: `${source.name} (copia)`,
+    description: source.description,
+    price: source.price,
+    acqPrice: source.acqPrice,
+    transportationCost: source.transportationCost,
+    categoryId: source.categoryId,
+    colorId: source.colorId,
+    sizeId: source.sizeId,
+    designId: source.designId,
+    supplierId: source.supplierId,
+    brand: source.brand,
+    isKit: source.isKit,
+    kitComponents: source.kitComponents,
+    catalogOptionValues: source.catalogOptionValues,
+    sourceName: source.name,
+  };
+}

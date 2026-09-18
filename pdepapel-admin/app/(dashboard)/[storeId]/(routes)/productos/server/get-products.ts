@@ -11,6 +11,7 @@ export async function getProducts(storeId: string) {
       id: true,
       categoryId: true,
       sku: true,
+      slug: true,
       name: true,
       price: true,
       acqPrice: true,
@@ -42,7 +43,10 @@ export async function getProducts(storeId: string) {
         },
       },
       _count: {
-        select: { images: { where: { brokenAt: { not: null } } } },
+        select: {
+          images: { where: { brokenAt: { not: null } } },
+          kitComponents: true,
+        },
       },
       category: {
         select: {

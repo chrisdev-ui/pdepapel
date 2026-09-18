@@ -1,34 +1,30 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Star } from "lucide-react";
+import { TintBadge } from "@/components/ui/tint-badge";
 import {
   DEFAULT_LOW_STOCK_THRESHOLD,
   type ProductShape,
   type Readiness,
 } from "@/lib/product-readiness";
-import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
-import { cn } from "@/lib/utils";
+import {
+  getProductStatus,
+  PRODUCT_STATUS,
+  productStockLabel,
+} from "@/lib/product-status";
+import { Star } from "lucide-react";
 
-const TONES: Record<string, string> = {
-  mint: "bg-tint-mint",
-  cream: "bg-tint-cream",
-  sky: "bg-tint-sky",
-  slate: "bg-muted",
-  pink: "bg-tint-pink",
-  lavender: "bg-tint-lavender",
-};
 const SHAPE_TONE: Record<ProductShape, string> = {
   individual: "slate",
   variante: "lavender",
   kit: "cream",
 };
 
+/** Alias de la insignia compartida; se mantiene por los importadores del módulo. */
 export function ProductTintBadge({
   label,
   tone,
@@ -41,17 +37,9 @@ export function ProductTintBadge({
   title?: string;
 }) {
   return (
-    <Badge
-      variant="outline"
-      title={title}
-      className={cn(
-        "whitespace-nowrap border-transparent font-semibold text-primary",
-        TONES[tone] ?? "bg-muted",
-        className,
-      )}
-    >
-      {label}
-    </Badge>
+    <span title={title} className="inline-flex">
+      <TintBadge label={label} tone={tone} className={className} />
+    </span>
   );
 }
 
@@ -60,20 +48,18 @@ export function ShapeBadge({
 }: {
   shape: { id: ProductShape; label: string };
 }) {
-  return <ProductTintBadge label={shape.label} tone={SHAPE_TONE[shape.id]} />;
+  return <TintBadge label={shape.label} tone={SHAPE_TONE[shape.id]} />;
 }
 
 /**
- * Qué le falta al producto. Antes el detalle vivía solo en un `title=`: no
- * aparece al tocar en móvil ni al navegar con teclado, así que en la práctica
- * "Faltan 3" no se podía resolver sin abrir el producto. Ahora es un botón con
- * un popover, accesible por clic, toque y teclado.
+ * Qué le falta al producto, en un popover accesible por clic, toque y
+ * teclado (un `title=` no aparece en móvil).
  */
 export function ReadinessBadge({ readiness }: { readiness: Readiness }) {
   const brokenImage = readiness.checks.some(
     (check) => check.id === "image-health" && !check.ok,
   );
-  if (readiness.complete) return <ProductTintBadge label="Listo" tone="mint" />;
+  if (readiness.complete) return <TintBadge label="Lista" tone="mint" />;
   const pending = readiness.total - readiness.done;
   return (
     <span
@@ -87,8 +73,8 @@ export function ReadinessBadge({ readiness }: { readiness: Readiness }) {
             aria-label={`Faltan ${pending}: ${readiness.missing.join(", ")}. Ver detalle`}
             className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ProductTintBadge
-              label={`Faltan ${pending}`}
+            <TintBadge
+              label={pending === 1 ? "Falta 1" : `Faltan ${pending}`}
               tone="cream"
               className="cursor-pointer"
             />
@@ -125,7 +111,6 @@ export function ReadinessBadge({ readiness }: { readiness: Readiness }) {
   );
 }
 
-/** `isFeatured` no se veía en ninguna parte, aunque se puede cambiar en lote. */
 export function FeaturedBadge({ isFeatured }: { isFeatured: boolean }) {
   if (!isFeatured) return null;
   return (
@@ -139,6 +124,7 @@ export function FeaturedBadge({ isFeatured }: { isFeatured: boolean }) {
   );
 }
 
+/** Estado en la tienda con el stock siempre visible (también archivado). */
 export function StockBadge({
   stock,
   isArchived,
@@ -150,27 +136,39 @@ export function StockBadge({
   availableAt?: Date | string | null;
   threshold?: number;
 }) {
-  if (isArchived) return <ProductTintBadge label="Archivado" tone="slate" />;
-  if (availableAt && isComingSoon({ availableAt }))
+  const product = { stock, isArchived, availableAt };
+  const status = getProductStatus(product, threshold);
+  const label = productStockLabel(product, threshold);
+  if (status === "a-la-venta")
     return (
-      <ProductTintBadge
-        label={`Llega el ${formatAvailableAt(availableAt)}`}
-        tone="lavender"
-        title="Próximamente: se muestra en la tienda sin botón de compra"
-      />
-    );
-  if (stock <= 0) return <ProductTintBadge label="Agotado" tone="pink" />;
-  if (stock <= threshold)
-    return (
-      <ProductTintBadge
-        label={`${stock} und`}
-        tone="cream"
-        title="Stock crítico"
-      />
+      <span className="text-sm font-semibold tabular-nums text-primary">
+        {stock}
+      </span>
     );
   return (
-    <span className="text-sm font-semibold tabular-nums text-primary">
-      {stock}
-    </span>
+    <ProductTintBadge
+      label={label}
+      tone={PRODUCT_STATUS[status].tone}
+      title={
+        status === "proximamente"
+          ? "Próximamente: se muestra en la tienda sin botón de compra"
+          : status === "stock-critico"
+            ? "Stock crítico"
+            : undefined
+      }
+    />
+  );
+}
+
+/** Insignia «Oferta: nombre» cuando el precio mostrado viene de una oferta. */
+export function OfferBadge({ label }: { label?: string | null }) {
+  if (!label) return null;
+  return (
+    <ProductTintBadge
+      label={`Oferta: ${label}`}
+      tone="pink"
+      className="max-w-[200px] truncate"
+      title={`Precio con la oferta «${label}»`}
+    />
   );
 }

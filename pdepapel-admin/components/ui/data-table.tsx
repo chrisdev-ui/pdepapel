@@ -69,6 +69,8 @@ interface DataTableProps<TData, TValue> {
     }[];
   }[];
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
+  /** Texto del buscador; permite a la página ampliar los datos mientras se busca. */
+  onGlobalFilterChange?: (value: string) => void;
   /** Acciones para las filas seleccionadas; aparecen en la barra flotante. */
   bulkActions?: (table: ReactTable<TData>) => React.ReactNode;
   rowSelection?: Record<string, boolean>;
@@ -98,6 +100,7 @@ export function DataTable<TData, TValue>({
   tableKey,
   filters,
   onColumnFiltersChange: onColumnFiltersChangeProp,
+  onGlobalFilterChange,
   bulkActions,
   rowSelection: controlledRowSelection,
   onRowSelectionChange: controlledOnRowSelectionChange,
@@ -137,6 +140,10 @@ export function DataTable<TData, TValue>({
   }>(tableState.pagination);
 
   const rowSelection = controlledRowSelection ?? internalRowSelection;
+
+  useEffect(() => {
+    onGlobalFilterChange?.(globalFilter);
+  }, [globalFilter, onGlobalFilterChange]);
 
   const setRowSelection: OnChangeFn<RowSelectionState> = (updaterOrValue) => {
     const newSelection =

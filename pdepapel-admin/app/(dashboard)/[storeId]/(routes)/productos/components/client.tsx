@@ -32,6 +32,7 @@ import {
   FileDown,
   FileUp,
   Layers,
+  ListChecks,
   Plus,
 } from "lucide-react";
 import Link from "next/link";
@@ -55,6 +56,8 @@ interface ProductClientProps {
   taxonomies: BulkTaxonomies;
   /** Umbral de stock crítico de la tienda; null usa el de la aplicación. */
   lowStockThreshold: number | null;
+  /** URL pública de la tienda, para «Ver en la tienda». */
+  storeUrl?: string | null;
 }
 
 const VIEW_PARAM = "vista";
@@ -65,6 +68,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
   suppliers,
   taxonomies,
   lowStockThreshold,
+  storeUrl,
 }) => {
   const router = useRouter();
   const pathname = usePathname() ?? "";
@@ -76,11 +80,21 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  // Modo selección en celular: las tarjetas muestran su casilla.
+  const [selectMode, setSelectMode] = useState(false);
+  // Con texto en el buscador se busca en TODAS las vistas, no solo en la pestaña.
+  const [search, setSearch] = useState("");
   const requested = searchParams.get(VIEW_PARAM);
   // La URL manda; el estado local solo cubre el hueco hasta que Next
   // refleja el replaceState.
-  const requestedView: ProductView = isProductView(requested) ? requested : DEFAULT_VIEW;
-  const [selected, setSelected] = useState<{ base: ProductView; view: ProductView } | null>(null);
+  const requestedView: ProductView = isProductView(requested)
+    ? requested
+    : DEFAULT_VIEW;
+  const [selected, setSelected] = useState<{
+    base: ProductView;
+    view: ProductView;
+  } | null>(null);
   const view = selected?.base === requestedView ? selected.view : requestedView;
 
   const fetchCatalogData = useCallback(async () => {
@@ -107,10 +121,9 @@ const ProductClient: React.FC<ProductClientProps> = ({
         item.productGroup &&
         unique.set(item.productGroup.id, item.productGroup),
     );
-    return Array.from(unique.values()).map((g) => ({
-      label: g.name,
-      value: g.id,
-    }));
+    return Array.from(unique.values())
+      .sort((a, b) => a.name.localeCompare(b.name, "es"))
+      .map((g) => ({ label: g.name, value: g.id }));
   }, [data]);
   const categoryFilterOptions = useMemo(() => {
     const names = new Set(
@@ -141,13 +154,17 @@ const ProductClient: React.FC<ProductClientProps> = ({
       ).length;
     return result;
   }, [data, threshold]);
+  const searching = search.trim().length > 0;
   const rows = useMemo(
-    () => data.filter((p) => productMatchesView(p, view, threshold)),
-    [data, view, threshold],
+    () =>
+      searching
+        ? data
+        : data.filter((p) => productMatchesView(p, view, threshold)),
+    [data, view, threshold, searching],
   );
   const columns = useMemo(
-    () => buildColumns(storeId, threshold),
-    [storeId, threshold],
+    () => buildColumns(storeId, threshold, storeUrl),
+    [storeId, threshold, storeUrl],
   );
 
   const setView = (next: ProductView) => {
@@ -171,15 +188,25 @@ const ProductClient: React.FC<ProductClientProps> = ({
             Productos
           </h1>
           <p className="text-sm text-muted-foreground">
-            {counts.activos} activos · {counts["sin-completar"]} sin completar ·{" "}
-            {counts["sin-identificador"]} sin identificador ·{" "}
-            {counts["imagen-rota"]} con imagen rota · {counts.proximamente}{" "}
-            próximamente · {counts["stock-critico"]} con stock crítico ·{" "}
-            {counts.agotados} agotados · {counts.archivados} archivados.
+            {counts.activos} a la venta · {counts.agotados} agotados ·{" "}
+            {counts["stock-critico"]} con stock crítico · {counts.archivados}{" "}
+            archivados.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <RefreshButton />
+          <Button
+            type="button"
+            variant={selectMode ? "secondary" : "outline"}
+            className="sm:hidden"
+            onClick={() => {
+              if (selectMode) setRowSelection({});
+              setSelectMode((value) => !value);
+            }}
+          >
+            <ListChecks className="mr-2 h-4 w-4" aria-hidden="true" />
+            {selectMode ? "Listo" : "Seleccionar"}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -253,7 +280,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
         className="flex max-w-full gap-1 overflow-x-auto rounded-full border bg-white p-1"
       >
         {PRODUCT_VIEWS.map((item) => {
-          const active = item.id === view;
+          const active = item.id === view && !searching;
           return (
             <button
               key={item.id}
@@ -281,19 +308,32 @@ const ProductClient: React.FC<ProductClientProps> = ({
           );
         })}
       </div>
+      {searching && (
+        <p className="text-xs text-muted-foreground" role="status">
+          Buscando en todas las vistas, incluidos los archivados. Borra el texto
+          para volver a «{PRODUCT_VIEWS.find((v) => v.id === view)?.label}».
+        </p>
+      )}
 
       <DataTable
         tableKey={Models.Products}
-        searchPlaceholder="Buscar por nombre, SKU o grupo…"
+        searchPlaceholder="Nombre, SKU, GTIN o grupo…"
         columns={columns}
         data={rows}
         getRowId={(row) => row.id}
         onRowClick={(row) => router.push(`/${storeId}/productos/${row.id}`)}
+        onGlobalFilterChange={setSearch}
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
         renderMobileCard={(row) => (
           <ProductMobileCard
             product={row.original}
             storeId={storeId}
             lowStockThreshold={threshold}
+            storeUrl={storeUrl}
+            selectable={selectMode}
+            selected={row.getIsSelected()}
+            onSelectedChange={(checked) => row.toggleSelected(checked)}
           />
         )}
         filters={[
@@ -346,12 +386,14 @@ const ProductClient: React.FC<ProductClientProps> = ({
                 title: "Nada en esta vista",
                 description:
                   view === "sin-completar"
-                    ? "Todos los productos activos están listos para vender."
+                    ? "Todos los productos a la venta están listos para vender."
                     : view === "imagen-rota"
-                      ? "Todas las imágenes de los productos activos existen en Cloudinary; el cron diario vuelve a revisarlas."
+                      ? "Todas las imágenes de los productos a la venta existen en Cloudinary; el cron diario vuelve a revisarlas."
                       : view === "sin-identificador"
-                        ? "Todos los productos activos tienen GTIN o la marca «No tiene identificador global»."
-                        : "Cuando un producto entre en este estado aparecerá aquí.",
+                        ? "Todos los productos a la venta tienen GTIN o la marca «No tiene código de barras»."
+                        : view === "en-oferta"
+                          ? "Ningún producto tiene una oferta vigente. Las ofertas se crean en Promociones."
+                          : "Cuando un producto entre en este estado aparecerá aquí.",
               }
         }
       />

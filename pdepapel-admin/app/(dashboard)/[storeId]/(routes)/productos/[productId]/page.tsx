@@ -7,7 +7,7 @@ import {
   ProductWorkspaceHeader,
 } from "./components/product-workspace";
 import { NEW_PRODUCT_SEGMENT } from "@/lib/product-routes";
-import { getProduct } from "./server/get-product";
+import { getProduct, getProductSeed } from "./server/get-product";
 
 export const metadata: Metadata = {
   title: "Producto | PdePapel Admin",
@@ -15,8 +15,10 @@ export const metadata: Metadata = {
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: { productId: string; storeId: string };
+  searchParams?: { desde?: string };
 }) {
   const {
     product,
@@ -35,6 +37,12 @@ export default async function ProductPage({
 
   if (!product && params.productId !== NEW_PRODUCT_SEGMENT) notFound();
 
+  // «Duplicar» desde la lista o la ficha: siembra el formulario de creación.
+  const seed =
+    !product && searchParams?.desde
+      ? await getProductSeed(params.storeId, searchParams.desde)
+      : null;
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
       {product ? (
@@ -45,11 +53,12 @@ export default async function ProductPage({
       ) : (
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-primary">
-            Nuevo producto
+            {seed ? `Copia de «${seed.sourceName}»` : "Nuevo producto"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Sube la foto, completa nombre, precio y categoría; la lista de la
-            derecha te dice qué falta para venderlo.
+            {seed
+              ? "Se copiaron nombre, precio, costo, clasificación y descripción. Sube fotos nuevas y revisa el stock inicial; el SKU y la URL se generan al guardar."
+              : "Sube la foto, completa nombre, precio y categoría; la lista de la derecha te dice qué falta para venderlo."}
           </p>
         </div>
       )}
@@ -68,6 +77,7 @@ export default async function ProductPage({
             productGroup={productGroup}
             productGroups={productGroups}
             activePresale={activePresale}
+            seed={seed}
           />
         </div>
         <ProductWorkspaceAside product={product} storeId={params.storeId} />

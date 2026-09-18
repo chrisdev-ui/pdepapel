@@ -125,16 +125,17 @@ export function getProductShape(product: { isKit?: boolean | null; productGroupI
   return { id: "individual", label: "Individual" };
 }
 
-export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "imagen-rota" | "proximamente" | "stock-critico" | "agotados" | "archivados" | "todos";
+export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "imagen-rota" | "proximamente" | "stock-critico" | "agotados" | "en-oferta" | "archivados" | "todos";
 
 export const PRODUCT_VIEWS: { id: ProductView; label: string }[] = [
-  { id: "activos", label: "Activos" },
+  { id: "activos", label: "A la venta" },
   { id: "sin-completar", label: "Sin completar" },
   { id: "sin-identificador", label: "Sin identificador" },
   { id: "imagen-rota", label: "Imagen rota" },
   { id: "proximamente", label: "Próximamente" },
   { id: "stock-critico", label: "Stock crítico" },
   { id: "agotados", label: "Agotados" },
+  { id: "en-oferta", label: "En oferta" },
   { id: "archivados", label: "Archivados" },
   { id: "todos", label: "Todos" },
 ];
@@ -152,13 +153,15 @@ export function productLacksIdentifier(product: Pick<ReadinessInput, "gtin" | "h
 }
 
 export function productMatchesView(
-  product: { isArchived: boolean; stock: number } & Omit<ReadinessInput, "description">,
+  product: { isArchived: boolean; stock: number; hasDiscount?: boolean } & Omit<ReadinessInput, "description">,
   view: ProductView,
   lowStockThreshold = DEFAULT_LOW_STOCK_THRESHOLD,
 ): boolean {
   switch (view) {
     case "todos":
       return true;
+    case "en-oferta":
+      return !product.isArchived && product.hasDiscount === true;
     case "archivados":
       return product.isArchived;
     case "activos":

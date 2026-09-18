@@ -1,4 +1,5 @@
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
@@ -66,6 +67,7 @@ export default async function ProductsPage({
         suppliers={suppliers}
         taxonomies={{ categories, sizes, colors, designs }}
         lowStockThreshold={store?.lowStockThreshold ?? null}
+        storeUrl={env.FRONTEND_STORE_URL}
       />
     </div>
   );
