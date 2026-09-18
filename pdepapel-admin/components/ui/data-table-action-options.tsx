@@ -48,8 +48,7 @@ export type Action =
   | "mark-as-shipped"
   | "mark-as-in-transit"
   | "mark-as-delivered"
-  | "mark-as-returned"
-  | "invalidate";
+  | "mark-as-returned";
 
 interface DataTableActionOptionsProps<TData> {
   table: Table<TData>;
@@ -123,8 +122,9 @@ export function DataTableActionOptions<TData>({
           "mark-as-delivered",
           "mark-as-returned",
         ];
+      // Cupones tiene su propio menú en lote (`CouponBulkActions`).
       case Models.Coupons:
-        return ["delete", "invalidate", "export"];
+        return [];
       default:
         return ["delete", "export"];
     }
@@ -269,25 +269,6 @@ export function DataTableActionOptions<TData>({
           });
           table.resetRowSelection();
           break;
-        case "invalidate":
-          await makeApiCall<{ ids: string[] }>(
-            apiRoute,
-            "PATCH",
-            {
-              ids: table
-                .getFilteredSelectedRowModel()
-                .rows.map((row) => (row.original as { id: string }).id),
-            },
-          );
-          router.refresh();
-          toast({
-            description: `${table.getFilteredSelectedRowModel().rows.length} elemento(s) ${getActionDescription(
-              action,
-            )}`,
-            variant: "success",
-          });
-          table.resetRowSelection();
-          break;
       }
     } catch (error) {
       toast({
@@ -407,8 +388,6 @@ export function DataTableActionOptions<TData>({
       case "mark-as-delivered":
       case "mark-as-returned":
         return "cambiado(s) con éxito";
-      case "invalidate":
-        return "invalidado(s) con éxito";
       default:
         return "acción no soportada";
     }
@@ -590,20 +569,6 @@ export function DataTableActionOptions<TData>({
             >
               Eliminar imágenes
               <ImageOff className="h-4 w-4" aria-hidden="true" />
-            </DropdownMenuItem>
-          )}
-          {routeActions.includes("invalidate") && (
-            <DropdownMenuItem
-              className={cn(
-                "cursor-pointer",
-                {
-                  "cursor-wait": isLoading,
-                },
-              )}
-              onClick={() => setAction("invalidate")}
-            >
-              Invalidar
-              <Ban className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {model === Models.Orders && (

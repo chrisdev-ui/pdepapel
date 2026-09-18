@@ -150,14 +150,23 @@ describe("coupon routes", () => {
     expect((await PUT(json("PUT"), { params: itemParams })).status).toBe(409);
   });
 
-  it("bulk DELETE uses the same order guard as the single delete", async () => {
+  it("bulk DELETE deletes the coupons without orders and reports the skipped ones", async () => {
     mocks.couponFindMany.mockResolvedValue([
       { id: "a", code: "A", _count: { orders: 0 } },
       { id: "b", code: "B", _count: { orders: 1 } },
     ]);
+    mocks.couponDeleteMany.mockResolvedValue({ count: 1 });
     const response = await bulkDelete(json("DELETE", { ids: ["a", "b"] }), { params });
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining("El cupón B tiene pedidos asociados") });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: 1, skipped: [{ id: "b", code: "B", ordersCount: 1 }] });
+    expect(mocks.couponDeleteMany).toHaveBeenCalledWith({ where: { storeId: "store-1", id: { in: ["a"] } } });
+  });
+
+  it("bulk DELETE with only referenced coupons deletes nothing and still answers 200", async () => {
+    mocks.couponFindMany.mockResolvedValue([{ id: "b", code: "B", _count: { orders: 2 } }]);
+    const response = await bulkDelete(json("DELETE", { ids: ["b"] }), { params });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: 0, skipped: [{ id: "b", code: "B", ordersCount: 2 }] });
     expect(mocks.couponDeleteMany).not.toHaveBeenCalled();
   });
 

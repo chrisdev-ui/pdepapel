@@ -1,12 +1,13 @@
 "use client";
 
 import axios from "axios";
-import { MoreHorizontal, Plus, RefreshCw } from "lucide-react";
+import { ListChecks, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/ui/data-table";
 import {
   DropdownMenu,
@@ -22,6 +23,7 @@ import { PROMOTION_STATUS, formatDiscount, getPromotionStatus, summarizePromotio
 import { cn, currencyFormatter } from "@/lib/utils";
 
 import { CouponBatchDialog } from "../../cupones/components/coupon-batch-dialog";
+import { CouponBulkActions } from "../../cupones/components/coupon-bulk-actions";
 import { CellAction as CouponCellAction } from "../../cupones/components/cell-action";
 import { buildCouponColumns, CouponStatusBadge, type CouponColumn } from "../../cupones/components/columns";
 import { CellAction as OfferCellAction } from "../../ofertas/components/cell-action";
@@ -57,6 +59,8 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
   const storeId = String(params.storeId);
   const copy = COPY[props.kind];
   const [validating, setValidating] = useState(false);
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [selectMode, setSelectMode] = useState(false);
 
   const summary = useMemo(() => summarizePromotions(props.data.map((item) => getPromotionStatus(item))), [props.data]);
   const offerColumns = useMemo(() => buildOfferColumns(storeId), [storeId]);
@@ -98,6 +102,20 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         <RefreshButton />
+        {props.kind === "cupones" && (
+          <Button
+            type="button"
+            variant={selectMode ? "secondary" : "outline"}
+            className="sm:hidden"
+            onClick={() => {
+              if (selectMode) setRowSelection({});
+              setSelectMode((value) => !value);
+            }}
+          >
+            <ListChecks className="mr-2 h-4 w-4" aria-hidden="true" />
+            {selectMode ? "Listo" : "Seleccionar"}
+          </Button>
+        )}
         {props.kind === "cupones" && <CouponBatchDialog />}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -160,23 +178,36 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
           getRowId={(row) => row.id}
           onRowClick={(row) => router.push(`/${storeId}/cupones/${row.id}`)}
           filters={[{ columnKey: "status", title: "Estado", options: statusFilter }]}
+          rowSelection={rowSelection}
+          onRowSelectionChange={setRowSelection}
+          bulkActions={(table) => <CouponBulkActions table={table} />}
           renderMobileCard={(row) => (
-            <article className="flex flex-col gap-2 rounded-xl border bg-white p-3.5 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <Link href={`/${storeId}/cupones/${row.original.id}`} className="font-mono text-sm font-bold text-primary">
-                  {row.original.code}
-                </Link>
-                <CouponStatusBadge coupon={row.original} />
-              </div>
-              <p className="text-sm">
-                <span className="font-semibold">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {row.original.usedCount} de {row.original.maxUses ?? "∞"} usos
-                </span>
-              </p>
-              <div className="flex items-center justify-end">
-                <CouponCellAction data={row.original} />
+            <article className={cn("flex gap-3 rounded-xl border bg-white p-3.5 shadow-sm", row.getIsSelected() && "border-primary")}>
+              {selectMode && (
+                <Checkbox
+                  className="mt-0.5"
+                  checked={row.getIsSelected()}
+                  onCheckedChange={(checked) => row.toggleSelected(checked === true)}
+                  aria-label={`Seleccionar ${row.original.code}`}
+                />
+              )}
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <Link href={`/${storeId}/cupones/${row.original.id}`} className="font-mono text-sm font-bold text-primary">
+                    {row.original.code}
+                  </Link>
+                  <CouponStatusBadge coupon={row.original} />
+                </div>
+                <p className="text-sm">
+                  <span className="font-semibold">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {row.original.usedCount} de {row.original.maxUses ?? "∞"} {row.original.maxUses === 1 ? "uso" : "usos"}
+                  </span>
+                </p>
+                <div className="flex items-center justify-end">
+                  <CouponCellAction data={row.original} />
+                </div>
               </div>
             </article>
           )}

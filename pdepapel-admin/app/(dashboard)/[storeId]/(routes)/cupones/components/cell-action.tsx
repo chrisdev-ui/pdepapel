@@ -1,6 +1,5 @@
 "use client";
 
-import { Coupon } from "@prisma/client";
 import axios from "axios";
 import { Ban, Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -14,8 +13,10 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { getPromotionStatus } from "@/lib/promotion-status";
 
+import type { CouponColumn } from "./columns";
+
 interface CellActionProps {
-  data: Coupon;
+  data: CouponColumn;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
@@ -27,6 +28,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [open, setOpen] = useState(false);
   const storeId = String(params.storeId);
   const status = getPromotionStatus(data);
+  const canDelete = data.ordersCount === 0;
 
   const onCopy = async (value: string, message: string) => {
     try {
@@ -79,7 +81,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         onConfirm={onDelete}
         loading={loading}
         title={`¿Eliminar el cupón ${data.code}?`}
-        description="Solo se puede eliminar un cupón sin pedidos asociados. Si ya se usó, desactívalo en su lugar."
+        description="Nadie lo ha usado, así que se borra del todo. Esta acción no se puede deshacer."
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -101,9 +103,16 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             <Ban className="mr-2 h-4 w-4" aria-hidden="true" />
             Desactivar
           </DropdownMenuItem>
-          <DropdownMenuItem className="cursor-pointer" onClick={() => setOpen(true)}>
+          <DropdownMenuItem className="cursor-pointer" onClick={() => setOpen(true)} disabled={!canDelete}>
             <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
-            Eliminar
+            <span className="flex flex-col">
+              Eliminar
+              {!canDelete && (
+                <span className="text-xs text-muted-foreground">
+                  {data.ordersCount} {data.ordersCount === 1 ? "pedido lo referencia" : "pedidos lo referencian"}
+                </span>
+              )}
+            </span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

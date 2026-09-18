@@ -12,7 +12,7 @@ import { currencyFormatter } from "@/lib/utils";
 import { TintBadge } from "../../pedidos/components/order-badges";
 import { CellAction } from "./cell-action";
 
-export type CouponColumn = Coupon;
+export type CouponColumn = Coupon & { ordersCount: number };
 
 const SHORT_DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Bogota" });
 

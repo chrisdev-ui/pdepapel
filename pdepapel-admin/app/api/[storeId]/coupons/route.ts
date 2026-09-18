@@ -83,7 +83,7 @@ function parseIds(body: unknown): string[] {
   return Array.from(new Set(ids as string[]));
 }
 
-/** Borra varios cupones; ninguno puede tener pedidos asociados (misma regla que el borrado individual). */
+/** Borra los cupones sin pedidos y devuelve los que se omiten por tenerlos; nunca falla el lote entero. */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { storeId: string } },
@@ -97,7 +97,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    await prismadb.$transaction(async (tx) => {
+    const result = await prismadb.$transaction(async (tx) => {
       const coupons = await tx.coupon.findMany({
         where: { id: { in: ids }, storeId: params.storeId },
         select: { id: true, code: true, _count: { select: { orders: true } } },
@@ -107,17 +107,17 @@ export async function DELETE(
         throw ErrorFactory.NotFound("Algunos cupones no se han encontrado o no pertenecen a esta tienda");
       }
 
-      const used = coupons.find((coupon) => coupon._count.orders > 0);
-      if (used) {
-        throw ErrorFactory.Conflict(
-          `El cupón ${used.code} tiene pedidos asociados y no puede eliminarse. Desactívalo para que nadie más lo use.`,
-        );
+      const skipped = coupons
+        .filter((coupon) => coupon._count.orders > 0)
+        .map((coupon) => ({ id: coupon.id, code: coupon.code, ordersCount: coupon._count.orders }));
+      const deletable = coupons.filter((coupon) => coupon._count.orders === 0).map((coupon) => coupon.id);
+      if (deletable.length > 0) {
+        await tx.coupon.deleteMany({ where: { storeId: params.storeId, id: { in: deletable } } });
       }
-
-      await tx.coupon.deleteMany({ where: { storeId: params.storeId, id: { in: ids } } });
+      return { deleted: deletable.length, skipped };
     });
 
-    return NextResponse.json({ deleted: ids.length }, { headers: CACHE_HEADERS.NO_CACHE });
+    return NextResponse.json(result, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_DELETE");
   }

@@ -477,13 +477,13 @@ export function DataTable<TData, TValue>({
         <div
           role="region"
           aria-label={`${selectedCount} filas seleccionadas`}
-          className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full bg-primary py-2 pl-4 pr-2 text-sm text-primary-foreground shadow-xl"
+          className="sticky bottom-4 z-20 mx-auto flex w-full max-w-full flex-wrap items-center gap-2 rounded-2xl bg-primary p-2 pl-4 text-sm text-primary-foreground shadow-xl sm:w-fit sm:rounded-full sm:py-2"
         >
           <span className="font-semibold">
             {selectedCount} {selectedCount === 1 ? "seleccionado" : "seleccionados"}
           </span>
-          <span className="h-5 w-px bg-white/20" aria-hidden="true" />
-          <div className="flex flex-wrap items-center gap-1 [&_button]:border-white/30 [&_button]:bg-transparent [&_button]:text-primary-foreground [&_button]:shadow-none [&_button:hover]:bg-white/10 [&_button:hover]:text-primary-foreground">
+          <span className="hidden h-5 w-px bg-white/20 sm:block" aria-hidden="true" />
+          <div className="order-last flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto [&_button]:border-white/30 [&_button]:bg-transparent [&_button]:text-primary-foreground [&_button]:shadow-none [&_button:hover]:bg-white/10 [&_button:hover]:text-primary-foreground">
             {bulkActions ? (
               bulkActions(table)
             ) : (
@@ -493,7 +493,7 @@ export function DataTable<TData, TValue>({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="rounded-full bg-white/10 text-primary-foreground hover:bg-white/20 hover:text-primary-foreground"
+            className="ml-auto rounded-full bg-white/10 text-primary-foreground hover:bg-white/20 hover:text-primary-foreground sm:ml-0"
             aria-label="Quitar selección"
             onClick={() => table.resetRowSelection()}
           >
