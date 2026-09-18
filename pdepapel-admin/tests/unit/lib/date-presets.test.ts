@@ -34,4 +34,15 @@ describe("getDatePresets", () => {
     expect(firstPresets[0].from).not.toEqual(secondPresets[0].from);
     expect(format(secondPresets[0].from, "yyyy-MM-dd")).toBe("2026-08-03");
   });
+
+  it("offers the coming weekend as whole days", () => {
+    const friday = new Date("2026-09-18T15:00:00");
+    const weekend = getDatePresets(friday).find((preset) => preset.name === "Este fin de semana");
+    expect(weekend?.from.getDay()).toBe(6);
+    expect(weekend?.to.getDay()).toBe(0);
+    expect(weekend?.from.getDate()).toBe(19);
+    expect(weekend?.to.getDate()).toBe(20);
+    const sunday = new Date("2026-09-20T09:00:00");
+    expect(getDatePresets(sunday).find((preset) => preset.name === "Este fin de semana")?.from.getDate()).toBe(26);
+  });
 });

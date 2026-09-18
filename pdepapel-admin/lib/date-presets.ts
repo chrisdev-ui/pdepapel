@@ -17,6 +17,13 @@ export interface CustomDate {
   to: Date;
 }
 
+/** Sábado de esta semana, o el que viene si ya pasó el domingo. */
+function nextWeekendStart(referenceDate: Date): Date {
+  const day = referenceDate.getDay();
+  const offset = day === 0 ? 6 : 6 - day;
+  return addDays(referenceDate, offset);
+}
+
 export function getDatePresets(referenceDate = new Date()): Array<CustomDate> {
   return [
     {
@@ -28,6 +35,11 @@ export function getDatePresets(referenceDate = new Date()): Array<CustomDate> {
       name: "Mañana",
       from: startOfDay(addDays(referenceDate, 1)),
       to: endOfDay(addDays(referenceDate, 1)),
+    },
+    {
+      name: "Este fin de semana",
+      from: startOfDay(nextWeekendStart(referenceDate)),
+      to: endOfDay(addDays(nextWeekendStart(referenceDate), 1)),
     },
     {
       name: "Esta semana",

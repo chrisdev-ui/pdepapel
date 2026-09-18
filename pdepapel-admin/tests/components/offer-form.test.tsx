@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OfferForm } from "@/app/(dashboard)/[storeId]/(routes)/ofertas/[offerId]/components/offer-form";
 
-const mocks = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), toast: vi.fn(), patch: vi.fn(), post: vi.fn(), del: vi.fn() }));
+const mocks = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), toast: vi.fn(), get: vi.fn(), patch: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ storeId: "store-1", offerId: "o1" }),
@@ -15,19 +15,19 @@ vi.mock("next/image", () => ({ default: (props: React.ComponentProps<"img">) => 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("@/hooks/use-form-persist", () => ({ useFormPersist: () => ({ clearStorage: vi.fn() }) }));
 vi.mock("@/hooks/use-form-validation-toast", () => ({ useFormValidationToast: () => undefined }));
-vi.mock("axios", () => ({ default: { patch: mocks.patch, post: mocks.post, delete: mocks.del } }));
+vi.mock("axios", () => ({ default: { get: mocks.get, patch: mocks.patch, post: mocks.post, put: mocks.put, delete: mocks.del } }));
+
+const termo = { id: "p1", name: "Termo lila", sku: "T-1", price: 60000, stock: 3, categoryId: "c1", categoryName: "Termos", productGroupId: "g1", imageUrl: null, overlaps: [] };
+const cuaderno = { id: "p3", name: "Cuaderno", sku: "C-1", price: 8000, stock: 10, categoryId: "c2", categoryName: "Cuadernos", productGroupId: null, imageUrl: null, overlaps: [] };
+const agenda = { id: "p4", name: "Agenda A5", sku: "A-1", price: 23000, stock: 2, categoryId: "c2", categoryName: "Agendas", productGroupId: null, imageUrl: null, overlaps: [{ offerId: "o9", name: "Hasta agotar", type: "FIXED" as const, amount: 5000, after: 18000 }] };
 
 const picker = {
-  products: [
-    { id: "p1", name: "Termo lila", price: 60000, stock: 3, categoryId: "c1", productGroupId: "g1", categoryName: "Termos", imageUrl: null },
-    { id: "p2", name: "Termo negro", price: 60000, stock: 0, categoryId: "c1", productGroupId: "g1", categoryName: "Termos", imageUrl: null },
-    { id: "p3", name: "Cuaderno", price: 8000, stock: 10, categoryId: "c2", productGroupId: null, categoryName: "Cuadernos", imageUrl: null },
-  ],
   categories: [
     { id: "c1", name: "Termos", typeName: "Accesorios", productCount: 2 },
     { id: "c2", name: "Cuadernos", typeName: "Papelería", productCount: 1 },
   ],
   productGroups: [{ id: "g1", name: "Termo Owala", productCount: 2 }],
+  selectedProducts: [termo],
 };
 
 const offer = {
@@ -47,48 +47,80 @@ const offer = {
   productGroups: [],
 };
 
+const summary = { affected: 1, sellable: 1, byProducts: 1, byCategories: 0, byGroups: 0, overlaps: { count: 0, names: [] }, free: { count: 0, names: [] }, sample: { name: "Termo lila", price: 60000 } };
+
 describe("OfferForm", () => {
+  beforeAll(() => {
+    Object.defineProperties(HTMLElement.prototype, {
+      hasPointerCapture: { value: () => false, configurable: true },
+      releasePointerCapture: { value: () => undefined, configurable: true },
+      setPointerCapture: { value: () => undefined, configurable: true },
+    });
+    Object.defineProperty(Element.prototype, "scrollIntoView", { value: () => undefined, configurable: true });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.get.mockResolvedValue({ data: { products: [termo, cuaderno, agenda], hasMore: false } });
+    mocks.post.mockImplementation(async (url: string) => (url.endsWith("/scope-summary") ? { data: summary } : { data: {} }));
     mocks.patch.mockResolvedValue({ data: {} });
-    mocks.post.mockResolvedValue({ data: {} });
   });
   afterEach(cleanup);
 
-  it("marks the scope once, hides out-of-stock products until asked and warns about free products", () => {
+  it("shows the chosen products as chips, searches the API and flags overlaps and free products", async () => {
     render(<OfferForm initialData={offer} picker={picker} />);
-
-    expect(screen.getByRole("heading", { name: "Alcance" })).toBeInTheDocument();
-    expect(screen.queryByText("Termo negro")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Incluir agotados" }));
-    expect(screen.getByText("Termo negro")).toBeInTheDocument();
-    // $ 9.000 fijos sobre un cuaderno de $ 8.000 lo dejarían gratis: se avisa solo si está en el alcance.
-    expect(screen.queryByText(/Dejaría en \$ 0/)).toBeNull();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Cuaderno" }));
-    expect(screen.getByText(/Dejaría en \$ 0 a Cuaderno/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /A qué aplica/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quitar Termo lila" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Cuaderno" })).toBeInTheDocument());
+    expect(mocks.get).toHaveBeenCalledWith("/api/store-1/offers/scope-search", { params: { q: "", agotados: "0", excluir: "o1" } });
+    // $ 9.000 fijos sobre un cuaderno de $ 8.000 lo dejarían gratis: no se puede marcar.
+    expect(screen.getByRole("checkbox", { name: "Cuaderno" })).toBeDisabled();
+    expect(screen.getByText("Quedaría en $ 0")).toBeInTheDocument();
+    expect(screen.getByText(/Ya en «Hasta agotar»/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("1 producto con precio rebajado")).toBeInTheDocument());
   });
 
-  it("merges 'select the filtered' into the existing selection instead of replacing it", async () => {
+  it("adds a searched product and sends the merged scope", async () => {
     render(<OfferForm initialData={offer} picker={picker} />);
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Buscar en productos" }), { target: { value: "cuaderno" } });
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar los 1 filtrados" }));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Agenda A5" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("checkbox", { name: "Agenda A5" }));
+    expect(screen.getByRole("button", { name: "Quitar Agenda A5" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
-
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1));
-    const payload = mocks.patch.mock.calls[0][1];
-    expect(payload.productIds.sort()).toEqual(["p1", "p3"]);
+    const [url, payload] = mocks.patch.mock.calls[0];
+    expect(url).toBe("/api/store-1/offers/o1");
+    expect(payload.productIds.sort()).toEqual(["p1", "p4"]);
     expect(payload).toMatchObject({ label: null, startDate: "2026-09-08", endDate: "2026-12-30" });
     expect(mocks.push).toHaveBeenCalledWith("/store-1/promociones");
   });
 
   it("refuses to save once the last target is removed", async () => {
     render(<OfferForm initialData={offer} picker={picker} />);
-
-    fireEvent.click(screen.getByRole("checkbox", { name: "Termo lila" }));
+    fireEvent.click(screen.getByRole("button", { name: "Quitar Termo lila" }));
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
-
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Elige al menos un producto, grupo o subcategoría"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Elige al menos un producto, subcategoría o grupo"));
     expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it("empties the amount when the discount type changes", async () => {
+    render(<OfferForm initialData={offer} picker={picker} />);
+    expect(screen.getByPlaceholderText("$ 5.000")).toHaveDisplayValue(/9\.000/);
+    fireEvent.click(screen.getByRole("radio", { name: "Porcentaje" }));
+    expect(screen.getByPlaceholderText("10")).toHaveValue(null);
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(screen.getByText("Escribe el descuento")).toBeInTheDocument());
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it("starts a duplicate with the source scope and creates a new offer", async () => {
+    const user = userEvent.setup();
+    render(<OfferForm initialData={null} picker={picker} seed={{ name: "Hasta agotar (copia)", label: "ÚLTIMAS", type: "FIXED", amount: 9000, productIds: ["p1"], categoryIds: [], productGroupIds: [] }} />);
+    expect(screen.getByRole("heading", { name: "Nueva oferta (copia)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quitar Termo lila" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Hasta agotar (copia)")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Selecciona un rango de fechas" }));
+    await user.click(await screen.findByRole("button", { name: "Este mes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crear oferta" }));
+    await waitFor(() => expect(mocks.post).toHaveBeenCalledWith("/api/store-1/offers", expect.objectContaining({ name: "Hasta agotar (copia)", label: "ÚLTIMAS", productIds: ["p1"] })));
   });
 });

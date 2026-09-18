@@ -1,25 +1,12 @@
+import { loadScopeProducts, type ScopeProductRow } from "@/lib/offer-scope";
 import prismadb from "@/lib/prismadb";
 
 /**
- * Lo que el formulario de oferta necesita para elegir destinos: nada de
- * costos, GTIN ni kardex (antes se enviaba el catálogo completo al cliente).
+ * Lo que el formulario necesita de entrada: subcategorías y grupos (listas cortas)
+ * y los productos ya elegidos. Los demás productos se buscan por la API de a 20.
  */
-export async function getOfferPickerData(storeId: string) {
-  const [products, categories, productGroups] = await Promise.all([
-    prismadb.product.findMany({
-      where: { storeId, isArchived: false },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        stock: true,
-        categoryId: true,
-        productGroupId: true,
-        category: { select: { name: true } },
-        images: { select: { url: true }, where: { isMain: true }, take: 1 },
-      },
-      orderBy: { name: "asc" },
-    }),
+export async function getOfferPickerData(storeId: string, selectedProductIds: string[] = [], excludeOfferId: string | null = null) {
+  const [categories, productGroups, selectedProducts] = await Promise.all([
     prismadb.category.findMany({
       where: { storeId, isArchived: false },
       select: { id: true, name: true, type: { select: { name: true } }, _count: { select: { products: true } } },
@@ -30,21 +17,13 @@ export async function getOfferPickerData(storeId: string) {
       select: { id: true, name: true, _count: { select: { products: true } } },
       orderBy: { name: "asc" },
     }),
+    loadScopeProducts(prismadb, storeId, selectedProductIds, excludeOfferId),
   ]);
 
   return {
-    products: products.map((product) => ({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      stock: product.stock,
-      categoryId: product.categoryId,
-      productGroupId: product.productGroupId,
-      categoryName: product.category.name,
-      imageUrl: product.images.at(0)?.url ?? null,
-    })),
     categories: categories.map((category) => ({ id: category.id, name: category.name, typeName: category.type.name, productCount: category._count.products })),
     productGroups: productGroups.map((group) => ({ id: group.id, name: group.name, productCount: group._count.products })),
+    selectedProducts: selectedProducts as ScopeProductRow[],
   };
 }
 
