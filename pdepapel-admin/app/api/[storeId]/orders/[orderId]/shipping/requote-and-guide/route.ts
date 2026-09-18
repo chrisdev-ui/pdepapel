@@ -2,9 +2,13 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { describeGuideBlock } from "@/lib/order-transitions";
 import prismadb from "@/lib/prismadb";
 import { withResourceLock, ResourceBusyError } from "@/lib/resource-lock";
-import { createGuideForOrder, requoteCartShipping } from "@/lib/shipping-helpers";
+import {
+  createGuideForOrder,
+  requoteCartShipping,
+} from "@/lib/shipping-helpers";
 import { reconcileShippingRate } from "@/lib/shipping-rate-reconcile";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -39,10 +43,14 @@ export async function POST(
       where: { id: params.orderId, storeId: params.storeId },
       include: { shipping: true, orderItems: true },
     });
-    if (!order) throw ErrorFactory.NotFound("La orden no existe en esta tienda");
+    if (!order)
+      throw ErrorFactory.NotFound("La orden no existe en esta tienda");
     if (!order.shipping) {
       throw ErrorFactory.InvalidRequest("La orden no tiene envío asociado");
     }
+    // Crear la guía cobra: misma regla que «Crear guía ahora».
+    const guideBlock = describeGuideBlock(order.status, order.shipping.isCOD);
+    if (guideBlock) throw ErrorFactory.InvalidRequest(guideBlock);
     if (order.shipping.envioClickIdOrder) {
       throw ErrorFactory.InvalidRequest("La orden ya tiene una guía creada");
     }

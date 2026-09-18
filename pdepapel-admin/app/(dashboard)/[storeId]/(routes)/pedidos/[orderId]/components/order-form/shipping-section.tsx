@@ -1,5 +1,7 @@
 "use client";
 
+import { canCreateGuide } from "@/lib/order-transitions";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -772,7 +774,8 @@ export function ShippingSection({
               </p>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 {savedRateId === rateId && !hasGuide &&
-                  (Boolean(initialData?.shipping?.guideError) ||
+                  initialData && canCreateGuide(initialData.status, isCOD) &&
+                  (Boolean(initialData.shipping?.guideError) ||
                     (savedAgoMs !== null && savedAgoMs > QUOTE_TTL_MS)) && (
                     <RequoteAndGuideButton disabled={loading || discarding} />
                   )}

@@ -1,4 +1,9 @@
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import {
+  OrderStatus,
+  OrderType,
+  PaymentMethod,
+  ShippingStatus,
+} from "@prisma/client";
 
 /**
  * Transiciones de estado de un pedido, en un solo lugar: la API las hace
@@ -20,7 +25,10 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 /** Estados en los que el dinero ya entró: los productos son un registro histórico. */
-export const PAID_LIKE_STATUSES: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SENT];
+export const PAID_LIKE_STATUSES: OrderStatus[] = [
+  OrderStatus.PAID,
+  OrderStatus.SENT,
+];
 
 export function isPaidLike(status: OrderStatus): boolean {
   return PAID_LIKE_STATUSES.includes(status);
@@ -32,25 +40,53 @@ export interface TransitionContext {
 }
 
 const QUOTE_OPEN: OrderStatus[] = [OrderStatus.QUOTATION, OrderStatus.VIEWED];
-export const ONLINE_METHODS: PaymentMethod[] = [PaymentMethod.Bold, PaymentMethod.Wompi, PaymentMethod.PayU];
+export const ONLINE_METHODS: PaymentMethod[] = [
+  PaymentMethod.Bold,
+  PaymentMethod.Wompi,
+  PaymentMethod.PayU,
+];
 
 /** Estados a los que puede pasar un pedido desde `from`. */
-export function getAllowedTransitions(from: OrderStatus, context: TransitionContext): OrderStatus[] {
+export function getAllowedTransitions(
+  from: OrderStatus,
+  context: TransitionContext,
+): OrderStatus[] {
   const isQuote = context.type === OrderType.QUOTATION;
   const isCod = context.paymentMethod === PaymentMethod.COD;
   switch (from) {
     case OrderStatus.DRAFT:
-      return [...(isQuote ? [OrderStatus.QUOTATION] : []), OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.CANCELLED];
+      return [
+        ...(isQuote ? [OrderStatus.QUOTATION] : []),
+        OrderStatus.PENDING,
+        OrderStatus.PAID,
+        OrderStatus.CANCELLED,
+      ];
     case OrderStatus.QUOTATION:
     case OrderStatus.VIEWED:
-      return [OrderStatus.ACCEPTED, OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.REJECTED, OrderStatus.DRAFT, OrderStatus.CANCELLED];
+      return [
+        OrderStatus.ACCEPTED,
+        OrderStatus.PENDING,
+        OrderStatus.PAID,
+        OrderStatus.REJECTED,
+        OrderStatus.DRAFT,
+        OrderStatus.CANCELLED,
+      ];
     case OrderStatus.ACCEPTED:
-      return [OrderStatus.PAID, OrderStatus.PENDING, OrderStatus.REJECTED, OrderStatus.CANCELLED];
+      return [
+        OrderStatus.PAID,
+        OrderStatus.PENDING,
+        OrderStatus.REJECTED,
+        OrderStatus.CANCELLED,
+      ];
     case OrderStatus.REJECTED:
       return [OrderStatus.QUOTATION, OrderStatus.DRAFT, OrderStatus.CANCELLED];
     case OrderStatus.CREATED:
     case OrderStatus.PENDING:
-      return [OrderStatus.PAID, ...(isCod ? [OrderStatus.SENT] : []), OrderStatus.CANCELLED];
+      return [
+        OrderStatus.PAID,
+        ...(isCod ? [OrderStatus.SENT] : []),
+        OrderStatus.CANCELLED,
+      ];
     case OrderStatus.PAID:
       return [OrderStatus.SENT, OrderStatus.CANCELLED];
     case OrderStatus.SENT:
@@ -62,13 +98,20 @@ export function getAllowedTransitions(from: OrderStatus, context: TransitionCont
   }
 }
 
-export function canTransition(from: OrderStatus, to: OrderStatus, context: TransitionContext): boolean {
+export function canTransition(
+  from: OrderStatus,
+  to: OrderStatus,
+  context: TransitionContext,
+): boolean {
   if (from === to) return true;
   return getAllowedTransitions(from, context).includes(to);
 }
 
 /** Mensaje para la persona que intentó una transición no permitida. */
-export function describeForbiddenTransition(from: OrderStatus, to: OrderStatus): string {
+export function describeForbiddenTransition(
+  from: OrderStatus,
+  to: OrderStatus,
+): string {
   if (isPaidLike(from) && !isPaidLike(to) && to !== OrderStatus.CANCELLED) {
     return `Un pedido ${ORDER_STATUS_LABELS[from].toLowerCase()} solo puede pasar a enviado o cancelarse. Para revertir un pago, cancela el pedido (el inventario vuelve) y crea uno nuevo.`;
   }
@@ -91,14 +134,26 @@ export interface StatusAction {
  * pagado siempre confirma (descuenta inventario y fija la fecha de pago);
  * marcar como enviado pide guía; cancelar vive en la zona de cuidado.
  */
-export function getStatusActions(from: OrderStatus, context: TransitionContext & { quoteOpen?: boolean }): StatusAction[] {
+export function getStatusActions(
+  from: OrderStatus,
+  context: TransitionContext & { quoteOpen?: boolean },
+): StatusAction[] {
   const allowed = getAllowedTransitions(from, context);
   const isQuote = context.type === OrderType.QUOTATION;
   const isCod = context.paymentMethod === PaymentMethod.COD;
-  const isOnline = ONLINE_METHODS.includes(context.paymentMethod as PaymentMethod);
+  const isOnline = ONLINE_METHODS.includes(
+    context.paymentMethod as PaymentMethod,
+  );
   const actions: StatusAction[] = [];
-  const push = (to: OrderStatus, label: string, primary = false, confirm: StatusAction["confirm"] = null, destructive = false) => {
-    if (allowed.includes(to)) actions.push({ to, label, primary, confirm, destructive });
+  const push = (
+    to: OrderStatus,
+    label: string,
+    primary = false,
+    confirm: StatusAction["confirm"] = null,
+    destructive = false,
+  ) => {
+    if (allowed.includes(to))
+      actions.push({ to, label, primary, confirm, destructive });
   };
 
   switch (from) {
@@ -127,20 +182,42 @@ export function getStatusActions(from: OrderStatus, context: TransitionContext &
     case OrderStatus.CREATED:
     case OrderStatus.PENDING:
       // Con pago en línea la pasarela confirma sola: marcar a mano es la excepción, no el botón principal.
-      push(OrderStatus.PAID, isCod ? "Registrar pago (cobrado al entregar)" : isOnline ? "Registrar pago a mano" : "Marcar como pagado", !isCod && !isOnline, "pay");
+      push(
+        OrderStatus.PAID,
+        isCod
+          ? "Registrar pago (cobrado al entregar)"
+          : isOnline
+            ? "Registrar pago a mano"
+            : "Marcar como pagado",
+        !isCod && !isOnline,
+        "pay",
+      );
       if (isCod) push(OrderStatus.SENT, "Marcar como enviado", true, "ship");
       break;
     case OrderStatus.PAID:
-      if (!QUOTE_OPEN.includes(from)) push(OrderStatus.SENT, "Marcar como enviado", true, "ship");
+      if (!QUOTE_OPEN.includes(from))
+        push(OrderStatus.SENT, "Marcar como enviado", true, "ship");
       break;
     case OrderStatus.SENT:
-      if (isCod) push(OrderStatus.PAID, "Registrar pago (cobrado al entregar)", true, "pay");
+      if (isCod)
+        push(
+          OrderStatus.PAID,
+          "Registrar pago (cobrado al entregar)",
+          true,
+          "pay",
+        );
       break;
     case OrderStatus.CANCELLED:
       push(OrderStatus.PENDING, "Reactivar como pendiente", true);
       break;
   }
-  push(OrderStatus.CANCELLED, isPaidLike(from) ? "Cancelar y devolver el inventario" : "Cancelar pedido", false, "cancel", true);
+  push(
+    OrderStatus.CANCELLED,
+    isPaidLike(from) ? "Cancelar y devolver el inventario" : "Cancelar pedido",
+    false,
+    "cancel",
+    true,
+  );
   return actions;
 }
 
@@ -177,21 +254,38 @@ export interface ReconciledShipment {
  * envío en camino sobre un pedido pagado debe dejar el pedido «Enviado».
  * Nunca fuerza una transición que `canTransition` no permita.
  */
-export function reconcileShipmentStatus({ from, to, shippingStatus, requestedShippingStatus, context }: ReconcileShipmentInput): ReconciledShipment {
+export function reconcileShipmentStatus({
+  from,
+  to,
+  shippingStatus,
+  requestedShippingStatus,
+  context,
+}: ReconcileShipmentInput): ReconciledShipment {
   const result: ReconciledShipment = {};
   const effectiveShipping = requestedShippingStatus ?? shippingStatus ?? null;
   const becomesSent = to === OrderStatus.SENT && from !== OrderStatus.SENT;
 
-  if (becomesSent && (effectiveShipping === null || effectiveShipping === ShippingStatus.Preparing)) {
+  if (
+    becomesSent &&
+    (effectiveShipping === null ||
+      effectiveShipping === ShippingStatus.Preparing)
+  ) {
     result.shippingStatus = ShippingStatus.Shipped;
   }
 
   const orderStatusUntouched = !to || to === from;
   const shipmentStartsMoving =
     Boolean(requestedShippingStatus) &&
-    MOVING_SHIPPING_STATUSES.includes(requestedShippingStatus as ShippingStatus) &&
+    MOVING_SHIPPING_STATUSES.includes(
+      requestedShippingStatus as ShippingStatus,
+    ) &&
     requestedShippingStatus !== shippingStatus;
-  if (orderStatusUntouched && shipmentStartsMoving && from !== OrderStatus.SENT && canTransition(from, OrderStatus.SENT, context)) {
+  if (
+    orderStatusUntouched &&
+    shipmentStartsMoving &&
+    from !== OrderStatus.SENT &&
+    canTransition(from, OrderStatus.SENT, context)
+  ) {
     result.status = OrderStatus.SENT;
   }
 
@@ -216,4 +310,27 @@ export function describeDeletionBlock(order: {
   if (!guia) return null;
   const referencia = order.shipping?.trackingCode ?? guia;
   return `El pedido ${order.orderNumber} tiene una guía de EnvioClick activa (${referencia}). Cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro.`;
+}
+
+/**
+ * Cuándo se puede crear la guía de EnvioClick: cobra dinero, así que sólo con
+ * el pedido pagado, o pendiente si es contra entrega (la transportadora
+ * recauda). La misma regla para las dos rutas que crean guías y para el botón.
+ */
+export function canCreateGuide(
+  status: OrderStatus,
+  isCOD: boolean | null | undefined,
+): boolean {
+  if (status === OrderStatus.PAID) return true;
+  return Boolean(isCOD) && status === OrderStatus.PENDING;
+}
+
+export function describeGuideBlock(
+  status: OrderStatus,
+  isCOD: boolean | null | undefined,
+): string | null {
+  if (canCreateGuide(status, isCOD)) return null;
+  return isCOD
+    ? "La orden debe estar en estado PAGADA o PENDIENTE para crear la guía de pago contra entrega"
+    : "La orden debe estar en estado PAGADA para crear la guía";
 }

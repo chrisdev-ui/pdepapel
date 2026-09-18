@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { ErrorFactory } from "@/lib/api-errors";
+import { describeGuideBlock } from "@/lib/order-transitions";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { ResourceBusyError, withResourceLock } from "@/lib/resource-lock";
-import { OrderStatus } from "@prisma/client";
 
 export async function POST(
   req: Request,
@@ -57,19 +57,8 @@ export async function POST(
       );
     }
 
-    // Verificar que la orden esté pagada (o sea COD y esté pendiente)
-    const isCODOrder = order.shipping?.isCOD;
-    const allowedStatuses: OrderStatus[] = isCODOrder
-      ? [OrderStatus.PAID, OrderStatus.PENDING]
-      : [OrderStatus.PAID];
-
-    if (!allowedStatuses.includes(order.status)) {
-      throw ErrorFactory.InvalidRequest(
-        isCODOrder
-          ? "La orden debe estar en estado PAGADA o PENDIENTE para crear la guía de pago contra entrega"
-          : "La orden debe estar en estado PAGADA para crear la guía",
-      );
-    }
+    const guideBlock = describeGuideBlock(order.status, order.shipping.isCOD);
+    if (guideBlock) throw ErrorFactory.InvalidRequest(guideBlock);
 
     // Verificar que tenga un idRate
     if (!order.shipping.envioClickIdRate) {
@@ -114,7 +103,8 @@ export async function POST(
     );
   } catch (error: any) {
     console.error("[ORDER_SHIPPING_CREATE_GUIDE]", error);
-    const status = error instanceof ResourceBusyError ? 409 : error.statusCode || 500;
+    const status =
+      error instanceof ResourceBusyError ? 409 : error.statusCode || 500;
     return NextResponse.json(
       { error: error.message || "Error interno del servidor" },
       { status },
