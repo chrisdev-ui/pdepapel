@@ -12,14 +12,13 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { CountInput } from "@/components/ui/count-input";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { DiscountTypeToggle } from "@/components/ui/discount-type-toggle";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { PercentageInput } from "@/components/ui/percentage-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TintBadge } from "@/components/ui/tint-badge";
-import { discountOptions } from "@/constants";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -261,20 +260,9 @@ export function CouponBatchDialog() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel isRequired>Tipo de descuento</FormLabel>
-                        <Select onValueChange={(value) => onTypeChange(value, field.value)} value={field.value} disabled={submitting}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar tipo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.values(DiscountType).map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {discountOptions[option]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <DiscountTypeToggle value={field.value} onChange={(value) => onTypeChange(value, field.value)} disabled={submitting} />
+                        </FormControl>
                         <FormDescription>Al cambiar el tipo, el descuento se vacía.</FormDescription>
                         <FormMessage />
                       </FormItem>

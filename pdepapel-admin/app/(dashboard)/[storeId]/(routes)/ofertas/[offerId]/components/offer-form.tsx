@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { DiscountTypeToggle } from "@/components/ui/discount-type-toggle";
 import { FormPageHeader, FormStickyFooter } from "@/components/ui/form-page-chrome";
 import { Input } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -33,6 +34,7 @@ import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
 import { getDatePresets } from "@/lib/date-presets";
 import { priceAfter, type ScopeProductRow, type ScopeSummary } from "@/lib/offer-scope";
+import { refineDiscountAmount } from "@/lib/coupons";
 import { OFFER_LABEL_MAX, OFFER_NAME_MAX } from "@/lib/offers";
 import { formatDiscount, getPromotionStatus, PROMOTION_STATUS } from "@/lib/promotion-status";
 import { localDateToPromotionDay, promotionDayToLocalDate } from "@/lib/promotion-window";
@@ -57,9 +59,7 @@ const formSchema = z
     productGroupIds: z.array(z.string()),
   })
   .superRefine((value, ctx) => {
-    if (value.type === DiscountType.PERCENTAGE && value.amount > 100) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message: "El porcentaje no puede ser mayor a 100" });
-    }
+    refineDiscountAmount(value, ctx);
     if (value.productIds.length + value.categoryIds.length + value.productGroupIds.length === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["productIds"], message: "Elige al menos un producto, subcategoría o grupo" });
     }
@@ -350,25 +350,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker, seed 
                     <FormItem>
                       <FormLabel isRequired>Tipo</FormLabel>
                       <FormControl>
-                        <div role="radiogroup" aria-label="Tipo de descuento" className="flex h-10 gap-1 rounded-md border bg-muted/40 p-1">
-                          {[
-                            { value: DiscountType.PERCENTAGE, text: "%" },
-                            { value: DiscountType.FIXED, text: "$ fijo" },
-                          ].map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              role="radio"
-                              aria-checked={type === option.value}
-                              aria-label={option.value === DiscountType.PERCENTAGE ? "Porcentaje" : "Monto fijo"}
-                              disabled={loading}
-                              onClick={() => onTypeChange(option.value)}
-                              className={cn("flex-1 rounded text-[13px] font-semibold transition-colors", type === option.value ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-primary")}
-                            >
-                              {option.text}
-                            </button>
-                          ))}
-                        </div>
+                        <DiscountTypeToggle value={type} onChange={onTypeChange} disabled={loading} />
                       </FormControl>
                       <FormDescription>Al cambiar, el monto se vacía.</FormDescription>
                     </FormItem>
@@ -382,12 +364,12 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker, seed 
                       <FormLabel isRequired>Descuento</FormLabel>
                       <FormControl>
                         {isPercentage ? (
-                          <PercentageInput disabled={loading} placeholder="10" value={field.value} onChange={field.onChange} />
+                          <PercentageInput disabled={loading} step="1" min={1} placeholder="10" value={field.value} onChange={field.onChange} />
                         ) : (
                           <CurrencyInput placeholder="$ 5.000" disabled={loading} value={field.value} onChange={field.onChange} />
                         )}
                       </FormControl>
-                      <FormDescription>{isPercentage ? "Entre 1 y 100." : "Se resta del precio; nunca deja un producto en $ 0."}</FormDescription>
+                      <FormDescription>{isPercentage ? "Entre 1 y 100, sin decimales." : "Se resta del precio; nunca deja un producto en $ 0."}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

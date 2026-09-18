@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CouponForm } from "@/app/(dashboard)/[storeId]/(routes)/cupones/[couponId]/components/coupon-form";
@@ -90,11 +89,10 @@ describe("CouponForm", () => {
   });
 
   it("empties the amount when the discount type changes", async () => {
-    const user = userEvent.setup();
     render(<CouponForm initialData={coupon} activeWelcomeCode={null} />);
     expect(screen.getByPlaceholderText("10")).toHaveValue(10);
-    await user.click(screen.getByRole("combobox", { name: /Tipo de descuento/ }));
-    await user.click(await screen.findByRole("option", { name: "Monto fijo" }));
+    expect(screen.getByRole("radio", { name: "Porcentaje" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("radio", { name: "Monto fijo" }));
     expect(screen.queryByPlaceholderText("10")).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("$ 10.000")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
@@ -106,6 +104,9 @@ describe("CouponForm", () => {
     render(<CouponForm initialData={null} activeWelcomeCode={null} />);
     expect(screen.getByRole("heading", { name: "Nuevo cupón" })).toBeInTheDocument();
     expect(screen.getByText("Falta el código (4 a 20 caracteres)")).toBeInTheDocument();
+    // Sin tipo elegido: ninguna opción marcada y el monto deshabilitado.
+    expect(screen.getByRole("radio", { name: "Porcentaje" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Monto fijo" })).toHaveAttribute("aria-checked", "false");
     fireEvent.change(screen.getByLabelText(/Código/), { target: { value: "vuelve-2026" } });
     expect(screen.getByText("Código listo")).toBeInTheDocument();
     expect(screen.getByText("VUELVE-2026")).toBeInTheDocument();

@@ -15,15 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CountInput } from "@/components/ui/count-input";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { DiscountTypeToggle } from "@/components/ui/discount-type-toggle";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { FormPageHeader, FormStickyFooter } from "@/components/ui/form-page-chrome";
 import { PercentageInput } from "@/components/ui/percentage-input";
 import { SectionCard } from "@/components/ui/section-card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { TintBadge } from "@/components/ui/tint-badge";
-import { discountOptions } from "@/constants";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
@@ -280,21 +279,10 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData, activeWelco
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel isRequired>Tipo de descuento</FormLabel>
-                      <Select disabled={loading} onValueChange={(value) => onTypeChange(value, field.value)} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar tipo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {Object.values(DiscountType).map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {discountOptions[option]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>Al cambiar el tipo, el monto se vacía para no guardar un «10» como 10 pesos.</FormDescription>
+                      <FormControl>
+                        <DiscountTypeToggle value={field.value} onChange={(value) => onTypeChange(value, field.value)} disabled={loading} />
+                      </FormControl>
+                      <FormDescription>{type ? "Al cambiar el tipo, el monto se vacía para no guardar un «10» como 10 pesos." : "Elige % o $ fijo para habilitar el monto."}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
