@@ -482,7 +482,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData, activeWelco
                     {initialData.recentOrders.map((order) => (
                       <li key={order.id} className="flex items-center justify-between gap-2 py-2.5">
                         <div className="flex min-w-0 flex-col">
-                          <Link href={`/${storeId}/pedidos/${order.id}`} className="truncate text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                          <Link href={`/${storeId}/pedidos/${order.id}`} className="break-all text-sm font-semibold text-primary underline-offset-4 hover:underline">
                             Pedido #{order.orderNumber}
                           </Link>
                           <span className="text-xs text-muted-foreground">
@@ -490,7 +490,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData, activeWelco
                           </span>
                         </div>
                         {order.paidAt ? (
-                          <span className="text-sm font-semibold tabular-nums">− {currencyFormatter(order.couponDiscount)}</span>
+                          <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums">− {currencyFormatter(order.couponDiscount)}</span>
                         ) : (
                           <TintBadge label={order.status === "CANCELLED" ? "Cancelado" : "Reservado"} tone={order.status === "CANCELLED" ? "slate" : "cream"} />
                         )}
