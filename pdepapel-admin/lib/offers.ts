@@ -1,4 +1,5 @@
 import { ErrorFactory } from "@/lib/api-errors";
+import { refineDiscountAmount } from "@/lib/coupons";
 import { normalizePromotionWindow, type PromotionWindow } from "@/lib/promotion-window";
 import { currencyFormatter } from "@/lib/utils";
 import { DiscountType, type PrismaClient } from "@prisma/client";
@@ -28,9 +29,7 @@ export const offerInputSchema = z
     productGroupIds: idList,
   })
   .superRefine((value, ctx) => {
-    if (value.type === DiscountType.PERCENTAGE && value.amount > 100) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message: "El porcentaje no puede ser mayor a 100" });
-    }
+    refineDiscountAmount(value, ctx);
     if (value.productIds.length + value.categoryIds.length + value.productGroupIds.length === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["productIds"], message: "Elige al menos un producto, grupo o subcategoría" });
     }

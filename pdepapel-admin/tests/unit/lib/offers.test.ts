@@ -14,6 +14,14 @@ describe("parseOfferInput", () => {
     expect(input.endDate.toISOString()).toBe("2026-12-31T04:59:59.999Z");
   });
 
+  it("applies the same percentage rule as coupons: integer, at most 100", () => {
+    const base = { name: "Agendas", type: "PERCENTAGE", amount: 12.5, startDate: "2026-09-01", endDate: "2026-09-30", productIds: ["p1"] };
+    expect(() => parseOfferInput(base)).toThrow("El porcentaje debe ser un número entero");
+    expect(() => parseOfferInput({ ...base, amount: 120 })).toThrow("El porcentaje no puede ser mayor a 100");
+    expect(parseOfferInput({ ...base, amount: 15 }).amount).toBe(15);
+    expect(parseOfferInput({ ...base, type: "FIXED", amount: 2500.5 }).amount).toBe(2500.5);
+  });
+
   it("requires at least one target and valid amounts", () => {
     expect(() => parseOfferInput({ ...base, productIds: [] })).toThrow("Elige al menos un producto, grupo o subcategoría");
     expect(() => parseOfferInput({ ...base, amount: 0 })).toThrow("El descuento debe ser mayor a 0");
