@@ -59,6 +59,17 @@ describe("Hero image", () => {
     expect(image.getAttribute("fetchpriority")).toBe("high");
   });
 
+  /** Un teléfono 3x pedía la copia de 1600 (169 KB) por `100vw`; la caja mide ~360 px CSS. */
+  it("declares a fixed phone width so a 3x phone picks the 1080 copy and desktop keeps 1600", () => {
+    render(<Hero content={content(PHOTO)} freeShippingThreshold={null} />);
+
+    const sizes = screen.getByAltText("Portada").getAttribute("sizes") ?? "";
+    const phone = sizes.match(/\(max-width:\s*639px\)\s*(\d+)px/);
+    expect(phone, sizes).not.toBeNull();
+    expect(Number(phone![1]) * 3).toBeLessThanOrEqual(1080);
+    expect(sizes).toContain("46vw");
+  });
+
   it("cleans a stored url that already carried a transformation instead of chaining it", () => {
     render(
       <Hero

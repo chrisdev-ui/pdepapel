@@ -93,6 +93,8 @@ export const env = createEnv({
     NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: z.string().optional(),
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: z.string().min(1),
     NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME: z.string().optional(),
+    // "1" solo en local: las fotos de Cloudinary se sustituyen por un marcador.
+    NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS: z.enum(["0", "1"]).optional(),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
@@ -107,5 +109,7 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
     NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME:
       process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME,
+    NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS:
+      process.env.NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS,
   },
 });

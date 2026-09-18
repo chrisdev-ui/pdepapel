@@ -84,7 +84,11 @@ export function Hero({ content, freeShippingThreshold }: HeroProps) {
             alt={hero.imageAlt ?? hero.title}
             width={1280}
             height={800}
-            sizes="(max-width: 1023px) 100vw, 46vw"
+            // Celular: la caja mide como mucho ~360 px CSS; declararla así en vez
+            // de 100vw hace que un teléfono 3x pida la copia de 1080 (no la de
+            // 1600, 40 % más pesada) sin diferencia visible. Tableta y escritorio
+            // siguen pudiendo pedir 1600 porque ahí el hero sí es más ancho.
+            sizes="(max-width: 639px) 360px, (max-width: 1023px) 100vw, 46vw"
             priority
             className="aspect-[4/3] w-full object-cover sm:aspect-[8/5] md:aspect-square lg:aspect-[8/5]"
           />

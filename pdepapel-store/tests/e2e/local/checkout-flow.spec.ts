@@ -1,4 +1,4 @@
-import { expect, Page, Route, test } from "@playwright/test";
+import { expect, Page, Route, test } from "../helpers/safe-test";
 
 import { gotoPublicPage, skipPrivacyBanner } from "../helpers/public-page";
 import { stubDaneLookup } from "./helpers/local-environment";

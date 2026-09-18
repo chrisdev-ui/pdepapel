@@ -1,4 +1,4 @@
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 
 export type { Locator, Page, Route } from "@playwright/test";
 
@@ -18,6 +18,34 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0"
 const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
+ * Un PNG de 1×1 con el que se responden las fotos de Cloudinary durante las
+ * pruebas: el navegador real de Playwright las descargaba del CDN de
+ * producción en cada corrida (HeadlessChrome era el 6 % del ancho de banda
+ * de septiembre de 2026) y ninguna prueba mira los píxeles. `E2E_REAL_IMAGES=1`
+ * deja pasar las fotos de verdad para una revisión visual puntual.
+ */
+const CLOUDINARY_HOST = /(^|\.)res\.cloudinary\.com$/;
+const STUB_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
+  "base64",
+);
+
+export async function stubCloudinaryImages(page: Page) {
+  if (process.env.E2E_REAL_IMAGES === "1") return;
+  await page.route(
+    (url) => CLOUDINARY_HOST.test(url.hostname),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        headers: { "cache-control": "no-store", "x-e2e-stub": "cloudinary" },
+        body: STUB_PNG,
+      }),
+  );
+}
+
+
+/**
  * La suite corre contra producción (`playwright.config.ts` usa
  * `papeleriapdepapel.com` cuando no hay `E2E_BASE_URL`), y lo único que hoy
  * evita que una prueba cree un pedido real es que cada quien acierte con su
@@ -29,7 +57,14 @@ const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
  * Corta en vez de sólo avisar a propósito: con `retries` una prueba rota se
  * reintenta, y avisar después de los hechos llegaría tarde tres veces.
  */
-export const test = base.extend<{ orderSurfaceGuard: void }>({
+export const test = base.extend<{ orderSurfaceGuard: void; cloudinaryStub: void }>({
+  cloudinaryStub: [
+    async ({ page }, use) => {
+      await stubCloudinaryImages(page);
+      await use();
+    },
+    { auto: true },
+  ],
   orderSurfaceGuard: [
     async ({ page }, use, testInfo) => {
       const blocked: string[] = [];

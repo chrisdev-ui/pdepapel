@@ -3,6 +3,10 @@ import type { ImageLoaderProps } from "next/image";
 const CLOUDINARY_HOSTNAME = "res.cloudinary.com";
 const UPLOAD_SEGMENT = "/image/upload/";
 const VERSION_SEGMENT = /^v\d+$/;
+/** Nunca en producción: solo aísla el tráfico de desarrollo (docs/imagenes-cloudinary.md). */
+const PLACEHOLDER_MODE =
+  process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS === "1";
+const LOCAL_PLACEHOLDER = "/images/placeholder_1.png";
 /**
  * Un segmento de transformación de Cloudinary: `c_limit,w_640`, `f_auto`,
  * `q_auto:eco`, `e_blur:300`… Sirve para limpiar URLs sin versión que ya
@@ -100,5 +104,8 @@ export function getCloudinaryImageUrl(src: string, width: number): string {
 
 /** Loader de `next/image` para las fotos alojadas en Cloudinary. */
 export function cloudinaryLoader({ src, width }: ImageLoaderProps): string {
+  // En local, con `NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS=1`, ninguna foto del
+  // catálogo sale hacia la nube de producción: se sirve un marcador propio.
+  if (PLACEHOLDER_MODE && isCloudinaryUrl(src)) return LOCAL_PLACEHOLDER;
   return getCloudinaryImageUrl(src, width);
 }

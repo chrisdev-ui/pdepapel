@@ -1,5 +1,5 @@
 import { createClerkClient } from "@clerk/backend";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/image-stub";
 
 const baseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:3101";
 const testStoreId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";

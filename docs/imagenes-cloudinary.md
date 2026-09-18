@@ -145,6 +145,28 @@ desde un cron.
   limitada a 1600 px), así que se hace con `explicit`/re-subida controlada y
   con lista revisada, nunca con un borrado masivo.
 
+## Desarrollo local y pruebas automáticas
+
+El tráfico de `localhost`, `127.0.0.1` y `HeadlessChrome` era el 12 % del ancho
+de banda de septiembre de 2026: cada `npm run dev` y cada corrida de Playwright
+descargaba las fotos reales del CDN de producción.
+
+- **Subidas en local** ya van a la carpeta `development/` de la misma nube
+  (`NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME` en el `.env` del panel); el panel
+  entiende ids con carpeta y la limpieza de huérfanos las ve igual.
+- **Ver el catálogo en local**: con `NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS=1` en
+  el `.env` de cada app, los dos loaders responden un marcador propio
+  (`/images/placeholder_1.png` en la tienda, `/placeholder_1.png` en el panel)
+  en vez de pedir la foto a Cloudinary. Nunca aplica con `NODE_ENV=production`.
+  Quita la variable (o ponla en `0`) cuando necesites ver fotos reales, por
+  ejemplo para revisar un diseño.
+- **Playwright**: `tests/e2e/helpers/safe-test.ts` (tienda) y
+  `tests/e2e/helpers/image-stub.ts` (panel) responden toda petición a
+  `res.cloudinary.com` con un PNG de 1×1 y la cabecera `x-e2e-stub`. Las
+  pruebas no miran píxeles; `E2E_REAL_IMAGES=1` deja pasar las fotos de verdad
+  para una revisión visual puntual. Toda prueba nueva importa `test` de esos
+  helpers, no de `@playwright/test`.
+
 ## Qué no hacer
 
 - Instalar otra librería de imágenes o crear otro loader "para un caso".
