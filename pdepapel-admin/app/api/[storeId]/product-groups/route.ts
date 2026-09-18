@@ -3,16 +3,32 @@ import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
-import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
+import {
+  getUniqueProductSlug,
+  synchronizeProductGroupSlugs,
+} from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
 import { resolveVariantImages } from "@/lib/variant-images";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
+import { findProductWithGtin } from "@/lib/product-identifiers";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { pauseMarketplaceListingsForProducts } from "@/lib/product-archive";
+import {
+  buildVariantData,
+  findDuplicateVariantId,
+  loadAdoptableProducts,
+  variantAttributeIds,
+  variantLabel,
+  type VariantPayload,
+} from "@/lib/product-group-save";
+import {
+  assertStoreCategory,
+  loadVariantAttributes,
+} from "@/lib/product-group-attributes";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +51,9 @@ export async function POST(
     await verifyStoreOwner(userId, params.storeId);
     // El cuerpo se lee después de autorizar: un cuerpo vacío sin sesión
     // respondía 500 en vez de 401.
-    const body = await req.json();
+    const body = await req.json().catch(() => {
+      throw ErrorFactory.InvalidRequest("El cuerpo de la petición no es JSON válido");
+    });
 
     const {
       name,
@@ -46,14 +64,13 @@ export async function POST(
       categoryId,
       defaultPrice,
       price, // Alias for defaultPrice
-      defaultStock,
       defaultSupplier,
       defaultCost,
       acqPrice, // Alias for defaultCost
       isFeatured,
       isArchived,
-      variants: variantsPayload, // Array of manually created/edited variants
-    } = body;
+      variants: variantsPayload,
+    } = body as Record<string, any>;
 
     const effectiveDefaultPrice = defaultPrice ?? price;
     const effectiveDefaultCost = defaultCost ?? acqPrice;
@@ -68,10 +85,33 @@ export async function POST(
     if (!variantsPayload || !variantsPayload.length) {
       throw ErrorFactory.InvalidRequest("Variants are required");
     }
-    if (hasDuplicateVariantCombination(variantsPayload)) {
+    const variants = variantsPayload as VariantPayload[];
+    if (hasDuplicateVariantCombination(variants)) {
       throw ErrorFactory.InvalidRequest(
         "No se pueden crear dos variantes con la misma combinación de tamaño, color y diseño.",
       );
+    }
+    const duplicateId = findDuplicateVariantId(variants);
+    if (duplicateId) {
+      throw ErrorFactory.InvalidRequest(
+        "El mismo producto aparece dos veces en el grupo. Quita la fila repetida.",
+        { productId: duplicateId },
+      );
+    }
+    for (const variant of variants) {
+      const { sizeId, colorId, designId } = variantAttributeIds(variant);
+      if (!sizeId || !colorId || !designId) {
+        // Antes se hacia `return` y la respuesta decia "creado" mientras la
+        // variante nunca existia. Un grupo a medias es peor que un error.
+        const missing = [
+          !sizeId && "tamaño",
+          !colorId && "color",
+          !designId && "diseño",
+        ].filter(Boolean);
+        throw ErrorFactory.InvalidRequest(
+          `La variante "${variantLabel(variant)}" no se puede crear: le falta ${missing.join(", ")}.`,
+        );
+      }
     }
 
     // Una variante sin id que se llama como un producto suelto sería un
@@ -79,13 +119,13 @@ export async function POST(
     await assertNoStandaloneConflicts(
       prismadb,
       params.storeId,
-      variantsPayload,
+      variants,
       name,
       { images, imageMapping },
     );
     // Fotos previas de los productos que se adoptan: se reemplazan por las del
     // grupo y, si ninguna fila las conserva, se borran de Cloudinary al final.
-    const adoptedIds = (variantsPayload as { id?: string }[])
+    const adoptedIds = variants
       .map((variant) => variant.id)
       .filter((id): id is string => Boolean(id));
     const adoptedImages = adoptedIds.length
@@ -96,8 +136,18 @@ export async function POST(
       : [];
     const previousImageUrls = adoptedImages.map((image) => image.url);
 
+    let pausedListings = 0;
     const productGroup = await prismadb.$transaction(async (tx) => {
-      const initialMovements: any[] = [];
+      await assertStoreCategory(tx, params.storeId, categoryId);
+      // Los productos que se adoptan tienen que ser de la tienda, estar
+      // sueltos, no ser kits ni estar archivados.
+      const adopted = await loadAdoptableProducts(tx, {
+        storeId: params.storeId,
+        groupId: null,
+        variants,
+      });
+      const attributes = await loadVariantAttributes(tx, params.storeId, variants);
+
       // 1. Create Product Group
       const group = await tx.productGroup.create({
         data: {
@@ -108,200 +158,123 @@ export async function POST(
           description: sanitizedDescription,
           images: {
             createMany: {
-              data: [
-                ...images.map((image: { url: string; isMain?: boolean }) => ({
-                  url: image.url,
-                  isMain: image.isMain ?? false,
-                })),
-              ],
+              data: images.map((image: { url: string; isMain?: boolean }) => ({
+                url: image.url,
+                isMain: image.isMain ?? false,
+              })),
             },
           },
         },
       });
 
-      // 2. Create/Update Products from Frontend Variants
-      await Promise.all(
-        variantsPayload.map(async (variant: any) => {
-          // Extract IDs from potentially nested objects (size: { id: ... } or sizeId: ...)
-          const sizeId = variant.size?.id || variant.sizeId;
-          const colorId = variant.color?.id || variant.colorId;
-          const designId = variant.design?.id || variant.designId;
-
-          if (!sizeId || !colorId || !designId) {
-            // Antes se hacia `return` y la respuesta decia "creado" mientras la
-            // variante nunca existia. Un grupo a medias es peor que un error.
-            const missing = [
-              !sizeId && "tamaño",
-              !colorId && "color",
-              !designId && "diseño",
-            ].filter(Boolean);
-            throw ErrorFactory.InvalidRequest(
-              `La variante "${variant.name || variant.sku || "sin nombre"}" no se puede crear: le falta ${missing.join(", ")}.`,
-            );
-          }
-
-          const [colorObj, designObj, sizeObj] = await Promise.all([
-            tx.color.findUnique({ where: { id: colorId } }),
-            tx.design.findUnique({ where: { id: designId } }),
-            tx.size.findUnique({ where: { id: sizeId } }),
-          ]);
-
-          const variantName = variant.name || name;
-          let variantSlug = generateProductSlug({
-            name: variantName,
-            color: colorObj,
-            design: designObj,
-            size: sizeObj,
-            includeVariantAttributes: variantsPayload.length > 1,
-          });
-          if (!variantSlug)
-            variantSlug = slugify(variantName) || `variant-${Date.now()}`;
-
-          // Determine Applicable Images
-          const applicableImages = resolveVariantImages({
-            variantImages: variant.images,
-            groupImages: images,
-            imageMapping,
-            colorId,
-            designId,
-          });
-
-          const finalPrice =
-            variant.price !== undefined
-              ? parseFloat(variant.price)
-              : parseFloat(effectiveDefaultPrice);
-          const finalAcqPrice =
-            variant.acqPrice !== undefined
-              ? parseFloat(variant.acqPrice)
-              : effectiveDefaultCost
-                ? parseFloat(effectiveDefaultCost)
-                : null;
-          const finalStock =
-            variant.stock !== undefined
-              ? parseInt(variant.stock)
-              : parseInt(defaultStock || "0");
-
-          const finalSupplierId = variant.supplierId || defaultSupplier;
-
-          let variantIdentifiers;
-          try {
-            variantIdentifiers = normalizeProductIdentifiers({
-              gtin: variant.gtin,
-              mpn: variant.mpn,
-              hasNoProductIdentifier: variant.hasNoProductIdentifier,
-              defaultNoIdentifierWhenEmpty: true,
-            });
-          } catch (error) {
-            throw ErrorFactory.InvalidRequest(
-              `La variante "${variant.name || variant.sku || "sin nombre"}": ${
-                error instanceof Error
-                  ? error.message
-                  : "identificadores inválidos"
-              }`,
-            );
-          }
-
-          const productData = {
-            storeId: params.storeId,
-            productGroupId: group.id,
+      // 2. Variantes: adoptadas (solo cambia lo que trae la fila) y nuevas
+      //    (con 0 unidades; las existencias entran por Inventario).
+      const archivedNow: string[] = [];
+      for (const variant of variants) {
+        const ids = variantAttributeIds(variant) as {
+          sizeId: string;
+          colorId: string;
+          designId: string;
+        };
+        const { colorObj, designObj, sizeObj } = attributes.resolve(ids, variant);
+        const existing = variant.id ? adopted.get(variant.id) : undefined;
+        const data = buildVariantData({
+          variant,
+          defaults: {
+            name,
+            description: sanitizedDescription,
             categoryId,
-            name: variantName,
-            slug: variantSlug,
-            sku: variant.sku,
-            description: sanitizeRichTextHtml(
-              variant.description || sanitizedDescription,
-            ),
-            price: finalPrice,
-            acqPrice: finalAcqPrice,
-            stock: finalStock,
-            supplierId: finalSupplierId || null,
-            sizeId,
-            colorId,
-            designId,
-            isFeatured: variant.isFeatured ?? isFeatured ?? false,
-            // La casilla «Archivado» del grupo manda sobre las variantes: no
-            // hay columna en ProductGroup, archivar el grupo es archivarlas.
-            isArchived:
-              typeof isArchived === "boolean"
-                ? isArchived
-                : variant.isArchived || false,
-            // Sin esto toda variante creada desde el grupo quedaba para siempre
-            // "sin identificador" y Google Merchant la rechazaba.
-            ...variantIdentifiers,
-            // Handle images carefully during update vs create?
-            // For now, simpler to always recreate images or upsert
-          };
+            price: effectiveDefaultPrice,
+            acqPrice: effectiveDefaultCost,
+            supplierId: defaultSupplier,
+            isFeatured,
+            isArchived,
+          },
+          isNew: !existing,
+          attributes: ids,
+        });
 
-          if (variant.id) {
-            // ADOPT EXISTING PRODUCT
-            // CRITICAL: Do NOT update stock for adopted products - they already have inventory.
-            // We only update the productGroupId, category, pricing, and metadata.
-            // Stock should remain unchanged to preserve inventory integrity.
-            const { stock: _excludedStock, ...productDataWithoutStock } =
-              productData;
-
-            await tx.product.update({
-              where: { id: variant.id, storeId: params.storeId },
-              data: productDataWithoutStock,
-            });
-
-            // Prisma 6: explicit image replacement for optional relations
-            await tx.image.deleteMany({
-              where: { productId: variant.id },
-            });
-            await tx.image.createMany({
-              data: applicableImages.map(
-                (img: { url: string; isMain?: boolean }) => ({
-                  url: img.url,
-                  isMain: img.isMain || false,
-                  productId: variant.id,
-                }),
-              ),
-            });
-          } else {
-            // CREATE NEW PRODUCT
-            const newProduct = await tx.product.create({
-              data: {
-                ...productData,
-                stock: 0, // Always start at 0
-                images: {
-                  createMany: {
-                    data: applicableImages.map(
-                      (img: { url: string; isMain?: boolean }) => ({
-                        url: img.url,
-                        isMain: img.isMain || false,
-                      }),
-                    ),
-                  },
-                },
-              },
-            });
-
-            // If payload has initial stock, create an INITIAL_INTAKE movement
-            if (finalStock > 0) {
-              initialMovements.push({
-                storeId: params.storeId,
-                productId: newProduct.id, // Use the real ID
-                type: "INITIAL_INTAKE",
-                quantity: finalStock,
-                cost: finalAcqPrice,
-                price: finalPrice,
-                createdBy: userId, // or "SYSTEM_IMPORT"
-                reason: "Initial stock from Product Group creation",
-              });
-            }
+        if (data.gtin) {
+          const owner = await findProductWithGtin(tx, {
+            storeId: params.storeId,
+            gtin: data.gtin,
+            excludeProductId: existing?.id,
+          });
+          if (owner) {
+            throw ErrorFactory.Conflict(
+              `Ese GTIN ya está en «${owner.name}». Un código de barras identifica un solo producto.`,
+              { productId: owner.id },
+            );
           }
-        }),
-      );
+        }
 
-      await synchronizeProductGroupSlugs(tx, params.storeId, group.id);
+        const applicableImages = resolveVariantImages({
+          variantImages: variant.images,
+          groupImages: images,
+          imageMapping,
+          colorId: ids.colorId,
+          designId: ids.designId,
+        });
+        const imageData = applicableImages.map(
+          (img: { url: string; isMain?: boolean }) => ({
+            url: img.url,
+            isMain: img.isMain || false,
+          }),
+        );
 
-      // Execute Initial Movements
-      if (initialMovements.length > 0) {
-        const { createInventoryMovementBatch } =
-          await import("@/lib/inventory");
-        await createInventoryMovementBatch(tx, initialMovements);
+        if (existing) {
+          await tx.product.update({
+            where: { id: existing.id, storeId: params.storeId },
+            data: { ...data, productGroupId: group.id },
+          });
+          if (data.isArchived === true && !existing.isArchived) {
+            archivedNow.push(existing.id);
+          }
+          await tx.image.deleteMany({ where: { productId: existing.id } });
+          await tx.image.createMany({
+            data: imageData.map((img) => ({ ...img, productId: existing.id })),
+          });
+        } else {
+          if (!variant.sku) {
+            throw ErrorFactory.InvalidRequest(
+              `La variante «${variantLabel(variant)}» no tiene SKU.`,
+            );
+          }
+          const variantName = data.name ?? name;
+          const baseSlug =
+            generateProductSlug({
+              name: variantName,
+              color: colorObj,
+              design: designObj,
+              size: sizeObj,
+              includeVariantAttributes: variants.length > 1,
+            }) || slugify(variantName) || "producto";
+          const slug = await getUniqueProductSlug(tx, {
+            storeId: params.storeId,
+            baseSlug,
+          });
+          await tx.product.create({
+            data: {
+              ...data,
+              name: variantName,
+              sku: variant.sku,
+              slug,
+              stock: 0,
+              storeId: params.storeId,
+              productGroupId: group.id,
+              categoryId,
+              isArchived: data.isArchived ?? false,
+              isFeatured: data.isFeatured ?? false,
+              price: data.price ?? 0,
+              description: data.description ?? sanitizedDescription,
+              images: { createMany: { data: imageData } },
+            },
+          });
+        }
       }
+
+      pausedListings = await pauseMarketplaceListingsForProducts(tx, archivedNow);
+      await synchronizeProductGroupSlugs(tx, params.storeId, group.id);
 
       return group;
     });
@@ -309,7 +282,10 @@ export async function POST(
     await deleteCloudinaryImages(previousImageUrls, "PRODUCT_GROUPS_POST");
     await invalidateStoreProductsCache(params.storeId);
 
-    return NextResponse.json(productGroup, { headers: corsHeaders });
+    return NextResponse.json(
+      { ...productGroup, pausedListings },
+      { headers: corsHeaders },
+    );
   } catch (error) {
     console.log("[PRODUCT_GROUPS_POST]", error);
     return handleErrorResponse(error, "PRODUCT_GROUPS_POST", {

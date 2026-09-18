@@ -17,6 +17,7 @@ vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
 vi.mock("@/lib/product-slugs", () => ({
   synchronizeProductGroupSlugs: vi.fn(),
+  getUniqueProductSlug: vi.fn().mockResolvedValue("cartuchera-kawaii-lila"),
 }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
@@ -39,10 +40,21 @@ const tx = {
   productGroup: {
     create: vi.fn().mockResolvedValue({ id: "group-1", name: "Cartuchera" }),
   },
-  color: { findUnique: vi.fn().mockResolvedValue(attribute("c1", "Rosa")) },
-  design: { findUnique: vi.fn().mockResolvedValue(attribute("d1", "Panda")) },
-  size: { findUnique: vi.fn().mockResolvedValue(attribute("s1", "Única")) },
-  product: { create: mocks.productCreate, update: mocks.productUpdate },
+  category: { findFirst: vi.fn().mockResolvedValue({ id: "cat-1" }) },
+  color: { findMany: vi.fn().mockResolvedValue([attribute("c1", "Rosa")]) },
+  design: { findMany: vi.fn().mockResolvedValue([attribute("d1", "Panda")]) },
+  size: { findMany: vi.fn().mockResolvedValue([attribute("s1", "Única")]) },
+  product: {
+    create: mocks.productCreate,
+    update: mocks.productUpdate,
+    // Adopción: el producto suelto existe en la tienda, no es kit ni está archivado.
+    findMany: vi.fn().mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) =>
+      where.id.in.map((id: string) => ({ id, storeId: "store-1", name: "Cartuchera Kawaii lila", slug: "x", sku: "SKU", isKit: false, isArchived: false, productGroupId: null, createdAt: new Date() })),
+    ),
+    findFirst: vi.fn().mockResolvedValue(null),
+  },
+  productSlugAlias: { findUnique: vi.fn().mockResolvedValue(null) },
+  marketplaceListing: { findMany: vi.fn().mockResolvedValue([]) },
   image: { deleteMany: vi.fn(), createMany: vi.fn() },
 };
 

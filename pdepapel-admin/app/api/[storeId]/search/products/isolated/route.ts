@@ -79,6 +79,11 @@ export async function GET(
         isFeatured: true,
         isArchived: true,
         productGroupId: true,
+        // Al traer un producto al grupo se conservan tal cual.
+        description: true,
+        gtin: true,
+        mpn: true,
+        hasNoProductIdentifier: true,
         category: {
           select: {
             id: true,

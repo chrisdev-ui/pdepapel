@@ -49,6 +49,11 @@ const variantSchema = z.object({
   isFeatured: z.boolean().default(false).optional(), // Add isFeatured
   description: z.string().optional(),
   images: z.array(z.string()).optional(),
+  // Sin estos tres el modal devolvía la fila sin ellos y el guardado del
+  // grupo dejaba la variante «sin identificador», borrando un GTIN real.
+  gtin: z.string().optional(),
+  mpn: z.string().optional(),
+  hasNoProductIdentifier: z.boolean().optional(),
 });
 
 type VariantFormValues = z.infer<typeof variantSchema>;

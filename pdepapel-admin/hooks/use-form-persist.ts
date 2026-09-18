@@ -9,6 +9,11 @@ interface UseFormPersistProps<T extends FieldValues> {
   exclude?: (keyof T)[];
   /** Con `false` no se guarda nada (registros existentes: el servidor manda). */
   enabled?: boolean;
+  /**
+   * Última palabra sobre un borrador antes de restaurarlo (por ejemplo,
+   * quitar filas que apuntan a productos reales de otro día).
+   */
+  sanitizeDraft?: (draft: Partial<T>) => Partial<T>;
 }
 
 export function useFormPersist<T extends FieldValues>({
@@ -16,6 +21,7 @@ export function useFormPersist<T extends FieldValues>({
   key,
   exclude = [],
   enabled = true,
+  sanitizeDraft,
 }: UseFormPersistProps<T>) {
   const isLoaded = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -27,6 +33,10 @@ export function useFormPersist<T extends FieldValues>({
   useEffect(() => {
     excludeRef.current = exclude;
   }, [exclude]);
+  const sanitizeRef = useRef(sanitizeDraft);
+  useEffect(() => {
+    sanitizeRef.current = sanitizeDraft;
+  }, [sanitizeDraft]);
 
   // Restore data on mount - ONLY for new records, never for existing ones
   useEffect(() => {
@@ -50,7 +60,8 @@ export function useFormPersist<T extends FieldValues>({
           try {
             // Drafts travel through JSON: Date values come back as ISO
             // strings, which date-fns refuses. Revive them before resetting.
-            const draft = reviveDates({ ...savedData });
+            let draft = reviveDates({ ...savedData });
+            if (sanitizeRef.current) draft = sanitizeRef.current(draft) as typeof draft;
             if (excludeRef.current.length > 0) {
               excludeRef.current.forEach((k) => {
                 if (k in draft) {

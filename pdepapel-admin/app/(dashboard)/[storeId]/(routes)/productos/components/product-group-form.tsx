@@ -72,6 +72,15 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import { imageUrlKey, resolveVariantImages } from "@/lib/variant-images";
+import {
+  applyPendingImageRemovals,
+  archivePayload,
+  deriveArchiveMode,
+  describeArchiveRows,
+  stripAdoptedRowsFromDraft,
+  type GroupArchiveMode,
+} from "@/lib/product-group-form-state";
+import { RadioCards } from "@/components/ui/radio-cards";
 import { useParams, useRouter } from "next/navigation";
 import { currencyFormatter } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -99,7 +108,6 @@ const formSchema = z.object({
   transportationCost: z.coerce.number().min(0),
   miscCost: z.coerce.number().min(0),
   price: z.coerce.number().min(1, "El precio de venta debe ser mayor a 0"),
-  defaultStock: z.coerce.number().min(0, "El stock no puede ser negativo"),
   defaultSupplier: z.string().optional(),
   // New: Variants Array for editing
   variants: z
@@ -141,6 +149,9 @@ const formSchema = z.object({
           }),
         mpn: z.string().max(70).optional(),
         hasNoProductIdentifier: z.boolean().optional(),
+        // De dónde sale la fila: guardada en el grupo, traída de un producto
+        // suelto (se adopta) o generada (se crea). Solo informa a la tabla.
+        origin: z.enum(["saved", "adopted", "new"]).optional(),
       }),
     )
     .optional(),
@@ -153,7 +164,11 @@ const formSchema = z.object({
     )
     .optional(),
   isFeatured: z.boolean().default(false).optional(),
-  isArchived: z.boolean().default(false).optional(),
+  // Estado en la tienda: «todas» manda un booleano al servidor; «por
+  // variante» no manda nada y cada fila decide.
+  archiveMode: z
+    .enum(["per-variant", "all-archived", "all-published"])
+    .optional(),
 });
 
 export type ProductGroupFormValues = z.infer<typeof formSchema>;
@@ -174,6 +189,10 @@ export interface FormVariant {
   isArchived?: boolean;
   description?: string;
   images?: string[];
+  gtin?: string;
+  mpn?: string;
+  hasNoProductIdentifier?: boolean;
+  origin?: "saved" | "adopted" | "new";
 }
 
 export type ProductGroupWithIncludes = ProductGroup & {
@@ -522,13 +541,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         transportationCost: INITIAL_TRANSPORTATION_COST,
         miscCost: INITIAL_MISC_COST,
         price: initialData.products?.[0]?.price || 0,
-        defaultStock: initialData.products?.[0]?.stock || 0,
         defaultSupplier: initialData.products?.[0]?.supplierId || "",
         imageMapping:
           initialData.imageMapping ||
           reconstructMapping(getAllImages(), initialData.products),
         isFeatured: initialData.products?.[0]?.isFeatured || false,
-        isArchived: initialData.products?.[0]?.isArchived || false,
+        archiveMode: deriveArchiveMode(initialData.products ?? []),
         variants:
           initialData.products?.map((p) => ({
             id: p.id,
@@ -554,6 +572,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             gtin: p.gtin || "",
             mpn: p.mpn || "",
             hasNoProductIdentifier: p.hasNoProductIdentifier ?? true,
+            origin: "saved" as const,
           })) || [],
       }
     : {
@@ -570,11 +589,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         transportationCost: INITIAL_TRANSPORTATION_COST,
         miscCost: INITIAL_MISC_COST,
         price: 0,
-        defaultStock: 0,
         defaultSupplier: "",
         imageMapping: [],
         isFeatured: false,
-        isArchived: false,
+        archiveMode: "all-published",
         variants: [],
       };
 
@@ -862,9 +880,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
           mergedVariants.push({
             sku: gen.sku,
             name: gen.name,
+            origin: "new",
             price: form.getValues("price") || 0,
             acqPrice: form.getValues("acqPrice") || 0,
-            stock: form.getValues("defaultStock") || 0,
+            stock: 0,
             supplierId: form.getValues("defaultSupplier") || "",
             isFeatured: false,
             isArchived: false,
@@ -919,7 +938,22 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const { clearStorage } = useFormPersist({
     form,
     key: `product-group-form-${params.storeId}-${initialData?.id ?? "new"}`,
+    // El borrador nunca restaura filas traídas de productos reales: se
+    // vuelven a traer, así no se adopta nada que Paula no eligió hoy.
+    sanitizeDraft: (draft) => {
+      const { draft: clean, dropped } = stripAdoptedRowsFromDraft(draft);
+      if (dropped > 0) {
+        toast({
+          title: "Borrador restaurado",
+          description: `${dropped} ${dropped === 1 ? "producto traído no se restauró" : "productos traídos no se restauraron"}: vuelve a traerlos con «Traer productos existentes».`,
+          variant: "warning",
+        });
+      }
+      return clean;
+    },
   });
+  // Fotos del grupo marcadas con la papelera: se quitan al guardar, nunca antes.
+  const [pendingImageRemovals, setPendingImageRemovals] = useState<string[]>([]);
 
   useFormValidationToast({ form });
   const { confirmLeave, confirmationDialog: leaveDialog } =
@@ -975,15 +1009,26 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     try {
       setLoading(true);
 
-      // Merge scopes from form data directly (already synced)
-      const mapping = data.imageMapping || [];
+      const images = applyPendingImageRemovals(data.images, pendingImageRemovals);
+      const pending = new Set(pendingImageRemovals);
+      const mapping = (data.imageMapping || []).filter(
+        (entry) => !pending.has(entry.url),
+      );
+      const { archiveMode, ...rest } = data;
+      const payload = {
+        ...rest,
+        images,
+        imageMapping: mapping,
+        // Booleano solo con «todas archivadas» / «todas a la venta»; con
+        // «por variante» cada fila manda y el servidor no pisa nada.
+        ...archivePayload(archiveMode ?? "per-variant"),
+      };
 
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/product-groups/${initialData.id}`,
           {
-            ...data,
-            imageMapping: mapping,
+            ...payload,
             preserveSlug: true,
             // El formulario ya listo las bajas en "Cambios pendientes";
             // sin esta bandera el servidor responde 409 en vez de borrar.
@@ -991,12 +1036,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
           },
         );
       } else {
-        await axios.post(`/api/${params.storeId}/product-groups`, {
-          ...data,
-          imageMapping: mapping,
-        });
+        await axios.post(`/api/${params.storeId}/product-groups`, payload);
       }
 
+      setPendingImageRemovals([]);
       clearStorage(); // Clear storage on success
       router.push(`/${params.storeId}/productos`);
       router.refresh();
@@ -1090,7 +1133,6 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
   const currentPrice = form.watch("price");
   const currentAcqPrice = form.watch("acqPrice");
-  const defaultStock = form.watch("defaultStock");
   const defaultSupplier = form.watch("defaultSupplier");
 
   // Smart Variant Generation Handler
@@ -1205,9 +1247,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         finalVariants.push({
           sku: gen.sku,
           name: gen.name,
+          origin: "new",
           price: currentPrice || 0,
           acqPrice: currentAcqPrice || 0,
-          stock: defaultStock || 0,
+          // Una variante nueva nace con 0 unidades; las existencias entran
+          // por Inventario con su movimiento.
+          stock: 0,
           supplierId: defaultSupplier || "",
           isFeatured: false,
           isArchived: false,
@@ -1235,15 +1280,29 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       }
     }
 
-    // We do NOT add back remaining `currentVars`. This enforces the "Selected Only" rule.
+    // Las filas con id (guardadas o traídas de un producto suelto) no se
+    // descartan aunque su combinación no esté marcada: se conservan y se
+    // avisa, en vez de perderlas en silencio como antes.
+    const keptById = currentVars.filter(
+      (variant, index) => variant.id && !usedIndices.has(index),
+    );
+    if (keptById.length > 0) {
+      finalVariants.push(...keptById);
+      toast({
+        title: "Variantes conservadas",
+        description: `${keptById.length} ${keptById.length === 1 ? "variante con producto real no estaba" : "variantes con producto real no estaban"} en las combinaciones marcadas y se ${keptById.length === 1 ? "conserva" : "conservan"} igual: ${keptById.map((variant) => variant.name).join(", ")}.`,
+        variant: "warning",
+      });
+    }
 
     form.setValue("variants", finalVariants, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
+    const createdCount = finalVariants.filter((variant) => !variant.id).length;
     toast({
-      description: `Se han generado ${allGenerated.length} variantes.`,
+      description: `${createdCount} ${createdCount === 1 ? "variante nueva se crea" : "variantes nuevas se crean"} al guardar, con 0 unidades.`,
       variant: "success",
     });
   };
@@ -1264,6 +1323,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     isFeatured?: boolean;
     isArchived?: boolean;
     sku?: string;
+    description?: string | null;
+    gtin?: string | null;
+    mpn?: string | null;
+    hasNoProductIdentifier?: boolean;
   }
 
   // Handle Import from Standalone Products
@@ -1302,9 +1365,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       if (p.design?.id) currentDesigns.add(p.design.id);
     });
 
-    form.setValue("sizeIds", Array.from(currentSizes));
-    form.setValue("colorIds", Array.from(currentColors));
-    form.setValue("designIds", Array.from(currentDesigns));
+    // Con `shouldDirty`: antes traer productos no ensuciaba el formulario y
+    // la guarda de salida no avisaba al volver sin guardar.
+    form.setValue("sizeIds", Array.from(currentSizes), { shouldDirty: true });
+    form.setValue("colorIds", Array.from(currentColors), { shouldDirty: true });
+    form.setValue("designIds", Array.from(currentDesigns), { shouldDirty: true });
 
     // 3. Smart Image Aggregation
     const existingImages = form.getValues("images") || [];
@@ -1323,54 +1388,48 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     });
 
     if (newImages.length > 0) {
-      form.setValue("images", [...existingImages, ...newImages]);
+      form.setValue("images", [...existingImages, ...newImages], {
+        shouldDirty: true,
+      });
       toast({
         description: `${newImages.length} nuevas imágenes agregadas de los productos importados.`,
       });
     }
 
-    // 4. Inherit group-level values from imported products
-    // When importing products, we set the group's price/acqPrice/supplier from the first product
-    // if these values are not already set in the form
+    // 4. Los datos del grupo (precio, costo, proveedor) solo se rellenan si
+    //    estaban vacíos, para las variantes NUEVAS. Un producto que se trae
+    //    conserva lo suyo: precio, costo, proveedor, descripción y código.
     const firstProduct = products[0];
-
-    const currentPrice = form.getValues("price");
-    const currentAcqPrice = form.getValues("acqPrice");
-    const currentSupplier = form.getValues("defaultSupplier");
-
-    // Set group-level values from first imported product if not already set
-    if (!currentPrice || currentPrice === 0) {
-      form.setValue("price", firstProduct.price);
+    const dirty = { shouldDirty: true } as const;
+    if (!form.getValues("price")) form.setValue("price", firstProduct.price, dirty);
+    if (!form.getValues("acqPrice")) {
+      form.setValue("acqPrice", firstProduct.acqPrice || 0, dirty);
     }
-    if (!currentAcqPrice || currentAcqPrice === 0) {
-      form.setValue("acqPrice", firstProduct.acqPrice || 0);
-    }
-    if (!currentSupplier && firstProduct.supplierId) {
-      form.setValue("defaultSupplier", firstProduct.supplierId);
+    if (!form.getValues("defaultSupplier") && firstProduct.supplierId) {
+      form.setValue("defaultSupplier", firstProduct.supplierId, dirty);
     }
 
-    // Get the effective group values (either existing or newly set from first product)
-    const effectivePrice = form.getValues("price");
-    const effectiveAcqPrice = form.getValues("acqPrice");
-    const effectiveSupplier = form.getValues("defaultSupplier");
-
-    // 5. Map to Variants
-    // IMPORTANT: When importing standalone products, preserve their actual stock values.
-    // Each variant keeps its own stock - do NOT reset to 0 or use defaultStock.
+    // 5. Filas adoptadas: llevan `id` (el servidor adopta en vez de crear) y
+    //    todos sus datos reales; `origin: "adopted"` lo muestra la tabla.
     const newVariants: FormVariant[] = products.map((p) => ({
-      id: p.id, // KEEP ID so backend knows to update/adopt
+      id: p.id,
+      origin: "adopted",
       sku: p.sku || "",
       name: p.name,
-      price: effectivePrice || p.price, // Use group price (now set from first product)
-      acqPrice: effectiveAcqPrice || p.acqPrice || 0, // Use group acqPrice
-      stock: p.stock ?? 0, // ALWAYS preserve each product's actual stock
-      supplierId: effectiveSupplier || p.supplierId,
+      price: p.price,
+      acqPrice: p.acqPrice || 0,
+      stock: p.stock ?? 0,
+      supplierId: p.supplierId || "",
       isFeatured: p.isFeatured || false,
       isArchived: p.isArchived || false,
       size: p.size,
       color: p.color,
       design: p.design,
       images: p.images?.map((i) => i.url) || [],
+      description: p.description ?? undefined,
+      gtin: p.gtin ?? "",
+      mpn: p.mpn ?? "",
+      hasNoProductIdentifier: p.hasNoProductIdentifier ?? undefined,
     }));
 
     // Merge variants avoiding ID duplication AND Attribute Duplication
@@ -1410,17 +1469,23 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       const finalVariants = [...currentVars, ...toAdd];
       const finalImages = [...existingImages, ...newImages];
 
-      form.setValue("variants", finalVariants);
+      form.setValue("variants", finalVariants, { shouldDirty: true });
 
       // Recalculate Image Mapping for the new set of variants and images
       form.setValue(
         "imageMapping",
         reconstructMapping(finalImages, finalVariants),
+        { shouldDirty: true },
       );
 
+      const skipped = newVariants.length - toAdd.length;
       toast({
-        title: "Importación Exitosa",
-        description: `${toAdd.length} productos agregados como variantes.`,
+        title: "Productos traídos al grupo",
+        description: `${toAdd.length} ${toAdd.length === 1 ? "producto se adopta" : "productos se adoptan"} con su precio, costo, stock y código.${
+          skipped > 0
+            ? ` ${skipped} ${skipped === 1 ? "se omitió porque ya está" : "se omitieron porque ya están"} en el grupo o repiten una combinación.`
+            : ""
+        }`,
         variant: "success",
       });
     } else {
@@ -1631,11 +1696,18 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       isMain: v.isMain ?? false,
                     }))}
                     disabled={loading}
+                    maxImages={8}
                     onChange={(images) => field.onChange(images)}
-                    onRemove={(url) =>
-                      field.onChange([
-                        ...field.value.filter((current) => current.url !== url),
-                      ])
+                    pendingRemovals={pendingImageRemovals}
+                    onMarkRemoval={(url) =>
+                      setPendingImageRemovals((pending) =>
+                        pending.includes(url) ? pending : [...pending, url],
+                      )
+                    }
+                    onUndoRemoval={(url) =>
+                      setPendingImageRemovals((pending) =>
+                        pending.filter((item) => item !== url),
+                      )
                     }
                   />
                 </FormControl>
@@ -2004,39 +2076,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 </Button>
               </div>
             )}
-            <FormField
-              control={form.control}
-              name="defaultStock"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Stock Predeterminado</FormLabel>
-                  <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-full bg-slate-200/50 p-1">
-                        <PackageCheckIcon className="h-4 w-4 text-slate-500" />
-                      </div>
-                      <span className="text-sm font-semibold">
-                        Gestionado por variante
-                      </span>
-                    </div>
-                    <span className="rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                      Ver Variantes
-                    </span>
-                  </div>
-                  <FormControl>
-                    <Input
-                      type="hidden"
-                      disabled={true}
-                      placeholder="0"
-                      {...field}
-                      value={0}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
+                        <FormField
               control={form.control}
               name="defaultSupplier"
               render={({ field }) => (
@@ -2105,7 +2145,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <div className="space-y-1 leading-none">
                     <FormLabel>Destacado</FormLabel>
                     <FormDescription>
-                      Este grupo aparecerá en la pagina principal
+                      Este grupo aparecerá en la página principal
                     </FormDescription>
                   </div>
                 </FormItem>
@@ -2113,25 +2153,52 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="isArchived"
-              render={({ field }) => (
-                <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Archivado</FormLabel>
+              name="archiveMode"
+              render={({ field }) => {
+                const rows = describeArchiveRows(watchedVariants ?? []);
+                return (
+                  <FormItem className="col-span-full">
+                    <FormLabel>Estado en la tienda</FormLabel>
+                    <FormControl>
+                      <RadioCards<GroupArchiveMode>
+                        value={field.value ?? "per-variant"}
+                        onChange={field.onChange}
+                        label="Estado en la tienda"
+                        idPrefix="estado-grupo"
+                        disabled={loading}
+                        columns={3}
+                        options={[
+                          {
+                            value: "all-published",
+                            title: "Todas a la venta",
+                            hint: "Publica todas las variantes al guardar.",
+                          },
+                          {
+                            value: "all-archived",
+                            title: "Todas archivadas",
+                            hint: "Saca el grupo de la tienda y pausa Mercado Libre. Conserva todo.",
+                          },
+                          {
+                            value: "per-variant",
+                            title: "Por variante",
+                            hint:
+                              rows.saved > 0
+                                ? `Cada fila decide. Hoy: ${rows.live} a la venta, ${rows.archived} ${rows.archived === 1 ? "archivada" : "archivadas"}.`
+                                : "Cada fila decide su estado.",
+                          },
+                        ]}
+                      />
+                    </FormControl>
                     <FormDescription>
-                      Ocultar este grupo de la tienda
+                      Antes la casilla «Archivado» leía solo la primera variante
+                      y pisaba a las demás al guardar.
                     </FormDescription>
-                  </div>
-                </FormItem>
-              )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
-
+            
             <FormField
               control={form.control}
               name="categoryId"

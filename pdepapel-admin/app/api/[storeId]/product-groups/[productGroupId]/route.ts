@@ -5,18 +5,35 @@ import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
 import {
   deleteGroupedVariantKeepingUrls,
+  getUniqueProductSlug,
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
 import { resolveVariantImages } from "@/lib/variant-images";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
-import { resolveProductGroupVariantStock } from "@/lib/product-group-variant-stock";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
+import { findProductWithGtin } from "@/lib/product-identifiers";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { pauseMarketplaceListingsForProducts } from "@/lib/product-archive";
+import { getProductDeleteCheck } from "@/lib/product-deletion";
+import {
+  buildVariantData,
+  collectArchiveTransitions,
+  describeRemovals,
+  findDuplicateVariantId,
+  loadAdoptableProducts,
+  resolveVariantRemovals,
+  variantAttributeIds,
+  variantLabel,
+  type VariantPayload,
+} from "@/lib/product-group-save";
+import {
+  assertStoreCategory,
+  loadVariantAttributes,
+} from "@/lib/product-group-attributes";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,7 +98,9 @@ export async function PATCH(
     if (!params.productGroupId)
       throw ErrorFactory.InvalidRequest("Product Group ID is required");
     await verifyStoreOwner(userId, params.storeId);
-    const body = await req.json();
+    const body = await req.json().catch(() => {
+      throw ErrorFactory.InvalidRequest("El cuerpo de la petición no es JSON válido");
+    });
 
     const {
       name,
@@ -91,7 +110,6 @@ export async function PATCH(
       imageMapping,
       defaultPrice,
       defaultCost,
-      defaultStock,
       defaultSupplier,
       isFeatured,
       isArchived,
@@ -99,7 +117,7 @@ export async function PATCH(
       variants: variantsPayload,
       preserveSlug = false,
       confirmRemovals = false,
-    } = body;
+    } = body as Record<string, any>;
     const sanitizedDescription = sanitizeRichTextHtml(description);
 
     if (!name) throw ErrorFactory.InvalidRequest("Name is required");
@@ -108,10 +126,31 @@ export async function PATCH(
     if (!variantsPayload || !Array.isArray(variantsPayload)) {
       throw ErrorFactory.InvalidRequest("Variants array is required");
     }
-    if (hasDuplicateVariantCombination(variantsPayload)) {
+    const variants = variantsPayload as VariantPayload[];
+    if (hasDuplicateVariantCombination(variants)) {
       throw ErrorFactory.InvalidRequest(
         "No se pueden guardar dos variantes con la misma combinación de tamaño, color y diseño.",
       );
+    }
+    const duplicateId = findDuplicateVariantId(variants);
+    if (duplicateId) {
+      throw ErrorFactory.InvalidRequest(
+        "La misma variante aparece dos veces en el grupo. Quita la fila repetida.",
+        { productId: duplicateId },
+      );
+    }
+    for (const variant of variants) {
+      const { sizeId, colorId, designId } = variantAttributeIds(variant);
+      if (!sizeId || !colorId || !designId) {
+        const missing = [
+          !sizeId && "tamaño",
+          !colorId && "color",
+          !designId && "diseño",
+        ].filter(Boolean);
+        throw ErrorFactory.InvalidRequest(
+          `La variante "${variantLabel(variant)}" no se puede guardar: le falta ${missing.join(", ")}.`,
+        );
+      }
     }
 
     // Igual que al crear el grupo: una variante nueva no puede llamarse como
@@ -119,7 +158,7 @@ export async function PATCH(
     await assertNoStandaloneConflicts(
       prismadb,
       params.storeId,
-      variantsPayload,
+      variants,
       name,
       { images, imageMapping },
     );
@@ -137,8 +176,11 @@ export async function PATCH(
     });
     const previousImageUrls = previousImages.map((image) => image.url);
 
+    let pausedListings = 0;
+    let appliedRemovals: Awaited<ReturnType<typeof resolveVariantRemovals>> =
+      [];
+
     const updatedGroup = await prismadb.$transaction(async (tx) => {
-      const initialMovements: any[] = [];
       const existingGroup = await tx.productGroup.findFirst({
         where: { id: params.productGroupId, storeId: params.storeId },
         select: { id: true, slug: true },
@@ -147,7 +189,7 @@ export async function PATCH(
         throw ErrorFactory.NotFound("Grupo de productos no encontrado");
       }
 
-      // 1. Update Group Details
+      // 1. Datos del grupo
       const group = await tx.productGroup.update({
         where: { id: params.productGroupId },
         data: {
@@ -158,7 +200,6 @@ export async function PATCH(
         },
       });
 
-      // Prisma 6: explicit image replacement for optional relations
       await tx.image.deleteMany({
         where: { productGroupId: params.productGroupId },
       });
@@ -170,58 +211,61 @@ export async function PATCH(
         })),
       });
 
-      // 2. Fetch Existing Variants to Handle Deletions
+      // 2. Variantes actuales del grupo (de esta tienda) y productos que el
+      //    formulario quiere conservar o adoptar: cada id se valida por
+      //    tienda, grupo, kit y archivado antes de tocar nada.
       const existingProducts = await tx.product.findMany({
-        where: { productGroupId: params.productGroupId },
-        include: { orderItems: true },
+        where: { productGroupId: params.productGroupId, storeId: params.storeId },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          slug: true,
+          isArchived: true,
+          createdAt: true,
+        },
       });
-
-      // 3. Identify Variants to Update, Create, and Delete
+      const referenced = await loadAdoptableProducts(tx, {
+        storeId: params.storeId,
+        groupId: params.productGroupId,
+        variants,
+      });
       const payloadIds = new Set(
-        variantsPayload.map((v: any) => v.id).filter(Boolean),
+        variants.map((variant) => variant.id).filter(Boolean) as string[],
       );
 
-      // Deletions: Existing products not present in the payload
-      const productsToDelete = existingProducts.filter(
-        (p) => !payloadIds.has(p.id),
+      // 3. Bajas: la misma revisión que «Eliminar» en la ficha. Con bloqueos
+      //    se archiva y sigue en el grupo; libre se elimina y su URL redirige
+      //    a una hermana. El cliente tiene que haber visto la lista.
+      const productsToRemove = existingProducts.filter(
+        (product) => !payloadIds.has(product.id),
       );
-
-      // Quitar una variante del payload borraba el producto sin avisar. Ahora
-      // el cliente tiene que confirmar que vio la lista; cualquier otro cliente
-      // recibe 409 con el detalle en vez de perder catalogo en silencio.
-      if (productsToDelete.length > 0 && confirmRemovals !== true) {
+      const removals = await resolveVariantRemovals(tx, {
+        storeId: params.storeId,
+        products: productsToRemove,
+      });
+      if (removals.length > 0 && confirmRemovals !== true) {
         throw ErrorFactory.Conflict(
-          `Este guardado quitaria ${productsToDelete.length} ${
-            productsToDelete.length === 1 ? "variante" : "variantes"
-          } del grupo. Confirma la operacion para continuar.`,
-          {
-            removals: productsToDelete.map((product) => ({
-              id: product.id,
-              name: product.name,
-              sku: product.sku,
-              // Con pedidos se archiva para conservar el historial; sin
-              // pedidos se elimina de forma definitiva.
-              action: product.orderItems.length > 0 ? "archive" : "delete",
-              orderItems: product.orderItems.length,
-            })),
-          },
+          `Este guardado quitaría ${removals.length} ${
+            removals.length === 1 ? "variante" : "variantes"
+          } del grupo: ${describeRemovals(removals)}. Confirma la operación para continuar.`,
+          { removals },
         );
       }
 
-      // La hermana más antigua que sigue en el grupo hereda las URLs de las
-      // variantes que se borran; las nuevas de este mismo guardado aún no existen.
       const survivor = existingProducts
-        .filter((p) => payloadIds.has(p.id) && !p.isArchived)
+        .filter((product) => payloadIds.has(product.id) && !product.isArchived)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
 
-      // Process Deletions
-      for (const product of productsToDelete) {
-        if (product.orderItems.length > 0) {
-          // Soft delete if orders exist
+      const archivedByRemoval: string[] = [];
+      for (const removal of removals) {
+        const product = productsToRemove.find((row) => row.id === removal.id)!;
+        if (removal.action === "archive") {
           await tx.product.update({
-            where: { id: product.id },
+            where: { id: product.id, storeId: params.storeId },
             data: { isArchived: true },
           });
+          if (!product.isArchived) archivedByRemoval.push(product.id);
         } else if (survivor) {
           await deleteGroupedVariantKeepingUrls(tx, {
             storeId: params.storeId,
@@ -229,187 +273,132 @@ export async function PATCH(
             redirectToProductId: survivor.id,
           });
         } else {
-          // Hard delete
-          await tx.product.delete({
-            where: { id: product.id },
-          });
+          await tx.product.delete({ where: { id: product.id } });
         }
       }
+      appliedRemovals = removals;
 
-      // 4. Process Upserts (Updates + Creations)
-      await Promise.all(
-        variantsPayload.map(async (variant: any) => {
-          const sizeId = variant.size?.id || variant.sizeId;
-          const colorId = variant.color?.id || variant.colorId;
-          const designId = variant.design?.id || variant.designId;
+      // 4. Atributos y subcategoría de todas las filas de una vez (y de esta tienda).
+      await assertStoreCategory(tx, params.storeId, categoryId);
+      const attributes = await loadVariantAttributes(tx, params.storeId, variants);
 
-          if (!sizeId || !colorId || !designId) {
-            const missing = [
-              !sizeId && "tamaño",
-              !colorId && "color",
-              !designId && "diseño",
-            ].filter(Boolean);
-            throw ErrorFactory.InvalidRequest(
-              `La variante "${variant.name || variant.sku || "sin nombre"}" no se puede guardar: le falta ${missing.join(", ")}.`,
+      // 5. Altas y cambios, fila por fila (una transacción serializable no
+      //    gana nada con Promise.all y sí pierde el orden de los errores).
+      const nextArchived = new Map<string, boolean | undefined>();
+      for (const variant of variants) {
+        const ids = variantAttributeIds(variant) as {
+          sizeId: string;
+          colorId: string;
+          designId: string;
+        };
+        const { colorObj, designObj, sizeObj } = attributes.resolve(ids, variant);
+        const existing = variant.id ? referenced.get(variant.id) : undefined;
+        const isNew = !existing;
+
+        const data = buildVariantData({
+          variant,
+          defaults: {
+            name,
+            description: sanitizedDescription,
+            categoryId,
+            price: defaultPrice,
+            acqPrice: defaultCost,
+            supplierId: defaultSupplier,
+            isFeatured,
+            isArchived,
+          },
+          isNew,
+          attributes: ids,
+        });
+
+        if (data.gtin) {
+          const owner = await findProductWithGtin(tx, {
+            storeId: params.storeId,
+            gtin: data.gtin,
+            excludeProductId: existing?.id,
+          });
+          if (owner) {
+            throw ErrorFactory.Conflict(
+              `Ese GTIN ya está en «${owner.name}». Un código de barras identifica un solo producto.`,
+              { productId: owner.id },
             );
           }
+        }
 
-          const [colorObj, designObj, sizeObj] = await Promise.all([
-            tx.color.findUnique({ where: { id: colorId } }),
-            tx.design.findUnique({ where: { id: designId } }),
-            tx.size.findUnique({ where: { id: sizeId } }),
-          ]);
+        const applicableImages = resolveVariantImages({
+          variantImages: variant.images,
+          groupImages: images,
+          imageMapping,
+          colorId: ids.colorId,
+          designId: ids.designId,
+        });
+        const imageData = applicableImages.map(
+          (img: { url: string; isMain?: boolean }) => ({
+            url: img.url,
+            isMain: img.isMain || false,
+          }),
+        );
 
-          const variantName = variant.name || name;
-          const existingVariant = existingProducts.find(
-            (product) => product.id === variant.id,
-          );
-          let variantSlug = existingVariant?.slug || "";
-          if (!preserveSlug || !existingVariant) {
-            variantSlug = generateProductSlug({
+        if (existing) {
+          // Existente o adoptada: solo cambia lo que la fila trae; su slug y
+          // su URL se conservan (la sincronización de slugs escribe alias).
+          await tx.product.update({
+            where: { id: existing.id, storeId: params.storeId },
+            data: { ...data, productGroupId: params.productGroupId },
+          });
+          nextArchived.set(existing.id, data.isArchived);
+          await tx.image.deleteMany({ where: { productId: existing.id } });
+          await tx.image.createMany({
+            data: imageData.map((img) => ({ ...img, productId: existing.id })),
+          });
+        } else {
+          if (!variant.sku) {
+            throw ErrorFactory.InvalidRequest(
+              `La variante «${variantLabel(variant)}» no tiene SKU.`,
+            );
+          }
+          const variantName = data.name ?? name;
+          const baseSlug =
+            generateProductSlug({
               name: variantName,
               color: colorObj,
               design: designObj,
               size: sizeObj,
-              includeVariantAttributes: variantsPayload.length > 1,
-            });
-            if (!variantSlug) {
-              variantSlug = slugify(variantName) || `variant-${Date.now()}`;
-            }
-          }
-
-          // Determine Image Logic
-          const applicableImages = resolveVariantImages({
-            variantImages: variant.images,
-            groupImages: images,
-            imageMapping,
-            colorId,
-            designId,
-          });
-
-          // Prepare Data
-          const finalPrice =
-            variant.price !== undefined
-              ? parseFloat(variant.price)
-              : parseFloat(defaultPrice || "0");
-          const finalAcqPrice =
-            variant.acqPrice !== undefined
-              ? parseFloat(variant.acqPrice)
-              : parseFloat(defaultCost || "0");
-          const finalStock =
-            variant.stock !== undefined
-              ? parseInt(variant.stock)
-              : parseInt(defaultStock || "0");
-          const finalSupplierId = variant.supplierId || defaultSupplier || null;
-          const isExistingVariant = Boolean(
-            variant.id && payloadIds.has(variant.id),
-          );
-          const stockResolution = resolveProductGroupVariantStock({
-            isExistingVariant,
-            submittedStock: finalStock,
-          });
-
-          let variantIdentifiers;
-          try {
-            variantIdentifiers = normalizeProductIdentifiers({
-              gtin: variant.gtin,
-              mpn: variant.mpn,
-              hasNoProductIdentifier: variant.hasNoProductIdentifier,
-              defaultNoIdentifierWhenEmpty: true,
-            });
-          } catch (error) {
-            throw ErrorFactory.InvalidRequest(
-              `La variante "${variant.name || variant.sku || "sin nombre"}": ${
-                error instanceof Error
-                  ? error.message
-                  : "identificadores inválidos"
-              }`,
-            );
-          }
-
-          const dataToUpsert = {
+              includeVariantAttributes: variants.length > 1,
+            }) || slugify(variantName) || "producto";
+          const slug = await getUniqueProductSlug(tx, {
             storeId: params.storeId,
-            productGroupId: params.productGroupId,
-            categoryId,
-            sizeId,
-            colorId,
-            designId,
-            name: variantName,
-            slug: variantSlug,
-            sku: variant.sku,
-            description: sanitizeRichTextHtml(
-              variant.description || sanitizedDescription,
-            ),
-            price: finalPrice,
-            acqPrice: finalAcqPrice,
-            stock: stockResolution.productStock,
-            supplierId: finalSupplierId,
-            isFeatured: variant.isFeatured ?? isFeatured ?? false,
-            // La casilla «Archivado» del grupo manda sobre las variantes: no
-            // hay columna en ProductGroup, archivar el grupo es archivarlas.
-            isArchived:
-              typeof isArchived === "boolean"
-                ? isArchived
-                : variant.isArchived || false,
-            // Sin esto la variante quedaba para siempre "sin identificador".
-            ...variantIdentifiers,
-          };
+            baseSlug,
+          });
+          // Una variante nueva nace con 0 unidades, como cualquier producto
+          // nuevo: las existencias entran por Inventario, con su movimiento.
+          await tx.product.create({
+            data: {
+              ...data,
+              name: variantName,
+              sku: variant.sku,
+              slug,
+              stock: 0,
+              storeId: params.storeId,
+              productGroupId: params.productGroupId,
+              categoryId: data.categoryId ?? attributes.categoryFallback(),
+              isArchived: data.isArchived ?? false,
+              isFeatured: data.isFeatured ?? false,
+              price: data.price ?? 0,
+              description: data.description ?? sanitizedDescription,
+              images: { createMany: { data: imageData } },
+            },
+          });
+        }
+      }
 
-          const imageData = applicableImages.map(
-            (img: { url: string; isMain?: boolean }) => ({
-              url: img.url,
-              isMain: img.isMain || false,
-            }),
-          );
-
-          if (isExistingVariant) {
-            // UPDATE Existing
-            await tx.product.update({
-              where: { id: variant.id },
-              data: dataToUpsert,
-            });
-
-            // Prisma 6: explicit image replacement for optional relations
-            await tx.image.deleteMany({
-              where: { productId: variant.id },
-            });
-            await tx.image.createMany({
-              data: imageData.map((img: { url: string; isMain: boolean }) => ({
-                ...img,
-                productId: variant.id,
-              })),
-            });
-          } else {
-            // CREATE New
-            const newProduct = await tx.product.create({
-              data: {
-                ...dataToUpsert,
-                images: {
-                  createMany: {
-                    data: imageData,
-                  },
-                },
-              },
-            });
-
-            if (
-              stockResolution.initialMovementQuantity &&
-              !dataToUpsert.stock
-            ) {
-              initialMovements.push({
-                storeId: params.storeId,
-                productId: newProduct.id,
-                type: "INITIAL_INTAKE",
-                quantity: stockResolution.initialMovementQuantity,
-                cost: finalAcqPrice,
-                price: finalPrice,
-                createdBy: userId,
-                reason: "Initial stock from Product Group update (new variant)",
-              });
-            }
-          }
-        }),
-      );
+      // 6. Archivar (por casilla del grupo, por fila o por baja con bloqueos)
+      //    pausa la publicación de Mercado Libre, como en la ficha.
+      const transitions = collectArchiveTransitions(existingProducts, nextArchived);
+      pausedListings = await pauseMarketplaceListingsForProducts(tx, [
+        ...transitions,
+        ...archivedByRemoval,
+      ]);
 
       if (!preserveSlug) {
         await synchronizeProductGroupSlugs(
@@ -419,20 +408,16 @@ export async function PATCH(
         );
       }
 
-      // Execute Initial Movements for new variants
-      if (initialMovements.length > 0) {
-        const { createInventoryMovementBatch } =
-          await import("@/lib/inventory");
-        await createInventoryMovementBatch(tx, initialMovements);
-      }
-
       return group;
     });
 
     await deleteCloudinaryImages(previousImageUrls, "PRODUCT_GROUP_PATCH");
     await invalidateStoreProductsCache(params.storeId);
 
-    return NextResponse.json(updatedGroup, { headers: corsHeaders });
+    return NextResponse.json(
+      { ...updatedGroup, removals: appliedRemovals, pausedListings },
+      { headers: corsHeaders },
+    );
   } catch (error) {
     console.log("[PRODUCT_GROUP_PATCH]", error);
     return handleErrorResponse(error, "PRODUCT_GROUP_PATCH", {
@@ -447,23 +432,27 @@ export async function DELETE(
 ) {
   try {
     const { userId } = await auth();
-    // Parse query params for delete mode
-    const url = new URL(req.url);
-    const deleteVariants = url.searchParams.get("deleteVariants") === "true";
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productGroupId)
       throw ErrorFactory.InvalidRequest("Product Group ID is required");
-
     await verifyStoreOwner(userId, params.storeId);
+
+    const url = new URL(req.url);
+    const deleteVariants = url.searchParams.get("deleteVariants") === "true";
 
     const imageUrlsToDelete: string[] = [];
     const deletedGroup = await prismadb.$transaction(async (tx) => {
-      // 1. Fetch children to check constraints
+      // Todo filtrado por tienda: el grupo, sus variantes y sus fotos.
+      const group = await tx.productGroup.findFirst({
+        where: { id: params.productGroupId, storeId: params.storeId },
+        select: { id: true },
+      });
+      if (!group) throw ErrorFactory.NotFound("Grupo de productos no encontrado");
+
       const children = await tx.product.findMany({
-        where: { productGroupId: params.productGroupId },
-        include: { orderItems: true, images: { select: { url: true } } },
+        where: { productGroupId: params.productGroupId, storeId: params.storeId },
+        select: { id: true, name: true, images: { select: { url: true } } },
       });
       const groupImages = await tx.image.findMany({
         where: { productGroupId: params.productGroupId },
@@ -472,40 +461,43 @@ export async function DELETE(
       imageUrlsToDelete.push(...groupImages.map((image) => image.url));
 
       if (deleteVariants) {
-        // Enforce Strict Policy: Cannot delete if ANY child has orders
-        const hasOrders = children.some((child) => child.orderItems.length > 0);
-        if (hasOrders) {
+        // La misma revisión que «Eliminar» en la ficha, con nombres.
+        const blocked: { id: string; name: string; blockers: string[] }[] = [];
+        for (const child of children) {
+          const check = await getProductDeleteCheck(tx, {
+            storeId: params.storeId,
+            productId: child.id,
+          });
+          if (check?.blocked) {
+            blocked.push({
+              id: child.id,
+              name: child.name,
+              blockers: check.blockers.map((blocker) => blocker.label),
+            });
+          }
+        }
+        if (blocked.length > 0) {
           throw ErrorFactory.Conflict(
-            "Cannot delete group and variants because some products have existing orders.",
+            `No se puede eliminar el grupo con sus variantes: ${blocked
+              .map((row) => `«${row.name}» (${row.blockers.join(", ").toLowerCase()})`)
+              .join("; ")}. Archívalas o desvincula el grupo en su lugar.`,
+            { blocked },
           );
         }
-
-        // Las fotos de las variantes se borran de Cloudinary después de
-        // confirmar (solo las que ninguna otra fila use).
         imageUrlsToDelete.push(
           ...children.flatMap((child) => child.images.map((image) => image.url)),
         );
         await tx.product.deleteMany({
-          where: { productGroupId: params.productGroupId },
+          where: { productGroupId: params.productGroupId, storeId: params.storeId },
         });
       } else {
-        // Default: Unlink
         await tx.product.updateMany({
-          where: {
-            productGroupId: params.productGroupId,
-          },
-          data: {
-            productGroupId: null,
-          },
+          where: { productGroupId: params.productGroupId, storeId: params.storeId },
+          data: { productGroupId: null },
         });
       }
 
-      // 2. Delete Group
-      return tx.productGroup.delete({
-        where: {
-          id: params.productGroupId,
-        },
-      });
+      return tx.productGroup.delete({ where: { id: params.productGroupId } });
     });
 
     await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCT_GROUP_DELETE");

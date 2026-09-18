@@ -33,6 +33,7 @@ import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { currencyFormatter } from "@/lib/utils";
 import { Archive, Info, Package, Pencil, Star, Trash } from "lucide-react";
 import { ProductGroupFormValues } from "./product-group-form";
+import { ProductTintBadge } from "./product-badges";
 
 interface VariantGridProps {
   form: UseFormReturn<ProductGroupFormValues>;
@@ -150,8 +151,10 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
 
   const onSaveVariant = (data: any) => {
     if (editingIndex !== null) {
-      // Update the specific variant in the form array
-      setValue(`variants.${editingIndex}`, data, {
+      // Se mezcla sobre la fila: cualquier campo que el modal no conozca
+      // (identificadores, origen) se conserva en vez de perderse.
+      const current = formVariants[editingIndex] ?? {};
+      setValue(`variants.${editingIndex}`, { ...current, ...data }, {
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
@@ -264,7 +267,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                       selectedIndices.size === filteredVariants.length
                     }
                     onCheckedChange={toggleSelectAll}
-                    aria-label="Select all"
+                    aria-label="Seleccionar todas las variantes"
                   />
                 </TableHead>
                 <TableHead>SKU</TableHead>
@@ -312,7 +315,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                       <Checkbox
                         checked={selectedIndices.has(index)}
                         onCheckedChange={() => toggleSelectRow(index)}
-                        aria-label={`Select row ${index}`}
+                        aria-label={`Seleccionar ${variant.name || "la variante"}`}
                       />
                     </TableCell>
                     <TableCell className="font-mono text-xs">
@@ -440,10 +443,19 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                       })()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span className="text-sm font-medium">
                           {variant.name}
                         </span>
+                        {/* Origen: qué pasa con la fila al guardar. */}
+                        {variant.id ? (
+                          <ProductTintBadge
+                            label={variant.origin === "adopted" ? "Se adopta" : "Guardada"}
+                            tone={variant.origin === "adopted" ? "mint" : "slate"}
+                          />
+                        ) : (
+                          <ProductTintBadge label="Se crea · 0 und" tone="lavender" />
+                        )}
                         <span className="text-[10px] text-muted-foreground">
                           {variant.size?.name} / {variant.color?.name} /{" "}
                           {variant.design?.name}
