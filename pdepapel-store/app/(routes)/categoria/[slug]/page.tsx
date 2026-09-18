@@ -15,6 +15,7 @@ import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
+import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
@@ -49,7 +50,7 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   const name = stripTaxonomyIcon(category.name);
   const title = category.seoTitle || name;
   const description = category.seoDescription || `Explora ${name} en Papelería P de Papel. Encuentra artículos creativos con envíos a toda Colombia.`;
-  const socialImages = category.imageUrl ? [{ url: category.imageUrl, alt: name }] : undefined;
+  const socialImages = category.imageUrl ? [{ url: getCloudinaryImageUrl(category.imageUrl, CLOUDINARY_MAX_WIDTH), alt: name }] : undefined;
   const hasActiveFilters = Object.values(searchParams).some((value) => value !== undefined && value !== "");
   const shouldIndex = Boolean(category.seoEnabled) && !hasActiveFilters;
 

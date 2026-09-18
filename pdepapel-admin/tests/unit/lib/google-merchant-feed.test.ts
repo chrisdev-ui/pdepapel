@@ -79,8 +79,8 @@ describe("buildGoogleMerchantFeed", () => {
       title: "Producto 1",
       description: "Cuaderno A5, tapa dura",
       link: "https://papeleriapdepapel.com/producto/producto-1",
-      image_link: "https://res.cloudinary.com/demo/image/upload/v1/a.png",
-      additional_image_link: "https://res.cloudinary.com/demo/image/upload/v1/b.jpg",
+      image_link: "https://res.cloudinary.com/demo/image/upload/c_limit,w_1600,q_auto/v1/a.png",
+      additional_image_link: "https://res.cloudinary.com/demo/image/upload/c_limit,w_1600,q_auto/v1/b.jpg",
       price: "18000 COP",
       condition: "new",
       availability: "in_stock",
@@ -104,12 +104,12 @@ describe("buildGoogleMerchantFeed", () => {
       {
         id: "SKU-1",
         from: "https://res.cloudinary.com/demo/image/upload/v1/a.webp",
-        to: "https://res.cloudinary.com/demo/image/upload/v1/a.png",
+        to: "https://res.cloudinary.com/demo/image/upload/c_limit,w_1600,q_auto/v1/a.png",
       },
       {
         id: "2",
         from: "https://res.cloudinary.com/demo/image/upload/v1/a.webp",
-        to: "https://res.cloudinary.com/demo/image/upload/v1/a.png",
+        to: "https://res.cloudinary.com/demo/image/upload/c_limit,w_1600,q_auto/v1/a.png",
       },
     ]);
   });

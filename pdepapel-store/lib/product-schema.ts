@@ -1,4 +1,6 @@
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
+import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
+
 import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { BASE_URL } from "@/constants";
 import { getAverageRating, isComingSoon } from "@/lib/product-card";
@@ -57,7 +59,8 @@ export function buildProductSchema(
       `Descubre ${product.name} en Papelería P de Papel.`,
     ),
     url: `${BASE_URL}${path}`,
-    image: product.images?.map((image) => image.url) || [],
+    // La copia de 1600 px de la galería; Google la baja para Imágenes y Merchant.
+    image: product.images?.map((image) => getCloudinaryImageUrl(image.url, CLOUDINARY_MAX_WIDTH)) || [],
     sku: product.sku || product.id,
     ...(brand ? { brand: { "@type": "Brand", name: brand } } : {}),
     ...(product.gtin ? { gtin: product.gtin } : {}),

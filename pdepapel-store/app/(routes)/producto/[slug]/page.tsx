@@ -11,6 +11,7 @@ import { RelatedProductsSkeleton } from "@/components/related-products-skeleton"
 import { SingleProductPage } from "@/components/single-product-page";
 import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
+import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
 import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
 import { buildProductMetaTitle } from "@/lib/product-metadata";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
@@ -27,8 +28,10 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   if (!product) notFound();
 
   const canonicalPath = productPath(product.slug || product.id);
+  // Vista previa social: la copia de 1600 px que ya existe para la galería, no el
+  // original completo (WhatsApp, Facebook e Instagram lo bajaban por cada envío).
   const images = (product.images ?? []).map((image, index) => ({
-    url: image.url,
+    url: getCloudinaryImageUrl(image.url, CLOUDINARY_MAX_WIDTH),
     alt: index === 0 ? product.name : `${product.name}, vista ${index + 1}`,
   }));
   const title = buildProductMetaTitle(product);

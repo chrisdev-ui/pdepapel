@@ -41,4 +41,15 @@ describe("product structured data", () => {
     expect(buildProductJsonLd(a, [a, b])).toMatchObject({ "@type": "ProductGroup", productGroupID: "g1" });
     expect(buildProductJsonLd(a, [a, { ...b, color: a.color }])).toMatchObject({ "@type": "Product" });
   });
+
+  /** Google bajaba el original completo de cada foto del JSON-LD; ahora va la copia de 1600 px de la galería. */
+  it("points structured-data images at the sized gallery copy", () => {
+    const product = {
+      ...base,
+      images: [{ id: "i1", url: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg", isMain: true }],
+    } as Product;
+    expect(buildProductJsonLd(product, [product])).toMatchObject({
+      image: ["https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_1600/v1/foto.jpg"],
+    });
+  });
 });

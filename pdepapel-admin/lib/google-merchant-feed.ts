@@ -18,6 +18,7 @@ import {
   getGoogleMerchantProductLink,
   getGoogleMerchantSize,
   toGoogleMerchantImageUrl,
+  isGoogleMerchantFormatRewrite,
 } from "@/lib/google-merchant";
 import prismadb from "@/lib/prismadb";
 
@@ -144,11 +145,11 @@ export function buildGoogleMerchantFeed(
         productId: product.id,
         name: product.name,
       });
-    } else if (imageLink !== rawMainImage) {
+    } else if (isGoogleMerchantFormatRewrite(rawMainImage, imageLink)) {
       rewrittenImages.push({ id: feedId, from: rawMainImage, to: imageLink });
     }
     orderedImages.forEach((image, index) => {
-      if (additionalImages[index] !== image.url) {
+      if (isGoogleMerchantFormatRewrite(image.url, additionalImages[index])) {
         rewrittenImages.push({
           id: feedId,
           from: image.url,

@@ -77,10 +77,21 @@ ancho de banda) y las cadenas duplicadas venían del código anterior al
 2026-09-11 (`next/image` con los anchos por defecto hasta 3840 y la
 transformación encadenada dos veces) y de páginas cacheadas de esa época; el
 código actual solo emite los cinco anchos, y ambos loaders limpian también
-las URL sin versión que ya traían una transformación. AhrefsBot bajaba el
-catálogo entero (otro 6 %): está bloqueado en `app/robots.ts`
-(`BLOCKED_CRAWLERS`); Googlebot-Image se deja pasar porque alimenta Google
-Imágenes y Merchant.
+las URL sin versión que ya traían una transformación. AhrefsBot y Amazonbot
+bajaban el catálogo entero (6 % cada uno): están bloqueados en
+`app/robots.ts` (`BLOCKED_CRAWLERS`); Googlebot-Image se deja pasar porque
+alimenta Google Imágenes y Merchant.
+
+El 41 % «sin referrer» son rastreadores y servicios que bajan la foto desde
+un servidor: los feeds de Google Merchant y Meta (`facebookcatalog`), las
+vistas previas de enlaces (FacebookBot, Instagram, WhatsApp), Googlebot-Image
+y Mercado Libre. Todos recibían el original completo. Desde 2026-09-18:
+`og:image`, `twitter:image` y el `image` del JSON-LD de productos y categorías
+apuntan a la copia de 1600 px `f_auto` que ya existe para la galería (ninguna
+transformación nueva), y `image_link` de los feeds y `pictures` de Mercado
+Libre pasan por `toGoogleMerchantImageUrl` → `c_limit,w_1600,q_auto` con el
+formato fijado por la extensión (esos servicios no aceptan WebP), una copia
+nueva por foto la primera vez que la piden.
 
 Señales de alarma: `derived_resources` muy por encima de `resources × 6`,
 almacenamiento muy superior al peso de los originales, o un salto de

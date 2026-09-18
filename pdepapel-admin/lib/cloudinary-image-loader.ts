@@ -70,9 +70,13 @@ export function isCloudinaryUrl(src: string): boolean {
  * Las URL que no son de Cloudinary (placeholders locales, logos de
  * transportadoras, data URLs) se devuelven tal cual.
  */
-export function getCloudinaryImageUrl(src: string, width: number): string {
-  if (!isCloudinaryUrl(src)) return src;
-
+/**
+ * Separa una URL de Cloudinary en la parte fija (`/<cloud>/image/upload/`) y
+ * la ruta del archivo (versión, carpetas y nombre), descartando cualquier
+ * transformación que ya trajera. Lo usan el loader y los feeds.
+ */
+export function splitCloudinaryUrl(src: string): { url: URL; cloudPath: string; assetPath: string } | null {
+  if (!isCloudinaryUrl(src)) return null;
   const url = new URL(src);
   const uploadIndex = url.pathname.indexOf(UPLOAD_SEGMENT);
   const cloudPath = url.pathname.slice(0, uploadIndex);
@@ -89,7 +93,13 @@ export function getCloudinaryImageUrl(src: string, width: number): string {
       assetSegments = assetSegments.slice(1);
     }
   }
-  const assetPath = assetSegments.join("/");
+  return { url, cloudPath, assetPath: assetSegments.join("/") };
+}
+
+export function getCloudinaryImageUrl(src: string, width: number): string {
+  const parts = splitCloudinaryUrl(src);
+  if (!parts) return src;
+  const { url, cloudPath, assetPath } = parts;
   const boundedWidth = snapCloudinaryWidth(width);
 
   url.pathname = `${cloudPath}${UPLOAD_SEGMENT}${DELIVERY_TRANSFORMATION},w_${boundedWidth}/${assetPath}`;

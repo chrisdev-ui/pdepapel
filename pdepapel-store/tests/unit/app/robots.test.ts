@@ -50,6 +50,7 @@ describe("storefront robots policy", () => {
     const rules = Array.isArray(policy.rules) ? policy.rules : [policy.rules];
 
     expect(rules.find((rule) => rule.userAgent === "AhrefsBot")).toEqual({ userAgent: "AhrefsBot", disallow: "/" });
+    expect(rules.find((rule) => rule.userAgent === "Amazonbot")).toEqual({ userAgent: "Amazonbot", disallow: "/" });
     expect(rules.some((rule) => String(rule.userAgent).includes("Googlebot"))).toBe(false);
     expect(rules.find((rule) => rule.userAgent === "*")?.allow).toBe("/");
   });

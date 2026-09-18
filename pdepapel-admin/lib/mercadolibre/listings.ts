@@ -4,6 +4,7 @@ import {
   PRESALE_BLOCKS_MARKETPLACE_MESSAGE,
   hasActivePresale,
 } from "@/lib/presale";
+import { toGoogleMerchantImageUrl } from "@/lib/google-merchant";
 import { richTextToPlainText } from "@/lib/rich-text";
 
 import {
@@ -313,7 +314,8 @@ function buildItemPayload(listing: ListingForPublication) {
     ...(listing.product.sku.trim()
       ? { seller_custom_field: listing.product.sku.trim() }
       : {}),
-    pictures: pictures.map((source) => ({ source })),
+    // Mercado Libre descarga la foto una vez: la copia de 1600 px, no el original.
+    pictures: pictures.map((source) => ({ source: toGoogleMerchantImageUrl(source) })),
     attributes: addPackageDimensionAttributes(
       addProductIdentifiers(
         getConfiguredAttributes(listing.metadata),
@@ -569,7 +571,7 @@ export async function syncMercadoLibreListingContent(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      pictures: imageUrls.map((source) => ({ source })),
+      pictures: imageUrls.map((source) => ({ source: toGoogleMerchantImageUrl(source) })),
       attributes: mergeRemoteAttributes(
         getRemoteAttributes(existingPayload),
         listing,

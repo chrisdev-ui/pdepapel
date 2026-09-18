@@ -2,6 +2,7 @@ import {
   getCustomerFacingAttributeName,
   getCustomerFacingSizeName,
 } from "@/lib/product-naming";
+import { splitCloudinaryUrl } from "@/lib/cloudinary-image-loader";
 import { richTextToPlainText } from "@/lib/rich-text";
 
 export const GOOGLE_MERCHANT_STOREFRONT_URL = "https://papeleriapdepapel.com";
@@ -56,6 +57,16 @@ export const GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS = [
 
 const CLOUDINARY_UPLOAD_SEGMENT = "/image/upload/";
 
+/**
+ * Copia que se entrega a los rastreadores de catálogo (Google Merchant, Meta,
+ * Mercado Libre): 1600 px como máximo y calidad automática, con el formato
+ * fijado por la extensión porque esos servicios no aceptan WebP/AVIF. Antes
+ * apuntaban al original completo, y esos rastreadores (sin Referer) eran una
+ * parte grande del ancho de banda de Cloudinary. Una sola combinación: cada
+ * variante distinta es otra copia derivada por foto.
+ */
+export const GOOGLE_MERCHANT_IMAGE_TRANSFORMATION = "c_limit,w_1600,q_auto";
+
 function getUrlExtension(pathname: string) {
   const lastSegment = pathname.split("/").pop() ?? "";
   const dotIndex = lastSegment.lastIndexOf(".");
@@ -64,40 +75,50 @@ function getUrlExtension(pathname: string) {
 }
 
 /**
- * Returns an `image_link` Google accepts. Cloudinary delivers whatever format
- * the URL extension asks for, so an unsupported (or missing) extension is
- * swapped for PNG, which keeps transparency. Non-Cloudinary URLs are returned
- * unchanged because their format cannot be renegotiated from the URL.
+ * Returns an `image_link` Google accepts: the sized Cloudinary copy, with an
+ * unsupported (or missing) extension swapped for PNG, which keeps
+ * transparency. Non-Cloudinary URLs are returned unchanged because their
+ * format and size cannot be renegotiated from the URL.
  */
 export function toGoogleMerchantImageUrl(url: string | null | undefined) {
   if (!url) return "";
 
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return url;
-  }
+  const parts = splitCloudinaryUrl(url);
+  if (!parts) return url;
 
-  const extension = getUrlExtension(parsed.pathname);
+  const { url: parsed, cloudPath } = parts;
+  let assetPath = parts.assetPath;
+  const extension = getUrlExtension(assetPath);
   if (
-    (GOOGLE_MERCHANT_SUPPORTED_IMAGE_EXTENSIONS as readonly string[]).includes(
+    !(GOOGLE_MERCHANT_SUPPORTED_IMAGE_EXTENSIONS as readonly string[]).includes(
       extension,
     )
   ) {
-    return url;
+    assetPath = extension
+      ? assetPath.slice(0, -(extension.length + 1)) + ".png"
+      : `${assetPath}.png`;
   }
 
-  const isCloudinary =
-    parsed.hostname.endsWith("cloudinary.com") &&
-    parsed.pathname.includes(CLOUDINARY_UPLOAD_SEGMENT);
-  if (!isCloudinary) return url;
-
-  parsed.pathname = extension
-    ? parsed.pathname.slice(0, -(extension.length + 1)) + ".png"
-    : `${parsed.pathname}.png`;
+  parsed.pathname = `${cloudPath}${CLOUDINARY_UPLOAD_SEGMENT}${GOOGLE_MERCHANT_IMAGE_TRANSFORMATION}/${assetPath}`;
+  parsed.search = "";
+  parsed.hash = "";
 
   return parsed.toString();
+}
+
+/**
+ * Solo un cambio de formato (webp → png) merece aviso en el informe; el
+ * tamaño se aplica a todas las fotos y no es una «reescritura».
+ */
+export function isGoogleMerchantFormatRewrite(from: string, to: string) {
+  const extensionOf = (value: string) => {
+    try {
+      return getUrlExtension(new URL(value).pathname);
+    } catch {
+      return "";
+    }
+  };
+  return Boolean(to) && extensionOf(from) !== extensionOf(to);
 }
 
 export function getGoogleMerchantProductLink(
