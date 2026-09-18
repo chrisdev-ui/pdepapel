@@ -917,8 +917,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-4">
             {/* En tableta Pago y Resumen comparten fila, justo después del envío. */}
             <div className="order-6 grid gap-4 md:grid-cols-2 lg:contents">
-              {(editPreset.showPayment || initialData) && (
+  <SummaryCard
+                totals={totals}
+                shippingChargeState={shippingChargeState}
+                shippingCost={shippingCost}
+                coupon={coupon}
+                itemCount={(watchedItems ?? []).reduce(
+                  (sum, item) => sum + Number(item.quantity || 0),
+                  0,
+                )}
+              />
+            {(editPreset.showPayment || initialData) && (
                 <PaymentCard
+                className="order-first md:order-none"
                   storeId={storeId}
                   initialData={initialData}
                   type={watchedType}
@@ -930,16 +941,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   onTransition={onTransition}
                 />
               )}
-              <SummaryCard
-                totals={totals}
-                shippingChargeState={shippingChargeState}
-                shippingCost={shippingCost}
-                coupon={coupon}
-                itemCount={(watchedItems ?? []).reduce(
-                  (sum, item) => sum + Number(item.quantity || 0),
-                  0,
-                )}
-              />
+              
             </div>
             {initialData && (
               <div className="order-10 lg:order-none">

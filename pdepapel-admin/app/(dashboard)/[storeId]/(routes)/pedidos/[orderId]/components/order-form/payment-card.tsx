@@ -48,6 +48,7 @@ interface PaymentCardProps {
   isDirty: boolean;
   showMethod: boolean;
   onTransition: (payload: TransitionPayload) => Promise<void>;
+  className?: string;
 }
 
 const STORE_URL =
@@ -66,6 +67,7 @@ export function PaymentCard({
   isDirty,
   showMethod,
   onTransition,
+  className,
 }: PaymentCardProps) {
   const form = useFormContext<OrderFormValues>();
   const { toast } = useToast();
@@ -165,6 +167,7 @@ export function PaymentCard({
   return (
     <SectionCard
       id="pago"
+      className={className}
       title="Pago"
       description={
         initialData
