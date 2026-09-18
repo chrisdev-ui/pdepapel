@@ -42,6 +42,11 @@ export async function GET(
             contains: query,
           },
         },
+        {
+          sku: {
+            contains: query,
+          },
+        },
       ];
     }
 

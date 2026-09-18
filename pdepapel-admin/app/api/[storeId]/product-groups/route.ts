@@ -6,6 +6,7 @@ import { generateProductSlug, slugify } from "@/lib/slugify";
 import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
+import { assertNoStandaloneNameConflicts } from "@/lib/product-group-conflicts";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
@@ -69,6 +70,14 @@ export async function POST(
       );
     }
 
+    // Una variante sin id que se llama como un producto suelto sería un
+    // duplicado con el inventario en el otro: 409 antes de crear nada.
+    await assertNoStandaloneNameConflicts(
+      prismadb,
+      params.storeId,
+      variantsPayload,
+      name,
+    );
     const productGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
       // 1. Create Product Group
@@ -190,7 +199,9 @@ export async function POST(
           } catch (error) {
             throw ErrorFactory.InvalidRequest(
               `La variante "${variant.name || variant.sku || "sin nombre"}": ${
-                error instanceof Error ? error.message : "identificadores inválidos"
+                error instanceof Error
+                  ? error.message
+                  : "identificadores inválidos"
               }`,
             );
           }

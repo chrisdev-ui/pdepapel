@@ -13,9 +13,10 @@ const ROUTES = join(process.cwd(), "app/(dashboard)/[storeId]/(routes)");
 const config = readFileSync(join(process.cwd(), "next.config.mjs"), "utf8");
 const pairsBlock =
   config.match(/newDashboardRoutePairs = \[([\s\S]*?)\];/)?.[1] ?? "";
-const segments = [
-  ...pairsBlock.matchAll(/\[\s*"[^"]+",\s*"([^"]+)"\s*\]/g),
-].map((m) => m[1]);
+const segments = Array.from(
+  pairsBlock.matchAll(/\[\s*"[^"]+",\s*"([^"]+)"\s*\]/g),
+  (m) => m[1],
+);
 
 function findDynamicPage(segment: string): string | null {
   const dir = join(ROUTES, segment);

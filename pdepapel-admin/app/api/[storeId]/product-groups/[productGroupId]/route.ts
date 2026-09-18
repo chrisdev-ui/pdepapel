@@ -8,6 +8,7 @@ import {
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
+import { assertNoStandaloneNameConflicts } from "@/lib/product-group-conflicts";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { resolveProductGroupVariantStock } from "@/lib/product-group-variant-stock";
 import {
@@ -116,6 +117,15 @@ export async function PATCH(
     }
 
     await verifyStoreOwner(userId, params.storeId);
+
+    // Igual que al crear el grupo: una variante nueva no puede llamarse como
+    // un producto suelto que ya existe.
+    await assertNoStandaloneNameConflicts(
+      prismadb,
+      params.storeId,
+      variantsPayload,
+      name,
+    );
 
     const updatedGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];

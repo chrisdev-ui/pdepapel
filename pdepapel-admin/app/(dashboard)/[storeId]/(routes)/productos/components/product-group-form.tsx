@@ -196,6 +196,39 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   initialData,
 }) => {
   const params = useParams();
+  // Un producto suelto con el mismo nombre que una variante generada: no se
+  // crea el duplicado, se avisa para importarlo. Una consulta por nombre, cacheada.
+  const standaloneByName = useRef(new Map<string, boolean>());
+  const warnedStandalone = useRef(new Set<string>());
+  const isStandaloneTaken = async (variantName: string): Promise<boolean> => {
+    const key = variantName.trim().toLowerCase();
+    if (!key) return false;
+    const cached = standaloneByName.current.get(key);
+    if (cached !== undefined) return cached;
+    let taken = false;
+    try {
+      const response = await axios.get(
+        `/api/${params.storeId}/search/products/isolated`,
+        { params: { query: variantName.trim(), limit: 5 } },
+      );
+      const rows: { id: string; name: string }[] = response.data?.data ?? [];
+      taken = rows.some((row) => row.name.trim().toLowerCase() === key);
+    } catch {
+      taken = false;
+    }
+    standaloneByName.current.set(key, taken);
+    return taken;
+  };
+  const warnStandalone = (variantName: string) => {
+    const key = variantName.trim().toLowerCase();
+    if (warnedStandalone.current.has(key)) return;
+    warnedStandalone.current.add(key);
+    toast({
+      title: "Ese producto ya existe",
+      description: `Ya existe un producto suelto llamado «${variantName}». Usa «Importar productos existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
+      variant: "warning",
+    });
+  };
   const router = useRouter();
   const { toast } = useToast();
 
@@ -761,6 +794,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
           });
         } else {
           // 3. CREATE NEW
+          if (!initialData && (await isStandaloneTaken(gen.name))) {
+            warnStandalone(gen.name);
+            continue;
+          }
           mergedVariants.push({
             sku: gen.sku,
             name: gen.name,
@@ -1092,6 +1129,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         finalVariants.push(currentVars[matchIndex]);
       } else {
         // CREATE NEW
+        if (!initialData && (await isStandaloneTaken(gen.name))) {
+          warnStandalone(gen.name);
+          continue;
+        }
         finalVariants.push({
           sku: gen.sku,
           name: gen.name,
