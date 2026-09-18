@@ -4,16 +4,15 @@ import {
   visualCatalogAttributesSchema,
 } from "@/lib/catalog-migration";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import cloudinaryInstance from "@/lib/cloudinary";
 import { createCorsHeaders } from "@/lib/cors";
 import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_PRODUCT_DETAIL_SELECT } from "@/lib/public-catalog";
 import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
+import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import {
   CACHE_HEADERS,
   checkIfStoreOwner,
-  getPublicIdFromCloudinaryUrl,
   verifyStoreOwner,
   generateRandomSKU,
 } from "@/lib/utils";
@@ -334,27 +333,6 @@ export async function PATCH(
     );
 
     const result = await prismadb.$transaction(async (tx) => {
-      // Delete old images from Cloudinary
-      if (imagesToDelete.length > 0) {
-        const publicIds = imagesToDelete
-          .map((url) => getPublicIdFromCloudinaryUrl(url))
-          .filter((id): id is string => id !== null);
-
-        try {
-          if (publicIds.length > 0) {
-            await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-              type: "upload",
-              resource_type: "image",
-            });
-          }
-        } catch (cloudinaryError: any) {
-          throw ErrorFactory.CloudinaryError(
-            cloudinaryError,
-            "Error al intentar eliminar las imágenes del servidor Cloudinary",
-          );
-        }
-      }
-
       // Update product
       await tx.product.update({
         where: { id: params.productId },
@@ -449,6 +427,11 @@ export async function PATCH(
       await recalculateKitStock(prismadb, [params.productId]);
     }
 
+    // Las fotos quitadas se borran de Cloudinary solo después de que la base
+    // confirmó el guardado; antes iban dentro de la transacción y un fallo a
+    // medias dejaba filas apuntando a archivos inexistentes.
+    await deleteCloudinaryImages(imagesToDelete, "PRODUCT_PATCH");
+
     // Invalidate product cache & trigger instant storefront revalidation
     await invalidateStoreProductsCache(params.storeId, params.productId);
 
@@ -475,8 +458,9 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
+    const imageUrlsToDelete: string[] = [];
     await prismadb.$transaction(async (tx) => {
-      const product = await prismadb.product.findUnique({
+      const product = await tx.product.findUnique({
         where: { id: params.productId, storeId: params.storeId },
         include: {
           images: true,
@@ -500,24 +484,7 @@ export async function DELETE(
         );
       }
 
-      // Delete images from Cloudinary
-      const publicIds = product.images
-        .map((image) => getPublicIdFromCloudinaryUrl(image.url))
-        .filter((id): id is string => id !== null);
-
-      if (publicIds.length > 0) {
-        try {
-          await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-            type: "upload",
-            resource_type: "image",
-          });
-        } catch (cloudinaryError: any) {
-          throw ErrorFactory.CloudinaryError(
-            cloudinaryError,
-            "Error al eliminar imágenes del producto del servidor Cloudinary",
-          );
-        }
-      }
+      imageUrlsToDelete.push(...product.images.map((image) => image.url));
 
       // Delete related records first
       await tx.review.deleteMany({
@@ -534,7 +501,8 @@ export async function DELETE(
       });
     });
 
-    // Invalidate all product cache entries for this store
+    await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCT_DELETE");
+
     // Invalidate product cache & trigger instant storefront revalidation
     await invalidateStoreProductsCache(params.storeId, params.productId);
 

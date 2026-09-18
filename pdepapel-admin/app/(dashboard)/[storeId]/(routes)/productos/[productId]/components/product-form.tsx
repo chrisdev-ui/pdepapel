@@ -90,6 +90,11 @@ import { getProduct } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
 import { ComponentSelector } from "./component-selector";
 import { computeKitStockLimit, sumKitComponentCost } from "@/lib/kit-pricing";
+import {
+  imagesToSave,
+  normalizeProductImages,
+  unsavedUploadsToCleanup,
+} from "@/lib/product-images";
 import { KitPriceSuggestion } from "./kit-price-calculator";
 
 const formSchema = z
@@ -272,6 +277,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     useState<ProductImageAnalysis | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Fotos marcadas con la papelera: se borran de Cloudinary solo al guardar.
+  const [pendingRemovals, setPendingRemovals] = useState<string[]>([]);
   const [recentCategories, setRecentCategories] = useState<
     CatalogCategoryOption[]
   >([]);
@@ -290,8 +297,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     return set;
   }, [productGroup, initialData]);
 
+  // Una foto del grupo se suma como principal; no reemplaza las propias.
   const onAssignImage = (url: string) => {
-    form.setValue("images", [{ url, isMain: true }]);
+    const current = form.getValues("images") ?? [];
+    const others = current
+      .filter((image) => image.url !== url)
+      .map((image) => ({ ...image, isMain: false }));
+    form.setValue("images", [{ url, isMain: true }, ...others], {
+      shouldDirty: true,
+    });
+    setPendingRemovals((pending) => pending.filter((item) => item !== url));
   };
 
   const { title, description, toastMessage, action, pendingText } = useMemo(
@@ -319,12 +334,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             mpn: initialData.mpn || "",
             hasNoProductIdentifier: initialData.hasNoProductIdentifier || false,
             availableAt: availableAtToInput(initialData.availableAt),
-            images: initialData.images.map(
-              (image: { url: string }, idx: number) => ({
-                ...image,
-                isMain: idx === 0,
-              }),
-            ),
+            // Se respeta la principal guardada; antes se reasignaba a la
+            // primera fila en cada carga y podía cambiar sola al guardar.
+            images: normalizeProductImages(initialData.images),
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
             // Se guarda con el producto; el valor sembrado solo aplica a los
             // productos creados antes de que existiera la columna.
@@ -597,16 +609,37 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         });
         return;
       }
+      const images = imagesToSave(data.images, pendingRemovals);
+      if (images.length === 0) {
+        form.setError("images", {
+          type: "manual",
+          message: "Necesitas al menos una foto; deshaz la que quitaste o sube otra.",
+        });
+        window.setTimeout(focusFirstInvalidField, 0);
+        return;
+      }
       try {
         setLoading(true);
+        const payload = { ...data, images };
         if (initialData) {
           await axios.patch(
             `/api/${params.storeId}/${Models.Products}/${params.productId}`,
-            { ...data, preserveSlug: true },
+            { ...payload, preserveSlug: true },
           );
         } else {
-          await axios.post(`/api/${params.storeId}/${Models.Products}`, data);
+          await axios.post(`/api/${params.storeId}/${Models.Products}`, payload);
         }
+        // Las fotos quitadas que ya estaban guardadas las borra el servidor;
+        // las subidas y descartadas en esta sesión no existen en la base.
+        const orphans = unsavedUploadsToCleanup(
+          pendingRemovals,
+          (initialData?.images ?? []).map((image: { url: string }) => image.url),
+        );
+        if (orphans.length > 0) {
+          const { cleanupImages } = await import("@/actions/cleanup-images");
+          void cleanupImages(orphans);
+        }
+        setPendingRemovals([]);
         clearStorage();
         router.push(`/${params.storeId}/${Models.Products}`);
         router.refresh();
@@ -632,6 +665,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       toastMessage,
       collisionError,
       clearStorage,
+      pendingRemovals,
+      form,
     ],
   );
   const onDelete = useCallback(async () => {
@@ -1130,26 +1165,34 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
           <SectionCard
             id="imagenes"
-            title="Imágenes"
-            description="La principal se ve en la tienda y en Google; el asistente las lee para proponer los datos."
+            title="Fotos"
+            description="La principal se ve en la tienda y en Google; el asistente las lee para proponer los datos. Lo que quites con la papelera se borra solo al guardar."
           >
             <FormField
               control={form.control}
               name="images"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired>Imágenes del producto</FormLabel>
+                  <FormLabel isRequired>Fotos del producto</FormLabel>
                   <FormControl>
                     <ImageUpload
                       value={field.value}
                       disabled={loading}
-                      onChange={(images) => field.onChange(images)}
-                      onRemove={(url) =>
-                        field.onChange([
-                          ...field.value.filter(
-                            (current) => current.url !== url,
-                          ),
-                        ])
+                      maxImages={8}
+                      onChange={(images) => {
+                        field.onChange(images);
+                        form.clearErrors("images");
+                      }}
+                      pendingRemovals={pendingRemovals}
+                      onMarkRemoval={(url) =>
+                        setPendingRemovals((pending) =>
+                          pending.includes(url) ? pending : [...pending, url],
+                        )
+                      }
+                      onUndoRemoval={(url) =>
+                        setPendingRemovals((pending) =>
+                          pending.filter((item) => item !== url),
+                        )
                       }
                     />
                   </FormControl>

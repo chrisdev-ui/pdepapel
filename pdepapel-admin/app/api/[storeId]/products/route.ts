@@ -18,7 +18,7 @@ import {
   productGroupNameSearchWhere,
   productNameSearchWhere,
 } from "@/lib/search-terms";
-import cloudinaryInstance from "@/lib/cloudinary";
+import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
 import {
@@ -1587,6 +1587,7 @@ export async function DELETE(
         "Se requieren IDs de productos válidos en formato de arreglo",
       );
 
+    const imageUrlsToDelete: string[] = [];
     await prismadb.$transaction(async (tx: any) => {
       const products = await tx.product.findMany({
         where: {
@@ -1622,27 +1623,12 @@ export async function DELETE(
         );
       }
 
-      // Collect image public IDs for deletion
-      const publicIds = products.flatMap((product: any) =>
-        product.images
-          .map((image: any) => getPublicIdFromCloudinaryUrl(image.url))
-          .filter((id: any): id is string => id !== null && id !== undefined),
+      // Los archivos se borran de Cloudinary después de confirmar la base.
+      imageUrlsToDelete.push(
+        ...products.flatMap((product: any) =>
+          product.images.map((image: any) => image.url as string),
+        ),
       );
-
-      // Delete images from Cloudinary if any exist
-      if (publicIds.length > 0) {
-        try {
-          await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-            type: "upload",
-            resource_type: "image",
-          });
-        } catch (cloudinaryError: any) {
-          throw ErrorFactory.CloudinaryError(
-            cloudinaryError,
-            "Ha ocurrido un error al intentar eliminar las imágenes en el servidor Cloudinary",
-          );
-        }
-      }
 
       await tx.review.deleteMany({
         where: {
@@ -1669,6 +1655,8 @@ export async function DELETE(
         },
       });
     });
+
+    await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCTS_DELETE");
 
     // Invalidate all product cache entries for this store
     await invalidateStoreProductsCache(params.storeId);
