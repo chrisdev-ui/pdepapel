@@ -50,8 +50,10 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   // Lecturas que solo usa el panel (auditoría de exposición pública, 2026-09-11):
   // devolvían filas completas (costos, proveedor, cupones, cajas, reseñas con
   // nota de moderación) a cualquier visitante.
-  { path: "product-groups", methods: ["GET"] },
-  { path: "product-groups/[productGroupId]", methods: ["GET"], params: { productGroupId: "x" } },
+  { path: "product-groups", methods: ["GET", "POST"] },
+  { path: "product-groups/[productGroupId]", methods: ["GET", "PATCH", "DELETE"], params: { productGroupId: "x" } },
+  // Leían el cuerpo antes de comprobar la sesión: un cuerpo vacío sin sesión respondía 500 (Productos 2A).
+  { path: "products/[productId]/convert-to-variants", methods: ["POST"], params: { productId: "x" } },
   { path: "suppliers", methods: ["GET"] },
   { path: "suppliers/[supplierId]", methods: ["GET"], params: { supplierId: "x" } },
   { path: "products/catalog", methods: ["GET"] },

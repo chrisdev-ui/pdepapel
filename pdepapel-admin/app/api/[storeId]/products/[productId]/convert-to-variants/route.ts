@@ -17,17 +17,16 @@ export async function POST(
 ) {
   try {
     const { userId } = await auth();
-    const body = (await req.json()) as ConvertToVariantsBody;
-    const groupName = typeof body.name === "string" ? body.name.trim() : "";
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productId)
       throw ErrorFactory.InvalidRequest("Se requiere el producto a convertir");
+    await verifyStoreOwner(userId, params.storeId);
+
+    const body = (await req.json()) as ConvertToVariantsBody;
+    const groupName = typeof body.name === "string" ? body.name.trim() : "";
     if (!groupName)
       throw ErrorFactory.InvalidRequest("El nombre del grupo es requerido");
-
-    await verifyStoreOwner(userId, params.storeId);
 
     const product = await prismadb.product.findFirst({
       where: {

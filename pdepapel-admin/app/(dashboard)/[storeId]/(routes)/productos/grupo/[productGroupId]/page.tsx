@@ -1,6 +1,7 @@
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
+import { notFound } from "next/navigation";
 import { ProductGroupForm } from "../../components/product-group-form";
 import {
   GroupWorkspaceAside,
@@ -12,9 +13,12 @@ const ProductGroupPage = async ({
 }: {
   params: { storeId: string; productGroupId: string };
 }) => {
-  const productGroup = await prismadb.productGroup.findUnique({
+  // Acotado a la tienda: un id ajeno o inexistente responde 404 en vez de
+  // pintar el formulario de creación bajo una URL de edición.
+  const productGroup = await prismadb.productGroup.findFirst({
     where: {
       id: params.productGroupId,
+      storeId: params.storeId,
     },
     include: {
       images: true,
@@ -76,6 +80,8 @@ const ProductGroupPage = async ({
         })
         .catch(() => null),
     ]);
+
+  if (!productGroup) notFound();
 
   const threshold = resolveLowStockThreshold(store?.lowStockThreshold ?? null);
 

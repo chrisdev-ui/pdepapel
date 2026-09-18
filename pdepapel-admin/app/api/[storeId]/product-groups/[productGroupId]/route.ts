@@ -80,6 +80,11 @@ export async function PATCH(
 ) {
   try {
     const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.productGroupId)
+      throw ErrorFactory.InvalidRequest("Product Group ID is required");
+    await verifyStoreOwner(userId, params.storeId);
     const body = await req.json();
 
     const {
@@ -101,11 +106,6 @@ export async function PATCH(
     } = body;
     const sanitizedDescription = sanitizeRichTextHtml(description);
 
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.productGroupId)
-      throw ErrorFactory.InvalidRequest("Product Group ID is required");
-
     if (!name) throw ErrorFactory.InvalidRequest("Name is required");
     if (!images || !images.length)
       throw ErrorFactory.InvalidRequest("Images are required");
@@ -117,8 +117,6 @@ export async function PATCH(
         "No se pueden guardar dos variantes con la misma combinación de tamaño, color y diseño.",
       );
     }
-
-    await verifyStoreOwner(userId, params.storeId);
 
     // Igual que al crear el grupo: una variante nueva no puede llamarse como
     // un producto suelto que ya existe.

@@ -1,43 +1,57 @@
 "use server";
 
 import { ProductPresaleStatus } from "@prisma/client";
-import { ACTIVE_ATTRIBUTE_WHERE, activeOrCurrentWhere } from "@/lib/attribute-archive";
+import {
+  ACTIVE_ATTRIBUTE_WHERE,
+  activeOrCurrentWhere,
+} from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
+import { NEW_PRODUCT_SEGMENT } from "@/lib/product-routes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
 export async function getProduct(id: string, storeId: string) {
-  const product = await prismadb.product.findUnique({
-    where: {
-      id,
-    },
-    include: {
-      images: true,
-      reviews: true,
-      catalogOptionValues: {
-        include: { option: true, optionValue: true },
-      },
-      kitComponents: {
-        include: {
-          component: {
-            include: {
-              images: true,
-              category: true,
-              size: true,
-              color: true,
-              design: true,
+  // Acotado a la tienda: un id de otra tienda (o inexistente) devuelve null y
+  // la página responde 404 en vez de pintar el formulario de creación.
+  const product =
+    id === NEW_PRODUCT_SEGMENT
+      ? null
+      : await prismadb.product.findFirst({
+          where: {
+            id,
+            storeId,
+          },
+          include: {
+            images: { orderBy: [{ isMain: "desc" }, { createdAt: "asc" }] },
+            reviews: true,
+            catalogOptionValues: {
+              include: { option: true, optionValue: true },
+            },
+            kitComponents: {
+              include: {
+                component: {
+                  include: {
+                    images: true,
+                    category: true,
+                    size: true,
+                    color: true,
+                    design: true,
+                  },
+                },
+              },
             },
           },
-        },
-      },
-    },
-  });
+        });
   // Preventa activa del producto, si la hay. Va como consulta aparte a
   // propósito: meterla en el `include` de arriba cambiaría el tipo de
   // `product` y eso se propaga por todo el formulario.
   const activePresale = product
     ? await prismadb.productPresale.findFirst({
-        where: { productId: product.id, storeId, status: ProductPresaleStatus.ACTIVE },
+        where: {
+          productId: product.id,
+          storeId,
+          status: ProductPresaleStatus.ACTIVE,
+        },
         select: {
           id: true,
           expectedArrivalAt: true,
@@ -48,89 +62,79 @@ export async function getProduct(id: string, storeId: string) {
     : null;
 
   // Los formularios solo ofrecen atributos activos, pero conservan el que el
-  // producto ya tiene aunque esté archivado para no romper la edición.
-  const categories = await prismadb.category.findMany({
-    where: {
-      storeId,
-      ...activeOrCurrentWhere(product?.categoryId),
-    },
-    include: {
-      type: true,
-    },
-  });
-  const types = await prismadb.type.findMany({
-    where: { storeId, ...ACTIVE_ATTRIBUTE_WHERE },
-    orderBy: { name: "asc" },
-  });
-  const sizes = await prismadb.size.findMany({
-    where: {
-      storeId,
-      ...activeOrCurrentWhere(product?.sizeId),
-    },
-  });
-  const colors = await prismadb.color.findMany({
-    where: {
-      storeId,
-      ...activeOrCurrentWhere(product?.colorId),
-    },
-  });
-  const designs = await prismadb.design.findMany({
-    where: {
-      storeId,
-      ...activeOrCurrentWhere(product?.designId),
-    },
-  });
-  const suppliers = await prismadb.supplier.findMany({
-    where: {
-      storeId,
-    },
-  });
-  const catalogOptions = await prismadb.catalogOption.findMany({
-    where: { storeId },
-    orderBy: [{ isActive: "desc" }, { displayOrder: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      key: true,
-      name: true,
-      isActive: true,
-      categories: {
-        orderBy: { displayOrder: "asc" },
-        select: { categoryId: true },
+  // producto ya tiene aunque esté archivado para no romper la edición. Las
+  // consultas no dependen entre sí: van en paralelo.
+  const [
+    categories,
+    types,
+    sizes,
+    colors,
+    designs,
+    suppliers,
+    catalogOptions,
+    productGroups,
+  ] = await Promise.all([
+    prismadb.category.findMany({
+      where: { storeId, ...activeOrCurrentWhere(product?.categoryId) },
+      include: { type: true },
+    }),
+    prismadb.type.findMany({
+      where: { storeId, ...ACTIVE_ATTRIBUTE_WHERE },
+      orderBy: { name: "asc" },
+    }),
+    prismadb.size.findMany({
+      where: { storeId, ...activeOrCurrentWhere(product?.sizeId) },
+    }),
+    prismadb.color.findMany({
+      where: { storeId, ...activeOrCurrentWhere(product?.colorId) },
+    }),
+    prismadb.design.findMany({
+      where: { storeId, ...activeOrCurrentWhere(product?.designId) },
+    }),
+    prismadb.supplier.findMany({ where: { storeId } }),
+    prismadb.catalogOption.findMany({
+      where: { storeId },
+      orderBy: [{ isActive: "desc" }, { displayOrder: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        isActive: true,
+        categories: {
+          orderBy: { displayOrder: "asc" },
+          select: { categoryId: true },
+        },
+        values: {
+          orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            value: true,
+            _count: { select: { productValues: true } },
+          },
+        },
+        _count: { select: { productValues: true } },
       },
-      values: {
-        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          value: true,
-          _count: { select: { productValues: true } },
+    }),
+    // Grupos para el selector y la detección de colisiones de variantes.
+    prismadb.productGroup.findMany({
+      where: { storeId },
+      select: {
+        id: true,
+        name: true,
+        products: {
+          select: {
+            id: true,
+            categoryId: true,
+            designId: true,
+            colorId: true,
+            sizeId: true,
+            price: true,
+          },
         },
       },
-      _count: { select: { productValues: true } },
-    },
-  });
-
-  // Fetch all product groups for selection in the form
-  // We include products to check for existing variants (collision detection)
-  const productGroups = await prismadb.productGroup.findMany({
-    where: {
-      storeId,
-    },
-    select: {
-      id: true,
-      name: true,
-      products: {
-        select: {
-          id: true,
-          categoryId: true,
-          designId: true,
-          colorId: true,
-          sizeId: true,
-          price: true,
-        },
-      },
-    },
-  });
+    }),
+  ]);
 
   const reviews =
     product?.reviews.map((review) => ({
@@ -149,9 +153,10 @@ export async function getProduct(id: string, storeId: string) {
 
   let productGroup = null;
   if (product?.productGroupId) {
-    productGroup = await prismadb.productGroup.findUnique({
+    productGroup = await prismadb.productGroup.findFirst({
       where: {
         id: product.productGroupId,
+        storeId,
       },
       include: {
         images: true,

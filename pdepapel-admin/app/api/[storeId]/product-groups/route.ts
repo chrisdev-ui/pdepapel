@@ -29,6 +29,11 @@ export async function POST(
 ) {
   try {
     const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    await verifyStoreOwner(userId, params.storeId);
+    // El cuerpo se lee después de autorizar: un cuerpo vacío sin sesión
+    // respondía 500 en vez de 401.
     const body = await req.json();
 
     const {
@@ -52,10 +57,6 @@ export async function POST(
     const effectiveDefaultPrice = defaultPrice ?? price;
     const effectiveDefaultCost = defaultCost ?? acqPrice;
     const sanitizedDescription = sanitizeRichTextHtml(description);
-
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    await verifyStoreOwner(userId, params.storeId);
 
     if (!name) throw ErrorFactory.InvalidRequest("Name is required");
     if (!categoryId) throw ErrorFactory.InvalidRequest("Category is required");
