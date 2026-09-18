@@ -183,6 +183,7 @@ function ReviewFieldCard({
   id,
   label,
   value,
+  current,
   status,
   helper,
   checked,
@@ -194,6 +195,8 @@ function ReviewFieldCard({
   id: string;
   label: string;
   value: string;
+  /** Lo que hay hoy en el formulario, para ver antes → después. */
+  current?: string | null;
   status: string;
   helper?: string;
   checked: boolean;
@@ -202,6 +205,8 @@ function ReviewFieldCard({
   children?: ReactNode;
   onCheckedChange: (checked: boolean) => void;
 }) {
+  const currentValue = current?.trim() ?? "";
+  const changes = currentValue !== "" && currentValue !== value;
   return (
     <div
       className={cn(
@@ -235,9 +240,26 @@ function ReviewFieldCard({
             )}
             <Badge variant={canApply ? "secondary" : "outline"}>{status}</Badge>
           </div>
-          <p className="mt-1 break-words text-sm font-medium text-foreground">
-            {value}
-          </p>
+          {changes ? (
+            <p className="mt-1 break-words text-sm">
+              <span className="text-muted-foreground line-through">
+                {currentValue}
+              </span>
+              <span aria-hidden="true" className="mx-1 text-muted-foreground">
+                →
+              </span>
+              <span className="font-medium text-foreground">{value}</span>
+            </p>
+          ) : (
+            <p className="mt-1 break-words text-sm font-medium text-foreground">
+              {value}
+              {currentValue === value && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  (ya está así)
+                </span>
+              )}
+            </p>
+          )}
           {helper && (
             <p className="mt-1 text-pretty text-muted-foreground">{helper}</p>
           )}
@@ -1011,6 +1033,16 @@ export function ProductNameAssistant({
                     <p className="mt-1 text-muted-foreground">
                       Elige 1 opción. La selección marcada se aplicará al campo
                       Nombre.
+                      {currentName?.trim() && (
+                        <>
+                          {" "}
+                          Hoy dice:{" "}
+                          <span className="font-medium text-foreground">
+                            {currentName.trim()}
+                          </span>
+                          .
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1115,6 +1147,7 @@ export function ProductNameAssistant({
                     id="apply-ai-brand"
                     label="Marca o fabricante"
                     value={visualAnalysis.brand}
+                    current={brand}
                     status="Visible en foto"
                     checked={reviewSelection.brand}
                     canApply={fieldAvailability.brand}
@@ -1134,6 +1167,7 @@ export function ProductNameAssistant({
                     id="apply-ai-category"
                     label="Subcategoría"
                     value={visualAnalysis.categoryName}
+                    current={categoryName}
                     status={
                       visualAnalysis.categoryId
                         ? "Opción existente"
@@ -1191,6 +1225,7 @@ export function ProductNameAssistant({
                     id="apply-ai-size"
                     label="Tamaño o formato"
                     value={visualAnalysis.sizeName}
+                    current={sizeName}
                     status={
                       visualAnalysis.sizeId
                         ? "Opción existente"
@@ -1242,6 +1277,7 @@ export function ProductNameAssistant({
                     id="apply-ai-color"
                     label="Color"
                     value={visualAnalysis.colorName}
+                    current={colorName}
                     status={
                       visualAnalysis.colorSource === "existing"
                         ? "Opción existente"
@@ -1298,6 +1334,7 @@ export function ProductNameAssistant({
                     id="apply-ai-design"
                     label="Diseño"
                     value={visualAnalysis.designName}
+                    current={designName}
                     status={
                       visualAnalysis.designSource === "existing"
                         ? "Opción existente"

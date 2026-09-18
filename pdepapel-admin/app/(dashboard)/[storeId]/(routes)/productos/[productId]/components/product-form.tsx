@@ -1493,13 +1493,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         );
                       }
                     }}
-                    onApplyDescription={(description) =>
+                    onApplyDescription={async (description) => {
+                      const current = (form.getValues("description") || "")
+                        .replace(/<[^>]*>/g, "")
+                        .trim();
+                      if (current.length > 0) {
+                        const ok = await requestConfirmation({
+                          title: "¿Reemplazar la descripción?",
+                          description:
+                            "La descripción actual se reemplaza por la propuesta de la IA. Puedes deshacerlo con Descartar antes de guardar.",
+                          confirmLabel: "Reemplazar",
+                          destructive: true,
+                        });
+                        if (!ok) return;
+                      }
                       form.setValue("description", description, {
                         shouldDirty: true,
                         shouldTouch: true,
                         shouldValidate: true,
-                      })
-                    }
+                      });
+                    }}
                     onApplyVerifiedIdentifier={(type, identifier) => {
                       const options = {
                         shouldDirty: true,

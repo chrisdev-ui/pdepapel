@@ -729,3 +729,26 @@ describe("ProductNameAssistant visual analysis", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("ProductNameAssistant before → after", () => {
+  it("shows the current value struck through next to the proposal", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(createAnalysisResponse(createVisualAnalysis())));
+    render(
+      <ProductNameAssistant
+        currentName="Cuaderno viejo"
+        categoryName="Agendas"
+        brand="Genérica"
+        storeId="store-id"
+        imageUrls={["https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp"]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    expect(await screen.findByRole("heading", { name: "Revisa la propuesta de IA" })).toBeInTheDocument();
+    expect(screen.getByText("Genérica")).toHaveClass("line-through");
+    expect(screen.getByText("Agendas")).toHaveClass("line-through");
+    expect(screen.getByText("Cuaderno viejo")).toBeInTheDocument();
+  });
+});

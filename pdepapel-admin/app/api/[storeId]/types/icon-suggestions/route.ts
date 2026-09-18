@@ -94,7 +94,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     await verifyStoreOwner(userId, params.storeId);
 
     if (!env.GEMINI_API_KEY) {
-      throw new AppError("La generación de iconos con IA no está configurada. Agrega GEMINI_API_KEY en el panel.", 503);
+      throw new AppError("La generación de iconos con IA no está configurada. Avísale a quien administra el sistema: falta la clave de Gemini en Vercel.", 503);
     }
 
     const parsed = requestSchema.safeParse(await req.json().catch(() => ({})));

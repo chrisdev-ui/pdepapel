@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   redisIncr: vi.fn(),
   redisExpire: vi.fn(),
   redisSet: vi.fn(),
+  redisDecr: vi.fn(),
   generateText: vi.fn(),
   createGoogle: vi.fn(),
   env: { GEMINI_API_KEY: "gemini-test-key" as string | undefined },
@@ -34,6 +35,7 @@ vi.mock("@upstash/redis", () => ({
       incr: mocks.redisIncr,
       expire: mocks.redisExpire,
       set: mocks.redisSet,
+      decr: mocks.redisDecr,
     }),
   },
 }));
@@ -254,5 +256,28 @@ describe("product image analysis route", () => {
 
     expect(response.status).toBe(503);
     expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("gives the reserved analysis back when the model fails, and keeps it on a quota error", async () => {
+    mocks.redisGet.mockResolvedValue(null);
+    mocks.redisIncr.mockResolvedValue(1);
+    mocks.generateText.mockRejectedValueOnce(new Error("socket hang up"));
+    const request = () =>
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          imageUrls: ["https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp"],
+        }),
+      });
+
+    const failed = await POST(request(), { params: { storeId: "store-id" } });
+    expect(failed.status).toBe(500);
+    expect(mocks.redisDecr).toHaveBeenCalledWith(expect.stringContaining("store:store-id:product-image-analysis:"));
+
+    mocks.redisDecr.mockClear();
+    mocks.generateText.mockRejectedValueOnce(new Error("RESOURCE_EXHAUSTED: quota"));
+    const quota = await POST(request(), { params: { storeId: "store-id" } });
+    expect(quota.status).toBe(429);
+    expect(mocks.redisDecr).toHaveBeenCalledTimes(1);
   });
 });

@@ -79,7 +79,7 @@ export async function POST(
 
     if (!env.GEMINI_API_KEY) {
       throw new AppError(
-        "El análisis visual aún no está configurado. Agrega GEMINI_API_KEY en la administración antes de usarlo.",
+        "El análisis visual no está configurado. Avísale a quien administra el sistema: falta la clave de Gemini en Vercel.",
         503,
       );
     }
@@ -158,34 +158,46 @@ export async function POST(
       params.storeId,
     );
     const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY });
-    const result = await generateText({
-      model: google("gemini-3.5-flash-lite"),
-      output: Output.object({ schema: productImageAnalysisOutputSchema }),
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: buildProductImageAnalysisPrompt({
-                categoryName: payload.categoryName,
-                categories: categories.map(
-                  (category) => `${category.name} (${category.type.name})`,
-                ),
-                sizes: sizes.map((size) => size.name),
-                colors: colors.map((color) => color.name),
-                designs: designs.map((design) => design.name),
-              }),
-            },
-            ...payload.imageUrls.map((url) => ({
-              type: "file" as const,
-              mediaType: "image",
-              data: url,
-            })),
-          ],
-        },
-      ],
-    });
+    // Si el modelo falla, el análisis reservado se devuelve: la cuota diaria
+    // es de análisis hechos, no de intentos.
+    let result;
+    try {
+      result = await generateText({
+        model: google("gemini-3.5-flash-lite"),
+        output: Output.object({ schema: productImageAnalysisOutputSchema }),
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: buildProductImageAnalysisPrompt({
+                  categoryName: payload.categoryName,
+                  categories: categories.map(
+                    (category) => `${category.name} (${category.type.name})`,
+                  ),
+                  sizes: sizes.map((size) => size.name),
+                  colors: colors.map((color) => color.name),
+                  designs: designs.map((design) => design.name),
+                }),
+              },
+              ...payload.imageUrls.map((url) => ({
+                type: "file" as const,
+                mediaType: "image",
+                data: url,
+              })),
+            ],
+          },
+        ],
+      });
+    } catch (modelError) {
+      try {
+        await redis.decr(getProductImageAnalysisRateLimitKey(params.storeId));
+      } catch (refundError) {
+        console.error("[PRODUCT_IMAGE_ANALYSIS_REFUND]", refundError);
+      }
+      throw getModelError(modelError);
+    }
 
     if (!result.output) {
       throw new AppError(
