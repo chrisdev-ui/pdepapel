@@ -4,30 +4,11 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { StatusActions } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/[orderId]/components/order-form/status-actions";
-import { requestOrderAction } from "@/lib/order-actions";
 import { OrderStatus, OrderType, PaymentMethod, ShippingProvider } from "@prisma/client";
 
 afterEach(cleanup);
 
 describe("StatusActions", () => {
-  it("opens the pay dialog when the header asks for it, only on the status card", async () => {
-    const onTransition = vi.fn().mockResolvedValue(undefined);
-    render(
-      <>
-        <StatusActions status={OrderStatus.PENDING} type={OrderType.STANDARD} paymentMethod={PaymentMethod.BankTransfer} shippingProvider={ShippingProvider.MANUAL} loading={false} variant="card" onTransition={onTransition} />
-        <StatusActions status={OrderStatus.PENDING} type={OrderType.STANDARD} paymentMethod={PaymentMethod.BankTransfer} shippingProvider={ShippingProvider.MANUAL} loading={false} variant="care" onTransition={onTransition} />
-      </>,
-    );
-    expect(screen.queryByRole("dialog")).toBeNull();
-
-    await act(async () => requestOrderAction("pay"));
-
-    const dialogs = screen.getAllByRole("dialog");
-    expect(dialogs).toHaveLength(1);
-    expect(screen.getByLabelText("Referencia de la transferencia")).toBeInTheDocument();
-    expect(screen.getByText(/«Pendiente de pago» a «Pagado»/)).toBeInTheDocument();
-  });
-
   it("lets a manual delivery be marked as sent without a guide number", async () => {
     const onTransition = vi.fn().mockResolvedValue(undefined);
     render(

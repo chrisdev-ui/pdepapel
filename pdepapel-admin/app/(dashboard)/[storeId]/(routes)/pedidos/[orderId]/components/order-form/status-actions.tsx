@@ -18,7 +18,6 @@ import {
   ORDER_STATUS_LABELS,
   type StatusAction,
 } from "@/lib/order-transitions";
-import { ORDER_ACTION_EVENT, type OrderActionEventDetail } from "@/lib/order-actions";
 import { currencyFormatter } from "@/lib/utils";
 import {
   OrderStatus,
@@ -26,7 +25,7 @@ import {
   PaymentMethod,
   ShippingProvider,
 } from "@prisma/client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export interface TransitionPayload {
   to: OrderStatus;
@@ -117,22 +116,7 @@ export function StatusActions({
     }
   };
 
-  // La cabecera («Siguiente paso») pide abrir una acción concreta; solo la
-  // tarjeta de estado responde, para no abrir dos diálogos.
-  useEffect(() => {
-    if (variant !== "card") return;
-    const onRequest = (event: Event) => {
-      const detail = (event as CustomEvent<OrderActionEventDetail>).detail;
-      const action = actions.find((item) => item.confirm === detail?.action);
-      if (action && !loading && !submitting) void run(action);
-    };
-    window.addEventListener(ORDER_ACTION_EVENT, onRequest);
-    return () => window.removeEventListener(ORDER_ACTION_EVENT, onRequest);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant, loading, submitting, status, type, paymentMethod, transactionId]);
-
   if (actions.length === 0) return null;
-
 
   const confirm = async () => {
     if (!pending) return;
