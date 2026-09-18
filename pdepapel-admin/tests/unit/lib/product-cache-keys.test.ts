@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { productCacheKeyPatterns } from "@/lib/cache";
+import { productCacheKeyPatterns } from "@/lib/product-cache-keys";
 
 /** Archivar un producto lo dejaba una hora en el buscador de la tienda: solo se purgaba `products:*`. */
 describe("productCacheKeyPatterns", () => {

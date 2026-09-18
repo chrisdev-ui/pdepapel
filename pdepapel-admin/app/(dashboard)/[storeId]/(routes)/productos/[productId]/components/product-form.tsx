@@ -20,6 +20,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Archive,
   ArchiveRestore,
+  ChevronDown,
   Copy,
   Eraser,
   ExternalLink,
@@ -58,6 +59,13 @@ import {
   FormPageHeader,
   FormStickyFooter,
 } from "@/components/ui/form-page-chrome";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Heading } from "@/components/ui/heading";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
@@ -359,7 +367,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       initialData
         ? {
             ...initialData,
-            acqPrice: initialData.acqPrice || 0,
+            // Un kit cuesta lo que cuestan sus componentes: sembrarlo igual
+            // evita que la ficha abra como «con cambios sin guardar».
+            acqPrice: initialData.isKit
+              ? sumKitComponentCost(
+                  (initialData.kitComponents ?? []).map((c: any) => ({
+                    quantity: c.quantity,
+                    acqPrice: Number(c.component?.acqPrice || 0),
+                  })),
+                )
+              : initialData.acqPrice || 0,
             supplierId: initialData.supplierId || "",
             brand: initialData.brand || "",
             gtin: initialData.gtin || "",
@@ -1243,33 +1260,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 variant="outline"
                 size="sm"
                 disabled={loading}
-                onClick={async () => {
-                  if (await confirmLeave())
-                    router.push(
-                      `/${params.storeId}/${Models.Products}/nuevo?desde=${initialData.id}`,
-                    );
-                }}
-              >
-                <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
-                Duplicar
-              </Button>
-              {!initialData.productGroupId && !initialData.isKit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => requestVariantConversion()}
-                  disabled={loading}
-                >
-                  <Package className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Convertir en variantes
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={loading}
                 onClick={() => void toggleArchive()}
               >
                 {initialData.isArchived ? (
@@ -1279,17 +1269,48 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 )}
                 {initialData.isArchived ? "Restaurar" : "Archivar"}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={loading}
-                onClick={() => setOpen(true)}
-                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
-                Eliminar…
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={loading}
+                  >
+                    Más
+                    <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      if (await confirmLeave())
+                        router.push(
+                          `/${params.storeId}/${Models.Products}/nuevo?desde=${initialData.id}`,
+                        );
+                    }}
+                  >
+                    <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Duplicar
+                  </DropdownMenuItem>
+                  {!initialData.productGroupId && !initialData.isKit && (
+                    <DropdownMenuItem
+                      onClick={() => requestVariantConversion()}
+                    >
+                      <Package className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Convertir en variantes
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setOpen(true)}
+                  >
+                    <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Eliminar…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
             <Button

@@ -500,7 +500,7 @@ export function DataTable<TData, TValue>({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="ml-auto rounded-full bg-white/10 text-primary-foreground hover:bg-white/20 hover:text-primary-foreground sm:ml-0"
+            className="ml-auto rounded-full bg-white/10 text-primary-foreground hover:bg-white/20 hover:text-primary-foreground"
             aria-label="Quitar selección"
             onClick={() => table.resetRowSelection()}
           >

@@ -31,6 +31,9 @@ vi.mock("@/lib/api-errors", () => ({
   ),
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
+vi.mock("@/lib/product-archive", () => ({ pauseMarketplaceListingsForProducts: vi.fn() }));
+vi.mock("@/lib/mercadolibre/outbox", () => ({ queueMarketplaceStockSyncEvents: vi.fn() }));
+vi.mock("@/lib/cloudinary-cleanup", () => ({ deleteCloudinaryImages: vi.fn() }));
 vi.mock("@/lib/cloudinary", () => ({ default: {} }));
 vi.mock("@/lib/prismadb", () => ({
   default: {

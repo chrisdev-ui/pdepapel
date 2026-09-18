@@ -1,6 +1,9 @@
 import { Redis } from "@upstash/redis";
 import { enqueuePendingMarketplaceOutboxEventsForStore } from "./mercadolibre/outbox";
+import { productCacheKeyPatterns } from "./product-cache-keys";
 import { triggerStorefrontRevalidation } from "./revalidate-store";
+
+export { productCacheKeyPatterns };
 
 // Initialize Redis client (lazy - only when needed)
 let redis: Redis | null = null;
@@ -9,21 +12,6 @@ function getRedis(): Redis {
     redis = Redis.fromEnv();
   }
   return redis;
-}
-
-/**
- * Llaves de Redis que cambian cuando cambia un producto. La búsqueda de la
- * tienda (1 h) y el selector del panel se quedaban rancios porque solo se
- * purgaba `products:*`: un producto archivado seguía apareciendo en el
- * buscador durante una hora.
- */
-export function productCacheKeyPatterns(storeId: string): string[] {
-  return [
-    `store:${storeId}:products:*`,
-    `store:${storeId}:search:*`,
-    `store:${storeId}:search-vocabulary:*`,
-    `store:${storeId}:admin-select:*`,
-  ];
 }
 
 /**
@@ -85,19 +73,23 @@ export async function invalidateStoreProductsCache(
   }
 }
 
-
 /**
  * Invalida lo que depende de las promociones: la lista de ofertas activas en
  * Redis, las consultas de productos cacheadas (llevan precio con descuento) y
  * las páginas ISR de la tienda. Se llama al crear, editar, borrar o apagar una
  * oferta y desde el cron diario cuando alguna vigencia cambia.
  */
-export async function invalidateStorePromotionsCache(storeId: string): Promise<void> {
+export async function invalidateStorePromotionsCache(
+  storeId: string,
+): Promise<void> {
   const purgeActiveOffers = async () => {
     try {
       await getRedis().del(`store:${storeId}:active-offers`);
     } catch (error) {
-      console.error(`Redis active-offers purge error for store ${storeId}:`, error);
+      console.error(
+        `Redis active-offers purge error for store ${storeId}:`,
+        error,
+      );
     }
   };
   await Promise.allSettled([
