@@ -443,7 +443,7 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                         >
                           <Image
                             src={image.url}
-                            alt="Product Image"
+                            alt="Foto del grupo"
                             fill
                             className="object-cover"
                           />

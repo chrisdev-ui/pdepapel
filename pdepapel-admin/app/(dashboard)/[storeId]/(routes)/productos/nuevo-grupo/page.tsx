@@ -1,4 +1,5 @@
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { ProductGroupForm } from "../components/product-group-form";
 
@@ -42,13 +43,14 @@ export default async function ProductGroupPage({
 
   return (
     <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-8 sm:pt-6">
         <ProductGroupForm
           categories={categories}
           colors={colors}
           sizes={sizes}
           designs={designs}
           suppliers={suppliers}
+          storeUrl={env.FRONTEND_STORE_URL}
         />
       </div>
     </div>

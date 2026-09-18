@@ -34,7 +34,7 @@ export function SectionCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h2
             id={`${id}-titulo`}
@@ -49,7 +49,7 @@ export function SectionCard({
             <p className="text-xs text-muted-foreground">{description}</p>
           )}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="max-w-full shrink-0">{action}</div>}
       </div>
       {children}
     </section>

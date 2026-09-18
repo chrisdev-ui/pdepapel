@@ -181,9 +181,9 @@ export const ProductImportModal: React.FC<ProductImportModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="flex h-[80vh] max-w-4xl flex-col">
         <DialogHeader>
-          <DialogTitle>Importar Productos Existentes</DialogTitle>
+          <DialogTitle>Traer productos existentes</DialogTitle>
           <DialogDescription>
-            Selecciona productos individuales para agruparlos.
+            Elige productos sueltos para sumarlos al grupo como variantes. Conservan su ficha, stock y dirección.
             {currentCategoryId && (
               <span className="mt-1 block font-semibold text-primary">
                 Filtrando por subcategoría actual:{" "}
@@ -193,7 +193,7 @@ export const ProductImportModal: React.FC<ProductImportModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="z-10 flex items-center gap-4 bg-background py-4">
+        <div className="z-10 flex flex-col gap-3 bg-background py-4 sm:flex-row sm:items-center sm:gap-4">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -209,7 +209,7 @@ export const ProductImportModal: React.FC<ProductImportModalProps> = ({
             onValueChange={setSelectedCategory}
             disabled={!!currentCategoryId} // Disable if parent form already has a category set
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Subcategoría" />
             </SelectTrigger>
             <SelectContent>
@@ -301,16 +301,16 @@ export const ProductImportModal: React.FC<ProductImportModalProps> = ({
         </div>
 
         <DialogFooter className="border-t pt-4">
-          <div className="flex w-full items-center justify-between">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm text-muted-foreground">
-              {selectedIds.size} productos seleccionados
+              {selectedIds.size} {selectedIds.size === 1 ? "producto elegido" : "productos elegidos"}
             </span>
-            <div className="flex gap-2">
+            <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
               <Button onClick={handleConfirm} disabled={selectedIds.size === 0}>
-                Importar Seleccionados
+                Traer al grupo
               </Button>
             </div>
           </div>

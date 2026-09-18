@@ -1,12 +1,23 @@
 "use client";
 
 import { Supplier } from "@prisma/client";
-
 import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
+  Archive,
+  ArchiveRestore,
+  ExternalLink,
+  Package,
+  Pencil,
+  Star,
+  Trash,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { memo, useCallback, useMemo, useState } from "react";
+import { UseFormReturn } from "react-hook-form";
+
+import { VariantEditModal } from "@/components/modals/variant-edit-modal";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -16,24 +27,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import Image from "next/image";
-import { useState } from "react";
-import { UseFormReturn } from "react-hook-form";
-
-import { VariantEditModal } from "@/components/modals/variant-edit-modal";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
-import { currencyFormatter } from "@/lib/utils";
-import { Archive, Info, Package, Pencil, Star, Trash } from "lucide-react";
-import { ProductGroupFormValues } from "./product-group-form";
+import { cn, currencyFormatter } from "@/lib/utils";
+import { resolveVariantImages } from "@/lib/variant-images";
 import { ProductTintBadge } from "./product-badges";
+import type { FormVariant, ProductGroupFormValues } from "./product-group-form";
 
 interface VariantGridProps {
   form: UseFormReturn<ProductGroupFormValues>;
@@ -41,12 +38,359 @@ interface VariantGridProps {
   images: { url: string }[];
   imageScopes: Record<string, string>;
   suppliers: Supplier[];
-  isEditMode?: boolean; // True when editing existing group
-  onBatchIntake?: (variantIds: string[]) => void; // Callback for batch intake
+  storeId: string;
+  storeUrl?: string | null;
+  isEditMode?: boolean;
+  onBatchIntake?: (variantIds: string[]) => void;
   sizes: { id: string; name: string; value: string }[];
   colors: { id: string; name: string; value: string }[];
   designs: { id: string; name: string }[];
 }
+
+type Row = FormVariant & { originalIndex: number };
+
+/** Qué pasa con la fila al guardar. */
+function originOf(variant: FormVariant) {
+  if (!variant.id) return { label: "Se crea · 0 und", tone: "lavender" };
+  if (variant.origin === "adopted") return { label: "Se adopta", tone: "mint" };
+  return { label: "Guardada", tone: "slate" };
+}
+
+/** Estado en la tienda, por fila: a la venta, archivada o todavía sin crear. */
+function statusOf(variant: FormVariant) {
+  if (!variant.id) return { label: "Borrador", tone: "slate" };
+  if (variant.isArchived) return { label: "Archivada", tone: "cream" };
+  return { label: "A la venta", tone: "mint" };
+}
+
+/**
+ * GTIN con estado local: escribir en la tabla no reescribe el formulario en
+ * cada tecla (antes cada pulsación re-renderizaba las 2.500 líneas del
+ * formulario); se confirma al salir del campo.
+ */
+const GtinCell = memo(function GtinCell({
+  variant,
+  disabled,
+  onCommit,
+  onNoIdentifier,
+}: {
+  variant: FormVariant;
+  disabled: boolean;
+  onCommit: (gtin: string) => void;
+  onNoIdentifier: (value: boolean) => void;
+}) {
+  const [draft, setDraft] = useState(variant.gtin ?? "");
+  const noIdentifier = variant.hasNoProductIdentifier === true;
+  return (
+    <div className="flex min-w-[8rem] flex-col gap-1">
+      <Input
+        value={noIdentifier ? "" : draft}
+        disabled={disabled || noIdentifier}
+        inputMode="numeric"
+        placeholder={noIdentifier ? "Sin código" : "GTIN real"}
+        aria-label={`GTIN de ${variant.name || "la variante"}`}
+        className="h-8 font-mono text-xs"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft !== (variant.gtin ?? "")) onCommit(draft.trim());
+        }}
+      />
+      <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Checkbox
+          checked={noIdentifier}
+          disabled={disabled}
+          aria-label={`${variant.name || "La variante"} no tiene código de barras`}
+          onCheckedChange={(checked) => {
+            const value = checked === true;
+            if (value) setDraft("");
+            onNoIdentifier(value);
+          }}
+        />
+        Sin código
+      </label>
+    </div>
+  );
+});
+
+interface RowHandlers {
+  onToggleSelect: (index: number) => void;
+  onEdit: (index: number) => void;
+  onRemove: (index: number) => void;
+  onToggleArchive: (index: number) => void;
+  onGtin: (index: number, gtin: string) => void;
+  onNoIdentifier: (index: number, value: boolean) => void;
+}
+
+function VariantThumb({ urls, name }: { urls: string[]; name: string }) {
+  if (urls.length === 0) {
+    return <div className="h-12 w-12 shrink-0 rounded-md border bg-muted" aria-hidden="true" />;
+  }
+  return (
+    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border">
+      <Image src={urls[0]} alt={`Foto de ${name}`} fill sizes="48px" className="object-cover" />
+      {urls.length > 1 && (
+        <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[10px] font-bold text-white">
+          +{urls.length - 1}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function VariantIdentity({
+  variant,
+  storeId,
+  storeUrl,
+  withStatus = false,
+}: {
+  variant: FormVariant;
+  storeId: string;
+  storeUrl?: string | null;
+  /** La tabla no tiene columna de estado; la tarjeta lo pinta en su cabecera. */
+  withStatus?: boolean;
+}) {
+  const attrs = [variant.size?.name, variant.color?.name, variant.design?.name]
+    .filter(Boolean)
+    .join(" / ");
+  const origin = originOf(variant);
+  const status = statusOf(variant);
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        {variant.id ? (
+          <Link
+            href={`/${storeId}/productos/${variant.id}`}
+            className="truncate text-sm font-semibold text-primary underline-offset-2 hover:underline"
+          >
+            {variant.name || "Variante"}
+          </Link>
+        ) : (
+          <span className="truncate text-sm font-semibold text-primary">
+            {variant.name || "Variante"}
+          </span>
+        )}
+        <ProductTintBadge label={origin.label} tone={origin.tone} />
+        {withStatus && variant.id && <ProductTintBadge label={status.label} tone={status.tone} />}
+        {variant.isFeatured && (
+          <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" aria-label="Destacada" />
+        )}
+      </div>
+      <span className="font-mono text-[11px] text-muted-foreground">
+        {variant.sku || "SKU al guardar"}
+        {attrs ? ` · ${attrs}` : ""}
+      </span>
+      {variant.slug && (
+        <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="truncate">/producto/{variant.slug}</span>
+          {storeUrl && !variant.isArchived && (
+            <a
+              href={`${storeUrl}/producto/${variant.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Ver ${variant.name || "la variante"} en la tienda`}
+              className="text-primary"
+            >
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            </a>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const VariantTableRow = memo(function VariantTableRow({
+  row,
+  selected,
+  loading,
+  thumbs,
+  supplierName,
+  storeId,
+  storeUrl,
+  handlers,
+}: {
+  row: Row;
+  selected: boolean;
+  loading: boolean;
+  thumbs: string[];
+  supplierName: string;
+  storeId: string;
+  storeUrl?: string | null;
+  handlers: RowHandlers;
+}) {
+  const index = row.originalIndex;
+  return (
+    <TableRow className={cn(!row.id && "bg-tint-lavender/10", row.isArchived && "bg-muted/40")}>
+      <TableCell>
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => handlers.onToggleSelect(index)}
+          aria-label={`Seleccionar ${row.name || "la variante"}`}
+        />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-start gap-3">
+          <VariantThumb urls={thumbs} name={row.name || "la variante"} />
+          <VariantIdentity variant={row} storeId={storeId} storeUrl={storeUrl} withStatus />
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium">{currencyFormatter(row.price || 0)}</span>
+          <span className="text-xs text-muted-foreground">costo {currencyFormatter(row.acqPrice || 0)}</span>
+          <span className="truncate text-xs text-muted-foreground" title={supplierName}>
+            {supplierName}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell className="text-sm">
+        {row.id ? (
+          <span className="font-medium">{row.stock || 0} und</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">0 · por Inventario</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <GtinCell
+          variant={row}
+          disabled={loading}
+          onCommit={(gtin) => handlers.onGtin(index, gtin)}
+          onNoIdentifier={(value) => handlers.onNoIdentifier(index, value)}
+        />
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex justify-end gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            type="button"
+            disabled={loading}
+            aria-label={`Editar ${row.name || "la variante"}`}
+            onClick={() => handlers.onEdit(index)}
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          {row.id && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              type="button"
+              disabled={loading}
+              aria-label={`${row.isArchived ? "Publicar" : "Archivar"} ${row.name || "la variante"}`}
+              title={row.isArchived ? "Publicar" : "Archivar"}
+              onClick={() => handlers.onToggleArchive(index)}
+            >
+              {row.isArchived ? (
+                <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Archive className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            type="button"
+            disabled={loading}
+            aria-label={`Quitar ${row.name || "la variante"} del grupo`}
+            onClick={() => handlers.onRemove(index)}
+          >
+            <Trash className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+});
+
+const VariantCard = memo(function VariantCard({
+  row,
+  selected,
+  loading,
+  thumbs,
+  supplierName,
+  storeId,
+  storeUrl,
+  handlers,
+}: {
+  row: Row;
+  selected: boolean;
+  loading: boolean;
+  thumbs: string[];
+  supplierName: string;
+  storeId: string;
+  storeUrl?: string | null;
+  handlers: RowHandlers;
+}) {
+  const index = row.originalIndex;
+  const status = statusOf(row);
+  return (
+    <article
+      className={cn(
+        "flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm",
+        selected && "border-primary bg-accent/40",
+        row.isArchived && "bg-muted/30",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <Checkbox
+          className="mt-1"
+          checked={selected}
+          onCheckedChange={() => handlers.onToggleSelect(index)}
+          aria-label={`Seleccionar ${row.name || "la variante"}`}
+        />
+        <VariantThumb urls={thumbs} name={row.name || "la variante"} />
+        <div className="min-w-0 flex-1">
+          <VariantIdentity variant={row} storeId={storeId} storeUrl={storeUrl} />
+        </div>
+        <ProductTintBadge label={status.label} tone={status.tone} />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="font-semibold">{currencyFormatter(row.price || 0)}</span>
+        <span className="text-xs text-muted-foreground">costo {currencyFormatter(row.acqPrice || 0)}</span>
+        {row.id ? (
+          <span className="text-xs">{row.stock || 0} und</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">0 · por Inventario</span>
+        )}
+        <span className="text-xs text-muted-foreground">{supplierName}</span>
+      </div>
+      <GtinCell
+        variant={row}
+        disabled={loading}
+        onCommit={(gtin) => handlers.onGtin(index, gtin)}
+        onNoIdentifier={(value) => handlers.onNoIdentifier(index, value)}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => handlers.onEdit(index)}>
+          <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          Editar
+        </Button>
+        {row.id && (
+          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => handlers.onToggleArchive(index)}>
+            {row.isArchived ? (
+              <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Archive className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {row.isArchived ? "Publicar" : "Archivar"}
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={loading}
+          className="ml-auto text-destructive"
+          onClick={() => handlers.onRemove(index)}
+        >
+          <Trash className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          Quitar
+        </Button>
+      </div>
+    </article>
+  );
+});
 
 export const VariantGrid: React.FC<VariantGridProps> = ({
   form,
@@ -54,137 +398,119 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
   images,
   imageScopes,
   suppliers,
+  storeId,
+  storeUrl,
   isEditMode = false,
   onBatchIntake,
   sizes,
   colors,
   designs,
 }) => {
-  const { watch, setValue } = form;
-  const formVariants = watch("variants");
+  const { watch, setValue, getValues } = form;
+  const formVariants = watch("variants") ?? [];
   const [searchTerm, setSearchTerm] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
-    new Set(),
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
+  const supplierNames = useMemo(
+    () => new Map(suppliers.map((supplier) => [supplier.id, supplier.name])),
+    [suppliers],
+  );
+  const mapping = useMemo(
+    () => Object.entries(imageScopes).map(([url, scope]) => ({ url, scope })),
+    [imageScopes],
   );
 
-  if (!formVariants || formVariants.length === 0) return null;
+  const rows: Row[] = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return formVariants
+      .map((variant, index) => ({ ...variant, originalIndex: index }))
+      .filter(
+        (variant) =>
+          !term ||
+          variant.sku?.toLowerCase().includes(term) ||
+          variant.name?.toLowerCase().includes(term) ||
+          variant.gtin?.includes(term),
+      );
+  }, [formVariants, searchTerm]);
 
-  const filteredVariants =
-    formVariants
-      ?.map((variant, index) => ({
-        ...variant,
-        originalIndex: index,
-      }))
-      .filter((variant) => {
-        const v = variant;
-        return (
-          v.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          v.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const thumbsFor = useCallback(
+    (variant: FormVariant) =>
+      variant.images && variant.images.length > 0
+        ? variant.images
+        : resolveVariantImages({
+            groupImages: images,
+            imageMapping: mapping,
+            colorId: variant.color?.id,
+            designId: variant.design?.id,
+          }).map((image) => image.url),
+    [images, mapping],
+  );
+
+  const updateRow = useCallback(
+    (index: number, patch: Partial<FormVariant>) => {
+      const current = getValues("variants") ?? [];
+      setValue(`variants.${index}`, { ...current[index], ...patch }, { shouldDirty: true });
+    },
+    [getValues, setValue],
+  );
+
+  const handlers: RowHandlers = useMemo(
+    () => ({
+      onToggleSelect: (index) =>
+        setSelectedIndices((prev) => {
+          const next = new Set(prev);
+          if (next.has(index)) next.delete(index);
+          else next.add(index);
+          return next;
+        }),
+      onEdit: (index) => setEditingIndex(index),
+      onRemove: (index) => {
+        const current = getValues("variants") ?? [];
+        setValue(
+          "variants",
+          current.filter((_, i) => i !== index),
+          { shouldDirty: true, shouldTouch: true, shouldValidate: true },
         );
-      }) || [];
+        setSelectedIndices(new Set());
+      },
+      onToggleArchive: (index) => {
+        const current = getValues("variants") ?? [];
+        updateRow(index, { isArchived: !current[index]?.isArchived });
+      },
+      onGtin: (index, gtin) => updateRow(index, { gtin }),
+      onNoIdentifier: (index, value) =>
+        updateRow(index, { hasNoProductIdentifier: value, ...(value ? { gtin: "" } : {}) }),
+    }),
+    [getValues, setValue, updateRow],
+  );
 
   const toggleSelectAll = () => {
-    if (selectedIndices.size === filteredVariants.length) {
-      setSelectedIndices(new Set());
-    } else {
-      setSelectedIndices(new Set(filteredVariants.map((v) => v.originalIndex)));
-    }
+    if (selectedIndices.size === rows.length) setSelectedIndices(new Set());
+    else setSelectedIndices(new Set(rows.map((row) => row.originalIndex)));
   };
 
-  const toggleSelectRow = (index: number) => {
-    const newSelected = new Set(selectedIndices);
-    if (newSelected.has(index)) {
-      newSelected.delete(index);
-    } else {
-      newSelected.add(index);
-    }
-    setSelectedIndices(newSelected);
-  };
-
-  const onDeleteSelected = () => {
-    if (!formVariants) return;
-    const newVariants = formVariants.filter(
-      (_, index) => !selectedIndices.has(index),
+  const bulk = (patch: (variant: FormVariant) => FormVariant) => {
+    const current = getValues("variants") ?? [];
+    setValue(
+      "variants",
+      current.map((variant, index) => (selectedIndices.has(index) ? patch(variant) : variant)),
+      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
     );
-    setValue("variants", newVariants, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
     setSelectedIndices(new Set());
   };
 
-  const onArchiveSelected = () => {
-    if (!formVariants) return;
-    const newVariants = formVariants.map((variant, index) => {
-      if (selectedIndices.has(index)) {
-        return { ...variant, isArchived: true };
-      }
-      return variant;
-    });
-    setValue("variants", newVariants, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-    setSelectedIndices(new Set());
+  const onSaveVariant = (data: Partial<FormVariant>) => {
+    if (editingIndex === null) return;
+    // Se mezcla sobre la fila: lo que el modal no conoce se conserva.
+    updateRow(editingIndex, data);
+    setEditingIndex(null);
   };
 
-  // Handler for inline stock editing
-  const onStockChange = (index: number, newStock: number) => {
-    if (!formVariants) return;
-    const updatedVariant = { ...formVariants[index], stock: newStock };
-    setValue(`variants.${index}`, updatedVariant, {
-      shouldDirty: true,
-    });
-  };
-
-  // Handler for batch intake button
-  const handleBatchIntake = () => {
-    if (!onBatchIntake || !formVariants) return;
-    const selectedVariantIds = Array.from(selectedIndices)
-      .map((idx) => formVariants[idx]?.id)
-      .filter((id): id is string => !!id);
-    onBatchIntake(selectedVariantIds);
-  };
-
-  const onSaveVariant = (data: any) => {
-    if (editingIndex !== null) {
-      // Se mezcla sobre la fila: cualquier campo que el modal no conozca
-      // (identificadores, origen) se conserva en vez de perderse.
-      const current = formVariants[editingIndex] ?? {};
-      setValue(`variants.${editingIndex}`, { ...current, ...data }, {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
-      setEditingIndex(null);
-    }
-  };
-
-  const editingVariant =
-    editingIndex !== null ? formVariants[editingIndex] : null;
-
-  const getEffectiveImages = (variant: any) => {
-    // 1. If explicit images exist, return them
-    if (variant.images && variant.images.length > 0) {
-      return variant.images;
-    }
-
-    // 2. Fallback to attribute scoping logic
-    const matches = images.filter((img) => {
-      const scope = imageScopes[img.url] || "all";
-      if (scope === "all") return true;
-      if (scope === variant.color?.id) return true;
-      if (scope === variant.design?.id) return true;
-      if (scope === `COMBO|${variant.color?.id}|${variant.design?.id}`)
-        return true;
-      return false;
-    });
-
-    return matches.map((m) => m.url);
-  };
+  const editingVariant = editingIndex !== null ? formVariants[editingIndex] : null;
+  const selectedSaved = Array.from(selectedIndices)
+    .map((index) => formVariants[index])
+    .filter((variant): variant is FormVariant => Boolean(variant?.id));
 
   return (
     <>
@@ -193,12 +519,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
         onClose={() => setEditingIndex(null)}
         onConfirm={onSaveVariant}
         initialData={
-          editingVariant
-            ? {
-                ...editingVariant,
-                images: getEffectiveImages(editingVariant),
-              }
-            : null
+          editingVariant ? { ...editingVariant, images: thumbsFor(editingVariant) } : null
         }
         suppliers={suppliers}
         groupImages={images}
@@ -206,325 +527,151 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
         colors={colors}
         designs={designs}
       />
-      <div className="space-y-4 rounded-md border p-4">
-        <h3 className="text-lg font-medium">Editor de Variantes</h3>
-        <div className="text-sm text-muted-foreground">
-          Gestiona las variantes de tu grupo de productos.
+
+      {formVariants.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Este grupo todavía no tiene variantes. Usa «Traer productos existentes»
+          para adoptar productos sueltos o «Generar combinaciones» para crear
+          variantes nuevas (nacen con 0 unidades).
         </div>
-        <div className="flex items-center py-2">
-          <Input
-            placeholder="Buscar por SKU o Nombre..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
-          />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              placeholder="Buscar por nombre, SKU o GTIN"
+              aria-label="Buscar variante"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="sm:max-w-xs"
+            />
+            <span className="text-xs text-muted-foreground sm:ml-auto">
+              {rows.length} de {formVariants.length}{" "}
+              {formVariants.length === 1 ? "variante" : "variantes"}
+            </span>
+          </div>
+
           {selectedIndices.size > 0 && (
-            <div className="ml-auto flex items-center gap-2">
-              {/* Batch Intake Button - only show in edit mode for existing variants */}
+            <div
+              role="region"
+              aria-label={`${selectedIndices.size} variantes seleccionadas`}
+              className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 p-2"
+            >
+              <span className="px-1 text-xs font-semibold text-primary">
+                {selectedIndices.size} {selectedIndices.size === 1 ? "seleccionada" : "seleccionadas"}
+              </span>
               {isEditMode && onBatchIntake && (
                 <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleBatchIntake}
                   type="button"
-                  disabled={Array.from(selectedIndices).every(
-                    (idx) => !formVariants?.[idx]?.id,
-                  )}
+                  size="sm"
+                  variant="outline"
+                  disabled={selectedSaved.length === 0}
+                  onClick={() => onBatchIntake(selectedSaved.map((variant) => variant.id!))}
                 >
-                  <Package className="mr-2 h-4 w-4" />
-                  Ingresar Stock ({selectedIndices.size})
+                  <Package className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  Ingresar stock ({selectedSaved.length})
                 </Button>
               )}
               <Button
-                variant="destructive"
-                size="sm"
-                onClick={onDeleteSelected}
                 type="button"
+                size="sm"
+                variant="outline"
+                disabled={selectedSaved.length === 0}
+                onClick={() => bulk((variant) => (variant.id ? { ...variant, isArchived: true } : variant))}
               >
-                <Trash className="mr-2 h-4 w-4" />
-                Eliminar ({selectedIndices.size})
+                <Archive className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Archivar ({selectedSaved.length})
               </Button>
               <Button
-                variant="secondary"
-                size="sm"
-                onClick={onArchiveSelected}
                 type="button"
+                size="sm"
+                variant="outline"
+                disabled={selectedSaved.length === 0}
+                onClick={() => bulk((variant) => (variant.id ? { ...variant, isArchived: false } : variant))}
               >
-                <Archive className="mr-2 h-4 w-4" />
-                Archivar ({selectedIndices.size})
+                <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Publicar ({selectedSaved.length})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-destructive"
+                onClick={() => {
+                  const current = getValues("variants") ?? [];
+                  setValue(
+                    "variants",
+                    current.filter((_, index) => !selectedIndices.has(index)),
+                    { shouldDirty: true, shouldTouch: true, shouldValidate: true },
+                  );
+                  setSelectedIndices(new Set());
+                }}
+              >
+                <Trash className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Quitar ({selectedIndices.size})
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedIndices(new Set())}>
+                Quitar selección
               </Button>
             </div>
           )}
-        </div>
-        <div className="max-h-[400px] overflow-y-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px]">
-                  <Checkbox
-                    checked={
-                      filteredVariants.length > 0 &&
-                      selectedIndices.size === filteredVariants.length
-                    }
-                    onCheckedChange={toggleSelectAll}
-                    aria-label="Seleccionar todas las variantes"
+
+          {/* Hasta 1279 px: tarjetas. Junto al panel lateral la tabla no cabe
+              sin scroll anidado por debajo de ese ancho. */}
+          <div className="flex flex-col gap-2 xl:hidden">
+            {rows.map((row) => (
+              <VariantCard
+                key={row.id ?? `new-${row.originalIndex}`}
+                row={row}
+                selected={selectedIndices.has(row.originalIndex)}
+                loading={loading}
+                thumbs={thumbsFor(row)}
+                supplierName={supplierNames.get(row.supplierId ?? "") ?? "Sin proveedor"}
+                storeId={storeId}
+                storeUrl={storeUrl}
+                handlers={handlers}
+              />
+            ))}
+          </div>
+
+          {/* Escritorio ancho: tabla compacta; si no cabe, desplaza en
+              horizontal en vez de recortar la columna Variante. */}
+          <div className="hidden overflow-x-auto rounded-xl border xl:block">
+            <Table className="[&_td]:px-2 [&_th]:px-2">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={rows.length > 0 && selectedIndices.size === rows.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Seleccionar todas las variantes"
+                    />
+                  </TableHead>
+                  <TableHead className="min-w-[14rem]">Variante</TableHead>
+                  <TableHead className="w-28">Precio · costo</TableHead>
+                  <TableHead className="w-16">Stock</TableHead>
+                  <TableHead className="w-40">GTIN</TableHead>
+                  <TableHead className="w-28 text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <VariantTableRow
+                    key={row.id ?? `new-${row.originalIndex}`}
+                    row={row}
+                    selected={selectedIndices.has(row.originalIndex)}
+                    loading={loading}
+                    thumbs={thumbsFor(row)}
+                    supplierName={supplierNames.get(row.supplierId ?? "") ?? "Sin proveedor"}
+                    storeId={storeId}
+                    storeUrl={storeUrl}
+                    handlers={handlers}
                   />
-                </TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead className="w-[160px]">Identificador</TableHead>
-                <TableHead>Imagen</TableHead>
-                <TableHead>Variante</TableHead>
-                <TableHead className="w-[100px]">Costo</TableHead>
-                <TableHead className="w-[120px]">Proveedor</TableHead>
-                <TableHead className="w-[100px]">Precio</TableHead>
-                <TableHead className="w-[100px]">
-                  <div className="flex items-center gap-1">
-                    Stock
-                    {!isEditMode && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-3 w-3 cursor-pointer text-muted-foreground transition-colors hover:text-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="max-w-[200px] text-xs">
-                              Esta cantidad generará mov. de inventario
-                              individuales al crear el grupo.
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                </TableHead>
-                <TableHead className="w-[80px]">Destacado</TableHead>
-                <TableHead className="w-[80px]">Archivado</TableHead>
-                <TableHead className="w-[80px] text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredVariants.map((variant: any) => {
-                const index = variant.originalIndex;
-                const supplierName =
-                  suppliers.find((s) => s.id === variant.supplierId)?.name ||
-                  "-";
-
-                return (
-                  <TableRow key={variant.id || index}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIndices.has(index)}
-                        onCheckedChange={() => toggleSelectRow(index)}
-                        aria-label={`Seleccionar ${variant.name || "la variante"}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {variant.sku || (
-                        <span className="italic text-muted-foreground">
-                          Generado
-                        </span>
-                      )}
-                    </TableCell>
-                    {/* El grupo nunca enviaba identificadores, asi que toda
-                        variante nacia "sin identificador" y Google Merchant la
-                        rechazaba. Ahora se puede escribir el GTIN real o
-                        declarar que el producto no tiene. */}
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <Input
-                          value={variant.gtin || ""}
-                          disabled={
-                            loading || variant.hasNoProductIdentifier === true
-                          }
-                          inputMode="numeric"
-                          placeholder="GTIN real"
-                          aria-label={`GTIN de ${variant.name || "la variante"}`}
-                          className="h-8 font-mono text-xs"
-                          onChange={(event) =>
-                            form.setValue(
-                              `variants.${index}.gtin`,
-                              event.target.value,
-                              { shouldDirty: true },
-                            )
-                          }
-                        />
-                        <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <Checkbox
-                            checked={variant.hasNoProductIdentifier === true}
-                            disabled={loading}
-                            onCheckedChange={(checked) => {
-                              const value = checked === true;
-                              form.setValue(
-                                `variants.${index}.hasNoProductIdentifier`,
-                                value,
-                                { shouldDirty: true },
-                              );
-                              if (value) {
-                                form.setValue(`variants.${index}.gtin`, "", {
-                                  shouldDirty: true,
-                                });
-                              }
-                            }}
-                          />
-                          Sin identificador
-                        </label>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        let matches: { url: string }[] = [];
-
-                        // 1. Check for explicit variant images
-                        if (variant.images && variant.images.length > 0) {
-                          matches = variant.images.map((url: string) => ({
-                            url,
-                          }));
-                        } else {
-                          // 2. Fallback to attribute scoping logic
-                          matches = images.filter((img) => {
-                            const scope = imageScopes[img.url] || "all";
-                            if (scope === "all") return true;
-                            if (scope === variant.color?.id) return true;
-                            if (scope === variant.design?.id) return true;
-                            if (
-                              scope ===
-                              `COMBO|${variant.color?.id}|${variant.design?.id}`
-                            )
-                              return true;
-                            return false;
-                          });
-                        }
-
-                        if (matches.length === 0) {
-                          return (
-                            <div className="h-10 w-10 rounded-md border bg-muted" />
-                          );
-                        }
-
-                        const primaryMatch = matches[0];
-                        const othersCount = matches.length - 1;
-
-                        return (
-                          <HoverCard>
-                            <HoverCardTrigger asChild>
-                              <div className="relative h-10 w-10 cursor-pointer overflow-hidden rounded-md border transition-colors hover:border-primary">
-                                <Image
-                                  src={primaryMatch.url}
-                                  alt="Variant"
-                                  fill
-                                  className="object-cover"
-                                />
-                                {othersCount > 0 && (
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-[10px] font-bold text-white">
-                                    +{othersCount}
-                                  </div>
-                                )}
-                              </div>
-                            </HoverCardTrigger>
-                            <HoverCardContent className="w-80">
-                              <div className="grid grid-cols-4 gap-2">
-                                {matches.map((img, i) => (
-                                  <div
-                                    key={i}
-                                    className="relative aspect-square overflow-hidden rounded-md border"
-                                  >
-                                    <Image
-                                      src={img.url}
-                                      alt={`Variant image ${i + 1}`}
-                                      fill
-                                      className="object-cover"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </HoverCardContent>
-                          </HoverCard>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium">
-                          {variant.name}
-                        </span>
-                        {/* Origen: qué pasa con la fila al guardar. */}
-                        {variant.id ? (
-                          <ProductTintBadge
-                            label={variant.origin === "adopted" ? "Se adopta" : "Guardada"}
-                            tone={variant.origin === "adopted" ? "mint" : "slate"}
-                          />
-                        ) : (
-                          <ProductTintBadge label="Se crea · 0 und" tone="lavender" />
-                        )}
-                        <span className="text-[10px] text-muted-foreground">
-                          {variant.size?.name} / {variant.color?.name} /{" "}
-                          {variant.design?.name}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {currencyFormatter(variant.acqPrice || 0)}
-                    </TableCell>
-                    <TableCell
-                      className="max-w-[120px] truncate text-xs"
-                      title={supplierName}
-                    >
-                      {supplierName}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {currencyFormatter(variant.price || 0)}
-                    </TableCell>
-                    <TableCell>
-                      {isEditMode ? (
-                        <div className="flex items-center justify-center font-medium">
-                          {variant.stock || 0}
-                        </div>
-                      ) : (
-                        <StockQuantityInput
-                          value={variant.stock || 0}
-                          onChange={(val) => onStockChange(index, val)}
-                          disabled={loading || !!variant.id}
-                          size="sm"
-                          min={0}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {variant.isFeatured ? (
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ) : (
-                        <Star className="h-4 w-4 text-muted-foreground/30" />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {variant.isArchived ? (
-                        <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-medium text-red-800">
-                          Si
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-medium text-green-800">
-                          No
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setEditingIndex(index)}
-                        disabled={loading}
-                        type="button"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 };

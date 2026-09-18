@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   AlertTriangle,
-  ArrowLeft,
+  ChevronDown,
   Eraser,
   Loader2,
   PackageCheckIcon,
@@ -35,7 +35,18 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Heading } from "@/components/ui/heading";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { FormPageHeader, FormStickyFooter } from "@/components/ui/form-page-chrome";
+import { SectionCard } from "@/components/ui/section-card";
+import { MobileSectionNav } from "../[productId]/components/section-nav";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { PercentageInput } from "@/components/ui/percentage-input";
@@ -48,8 +59,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
@@ -82,7 +91,7 @@ import {
 } from "@/lib/product-group-form-state";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { useParams, useRouter } from "next/navigation";
-import { currencyFormatter } from "@/lib/utils";
+import { cn, currencyFormatter } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProductTintBadge } from "./product-badges";
 import { VariantGrid } from "./variant-grid";
@@ -152,6 +161,7 @@ const formSchema = z.object({
         // De dónde sale la fila: guardada en el grupo, traída de un producto
         // suelto (se adopta) o generada (se crea). Solo informa a la tabla.
         origin: z.enum(["saved", "adopted", "new"]).optional(),
+        slug: z.string().optional(),
       }),
     )
     .optional(),
@@ -193,6 +203,8 @@ export interface FormVariant {
   mpn?: string;
   hasNoProductIdentifier?: boolean;
   origin?: "saved" | "adopted" | "new";
+  /** URL actual en la tienda (solo filas con producto real). */
+  slug?: string;
 }
 
 export type ProductGroupWithIncludes = ProductGroup & {
@@ -213,6 +225,8 @@ interface ProductGroupFormProps {
   designs: Design[];
   suppliers: Supplier[];
   initialData?: ProductGroupWithIncludes | null;
+  /** URL pública de la tienda para los enlaces «Ver en la tienda» de cada variante. */
+  storeUrl?: string | null;
 }
 
 export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
@@ -222,6 +236,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   designs,
   suppliers,
   initialData,
+  storeUrl = null,
 }) => {
   const params = useParams();
   // Un producto suelto con el mismo nombre que una variante generada: no se
@@ -288,7 +303,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     warnedStandalone.current.add(key);
     toast({
       title: "Ese producto ya existe",
-      description: `Ya existe un producto suelto llamado «${variantName}». Usa «Importar productos existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
+      description: `Ya existe un producto suelto llamado «${variantName}». Usa «Traer existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
       variant: "warning",
     });
   };
@@ -298,7 +313,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     warnedStandalone.current.add(key);
     toast({
       title: "Ese producto ya existe",
-      description: `«${variantName}» llevaría exactamente las mismas fotos que el producto suelto «${existing}». Usa «Importar productos existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
+      description: `«${variantName}» llevaría exactamente las mismas fotos que el producto suelto «${existing}». Usa «Traer existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
       variant: "warning",
     });
   };
@@ -318,7 +333,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
   // Controls if we automatically fill the matrix when attributes change
   // Defaults to TRUE for standard creation flow
-  const [autoGenerate, setAutoGenerate] = useState(true);
+  // El interruptor «Auto-Generar» desapareció del encabezado; el efecto de
+  // sincronización automática se retoma en la fase 3.
+  const [autoGenerate, setAutoGenerate] = useState(false);
   const [includeColorInVariantName, setIncludeColorInVariantName] =
     useState(false);
   const [includeDesignInVariantName, setIncludeDesignInVariantName] =
@@ -327,15 +344,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   // Determine if we are in "Edit" mode
   const isEdit = !!initialData;
 
-  // We only support Creation for now in this form
-  const title = isEdit ? "Editar Grupo" : "Crear Grupo";
-  const description = isEdit
-    ? "Editar grupo de productos"
-    : "Agregar un nuevo grupo de productos con variantes";
   const toastMessage = isEdit
     ? "Grupo actualizado"
     : "Grupo de productos creado";
-  const action = isEdit ? "Guardar Cambios" : "Crear Grupo";
+  const action = isEdit ? "Guardar grupo" : "Crear grupo";
   const pendingText = isEdit ? "Guardando..." : "Creando...";
 
   const reconstructMapping = (
@@ -573,6 +585,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             mpn: p.mpn || "",
             hasNoProductIdentifier: p.hasNoProductIdentifier ?? true,
             origin: "saved" as const,
+            slug: p.slug,
           })) || [],
       }
     : {
@@ -1213,19 +1226,34 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     const finalVariants: FormVariant[] = [];
     const processedKeys = new Set<string>();
 
-    for (const gen of allGenerated) {
-      // Generate key to prevent duplicates within the generation batch
+    // Las comprobaciones de «ya existe suelto» (por nombre y por fotos) iban
+    // una tras otra: 5 colores × 6 diseños × 2 tamaños eran hasta 120
+    // peticiones en fila. Ahora van de cinco en cinco.
+    const uniqueGenerated = allGenerated.filter((gen) => {
       const genKey = `${gen.sizeId}|${gen.colorId}|${gen.designId}`;
-      if (processedKeys.has(genKey)) continue;
+      if (processedKeys.has(genKey)) return false;
       processedKeys.add(genKey);
-
-      // 1. Exact Match Check
+      return true;
+    });
+    const checks = await mapWithConcurrency(uniqueGenerated, 5, async (gen) => {
       const matchIndex = currentVars.findIndex(
         (v) =>
           v.size?.id === gen.sizeId &&
           v.color?.id === gen.colorId &&
           v.design?.id === gen.designId,
       );
+      if (matchIndex !== -1 || initialData) {
+        return { matchIndex, nameTaken: false, sameImagesAs: null as string | null };
+      }
+      const [nameTaken, sameImagesAs] = await Promise.all([
+        isStandaloneTaken(gen.name),
+        isStandaloneImagesTaken(gen.colorId, gen.designId),
+      ]);
+      return { matchIndex, nameTaken, sameImagesAs };
+    });
+
+    uniqueGenerated.forEach((gen, position) => {
+      const { matchIndex, nameTaken, sameImagesAs } = checks[position];
 
       if (matchIndex !== -1) {
         // KEEP EXISTING (Update metadata if needed, but keep ID and Stock)
@@ -1233,16 +1261,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         finalVariants.push(currentVars[matchIndex]);
       } else {
         // CREATE NEW
-        if (!initialData && (await isStandaloneTaken(gen.name))) {
+        if (nameTaken) {
           warnStandalone(gen.name);
-          continue;
+          return;
         }
-        const sameImagesAs = initialData
-          ? null
-          : await isStandaloneImagesTaken(gen.colorId, gen.designId);
         if (sameImagesAs) {
           warnStandaloneImages(gen.name, sameImagesAs);
-          continue;
+          return;
         }
         finalVariants.push({
           sku: gen.sku,
@@ -1278,7 +1303,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             : { id: "unknown", name: "?" },
         });
       }
-    }
+    });
 
     // Las filas con id (guardadas o traídas de un producto suelto) no se
     // descartan aunque su combinación no esté marcada: se conservan y se
@@ -1327,6 +1352,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     gtin?: string | null;
     mpn?: string | null;
     hasNoProductIdentifier?: boolean;
+    slug?: string;
   }
 
   // Handle Import from Standalone Products
@@ -1430,6 +1456,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       gtin: p.gtin ?? "",
       mpn: p.mpn ?? "",
       hasNoProductIdentifier: p.hasNoProductIdentifier ?? undefined,
+      slug: p.slug,
     }));
 
     // Merge variants avoiding ID duplication AND Attribute Duplication
@@ -1559,42 +1586,169 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     return scopes;
   }, [currentVariants, colors, designs]);
 
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
+  const isDirty = form.formState.isDirty || pendingImageRemovals.length > 0;
+
+  const onClearConfirmed = useCallback(async () => {
+    const ok = await requestConfirmation({
+      title: isEdit ? "¿Descartar los cambios?" : "¿Limpiar el formulario?",
+      description: isEdit
+        ? "Se vuelve a lo último guardado. Las fotos que subiste en esta sesión y no guardaste se borran."
+        : "Se borra todo lo escrito y las fotos subidas en esta sesión.",
+      confirmLabel: isEdit ? "Descartar" : "Limpiar",
+      destructive: true,
+    });
+    if (ok) {
+      setPendingImageRemovals([]);
+      await onClear();
+    }
+  }, [isEdit, onClear, requestConfirmation]);
+
+  /** Vuelve a poner en la tabla una variante quitada (antes de guardar). */
+  const restoreRemovedVariant = useCallback(
+    (productId: string) => {
+      const product = initialData?.products?.find((row) => row.id === productId);
+      if (!product) return;
+      const current = form.getValues("variants") ?? [];
+      form.setValue(
+        "variants",
+        [
+          ...current,
+          {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            size: product.size ? { id: product.size.id, name: product.size.name, value: product.size.value } : undefined,
+            color: product.color ? { id: product.color.id, name: product.color.name, value: product.color.value } : undefined,
+            design: product.design ? { id: product.design.id, name: product.design.name } : undefined,
+            price: product.price,
+            acqPrice: product.acqPrice || 0,
+            stock: product.stock,
+            supplierId: product.supplierId || "",
+            isFeatured: product.isFeatured,
+            isArchived: product.isArchived,
+            images: product.images.map((img) => img.url),
+            description: product.description || "",
+            gtin: product.gtin || "",
+            mpn: product.mpn || "",
+            hasNoProductIdentifier: product.hasNoProductIdentifier ?? true,
+            origin: "saved",
+            slug: product.slug,
+          },
+        ],
+        { shouldDirty: true },
+      );
+    },
+    [form, initialData],
+  );
+
+  const imageScopes = useMemo(
+    () =>
+      currentMapping.reduce<Record<string, string>>(
+        (acc, curr) => ({ ...acc, [curr.url]: curr.scope }),
+        {},
+      ),
+    [currentMapping],
+  );
+
+  /** «→ 4 variantes», «→ Rosa» … quién recibe una foto según su alcance. */
+  const scopeRecipients = (scope: string) => {
+    const rows = currentVariants ?? [];
+    if (scope === "all") return `${rows.length} ${rows.length === 1 ? "variante" : "variantes"}`;
+    const label = availableScopes.find((option) => option.value === scope)?.label ?? scope;
+    const count = rows.filter(
+      (row) =>
+        row.color?.id === scope ||
+        row.design?.id === scope ||
+        `COMBO|${row.color?.id}|${row.design?.id}` === scope,
+    ).length;
+    return `${label.replace(/^(Color|Diseño): /, "")} · ${count} ${count === 1 ? "variante" : "variantes"}`;
+  };
+
+  const groupStats = useMemo(() => {
+    const rows = initialData?.products ?? [];
+    return {
+      total: rows.length,
+      published: rows.filter((row) => !row.isArchived).length,
+      units: rows.reduce((sum, row) => sum + (row.stock ?? 0), 0),
+    };
+  }, [initialData]);
+  const groupAxes = useMemo(() => {
+    const rows = initialData?.products ?? [];
+    const count = (pick: (row: (typeof rows)[number]) => string | undefined) =>
+      new Set(rows.map(pick).filter(Boolean)).size;
+    return [
+      { label: "Tamaño", count: count((row) => row.size?.name) },
+      { label: "Color", count: count((row) => row.color?.name) },
+      { label: "Diseño", count: count((row) => row.design?.name) },
+    ].filter((axis) => axis.count > 1);
+  }, [initialData]);
+  const newVariantCount = (currentVariants ?? []).filter((row) => !row.id).length;
+  const adoptedVariantCount = (currentVariants ?? []).filter((row) => row.origin === "adopted").length;
+
+  const sectionLinks = [
+    { id: "fotos", label: "1 · Fotos y reparto" },
+    { id: "informacion", label: "2 · Datos del grupo" },
+    { id: "asistente", label: "Asistente de producto" },
+    { id: "precio", label: "3 · Precio y costo" },
+    { id: "variantes", label: `4 · Variantes · ${currentVariants?.length ?? 0}` },
+    { id: "descripcion", label: "5 · Descripción" },
+  ];
+
+  const openMatrix = () => {
+    if (!form.getValues("categoryId")) {
+      form.trigger("categoryId");
+      toast({
+        title: "Falta la subcategoría",
+        description: "Elige una subcategoría antes de generar combinaciones.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!selectedColorIds?.length || !selectedDesignIds?.length) {
+      toast({
+        title: "Faltan colores o diseños",
+        description: "Elige al menos un color y un diseño en «Datos del grupo».",
+        variant: "destructive",
+      });
+      return;
+    }
+    setMatrixOpen(true);
+  };
+
+  const pendingSummary = [
+    newVariantCount > 0 &&
+      `${newVariantCount} ${newVariantCount === 1 ? "variante nueva" : "variantes nuevas"}`,
+    adoptedVariantCount > 0 &&
+      `${adoptedVariantCount} ${adoptedVariantCount === 1 ? "producto se adopta" : "productos se adoptan"}`,
+    pendingRemovals.length > 0 &&
+      `${pendingRemovals.length} ${pendingRemovals.length === 1 ? "se quita" : "se quitan"}`,
+    pendingImageRemovals.length > 0 &&
+      `${pendingImageRemovals.length} ${pendingImageRemovals.length === 1 ? "foto se quita" : "fotos se quitan"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <>
       {leaveDialog}
+      {confirmationDialog}
       <Modal
-        title="Eliminar Grupo"
-        description="¿Cómo deseas eliminar este grupo?"
+        title="Desagrupar o eliminar el grupo"
+        description="Desagrupar deja cada variante como producto suelto con todo lo suyo. Eliminar borra el grupo y sus variantes; si alguna tiene pedidos, kits, Mercado Libre, ferias, reposición o kardex, no se puede."
         isOpen={open}
         onClose={() => setOpen(false)}
       >
-        <div className="flex flex-col gap-4 py-4">
-          <p className="text-sm text-gray-500">
-            Puedes desvincular los productos (se mantendrán como individuales) o
-            eliminar todo el grupo y sus variantes (siempre que no tengan
-            ventas).
-          </p>
-          <div className="flex w-full justify-end gap-2">
-            <Button
-              disabled={loading}
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex w-full flex-wrap justify-end gap-2">
+            <Button disabled={loading} variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button
-              disabled={loading}
-              variant="secondary"
-              onClick={() => onDelete(false)}
-            >
-              Solo Desvincular
+            <Button disabled={loading} variant="secondary" onClick={() => onDelete(false)}>
+              Desagrupar
             </Button>
-            <Button
-              disabled={loading}
-              variant="destructive"
-              onClick={() => onDelete(true)}
-            >
-              Eliminar Todo
+            <Button disabled={loading} variant="destructive" onClick={() => onDelete(true)}>
+              Eliminar grupo y variantes
             </Button>
           </div>
         </div>
@@ -1616,548 +1770,506 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         categories={categories}
       />
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Volver a productos"
-            onClick={async () => {
-              if (await confirmLeave())
-                router.push(`/${params.storeId}/productos`);
-            }}
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          <Heading title={title} description={description} />
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center space-x-2 rounded-md border p-2">
-            <Switch
-              id="auto-generate"
-              checked={autoGenerate}
-              onCheckedChange={setAutoGenerate}
-            />
-            <div className="grid gap-1.5 leading-none">
-              <label
-                htmlFor="auto-generate"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Auto-Generar
-              </label>
-              <p className="text-[0.8rem] text-muted-foreground">
-                {autoGenerate ? "ON: Matriz Completa" : "OFF: Selección Manual"}
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={onClear} type="button">
-            <Eraser className="mr-2 h-4 w-4" />
-            Limpiar Formulario
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setImportOpen(true)}
-            type="button"
-          >
-            <PackageCheckIcon className="mr-2 h-4 w-4" />
-            Importar Productos
-          </Button>
-          {isEdit && (
-            <Button
-              disabled={loading}
-              variant="destructive"
-              size="icon"
-              onClick={() => setOpen(true)}
-            >
-              <Trash className="h-4 w-4" />
+      <FormPageHeader
+        title={isEdit ? watchedName || initialData?.name || "Grupo" : "Nuevo grupo de variantes"}
+        badge={
+          <>
+            <ProductTintBadge label="Grupo de variantes" tone="lavender" />
+            {isEdit ? (
+              groupAxes.map((axis) => (
+                <ProductTintBadge key={axis.label} label={`${axis.label} · ${axis.count} valores`} tone="slate" />
+              ))
+            ) : (
+              <ProductTintBadge label="Borrador · aún no está en la tienda" tone="slate" />
+            )}
+          </>
+        }
+        summary={
+          isEdit
+            ? `${groupStats.total} ${groupStats.total === 1 ? "variante" : "variantes"} · ${groupStats.published} a la venta · ${groupStats.units} unidades en total`
+            : "Un mismo artículo en varios colores o tamaños. Cada variante es un producto con su propio SKU, precio y stock."
+        }
+        backLabel="Volver a productos"
+        onBack={async () => {
+          if (await confirmLeave()) router.push(`/${params.storeId}/productos`);
+        }}
+        actions={
+          <>
+            <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => setImportOpen(true)}>
+              <PackageCheckIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+              Traer existentes
             </Button>
-          )}
-        </div>
-      </div>
-      <Separator />
+            <Button type="button" variant="outline" size="sm" disabled={loading} onClick={openMatrix}>
+              <Settings2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              Generar combinaciones
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="sm" disabled={loading}>
+                  Más
+                  <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onClick={() => void onClearConfirmed()}>
+                  <Eraser className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {isEdit ? "Descartar cambios" : "Limpiar formulario"}
+                </DropdownMenuItem>
+                {isEdit && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setOpen(true)}>
+                      <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Desagrupar o eliminar…
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
+
+      <MobileSectionNav sections={sectionLinks} />
 
       <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="w-full space-y-8"
-        >
-          <FormField
-            control={form.control}
-            name="images"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel isRequired>Imágenes del grupo</FormLabel>
-                <FormControl>
-                  <ImageUpload
-                    value={field.value.map((v) => ({
-                      ...v,
-                      isMain: v.isMain ?? false,
-                    }))}
-                    disabled={loading}
-                    maxImages={8}
-                    onChange={(images) => field.onChange(images)}
-                    pendingRemovals={pendingImageRemovals}
-                    onMarkRemoval={(url) =>
-                      setPendingImageRemovals((pending) =>
-                        pending.includes(url) ? pending : [...pending, url],
-                      )
-                    }
-                    onUndoRemoval={(url) =>
-                      setPendingImageRemovals((pending) =>
-                        pending.filter((item) => item !== url),
-                      )
-                    }
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full flex-col gap-4">
+          <SectionCard
+            id="fotos"
+            step={1}
+            title="Fotos y reparto"
+            description="Cada foto va a todas las variantes o solo a un color, diseño o combinación. Lo que quites con la papelera se borra al guardar."
+          >
+            <FormField
+              control={form.control}
+              name="images"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Fotos del grupo</FormLabel>
+                  <FormControl>
+                    <ImageUpload
+                      value={field.value.map((v) => ({ ...v, isMain: v.isMain ?? false }))}
+                      disabled={loading}
+                      maxImages={8}
+                      onChange={(images) => field.onChange(images)}
+                      pendingRemovals={pendingImageRemovals}
+                      onMarkRemoval={(url) =>
+                        setPendingImageRemovals((pending) => (pending.includes(url) ? pending : [...pending, url]))
+                      }
+                      onUndoRemoval={(url) => setPendingImageRemovals((pending) => pending.filter((item) => item !== url))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          {currentImages?.length > 0 &&
-            (selectedColorIds?.length > 0 || selectedDesignIds?.length > 0) && (
-              <div className="space-y-4 rounded-md border p-4">
-                <div className="space-y-1">
-                  <Heading
-                    title="Asignación de Imágenes"
-                    description="Asigna imágenes a variantes específicas (Colores/Diseños)"
-                  />
+            {currentImages?.length > 0 && (selectedColorIds?.length > 0 || selectedDesignIds?.length > 0) && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-primary">Reparto por variante</p>
+                  <p className="text-xs text-muted-foreground">
+                    Debajo de cada foto eliges quién la recibe. Una variante con fotos propias no se toca.
+                  </p>
                 </div>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-                  {currentImages.map((img) => (
-                    <div
-                      key={img.url}
-                      className="group relative space-y-2 rounded-md border p-2"
-                    >
-                      <div className="relative aspect-square overflow-hidden rounded-md border text-center">
-                        <Image
-                          src={img.url}
-                          alt="Product Image"
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                      <Select
-                        key={`${img.url}-${currentMapping.find((m) => m.url === img.url)?.scope || "all"}-${availableScopes.length}`}
-                        disabled={loading}
-                        value={
-                          currentMapping.find((m) => m.url === img.url)
-                            ?.scope || "all"
-                        }
-                        defaultValue={
-                          currentMapping.find((m) => m.url === img.url)
-                            ?.scope || "all"
-                        }
-                        onValueChange={(val) => {
-                          const existingIndex = currentMapping.findIndex(
-                            (m) => m.url === img.url,
-                          );
-
-                          let newMapping = [...currentMapping];
-                          if (existingIndex >= 0) {
-                            newMapping[existingIndex] = {
-                              ...newMapping[existingIndex],
-                              scope: val,
-                            };
-                          } else {
-                            newMapping.push({ url: img.url, scope: val });
-                          }
-
-                          console.log(
-                            "ProductGroupForm - Explicitly Setting Image Mapping:",
-                            newMapping,
-                          );
-                          form.setValue("imageMapping", newMapping, {
-                            shouldDirty: true,
-                            shouldTouch: true,
-                            shouldValidate: true,
-                          });
-                        }}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+                  {currentImages.map((img) => {
+                    const scope = currentMapping.find((m) => m.url === img.url)?.scope || "all";
+                    const isPending = pendingImageRemovals.includes(img.url);
+                    return (
+                      <div
+                        key={img.url}
+                        className={cn("flex flex-col gap-2 rounded-lg border p-2", isPending && "opacity-50")}
                       >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Alcance" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableScopes.map((scope) => (
-                            <SelectItem
-                              key={scope.value}
-                              value={scope.value}
-                              disabled={scope.disabled}
-                              className={
-                                scope.disabled
-                                  ? "font-semibold opacity-100"
-                                  : ""
-                              }
-                            >
-                              {scope.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
+                        <div className="relative aspect-square overflow-hidden rounded-md border">
+                          <Image src={img.url} alt="" fill sizes="(max-width: 640px) 50vw, 200px" className="object-cover" />
+                        </div>
+                        <Select
+                          key={`${img.url}-${scope}-${availableScopes.length}`}
+                          disabled={loading || isPending}
+                          value={scope}
+                          onValueChange={(val) => {
+                            const existingIndex = currentMapping.findIndex((m) => m.url === img.url);
+                            const newMapping = [...currentMapping];
+                            if (existingIndex >= 0) newMapping[existingIndex] = { ...newMapping[existingIndex], scope: val };
+                            else newMapping.push({ url: img.url, scope: val });
+                            form.setValue("imageMapping", newMapping, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs" aria-label="Quién recibe esta foto">
+                            <SelectValue placeholder="Alcance" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableScopes.map((s) => (
+                              <SelectItem key={s.value} value={s.value} disabled={s.disabled} className={s.disabled ? "font-semibold opacity-100" : ""}>
+                                {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span className="text-[11px] text-muted-foreground">
+                          {isPending ? "Se quita al guardar" : `→ ${scopeRecipients(scope)}`}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
+          </SectionCard>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem className="col-span-full">
-                  <FormLabel isRequired>Nombre</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      maxLength={PRODUCT_NAME_MAX_LENGTH}
-                      placeholder="Nombre del producto"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div
-              id="informacion"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5"
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Datos del grupo
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Se heredan a cada variante nueva.
-              </p>
-            </div>
-            <div
-              id="asistente"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Asistente de producto
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Lee las fotos del grupo y propone nombre, marca, clasificación y
-                descripción. Se aplican al grupo, y de ahí las heredan las
-                variantes nuevas.
-              </p>
-            </div>
-            <div className="col-span-full">
-              <ProductNameAssistant
-                currentName={watchedName}
-                categoryName={
-                  categories.find(
-                    (category) => category.id === watchedCategoryId,
-                  )?.name
-                }
-                brand={watchedBrand}
-                includeVariantAttributes={false}
-                disabled={loading}
-                storeId={params.storeId}
-                imageUrls={currentImages?.map((image) => image.url)}
-                visualFieldAvailability={{
-                  brand: true,
-                  category: !currentVariants?.some((variant) => variant.id),
-                  size: false,
-                  color: false,
-                  design: false,
-                  catalogAttributes: false,
-                }}
-                onApply={(name) =>
-                  form.setValue("name", name, {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  })
-                }
-                onApplyVisualAnalysis={(analysis) => {
-                  const options = {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  };
-
-                  if (analysis.brand) {
-                    form.setValue("brand", analysis.brand, options);
-                  }
-
-                  if (
-                    analysis.categoryId &&
-                    !currentVariants?.some((variant) => variant.id)
-                  ) {
-                    form.setValue("categoryId", analysis.categoryId, options);
-                  }
-                }}
-                onApplyDescription={(description) =>
-                  form.setValue("description", description, {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  })
-                }
+          <SectionCard
+            id="informacion"
+            step={2}
+            title="Datos del grupo"
+            description="Nombre, marca, subcategoría y atributos. Se heredan a cada variante nueva; no pisan lo que ya guardaste en una variante."
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem className="col-span-full">
+                    <FormLabel isRequired>Nombre</FormLabel>
+                    <FormControl>
+                      <Input disabled={loading} maxLength={PRODUCT_NAME_MAX_LENGTH} placeholder="Ej. Cartuchera Wisdom" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <FormField
-              control={form.control}
-              name="brand"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Marca o fabricante</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej. Sanrio, Stabilo"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Se aplicará a todas las variantes en Google Merchant.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="acqPrice"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Precio de compra</FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 1.000"
-                      disabled={loading}
+              <FormField
+                control={form.control}
+                name="brand"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Marca o fabricante</FormLabel>
+                    <FormControl>
+                      <Input disabled={loading} placeholder="Ej. Sanrio, Stabilo" {...field} />
+                    </FormControl>
+                    <FormDescription>Se aplica a todas las variantes en Google Merchant.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="categoryId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Subcategoría</FormLabel>
+                    <Select
+                      key={field.value}
+                      disabled={loading || currentVariants?.some((v) => v.id)}
+                      onValueChange={field.onChange}
                       value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="percentageIncrease"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Porcentaje de incremento</FormLabel>
-                  <FormControl>
-                    <PercentageInput
-                      disabled={loading}
-                      placeholder="30"
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="transportationCost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Costo de transporte</FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 0"
-                      disabled={loading}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="miscCost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Costos misceláneos</FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 0"
-                      disabled={loading}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Precio de venta</FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 1.000"
-                      disabled={loading}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  {suggestedGroupPrice > 0 &&
-                    suggestedGroupPrice !== Number(field.value) && (
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona una subcategoría" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {selectOptions.categories.map((category) => (
+                          <SelectItem key={category.value} value={category.value}>
+                            {category.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {currentVariants?.some((v) => v.id) && (
+                      <FormDescription>
+                        Bloqueada: hay variantes guardadas. Se cambia desde la ficha de cada producto.
+                      </FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="defaultSupplier"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel>Proveedor para variantes nuevas</FormLabel>
                       <button
                         type="button"
                         disabled={loading}
-                        onClick={() =>
-                          form.setValue("price", suggestedGroupPrice, {
-                            shouldDirty: true,
-                          })
-                        }
-                        className="self-start text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                        className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                        onClick={() => {
+                          const val = form.getValues("defaultSupplier");
+                          const current = form.getValues("variants");
+                          if (!val || !current?.length) return;
+                          form.setValue("variants", current.map((v) => ({ ...v, supplierId: val })), { shouldDirty: true });
+                          toast({ description: `Proveedor aplicado a ${current.length} ${current.length === 1 ? "variante" : "variantes"}` });
+                        }}
                       >
-                        Usar el sugerido:{" "}
-                        {currencyFormatter(suggestedGroupPrice)}
+                        Aplicar a todas
                       </button>
-                    )}
+                    </div>
+                    <Select key={field.value} disabled={loading} onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona un proveedor" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {selectOptions.suppliers.map((supplier) => (
+                          <SelectItem key={supplier.value} value={supplier.value}>
+                            {supplier.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="sizeIds"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Tamaños</FormLabel>
+                    <FormControl>
+                      <MultiSelect options={selectOptions.sizes} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige tamaños…" variant="secondary" responsive className="h-10" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="colorIds"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Colores</FormLabel>
+                    <FormControl>
+                      <MultiSelect options={selectOptions.colors} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige colores…" variant="secondary" responsive className="h-10" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="designIds"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Diseños</FormLabel>
+                    <FormControl>
+                      <MultiSelect options={selectOptions.designs} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige diseños…" variant="secondary" responsive className="h-10" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="col-span-full rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm font-medium">Nombre de las variantes nuevas</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Color y diseño siguen siendo obligatorios para inventario y SKU. Inclúyelos en el nombre solo cuando la clienta pueda distinguir y elegir esa variante.
+                </p>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <label className="flex cursor-pointer items-start gap-2 text-sm">
+                    <Checkbox checked={includeColorInVariantName} disabled={loading || selectedColorIds.length === 0} onCheckedChange={(checked) => setIncludeColorInVariantName(checked === true)} />
+                    <span>Incluir el color en cada nombre</span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2 text-sm">
+                    <Checkbox checked={includeDesignInVariantName} disabled={loading || selectedDesignIds.length === 0} onCheckedChange={(checked) => setIncludeDesignInVariantName(checked === true)} />
+                    <span>Incluir el diseño en cada nombre</span>
+                  </label>
+                </div>
+              </div>
+              <FormField
+                control={form.control}
+                name="isFeatured"
+                render={({ field }) => (
+                  <FormItem className="col-span-full flex items-start space-x-3 space-y-0 rounded-md border p-4 sm:col-span-1">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Destacado</FormLabel>
+                      <FormDescription>Las variantes nuevas aparecen en la página principal.</FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            id="asistente"
+            title="Asistente de producto"
+            description="Lee las fotos del grupo y propone nombre, marca, clasificación y descripción. Tú apruebas campo por campo; nada se guarda solo."
+          >
+            <ProductNameAssistant
+              currentName={watchedName}
+              categoryName={categories.find((category) => category.id === watchedCategoryId)?.name}
+              brand={watchedBrand}
+              includeVariantAttributes={false}
+              disabled={loading}
+              storeId={params.storeId}
+              imageUrls={currentImages?.map((image) => image.url)}
+              visualFieldAvailability={{
+                brand: true,
+                category: !currentVariants?.some((variant) => variant.id),
+                size: false,
+                color: false,
+                design: false,
+                catalogAttributes: false,
+              }}
+              onApply={(name) => form.setValue("name", name, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+              onApplyVisualAnalysis={(analysis) => {
+                const options = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
+                if (analysis.brand) form.setValue("brand", analysis.brand, options);
+                if (analysis.categoryId && !currentVariants?.some((variant) => variant.id)) {
+                  form.setValue("categoryId", analysis.categoryId, options);
+                }
+              }}
+              onApplyDescription={(description) => form.setValue("description", description, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+            />
+          </SectionCard>
+
+          <SectionCard
+            id="precio"
+            step={3}
+            title="Precio y costo para variantes nuevas"
+            description="Lo que heredan las variantes que se crean. Las guardadas o traídas conservan su precio hasta que pulses «Aplicar»."
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <FormField control={form.control} name="acqPrice" render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Costo de compra</FormLabel>
+                  <FormControl><CurrencyInput placeholder="$ 1.000" disabled={loading} value={field.value} onChange={field.onChange} /></FormControl>
                   <FormMessage />
                 </FormItem>
-              )}
-            />
-            {variantsPriceDiff.length > 0 && (
-              <div className="col-span-full flex flex-col gap-3 rounded-lg border border-tint-cream bg-tint-cream/25 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle
-                    className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-col gap-1">
-                    <p className="text-sm font-semibold text-primary">
-                      Aplicar este precio sobrescribe {variantsPriceDiff.length}{" "}
-                      {variantsPriceDiff.length === 1
-                        ? "variante"
-                        : "variantes"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      El stock nunca se toca. Solo cambia lo que listamos aquí.
-                    </p>
-                  </div>
-                </div>
-                <ul className="flex flex-col gap-1 text-xs text-primary">
-                  {variantsPriceDiff.slice(0, 6).map(({ variant, index }) => (
-                    <li key={variant.id ?? index} className="flex gap-2">
-                      <span className="font-medium">
-                        {variant.name || variant.sku || `Variante ${index + 1}`}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {currencyFormatter(Number(variant.price ?? 0))} →{" "}
-                        {currencyFormatter(Number(watchedGroupPrice) || 0)}
-                      </span>
-                    </li>
-                  ))}
-                  {variantsPriceDiff.length > 6 && (
-                    <li className="text-muted-foreground">
-                      y {variantsPriceDiff.length - 6} más
-                    </li>
-                  )}
-                </ul>
-                <Button
-                  type="button"
-                  variant="soft"
-                  size="sm"
-                  disabled={loading}
-                  onClick={applyGroupPriceToVariants}
-                  className="self-start"
-                >
-                  Aplicar a {variantsPriceDiff.length}{" "}
-                  {variantsPriceDiff.length === 1 ? "variante" : "variantes"}
-                </Button>
-              </div>
-            )}
-                        <FormField
-              control={form.control}
-              name="defaultSupplier"
-              render={({ field }) => (
+              )} />
+              <FormField control={form.control} name="price" render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel>Proveedor por defecto</FormLabel>
-                    <div
-                      className="cursor-pointer text-xs text-primary underline hover:text-primary/80"
-                      onClick={() => {
-                        const val = form.getValues("defaultSupplier");
-                        const current = form.getValues("variants");
-                        if (val && current) {
-                          form.setValue(
-                            "variants",
-                            current.map((v) => ({
-                              ...v,
-                              supplierId: val,
-                            })),
-                          );
-                          toast({
-                            description:
-                              "Proveedor aplicado a todas las variantes",
-                          });
-                        }
-                      }}
-                    >
-                      Aplicar a todo
+                  <FormLabel isRequired>Precio de venta</FormLabel>
+                  <FormControl><CurrencyInput placeholder="$ 1.000" disabled={loading} value={field.value} onChange={field.onChange} /></FormControl>
+                  {suggestedGroupPrice > 0 && suggestedGroupPrice !== Number(field.value) && (
+                    <button type="button" disabled={loading} onClick={() => form.setValue("price", suggestedGroupPrice, { shouldDirty: true })} className="self-start text-xs text-primary underline underline-offset-2 hover:text-primary/80">
+                      Usar el sugerido: {currencyFormatter(suggestedGroupPrice)}
+                    </button>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <details className="col-span-full rounded-lg border bg-muted/20 p-3">
+                <summary className="cursor-pointer text-sm font-medium text-primary">Calculadora de precio (no se guarda)</summary>
+                <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <FormField control={form.control} name="percentageIncrease" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Incremento</FormLabel>
+                      <FormControl><PercentageInput disabled={loading} placeholder="30" value={field.value} onChange={field.onChange} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="transportationCost" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Transporte por unidad</FormLabel>
+                      <FormControl><CurrencyInput placeholder="$ 0" disabled={loading} value={field.value} onChange={field.onChange} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="miscCost" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Otros gastos por unidad</FormLabel>
+                      <FormControl><CurrencyInput placeholder="$ 0" disabled={loading} value={field.value} onChange={field.onChange} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+              </details>
+              {variantsPriceDiff.length > 0 && (
+                <div className="col-span-full flex flex-col gap-3 rounded-lg border border-tint-cream bg-tint-cream/25 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-semibold text-primary">
+                        Aplicar este precio sobrescribe {variantsPriceDiff.length} {variantsPriceDiff.length === 1 ? "variante" : "variantes"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">El stock nunca se toca. Solo cambia lo que listamos aquí.</p>
                     </div>
                   </div>
-                  <Select
-                    key={field.value}
-                    disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un proveedor" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {selectOptions.suppliers.map((supplier) => (
-                        <SelectItem key={supplier.value} value={supplier.value}>
-                          {supplier.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+                  <ul className="flex flex-col gap-1 text-xs text-primary">
+                    {variantsPriceDiff.slice(0, 6).map(({ variant, index }) => (
+                      <li key={variant.id ?? index} className="flex flex-wrap gap-2">
+                        <span className="font-medium">{variant.name || variant.sku || `Variante ${index + 1}`}</span>
+                        <span className="text-muted-foreground">
+                          {currencyFormatter(Number(variant.price ?? 0))} → {currencyFormatter(Number(watchedGroupPrice) || 0)}
+                        </span>
+                      </li>
+                    ))}
+                    {variantsPriceDiff.length > 6 && <li className="text-muted-foreground">y {variantsPriceDiff.length - 6} más</li>}
+                  </ul>
+                  <Button type="button" variant="soft" size="sm" disabled={loading} onClick={applyGroupPriceToVariants} className="self-start">
+                    Aplicar a {variantsPriceDiff.length} {variantsPriceDiff.length === 1 ? "variante" : "variantes"}
+                  </Button>
+                </div>
               )}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            id="variantes"
+            step={4}
+            title="Variantes"
+            description="Cada fila es un producto real con su SKU, precio, stock e identificador. Nada cambia en la tienda hasta guardar."
+            action={
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => setImportOpen(true)}>
+                  <PackageCheckIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Traer existentes
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={loading} onClick={openMatrix}>
+                  <Settings2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Generar combinaciones
+                </Button>
+              </div>
+            }
+          >
+            <p className="text-xs text-muted-foreground">
+              Traer conserva precio, costo, stock, código y URL de cada producto. Generar crea variantes nuevas con 0 unidades y avisa si alguna ya existe suelta.
+            </p>
+            <VariantGrid
+              form={form}
+              loading={loading}
+              images={currentImages}
+              imageScopes={imageScopes}
+              suppliers={suppliers}
+              storeId={params.storeId as string}
+              storeUrl={storeUrl}
+              isEditMode={isEdit}
+              sizes={sizes}
+              colors={colors}
+              designs={designs}
+              onBatchIntake={(variantIds) => {
+                const variants = form.getValues("variants") || [];
+                const selected: BatchIntakeVariant[] = variantIds
+                  .map((id) => {
+                    const v = variants.find((variant) => variant.id === id);
+                    return v ? { id: v.id!, name: v.name || "Variante", currentStock: v.stock || 0 } : null;
+                  })
+                  .filter((v): v is BatchIntakeVariant => v !== null);
+                if (selected.length > 0) {
+                  setBatchIntakeVariants(selected);
+                  setBatchIntakeOpen(true);
+                }
+              }}
             />
 
-            <FormField
-              control={form.control}
-              name="isFeatured"
-              render={({ field }) => (
-                <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Destacado</FormLabel>
-                    <FormDescription>
-                      Este grupo aparecerá en la página principal
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
             <FormField
               control={form.control}
               name="archiveMode"
               render={({ field }) => {
                 const rows = describeArchiveRows(watchedVariants ?? []);
                 return (
-                  <FormItem className="col-span-full">
+                  <FormItem>
                     <FormLabel>Estado en la tienda</FormLabel>
                     <FormControl>
                       <RadioCards<GroupArchiveMode>
@@ -2168,361 +2280,113 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                         disabled={loading}
                         columns={3}
                         options={[
-                          {
-                            value: "all-published",
-                            title: "Todas a la venta",
-                            hint: "Publica todas las variantes al guardar.",
-                          },
-                          {
-                            value: "all-archived",
-                            title: "Todas archivadas",
-                            hint: "Saca el grupo de la tienda y pausa Mercado Libre. Conserva todo.",
-                          },
+                          { value: "all-published", title: "Todas a la venta", hint: "Publica todas las variantes al guardar." },
+                          { value: "all-archived", title: "Todas archivadas", hint: "Saca el grupo de la tienda y pausa Mercado Libre. Conserva todo." },
                           {
                             value: "per-variant",
                             title: "Por variante",
-                            hint:
-                              rows.saved > 0
-                                ? `Cada fila decide. Hoy: ${rows.live} a la venta, ${rows.archived} ${rows.archived === 1 ? "archivada" : "archivadas"}.`
-                                : "Cada fila decide su estado.",
+                            hint: rows.saved > 0
+                              ? `Cada fila decide. Hoy: ${rows.live} a la venta, ${rows.archived} ${rows.archived === 1 ? "archivada" : "archivadas"}.`
+                              : "Cada fila decide su estado.",
                           },
                         ]}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Antes la casilla «Archivado» leía solo la primera variante
-                      y pisaba a las demás al guardar.
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 );
               }}
             />
-            
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Categoría</FormLabel>
-                  <Select
-                    key={field.value}
-                    disabled={loading || currentVariants?.some((v) => v.id)}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una categoría" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {selectOptions.categories?.length > 0 &&
-                        selectOptions.categories.map((category) => (
-                          <SelectItem
-                            key={category.value}
-                            value={category.value}
-                          >
-                            {category.label}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {currentVariants?.some((v) => v.id) && (
-                    <FormDescription className="text-yellow-600">
-                      La categoría está bloqueada porque hay productos
-                      existentes vinculados. Para cambiarla, primero desvincula
-                      o elimina los productos.
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
-            <FormField
-              control={form.control}
-              name="sizeIds"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Tamaños</FormLabel>
-                  <FormControl>
-                    <MultiSelect
-                      options={selectOptions.sizes}
-                      defaultValue={field.value}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      placeholder="Selecciona tamaños..."
-                      variant="secondary"
-                      responsive
-                      className="h-10"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Seleccione los tamaños disponibles para este grupo
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="colorIds"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Colores</FormLabel>
-                  <FormControl>
-                    <MultiSelect
-                      options={selectOptions.colors}
-                      defaultValue={field.value}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      placeholder="Selecciona colores..."
-                      variant="secondary"
-                      responsive
-                      className="h-10"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Seleccione los colores disponibles para este grupo
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="designIds"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Diseños</FormLabel>
-                  <FormControl>
-                    <MultiSelect
-                      options={selectOptions.designs}
-                      defaultValue={field.value}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      placeholder="Selecciona diseños..."
-                      variant="secondary"
-                      responsive
-                      className="h-10"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Seleccione los diseños disponibles para este grupo
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="col-span-full rounded-lg border bg-muted/30 p-4">
-              <p className="text-sm font-medium">Nombre de las variantes</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Color y diseño siguen siendo obligatorios para inventario y SKU.
-                Inclúyelos en los nombres únicamente cuando la clienta pueda
-                distinguir y elegir esa variante.
-              </p>
-              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <label className="flex cursor-pointer items-start gap-2 text-sm">
-                  <Checkbox
-                    checked={includeColorInVariantName}
-                    disabled={loading || selectedColorIds.length === 0}
-                    onCheckedChange={(checked) =>
-                      setIncludeColorInVariantName(checked === true)
-                    }
-                  />
-                  <span>Incluir color en cada nombre generado</span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-2 text-sm">
-                  <Checkbox
-                    checked={includeDesignInVariantName}
-                    disabled={loading || selectedDesignIds.length === 0}
-                    onCheckedChange={(checked) =>
-                      setIncludeDesignInVariantName(checked === true)
-                    }
-                  />
-                  <span>Incluir diseño en cada nombre generado</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="col-span-full flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setImportOpen(true)}
-                disabled={loading}
-              >
-                Importar Productos
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  const cat = form.getValues("categoryId");
-                  if (!cat) {
-                    form.trigger("categoryId");
-                    toast({
-                      title: "Falta Categoría",
-                      description:
-                        "Debes seleccionar una categoría antes de configurar variantes.",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-                  setMatrixOpen(true);
-                }}
-                disabled={
-                  loading ||
-                  !selectedColorIds?.length ||
-                  !selectedDesignIds?.length
-                }
-              >
-                <Settings2 className="mr-2 h-4 w-4" />
-                Configurar Variantes
-              </Button>
-            </div>
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem className="col-span-full">
-                  <FormLabel>Descripción</FormLabel>
-                  <FormControl>
-                    <RichTextEditor
-                      placeholder="Describe el grupo de productos..."
-                      value={field.value || ""}
-                      onChange={field.onChange}
-                      templates={PRODUCT_DESCRIPTION_TEMPLATES}
-                      showSeoGuidance
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div
-            id="variantes"
-            className="flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
-          >
-            <h2 className="text-[15px] font-bold text-primary">Variantes</h2>
-            <p className="text-xs text-muted-foreground">
-              Cada fila es un producto real con su propio SKU, identificador,
-              precio y stock.
-            </p>
-          </div>
-          <VariantGrid
-            form={form}
-            loading={loading}
-            images={currentImages}
-            imageScopes={currentMapping.reduce(
-              (acc, curr) => ({ ...acc, [curr.url]: curr.scope }),
-              {},
+            {pendingRemovals.length > 0 && (
+              <section aria-labelledby="cambios-pendientes-titulo" className="flex flex-col gap-3 rounded-xl border border-tint-pink bg-tint-pink/20 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <div className="flex flex-col gap-1">
+                    <h3 id="cambios-pendientes-titulo" className="text-sm font-semibold text-primary">
+                      Al guardar se quitarán {pendingRemovals.length} {pendingRemovals.length === 1 ? "variante" : "variantes"} del grupo
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Se revisa qué la usa (pedidos, kits, Mercado Libre, ferias, reposición, kardex): con bloqueos se archiva y conserva su historial; libre se elimina y su URL redirige a una hermana.
+                    </p>
+                  </div>
+                </div>
+                <ul className="flex flex-col gap-1.5 text-xs">
+                  {pendingRemovals.map((removal) => (
+                    <li key={removal.id} className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-primary">{removal.name}</span>
+                      {removal.sku && <span className="font-mono text-muted-foreground">{removal.sku}</span>}
+                      <ProductTintBadge label={removal.willArchive ? "Se archiva (tiene pedidos)" : "Se elimina si nada la usa"} tone={removal.willArchive ? "cream" : "pink"} />
+                      <button
+                        type="button"
+                        className="text-primary underline underline-offset-2"
+                        onClick={() => restoreRemovedVariant(removal.id)}
+                      >
+                        Deshacer
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
-            suppliers={suppliers}
-            isEditMode={isEdit}
-            sizes={sizes}
-            colors={colors}
-            designs={designs}
-            onBatchIntake={(variantIds) => {
-              const variants = form.getValues("variants") || [];
-              const selected: BatchIntakeVariant[] = variantIds
-                .map((id) => {
-                  const v = variants.find((v) => v.id === id);
-                  if (!v) return null;
-                  return {
-                    id: v.id!,
-                    name: v.name || "Variante",
-                    currentStock: v.stock || 0,
-                  };
-                })
-                .filter((v): v is BatchIntakeVariant => v !== null);
-              if (selected.length > 0) {
-                setBatchIntakeVariants(selected);
-                setBatchIntakeOpen(true);
-              }
-            }}
-          />
+          </SectionCard>
 
-          {/* Batch Intake Modal for product group update mode */}
           <BatchIntakeModal
             isOpen={batchIntakeOpen}
-            onClose={() => {
-              setBatchIntakeOpen(false);
-              setBatchIntakeVariants([]);
-            }}
+            onClose={() => { setBatchIntakeOpen(false); setBatchIntakeVariants([]); }}
             variants={batchIntakeVariants}
             defaultCost={form.getValues("acqPrice") || 0}
             defaultSupplierId={form.getValues("defaultSupplier") || ""}
             suppliers={suppliers}
           />
 
-          {pendingRemovals.length > 0 && (
-            <section
-              aria-labelledby="cambios-pendientes-titulo"
-              className="flex flex-col gap-3 rounded-xl border border-tint-pink bg-tint-pink/20 p-4"
-            >
-              <div className="flex items-start gap-3">
-                <AlertTriangle
-                  className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                  aria-hidden="true"
-                />
-                <div className="flex flex-col gap-1">
-                  <h3
-                    id="cambios-pendientes-titulo"
-                    className="text-sm font-semibold text-primary"
-                  >
-                    Al guardar se quitarán {pendingRemovals.length}{" "}
-                    {pendingRemovals.length === 1 ? "variante" : "variantes"}{" "}
-                    del grupo
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Una variante con pedidos se archiva y conserva su historial.
-                    Una sin pedidos se elimina de forma definitiva.
-                  </p>
-                </div>
-              </div>
-              <ul className="flex flex-col gap-1.5 text-xs">
-                {pendingRemovals.map((removal) => (
-                  <li
-                    key={removal.id}
-                    className="flex flex-wrap items-center gap-2"
-                  >
-                    <span className="font-medium text-primary">
-                      {removal.name}
-                    </span>
-                    {removal.sku && (
-                      <span className="font-mono text-muted-foreground">
-                        {removal.sku}
-                      </span>
-                    )}
-                    <ProductTintBadge
-                      label={removal.willArchive ? "Se archiva" : "Se elimina"}
-                      tone={removal.willArchive ? "cream" : "pink"}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          <SectionCard
+            id="descripcion"
+            step={5}
+            title="Descripción"
+            description="Se muestra en la tienda y en Google. Las variantes nuevas la heredan; las guardadas conservan la suya."
+          >
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <RichTextEditor placeholder="Describe el grupo de productos…" value={field.value || ""} onChange={field.onChange} templates={PRODUCT_DESCRIPTION_TEMPLATES} showSeoGuidance />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </SectionCard>
 
-          <Button disabled={loading} className="ml-auto" type="submit">
-            {loading ? (
+          <FormStickyFooter
+            className="bottom-[84px] z-20 lg:bottom-2"
+            note={
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {pendingText}
+                {isDirty && <ProductTintBadge label="Cambios sin guardar" tone="cream" className="mr-2" />}
+                {pendingSummary
+                  ? `Al guardar: ${pendingSummary}.`
+                  : isEdit
+                    ? "Los cambios se aplican al guardar y la tienda se actualiza sola."
+                    : "Revisa fotos, datos y variantes; el grupo se crea al guardar."}
               </>
-            ) : (
-              action
-            )}
-          </Button>
+            }
+          >
+            <Button type="button" variant="outline" disabled={loading || !isDirty} onClick={() => void onClearConfirmed()}>
+              Descartar
+            </Button>
+            <Button disabled={loading} type="submit">
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  {pendingText}
+                </>
+              ) : (
+                action
+              )}
+            </Button>
+          </FormStickyFooter>
         </form>
       </Form>
     </>

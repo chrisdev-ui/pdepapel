@@ -138,10 +138,9 @@ export const VariantMatrix: React.FC<VariantMatrixProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="flex max-h-[90vh] w-full max-w-[95vw] flex-col">
         <DialogHeader>
-          <DialogTitle>Configurar Combinaciones Válidas</DialogTitle>
+          <DialogTitle>Elegir combinaciones</DialogTitle>
           <DialogDescription>
-            Matriz de variantes: Haz clic en los encabezados para
-            activar/desactivar filas o columnas completas.
+            Marca las combinaciones de color y diseño que existen de verdad. Toca un encabezado para activar o desactivar toda la fila o columna.
           </DialogDescription>
         </DialogHeader>
 
@@ -248,7 +247,7 @@ export const VariantMatrix: React.FC<VariantMatrixProps> = ({
             Cancelar
           </Button>
           <Button onClick={handleConfirm} type="button">
-            Generar Variantes
+            Crear variantes
           </Button>
         </DialogFooter>
       </DialogContent>

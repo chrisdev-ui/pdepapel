@@ -3,10 +3,8 @@ import prismadb from "@/lib/prismadb";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
 import { notFound } from "next/navigation";
 import { ProductGroupForm } from "../../components/product-group-form";
-import {
-  GroupWorkspaceAside,
-  GroupWorkspaceHeader,
-} from "./components/group-workspace";
+import { env } from "@/lib/env.mjs";
+import { GroupWorkspaceAside } from "./components/group-workspace";
 
 const ProductGroupPage = async ({
   params,
@@ -87,22 +85,7 @@ const ProductGroupPage = async ({
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
-      {productGroup ? (
-        <GroupWorkspaceHeader
-          group={productGroup}
-          lowStockThreshold={threshold}
-        />
-      ) : (
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-primary">
-            Nuevo grupo de variantes
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Un mismo artículo en varios colores o tamaños. Cada variante es un
-            producto con su propio SKU, precio y stock.
-          </p>
-        </div>
-      )}
+      {/* Un solo encabezado: lo pinta el formulario (FormPageHeader). */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <ProductGroupForm
@@ -112,6 +95,7 @@ const ProductGroupPage = async ({
             designs={designs}
             suppliers={suppliers}
             initialData={productGroup}
+            storeUrl={env.FRONTEND_STORE_URL}
           />
         </div>
         <GroupWorkspaceAside
