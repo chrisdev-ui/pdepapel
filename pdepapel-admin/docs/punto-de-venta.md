@@ -15,14 +15,16 @@ Usa **Punto de venta** cuando vendas en el local, por una visita o en cualquier 
 
 Cada etiqueta de producto se puede reutilizar. No necesitas crear una etiqueta nueva después de cada venta ni una por cada unidad. Si cambia el color, tamaño, diseño o SKU, usa la etiqueta correspondiente a esa variante.
 
-### Elegir formato y ahorrar material
+### La hoja de etiquetas y cómo imprimirla
 
-Antes de pulsar **Imprimir etiquetas**, selecciona el formato de la hoja:
+La hoja es la **AH Royal de 65 etiquetas en tamaño carta** (38,1 × 21,2 mm, 5 columnas × 13 filas). Solo existe ese formato en el panel.
 
-- **Ahorro · 65 por hoja A4:** etiquetas de 38,1 × 21,2 mm. Es el formato predeterminado para imprimir muchas etiquetas de productos. Usa hojas adhesivas A4 para **inkjet** del mismo tamaño y prueba primero una hoja con el celular.
-- **Estándar · 40 por hoja A4:** etiquetas de 48 × 28 mm. El QR es más grande y es la opción indicada si la etiqueta quedará lejos del celular, se manipulará mucho o la luz es baja.
-
-En la ventana de impresión selecciona papel **A4**, escala **100%** o **tamaño real** y calidad **Normal** u **Óptima**. No elijas *Ajustar a página*, porque desplaza las etiquetas. Haz una prueba sobre papel normal y ponla detrás de una hoja adhesiva para confirmar la alineación antes de imprimir un lote.
+- **Hoja de calibración.** El fabricante no publica márgenes ni separación entre etiquetas, así que la primera vez (y cada vez que cambies de impresora o de paquete) pulsa **Hoja de calibración**, imprímela sobre papel normal y ponla detrás de una hoja adhesiva al trasluz. Cada contorno debe caer sobre una etiqueta. Si se corre, mide cuántos milímetros y anótalos en **Desplazar impresión**; el ajuste se guarda en el navegador.
+- **Empezar en la etiqueta nº.** Para aprovechar una hoja que ya tiene etiquetas usadas: escribe la primera posición libre (se cuenta por filas, de izquierda a derecha) y la impresión salta las anteriores.
+- **Guías de corte.** Si la hoja adhesiva no viene troquelada, deja marcada la casilla: se imprime un contorno fino y marcas en las esquinas para recortar con tijeras.
+- **Qué lleva la etiqueta.** Siempre el QR y el nombre; la variante (color, tamaño, diseño), el SKU y el precio se activan con las casillas. El SKU nunca se corta: es lo que escribes a mano si la cámara no lee.
+- **Imprimir o guardar PDF** abre la hoja en otra pestaña con el diálogo de impresión. Papel **Carta**, escala **100 %** o **tamaño real**, sin *Ajustar a página*. En iPad: Compartir → Imprimir. La hoja armada se guarda en el navegador: puedes cambiar a **Vender** y volver.
+- **Grupos.** Si el producto es una variante, **Todas las variantes del grupo** agrega una etiqueta por cada variante a la venta.
 
 ### Ejemplo
 

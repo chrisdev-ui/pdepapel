@@ -89,6 +89,9 @@ export async function GET(
         hasNoProductIdentifier: true,
         color: { select: { name: true } },
         size: { select: { name: true } },
+        design: { select: { name: true } },
+        // Para «agregar todas las variantes del grupo» en Etiquetas.
+        productGroupId: true,
         isKit: true,
         category: {
           select: { id: true, name: true },

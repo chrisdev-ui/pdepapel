@@ -1,228 +1,191 @@
 "use client";
 
 import { QRCodeSVG } from "qrcode.react";
+import { useMemo } from "react";
 
 import {
-  getLabelPrintFormat,
-  type LabelPrintFormat,
+  DEFAULT_LABEL_SHEET,
+  DEFAULT_SHEET_OPTIONS,
+  getLabelSheetTemplate,
+  labelSheetCss,
+  paginateLabels,
+  SKU_LONG_THRESHOLD,
+  type LabelSheetOptions,
+  type LabelSheetTemplate,
+  type LabelSheetTemplateId,
 } from "@/lib/label-printing";
 
+/** Una etiqueta: el QR lleva `code`; el resto es lo que se lee a ojo. */
 export type QrPrintLabel = {
   id: string;
   code: string;
   title: string;
-  subtitle?: string;
+  variant?: string | null;
+  sku?: string | null;
+  price?: number | null;
 };
 
-export type QrLabelPrintTarget = "product" | "capsule";
+export interface LabelContentOptions {
+  showVariant: boolean;
+  showSku: boolean;
+  showPrice: boolean;
+}
 
-type QrLabelPrintSheetProps = {
-  target: QrLabelPrintTarget;
+export const DEFAULT_CONTENT_OPTIONS: LabelContentOptions = {
+  showVariant: true,
+  showSku: true,
+  showPrice: false,
+};
+
+export interface LabelPrintJob {
+  storeId: string;
+  /** Para que la página de impresión sepa de dónde volver. */
+  source: "product" | "capsule";
   labels: QrPrintLabel[];
-  format: LabelPrintFormat;
-};
-
-function chunkLabels(labels: QrPrintLabel[], itemsPerPage: number) {
-  const pages: QrPrintLabel[][] = [];
-
-  for (let index = 0; index < labels.length; index += itemsPerPage) {
-    pages.push(labels.slice(index, index + itemsPerPage));
-  }
-
-  return pages;
+  templateId: LabelSheetTemplateId;
+  startAt: number;
+  sheet: LabelSheetOptions;
+  content: LabelContentOptions;
+  createdAt: string;
 }
 
-const labelPrintDocumentStyles = `
-  @page {
-    size: A4 portrait;
-    margin: 3.3mm;
-  }
+const priceFormatter = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
 
-  * {
-    box-sizing: border-box;
-  }
-
-  html,
-  body {
-    margin: 0;
-    padding: 0;
-    background: #fff;
-  }
-
-  [data-qr-label-sheet] {
-    width: 100%;
-  }
-
-  .print-label-page {
-    display: grid;
-    margin: 0 auto;
-    break-after: page;
-    page-break-after: always;
-  }
-
-  .print-label-page:last-child {
-    break-after: auto;
-    page-break-after: auto;
-  }
-
-  .qr-print-label {
-    display: grid;
-    align-items: center;
-    overflow: hidden;
-    background: #fff;
-    color: #0f172a;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .qr-print-label-code,
-  .qr-print-label-code svg {
-    display: block;
-  }
-
-  .qr-print-label-code svg {
-    width: 100%;
-    height: 100%;
-  }
-
-  .qr-print-label-title {
-    display: -webkit-box;
-    margin: 0;
-    overflow: hidden;
-    color: #0f172a;
-    font-size: 5.5pt;
-    font-weight: 700;
-    line-height: 1.2;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .qr-print-label-subtitle {
-    margin: 0.8mm 0 0;
-    overflow: hidden;
-    color: #475569;
-    font-size: 4.8pt;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  [data-label-print-format="COMPACT_65"] .print-label-page {
-    width: 202.9mm;
-    grid-template-columns: repeat(5, 38.1mm);
-    grid-auto-rows: 21.2mm;
-    gap: 1.2mm 3.1mm;
-  }
-
-  [data-label-print-format="COMPACT_65"] .qr-print-label {
-    grid-template-columns: 18mm minmax(0, 1fr);
-    gap: 0.8mm;
-    padding: 1mm;
-  }
-
-  [data-label-print-format="COMPACT_65"] .qr-print-label-code {
-    width: 18mm;
-    height: 18mm;
-  }
-
-  [data-label-print-format="STANDARD_40"] .print-label-page {
-    width: 201mm;
-    grid-template-columns: repeat(4, 48mm);
-    grid-auto-rows: 28mm;
-    gap: 1mm 3mm;
-  }
-
-  [data-label-print-format="STANDARD_40"] .qr-print-label {
-    grid-template-columns: 22mm minmax(0, 1fr);
-    gap: 1.5mm;
-    padding: 2mm;
-  }
-
-  [data-label-print-format="STANDARD_40"] .qr-print-label-code {
-    width: 22mm;
-    height: 22mm;
-  }
-`;
-
-export function printQrLabelSheet(target: QrLabelPrintTarget) {
-  const source = document.querySelector<HTMLElement>(
-    `[data-qr-label-sheet="${target}"]`,
-  );
-  if (!source) return false;
-
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return false;
-
-  printWindow.document.write(`<!doctype html>
-    <html lang="es">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Etiquetas P de Papel</title>
-        <style>${labelPrintDocumentStyles}</style>
-      </head>
-      <body>${source.outerHTML}</body>
-    </html>`);
-  printWindow.document.close();
-  printWindow.addEventListener("afterprint", () => printWindow.close(), {
-    once: true,
-  });
-
-  const startPrint = () => {
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  if (printWindow.document.readyState === "complete") {
-    window.setTimeout(startPrint, 100);
-  } else {
-    printWindow.addEventListener("load", startPrint, { once: true });
-  }
-
-  return true;
+/**
+ * La hoja de estilos de la plantilla, inyectada donde se pinte la hoja: en la
+ * vista previa del panel y en la página de impresión, la misma.
+ */
+export function LabelSheetStyles({
+  template,
+  options,
+}: {
+  template: LabelSheetTemplate;
+  options: LabelSheetOptions;
+}) {
+  const css = useMemo(() => labelSheetCss(template, options), [template, options]);
+  // CSS como HTML crudo: como texto, el servidor escapa las comillas
+  // (`content:""` → `&quot;`) y un <style> no decodifica entidades, así que la
+  // hidratación no cuadraba en la página de calibración.
+  return <style data-label-sheet-css="" dangerouslySetInnerHTML={{ __html: css }} />;
 }
 
-export function QrLabelPrintSheet({
-  target,
-  labels,
-  format,
-}: QrLabelPrintSheetProps) {
-  const labelFormat = getLabelPrintFormat(format);
-  const pages = chunkLabels(labels, labelFormat.itemsPerPage);
-
+function LabelSlot({ label, content, slot }: { label: QrPrintLabel; content: LabelContentOptions; slot: number }) {
+  const sku = content.showSku && label.sku ? label.sku : null;
   return (
-    <div
-      data-qr-label-sheet={target}
-      data-label-print-format={format}
-      className="space-y-3"
-    >
-      {pages.map((page, pageIndex) => (
-        <div
-          className="print-label-page grid grid-cols-2 gap-3 sm:grid-cols-4"
-          key={`${target}-${pageIndex}`}
-        >
-          {page.map((label, index) => (
-            <article
-              className="qr-print-label grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border bg-white p-2 text-slate-900"
-              key={`${label.id}-${pageIndex}-${index}`}
-            >
-              <div className="qr-print-label-code h-20 w-20 shrink-0">
-                <QRCodeSVG value={label.code} size={128} includeMargin />
-              </div>
-              <div className="min-w-0 text-left">
-                <p className="qr-print-label-title line-clamp-2 text-xs font-semibold leading-tight">
-                  {label.title}
-                </p>
-                {label.subtitle && (
-                  <p className="qr-print-label-subtitle mt-1 truncate text-[10px] text-slate-500">
-                    {label.subtitle}
-                  </p>
-                )}
-              </div>
-            </article>
-          ))}
+    <div className="label-sheet__slot" data-slot={slot} data-label-id={label.id}>
+      <div className="label-sheet__qr">
+        {/* Nivel M y zona de silencio: la etiqueta se manosea y se lee con el celular. */}
+        <QRCodeSVG value={label.code} size={256} level="M" includeMargin style={{ width: "100%", height: "100%" }} />
+      </div>
+      <div className="label-sheet__text">
+        <p className="label-sheet__title">{label.title}</p>
+        {content.showVariant && label.variant && (
+          <p className="label-sheet__variant">{label.variant}</p>
+        )}
+        {sku && (
+          <p className={`label-sheet__sku${sku.length > SKU_LONG_THRESHOLD ? " label-sheet__sku--long" : ""}`}>
+            {sku}
+          </p>
+        )}
+        {content.showPrice && typeof label.price === "number" && (
+          <p className="label-sheet__price">{priceFormatter.format(label.price)}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface LabelSheetProps {
+  labels: QrPrintLabel[];
+  templateId?: LabelSheetTemplateId;
+  startAt?: number;
+  sheet?: LabelSheetOptions;
+  content?: LabelContentOptions;
+  /** Marca de la hoja para que las pruebas y la impresión la encuentren. */
+  target?: "product" | "capsule";
+}
+
+/**
+ * Las hojas, una debajo de otra, a tamaño real en mm. Quien la muestre en
+ * pantalla la escala con `transform`; la página de impresión la deja tal cual.
+ */
+export function QrLabelPrintSheet({
+  labels,
+  templateId = DEFAULT_LABEL_SHEET,
+  startAt = 1,
+  sheet = DEFAULT_SHEET_OPTIONS,
+  content = DEFAULT_CONTENT_OPTIONS,
+  target = "product",
+}: LabelSheetProps) {
+  const template = getLabelSheetTemplate(templateId);
+  const pagination = useMemo(() => paginateLabels(labels, template, startAt), [labels, template, startAt]);
+  return (
+    <div data-qr-label-sheet={target} data-label-template={template.id}>
+      <LabelSheetStyles template={template} options={sheet} />
+      {pagination.pages.map((page, pageIndex) => (
+        <div className="label-sheet" key={`${target}-${pageIndex}`} data-page={pageIndex + 1}>
+          {page.map((label, index) =>
+            label ? (
+              <LabelSlot key={`${label.id}-${pageIndex}-${index}`} label={label} content={content} slot={index + 1} />
+            ) : (
+              <div className="label-sheet__slot label-sheet__slot--empty" data-slot={index + 1} key={`empty-${pageIndex}-${index}`} aria-hidden="true" />
+            ),
+          )}
         </div>
       ))}
     </div>
   );
+}
+
+export const PRINT_JOB_STORAGE_KEY = "pdepapel:etiquetas:trabajo";
+
+export function printJobStorageKey(storeId: string) {
+  return `${PRINT_JOB_STORAGE_KEY}:${storeId}`;
+}
+
+export function labelPrintUrl(storeId: string, mode: "etiquetas" | "calibracion" = "etiquetas") {
+  return `/${storeId}/etiquetas/imprimir${mode === "calibracion" ? "?modo=calibracion" : ""}`;
+}
+
+/**
+ * Deja el trabajo en el navegador y abre la página de impresión en otra
+ * pestaña. Sin ventana emergente con `document.write`: la página es una ruta
+ * real del panel, con la misma letra, que también sirve para guardar PDF y
+ * funciona en el iPad (Compartir → Imprimir).
+ */
+export function openLabelPrintJob(job: LabelPrintJob) {
+  try {
+    window.localStorage.setItem(printJobStorageKey(job.storeId), JSON.stringify(job));
+  } catch {
+    return false;
+  }
+  const url = labelPrintUrl(job.storeId);
+  const tab = window.open(url, "_blank", "noopener");
+  if (!tab) window.location.assign(url);
+  return true;
+}
+
+export function readLabelPrintJob(storeId: string): LabelPrintJob | null {
+  try {
+    const raw = window.localStorage.getItem(printJobStorageKey(storeId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<LabelPrintJob>;
+    if (!Array.isArray(parsed.labels)) return null;
+    return {
+      storeId,
+      source: parsed.source === "capsule" ? "capsule" : "product",
+      labels: parsed.labels,
+      templateId: parsed.templateId ?? DEFAULT_LABEL_SHEET,
+      startAt: Number(parsed.startAt) || 1,
+      sheet: { ...DEFAULT_SHEET_OPTIONS, ...(parsed.sheet ?? {}) },
+      content: { ...DEFAULT_CONTENT_OPTIONS, ...(parsed.content ?? {}) },
+      createdAt: parsed.createdAt ?? new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
 }

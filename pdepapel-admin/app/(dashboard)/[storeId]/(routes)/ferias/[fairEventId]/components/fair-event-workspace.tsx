@@ -21,9 +21,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { LabelSheetPreview } from "@/components/labels/label-sheet-preview";
 import {
-  printQrLabelSheet,
-  QrLabelPrintSheet,
+  DEFAULT_CONTENT_OPTIONS,
+  openLabelPrintJob,
   type QrPrintLabel,
 } from "@/components/labels/qr-label-print-sheet";
 import { AlertModal } from "@/components/modals/alert-modal";
@@ -57,7 +58,7 @@ import {
   summarizeReconciliation,
   type ReconciliationCount,
 } from "@/lib/fair-phases";
-import { LABEL_PRINT_FORMATS } from "@/lib/label-printing";
+import { DEFAULT_LABEL_SHEET, DEFAULT_SHEET_OPTIONS, getLabelSheetTemplate } from "@/lib/label-printing";
 import { capsuleLine, productLine, toSaleItems } from "@/lib/sell-cart";
 
 import { FairPhaseHeader } from "./fair-phase-header";
@@ -240,7 +241,8 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
         id: capsule.id,
         code: capsule.code,
         title: "Cápsula sorpresa",
-        subtitle: capsule.code,
+        // El código impreso es lo que se escribe a mano si el QR no lee.
+        sku: capsule.code,
       })),
     [generatedCapsules],
   );
@@ -976,18 +978,29 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                     en la etiqueta.
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {LABEL_PRINT_FORMATS.STANDARD_40.description}. Este formato
-                    protege la lectura de códigos únicos.
+                    {getLabelSheetTemplate(DEFAULT_LABEL_SHEET).name} · papel
+                    carta, escala 100 %. Se abre la página de impresión del
+                    panel, que también sirve para guardar el PDF.
                   </p>
                 </div>
                 <Button
                   variant="outline"
                   onClick={() => {
-                    if (!printQrLabelSheet("capsule")) {
+                    const opened = openLabelPrintJob({
+                      storeId,
+                      source: "capsule",
+                      labels: printableCapsuleLabels,
+                      templateId: DEFAULT_LABEL_SHEET,
+                      startAt: 1,
+                      sheet: DEFAULT_SHEET_OPTIONS,
+                      content: { ...DEFAULT_CONTENT_OPTIONS, showPrice: false },
+                      createdAt: new Date().toISOString(),
+                    });
+                    if (!opened) {
                       toast({
-                        title: "No se pudo abrir la impresión",
+                        title: "No se pudo preparar la impresión",
                         description:
-                          "Permite las ventanas emergentes e inténtalo de nuevo.",
+                          "El navegador no dejó guardar la hoja. Inténtalo de nuevo.",
                         variant: "destructive",
                       });
                     }
@@ -996,10 +1009,13 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                   Imprimir etiquetas
                 </Button>
               </div>
-              <QrLabelPrintSheet
+              <LabelSheetPreview
                 target="capsule"
                 labels={printableCapsuleLabels}
-                format="STANDARD_40"
+                startAt={1}
+                sheet={DEFAULT_SHEET_OPTIONS}
+                content={DEFAULT_CONTENT_OPTIONS}
+                maxPages={1}
               />
             </div>
           )}

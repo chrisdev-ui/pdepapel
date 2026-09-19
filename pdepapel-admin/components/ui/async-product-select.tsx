@@ -38,6 +38,8 @@ export type AsyncProductOption = {
   hasNoProductIdentifier?: boolean;
   color?: { name: string } | null;
   size?: { name: string } | null;
+  design?: { name: string } | null;
+  productGroupId?: string | null;
   isArchived?: boolean;
   isKit?: boolean;
   category?: { id?: string; name: string } | null;
