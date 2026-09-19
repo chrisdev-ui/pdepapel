@@ -1,104 +1,27 @@
 "use client";
 
-import { AlertModal } from "@/components/modals/alert-modal";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useParams } from "next/navigation";
+
 import { Models } from "@/constants";
-import { useToast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/lib/api-errors";
-import axios from "axios";
-import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import { ArchiveMenuItem } from "../../atributos/components/archive-actions";
-import { DesignColumn } from "./columns";
+import { AttributeRowMenu, deleteBlockedReasonFor } from "../../atributos/components/attribute-row-menu";
+import { DesignRow } from "./columns";
 
-interface CellActionProps {
-  data: DesignColumn;
-}
-
-export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast();
-  const router = useRouter();
+export const CellAction: React.FC<{ data: DesignRow }> = ({ data }) => {
   const params = useParams();
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast({
-      description: "ID del diseño copiado al portapapeles",
-      variant: "success",
-    });
-  };
-
-  const onDelete = async () => {
-    try {
-      setLoading(true);
-      await axios.delete(`/api/${params.storeId}/${Models.Designs}/${data.id}`);
-      router.refresh();
-      toast({
-        description: "Diseño eliminado",
-        variant: "success",
-      });
-    } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-      setOpen(false);
-    }
-  };
-
   return (
-    <>
-      <AlertModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onConfirm={onDelete}
-        loading={loading}
-      />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0">
-            <span className="sr-only">Abrir Menú</span>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onCopy(data.id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              router.push(`/${params.storeId}/${Models.Designs}/${data.id}`)
-            }
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Actualizar
-          </DropdownMenuItem>
-          <ArchiveMenuItem kind="designs" row={data} />
-          <DropdownMenuItem
-            onClick={() => setOpen(true)}
-            disabled={data._count.products > 0}
-            title={data._count.products > 0 ? "Tiene productos; archívalo en su lugar" : undefined}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash className="mr-2 h-4 w-4" />
-            Eliminar
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+    <AttributeRowMenu
+      kind="designs"
+      row={data}
+      usage={data.usage}
+      editHref={`/${params.storeId}/${Models.Designs}/${data.id}`}
+      usageHref={`/${params.storeId}/productos?diseno=${data.id}`}
+      usageLabel={`Ver sus ${data.usage === 1 ? "producto" : `${data.usage} productos`}`}
+      apiModel={Models.Designs}
+      deleteTitle={`¿Eliminar el diseño «${data.name}»?`}
+      deleteDescription="Ningún producto lo usa: se elimina de inmediato y no se puede deshacer."
+      deleteBlockedReason={deleteBlockedReasonFor("designs")}
+      copiedMessage="ID del diseño copiado al portapapeles"
+      deletedMessage="Diseño eliminado"
+    />
   );
 };

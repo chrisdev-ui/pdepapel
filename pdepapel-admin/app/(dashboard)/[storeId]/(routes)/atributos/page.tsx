@@ -1,3 +1,4 @@
+import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
@@ -42,7 +43,7 @@ export default async function AttributesPage({ params }: { params: { storeId: st
 
   return (
     <div className="p-4 sm:p-8 sm:pt-6">
-      <AttributesClient types={types} categories={categories} sizes={sizes} colors={colors} designs={designs} options={options} />
+      <AttributesClient types={types} categories={categories} sizes={sizes} colors={colors} designs={designs} options={options} storeUrl={env.FRONTEND_STORE_URL ?? null} />
     </div>
   );
 }

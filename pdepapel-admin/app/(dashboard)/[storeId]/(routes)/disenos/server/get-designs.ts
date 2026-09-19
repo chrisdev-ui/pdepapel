@@ -4,23 +4,16 @@ import prismadb from "@/lib/prismadb";
 
 export async function getDesigns(storeId: string) {
   return await prismadb.design.findMany({
-    where: {
-      storeId,
-    },
+    where: { storeId },
     select: {
       id: true,
       name: true,
       createdAt: true,
+      updatedAt: true,
       isArchived: true,
       archivedAt: true,
-      _count: {
-        select: {
-          products: true,
-        },
-      },
+      _count: { select: { products: true } },
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: { name: "asc" },
   });
 }

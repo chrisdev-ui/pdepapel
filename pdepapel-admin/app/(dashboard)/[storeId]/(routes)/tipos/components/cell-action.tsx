@@ -1,104 +1,32 @@
 "use client";
 
-import { AlertModal } from "@/components/modals/alert-modal";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useParams } from "next/navigation";
+
 import { Models } from "@/constants";
-import { useToast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/lib/api-errors";
-import axios from "axios";
-import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import { ArchiveMenuItem } from "../../atributos/components/archive-actions";
-import { TypeColumn } from "./columns";
+import { useAttributeActions } from "../../atributos/components/attribute-actions";
+import { AttributeRowMenu, deleteBlockedReasonFor } from "../../atributos/components/attribute-row-menu";
+import { TypeRow } from "./columns";
 
-interface CellActionProps {
-  data: TypeColumn;
-}
-
-export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast();
-  const router = useRouter();
+export const CellAction: React.FC<{ data: TypeRow }> = ({ data }) => {
   const params = useParams();
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast({
-      description: "ID de la categoría copiado al portapapeles",
-      variant: "success",
-    });
-  };
-
-  const onDelete = async () => {
-    try {
-      setLoading(true);
-      await axios.delete(`/api/${params.storeId}/${Models.Types}/${data.id}`);
-      router.refresh();
-      toast({
-        description: "Categoría eliminada",
-        variant: "success",
-      });
-    } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-      setOpen(false);
-    }
-  };
-
+  const actions = useAttributeActions();
+  const storeHref = actions?.storeUrl && data.slug ? `${actions.storeUrl.replace(/\/$/, "")}/tienda?typeId=${data.slug}` : null;
+  const subcategories = data._count.categories;
   return (
-    <>
-      <AlertModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onConfirm={onDelete}
-        loading={loading}
-        title={`¿Eliminar la categoría «${data.name}»?`}
-        description="No tiene subcategorías, así que se elimina de inmediato. Esta acción no se puede deshacer."
-      />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0">
-            <span className="sr-only">Abrir Menú</span>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onCopy(data.id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => router.push(`/${params.storeId}/tipos/${data.id}`)}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Editar
-          </DropdownMenuItem>
-          <ArchiveMenuItem kind="types" row={data} />
-          <DropdownMenuItem
-            onClick={() => setOpen(true)}
-            disabled={data._count.categories > 0}
-            title={data._count.categories > 0 ? "Tiene subcategorías; archívala en su lugar" : undefined}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash className="mr-2 h-4 w-4" />
-            Eliminar
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+    <AttributeRowMenu
+      kind="types"
+      row={data}
+      usage={subcategories}
+      editHref={`/${params.storeId}/tipos/${data.id}`}
+      usageHref={`/${params.storeId}/atributos?tab=subcategorias&categoria=${data.id}`}
+      usageLabel={`Ver sus ${subcategories === 1 ? "subcategoría" : `${subcategories} subcategorías`}`}
+      storeHref={storeHref}
+      apiModel={Models.Types}
+      deleteTitle={`¿Eliminar la categoría «${data.name}»?`}
+      deleteDescription="No tiene subcategorías, así que se elimina de inmediato. Esta acción no se puede deshacer."
+      deleteBlockedReason={deleteBlockedReasonFor("types")}
+      copiedMessage="ID de la categoría copiado al portapapeles"
+      deletedMessage="Categoría eliminada"
+    />
   );
 };

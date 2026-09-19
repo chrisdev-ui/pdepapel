@@ -50,16 +50,19 @@ export async function getProducts(storeId: string) {
       },
       category: {
         select: {
+          id: true,
           name: true,
         },
       },
       size: {
         select: {
+          id: true,
           name: true,
         },
       },
       design: {
         select: {
+          id: true,
           name: true,
         },
       },

@@ -18,9 +18,9 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 const createdAt = new Date("2026-09-01T15:00:00.000Z");
-const base = { createdAt, isArchived: false, archivedAt: null as Date | null };
-const types = [{ id: "t1", name: "Papelería", slug: "papeleria", icon: null, iconSvg: null, ...base, _count: { categories: 1 } }];
-const categories = [{ id: "c1", name: "Agendas", seoEnabled: true, seoFeatured: false, ...base, type: { name: "Papelería" }, _count: { products: 2 } }];
+const base = { createdAt, updatedAt: createdAt, isArchived: false, archivedAt: null as Date | null };
+const types = [{ id: "t1", name: "Papelería", slug: "papeleria", icon: null, iconSvg: null, ...base, _count: { categories: 1 }, productsCount: 2, activeCategoriesCount: 1 }];
+const categories = [{ id: "c1", name: "Agendas", slug: "agendas", typeId: "t1", seoEnabled: true, seoFeatured: false, ...base, type: { id: "t1", name: "Papelería" }, _count: { products: 2 } }];
 const colors = [{ id: "k1", name: "Rosa", value: "#ffc0cb", ...base, _count: { products: 1 } }];
 const designs = [{ id: "d1", name: "Osito", ...base, isArchived: true, archivedAt: createdAt, _count: { products: 0 } }];
 
@@ -42,9 +42,10 @@ afterEach(cleanup);
 
 describe("readAttributeQuery / filterByView", () => {
   it("falls back to the first tab and the active view for unknown values", () => {
-    expect(readAttributeQuery(new URLSearchParams(""))).toEqual({ tab: "categorias", view: "activos" });
-    expect(readAttributeQuery(new URLSearchParams("tab=colores&vista=archivados"))).toEqual({ tab: "colores", view: "archivados" });
-    expect(readAttributeQuery(new URLSearchParams("tab=otra&vista=x"))).toEqual({ tab: "categorias", view: "activos" });
+    expect(readAttributeQuery(new URLSearchParams(""))).toEqual({ tab: "categorias", view: "activos", typeId: null });
+    expect(readAttributeQuery(new URLSearchParams("tab=colores&vista=archivados"))).toEqual({ tab: "colores", view: "archivados", typeId: null });
+    expect(readAttributeQuery(new URLSearchParams("tab=otra&vista=x"))).toEqual({ tab: "categorias", view: "activos", typeId: null });
+    expect(readAttributeQuery(new URLSearchParams("tab=subcategorias&categoria=t1"))).toMatchObject({ tab: "subcategorias", typeId: "t1" });
   });
 
   it("splits rows by archive state", () => {
@@ -108,5 +109,52 @@ describe("AttributesClient", () => {
     cleanup();
     renderHub({ types: [] });
     expect(screen.getByRole("link", { name: /Crear la primera categoría/ })).toHaveAttribute("href", "/store-1/tipos/nuevo");
+  });
+
+  it("shows cleanup hints, offers the review filter and «Unir con…» on a mergeable active row", () => {
+    navigation.search = "tab=colores";
+    renderHub({
+      colors: [
+        ...colors,
+        { id: "k2", name: "Rosado", value: "#F472B6", ...base, _count: { products: 3 } },
+        { id: "k3", name: "Morado", value: "#8E44AD ", ...base, _count: { products: 0 } },
+      ],
+    });
+    // «Rosa» ~ «Rosado» (raíz), «Morado» sin productos y con espacio en el valor.
+    expect(screen.getAllByText("Parecido a «Rosado»").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Sin productos").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Valor con espacio al final").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /Revisar/ })).toBeInTheDocument();
+
+    // Radix abre el menú con el teclado en jsdom (el clic real llega por pointerdown).
+    const trigger = screen.getAllByRole("button", { name: "Abrir menú de Rosa" })[0];
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    expect(screen.getByRole("menuitem", { name: /Unir con…/ })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Ver sus producto/ })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Eliminar · tiene 1 producto/ })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("filters subcategories by the category the URL asks for and offers to see all", () => {
+    navigation.search = "tab=subcategorias&categoria=t1";
+    renderHub({ categories: [...categories, { ...categories[0], id: "c2", name: "Libretas", typeId: "t2", type: { id: "t2", name: "Oficina" } }] });
+    expect(screen.getByRole("status")).toHaveTextContent("Subcategorías de «Papelería»");
+    expect(screen.getAllByText("Agendas").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Libretas")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ver todas/ }));
+    expect(screen.getAllByText("Libretas").length).toBeGreaterThan(0);
+  });
+
+  it("disables «Nuevo tamaño» once every dimension × weight combination exists", () => {
+    navigation.search = "tab=tamanos";
+    const all = ["XS-L", "XS-P", "S-L", "S-P", "M-L", "M-P", "L-L", "L-P", "XL-L", "XL-P"];
+    renderHub({ sizes: all.map((value, index) => ({ id: `s${index}`, name: value, value, ...base, _count: { products: index } })) });
+    expect(screen.getByRole("button", { name: /Nuevo tamaño/ })).toBeDisabled();
+    expect(screen.getByText(/10 combinaciones/)).toBeInTheDocument();
+    expect(screen.getAllByText("Pequeño").length).toBeGreaterThan(0);
+  });
+
+  it("offers a tab picker for small screens with the same tabs and counts", () => {
+    renderHub();
+    expect(screen.getByRole("combobox", { name: "Qué atributo ver" })).toHaveTextContent("Categorías");
   });
 });

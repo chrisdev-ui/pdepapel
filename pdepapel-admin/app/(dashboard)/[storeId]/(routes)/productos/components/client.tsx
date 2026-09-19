@@ -64,6 +64,27 @@ interface ProductClientProps {
 const VIEW_PARAM = "vista";
 const DEFAULT_VIEW: ProductView = "activos";
 
+/** Filtro por atributo que llega desde Atributos («Ver sus productos»): `?color=<id>`, `?tamano=`, `?diseno=`, `?subcategoria=`. */
+const ATTRIBUTE_PARAMS = [
+  { param: "color", label: "color", pick: (p: ProductColumn) => p.color },
+  { param: "tamano", label: "tamaño", pick: (p: ProductColumn) => p.size },
+  { param: "diseno", label: "diseño", pick: (p: ProductColumn) => p.design },
+  { param: "subcategoria", label: "subcategoría", pick: (p: ProductColumn) => p.category },
+] as const;
+
+export function readAttributeFilter(
+  searchParams: { get(name: string): string | null },
+  data: readonly ProductColumn[],
+): { param: string; label: string; name: string; matches: (p: ProductColumn) => boolean } | null {
+  for (const entry of ATTRIBUTE_PARAMS) {
+    const id = searchParams.get(entry.param);
+    if (!id) continue;
+    const sample = data.find((p) => entry.pick(p)?.id === id);
+    return { param: entry.param, label: entry.label, name: sample ? entry.pick(sample)!.name : "—", matches: (p) => entry.pick(p)?.id === id };
+  }
+  return null;
+}
+
 const ProductClient: React.FC<ProductClientProps> = ({
   data,
   suppliers,
@@ -156,13 +177,18 @@ const ProductClient: React.FC<ProductClientProps> = ({
     return result;
   }, [data, threshold]);
   const searching = search.trim().length > 0;
-  const rows = useMemo(
-    () =>
-      searching
-        ? data
-        : data.filter((p) => productMatchesView(p, view, threshold)),
-    [data, view, threshold, searching],
-  );
+  // Con un atributo en la URL se listan todos sus productos, sin importar la vista.
+  const attributeFilter = useMemo(() => readAttributeFilter(searchParams, data), [searchParams, data]);
+  const rows = useMemo(() => {
+    if (attributeFilter) return data.filter(attributeFilter.matches);
+    return searching ? data : data.filter((p) => productMatchesView(p, view, threshold));
+  }, [data, view, threshold, searching, attributeFilter]);
+  const clearAttributeFilter = () => {
+    const query = new URLSearchParams(searchParams.toString());
+    ATTRIBUTE_PARAMS.forEach((entry) => query.delete(entry.param));
+    const suffix = query.toString();
+    router.replace(suffix ? `${pathname}?${suffix}` : pathname);
+  };
   const columns = useMemo(
     () => buildColumns(storeId, threshold, storeUrl),
     [storeId, threshold, storeUrl],
@@ -295,7 +321,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
         className="flex max-w-full gap-1 overflow-x-auto rounded-full border bg-white p-1"
       >
         {PRODUCT_VIEWS.map((item) => {
-          const active = item.id === view && !searching;
+          const active = item.id === view && !searching && !attributeFilter;
           return (
             <button
               key={item.id}
@@ -323,7 +349,18 @@ const ProductClient: React.FC<ProductClientProps> = ({
           );
         })}
       </div>
-      {searching && (
+      {attributeFilter && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm">
+          <span>
+            {rows.length === 1 ? "1 producto" : `${rows.length} productos`} con {attributeFilter.label}{" "}
+            <span className="font-semibold">«{attributeFilter.name}»</span>, incluidos los archivados.
+          </span>
+          <Button type="button" variant="ghost" size="sm" onClick={clearAttributeFilter}>
+            Quitar filtro
+          </Button>
+        </div>
+      )}
+      {searching && !attributeFilter && (
         <p className="text-xs text-muted-foreground" role="status">
           Buscando en todas las vistas, incluidos los archivados. Borra el texto
           para volver a «{PRODUCT_VIEWS.find((v) => v.id === view)?.label}».

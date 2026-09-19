@@ -41,10 +41,11 @@ vi.mock("@/lib/prismadb", () => ({
     orderItem: { count: mocks.orderItemCount },
     supplier: { findFirst: vi.fn() },
     productGroup: { findFirst: vi.fn() },
-    category: { findUnique: vi.fn().mockResolvedValue(null) },
-    design: { findUnique: vi.fn().mockResolvedValue(null) },
-    color: { findUnique: vi.fn().mockResolvedValue(null) },
-    size: { findUnique: vi.fn().mockResolvedValue(null) },
+    // Los atributos se buscan acotados a la tienda y deben existir (auditoría de Atributos).
+    category: { findFirst: vi.fn().mockResolvedValue({ id: "c1", name: "Agendas" }) },
+    design: { findFirst: vi.fn().mockResolvedValue({ id: "d1", name: "Kawaii" }) },
+    color: { findFirst: vi.fn().mockResolvedValue({ id: "k1", name: "Rosa" }) },
+    size: { findFirst: vi.fn().mockResolvedValue({ id: "s1", name: "S", value: "S-L" }) },
   },
 }));
 
