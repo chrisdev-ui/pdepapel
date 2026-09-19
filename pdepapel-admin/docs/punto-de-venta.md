@@ -46,14 +46,26 @@ Tienes 8 resaltadores pastel iguales. Imprime una etiqueta del producto **Resalt
 
 ## Registrar una venta
 
-1. En **Agregar productos**, apunta la cámara con **Escanear** a la etiqueta. También puedes escribir el SKU o buscar el producto en el catálogo.
-2. Cada lectura agrega una unidad. Si la persona lleva varias unidades, ajusta el número con los botones `−` y `+`.
-3. Revisa los productos y el total de la venta.
-4. Selecciona **Efectivo** o **Transferencia** según el dinero que ya recibiste.
-5. Pulsa **Registrar pago** y confirma.
-6. Espera el mensaje verde que muestra el número del pedido. Solo entonces la venta quedó registrada.
+1. En **Productos** hay una sola casilla: **Buscar o escanear**. Sirve para escribir o pegar el nombre, el SKU o el código de barras, para el lector de mano (escribe el código y pulsa Enter solo), para la cámara (**Escanear**) y para el celular vinculado. Todo entra por el mismo camino.
+2. Al abrir la pantalla ya aparecen los productos más vendidos con unidades. Al escribir, la lista se ordena para el mostrador: el **código exacto primero**, luego los que tienen unidades (los más vendidos antes) y los **agotados al final**, en gris y sin poderse agregar. Cada fila muestra el color y el tamaño, el SKU, las unidades y el precio; si hay una oferta vigente se ve el precio rebajado y el anterior tachado.
+3. Un código exacto (SKU o código de barras) se agrega solo. Si lo leído no coincide con ningún producto, o coincide con varios, la pantalla lo dice en una línea y te deja elegir de la lista.
+4. En la venta cada línea muestra la variante, el precio con la oferta («antes $ …») y, en un kit, qué unidades descuenta. Ajusta la cantidad con `−` y `+` o quita la línea con la papelera. No deja vender más unidades de las que hay.
+5. Elige cómo pagó la persona:
+   - **Efectivo**.
+   - **Transferencia**: al confirmar te pide la **referencia del comprobante** (mínimo cuatro caracteres). Queda guardada en el pedido, como al marcar pagado en Pedidos.
+   - **Datáfono**: el cobro se envía al datáfono Bold, igual que «Cobrar en el datáfono» en Pedidos. La venta queda **pendiente** hasta que Bold confirma; solo entonces se marca pagada y descuenta el inventario.
+6. Pulsa **Registrar pago** (en celular y tableta está en la barra fija de abajo, junto al total) y confirma.
+7. Aparece la tarjeta **Venta registrada** con el número del pedido (enlaza a Pedidos), **Descargar recibo** en PDF, **Enviar por WhatsApp**, **Deshacer** y **Nueva venta**. La tarjeta se queda hasta que empieces la siguiente venta, aunque recargues la página.
 
-Si un producto ya no tiene unidades, el sistema no permite registrar esa venta. Si alguno de varios productos no tiene disponibilidad, no descuenta ninguno: revisa el inventario y vuelve a intentarlo.
+Si a algún producto no le alcanza el inventario, no se registra nada: el aviso dice cuál producto, cuántas unidades hay y cuántas pediste. Ajusta las cantidades o revisa Inventario y vuelve a intentar.
+
+### Ofertas
+
+Las ofertas vigentes de la tienda en línea también aplican en el mostrador. El precio rebajado es el que se cobra, el que queda en el pedido y el que sale en el recibo; el costo real del producto sigue siendo el de compra, así que el kardex y el margen no cambian. No hay descuento manual por venta: una rebaja se hace como oferta desde Promociones.
+
+### Cobro con datáfono
+
+Al confirmar con **Datáfono**, la tarjeta dice «Esperando al datáfono». Pasa la tarjeta en el aparato; cuando Bold confirma, la tarjeta cambia sola a **Venta registrada** y el inventario se descuenta en ese momento. Si el datáfono no recibe el cobro, la venta pendiente se cancela y no descuenta nada; si la persona se arrepiente antes de pagar, pulsa **Cancelar cobro**.
 
 ## Kits y combos
 
@@ -70,19 +82,18 @@ Las cápsulas sorpresa siguen siendo diferentes:
 
 ## Si te equivocas
 
-No borres una venta presencial desde **Pedidos**: el panel lo impide, tanto de una en una como en acciones masivas. Para que las cuentas y el inventario queden claros:
+- **Dentro de los 30 minutos** siguientes al pago, en la tarjeta de la venta pulsa **Deshacer**: el pedido queda cancelado en Pedidos y las unidades vuelven al inventario con un movimiento de cancelación por producto (un kit devuelve sus componentes). Si ya recibiste el dinero, devuélvelo tú; el panel no mueve plata.
+- **Después de 30 minutos**, o si ya cerraste la tarjeta, registra lo ocurrido en **Inventario → Movimientos de inventario** (devolución, ajuste, daño o pérdida) con una nota corta, por ejemplo `Devolución de venta presencial ORD-...`.
 
-1. Ve a **Inventario → Movimientos de inventario**.
-2. Registra una devolución, ajuste, daño o pérdida según lo que ocurrió realmente.
-3. Escribe una nota corta, por ejemplo: `Devolución de venta presencial ORD-...`.
+No borres una venta presencial desde **Pedidos**: el panel lo impide, tanto de una en una como en acciones masivas.
 
 Una venta hecha **dentro de una feria** se anula desde la propia feria (**Últimas ventas → Anular**), nunca desde Pedidos ni con un ajuste: sus unidades pertenecen a la reserva de la feria.
 
-Si al buscar un producto aparece «Sin stock en línea. Revisa en Inventario.», el producto existe pero no tiene unidades disponibles; corrige el stock desde Inventario antes de venderlo.
+Si un producto aparece como **Agotado** en la lista, existe pero no tiene unidades; corrige el stock desde Inventario antes de venderlo.
 
 ## Cierre del día
 
-En la pestaña **Vender**, bajo el cobro, la tarjeta **Cierre del día** muestra lo vendido hoy en el punto de venta separado por **Efectivo** y **Transferencia**, con el total, las unidades y las últimas ventas. Úsala al terminar la jornada para contrastar el efectivo en caja y las transferencias recibidas. Es una lectura: no mueve dinero ni inventario.
+En la pestaña **Vender**, bajo el cobro, la tarjeta **Cierre del día** muestra lo vendido hoy en el punto de venta separado por **Efectivo**, **Transferencia** y **Datáfono** (esta fila solo aparece si hubo cobros con datáfono), con el total, las unidades y las últimas ventas. Arriba, junto al título, se resume «Hoy: N ventas · total · última a las …». Úsala al terminar la jornada para contrastar el efectivo en caja y las transferencias recibidas. Es una lectura: no mueve dinero ni inventario.
 
 ## Dónde ver las ventas
 
@@ -92,4 +103,4 @@ En la pestaña **Vender**, bajo el cobro, la tarjeta **Cierre del día** muestra
 
 ## Recomendación para el día a día
 
-Imprime etiquetas para los productos que vendas habitualmente fuera de ferias. Durante la venta usa el celular con cámara o un lector Bluetooth. Si vas a una feria, prepara y registra todo desde **Ventas en feria**.
+Imprime etiquetas para los productos que vendas habitualmente fuera de ferias. Durante la venta usa el lector de mano, la cámara del computador o el celular vinculado: los tres entran por la misma casilla. Si vas a una feria, prepara y registra todo desde **Ventas en feria**.

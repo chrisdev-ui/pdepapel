@@ -105,13 +105,23 @@ Menú de fila: copiar ID o número, link de pago (si no está pagado), datáfono
 
 **Vender**
 
-1. Agrega productos escaneando (lector o cámara), escribiendo el código
-   (SKU o código de barras) y «Agregar código», o buscando en el catálogo.
-2. Ajusta cantidades en «Venta actual»; no deja vender más de lo que hay.
-3. Elige Efectivo o Transferencia.
-4. «Registrar pago» y confirma. Se crea el pedido pagado y se descuenta el
-   inventario.
+1. Una sola casilla «Buscar o escanear»: nombre, SKU o código de barras,
+   lector de mano (Enter), cámara o celular vinculado. La lista se ordena
+   para vender: código exacto, con unidades (más vendidos primero),
+   agotados al final y sin poderse agregar. Cada fila trae color/tamaño y el
+   precio con la oferta vigente.
+2. En la venta cada línea muestra la variante, «antes $ …» si hay oferta y,
+   en un kit, qué descuenta. Ajusta cantidades; no deja vender más de lo que
+   hay.
+3. Elige Efectivo, Transferencia (pide la referencia, mínimo 4 caracteres) o
+   Datáfono (el cobro va a Bold; la venta queda pendiente hasta que Bold
+   confirma y solo entonces descuenta inventario).
+4. «Registrar pago» (en celular está en la barra fija de abajo) y confirma.
+   Aparece la tarjeta Venta registrada: enlace al pedido, recibo PDF,
+   WhatsApp, «Deshacer» durante 30 minutos (cancela el pedido y devuelve el
+   inventario) y «Nueva venta».
 
+Las ofertas de la tienda aplican en el mostrador; no hay descuento manual.
 «Cierre del día» suma lo presencial de hoy por método de pago.
 
 **Etiquetas**: hoja adhesiva con el código de cada producto; elige producto,
