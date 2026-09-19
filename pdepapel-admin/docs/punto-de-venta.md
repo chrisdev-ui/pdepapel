@@ -15,6 +15,18 @@ Usa **Punto de venta** cuando vendas en el local, por una visita o en cualquier 
 
 Cada etiqueta de producto se puede reutilizar. No necesitas crear una etiqueta nueva después de cada venta ni una por cada unidad. Si cambia el color, tamaño, diseño o SKU, usa la etiqueta correspondiente a esa variante.
 
+### Usar el celular como escáner (en cualquier pantalla con botón Escanear)
+
+Junto a cada botón **Escanear** hay un icono de celular: **Usar el celular como escáner**. Sirve cuando trabajas en el computador o la tableta y quieres leer códigos con la cámara del celular, sin Bluetooth ni aplicaciones.
+
+1. Pulsa el icono del celular. Aparece un **código QR** con un enlace y un **código corto** de 6 caracteres (por ejemplo «K7P 4Q2»).
+2. En el celular, escanea el QR con la cámara o entra a `admin.papeleriapdepapel.com/<tienda>/escaner` y escribe el código. El celular tiene que tener **tu misma sesión del panel**: si no la tiene, primero inicia sesión. El código no reemplaza el inicio de sesión.
+3. Pulsa **Vincular este celular** y luego **Iniciar cámara**. Cada código de barras o QR de etiqueta que leas viaja a la pantalla del computador y se resuelve igual que con la cámara local (SKU, código de barras o QR de etiqueta → producto).
+4. En la pantalla, el icono del celular muestra un punto verde en el botón que **recibe** las lecturas. Si hay varios botones (por ejemplo, en Vender: el de la venta y el del catálogo), recibe el primero; para cambiar, abre la ventana desde el otro botón.
+5. La vinculación vence a los **10 minutos sin leer nada**; cada lectura la renueva. **Desvincular** (en la pantalla o en el celular) la termina. Solo un celular a la vez: si otro se vincula con el mismo código, el anterior deja de enviar.
+
+Pantallas con escáner: Etiquetas, Vender (catálogo; la venta con su lector sigue exigiendo stock), Movimientos de inventario (ajuste), Aprovisionamiento (cada línea del borrador), Ferias (reservar inventario; la cápsula sorpresa tiene su propio QR), Mercado Libre (importar existentes y el asistente de publicación), Portada (productos que vienen) y Productos (la lectura abre la ficha del producto).
+
 ### La hoja de etiquetas y cómo imprimirla
 
 La hoja es la **AH Royal de 60 etiquetas en tamaño carta** (38,1 × 21,2 mm, 5 columnas × 12 filas). Solo existe ese formato en el panel.
