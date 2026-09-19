@@ -37,6 +37,9 @@
     "export:product-slug-redirects": "tsx scripts/export-product-slug-redirects.ts",
     "update:orders": "ts-node prisma/scripts/update-orders-totals.ts",
     "cleanup:orphaned-shipments": "ts-node scripts/cleanup-orphaned-shipments.ts",
+    "prod:approve": "node scripts/prod-approve.mjs",
+    "prod:write": "node scripts/prod-write.mjs",
+    "prod:migrate": "node scripts/prod-write.mjs scripts/apply-manual-migration.mjs",
     "seed:boxes": "ts-node prisma/seed/seed-boxes.ts"
   },
   "dependencies": {

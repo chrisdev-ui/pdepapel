@@ -62,3 +62,7 @@ backup_prod_*.sql
 *.sql
 !prisma/manual-migrations/
 !prisma/manual-migrations/*.sql
+
+# producción: URL de escritura y aprobación de un solo uso (nunca al repositorio)
+.env.prod-write
+.prod-write-approval.json

@@ -1,0 +1,2 @@
+# Registro de escrituras directas en la base de producción (una línea por corrida de scripts/prod-write.mjs).
+# fecha | operador | destino | guion@hash | exit | filas | motivo aprobado
