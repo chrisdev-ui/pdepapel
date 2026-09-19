@@ -57,7 +57,7 @@ export function methodForPayment(method: PaymentMethod | null | undefined): Poin
 export const METHOD_LABELS: Record<PointOfSaleDayMethod, string> = {
   cash: "Efectivo",
   transfer: "Transferencia",
-  other: "Otro método",
+  other: "Datáfono",
 };
 
 function emptyTotals(): Record<PointOfSaleDayMethod, PointOfSaleMethodTotal> {

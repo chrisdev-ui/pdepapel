@@ -103,6 +103,7 @@ describe("point of sale flow with MySQL", () => {
           { productId: fixture.kit.id, quantity: 2 },
         ],
         paymentMethod: PaymentMethod.BankTransfer,
+        transactionId: "REF-0001",
         idempotencyKey: "point-of-sale-insufficient-001",
         userId: fixture.store.userId,
       }),

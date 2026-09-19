@@ -53,7 +53,7 @@ describe("sell-cart", () => {
 
   it("totals and removes lines", () => {
     const { cart } = addLineToCart(addLineToCart([], product({ quantity: 2 })).cart, capsule);
-    expect(cartTotals(cart)).toEqual({ total: 39000, units: 3, lines: 2 });
+    expect(cartTotals(cart)).toEqual({ total: 39000, units: 3, lines: 2, savings: 0 });
     expect(removeLine(cart, "capsule-ABC")).toHaveLength(1);
   });
 
@@ -83,5 +83,29 @@ describe("sell-cart", () => {
   it("builds the sale payload from the line kind, not from nullable ids", () => {
     const { cart } = addLineToCart(addLineToCart([], product({ quantity: 2 })).cart, capsule);
     expect(toSaleItems(cart)).toEqual([{ productId: "1", quantity: 2 }, { capsuleCode: "ABC" }]);
+  });
+});
+
+import { SALE_UNDO_WINDOW_MS, undoTimeLeft } from "@/lib/sell-cart";
+
+/** Vender: el total con ofertas y la ventana de 30 minutos para deshacer. */
+describe("sell-cart · offers and undo window", () => {
+  it("sums the savings of discounted lines without touching the total", () => {
+    const cart: SellLine[] = [
+      productLine({ productId: "a", name: "A", price: 8000, originalPrice: 10000, offerLabel: "20%", maxQuantity: null }),
+      productLine({ productId: "b", name: "B", price: 5000, maxQuantity: null }),
+    ];
+    const withTwo = setLineQuantity(cart, cart[0].key, 2).cart;
+    expect(cartTotals(withTwo)).toEqual({ total: 21000, units: 3, lines: 2, savings: 4000 });
+  });
+
+  it("counts down 30 minutes from the payment and reaches zero afterwards", () => {
+    const paidAt = new Date("2026-09-19T15:00:00Z");
+    expect(SALE_UNDO_WINDOW_MS).toBe(30 * 60 * 1000);
+    expect(undoTimeLeft(paidAt, new Date("2026-09-19T15:10:00Z"))).toBe(20 * 60 * 1000);
+    expect(undoTimeLeft(paidAt.toISOString(), new Date("2026-09-19T15:30:00Z"))).toBe(0);
+    expect(undoTimeLeft(paidAt, new Date("2026-09-19T16:00:00Z"))).toBe(0);
+    expect(undoTimeLeft(null)).toBe(0);
+    expect(undoTimeLeft("no es fecha")).toBe(0);
   });
 });

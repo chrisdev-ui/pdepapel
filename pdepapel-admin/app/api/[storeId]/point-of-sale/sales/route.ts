@@ -4,13 +4,9 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { createPointOfSaleSale } from "@/lib/point-of-sale";
+import { chargePointOfSaleOnTerminal, createPointOfSaleSale, POINT_OF_SALE_PAYMENT_METHODS } from "@/lib/point-of-sale";
 import { verifyStoreOwner } from "@/lib/utils";
 
-const supportedPaymentMethods = [
-  PaymentMethod.CASH,
-  PaymentMethod.BankTransfer,
-];
 
 export async function POST(
   req: Request,
@@ -21,14 +17,14 @@ export async function POST(
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
-    const { items, paymentMethod, idempotencyKey } = await req.json();
+    const { items, paymentMethod, idempotencyKey, transactionId } = await req.json();
     if (!Array.isArray(items)) {
       throw ErrorFactory.InvalidRequest(
         "Los productos de la venta son requeridos",
       );
     }
-    if (!supportedPaymentMethods.includes(paymentMethod)) {
-      throw ErrorFactory.InvalidRequest("Selecciona efectivo o transferencia");
+    if (!POINT_OF_SALE_PAYMENT_METHODS.includes(paymentMethod)) {
+      throw ErrorFactory.InvalidRequest("Elige efectivo, transferencia o datáfono");
     }
 
     const result = await createPointOfSaleSale({
@@ -37,12 +33,18 @@ export async function POST(
       paymentMethod,
       idempotencyKey,
       userId,
+      transactionId,
     });
-    if (!result.duplicate) {
+    // Datáfono: el pedido pendiente ya existe; ahora se le manda el cobro a Bold.
+    let terminal: string | null = null;
+    if (result.pending && !result.duplicate && paymentMethod === PaymentMethod.Bold) {
+      terminal = (await chargePointOfSaleOnTerminal({ storeId: params.storeId, orderId: result.order.id })).message;
+    }
+    if (!result.duplicate && !result.pending) {
       await invalidateStoreProductsCache(params.storeId);
     }
 
-    return NextResponse.json(result, { status: result.duplicate ? 200 : 201 });
+    return NextResponse.json({ ...result, terminal }, { status: result.duplicate ? 200 : 201 });
   } catch (error) {
     return handleErrorResponse(error, "POINT_OF_SALE_SALES_POST");
   }

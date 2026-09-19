@@ -7,7 +7,8 @@
  * hacer, un mensaje listo para mostrar.
  */
 
-export type SellPaymentMethod = "CASH" | "BankTransfer";
+/** Efectivo, transferencia o datáfono Bold (solo en el punto de venta). */
+export type SellPaymentMethod = "CASH" | "BankTransfer" | "Bold";
 
 export type SellLineKind = "product" | "capsule";
 
@@ -23,7 +24,16 @@ export interface SellLine {
   name: string;
   /** Texto pequeño bajo el nombre: SKU, disponibilidad, contenido. */
   detail?: string;
+  /** Precio unitario que se cobra (ya con la oferta vigente aplicada). */
   price: number;
+  /** Precio de lista cuando hay oferta; igual a `price` o ausente si no la hay. */
+  originalPrice?: number | null;
+  /** Etiqueta de la oferta que rebaja esta línea («Agendas −10»). */
+  offerLabel?: string | null;
+  /** Color, tamaño… para distinguir variantes con el mismo nombre. */
+  chips?: string[];
+  /** Qué descuenta un kit al venderse (sus componentes). */
+  note?: string | null;
   quantity: number;
   /** Unidades máximas que se pueden vender; null = sin tope conocido. */
   maxQuantity: number | null;
@@ -48,6 +58,10 @@ export function productLine(input: {
   detail?: string;
   imageUrl?: string | null;
   quantity?: number;
+  originalPrice?: number | null;
+  offerLabel?: string | null;
+  chips?: string[];
+  note?: string | null;
 }): SellLine {
   return {
     key: `product-${input.productId}`,
@@ -56,6 +70,10 @@ export function productLine(input: {
     name: input.name,
     detail: input.detail,
     price: input.price,
+    originalPrice: input.originalPrice ?? null,
+    offerLabel: input.offerLabel ?? null,
+    chips: input.chips ?? [],
+    note: input.note ?? null,
     quantity: input.quantity ?? 1,
     maxQuantity: input.maxQuantity,
     imageUrl: input.imageUrl ?? null,
@@ -138,11 +156,28 @@ export function removeLine(cart: SellLine[], key: string): SellLine[] {
   return cart.filter((item) => item.key !== key);
 }
 
-export function cartTotals(cart: SellLine[]): { total: number; units: number; lines: number } {
+/** Total, unidades, líneas y lo que ahorra el cliente por las ofertas vigentes. */
+export function cartTotals(cart: SellLine[]): { total: number; units: number; lines: number; savings: number } {
   return cart.reduce(
-    (acc, item) => ({ total: acc.total + item.price * item.quantity, units: acc.units + item.quantity, lines: acc.lines + 1 }),
-    { total: 0, units: 0, lines: 0 },
+    (acc, item) => ({
+      total: acc.total + item.price * item.quantity,
+      units: acc.units + item.quantity,
+      lines: acc.lines + 1,
+      savings: acc.savings + Math.max(0, ((item.originalPrice ?? item.price) - item.price) * item.quantity),
+    }),
+    { total: 0, units: 0, lines: 0, savings: 0 },
   );
+}
+
+/** Ventana para deshacer una venta desde el punto de venta. */
+export const SALE_UNDO_WINDOW_MS = 30 * 60 * 1000;
+
+/** Milisegundos que quedan para deshacer; 0 cuando la ventana pasó. */
+export function undoTimeLeft(paidAt: Date | string | null | undefined, now: Date = new Date()): number {
+  if (!paidAt) return 0;
+  const paid = new Date(paidAt).getTime();
+  if (Number.isNaN(paid)) return 0;
+  return Math.max(0, paid + SALE_UNDO_WINDOW_MS - now.getTime());
 }
 
 export function createIdempotencyKey(prefix = "sale"): string {
