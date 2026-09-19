@@ -260,12 +260,19 @@ const ProductClient: React.FC<ProductClientProps> = ({
               )}
             </PDFDownloadLink>
           )}
-          {/* Escanear abre la ficha: la búsqueda de la tabla filtra en el cliente y cada fila abre la ficha. */}
+          {/* Escanear abre la ficha (la búsqueda de la tabla filtra en el cliente y cada fila abre la ficha);
+              una variante abre su grupo con la variante resaltada; un suelto o un kit, su propia ficha. */}
           <ProductScanButton
             compact
             label="Escanear y abrir"
             notify
-            onFound={(product) => router.push(`/${storeId}/productos/${product.id}`)}
+            onFound={(product) =>
+              router.push(
+                product.productGroupId
+                  ? `/${storeId}/productos/grupo/${product.productGroupId}?variante=${product.id}`
+                  : `/${storeId}/productos/${product.id}`,
+              )
+            }
           />
           <Button asChild variant="outline">
             <Link href={`/${storeId}/productos/nuevo-grupo`}>

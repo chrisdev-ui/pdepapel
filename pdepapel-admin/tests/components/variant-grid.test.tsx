@@ -28,7 +28,7 @@ const variants: ProductGroupFormValues["variants"] = [
 
 let latest: ReturnType<typeof useForm<ProductGroupFormValues>> | null = null;
 
-function Harness() {
+function Harness({ highlightId = null }: { highlightId?: string | null } = {}) {
   const form = useForm<ProductGroupFormValues>({
     defaultValues: {
       name: "Cartuchera",
@@ -60,6 +60,7 @@ function Harness() {
       sizes={[]}
       colors={[]}
       designs={[]}
+      highlightId={highlightId}
     />
   );
 }
@@ -107,5 +108,20 @@ describe("VariantGrid", () => {
     expect(screen.getAllByRole("button", { name: "Editar Cartuchera Rosa" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Quitar Cartuchera Rosa del grupo" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("checkbox", { name: "Seleccionar Cartuchera Rosa" }).length).toBeGreaterThan(0);
+  });
+
+  /** «Escanear y abrir» en Productos llega con ?variante=: esa fila se resalta y se trae a la vista. */
+  it("highlights the variant named in the URL and scrolls it into view once the page has painted", () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(<Harness highlightId="p2" />);
+    const highlighted = document.querySelectorAll('[data-variant-id="p2"][data-highlighted]');
+    expect(highlighted.length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-variant-id="p1"][data-highlighted]')).toBeNull();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(400);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+    vi.useRealTimers();
   });
 });

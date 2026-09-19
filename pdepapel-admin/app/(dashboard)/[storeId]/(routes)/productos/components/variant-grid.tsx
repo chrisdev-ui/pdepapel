@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 
 import { VariantEditModal } from "@/components/modals/variant-edit-modal";
@@ -45,6 +45,8 @@ interface VariantGridProps {
   sizes: { id: string; name: string; value: string }[];
   colors: { id: string; name: string; value: string }[];
   designs: { id: string; name: string }[];
+  /** Variante a resaltar y traer a la vista (llegada desde «Escanear y abrir» en Productos). */
+  highlightId?: string | null;
 }
 
 type Row = FormVariant & { originalIndex: number };
@@ -202,6 +204,7 @@ function VariantIdentity({
 const VariantTableRow = memo(function VariantTableRow({
   row,
   selected,
+  highlighted = false,
   loading,
   thumbs,
   supplierName,
@@ -211,6 +214,7 @@ const VariantTableRow = memo(function VariantTableRow({
 }: {
   row: Row;
   selected: boolean;
+  highlighted?: boolean;
   loading: boolean;
   thumbs: string[];
   supplierName: string;
@@ -220,7 +224,11 @@ const VariantTableRow = memo(function VariantTableRow({
 }) {
   const index = row.originalIndex;
   return (
-    <TableRow className={cn(!row.id && "bg-tint-lavender/10", row.isArchived && "bg-muted/40")}>
+    <TableRow
+      data-variant-id={row.id ?? undefined}
+      data-highlighted={highlighted ? "" : undefined}
+      className={cn(!row.id && "bg-tint-lavender/10", row.isArchived && "bg-muted/40", highlighted && "bg-tint-lavender/30 ring-2 ring-inset ring-primary")}
+    >
       <TableCell>
         <Checkbox
           checked={selected}
@@ -306,6 +314,7 @@ const VariantTableRow = memo(function VariantTableRow({
 const VariantCard = memo(function VariantCard({
   row,
   selected,
+  highlighted = false,
   loading,
   thumbs,
   supplierName,
@@ -315,6 +324,7 @@ const VariantCard = memo(function VariantCard({
 }: {
   row: Row;
   selected: boolean;
+  highlighted?: boolean;
   loading: boolean;
   thumbs: string[];
   supplierName: string;
@@ -326,10 +336,13 @@ const VariantCard = memo(function VariantCard({
   const status = statusOf(row);
   return (
     <article
+      data-variant-id={row.id ?? undefined}
+      data-highlighted={highlighted ? "" : undefined}
       className={cn(
         "flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm",
         selected && "border-primary bg-accent/40",
         row.isArchived && "bg-muted/30",
+        highlighted && "border-primary bg-tint-lavender/30 ring-2 ring-primary",
       )}
     >
       <div className="flex items-start gap-3">
@@ -405,8 +418,21 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
   sizes,
   colors,
   designs,
+  highlightId = null,
 }) => {
   const { watch, setValue, getValues } = form;
+  // La variante escaneada en Productos se trae a la vista una vez; el resalte se queda.
+  useEffect(() => {
+    if (!highlightId || typeof document === "undefined") return;
+    // Tras pintar: con fotos y barra fija cargando, un scroll inmediato se queda corto.
+    const timer = setTimeout(() => {
+      // La fila existe dos veces (tarjeta hasta 1279 px, fila de tabla desde ahí): se desplaza a la visible.
+      const candidates = Array.from(document.querySelectorAll<HTMLElement>(`[data-variant-id="${highlightId}"][data-highlighted]`));
+      const target = candidates.find((el) => el.getBoundingClientRect().width > 0) ?? candidates[0];
+      target?.scrollIntoView?.({ block: "center" });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [highlightId]);
   const watchedVariants = watch("variants");
   const formVariants = useMemo(() => watchedVariants ?? [], [watchedVariants]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -624,6 +650,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                 key={row.id ?? `new-${row.originalIndex}`}
                 row={row}
                 selected={selectedIndices.has(row.originalIndex)}
+                highlighted={Boolean(highlightId) && row.id === highlightId}
                 loading={loading}
                 thumbs={thumbsFor(row)}
                 supplierName={supplierNames.get(row.supplierId ?? "") ?? "Sin proveedor"}
@@ -664,6 +691,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                     key={row.id ?? `new-${row.originalIndex}`}
                     row={row}
                     selected={selectedIndices.has(row.originalIndex)}
+                    highlighted={Boolean(highlightId) && row.id === highlightId}
                     loading={loading}
                     thumbs={thumbsFor(row)}
                     supplierName={supplierNames.get(row.supplierId ?? "") ?? "Sin proveedor"}

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
-  scanned: { id: "p-scan", name: "Alcancía de gato", sku: "ALC-01", stock: 4, price: 44000, images: [] },
+  scanned: { id: "p-scan", name: "Alcancía de gato", sku: "ALC-01", stock: 4, price: 44000, images: [] } as Record<string, unknown>,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -40,11 +40,23 @@ afterEach(cleanup);
  * producto en vez de escribir en el buscador.
  */
 describe("Productos · escanear y abrir", () => {
-  it("opens the scanned product's detail page instead of filtering the list", async () => {
+  it("opens the scanned standalone product's detail page instead of filtering the list", async () => {
     const Client = ProductClient as unknown as React.ComponentType<Record<string, unknown>>;
     render(<Client data={[]} suppliers={[]} taxonomies={{ categories: [], sizes: [], colors: [], designs: [] }} lowStockThreshold={null} />);
     expect(screen.getByPlaceholderText("Nombre, SKU, GTIN o grupo…")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Escanear y abrir" }));
     expect(mocks.push).toHaveBeenCalledWith("/store-1/productos/p-scan");
+  });
+
+  /** Una variante abre su grupo, con la variante marcada en la URL; un kit sigue abriendo su propia ficha. */
+  it("opens the group page for a variant, and the kit's own page for a kit", async () => {
+    const Client = ProductClient as unknown as React.ComponentType<Record<string, unknown>>;
+    render(<Client data={[]} suppliers={[]} taxonomies={{ categories: [], sizes: [], colors: [], designs: [] }} lowStockThreshold={null} />);
+    mocks.scanned = { ...mocks.scanned, id: "v-2", productGroupId: "g-hadas" };
+    fireEvent.click(await screen.findByRole("button", { name: "Escanear y abrir" }));
+    expect(mocks.push).toHaveBeenLastCalledWith("/store-1/productos/grupo/g-hadas?variante=v-2");
+    mocks.scanned = { ...mocks.scanned, id: "kit-1", productGroupId: null, isKit: true };
+    fireEvent.click(screen.getByRole("button", { name: "Escanear y abrir" }));
+    expect(mocks.push).toHaveBeenLastCalledWith("/store-1/productos/kit-1");
   });
 });
