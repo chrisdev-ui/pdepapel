@@ -3,6 +3,7 @@
 import { ProductCatalog } from "@/components/catalog/product-catalog";
 import { ProductBatchImportModal } from "@/components/modals/product-batch-import-modal";
 import { Button } from "@/components/ui/button";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { DataTable } from "@/components/ui/data-table";
 import {
   DropdownMenu,
@@ -259,6 +260,13 @@ const ProductClient: React.FC<ProductClientProps> = ({
               )}
             </PDFDownloadLink>
           )}
+          {/* Escanear abre la ficha: la búsqueda de la tabla filtra en el cliente y cada fila abre la ficha. */}
+          <ProductScanButton
+            compact
+            label="Escanear y abrir"
+            notify
+            onFound={(product) => router.push(`/${storeId}/productos/${product.id}`)}
+          />
           <Button asChild variant="outline">
             <Link href={`/${storeId}/productos/nuevo-grupo`}>
               <Layers className="h-4 w-4" aria-hidden="true" />

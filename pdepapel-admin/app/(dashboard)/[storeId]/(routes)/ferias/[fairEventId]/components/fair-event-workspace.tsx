@@ -29,7 +29,8 @@ import {
 } from "@/components/labels/qr-label-print-sheet";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { SellPanel, type SellSource } from "@/components/sales/sell-panel";
-import { AsyncProductSelect } from "@/components/ui/async-product-select";
+import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -560,6 +561,26 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   );
 
   // Fuente de la pantalla de venta compartida: solo productos reservados en la feria y cápsulas con QR.
+  /** Elegido de la lista o escaneado: los kits no se reservan, se reservan sus componentes. */
+  const chooseReservationProduct = (product: AsyncProductOption) => {
+    if (product.isKit) {
+      toast({
+        title: "Reserva los productos físicos del kit",
+        description:
+          "Los kits calculan su inventario desde sus componentes y no se reservan directamente para una feria.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPendingProduct({
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      stock: product.stock,
+      isKit: product.isKit,
+    });
+  };
+
   const fairSellSource = useMemo<SellSource>(
     () => ({
       lookup: async (code) => {
@@ -771,31 +792,21 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_110px_auto] sm:items-end">
             <div className="grid gap-2">
               <Label>Producto</Label>
-              <AsyncProductSelect
-                value={pendingProduct?.id ?? ""}
-                onChange={(_value, product) => {
-                  if (!product) return;
-                  if (product.isKit) {
-                    toast({
-                      title: "Reserva los productos físicos del kit",
-                      description:
-                        "Los kits calculan su inventario desde sus componentes y no se reservan directamente para una feria.",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-                  setPendingProduct({
-                    id: product.id,
-                    name: product.name,
-                    sku: product.sku,
-                    stock: product.stock,
-                    isKit: product.isKit,
-                  });
-                }}
-                placeholder="Busca por nombre, SKU o código"
-                modal
-                ariaLabel="Producto para reservar"
-              />
+              <div className="flex min-w-0 items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <AsyncProductSelect
+                    value={pendingProduct?.id ?? ""}
+                    onChange={(_value, product) => {
+                      if (product) chooseReservationProduct(product);
+                    }}
+                    placeholder="Busca por nombre, SKU o código"
+                    modal
+                    ariaLabel="Producto para reservar"
+                  />
+                </div>
+                {/* Escanear un producto del catálogo para reservarlo; el QR de cápsula sigue siendo de la venta. */}
+                <ProductScanButton compact label="Escanear producto para reservar" onFound={chooseReservationProduct} />
+              </div>
               <p className="text-xs text-muted-foreground">
                 Los kits se venden en Punto de venta, pero a una feria solo se
                 reservan sus componentes: busca cada producto físico del kit.

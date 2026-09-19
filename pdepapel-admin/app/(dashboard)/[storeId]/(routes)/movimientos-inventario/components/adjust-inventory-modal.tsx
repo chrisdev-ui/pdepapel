@@ -30,6 +30,7 @@ import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { MANUAL_ADJUSTMENT_OPTIONS } from "@/lib/inventory-constants";
 
 const formSchema = z.object({
@@ -142,15 +143,20 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
             render={({ field }) => (
               <FormItem className="flex flex-col">
                 <FormLabel isRequired>Producto</FormLabel>
-                <FormControl>
-                  <AsyncProductSelect
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    placeholder="Buscar producto..."
-                    className="w-full"
-                    modal={true}
-                  />
-                </FormControl>
+                <div className="flex min-w-0 items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <FormControl>
+                      <AsyncProductSelect
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        placeholder="Buscar producto..."
+                        className="w-full"
+                        modal={true}
+                      />
+                    </FormControl>
+                  </div>
+                  <ProductScanButton compact onFound={(product) => field.onChange(product.id)} />
+                </div>
                 <FormMessage />
               </FormItem>
             )}

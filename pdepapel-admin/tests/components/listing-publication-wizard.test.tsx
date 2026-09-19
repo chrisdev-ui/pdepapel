@@ -12,6 +12,16 @@ vi.mock("next/image", () => ({
 vi.mock("@/components/ui/async-product-select", () => ({
   AsyncProductSelect: () => <button type="button">Producto local</button>,
 }));
+const scanMocks = vi.hoisted(() => ({
+  scanned: { id: "product-scan", name: "Termo Owala", sku: "TER-OWA-01", stock: 4, price: 52000, images: [] },
+}));
+vi.mock("@/components/ui/product-scan-button", () => ({
+  ProductScanButton: ({ onFound, label }: { onFound: (product: unknown) => void; label?: string }) => (
+    <button type="button" onClick={() => onFound(scanMocks.scanned)}>
+      {label ?? "Escanear"}
+    </button>
+  ),
+}));
 
 const product = {
   id: "product-1",
@@ -40,8 +50,10 @@ function WizardHarness({
   suggestions = [],
   suggestionsNotice = null,
   withColorList = false,
+  onProductChange = () => undefined,
 }: {
   onPublish: () => Promise<void>;
+  onProductChange?: (productId: string, product?: unknown) => void;
   onSuggestPrice?: () => Promise<void>;
   onApplyActiveConditions?: () => Promise<void>;
   onLoadPriceEstimate?: () => Promise<boolean>;
@@ -218,7 +230,7 @@ function WizardHarness({
       onFormChange={(key, value) =>
         setForm((current) => ({ ...current, [key]: value }))
       }
-      onProductChange={() => undefined}
+      onProductChange={onProductChange}
       onSearchCategories={async () => undefined}
       onCategoryChange={(categoryId) =>
         setForm((current) => ({ ...current, categoryId }))
@@ -548,5 +560,13 @@ describe("ListingPublicationWizard", () => {
       screen.getByLabelText("Nombre de familia en Mercado Libre* (obligatorio)"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/\(opcional\)/)).not.toBeInTheDocument();
+  });
+
+  /** Escanear junto al selector elige el producto local por el mismo camino que la lista. */
+  it("picks the local product from a scan next to the picker", async () => {
+    const onProductChange = vi.fn();
+    render(<WizardHarness onPublish={async () => undefined} onProductChange={onProductChange} initialStep={1} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Escanear producto local" }));
+    expect(onProductChange).toHaveBeenCalledWith("product-scan", expect.objectContaining({ id: "product-scan", sku: "TER-OWA-01" }));
   });
 });

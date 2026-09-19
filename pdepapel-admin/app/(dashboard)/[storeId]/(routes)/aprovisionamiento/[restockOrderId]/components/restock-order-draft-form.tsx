@@ -1,6 +1,7 @@
 "use client";
 
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -246,17 +247,31 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
                               render={({ field: productField }) => (
                                 <FormItem>
                                   <FormLabel isRequired>Producto</FormLabel>
-                                  <AsyncProductSelect
-                                    disabled={loading}
-                                    value={productField.value ?? ""}
-                                    ariaLabel={`Producto de la línea ${index + 1}`}
-                                    onChange={(value, product) => {
-                                      productField.onChange(value);
-                                      if (product && !form.getValues(`items.${index}.cost`)) {
-                                        form.setValue(`items.${index}.cost`, product.acqPrice || 0, { shouldDirty: true });
-                                      }
-                                    }}
-                                  />
+                                  <div className="flex min-w-0 items-start gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <AsyncProductSelect
+                                        disabled={loading}
+                                        value={productField.value ?? ""}
+                                        ariaLabel={`Producto de la línea ${index + 1}`}
+                                        onChange={(value, product) => {
+                                          productField.onChange(value);
+                                          if (product && !form.getValues(`items.${index}.cost`)) {
+                                            form.setValue(`items.${index}.cost`, product.acqPrice || 0, { shouldDirty: true });
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <ProductScanButton
+                                      compact
+                                      label={`Escanear producto de la línea ${index + 1}`}
+                                      onFound={(product) => {
+                                        productField.onChange(product.id);
+                                        if (!form.getValues(`items.${index}.cost`)) {
+                                          form.setValue(`items.${index}.cost`, product.acqPrice || 0, { shouldDirty: true });
+                                        }
+                                      }}
+                                    />
+                                  </div>
                                   <FormMessage />
                                 </FormItem>
                               )}

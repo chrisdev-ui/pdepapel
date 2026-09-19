@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import {
@@ -441,14 +442,18 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 {EMPTY_PRODUCTS.map((_, index) => (
-                  <AsyncProductSelect
-                    key={index}
-                    disabled={loading}
-                    value={productIds[index] ?? ""}
-                    onChange={(value) => setProductAt(index, value)}
-                    placeholder={`Producto ${index + 1}`}
-                    ariaLabel={`Producto ${index + 1} del cargamento`}
-                  />
+                  <div key={index} className="flex min-w-0 items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <AsyncProductSelect
+                        disabled={loading}
+                        value={productIds[index] ?? ""}
+                        onChange={(value) => setProductAt(index, value)}
+                        placeholder={`Producto ${index + 1}`}
+                        ariaLabel={`Producto ${index + 1} del cargamento`}
+                      />
+                    </div>
+                    <ProductScanButton compact label={`Escanear producto ${index + 1}`} onFound={(product) => setProductAt(index, product.id)} />
+                  </div>
                 ))}
               </div>
               <FormField control={form.control} name="productIds" render={() => <FormMessage />} />

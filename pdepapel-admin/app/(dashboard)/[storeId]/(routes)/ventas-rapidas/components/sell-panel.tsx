@@ -6,6 +6,7 @@ import { useMemo, type ReactNode } from "react";
 
 import { SellPanel as SharedSellPanel, type SellLine, type SellSource } from "@/components/sales/sell-panel";
 import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { productLine, toSaleItems } from "@/lib/sell-cart";
 
 export type PointOfSaleProduct = {
@@ -83,16 +84,28 @@ export function SellPanel({ dayClose }: SellPanelProps) {
         });
         return { orderNumber: response.data.order.orderNumber as string, duplicate: Boolean(response.data.duplicate) };
       },
+      // Escanear aquí resuelve por la búsqueda (sin control de stock), igual
+      // que elegir de la lista; la venta con su lector sigue en el lookup.
       renderPicker: (add) => (
-        <AsyncProductSelect
-          value=""
-          onChange={(_value, product) => {
-            if (product) add(toSellLine(toPointOfSaleProduct(product)));
-          }}
-          placeholder="Busca por nombre, SKU o código"
-          modal
-          ariaLabel="Agregar producto del catálogo"
-        />
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <AsyncProductSelect
+              value=""
+              onChange={(_value, product) => {
+                if (product) add(toSellLine(toPointOfSaleProduct(product)));
+              }}
+              placeholder="Busca por nombre, SKU o código"
+              modal
+              ariaLabel="Agregar producto del catálogo"
+            />
+          </div>
+          <ProductScanButton
+            compact
+            label="Escanear del catálogo"
+            description="Apunta al QR de una etiqueta o al código de barras: el producto entra a la venta desde el catálogo."
+            onFound={(product) => add(toSellLine(toPointOfSaleProduct(product)))}
+          />
+        </div>
       ),
       copy: {
         addDescription: "Escanea el QR o busca por nombre o SKU en el catálogo. El stock que ves es el de este momento.",

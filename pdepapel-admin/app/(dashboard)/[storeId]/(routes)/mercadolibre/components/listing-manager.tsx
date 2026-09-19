@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import {
   AsyncProductSelect,
   type AsyncProductOption,
@@ -2541,21 +2542,37 @@ export function MercadoLibreListingManager({
                         >
                           Producto local
                         </Label>
-                        <AsyncProductSelect
-                          id={`mercadolibre-import-${listing.key}`}
-                          value={selection.productId ?? ""}
-                          modal
-                          ariaLabel={`Producto local para ${listing.title}`}
-                          placeholder="Buscar producto local..."
-                          className="min-h-10"
-                          disabled={listing.status === "ERROR"}
-                          onChange={(productId) =>
-                            updateImportSelection(listing.key, {
-                              productId,
-                              selected: Boolean(productId),
-                            })
-                          }
-                        />
+                        <div className="flex min-w-0 items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <AsyncProductSelect
+                              id={`mercadolibre-import-${listing.key}`}
+                              value={selection.productId ?? ""}
+                              modal
+                              ariaLabel={`Producto local para ${listing.title}`}
+                              placeholder="Buscar producto local..."
+                              className="min-h-10"
+                              disabled={listing.status === "ERROR"}
+                              onChange={(productId) =>
+                                updateImportSelection(listing.key, {
+                                  productId,
+                                  selected: Boolean(productId),
+                                })
+                              }
+                            />
+                          </div>
+                          {listing.status !== "ERROR" && (
+                            <ProductScanButton
+                              compact
+                              label={`Escanear producto local para ${listing.title}`}
+                              onFound={(product) =>
+                                updateImportSelection(listing.key, {
+                                  productId: product.id,
+                                  selected: true,
+                                })
+                              }
+                            />
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

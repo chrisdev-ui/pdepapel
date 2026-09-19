@@ -1,5 +1,6 @@
 "use client";
 
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import {
   AsyncProductSelect,
   type AsyncProductOption,
@@ -617,20 +618,36 @@ export function ListingPublicationWizard({
             <Label htmlFor="mercadolibre-product" required>
               Producto de P de Papel
             </Label>
-            <AsyncProductSelect
-              value={form.productId ?? ""}
-              id="mercadolibre-product"
-              modal
-              disabled={productLocked}
-              ariaLabel="Producto local para la publicación"
-              placeholder="Buscar por nombre o SKU..."
-              onChange={(productId, product) => {
-                setIssue((current) =>
-                  current?.field === "productId" ? null : current,
-                );
-                onProductChange(productId, product);
-              }}
-            />
+            <div className="flex min-w-0 items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <AsyncProductSelect
+                  value={form.productId ?? ""}
+                  id="mercadolibre-product"
+                  modal
+                  disabled={productLocked}
+                  ariaLabel="Producto local para la publicación"
+                  placeholder="Buscar por nombre o SKU..."
+                  onChange={(productId, product) => {
+                    setIssue((current) =>
+                      current?.field === "productId" ? null : current,
+                    );
+                    onProductChange(productId, product);
+                  }}
+                />
+              </div>
+              {!productLocked && (
+                <ProductScanButton
+                  compact
+                  label="Escanear producto local"
+                  onFound={(product) => {
+                    setIssue((current) =>
+                      current?.field === "productId" ? null : current,
+                    );
+                    onProductChange(product.id, product);
+                  }}
+                />
+              )}
+            </div>
             {renderFieldIssue("productId")}
             {productLocked && !editing ? (
               <p className="text-xs text-muted-foreground">
