@@ -85,17 +85,19 @@ export function DayCloseCard({ storeId, summary }: DayCloseCardProps) {
               </p>
               <ul className="divide-y text-sm">
                 {summary.recent.map((sale) => (
-                  <li key={sale.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <li key={sale.id} className="flex flex-col gap-0.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-1.5">
                     <Link
                       href={`/${storeId}/pedidos/${sale.id}`}
-                      className="min-w-0 truncate font-medium text-primary underline-offset-4 hover:underline"
+                      className="min-w-0 break-all font-medium text-primary underline-offset-4 hover:underline sm:truncate"
                     >
                       {sale.orderNumber}
                     </Link>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {TIME.format(sale.paidAt)} · {METHOD_LABELS[sale.method]}
+                    <span className="flex items-center justify-between gap-3 sm:justify-end">
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {TIME.format(sale.paidAt)} · {METHOD_LABELS[sale.method]}
+                      </span>
+                      <span className="shrink-0 font-semibold tabular-nums">{currencyFormatter(sale.total)}</span>
                     </span>
-                    <span className="shrink-0 tabular-nums">{currencyFormatter(sale.total)}</span>
                   </li>
                 ))}
               </ul>

@@ -31,6 +31,8 @@ type BarcodeScannerProps = {
   remote?: boolean;
   /** `sm` iguala los botones pequeños de una cabecera de sección. */
   size?: "default" | "sm";
+  /** Con un solo lector en pantalla, dice en texto que el celular vinculado recibe aquí. */
+  remoteStatusLabel?: boolean;
 };
 
 export function getCameraErrorMessage(cameraError: unknown) {
@@ -57,6 +59,7 @@ export function BarcodeScanner({
   className,
   remote = true,
   size = "default",
+  remoteStatusLabel = false,
 }: BarcodeScannerProps) {
   const params = useParams();
   const storeId = remote ? String(params?.storeId ?? "") : "";
@@ -222,6 +225,19 @@ export function BarcodeScanner({
               />
             )}
           </Button>
+        )}
+        {remoteStatusLabel && remoteScanner.enabled && remotePaired && (
+          <span
+            className={cn(
+              // En teléfono el chip quitaría espacio al buscador: queda el punto verde del botón del celular.
+              "hidden h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold sm:inline-flex",
+              remoteScanner.receiving ? "bg-tint-mint text-primary" : "bg-muted text-muted-foreground",
+            )}
+            data-remote-scanner-label={remoteScanner.receiving ? "receiving" : "paired"}
+          >
+            <span className={cn("h-2 w-2 rounded-full", remoteScanner.receiving ? "bg-green-600" : "bg-slate-400")} aria-hidden="true" />
+            {remoteScanner.receiving ? "Celular vinculado · recibe aquí" : "Celular vinculado"}
+          </span>
         )}
       </div>
       {remoteScanner.enabled && <RemoteScannerDialog open={remoteOpen} onOpenChange={setRemoteOpen} remote={remoteScanner} />}

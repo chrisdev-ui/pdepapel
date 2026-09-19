@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { getPointOfSaleDaySummary } from "@/lib/point-of-sale-day";
-import { cn } from "@/lib/utils";
+import prismadb from "@/lib/prismadb";
+import { cn, currencyFormatter } from "@/lib/utils";
 
 import { DayCloseCard } from "./components/day-close-card";
 import { LabelsPanel } from "./components/labels-panel";
@@ -30,14 +31,24 @@ export default async function PointOfSalePage({ params, searchParams }: PointOfS
   const tab: Tab = searchParams.tab === "etiquetas" ? "etiquetas" : "vender";
   const hrefFor = (id: Tab) =>
     `/${params.storeId}/ventas-rapidas${id === "vender" ? "" : `?tab=${id}`}`;
-  const summary = tab === "vender" ? await getPointOfSaleDaySummary(params.storeId) : null;
+  const [summary, store] = await Promise.all([
+    tab === "vender" ? getPointOfSaleDaySummary(params.storeId) : Promise.resolve(null),
+    prismadb.store.findUnique({ where: { id: params.storeId }, select: { name: true } }),
+  ]);
+  // Misma hora que en «Cierre del día»; «p. m.» ya trae punto, así que la frase no lleva otro.
+  const time = new Intl.DateTimeFormat("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" });
+  const today = summary
+    ? summary.sales === 0
+      ? "Hoy no hay ventas presenciales todavía."
+      : `Hoy: ${summary.sales} venta${summary.sales === 1 ? "" : "s"} · ${currencyFormatter(summary.total)}${summary.lastSaleAt ? ` · última a las ${time.format(summary.lastSaleAt).replace(/\.$/, "")}` : ""}.`
+    : null;
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold tracking-tight text-primary">Punto de venta</h1>
         <p className="text-sm text-muted-foreground">
-          Registra ventas presenciales fuera de feria y descuenta el inventario al confirmar el pago. Dentro de una feria vende desde Ferias.
+          {today ? `${today} ` : ""}Cada venta descuenta el inventario al confirmar el pago; dentro de una feria vende desde Ferias.
         </p>
       </div>
       <nav
@@ -61,7 +72,7 @@ export default async function PointOfSalePage({ params, searchParams }: PointOfS
         ))}
       </nav>
       {tab === "vender" && summary ? (
-        <SellPanel dayClose={<DayCloseCard storeId={params.storeId} summary={summary} />} />
+        <SellPanel dayClose={<DayCloseCard storeId={params.storeId} summary={summary} />} storeName={store?.name ?? undefined} />
       ) : (
         <LabelsPanel />
       )}

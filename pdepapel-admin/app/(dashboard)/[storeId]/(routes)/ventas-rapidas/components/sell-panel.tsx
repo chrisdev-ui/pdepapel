@@ -4,116 +4,61 @@ import axios from "axios";
 import { useParams } from "next/navigation";
 import { useMemo, type ReactNode } from "react";
 
-import { SellPanel as SharedSellPanel, type SellLine, type SellSource } from "@/components/sales/sell-panel";
-import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
-import { ProductScanButton } from "@/components/ui/product-scan-button";
-import { productLine, toSaleItems } from "@/lib/sell-cart";
-
-export type PointOfSaleProduct = {
-  id: string;
-  name: string;
-  sku: string;
-  gtin: string | null;
-  stock: number;
-  price: number;
-  isKit: boolean;
-  images: { url: string }[];
-};
-
-export function toPointOfSaleProduct(product: AsyncProductOption): PointOfSaleProduct {
-  return {
-    id: product.id,
-    name: product.name,
-    sku: product.sku,
-    gtin: product.gtin || null,
-    stock: product.stock,
-    price: Number(product.price || 0),
-    isKit: Boolean(product.isKit),
-    images: product.images || [],
-  };
-}
-
-/** En el punto de venta toda línea es un producto del catálogo (los kits descuentan sus componentes). */
-export function toSellLine(product: PointOfSaleProduct): SellLine {
-  return productLine({
-    productId: product.id,
-    name: product.name,
-    detail: `${product.isKit ? "Kit" : "Producto"} · SKU ${product.sku} · ${product.stock} disponibles`,
-    price: product.price,
-    maxQuantity: product.stock,
-    imageUrl: product.images[0]?.url ?? null,
-  });
-}
-
-const OUT_OF_STOCK_HINT = "Sin stock en línea. Revisa en Inventario.";
-
-/** El lookup responde 409 con `details.code = "OUT_OF_STOCK"` cuando el producto existe pero no tiene unidades. */
-function describeLookupError(error: unknown): unknown {
-  const response = (error as { response?: { status?: number; data?: { details?: { code?: string } } } })?.response;
-  if (response?.status === 409 && response.data?.details?.code === "OUT_OF_STOCK") {
-    return Object.assign(new Error(OUT_OF_STOCK_HINT), { response: { data: { error: OUT_OF_STOCK_HINT } } });
-  }
-  return error;
-}
+import { SaleDoneCard } from "@/components/sales/sale-done-card";
+import { SaleSearch } from "@/components/sales/sale-search";
+import { SellPanel as SharedSellPanel, type SellSource } from "@/components/sales/sell-panel";
+import { toSaleItems } from "@/lib/sell-cart";
 
 interface SellPanelProps {
   /** Tarjeta de cierre del día, renderizada por el servidor, bajo el cobro. */
   dayClose?: ReactNode;
+  storeName?: string;
 }
 
-/** Punto de venta: la pantalla compartida con el catálogo completo como fuente. */
-export function SellPanel({ dayClose }: SellPanelProps) {
+/**
+ * Punto de venta: la pantalla compartida con una sola entrada (buscar o
+ * escanear), precios con la oferta vigente, efectivo / transferencia con
+ * referencia / datáfono Bold, y la tarjeta de después de la venta.
+ */
+export function SellPanel({ dayClose, storeName }: SellPanelProps) {
   const params = useParams();
   const storeId = String(params.storeId);
 
   const source = useMemo<SellSource>(
     () => ({
-      lookup: async (code) => {
-        try {
-          const response = await axios.get(`/api/${storeId}/point-of-sale/lookup`, { params: { code } });
-          return toSellLine(response.data.product as PointOfSaleProduct);
-        } catch (error) {
-          throw describeLookupError(error);
-        }
-      },
-      submit: async ({ lines, paymentMethod, idempotencyKey }) => {
+      renderEntry: (add) => <SaleSearch onAdd={add} storeId={storeId} />,
+      submit: async ({ lines, paymentMethod, idempotencyKey, transactionId }) => {
         const response = await axios.post(`/api/${storeId}/point-of-sale/sales`, {
           items: toSaleItems(lines),
           paymentMethod,
           idempotencyKey,
+          transactionId,
         });
-        return { orderNumber: response.data.order.orderNumber as string, duplicate: Boolean(response.data.duplicate) };
+        const order = response.data.order as { id: string; orderNumber: string; paidAt: string | null };
+        return {
+          orderNumber: order.orderNumber,
+          orderId: order.id,
+          paidAt: order.paidAt,
+          duplicate: Boolean(response.data.duplicate),
+          pending: Boolean(response.data.pending),
+          terminal: (response.data.terminal as string | null) ?? null,
+        };
       },
-      // Escanear aquí resuelve por la búsqueda (sin control de stock), igual
-      // que elegir de la lista; la venta con su lector sigue en el lookup.
-      renderPicker: (add) => (
-        <div className="flex min-w-0 items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <AsyncProductSelect
-              value=""
-              onChange={(_value, product) => {
-                if (product) add(toSellLine(toPointOfSaleProduct(product)));
-              }}
-              placeholder="Busca por nombre, SKU o código"
-              modal
-              ariaLabel="Agregar producto del catálogo"
-            />
-          </div>
-          <ProductScanButton
-            compact
-            label="Escanear del catálogo"
-            description="Apunta al QR de una etiqueta o al código de barras: el producto entra a la venta desde el catálogo."
-            onFound={(product) => add(toSellLine(toPointOfSaleProduct(product)))}
-          />
-        </div>
-      ),
+      paymentOptions: [
+        { value: "CASH", title: "Efectivo" },
+        { value: "BankTransfer", title: "Transferencia", hint: "Con referencia" },
+        { value: "Bold", title: "Datáfono", hint: "Bold confirma" },
+      ],
+      requireTransferReference: true,
+      renderAfterSale: (sale, { reset, update }) => <SaleDoneCard storeId={storeId} storeName={storeName} sale={sale} onNewSale={reset} onChange={update} />,
       copy: {
-        addDescription: "Escanea el QR o busca por nombre o SKU en el catálogo. El stock que ves es el de este momento.",
+        addDescription: "Escribe, pega o escanea: nombre, SKU o código de barras. El código exacto entra solo; el precio ya trae la oferta vigente.",
         saleNoun: "venta presencial",
+        submitError: "No se registró la venta ni se descontó inventario. Revisa los productos e intenta de nuevo.",
       },
     }),
-    [storeId],
+    [storeId, storeName],
   );
 
-  return <SharedSellPanel source={source} aside={dayClose} />;
+  return <SharedSellPanel source={source} aside={dayClose} persistLastSaleKey={`pos-last-sale:${storeId}`} />;
 }
