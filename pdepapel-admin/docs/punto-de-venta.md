@@ -8,7 +8,7 @@ Usa **Punto de venta** cuando vendas en el local, por una visita o en cualquier 
 
 1. Entra a **Ventas → Punto de venta**.
 2. Abre la pestaña **Etiquetas**.
-3. Busca un producto por nombre, SKU o código.
+3. Busca un producto por nombre, SKU o código, o pulsa **Escanear** (el icono de cámara junto al buscador) y apunta al QR de una etiqueta o al código de barras del empaque. En la lista cada fila muestra la foto, «Nombre · Variante», «SKU · stock · precio» y si es una **Variante**; la fila **todas las variantes** (con la cuenta) agrega el grupo entero de una vez. Lo elegido queda en la tarjeta **Elegido**, con **Cambiar** para volver a la lista. Un producto sin stock también se puede etiquetar (por ejemplo, antes de una reposición).
 4. Escribe cuántas etiquetas quieres imprimir. Para un producto idéntico basta **una sola etiqueta**.
 5. Pulsa **Agregar a la hoja** y luego **Imprimir etiquetas**.
 6. Pega la etiqueta en la caja, bandeja o exhibidor donde guardas ese producto. Imprime más solo si quieres tener la misma etiqueta en varios lugares.
@@ -22,9 +22,11 @@ La hoja es la **AH Royal de 60 etiquetas en tamaño carta** (38,1 × 21,2 mm, 5 
 - **Hoja de calibración.** El fabricante no publica márgenes ni separación entre etiquetas, así que la primera vez (y cada vez que cambies de impresora o de paquete) pulsa **Hoja de calibración**, imprímela sobre papel normal y ponla detrás de una hoja adhesiva al trasluz. Cada contorno debe caer sobre una etiqueta. Si se corre, ajusta **Desplazar impresión** (Horizontal y Vertical, en milímetros, con los botones −/+ de medio milímetro) en la misma página de calibración o en el panel, y vuelve a imprimir; el ajuste se guarda en el navegador y lo usan tanto la calibración como las etiquetas. Vertical positivo baja todo: si la primera fila se corta arriba, suma.
 - **Empezar en la etiqueta nº.** Para aprovechar una hoja que ya tiene etiquetas usadas: escribe la primera posición libre (se cuenta por filas, de izquierda a derecha) y la impresión salta las anteriores.
 - **Guías de corte.** Si la hoja adhesiva no viene troquelada, deja marcada la casilla: se imprime un contorno fino y marcas en las esquinas para recortar con tijeras.
-- **Qué lleva la etiqueta.** Siempre el QR y el nombre; la variante (color, tamaño, diseño), el SKU y el precio se activan con las casillas. El SKU nunca se corta: es lo que escribes a mano si la cámara no lee.
+- **Qué lleva la etiqueta.** Siempre el QR y el nombre; la variante (color, tamaño, diseño), el SKU, el precio y el **nombre del grupo** se activan con las casillas. El SKU nunca se corta: es lo que escribes a mano si la cámara no lee. «Nombre del grupo» imprime una línea pequeña encima del nombre solo en las etiquetas que entraron como grupo; el nombre pasa entonces a una línea para que nada más se mueva. En un producto suelto la casilla no cambia nada.
+- **Así queda la hoja** muestra la hoja real a escala con su leyenda: *Se imprime*, *Siguiente libre*, *Ya usada* (las posiciones que saltas con «Empezar en la etiqueta nº») y *Libre*.
+- **Vista previa a tamaño real** abre la misma página de impresión sin el diálogo, para revisar la hoja antes de gastar una adhesiva; desde ahí se imprime con el botón.
 - **Imprimir o guardar PDF** abre la hoja en otra pestaña con el diálogo de impresión. Papel **Carta**, escala **100 %** o **tamaño real**, sin *Ajustar a página*. En iPad: Compartir → Imprimir. La hoja armada se guarda en el navegador: puedes cambiar a **Vender** y volver.
-- **Grupos.** Si el producto es una variante, **Todas las variantes del grupo** agrega una etiqueta por cada variante a la venta.
+- **Grupos.** La fila **todas las variantes** de la lista de búsqueda, o el botón **Todas las variantes del grupo** tras elegir una variante, agregan una etiqueta por cada variante a la venta.
 
 ### Ejemplo
 

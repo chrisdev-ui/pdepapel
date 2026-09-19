@@ -1,7 +1,8 @@
 "use client";
 
 import axios from "axios";
-import { Layers, Minus, Plus, Printer, Ruler, Trash2 } from "lucide-react";
+import { Eye, Layers, Minus, Package, Plus, Printer, Ruler, Trash2 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -13,7 +14,8 @@ import {
   openLabelPrintJob,
   type QrPrintLabel,
 } from "@/components/labels/qr-label-print-sheet";
-import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
+import { AsyncProductSelect, type AsyncProductGroupPick, type AsyncProductOption } from "@/components/ui/async-product-select";
+import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -21,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { SectionCard } from "@/components/ui/section-card";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { TintBadge } from "@/components/ui/tint-badge";
+import { useProductScanLookup } from "@/hooks/use-product-scan-lookup";
 import { useToast } from "@/hooks/use-toast";
 import { getLabelSheetTemplate, labelsPerSheet, paginateLabels } from "@/lib/label-printing";
 import {
@@ -38,8 +41,11 @@ import {
   type LabelSheetDraft,
 } from "@/lib/label-sheet-draft";
 import { getErrorMessage } from "@/lib/api-errors";
+import { currencyFormatter } from "@/lib/utils";
 
-function toDraftProduct(product: AsyncProductOption): LabelDraftProduct {
+const PRODUCT_PICKER_ID = "label-product";
+
+function toDraftProduct(product: AsyncProductOption, groupName: string | null = null): LabelDraftProduct {
   return {
     id: product.id,
     name: product.name,
@@ -48,7 +54,27 @@ function toDraftProduct(product: AsyncProductOption): LabelDraftProduct {
     variant: describeVariant(product),
     imageUrl: product.images?.[0]?.url ?? null,
     productGroupId: product.productGroupId ?? null,
+    groupName,
   };
+}
+
+/** «SKU · stock · precio», la misma línea que en la lista de búsqueda. */
+function describePick(product: Pick<AsyncProductOption, "sku" | "stock" | "price">) {
+  return [product.sku, `${product.stock} und`, typeof product.price === "number" ? currencyFormatter(product.price) : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function Thumb({ url, alt, className = "h-10 w-10" }: { url: string | null; alt: string; className?: string }) {
+  return (
+    <div className={`relative shrink-0 overflow-hidden rounded-md border bg-muted ${className}`}>
+      {url ? (
+        <Image src={url} alt={alt} fill className="object-cover" sizes="40px" />
+      ) : (
+        <Package className="absolute inset-0 m-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      )}
+    </div>
+  );
 }
 
 /**
@@ -87,6 +113,7 @@ export function LabelsPanel() {
   const [picked, setPicked] = useState<AsyncProductOption | null>(null);
   const [copies, setCopies] = useState(1);
   const [addingGroup, setAddingGroup] = useState(false);
+  const { resolve: resolveScan, resolving } = useProductScanLookup(storeId);
 
   const template = getLabelSheetTemplate(draft.templateId);
   const perSheet = labelsPerSheet(template);
@@ -101,6 +128,7 @@ export function LabelsPanel() {
           variant: batch.product.variant,
           sku: batch.product.sku,
           price: batch.product.price,
+          group: batch.product.groupName,
         })),
       ),
     [draft.batches],
@@ -128,17 +156,18 @@ export function LabelsPanel() {
     });
   }
 
-  async function onAddGroup() {
-    if (!picked?.productGroupId) return;
+  /** Todas las variantes vivas del grupo, con el nombre del grupo para la etiqueta. */
+  async function addGroup(groupId: string) {
     setAddingGroup(true);
     try {
-      const response = await axios.get(`/api/${storeId}/product-groups/${picked.productGroupId}`);
+      const response = await axios.get(`/api/${storeId}/product-groups/${groupId}`);
+      const groupName: string | null = response.data?.name ? String(response.data.name) : null;
       const products: AsyncProductOption[] = (response.data?.products ?? []).filter(
         (product: AsyncProductOption & { isArchived?: boolean }) => !product.isArchived,
       );
       if (products.length === 0) throw new Error("El grupo no tiene variantes a la venta.");
       setDraft((current) =>
-        products.reduce((acc, product) => addToDraft(acc, toDraftProduct(product), copies), current),
+        products.reduce((acc, product) => addToDraft(acc, toDraftProduct(product, groupName), copies), current),
       );
       toast({
         title: "Grupo en la hoja",
@@ -152,18 +181,49 @@ export function LabelsPanel() {
     }
   }
 
-  function onPrint() {
+  function onAddGroup() {
+    if (picked?.productGroupId) void addGroup(picked.productGroupId);
+  }
+
+  function onSelectGroup(group: AsyncProductGroupPick) {
+    setPicked(null);
+    void addGroup(group.id);
+  }
+
+  async function onScanned(code: string) {
+    const product = await resolveScan(code);
+    if (!product) {
+      toast({
+        title: "No encontramos ese código",
+        description: `«${code}» no coincide con ningún SKU, código de barras ni QR de etiqueta.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setPicked(product);
+    toast({ title: "Producto encontrado", description: product.name, variant: "success" });
+  }
+
+  function onChangePick() {
+    setPicked(null);
+    document.getElementById(PRODUCT_PICKER_ID)?.click();
+  }
+
+  function onPrint(mode: "etiquetas" | "vista" = "etiquetas") {
     if (total === 0) return;
-    const opened = openLabelPrintJob({
-      storeId,
-      source: "product",
-      labels,
-      templateId: draft.templateId,
-      startAt: draft.startAt,
-      sheet: draft.sheet,
-      content: draft.content,
-      createdAt: new Date().toISOString(),
-    });
+    const opened = openLabelPrintJob(
+      {
+        storeId,
+        source: "product",
+        labels,
+        templateId: draft.templateId,
+        startAt: draft.startAt,
+        sheet: draft.sheet,
+        content: draft.content,
+        createdAt: new Date().toISOString(),
+      },
+      mode,
+    );
     if (!opened) {
       toast({
         title: "No se pudo preparar la impresión",
@@ -173,20 +233,16 @@ export function LabelsPanel() {
     }
   }
 
-  const contentToggle = (key: keyof LabelSheetDraft["content"], label: string, hint?: string) => (
-    <label className="flex cursor-pointer items-start gap-2 text-sm">
+  const contentToggle = (key: keyof LabelSheetDraft["content"], label: string) => (
+    <label className="flex cursor-pointer items-center gap-2 text-sm">
       <Checkbox
         checked={draft.content[key]}
         onCheckedChange={(checked) =>
           setDraft((current) => ({ ...current, content: { ...current.content, [key]: checked === true } }))
         }
-        className="mt-0.5"
         aria-label={label}
       />
-      <span>
-        {label}
-        {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
-      </span>
+      <span>{label}</span>
     </label>
   );
 
@@ -199,20 +255,54 @@ export function LabelsPanel() {
           title="Elige qué etiquetar"
           description="Una etiqueta por producto o variante, reutilizable: pégala en la caja o el exhibidor y escanéala en cada venta. Las cápsulas sorpresa usan su propio QR desde Ferias."
         >
-          <div className="grid gap-2">
-            <Label>Busca el producto</Label>
-            <AsyncProductSelect
-              value={picked?.id ?? ""}
-              onChange={(_value, product) => setPicked(product ?? null)}
-              placeholder="Nombre, SKU o código de barras"
-              modal
-              ariaLabel="Producto para imprimir etiquetas"
-            />
+          {/* minmax(0,1fr) y min-w-0: el nombre elegido (nowrap con «…») no puede fijar el ancho mínimo de la fila en celular. */}
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+            <Label htmlFor={PRODUCT_PICKER_ID}>Busca el producto</Label>
+            <div className="flex min-w-0 items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <AsyncProductSelect
+                  id={PRODUCT_PICKER_ID}
+                  value={picked?.id ?? ""}
+                  onChange={(_value, product) => setPicked(product ?? null)}
+                  onSelectGroup={onSelectGroup}
+                  placeholder="Nombre, SKU o código de barras"
+                  modal
+                  ariaLabel="Producto para imprimir etiquetas"
+                />
+              </div>
+              <BarcodeScanner
+                onDetected={(code) => void onScanned(code)}
+                description="Apunta al QR de una etiqueta o al código de barras del empaque."
+                compact
+                className="h-auto min-h-[2.75rem] shrink-0 px-3 sm:px-4"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Escribe y elige de la lista, o pulsa Escanear y apunta al código de barras del empaque. Un grupo agrega
+              una etiqueta por variante.
+            </p>
+            {resolving && (
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                Buscando el código leído…
+              </p>
+            )}
             {picked && (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-tint-mint bg-tint-mint/20 px-3 py-2 text-sm">
-                <span className="font-semibold text-primary">{picked.name}</span>
-                {describeVariant(picked) && <TintBadge tone="lavender" label={describeVariant(picked)!} />}
-                <span className="font-mono text-xs text-muted-foreground">{picked.sku}</span>
+              <div
+                className="flex min-w-0 items-center gap-3 rounded-lg border border-tint-mint bg-tint-mint/20 px-3 py-2 text-sm"
+                data-testid="label-pick"
+              >
+                <Thumb url={picked.images?.[0]?.url ?? null} alt={picked.name} />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-xs font-semibold text-primary">Elegido</span>
+                  <span className="truncate font-semibold text-primary">
+                    {picked.name}
+                    {describeVariant(picked) ? ` · ${describeVariant(picked)}` : ""}
+                  </span>
+                  <span className="truncate font-mono text-[11px] text-muted-foreground">{describePick(picked)}</span>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={onChangePick}>
+                  Cambiar
+                </Button>
               </div>
             )}
           </div>
@@ -244,10 +334,23 @@ export function LabelsPanel() {
           <p className="text-xs text-muted-foreground">
             Una por sitio donde guardes el producto; no hace falta una por unidad.
           </p>
-          <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
-            {contentToggle("showVariant", "Variante", "Color, tamaño o diseño en su propia línea.")}
-            {contentToggle("showSku", "SKU", "Siempre completo: es lo que se escribe si la cámara falla.")}
-            {contentToggle("showPrice", "Precio", "Sale de la ficha en el momento de imprimir.")}
+          <div className="grid gap-3 border-t pt-4">
+            <span className="text-sm font-medium">Qué lleva cada etiqueta</span>
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Checkbox checked disabled aria-label="Nombre (siempre)" />
+                <span>Nombre (siempre)</span>
+              </label>
+              {contentToggle("showVariant", "Variante: color y tamaño")}
+              {contentToggle("showSku", "SKU")}
+              {contentToggle("showPrice", "Precio")}
+              {contentToggle("showGroupName", "Nombre del grupo")}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              El QR lleva siempre su zona de silencio y el SKU nunca se corta: baja de tamaño antes que perder un
+              carácter. «Nombre del grupo» sale encima del nombre solo en las etiquetas agregadas como grupo, y el nombre
+              pasa a una línea para no mover nada más.
+            </p>
           </div>
         </SectionCard>
 
@@ -344,6 +447,26 @@ export function LabelsPanel() {
           {pagination.pageCount > 2 && (
             <p className="text-xs text-muted-foreground">Se muestran las 2 primeras hojas de {pagination.pageCount}.</p>
           )}
+          {total > 0 && (
+            <ul className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground" aria-label="Leyenda de la hoja">
+              <li className="flex items-center gap-1.5">
+                <span className="h-3.5 w-3.5 rounded-sm border border-slate-300 bg-white" aria-hidden="true" />
+                Se imprime
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="h-3.5 w-3.5 rounded-sm border border-[#14532d] bg-[#d6f5e0]" aria-hidden="true" />
+                Siguiente libre
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="h-3.5 w-3.5 rounded-sm border border-slate-300 bg-[#f1f5f9]" aria-hidden="true" />
+                Ya usada
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="h-3.5 w-3.5 rounded-sm border border-dashed border-slate-300" aria-hidden="true" />
+                Libre
+              </li>
+            </ul>
+          )}
         </SectionCard>
       </div>
 
@@ -358,6 +481,7 @@ export function LabelsPanel() {
             <ul className="divide-y text-sm">
               {draft.batches.map((batch) => (
                 <li key={batch.product.id} className="flex items-center gap-2 py-2">
+                  <Thumb url={batch.product.imageUrl} alt={batch.product.name} className="h-8 w-8" />
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-medium">{batch.product.name}</span>
                     <span className="truncate font-mono text-[11px] text-muted-foreground">
@@ -402,9 +526,13 @@ export function LabelsPanel() {
               ))}
             </ul>
           )}
-          <Button type="button" className="w-full" disabled={total === 0} onClick={onPrint}>
+          <Button type="button" className="w-full" disabled={total === 0} onClick={() => onPrint()}>
             <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
             Imprimir o guardar PDF
+          </Button>
+          <Button type="button" variant="outline" className="w-full" disabled={total === 0} onClick={() => onPrint("vista")}>
+            <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
+            Vista previa a tamaño real
           </Button>
           {draft.batches.length > 0 && (
             <Button
