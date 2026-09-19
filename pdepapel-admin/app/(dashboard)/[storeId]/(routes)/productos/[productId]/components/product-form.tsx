@@ -2063,17 +2063,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>GTIN / código de barras</FormLabel>
-                      <div className="flex gap-2">
-                        <FormControl>
-                          <Input
-                            disabled={loading || watchedHasNoIdentifier}
-                            inputMode="numeric"
-                            placeholder="8, 12, 13 o 14 dígitos"
-                            {...field}
-                          />
-                        </FormControl>
+                      {/* min-w-0 + flex-1: el lector trae dos botones (cámara y celular) y en celular la fila se salía de la tarjeta. */}
+                      <div className="flex min-w-0 items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <FormControl>
+                            <Input
+                              disabled={loading || watchedHasNoIdentifier}
+                              inputMode="numeric"
+                              placeholder="8, 12, 13 o 14 dígitos"
+                              {...field}
+                            />
+                          </FormControl>
+                        </div>
                         {!watchedHasNoIdentifier && (
                           <BarcodeScanner
+                            compact
                             label="Escanear"
                             description="Apunta la cámara al código de barras del empaque."
                             onDetected={(code) =>
