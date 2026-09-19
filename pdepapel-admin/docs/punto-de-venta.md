@@ -17,9 +17,9 @@ Cada etiqueta de producto se puede reutilizar. No necesitas crear una etiqueta n
 
 ### La hoja de etiquetas y cómo imprimirla
 
-La hoja es la **AH Royal de 65 etiquetas en tamaño carta** (38,1 × 21,2 mm, 5 columnas × 13 filas). Solo existe ese formato en el panel.
+La hoja es la **AH Royal de 60 etiquetas en tamaño carta** (38,1 × 21,2 mm, 5 columnas × 12 filas). Solo existe ese formato en el panel.
 
-- **Hoja de calibración.** El fabricante no publica márgenes ni separación entre etiquetas, así que la primera vez (y cada vez que cambies de impresora o de paquete) pulsa **Hoja de calibración**, imprímela sobre papel normal y ponla detrás de una hoja adhesiva al trasluz. Cada contorno debe caer sobre una etiqueta. Si se corre, mide cuántos milímetros y anótalos en **Desplazar impresión**; el ajuste se guarda en el navegador.
+- **Hoja de calibración.** El fabricante no publica márgenes ni separación entre etiquetas, así que la primera vez (y cada vez que cambies de impresora o de paquete) pulsa **Hoja de calibración**, imprímela sobre papel normal y ponla detrás de una hoja adhesiva al trasluz. Cada contorno debe caer sobre una etiqueta. Si se corre, ajusta **Desplazar impresión** (Horizontal y Vertical, en milímetros, con los botones −/+ de medio milímetro) en la misma página de calibración o en el panel, y vuelve a imprimir; el ajuste se guarda en el navegador y lo usan tanto la calibración como las etiquetas. Vertical positivo baja todo: si la primera fila se corta arriba, suma.
 - **Empezar en la etiqueta nº.** Para aprovechar una hoja que ya tiene etiquetas usadas: escribe la primera posición libre (se cuenta por filas, de izquierda a derecha) y la impresión salta las anteriores.
 - **Guías de corte.** Si la hoja adhesiva no viene troquelada, deja marcada la casilla: se imprime un contorno fino y marcas en las esquinas para recortar con tijeras.
 - **Qué lleva la etiqueta.** Siempre el QR y el nombre; la variante (color, tamaño, diseño), el SKU y el precio se activan con las casillas. El SKU nunca se corta: es lo que escribes a mano si la cámara no lee.

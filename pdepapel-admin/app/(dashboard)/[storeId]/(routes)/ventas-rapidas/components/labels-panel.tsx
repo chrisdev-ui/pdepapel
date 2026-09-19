@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { LabelSheetPreview } from "@/components/labels/label-sheet-preview";
+import { PrintOffsetFields } from "@/components/labels/print-offset-fields";
 import {
   labelPrintUrl,
   openLabelPrintJob,
@@ -266,13 +267,13 @@ export function LabelsPanel() {
         >
           {template.provisional && (
             <p className="rounded-lg border border-tint-cream bg-tint-cream/40 px-3 py-2 text-xs text-primary">
-              La geometría de esta hoja es provisional (el fabricante no publica la ficha). Imprime la hoja de
-              calibración sobre papel normal, ponla detrás de una hoja adhesiva al trasluz y, si se corre, anota el
-              desplazamiento aquí.
+              El margen superior de esta hoja es aproximado (el fabricante no publica la ficha). Imprime la hoja de
+              calibración sobre papel normal y ponla detrás de una hoja adhesiva al trasluz; si se corre, ajusta
+              «Desplazar impresión» aquí o en la propia página de calibración y vuelve a imprimir.
             </p>
           )}
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-2">
+            <div className="grid gap-2 sm:col-span-1">
               <Label htmlFor="label-start-at">Empezar en la etiqueta nº</Label>
               <Input
                 id="label-start-at"
@@ -290,42 +291,15 @@ export function LabelsPanel() {
               />
               <span className="text-xs text-muted-foreground">Para aprovechar una hoja a medio usar.</span>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="label-offset-x">Desplazar impresión (mm)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="label-offset-x"
-                  type="number"
-                  step="0.5"
-                  min={-10}
-                  max={10}
-                  aria-label="Desplazamiento horizontal en milímetros"
-                  value={draft.sheet.offsetXMm}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      sheet: { ...current.sheet, offsetXMm: Number(event.target.value) || 0 },
-                    }))
-                  }
-                />
-                <Input
-                  type="number"
-                  step="0.5"
-                  min={-10}
-                  max={10}
-                  aria-label="Desplazamiento vertical en milímetros"
-                  value={draft.sheet.offsetYMm}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      sheet: { ...current.sheet, offsetYMm: Number(event.target.value) || 0 },
-                    }))
-                  }
-                />
-              </div>
-              <span className="text-xs text-muted-foreground">Horizontal y vertical, según la hoja de calibración.</span>
+            <div className="grid gap-2 sm:col-span-2">
+              <span className="text-sm font-medium">Desplazar impresión</span>
+              <PrintOffsetFields
+                value={draft.sheet}
+                onChange={(sheet) => setDraft((current) => ({ ...current, sheet }))}
+                idPrefix="label-offset"
+              />
             </div>
-            <label className="flex cursor-pointer items-start gap-2 pt-7 text-sm">
+            <label className="flex cursor-pointer items-start gap-2 text-sm sm:col-span-3">
               <Checkbox
                 checked={draft.sheet.cutGuides}
                 onCheckedChange={(checked) =>

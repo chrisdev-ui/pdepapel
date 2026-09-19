@@ -10,14 +10,16 @@ import {
   readLabelPrintJob,
   type LabelPrintJob,
 } from "@/components/labels/qr-label-print-sheet";
+import { PrintOffsetFields } from "@/components/labels/print-offset-fields";
+import { useSheetOptions } from "@/components/labels/use-sheet-options";
 import { Button } from "@/components/ui/button";
 import {
-  DEFAULT_SHEET_OPTIONS,
   getLabelSheetTemplate,
   labelsPerSheet,
   paginateLabels,
   PX_PER_MM,
   sheetFitsPage,
+  type LabelSheetOptions,
 } from "@/lib/label-printing";
 
 interface PrintLabelsClientProps {
@@ -28,12 +30,14 @@ interface PrintLabelsClientProps {
 const mm = (value: number) => `${Math.round(value * 1000) / 1000}mm`;
 
 /**
- * Hoja de calibración: el contorno de las 65 posiciones, numeradas, y una
+ * Hoja de calibración: el contorno de las 60 posiciones, numeradas, y una
  * regla en mm por cada borde. Se imprime sobre papel normal y se pone detrás
  * de la hoja adhesiva al trasluz: si los contornos caen sobre las etiquetas,
- * la plantilla está bien; si no, se ajusta el desplazamiento en el panel.
+ * la plantilla está bien; si no, se ajusta el desplazamiento. Obedece las
+ * mismas opciones (desplazamiento) que la impresión real: antes usaba las de
+ * fábrica y el ajuste guardado nunca llegaba a esta hoja.
  */
-function CalibrationSheet({ storeId }: { storeId: string }) {
+export function CalibrationSheet({ storeId, options }: { storeId: string; options: LabelSheetOptions }) {
   const template = getLabelSheetTemplate();
   const perPage = labelsPerSheet(template);
   const fit = sheetFitsPage(template);
@@ -41,7 +45,7 @@ function CalibrationSheet({ storeId }: { storeId: string }) {
   const ticksY = Array.from({ length: Math.floor(template.page.heightMm / 10) }, (_, index) => (index + 1) * 10);
   return (
     <>
-      <LabelSheetStyles template={template} options={{ ...DEFAULT_SHEET_OPTIONS, cutGuides: true }} />
+      <LabelSheetStyles template={template} options={{ ...options, cutGuides: true }} />
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -70,9 +74,10 @@ function CalibrationSheet({ storeId }: { storeId: string }) {
           </div>
         ))}
         <p className="calibration__legend">
-          Hoja de calibración · {template.reference} · tienda {storeId.slice(0, 8)} · escala 100 %, sin «ajustar a
-          página». Pon esta hoja detrás de la adhesiva al trasluz: cada contorno debe caer sobre una etiqueta. Si se
-          corre, mide en mm cuánto y anótalo en «Desplazar impresión» del panel.
+          Hoja de calibración · {template.reference} · tienda {storeId.slice(0, 8)} · desplazamiento{" "}
+          {options.offsetXMm} / {options.offsetYMm} mm · escala 100 %, sin «ajustar a página». Pon esta hoja detrás de
+          la adhesiva al trasluz: cada contorno debe caer sobre una etiqueta. Si se corre, ajusta «Desplazar impresión»
+          arriba y vuelve a imprimir.
         </p>
       </div>
     </>
@@ -122,6 +127,13 @@ export function PrintLabelsClient({ storeId, mode }: PrintLabelsClientProps) {
   const [job, setJob] = useState<LabelPrintJob | null | undefined>(undefined);
   const template = getLabelSheetTemplate();
   const fit = sheetFitsPage(template);
+  // El desplazamiento guardado por navegador manda también aquí: se ajusta
+  // mirando la hoja y la siguiente impresión (esta o la del panel) lo usa.
+  const { options: sheetOptions, setOptions: setSheetOptions } = useSheetOptions(storeId);
+  const effectiveSheet = useMemo(
+    () => (job ? { ...job.sheet, offsetXMm: sheetOptions.offsetXMm, offsetYMm: sheetOptions.offsetYMm } : sheetOptions),
+    [job, sheetOptions],
+  );
 
   useEffect(() => {
     if (mode === "calibracion") {
@@ -171,6 +183,10 @@ export function PrintLabelsClient({ storeId, mode }: PrintLabelsClientProps) {
           <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
           Imprimir o guardar PDF
         </Button>
+        <div className="flex w-full flex-wrap items-end gap-x-6 gap-y-2 border-t pt-3">
+          <span className="text-xs font-semibold text-primary">Desplazar impresión (se guarda en este navegador)</span>
+          <PrintOffsetFields value={sheetOptions} onChange={setSheetOptions} idPrefix="print-offset" compact />
+        </div>
       </header>
 
       {!fit.fits && (
@@ -182,7 +198,7 @@ export function PrintLabelsClient({ storeId, mode }: PrintLabelsClientProps) {
       <main className="flex flex-col items-center gap-6 bg-slate-100 p-4 print:block print:bg-white print:p-0">
         {mode === "calibracion" ? (
           <FitOnScreen pages={1}>
-            <CalibrationSheet storeId={storeId} />
+            <CalibrationSheet storeId={storeId} options={sheetOptions} />
           </FitOnScreen>
         ) : job === undefined ? (
           <p className="text-sm text-muted-foreground">Preparando la hoja…</p>
@@ -199,7 +215,7 @@ export function PrintLabelsClient({ storeId, mode }: PrintLabelsClientProps) {
               labels={job.labels}
               templateId={job.templateId}
               startAt={job.startAt}
-              sheet={job.sheet}
+              sheet={effectiveSheet}
               content={job.content}
               target={job.source}
             />

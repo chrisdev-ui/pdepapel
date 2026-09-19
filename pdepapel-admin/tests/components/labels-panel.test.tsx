@@ -74,7 +74,7 @@ describe("LabelsPanel", () => {
       const saved = JSON.parse(window.localStorage.getItem(labelDraftStorageKey("store-1")) ?? "{}");
       expect(saved.batches).toEqual([expect.objectContaining({ copies: 2, product: expect.objectContaining({ id: "p1", variant: "Lila · Kawaii" }) })]);
     });
-    // La vista previa es la hoja real: dos posiciones ocupadas de 65.
+    // La vista previa es la hoja real: dos posiciones ocupadas de 60.
     expect(document.querySelectorAll("[data-label-sheet-preview] [data-label-id]")).toHaveLength(2);
     expect(screen.getByText(/2 etiquetas · 1 hoja carta/)).toBeInTheDocument();
   });
@@ -82,16 +82,30 @@ describe("LabelsPanel", () => {
   it("restores a saved sheet after a tab switch and starts at the chosen position", async () => {
     window.localStorage.setItem(
       labelDraftStorageKey("store-1"),
-      JSON.stringify({ batches: [{ product: { id: "p9", name: "Resaltador pastel", sku: "RES-1", price: 4500, variant: null, imageUrl: null, productGroupId: null }, copies: 4 }], startAt: 63 }),
+      JSON.stringify({ batches: [{ product: { id: "p9", name: "Resaltador pastel", sku: "RES-1", price: 4500, variant: null, imageUrl: null, productGroupId: null }, copies: 4 }], startAt: 58 }),
     );
     render(<LabelsPanel />);
     expect(await screen.findByText("4 etiquetas")).toBeInTheDocument();
-    expect(screen.getByLabelText("Empezar en la etiqueta nº")).toHaveValue(63);
-    // 4 etiquetas desde la posición 63: 3 en la primera hoja y 1 en la segunda.
-    expect(screen.getByText(/4 etiquetas · 2 hojas carta · desde la posición 63/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Empezar en la etiqueta nº")).toHaveValue(58);
+    // 4 etiquetas desde la posición 58: 3 en la primera hoja (58, 59, 60) y 1 en la segunda.
+    expect(screen.getByText(/4 etiquetas · 2 hojas carta · desde la posición 58/)).toBeInTheDocument();
     const slots = document.querySelectorAll('[data-label-sheet-preview] .label-sheet[data-page="1"] .label-sheet__slot');
-    expect(slots[61].classList.contains("label-sheet__slot--empty")).toBe(true);
-    expect(slots[62].getAttribute("data-label-id")).toBe("p9");
+    expect(slots).toHaveLength(60);
+    expect(slots[56].classList.contains("label-sheet__slot--empty")).toBe(true);
+    expect(slots[57].getAttribute("data-label-id")).toBe("p9");
+  });
+
+  it("shows named horizontal and vertical offset fields with ± steppers and persists them", async () => {
+    render(<LabelsPanel />);
+    const vertical = await screen.findByLabelText("Vertical");
+    expect(screen.getByLabelText("Horizontal")).toHaveValue(0);
+    fireEvent.click(screen.getByRole("button", { name: "Vertical: sumar 0.5 mm" }));
+    fireEvent.click(screen.getByRole("button", { name: "Vertical: sumar 0.5 mm" }));
+    expect(vertical).toHaveValue(1);
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(labelDraftStorageKey("store-1")) ?? "{}");
+      expect(saved.sheet).toMatchObject({ offsetXMm: 0, offsetYMm: 1 });
+    });
   });
 
   it("adds every live variant of the group at once", async () => {

@@ -30,14 +30,16 @@ afterEach(() => {
 });
 
 describe("QrLabelPrintSheet", () => {
-  it("splits labels into Letter sheets of 65 and keeps empty slots in place", () => {
+  it("splits labels into Letter sheets of exactly 60 (5 × 12) and keeps empty slots in place", () => {
     const { container } = render(<QrLabelPrintSheet labels={labels} />);
     const sheets = container.querySelectorAll(".label-sheet");
     expect(sheets).toHaveLength(2);
-    expect(sheets[0].querySelectorAll(".label-sheet__slot")).toHaveLength(65);
-    expect(sheets[0].querySelectorAll("[data-label-id]")).toHaveLength(65);
-    expect(sheets[1].querySelectorAll("[data-label-id]")).toHaveLength(1);
-    expect(sheets[1].querySelectorAll(".label-sheet__slot--empty")).toHaveLength(64);
+    expect(sheets[0].querySelectorAll(".label-sheet__slot")).toHaveLength(60);
+    expect(sheets[0].querySelectorAll("[data-label-id]")).toHaveLength(60);
+    // La fila 13 no existe en la hoja física: la posición 61 cae en la hoja siguiente.
+    expect(sheets[0].querySelector('[data-slot="61"]')).toBeNull();
+    expect(sheets[1].querySelectorAll("[data-label-id]")).toHaveLength(6);
+    expect(sheets[1].querySelectorAll(".label-sheet__slot--empty")).toHaveLength(54);
   });
 
   it("starts at the requested position so a half-used sheet can be reused", () => {

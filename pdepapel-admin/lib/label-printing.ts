@@ -3,27 +3,30 @@
  * previa del panel, la página de impresión y la hoja de calibración.
  *
  * Todo se declara en milímetros sobre la hoja física. La única hoja hoy es la
- * AH Royal de 65 etiquetas en tamaño carta (215,9 × 279,4 mm); el fabricante
- * no publica la ficha con márgenes y paso, así que la geometría es
- * PROVISIONAL: sale de la única disposición posible de 5 × 13 etiquetas de
- * 38,1 × 21,2 mm en una hoja carta y se afina con la hoja de calibración
- * impresa sobre la hoja real.
+ * AH Royal de 60 etiquetas en tamaño carta (215,9 × 279,4 mm, 5 × 12). El
+ * fabricante no publica la ficha; la calibración impresa por Christian el
+ * 2026-09-19 confirmó columnas, tamaño, paso y margen izquierdo, y que la
+ * hoja tiene 12 filas (no 13). El margen superior sigue siendo una
+ * aproximación: la primera fila se recortaba con 1,9 mm; 12 filas de 21,2 mm
+ * dejan 25 mm libres, así que 12,5 mm (hoja centrada) es el punto de partida
+ * y el ajuste fino se hace con «Desplazar impresión».
  */
 
 export const LABEL_SHEET_TEMPLATES = {
   AH_ROYAL_65_CARTA: {
     id: "AH_ROYAL_65_CARTA",
-    name: "AH Royal · 65 por hoja carta",
-    reference: "AH Royal, hoja carta (US Letter) de 65 etiquetas",
-    description: "38,1 × 21,2 mm · 5 columnas × 13 filas · QR de 17 mm",
+    name: "AH Royal · 60 por hoja carta",
+    reference: "AH Royal, hoja carta (US Letter) de 60 etiquetas",
+    description: "38,1 × 21,2 mm · 5 columnas × 12 filas · QR de 17 mm",
     /** `letter` es lo que entiende `@page { size }`; los mm son la hoja real. */
     page: { widthMm: 215.9, heightMm: 279.4, cssSize: "letter" as const },
     columns: 5,
-    rows: 13,
+    rows: 12,
     labelWidthMm: 38.1,
     labelHeightMm: 21.2,
-    /** Distancia del borde de la hoja a la primera etiqueta. */
-    marginTopMm: 1.9,
+    /** Distancia del borde de la hoja a la primera etiqueta. El superior es
+     *  aproximado (hoja centrada) hasta que Christian reimprima la calibración. */
+    marginTopMm: 12.5,
     marginLeftMm: 7.7,
     /** Distancia entre el inicio de una etiqueta y el de la siguiente. */
     pitchXMm: 40.6,
@@ -32,7 +35,7 @@ export const LABEL_SHEET_TEMPLATES = {
     paddingMm: 1,
     qrSizeMm: 17,
     gapMm: 1,
-    /** Sin ficha publicada por el fabricante: confirmar con la calibración. */
+    /** Sin ficha del fabricante: el margen superior espera la segunda calibración. */
     provisional: true,
   },
 } as const;
