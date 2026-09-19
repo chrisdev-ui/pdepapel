@@ -2,7 +2,7 @@
 
 import { Loader2, Plus, Sparkles, Trash } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ProductImageAnalysis,
@@ -171,8 +171,15 @@ export function ConvertProductWizard({
       );
   }, [analysis?.variantCandidates, imageUrlsKey]);
 
+  // El formulario padre pasa `product` como objeto nuevo en cada render (por
+  // ejemplo al activar `loading`): el asistente se reinicia solo al abrirse o
+  // si cambia de verdad el producto, nunca por identidad del objeto.
+  const productRef = useRef(product);
+  productRef.current = product;
+  const productKey = JSON.stringify(product);
   useEffect(() => {
     if (!isOpen) return;
+    const product = productRef.current;
     setStep(1);
     setGroupName(product.name);
     setCopyOffers(true);
@@ -199,7 +206,8 @@ export function ConvertProductWizard({
       return;
     }
     setVariants([kept]);
-  }, [candidateRows, isOpen, product]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateRows, isOpen, productKey]);
 
   const allocated = variants.reduce((total, variant) => total + variant.stock, 0);
   const remaining = product.stock - allocated;

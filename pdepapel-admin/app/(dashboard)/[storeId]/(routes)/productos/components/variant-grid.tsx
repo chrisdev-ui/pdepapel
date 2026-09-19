@@ -650,7 +650,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                   <TableHead className="min-w-[14rem]">Variante</TableHead>
                   <TableHead className="w-28">Precio · costo</TableHead>
                   <TableHead className="w-16">Stock</TableHead>
-                  <TableHead className="w-40">GTIN</TableHead>
+                  <TableHead className="w-36">GTIN</TableHead>
                   <TableHead className="w-28 text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>

@@ -157,6 +157,21 @@ describe("ConvertProductWizard", () => {
     });
   });
 
+  /** En producción el asistente volvía al paso 1 al pulsar «Crear grupo»: el padre re-renderizaba con un objeto `product` nuevo. */
+  it("keeps its step when the parent re-renders with an equal product object", () => {
+    const onConfirm = vi.fn();
+    const { rerender } = render(
+      <ConvertProductWizard product={{ ...product }} analysis={null} colors={colors} designs={designs} sizes={sizes} activeOffers={[]} isOpen loading={false} onClose={vi.fn()} onConfirm={onConfirm} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Otra opción" }));
+    rerender(
+      <ConvertProductWizard product={{ ...product }} analysis={null} colors={colors} designs={designs} sizes={sizes} activeOffers={[]} isOpen loading onClose={vi.fn()} onConfirm={onConfirm} />,
+    );
+    expect(screen.getByText("Se crea")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Nombre para mostrar del grupo")).toBeNull();
+  });
+
   it("lets the group be created with the current product alone", () => {
     const { onConfirm } = renderWizard({ activeOffers: [] });
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
