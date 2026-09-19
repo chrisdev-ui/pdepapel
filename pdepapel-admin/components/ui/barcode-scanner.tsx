@@ -20,6 +20,9 @@ type BarcodeScannerProps = {
   onDetected: (code: string) => void;
   description?: string;
   label?: string;
+  /** Solo el icono en celular; el nombre sigue en `aria-label`. */
+  compact?: boolean;
+  className?: string;
 };
 
 function getCameraErrorMessage(cameraError: unknown) {
@@ -42,6 +45,8 @@ export function BarcodeScanner({
   onDetected,
   description = "Apunta la cámara al código de barras o QR del producto.",
   label = "Escanear",
+  compact = false,
+  className,
 }: BarcodeScannerProps) {
   const controlsRef = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -164,10 +169,12 @@ export function BarcodeScanner({
       <Button
         type="button"
         variant="outline"
+        aria-label={label}
+        className={className}
         onClick={() => void requestCamera()}
       >
-        <Camera className="mr-2 h-4 w-4" aria-hidden="true" />
-        {label}
+        <Camera className={compact ? "h-4 w-4 sm:mr-2" : "mr-2 h-4 w-4"} aria-hidden="true" />
+        <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
       </Button>
       <DialogContent className="max-w-md">
         <DialogHeader>

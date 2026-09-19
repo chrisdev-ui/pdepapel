@@ -17,7 +17,7 @@ export default function PrintLabelsPage({
   return (
     <PrintLabelsClient
       storeId={params.storeId}
-      mode={searchParams.modo === "calibracion" ? "calibracion" : "etiquetas"}
+      mode={searchParams.modo === "calibracion" ? "calibracion" : searchParams.modo === "vista" ? "vista" : "etiquetas"}
     />
   );
 }

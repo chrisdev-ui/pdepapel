@@ -23,19 +23,25 @@ export type QrPrintLabel = {
   variant?: string | null;
   sku?: string | null;
   price?: number | null;
+  /** Nombre del grupo, solo si la etiqueta entró como parte de un grupo. */
+  group?: string | null;
 };
 
 export interface LabelContentOptions {
   showVariant: boolean;
   showSku: boolean;
   showPrice: boolean;
+  showGroupName: boolean;
 }
 
 export const DEFAULT_CONTENT_OPTIONS: LabelContentOptions = {
   showVariant: true,
   showSku: true,
   showPrice: false,
+  showGroupName: false,
 };
+
+export type LabelPrintMode = "etiquetas" | "calibracion" | "vista";
 
 export interface LabelPrintJob {
   storeId: string;
@@ -75,6 +81,9 @@ export function LabelSheetStyles({
 
 function LabelSlot({ label, content, slot }: { label: QrPrintLabel; content: LabelContentOptions; slot: number }) {
   const sku = content.showSku && label.sku ? label.sku : null;
+  // El grupo va encima del nombre y le quita una línea: el bloque mide lo
+  // mismo con o sin él (ver LABEL_HEADING). Sin grupo no hay línea vacía.
+  const group = content.showGroupName && label.group ? label.group : null;
   return (
     <div className="label-sheet__slot" data-slot={slot} data-label-id={label.id}>
       <div className="label-sheet__qr">
@@ -82,7 +91,10 @@ function LabelSlot({ label, content, slot }: { label: QrPrintLabel; content: Lab
         <QRCodeSVG value={label.code} size={256} level="M" includeMargin style={{ width: "100%", height: "100%" }} />
       </div>
       <div className="label-sheet__text">
-        <p className="label-sheet__title">{label.title}</p>
+        <div className="label-sheet__heading">
+          {group && <p className="label-sheet__group">{group}</p>}
+          <p className={`label-sheet__title${group ? " label-sheet__title--single" : ""}`}>{label.title}</p>
+        </div>
         {content.showVariant && label.variant && (
           <p className="label-sheet__variant">{label.variant}</p>
         )}
@@ -107,6 +119,8 @@ interface LabelSheetProps {
   content?: LabelContentOptions;
   /** Marca de la hoja para que las pruebas y la impresión la encuentren. */
   target?: "product" | "capsule";
+  /** En pantalla: tiñe las posiciones ya usadas y la siguiente libre (nunca en papel). */
+  preview?: boolean;
 }
 
 /**
@@ -120,11 +134,20 @@ export function QrLabelPrintSheet({
   sheet = DEFAULT_SHEET_OPTIONS,
   content = DEFAULT_CONTENT_OPTIONS,
   target = "product",
+  preview = false,
 }: LabelSheetProps) {
   const template = getLabelSheetTemplate(templateId);
   const pagination = useMemo(() => paginateLabels(labels, template, startAt), [labels, template, startAt]);
+  const lastPage = pagination.pages.length - 1;
+  const lastUsed = pagination.pages[lastPage]?.reduce((last, label, index) => (label ? index : last), -1) ?? -1;
+  const emptyState = (pageIndex: number, index: number) => {
+    if (!preview) return "";
+    if (pageIndex === 0 && index < startAt - 1) return " label-sheet__slot--used";
+    if (pageIndex === lastPage && labels.length > 0 && index === lastUsed + 1) return " label-sheet__slot--next";
+    return "";
+  };
   return (
-    <div data-qr-label-sheet={target} data-label-template={template.id}>
+    <div data-qr-label-sheet={target} data-label-template={template.id} data-preview={preview ? "" : undefined}>
       <LabelSheetStyles template={template} options={sheet} />
       {pagination.pages.map((page, pageIndex) => (
         <div className="label-sheet" key={`${target}-${pageIndex}`} data-page={pageIndex + 1}>
@@ -132,7 +155,12 @@ export function QrLabelPrintSheet({
             label ? (
               <LabelSlot key={`${label.id}-${pageIndex}-${index}`} label={label} content={content} slot={index + 1} />
             ) : (
-              <div className="label-sheet__slot label-sheet__slot--empty" data-slot={index + 1} key={`empty-${pageIndex}-${index}`} aria-hidden="true" />
+              <div
+                className={`label-sheet__slot label-sheet__slot--empty${emptyState(pageIndex, index)}`}
+                data-slot={index + 1}
+                key={`empty-${pageIndex}-${index}`}
+                aria-hidden="true"
+              />
             ),
           )}
         </div>
@@ -147,8 +175,8 @@ export function printJobStorageKey(storeId: string) {
   return `${PRINT_JOB_STORAGE_KEY}:${storeId}`;
 }
 
-export function labelPrintUrl(storeId: string, mode: "etiquetas" | "calibracion" = "etiquetas") {
-  return `/${storeId}/etiquetas/imprimir${mode === "calibracion" ? "?modo=calibracion" : ""}`;
+export function labelPrintUrl(storeId: string, mode: LabelPrintMode = "etiquetas") {
+  return `/${storeId}/etiquetas/imprimir${mode === "etiquetas" ? "" : `?modo=${mode}`}`;
 }
 
 /**
@@ -157,13 +185,13 @@ export function labelPrintUrl(storeId: string, mode: "etiquetas" | "calibracion"
  * real del panel, con la misma letra, que también sirve para guardar PDF y
  * funciona en el iPad (Compartir → Imprimir).
  */
-export function openLabelPrintJob(job: LabelPrintJob) {
+export function openLabelPrintJob(job: LabelPrintJob, mode: Extract<LabelPrintMode, "etiquetas" | "vista"> = "etiquetas") {
   try {
     window.localStorage.setItem(printJobStorageKey(job.storeId), JSON.stringify(job));
   } catch {
     return false;
   }
-  const url = labelPrintUrl(job.storeId);
+  const url = labelPrintUrl(job.storeId, mode);
   const tab = window.open(url, "_blank", "noopener");
   if (!tab) window.location.assign(url);
   return true;

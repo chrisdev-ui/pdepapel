@@ -90,8 +90,12 @@ export async function GET(
         color: { select: { name: true } },
         size: { select: { name: true } },
         design: { select: { name: true } },
-        // Para «agregar todas las variantes del grupo» en Etiquetas.
+        // Para «agregar todas las variantes del grupo» en Etiquetas: id, nombre
+        // y cuántas variantes vivas tiene (la fila «todas las variantes»).
         productGroupId: true,
+        productGroup: {
+          select: { id: true, name: true, _count: { select: { products: { where: { isArchived: false } } } } },
+        },
         isKit: true,
         category: {
           select: { id: true, name: true },

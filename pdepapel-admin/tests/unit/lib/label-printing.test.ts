@@ -97,3 +97,33 @@ describe("paginateLabels", () => {
     expect(paginateLabels([], template, 10)).toMatchObject({ pageCount: 0, pages: [] });
   });
 });
+
+import { LABEL_HEADING, labelHeadingBudgetPt } from "@/lib/label-printing";
+
+/**
+ * El bloque de cabecera mide lo mismo con «Nombre del grupo» (grupo + nombre
+ * a una línea) que sin él (nombre a dos líneas): la opción no puede mover la
+ * variante ni el SKU, que es el solape que este módulo vino a arreglar.
+ */
+describe("group name line budget", () => {
+  it("keeps the heading height identical with and without the group line", () => {
+    const withGroup = labelHeadingBudgetPt({ withGroup: true });
+    const without = labelHeadingBudgetPt({ withGroup: false });
+    expect(withGroup.totalPt).toBe(without.totalPt);
+    expect(withGroup.lines.map((line) => line.role)).toEqual(["group", "title"]);
+    expect(without.lines.map((line) => line.role)).toEqual(["title", "title"]);
+    expect(withGroup.totalPt).toBe(LABEL_HEADING.linePt * LABEL_HEADING.lines);
+  });
+
+  it("emits the same line height for the group and the title and caps the heading at two lines", () => {
+    const css = labelSheetCss(getLabelSheetTemplate());
+    expect(css).toContain(`.label-sheet__heading{max-height:${LABEL_HEADING.linePt * 2}pt;overflow:hidden}`);
+    expect(css).toMatch(new RegExp(`\\.label-sheet__group\\{[^}]*font-size:${LABEL_HEADING.groupPt}pt;line-height:${LABEL_HEADING.linePt}pt`));
+    expect(css).toMatch(new RegExp(`\\.label-sheet__title\\{[^}]*font-size:${LABEL_HEADING.titlePt}pt;line-height:${LABEL_HEADING.linePt}pt`));
+    expect(css).toContain(".label-sheet__title--single{-webkit-line-clamp:1}");
+    expect(LABEL_HEADING.groupPt).toBeLessThan(LABEL_HEADING.titlePt);
+    // Los tintes de la vista previa nunca llegan al papel: solo bajo [data-preview].
+    expect(css).toContain("[data-preview] .label-sheet__slot--used");
+    expect(css).not.toMatch(/(^|\n)\.label-sheet__slot--used/);
+  });
+});

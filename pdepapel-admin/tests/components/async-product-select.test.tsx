@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-const { selectedProduct } = vi.hoisted(() => ({
+const { selectedProduct, listState } = vi.hoisted(() => ({
+  listState: { rows: [] as unknown[] },
   selectedProduct: {
     id: "product-1",
     name: "Set de marcadores kawaii edición especial con estuche coleccionable",
@@ -35,7 +36,7 @@ vi.mock("swr", () => ({
 
 vi.mock("swr/infinite", () => ({
   default: () => ({
-    data: [{ data: [selectedProduct], metadata: { hasMore: false } }],
+    data: [{ data: listState.rows.length > 0 ? listState.rows : [selectedProduct], metadata: { hasMore: false } }],
     size: 1,
     setSize: vi.fn(),
     isLoading: false,
@@ -139,5 +140,40 @@ describe("AsyncProductSelect", () => {
 
     expect(onChange).toHaveBeenCalledWith("product-1", selectedProduct);
     expect(trigger).toHaveTextContent("Seleccionar producto...");
+  });
+
+  /**
+   * Filas como en el lienzo de Etiquetas: «Nombre · Variante», línea mono
+   * «SKU · stock · precio», chip de variante, y al final de las variantes de
+   * un grupo la fila «todas las variantes» con su cuenta.
+   */
+  it("renders rich rows and a «todas las variantes» row after the group's last variant", async () => {
+    const group = { id: "g1", name: "Cartuchera Wisdom", _count: { products: 2 } };
+    listState.rows = [
+      { id: "v1", name: "Cartuchera Wisdom", sku: "CAR-ROS", stock: 0, price: 13000, color: { name: "Rosa pastel" }, size: { name: "S" }, productGroupId: "g1", productGroup: group, images: [] },
+      { id: "s1", name: "Agenda Hogwarts", sku: "OF-2", stock: 3, price: 19000, images: [] },
+      { id: "v2", name: "Cartuchera Wisdom", sku: "CAR-AZU", stock: 1, price: 13000, color: { name: "Azul pastel" }, size: { name: "S" }, productGroupId: "g1", productGroup: group, images: [] },
+    ];
+    cleanup();
+    const onSelectGroup = vi.fn();
+    const user = userEvent.setup();
+    render(<AsyncProductSelect value="" onChange={() => undefined} onSelectGroup={onSelectGroup} modal />);
+    await user.click(screen.getByRole("combobox"));
+
+    expect(await screen.findByText("Cartuchera Wisdom · Rosa pastel · S")).toBeInTheDocument();
+    expect(screen.getByText("CAR-ROS · 0 und · $ 13.000")).toHaveClass("font-mono");
+    expect(screen.getAllByText("Variante")).toHaveLength(2);
+    const groupRow = document.querySelector('[data-group-row="g1"]') as HTMLElement;
+    expect(groupRow).not.toBeNull();
+    expect(groupRow.textContent).toContain("Cartuchera Wisdom · todas las variantes");
+    expect(groupRow.textContent).toContain("(2)");
+    expect(groupRow.textContent).toContain("Grupo");
+    // Después de la última variante del grupo (v2), no después de la primera.
+    const rows = Array.from(document.querySelectorAll("[cmdk-item]")).map((el) => el.getAttribute("data-value"));
+    expect(rows).toEqual(["v1", "s1", "v2", "group:g1"]);
+
+    await user.click(groupRow);
+    expect(onSelectGroup).toHaveBeenCalledWith({ id: "g1", name: "Cartuchera Wisdom", count: 2 });
+    listState.rows = [];
   });
 });

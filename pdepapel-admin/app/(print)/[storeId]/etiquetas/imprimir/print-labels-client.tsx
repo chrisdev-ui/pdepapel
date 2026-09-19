@@ -9,6 +9,7 @@ import {
   QrLabelPrintSheet,
   readLabelPrintJob,
   type LabelPrintJob,
+  type LabelPrintMode,
 } from "@/components/labels/qr-label-print-sheet";
 import { PrintOffsetFields } from "@/components/labels/print-offset-fields";
 import { useSheetOptions } from "@/components/labels/use-sheet-options";
@@ -24,7 +25,8 @@ import {
 
 interface PrintLabelsClientProps {
   storeId: string;
-  mode: "etiquetas" | "calibracion";
+  /** `vista`: la misma hoja sin abrir el diálogo de impresión, para revisarla antes de gastar una hoja. */
+  mode: LabelPrintMode;
 }
 
 const mm = (value: number) => `${Math.round(value * 1000) / 1000}mm`;
@@ -149,7 +151,8 @@ export function PrintLabelsClient({ storeId, mode }: PrintLabelsClientProps) {
     [job, template],
   );
 
-  // Abre el diálogo de impresión sola una vez que las hojas están pintadas.
+  // Abre el diálogo de impresión sola una vez que las hojas están pintadas
+  // (no en «vista»: ahí se mira la hoja y se imprime a mano si convence).
   useEffect(() => {
     if (mode !== "etiquetas" || !job || job.labels.length === 0) return;
     const timer = window.setTimeout(() => window.print(), 600);
@@ -169,7 +172,7 @@ export function PrintLabelsClient({ storeId, mode }: PrintLabelsClientProps) {
         </Button>
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="font-semibold text-primary">
-            {mode === "calibracion" ? "Hoja de calibración" : "Etiquetas para imprimir"}
+            {mode === "calibracion" ? "Hoja de calibración" : mode === "vista" ? "Vista previa a tamaño real" : "Etiquetas para imprimir"}
           </span>
           <span className="text-xs text-muted-foreground">
             {mode === "calibracion"

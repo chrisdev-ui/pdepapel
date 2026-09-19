@@ -14,6 +14,8 @@ export interface LabelDraftProduct {
   variant: string | null;
   imageUrl: string | null;
   productGroupId: string | null;
+  /** Solo cuando se agregó como parte de un grupo: es lo que imprime «Nombre del grupo». */
+  groupName: string | null;
 }
 
 export interface LabelDraftBatch {
@@ -25,6 +27,7 @@ export interface LabelContentSettings {
   showVariant: boolean;
   showSku: boolean;
   showPrice: boolean;
+  showGroupName: boolean;
 }
 
 export interface LabelSheetDraft {
@@ -42,25 +45,14 @@ export const EMPTY_LABEL_DRAFT: LabelSheetDraft = {
   templateId: DEFAULT_LABEL_SHEET,
   startAt: 1,
   sheet: DEFAULT_SHEET_OPTIONS,
-  content: { showVariant: true, showSku: true, showPrice: false },
+  content: { showVariant: true, showSku: true, showPrice: false, showGroupName: false },
 };
 
 export function labelDraftStorageKey(storeId: string) {
   return `pdepapel:etiquetas:hoja:${storeId}`;
 }
 
-/** Línea «Rosa pastel · S» a partir de los atributos; vacía si no aportan nada. */
-export function describeVariant(product: {
-  color?: { name: string } | null;
-  size?: { name: string } | null;
-  design?: { name: string } | null;
-}) {
-  const parts = [product.color?.name, product.size?.name, product.design?.name]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value))
-    .filter((value) => !/^(único|unica|única|unico|n\/a|na|-)$/i.test(value));
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
+export { describeVariant } from "@/lib/product-variant";
 
 const clampCopies = (copies: number) =>
   Math.min(Math.max(Math.round(Number(copies) || 0), 1), MAX_COPIES_PER_PRODUCT);
@@ -112,6 +104,7 @@ export function parseLabelDraft(raw: string | null): LabelSheetDraft {
               variant: batch.product.variant ? String(batch.product.variant) : null,
               imageUrl: batch.product.imageUrl ? String(batch.product.imageUrl) : null,
               productGroupId: batch.product.productGroupId ? String(batch.product.productGroupId) : null,
+              groupName: batch.product.groupName ? String(batch.product.groupName) : null,
             },
             copies: clampCopies(batch.copies),
           }))

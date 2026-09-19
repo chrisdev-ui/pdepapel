@@ -87,12 +87,52 @@ describe("QrLabelPrintSheet", () => {
     const { container } = render(
       <QrLabelPrintSheet
         labels={labels.slice(0, 1)}
-        content={{ showVariant: false, showSku: false, showPrice: false }}
+        content={{ showVariant: false, showSku: false, showPrice: false, showGroupName: false }}
       />,
     );
     expect(container.querySelector(".label-sheet__variant")).toBeNull();
     expect(container.querySelector(".label-sheet__sku")).toBeNull();
     expect(container.querySelector(".label-sheet__price")).toBeNull();
+  });
+});
+
+/**
+ * «Nombre del grupo»: una línea pequeña encima del nombre que le quita una
+ * línea al nombre (2 → 1) para que el bloque mida igual y nada baje; sin
+ * grupo, la opción no pinta nada.
+ */
+describe("group name line", () => {
+  const content = { ...DEFAULT_CONTENT_OPTIONS, showGroupName: true };
+
+  it("prints the group above a one-line name when the label came from a group", () => {
+    const { container } = render(<QrLabelPrintSheet labels={[{ ...labels[0], group: "Cartuchera Wisdom" }]} content={content} />);
+    const heading = container.querySelector(".label-sheet__heading") as HTMLElement;
+    expect(heading.querySelector(".label-sheet__group")?.textContent).toBe("Cartuchera Wisdom");
+    const title = heading.querySelector(".label-sheet__title") as HTMLElement;
+    expect(title.classList.contains("label-sheet__title--single")).toBe(true);
+    expect(heading.children).toHaveLength(2);
+    expect(heading.firstElementChild?.className).toBe("label-sheet__group");
+  });
+
+  it("is a no-op for a standalone product: no empty line, name keeps two lines", () => {
+    const { container } = render(<QrLabelPrintSheet labels={[{ ...labels[0], group: null }]} content={content} />);
+    const heading = container.querySelector(".label-sheet__heading") as HTMLElement;
+    expect(heading.querySelector(".label-sheet__group")).toBeNull();
+    expect(heading.children).toHaveLength(1);
+    expect(heading.querySelector(".label-sheet__title")?.classList.contains("label-sheet__title--single")).toBe(false);
+  });
+
+  it("tints used and next-free positions only in preview mode", () => {
+    const { container } = render(<QrLabelPrintSheet labels={labels.slice(0, 2)} startAt={3} preview />);
+    const slots = container.querySelectorAll('[data-page="1"] .label-sheet__slot');
+    expect(slots[0].classList.contains("label-sheet__slot--used")).toBe(true);
+    expect(slots[1].classList.contains("label-sheet__slot--used")).toBe(true);
+    expect(slots[4].classList.contains("label-sheet__slot--next")).toBe(true);
+    expect(slots[5].className).toBe("label-sheet__slot label-sheet__slot--empty");
+    expect(container.querySelector("[data-preview]")).not.toBeNull();
+    const printed = render(<QrLabelPrintSheet labels={labels.slice(0, 2)} startAt={3} />).container;
+    expect(printed.querySelector(".label-sheet__slot--used")).toBeNull();
+    expect(printed.querySelector("[data-preview]")).toBeNull();
   });
 });
 
@@ -130,6 +170,15 @@ describe("print job handoff", () => {
       createdAt: "2026-09-19T00:00:00.000Z",
     });
     expect(assign).toHaveBeenCalledWith(labelPrintUrl("store-2"));
+  });
+
+  it("opens the real-size preview without the print mode in the URL", () => {
+    const open = vi.spyOn(window, "open").mockReturnValue({} as Window);
+    openLabelPrintJob(
+      { storeId: "store-3", source: "product", labels: labels.slice(0, 1), templateId: "AH_ROYAL_65_CARTA", startAt: 1, sheet: DEFAULT_SHEET_OPTIONS, content: DEFAULT_CONTENT_OPTIONS, createdAt: "2026-09-19T00:00:00.000Z" },
+      "vista",
+    );
+    expect(open).toHaveBeenCalledWith("/store-3/etiquetas/imprimir?modo=vista", "_blank", "noopener");
   });
 
   it("returns null for a missing or broken job", () => {

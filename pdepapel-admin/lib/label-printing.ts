@@ -155,6 +155,28 @@ export const DEFAULT_SHEET_OPTIONS: LabelSheetOptions = {
 };
 
 const mm = (value: number) => `${Math.round(value * 1000) / 1000}mm`;
+const pt = (value: number) => `${Math.round(value * 100) / 100}pt`;
+
+/**
+ * El bloque de cabecera de la etiqueta (nombre, y encima el nombre del grupo
+ * cuando se pide) mide siempre lo mismo: dos líneas de nombre, o una línea de
+ * grupo más una de nombre. Las dos líneas comparten la misma altura de línea
+ * aunque el grupo use letra más pequeña, así activar «Nombre del grupo» no
+ * empuja la variante ni el SKU y no reabre el solape que motivó este módulo.
+ */
+export const LABEL_HEADING = {
+  titlePt: 7,
+  groupPt: 5.5,
+  linePt: 8.05,
+  lines: 2,
+} as const;
+
+export function labelHeadingBudgetPt(options: { withGroup: boolean }) {
+  const lines = options.withGroup
+    ? [{ role: "group" as const, heightPt: LABEL_HEADING.linePt }, { role: "title" as const, heightPt: LABEL_HEADING.linePt }]
+    : [{ role: "title" as const, heightPt: LABEL_HEADING.linePt }, { role: "title" as const, heightPt: LABEL_HEADING.linePt }];
+  return { lines, totalPt: lines.reduce((sum, line) => sum + line.heightPt, 0) };
+}
 
 /**
  * CSS de la hoja: la misma hoja de estilos para la vista previa (escalada) y
@@ -197,7 +219,12 @@ ${guides}
 .label-sheet__qr{position:absolute;left:${mm(geometry.qr.xMm)};top:${mm(geometry.qr.yMm)};width:${mm(geometry.qr.widthMm)};height:${mm(geometry.qr.heightMm)};background:#fff}
 .label-sheet__qr svg{display:block;width:100%;height:100%}
 .label-sheet__text{position:absolute;left:${mm(geometry.text.xMm)};top:${mm(geometry.text.yMm)};width:${mm(geometry.text.widthMm)};height:${mm(geometry.text.heightMm)};display:flex;flex-direction:column;justify-content:center;gap:0.4mm;overflow:hidden;line-height:1.15}
-.label-sheet__title{margin:0;font-size:7pt;font-weight:700;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.label-sheet__heading{max-height:${pt(LABEL_HEADING.linePt * LABEL_HEADING.lines)};overflow:hidden}
+.label-sheet__group{margin:0;font-size:${pt(LABEL_HEADING.groupPt)};line-height:${pt(LABEL_HEADING.linePt)};font-weight:600;color:#475569;letter-spacing:0.02em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.label-sheet__title{margin:0;font-size:${pt(LABEL_HEADING.titlePt)};line-height:${pt(LABEL_HEADING.linePt)};font-weight:700;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.label-sheet__title--single{-webkit-line-clamp:1}
+[data-preview] .label-sheet__slot--used{background:#f1f5f9}
+[data-preview] .label-sheet__slot--next{background:#d6f5e0;outline:0.3mm solid #14532d;outline-offset:-0.3mm}
 .label-sheet__variant{margin:0;font-size:6pt;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .label-sheet__sku{margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:5.5pt;color:#475569;white-space:nowrap;overflow:visible;letter-spacing:-0.01em}
 .label-sheet__sku--long{font-size:4.8pt}

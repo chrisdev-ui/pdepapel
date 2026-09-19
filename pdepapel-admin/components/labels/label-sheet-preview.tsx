@@ -88,6 +88,7 @@ export function LabelSheetPreview({
             sheet={sheet}
             content={content}
             target={target}
+            preview
           />
         </div>
       </div>
