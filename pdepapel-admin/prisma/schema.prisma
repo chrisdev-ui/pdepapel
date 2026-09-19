@@ -92,6 +92,7 @@ model Store {
   jobRuns                        JobRun[]
   shippingWebhookEvents          ShippingWebhookEvent[]
   paymentWebhookEvents           PaymentWebhookEvent[]
+  scannerSessions                ScannerSession[]
 }
 
 model Offer {
@@ -1433,6 +1434,44 @@ model PaymentWebhookEvent {
   @@index([provider, transactionId])
   @@index([orderId])
   @@index([status, completedAt])
+}
+
+/// Vinculación de un celular como escáner remoto de una pantalla del panel
+/// (2026-09-19). Un código corto por sesión; vence a los 10 minutos sin
+/// actividad y cada lectura lo renueva. Solo un celular a la vez: volver a
+/// vincular cambia el token y el anterior deja de poder enviar.
+model ScannerSession {
+  id              String    @id @default(uuid())
+  storeId         String
+  code            String
+  createdByUserId String
+  pairedUserId    String?
+  pairingToken    String?
+  deviceLabel     String?
+  pairedAt        DateTime?
+  lastActivityAt  DateTime  @default(now())
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  store Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  scans ScannerScan[]
+
+  @@unique([storeId, code])
+  @@index([storeId, expiresAt])
+}
+
+/// Cada código leído por el celular vinculado; la pantalla los recoge por
+/// `createdAt` mayor que el último que vio.
+model ScannerScan {
+  id        String   @id @default(uuid())
+  sessionId String
+  code      String
+  createdAt DateTime @default(now())
+
+  session ScannerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
 
 model InventoryMovement {
