@@ -1,10 +1,13 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import { OPEN_INVENTORY_ISSUE_SELECT } from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
 import { headers } from "next/headers";
 
 export async function getOrder(orderId: string, storeId: string) {
+  await requireStoreOwner(storeId);
   headers();
   const order = await prismadb.order.findUnique({
     where: {

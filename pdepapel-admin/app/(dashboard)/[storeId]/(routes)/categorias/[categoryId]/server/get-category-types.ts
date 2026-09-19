@@ -1,5 +1,7 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 
@@ -8,6 +10,7 @@ import prismadb from "@/lib/prismadb";
  * tienda) y las categorías que puede elegir.
  */
 export async function getCategoryTypes(storeId: string, categoryId: string) {
+  await requireStoreOwner(storeId);
   const category = await prismadb.category.findFirst({
     where: { id: categoryId, storeId },
   });

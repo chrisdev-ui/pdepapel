@@ -1,9 +1,12 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 import { headers } from "next/headers";
 
 export async function getOrders(storeId: string) {
+  await requireStoreOwner(storeId);
   headers();
   const orders = await prismadb.order.findMany({
     where: {

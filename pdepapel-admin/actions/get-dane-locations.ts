@@ -1,4 +1,6 @@
 "use server";
+
+import { requireAdminSession } from "@/lib/store-access";
 import {
   getAllLocationsWithCache,
   formatLocationForDisplay,
@@ -16,6 +18,7 @@ import { headers } from "next/headers";
  * @returns Array de LocationOption para el combobox con TODAS las ubicaciones
  */
 export const getDaneLocations = async (): Promise<LocationOption[]> => {
+  await requireAdminSession();
   headers();
   try {
     // Obtener TODAS las ubicaciones con caché de 24h en memoria

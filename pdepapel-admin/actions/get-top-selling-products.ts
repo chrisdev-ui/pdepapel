@@ -1,11 +1,14 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import { endOfYear, startOfYear } from "date-fns";
 
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
 import prisma from "@/lib/prismadb";
 
 export const getTopSellingProducts = async (storeId: string, year: number) => {
+  await requireStoreOwner(storeId);
   const yearDate = new Date(year, 0, 1);
   const startDate = startOfYear(yearDate);
   const endDate = endOfYear(yearDate);

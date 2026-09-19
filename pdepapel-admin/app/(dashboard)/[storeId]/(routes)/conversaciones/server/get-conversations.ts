@@ -1,3 +1,5 @@
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 import { parseCartMetadata, previewMessage, type ConversationRow } from "@/lib/conversations";
 
@@ -6,6 +8,7 @@ import { parseCartMetadata, previewMessage, type ConversationRow } from "@/lib/c
  * Función de servidor normal (sin `"use server"`): solo la llama la página.
  */
 export async function getConversations(storeId: string): Promise<ConversationRow[]> {
+  await requireStoreOwner(storeId);
   const conversations = await prismadb.conversation.findMany({
     where: { storeId },
     select: {

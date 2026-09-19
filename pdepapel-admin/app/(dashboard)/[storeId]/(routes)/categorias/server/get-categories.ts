@@ -1,8 +1,11 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 
 export async function getCategories(storeId: string) {
+  await requireStoreOwner(storeId);
   return await prismadb.category.findMany({
     where: { storeId },
     select: {

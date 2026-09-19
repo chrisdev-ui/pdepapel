@@ -2,6 +2,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 import { getProduct } from "@/app/(dashboard)/[storeId]/(routes)/productos/[productId]/server/get-product";
 
+// La carga de la ficha exige sesión y propiedad de la tienda.
+const session = vi.hoisted(() => ({ userId: null as string | null }));
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: async () => ({ userId: session.userId, sessionClaims: null }),
+  clerkClient: async () => ({ users: { getUser: async () => null } }),
+}));
+
 import {
   createInventoryFixture,
   deleteInventoryFixture,
@@ -38,12 +45,17 @@ describe("product page loader is scoped to the store", () => {
   it("returns the product for its own store and null for a foreign or unknown id", async () => {
     fixture = await createInventoryFixture();
     other = await createInventoryFixture();
+    session.userId = fixture.store.userId;
 
     const own = await getProduct(fixture.component.id, fixture.store.id);
     expect(own.product?.id).toBe(fixture.component.id);
 
-    const foreign = await getProduct(fixture.component.id, other.store.id);
-    expect(foreign.product).toBeNull();
+    // La tienda ajena se niega por autorización, sin consultar el producto.
+    await expect(getProduct(fixture.component.id, other.store.id)).rejects.toMatchObject({ statusCode: 403 });
+
+    session.userId = null;
+    await expect(getProduct(fixture.component.id, fixture.store.id)).rejects.toMatchObject({ statusCode: 401 });
+    session.userId = fixture.store.userId;
 
     const unknown = await getProduct("no-existe", fixture.store.id);
     expect(unknown.product).toBeNull();

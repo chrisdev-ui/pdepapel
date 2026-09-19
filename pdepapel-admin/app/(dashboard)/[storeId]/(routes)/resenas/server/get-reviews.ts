@@ -1,9 +1,12 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 import { clerkClient, type User } from "@clerk/nextjs/server";
 
 export async function getReviews(storeId: string) {
+  await requireStoreOwner(storeId);
   const reviews = await prismadb.review.findMany({
     where: {
       storeId,

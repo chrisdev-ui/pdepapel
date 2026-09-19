@@ -1,5 +1,7 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import { ProductPresaleStatus } from "@prisma/client";
 import {
   ACTIVE_ATTRIBUTE_WHERE,
@@ -11,6 +13,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
 export async function getProduct(id: string, storeId: string) {
+  await requireStoreOwner(storeId);
   // Acotado a la tienda: un id de otra tienda (o inexistente) devuelve null y
   // la página responde 404 en vez de pintar el formulario de creación.
   const product =
@@ -224,6 +227,7 @@ export async function getProduct(id: string, storeId: string) {
  * la otra), sin SKU, sin GTIN ni MPN, sin stock y sin grupo.
  */
 export async function getProductSeed(storeId: string, sourceId: string) {
+  await requireStoreOwner(storeId);
   const source = await prismadb.product.findFirst({
     where: { id: sourceId, storeId },
     include: {

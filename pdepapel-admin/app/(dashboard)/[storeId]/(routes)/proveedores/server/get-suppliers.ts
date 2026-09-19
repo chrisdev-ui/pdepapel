@@ -1,3 +1,5 @@
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 import {
   OPEN_RESTOCK_STATUSES,
@@ -11,6 +13,7 @@ import { RestockOrderStatus } from "@prisma/client";
  * Función de servidor normal (sin `"use server"`): solo la llama la página.
  */
 export async function getSuppliers(storeId: string): Promise<SupplierRow[]> {
+  await requireStoreOwner(storeId);
   const [suppliers, openByStatus] = await Promise.all([
     prismadb.supplier.findMany({
       where: { storeId },

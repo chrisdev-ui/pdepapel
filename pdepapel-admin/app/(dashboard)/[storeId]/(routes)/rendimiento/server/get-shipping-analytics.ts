@@ -1,10 +1,13 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 import { ShippingStatus, ShippingProvider } from "@prisma/client";
 import { headers } from "next/headers";
 
 export async function getShippingAnalytics(storeId: string) {
+  await requireStoreOwner(storeId);
   headers();
 
   // Fetch all shipments with minimal data for calculations

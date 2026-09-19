@@ -1,3 +1,5 @@
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 import {
   parseStoredButtons,
@@ -10,6 +12,7 @@ import {
  * Función de servidor normal (sin `"use server"`): solo la llama la página.
  */
 export async function getBotReplies(storeId: string): Promise<BotReplyRow[]> {
+  await requireStoreOwner(storeId);
   const replies = await prismadb.whatsAppBotReply.findMany({
     where: { storeId },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -38,6 +41,7 @@ export async function getBotReply(
   storeId: string,
   botReplyId: string,
 ): Promise<BotReplyRow | null> {
+  await requireStoreOwner(storeId);
   const reply = await prismadb.whatsAppBotReply.findFirst({
     where: { id: botReplyId, storeId },
     select: {

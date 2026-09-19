@@ -1,10 +1,13 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import { EMPLOYEE_NAMES, EMPLOYEE_PHONES } from "@/constants";
 import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 
 export async function getCustomerAnalytics(storeId: string) {
+  await requireStoreOwner(storeId);
   try {
     const now = getColombiaDate();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

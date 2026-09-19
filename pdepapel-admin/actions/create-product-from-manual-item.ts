@@ -1,8 +1,8 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 import { createInventoryMovementBatch } from "@/lib/inventory";
-import { auth } from "@clerk/nextjs/server";
 import { InventoryMovementType } from "@prisma/client";
 
 interface CreateProductParams {
@@ -20,11 +20,9 @@ interface CreateProductParams {
 }
 
 export async function createProductFromManualItem(data: CreateProductParams) {
-  const { userId } = await auth();
-
-  if (!userId) {
-    throw new Error("Unauthenticated");
-  }
+  // Crea producto y movimiento de inventario: solo la dueña de la tienda.
+  // Antes bastaba con una sesión de Clerk, y la tienda sale del cuerpo.
+  const userId = await requireStoreOwner(data.storeId);
 
   // Fetch or Create Defaults for Required Relations (Size, Color, Design)
   // This ensures the product is valid in the schema

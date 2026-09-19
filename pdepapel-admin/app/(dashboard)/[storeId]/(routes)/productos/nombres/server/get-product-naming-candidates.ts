@@ -1,8 +1,11 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 
 export async function getProductNamingCandidates(storeId: string) {
+  await requireStoreOwner(storeId);
   const [products, groups, recentChanges] = await Promise.all([
     prismadb.product.findMany({
       where: { storeId, isArchived: false },

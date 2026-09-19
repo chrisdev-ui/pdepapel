@@ -1,3 +1,5 @@
+import { requireStoreOwner } from "@/lib/store-access";
+
 import prismadb from "@/lib/prismadb";
 import {
   OPEN_RESTOCK_STATUSES,
@@ -18,6 +20,7 @@ export async function getSupplier(
   storeId: string,
   supplierId: string,
 ): Promise<SupplierDetail | null> {
+  await requireStoreOwner(storeId);
   const supplier = await prismadb.supplier.findFirst({
     where: { id: supplierId, storeId },
     include: {

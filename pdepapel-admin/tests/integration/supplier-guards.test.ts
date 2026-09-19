@@ -325,7 +325,9 @@ describe("guardas de proveedores", () => {
       data: { name: `Otra tienda ${randomUUID()}`, userId: `other-${randomUUID()}` },
     });
     otherStoreId = otherStore.id;
-    expect(await getSupplier(otherStore.id, supplier.id)).toBeNull();
+    // La carga exige ser dueña de la tienda pedida: con la tienda ajena ya no
+    // devuelve `null` tras consultar, se niega antes de leer nada.
+    await expect(getSupplier(otherStore.id, supplier.id)).rejects.toMatchObject({ statusCode: 403 });
 
     const foreignGet = await GET(json("GET"), {
       params: { storeId: otherStore.id, supplierId: supplier.id },
@@ -341,7 +343,7 @@ describe("guardas de proveedores", () => {
       products: 1,
       usage: { products: 1, restockOrders: 3, receivingRestockOrders: 1, lastPurchaseAt: receiving.createdAt },
     });
-    expect(await getSuppliers(otherStore.id)).toEqual([]);
+    await expect(getSuppliers(otherStore.id)).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it("rejects anonymous and non-owner callers", async () => {

@@ -1,9 +1,12 @@
 "use server";
 
+import { requireStoreOwner } from "@/lib/store-access";
+
 import { HOME_CONTENT_ADMIN_SELECT } from "@/lib/home-content";
 import prismadb from "@/lib/prismadb";
 
 export async function getHomeContents(storeId: string) {
+  await requireStoreOwner(storeId);
   return prismadb.homeContent.findMany({
     where: { storeId },
     orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }],
@@ -12,6 +15,7 @@ export async function getHomeContents(storeId: string) {
 }
 
 export async function getHomeContent(storeId: string, homeContentId: string) {
+  await requireStoreOwner(storeId);
   return prismadb.homeContent.findFirst({
     where: { id: homeContentId, storeId },
     select: HOME_CONTENT_ADMIN_SELECT,

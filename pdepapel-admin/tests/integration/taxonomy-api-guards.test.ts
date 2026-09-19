@@ -217,6 +217,7 @@ describe("taxonomy API guards with MySQL", () => {
 
   it("scopes the detail loaders by store and returns null for another store's row", async () => {
     fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
     const other = await createOtherStore();
     const [size, color, design] = await Promise.all([
       testPrisma.size.findFirstOrThrow({ where: { storeId: fixture.store.id } }),
@@ -229,12 +230,15 @@ describe("taxonomy API guards with MySQL", () => {
     expect((await getDesign(fixture.store.id, design.id))?.id).toBe(design.id);
     expect((await getCategoryTypes(fixture.store.id, fixture.category.id)).category?.id).toBe(fixture.category.id);
 
-    expect(await getSize(other.id, size.id)).toBeNull();
-    expect(await getColor(other.id, color.id)).toBeNull();
-    expect(await getDesign(other.id, design.id)).toBeNull();
-    const foreign = await getCategoryTypes(other.id, fixture.category.id);
-    expect(foreign.category).toBeNull();
-    expect(foreign.types).toEqual([]);
+    // Con la tienda ajena las cargas se niegan por autorización, antes de leer.
+    await expect(getSize(other.id, size.id)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(getColor(other.id, color.id)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(getDesign(other.id, design.id)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(getCategoryTypes(other.id, fixture.category.id)).rejects.toMatchObject({ statusCode: 403 });
+
+    // Dentro de la tienda propia, un id que no existe sigue devolviendo null.
+    expect(await getSize(fixture.store.id, "no-existe")).toBeNull();
+    expect(await getColor(fixture.store.id, "no-existe")).toBeNull();
   });
 
   it("answers 404 for a color of another store and refuses to edit it", async () => {
