@@ -2,3 +2,4 @@
 # fecha | operador | destino | guion@hash | estado (ok · error · sin-arrancar) | exit | filas | motivo aprobado
 2026-09-19T03:19:29.996Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/verify-schema.ts@60ecb40ec3814f14 | estado=sin-arrancar | exit=1 | rows=? | "prueba del envoltorio"
 2026-09-19T03:46:49.173Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/verify-schema.ts@60ecb40ec3814f14 | estado=ok | exit=0 | rows=? | "prueba del envoltorio con tsx: verify-schema.ts, solo lectura"
+2026-09-19T05:45:12.893Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "crear tablas ScannerSession y ScannerScan (escáner remoto)"
