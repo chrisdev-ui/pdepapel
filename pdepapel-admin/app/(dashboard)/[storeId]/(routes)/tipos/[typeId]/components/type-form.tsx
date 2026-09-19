@@ -24,6 +24,7 @@ import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
 import { ICON_SVG_MAX_LENGTH } from "@/lib/svg-icon";
 import { LUCIDE_ICON_NAME_PATTERN, stripLeadingSymbol } from "@/lib/taxonomy-icons";
+import { AttributeNameHints, type NameHintSibling } from "../../../atributos/components/attribute-form-hints";
 
 import type { TypeDetail } from "../server/get-type";
 
@@ -50,6 +51,8 @@ type TypeFormValues = z.infer<typeof formSchema>;
 interface TypeFormProps {
   initialData: TypeDetail | null;
   aiIconConfigured: boolean;
+  /** Categorías activas de la tienda, para avisar de nombres repetidos o parecidos. */
+  siblings?: NameHintSibling[];
 }
 
 const plural = (count: number, singular: string, pluralForm: string) => `${count} ${count === 1 ? singular : pluralForm}`;
@@ -82,7 +85,7 @@ export function describeTypeDeletion(type: Pick<TypeDetail, "categoriesCount" | 
   };
 }
 
-export const TypeForm: React.FC<TypeFormProps> = ({ initialData, aiIconConfigured }) => {
+export const TypeForm: React.FC<TypeFormProps> = ({ initialData, aiIconConfigured, siblings = [] }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -190,6 +193,7 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData, aiIconConfigure
                     </FormControl>
                     <FormDescription>Sin emojis ni símbolos al inicio: si los escribes, se quitan al guardar y el icono se elige abajo.</FormDescription>
                     <FormMessage />
+                    <AttributeNameHints name={stripLeadingSymbol(name)} siblings={siblings} currentId={initialData?.id} entity="type" hrefFor={(id) => `/${storeId}/tipos/${id}`} />
                   </FormItem>
                 )}
               />

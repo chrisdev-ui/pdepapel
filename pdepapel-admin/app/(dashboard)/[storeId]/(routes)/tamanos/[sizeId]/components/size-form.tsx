@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Size } from "@prisma/client";
 import axios from "axios";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -21,6 +22,9 @@ import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
+import type { AttributeSibling } from "@/lib/attribute-usage";
+import { formatRelativeDate } from "../../../atributos/components/attribute-cells";
+import { AttributeMergeCard } from "../../../atributos/components/merge-card";
 
 const formSchema = z.object({
   dimension: z.string().min(1, "Elige la dimensión"),
@@ -34,16 +38,19 @@ type SizeFormValues = z.infer<typeof formSchema>;
 export interface SizeUsage {
   activeProducts: number;
   archivedProducts: number;
+  groups: number;
 }
 
 interface SizeFormProps {
   initialData: Size | null;
   usage: SizeUsage;
+  /** Tamaños activos de la tienda: aviso de combinación ya creada y destino de «Unir». */
+  siblings?: AttributeSibling[];
 }
 
 const plural = (count: number, singular: string, pluralForm: string) => `${count} ${count === 1 ? singular : pluralForm}`;
 
-export const SizeForm: React.FC<SizeFormProps> = ({ initialData, usage }) => {
+export const SizeForm: React.FC<SizeFormProps> = ({ initialData, usage, siblings = [] }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -76,6 +83,8 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData, usage }) => {
   const name = form.watch("name");
   const value = form.watch("value");
   const productsTotal = usage.activeProducts + usage.archivedProducts;
+  // La combinación ya existe en otro tamaño: se avisa antes de guardar (la API respondería 409).
+  const existing = value ? (siblings.find((row) => row.value === value && row.id !== initialData?.id) ?? null) : null;
 
   // Nombre y código salen de la combinación; nunca se escriben a mano.
   useEffect(() => {
@@ -220,13 +229,22 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData, usage }) => {
                 </div>
                 <div className="text-muted-foreground sm:col-span-2">El código nunca se muestra al cliente ni en Google Merchant.</div>
               </dl>
+              {existing && (
+                <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert" data-testid="size-exists">
+                  Ya existe el tamaño «{existing.name}» con el código {existing.value} ({existing.usage} {existing.usage === 1 ? "producto" : "productos"}).{" "}
+                  <Link href={`/${storeId}/tamanos/${existing.id}`} className="font-semibold underline underline-offset-2">
+                    Ábrelo
+                  </Link>{" "}
+                  o elige otra combinación.
+                </p>
+              )}
               {/* Los campos generados viajan ocultos; los valores visibles están en la vista previa. */}
               <FormField control={form.control} name="name" render={({ field }) => (<FormItem className="hidden"><FormControl><input type="hidden" {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="value" render={({ field }) => (<FormItem className="hidden"><FormControl><input type="hidden" {...field} /></FormControl><FormMessage /></FormItem>)} />
             </SectionCard>
 
             <FormStickyFooter note={initialData ? "Cambiar la combinación cambia el código; los productos que lo usan siguen apuntando a este tamaño." : "El tamaño queda disponible en los formularios de producto al crearlo."}>
-              <Button type="submit" form="size-form" isLoading={loading} loadingText={initialData ? "Guardando…" : "Creando…"}>
+              <Button type="submit" form="size-form" disabled={Boolean(existing)} isLoading={loading} loadingText={initialData ? "Guardando…" : "Creando…"}>
                 {initialData ? "Guardar cambios" : "Crear tamaño"}
               </Button>
             </FormStickyFooter>
@@ -240,9 +258,25 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData, usage }) => {
                 items={[
                   { label: "Productos activos", value: usage.activeProducts },
                   { label: "Productos archivados", value: usage.archivedProducts },
+                  { label: "Grupos con variantes", value: usage.groups },
+                  { label: "Último cambio", value: formatRelativeDate(initialData.updatedAt) },
                 ]}
               />
+              {productsTotal > 0 && (
+                <Button asChild variant="outline" size="sm" className="w-fit">
+                  <Link href={`/${storeId}/productos?tamano=${initialData.id}`}>Ver sus productos</Link>
+                </Button>
+              )}
             </SectionCard>
+            <AttributeMergeCard
+              storeId={storeId}
+              kind="sizes"
+              entity={initialData}
+              candidates={siblings}
+              hubHref={hubHref}
+              description="Pasa sus productos a otro tamaño y deja este archivado. El peso entra en la cotización de envío: los productos movidos se cotizarán como el destino."
+              disabled={loading}
+            />
             <AttributeCareCard
               kind="sizes"
               storeId={storeId}

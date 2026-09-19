@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { activeOrCurrentWhere } from "@/lib/attribute-archive";
+import { getAttributeSiblings, getAttributeUsage } from "@/lib/attribute-usage";
 import { isCategoryCoverConfigured } from "@/lib/category-covers";
 import prismadb from "@/lib/prismadb";
 import { CategoryForm, type CategoryFormType } from "./components/category-form";
@@ -20,19 +21,17 @@ export default async function CategoryPage({
       });
   if (!isNew && !category) notFound();
 
-  const [types, activeProducts, archivedProducts, offersCount] = await Promise.all([
+  const [types, usage, offersCount, siblings] = await Promise.all([
     prismadb.type.findMany({
       where: { storeId: params.storeId, ...activeOrCurrentWhere(category?.typeId) },
       orderBy: { name: "asc" },
       select: { id: true, name: true, slug: true, icon: true, iconSvg: true, isArchived: true },
     }),
     category
-      ? prismadb.product.count({ where: { storeId: params.storeId, categoryId: category.id, isArchived: false } })
-      : Promise.resolve(0),
-    category
-      ? prismadb.product.count({ where: { storeId: params.storeId, categoryId: category.id, isArchived: true } })
-      : Promise.resolve(0),
+      ? getAttributeUsage(prismadb, { storeId: params.storeId, kind: "categories", id: category.id })
+      : Promise.resolve({ activeProducts: 0, archivedProducts: 0, groups: 0 }),
     category ? prismadb.offerCategory.count({ where: { categoryId: category.id } }) : Promise.resolve(0),
+    getAttributeSiblings(prismadb, "categories", params.storeId),
   ]);
 
   return (
@@ -40,7 +39,8 @@ export default async function CategoryPage({
       <CategoryForm
         initialData={category}
         types={types satisfies CategoryFormType[]}
-        usage={{ activeProducts, archivedProducts, offersCount }}
+        usage={{ ...usage, offersCount }}
+        siblings={siblings}
         coverConfigured={isCategoryCoverConfigured()}
       />
     </div>

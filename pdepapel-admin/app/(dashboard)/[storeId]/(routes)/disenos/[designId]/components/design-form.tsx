@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Design } from "@prisma/client";
 import axios from "axios";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -20,6 +21,11 @@ import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
+import type { AttributeSibling } from "@/lib/attribute-usage";
+import { AttributeNameHints } from "../../../atributos/components/attribute-form-hints";
+import { formatRelativeDate } from "../../../atributos/components/attribute-cells";
+import { AttributeMergeCard } from "../../../atributos/components/merge-card";
+import { MergeAttributesDialog } from "../../../atributos/components/merge-dialog";
 
 const formSchema = z.object({
   name: z.string().trim().min(1, "Escribe el nombre del diseño").max(60, "Máximo 60 caracteres"),
@@ -30,16 +36,19 @@ type DesignFormValues = z.infer<typeof formSchema>;
 export interface DesignUsage {
   activeProducts: number;
   archivedProducts: number;
+  groups: number;
 }
 
 interface DesignFormProps {
   initialData: Design | null;
   usage: DesignUsage;
+  /** Diseños activos de la tienda: pistas de parecido y destino de «Unir». */
+  siblings?: AttributeSibling[];
 }
 
 const plural = (count: number, singular: string, pluralForm: string) => `${count} ${count === 1 ? singular : pluralForm}`;
 
-export const DesignForm: React.FC<DesignFormProps> = ({ initialData, usage }) => {
+export const DesignForm: React.FC<DesignFormProps> = ({ initialData, usage, siblings = [] }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -59,7 +68,9 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData, usage }) =>
   useFormValidationToast({ form });
   const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
+  const name = form.watch("name");
   const productsTotal = usage.activeProducts + usage.archivedProducts;
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
 
   const goToHub = () => {
     router.push(hubHref);
@@ -111,6 +122,21 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData, usage }) =>
   return (
     <>
       {leaveDialog}
+      {mergeTarget && initialData && (
+        <MergeAttributesDialog
+          storeId={storeId}
+          kind="designs"
+          selectedIds={[initialData.id]}
+          candidates={siblings}
+          initialTargetId={mergeTarget}
+          open
+          onOpenChange={(next) => !next && setMergeTarget(null)}
+          onDone={() => {
+            setMergeTarget(null);
+            goToHub();
+          }}
+        />
+      )}
       <FormPageHeader
         title={initialData ? initialData.name : "Nuevo diseño"}
         badge={initialData ? <TintBadge label={initialData.isArchived ? "Archivado" : "Activo"} tone={initialData.isArchived ? "slate" : "mint"} /> : null}
@@ -136,6 +162,14 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData, usage }) =>
                     </FormControl>
                     <FormDescription>Nunca se agrega solo al título del producto.</FormDescription>
                     <FormMessage />
+                    <AttributeNameHints
+                      name={name}
+                      siblings={siblings}
+                      currentId={initialData?.id}
+                      entity="design"
+                      hrefFor={(id) => `/${storeId}/disenos/${id}`}
+                      onMerge={initialData && !initialData.isArchived ? (targetId) => setMergeTarget(targetId) : undefined}
+                    />
                   </FormItem>
                 )}
               />
@@ -156,9 +190,25 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData, usage }) =>
                 items={[
                   { label: "Productos activos", value: usage.activeProducts },
                   { label: "Productos archivados", value: usage.archivedProducts },
+                  { label: "Grupos con variantes", value: usage.groups },
+                  { label: "Último cambio", value: formatRelativeDate(initialData.updatedAt) },
                 ]}
               />
+              {productsTotal > 0 && (
+                <Button asChild variant="outline" size="sm" className="w-fit">
+                  <Link href={`/${storeId}/productos?diseno=${initialData.id}`}>Ver sus productos</Link>
+                </Button>
+              )}
             </SectionCard>
+            <AttributeMergeCard
+              storeId={storeId}
+              kind="designs"
+              entity={initialData}
+              candidates={siblings}
+              hubHref={hubHref}
+              description="Pasa sus productos a otro diseño y deja este archivado. Comprueba antes que ningún grupo quede con dos variantes iguales."
+              disabled={loading}
+            />
             <AttributeCareCard
               kind="designs"
               storeId={storeId}

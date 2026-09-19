@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Color } from "@prisma/client";
 import axios from "axios";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -20,9 +21,14 @@ import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
+import type { AttributeSibling } from "@/lib/attribute-usage";
+import { HEX_COLOR_PATTERN, normalizeHexColor } from "@/lib/taxonomy";
+import { AttributeNameHints } from "../../../atributos/components/attribute-form-hints";
+import { AttributeMergeCard } from "../../../atributos/components/merge-card";
+import { MergeAttributesDialog } from "../../../atributos/components/merge-dialog";
+import { formatRelativeDate } from "../../../atributos/components/attribute-cells";
 
-/** `#RGB`, `#RRGGBB` o `#RRGGBBAA`, como lo guardan los colores existentes. */
-export const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+export { HEX_COLOR_PATTERN };
 
 const formSchema = z.object({
   name: z.string().trim().min(1, "Escribe el nombre del color").max(60, "Máximo 60 caracteres"),
@@ -37,11 +43,14 @@ type ColorFormValues = z.infer<typeof formSchema>;
 export interface ColorUsage {
   activeProducts: number;
   archivedProducts: number;
+  groups: number;
 }
 
 interface ColorFormProps {
   initialData: Color | null;
   usage: ColorUsage;
+  /** Colores activos de la tienda: pistas de parecido, mismo tono y destino de «Unir». */
+  siblings?: AttributeSibling[];
 }
 
 const plural = (count: number, singular: string, pluralForm: string) => `${count} ${count === 1 ? singular : pluralForm}`;
@@ -54,7 +63,7 @@ function toPickerHex(value: string): string {
   return "#ffffff";
 }
 
-export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage }) => {
+export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblings = [] }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -77,9 +86,13 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage }) => {
   useFormValidationToast({ form });
   const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
+  const name = form.watch("name");
   const value = form.watch("value");
   const validHex = HEX_COLOR_PATTERN.test(value.trim());
   const productsTotal = usage.activeProducts + usage.archivedProducts;
+  // Mismo tono en otro color activo: aviso, no bloqueo («Pastel» y «Multicolor» comparten #FFFFFF a propósito).
+  const sameTone = validHex ? siblings.filter((row) => row.id !== initialData?.id && normalizeHexColor(row.value) === normalizeHexColor(value)) : [];
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
 
   const goToHub = () => {
     router.push(hubHref);
@@ -87,7 +100,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage }) => {
   };
 
   const onSubmit = async (data: ColorFormValues) => {
-    const payload = { name: data.name, value: data.value.toUpperCase() };
+    const payload = { name: data.name, value: normalizeHexColor(data.value) ?? data.value.trim().toUpperCase() };
     try {
       setLoading(true);
       if (initialData) {
@@ -132,6 +145,21 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage }) => {
   return (
     <>
       {leaveDialog}
+      {mergeTarget && initialData && (
+        <MergeAttributesDialog
+          storeId={storeId}
+          kind="colors"
+          selectedIds={[initialData.id]}
+          candidates={siblings}
+          initialTargetId={mergeTarget}
+          open
+          onOpenChange={(next) => !next && setMergeTarget(null)}
+          onDone={() => {
+            setMergeTarget(null);
+            goToHub();
+          }}
+        />
+      )}
       <FormPageHeader
         title={initialData ? initialData.name : "Nuevo color"}
         badge={initialData ? <TintBadge label={initialData.isArchived ? "Archivado" : "Activo"} tone={initialData.isArchived ? "slate" : "mint"} /> : null}
@@ -158,6 +186,14 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage }) => {
                       </FormControl>
                       <FormDescription>Nunca se agrega solo al título del producto.</FormDescription>
                       <FormMessage />
+                      <AttributeNameHints
+                        name={name}
+                        siblings={siblings}
+                        currentId={initialData?.id}
+                        entity="color"
+                        hrefFor={(id) => `/${storeId}/colores/${id}`}
+                        onMerge={initialData && !initialData.isArchived ? (targetId) => setMergeTarget(targetId) : undefined}
+                      />
                     </FormItem>
                   )}
                 />
@@ -188,15 +224,20 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage }) => {
                           </label>
                         </div>
                       </FormControl>
-                      <FormDescription>Con numeral, 3 o 6 dígitos. Puedes elegirlo con el círculo.</FormDescription>
+                      <FormDescription>Con numeral, 3 o 6 dígitos. Se guarda sin espacios y en mayúsculas. Puedes elegirlo con el círculo.</FormDescription>
                       <FormMessage />
+                      {sameTone.length > 0 && (
+                        <p className="rounded-lg border border-tint-cream bg-tint-cream/40 px-3 py-2 text-xs" data-testid="same-tone">
+                          Mismo tono que {sameTone.map((row) => `«${row.name}»`).join(", ")}. Se guarda igual; es solo un aviso.
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
               </div>
             </SectionCard>
 
-            <FormStickyFooter note={initialData ? "Los cambios se ven en los filtros de la tienda al guardar." : "El color queda disponible en los formularios de producto al crearlo."}>
+            <FormStickyFooter note={initialData ? "Los cambios se ven en los filtros de la tienda al guardar. El SKU de los productos no cambia." : "El color queda disponible en los formularios de producto al crearlo."}>
               <Button type="submit" form="color-form" isLoading={loading} loadingText={initialData ? "Guardando…" : "Creando…"}>
                 {initialData ? "Guardar cambios" : "Crear color"}
               </Button>
@@ -211,9 +252,25 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage }) => {
                 items={[
                   { label: "Productos activos", value: usage.activeProducts },
                   { label: "Productos archivados", value: usage.archivedProducts },
+                  { label: "Grupos con variantes", value: usage.groups },
+                  { label: "Último cambio", value: formatRelativeDate(initialData.updatedAt) },
                 ]}
               />
+              {productsTotal > 0 && (
+                <Button asChild variant="outline" size="sm" className="w-fit">
+                  <Link href={`/${storeId}/productos?color=${initialData.id}`}>Ver sus productos</Link>
+                </Button>
+              )}
             </SectionCard>
+            <AttributeMergeCard
+              storeId={storeId}
+              kind="colors"
+              entity={initialData}
+              candidates={siblings}
+              hubHref={hubHref}
+              description="Pasa sus productos a otro color y deja este archivado. Comprueba antes que ningún grupo quede con dos variantes iguales."
+              disabled={loading}
+            />
             <AttributeCareCard
               kind="colors"
               storeId={storeId}

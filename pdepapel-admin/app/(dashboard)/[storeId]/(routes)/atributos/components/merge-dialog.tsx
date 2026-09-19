@@ -33,6 +33,8 @@ interface MergeAttributesDialogProps {
   selectedIds: string[];
   /** Filas activas de la familia. */
   candidates: MergeCandidate[];
+  /** Destino ya elegido (desde la pista «Parecido a…» de una ficha). */
+  initialTargetId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone: () => void;
@@ -45,7 +47,7 @@ const plural = (count: number, singular: string, pluralForm: string) => `${count
  * si algún grupo quedaría con dos variantes iguales (misma regla que al
  * guardar un grupo). El valor que desaparece queda archivado, no borrado.
  */
-export function MergeAttributesDialog({ storeId, kind, selectedIds, candidates, open, onOpenChange, onDone }: MergeAttributesDialogProps) {
+export function MergeAttributesDialog({ storeId, kind, selectedIds, candidates, initialTargetId = null, open, onOpenChange, onDone }: MergeAttributesDialogProps) {
   const { toast } = useToast();
   const labels = ATTRIBUTE_KIND_LABELS[kind];
   const bulk = selectedIds.length > 1;
@@ -55,7 +57,7 @@ export function MergeAttributesDialog({ storeId, kind, selectedIds, candidates, 
     () => (bulk ? [...selected].sort((a, b) => b.usage - a.usage) : candidates.filter((row) => !selectedIds.includes(row.id))),
     [bulk, selected, candidates, selectedIds],
   );
-  const [targetId, setTargetId] = useState<string | null>(bulk ? (targets[0]?.id ?? null) : null);
+  const [targetId, setTargetId] = useState<string | null>(initialTargetId ?? (bulk ? (targets[0]?.id ?? null) : null));
   const [preview, setPreview] = useState<AttributeMergePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

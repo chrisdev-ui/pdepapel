@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { getAttributeSiblings, getAttributeUsage } from "@/lib/attribute-usage";
 import prismadb from "@/lib/prismadb";
 import { ColorForm } from "./components/color-form";
 
@@ -14,16 +15,14 @@ export default async function ColorPage({
   const color = isNew ? null : await prismadb.color.findFirst({ where: { id: params.colorId, storeId: params.storeId } });
   if (!isNew && !color) notFound();
 
-  const [activeProducts, archivedProducts] = color
-    ? await Promise.all([
-        prismadb.product.count({ where: { storeId: params.storeId, colorId: color.id, isArchived: false } }),
-        prismadb.product.count({ where: { storeId: params.storeId, colorId: color.id, isArchived: true } }),
-      ])
-    : [0, 0];
+  const [usage, siblings] = await Promise.all([
+    color ? getAttributeUsage(prismadb, { storeId: params.storeId, kind: "colors", id: color.id }) : { activeProducts: 0, archivedProducts: 0, groups: 0 },
+    getAttributeSiblings(prismadb, "colors", params.storeId),
+  ]);
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
-      <ColorForm initialData={color} usage={{ activeProducts, archivedProducts }} />
+      <ColorForm initialData={color} usage={usage} siblings={siblings} />
     </div>
   );
 }

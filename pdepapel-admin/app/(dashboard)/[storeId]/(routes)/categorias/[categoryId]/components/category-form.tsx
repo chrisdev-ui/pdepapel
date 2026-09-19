@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { Category } from "@prisma/client";
 import axios from "axios";
 import { Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -26,7 +27,12 @@ import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
+import type { AttributeSibling } from "@/lib/attribute-usage";
 import { slugify } from "@/lib/slugify";
+import { AttributeNameHints } from "../../../atributos/components/attribute-form-hints";
+import { formatRelativeDate } from "../../../atributos/components/attribute-cells";
+import { AttributeMergeCard } from "../../../atributos/components/merge-card";
+import { MergeAttributesDialog } from "../../../atributos/components/merge-dialog";
 import { stripLeadingSymbol } from "@/lib/taxonomy-icons";
 
 export const SEO_TITLE_MAX = 70;
@@ -76,6 +82,7 @@ export interface CategoryFormType {
 export interface CategoryUsage {
   activeProducts: number;
   archivedProducts: number;
+  groups: number;
   offersCount: number;
 }
 
@@ -83,6 +90,8 @@ interface CategoryFormProps {
   initialData: Category | null;
   types: CategoryFormType[];
   usage: CategoryUsage;
+  /** Subcategorías activas de la tienda: pistas de parecido y destino de «Unir». */
+  siblings?: AttributeSibling[];
   /** `false` cuando el panel no tiene `OPENAI_API_KEY`: los botones de IA se ven deshabilitados. */
   coverConfigured: boolean;
 }
@@ -104,7 +113,7 @@ function Counter({ length, max, soft = false }: { length: number; max: number; s
   );
 }
 
-export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, usage, coverConfigured }) => {
+export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, usage, coverConfigured, siblings = [] }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -150,6 +159,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
   const effectiveSlug = initialData && stripLeadingSymbol(name) === initialData.name ? initialData.slug : slugify(stripLeadingSymbol(name)) || initialData?.slug || "…";
   const storePath = `/categoria/${effectiveSlug}`;
   const productsTotal = usage.activeProducts + usage.archivedProducts;
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
 
   const goToHub = () => {
     router.push(hubHref);
@@ -240,6 +250,21 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
   return (
     <>
       {leaveDialog}
+      {mergeTarget && initialData && (
+        <MergeAttributesDialog
+          storeId={storeId}
+          kind="categories"
+          selectedIds={[initialData.id]}
+          candidates={siblings}
+          initialTargetId={mergeTarget}
+          open
+          onOpenChange={(next) => !next && setMergeTarget(null)}
+          onDone={() => {
+            setMergeTarget(null);
+            goToHub();
+          }}
+        />
+      )}
       <FormPageHeader
         title={initialData ? initialData.name : "Nueva subcategoría"}
         badge={initialData ? <TintBadge label={initialData.isArchived ? "Archivada" : "Activa"} tone={initialData.isArchived ? "slate" : "mint"} /> : null}
@@ -265,6 +290,14 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
                         <Input disabled={loading} placeholder="Ej. Accesorios de escritorio" maxLength={80} {...field} />
                       </FormControl>
                       <FormMessage />
+                      <AttributeNameHints
+                        name={stripLeadingSymbol(name)}
+                        siblings={siblings}
+                        currentId={initialData?.id}
+                        entity="category"
+                        hrefFor={(id) => `/${storeId}/categorias/${id}`}
+                        onMerge={initialData && !initialData.isArchived ? (targetId) => setMergeTarget(targetId) : undefined}
+                      />
                     </FormItem>
                   )}
                 />
@@ -464,9 +497,16 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
                 items={[
                   { label: "Productos activos", value: usage.activeProducts },
                   { label: "Productos archivados", value: usage.archivedProducts },
+                  { label: "Grupos con variantes", value: usage.groups },
                   { label: "Ofertas que la usan", value: usage.offersCount },
+                  { label: "Último cambio", value: formatRelativeDate(initialData.updatedAt) },
                 ]}
               />
+              {productsTotal > 0 && (
+                <Button asChild variant="outline" size="sm" className="w-fit">
+                  <Link href={`/${storeId}/productos?subcategoria=${initialData.id}`}>Ver sus productos</Link>
+                </Button>
+              )}
               {imageUrl && (
                 <p className="text-xs text-muted-foreground">
                   Portada actual:{" "}
@@ -497,6 +537,15 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
               deleteConfirmTitle={`¿Eliminar la subcategoría «${initialData.name}»?`}
               deleteConfirmDescription="Se elimina de inmediato, junto con sus alias de URL y sus opciones para clientes. Esta acción no se puede deshacer."
               onDelete={onDelete}
+              disabled={loading}
+            />
+            <AttributeMergeCard
+              storeId={storeId}
+              kind="categories"
+              entity={initialData}
+              candidates={siblings}
+              hubHref={hubHref}
+              description="Pasa sus productos y ofertas a otra subcategoría y deja esta archivada; su URL queda como alias de la otra."
               disabled={loading}
             />
           </div>
