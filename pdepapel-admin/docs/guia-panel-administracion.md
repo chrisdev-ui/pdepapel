@@ -219,16 +219,145 @@ búsqueda, Opciones para clientes.
 
 ## 11. Atributos (`/atributos`)
 
-Pestañas: Categorías, Subcategorías, Tamaños, Colores, Diseños, Opciones para
-clientes. Interruptor Activos / Archivados.
+Una sola pantalla con seis pestañas: Categorías, Subcategorías, Tamaños,
+Colores, Diseños y Opciones para clientes. Cada pestaña tiene su interruptor
+Activos / Archivados, su buscador y su botón «Nuevo…». En celular la fila de
+pestañas se convierte en el selector «Qué atributo ver» (las seis con su
+conteo) y cada fila es una tarjeta con su casilla y su menú «···».
 
-- **Archivar** retira el atributo de formularios y tienda sin tocar los
-  productos que ya lo usan. **Restaurar** lo devuelve. **Eliminar** solo si
-  ningún producto lo usa.
-- Una subcategoría con productos activos no se archiva (mueve o archiva los
-  productos antes); una categoría con subcategorías activas tampoco.
-- Los nombres van sin emojis; el icono se elige aparte. Las URL antiguas se
-  conservan como alias.
+### Lo que es igual en las cinco listas
+
+- **Orden por nombre** (tamaños por código: XS, XS+, S, S+…), así los
+  parecidos quedan juntos.
+- **Columnas:** nombre con sus pistas, uso (barra proporcional a la fila más
+  usada y número), Estado, Actualizado (hace cuánto se tocó) y el menú.
+- **Pistas junto al nombre:**
+  - «Repetido con «X»»: mismo nombre salvo mayúsculas, tildes o espacios.
+  - «Parecido a «X»»: singular/plural (Cinta / Cintas), uno es el otro más
+    palabras (Osito / Osito panda) o comparten raíz (Rosa pastel / Rosado).
+  - «Sin productos» (o «Sin subcategorías» en categorías).
+  - «Nombre por corregir»: empieza en minúscula o trae espacios de más. Al
+    abrir la ficha ya se ve cómo quedará al guardar.
+  - Solo colores: «Valor con espacio al final», «Valor no válido», «Mismo
+    tono que N más». Solo categorías: «Sin icono».
+- **Filtro «Revisar»:** deja solo las filas con una pista concreta; cada
+  opción dice cuántas hay. Se combina con el buscador y con «Limpiar».
+- **Menú de fila («···»)**, en este orden: Editar · Ver sus productos (abre
+  Productos filtrado por ese valor, archivados incluidos) · Ver en la tienda
+  (categorías y subcategorías) · Unir con… · Archivar o Restaurar · Eliminar
+  (apagado con la razón: «tiene 92 productos») · Copiar ID.
+- **Con filas marcadas** aparece la barra de lote: Unir en uno… (dos o más
+  activas), Mover a otra categoría… (solo subcategorías), Archivar o
+  Restaurar, y Eliminar… solo cuando ninguna de las marcadas tiene uso. En
+  celular los botones van a todo el ancho con el texto completo.
+- **Archivar** retira el valor de formularios y tienda sin tocar los
+  productos que ya lo usan; **Restaurar** lo devuelve. **Eliminar** solo si
+  ningún producto lo usa (los archivados también cuentan).
+
+### Unir con…
+
+Para juntar dos valores que son el mismo (Rosa pastel y Rosado, Osito panda
+y Osito, Cinta y Cintas resaltadoras). Vale para subcategorías, tamaños,
+colores y diseños; no para categorías.
+
+1. Desde el menú de una fila («Unir con…»), desde varias marcadas («Unir en
+   uno…», eliges cuál se queda; por defecto la más usada) o desde la ficha
+   (tarjeta «Unir con otro», o el botón que aparece bajo el nombre cuando hay
+   un parecido).
+2. Elige el valor que **se queda**. La ventana dice cuántos productos pasan
+   (archivados incluidos), cuántos grupos con variantes toca y, en
+   subcategorías, cuántas ofertas y alias de URL se llevan.
+3. Si algún grupo quedaría con **dos variantes iguales** (mismo tamaño, color
+   y diseño), la unión se detiene y muestra el grupo con enlace: cambia el
+   atributo de una de las dos variantes y vuelve a intentar. No se toca nada.
+4. Al confirmar, los productos pasan al destino y el valor que desaparece
+   **queda archivado, no borrado** (restaurarlo no devuelve los productos,
+   pero conserva el valor). Los SKU y las etiquetas impresas no cambian. La
+   tienda y los feeds se refrescan solos.
+
+### Categorías
+
+- Lista: icono, nombre, subcategorías, productos (suma de todas sus
+  subcategorías), estado, actualizado. Pistas: parecido, nombre por corregir,
+  sin subcategorías, sin icono.
+- Menú: Ver sus subcategorías (abre la pestaña Subcategorías filtrada por esa
+  categoría, con «Ver todas» para quitar el filtro) y Ver en la tienda.
+- No tiene «Unir con…»: fusionar categorías mueve subcategorías con URL
+  propia; se resuelve moviendo las subcategorías (lote «Mover a otra
+  categoría…») y archivando la categoría vacía.
+- Archivar exige que no queden subcategorías activas; eliminar, que no tenga
+  subcategorías.
+- Ficha: nombre (sin emojis; avisa si ya existe o se parece a otra categoría),
+  icono Lucide o generado con IA, tarjeta Uso con sus subcategorías.
+
+### Subcategorías
+
+- Lista: nombre, categoría, productos, «Página en la tienda» (Indexada ·
+  destacada / Indexada / No indexada), estado, actualizado. Filtros:
+  Categoría, Página en la tienda y Revisar (sin productos, parecidos, nombre
+  por corregir).
+- Menú: Ver sus productos, Ver en la tienda, Unir con… Lote: Mover a otra
+  categoría… (cambia la sección del menú; la URL no cambia).
+- Unir: los productos y las ofertas pasan al destino, las opciones para
+  clientes también, y la URL de la que desaparece queda como alias de la que
+  se queda (los enlaces viejos siguen abriendo). Si cruza de categoría, la
+  ventana lo avisa.
+- Archivar exige que no queden productos activos; eliminar, que no tenga
+  productos (borra sus alias de URL y sus opciones para clientes).
+- Ficha: nombre con pistas (se guardará como…, ya existe, parecido con unión
+  a un clic), categoría, URL en la tienda (al renombrar, la anterior queda
+  como alias), página SEO (indexar, portada, destacar, título, descripción,
+  intro), tarjeta Uso (productos activos y archivados, grupos con variantes,
+  ofertas, último cambio, Ver sus productos), Unir con otra, Archivar o
+  eliminar.
+
+### Tamaños
+
+- Son internos (SKU y cotización de envío); el cliente nunca los ve. Lista:
+  tamaño, código, dimensión, peso, productos, estado. Pista: sin productos.
+- Solo existen 10 combinaciones (5 dimensiones × 2 pesos). Cuando ya están
+  todas creadas, «Nuevo tamaño» se apaga y lo dice.
+- Menú: Ver sus productos, Unir con… Al unir, la ventana recuerda que el peso
+  entra en la cotización de envío: los productos movidos se cotizarán como el
+  tamaño que se queda.
+- Ficha: dimensión y peso (el nombre y el código salen de la combinación);
+  si la combinación ya existe, avisa con enlace y no deja guardar. Tarjeta
+  Uso con grupos y último cambio, Ver sus productos, Unir con otro.
+
+### Colores
+
+- Lista: muestra, nombre, valor hexadecimal, productos, estado, actualizado.
+  Pistas: parecido, repetido, sin productos, nombre por corregir, valor con
+  espacio o no válido, mismo tono que N más (Pastel, Multicolor y otros
+  comparten #FFFFFF a propósito: la pista es solo para revisar).
+- Menú: Ver sus productos, Unir con…; lote: Unir en uno…
+- Ficha: nombre con pistas y unión a un clic; valor hexadecimal con selector
+  de color, que se guarda sin espacios y en mayúsculas; aviso (sin bloqueo)
+  cuando otro color activo usa el mismo tono. Tarjeta Uso con grupos y último
+  cambio, Ver sus productos, Unir con otro. El SKU de los productos no cambia
+  al editar un color.
+
+### Diseños
+
+- Lista: nombre, productos, estado, actualizado. Pistas: parecido, repetido,
+  sin productos, nombre por corregir. Es la familia con más valores: el
+  filtro «Sin productos» y «Eliminar…» en lote limpian los que sobran.
+- Menú: Ver sus productos, Unir con…; lote: Unir en uno…
+- Ficha: nombre con «se guardará como…», «ya existe» con enlace (no se puede
+  repetir) y «parecido» con unión a un clic. Tarjeta Uso, Ver sus productos,
+  Unir con otro.
+
+### Opciones para clientes
+
+- Lo que el cliente ve como formato, capacidad, medida, cantidad o punta. La
+  pestaña solo las muestra (nombre, valores, productos y subcategorías que
+  las usan); se crean y asignan desde Productos › Opciones para clientes.
+
+### Productos filtrado por atributo
+
+«Ver sus productos» abre Productos con un aviso («12 productos con color
+«Rosado», incluidos los archivados») y el botón «Quitar filtro». Mientras el
+filtro está puesto, las vistas de Productos no aplican.
 
 ## 12. Proveedores y aprovisionamiento (`/proveedores`, `/aprovisionamiento`)
 

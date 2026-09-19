@@ -119,7 +119,7 @@ export function MergeAttributesDialog({ storeId, kind, selectedIds, candidates, 
         <DialogHeader>
           <DialogTitle className="break-words">{title}</DialogTitle>
           <DialogDescription>
-            Los productos pasan al {labels.singular} que se queda. {bulk ? "Los demás" : "El que desaparece"} quedan archivados, no borrados: restaurarlos no deshace el movimiento, pero conserva el valor.
+            Los productos pasan al {labels.singular} que se queda. {bulk ? "Los demás quedan archivados, no borrados" : "El que desaparece queda archivado, no borrado"}: restaurarlo no deshace el movimiento, pero conserva el valor.
           </DialogDescription>
         </DialogHeader>
 
