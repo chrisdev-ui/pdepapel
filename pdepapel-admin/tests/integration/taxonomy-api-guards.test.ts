@@ -112,7 +112,8 @@ describe("taxonomy API guards with MySQL", () => {
       params: { storeId: fixture.store.id },
     });
     expect(created.status).toBe(200);
-    expect(await created.json()).toMatchObject({ name: "Verde menta", value: "#00ffaa" });
+    // El valor hexadecimal se guarda en mayúsculas y sin espacios (auditoría de Atributos).
+    expect(await created.json()).toMatchObject({ name: "Verde menta", value: "#00FFAA" });
     expect(mocks.invalidate).toHaveBeenCalledWith(fixture.store.id);
   });
 

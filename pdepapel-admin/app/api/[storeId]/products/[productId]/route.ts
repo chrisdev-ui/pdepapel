@@ -17,6 +17,7 @@ import {
   verifyStoreOwner,
   generateRandomSKU,
 } from "@/lib/utils";
+import { loadProductAttributes } from "@/lib/product-attributes";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
 import { parseAvailableAt } from "@/lib/product-availability";
@@ -335,24 +336,24 @@ export async function PATCH(
     const stopsBeingKit = !isKit && productToUpdate.isKit;
     let pausedListings = 0;
 
-    const [categoryObj, designObj, colorObj, sizeObj] = await Promise.all([
-      prismadb.category.findUnique({ where: { id: categoryId } }),
-      prismadb.design.findUnique({ where: { id: designId } }),
-      prismadb.color.findUnique({ where: { id: colorId } }),
-      prismadb.size.findUnique({ where: { id: sizeId } }),
-    ]);
+    // Atributos acotados a la tienda: un id de otra tienda no se puede colgar de un producto.
+    const { category: categoryObj, design: designObj, color: colorObj, size: sizeObj } = await loadProductAttributes(prismadb, {
+      storeId: params.storeId,
+      categoryId,
+      designId,
+      colorId,
+      sizeId,
+    });
 
     // SKU Regeneration for Manual Items
     let newSku: string | undefined = undefined;
     if (productToUpdate.sku.startsWith("MAN-")) {
-      if (categoryObj && designObj && colorObj && sizeObj) {
-        newSku = generateSemanticSKU(
-          categoryObj.name,
-          designObj.name,
-          colorObj.name,
-          sizeObj.value || sizeObj.name,
-        );
-      }
+      newSku = generateSemanticSKU(
+        categoryObj.name,
+        designObj.name,
+        colorObj.name,
+        sizeObj.value || sizeObj.name,
+      );
     }
 
     let uniqueSlug = productToUpdate.slug;

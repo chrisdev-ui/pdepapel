@@ -7,6 +7,7 @@ import {
   duplicateTaxonomyError,
   findDuplicateTaxonomyName,
   mapTaxonomyUniqueError,
+  normalizeHexColor,
   requiredTaxonomyFieldMessage,
 } from "@/lib/taxonomy";
 import {
@@ -32,10 +33,11 @@ export async function POST(
 
     const body = await req.json();
     const name = cleanTaxonomyName(body?.name);
-    const value = typeof body?.value === "string" ? body.value.trim() : "";
+    // Sin espacios y en mayúsculas: «#8e44ad » se guarda como «#8E44AD».
+    const value = normalizeHexColor(body?.value);
 
     if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "nombre"));
-    if (!value) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "valor"));
+    if (!value) throw ErrorFactory.InvalidRequest("Escribe un color hexadecimal válido, por ejemplo #F5A3C7");
 
     // Nombre único por tienda sin distinguir mayúsculas ni tildes; el índice
     // `Color_storeId_name_key` es la última barrera (P2002 → mismo 409).

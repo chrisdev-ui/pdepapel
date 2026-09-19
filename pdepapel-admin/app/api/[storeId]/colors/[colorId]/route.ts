@@ -6,6 +6,7 @@ import {
   duplicateTaxonomyError,
   findDuplicateTaxonomyName,
   mapTaxonomyUniqueError,
+  normalizeHexColor,
   missingTaxonomyMessage,
   requiredTaxonomyFieldMessage,
 } from "@/lib/taxonomy";
@@ -55,10 +56,11 @@ export async function PATCH(
 
     const body = await req.json();
     const name = cleanTaxonomyName(body?.name);
-    const value = typeof body?.value === "string" ? body.value.trim() : "";
+    // Sin espacios y en mayúsculas: «#8e44ad » se guarda como «#8E44AD».
+    const value = normalizeHexColor(body?.value);
 
     if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "nombre"));
-    if (!value) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "valor"));
+    if (!value) throw ErrorFactory.InvalidRequest("Escribe un color hexadecimal válido, por ejemplo #F5A3C7");
 
     const updatedColor = await prismadb
       .$transaction(async (tx) => {

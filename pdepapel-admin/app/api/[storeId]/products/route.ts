@@ -37,11 +37,11 @@ import { Prisma } from "@prisma/client";
 import {
   CACHE_HEADERS,
   currencyFormatter,
-  generateRandomSKU,
   getPublicIdFromCloudinaryUrl,
   parseErrorDetails,
   verifyStoreOwner,
 } from "@/lib/utils";
+import { loadProductAttributes } from "@/lib/product-attributes";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
 import {
@@ -265,24 +265,21 @@ export async function POST(
       }
     }
 
-    // Fetch relations to generate Semantic SKU
-    const [category, design, color, size] = await Promise.all([
-      prismadb.category.findUnique({ where: { id: categoryId } }),
-      prismadb.design.findUnique({ where: { id: designId } }),
-      prismadb.color.findUnique({ where: { id: colorId } }),
-      prismadb.size.findUnique({ where: { id: sizeId } }),
-    ]);
+    // Atributos acotados a la tienda: un id de otra tienda no se puede colgar de un producto.
+    const { category, design, color, size } = await loadProductAttributes(prismadb, {
+      storeId: params.storeId,
+      categoryId,
+      designId,
+      colorId,
+      sizeId,
+    });
 
-    let sku = generateRandomSKU();
-
-    if (category && design && color && size) {
-      sku = generateSemanticSKU(
-        category.name,
-        design.name,
-        color.name,
-        size.value || size.name,
-      );
-    }
+    const sku = generateSemanticSKU(
+      category.name,
+      design.name,
+      color.name,
+      size.value || size.name,
+    );
 
     const slug = await getUniqueProductSlug(prismadb, {
       storeId: params.storeId,
