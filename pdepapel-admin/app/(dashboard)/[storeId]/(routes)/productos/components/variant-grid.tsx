@@ -634,10 +634,14 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
             ))}
           </div>
 
-          {/* Escritorio ancho: tabla compacta; si no cabe, desplaza en
-              horizontal en vez de recortar la columna Variante. */}
+          {/* Escritorio ancho: tabla compacta de columnas fijas. Con el
+              reparto automático, un texto sin cortes (la URL con `truncate`)
+              ensanchaba la tabla más que su tarjeta y recortaba «Acciones»
+              (751 px en 740 px en producción); con `table-fixed` el ancho lo
+              manda el contenedor y `truncate` sí recorta. Por debajo de 46 rem
+              desplaza en horizontal en vez de aplastar «Variante». */}
           <div className="hidden overflow-x-auto rounded-xl border xl:block">
-            <Table className="[&_td]:px-2 [&_th]:px-2">
+            <Table className="table-fixed min-w-[46rem] [&_td]:px-2 [&_th]:px-2">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
@@ -647,7 +651,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                       aria-label="Seleccionar todas las variantes"
                     />
                   </TableHead>
-                  <TableHead className="min-w-[14rem]">Variante</TableHead>
+                  <TableHead>Variante</TableHead>
                   <TableHead className="w-28">Precio · costo</TableHead>
                   <TableHead className="w-16">Stock</TableHead>
                   <TableHead className="w-36">GTIN</TableHead>
