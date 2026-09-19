@@ -66,3 +66,68 @@ export function applyPendingImageRemovals<T extends { url: string }>(
   const pending = new Set(pendingRemovals);
   return images.filter((image) => !pending.has(image.url));
 }
+
+export interface GeneratedCombination {
+  sizeId: string;
+  colorId: string;
+  designId: string;
+  sku: string;
+  name: string;
+}
+
+export interface PlannableRow {
+  id?: string;
+  size?: { id: string } | null;
+  color?: { id: string } | null;
+  design?: { id: string } | null;
+}
+
+const comboKey = (row: { sizeId: string; colorId: string; designId: string }) =>
+  `${row.sizeId}|${row.colorId}|${row.designId}`;
+
+/**
+ * Qué pasa con cada fila al generar combinaciones. Una sola regla para el
+ * modo automático (aditivo: nada se quita) y la matriz (estricta: las filas
+ * nuevas que no están marcadas se descartan). Las filas con id nunca se
+ * pierden: si su combinación no está, se conservan aparte y se avisa.
+ */
+export function planGeneratedVariants<V extends PlannableRow>(
+  current: V[],
+  generated: GeneratedCombination[],
+  mode: "additive" | "strict",
+): { kept: V[]; toCreate: GeneratedCombination[]; keptOutside: V[]; dropped: V[] } {
+  const seen = new Set<string>();
+  const unique = generated.filter((combination) => {
+    const key = comboKey(combination);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const rowKey = (row: V) =>
+    row.size?.id && row.color?.id && row.design?.id
+      ? comboKey({ sizeId: row.size.id, colorId: row.color.id, designId: row.design.id })
+      : null;
+  const matched = new Set<number>();
+  const kept: V[] = [];
+  const toCreate: GeneratedCombination[] = [];
+  for (const combination of unique) {
+    const index = current.findIndex(
+      (row, position) => !matched.has(position) && rowKey(row) === comboKey(combination),
+    );
+    if (index === -1) {
+      toCreate.push(combination);
+    } else {
+      matched.add(index);
+      kept.push(current[index]);
+    }
+  }
+  const keptOutside: V[] = [];
+  const dropped: V[] = [];
+  current.forEach((row, position) => {
+    if (matched.has(position)) return;
+    if (row.id) keptOutside.push(row);
+    else if (mode === "additive") kept.push(row);
+    else dropped.push(row);
+  });
+  return { kept, toCreate, keptOutside, dropped };
+}

@@ -24,6 +24,7 @@ export default async function ProductPage({
   const {
     product,
     activePresale,
+    activeOffers,
     categories,
     types,
     sizes,
@@ -62,6 +63,7 @@ export default async function ProductPage({
             productGroup={productGroup}
             productGroups={productGroups}
             activePresale={activePresale}
+            activeOffers={activeOffers}
             seed={seed}
             storeUrl={env.FRONTEND_STORE_URL}
           />

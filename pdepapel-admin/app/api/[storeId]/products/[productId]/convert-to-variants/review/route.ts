@@ -31,6 +31,8 @@ const newAttributeSchema = z.object({
 
 const reviewConversionSchema = z.object({
   name: z.string().trim().min(1).max(180),
+  /** Las ofertas vigentes del producto pasan también a las opciones nuevas. */
+  copyOffers: z.boolean().optional().default(true),
   variants: z
     .array(
       z.object({
@@ -42,7 +44,9 @@ const reviewConversionSchema = z.object({
         sizeId: z.string().uuid(),
       }),
     )
-    .min(2)
+    // Una sola opción = crear el grupo solo con el producto actual; las
+    // demás se agregan después desde el grupo.
+    .min(1)
     .max(MAX_VARIANT_REVIEW_OPTIONS),
 });
 
@@ -172,7 +176,17 @@ export async function POST(
 
     const product = await prismadb.product.findFirst({
       where: { id: params.productId, storeId: params.storeId },
-      include: { images: true },
+      include: {
+        images: true,
+        catalogOptionValues: {
+          select: { optionId: true, optionValueId: true },
+        },
+        // Ofertas vigentes: se copian a las opciones nuevas si se pide.
+        offers: {
+          where: { offer: { isActive: true, endDate: { gte: new Date() } } },
+          select: { offerId: true },
+        },
+      },
     });
     if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
     if (product.productGroupId) {
@@ -316,6 +330,9 @@ export async function POST(
         (variant) => !variant.keepExistingProduct,
       );
       const createdProducts: Array<{ id: string; stock: number }> = [];
+      const offerIds = body.copyOffers
+        ? product.offers.map((offer) => offer.offerId)
+        : [];
       for (const variant of newVariants) {
         const sku = await getUniqueSemanticSku(tx, {
           categoryName: category.name,
@@ -340,47 +357,59 @@ export async function POST(
             designId: variant.design.id,
             sku,
             brand: product.brand,
+            // El GTIN es de un solo producto: la opción nueva nace sin código.
             hasNoProductIdentifier: true,
             supplierId: product.supplierId,
             productGroupId: group.id,
+            // Lo que antes se perdía: envío por unidad, perfil de envío,
+            // «disponible desde», opciones para clientes y ofertas vigentes.
+            transportationCost: product.transportationCost,
+            shippingProfileId: product.shippingProfileId,
+            availableAt: product.availableAt,
             images: { create: { url: variant.imageUrl, isMain: true } },
+            catalogOptionValues: {
+              createMany: {
+                data: product.catalogOptionValues.map((value) => ({
+                  storeId: params.storeId,
+                  optionId: value.optionId,
+                  optionValueId: value.optionValueId,
+                })),
+              },
+            },
+            offers: {
+              createMany: { data: offerIds.map((offerId) => ({ offerId })) },
+            },
           },
           select: { id: true },
         });
         createdProducts.push({ id: createdProduct.id, stock: variant.stock });
       }
 
+      // El reparto queda en el kardex con su propio tipo y enlazado al grupo,
+      // no como un ajuste manual suelto.
+      const movement = (productId: string, quantity: number) => ({
+        productId,
+        storeId: params.storeId,
+        type: "VARIANT_CONVERSION" as const,
+        quantity,
+        reason: "Conversión a variantes",
+        description: `Reparto del inventario de «${product.name}» al crear el grupo «${body.name}».`,
+        referenceId: group.id,
+        cost: product.acqPrice ?? undefined,
+        price: product.price,
+        createdBy: `USER_${userId}`,
+      });
       const inventoryMovements = [
-        {
-          productId: product.id,
-          storeId: params.storeId,
-          type: "MANUAL_ADJUSTMENT" as const,
-          quantity: existingVariant.stock - product.stock,
-          reason: "Distribución de inventario al crear variantes",
-          description:
-            "Inventario distribuido desde un producto individual al crear sus variantes.",
-          cost: product.acqPrice ?? undefined,
-          price: product.price,
-          createdBy: `USER_${userId}`,
-        },
-        ...createdProducts.map((createdProduct) => ({
-          productId: createdProduct.id,
-          storeId: params.storeId,
-          type: "MANUAL_ADJUSTMENT" as const,
-          quantity: createdProduct.stock,
-          reason: "Distribución de inventario al crear variantes",
-          description:
-            "Inventario distribuido desde un producto individual al crear sus variantes.",
-          cost: product.acqPrice ?? undefined,
-          price: product.price,
-          createdBy: `USER_${userId}`,
-        })),
+        movement(product.id, existingVariant.stock - product.stock),
+        ...createdProducts.map((createdProduct) =>
+          movement(createdProduct.id, createdProduct.stock),
+        ),
       ].filter((movement) => movement.quantity !== 0);
 
       await createInventoryMovementBatch(tx, inventoryMovements, true);
       await synchronizeProductGroupSlugs(tx, params.storeId, group.id);
 
-      return { group, createdProducts };
+      return { group, createdProducts, copiedOffers: offerIds.length };
     });
 
     await deleteCloudinaryImages(droppedImageUrls, "PRODUCT_CONVERT_REVIEW");
@@ -388,6 +417,7 @@ export async function POST(
     return NextResponse.json({
       productGroupId: result.group.id,
       createdProductIds: result.createdProducts.map((product) => product.id),
+      copiedOffers: result.createdProducts.length > 0 ? result.copiedOffers : 0,
     });
   } catch (error) {
     console.error("[PRODUCT_CONVERT_TO_VARIANTS_REVIEW_POST]", error);

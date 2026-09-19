@@ -407,7 +407,8 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
   designs,
 }) => {
   const { watch, setValue, getValues } = form;
-  const formVariants = watch("variants") ?? [];
+  const watchedVariants = watch("variants");
+  const formVariants = useMemo(() => watchedVariants ?? [], [watchedVariants]);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());

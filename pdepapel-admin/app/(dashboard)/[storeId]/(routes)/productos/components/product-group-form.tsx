@@ -47,6 +47,11 @@ import { SectionCard } from "@/components/ui/section-card";
 import { MobileSectionNav } from "../[productId]/components/section-nav";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { mapWithConcurrency } from "@/lib/concurrency";
+import { Switch } from "@/components/ui/switch";
+import {
+  planGeneratedVariants,
+  type GeneratedCombination,
+} from "@/lib/product-group-form-state";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { PercentageInput } from "@/components/ui/percentage-input";
@@ -207,6 +212,38 @@ export interface FormVariant {
   slug?: string;
 }
 
+interface GeneratedRowContext {
+  sizes: { id: string; name: string; value?: string | null }[];
+  colors: { id: string; name: string; value?: string | null }[];
+  designs: { id: string; name: string }[];
+  price: number;
+  acqPrice: number;
+  supplierId: string;
+}
+
+/** Fila nueva a partir de una combinación generada: 0 unidades, sin id. */
+function buildGeneratedRow(gen: GeneratedCombination, ctx: GeneratedRowContext): FormVariant {
+  const size = ctx.sizes.find((x) => x.id === gen.sizeId);
+  const color = ctx.colors.find((x) => x.id === gen.colorId);
+  const design = ctx.designs.find((x) => x.id === gen.designId);
+  return {
+    sku: gen.sku,
+    name: gen.name,
+    origin: "new",
+    price: ctx.price,
+    acqPrice: ctx.acqPrice,
+    // Una variante nueva nace con 0 unidades; las existencias entran por
+    // Inventario con su movimiento.
+    stock: 0,
+    supplierId: ctx.supplierId,
+    isFeatured: false,
+    isArchived: false,
+    size: size ? { id: size.id, name: size.name, value: size.value ?? "" } : { id: "unknown", name: "?" },
+    color: color ? { id: color.id, name: color.name, value: color.value ?? "" } : { id: "unknown", name: "?" },
+    design: design ? { id: design.id, name: design.name } : { id: "unknown", name: "?" },
+  };
+}
+
 export type ProductGroupWithIncludes = ProductGroup & {
   images: PrismaImage[];
   products: (Product & {
@@ -216,6 +253,7 @@ export type ProductGroupWithIncludes = ProductGroup & {
     design: Design | null;
   })[];
   imageMapping?: { url: string; scope: string }[];
+  offers?: { offerId: string }[];
 };
 
 interface ProductGroupFormProps {
@@ -729,208 +767,85 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const watchedName = form.watch("name");
   const watchedBrand = form.watch("brand");
 
-  // AUTO-SYNC VARIANTS HOOK
+  // GENERACIÓN AUTOMÁTICA (interruptor en «Variantes»): al elegir atributos
+  // crea las combinaciones que falten sin quitar nada. Antes el efecto salía
+  // siempre antes de generar y el interruptor no hacía nada.
   useEffect(() => {
-    // We only trigger if explicit attributes are selected.
+    if (!autoGenerate) return;
     const timer = setTimeout(async () => {
-      if (
-        !watchedName.trim() ||
-        !watchedCategoryId ||
-        (watchedColorIds.length === 0 &&
-          watchedSizeIds.length === 0 &&
-          watchedDesignIds.length === 0)
-      ) {
-        return;
-      }
-
-      const { generateVariants } = await import("@/lib/variant-generator");
+      if (!watchedName.trim() || !watchedCategoryId) return;
       const catObj = categories.find((x) => x.id === watchedCategoryId);
       const sizesObj = sizes.filter((x) => watchedSizeIds.includes(x.id));
       const colorsObj = colors.filter((x) => watchedColorIds.includes(x.id));
       const designsObj = designs.filter((x) => watchedDesignIds.includes(x.id));
-
-      if (!catObj) return;
-
-      // 1. Generate Matrix
-      const sList = sizesObj.length > 0 ? sizesObj : [];
-      const cList = colorsObj.length > 0 ? colorsObj : [];
-      const dList = designsObj.length > 0 ? designsObj : [];
-
-      if (sList.length === 0 || cList.length === 0 || dList.length === 0) {
+      // Un producto necesita tamaño, color y diseño.
+      if (!catObj || sizesObj.length === 0 || colorsObj.length === 0 || designsObj.length === 0) {
         return;
       }
 
-      // POSITIVE LOGIC CHANGE:
-      // If we have BOTH Colors and Designs, we REQUIRE the user to use the Matrix.
-      // We do NOT auto-generate here to avoid pollution.
-      if (cList.length > 0 && dList.length > 0) {
-        return;
-      }
-
-      // If Auto-Generate is OFF, we do not create new combinations automatically
-      if (!autoGenerate) {
-        return;
-      }
-
-      const result = generateVariants({
+      const { generateVariants } = await import("@/lib/variant-generator");
+      const generated = generateVariants({
         baseName: watchedName,
         category: { id: catObj.id, name: catObj.name },
-        sizes: sList.map((x) => ({
-          id: x.id,
-          name: x.name,
-          value: x.value ?? "",
-        })),
-        colors: cList.map((x) => ({ id: x.id, name: x.name, value: x.value })),
-        designs: dList.map((x) => ({ id: x.id, name: x.name, value: x.name })),
+        sizes: sizesObj.map((x) => ({ id: x.id, name: x.name, value: x.value ?? "" })),
+        colors: colorsObj.map((x) => ({ id: x.id, name: x.name, value: x.value })),
+        designs: designsObj.map((x) => ({ id: x.id, name: x.name, value: x.name })),
         includeColorInName: includeColorInVariantName,
         includeDesignInName: includeDesignInVariantName,
       });
 
-      const generatedVariants = result;
-
-      // 2. Diff and Merge
       const currentVars = form.getValues("variants") || [];
-      const mergedVariants: FormVariant[] = [];
-      const usedCurrentIndices = new Set<number>();
+      const plan = planGeneratedVariants(currentVars, generated, "additive");
+      if (plan.toCreate.length === 0) return;
 
-      // A. PRESENCE CHECK: keep all variants that have an ID (imported/existing)
-      currentVars.forEach((v, idx) => {
-        if (v.id) {
-          mergedVariants.push(v);
-          usedCurrentIndices.add(idx);
-        }
+      // Las comprobaciones de «ya existe suelto» van de cinco en cinco.
+      const checks = await mapWithConcurrency(plan.toCreate, 5, async (gen) => {
+        if (initialData) return { nameTaken: false, sameImagesAs: null as string | null };
+        const [nameTaken, sameImagesAs] = await Promise.all([
+          isStandaloneTaken(gen.name),
+          isStandaloneImagesTaken(gen.colorId, gen.designId),
+        ]);
+        return { nameTaken, sameImagesAs };
       });
-
-      // B. GENERATION CHECK: for each generated combination...
-      for (const gen of generatedVariants) {
-        // 1. Check if this combination is ALREADY satisfied by an existing (imported) variant
-        //    (one we just added to mergedVariants)
-        const isSatisfiedByImport = mergedVariants.some(
-          (v) =>
-            v.id && // Must be an actual saved variant
-            v.size?.id === gen.sizeId &&
-            v.color?.id === gen.colorId &&
-            v.design?.id === gen.designId,
-        );
-
-        if (isSatisfiedByImport) {
-          // Skip - we already have this product from import
-          continue;
-        }
-
-        // 2. Check overlap with "New/Unsaved" variants in currentVars (Update/Adoption)
-        //    We look for a manual entry that hasn't been "claimed" by an ID check above
-        let matchIndex = currentVars.findIndex(
-          (v, idx) =>
-            !usedCurrentIndices.has(idx) && // Not already used
-            !v.id && // Must be new/unsaved (saved ones are handled in step A)
-            (v.size?.id === gen.sizeId || !v.size?.id) &&
-            (v.color?.id === gen.colorId || !v.color?.id) &&
-            (v.design?.id === gen.designId || !v.design?.id),
-        );
-
-        // Refine match: prefer exact attribute match if possible
-        const exactMatchIndex = currentVars.findIndex(
-          (v, idx) =>
-            !usedCurrentIndices.has(idx) &&
-            !v.id &&
-            v.size?.id === gen.sizeId &&
-            v.color?.id === gen.colorId &&
-            v.design?.id === gen.designId,
-        );
-
-        if (exactMatchIndex !== -1) matchIndex = exactMatchIndex;
-
-        if (matchIndex !== -1) {
-          // ADOPT / UPDATE existing manual entry
-          usedCurrentIndices.add(matchIndex);
-          const existing = currentVars[matchIndex];
-          mergedVariants.push({
-            ...existing,
-            size:
-              existing.size?.id && existing.size.id !== "unknown"
-                ? existing.size
-                : sizesObj.find((x) => x.id === gen.sizeId)
-                  ? {
-                      id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
-                      name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
-                      value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
-                    }
-                  : { id: "unknown", name: "?" },
-            color:
-              existing.color?.id && existing.color.id !== "unknown"
-                ? existing.color
-                : colorsObj.find((x) => x.id === gen.colorId)
-                  ? {
-                      id: colorsObj.find((x) => x.id === gen.colorId)!.id,
-                      name: colorsObj.find((x) => x.id === gen.colorId)!.name,
-                      value: colorsObj.find((x) => x.id === gen.colorId)!.value,
-                    }
-                  : { id: "unknown", name: "?" },
-            design:
-              existing.design?.id && existing.design.id !== "unknown"
-                ? existing.design
-                : designsObj.find((x) => x.id === gen.designId)
-                  ? {
-                      id: designsObj.find((x) => x.id === gen.designId)!.id,
-                      name: designsObj.find((x) => x.id === gen.designId)!.name,
-                    }
-                  : { id: "unknown", name: "?" },
-          });
-        } else {
-          // 3. CREATE NEW
-          if (!initialData && (await isStandaloneTaken(gen.name))) {
+      const ctx: GeneratedRowContext = {
+        sizes: sizesObj,
+        colors: colorsObj,
+        designs: designsObj,
+        price: form.getValues("price") || 0,
+        acqPrice: form.getValues("acqPrice") || 0,
+        supplierId: form.getValues("defaultSupplier") || "",
+      };
+      const created = plan.toCreate
+        .filter((gen, index) => {
+          if (checks[index].nameTaken) {
             warnStandalone(gen.name);
-            continue;
+            return false;
           }
-          const sameImagesAs = initialData
-            ? null
-            : await isStandaloneImagesTaken(gen.colorId, gen.designId);
-          if (sameImagesAs) {
-            warnStandaloneImages(gen.name, sameImagesAs);
-            continue;
+          if (checks[index].sameImagesAs) {
+            warnStandaloneImages(gen.name, checks[index].sameImagesAs);
+            return false;
           }
-          mergedVariants.push({
-            sku: gen.sku,
-            name: gen.name,
-            origin: "new",
-            price: form.getValues("price") || 0,
-            acqPrice: form.getValues("acqPrice") || 0,
-            stock: 0,
-            supplierId: form.getValues("defaultSupplier") || "",
-            isFeatured: false,
-            isArchived: false,
-            size: sizesObj.find((x) => x.id === gen.sizeId)
-              ? {
-                  id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
-                  name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
-                  value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
-                }
-              : { id: "unknown", name: "?" },
-            color: colorsObj.find((x) => x.id === gen.colorId)
-              ? {
-                  id: colorsObj.find((x) => x.id === gen.colorId)!.id,
-                  name: colorsObj.find((x) => x.id === gen.colorId)!.name,
-                  value: colorsObj.find((x) => x.id === gen.colorId)!.value,
-                }
-              : { id: "unknown", name: "?" },
-            design: designsObj.find((x) => x.id === gen.designId)
-              ? {
-                  id: designsObj.find((x) => x.id === gen.designId)!.id,
-                  name: designsObj.find((x) => x.id === gen.designId)!.name,
-                }
-              : { id: "unknown", name: "?" },
-          });
-        }
-      }
+          return true;
+        })
+        .map((gen) => buildGeneratedRow(gen, ctx));
+      if (created.length === 0) return;
 
-      // Update State
-      if (JSON.stringify(mergedVariants) !== JSON.stringify(currentVars)) {
-        form.setValue("variants", mergedVariants, { shouldDirty: true });
-      }
+      // Aditivo: todo lo que había se queda; solo se suman las que faltan.
+      form.setValue("variants", [...currentVars, ...created], {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      toast({
+        description: `${created.length} ${created.length === 1 ? "variante nueva se crea" : "variantes nuevas se crean"} al guardar, con 0 unidades.`,
+        variant: "success",
+      });
     }, 800);
 
     return () => clearTimeout(timer);
+    // Las funciones de comprobación y aviso son estables por render y no
+    // entran como dependencias a propósito.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     watchedColorIds,
     watchedSizeIds,
@@ -943,8 +858,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     designs,
     form,
     autoGenerate,
+    initialData,
     includeColorInVariantName,
     includeDesignInVariantName,
+    toast,
   ]);
 
   // Form Persistence
@@ -1074,13 +991,24 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     try {
       if (!initialData) return;
       setLoading(true);
-      await axios.delete(
-        `/api/${params.storeId}/product-groups/${initialData.id}?deleteVariants=${strict}`,
-      );
+      const response = await axios.delete<{
+        ungrouped: { variants: { id: string }[]; offersCarried: number; photosCopiedTo: number } | null;
+      }>(`/api/${params.storeId}/product-groups/${initialData.id}?deleteVariants=${strict}`);
+      clearStorage();
       router.push(`/${params.storeId}/productos`);
       router.refresh();
+      const ungrouped = response.data?.ungrouped;
       toast({
-        description: "Grupo eliminado correctamente",
+        title: ungrouped ? "Grupo desagrupado" : "Grupo eliminado",
+        description: ungrouped
+          ? [
+              `${ungrouped.variants.length} ${ungrouped.variants.length === 1 ? "producto suelto conserva" : "productos sueltos conservan"} su SKU, stock, kardex, pedidos y URL.`,
+              ungrouped.offersCarried > 0 ? `${ungrouped.offersCarried} ${ungrouped.offersCarried === 1 ? "oferta pasó" : "ofertas pasaron"} a las variantes.` : null,
+              ungrouped.photosCopiedTo > 0 ? `Las fotos del grupo se copiaron a ${ungrouped.photosCopiedTo} ${ungrouped.photosCopiedTo === 1 ? "producto que no tenía" : "productos que no tenían"}.` : null,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : "El grupo y sus variantes se eliminaron.",
         variant: "success",
       });
     } catch (error) {
@@ -1217,102 +1145,48 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       allGenerated = [...allGenerated, ...result];
     }
 
-    // STRICT POSITIVE LOGIC:
-    // We only keep variants that are in 'allGenerated'.
-    // Anything else is implicitly deleted (unless we want to preserve partial matches, but the user asked for strictness).
-
+    // Estricto: solo quedan las combinaciones marcadas. Las filas con
+    // producto real fuera de la matriz se conservan y se avisa; las nuevas
+    // sin marcar se descartan.
     const currentVars = form.getValues("variants") || [];
-    const usedIndices = new Set<number>();
-    const finalVariants: FormVariant[] = [];
-    const processedKeys = new Set<string>();
+    const plan = planGeneratedVariants(currentVars, allGenerated, "strict");
 
     // Las comprobaciones de «ya existe suelto» (por nombre y por fotos) iban
     // una tras otra: 5 colores × 6 diseños × 2 tamaños eran hasta 120
     // peticiones en fila. Ahora van de cinco en cinco.
-    const uniqueGenerated = allGenerated.filter((gen) => {
-      const genKey = `${gen.sizeId}|${gen.colorId}|${gen.designId}`;
-      if (processedKeys.has(genKey)) return false;
-      processedKeys.add(genKey);
-      return true;
-    });
-    const checks = await mapWithConcurrency(uniqueGenerated, 5, async (gen) => {
-      const matchIndex = currentVars.findIndex(
-        (v) =>
-          v.size?.id === gen.sizeId &&
-          v.color?.id === gen.colorId &&
-          v.design?.id === gen.designId,
-      );
-      if (matchIndex !== -1 || initialData) {
-        return { matchIndex, nameTaken: false, sameImagesAs: null as string | null };
-      }
+    const checks = await mapWithConcurrency(plan.toCreate, 5, async (gen) => {
+      if (initialData) return { nameTaken: false, sameImagesAs: null as string | null };
       const [nameTaken, sameImagesAs] = await Promise.all([
         isStandaloneTaken(gen.name),
         isStandaloneImagesTaken(gen.colorId, gen.designId),
       ]);
-      return { matchIndex, nameTaken, sameImagesAs };
+      return { nameTaken, sameImagesAs };
     });
-
-    uniqueGenerated.forEach((gen, position) => {
-      const { matchIndex, nameTaken, sameImagesAs } = checks[position];
-
-      if (matchIndex !== -1) {
-        // KEEP EXISTING (Update metadata if needed, but keep ID and Stock)
-        usedIndices.add(matchIndex);
-        finalVariants.push(currentVars[matchIndex]);
-      } else {
-        // CREATE NEW
-        if (nameTaken) {
+    const ctx: GeneratedRowContext = {
+      sizes: sizesObj,
+      colors,
+      designs,
+      price: currentPrice || 0,
+      acqPrice: currentAcqPrice || 0,
+      supplierId: defaultSupplier || "",
+    };
+    const created = plan.toCreate
+      .filter((gen, index) => {
+        if (checks[index].nameTaken) {
           warnStandalone(gen.name);
-          return;
+          return false;
         }
-        if (sameImagesAs) {
-          warnStandaloneImages(gen.name, sameImagesAs);
-          return;
+        if (checks[index].sameImagesAs) {
+          warnStandaloneImages(gen.name, checks[index].sameImagesAs);
+          return false;
         }
-        finalVariants.push({
-          sku: gen.sku,
-          name: gen.name,
-          origin: "new",
-          price: currentPrice || 0,
-          acqPrice: currentAcqPrice || 0,
-          // Una variante nueva nace con 0 unidades; las existencias entran
-          // por Inventario con su movimiento.
-          stock: 0,
-          supplierId: defaultSupplier || "",
-          isFeatured: false,
-          isArchived: false,
-          size: sizesObj.find((x) => x.id === gen.sizeId)
-            ? {
-                id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
-                name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
-                value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
-              }
-            : { id: "unknown", name: "?" },
-          color: colors.find((x) => x.id === gen.colorId)
-            ? {
-                id: colors.find((x) => x.id === gen.colorId)!.id,
-                name: colors.find((x) => x.id === gen.colorId)!.name,
-                value: colors.find((x) => x.id === gen.colorId)!.value,
-              }
-            : { id: "unknown", name: "?" },
-          design: designs.find((x) => x.id === gen.designId)
-            ? {
-                id: designs.find((x) => x.id === gen.designId)!.id,
-                name: designs.find((x) => x.id === gen.designId)!.name,
-              }
-            : { id: "unknown", name: "?" },
-        });
-      }
-    });
+        return true;
+      })
+      .map((gen) => buildGeneratedRow(gen, ctx));
 
-    // Las filas con id (guardadas o traídas de un producto suelto) no se
-    // descartan aunque su combinación no esté marcada: se conservan y se
-    // avisa, en vez de perderlas en silencio como antes.
-    const keptById = currentVars.filter(
-      (variant, index) => variant.id && !usedIndices.has(index),
-    );
-    if (keptById.length > 0) {
-      finalVariants.push(...keptById);
+    const finalVariants: FormVariant[] = [...plan.kept, ...created, ...plan.keptOutside];
+    if (plan.keptOutside.length > 0) {
+      const keptById = plan.keptOutside;
       toast({
         title: "Variantes conservadas",
         description: `${keptById.length} ${keptById.length === 1 ? "variante con producto real no estaba" : "variantes con producto real no estaban"} en las combinaciones marcadas y se ${keptById.length === 1 ? "conserva" : "conservan"} igual: ${keptById.map((variant) => variant.name).join(", ")}.`,
@@ -1735,11 +1609,28 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       {confirmationDialog}
       <Modal
         title="Desagrupar o eliminar el grupo"
-        description="Desagrupar deja cada variante como producto suelto con todo lo suyo. Eliminar borra el grupo y sus variantes; si alguna tiene pedidos, kits, Mercado Libre, ferias, reposición o kardex, no se puede."
+        description="Dos caminos distintos: desagrupar no borra nada; eliminar borra el grupo y sus variantes."
         isOpen={open}
         onClose={() => setOpen(false)}
       >
         <div className="flex flex-col gap-4 py-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border bg-tint-mint/20 p-3 text-sm">
+              <p className="font-semibold text-primary">Desagrupar</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {groupStats.total} {groupStats.total === 1 ? "variante vuelve a ser producto suelto" : "variantes vuelven a ser productos sueltos"} con su SKU, stock, kardex, pedidos, fotos y URL.
+                {(initialData?.offers?.length ?? 0) > 0
+                  ? ` ${initialData!.offers!.length} ${initialData!.offers!.length === 1 ? "oferta del grupo pasa" : "ofertas del grupo pasan"} a cada una.`
+                  : " Se puede volver a agrupar después con «Traer existentes»."}
+              </p>
+            </div>
+            <div className="rounded-lg border bg-tint-pink/20 p-3 text-sm">
+              <p className="font-semibold text-destructive">Eliminar grupo y variantes</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Borra el grupo y sus {groupStats.total} {groupStats.total === 1 ? "variante" : "variantes"}. Si alguna tiene pedidos, kits, Mercado Libre, ferias, reposición o kardex, no se puede: archívala o desagrupa.
+              </p>
+            </div>
+          </div>
           <div className="flex w-full flex-wrap justify-end gap-2">
             <Button disabled={loading} variant="outline" onClick={() => setOpen(false)}>
               Cancelar
@@ -2236,6 +2127,21 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             <p className="text-xs text-muted-foreground">
               Traer conserva precio, costo, stock, código y URL de cada producto. Generar crea variantes nuevas con 0 unidades y avisa si alguna ya existe suelta.
             </p>
+            <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+              <Switch
+                checked={autoGenerate}
+                onCheckedChange={setAutoGenerate}
+                disabled={loading}
+                aria-label="Generar todas las combinaciones al elegir atributos"
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-primary">Generar todas las combinaciones al elegir atributos</span>
+                <span className="block text-xs text-muted-foreground">
+                  Suma las que falten sin quitar nada. Con varios colores y diseños, «Generar combinaciones» deja marcar solo las que existen.
+                </span>
+              </span>
+            </label>
             <VariantGrid
               form={form}
               loading={loading}

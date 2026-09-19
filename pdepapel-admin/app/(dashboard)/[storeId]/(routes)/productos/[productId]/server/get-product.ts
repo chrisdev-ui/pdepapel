@@ -42,6 +42,18 @@ export async function getProduct(id: string, storeId: string) {
             },
           },
         });
+  // Ofertas vigentes: el asistente «Convertir en variantes» ofrece copiarlas
+  // a las opciones nuevas. Consulta aparte por la misma razón que la preventa.
+  const activeOffers = product
+    ? await prismadb.offerProduct.findMany({
+        where: {
+          productId: product.id,
+          offer: { storeId, isActive: true, endDate: { gte: new Date() } },
+        },
+        select: { offer: { select: { id: true, name: true } } },
+      })
+    : [];
+
   // Preventa activa del producto, si la hay. Va como consulta aparte a
   // propósito: meterla en el `include` de arriba cambiaría el tipo de
   // `product` y eso se propaga por todo el formulario.
@@ -171,6 +183,7 @@ export async function getProduct(id: string, storeId: string) {
 
   return {
     product,
+    activeOffers: activeOffers.map((row) => row.offer),
     activePresale: activePresale
       ? {
           id: activePresale.id,

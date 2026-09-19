@@ -7,9 +7,9 @@ import {
   type CatalogOptionSuggestion,
 } from "@/components/products/catalog-attributes-editor";
 import {
-  ReviewProductVariantsModal,
+  ConvertProductWizard,
   type ProductVariantReviewPayload,
-} from "@/components/modals/review-product-variants-modal";
+} from "@/components/modals/convert-product-to-variants-modal";
 import { ProductTintBadge, ShapeBadge } from "../../components/product-badges";
 import { ProductDeleteDialog } from "../../components/product-delete-dialog";
 import { ProductShapePicker } from "./product-shape-picker";
@@ -37,7 +37,6 @@ import z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { PRODUCT_DESCRIPTION_TEMPLATES } from "@/lib/product-description-templates";
-import { ConvertProductToVariantsModal } from "@/components/modals/convert-product-to-variants-modal";
 import { IntakeModal } from "@/components/modals/intake-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -284,6 +283,8 @@ interface ProductFormProps {
   seed?: ProductSeed | null;
   /** URL pública de la tienda para «Ver en la tienda». */
   storeUrl?: string | null;
+  /** Ofertas vigentes del producto (para el asistente de conversión). */
+  activeOffers?: { id: string; name: string }[];
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -305,14 +306,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   activePresale = null,
   seed = null,
   storeUrl = null,
+  activeOffers = [],
 }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
-  const [convertToVariantsOpen, setConvertToVariantsOpen] = useState(false);
-  const [reviewVariantsOpen, setReviewVariantsOpen] = useState(false);
+  const [conversionOpen, setConversionOpen] = useState(false);
   const [variantReviewAnalysis, setVariantReviewAnalysis] =
     useState<ProductImageAnalysis | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
@@ -821,56 +822,32 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     }
   }, [initialData, onClear, requestConfirmation]);
 
-  const onConvertToVariants = useCallback(
-    async (groupName: string) => {
-      if (!initialData) return;
-
-      try {
-        setLoading(true);
-        const response = await axios.post<{ productGroupId: string }>(
-          `/api/${params.storeId}/${Models.Products}/${initialData.id}/convert-to-variants`,
-          { name: groupName },
-        );
-
-        clearStorage();
-        setConvertToVariantsOpen(false);
-        toast({
-          description:
-            "Grupo creado. Ahora agrega las demás opciones con su propio stock.",
-          variant: "success",
-        });
-        router.push(
-          `/${params.storeId}/${Models.Products}/grupo/${response.data.productGroupId}`,
-        );
-      } catch (error) {
-        toast({
-          description: getErrorMessage(error),
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [clearStorage, initialData, params.storeId, router, toast],
-  );
-
   const onCreateReviewedVariants = useCallback(
     async (payload: ProductVariantReviewPayload) => {
       if (!initialData) return;
 
       try {
         setLoading(true);
-        const response = await axios.post<{ productGroupId: string }>(
+        const response = await axios.post<{
+          productGroupId: string;
+          createdProductIds: string[];
+          copiedOffers: number;
+        }>(
           `/api/${params.storeId}/${Models.Products}/${initialData.id}/convert-to-variants/review`,
           payload,
         );
 
         clearStorage();
-        setReviewVariantsOpen(false);
+        setConversionOpen(false);
         setVariantReviewAnalysis(null);
+        const created = response.data.createdProductIds?.length ?? 0;
+        const copied = response.data.copiedOffers ?? 0;
         toast({
+          title: "Grupo creado",
           description:
-            "Variantes creadas con el inventario distribuido y registrado.",
+            created === 0
+              ? "El producto ahora es la primera opción de su grupo. Agrega las demás desde el grupo."
+              : `${created} ${created === 1 ? "opción nueva" : "opciones nuevas"} con el inventario repartido y registrado en el kardex${copied > 0 ? `; ${copied} ${copied === 1 ? "oferta copiada" : "ofertas copiadas"}` : ""}.`,
           variant: "success",
         });
         router.push(
@@ -901,16 +878,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         return;
       }
 
-      if (
-        analysis?.variantCandidates.length &&
-        analysis.variantCandidates.length >= 2
-      ) {
-        setVariantReviewAnalysis(analysis);
-        setReviewVariantsOpen(true);
-        return;
-      }
-
-      setConvertToVariantsOpen(true);
+      // Con dos o más opciones vistas por la IA, el paso 2 llega prellenado.
+      setVariantReviewAnalysis(
+        analysis?.variantCandidates.length && analysis.variantCandidates.length >= 2
+          ? analysis
+          : null,
+      );
+      setConversionOpen(true);
     },
     [form.formState.isDirty, initialData, toast],
   );
@@ -1173,35 +1147,32 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         />
       )}
       {initialData && (
-        <ConvertProductToVariantsModal
-          defaultName={initialData.name}
-          isOpen={convertToVariantsOpen}
-          loading={loading}
-          onClose={() => setConvertToVariantsOpen(false)}
-          onConfirm={onConvertToVariants}
-        />
-      )}
-      {initialData && (
-        <ReviewProductVariantsModal
-          analysis={variantReviewAnalysis}
-          colors={availableColors}
-          defaultName={initialData.name}
-          defaultVariant={{
+        <ConvertProductWizard
+          product={{
+            name: initialData.name,
+            sku: initialData.sku,
+            slug: initialData.slug,
+            stock: watchedStock,
+            price: initialData.price,
+            acqPrice: initialData.acqPrice,
+            gtin: initialData.gtin,
+            imageUrls: watchedImages?.map((image) => image.url) ?? [],
             colorId: watchedColorId,
             designId: watchedDesignId,
             sizeId: watchedSizeId,
-            stock: watchedStock,
           }}
+          analysis={variantReviewAnalysis}
+          colors={availableColors}
           designs={availableDesigns}
-          imageUrls={watchedImages?.map((image) => image.url) ?? []}
-          isOpen={reviewVariantsOpen}
+          sizes={availableSizes}
+          activeOffers={activeOffers}
+          isOpen={conversionOpen}
           loading={loading}
           onClose={() => {
-            setReviewVariantsOpen(false);
+            setConversionOpen(false);
             setVariantReviewAnalysis(null);
           }}
           onConfirm={onCreateReviewedVariants}
-          sizes={availableSizes}
         />
       )}
       <FormPageHeader

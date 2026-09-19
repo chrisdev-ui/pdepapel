@@ -1544,6 +1544,7 @@ enum InventoryMovementType {
   FESTIVAL_ALLOCATION // Removed from online availability
   FESTIVAL_RETURN // Returned to online availability
   IN_PERSON_SALE // Decrease from a confirmed in-person sale
+  VARIANT_CONVERSION // Reparto del stock de un producto suelto entre sus variantes nuevas
 }
 
 enum FairEventStatus {

@@ -45,6 +45,7 @@ const FILTER_TYPES: InventoryMovementType[] = [
   "FESTIVAL_RETURN",
   "INITIAL_INTAKE",
   "INITIAL_MIGRATION",
+  "VARIANT_CONVERSION",
 ];
 
 function stockTone(stock: number, threshold: number): string {

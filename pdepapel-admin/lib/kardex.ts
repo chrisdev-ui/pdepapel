@@ -27,6 +27,7 @@ export const MOVEMENT_LABELS: Record<InventoryMovementType, string> = {
   PROMOTION: "Promoción",
   INITIAL_INTAKE: "Ingreso inicial",
   INITIAL_MIGRATION: "Migración",
+  VARIANT_CONVERSION: "Conversión a variantes",
 };
 
 export const MOVEMENT_TONES: Record<InventoryMovementType, TintTone> = {
@@ -45,6 +46,7 @@ export const MOVEMENT_TONES: Record<InventoryMovementType, TintTone> = {
   LOST: "pink",
   RETURN: "mint",
   ORDER_CANCELLED: "mint",
+  VARIANT_CONVERSION: "lavender",
 };
 
 /** Salidas por venta (se cuentan en valor absoluto). */

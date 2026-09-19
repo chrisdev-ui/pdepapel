@@ -59,6 +59,8 @@ vi.mock("@/lib/api-errors", () => ({
 }));
 
 import { POST } from "@/app/api/[storeId]/products/[productId]/convert-to-variants/review/route";
+import { createInventoryMovementBatch } from "@/lib/inventory";
+import { generateSemanticSKU } from "@/lib/variant-generator";
 
 const identifiers = {
   color: "5e1d53da-1831-4dd7-9868-1db789af4811",
@@ -69,15 +71,53 @@ const identifiers = {
 const product = {
   id: "product-id",
   storeId: "store-id",
+  name: "Termo pastel rosa",
+  description: "Termo de acero",
+  categoryId: "category-id",
+  brand: "P de Papel",
+  price: 17500,
+  acqPrice: 11000,
+  transportationCost: 1200,
+  shippingProfileId: "profile-id",
+  availableAt: new Date("2026-09-01T00:00:00.000Z"),
+  supplierId: "supplier-id",
+  isFeatured: false,
   productGroupId: null,
   isArchived: false,
   isKit: false,
   stock: 7,
   images: [
-    { url: "https://example.com/first.jpg" },
-    { url: "https://example.com/second.jpg" },
+    { url: "https://example.com/first.jpg", isMain: true },
+    { url: "https://example.com/second.jpg", isMain: false },
   ],
+  catalogOptionValues: [{ optionId: "option-id", optionValueId: "value-id" }],
+  offers: [{ offerId: "offer-id" }],
 };
+
+/** Transacción con lo justo para crear el grupo y una opción nueva. */
+function transactionMocks() {
+  const tx = {
+    category: { findFirst: vi.fn().mockResolvedValue({ id: "category-id", name: "Termos" }) },
+    productGroup: { create: vi.fn().mockResolvedValue({ id: "group-id" }) },
+    color: { findFirst: vi.fn().mockResolvedValue({ id: identifiers.color, name: "Rosa", value: "#FFC0CB" }) },
+    design: {
+      // Por id: el diseño actual existe; por nombre («Floral»): no, se crea.
+      findFirst: vi.fn().mockImplementation(async ({ where }: { where: { id?: string } }) =>
+        where.id ? { id: identifiers.design, name: "Clásico" } : null,
+      ),
+      create: vi.fn().mockResolvedValue({ id: "design-new", name: "Floral" }),
+    },
+    size: { findFirst: vi.fn().mockResolvedValue({ id: identifiers.size, name: "Único", value: "U" }) },
+    product: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: "created-id" }),
+    },
+    image: { deleteMany: vi.fn(), create: vi.fn() },
+  };
+  mocks.transaction.mockImplementation(async (callback: (client: unknown) => unknown) => callback(tx));
+  return tx;
+}
 
 function requestBody(overrides: Record<string, unknown> = {}) {
   return {
@@ -177,5 +217,68 @@ describe("POST /api/[storeId]/products/[productId]/convert-to-variants/review", 
         "Cada opción debe usar una imagen que pertenezca al producto actual",
     });
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Fase 2B: la opción nueva perdía envío por unidad, perfil de envío,
+   * «disponible desde», opciones para clientes y ofertas, y el reparto se
+   * registraba como ajuste manual suelto.
+   */
+  it("carries shipping fields, catalog options and offers to the new option and logs the split as a conversion", async () => {
+    const tx = transactionMocks();
+    vi.mocked(generateSemanticSKU).mockReturnValue("TER-FLO-ROS-U-1");
+
+    const response = await submit(requestBody());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      productGroupId: "group-id",
+      createdProductIds: ["created-id"],
+      copiedOffers: 1,
+    });
+    const created = tx.product.create.mock.calls[0][0].data;
+    expect(created).toMatchObject({
+      transportationCost: 1200,
+      shippingProfileId: "profile-id",
+      availableAt: product.availableAt,
+      supplierId: "supplier-id",
+      hasNoProductIdentifier: true,
+      productGroupId: "group-id",
+      catalogOptionValues: {
+        createMany: { data: [{ storeId: "store-id", optionId: "option-id", optionValueId: "value-id" }] },
+      },
+      offers: { createMany: { data: [{ offerId: "offer-id" }] } },
+    });
+    expect(created).not.toHaveProperty("gtin");
+
+    const movements = vi.mocked(createInventoryMovementBatch).mock.calls[0][1];
+    expect(movements).toEqual([
+      expect.objectContaining({ productId: "product-id", type: "VARIANT_CONVERSION", quantity: -3, referenceId: "group-id" }),
+      expect.objectContaining({ productId: "created-id", type: "VARIANT_CONVERSION", quantity: 3, referenceId: "group-id" }),
+    ]);
+  });
+
+  it("leaves the offers behind when the owner unticks «copiar ofertas»", async () => {
+    const tx = transactionMocks();
+    const response = await submit(requestBody({ copyOffers: false }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ copiedOffers: 0 });
+    expect(tx.product.create.mock.calls[0][0].data.offers).toEqual({ createMany: { data: [] } });
+  });
+
+  it("creates the group with only the current product when no other option is added", async () => {
+    const tx = transactionMocks();
+    const response = await submit(
+      requestBody({ variants: [{ ...requestBody().variants[0], stock: 7 }] }),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      productGroupId: "group-id",
+      createdProductIds: [],
+      copiedOffers: 0,
+    });
+    expect(tx.product.create).not.toHaveBeenCalled();
+    // Todo el stock se queda en el producto: no hay movimiento que registrar.
+    expect(vi.mocked(createInventoryMovementBatch).mock.calls[0][1]).toEqual([]);
   });
 });

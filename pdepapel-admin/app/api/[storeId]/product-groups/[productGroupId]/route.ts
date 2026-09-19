@@ -442,6 +442,11 @@ export async function DELETE(
     const deleteVariants = url.searchParams.get("deleteVariants") === "true";
 
     const imageUrlsToDelete: string[] = [];
+    let ungrouped: {
+      variants: { id: string; name: string }[];
+      offersCarried: number;
+      photosCopiedTo: number;
+    } | null = null;
     const deletedGroup = await prismadb.$transaction(async (tx) => {
       // Todo filtrado por tienda: el grupo, sus variantes y sus fotos.
       const group = await tx.productGroup.findFirst({
@@ -456,7 +461,7 @@ export async function DELETE(
       });
       const groupImages = await tx.image.findMany({
         where: { productGroupId: params.productGroupId },
-        select: { url: true },
+        select: { url: true, isMain: true },
       });
       imageUrlsToDelete.push(...groupImages.map((image) => image.url));
 
@@ -491,10 +496,56 @@ export async function DELETE(
           where: { productGroupId: params.productGroupId, storeId: params.storeId },
         });
       } else {
+        // «Desagrupar»: cada variante sigue siendo el mismo producto (SKU,
+        // stock, kardex, pedidos, URL). Lo que era del grupo y se perdería
+        // pasa a cada una: las ofertas del grupo y, para la variante sin
+        // fotos propias, las fotos del grupo.
+        const groupOffers = await tx.offerProductGroup.findMany({
+          where: { productGroupId: params.productGroupId },
+          select: { offerId: true },
+        });
+        const childIds = children.map((child) => child.id);
+        const alreadyLinked =
+          groupOffers.length > 0
+            ? await tx.offerProduct.findMany({
+                where: {
+                  productId: { in: childIds },
+                  offerId: { in: groupOffers.map((offer) => offer.offerId) },
+                },
+                select: { offerId: true, productId: true },
+              })
+            : [];
+        const linked = new Set(
+          alreadyLinked.map((row) => `${row.offerId}:${row.productId}`),
+        );
+        const offerRows = children.flatMap((child) =>
+          groupOffers
+            .filter((offer) => !linked.has(`${offer.offerId}:${child.id}`))
+            .map((offer) => ({ offerId: offer.offerId, productId: child.id })),
+        );
+        if (offerRows.length > 0) {
+          await tx.offerProduct.createMany({ data: offerRows });
+        }
+        const withoutPhotos = children.filter((child) => child.images.length === 0);
+        const photoRows = withoutPhotos.flatMap((child) =>
+          groupImages.map((image) => ({
+            productId: child.id,
+            url: image.url,
+            isMain: image.isMain,
+          })),
+        );
+        if (photoRows.length > 0) {
+          await tx.image.createMany({ data: photoRows });
+        }
         await tx.product.updateMany({
           where: { productGroupId: params.productGroupId, storeId: params.storeId },
           data: { productGroupId: null },
         });
+        ungrouped = {
+          variants: children.map((child) => ({ id: child.id, name: child.name })),
+          offersCarried: offerRows.length,
+          photosCopiedTo: photoRows.length > 0 ? withoutPhotos.length : 0,
+        };
       }
 
       return tx.productGroup.delete({ where: { id: params.productGroupId } });
@@ -503,7 +554,7 @@ export async function DELETE(
     await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCT_GROUP_DELETE");
     await invalidateStoreProductsCache(params.storeId);
 
-    return NextResponse.json(deletedGroup, { headers: corsHeaders });
+    return NextResponse.json({ ...deletedGroup, ungrouped }, { headers: corsHeaders });
   } catch (error) {
     console.log("[PRODUCT_GROUP_DELETE]", error);
     return handleErrorResponse(error, "PRODUCT_GROUP_DELETE", {

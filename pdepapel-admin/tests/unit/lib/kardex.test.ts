@@ -122,7 +122,7 @@ describe("describeWho", () => {
 describe("labels and tones", () => {
   it("has a Spanish label and a tone for every movement type", () => {
     const types = Object.keys(MOVEMENT_LABELS);
-    expect(types).toHaveLength(15);
+    expect(types).toHaveLength(16);
     for (const type of types) {
       expect(MOVEMENT_LABELS[type as keyof typeof MOVEMENT_LABELS]).not.toBe("");
       expect(["mint", "cream", "sky", "pink", "lavender", "slate"]).toContain(MOVEMENT_TONES[type as keyof typeof MOVEMENT_TONES]);
@@ -133,6 +133,8 @@ describe("labels and tones", () => {
     expect(MOVEMENT_LABELS.PURCHASE).toBe("Recepción");
     expect(MOVEMENT_TONES.DAMAGE).toBe("pink");
     expect(MOVEMENT_TONES.LOST).toBe("pink");
+    // Fase 2B: el reparto al convertir un producto en variantes tiene tipo propio.
+    expect(MOVEMENT_LABELS.VARIANT_CONVERSION).toBe("Conversión a variantes");
   });
 
   it("describes adjustment counts in Spanish with plurals", () => {

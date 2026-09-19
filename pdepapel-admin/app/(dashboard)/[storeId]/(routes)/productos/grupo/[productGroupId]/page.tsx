@@ -20,6 +20,8 @@ const ProductGroupPage = async ({
     },
     include: {
       images: true,
+      // Solo el conteo: «Desagrupar» dice cuántas ofertas del grupo pasan a cada variante.
+      offers: { select: { offerId: true } },
       products: {
         include: {
           images: true,

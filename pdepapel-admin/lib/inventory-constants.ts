@@ -13,7 +13,8 @@ export type MovementType =
   | "STORE_USE"
   | "FESTIVAL_ALLOCATION"
   | "FESTIVAL_RETURN"
-  | "IN_PERSON_SALE";
+  | "IN_PERSON_SALE"
+  | "VARIANT_CONVERSION";
 
 export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   ORDER_PLACED: "Venta",
@@ -31,6 +32,7 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   FESTIVAL_ALLOCATION: "Asignación a feria (-)",
   FESTIVAL_RETURN: "Devolución de feria (+)",
   IN_PERSON_SALE: "Venta presencial (-)",
+  VARIANT_CONVERSION: "Conversión a variantes (+/-)",
 };
 
 export const MANUAL_ADJUSTMENT_OPTIONS: {
