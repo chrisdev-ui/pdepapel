@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -14,6 +14,7 @@ import {
   isProductionDatabaseUrl,
   markApprovalUsed,
   reasonNamesModel,
+  runnerFor,
 } from "../../../scripts/lib/prod-guard.mjs";
 
 const NOW = Date.parse("2026-09-19T12:00:00.000Z");
@@ -71,10 +72,20 @@ describe("target and script checks", () => {
       scriptPath: "scripts/limpiar.mjs",
       scriptHash: "abcd1234abcd1234",
       target: "root@monorail.proxy.rlwy.net/railway",
+      status: "ok",
       exitCode: 0,
       rowsAffected: 7,
     });
-    expect(line).toBe('2026-09-19T12:00:00.000Z | christian | root@monorail.proxy.rlwy.net/railway | scripts/limpiar.mjs@abcd1234abcd1234 | exit=0 | rows=7 | "borrar el grupo de prueba"\n');
+    expect(line).toBe('2026-09-19T12:00:00.000Z | christian | root@monorail.proxy.rlwy.net/railway | scripts/limpiar.mjs@abcd1234abcd1234 | estado=ok | exit=0 | rows=7 | "borrar el grupo de prueba"\n');
+  });
+
+  it("runs .ts with tsx (the project convention), .mjs/.js with node, and refuses anything else", () => {
+    const projectRoot = "/repo/pdepapel-admin";
+    expect(runnerFor("scripts/verify-schema.ts", { projectRoot, nodePath: "/bin/node" })).toMatchObject({ runner: "tsx", command: "/repo/pdepapel-admin/node_modules/.bin/tsx" });
+    expect(runnerFor("scripts/limpiar.mjs", { projectRoot, nodePath: "/bin/node" })).toMatchObject({ runner: "node", command: "/bin/node" });
+    expect(runnerFor("scripts/viejo.js", { projectRoot, nodePath: "/bin/node" })).toMatchObject({ runner: "node" });
+    expect(runnerFor("scripts/algo.sql", { projectRoot })).toBeNull();
+    expect(runnerFor("scripts/sin-extension", { projectRoot })).toBeNull();
   });
 });
 
@@ -105,7 +116,8 @@ describe("prod-write wrapper", () => {
       env: { ...process.env, PROD_WRITE_EXTRA_ROOT: "" },
     });
     expect(result.status).toBe(2);
-    expect(result.stderr).toMatch(/prod-write: (falta \.env\.prod-write|No hay aprobación|el destino no es)/);
+    // En la máquina de un desarrollador puede quedar una aprobación vieja: cualquiera de estas negativas vale.
+    expect(result.stderr).toMatch(/^prod-write: .*(falta \.env\.prod-write|No hay aprobación|ya se usó|venció|el destino no es)/);
     const after = existsSync(logFile) ? readFileSync(logFile, "utf8") : "";
     expect(after).toBe(before);
   });
@@ -115,5 +127,72 @@ describe("prod-write wrapper", () => {
     const rogue = join(scratch, "rogue.mjs");
     writeFileSync(rogue, "console.log('nunca')\n");
     expect(isAllowedScriptPath(rogue, { projectRoot })).toBe(false);
+  });
+
+  /**
+   * Corridas completas del envoltorio en un proyecto de mentira: mismos
+   * guiones, `.env.prod-write` con un host de Railway falso y una aprobación
+   * fresca. Ningún guion abre conexión: sólo se comprueba qué se gasta y qué
+   * queda escrito en el registro según cómo termine el hijo.
+   */
+  const fakeProject = ({ linkNodeModules = true } = {}) => {
+    const root = mkdtempSync(join(tmpdir(), "prod-write-"));
+    mkdirSync(join(root, "scripts", "lib"), { recursive: true });
+    for (const file of ["prod-write.mjs", "lib/prod-guard.mjs"]) {
+      writeFileSync(join(root, "scripts", file), readFileSync(resolve(projectRoot, "scripts", file)));
+    }
+    writeFileSync(join(root, ".env.prod-write"), "DATABASE_URL=mysql://root:falso@prueba.proxy.rlwy.net:1/railway\n");
+    writeFileSync(join(root, ".prod-write-approval.json"), JSON.stringify(buildApproval({ reason: "prueba del envoltorio en un directorio temporal", operator: "vitest" })));
+    if (linkNodeModules) symlinkSync(resolve(projectRoot, "node_modules"), join(root, "node_modules"), "dir");
+    const run = (script: string) =>
+      spawnSync(process.execPath, [join(root, "scripts", "prod-write.mjs"), script], { cwd: root, encoding: "utf8", env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" } });
+    const approvalUsed = () => Boolean(JSON.parse(readFileSync(join(root, ".prod-write-approval.json"), "utf8")).usedAt);
+    const log = () => (existsSync(join(root, "ops/prod-writes.log")) ? readFileSync(join(root, "ops/prod-writes.log"), "utf8") : "");
+    return { root, run, approvalUsed, log };
+  };
+
+  it("refuses an extension it cannot run before spending the approval", () => {
+    const project = fakeProject();
+    writeFileSync(join(project.root, "scripts/algo.sql"), "SELECT 1;\n");
+    const result = project.run("scripts/algo.sql");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/no sé ejecutar scripts\/algo\.sql/);
+    expect(project.approvalUsed()).toBe(false);
+    expect(project.log()).toBe("");
+  });
+
+  it("runs a TypeScript script through tsx and logs estado=ok with the rows it reports", () => {
+    const project = fakeProject();
+    writeFileSync(join(project.root, "scripts/lee.ts"), 'const n: number = 3;\nconsole.log(`PROD_WRITE_ROWS=${n}`);\n');
+    const result = project.run("scripts/lee.ts");
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("(con tsx)");
+    expect(project.approvalUsed()).toBe(true);
+    expect(project.log()).toMatch(/ \| scripts\/lee\.ts@[0-9a-f]{16} \| estado=ok \| exit=0 \| rows=3 \| "prueba del envoltorio en un directorio temporal"\n$/);
+  });
+
+  it("records a script that started and failed as estado=error and still spends the approval", () => {
+    const project = fakeProject();
+    writeFileSync(join(project.root, "scripts/rompe.mjs"), "process.exit(1);\n");
+    const result = project.run("scripts/rompe.mjs");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/estado «error»/);
+    expect(project.approvalUsed()).toBe(true);
+    expect(project.log()).toMatch(/ \| estado=error \| exit=1 \| rows=\? \| /);
+  });
+
+  it("keeps the approval when the child process never starts and records estado=sin-arrancar", () => {
+    const project = fakeProject({ linkNodeModules: false });
+    // Un «tsx» que existe pero no se puede ejecutar: spawn falla con EACCES.
+    mkdirSync(join(project.root, "node_modules", ".bin"), { recursive: true });
+    writeFileSync(join(project.root, "node_modules/.bin/tsx"), "no ejecutable\n");
+    chmodSync(join(project.root, "node_modules/.bin/tsx"), 0o644);
+    writeFileSync(join(project.root, "scripts/lee.ts"), "console.log('nunca');\n");
+    const result = project.run("scripts/lee.ts");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/no arrancó .*la aprobación sigue válida/);
+    expect(project.approvalUsed()).toBe(false);
+    expect(project.log()).toMatch(/ \| estado=sin-arrancar \| exit=- \| rows=\? \| /);
   });
 });

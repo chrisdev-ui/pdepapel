@@ -118,17 +118,55 @@ export function isAllowedScriptPath(scriptPath, { projectRoot, extraRoots = [] }
   });
 }
 
+/**
+ * Con qué se ejecuta cada guion: `.mjs/.cjs/.js` con Node; `.ts/.mts/.tsx`
+ * con `tsx`, que es lo que ya usan los guiones TypeScript del proyecto
+ * (`normalize:product-slugs`, `export:products`, …). Cualquier otra
+ * extensión se rechaza ANTES de gastar la aprobación: Node no carga `.ts`
+ * a pelo y el primer intento real murió con ERR_UNKNOWN_FILE_EXTENSION.
+ * @param {string} scriptPath
+ * @param {{ projectRoot: string, nodePath?: string }} options
+ * @returns {{ command: string, args: string[], runner: "node" | "tsx" } | null}
+ */
+export function runnerFor(scriptPath, { projectRoot, nodePath = process.execPath }) {
+  const extension = scriptPath.toLowerCase().match(/\.[a-z]+$/)?.[0] ?? "";
+  if ([".mjs", ".cjs", ".js"].includes(extension)) {
+    return { command: nodePath, args: [], runner: "node" };
+  }
+  if ([".ts", ".mts", ".tsx"].includes(extension)) {
+    const tsx = resolve(projectRoot, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
+    return { command: tsx, args: [], runner: "tsx" };
+  }
+  return null;
+}
+
+/** Estados posibles de una corrida en el registro. */
+export const RUN_STATUS = {
+  /** El guion corrió y terminó con código 0. */
+  ok: "ok",
+  /** El guion corrió (pudo tocar la base) y terminó con error. */
+  error: "error",
+  /** El proceso nunca arrancó: nada pudo llegar a la base. */
+  notStarted: "sin-arrancar",
+};
+
 export function hashFile(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 16);
 }
 
-/** Una línea por escritura, en el registro que va al repositorio. */
-export function formatLogLine({ at, operator, reason, scriptPath, scriptHash, target, exitCode, rowsAffected }) {
+/**
+ * Una línea por corrida, en el registro que va al repositorio. `status` dice
+ * qué pasó de verdad: `ok`, `error` (corrió y falló) o `sin-arrancar` (nunca
+ * llegó a la base). Antes toda corrida quedaba con la misma forma y un
+ * fallo al cargar el guion se leía como una escritura hecha.
+ */
+export function formatLogLine({ at, operator, reason, scriptPath, scriptHash, target, status, exitCode, rowsAffected }) {
   const cells = [
     new Date(at).toISOString(),
     operator ?? "?",
     target,
     `${scriptPath}@${scriptHash}`,
+    `estado=${status}`,
     `exit=${exitCode}`,
     rowsAffected === undefined || rowsAffected === null ? "rows=?" : `rows=${rowsAffected}`,
     JSON.stringify(reason),
