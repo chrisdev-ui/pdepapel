@@ -29,6 +29,8 @@ type BarcodeScannerProps = {
   className?: string;
   /** Ofrecer «Usar el celular como escáner» (necesita el storeId de la ruta). */
   remote?: boolean;
+  /** `sm` iguala los botones pequeños de una cabecera de sección. */
+  size?: "default" | "sm";
 };
 
 export function getCameraErrorMessage(cameraError: unknown) {
@@ -54,6 +56,7 @@ export function BarcodeScanner({
   compact = false,
   className,
   remote = true,
+  size = "default",
 }: BarcodeScannerProps) {
   const params = useParams();
   const storeId = remote ? String(params?.storeId ?? "") : "";
@@ -183,8 +186,9 @@ export function BarcodeScanner({
         <Button
           type="button"
           variant="outline"
+          size={size === "sm" ? "sm" : "default"}
           aria-label={label}
-          className="min-h-[2.5rem]"
+          className={size === "sm" ? undefined : "min-h-[2.5rem]"}
           onClick={() => void requestCamera()}
         >
           <Camera className={compact ? "h-4 w-4 sm:mr-2" : "mr-2 h-4 w-4"} aria-hidden="true" />
@@ -194,7 +198,7 @@ export function BarcodeScanner({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            size={size === "sm" ? "icon-sm" : "icon"}
             aria-label={
               remotePaired
                 ? remoteScanner.receiving

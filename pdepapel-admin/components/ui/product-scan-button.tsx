@@ -16,6 +16,8 @@ interface ProductScanButtonProps {
   /** Aviso al encontrarlo; útil cuando la pantalla no muestra la elección de inmediato. */
   notify?: boolean;
   storeId?: string;
+  /** `sm` para cabeceras de sección con botones pequeños. */
+  size?: "default" | "sm";
 }
 
 /**
@@ -33,6 +35,7 @@ export function ProductScanButton({
   className,
   notify = false,
   storeId,
+  size = "default",
 }: ProductScanButtonProps) {
   const { resolve } = useProductScanLookup(storeId);
   const { toast } = useToast();
@@ -51,5 +54,5 @@ export function ProductScanButton({
     onFound(product);
   }
 
-  return <BarcodeScanner onDetected={(code) => void onDetected(code)} description={description} label={label} compact={compact} className={className} />;
+  return <BarcodeScanner onDetected={(code) => void onDetected(code)} description={description} label={label} compact={compact} className={className} size={size} />;
 }

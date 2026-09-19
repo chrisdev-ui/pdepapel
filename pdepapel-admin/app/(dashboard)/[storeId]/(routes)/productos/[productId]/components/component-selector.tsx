@@ -24,7 +24,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
+import { useToast } from "@/hooks/use-toast";
 import { cn, currencyFormatter } from "@/lib/utils";
 
 // Interface matched to API response
@@ -77,6 +79,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
   excludeId,
 }) => {
   const params = useParams();
+  const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -180,6 +183,35 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
     // setOpen(false);
   };
 
+  /**
+   * Escanear un componente: resuelto el código, se pregunta al mismo
+   * endpoint de la lista por ese id. Si no vuelve es porque es un kit, está
+   * archivado o es este mismo producto: las mismas reglas, sin repetirlas aquí.
+   */
+  const onScanned = async (product: { id: string; name: string }) => {
+    if (selectedIds.has(product.id)) {
+      toast({ title: "Ya está en el kit", description: product.name });
+      return;
+    }
+    try {
+      const exclude = excludeId ? `&excludeId=${encodeURIComponent(excludeId)}` : "";
+      const response = await axios.get(`/api/${params.storeId}/products/selectable?id=${encodeURIComponent(product.id)}&limit=1${exclude}`);
+      const row = (response.data?.products as ProductForItem[] | undefined)?.[0];
+      if (!row) {
+        toast({
+          title: "No puede ser componente",
+          description: `«${product.name}» es un kit, está archivado o es este mismo producto. Solo entran productos sueltos a la venta.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      onAdd(row);
+      toast({ title: "Componente agregado", description: row.name, variant: "success" });
+    } catch {
+      toast({ title: "No se pudo comprobar el producto", description: "Revisa la conexión e inténtalo de nuevo.", variant: "destructive" });
+    }
+  };
+
   const onRemove = (id: string) => {
     onChange(value.filter((item) => item.componentId !== id));
   };
@@ -193,27 +225,8 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
     );
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Trigger Button (Combobox Style) */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            disabled={disabled}
-            className="w-full min-w-0 justify-between"
-          >
-            <span>Agregar productos al kit...</span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </DialogTrigger>
-        {/* Maximized Dialog */}
-        <DialogContent className="max-w-[95vw] gap-0 p-0 lg:max-w-7xl">
-          <DialogTitle className="sr-only">
-            Buscar productos para el kit
-          </DialogTitle>
+  const KitPickerBody = () => (
+    <>
           <div className="flex min-w-0 items-center justify-between border-b py-2 pl-4 pr-12">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <Search className="h-5 w-5 text-muted-foreground" />
@@ -373,8 +386,48 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
               </div>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+    </>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Trigger Button (Combobox Style) + escanear un componente */}
+      <div className="flex min-w-0 items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                disabled={disabled}
+                className="w-full min-w-0 justify-between"
+              >
+                <span>Agregar productos al kit...</span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </DialogTrigger>
+            {/* Maximized Dialog */}
+            <DialogContent className="max-w-[95vw] gap-0 p-0 lg:max-w-7xl">
+              <DialogTitle className="sr-only">
+                Buscar productos para el kit
+              </DialogTitle>
+              <KitPickerBody />
+            </DialogContent>
+          </Dialog>
+        </div>
+        {!disabled && (
+          <ProductScanButton
+            compact
+            label="Escanear producto para el kit"
+            description="Apunta al QR de una etiqueta o al código de barras del producto que va dentro del kit."
+            onFound={(product) => void onScanned(product)}
+          />
+        )}
+      </div>
+      <p className="-mt-4 text-xs text-muted-foreground">
+        Busca en la lista o pulsa Escanear y apunta al código del producto: entra al kit con cantidad 1.
+      </p>
 
       {/* Selected Components List (AdminCartItem Style) */}
       <div className="flex flex-col gap-4">

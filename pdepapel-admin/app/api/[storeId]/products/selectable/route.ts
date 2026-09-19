@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import prismadb from "@/lib/prismadb";
 import { handleErrorResponse } from "@/lib/api-errors";
+import { buildSelectableWhere } from "@/lib/product-pickers";
 import { checkIfStoreOwner } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -33,23 +34,10 @@ export async function GET(
     const limit = parseInt(searchParams.get("limit") || "20");
     // El propio kit nunca aparece como componente de sí mismo.
     const excludeId = searchParams.get("excludeId") || undefined;
+    // Escaneo: un id concreto, sometido a las mismas reglas que la lista.
+    const id = searchParams.get("id") || undefined;
 
-    const whereClause = {
-      storeId: params.storeId,
-      isArchived: false,
-      isKit: false, // STRICTLY EXCLUDE KITS
-      ...(excludeId ? { NOT: { id: excludeId } } : {}),
-      OR: query
-        ? [
-            { name: { contains: query } },
-            {
-              category: {
-                name: { contains: query },
-              },
-            },
-          ]
-        : undefined,
-    };
+    const whereClause = buildSelectableWhere({ storeId: params.storeId, query, excludeId, id });
 
     const products = await prismadb.product.findMany({
       where: whereClause,
