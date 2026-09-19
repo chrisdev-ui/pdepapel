@@ -4,10 +4,14 @@ import {
   BrowserMultiFormatReader,
   type IScannerControls,
 } from "@zxing/browser";
-import { Camera, Loader2, RefreshCw } from "lucide-react";
+import { Camera, Loader2, RefreshCw, Smartphone } from "lucide-react";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { RemoteScannerDialog } from "@/components/ui/remote-scanner-dialog";
+import { useRemoteScanner } from "@/hooks/use-remote-scanner";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -23,9 +27,11 @@ type BarcodeScannerProps = {
   /** Solo el icono en celular; el nombre sigue en `aria-label`. */
   compact?: boolean;
   className?: string;
+  /** Ofrecer «Usar el celular como escáner» (necesita el storeId de la ruta). */
+  remote?: boolean;
 };
 
-function getCameraErrorMessage(cameraError: unknown) {
+export function getCameraErrorMessage(cameraError: unknown) {
   if (cameraError instanceof DOMException) {
     if (cameraError.name === "NotAllowedError") {
       return "Permite el uso de la cámara en los permisos del navegador e inténtalo de nuevo.";
@@ -47,7 +53,11 @@ export function BarcodeScanner({
   label = "Escanear",
   compact = false,
   className,
+  remote = true,
 }: BarcodeScannerProps) {
+  const params = useParams();
+  const storeId = remote ? String(params?.storeId ?? "") : "";
+  const [remoteOpen, setRemoteOpen] = useState(false);
   const controlsRef = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectedRef = useRef(false);
@@ -64,6 +74,9 @@ export function BarcodeScanner({
   useEffect(() => {
     onDetectedRef.current = onDetected;
   }, [onDetected]);
+  // El celular vinculado entrega por el mismo camino que la cámara local.
+  const remoteScanner = useRemoteScanner(storeId, (code) => onDetectedRef.current(code));
+  const remotePaired = remoteScanner.status === "paired";
 
   const stopScanner = useCallback(() => {
     controlsRef.current?.stop();
@@ -166,16 +179,48 @@ export function BarcodeScanner({
         setOpen(true);
       }}
     >
-      <Button
-        type="button"
-        variant="outline"
-        aria-label={label}
-        className={className}
-        onClick={() => void requestCamera()}
-      >
-        <Camera className={compact ? "h-4 w-4 sm:mr-2" : "mr-2 h-4 w-4"} aria-hidden="true" />
-        <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
-      </Button>
+      <div className={cn("flex min-w-0 items-center gap-1", className)}>
+        <Button
+          type="button"
+          variant="outline"
+          aria-label={label}
+          className="min-h-[2.5rem]"
+          onClick={() => void requestCamera()}
+        >
+          <Camera className={compact ? "h-4 w-4 sm:mr-2" : "mr-2 h-4 w-4"} aria-hidden="true" />
+          <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
+        </Button>
+        {remoteScanner.enabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={
+              remotePaired
+                ? remoteScanner.receiving
+                  ? "Celular vinculado: recibe aquí"
+                  : "Celular vinculado: recibir aquí"
+                : "Usar el celular como escáner"
+            }
+            title={remotePaired ? (remoteScanner.receiving ? "Celular vinculado · recibe aquí" : "Celular vinculado · pulsa para recibir aquí") : "Usar el celular como escáner"}
+            className="relative shrink-0"
+            data-remote-scanner={remotePaired ? (remoteScanner.receiving ? "receiving" : "paired") : remoteScanner.status}
+            onClick={() => {
+              remoteScanner.claim();
+              setRemoteOpen(true);
+            }}
+          >
+            <Smartphone className="h-4 w-4" aria-hidden="true" />
+            {remotePaired && (
+              <span
+                className={cn("absolute right-1.5 top-1.5 h-2 w-2 rounded-full", remoteScanner.receiving ? "bg-green-600" : "bg-slate-400")}
+                aria-hidden="true"
+              />
+            )}
+          </Button>
+        )}
+      </div>
+      {remoteScanner.enabled && <RemoteScannerDialog open={remoteOpen} onOpenChange={setRemoteOpen} remote={remoteScanner} />}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Escanear código</DialogTitle>
