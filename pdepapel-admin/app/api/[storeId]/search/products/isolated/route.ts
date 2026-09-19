@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { buildIsolatedWhere } from "@/lib/product-pickers";
 import { verifyStoreOwner } from "@/lib/utils";
 
 export async function GET(
@@ -24,45 +25,16 @@ export async function GET(
     const page = parseInt(searchParams.get("page") || "1");
     const skip = (page - 1) * limit;
 
-    const whereClause: any = {
-      storeId: params.storeId,
-      productGroupId: null, // Only standalone products
-      isArchived: false,
-    };
-
-    if (query) {
-      whereClause.OR = [
-        {
-          name: {
-            contains: query,
-          },
-        },
-        {
-          description: {
-            contains: query,
-          },
-        },
-        {
-          sku: {
-            contains: query,
-          },
-        },
-      ];
-    }
-
-    if (categoryId && categoryId !== "all") {
-      whereClause.categoryId = categoryId;
-    }
-
+    // Escaneo: un id concreto, sometido a las mismas reglas que la lista
+    // (suelto y a la venta).
+    const id = searchParams.get("id") || undefined;
     // Productos sueltos que usan alguna de estas fotos: el formulario de grupo
     // lo consulta antes de crear una variante generada.
     const imageUrls = (searchParams.get("imageUrls") || "")
       .split(",")
       .map((url) => url.trim())
       .filter(Boolean);
-    if (imageUrls.length > 0) {
-      whereClause.images = { some: { url: { in: imageUrls } } };
-    }
+    const whereClause = buildIsolatedWhere({ storeId: params.storeId, query, categoryId, imageUrls, id });
 
     // Limit + 1 Strategy to avoid Count query
     const products = await prismadb.product.findMany({

@@ -21,6 +21,7 @@ import {
   BatchIntakeVariant,
 } from "@/components/modals/batch-intake-modal";
 import { ProductImportModal } from "@/components/modals/product-import-modal";
+import { ScanIntoGroupButton } from "@/components/products/scan-into-group-button";
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
 import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
 import { Button } from "@/components/ui/button";
@@ -95,10 +96,11 @@ import {
   type GroupArchiveMode,
 } from "@/lib/product-group-form-state";
 import { RadioCards } from "@/components/ui/radio-cards";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProductTintBadge } from "./product-badges";
+import { mergeAdoptedVariants } from "@/lib/product-group-variants";
 import { VariantGrid } from "./variant-grid";
 import { VariantMatrix } from "./variant-matrix";
 
@@ -277,6 +279,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   storeUrl = null,
 }) => {
   const params = useParams();
+  // «Escanear y abrir» en Productos llega aquí con la variante leída para resaltarla.
+  const highlightedVariantId = useSearchParams()?.get("variante") ?? null;
   // Un producto suelto con el mismo nombre que una variante generada: no se
   // crea el duplicado, se avisa para importarlo. Una consulta por nombre, cacheada.
   const standaloneByName = useRef(new Map<string, boolean>());
@@ -1333,35 +1337,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       slug: p.slug,
     }));
 
-    // Merge variants avoiding ID duplication AND Attribute Duplication
+    // Sin repetir id ni combinación de atributos: la misma regla para la
+    // lista y para el escaneo (lib/product-group-variants).
     const currentVars = form.getValues("variants") || [];
-    const currentIds = new Set(currentVars.map((v) => v.id).filter(Boolean));
-
-    // Helper to generate a unique key for attributes
-    const getVariantKey = (v: Partial<FormVariant>) => {
-      const s = v.size?.id || "nosize";
-      const c = v.color?.id || "nocolor";
-      const d = v.design?.id || "nodesign";
-      return `${s}|${c}|${d}`;
-    };
-
-    const currentAttributeKeys = new Set(currentVars.map(getVariantKey));
-    const newBatchKeys = new Set<string>();
-
-    const toAdd = newVariants.filter((v) => {
-      // 1. Check ID (if it exists, it must not be in currentIds)
-      if (v.id && currentIds.has(v.id)) return false;
-
-      // 2. Check Attributes (must not match existing combination)
-      const key = getVariantKey(v);
-      if (currentAttributeKeys.has(key)) return false;
-
-      // 3. Self-Dedupe (must not be already added in this batch)
-      if (newBatchKeys.has(key)) return false;
-
-      newBatchKeys.add(key);
-      return true;
-    });
+    const { toAdd } = mergeAdoptedVariants(currentVars, newVariants);
 
     if (toAdd.length > 0) {
       // TURN OFF AUTO-GENERATE upon import to prevent filling the gaps
@@ -2117,6 +2096,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <PackageCheckIcon className="mr-2 h-4 w-4" aria-hidden="true" />
                   Traer existentes
                 </Button>
+                <ScanIntoGroupButton onImport={handleImport} disabled={loading} />
                 <Button type="button" variant="outline" size="sm" disabled={loading} onClick={openMatrix}>
                   <Settings2 className="mr-2 h-4 w-4" aria-hidden="true" />
                   Generar combinaciones
@@ -2125,7 +2105,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             }
           >
             <p className="text-xs text-muted-foreground">
-              Traer conserva precio, costo, stock, código y URL de cada producto. Generar crea variantes nuevas con 0 unidades y avisa si alguna ya existe suelta.
+              Traer conserva precio, costo, stock, código y URL de cada producto (también escaneando su etiqueta o código de barras). Generar crea variantes nuevas con 0 unidades y avisa si alguna ya existe suelta.
             </p>
             <label className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
               <Switch
@@ -2154,6 +2134,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               sizes={sizes}
               colors={colors}
               designs={designs}
+              highlightId={highlightedVariantId}
               onBatchIntake={(variantIds) => {
                 const variants = form.getValues("variants") || [];
                 const selected: BatchIntakeVariant[] = variantIds
