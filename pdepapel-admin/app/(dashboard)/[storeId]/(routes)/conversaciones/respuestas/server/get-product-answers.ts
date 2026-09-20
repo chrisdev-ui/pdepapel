@@ -1,3 +1,5 @@
+import { requireStoreOwner } from "@/lib/store-access";
+
 import {
   areProductAnswersApproved,
   previewProductTemplates,
@@ -9,6 +11,7 @@ import type { ProductAnswersPreview } from "../components/product-answers-card";
 export async function getProductAnswers(
   storeId: string,
 ): Promise<ProductAnswersPreview> {
+  await requireStoreOwner(storeId);
   const settings = await getStoreSettings(storeId);
   return {
     approved: areProductAnswersApproved(settings),

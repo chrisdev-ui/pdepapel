@@ -30,6 +30,8 @@ import { ShippingProvider } from "@prisma/client";
 import type { DispatchShipment } from "../server/get-shipments";
 import { BulkActions } from "./bulk-actions";
 import { BulkManualUpdateModal } from "./bulk-manual-update-modal";
+import { useCanWrite } from "@/components/shell/viewer-access";
+
 import { buildColumns, carrierLabel, PROVIDER_LABELS, type ShipmentColumn } from "./columns";
 import { PickingListButton } from "./picking-list";
 import { ShipmentMobileCard } from "./shipment-mobile-card";
@@ -56,6 +58,7 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
   const searchParams = useSearchParams();
   const params = useParams();
   const storeId = String(params.storeId);
+  const canWrite = useCanWrite();
   const { toast } = useToast();
 
   const requested = searchParams.get(VIEW_PARAM);
@@ -71,7 +74,7 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
   const counts = useMemo(() => countShipmentViews(data), [data]);
   const rows = useMemo(() => data.filter((shipment) => shipmentMatchesView(shipment, view)), [data, view]);
   const staleCount = useMemo(() => data.filter((shipment) => isStaleDispatch(shipment)).length, [data]);
-  const columns = useMemo(() => buildColumns(storeId), [storeId]);
+  const columns = useMemo(() => buildColumns(storeId, canWrite), [storeId, canWrite]);
   const carrierOptions = useMemo(() => {
     const names = new Set<string>();
     for (const shipment of data) {
@@ -146,28 +149,33 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <RefreshButton />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" aria-label="Más acciones">
-                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60">
-              <DropdownMenuItem onClick={onSync} disabled={syncing}>
-                <RefreshCw className={cn("mr-2 h-4 w-4", syncing && "animate-spin")} aria-hidden="true" />
-                Sincronizar con EnvioClick
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setOpenManualModal(true)}>
-                <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
-                Corregir envíos manuales…
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExport} disabled={exporting || data.length === 0}>
-                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                {exporting ? "Exportando…" : "Exportar CSV"}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <PickingListButton shipments={dispatch} selectedIds={rows.map((row) => row.id)} />
+          {/* Las tres acciones son de la dueña: dos escriben y el CSV lleva el
+              costo del despacho y la dirección de quien recibe (la API lo
+              reserva con `verifyStoreOwner`). Sin ninguna, el menú sobra. */}
+          {canWrite ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="Más acciones">
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem onClick={onSync} disabled={syncing}>
+                  <RefreshCw className={cn("mr-2 h-4 w-4", syncing && "animate-spin")} aria-hidden="true" />
+                  Sincronizar con EnvioClick
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setOpenManualModal(true)}>
+                  <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Corregir envíos manuales…
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExport} disabled={exporting || data.length === 0}>
+                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {exporting ? "Exportando…" : "Exportar CSV"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          {canWrite ? <PickingListButton shipments={dispatch} selectedIds={rows.map((row) => row.id)} /> : null}
         </div>
       </div>
 
@@ -221,7 +229,7 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
             options: Object.values(ShippingProvider).map((provider) => ({ label: PROVIDER_LABELS[provider], value: provider })),
           },
         ]}
-        bulkActions={(table) => <BulkActions table={table} dispatch={dispatch} />}
+        bulkActions={canWrite ? (table) => <BulkActions table={table} dispatch={dispatch} /> : undefined}
         emptyState={empty}
       />
     </div>

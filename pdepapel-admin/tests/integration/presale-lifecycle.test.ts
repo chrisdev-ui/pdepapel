@@ -15,7 +15,8 @@ import { testPrisma } from "./helpers/database";
 
 const session = vi.hoisted(() => ({ userId: "user-paula" }));
 vi.mock("@clerk/nextjs/server", () => ({
-  auth: () => ({ userId: session.userId }),
+  auth: () => ({ userId: session.userId, sessionClaims: {} }),
+  clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
 
 import {
@@ -50,7 +51,7 @@ let abandonedLineId = "";
 
 beforeAll(async () => {
   const store = await testPrisma.store.create({
-    data: { name: `Preventa ${suffix}`, userId: `owner-${suffix}` },
+    data: { name: `Preventa ${suffix}`, userId: session.userId },
   });
   storeId = store.id;
   const type = await testPrisma.type.create({

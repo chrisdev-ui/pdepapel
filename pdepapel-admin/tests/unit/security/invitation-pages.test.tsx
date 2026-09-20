@@ -69,10 +69,14 @@ describe("pantalla de invitaciones", () => {
     expect(mocks.listPendingInvitations).toHaveBeenCalledWith(OWNER);
   });
 
+  // Sale a la raíz, no a «sin acceso»: la raíz ya sabe repartir a cada sesión
+  // (su tienda, la tienda permitida, o «sin acceso» si de verdad no tiene
+  // nada). Encadenar las dos redirecciones reventaba con un 500 al navegar
+  // dentro del panel, sin recargar la página.
   it("echa a la dueña que no está en la lista", async () => {
     delete process.env.ADMIN_ALLOWED_USER_IDS;
     session.userId = OWNER;
-    await expect(render(() => InvitationsPage({ params: { storeId: STORE } }))).resolves.toBe("/sin-acceso");
+    await expect(render(() => InvitationsPage({ params: { storeId: STORE } }))).resolves.toBe("/");
     expect(mocks.listPendingInvitations).not.toHaveBeenCalled();
   });
 
@@ -80,7 +84,7 @@ describe("pantalla de invitaciones", () => {
     process.env.ADMIN_ALLOWED_USER_IDS = OWNER;
     session.userId = OWNER;
     mocks.ownedStores.mockResolvedValue([{ id: "otra", name: "Otra" }]);
-    await expect(render(() => InvitationsPage({ params: { storeId: STORE } }))).resolves.toBe("/sin-acceso");
+    await expect(render(() => InvitationsPage({ params: { storeId: STORE } }))).resolves.toBe("/");
   });
 
   it("manda a iniciar sesión sin sesión", async () => {

@@ -133,7 +133,6 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "envios",
-        ownerOnly: true,
         label: "Envíos",
         icon: Truck,
         segment: "envios",
@@ -147,7 +146,6 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "clientes",
-        ownerOnly: true,
         label: "Clientes",
         icon: Users,
         segment: "clientes",
@@ -158,7 +156,6 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "preventas",
-        ownerOnly: true,
         label: "Preventas",
         icon: CalendarClock,
         segment: "preventas",
@@ -228,7 +225,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         id: "inventario",
-        ownerOnly: true,
         label: "Inventario",
         icon: Warehouse,
         segment: "inventario",
@@ -237,7 +233,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Todo el stock", segment: "inventario" },
           { label: "Por reponer", segment: "inventario?vista=por-reponer" },
           { label: "Agotados", segment: "inventario?vista=agotados" },
-          { label: "Sin costo", segment: "inventario?vista=sin-costo" },
+          { label: "Sin costo", segment: "inventario?vista=sin-costo", ownerOnly: true },
         ],
       },
       { id: "movimientos", ownerOnly: true, label: "Movimientos", icon: History, segment: "movimientos-inventario" },

@@ -7,6 +7,8 @@ import {
   PAID_PRESALE_LINE,
 } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
+import { requireStoreRead } from "@/lib/store-access";
+import { scrubPresales } from "@/lib/viewer-payloads";
 
 /** Una fila de la pantalla de Preventas. */
 export interface PresaleRow {
@@ -63,11 +65,17 @@ export interface PresalesSummary {
  * Todo lo que la pantalla necesita, en dos consultas: las campañas y las
  * líneas vendidas. El dinero y las clientas se cuentan aquí y no en la tabla,
  * porque `committedUnits` es un contador de reservas, no de pedidos.
+ *
+ * Una cuenta de solo lectura la ve sin el dinero recibido: ese es plata de las
+ * clientas que la tienda todavía debe. Le quedan el producto, las unidades
+ * reservadas y para cuándo se espera, que es la señal de demanda.
  */
 export async function getPresales(
   storeId: string,
   now = new Date(),
 ): Promise<PresalesSummary> {
+  const access = await requireStoreRead(storeId);
+  const isViewer = access.role === "viewer";
   const presales = await prismadb.productPresale.findMany({
     where: { storeId },
     orderBy: [{ status: "asc" }, { expectedArrivalAt: "asc" }],
@@ -166,9 +174,9 @@ export async function getPresales(
     );
 
   return {
-    rows,
+    rows: isViewer ? (scrubPresales(rows as any[]) as PresaleRow[]) : rows,
     activeUnits: active.reduce((total, row) => total + row.pendingUnits, 0),
-    collected: active.reduce((total, row) => total + row.collected, 0),
+    collected: isViewer ? 0 : active.reduce((total, row) => total + row.collected, 0),
     customerCount: active.reduce((total, row) => total + row.customerCount, 0),
     overdueCount: active.filter((row) => row.isOverdue).length,
     nextArrivalAt: upcoming[0]?.expectedArrivalAt ?? null,

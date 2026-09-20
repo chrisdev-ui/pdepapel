@@ -160,3 +160,98 @@ export function scrubReview<T extends AnyRecord | null | undefined>(review: T): 
 export function scrubReviews<T extends AnyRecord>(reviews: T[]): T[] {
   return reviews.map((review) => scrubReview(review));
 }
+
+/**
+ * Inventario visto por una cuenta de solo lectura.
+ *
+ * Fuera: el precio de compra. Dentro: las unidades y las señales de
+ * reposición —qué hay, qué se está acabando y qué no se mueve—, que es lo que
+ * sirve para planear una campaña. El valor a precio de venta se conserva
+ * porque sale de los precios públicos de la tienda: esconderlo no oculta nada.
+ */
+export const VIEWER_HIDDEN_INVENTORY_FIELDS = [
+  "acqPrice",
+  "transportationCost",
+  "lastCost",
+  "lastCostSource",
+  "lastCostAt",
+  // El proveedor ya es interno en el producto (`INTERNAL_PRODUCT_FIELDS`);
+  // aquí se repite para que la fila de inventario no lo reintroduzca.
+  "supplier",
+] as const;
+
+export function scrubInventoryRow<T extends AnyRecord | null | undefined>(row: T): T {
+  if (!row) return row;
+  return omit(row as AnyRecord, VIEWER_HIDDEN_INVENTORY_FIELDS) as T;
+}
+
+export function scrubInventoryRows<T extends AnyRecord>(rows: T[]): T[] {
+  return rows.map((row) => scrubInventoryRow(row));
+}
+
+/**
+ * Envíos vistos por una cuenta de solo lectura.
+ *
+ * Fuera: lo que cuesta despachar (dinero de la casa) y todo lo que identifica
+ * a quien recibe, incluida la guía —con el número de guía se consulta el
+ * nombre y la dirección en la página de la transportadora, así que se trata
+ * como dato personal, igual que en las ventas de marketplace—. Dentro: estado,
+ * fechas, ciudad y las señales de demora.
+ */
+export const VIEWER_HIDDEN_SHIPMENT_FIELDS = [
+  "cost",
+  "shippingCost",
+  "trackingCode",
+  "trackingNumber",
+  "trackingUrl",
+  "labelUrl",
+  "guideUrl",
+  "fullName",
+  "phone",
+  "email",
+  "address",
+  "address2",
+  "addressReference",
+  "neighborhood",
+  "daneCode",
+  "documentId",
+] as const;
+
+export function scrubShipment<T extends AnyRecord | null | undefined>(shipment: T): T {
+  if (!shipment) return shipment;
+  const clean = omit(shipment as AnyRecord, VIEWER_HIDDEN_SHIPMENT_FIELDS);
+  if (clean.order) clean.order = scrubOrder(clean.order as AnyRecord);
+  return clean as T;
+}
+
+export function scrubShipments<T extends AnyRecord>(shipments: T[]): T[] {
+  return shipments.map((shipment) => scrubShipment(shipment));
+}
+
+/**
+ * Preventas vistas por una cuenta de solo lectura.
+ *
+ * Fuera: el dinero ya recibido y los abonos por pedido —plata de las clientas
+ * que la tienda todavía debe—. Dentro: qué producto está en preventa, cuántas
+ * unidades hay reservadas y para cuándo se espera liberar, que es la señal de
+ * demanda que sí sirve.
+ */
+export const VIEWER_HIDDEN_PRESALE_FIELDS = [
+  "amountReceived",
+  "depositAmount",
+  "depositTotal",
+  "totalReceived",
+  "totalCollected",
+] as const;
+
+export function scrubPresale<T extends AnyRecord | null | undefined>(presale: T): T {
+  if (!presale) return presale;
+  const clean = omit(presale as AnyRecord, VIEWER_HIDDEN_PRESALE_FIELDS);
+  if (clean.product) clean.product = scrubProduct(clean.product as AnyRecord);
+  if (Array.isArray(clean.orders)) clean.orders = (clean.orders as AnyRecord[]).map((order) => scrubOrder(order));
+  return clean as T;
+}
+
+export function scrubPresales<T extends AnyRecord>(presales: T[]): T[] {
+  return presales.map((presale) => scrubPresale(presale));
+}

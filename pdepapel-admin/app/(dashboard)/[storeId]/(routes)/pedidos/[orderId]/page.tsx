@@ -2,6 +2,7 @@ import { getDaneLocations } from "@/actions/get-dane-locations";
 import { buildOrderTimeline, getNextStepCard } from "@/lib/order-timeline";
 import { getShippingChargeState } from "@/lib/order-totals";
 import prismadb from "@/lib/prismadb";
+import { getStoreAccess } from "@/lib/store-access";
 import { OrderForm } from "./components/order-form";
 import { OrderWorkspaceHeader } from "./components/order-workspace-header";
 import { ShippingInfo } from "./components/shipping-info";
@@ -17,6 +18,12 @@ export default async function OrderPage({
 }: {
   params: { orderId: string; storeId: string };
 }) {
+  // La lista de clientas anteriores trae nombre, correo, teléfono y documento:
+  // solo sirve para rellenar el pedido y solo la puede pedir la dueña. Se
+  // consulta el acceso antes, en vez de dejar que el guardia reviente dentro
+  // del `Promise.all` y se lleve por delante la página del pedido.
+  const access = await getStoreAccess(params.storeId);
+  const canWrite = access?.role === "owner";
   const [
     { order, products, categories },
     coupons,
@@ -27,7 +34,7 @@ export default async function OrderPage({
   ] = await Promise.all([
     getOrder(params.orderId, params.storeId),
     getCoupons(params.storeId),
-    getAvailableCustomers(params.storeId),
+    canWrite ? getAvailableCustomers(params.storeId) : Promise.resolve([]),
     getDaneLocations(),
     getBoxes(params.storeId),
     prismadb.store

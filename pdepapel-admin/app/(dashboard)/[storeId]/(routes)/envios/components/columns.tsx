@@ -20,6 +20,16 @@ export type ShipmentColumn = ShipmentRow;
 /** Etiquetas del origen de la guía; viven en `lib/shipment-views` para compartirlas con la exportación. */
 export { PROVIDER_LABELS };
 
+/** Costo del despacho y guía: fuera para una cuenta de solo lectura. */
+const VIEWER_HIDDEN_COLUMNS = ["cost", "trackingCode"];
+
+/** El id con el que se identifica una columna, venga de `id` o de `accessorKey`. */
+function columnId<T>(column: ColumnDef<T>): string {
+  if ("id" in column && column.id) return column.id;
+  if ("accessorKey" in column && column.accessorKey) return String(column.accessorKey);
+  return "";
+}
+
 export function carrierLabel(shipment: Pick<ShipmentColumn, "carrierName" | "courier">) {
   const raw = shipment.carrierName || shipment.courier;
   if (!raw) return null;
@@ -48,8 +58,13 @@ export function CarrierCell({ shipment }: { shipment: ShipmentColumn }) {
   );
 }
 
-export function buildColumns(storeId: string): ColumnDef<ShipmentColumn>[] {
-  return [
+/**
+ * `canWrite` en `false` es una cuenta de solo lectura: el servidor ya manda la
+ * fila sin costo ni guía, así que esas columnas se caen en vez de quedar en
+ * blanco.
+ */
+export function buildColumns(storeId: string, canWrite = true): ColumnDef<ShipmentColumn>[] {
+  const all: ColumnDef<ShipmentColumn>[] = [
     {
       id: "order",
       accessorFn: (row) => `${row.order?.orderNumber ?? ""} ${row.order?.fullName ?? ""} ${row.order?.phone ?? ""} ${row.order?.city ?? ""}`,
@@ -164,4 +179,6 @@ export function buildColumns(storeId: string): ColumnDef<ShipmentColumn>[] {
       cell: ({ row }) => <CellAction data={row.original} />,
     },
   ];
+  if (canWrite) return all;
+  return all.filter((column) => !VIEWER_HIDDEN_COLUMNS.includes(columnId(column)));
 }

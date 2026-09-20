@@ -33,7 +33,10 @@ describe("menú según la autorización explícita", () => {
   });
 
   it("no cambia ninguna otra entrada del menú", () => {
-    const withoutInvitations = allChildLabels().filter((label) => label !== "Invitaciones");
+    // «Sin costo» se esconde por lo mismo que «Invitaciones»: la vista existe
+    // solo para encontrar productos sin precio de compra.
+    const ownerOnlyChildren = ["Invitaciones", "Sin costo"];
+    const withoutInvitations = allChildLabels().filter((label) => !ownerOnlyChildren.includes(label));
     expect(childLabels(false)).toEqual(withoutInvitations);
     expect(navGroupsFor(visibility(false)).map((group) => group.id)).toEqual(NAV_GROUPS.map((group) => group.id));
     expect(navGroupsFor(visibility(false)).flatMap((group) => group.items.map((item) => item.id))).toEqual(
@@ -48,12 +51,8 @@ describe("pantallas reservadas a la dueña", () => {
     for (const hidden of [
       "pos",
       "mercadolibre",
-      "envios",
-      "clientes",
-      "preventas",
       "conversaciones",
       "proveedores",
-      "inventario",
       "movimientos",
       "aprovisionamiento",
       "boletin",
@@ -67,7 +66,10 @@ describe("pantallas reservadas a la dueña", () => {
 
   it("le deja lo que sí puede mirar", () => {
     const viewer = screenIds(false);
-    for (const visible of ["inicio", "pedidos", "productos", "atributos", "promociones", "contenido", "ferias"]) {
+    // Inventario, Envíos, Clientes y Preventas entraron en la fase 2: el
+    // servidor las sirve depuradas (`lib/viewer-payloads.ts`), así que el menú
+    // tiene que decir la verdad y enseñarlas.
+    for (const visible of ["inicio", "pedidos", "productos", "atributos", "promociones", "contenido", "ferias", "inventario", "envios", "clientes", "preventas"]) {
       expect(viewer, visible).toContain(visible);
     }
     expect(footerItemsFor({ canWrite: false }).map((item) => item.id)).toContain("manual");

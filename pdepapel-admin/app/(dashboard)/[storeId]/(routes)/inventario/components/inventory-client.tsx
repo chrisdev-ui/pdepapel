@@ -9,6 +9,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { Models } from "@/constants";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { INVENTORY_VIEWS, inventoryMatchesView, inventoryRowValue, normalizeInventoryView, summarizeInventory, type InventoryView } from "@/lib/inventory-views";
 import { isOutOfStock } from "@/lib/product-readiness";
 import { compareUrgency, describeCover, DORMANT_WINDOW_DAYS, SALES_WINDOW_DAYS, TARGET_WEEKS } from "@/lib/replenishment";
@@ -26,6 +27,16 @@ import { ReplenishmentBySupplier, restockHref } from "./replenishment-by-supplie
 const VIEW_PARAM = "vista";
 const GROUP_PARAM = "agrupar";
 const DEFAULT_VIEW: InventoryView = "por-reponer";
+
+/** Costo y proveedor: el servidor no los manda a una cuenta de solo lectura. */
+const HIDDEN_FOR_VIEWER = ["supplier", "acqPrice", "value"];
+
+/** El id con el que se identifica una columna, venga de `id` o de `accessorKey`. */
+function columnId<T>(column: ColumnDef<T>): string {
+  if ("id" in column && column.id) return column.id;
+  if ("accessorKey" in column && column.accessorKey) return String(column.accessorKey);
+  return "";
+}
 
 const TONE_BAR: Record<string, string> = { pink: "bg-[#E11D48]", cream: "bg-[#D97706]", mint: "bg-tint-mint", slate: "bg-border" };
 
@@ -55,6 +66,9 @@ interface InventoryClientProps {
 }
 
 export function InventoryClient({ data, threshold, thresholdFromSettings = false, initialView = null, initialGrouped = false }: InventoryClientProps) {
+  // Sin permiso de escritura no hay costos que mostrar ni acciones que ofrecer:
+  // el servidor ya manda la fila sin `acqPrice`, aquí se quitan las columnas.
+  const canWrite = useCanWrite();
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -62,7 +76,10 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
   const storeId = String(params.storeId);
   // La URL manda; el estado local solo cubre el hueco hasta que Next
   // refleja el replaceState.
-  const requestedView: InventoryView = normalizeInventoryView(initialView ?? searchParams.get(VIEW_PARAM)) ?? DEFAULT_VIEW;
+  const askedFor = normalizeInventoryView(initialView ?? searchParams.get(VIEW_PARAM)) ?? DEFAULT_VIEW;
+  // Escribiendo la URL se llega a «Sin costo» aunque la pestaña no esté. Sin
+  // `acqPrice` esa vista devuelve todo el catálogo, así que se cae al inicio.
+  const requestedView: InventoryView = !canWrite && askedFor === "sin-costo" ? DEFAULT_VIEW : askedFor;
   const [selected, setSelected] = useState<{ base: InventoryView; view: InventoryView } | null>(null);
   const view = selected?.base === requestedView ? selected.view : requestedView;
   const [grouped, setGroupedState] = useState(initialGrouped || searchParams.get(GROUP_PARAM) === "proveedor");
@@ -70,6 +87,9 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
   const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
 
   const totals = useMemo(() => summarizeInventory(data, threshold), [data, threshold]);
+  // «Sin costo» existe solo para encontrar productos a los que les falta el
+  // precio de compra: no tiene sentido sin costos a la vista.
+  const views = useMemo(() => (canWrite ? INVENTORY_VIEWS : INVENTORY_VIEWS.filter((v) => v.id !== "sin-costo")), [canWrite]);
   const counts = useMemo(() => Object.fromEntries(INVENTORY_VIEWS.map((v) => [v.id, data.filter((row) => inventoryMatchesView(row, v.id, threshold)).length])) as Record<InventoryView, number>, [data, threshold]);
   const rows = useMemo(() => {
     const filtered = data.filter((row) => inventoryMatchesView(row, view, threshold));
@@ -99,7 +119,8 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
     replaceQuery(view, next);
   };
 
-  const columns = useMemo<ColumnDef<InventoryRow>[]>(() => [
+  const columns = useMemo<ColumnDef<InventoryRow>[]>(() => {
+    const all: ColumnDef<InventoryRow>[] = [
     {
       id: "product",
       accessorFn: (row) => [row.name, row.sku, row.categoryName].filter(Boolean).join(" "),
@@ -142,8 +163,10 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="Acciones"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openAdjust(row.original.isKit ? null : row.original.id)}>Ajustar inventario</DropdownMenuItem>
-              {!row.original.isKit && (
+              {canWrite ? (
+                <DropdownMenuItem onClick={() => openAdjust(row.original.isKit ? null : row.original.id)}>Ajustar inventario</DropdownMenuItem>
+              ) : null}
+              {canWrite && !row.original.isKit && (
                 <DropdownMenuItem onClick={() => router.push(restockHref(storeId, row.original))}>Reponer con el proveedor{row.original.supplier ? ` (${row.original.supplier.name})` : ""}</DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => router.push(`/${storeId}/movimientos-inventario/producto/${row.original.id}`)}>Ver kardex</DropdownMenuItem>
@@ -156,9 +179,14 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
       enableHiding: false,
       enableGlobalFilter: false,
     },
-  ], [router, storeId]);
+    ];
+    if (canWrite) return all;
+    // El servidor ya no manda estos datos; la columna quedaría vacía y, peor,
+    // prometería algo que la cuenta de solo lectura no puede ver.
+    return all.filter((column) => !HIDDEN_FOR_VIEWER.includes(columnId(column)));
+  }, [router, storeId, canWrite]);
 
-  const showGrouped = view === "por-reponer" && grouped;
+  const showGrouped = canWrite && view === "por-reponer" && grouped;
 
   return (
     <div className="flex flex-col gap-4">
@@ -167,22 +195,28 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
           <h1 className="text-2xl font-bold tracking-tight text-primary">Inventario</h1>
           <p className="text-sm text-muted-foreground">Qué se acaba primero según lo que se vende, no solo cuántas unidades quedan. Los kits se calculan desde sus componentes.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => openAdjust(null)}><History className="h-4 w-4" aria-hidden="true" />Ajustar inventario</Button>
-          <Button asChild><Link href={`/${storeId}/aprovisionamiento/nuevo`}><Package className="h-4 w-4" aria-hidden="true" />Nueva orden de aprovisionamiento</Link></Button>
-        </div>
+        {canWrite ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => openAdjust(null)}><History className="h-4 w-4" aria-hidden="true" />Ajustar inventario</Button>
+            <Button asChild><Link href={`/${storeId}/aprovisionamiento/nuevo`}><Package className="h-4 w-4" aria-hidden="true" />Nueva orden de aprovisionamiento</Link></Button>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <MetricCard label="Se acaban esta semana" value={totals.runsOutThisWeek.toLocaleString("es-CO")} note={`Con stock, ventas en ${DORMANT_WINDOW_DAYS} días y menos de 7 días de cobertura`} icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-pink" />
         <MetricCard label="Agotados que se vendían" value={totals.outOfStockSelling.toLocaleString("es-CO")} note={`De ${totals.outOfStock.toLocaleString("es-CO")} agotados; el resto no vendió en ${DORMANT_WINDOW_DAYS} días`} icon={<Truck className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-cream" />
-        <MetricCard label="Valor a costo" value={currencyFormatter(totals.costValue)} note={`${totals.units.toLocaleString("es-CO")} unidades · a venta ${currencyFormatter(totals.retailValue)}`} icon={<Wallet className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-mint" />
+        {canWrite ? (
+          <MetricCard label="Valor a costo" value={currencyFormatter(totals.costValue)} note={`${totals.units.toLocaleString("es-CO")} unidades · a venta ${currencyFormatter(totals.retailValue)}`} icon={<Wallet className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-mint" />
+        ) : (
+          <MetricCard label="Unidades en stock" value={totals.units.toLocaleString("es-CO")} note={`Valor a venta ${currencyFormatter(totals.retailValue)}`} icon={<Wallet className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-mint" />
+        )}
         <MetricCard label={`Sin movimiento en ${DORMANT_WINDOW_DAYS} días`} value={totals.dormant.toLocaleString("es-CO")} note="Candidatos a oferta antes que a reposición" icon={<Boxes className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-sky" />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div role="tablist" aria-label="Vistas de inventario" className="flex max-w-full gap-1 overflow-x-auto rounded-full border bg-white p-1">
-          {INVENTORY_VIEWS.map((item) => {
+          {views.map((item) => {
             const active = item.id === view;
             return (
               <button key={item.id} type="button" role="tab" aria-selected={active} onClick={() => setView(item.id)} className={cn("flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "bg-primary text-primary-foreground" : "text-primary hover:bg-accent")}>
@@ -192,7 +226,9 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
             );
           })}
         </div>
-        {view === "por-reponer" && (
+        {/* Agrupar por proveedor no dice nada sin proveedor, y el servidor no
+            se lo manda a una cuenta de solo lectura. */}
+        {canWrite && view === "por-reponer" && (
           <Button type="button" variant="outline" size="sm" onClick={() => setGrouped(!grouped)} aria-pressed={grouped}>
             {grouped ? <LayoutList className="h-4 w-4" aria-hidden="true" /> : <Truck className="h-4 w-4" aria-hidden="true" />}
             {grouped ? "Ver como lista" : "Agrupar por proveedor"}

@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 import { clerkClient } from "@clerk/nextjs/server";
 import { normalizePhone } from "@/lib/utils";
 import parsePhoneNumber from "libphonenumber-js";
@@ -13,9 +14,15 @@ export interface AvailableCustomer {
   source: "clerk" | "order";
 }
 
+/**
+ * Solo la dueña: devuelve nombre, correo, teléfono y documento de quienes ya
+ * compraron, para rellenar el pedido. Pedidos sí lo ve una cuenta de solo
+ * lectura —depurado—, así que este ayudante necesita su propio guardia.
+ */
 export const getAvailableCustomers = async (
   storeId: string,
 ): Promise<AvailableCustomer[]> => {
+  await requireStoreOwner(storeId);
   // 1. Fetch Clerk Users - DISABLED (Focus on Orders)
   const registeredCustomers: AvailableCustomer[] = [];
 

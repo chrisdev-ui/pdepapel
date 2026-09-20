@@ -1,5 +1,6 @@
 import { getBusinessGrowthOverview } from "@/lib/business-growth-data";
 import { resolveBusinessGrowthPeriod } from "@/lib/business-growth-period";
+import { requireStoreOwner } from "@/lib/store-access";
 import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -27,7 +28,14 @@ interface RendimientoPageProps {
   searchParams: { tab?: string; month?: string | string[]; year?: string | string[] };
 }
 
+/**
+ * Solo la dueña: aquí va el dinero de la casa —ventas netas, utilidad,
+ * margen por producto y el retiro personal sugerido—. No hay versión
+ * depurada para una cuenta de solo lectura; si algún día la agencia
+ * necesita cifras, se le hace una vista aparte con unidades y campañas.
+ */
 export default async function RendimientoPage({ params, searchParams }: RendimientoPageProps) {
+  await requireStoreOwner(params.storeId);
   const tab: Tab = searchParams.tab === "detalle" ? "detalle" : searchParams.tab === "envios" ? "envios" : "resumen";
   const period = resolveBusinessGrowthPeriod(searchParams);
   const query = new URLSearchParams();

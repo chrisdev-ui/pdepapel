@@ -3,6 +3,8 @@ import prismadb from "@/lib/prismadb";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
 import { addKitDemand, computeReplenishment, limitingKitComponent, type ReplenishmentSignal } from "@/lib/replenishment";
 import { getReplenishmentContext } from "@/lib/replenishment-db";
+import { requireStoreRead } from "@/lib/store-access";
+import { scrubInventoryRows } from "@/lib/viewer-payloads";
 
 /** De dónde sale el costo con el que se arma un borrador de reposición. */
 export type LastCostSource = "purchase" | "product";
@@ -15,8 +17,12 @@ export type LastCostSource = "purchase" | "product";
  *
  * Las cápsulas sorpresa quedan fuera: son un producto de feria que se arma
  * con productos normales, y esos sí están en la lista.
+ *
+ * Una cuenta de solo lectura la ve sin costos ni proveedor: se queda con las
+ * unidades y las señales de reposición, que es lo que sirve para planear.
  */
 export async function getInventory(storeId: string, now = new Date()) {
+  const access = await requireStoreRead(storeId);
   const [products, store, context] = await Promise.all([
     prismadb.product.findMany({
       where: { storeId, isArchived: false, categoryId: { not: CAPSULAS_SORPRESA_ID } },
@@ -40,6 +46,7 @@ export async function getInventory(storeId: string, now = new Date()) {
     getReplenishmentContext(storeId, now),
   ]);
   const threshold = resolveLowStockThreshold(store);
+  const isViewer = access.role === "viewer";
 
   // Lo que se vende dentro de un kit consume el stock del componente: cuenta
   // como demanda del componente aunque el pedido lleve el kit.
@@ -49,7 +56,7 @@ export async function getInventory(storeId: string, now = new Date()) {
   const demand30 = addKitDemand(context.sold30, kits);
   const demand90 = addKitDemand(context.sold90, kits);
 
-  return products.map((product) => {
+  const rows = products.map((product) => {
     let stock = product.stock;
     let limiting: { name: string; kits: number } | null = null;
     if (product.isKit && product.kitComponents.length > 0) {
@@ -91,6 +98,8 @@ export async function getInventory(storeId: string, now = new Date()) {
       signal,
     };
   });
+
+  return isViewer ? scrubInventoryRows(rows) : rows;
 }
 
 export type InventoryRow = Awaited<ReturnType<typeof getInventory>>[number];

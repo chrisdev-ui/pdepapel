@@ -8,15 +8,31 @@ import { useToast } from "@/hooks/use-toast";
 
 const MUTATING = new Set(["post", "put", "patch", "delete"]);
 
+/** `/api/...` de este mismo origen; nunca las rutas internas de Next. */
+function isPanelApi(url: string): boolean {
+  if (!url) return false;
+  try {
+    const resolved = new URL(url, window.location.origin);
+    return resolved.origin === window.location.origin && resolved.pathname.startsWith("/api/");
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Red de seguridad del navegador: en una cuenta de solo lectura corta las
  * peticiones que escriben antes de salir, y explica por qué.
  *
  * **No es la seguridad.** El servidor rechaza cada escritura con
  * `requireStoreOwner` pase lo que pase aquí: esto solo evita que un botón que
- * se nos haya pasado por alto muestre un error críptico. Además cubre solo lo
- * que va por axios; las pantallas que escriben con `fetch` (Mercado Libre,
- * Envíos, Ajustes) quedan fuera, y son justo las que el menú ya esconde.
+ * se nos haya pasado por alto muestre un error críptico.
+ *
+ * Cubre las dos formas de escribir del panel: axios y `fetch`. El aviso de
+ * solo lectura promete que «los botones que crean, editan o borran están
+ * apagados», y antes eso era mentira en Mercado Libre, Envíos y Ajustes, que
+ * escriben con `fetch`. Solo se tocan las peticiones a `/api/`: las de Next
+ * —navegación RSC y acciones de servidor— también van por `fetch` y tienen
+ * que pasar intactas.
  */
 export function ReadOnlyGuard() {
   const { isViewer } = useViewerAccess();
@@ -39,7 +55,40 @@ export function ReadOnlyGuard() {
         }),
       );
     });
-    return () => axios.interceptors.request.eject(id);
+    const originalFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      const method = (
+        init?.method ??
+        (typeof input === "object" && "method" in input ? input.method : undefined) ??
+        "GET"
+      ).toLowerCase();
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : "url" in input
+              ? input.url
+              : "";
+      // Solo las escrituras de la API del panel. Lo de Next pasa tal cual.
+      if (!MUTATING.has(method) || !isPanelApi(url)) {
+        return originalFetch(input, init);
+      }
+      toast({
+        title: "Solo lectura",
+        description: "Tu cuenta puede mirar el panel, pero no cambiar nada.",
+        variant: "destructive",
+      });
+      return new Response(JSON.stringify({ error: "Tu cuenta es de solo lectura." }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    return () => {
+      axios.interceptors.request.eject(id);
+      window.fetch = originalFetch;
+    };
   }, [isViewer, toast]);
 
   return null;

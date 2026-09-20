@@ -1,7 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
+
+/**
+ * Desde el lote de RBAC fase 2, `getInventory` exige una sesión: la dueña la ve
+ * con costos, la cuenta de solo lectura sin ellos. Aquí se firma como la dueña
+ * de la tienda de prueba.
+ */
+const session = vi.hoisted(() => ({ userId: null as string | null }));
+
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: async () => ({ userId: session.userId, sessionClaims: {} }),
+  clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
+}));
+
 import { getInventory } from "@/app/(dashboard)/[storeId]/(routes)/inventario/server/get-inventory";
 import { OrderStatus, OrderType, PaymentMethod, RestockOrderStatus } from "@prisma/client";
 
@@ -31,6 +44,7 @@ describe("getInventory con señal de reposición", () => {
 
   it("computes sold units, cover, on-order units and the last purchase cost per product", async () => {
     fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
     const now = new Date("2026-09-12T12:00:00.000Z");
     const paidAt = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86400000);
     const customer = { fullName: "Cliente", phone: "3000000000", address: "Calle 1", email: "c@test.com" };
@@ -77,6 +91,7 @@ describe("getInventory con señal de reposición", () => {
 
   it("counts a paid order without paidAt by its creation date and adds kit sales to the component", async () => {
     fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
     const now = new Date("2026-09-12T12:00:00.000Z");
     const daysAgo = (days: number) => new Date(now.getTime() - days * 86400000);
     const customer = { fullName: "Cliente", phone: "3000000000", address: "Calle 1", email: "c@test.com" };

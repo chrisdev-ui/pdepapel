@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { getPointOfSaleDaySummary } from "@/lib/point-of-sale-day";
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 import { cn, currencyFormatter } from "@/lib/utils";
 
 import { DayCloseCard } from "./components/day-close-card";
@@ -27,7 +28,13 @@ interface PointOfSalePageProps {
   searchParams: { tab?: string };
 }
 
+/**
+ * Solo la dueña. La pantalla entera escribe —vender, registrar el pago y
+ * cerrar el día—, así que no hay versión de solo lectura que ofrecer: una
+ * cuenta de solo lectura vería botones apagados y nada más.
+ */
 export default async function PointOfSalePage({ params, searchParams }: PointOfSalePageProps) {
+  await requireStoreOwner(params.storeId);
   const tab: Tab = searchParams.tab === "etiquetas" ? "etiquetas" : "vender";
   const hrefFor = (id: Tab) =>
     `/${params.storeId}/ventas-rapidas${id === "vender" ? "" : `?tab=${id}`}`;

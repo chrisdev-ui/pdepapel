@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 import {
   parseCartMetadata,
   resolveCart,
@@ -9,11 +10,16 @@ import {
  * Una conversación con todo su hilo. Los carritos se resuelven contra el
  * catálogo de ahora, así que el precio y las existencias que ve la dueña son
  * los de hoy, no los del día en que la clienta armó el carrito.
+ *
+ * Solo la dueña: el hilo trae el teléfono, el nombre y todo lo que se
+ * escribieron. La lista de Conversaciones ya estaba cerrada, pero el detalle
+ * se quedó abierto: con el id de una conversación se leía entera.
  */
 export async function getConversation(
   storeId: string,
   conversationId: string,
 ): Promise<ConversationDetail | null> {
+  await requireStoreOwner(storeId);
   const conversation = await prismadb.conversation.findFirst({
     where: { id: conversationId, storeId },
     select: {

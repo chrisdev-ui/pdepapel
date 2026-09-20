@@ -5,6 +5,7 @@ import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES } from "@/lib/mercadolibre/recovery-schedule";
@@ -62,6 +63,7 @@ const DATE_TIME = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeSt
 
 export default function MercadoLibreClient({ configuration, queueConfiguration, connection }: MercadoLibreClientProps) {
   const { storeId } = useParams<{ storeId: string }>();
+  const canWrite = useCanWrite();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const result = searchParams.get("mercadolibre");
@@ -249,6 +251,8 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
                   <Button
                     type="button"
                     variant={connected ? "outline" : "default"}
+                    disabled={!canWrite}
+                    title={canWrite ? undefined : "Solo lectura"}
                     onClick={() => window.location.assign(`/api/${storeId}/marketplaces/mercadolibre/connect`)}
                   >
                     <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />

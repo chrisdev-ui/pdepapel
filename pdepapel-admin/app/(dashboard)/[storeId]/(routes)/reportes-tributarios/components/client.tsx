@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import {
   Download,
+  Eye,
   FileSpreadsheet,
   Pencil,
   Plus,
@@ -138,6 +139,9 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  // La API contesta 403 a una cuenta de solo lectura. Sin esto, el cuerpo JSON
+  // crudo se pintaba tal cual en la pantalla.
+  const [forbidden, setForbidden] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [purchaseForm, setPurchaseForm] =
     useState<PurchaseForm>(emptyPurchaseForm);
@@ -162,10 +166,17 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
           { cache: "no-store" },
         );
 
+        if (response.status === 403) {
+          setForbidden(true);
+          setReport(null);
+          return;
+        }
+
         if (!response.ok) {
           throw new Error(await getErrorMessage(response));
         }
 
+        setForbidden(false);
         setReport(await response.json());
       } catch (requestError) {
         setError(
@@ -310,6 +321,28 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
     salesTable.setPageIndex(0);
     purchasesTable.setPageIndex(0);
   }, [report, salesTable, purchasesTable]);
+
+  if (forbidden) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Reportes tributarios
+          </h1>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 p-10 text-center">
+            <Eye className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+            <p className="text-base font-semibold text-foreground">Solo lectura</p>
+            <p className="max-w-md text-sm text-muted-foreground">
+              Los reportes tributarios los ve solo la dueña de la tienda. Pídele acceso si
+              necesitas el archivo del período.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

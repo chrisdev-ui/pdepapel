@@ -3,12 +3,14 @@ import Link from "next/link";
 
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { getStoreAccess } from "@/lib/store-access";
 import { cn } from "@/lib/utils";
 
 import { ReviewsPanel } from "../resenas/components/reviews-panel";
 import { getReviews } from "../resenas/server/get-reviews";
 import CustomerClient from "./components/client";
-import { getCustomers, toCustomerRows } from "./server/get-customers";
+import { CustomerOverviewPanel } from "./components/customer-overview-panel";
+import { getCustomerOverview, getCustomers, toCustomerRows } from "./server/get-customers";
 
 export const revalidate = 0;
 
@@ -32,6 +34,10 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
   const tab: Tab = searchParams.tab === "resenas" ? "resenas" : "clientes";
   const hrefFor = (id: Tab) => `/${params.storeId}/clientes${id === "clientes" ? "" : `?tab=${id}`}`;
   const store = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { name: true } });
+  // La lista con nombre y teléfono es de la dueña; la cuenta de solo lectura
+  // ve el agregado. Lo decide el servidor, no el navegador.
+  const access = await getStoreAccess(params.storeId);
+  const isViewer = access?.role === "viewer";
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
@@ -58,11 +64,15 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
         ))}
       </nav>
       {tab === "clientes" ? (
-        <CustomerClient
-          data={toCustomerRows(await getCustomers(params.storeId))}
-          storeName={store?.name ?? "P de Papel"}
-          storeUrl={env.FRONTEND_STORE_URL}
-        />
+        isViewer ? (
+          <CustomerOverviewPanel overview={await getCustomerOverview(params.storeId)} />
+        ) : (
+          <CustomerClient
+            data={toCustomerRows(await getCustomers(params.storeId))}
+            storeName={store?.name ?? "P de Papel"}
+            storeUrl={env.FRONTEND_STORE_URL}
+          />
+        )
       ) : (
         <ReviewsPanel data={await getReviews(params.storeId)} />
       )}

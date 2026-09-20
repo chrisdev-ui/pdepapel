@@ -5,9 +5,12 @@ import {
   getCustomerSegment,
   isPlaceholderCustomer,
   normalizePhone,
+  summarizeCustomers,
   type CustomerSegment,
+  type CustomerSummary,
 } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner, requireStoreRead } from "@/lib/store-access";
 
 const PAID: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SENT];
 const PENDING: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CREATED];
@@ -49,8 +52,13 @@ type Draft = Omit<CustomerRecord, "segment" | "averageOrderValue" | "favoritePro
   productCounts: Map<string, number>;
 };
 
-/** Agrupa los pedidos con teléfono por cliente (teléfono normalizado) y calcula su segmento. */
-export async function getCustomers(storeId: string, now = new Date()): Promise<CustomerRecord[]> {
+/**
+ * Agrupa los pedidos con teléfono por cliente (teléfono normalizado) y calcula
+ * su segmento. **Privada y sin guardia**: trae nombre, teléfono y correo, así
+ * que nadie la llama sin pasar antes por `getCustomers` (dueña) o por
+ * `getCustomerOverview` (agregado, también para solo lectura).
+ */
+async function buildCustomerRecords(storeId: string, now = new Date()): Promise<CustomerRecord[]> {
   const orders = await prismadb.order.findMany({
     where: { storeId, phone: { not: "" }, fullName: { not: "" } },
     select: {
@@ -150,6 +158,53 @@ export async function getCustomers(storeId: string, now = new Date()): Promise<C
     .sort((a, b) => b.totalSpent - a.totalSpent || b.lastOrderAt.getTime() - a.lastOrderAt.getTime());
 }
 
+/**
+ * La lista con nombre y teléfono es solo de la dueña. Una cuenta de solo
+ * lectura no la ve: el identificador de cada fila **es** el teléfono
+ * normalizado, y además va en la URL de `/clientes/[customerId]`, así que
+ * esconder columnas no bastaría. Para esa cuenta está `getCustomerOverview`.
+ */
+export async function getCustomers(storeId: string, now = new Date()): Promise<CustomerRecord[]> {
+  await requireStoreOwner(storeId);
+  return buildCustomerRecords(storeId, now);
+}
+
+/** Ciudades con más clientes; la ciudad sola no identifica a nadie. */
+export interface CustomerCityCount {
+  city: string;
+  customers: number;
+}
+
+export interface CustomerOverview {
+  summary: CustomerSummary;
+  cities: CustomerCityCount[];
+}
+
+/**
+ * Lo único que ve una cuenta de solo lectura en Clientes: cuántos hay, cuántos
+ * compran, cuántos son VIP o están inactivos, y de qué ciudades vienen. Sin
+ * una sola fila con nombre, teléfono, correo ni cuánto gastó nadie.
+ */
+export async function getCustomerOverview(storeId: string, now = new Date()): Promise<CustomerOverview> {
+  await requireStoreRead(storeId);
+  const records = await buildCustomerRecords(storeId, now);
+
+  const byCity = new Map<string, number>();
+  for (const record of records) {
+    const city = record.city?.trim();
+    if (!city) continue;
+    byCity.set(city, (byCity.get(city) ?? 0) + 1);
+  }
+
+  return {
+    summary: summarizeCustomers(records.map((record) => record.segment)),
+    cities: Array.from(byCity.entries())
+      .map(([city, customers]) => ({ city, customers }))
+      .sort((a, b) => b.customers - a.customers || a.city.localeCompare(b.city, "es"))
+      .slice(0, 12),
+  };
+}
+
 /** Fila de la tabla: sin la lista completa de pedidos para no inflar la página. */
 export type CustomerRow = Omit<CustomerRecord, "orders"> & { recentOrders: CustomerOrderSummary[] };
 
@@ -158,7 +213,8 @@ export function toCustomerRows(customers: CustomerRecord[]): CustomerRow[] {
 }
 
 export async function getCustomerDetail(storeId: string, customerId: string) {
-  const customers = await getCustomers(storeId);
+  await requireStoreOwner(storeId);
+  const customers = await buildCustomerRecords(storeId);
   const customer = customers.find((item) => item.id === customerId) ?? null;
   if (!customer) return null;
   const reactivations = customer.email

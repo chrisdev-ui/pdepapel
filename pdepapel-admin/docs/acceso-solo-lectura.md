@@ -102,13 +102,17 @@ Trece rutas de la lista original ya eran **públicas** (las consume la tienda en
 
 ## Qué ve y qué no (fase 2)
 
-**Pantallas abiertas:** Inicio (sin la pestaña de inventario, que valora al costo), Pedidos, Productos, Atributos, Promociones, Contenido de la tienda, Ferias y el Manual.
+**Pantallas abiertas:** Inicio (sin la pestaña de inventario, que valora al costo), Pedidos, Productos, Atributos, Promociones, Contenido de la tienda, Ferias, Reseñas y el Manual.
 
-**Pantallas reservadas**, escondidas del menú: Punto de venta, Mercado Libre, Envíos, Clientes, Preventas, Conversaciones, Proveedores, Inventario, Movimientos, Aprovisionamiento, Boletín, Rendimiento, Tributarios y Ajustes. Si alguien entra por la URL, `app/(dashboard)/[storeId]/error.tsx` explica que la pantalla es solo para la dueña, dentro del panel y sin parecer una falla.
+**Pantallas abiertas y depuradas (2026-09-20):** Inventario (sin costo de compra, sin valor a costo, sin proveedor y sin la vista «Sin costo»), Envíos (sin el costo del despacho, sin la guía y sin la lista de recogida) y Preventas (sin el dinero recibido). En Clientes la cuenta de solo lectura ve **solo el agregado** —cuántos hay, cuántos compran, cuántos son VIP o están inactivos, y de qué ciudades vienen—: la lista con nombre y teléfono no se depura, porque el identificador de cada fila **es** el teléfono normalizado y va en la URL de `/clientes/[customerId]`.
+
+**Pantallas reservadas**, escondidas del menú: Punto de venta, Clientes (la lista y el detalle), Mercado Libre, Conversaciones, Proveedores, Movimientos, Aprovisionamiento, Boletín, Rendimiento (y sus dos gemelas `/negocio` e `/inteligencia-negocio`), Tributarios y Ajustes. Si alguien entra por la URL, `app/(dashboard)/[storeId]/error.tsx` explica que la pantalla es solo para la dueña, dentro del panel y sin parecer una falla.
 
 > **Esconder del menú no es cerrar la pantalla.** La bandera `ownerOnly` solo quita el enlace: quien escriba la URL llega igual, y lo que decide es el guardia del cargador. La auditoría de Movimientos (2026-09-19) encontró que ese módulo no tenía ninguno, así que una cuenta de solo lectura podía leer el kardex entero con el costo de compra, el precio de venta y el nombre y el correo de la clienta de cada pedido. Corregido: `getInventoryMovements`, `getProductKardex`, las dos páginas y `GET /inventory/reconciliation-template` exigen `requireStoreOwner`, y `tests/unit/security/movimientos-owner-only.test.ts` falla si alguien agrega otra carga al módulo sin el guardia. Al revisar cualquier otra pantalla reservada, comprobar el cargador, no el menú.
 >
 > **Segundo caso, mismo patrón: Aprovisionamiento (2026-09-20).** Ni el cargador ni las dos páginas comprobaban nada, mientras `GET /api/[storeId]/restock-orders` ya se reservaba «por costos de compra» en dos pruebas: la pantalla enseñaba el costo unitario, el costo puesto en bodega y el margen que la API negaba. Corregido igual: `getRestockOrders` y las dos páginas exigen `requireStoreOwner`, los controles que escriben pasan por `useCanWrite`, y `tests/unit/security/aprovisionamiento-owner-only.test.ts` repite el escaneo del módulo. Que aparezca dos veces sugiere revisar de una vez el resto de las reservadas.
+>
+> **Barrido completo con el navegador (2026-09-20).** Se recorrieron todas las pantallas reservadas con una sesión de solo lectura de verdad, y el barrido a ojo había fallado en las **dos** direcciones: dio por cerrado **Rendimiento** —el guardia existía, pero solo en la pestaña de Envíos, y «Resumen y caja» enseñaba ventas netas, utilidad operativa y el retiro personal sugerido— y dio por abierto **Boletín**, que sí estaba cerrado con el ayudante antiguo `verifyStoreOwner`. Además aparecieron dos filtraciones que ningún grep por archivo había visto: el **detalle de una conversación** (teléfono, nombre y el hilo entero) y la **lista de clientas anteriores** del formulario de pedido (nombre, correo, teléfono y documento). Y `/negocio` e `/inteligencia-negocio` servían el mismo resumen de caja que Rendimiento, cada una en su propia URL. Desde entonces `tests/unit/security/read-auth-scan.test.ts` exige que toda carga del panel que consulte la base diga a quién deja entrar, con una lista de excepciones que lleva el motivo escrito.
 
 **Qué se recorta** (`lib/viewer-payloads.ts`, una sola lista para todas las lecturas):
 
@@ -119,16 +123,20 @@ Trece rutas de la lista original ya eran **públicas** (las consume la tienda en
 | Mercado Libre | `buyerName`, `trackingNumber`, `minimumMarginAmount` |
 | Feeds | la URL del feed, que lleva el secreto |
 | Reseña | `userId` y la moderación; **el nombre de quien reseña se conserva**, porque ya se ve en la tienda |
+| Inventario | `acqPrice`, `transportationCost`, `lastCost`, `lastCostSource`, `lastCostAt`, `supplier`. **Las unidades y las señales de reposición sí se ven**: es lo que sirve para planear una campaña |
+| Envío | `cost`, la guía (`trackingCode`, `trackingUrl`, `labelUrl`) y quién recibe. Con el número de guía se consulta el nombre y la dirección en la página de la transportadora, así que se trata como dato personal |
+| Preventa | `amountReceived`, `depositAmount` y el total cobrado: es plata de las clientas que la tienda todavía debe |
 
 **Controles que escriben:** apagados o escondidos con `useCanWrite()`. El aviso, el menú, la barra del teléfono, la barra de acciones masivas, las confirmaciones, la cabecera de los formularios, el botón «Nuevo pedido» de la barra superior, los «Nuevo …» de cada lista, el menú de fila de atributos y el botón de WhatsApp responden a ese mismo dato.
 
-**Red de seguridad del navegador:** `ReadOnlyGuard` corta por axios las peticiones que escriben y avisa. Es comodidad, no seguridad: el servidor rechaza igual, y no cubre las pantallas que escriben con `fetch` (Mercado Libre, Envíos, Ajustes), que son justo las que el menú esconde.
+**Red de seguridad del navegador:** `ReadOnlyGuard` corta las peticiones que escriben y avisa, **por axios y por `fetch`**. Es comodidad, no seguridad: el servidor rechaza igual. Antes solo cubría axios, y el aviso prometía que «los botones que crean, editan o borran están apagados» mientras Mercado Libre, Envíos y Ajustes seguían escribiendo con `fetch`: el botón «Conectar Mercado Libre» estaba vivo debajo del aviso. Solo se interceptan las peticiones a `/api/` de este mismo origen; las de Next —navegación RSC y acciones de servidor— pasan intactas.
 
 ## Qué falta
 
-1. Las 24 lecturas reservadas siguen siendo solo de la dueña a propósito (ajustes con cuentas bancarias, proveedores, impuestos, liquidaciones de Mercado Libre, costos de compra, datos de clientas). Abrir alguna exige depurarla primero.
-2. Cola larga de la interfaz: quedan tarjetas y menús de fila que todavía dicen «Editar» y llevan a un formulario que ya está apagado. No deja escribir nada, pero se lee raro.
-3. Revisar si la lista de tiendas del selector debe mostrar todas las permitidas cuando una cuenta tenga más de una.
+1. **Mercado Libre sigue pendiente.** El menú la esconde, pero la pantalla carga igual para una cuenta de solo lectura y no tiene depurador propio: el resumen de caja de Mercado Libre enseña dinero. Es el mismo patrón de Movimientos y Aprovisionamiento, todavía sin cerrar, y está fuera del lote de la fase 2 a propósito.
+2. Las 24 lecturas reservadas siguen siendo solo de la dueña a propósito (ajustes con cuentas bancarias, proveedores, impuestos, liquidaciones de Mercado Libre, costos de compra, datos de clientas). Abrir alguna exige depurarla primero.
+3. Cola larga de la interfaz: quedan tarjetas y menús de fila que todavía dicen «Editar» y llevan a un formulario que ya está apagado. No deja escribir nada, pero se lee raro.
+4. Revisar si la lista de tiendas del selector debe mostrar todas las permitidas cuando una cuenta tenga más de una.
 
 ## Guardias automáticos
 

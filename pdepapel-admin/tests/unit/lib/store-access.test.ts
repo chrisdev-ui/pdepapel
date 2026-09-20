@@ -251,4 +251,25 @@ describe("requireAdminSession", () => {
     mocks.storeCount.mockResolvedValue(1);
     await expect(requireAdminSession()).resolves.toBe(OWNER);
   });
+
+  /**
+   * Una cuenta de solo lectura no es dueña de ninguna tienda, así que
+   * `hasAdminAccess` la deja fuera. Sin esta rama, la ficha de un pedido se
+   * caía entera para ella —los municipios DANE se cargan ahí dentro—, aunque
+   * Pedidos sea una pantalla que sí puede ver.
+   */
+  it("acepta a una cuenta de solo lectura, que no es dueña de nada", async () => {
+    mocks.storeCount.mockResolvedValue(0);
+    signedInAs(VIEWER, { role: "viewer", allowedStoreIds: [STORE] });
+    await expect(requireAdminSession()).resolves.toBe(VIEWER);
+  });
+
+  it("sigue rechazando a una clienta de la tienda con el metadato roto", async () => {
+    mocks.storeCount.mockResolvedValue(0);
+    signedInAs(VIEWER, { role: "viewer", allowedStoreIds: [] });
+    await expect(requireAdminSession()).rejects.toMatchObject({ statusCode: 403 });
+
+    signedInAs(VIEWER, { role: "viewer", allowedStoreIds: "store-1" });
+    await expect(requireAdminSession()).rejects.toMatchObject({ statusCode: 403 });
+  });
 });

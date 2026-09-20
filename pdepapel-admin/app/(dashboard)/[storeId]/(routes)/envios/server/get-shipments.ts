@@ -3,9 +3,18 @@ import { ShippingStatus } from "@prisma/client";
 import { DISPATCH_WINDOW_DAYS } from "@/lib/dashboard-today";
 import prismadb from "@/lib/prismadb";
 import { isReadyToDispatch } from "@/lib/shipment-views";
+import { requireStoreOwner, requireStoreRead } from "@/lib/store-access";
+import { scrubShipments } from "@/lib/viewer-payloads";
 
-/** Lista completa de envíos de la tienda; las vistas se resuelven en el cliente. */
+/**
+ * Lista completa de envíos de la tienda; las vistas se resuelven en el cliente.
+ *
+ * Una cuenta de solo lectura la ve sin el costo del despacho, sin la guía y
+ * sin quién recibe: le quedan el estado, las fechas, la ciudad y las señales
+ * de demora, que es lo que dice cómo va la operación.
+ */
 export async function getShipments(storeId: string) {
+  const access = await requireStoreRead(storeId);
   const shipments = await prismadb.shipping.findMany({
     where: { storeId },
     select: {
@@ -45,7 +54,7 @@ export async function getShipments(storeId: string) {
     orderBy: { updatedAt: "desc" },
   });
 
-  return shipments.map(({ trackingEvents, order, ...shipment }) => ({
+  const rows = shipments.map(({ trackingEvents, order, ...shipment }) => ({
     ...shipment,
     firstEventAt: trackingEvents[0]?.timestamp ?? null,
     order: order
@@ -62,6 +71,8 @@ export async function getShipments(storeId: string) {
         }
       : null,
   }));
+
+  return access.role === "viewer" ? scrubShipments(rows) : rows;
 }
 
 export type ShipmentRow = Awaited<ReturnType<typeof getShipments>>[number];
@@ -73,6 +84,9 @@ export type ShipmentRow = Awaited<ReturnType<typeof getShipments>>[number];
  * línea, producto y componentes del kit).
  */
 export async function getDispatchQueue(storeId: string) {
+  // La lista de recogida es un papel con nombres y direcciones: solo la dueña.
+  // Quien la llama comprueba antes si puede, para no tumbar la página entera.
+  await requireStoreOwner(storeId);
   const now = new Date();
   const shipments = await prismadb.shipping.findMany({
     where: {

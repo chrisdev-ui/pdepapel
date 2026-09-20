@@ -6,6 +6,7 @@ import { AlertTriangle, BellRing, PackageCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +37,9 @@ const STATUS_VARIANT: Record<
  * en Bold o Wompi: el panel no mueve plata.
  */
 const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
+  // El servidor ya manda las filas sin el dinero recibido; aquí se quitan la
+  // tarjeta, la cifra por fila y las dos acciones que mueven inventario.
+  const canWrite = useCanWrite();
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
@@ -144,6 +148,7 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
             </p>
           </CardContent>
         </Card>
+        {canWrite ? (
         <Card>
           <CardContent className="space-y-1 p-4">
             <p className="text-xs font-medium text-muted-foreground">
@@ -157,6 +162,7 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
             </p>
           </CardContent>
         </Card>
+        ) : null}
         <Card>
           <CardContent className="space-y-1 p-4">
             <p className="text-xs font-medium text-muted-foreground">
@@ -213,8 +219,13 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                     <p className="text-sm">
                       <strong>{row.committedUnits}</strong> de {row.unitLimit}{" "}
                       reservadas · {row.customerCount} clienta
-                      {row.customerCount === 1 ? "" : "s"} ·{" "}
-                      <strong>{currencyFormatter(row.collected)}</strong>
+                      {row.customerCount === 1 ? "" : "s"}
+                      {canWrite ? (
+                        <>
+                          {" · "}
+                          <strong>{currencyFormatter(row.collected)}</strong>
+                        </>
+                      ) : null}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {row.pendingUnits > 0
@@ -257,7 +268,7 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    {row.isOverdue ? (
+                    {canWrite && row.isOverdue ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -268,7 +279,7 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                         Notificar retraso
                       </Button>
                     ) : null}
-                    {row.status === ProductPresaleStatus.ACTIVE ? (
+                    {canWrite && row.status === ProductPresaleStatus.ACTIVE ? (
                       <Button
                         size="sm"
                         disabled={loading !== null || !row.canRelease}

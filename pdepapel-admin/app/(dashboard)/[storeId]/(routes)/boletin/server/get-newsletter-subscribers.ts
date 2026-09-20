@@ -1,17 +1,14 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { NewsletterSubscriberStatus } from "@prisma/client";
 import { headers } from "next/headers";
 
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { requireStoreOwner } from "@/lib/store-access";
 
 export async function getNewsletterSubscribers(storeId: string) {
   headers();
-  const { userId } = await auth();
-  if (!userId) throw new Error("No autenticado");
-  await verifyStoreOwner(userId, storeId);
+  await requireStoreOwner(storeId);
 
   const [subscribers, grouped] = await Promise.all([
     prismadb.newsletterSubscriber.findMany({

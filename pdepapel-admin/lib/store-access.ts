@@ -103,10 +103,21 @@ export async function requireStoreOwner(storeId: string): Promise<string> {
   return userId;
 }
 
-/** Datos del panel que no pertenecen a una tienda (p. ej. municipios DANE): cualquier sesión con acceso al panel. */
+/**
+ * Datos del panel que no pertenecen a una tienda (p. ej. municipios DANE):
+ * cualquier sesión con acceso al panel.
+ *
+ * Eso incluye a una cuenta de solo lectura. `hasAdminAccess` solo sabe de
+ * dueñas y de la lista explícita, así que una cuenta de solo lectura —que no
+ * es dueña de nada— se quedaba fuera y la ficha de un pedido se caía entera
+ * para ella, aunque Pedidos sea una pantalla que sí puede ver. Los municipios
+ * DANE son datos públicos del gobierno: lo que se comprueba aquí es que haya
+ * sesión de panel, no de qué tienda.
+ */
 export async function requireAdminSession(): Promise<string> {
   const { userId } = await auth();
   if (!userId) throw ErrorFactory.Unauthenticated();
-  if (!(await hasAdminAccess(userId))) throw ErrorFactory.Unauthorized();
-  return userId;
+  if (await hasAdminAccess(userId)) return userId;
+  if ((await getViewerStoreIds()).length > 0) return userId;
+  throw ErrorFactory.Unauthorized();
 }
