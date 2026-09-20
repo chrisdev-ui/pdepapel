@@ -484,7 +484,7 @@ Registrar cada oleada con su fecha en `docs/seguimiento-seo.md`, junto a la migr
 
 ## 7. Definición de hecho
 
-Por fase, según `AI_AGENT_CONTEXT.md` §18 y §20:
+Por fase, según la «Definition of done» de `pdepapel-admin/AGENTS.md`:
 
 - [ ] Causa raíz atendida dentro de la arquitectura y las reglas de negocio del repo
 - [ ] Pruebas relevantes en verde + prueba de regresión del comportamiento que se estaba rompiendo
@@ -493,7 +493,7 @@ Por fase, según `AI_AGENT_CONTEXT.md` §18 y §20:
 - [ ] Migración documentada en `prisma/manual-migrations/` y aplicada de forma deliberada
 - [ ] Servidores y contenedores locales detenidos
 - [ ] **Aprobación explícita del usuario antes de cualquier `git push`**
-- [ ] `docs/AI_AGENT_CONTEXT.md` y `docs/seguimiento-seo.md` actualizados en el mismo commit
+- [ ] `pdepapel-admin/AGENTS.md` y `docs/seguimiento-seo.md` actualizados en el mismo commit
 
 ---
 

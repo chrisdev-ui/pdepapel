@@ -474,6 +474,6 @@ Activo / Archivado; «Faltan N» en «Listo para vender».
 - [ ] Archivar y restaurar un color en Atributos.
 - [ ] Leer los capítulos 19 y 20.
 
-Documentación técnica: `docs/AI_AGENT_CONTEXT.md` en la raíz del repositorio y
-los manuales de `pdepapel-admin/docs/` (feria, punto de venta, Mercado Libre,
-reportes tributarios).
+Documentación técnica: `pdepapel-admin/AGENTS.md` (y `pdepapel-store/AGENTS.md`
+para la tienda en línea) más los manuales de `pdepapel-admin/docs/` (feria,
+punto de venta, Mercado Libre, reportes tributarios).
