@@ -140,10 +140,14 @@ describe("pedidos de aprovisionamiento", () => {
     expect(excessBody.receipt.excessUnits).toBe(1);
     expect(await componentStock(f)).toBe(9);
 
-    // Costo puesto en bodega: 30000 de mercancía + 6000 de envío sobre 60000 → 10 %.
+    // Costo puesto en bodega: 30000 de mercancía + 6000 de envío sobre 60000 → 10 %,
+    // promediado con lo que ya había. El producto entra con 6 unidades a 4000 y
+    // sin transporte: 1 unidad lleva el costo a (6×4000 + 30000) / 7 = 7714,29 y
+    // las 2 siguientes a (7×7714,29 + 2×30000) / 9 = 12666,67. El movimiento sí
+    // guarda el costo real de esta compra, 33000.
     const product = await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id } });
-    expect(product.acqPrice).toBe(30000);
-    expect(product.transportationCost).toBe(3000);
+    expect(product.acqPrice).toBe(12666.67);
+    expect(product.transportationCost).toBe(1000);
     expect(product.supplierId).toBe(supplierId);
     const movements = await testPrisma.inventoryMovement.findMany({ where: { referenceId: order.id, type: "RESTOCK_RECEIVED" } });
     expect(movements).toHaveLength(2);

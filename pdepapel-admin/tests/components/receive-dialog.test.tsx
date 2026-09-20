@@ -25,6 +25,10 @@ const order: ReceivableOrder = {
   ],
 };
 
+/** Una viñeta de «Al confirmar»: el texto va partido por los resaltados en negrita. */
+const bullet = (pattern: RegExp) =>
+  screen.getByText((_, element) => element?.tagName === "LI" && pattern.test((element.textContent ?? "").replace(/\s+/g, " ")));
+
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
@@ -38,7 +42,10 @@ describe("ReceiveDialog", () => {
     expect(first.value).toBe("1");
     expect(second.value).toBe("0");
     expect(screen.getByText("$ 16.500")).toBeInTheDocument();
-    expect(screen.getByText(/se crearán 1 movimiento de inventario/i)).toBeInTheDocument();
+    // El bloque «Al confirmar» dice qué entra, en qué queda el pedido y que no se deshace desde aquí.
+    expect(bullet(/entran 1 unidad al inventario, en 1 movimiento del kardex/i)).toBeInTheDocument();
+    expect(bullet(/el pedido queda en completado: no quedaría nada pendiente/i)).toBeInTheDocument();
+    expect(bullet(/no se puede deshacer desde aquí/i)).toBeInTheDocument();
 
     const button = screen.getByRole("button", { name: "Recibir 1 unidad" });
     await act(async () => {

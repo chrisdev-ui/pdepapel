@@ -37,6 +37,7 @@ const row = {
   status: RestockOrderStatus.ORDERED,
   supplier: { id: "sup-1", name: "Henko Importaciones" },
   supplierId: "sup-1",
+  supplierLeadTimeDays: 10,
   totalAmount: 60000,
   shippingCost: 6000,
   total: 66000,

@@ -10,6 +10,7 @@ import {
   landedUnitCost,
   nextRestockOrderNumber,
   parseRestockOrderNumber,
+  weightedAverageCost,
   planReceipt,
   receiptInputSchema,
   restockOrderInputSchema,
@@ -119,5 +120,55 @@ describe("input parsing", () => {
     const ok = receiptInputSchema.safeParse({ idempotencyKey: "3f0c2c2e-9c1b-4b8a-9d0e-2b1d1c1c1c1c", lines: [{ restockOrderItemId: "a", quantity: 1 }] });
     expect(ok.success).toBe(true);
     if (ok.success) expect(ok.data).toMatchObject({ updateCosts: true, assignSupplier: true, lines: [{ allowExcess: false }] });
+  });
+
+  describe("costo promedio ponderado", () => {
+    it("no mueve el costo cuando la compra llega al mismo precio", () => {
+      expect(weightedAverageCost({ currentUnits: 10, currentCost: 1000, incomingUnits: 5, incomingCost: 1000 })).toBe(1000);
+    });
+
+    it("sube en proporción a lo que entra, no al último precio", () => {
+      // 10 a 1.000 más 10 a 2.000: el promedio queda en 1.500, no en 2.000.
+      expect(weightedAverageCost({ currentUnits: 10, currentCost: 1000, incomingUnits: 10, incomingCost: 2000 })).toBe(1500);
+      // Con poco entrando, el costo apenas se mueve.
+      expect(weightedAverageCost({ currentUnits: 90, currentCost: 1000, incomingUnits: 10, incomingCost: 2000 })).toBe(1100);
+    });
+
+    it("baja cuando la compra sale más barata", () => {
+      expect(weightedAverageCost({ currentUnits: 10, currentCost: 2000, incomingUnits: 10, incomingCost: 1000 })).toBe(1500);
+    });
+
+    it("acumula varias recepciones a precios distintos", () => {
+      // Tres compras seguidas: 20 a 1.000, 20 a 1.500 y un alza a 3.000.
+      const first = weightedAverageCost({ currentUnits: 0, currentCost: 0, incomingUnits: 20, incomingCost: 1000 });
+      expect(first).toBe(1000);
+      const second = weightedAverageCost({ currentUnits: 20, currentCost: first, incomingUnits: 20, incomingCost: 1500 });
+      expect(second).toBe(1250);
+      // El alza entra ponderada: 40 unidades a 1.250 más 10 a 3.000.
+      const third = weightedAverageCost({ currentUnits: 40, currentCost: second, incomingUnits: 10, incomingCost: 3000 });
+      expect(third).toBe(1600);
+    });
+
+    it("toma el costo de la compra cuando no había stock ni costo previo", () => {
+      expect(weightedAverageCost({ currentUnits: 0, currentCost: 900, incomingUnits: 5, incomingCost: 1200 })).toBe(1200);
+      expect(weightedAverageCost({ currentUnits: 8, currentCost: null, incomingUnits: 5, incomingCost: 1200 })).toBe(1200);
+      // Stock negativo por un descuadre: se trata como cero, no como resta.
+      expect(weightedAverageCost({ currentUnits: -4, currentCost: 500, incomingUnits: 5, incomingCost: 1200 })).toBe(1200);
+    });
+
+    it("distingue un costo desconocido de un cero de verdad", () => {
+      // `null` es «nunca se supo»: la compra fija el costo.
+      expect(weightedAverageCost({ currentUnits: 10, currentCost: null, incomingUnits: 2, incomingCost: 3000 })).toBe(3000);
+      // 0 es un cero real, como un producto que antes no pagaba transporte.
+      expect(weightedAverageCost({ currentUnits: 10, currentCost: 0, incomingUnits: 10, incomingCost: 3000 })).toBe(1500);
+    });
+
+    it("conserva el costo actual si no entra nada", () => {
+      expect(weightedAverageCost({ currentUnits: 10, currentCost: 1000, incomingUnits: 0, incomingCost: 5000 })).toBe(1000);
+    });
+
+    it("redondea a dos decimales", () => {
+      expect(weightedAverageCost({ currentUnits: 3, currentCost: 1000, incomingUnits: 4, incomingCost: 1500 })).toBe(1285.71);
+    });
   });
 });

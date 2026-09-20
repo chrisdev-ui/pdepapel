@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { getRestockProgress } from "@/lib/restock-orders";
+import { displayRestockOrderNumber, getRestockProgress } from "@/lib/restock-orders";
 import { requireStoreOwner } from "@/lib/store-access";
 
 /**
@@ -14,7 +14,7 @@ export const getRestockOrders = async (storeId: string, supplierId?: string | nu
   const restockOrders = await prismadb.restockOrder.findMany({
     where: { storeId, ...(supplierId ? { supplierId } : {}) },
     include: {
-      supplier: { select: { id: true, name: true } },
+      supplier: { select: { id: true, name: true, leadTimeDays: true } },
       items: { select: { id: true, quantity: true, quantityReceived: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -22,10 +22,13 @@ export const getRestockOrders = async (storeId: string, supplierId?: string | nu
 
   return restockOrders.map((order) => ({
     id: order.id,
-    orderNumber: order.orderNumber,
+    // Con los mismos ceros aunque en la base haya quedado un «PO-5».
+    orderNumber: displayRestockOrderNumber(order.orderNumber),
     status: order.status,
-    supplier: order.supplier,
+    supplier: { id: order.supplier.id, name: order.supplier.name },
     supplierId: order.supplierId,
+    /** Plazo del proveedor; `null` en casi todos hoy, y la lista lo dice en vez de estimar. */
+    supplierLeadTimeDays: order.supplier.leadTimeDays,
     totalAmount: order.totalAmount,
     shippingCost: order.shippingCost,
     total: Math.round((order.totalAmount + order.shippingCost) * 100) / 100,

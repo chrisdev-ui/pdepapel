@@ -100,6 +100,17 @@ export function formatRestockOrderNumber(sequence: number): string {
 }
 
 /**
+ * Cómo se muestra un número guardado. Una fila vieja quedó como «PO-5» y al
+ * lado de «PO-0038» parecía de otra serie; se muestra con los mismos ceros sin
+ * tocar lo guardado, y si el texto no tiene la forma esperada se muestra tal
+ * cual en vez de inventar.
+ */
+export function displayRestockOrderNumber(orderNumber: string): string {
+  const sequence = parseRestockOrderNumber(orderNumber);
+  return sequence === null ? orderNumber : formatRestockOrderNumber(sequence);
+}
+
+/**
  * Siguiente número a partir de los existentes: el mayor más uno, nunca
  * `count + 1` (borrar un borrador bajaba el conteo y reutilizaba un número).
  * Convive con el formato antiguo sin ceros (`PO-1001`).
@@ -313,4 +324,52 @@ export function getRestockProgress(items: { quantity: number; quantityReceived: 
 /** Transporte por unidad que queda en el producto al actualizar costos: la parte del envío. */
 export function transportationShare(unitCost: number, totalAmount: number, shippingCost: number): number {
   return round2(landedUnitCost(unitCost, totalAmount, shippingCost) - unitCost);
+}
+
+/* ── Costo promedio ponderado ───────────────────────────────────────────── */
+
+export interface WeightedCostInput {
+  /** Unidades en bodega **antes** de esta recepción. */
+  currentUnits: number;
+  /**
+   * Costo registrado hoy en el producto. `null` significa «nunca se supo» y
+   * cae al costo de la compra; 0 es un cero real y sí entra al promedio (un
+   * producto que antes no pagaba transporte, por ejemplo).
+   */
+  currentCost: number | null | undefined;
+  /** Unidades que entran con esta recepción. */
+  incomingUnits: number;
+  /** Costo unitario de lo que entra. */
+  incomingCost: number;
+}
+
+/**
+ * Promedio ponderado por unidades:
+ *
+ *     (unidades_en_bodega × costo_actual + unidades_que_entran × costo_nuevo)
+ *     ─────────────────────────────────────────────────────────────────────
+ *                  unidades_en_bodega + unidades_que_entran
+ *
+ * Antes la recepción pisaba el costo con el de la última compra, así que
+ * recibir 2 unidades a un precio nuevo revaluaba las 100 que ya estaban en
+ * bodega y el margen de todo el catálogo se movía por una compra pequeña.
+ *
+ * Dos casos caen al costo nuevo a propósito: sin unidades previas no hay nada
+ * que promediar, y sin costo previo registrado (`currentCost` en `null`) no
+ * hay con qué promediar; quien llama decide cuándo un cero guardado significa
+ * «nunca se supo» y cuándo es un cero de verdad.
+ */
+export function weightedAverageCost(input: WeightedCostInput): number {
+  const incomingUnits = Math.max(0, input.incomingUnits);
+  const incomingCost = Math.max(0, input.incomingCost);
+  const currentUnits = Math.max(0, input.currentUnits);
+  const known = input.currentCost !== null && input.currentCost !== undefined && Number.isFinite(input.currentCost) && Number(input.currentCost) >= 0;
+  const currentCost = known ? Number(input.currentCost) : 0;
+
+  // Nada entra: el costo se queda como está.
+  if (incomingUnits <= 0) return round2(known ? currentCost : incomingCost);
+  // Nada con qué promediar.
+  if (currentUnits <= 0 || !known) return round2(incomingCost);
+
+  return round2((currentUnits * currentCost + incomingUnits * incomingCost) / (currentUnits + incomingUnits));
 }

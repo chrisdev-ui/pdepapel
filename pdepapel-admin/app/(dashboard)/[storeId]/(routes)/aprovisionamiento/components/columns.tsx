@@ -3,27 +3,78 @@
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { ProgressBar, receivedPercent } from "@/components/ui/progress-bar";
 import { TintBadge } from "@/components/ui/tint-badge";
-import { RESTOCK_STATUS_LABELS, RESTOCK_STATUS_TONES } from "@/lib/restock-orders";
+import { formatKardexDay } from "@/lib/kardex";
+import { parseRestockOrderNumber, RESTOCK_STATUS_LABELS, RESTOCK_STATUS_TONES } from "@/lib/restock-orders";
+import { expectedArrival } from "@/lib/restock-views";
 import { cn } from "@/lib/utils";
+import { RestockOrderStatus } from "@prisma/client";
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 
 import type { RestockOrderRow } from "../server/get-restock-orders";
 import { CellAction } from "./cell-action";
+
+/** El proveedor lleva a su ficha; antes era texto plano. */
+function SupplierCell({ row }: { row: RestockOrderRow }) {
+  const params = useParams();
+  return (
+    <Link
+      href={`/${String(params.storeId)}/proveedores/${row.supplier.id}`}
+      className="text-sm text-primary hover:underline"
+      data-no-row-click
+    >
+      {row.supplier.name}
+    </Link>
+  );
+}
+
+/**
+ * Cuándo debería llegar el pedido. Sin plazo del proveedor no se estima nada:
+ * hoy 28 de 29 proveedores no lo tienen, y una fecha inventada en una pantalla
+ * de compras es peor que ninguna.
+ */
+function ArrivalCell({ row }: { row: RestockOrderRow }) {
+  const arrival = expectedArrival(row);
+  switch (arrival.state) {
+    case "sin-plazo":
+      return <span className="text-xs text-muted-foreground">Sin plazo del proveedor</span>;
+    case "sin-pedir":
+      return <span className="text-xs text-muted-foreground">Sin pedir</span>;
+    case "cerrado":
+      // Una fecha sola no dice nada: el pedido cerrado o llegó o se canceló.
+      return (
+        <span className="text-sm text-muted-foreground">
+          {row.status === RestockOrderStatus.CANCELLED ? "Cancelado" : `Llegó el ${formatKardexDay(row.updatedAt)}`}
+        </span>
+      );
+    case "retrasado":
+      return (
+        <TintBadge
+          label={`${arrival.overdueDays} ${arrival.overdueDays === 1 ? "día de retraso" : "días de retraso"}`}
+          tone="pink"
+        />
+      );
+    case "hoy":
+      return <TintBadge label="Llega hoy" tone="cream" />;
+    default:
+      return <span className="text-sm text-primary">Llega el {formatKardexDay(arrival.date!)}</span>;
+  }
+}
 
 export type RestockOrderColumn = RestockOrderRow;
 
 /** Barra de unidades recibidas sobre pedidas; compartida por la tabla y la tarjeta móvil. */
 export function RestockProgressCell({ progress, className }: { progress: RestockOrderRow["progress"]; className?: string }) {
-  const percent = progress.orderedUnits > 0 ? Math.min(100, Math.round((progress.receivedUnits / progress.orderedUnits) * 100)) : 0;
+  const percent = receivedPercent(progress.receivedUnits, progress.orderedUnits);
   return (
     <div className={cn("flex min-w-[120px] flex-col gap-1", className)}>
       <span className="text-xs text-muted-foreground">
         {progress.receivedUnits} de {progress.orderedUnits} unidades · {progress.lineCount} {progress.lineCount === 1 ? "línea" : "líneas"}
       </span>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
-        <div className={cn("h-full rounded-full", percent >= 100 ? "bg-tint-mint" : "bg-primary/60")} style={{ width: `${percent}%` }} />
-      </div>
+      <ProgressBar percent={percent} barClassName={percent >= 100 ? "bg-tint-mint" : "bg-primary/60"} />
     </div>
   );
 }
@@ -33,12 +84,16 @@ export const columns: ColumnDef<RestockOrderColumn>[] = [
     accessorKey: "orderNumber",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Pedido" />,
     cell: ({ row }) => <span className="font-mono text-sm font-semibold text-primary">{row.original.orderNumber}</span>,
+    // Ordena por el número, no por el texto: una fila vieja sin ceros a la
+    // izquierda («PO-5») quedaba después de «PO-0038» al ordenar como cadena.
+    sortingFn: (a, b) =>
+      (parseRestockOrderNumber(a.original.orderNumber) ?? -1) - (parseRestockOrderNumber(b.original.orderNumber) ?? -1),
   },
   {
     id: "supplier",
     accessorFn: (row) => row.supplier.name,
     header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
-    cell: ({ row }) => <span className="text-sm">{row.original.supplier.name}</span>,
+    cell: ({ row }) => <SupplierCell row={row.original} />,
   },
   {
     accessorKey: "status",
@@ -63,8 +118,14 @@ export const columns: ColumnDef<RestockOrderColumn>[] = [
     ),
   },
   {
+    id: "arrival",
+    accessorFn: (row) => expectedArrival(row).state,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Cuándo llega" />,
+    cell: ({ row }) => <ArrivalCell row={row.original} />,
+  },
+  {
     accessorKey: "createdAt",
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Pedido el" />,
     cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {

@@ -376,6 +376,22 @@ recibir, sube el inventario con movimiento «Reposición recibida» y costo. Un
 pedido de aprovisionamiento no es una factura: las facturas de compra se
 registran para tributarios con su número.
 
+La lista abre con cuatro cifras —esperando mercancía, unidades en camino,
+comprometido a costo y con retraso— y vistas por estado (Todo, Borradores, Al
+proveedor, Recibiendo, Completados, Cancelados) que quedan en la URL.
+
+- **Cuándo llega**: la fecha del pedido más el plazo del proveedor
+  (`Proveedores` → «Días de entrega»). Sin ese plazo la columna dice «Sin plazo
+  del proveedor» en vez de estimar una fecha; vale la pena registrarlo.
+- **Recibir mercancía**: cada línea propone lo que falta, recibir de más exige
+  confirmarlo y antes de aceptar se lee «Al confirmar», que dice cuántas
+  unidades entran, en cuántos movimientos, en qué estado queda el pedido y que
+  no se deshace desde ahí (se corrige con un movimiento en Movimientos).
+- **Costo al recibir**: con «Actualizar el costo» encendido, el costo del
+  producto queda en el **promedio ponderado por unidades** entre lo que ya
+  había en bodega y lo que entra, no en el precio de la última compra. Recibir
+  2 unidades más caras ya no revalúa las 100 que estaban guardadas.
+
 ## 13. Contenido de la tienda (`/contenido`)
 
 Pestañas Portada y Redes en la tienda (publicaciones sociales). Portada tiene

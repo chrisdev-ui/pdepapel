@@ -16,6 +16,7 @@ import {
   receiptInputSchema,
   RESTOCK_STATUS_LABELS,
   transportationShare,
+  weightedAverageCost,
 } from "@/lib/restock-orders";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -90,6 +91,18 @@ export async function POST(req: Request, { params }: { params: { storeId: string
         });
       }
 
+      // Costo y unidades **antes** de mover inventario: el promedio ponderado
+      // necesita lo que había en bodega, y el lote de movimientos ya suma lo
+      // que entra.
+      const beforeReceipt = new Map(
+        (
+          await tx.product.findMany({
+            where: { id: { in: plan.lines.map((line) => line.productId) }, storeId: params.storeId },
+            select: { id: true, stock: true, acqPrice: true, transportationCost: true },
+          })
+        ).map((product) => [product.id, product]),
+      );
+
       const movements: CreateInventoryMovementParams[] = plan.lines.map((line) => ({
         storeId: params.storeId,
         productId: line.productId,
@@ -105,13 +118,27 @@ export async function POST(req: Request, { params }: { params: { storeId: string
 
       if (input.updateCosts) {
         for (const line of plan.lines) {
-          await tx.product.update({
-            where: { id: line.productId },
-            data: {
-              acqPrice: line.unitCost,
-              transportationCost: transportationShare(line.unitCost, order.totalAmount, order.shippingCost),
-            },
+          const before = beforeReceipt.get(line.productId);
+          const currentUnits = before?.stock ?? 0;
+          // Un producto sin costo de adquisición no tiene historia de costos:
+          // su cero solo dice que nunca se supo, así que la compra fija las dos
+          // mitades en vez de promediar contra un cero inventado.
+          const hasCostHistory = (before?.acqPrice ?? 0) > 0;
+          // Se promedian las dos mitades del costo puesto en bodega, para que
+          // `acqPrice + transportationCost` siga siendo el costo real.
+          const acqPrice = weightedAverageCost({
+            currentUnits,
+currentCost: hasCostHistory ? before?.acqPrice : null,
+            incomingUnits: line.quantity,
+            incomingCost: line.unitCost,
           });
+          const transportationCost = weightedAverageCost({
+            currentUnits,
+currentCost: hasCostHistory ? (before?.transportationCost ?? 0) : null,
+            incomingUnits: line.quantity,
+            incomingCost: transportationShare(line.unitCost, order.totalAmount, order.shippingCost),
+          });
+          await tx.product.update({ where: { id: line.productId }, data: { acqPrice, transportationCost } });
         }
       }
       if (input.assignSupplier) {

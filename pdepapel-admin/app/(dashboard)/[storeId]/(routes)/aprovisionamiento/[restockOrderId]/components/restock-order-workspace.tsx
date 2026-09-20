@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/components/ui/section-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { formatKardexDate, formatKardexDay } from "@/lib/kardex";
+import { FormPageHeader } from "@/components/ui/form-page-chrome";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useCanWrite } from "@/components/shell/viewer-access";
@@ -11,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import {
   canTransitionRestockOrder,
+  displayRestockOrderNumber,
   getRestockProgress,
   landedCostFactor,
   landedUnitCost,
@@ -30,13 +34,8 @@ import { useState } from "react";
 import { ReceiveDialog } from "./receive-dialog";
 import { RestockSteps } from "./restock-steps";
 
-const fmtDate = (value: Date | string, withTime = false) =>
-  new Intl.DateTimeFormat("es-CO", {
-    day: "numeric",
-    month: "short",
-    ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
-    timeZone: "America/Bogota",
-  }).format(new Date(value));
+/** Las mismas fechas que el kardex y Movimientos, en hora de Colombia. */
+const fmtDate = (value: Date | string, withTime = false) => (withTime ? formatKardexDate(value) : formatKardexDay(value));
 
 interface RestockOrderWorkspaceProps {
   order: RestockOrderWithRelations;
@@ -57,6 +56,8 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
   const [receiveOpen, setReceiveOpen] = useState(openReceive);
 
   const progress = getRestockProgress(order.items);
+  // Con los mismos ceros aunque en la base haya quedado un «PO-5».
+  const orderNumber = displayRestockOrderNumber(order.orderNumber);
   const context = { receivedUnits: progress.receivedUnits };
   const receivable = RECEIVABLE_STATUSES.includes(order.status);
   const cancelled = order.status === RestockOrderStatus.CANCELLED;
@@ -89,7 +90,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
 
   const closeShort = async () => {
     const confirmed = await requestConfirmation({
-      title: `Cerrar el pedido ${order.orderNumber}`,
+      title: `Cerrar el pedido ${orderNumber}`,
       description: `Faltan ${progress.remainingUnits} unidades que no llegarán. El pedido queda completado con lo recibido; el inventario no cambia.`,
       confirmLabel: "Cerrar pedido",
       cancelLabel: "Volver",
@@ -99,7 +100,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
 
   const cancel = async () => {
     const confirmed = await requestConfirmation({
-      title: `Cancelar el pedido ${order.orderNumber}`,
+      title: `Cancelar el pedido ${orderNumber}`,
       description: "No se ha recibido nada, así que el inventario no cambia. Podrás volverlo a borrador si hace falta.",
       confirmLabel: "Cancelar pedido",
       cancelLabel: "Volver",
@@ -109,12 +110,18 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
   };
 
   const reopen = async () => {
-    await patch({ status: RestockOrderStatus.DRAFT }, "El pedido vuelve a ser un borrador.");
+    const confirmed = await requestConfirmation({
+      title: `Volver ${orderNumber} a borrador`,
+      description:
+        "El pedido deja de estar cancelado y sus líneas, el proveedor y el envío se vuelven editables. No toca el inventario.",
+      confirmLabel: "Sí, volver a borrador",
+    });
+    if (confirmed) await patch({ status: RestockOrderStatus.DRAFT }, "El pedido vuelve a ser un borrador.");
   };
 
   const remove = async () => {
     const confirmed = await requestConfirmation({
-      title: `Eliminar el pedido ${order.orderNumber}`,
+      title: `Eliminar el pedido ${orderNumber}`,
       description: "Está cancelado y no recibió mercancía. Se borra definitivamente; su número no se reutiliza.",
       confirmLabel: "Eliminar",
       cancelLabel: "Volver",
@@ -138,42 +145,30 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
       {confirmationDialog}
       <ReceiveDialog order={order} open={receiveOpen} onOpenChange={setReceiveOpen} />
 
-      <div className="flex flex-col gap-1">
-        <p className="text-xs text-muted-foreground">
-          <Link href={`/${storeId}/aprovisionamiento`} className="hover:underline">
-            Aprovisionamiento
-          </Link>{" "}
-          › {order.orderNumber}
-        </p>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-primary">Pedido {order.orderNumber}</h1>
-              <TintBadge label={RESTOCK_STATUS_LABELS[order.status]} tone={RESTOCK_STATUS_TONES[order.status]} />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {order.supplier.name} · {progress.lineCount} {progress.lineCount === 1 ? "línea" : "líneas"} · {progress.receivedUnits} de {progress.orderedUnits} unidades recibidas · pedido el {fmtDate(order.createdAt)}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/${storeId}/aprovisionamiento`}>Volver a aprovisionamiento</Link>
+      <FormPageHeader
+        title={`Pedido ${orderNumber}`}
+        badge={<TintBadge label={RESTOCK_STATUS_LABELS[order.status]} tone={RESTOCK_STATUS_TONES[order.status]} />}
+        summary={`${order.supplier.name} · ${progress.lineCount} ${progress.lineCount === 1 ? "línea" : "líneas"} · ${progress.receivedUnits} de ${progress.orderedUnits} unidades recibidas · pedido el ${fmtDate(order.createdAt)}`}
+        backLabel="Volver a aprovisionamiento"
+        onBack={() => router.push(`/${storeId}/aprovisionamiento`)}
+        actions={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={saveNotes} disabled={!notesDirty || saving || busy} isLoading={saving} loadingText="Guardando…">
+              Guardar notas
             </Button>
-            {canWrite && (
-              <Button type="button" variant="outline" size="sm" onClick={saveNotes} disabled={!notesDirty || saving || busy} isLoading={saving} loadingText="Guardando…">
-                Guardar notas
-              </Button>
-            )}
-            {receivable && canWrite && (
+            {receivable && (
+              // La acción principal del pedido abierto: antes era un botón
+              // discreto con borde, al lado de «Volver».
               <Button type="button" size="sm" onClick={() => setReceiveOpen(true)} disabled={busy}>
                 <PackageCheck className="mr-2 h-4 w-4" aria-hidden="true" />
                 Recibir mercancía
               </Button>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
+      {/* Los pasos van arriba: son lo que dice en qué punto está el pedido. */}
       <RestockSteps status={order.status} receivedUnits={progress.receivedUnits} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -221,9 +216,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
                               {item.quantityReceived} de {item.quantity}
                               {excess ? ` (+${item.quantityReceived - item.quantity})` : ""}
                             </span>
-                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                              <div className={cn("h-full rounded-full", percent >= 100 ? "bg-tint-mint" : "bg-primary/60")} style={{ width: `${percent}%` }} />
-                            </div>
+                            <ProgressBar percent={percent} barClassName={percent >= 100 ? "bg-tint-mint" : "bg-primary/60"} />
                           </div>
                         </TableCell>
                         <TableCell className="text-right">{currencyFormatter(item.cost)}</TableCell>

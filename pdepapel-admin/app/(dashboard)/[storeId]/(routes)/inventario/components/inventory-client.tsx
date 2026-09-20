@@ -6,6 +6,7 @@ import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MetricCard } from "@/components/ui/metric-card";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { Models } from "@/constants";
 import { INVENTORY_VIEWS, inventoryMatchesView, inventoryRowValue, normalizeInventoryView, summarizeInventory, type InventoryView } from "@/lib/inventory-views";
@@ -33,9 +34,7 @@ function CoverCell({ row }: { row: InventoryRow }) {
   return (
     <div className="flex min-w-[150px] flex-col gap-1.5">
       <span className={cn("text-xs font-semibold", cover.tone === "slate" ? "text-muted-foreground" : "text-primary")}>{cover.label}</span>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
-        <div className={cn("h-full rounded-full", TONE_BAR[cover.tone])} style={{ width: `${cover.percent}%` }} />
-      </div>
+      <ProgressBar percent={cover.percent} barClassName={TONE_BAR[cover.tone]} />
     </div>
   );
 }

@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { landedCostFactor, landedUnitCost, remainingUnits } from "@/lib/restock-orders";
+import { displayRestockOrderNumber, landedCostFactor, landedUnitCost, remainingUnits, RESTOCK_STATUS_LABELS } from "@/lib/restock-orders";
 import { currencyFormatter } from "@/lib/utils";
+import { RestockOrderStatus } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -64,6 +65,7 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
     setSubmitting(false);
   }, [open, order.items]);
 
+  const orderNumber = displayRestockOrderNumber(order.orderNumber);
   const factor = landedCostFactor(order.totalAmount, order.shippingCost);
   const shippingPercent = Math.round((factor - 1) * 1000) / 10;
 
@@ -81,6 +83,13 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
   const receivingLines = lines.filter((line) => line.quantity > 0).length;
   const unconfirmedExcess = lines.some((line) => line.excess > 0 && !excessConfirmed[line.item.id]);
   const costChanges = lines.filter((line) => line.quantity > 0 && (line.item.product.acqPrice ?? 0) !== line.item.cost).length;
+  // En qué queda el pedido si se confirma esto, con la misma regla que aplica
+  // el servidor en `deriveRestockStatus`: sin nada pendiente, se cierra.
+  const pendingAfter = order.items.reduce(
+    (sum, item) => sum + Math.max(0, item.quantity - (item.quantityReceived + (quantities[item.id] ?? 0))),
+    0,
+  );
+  const nextStatusLabel = RESTOCK_STATUS_LABELS[pendingAfter > 0 ? RestockOrderStatus.PARTIALLY_RECEIVED : RestockOrderStatus.COMPLETED];
 
   const submit = async () => {
     if (receivingUnits === 0 || unconfirmedExcess || submitting) return;
@@ -94,7 +103,7 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
           .filter((line) => line.quantity > 0)
           .map((line) => ({ restockOrderItemId: line.item.id, quantity: line.quantity, allowExcess: line.excess > 0 })),
       });
-      toast({ title: `Recibidas ${receivingUnits} unidades del pedido ${order.orderNumber}.`, variant: "success" });
+      toast({ title: `Recibidas ${receivingUnits} unidades del pedido ${orderNumber}.`, variant: "success" });
       router.refresh();
       onOpenChange(false);
     } catch (error) {
@@ -114,7 +123,7 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
     <Dialog open={open} onOpenChange={(next) => !submitting && onOpenChange(next)}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Recibir mercancía de {order.orderNumber}</DialogTitle>
+          <DialogTitle>Recibir mercancía de {orderNumber}</DialogTitle>
           <DialogDescription>
             Cada línea propone lo que falta. Puedes recibir menos; para recibir de más tendrás que confirmarlo.
           </DialogDescription>
@@ -195,10 +204,34 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
           <Switch id="recepcion-costos" checked={updateCosts} onCheckedChange={setUpdateCosts} disabled={submitting} />
         </div>
 
+        {receivingUnits > 0 && (
+          <div className="flex flex-col gap-2 rounded-xl border p-4">
+            <span className="text-sm font-semibold text-primary">Al confirmar</span>
+            <ul className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+              <li>
+                Entran <strong className="font-semibold text-primary">{receivingUnits} {receivingUnits === 1 ? "unidad" : "unidades"}</strong> al inventario, en{" "}
+                {receivingLines} {receivingLines === 1 ? "movimiento" : "movimientos"} del kardex.
+              </li>
+              <li>
+                El pedido queda en{" "}
+                <strong className="font-semibold text-primary">{nextStatusLabel}</strong>
+                {pendingAfter > 0 ? `: quedarían ${pendingAfter} ${pendingAfter === 1 ? "unidad" : "unidades"} por recibir.` : ": no quedaría nada pendiente."}
+              </li>
+              {updateCosts && costChanges > 0 && (
+                <li>
+                  Se recalcula el costo de {costChanges} {costChanges === 1 ? "producto" : "productos"} como promedio ponderado entre lo que ya
+                  había en bodega y lo que entra.
+                </li>
+              )}
+              <li>No se puede deshacer desde aquí: se corrige con un movimiento en Movimientos de inventario.</li>
+            </ul>
+          </div>
+        )}
+
         <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
             {receivingLines > 0
-              ? `Se crearán ${receivingLines} ${receivingLines === 1 ? "movimiento" : "movimientos"} de inventario. Esta recepción no se puede repetir por accidente: el botón queda bloqueado hasta terminar.`
+              ? "Esta recepción no se puede repetir por accidente: el botón queda bloqueado hasta terminar."
               : "Ingresa al menos una cantidad."}
           </p>
           <div className="flex gap-2">

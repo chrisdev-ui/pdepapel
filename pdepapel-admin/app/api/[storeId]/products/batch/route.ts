@@ -1,10 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { allocateRestockOrderNumber } from "@/lib/restock-order-numbers";
+import { landedUnitCost, transportationShare } from "@/lib/restock-orders";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { auth } from "@clerk/nextjs/server";
-import { InventoryMovementType, RestockOrderStatus } from "@prisma/client";
+import { InventoryMovementType, Prisma, RestockOrderStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 interface ProductInput {
@@ -55,6 +56,15 @@ export async function POST(
       }
     }
 
+    // El envío se reparte igual que en la recepción del pedido, y para eso hay
+    // que conocer el total de mercancía **antes** de crear cada producto.
+    const importedUnits = products.reduce((sum, product) => sum + Math.max(0, product.stock || 0), 0);
+    const totalRestockAmount = products.reduce(
+      (sum, product) => sum + Math.max(0, product.stock || 0) * (product.acqPrice || 0),
+      0,
+    );
+    const importShippingCost = supplierId ? shippingCost || 0 : 0;
+
     // Use transaction for data integrity
     const result = await prismadb.$transaction(
       async (tx) => {
@@ -72,8 +82,8 @@ export async function POST(
               supplierId,
               orderNumber: restockOrderNumber,
               status: RestockOrderStatus.COMPLETED,
-              shippingCost: shippingCost || 0,
-              totalAmount: 0, // Will be updated after items are added
+              shippingCost: importShippingCost,
+              totalAmount: totalRestockAmount,
               notes: `Importación masiva de ${products.length} productos`,
             },
           });
@@ -81,7 +91,7 @@ export async function POST(
         }
 
         const createdProductIds: string[] = [];
-        let totalRestockAmount = 0;
+        const receiptLines: Prisma.InputJsonValue[] = [];
         let itemIndex = 0;
 
         for (const product of products) {
@@ -197,6 +207,10 @@ export async function POST(
               description: product.description || "",
               price: product.price,
               acqPrice: product.acqPrice || 0,
+              // Parte del envío que le toca a este producto, como en la
+              // recepción: `acqPrice + transportationCost` es el costo puesto
+              // en bodega.
+              transportationCost: transportationShare(product.acqPrice || 0, totalRestockAmount, importShippingCost),
               stock: product.stock || 0,
               sku,
               categoryId: category.id,
@@ -225,9 +239,9 @@ export async function POST(
           // Create Restock Order Item if applicable
           if (restockOrderId && product.stock > 0) {
             const subtotal = product.stock * (product.acqPrice || 0);
-            totalRestockAmount += subtotal;
+            const landed = landedUnitCost(product.acqPrice || 0, totalRestockAmount, importShippingCost);
 
-            await tx.restockOrderItem.create({
+            const restockOrderItem = await tx.restockOrderItem.create({
               data: {
                 restockOrderId,
                 productId: createdProduct.id,
@@ -248,13 +262,22 @@ export async function POST(
                 quantity: product.stock,
                 previousStock: 0,
                 newStock: product.stock,
-                cost: product.acqPrice || 0,
+                cost: landed,
                 price: product.price,
-                reason: `Importación masiva - Orden ${restockOrderNumber}`,
-                description: `Producto creado via importación CSV`,
+                reason: `Recepción del pedido ${restockOrderNumber}`,
+                description: "Producto creado por importación masiva de CSV",
                 referenceId: restockOrderId,
                 createdBy: userId,
               },
+            });
+
+            receiptLines.push({
+              restockOrderItemId: restockOrderItem.id,
+              productId: createdProduct.id,
+              quantity: product.stock,
+              excess: 0,
+              unitCost: product.acqPrice || 0,
+              landedUnitCost: landed,
             });
           } else if (product.stock > 0) {
             // No restock order, but still record inventory movement
@@ -276,11 +299,23 @@ export async function POST(
           }
         }
 
-        // Update Restock Order total
+        // La importación entra mercancía igual que una recepción, así que deja
+        // el mismo rastro: una fila de recepción con lo que llegó. La clave es
+        // propia del servidor porque el CSV no trae ninguna; no vuelve
+        // idempotente la importación, solo hace auditable lo que entró.
         if (restockOrderId) {
-          await tx.restockOrder.update({
-            where: { id: restockOrderId },
-            data: { totalAmount: totalRestockAmount },
+          await tx.restockOrderReceipt.create({
+            data: {
+              storeId: params.storeId,
+              restockOrderId,
+              idempotencyKey: `csv-${restockOrderId}`,
+              receivedUnits: importedUnits,
+              lineCount: receiptLines.length,
+              excessUnits: 0,
+              updatedCosts: true,
+              lines: receiptLines,
+              createdBy: userId,
+            },
           });
         }
 
