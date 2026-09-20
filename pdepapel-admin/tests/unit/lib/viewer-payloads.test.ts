@@ -39,7 +39,7 @@ describe("recorte para cuentas de solo lectura", () => {
     expect(product.acqPrice).toBe(5000);
   });
 
-  it("quita del pedido el contacto de la clienta y la utilidad, incluso dentro de las líneas", () => {
+  it("quita del pedido el contacto y la utilidad, conserva ciudad y departamento, y limpia las líneas", () => {
     const order = {
       id: "o-1",
       orderNumber: "ORD-1",
@@ -69,12 +69,14 @@ describe("recorte para cuentas de solo lectura", () => {
     const clean = scrubOrder(order) as Record<string, any>;
     for (const hidden of [
       "fullName", "email", "phone", "address", "address2", "addressReference", "neighborhood",
-      "city", "department", "daneCode", "documentId", "company",
+      "daneCode", "documentId", "company",
       "totalProductCost", "netProfit", "gatewayFee", "profitMarginPct", "adminNotes",
     ]) {
       expect(clean, hidden).not.toHaveProperty(hidden);
     }
     expect(clean).toMatchObject({ orderNumber: "ORD-1", status: "PAID", total: 50000, subtotal: 45000 });
+    // De dónde vino la venta sí se ve: sirve para marketing y no identifica a nadie.
+    expect(clean).toMatchObject({ city: "Bogotá", department: "Cundinamarca" });
     expect(clean.orderItems[0]).toMatchObject({ quantity: 2, price: 12000 });
     expect(clean.orderItems[0].product).not.toHaveProperty("acqPrice");
     expect(clean.orderItems[0].product).toMatchObject({ name: "Libreta" });

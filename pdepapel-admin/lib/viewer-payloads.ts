@@ -13,7 +13,14 @@ import { INTERNAL_PRODUCT_FIELDS } from "@/lib/public-catalog";
 /** Campos internos del producto; reutiliza la lista que ya declaraba el catálogo. */
 export const VIEWER_HIDDEN_PRODUCT_FIELDS = INTERNAL_PRODUCT_FIELDS;
 
-/** Contacto y dinero propio de un pedido. */
+/**
+ * Contacto y dinero propio de un pedido.
+ *
+ * `city` y `department` **sí** se ven: dicen de dónde vienen las ventas, que
+ * es justo lo que una agencia necesita, y solos no identifican a nadie. La
+ * calle, el barrio, el código DANE, el teléfono, el correo, el nombre y el
+ * documento siguen fuera.
+ */
 export const VIEWER_HIDDEN_ORDER_FIELDS = [
   "fullName",
   "email",
@@ -22,8 +29,6 @@ export const VIEWER_HIDDEN_ORDER_FIELDS = [
   "address2",
   "addressReference",
   "neighborhood",
-  "city",
-  "department",
   "daneCode",
   "documentId",
   "company",

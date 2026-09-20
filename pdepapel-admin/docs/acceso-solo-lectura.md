@@ -111,7 +111,7 @@ Trece rutas de la lista original ya eran **públicas** (las consume la tienda en
 | Dato | Se quita |
 |---|---|
 | Producto | `acqPrice`, `transportationCost`, `supplierId`, `supplier`, `abcClassification`, `soldCount` |
-| Pedido | nombre, correo, teléfono, dirección, ciudad, departamento, documento, empresa, `totalProductCost`, `netProfit`, `gatewayFee`, `profitMarginPct`, notas internas |
+| Pedido | nombre, correo, teléfono, dirección, barrio, código DANE, documento, empresa, `totalProductCost`, `netProfit`, `gatewayFee`, `profitMarginPct`, notas internas. **La ciudad y el departamento sí se ven**: dicen de dónde vienen las ventas y solos no identifican a nadie |
 | Mercado Libre | `buyerName`, `trackingNumber`, `minimumMarginAmount` |
 | Feeds | la URL del feed, que lleva el secreto |
 | Reseña | `userId` y la moderación; **el nombre de quien reseña se conserva**, porque ya se ve en la tienda |

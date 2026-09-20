@@ -103,13 +103,15 @@ describe("catálogo para una cuenta de solo lectura", () => {
 });
 
 describe("pedidos para una cuenta de solo lectura", () => {
-  it("entrega la lista sin contacto de la clienta ni utilidad", async () => {
+  it("entrega la lista sin contacto ni utilidad, pero con la ciudad de la venta", async () => {
     signIn("viewer");
     const rows = (await getOrders(STORE)) as Record<string, unknown>[];
     expect(rows[0]).toMatchObject({ orderNumber: "ORD-1", status: "PAID", total: 50000 });
-    for (const hidden of ["fullName", "email", "phone", "address", "city", "department", "documentId", "netProfit", "totalProductCost"]) {
+    for (const hidden of ["fullName", "email", "phone", "address", "documentId", "netProfit", "totalProductCost"]) {
       expect(rows[0], hidden).not.toHaveProperty(hidden);
     }
+    // La ciudad y el departamento se conservan: dicen de dónde vienen las ventas.
+    expect(rows[0]).toMatchObject({ city: "Bogotá", department: "Cundinamarca" });
   });
 
   it("a la dueña le entrega el pedido completo", async () => {
