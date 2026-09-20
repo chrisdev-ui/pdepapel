@@ -29,6 +29,7 @@ import {
 } from "@/components/labels/qr-label-print-sheet";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { SellPanel, type SellSource } from "@/components/sales/sell-panel";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
 import { ProductScanButton } from "@/components/ui/product-scan-button";
 import {
@@ -93,8 +94,9 @@ type FairCapsule = {
   id: string;
   code: string;
   salePrice: number;
-  productCost: number;
-  minimumMarginPct: number;
+  /** Nulos en una cuenta de solo lectura: `scrubFairEvent` los quita. */
+  productCost: number | null;
+  minimumMarginPct: number | null;
   status: "PACKED" | "SOLD" | "VOID";
   product: { id: string; name: string; sku: string };
 };
@@ -193,6 +195,10 @@ function Kpi({
 }
 
 export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
+  // Una cuenta de solo lectura ve la feria entera, pero no mueve nada: el
+  // servidor ya rechaza cada escritura y aquí se apagan los controles, que es
+  // lo que promete el aviso de solo lectura.
+  const canWrite = useCanWrite();
   const params = useParams();
   const storeId = String(params.storeId);
   const router = useRouter();
@@ -261,7 +267,11 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
         event.inventoryItems.map((item) => [
           item.productId,
           {
-            returnedQuantity: item.allocatedQuantity - item.soldQuantity,
+            // Nada se da por contado: si esto arrancara en «devuelto = todo lo
+            // que no se vendió», un envío sin tocar devolvería al stock las
+            // unidades dañadas y perdidas, que no vuelven. El botón de cerrar
+            // solo se enciende cuando las tres columnas suman lo que falta.
+            returnedQuantity: 0,
             damagedQuantity: 0,
             lostQuantity: 0,
           },
@@ -270,6 +280,29 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
     );
     setCountedPhysically(false);
   }, [event.id, event.updatedAt, event.inventoryItems]);
+
+  /**
+   * Atajo para el caso común, como un acto explícito y no como suposición del
+   * formulario: deja «devuelto» en todo lo que falta por contar y el resto en
+   * cero. Sigue siendo editable antes de cerrar.
+   */
+  const assumeEverythingReturned = () => {
+    setReconciliation(
+      Object.fromEntries(
+        event.inventoryItems.map((item) => [
+          item.productId,
+          {
+            returnedQuantity: Math.max(
+              0,
+              item.allocatedQuantity - item.soldQuantity,
+            ),
+            damagedQuantity: 0,
+            lostQuantity: 0,
+          },
+        ]),
+      ),
+    );
+  };
 
   const reconciliationSummary = summarizeReconciliation(
     event.inventoryItems,
@@ -660,7 +693,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
       <Button
         type="button"
         onClick={openFair}
-        disabled={event.inventoryItems.length === 0}
+        disabled={!canWrite || event.inventoryItems.length === 0}
         isLoading={isChangingPhase}
       >
         {!isChangingPhase && (
@@ -673,6 +706,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
         type="button"
         variant="outline"
         onClick={startReconciliation}
+        disabled={!canWrite}
         isLoading={isChangingPhase}
       >
         {!isChangingPhase && (
@@ -686,6 +720,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
           type="button"
           variant="outline"
           onClick={reopenSales}
+          disabled={!canWrite}
           isLoading={isChangingPhase}
         >
           {!isChangingPhase && (
@@ -696,7 +731,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
         <Button
           type="button"
           onClick={() => setIsCloseConfirmationOpen(true)}
-          disabled={isReconciling || !reconciliationSummary.balanced}
+          disabled={!canWrite || isReconciling || !reconciliationSummary.balanced}
         >
           Cerrar la feria
         </Button>
@@ -826,6 +861,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
               type="button"
               variant="outline"
               onClick={addPendingAllocation}
+            disabled={!canWrite}
             >
               <Plus className="mr-2 h-4 w-4" />
               Agregar
@@ -879,7 +915,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
             </p>
             <Button
               onClick={submitAllocations}
-              disabled={isAllocating || pendingAllocations.length === 0}
+              disabled={!canWrite || isAllocating || pendingAllocations.length === 0}
             >
               {isAllocating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Reservar en inventario
@@ -963,7 +999,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
             </div>
             <Button
               onClick={packCapsules}
-              disabled={isPackingCapsules || availableItems.length === 0}
+              disabled={!canWrite || isPackingCapsules || availableItems.length === 0}
             >
               {isPackingCapsules && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1038,7 +1074,12 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
           <SellPanel
             source={fairSellSource}
             lockedReason={
-              reconciling ? (
+              !canWrite ? (
+                <>
+                  Tu cuenta es de solo lectura: puedes ver la feria, pero no
+                  registrar cobros.
+                </>
+              ) : reconciling ? (
                 <>
                   Las ventas están detenidas mientras concilias. Si falta
                   vender, pulsa <strong>Reabrir ventas</strong> arriba.
@@ -1066,6 +1107,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
               type="button"
               variant="outline"
               onClick={startReconciliation}
+              disabled={!canWrite}
               isLoading={isChangingPhase}
             >
               {!isChangingPhase && (
@@ -1084,14 +1126,25 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
           title="Conciliación"
           description="Por cada producto, reparte las unidades no vendidas entre devuelto, dañado y perdido. La suma debe cuadrar con «Por conciliar»."
           action={
-            <TintBadge
-              label={
-                reconciliationSummary.balanced
-                  ? "Todo cuadra"
-                  : `${event.inventoryItems.length - reconciliationSummary.unbalanced} de ${event.inventoryItems.length} cuadran`
-              }
-              tone={reconciliationSummary.balanced ? "mint" : "slate"}
-            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                disabled={!canWrite}
+                onClick={assumeEverythingReturned}
+              >
+                Todo volvió intacto
+              </Button>
+              <TintBadge
+                label={
+                  reconciliationSummary.balanced
+                    ? "Todo cuadra"
+                    : `${event.inventoryItems.length - reconciliationSummary.unbalanced} de ${event.inventoryItems.length} cuadran`
+                }
+                tone={reconciliationSummary.balanced ? "mint" : "slate"}
+              />
+            </div>
           }
         >
           <div className="hidden grid-cols-[minmax(0,1fr)_80px_80px_110px_110px_110px_100px] gap-3 px-2 text-xs font-medium text-muted-foreground md:grid">
@@ -1240,7 +1293,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
             <Button
               type="button"
               onClick={() => setIsCloseConfirmationOpen(true)}
-              disabled={isReconciling || !reconciliationSummary.balanced}
+              disabled={!canWrite || isReconciling || !reconciliationSummary.balanced}
             >
               Cerrar la feria
             </Button>
@@ -1391,6 +1444,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                         type="button"
                         size="xs"
                         variant="ghost"
+                        disabled={!canWrite}
                         onClick={() => setSaleToCancel(order)}
                         aria-label={`Anular la venta ${order.orderNumber}`}
                       >

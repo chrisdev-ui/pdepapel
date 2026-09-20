@@ -1,4 +1,6 @@
 import { getFairEventDetail } from "@/lib/fair-events";
+import { requireStoreRead } from "@/lib/store-access";
+import { scrubFairEvent } from "@/lib/viewer-payloads";
 
 import {
   FairEventWorkspace,
@@ -7,15 +9,29 @@ import {
 
 export const revalidate = 0;
 
+/**
+ * `scrubFairEvent` **borra** el campo en vez de ponerlo en cero, así que aquí
+ * hay que distinguir «no vino» de «vino en null»: `Number(undefined)` es NaN y
+ * eso sí llegaría al navegador.
+ */
+const toNumberOrNull = (value: unknown): number | null =>
+  value === null || value === undefined ? null : Number(value);
+
+/**
+ * Solo lectura: la feria se ve sin el costo de compra de cada producto ni lo
+ * que costó armar una cápsula. `GET /api/[storeId]/fair-events/[fairEventId]`
+ * ya lo hacía; esta página llamaba a la carga directa y entregaba el detalle
+ * entero al navegador, así que el depurador existía y no se aplicaba aquí.
+ */
 export default async function FairEventPage({
   params,
 }: {
   params: { storeId: string; fairEventId: string };
 }) {
-  const fairEvent = await getFairEventDetail(
-    params.storeId,
-    params.fairEventId,
-  );
+  const access = await requireStoreRead(params.storeId);
+  const detail = await getFairEventDetail(params.storeId, params.fairEventId);
+  const fairEvent =
+    access.role === "viewer" ? scrubFairEvent(detail) : detail;
 
   const event: FairEventDetail = {
     id: fairEvent.id,
@@ -43,8 +59,7 @@ export default async function FairEventPage({
         sku: item.product.sku,
         stock: item.product.stock,
         price: Number(item.product.price),
-        acqPrice:
-          item.product.acqPrice === null ? null : Number(item.product.acqPrice),
+        acqPrice: toNumberOrNull(item.product.acqPrice),
         gtin: item.product.gtin,
         images: item.product.images,
       },
@@ -53,8 +68,8 @@ export default async function FairEventPage({
       id: capsule.id,
       code: capsule.code,
       salePrice: Number(capsule.salePrice),
-      productCost: Number(capsule.productCost),
-      minimumMarginPct: Number(capsule.minimumMarginPct),
+      productCost: toNumberOrNull(capsule.productCost),
+      minimumMarginPct: toNumberOrNull(capsule.minimumMarginPct),
       status: capsule.status,
       product: capsule.product,
     })),

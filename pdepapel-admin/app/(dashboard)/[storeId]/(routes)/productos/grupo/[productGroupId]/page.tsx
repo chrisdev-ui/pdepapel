@@ -1,3 +1,6 @@
+import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
+import { requireStoreRead } from "@/lib/store-access";
+import { scrubProductGroup } from "@/lib/viewer-payloads";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
@@ -11,9 +14,15 @@ const ProductGroupPage = async ({
 }: {
   params: { storeId: string; productGroupId: string };
 }) => {
+  // Solo lectura: las variantes traen `include` sin `select`, o sea todos los
+  // escalares del producto —costo de compra, transporte, proveedor—. La ruta de
+  // API ya las depuraba con `scrubProductGroup`; esta página no, y sí la ve una
+  // cuenta de solo lectura.
+  const access = await requireStoreRead(params.storeId);
+
   // Acotado a la tienda: un id ajeno o inexistente responde 404 en vez de
   // pintar el formulario de creación bajo una URL de edición.
-  const productGroup = await prismadb.productGroup.findFirst({
+  const productGroupRaw = await prismadb.productGroup.findFirst({
     where: {
       id: params.productGroupId,
       storeId: params.storeId,
@@ -35,6 +44,9 @@ const ProductGroupPage = async ({
       },
     },
   });
+
+  const productGroup =
+    access.role === "viewer" ? scrubProductGroup(productGroupRaw) : productGroupRaw;
 
   // Atributos activos más los que ya usan las variantes del grupo.
   const usedIds = (field: "categoryId" | "sizeId" | "colorId" | "designId") =>
@@ -72,7 +84,10 @@ const ProductGroupPage = async ({
           OR: [ACTIVE_ATTRIBUTE_WHERE, { id: { in: usedIds("designId") } }],
         },
       }),
-      prismadb.supplier.findMany({ where: { storeId: params.storeId } }),
+      prismadb.supplier.findMany({
+        where: { storeId: params.storeId },
+        select: SUPPLIER_PICKER_SELECT,
+      }),
       prismadb.store
         .findUnique({
           where: { id: params.storeId },

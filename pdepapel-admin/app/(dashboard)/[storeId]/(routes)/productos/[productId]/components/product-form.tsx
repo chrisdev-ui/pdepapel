@@ -1,5 +1,6 @@
 "use client";
 
+import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
@@ -274,7 +275,7 @@ interface ProductFormProps {
   colors: Color[];
   designs: Design[];
   reviews?: ReviewColumn[];
-  suppliers: Supplier[];
+  suppliers: SupplierPickerOption[];
   productGroup: ProductGroup;
   productGroups: ProductGroups;
   catalogOptions: CatalogOptionSuggestion[];

@@ -115,6 +115,15 @@ export function scrubMargins<T extends AnyRecord>(rows: T[]): T[] {
   return rows.map((row) => scrubMargin(row));
 }
 
+/**
+ * Lo que cuesta una cápsula sorpresa y el margen mínimo con que se armó.
+ *
+ * La cápsula guarda `productCost` y `minimumMarginPct` como columnas suyas, no
+ * dentro del producto, así que `scrubProduct` no las tocaba: el detalle de una
+ * feria las entregaba enteras a una cuenta de solo lectura.
+ */
+export const VIEWER_HIDDEN_CAPSULE_FIELDS = ["productCost", "minimumMarginPct"] as const;
+
 /** El detalle de una feria trae el costo de compra en cada producto reservado. */
 export function scrubFairEvent<T extends AnyRecord | null | undefined>(detail: T): T {
   if (!detail) return detail;
@@ -124,6 +133,14 @@ export function scrubFairEvent<T extends AnyRecord | null | undefined>(detail: T
     clean.inventoryItems = items.map((item) => {
       if (!item || typeof item !== "object") return item;
       const row = { ...(item as AnyRecord) };
+      if (row.product) row.product = scrubProduct(row.product as AnyRecord);
+      return row;
+    });
+  }
+  if (Array.isArray(clean.capsules)) {
+    clean.capsules = (clean.capsules as AnyRecord[]).map((capsule) => {
+      if (!capsule || typeof capsule !== "object") return capsule;
+      const row = omit(capsule, VIEWER_HIDDEN_CAPSULE_FIELDS);
       if (row.product) row.product = scrubProduct(row.product as AnyRecord);
       return row;
     });

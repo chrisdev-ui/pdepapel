@@ -1,5 +1,6 @@
 "use client";
 
+import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { ProductCatalog } from "@/components/catalog/product-catalog";
 import { ProductBatchImportModal } from "@/components/modals/product-batch-import-modal";
@@ -54,7 +55,7 @@ import { ProductMobileCard } from "./product-mobile-card";
 
 interface ProductClientProps {
   data: ProductColumn[];
-  suppliers: Supplier[];
+  suppliers: SupplierPickerOption[];
   taxonomies: BulkTaxonomies;
   /** Umbral de stock crítico de la tienda; null usa el de la aplicación. */
   lowStockThreshold: number | null;

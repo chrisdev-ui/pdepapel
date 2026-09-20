@@ -1,5 +1,6 @@
 "use client";
 
+import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   AlertTriangle,
@@ -263,7 +264,7 @@ interface ProductGroupFormProps {
   sizes: Size[];
   colors: Color[];
   designs: Design[];
-  suppliers: Supplier[];
+  suppliers: SupplierPickerOption[];
   initialData?: ProductGroupWithIncludes | null;
   /** URL pública de la tienda para los enlaces «Ver en la tienda» de cada variante. */
   storeUrl?: string | null;

@@ -1,5 +1,6 @@
 "use server";
 
+import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { requireStoreRead } from "@/lib/store-access";
 
 import { ProductPresaleStatus } from "@prisma/client";
@@ -107,7 +108,10 @@ export async function getProduct(id: string, storeId: string) {
     prismadb.design.findMany({
       where: { storeId, ...activeOrCurrentWhere(product?.designId) },
     }),
-    prismadb.supplier.findMany({ where: { storeId } }),
+    prismadb.supplier.findMany({
+      where: { storeId },
+      select: SUPPLIER_PICKER_SELECT,
+    }),
     prismadb.catalogOption.findMany({
       where: { storeId },
       orderBy: [{ isActive: "desc" }, { displayOrder: "asc" }, { name: "asc" }],

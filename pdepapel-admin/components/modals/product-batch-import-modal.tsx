@@ -1,5 +1,6 @@
 "use client";
 
+import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -76,7 +77,7 @@ type ImportFormValues = z.infer<typeof importFormSchema>;
 interface ProductBatchImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  suppliers: Supplier[];
+  suppliers: SupplierPickerOption[];
 }
 
 const CSV_HEADERS = [

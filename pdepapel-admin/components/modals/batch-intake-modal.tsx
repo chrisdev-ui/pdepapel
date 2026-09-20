@@ -1,5 +1,6 @@
 "use client";
 
+import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -53,7 +54,7 @@ interface BatchIntakeModalProps {
   variants: BatchIntakeVariant[];
   defaultCost?: number;
   defaultSupplierId?: string;
-  suppliers?: Supplier[];
+  suppliers?: SupplierPickerOption[];
   onSuccess?: () => void;
 }
 

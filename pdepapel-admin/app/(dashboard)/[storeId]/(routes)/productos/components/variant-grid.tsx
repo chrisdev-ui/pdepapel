@@ -1,5 +1,6 @@
 "use client";
 
+import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { Supplier } from "@prisma/client";
 import {
@@ -38,7 +39,7 @@ interface VariantGridProps {
   loading: boolean;
   images: { url: string }[];
   imageScopes: Record<string, string>;
-  suppliers: Supplier[];
+  suppliers: SupplierPickerOption[];
   storeId: string;
   storeUrl?: string | null;
   isEditMode?: boolean;

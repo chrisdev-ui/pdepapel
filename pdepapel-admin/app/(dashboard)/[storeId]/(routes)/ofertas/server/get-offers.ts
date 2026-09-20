@@ -1,7 +1,10 @@
+import { requireStoreRead } from "@/lib/store-access";
 import prismadb from "@/lib/prismadb";
 
 /** Ofertas de la tienda con lo que la lista necesita: cuántos destinos, una muestra de nombres y si aún queda algo a la venta. */
 export const getOffers = async (storeId: string) => {
+  // Ofertas está abierta a solo lectura desde la fase 1; el guardia se declara aquí.
+  await requireStoreRead(storeId);
   const offers = await prismadb.offer.findMany({
     where: { storeId },
     orderBy: { createdAt: "desc" },

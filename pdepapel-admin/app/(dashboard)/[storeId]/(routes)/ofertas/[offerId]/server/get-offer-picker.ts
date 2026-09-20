@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { loadScopeProducts, type ScopeProductRow } from "@/lib/offer-scope";
 import prismadb from "@/lib/prismadb";
 
@@ -6,6 +7,8 @@ import prismadb from "@/lib/prismadb";
  * y los productos ya elegidos. Los demás productos se buscan por la API de a 20.
  */
 export async function getOfferPickerData(storeId: string, selectedProductIds: string[] = [], excludeOfferId: string | null = null) {
+  // Ofertas está abierta a solo lectura desde la fase 1; el guardia se declara aquí.
+  await requireStoreRead(storeId);
   const [categories, productGroups, selectedProducts] = await Promise.all([
     prismadb.category.findMany({
       where: { storeId, isArchived: false },

@@ -1,3 +1,5 @@
+import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
+import { requireStoreRead } from "@/lib/store-access";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
@@ -24,12 +26,14 @@ export default async function ProductsPage({
     storeId: string;
   };
 }) {
+  await requireStoreRead(params.storeId);
   const [products, suppliers, store, categories, sizes, colors, designs] =
     await Promise.all([
       getProducts(params.storeId),
       prismadb.supplier.findMany({
         where: { storeId: params.storeId },
         orderBy: { name: "asc" },
+        select: SUPPLIER_PICKER_SELECT,
       }),
       prismadb.store
         .findUnique({

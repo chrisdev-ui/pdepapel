@@ -143,3 +143,17 @@ export const INTERNAL_PRODUCT_FIELDS = [
   "hasNoProductIdentifier",
   "storeId",
 ] as const;
+
+/**
+ * Lo único que el panel de Productos necesita de un proveedor: llenar un
+ * selector. El modelo trae además NIT, contacto, teléfono, correo y notas, y
+ * `findMany` sin `select` los devolvía enteros a la pantalla de Productos, que
+ * sí ve una cuenta de solo lectura. Proveedores es una pantalla reservada: sus
+ * datos no salen por la puerta de al lado.
+ */
+export const SUPPLIER_PICKER_SELECT = { id: true, name: true } as const;
+
+export interface SupplierPickerOption {
+  id: string;
+  name: string;
+}

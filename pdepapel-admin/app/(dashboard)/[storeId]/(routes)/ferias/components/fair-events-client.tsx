@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useMemo, useState } from "react";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DateField } from "@/components/ui/date-field";
@@ -51,6 +52,8 @@ function getErrorMessage(error: unknown) {
 }
 
 export function FairEventsClient({ data }: { data: FairEventSummary[] }) {
+  // Crear una feria escribe: una cuenta de solo lectura no lo ve.
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const pathname = usePathname() ?? "";
@@ -127,7 +130,7 @@ export function FairEventsClient({ data }: { data: FairEventSummary[] }) {
               Conciliar feria anterior
             </Link>
           </Button>
-          <Button type="button" onClick={() => setIsCreating(true)}>
+          <Button type="button" disabled={!canWrite} onClick={() => setIsCreating(true)}>
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Nueva feria
           </Button>
@@ -165,7 +168,7 @@ export function FairEventsClient({ data }: { data: FairEventSummary[] }) {
               <p className="text-sm text-muted-foreground">Crea una antes de llevar productos a una venta presencial.</p>
             </div>
             {view !== "cerradas" && (
-              <Button type="button" variant="soft" onClick={() => setIsCreating(true)}>
+              <Button type="button" variant="soft" disabled={!canWrite} onClick={() => setIsCreating(true)}>
                 Nueva feria
               </Button>
             )}

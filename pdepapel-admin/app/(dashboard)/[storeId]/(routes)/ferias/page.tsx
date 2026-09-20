@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import prismadb from "@/lib/prismadb";
+import { requireStoreRead } from "@/lib/store-access";
 
 import { FairEventsClient } from "./components/fair-events-client";
 
@@ -11,7 +12,12 @@ export const metadata: Metadata = {
   description: "Reservas de stock, ventas en feria y conciliación",
 };
 
+/**
+ * La lista de ferias no enseña costos, así que la ve también una cuenta de
+ * solo lectura; el guardia va aquí igual, y no solo en el armazón del panel.
+ */
 export default async function FairEventsPage({ params }: { params: { storeId: string } }) {
+  await requireStoreRead(params.storeId);
   const fairs = await prismadb.fairEvent.findMany({
     where: { storeId: params.storeId },
     include: {

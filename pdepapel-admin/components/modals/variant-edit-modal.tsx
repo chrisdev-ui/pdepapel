@@ -1,5 +1,6 @@
 "use client";
 
+import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Supplier } from "@prisma/client";
 import { useEffect, useState } from "react";
@@ -63,7 +64,7 @@ interface VariantEditModalProps {
   onClose: () => void;
   onConfirm: (data: VariantFormValues) => void;
   initialData: VariantFormValues | null;
-  suppliers: Supplier[];
+  suppliers: SupplierPickerOption[];
   groupImages: { url: string }[];
   sizes: { id: string; name: string; value: string }[];
   colors: { id: string; name: string; value: string }[];

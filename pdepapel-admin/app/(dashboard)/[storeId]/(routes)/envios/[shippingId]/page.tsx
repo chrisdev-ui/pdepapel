@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { redirect } from "next/navigation";
 
 import prismadb from "@/lib/prismadb";
@@ -13,6 +14,8 @@ interface ShipmentDetailPageProps {
  * 2026-09). Esta ruta se conserva solo para no romper enlaces guardados.
  */
 export default async function ShipmentDetailPage({ params }: ShipmentDetailPageProps) {
+  // Solo reenvía al pedido, pero el guardia va aquí igual y no solo en el armazón.
+  await requireStoreRead(params.storeId);
   const shipment = await prismadb.shipping.findFirst({
     where: { id: params.shippingId, storeId: params.storeId },
     select: { orderId: true },
