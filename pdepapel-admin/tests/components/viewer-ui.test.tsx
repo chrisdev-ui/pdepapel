@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -14,6 +14,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
+import { HomeContentCellAction } from "@/app/(dashboard)/[storeId]/(routes)/contenido/components/home-content-columns";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { ReadOnlyBanner } from "@/components/shell/read-only-banner";
 import { ViewerAccessProvider } from "@/components/shell/viewer-access";
@@ -57,5 +58,22 @@ describe("confirmación destructiva", () => {
   it("la dueña la usa igual que siempre", () => {
     asOwner(modal);
     expect(screen.getByRole("button", { name: "Sí, eliminar" })).toBeEnabled();
+  });
+});
+
+describe("acciones de fila", () => {
+  const row = { id: "h-1", kind: "banner", title: "Portada", isActive: true } as never;
+
+  it("una cuenta de solo lectura ve «Ver», no «Editar»", async () => {
+    asViewer(<HomeContentCellAction data={row} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Abrir menú" }), { key: "Enter" });
+    expect(await screen.findByText("Ver")).toBeInTheDocument();
+    expect(screen.queryByText("Editar")).not.toBeInTheDocument();
+  });
+
+  it("la dueña sigue viendo «Editar»", async () => {
+    asOwner(<HomeContentCellAction data={row} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Abrir menú" }), { key: "Enter" });
+    expect(await screen.findByText("Editar")).toBeInTheDocument();
   });
 });

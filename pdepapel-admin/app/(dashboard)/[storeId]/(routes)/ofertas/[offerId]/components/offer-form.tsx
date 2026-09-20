@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { DiscountType, type Offer, type OfferCategory, type OfferProduct, type OfferProductGroup } from "@prisma/client";
 import axios from "axios";
@@ -95,6 +96,7 @@ const isValidDate = (value: unknown): value is Date => value instanceof Date && 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
 export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker, seed = null }) => {
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -280,7 +282,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker, seed 
       {leaveDialog}
       <AlertModal isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={onDelete} loading={loading} title={OFFER_DELETE_COPY.title(initialData?.name ?? "")} description={OFFER_DELETE_COPY.description} />
       <FormPageHeader
-        title={initialData ? "Editar oferta" : seed ? "Nueva oferta (copia)" : "Nueva oferta"}
+        title={initialData ? (canWrite ? "Editar oferta" : "Ver oferta") : seed ? "Nueva oferta (copia)" : "Nueva oferta"}
         badge={status && <TintBadge label={PROMOTION_STATUS[status].label} tone={PROMOTION_STATUS[status].tone} />}
         summary={
           initialData

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
@@ -82,6 +83,7 @@ interface PostFormProps {
 }
 
 export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -91,7 +93,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
 
   const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
-      title: initialData ? "Editar publicación" : "Nueva publicación",
+      title: initialData ? (canWrite ? "Editar publicación" : "Ver publicación") : "Nueva publicación",
       description: initialData
         ? "Cambia la red o el identificador de una publicación que se muestra en la tienda."
         : "Muestra en la página Nosotros de la tienda una publicación de tus redes.",

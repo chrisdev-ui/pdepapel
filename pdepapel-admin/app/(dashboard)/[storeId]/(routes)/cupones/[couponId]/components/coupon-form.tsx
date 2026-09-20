@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { DiscountType } from "@prisma/client";
 import axios from "axios";
@@ -80,6 +81,7 @@ function orderStateLabel(order: CouponDetail["recentOrders"][number]) {
 }
 
 export const CouponForm: React.FC<CouponFormProps> = ({ initialData, activeWelcomeCode }) => {
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -240,7 +242,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData, activeWelco
         description="Esta acción no se puede deshacer."
       />
       <FormPageHeader
-        title={initialData ? "Editar cupón" : "Nuevo cupón"}
+        title={initialData ? (canWrite ? "Editar cupón" : "Ver cupón") : "Nuevo cupón"}
         badge={status && <TintBadge label={PROMOTION_STATUS[status].label} tone={PROMOTION_STATUS[status].tone} />}
         summary={summary}
         backLabel="Volver a cupones"

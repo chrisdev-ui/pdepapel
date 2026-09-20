@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { ColumnDef } from "@tanstack/react-table";
 import axios from "axios";
 import { Edit, MoreHorizontal, Trash } from "lucide-react";
@@ -56,6 +57,7 @@ export function homeContentKind(row: HomeContentRow) {
 }
 
 export function HomeContentCellAction({ data }: { data: HomeContentRow }) {
+  const canWrite = useCanWrite();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
@@ -88,7 +90,7 @@ export function HomeContentCellAction({ data }: { data: HomeContentRow }) {
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => router.push(`/${params.storeId}/portada/${data.id}`)}>
-            <Edit className="mr-2 h-4 w-4" /> Editar
+            <Edit className="mr-2 h-4 w-4" /> {canWrite ? "Editar" : "Ver"}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setOpen(true)}>
             <Trash className="mr-2 h-4 w-4" /> Eliminar

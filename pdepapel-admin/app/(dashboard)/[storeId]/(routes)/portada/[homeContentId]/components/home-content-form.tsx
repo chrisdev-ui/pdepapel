@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { ArrowLeft, Eraser, Loader2, Mail, PackageCheck, Trash } from "lucide-react";
@@ -64,6 +65,7 @@ interface HomeContentFormProps {
 }
 
 export function HomeContentForm({ initialData }: HomeContentFormProps) {
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -224,7 +226,7 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Heading
-            title={initialData ? "Editar contenido de portada" : "Nuevo contenido de portada"}
+            title={initialData ? (canWrite ? "Editar contenido de portada" : "Ver contenido de portada") : "Nuevo contenido de portada"}
             description="El hero es el primer pantallazo de la tienda; el banner de campaña solo aparece mientras está vigente."
           />
         </div>

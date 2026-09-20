@@ -1,3 +1,4 @@
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getListReadiness, getProductShape } from "@/lib/product-readiness";
@@ -34,6 +35,7 @@ export function ProductMobileCard({
   selected = false,
   onSelectedChange,
 }: ProductMobileCardProps) {
+  const canWrite = useCanWrite();
   return (
     <article
       className={cn(
@@ -110,7 +112,7 @@ export function ProductMobileCard({
         {!selectable && (
           <div className="flex items-center gap-2">
             <Button asChild variant="soft" size="sm" className="flex-1">
-              <Link href={`/${storeId}/productos/${product.id}`}>Editar</Link>
+              <Link href={`/${storeId}/productos/${product.id}`}>{canWrite ? "Editar" : "Ver"}</Link>
             </Button>
             <CellAction data={product} storeUrl={storeUrl} />
           </div>

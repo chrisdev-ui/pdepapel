@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ interface CellActionProps {
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data, storeUrl }) => {
+  const canWrite = useCanWrite();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
@@ -100,7 +102,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data, storeUrl }) => {
           </DropdownMenuLabel>
           <DropdownMenuItem onClick={() => router.push(`${base}/${data.id}`)}>
             <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
-            Editar
+            {canWrite ? "Editar" : "Ver"}
           </DropdownMenuItem>
           {storeHref && (
             <DropdownMenuItem asChild>

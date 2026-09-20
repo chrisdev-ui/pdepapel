@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import axios from "axios";
 import { Ban, Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -21,6 +22,7 @@ interface CellActionProps {
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
+  const canWrite = useCanWrite();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
@@ -74,7 +76,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(`/${storeId}/ofertas/${data.id}`)}>
             <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
-            Editar
+            {canWrite ? "Editar" : "Ver"}
           </DropdownMenuItem>
           <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(`/${storeId}/ofertas/nuevo?desde=${data.id}`)}>
             <Copy className="mr-2 h-4 w-4" aria-hidden="true" />

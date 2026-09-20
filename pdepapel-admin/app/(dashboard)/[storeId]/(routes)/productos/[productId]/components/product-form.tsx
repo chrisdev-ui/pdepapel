@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
 import {
@@ -308,6 +309,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   storeUrl = null,
   activeOffers = [],
 }) => {
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -352,7 +354,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
-      title: initialData ? "Editar producto" : "Crear producto",
+      title: initialData ? (canWrite ? "Editar producto" : "Ver producto") : "Crear producto",
       description: initialData
         ? "Editar un producto"
         : "Crear un nuevo producto",

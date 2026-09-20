@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Supplier } from "@prisma/client";
 import {
   Archive,
@@ -222,6 +223,7 @@ const VariantTableRow = memo(function VariantTableRow({
   storeUrl?: string | null;
   handlers: RowHandlers;
 }) {
+  const canWrite = useCanWrite();
   const index = row.originalIndex;
   return (
     <TableRow
@@ -268,6 +270,7 @@ const VariantTableRow = memo(function VariantTableRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-0.5">
+          {canWrite && (
           <Button
             variant="ghost"
             size="icon-sm"
@@ -278,6 +281,7 @@ const VariantTableRow = memo(function VariantTableRow({
           >
             <Pencil className="h-4 w-4" aria-hidden="true" />
           </Button>
+          )}
           {row.id && (
             <Button
               variant="ghost"
@@ -332,6 +336,7 @@ const VariantCard = memo(function VariantCard({
   storeUrl?: string | null;
   handlers: RowHandlers;
 }) {
+  const canWrite = useCanWrite();
   const index = row.originalIndex;
   const status = statusOf(row);
   return (
@@ -375,10 +380,12 @@ const VariantCard = memo(function VariantCard({
         onNoIdentifier={(value) => handlers.onNoIdentifier(index, value)}
       />
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => handlers.onEdit(index)}>
-          <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-          Editar
-        </Button>
+        {canWrite && (
+          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => handlers.onEdit(index)}>
+            <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            Editar
+          </Button>
+        )}
         {row.id && (
           <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => handlers.onToggleArchive(index)}>
             {row.isArchived ? (
@@ -420,6 +427,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
   designs,
   highlightId = null,
 }) => {
+  const canWrite = useCanWrite();
   const { watch, setValue, getValues } = form;
   // La variante escaneada en Productos se trae a la vista una vez; el resalte se queda.
   useEffect(() => {
