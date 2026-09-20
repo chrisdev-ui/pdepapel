@@ -1,3 +1,5 @@
+import { scrubMargins } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { MarketplaceProvider, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -60,16 +62,14 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
-    return NextResponse.json(
-      await prismadb.marketplaceCategoryTemplate.findMany({
-        where: { storeId: params.storeId },
-        orderBy: { updatedAt: "desc" },
-      }),
-      { headers: CACHE_HEADERS.NO_CACHE },
-    );
+    const access = await requireStoreRead(params.storeId);
+    const templates = await prismadb.marketplaceCategoryTemplate.findMany({
+      where: { storeId: params.storeId },
+      orderBy: { updatedAt: "desc" },
+    });
+    return NextResponse.json(access.role === "viewer" ? scrubMargins(templates) : templates, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "MERCADOLIBRE_TEMPLATES_GET", {
       headers: CACHE_HEADERS.NO_CACHE,

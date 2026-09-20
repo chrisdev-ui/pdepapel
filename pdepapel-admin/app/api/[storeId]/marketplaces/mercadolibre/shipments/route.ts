@@ -1,3 +1,5 @@
+import { scrubMarketplaceRows } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import {
   MarketplaceConnectionStatus,
@@ -16,9 +18,7 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
     const connection = await prismadb.marketplaceConnection.findUnique({
       where: {

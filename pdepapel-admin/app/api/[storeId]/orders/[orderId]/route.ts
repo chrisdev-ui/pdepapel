@@ -1,3 +1,5 @@
+import { scrubOrder } from "@/lib/viewer-payloads";
+import { getStoreAccess } from "@/lib/store-access";
 import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
@@ -87,7 +89,10 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
 
     const { userId } = await auth();
-    const isOwner = await checkIfStoreOwner(userId, params.storeId);
+    // El select de la clienta trae su propio contacto, así que a una cuenta de
+    // solo lectura hay que limpiárselo aparte.
+    const access = await getStoreAccess(params.storeId);
+    const isOwner = access?.role === "owner";
     const where = { id: params.orderId, storeId: params.storeId };
 
     if (isOwner) {
@@ -105,7 +110,7 @@ export async function GET(
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-      return NextResponse.json(order, {
+      return NextResponse.json(access?.role === "viewer" ? scrubOrder(order) : order, {
         headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
       });
     }

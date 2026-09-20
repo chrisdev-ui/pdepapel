@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import axios from "axios";
 import { ListChecks, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
@@ -54,6 +55,7 @@ const COPY = {
 } as const;
 
 export function PromotionsPanel(props: PromotionsPanelProps) {
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -129,12 +131,14 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+{canWrite && (
         <Button asChild>
           <Link href={`/${storeId}/${copy.newHref}`}>
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             {copy.newLabel}
           </Link>
         </Button>
+        )}
       </div>
 
       {props.kind === "ofertas" ? (

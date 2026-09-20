@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  requireStoreRead: vi.fn(),
   auth: vi.fn(),
   findFirst: vi.fn(),
   findMany: vi.fn(),
@@ -10,6 +11,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({
+  requireStoreRead: mocks.requireStoreRead,
+}));
 vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({ default: { product: { findFirst: mocks.findFirst, findMany: mocks.findMany } } }));
 vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: () => ({ get: mocks.redisGet, set: mocks.redisSet }) } }));
@@ -23,6 +28,7 @@ const row = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id
 /** Vender: `mode=venta` ordena para el mostrador y trae el precio con oferta. */
 describe("GET /products/search?mode=venta", () => {
   beforeEach(() => {
+    mocks.requireStoreRead.mockResolvedValue({ userId: "owner", role: "owner" });
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: "owner" });
     mocks.redisGet.mockResolvedValue(null);

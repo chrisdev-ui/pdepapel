@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import {
   Tooltip,
   TooltipContent,
@@ -166,6 +167,7 @@ function ItemLink({
 }
 
 export function SidebarNav({ storeId, counts, collapsed = false, onNavigate, ownerAllowlisted = false }: SidebarNavProps) {
+  const canWrite = useCanWrite();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
@@ -175,7 +177,7 @@ export function SidebarNav({ storeId, counts, collapsed = false, onNavigate, own
         aria-label="Secciones del panel"
         className={cn("flex flex-1 flex-col gap-1 overflow-y-auto", collapsed ? "items-center px-2 py-2" : "px-3 py-2")}
       >
-        {navGroupsFor(ownerAllowlisted).map((group) => (
+        {navGroupsFor({ canWrite, ownerAllowlisted }).map((group) => (
           <div key={group.id} className={cn("flex flex-col gap-0.5", collapsed && "items-center")}>
             {group.label &&
               (collapsed ? (
@@ -207,7 +209,7 @@ export function SidebarNav({ storeId, counts, collapsed = false, onNavigate, own
         ))}
       </nav>
       <div className={cn("border-t border-border", collapsed ? "flex justify-center px-2 py-2" : "px-3 py-2")}>
-        {footerItemsFor(ownerAllowlisted).map((item) => (
+        {footerItemsFor({ canWrite, ownerAllowlisted }).map((item) => (
           <ItemLink
             key={item.id}
             item={item}

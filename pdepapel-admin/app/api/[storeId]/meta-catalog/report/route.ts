@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreOwner, requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -13,10 +13,14 @@ import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+/** Lectura: la dueña o una cuenta de solo lectura con esta tienda permitida. */
+async function requireRead(storeId: string) {
+  return requireStoreRead(storeId);
+}
+
+/** Refrescar el feed escribe: solo la dueña. */
 async function requireOwner(storeId: string) {
-  const { userId } = await auth();
-  if (!userId) throw ErrorFactory.Unauthenticated();
-  await verifyStoreOwner(userId, storeId);
+  await requireStoreOwner(storeId);
 }
 
 /** Vista del feed de Meta solo para la dueña: su URL, su ritmo y el último informe. */
@@ -25,7 +29,7 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    await requireOwner(params.storeId);
+    const access = await requireRead(params.storeId);
 
     const secret = env.META_CATALOG_FEED_SECRET;
     const cached = await readCachedMetaCatalogFeed(params.storeId);
@@ -33,7 +37,11 @@ export async function GET(
     return NextResponse.json(
       {
         configured: Boolean(secret),
-        feedUrl: secret
+        // Solo lectura: la URL del feed lleva el secreto, así que no se manda.
+        feedUrl:
+          access.role === "viewer"
+            ? null
+            : secret
           ? getMetaCatalogFeedUrl(params.storeId, secret, env.ADMIN_WEB_URL)
           : null,
         schedule: META_CATALOG_FEED_SCHEDULE_LABEL,

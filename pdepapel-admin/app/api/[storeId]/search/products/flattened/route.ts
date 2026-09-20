@@ -1,3 +1,5 @@
+import { scrubProducts } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
@@ -16,7 +18,7 @@ export async function GET(
     }
 
     // Strict Owner Validation
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("query") || "";
@@ -114,7 +116,10 @@ export async function GET(
 
     const pricesMap = await getProductsPrices(data as any[], params.storeId);
 
-    const enrichedData = data.map(product => {
+    // Solo lectura: sin costo de compra ni proveedor.
+    const visible = access.role === "viewer" ? scrubProducts(data as any[]) : data;
+
+    const enrichedData = (visible as any[]).map(product => {
         const priceInfo = pricesMap.get(product.id);
         return {
             ...product,

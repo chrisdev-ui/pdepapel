@@ -1,13 +1,14 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import { OPEN_INVENTORY_ISSUE_SELECT } from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
+import { scrubOrder, scrubProducts } from "@/lib/viewer-payloads";
 import { headers } from "next/headers";
 
 export async function getOrder(orderId: string, storeId: string) {
-  await requireStoreOwner(storeId);
+  const access = await requireStoreRead(storeId);
   headers();
   const order = await prismadb.order.findUnique({
     where: {
@@ -139,9 +140,13 @@ export async function getOrder(orderId: string, storeId: string) {
     },
   });
 
+  const isViewer = access.role === "viewer";
+
   return {
-    order,
-    products,
+    // Solo lectura: sin contacto de la clienta, sin utilidad y sin costos en
+    // los productos que el formulario ofrece.
+    order: isViewer ? scrubOrder(order) : order,
+    products: isViewer ? scrubProducts(products) : products,
     categories,
   };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -89,6 +90,9 @@ export function DataTableActionOptions<TData>({
   table,
   model,
 }: DataTableActionOptionsProps<TData>) {
+  const canWrite = useCanWrite();
+  // Una cuenta de solo lectura no ve acciones masivas.
+  if (!canWrite) return null;
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();

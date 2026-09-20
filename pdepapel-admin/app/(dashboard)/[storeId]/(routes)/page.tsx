@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
+import { getStoreAccess } from "@/lib/store-access";
 import { getTodaySummary } from "@/lib/dashboard-today";
 import { getSystemsStatus } from "@/lib/job-runs";
 import { getColombiaDate } from "@/lib/date-utils";
@@ -40,6 +41,11 @@ export default async function DashboardPage({
   params,
   searchParams,
 }: DashboardPageProps) {
+  // El resumen de inventario valora el stock al costo de compra: fuera para
+  // una cuenta de solo lectura. El resto de la pantalla (ventas, pendientes)
+  // sí se muestra, que es justo lo que una agencia necesita ver.
+  const access = await getStoreAccess(params.storeId);
+  const canSeeCosts = access?.role !== "viewer";
   const year = searchParams.year
     ? parseInt(searchParams.year)
     : new Date().getFullYear();
@@ -94,7 +100,7 @@ export default async function DashboardPage({
         <Tabs defaultValue="overview" className="w-full">
           <TabsList>
             <TabsTrigger value="overview">Ventas por año</TabsTrigger>
-            <TabsTrigger value="inventory">Inventario</TabsTrigger>
+            {canSeeCosts && <TabsTrigger value="inventory">Inventario</TabsTrigger>}
             <TabsTrigger value="analytics">Analíticas</TabsTrigger>
           </TabsList>
           <TabsContent value="overview">
@@ -108,11 +114,13 @@ export default async function DashboardPage({
               </CardContent>
             </Card>
           </TabsContent>
-          <TabsContent value="inventory">
-            <Suspense fallback={<BrandedLoader />}>
-              <InventorySummaryTab storeId={params.storeId} />
-            </Suspense>
-          </TabsContent>
+          {canSeeCosts && (
+            <TabsContent value="inventory">
+              <Suspense fallback={<BrandedLoader />}>
+                <InventorySummaryTab storeId={params.storeId} />
+              </Suspense>
+            </TabsContent>
+          )}
           <TabsContent value="analytics">
             <Suspense fallback={<BrandedLoader />}>
               <Analytics params={params} year={year} salesData={salesCount} />

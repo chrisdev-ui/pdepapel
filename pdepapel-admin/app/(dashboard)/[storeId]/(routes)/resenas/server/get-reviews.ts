@@ -1,12 +1,13 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
+import { scrubReview } from "@/lib/viewer-payloads";
 import { clerkClient, type User } from "@clerk/nextjs/server";
 
 export async function getReviews(storeId: string) {
-  await requireStoreOwner(storeId);
+  const access = await requireStoreRead(storeId);
   const reviews = await prismadb.review.findMany({
     where: {
       storeId,
@@ -35,7 +36,7 @@ export async function getReviews(storeId: string) {
   return reviews.map((review) => {
     const user = users.find((user) => user.id === review.userId);
     const userImage = user?.hasImage ? user.imageUrl : undefined;
-    return {
+    const row = {
       id: review.id,
       productId: review.productId,
       productSlug: review.product.slug,
@@ -55,5 +56,7 @@ export async function getReviews(storeId: string) {
       repliedAt: review.repliedAt,
       createdAt: review.createdAt,
     };
+    // El nombre de quien reseña ya se ve en la tienda; la nota de moderación no.
+    return access.role === "viewer" ? scrubReview(row) : row;
   });
 }

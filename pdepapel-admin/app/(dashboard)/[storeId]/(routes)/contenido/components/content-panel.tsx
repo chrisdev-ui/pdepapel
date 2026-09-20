@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,6 +38,7 @@ function HomeContentCard({ row }: { row: HomeContentRow }) {
 }
 
 export function ContentPanel(props: ContentPanelProps) {
+  const canWrite = useCanWrite();
   const params = useParams();
   const router = useRouter();
   const storeId = String(params.storeId);
@@ -101,12 +103,14 @@ export function ContentPanel(props: ContentPanelProps) {
         </p>
         <div className="flex items-center gap-2">
           <RefreshButton />
+          {canWrite && (
           <Button asChild>
             <Link href={`/${storeId}/publicaciones/nuevo`}>
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               Nueva publicación
             </Link>
           </Button>
+          )}
         </div>
       </div>
       <DataTable

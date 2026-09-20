@@ -1,12 +1,13 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
+import { scrubOrder } from "@/lib/viewer-payloads";
 import { headers } from "next/headers";
 
 export async function getOrders(storeId: string) {
-  await requireStoreOwner(storeId);
+  const access = await requireStoreRead(storeId);
   headers();
   const orders = await prismadb.order.findMany({
     where: {
@@ -66,7 +67,8 @@ export async function getOrders(storeId: string) {
     },
   });
   return orders.map(({ _count, ...order }) => ({
-    ...order,
+    // Solo lectura: sin contacto de la clienta ni utilidad del pedido.
+    ...(access.role === "viewer" ? scrubOrder(order) : order),
     openInventoryIssues: _count.inventoryIssues,
   }));
 }

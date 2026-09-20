@@ -1,6 +1,6 @@
 # Cuentas de solo lectura en el panel (fase 1)
 
-Estado: **fase 1 completa.** Una cuenta de solo lectura ya entra al panel y puede consultar 29 lecturas que no exponen dinero ni datos personales. Todo lo que escribe sigue cerrado, y las lecturas sensibles también. Falta la fase 2: esconder en la interfaz lo que esa cuenta no puede usar y depurar campos de las lecturas que se abran después.
+Estado: **fase 2 completa.** Una cuenta de solo lectura entra al panel, ve un aviso fijo de «Solo lectura», navega un menú sin las pantallas reservadas y consulta el catálogo, los pedidos, las ferias, los atributos, las promociones y el contenido **sin** el costo de compra ni los datos personales de las clientas. Todo lo que escribe sigue cerrado en el servidor.
 
 ## Quién puede qué
 
@@ -100,10 +100,30 @@ Las dos puertas del panel (`app/(root)/layout.tsx` y `app/(dashboard)/[storeId]/
 
 Trece rutas de la lista original ya eran **públicas** (las consume la tienda en línea: categorías, colores, diseños, tamaños, tipos, publicaciones y productos). No se tocaron: ponerles autenticación habría tumbado la tienda.
 
-## Qué falta (fase 2)
+## Qué ve y qué no (fase 2)
 
-1. Depurar los campos sensibles de las lecturas reservadas para poder abrirlas (varias devuelven filas enteras de `Product` u `Order`, con `acqPrice` o el teléfono de la clienta).
-2. En la interfaz: aviso «Solo lectura», menú sin las pantallas de escritura, formularios abiertos pero deshabilitados y un interceptor que convierta un 403 en un mensaje claro. **Hoy una cuenta de solo lectura que navegue a una pantalla reservada ve un 403 crudo**: es un hueco conocido y aceptado de la fase 1.
+**Pantallas abiertas:** Inicio (sin la pestaña de inventario, que valora al costo), Pedidos, Productos, Atributos, Promociones, Contenido de la tienda, Ferias y el Manual.
+
+**Pantallas reservadas**, escondidas del menú: Punto de venta, Mercado Libre, Envíos, Clientes, Preventas, Conversaciones, Proveedores, Inventario, Movimientos, Aprovisionamiento, Boletín, Rendimiento, Tributarios y Ajustes. Si alguien entra por la URL, `app/(dashboard)/[storeId]/error.tsx` explica que la pantalla es solo para la dueña, dentro del panel y sin parecer una falla.
+
+**Qué se recorta** (`lib/viewer-payloads.ts`, una sola lista para todas las lecturas):
+
+| Dato | Se quita |
+|---|---|
+| Producto | `acqPrice`, `transportationCost`, `supplierId`, `supplier`, `abcClassification`, `soldCount` |
+| Pedido | nombre, correo, teléfono, dirección, ciudad, departamento, documento, empresa, `totalProductCost`, `netProfit`, `gatewayFee`, `profitMarginPct`, notas internas |
+| Mercado Libre | `buyerName`, `trackingNumber`, `minimumMarginAmount` |
+| Feeds | la URL del feed, que lleva el secreto |
+| Reseña | `userId` y la moderación; **el nombre de quien reseña se conserva**, porque ya se ve en la tienda |
+
+**Controles que escriben:** apagados o escondidos con `useCanWrite()`. El aviso, el menú, la barra del teléfono, la barra de acciones masivas, las confirmaciones, la cabecera de los formularios, el botón «Nuevo pedido» de la barra superior, los «Nuevo …» de cada lista, el menú de fila de atributos y el botón de WhatsApp responden a ese mismo dato.
+
+**Red de seguridad del navegador:** `ReadOnlyGuard` corta por axios las peticiones que escriben y avisa. Es comodidad, no seguridad: el servidor rechaza igual, y no cubre las pantallas que escriben con `fetch` (Mercado Libre, Envíos, Ajustes), que son justo las que el menú esconde.
+
+## Qué falta
+
+1. Las 24 lecturas reservadas siguen siendo solo de la dueña a propósito (ajustes con cuentas bancarias, proveedores, impuestos, liquidaciones de Mercado Libre, costos de compra, datos de clientas). Abrir alguna exige depurarla primero.
+2. Cola larga de la interfaz: quedan tarjetas y menús de fila que todavía dicen «Editar» y llevan a un formulario que ya está apagado. No deja escribir nada, pero se lee raro.
 3. Revisar si la lista de tiendas del selector debe mostrar todas las permitidas cuando una cuenta tenga más de una.
 
 ## Guardias automáticos

@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), findMany: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  requireStoreRead: vi.fn(), auth: vi.fn(), findMany: vi.fn() }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({
+  requireStoreRead: mocks.requireStoreRead,
+}));
 vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({
   default: { product: { findMany: mocks.findMany } },
@@ -22,6 +27,7 @@ const call = (query: string, extra = "") =>
 
 describe("GET /search/products/isolated", () => {
   beforeEach(() => {
+    mocks.requireStoreRead.mockResolvedValue({ userId: "owner", role: "owner" });
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: "owner" });
   });

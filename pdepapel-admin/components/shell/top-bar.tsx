@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { dashboardHref } from "@/lib/admin-navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -16,6 +17,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMenu, onOpenCommand }: TopBarProps) {
+  const canWrite = useCanWrite();
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-white px-3 sm:px-4 lg:px-6">
       <Button
@@ -69,6 +71,7 @@ export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMe
             </a>
           </Button>
         )}
+        {canWrite && (
         <Button asChild size="sm">
           <Link href={dashboardHref(storeId, "pedidos/nuevo")}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -76,6 +79,7 @@ export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMe
             <span className="sr-only sm:hidden">Nuevo pedido</span>
           </Link>
         </Button>
+        )}
         <div className="ml-1 flex items-center">
           <UserButton afterSignOutUrl="/iniciar-sesion" />
         </div>

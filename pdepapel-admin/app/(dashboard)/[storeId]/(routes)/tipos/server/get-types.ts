@@ -1,12 +1,12 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
 
 /** Categorías (modelo `Type`) de una tienda para las tablas del centro de Atributos. */
 export async function getTypes(storeId: string) {
-  await requireStoreOwner(storeId);
+  await requireStoreRead(storeId);
   const rows = await prismadb.type.findMany({
     where: { storeId },
     select: {

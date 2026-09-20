@@ -1,3 +1,5 @@
+import { scrubOrders } from "@/lib/viewer-payloads";
+import { getStoreAccess } from "@/lib/store-access";
 import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
@@ -748,7 +750,10 @@ export async function GET(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
 
-    const isStoreOwner = await checkIfStoreOwner(userId, params.storeId);
+    // La dueña ve todo; una cuenta de solo lectura ve la misma lista sin el
+    // contacto de la clienta ni la utilidad; una clienta, solo lo suyo.
+    const access = await getStoreAccess(params.storeId);
+    const isStoreOwner = access?.role === "owner";
     const requestedUserId = req.nextUrl.searchParams.get("userId");
 
     if (!isStoreOwner && requestedUserId && requestedUserId !== userId) {
@@ -779,7 +784,7 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(orders, {
+    return NextResponse.json(access?.role === "viewer" ? scrubOrders(orders) : orders, {
       headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
     });
   } catch (error) {

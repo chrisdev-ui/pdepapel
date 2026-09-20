@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import {
   ActionConfirmationDialog,
   type ActionConfirmationDialogProps,
@@ -16,6 +17,7 @@ type PendingConfirmation = ConfirmationOptions & {
 };
 
 export function useActionConfirmation() {
+  const canWrite = useCanWrite();
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation | null>(null);
   const pendingConfirmationRef = useRef<PendingConfirmation | null>(null);
@@ -32,13 +34,19 @@ export function useActionConfirmation() {
   const requestConfirmation = useCallback(
     (options: ConfirmationOptions) =>
       new Promise<boolean>((resolve) => {
+        // Una cuenta de solo lectura no confirma nada: la acción se cancela
+        // sin abrir el diálogo. El servidor la rechazaría igual.
+        if (!canWrite) {
+          resolve(false);
+          return;
+        }
         pendingConfirmationRef.current?.resolve(false);
 
         const pending = { ...options, resolve };
         pendingConfirmationRef.current = pending;
         setPendingConfirmation(pending);
       }),
-    [],
+    [canWrite],
   );
 
   useEffect(

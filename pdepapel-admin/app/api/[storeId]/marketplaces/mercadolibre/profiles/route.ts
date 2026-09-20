@@ -1,3 +1,5 @@
+import { scrubMargins } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { MarketplaceProvider, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -74,16 +76,14 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
     const profiles = await prismadb.marketplacePublicationProfile.findMany({
       where: { storeId: params.storeId },
       include: { localCategory: { select: { id: true, name: true } } },
       orderBy: { updatedAt: "desc" },
     });
-    return NextResponse.json(profiles, { headers: CACHE_HEADERS.NO_CACHE });
+    return NextResponse.json(access.role === "viewer" ? scrubMargins(profiles) : profiles, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "MERCADOLIBRE_PROFILES_GET", {
       headers: CACHE_HEADERS.NO_CACHE,

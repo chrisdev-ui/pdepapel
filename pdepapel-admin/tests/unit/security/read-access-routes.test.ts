@@ -116,6 +116,7 @@ const READ_ROUTES: RouteCase[] = [
   { path: "products/[productId]/delete-check", load: () => import("@/app/api/[storeId]/products/[productId]/delete-check/route"), params: { storeId: STORE, productId: "product-1" } },
   { path: "products/[productId]/videos", load: () => import("@/app/api/[storeId]/products/[productId]/videos/route"), params: { storeId: STORE, productId: "product-1" } },
   { path: "shipment/cache", load: () => import("@/app/api/[storeId]/shipment/cache/route"), params: { storeId: STORE } },
+  { path: "products/[productId]/reviews/[reviewId]", load: () => import("@/app/api/[storeId]/products/[productId]/reviews/[reviewId]/route"), params: { storeId: STORE, productId: "product-1", reviewId: "review-1" } },
 ];
 
 const HOLD_ROUTES: (RouteCase & { reason: string })[] = [
@@ -124,7 +125,6 @@ const HOLD_ROUTES: (RouteCase & { reason: string })[] = [
   { path: "settings", load: () => import("@/app/api/[storeId]/settings/route"), params: { storeId: STORE }, reason: "cuentas bancarias de la tienda" },
   { path: "restock-orders", load: () => import("@/app/api/[storeId]/restock-orders/route"), params: { storeId: STORE }, reason: "costos de compra" },
   { path: "tax-reports", load: () => import("@/app/api/[storeId]/tax-reports/route"), params: { storeId: STORE }, reason: "impuestos" },
-  { path: "products/[productId]/reviews/[reviewId]", load: () => import("@/app/api/[storeId]/products/[productId]/reviews/[reviewId]/route"), params: { storeId: STORE, productId: "product-1", reviewId: "review-1" }, reason: "nombre de quien reseña" },
 ];
 
 describe.each(READ_ROUTES)("GET $path", (entry) => {

@@ -1,3 +1,4 @@
+import { ErrorFactory } from "@/lib/api-errors";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   redisSet: vi.fn(),
   auth: vi.fn(),
   verifyStoreOwner: vi.fn(),
+  requireStoreRead: vi.fn(),
+  requireStoreOwner: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
@@ -21,6 +24,11 @@ vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => ({ get: mocks.redisGet, set: mocks.redisSet }) },
 }));
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({
+  requireStoreRead: mocks.requireStoreRead,
+  requireStoreOwner: mocks.requireStoreOwner,
+}));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: {
     NO_CACHE: {
@@ -185,15 +193,20 @@ describe("Meta catalog feed report", () => {
     mocks.redisSet.mockResolvedValue("OK");
     mocks.findProducts.mockResolvedValue([catalogProduct]);
     mocks.verifyStoreOwner.mockResolvedValue(undefined);
+    mocks.requireStoreRead.mockResolvedValue({ userId: "owner-id", role: "owner" });
+    mocks.requireStoreOwner.mockResolvedValue("owner-id");
   });
 
   it("requires a signed-in store owner", async () => {
     mocks.auth.mockReturnValue({ userId: null });
+    mocks.requireStoreRead.mockRejectedValue(
+      ErrorFactory.Unauthenticated(),
+    );
 
     const response = await getReport(new Request(reportUrl), params);
 
     expect(response.status).toBe(401);
-    expect(mocks.verifyStoreOwner).not.toHaveBeenCalled();
+    expect(mocks.requireStoreOwner).not.toHaveBeenCalled();
   });
 
   it("exposes the feed URL and the last report to the owner only", async () => {
@@ -206,7 +219,7 @@ describe("Meta catalog feed report", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.verifyStoreOwner).toHaveBeenCalledWith("user-1", storeId);
+    expect(mocks.requireStoreRead).toHaveBeenCalledWith(storeId);
     expect(json.configured).toBe(true);
     expect(json.feedUrl).toBe(`${feedUrl}?token=${token}`);
     expect(json.schedule).toContain("12 horas");

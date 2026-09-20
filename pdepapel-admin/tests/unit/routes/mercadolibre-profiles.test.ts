@@ -8,9 +8,16 @@ const mocks = vi.hoisted(() => ({
   inspectCategory: vi.fn(),
   upsertProfile: vi.fn(),
   verifyStoreOwner: vi.fn(),
+  requireStoreRead: vi.fn(),
+  requireStoreOwner: vi.fn(),
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({
+  requireStoreRead: mocks.requireStoreRead,
+  requireStoreOwner: mocks.requireStoreOwner,
+}));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
   verifyStoreOwner: mocks.verifyStoreOwner,
@@ -38,6 +45,8 @@ import {
 describe("Mercado Libre publication profiles routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.requireStoreRead.mockResolvedValue({ userId: "owner-id", role: "owner" });
+    mocks.requireStoreOwner.mockResolvedValue("owner-id");
     mocks.findConnection.mockResolvedValue({ id: "connection-id" });
     mocks.inspectCategory.mockResolvedValue({
       ok: true,

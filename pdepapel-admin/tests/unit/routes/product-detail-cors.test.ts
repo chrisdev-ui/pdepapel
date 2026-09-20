@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getStoreAccess: vi.fn(),
   findProduct: vi.fn(),
   findProductSlugAlias: vi.fn(),
   calculateDiscountedPrice: vi.fn(),
@@ -35,6 +36,10 @@ vi.mock("@/lib/product-archive", () => ({ pauseMarketplaceListingsForProducts: v
 vi.mock("@/lib/mercadolibre/outbox", () => ({ queueMarketplaceStockSyncEvents: vi.fn() }));
 vi.mock("@/lib/cloudinary-cleanup", () => ({ deleteCloudinaryImages: vi.fn() }));
 vi.mock("@/lib/cloudinary", () => ({ default: {} }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({
+  getStoreAccess: mocks.getStoreAccess,
+}));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     product: { findFirst: mocks.findProduct },
@@ -72,6 +77,7 @@ import { handleErrorResponse } from "@/lib/api-errors";
 
 describe("public product detail CORS", () => {
   beforeEach(() => {
+    mocks.getStoreAccess.mockResolvedValue(null);
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: null });
     mocks.checkIfStoreOwner.mockResolvedValue(false);
@@ -206,14 +212,14 @@ describe("public product detail CORS", () => {
 
   it("gives the store owner the full row the admin product picker relies on", async () => {
     mocks.auth.mockResolvedValue({ userId: "owner-1" });
-    mocks.checkIfStoreOwner.mockResolvedValue(true);
+    mocks.getStoreAccess.mockResolvedValue({ userId: "owner-1", role: "owner" });
 
     await GET(
       new Request("https://admin.example.com/api/store-id/products/product-id"),
       { params: { storeId: "store-id", productId: "product-id" } },
     );
 
-    expect(mocks.checkIfStoreOwner).toHaveBeenCalledWith("owner-1", "store-id");
+    expect(mocks.getStoreAccess).toHaveBeenCalledWith("store-id");
     const query = mocks.findProduct.mock.calls[0][0];
     expect(query.select).toBeUndefined();
     expect(query.include).toEqual(expect.objectContaining({ supplier: true, images: true }));

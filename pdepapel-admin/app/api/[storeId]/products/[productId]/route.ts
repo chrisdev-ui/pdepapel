@@ -1,3 +1,4 @@
+import { getStoreAccess } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
   syncProductCatalogAttributes,
@@ -80,7 +81,10 @@ export async function GET(
     // aprovisionamiento leen acqPrice y transportationCost de aquí); cualquier
     // otra persona recibe solo el `select` público, sin costos ni proveedor.
     const { userId } = await auth();
-    const isOwner = await checkIfStoreOwner(userId, params.storeId);
+    // La dueña ve la ficha completa; una cuenta de solo lectura entra por el
+    // select público, que no trae costo de compra, transporte ni proveedor.
+    const access = await getStoreAccess(params.storeId);
+    const isOwner = access?.role === "owner";
 
     const ownerInclude = {
       images: true,

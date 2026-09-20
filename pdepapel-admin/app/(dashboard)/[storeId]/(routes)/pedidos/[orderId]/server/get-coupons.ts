@@ -1,12 +1,12 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
 import { headers } from "next/headers";
 
 export async function getCoupons(storeId: string) {
-  await requireStoreOwner(storeId);
+  await requireStoreRead(storeId);
   headers();
 
   return await prismadb.coupon.findMany({

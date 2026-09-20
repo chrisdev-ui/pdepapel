@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import axios from "axios";
 import { Copy, Edit, ExternalLink, List, Merge, MoreHorizontal, Trash } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -61,6 +62,7 @@ export function AttributeRowMenu({
   copiedMessage,
   deletedMessage,
 }: AttributeRowMenuProps) {
+  const canWrite = useCanWrite();
   const { toast } = useToast();
   const router = useRouter();
   const actions = useAttributeActions();
@@ -96,7 +98,7 @@ export function AttributeRowMenu({
           <DropdownMenuLabel className="truncate">{row.name}</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => router.push(editHref)}>
             <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
-            Editar
+            {canWrite ? "Editar" : "Ver"}
           </DropdownMenuItem>
           {usageHref && usage > 0 && (
             <DropdownMenuItem onClick={() => router.push(usageHref)}>
@@ -112,18 +114,20 @@ export function AttributeRowMenu({
               </a>
             </DropdownMenuItem>
           )}
-          {mergeable && (
+          {canWrite && mergeable && (
             <DropdownMenuItem onClick={() => actions.openMerge(kind as MergeableKind, [row.id])}>
               <Merge className="mr-2 h-4 w-4" aria-hidden="true" />
               Unir con…
             </DropdownMenuItem>
           )}
-          <DropdownMenuSeparator />
-          <ArchiveMenuItem kind={kind} row={row} />
+          {canWrite && <DropdownMenuSeparator />}
+          {canWrite && <ArchiveMenuItem kind={kind} row={row} />}
+          {canWrite && (
           <DropdownMenuItem onClick={() => setOpen(true)} disabled={usage > 0} title={usage > 0 ? deleteBlockedReason : undefined} className="text-destructive focus:text-destructive">
             <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
             {usage > 0 ? `Eliminar · ${usage === 1 ? `tiene 1 ${kind === "types" ? "subcategoría" : "producto"}` : `tiene ${usage} ${kind === "types" ? "subcategorías" : "productos"}`}` : "Eliminar…"}
           </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => {

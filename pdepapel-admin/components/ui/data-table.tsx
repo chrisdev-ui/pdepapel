@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -112,6 +113,7 @@ export function DataTable<TData, TValue>({
   renderMobileCard,
   getRowId,
 }: DataTableProps<TData, TValue>) {
+  const canWrite = useCanWrite();
   const { tables, updateTableState } = useTableStore();
   const tableState = tables[tableKey] || {
     pagination: { pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE },
@@ -418,7 +420,8 @@ export function DataTable<TData, TValue>({
           <div className="hidden sm:block">
             <DataTableViewOptions table={table} model={tableKey} />
           </div>
-          {selectedCount === 0 &&
+          {canWrite &&
+            selectedCount === 0 &&
             (bulkActions ? (
               bulkActions(table)
             ) : (
@@ -491,11 +494,12 @@ export function DataTable<TData, TValue>({
           </span>
           <span className="hidden h-5 w-px bg-white/20 sm:block" aria-hidden="true" />
           <div className="order-last flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto [&_button]:border-white/30 [&_button]:bg-transparent [&_button]:text-primary-foreground [&_button]:shadow-none [&_button:hover]:bg-white/10 [&_button:hover]:text-primary-foreground">
-            {bulkActions ? (
-              bulkActions(table)
-            ) : (
-              <DataTableActionOptions table={table} model={tableKey} />
-            )}
+            {canWrite &&
+              (bulkActions ? (
+                bulkActions(table)
+              ) : (
+                <DataTableActionOptions table={table} model={tableKey} />
+              ))}
           </div>
           <Button
             variant="ghost"

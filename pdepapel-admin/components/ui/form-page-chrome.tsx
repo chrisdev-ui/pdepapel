@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -26,6 +27,7 @@ export function FormPageHeader({
   onBack,
   actions,
 }: FormPageHeaderProps) {
+  const canWrite = useCanWrite();
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -49,7 +51,7 @@ export function FormPageHeader({
           <p className="text-sm text-muted-foreground">{summary}</p>
         </div>
       </div>
-      {actions && (
+      {canWrite && actions && (
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {actions}
         </div>

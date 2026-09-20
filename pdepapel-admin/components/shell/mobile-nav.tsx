@@ -1,6 +1,7 @@
 "use client";
 
-import { MOBILE_NAV, dashboardHref, isSegmentActive } from "@/lib/admin-navigation";
+import { dashboardHref, isSegmentActive, mobileNavFor } from "@/lib/admin-navigation";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,13 +13,14 @@ interface MobileNavProps {
 
 /** Barra inferior del teléfono con “Vender” destacado en el centro. */
 export function MobileNav({ storeId, onOpenMenu }: MobileNavProps) {
+  const canWrite = useCanWrite();
   const pathname = usePathname() ?? "";
   return (
     <nav
       aria-label="Navegación principal"
       className="fixed inset-x-0 bottom-0 z-30 flex h-[72px] items-start border-t bg-white px-1 pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
-      {MOBILE_NAV.map((item) => {
+      {mobileNavFor(canWrite).map((item) => {
         const Icon = item.icon;
         const active = item.segment !== undefined && isSegmentActive(pathname, storeId, item.segment, item.exact);
         if (item.id === "vender") {

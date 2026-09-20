@@ -1,3 +1,5 @@
+import { scrubFairEvent } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -10,13 +12,11 @@ export async function GET(
   { params }: { params: { storeId: string; fairEventId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
-    return NextResponse.json(
-      await getFairEventDetail(params.storeId, params.fairEventId),
-    );
+    const detail = await getFairEventDetail(params.storeId, params.fairEventId);
+    // Solo lectura: la feria se ve sin el costo de compra de cada producto.
+    return NextResponse.json(access.role === "viewer" ? scrubFairEvent(detail) : detail);
   } catch (error) {
     return handleErrorResponse(error, "FAIR_EVENT_GET");
   }

@@ -1,6 +1,6 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import { ProductPresaleStatus } from "@prisma/client";
 import {
@@ -8,12 +8,13 @@ import {
   activeOrCurrentWhere,
 } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
+import { scrubProduct } from "@/lib/viewer-payloads";
 import { NEW_PRODUCT_SEGMENT } from "@/lib/product-routes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
 export async function getProduct(id: string, storeId: string) {
-  await requireStoreOwner(storeId);
+  const access = await requireStoreRead(storeId);
   // Acotado a la tienda: un id de otra tienda (o inexistente) devuelve null y
   // la página responde 404 en vez de pintar el formulario de creación.
   const product =
@@ -185,7 +186,8 @@ export async function getProduct(id: string, storeId: string) {
   }
 
   return {
-    product,
+    // Solo lectura: la ficha se ve sin costo de compra, transporte ni proveedor.
+    product: access.role === "viewer" ? scrubProduct(product) : product,
     activeOffers: activeOffers.map((row) => row.offer),
     activePresale: activePresale
       ? {
@@ -227,7 +229,7 @@ export async function getProduct(id: string, storeId: string) {
  * la otra), sin SKU, sin GTIN ni MPN, sin stock y sin grupo.
  */
 export async function getProductSeed(storeId: string, sourceId: string) {
-  await requireStoreOwner(storeId);
+  const access = await requireStoreRead(storeId);
   const source = await prismadb.product.findFirst({
     where: { id: sourceId, storeId },
     include: {

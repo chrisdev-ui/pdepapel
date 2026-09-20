@@ -4,7 +4,11 @@ import { Breadcrumbs } from "@/components/shell/breadcrumbs";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { SidebarNav, type NavCounts } from "@/components/shell/sidebar-nav";
+import type { StoreRole } from "@/lib/store-access";
 import { TopBar } from "@/components/shell/top-bar";
+import { ReadOnlyBanner } from "@/components/shell/read-only-banner";
+import { ReadOnlyGuard } from "@/components/shell/read-only-guard";
+import { ViewerAccessProvider } from "@/components/shell/viewer-access";
 import { StoreSwitcher } from "@/components/store-switcher";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useSidebarStore } from "@/hooks/use-sidebar-store";
@@ -21,6 +25,8 @@ interface AppShellProps {
    * entradas reservadas del menú (invitaciones).
    */
   canCreateStore?: boolean;
+  /** Rol en esta tienda: `viewer` apaga todo lo que escribe. */
+  role?: StoreRole | null;
   storeUrl?: string;
   counts?: NavCounts;
   children: React.ReactNode;
@@ -35,6 +41,7 @@ export function AppShell({
   storeId,
   stores,
   canCreateStore = false,
+  role = null,
   storeUrl,
   counts,
   children,
@@ -65,71 +72,84 @@ export function AppShell({
   }, [toggle]);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[hsl(240_20%_98.5%)] text-foreground">
-      <aside
-        aria-label="Barra lateral"
-        className={cn(
-          "hidden shrink-0 flex-col border-r bg-white transition-[width] duration-200 lg:flex",
-          collapsed ? "w-16" : "w-64",
-        )}
-      >
-        <div
+    <ViewerAccessProvider role={role}>
+      <div className="flex h-dvh overflow-hidden bg-[hsl(240_20%_98.5%)] text-foreground">
+        <aside
+          aria-label="Barra lateral"
           className={cn(
-            "flex h-16 items-center border-b",
-            collapsed ? "justify-center px-2" : "px-3",
+            "hidden shrink-0 flex-col border-r bg-white transition-[width] duration-200 lg:flex",
+            collapsed ? "w-16" : "w-64",
           )}
         >
-          <StoreSwitcher items={stores} compact={collapsed} canCreateStore={canCreateStore} />
-        </div>
-        <SidebarNav storeId={storeId} counts={counts} collapsed={collapsed} ownerAllowlisted={canCreateStore} />
-      </aside>
-
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent
-          side="left"
-          className="flex w-[300px] flex-col p-0"
-          aria-describedby={undefined}
-        >
-          <SheetTitle className="sr-only">Menú del panel</SheetTitle>
-          <div className="flex h-16 items-center border-b px-3">
-            <StoreSwitcher items={stores} canCreateStore={canCreateStore} />
+          <div
+            className={cn(
+              "flex h-16 items-center border-b",
+              collapsed ? "justify-center px-2" : "px-3",
+            )}
+          >
+            <StoreSwitcher
+              items={stores}
+              compact={collapsed}
+              canCreateStore={canCreateStore}
+            />
           </div>
           <SidebarNav
-            ownerAllowlisted={canCreateStore}
             storeId={storeId}
             counts={counts}
-            onNavigate={() => setMenuOpen(false)}
+            collapsed={collapsed}
+            ownerAllowlisted={canCreateStore}
           />
-        </SheetContent>
-      </Sheet>
+        </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          storeId={storeId}
-          storeUrl={storeUrl}
-          collapsed={collapsed}
-          onToggleSidebar={toggle}
-          onOpenMenu={() => setMenuOpen(true)}
-          onOpenCommand={() => setCommandOpen(true)}
-        />
-        {/* `relative`: los inputs ocultos de Radix (checkbox, radio) y los
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <SheetContent
+            side="left"
+            className="flex w-[300px] flex-col p-0"
+            aria-describedby={undefined}
+          >
+            <SheetTitle className="sr-only">Menú del panel</SheetTitle>
+            <div className="flex h-16 items-center border-b px-3">
+              <StoreSwitcher items={stores} canCreateStore={canCreateStore} />
+            </div>
+            <SidebarNav
+              ownerAllowlisted={canCreateStore}
+              storeId={storeId}
+              counts={counts}
+              onNavigate={() => setMenuOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar
+            storeId={storeId}
+            storeUrl={storeUrl}
+            collapsed={collapsed}
+            onToggleSidebar={toggle}
+            onOpenMenu={() => setMenuOpen(true)}
+            onOpenCommand={() => setCommandOpen(true)}
+          />
+          {/* `relative`: los inputs ocultos de Radix (checkbox, radio) y los
             textos `sr-only` son `position: absolute`; sin un ancestro
             posicionado su bloque contenedor es el documento, se salen del
             scroll de <main> y la ventana entera se vuelve desplazable hacia
             una zona en blanco. */}
-        <main className="min-h-0 relative flex-1 overflow-y-auto pb-[88px] lg:pb-0">
-          <Breadcrumbs storeId={storeId} className="px-4 pt-4 sm:px-8" />
-          {children}
-        </main>
-      </div>
+          <main className="min-h-0 relative flex-1 overflow-y-auto pb-[88px] lg:pb-0">
+            <ReadOnlyGuard />
+          <ReadOnlyBanner />
+            <Breadcrumbs storeId={storeId} className="px-4 pt-4 sm:px-8" />
+            {children}
+          </main>
+        </div>
 
-      <MobileNav storeId={storeId} onOpenMenu={() => setMenuOpen(true)} />
-      <CommandPalette
-        storeId={storeId}
-        ownerAllowlisted={canCreateStore}
-        open={commandOpen}
-        onOpenChange={setCommandOpen}
-      />
-    </div>
+        <MobileNav storeId={storeId} onOpenMenu={() => setMenuOpen(true)} />
+        <CommandPalette
+          storeId={storeId}
+          ownerAllowlisted={canCreateStore}
+          open={commandOpen}
+          onOpenChange={setCommandOpen}
+        />
+      </div>
+    </ViewerAccessProvider>
   );
 }

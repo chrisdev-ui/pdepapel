@@ -55,6 +55,12 @@ export interface NavItem {
   id: string;
   label: string;
   icon: LucideIcon;
+  /**
+   * Pantalla reservada a la dueña: muestra costos, datos personales,
+   * proveedores, impuestos o ajustes, así que una cuenta de solo lectura ni
+   * la ve en el menú (si entrara por la URL, el cargador la rechaza).
+   */
+  ownerOnly?: boolean;
   /** Segmento tras `/[storeId]/`. Vacío = inicio. */
   segment: string;
   exact?: boolean;
@@ -90,6 +96,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "pos",
+        ownerOnly: true,
         label: "Punto de venta",
         icon: ScanLine,
         segment: "ventas-rapidas",
@@ -110,6 +117,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "mercadolibre",
+        ownerOnly: true,
         label: "Mercado Libre",
         icon: Store,
         segment: "mercadolibre",
@@ -125,6 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "envios",
+        ownerOnly: true,
         label: "Envíos",
         icon: Truck,
         segment: "envios",
@@ -138,6 +147,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "clientes",
+        ownerOnly: true,
         label: "Clientes",
         icon: Users,
         segment: "clientes",
@@ -148,6 +158,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "preventas",
+        ownerOnly: true,
         label: "Preventas",
         icon: CalendarClock,
         segment: "preventas",
@@ -155,6 +166,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "conversaciones",
+        ownerOnly: true,
         label: "Conversaciones",
         icon: MessagesSquare,
         segment: "conversaciones",
@@ -196,7 +208,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Opciones para clientes", segment: "atributos?tab=opciones" },
         ],
       },
-      { id: "proveedores", label: "Proveedores", icon: ClipboardList, segment: "proveedores" },
+      { id: "proveedores", ownerOnly: true, label: "Proveedores", icon: ClipboardList, segment: "proveedores" },
       {
         id: "contenido",
         label: "Contenido de la tienda",
@@ -216,6 +228,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         id: "inventario",
+        ownerOnly: true,
         label: "Inventario",
         icon: Warehouse,
         segment: "inventario",
@@ -227,8 +240,8 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Sin costo", segment: "inventario?vista=sin-costo" },
         ],
       },
-      { id: "movimientos", label: "Movimientos", icon: History, segment: "movimientos-inventario" },
-      { id: "aprovisionamiento", label: "Aprovisionamiento", icon: Package, segment: "aprovisionamiento" },
+      { id: "movimientos", ownerOnly: true, label: "Movimientos", icon: History, segment: "movimientos-inventario" },
+      { id: "aprovisionamiento", ownerOnly: true, label: "Aprovisionamiento", icon: Package, segment: "aprovisionamiento" },
     ],
   },
   {
@@ -246,7 +259,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Cupones", segment: "promociones?tab=cupones" },
         ],
       },
-      { id: "boletin", label: "Boletín", icon: Mail, segment: "boletin" },
+      { id: "boletin", ownerOnly: true, label: "Boletín", icon: Mail, segment: "boletin" },
     ],
   },
   {
@@ -256,6 +269,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       {
         id: "rendimiento",
+        ownerOnly: true,
         label: "Rendimiento",
         icon: BarChart3,
         segment: "rendimiento",
@@ -265,7 +279,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Envíos", segment: "rendimiento?tab=envios" },
         ],
       },
-      { id: "tributarios", label: "Tributarios", icon: Landmark, segment: "reportes-tributarios" },
+      { id: "tributarios", ownerOnly: true, label: "Tributarios", icon: Landmark, segment: "reportes-tributarios" },
     ],
   },
 ];
@@ -281,6 +295,7 @@ export const FOOTER_ITEMS: NavItem[] = [
   },
   {
     id: "ajustes",
+    ownerOnly: true,
     label: "Ajustes",
     icon: Settings,
     segment: "configuracion",
@@ -296,13 +311,20 @@ export const FOOTER_ITEMS: NavItem[] = [
 ];
 
 /** Barra inferior del teléfono. `more` abre el panel completo. */
-export const MOBILE_NAV: { id: string; label: string; icon: LucideIcon; segment?: string; exact?: boolean; more?: boolean }[] = [
+export const MOBILE_NAV: { id: string; label: string; icon: LucideIcon; segment?: string; exact?: boolean; more?: boolean; ownerOnly?: boolean }[] = [
   { id: "inicio", label: "Inicio", icon: Home, segment: "", exact: true },
   { id: "pedidos", label: "Pedidos", icon: ShoppingBag, segment: "pedidos" },
-  { id: "vender", label: "Vender", icon: ScanLine, segment: "ventas-rapidas" },
-  { id: "inventario", label: "Inventario", icon: Warehouse, segment: "inventario" },
+  { id: "vender", label: "Vender", icon: ScanLine, segment: "ventas-rapidas", ownerOnly: true },
+  { id: "inventario", label: "Inventario", icon: Warehouse, segment: "inventario", ownerOnly: true },
+  { id: "productos", label: "Productos", icon: Tag, segment: "productos" },
   { id: "mas", label: "Más", icon: LayoutGrid, more: true },
 ];
+
+/** La barra del teléfono sin lo reservado; una cuenta de solo lectura ve Productos en su lugar. */
+export function mobileNavFor(canWrite: boolean) {
+  const items = canWrite ? MOBILE_NAV.filter((item) => item.id !== "productos") : MOBILE_NAV.filter((item) => !item.ownerOnly);
+  return items;
+}
 
 export interface QuickAction {
   id: string;
@@ -420,19 +442,42 @@ export function isSegmentActive(
   return query ? current === query : current === "";
 }
 
-function withoutOwnerOnly(items: NavItem[]): NavItem[] {
-  return items.map((item) =>
-    item.children ? { ...item, children: item.children.filter((child) => !child.ownerOnly) } : item,
+/**
+ * Quién ve qué en el menú.
+ *
+ * - Una pantalla marcada `ownerOnly` (costos, datos personales, proveedores,
+ *   impuestos, ajustes, o que solo sirve para escribir) desaparece en una
+ *   cuenta de solo lectura: verla llevaría a la pantalla de «sin acceso».
+ * - Una subentrada `ownerOnly` (invitaciones) pide además estar en
+ *   `ADMIN_ALLOWED_USER_IDS`.
+ */
+export interface NavVisibility {
+  /** `false` en una cuenta de solo lectura. */
+  canWrite?: boolean;
+  /** Sesión en la lista explícita del dueño. */
+  ownerAllowlisted?: boolean;
+}
+
+function visibleItems(items: NavItem[], visibility: NavVisibility): NavItem[] {
+  const canWrite = visibility.canWrite ?? true;
+  const allowlisted = visibility.ownerAllowlisted ?? false;
+  return items
+    .filter((item) => canWrite || !item.ownerOnly)
+    .map((item) =>
+      item.children
+        ? { ...item, children: item.children.filter((child) => allowlisted || !child.ownerOnly) }
+        : item,
+    );
+}
+
+/** Menú lateral para esta sesión. */
+export function navGroupsFor(visibility: NavVisibility): NavGroup[] {
+  return NAV_GROUPS.map((group) => ({ ...group, items: visibleItems(group.items, visibility) })).filter(
+    (group) => group.items.length > 0,
   );
 }
 
-/** Menú sin las entradas reservadas cuando la sesión no está en la lista del dueño. */
-export function navGroupsFor(isOwnerAllowlisted: boolean): NavGroup[] {
-  if (isOwnerAllowlisted) return NAV_GROUPS;
-  return NAV_GROUPS.map((group) => ({ ...group, items: withoutOwnerOnly(group.items) }));
-}
-
 /** Lo mismo para el pie de la barra lateral, donde vive «Ajustes». */
-export function footerItemsFor(isOwnerAllowlisted: boolean): NavItem[] {
-  return isOwnerAllowlisted ? FOOTER_ITEMS : withoutOwnerOnly(FOOTER_ITEMS);
+export function footerItemsFor(visibility: NavVisibility): NavItem[] {
+  return visibleItems(FOOTER_ITEMS, visibility);
 }

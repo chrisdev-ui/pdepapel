@@ -1,3 +1,5 @@
+import { scrubProducts } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { Redis } from "@upstash/redis";
@@ -36,7 +38,7 @@ export async function GET(
 
     // Verify ownership (Admin access only)
     // This is crucial since we are skipping storefront logic
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
@@ -129,7 +131,9 @@ export async function GET(
     });
 
     const hasMore = products.length > limit;
-    const data = hasMore ? products.slice(0, limit) : products;
+    const page1 = hasMore ? products.slice(0, limit) : products;
+    // Solo lectura: sin costo de compra ni transporte.
+    const data = access.role === "viewer" ? scrubProducts(page1 as any[]) : page1;
 
     const response = {
       data,

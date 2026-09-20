@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { cn, currencyFormatter } from "@/lib/utils";
@@ -59,10 +60,13 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
   order,
   customer,
 }) => {
+  // Escribirle a una clienta necesita su nombre y su teléfono, que una cuenta
+  // de solo lectura no recibe: el botón no se muestra.
+  const canWrite = useCanWrite();
   const data = order || customer;
 
   const firstName = useMemo(() => {
-    return data ? data.fullName.split(" ")[0] : "";
+    return data?.fullName ? data.fullName.split(" ")[0] : "";
   }, [data]);
 
   const orderPrice = useMemo(() => {
@@ -205,6 +209,8 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
     );
   }
 
+
+  if (!canWrite) return null;
   return (
     <Button
       variant={variant}

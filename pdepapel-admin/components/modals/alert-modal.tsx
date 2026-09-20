@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +45,7 @@ export function AlertModal({
   cancelLabel = "Cancelar",
   destructive = true,
 }: AlertModalProps) {
+  const canWrite = useCanWrite();
   return (
     <AlertDialog
       open={isOpen}
@@ -61,7 +63,7 @@ export function AlertModal({
             {cancelLabel}
           </AlertDialogCancel>
           <AlertDialogAction
-            disabled={loading}
+            disabled={loading || !canWrite}
             onClick={(event) => {
               event.preventDefault();
               onConfirm();

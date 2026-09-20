@@ -1,6 +1,6 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
 
@@ -14,7 +14,7 @@ const CATEGORY_PREVIEW_LIMIT = 6;
  * Siempre acotada por `storeId`; un id de otra tienda devuelve `null`.
  */
 export async function getType(storeId: string, typeId: string) {
-  await requireStoreOwner(storeId);
+  await requireStoreRead(storeId);
   const type = await prismadb.type.findFirst({
     where: { id: typeId, storeId },
     select: {

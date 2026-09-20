@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { RefreshButton } from "@/components/ui/refresh-button";
@@ -27,6 +28,7 @@ interface OrderClientProps {
 const VIEW_PARAM = "vista";
 
 const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
+  const canWrite = useCanWrite();
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -80,12 +82,14 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
         </div>
         <div className="flex items-center gap-2">
           <RefreshButton />
+          {canWrite && (
           <Button asChild>
             <Link href={`/${storeId}/pedidos/nuevo`}>
               <Plus className="h-4 w-4" aria-hidden="true" />
               Nuevo pedido
             </Link>
           </Button>
+          )}
         </div>
       </div>
 

@@ -1,7 +1,9 @@
+import { scrubReview } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -30,9 +32,7 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("El ID de la reseña es requerido");
     // Fila completa (con nota de moderación): solo el panel. La tienda lee
     // reseñas publicadas por `GET /products/[id]/reviews`.
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
     const review = await prismadb.review.findUnique({
       where: {
@@ -44,7 +44,7 @@ export async function GET(
 
     if (!review) throw ErrorFactory.NotFound("Reseña no encontrada");
 
-    return NextResponse.json(review, {
+    return NextResponse.json(access.role === "viewer" ? scrubReview(review) : review, {
       headers: corsHeaders,
     });
   } catch (error) {

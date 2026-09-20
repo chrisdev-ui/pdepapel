@@ -1,3 +1,5 @@
+import { scrubProducts } from "@/lib/viewer-payloads";
+import { getStoreAccess } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -19,7 +21,8 @@ export async function GET(
     if (!userId) {
       return new NextResponse("Unauthenticated", { status: 401 });
     }
-    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+    const access = await getStoreAccess(params.storeId);
+    if (!access) {
       return new NextResponse("Unauthorized", { status: 403 });
     }
 
@@ -71,7 +74,8 @@ export async function GET(
     const totalPages = Math.ceil(totalItems / limit);
 
     return NextResponse.json({
-      products,
+      // Solo lectura: sin costo de compra, transporte ni proveedor.
+      products: access.role === "viewer" ? scrubProducts(products) : products,
       totalItems,
       totalPages,
     });

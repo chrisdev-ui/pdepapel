@@ -1,11 +1,12 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
+import { scrubProduct } from "@/lib/viewer-payloads";
 
 export async function getProducts(storeId: string) {
-  await requireStoreOwner(storeId);
+  const access = await requireStoreRead(storeId);
   const products = await prismadb.product.findMany({
     where: {
       storeId,
@@ -101,8 +102,11 @@ export async function getProducts(storeId: string) {
       if (effectiveStock < 0) effectiveStock = 0;
     }
 
+    // Una cuenta de solo lectura ve el catálogo sin el costo de compra.
+    const visible = access.role === "viewer" ? scrubProduct(product) : product;
+
     return {
-      ...product,
+      ...visible,
       brokenImages: product._count.images,
       stock: effectiveStock,
       discountedPrice: priceInfo?.price ?? product.price,

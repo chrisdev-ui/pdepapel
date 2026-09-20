@@ -73,6 +73,7 @@ export default async function DashboardLayout({
         storeId={params.storeId}
         stores={stores}
         canCreateStore={canCreateStore(userId)}
+        role={access?.role ?? null}
         storeUrl={env.FRONTEND_STORE_URL}
         counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue }}
       >

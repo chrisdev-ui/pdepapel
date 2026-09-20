@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import {
   CommandDialog,
   CommandEmpty,
@@ -63,6 +64,7 @@ export function CommandPalette({
   searchProducts,
   ownerAllowlisted = false,
 }: CommandPaletteProps) {
+  const canWrite = useCanWrite();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<ProductHit[]>([]);
@@ -110,7 +112,7 @@ export function CommandPalette({
 
   const destinations = useMemo(() => {
     const items: { label: string; segment: string; group: string }[] = [];
-    for (const group of navGroupsFor(ownerAllowlisted)) {
+    for (const group of navGroupsFor({ canWrite, ownerAllowlisted })) {
       for (const item of group.items) {
         items.push({ label: item.label, segment: item.segment, group: group.label ?? "Inicio" });
         for (const child of item.children ?? []) {
@@ -120,7 +122,7 @@ export function CommandPalette({
         }
       }
     }
-    for (const item of footerItemsFor(ownerAllowlisted)) {
+    for (const item of footerItemsFor({ canWrite, ownerAllowlisted })) {
       items.push({ label: item.label, segment: item.segment, group: "Ajustes" });
       for (const child of item.children ?? []) {
         if (child.segment !== item.segment) items.push({ label: `${item.label} › ${child.label}`, segment: child.segment, group: "Ajustes" });

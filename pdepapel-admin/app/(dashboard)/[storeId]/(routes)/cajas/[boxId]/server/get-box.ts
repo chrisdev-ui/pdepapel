@@ -1,6 +1,6 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
 import { headers } from "next/headers";
@@ -10,7 +10,7 @@ import { headers } from "next/headers";
  * el id no existe o pertenece a otra tienda.
  */
 export async function getBox(boxId: string, storeId: string) {
-  await requireStoreOwner(storeId);
+  await requireStoreRead(storeId);
   headers();
   const box = await prismadb.box.findFirst({
     where: {

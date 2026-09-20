@@ -1,11 +1,11 @@
 "use server";
 
-import { requireStoreOwner } from "@/lib/store-access";
+import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
 
 export async function getSizes(storeId: string) {
-  await requireStoreOwner(storeId);
+  await requireStoreRead(storeId);
   return await prismadb.size.findMany({
     where: { storeId },
     select: {

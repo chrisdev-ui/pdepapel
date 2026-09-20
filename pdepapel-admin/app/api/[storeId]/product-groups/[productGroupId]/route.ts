@@ -1,3 +1,5 @@
+import { scrubProductGroup } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -55,9 +57,7 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("Product Group ID is required");
     }
     // Solo el panel: devuelve las variantes como filas completas de Product.
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
     const productGroup = await prismadb.productGroup.findFirst({
       where: {
@@ -79,7 +79,7 @@ export async function GET(
 
     if (!productGroup) throw ErrorFactory.NotFound("Product Group not found");
 
-    return NextResponse.json(productGroup, { headers: corsHeaders });
+    return NextResponse.json(access.role === "viewer" ? scrubProductGroup(productGroup) : productGroup, { headers: corsHeaders });
   } catch (error) {
     return handleErrorResponse(error, "PRODUCT_GROUP_GET", {
       headers: corsHeaders,

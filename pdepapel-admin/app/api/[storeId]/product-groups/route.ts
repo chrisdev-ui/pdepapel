@@ -1,3 +1,5 @@
+import { scrubProductGroups } from "@/lib/viewer-payloads";
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -303,9 +305,7 @@ export async function GET(
     // Lista de administración: la tienda en línea agrupa variantes por
     // `GET /products?groupBy=parents`, nunca por aquí (devuelve filas
     // completas de Product, con costos y proveedor).
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const access = await requireStoreRead(params.storeId);
 
     // For admin dashboard list
     const productGroups = await prismadb.productGroup.findMany({
@@ -321,7 +321,7 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(productGroups, { headers: corsHeaders });
+    return NextResponse.json(access.role === "viewer" ? scrubProductGroups(productGroups) : productGroups, { headers: corsHeaders });
   } catch (error) {
     return handleErrorResponse(error, "PRODUCT_GROUPS_GET", {
       headers: corsHeaders,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { ProductCatalog } from "@/components/catalog/product-catalog";
 import { ProductBatchImportModal } from "@/components/modals/product-batch-import-modal";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
   lowStockThreshold,
   storeUrl,
 }) => {
+  const canWrite = useCanWrite();
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -300,18 +302,22 @@ const ProductClient: React.FC<ProductClientProps> = ({
               )
             }
           />
+          {canWrite && (
           <Button asChild variant="outline">
             <Link href={`/${storeId}/productos/nuevo-grupo`}>
               <Layers className="h-4 w-4" aria-hidden="true" />
               Grupo con variantes
             </Link>
           </Button>
+          )}
+          {canWrite && (
           <Button asChild>
             <Link href={`/${storeId}/productos/nuevo`}>
               <Plus className="h-4 w-4" aria-hidden="true" />
               Nuevo producto
             </Link>
           </Button>
+          )}
         </div>
       </div>
 
