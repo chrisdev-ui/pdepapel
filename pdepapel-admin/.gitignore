@@ -49,6 +49,7 @@ next-env.d.ts
 
 google_merchant_*
 *md
+!/AGENTS.md
 !docs/reportes-tributarios.md
 !docs/ventas-en-feria.md
 !docs/punto-de-venta.md

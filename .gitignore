@@ -11,8 +11,7 @@ coverage/
 tmp/
 outputs/
 
-# Local AI agent instructions. Shared project guidance lives in docs/.
-/AGENTS.md
+# Local AI agent scratch notes. AGENTS.md files are tracked shared guidance.
 /CLAUDE.md
 /pdepapel-store/CLAUDE.md
 
