@@ -115,6 +115,30 @@ describe("ProductKardexView", () => {
     });
   });
 
+  it("la venta en feria se ve como fila derivada, sin saldo y distinta de una del kardex", () => {
+    const derivedRow = row({
+      id: "fair-sale:f1",
+      type: "IN_PERSON_SALE",
+      quantity: -24,
+      previousStock: null,
+      newStock: null,
+      cost: null,
+      who: "—",
+      reference: { kind: "fair", label: "Feria Kawaii", secondary: "24 unidades vendidas · 2 dañadas", href: "/store-1/ferias/f1" },
+      derived: { kind: "fair-sale", hint: "Las unidades salieron del stock al reservarlas para la feria." },
+    });
+    render(<ProductKardexView storeId="store-1" kardex={kardex({ rows: [derivedRow] })} showAll={false} typeFilter={null} />);
+
+    // Se anuncia como venta en feria, no como «Venta presencial» del kardex.
+    expect(screen.getByText("Venta en feria")).toHaveClass("bg-tint-lavender");
+    expect(screen.getByText("derivada")).toBeInTheDocument();
+    expect(screen.queryByText("Venta presencial")).not.toBeInTheDocument();
+    // Sin saldo: no movió stock.
+    expect(screen.getByTitle("No mueve stock: no deja saldo.")).toHaveTextContent("—");
+    expect(screen.getByRole("link", { name: "Feria Kawaii" })).toHaveAttribute("href", "/store-1/ferias/f1");
+    expect(screen.getByText("24 unidades vendidas · 2 dañadas")).toBeInTheDocument();
+  });
+
   it("explains a kit mismatch instead of offering an adjustment, and mentions kit sales in the note", () => {
     render(<ProductKardexView storeId="store-1" kardex={kardex({}, { stock: 2, isKit: true }, { balanced: false, latestBalance: 4, viaKits30: 4 })} showAll={false} typeFilter={null} />);
     expect(screen.queryByRole("button", { name: /Registrar ajuste/ })).toBeNull();

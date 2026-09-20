@@ -8,6 +8,7 @@ import {
   summarizeKardex,
   type KardexMetrics,
 } from "@/lib/kardex";
+import { collectFairAnchors, describeFairSale, FAIR_SALE_HINT } from "@/lib/fair-kardex";
 import { collectMovementActorIds } from "@/lib/movement-actor";
 import { buildMovementReference, loadMovementReferences } from "@/lib/movement-reference";
 import prismadb from "@/lib/prismadb";
@@ -38,12 +39,18 @@ export interface KardexRow {
   id: string;
   type: InventoryMovementType;
   quantity: number;
-  previousStock: number;
-  newStock: number;
+  /** `null` en una fila derivada: no hay saldo porque no movió stock. */
+  previousStock: number | null;
+  newStock: number | null;
   cost: number | null;
   createdAt: Date;
   who: string;
   reference: import("@/lib/movement-reference").MovementReference | null;
+  /**
+   * Fila derivada al leer, no una fila de `InventoryMovement`. Hoy solo lo
+   * vendido en una feria. No entra en el saldo ni en el cuadre.
+   */
+  derived?: { kind: "fair-sale"; hint: string };
 }
 
 export interface ProductKardex {
@@ -211,6 +218,42 @@ export async function getProductKardex(storeId: string, productId: string, optio
       reference,
     };
   });
+
+  // ── Ventas en feria ────────────────────────────────────────────────────
+  // No existen como movimiento (ver `lib/fair-kardex.ts`); se derivan de lo
+  // que la feria registró y se marcan como derivadas. Van después de armar
+  // `rows` y del cuadre, que solo miran movimientos reales.
+  const anchors = collectFairAnchors(visible);
+  if (anchors.size > 0) {
+    const fairItems = await prismadb.fairEventInventoryItem.findMany({
+      where: { productId, fairEventId: { in: Array.from(anchors.keys()) } },
+      select: { fairEventId: true, soldQuantity: true, damagedQuantity: true, lostQuantity: true },
+    });
+    for (const item of fairItems) {
+      if (item.soldQuantity <= 0) continue;
+      const anchor = anchors.get(item.fairEventId);
+      if (!anchor) continue;
+      const fair = references.fairs.get(item.fairEventId);
+      const note = describeFairSale({ sold: item.soldQuantity, damaged: item.damagedQuantity, lost: item.lostQuantity });
+      rows.push({
+        id: `fair-sale:${item.fairEventId}`,
+        // Es una venta presencial, así que cuenta como tal para quien filtre
+        // por tipo; la insignia la distingue de una fila del kardex.
+        type: "IN_PERSON_SALE",
+        quantity: -item.soldQuantity,
+        previousStock: null,
+        newStock: null,
+        cost: null,
+        createdAt: anchor.settledAt,
+        who: "—",
+        reference: fair
+          ? { kind: "fair", label: fair.name, secondary: note, href: `/${storeId}/ferias/${fair.id}` }
+          : { kind: "note", label: note, secondary: null, href: null },
+        derived: { kind: "fair-sale", hint: FAIR_SALE_HINT },
+      });
+    }
+    rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
 
   return {
     product: {

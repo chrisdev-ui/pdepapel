@@ -2,6 +2,7 @@
 
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { TintBadge } from "@/components/ui/tint-badge";
+import { FAIR_SALE_LABEL } from "@/lib/fair-kardex";
 import { formatKardexDate, formatSignedQuantity, MOVEMENT_LABELS, MOVEMENT_TONES } from "@/lib/kardex";
 import { cn, currencyFormatter } from "@/lib/utils";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -42,7 +43,18 @@ export const kardexColumns: ColumnDef<KardexRow>[] = [
   {
     accessorKey: "type",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Movimiento" />,
-    cell: ({ row }) => <TintBadge label={MOVEMENT_LABELS[row.original.type]} tone={MOVEMENT_TONES[row.original.type]} />,
+    cell: ({ row }) =>
+      row.original.derived ? (
+        <span title={row.original.derived.hint} className="inline-flex items-center gap-1.5">
+          <TintBadge label={FAIR_SALE_LABEL} tone="lavender" />
+          <span aria-hidden="true" className="text-xs text-muted-foreground">
+            ·
+          </span>
+          <span className="text-[11px] text-muted-foreground">derivada</span>
+        </span>
+      ) : (
+        <TintBadge label={MOVEMENT_LABELS[row.original.type]} tone={MOVEMENT_TONES[row.original.type]} />
+      ),
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
@@ -73,11 +85,16 @@ export const kardexColumns: ColumnDef<KardexRow>[] = [
   {
     accessorKey: "newStock",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Saldo" />,
-    cell: ({ row }) => (
-      <span className="whitespace-nowrap text-right font-mono text-sm font-bold tabular-nums text-primary">
-        {row.original.newStock.toLocaleString("es-CO")}
-      </span>
-    ),
+    cell: ({ row }) =>
+      row.original.newStock === null ? (
+        <span className="whitespace-nowrap text-right text-sm text-muted-foreground" title="No mueve stock: no deja saldo.">
+          —
+        </span>
+      ) : (
+        <span className="whitespace-nowrap text-right font-mono text-sm font-bold tabular-nums text-primary">
+          {row.original.newStock.toLocaleString("es-CO")}
+        </span>
+      ),
   },
   {
     accessorKey: "cost",

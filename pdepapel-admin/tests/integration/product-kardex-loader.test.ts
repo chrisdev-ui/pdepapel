@@ -123,6 +123,73 @@ describe("product kardex loader with MySQL", () => {
     });
   };
 
+  it("muestra lo vendido en una feria como fila derivada, sin tocar el cuadre", async () => {
+    fixture = await signedInFixture();
+    const productId = fixture.component.id;
+    const fair = await testPrisma.fairEvent.create({
+      data: {
+        storeId: fixture.store.id,
+        name: `Feria kardex ${randomUUID()}`,
+        status: "CLOSED",
+        startsAt: daysAgo(now, 12),
+        endsAt: daysAgo(now, 9),
+      },
+    });
+    // Reserva de 30, vuelven 4, se vendieron 24 y 2 quedaron dañadas:
+    // `reservado − devuelto` daría 26, que no es lo vendido.
+    await testPrisma.fairEventInventoryItem.create({
+      data: { fairEventId: fair.id, productId, allocatedQuantity: 30, soldQuantity: 24, returnedQuantity: 4, damagedQuantity: 2 },
+    });
+    await seed(
+      [
+        { type: InventoryMovementType.FESTIVAL_ALLOCATION, quantity: -30, previousStock: 40, newStock: 10, referenceId: fair.id, createdAt: daysAgo(now, 12) },
+        { type: InventoryMovementType.FESTIVAL_RETURN, quantity: 4, previousStock: 10, newStock: 14, referenceId: fair.id, createdAt: daysAgo(now, 9) },
+      ],
+      productId,
+    );
+    await testPrisma.product.update({ where: { id: productId }, data: { stock: 14 } });
+
+    const kardex = (await getProductKardex(fixture.store.id, productId, { now }))!;
+    const derived = kardex.rows.filter((row) => row.derived);
+    expect(derived).toHaveLength(1);
+    expect(derived[0].quantity).toBe(-24);
+    expect(derived[0].derived?.kind).toBe("fair-sale");
+    // No es una fila del kardex: no deja saldo y enlaza a la feria.
+    expect(derived[0].newStock).toBeNull();
+    expect(derived[0].previousStock).toBeNull();
+    expect(derived[0].reference?.href).toBe(`/${fixture.store.id}/ferias/${fair.id}`);
+    expect(derived[0].reference?.secondary).toContain("24 unidades vendidas");
+    expect(derived[0].reference?.secondary).toContain("2 dañadas");
+    // Se coloca en el cierre de la feria, no en la reserva.
+    expect(derived[0].createdAt.getTime()).toBe(daysAgo(now, 9).getTime());
+
+    // El cuadre solo mira movimientos reales: sigue cuadrando contra el retorno.
+    expect(kardex.metrics.latestBalance).toBe(14);
+    expect(kardex.metrics.balanced).toBe(true);
+    // Y no se cuela en el conteo de movimientos guardados.
+    expect(kardex.totalCount).toBe(2);
+  });
+
+  it("no inventa una fila cuando la feria no vendió nada", async () => {
+    fixture = await signedInFixture();
+    const productId = fixture.component.id;
+    const fair = await testPrisma.fairEvent.create({
+      data: { storeId: fixture.store.id, name: `Feria vacía ${randomUUID()}`, status: "CLOSED", startsAt: daysAgo(now, 6), endsAt: daysAgo(now, 5) },
+    });
+    await testPrisma.fairEventInventoryItem.create({
+      data: { fairEventId: fair.id, productId, allocatedQuantity: 5, soldQuantity: 0, returnedQuantity: 5 },
+    });
+    await seed(
+      [
+        { type: InventoryMovementType.FESTIVAL_ALLOCATION, quantity: -5, previousStock: 10, newStock: 5, referenceId: fair.id, createdAt: daysAgo(now, 6) },
+        { type: InventoryMovementType.FESTIVAL_RETURN, quantity: 5, previousStock: 5, newStock: 10, referenceId: fair.id, createdAt: daysAgo(now, 5) },
+      ],
+      productId,
+    );
+    const kardex = (await getProductKardex(fixture.store.id, productId, { now }))!;
+    expect(kardex.rows.filter((row) => row.derived)).toHaveLength(0);
+  });
+
   it("rejects another store and returns null for an unknown product", async () => {
     fixture = await signedInFixture();
     const otherStore = await testPrisma.store.create({ data: { name: `Otra tienda ${randomUUID()}`, userId: `other-${randomUUID()}` } });
