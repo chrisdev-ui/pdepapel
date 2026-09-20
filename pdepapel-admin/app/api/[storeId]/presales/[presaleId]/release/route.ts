@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -21,12 +22,19 @@ async function authorize(storeId: string, presaleId: string) {
   return userId;
 }
 
+/** Lectura: la dueña o una cuenta de solo lectura con esta tienda permitida. */
+async function authorizeRead(storeId: string, presaleId: string) {
+  if (!storeId) throw ErrorFactory.MissingStoreId();
+  if (!presaleId) throw ErrorFactory.InvalidRequest("El ID de la preventa es requerido");
+  await requireStoreRead(storeId);
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string; presaleId: string } },
 ) {
   try {
-    await authorize(params.storeId, params.presaleId);
+    await authorizeRead(params.storeId, params.presaleId);
     const preview = await getPresaleReleasePreview(params.storeId, params.presaleId);
 
     return NextResponse.json(

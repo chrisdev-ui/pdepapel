@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { FairEventStatus, OrderStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -21,9 +22,7 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const fairs = await prismadb.fairEvent.findMany({
       where: { storeId: params.storeId },

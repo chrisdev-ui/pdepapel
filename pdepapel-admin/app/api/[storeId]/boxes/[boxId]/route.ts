@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -15,9 +16,7 @@ export async function GET(
     if (!params.boxId) {
       throw ErrorFactory.InvalidRequest("Box id is required");
     }
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const box = await prismadb.box.findFirst({
       where: {

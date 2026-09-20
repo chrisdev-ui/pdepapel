@@ -83,6 +83,18 @@ export async function requireStoreRead(storeId: string): Promise<StoreAccess> {
   return access;
 }
 
+/**
+ * Tiendas que puede leer la cuenta de solo lectura de esta sesión, o lista
+ * vacía. Lo usa la raíz del panel para llevarla a su tienda: no es dueña de
+ * ninguna, así que sin esto acabaría en «sin acceso».
+ */
+export async function getViewerStoreIds(): Promise<string[]> {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) return [];
+  const metadata = await readPanelMetadata(userId, sessionClaims);
+  return metadata?.role === "viewer" ? metadata.allowedStoreIds : [];
+}
+
 /** Escritura y lecturas sensibles: solo la dueña de la tienda. Devuelve el userId. */
 export async function requireStoreOwner(storeId: string): Promise<string> {
   const { userId } = await auth();

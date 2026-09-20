@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -30,9 +31,7 @@ export async function GET(req: Request, { params }: { params: { storeId: string 
       return NextResponse.json(selectLiveHomeContent(entries, now), { headers: CACHE_HEADERS.DYNAMIC });
     }
 
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const entries = await prismadb.homeContent.findMany({
       where: { storeId: params.storeId },

@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStorePromotionsCache } from "@/lib/cache";
 import { assertFixedAmountBelowPrices, assertOfferTargetsInStore, offerTargetsData, parseOfferInput } from "@/lib/offers";
@@ -48,9 +49,7 @@ export async function GET(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     // Campañas con su nombre interno: solo el panel. La tienda recibe los
     // precios ya calculados en cada producto.
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const offers = await prismadb.offer.findMany({
       where: { storeId: params.storeId },

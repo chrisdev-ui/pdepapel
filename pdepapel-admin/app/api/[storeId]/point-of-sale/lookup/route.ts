@@ -1,9 +1,8 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreRead } from "@/lib/store-access";
 import { NextRequest, NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
 
 function getProductIdFromCode(code: string) {
   const match = /^PDP:([a-z0-9-]+)$/i.exec(code);
@@ -15,9 +14,7 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const code = req.nextUrl.searchParams.get("code")?.trim();
     if (!code) throw ErrorFactory.InvalidRequest("Ingresa o escanea un código");

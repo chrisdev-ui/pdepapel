@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 
@@ -40,12 +41,18 @@ async function requireOwner(storeId: string) {
   await verifyStoreOwner(userId, storeId);
 }
 
+/** Lectura: la dueña o una cuenta de solo lectura con esta tienda permitida. */
+async function requireRead(storeId: string) {
+  if (!storeId) throw ErrorFactory.MissingStoreId();
+  await requireStoreRead(storeId);
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    await requireOwner(params.storeId);
+    await requireRead(params.storeId);
 
     const [suggestions, statusCounts, activeProducts, assignedProducts] =
       await Promise.all([

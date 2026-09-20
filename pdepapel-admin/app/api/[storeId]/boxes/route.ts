@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -78,9 +79,7 @@ export async function GET(
       throw ErrorFactory.MissingStoreId();
     }
     // Medidas de empaque internas: solo el panel, sin caché compartida.
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const boxes = await prismadb.box.findMany({
       where: {

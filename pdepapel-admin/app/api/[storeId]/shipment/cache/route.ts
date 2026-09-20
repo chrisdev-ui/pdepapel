@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -10,9 +11,7 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const stats = await prismadb.shippingQuote.aggregate({

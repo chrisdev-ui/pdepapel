@@ -1,20 +1,17 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreRead } from "@/lib/store-access";
 import { FairCapsuleStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getFairStockAvailability } from "@/lib/fair-events";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { storeId: string; fairEventId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const code = req.nextUrl.searchParams.get("code")?.trim().toUpperCase();
     if (!code) throw ErrorFactory.InvalidRequest("Ingresa o escanea un código");

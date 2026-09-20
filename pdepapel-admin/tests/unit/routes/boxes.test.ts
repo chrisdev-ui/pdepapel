@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   verifyStoreOwner: vi.fn(),
+  requireStoreRead: vi.fn(),
   boxFindFirst: vi.fn(),
   boxFindMany: vi.fn(),
   boxCreate: vi.fn(),
@@ -13,6 +14,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({ requireStoreRead: mocks.requireStoreRead }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: {
     NO_CACHE: { "Cache-Control": "no-store" },
@@ -99,6 +102,7 @@ describe("boxes API", () => {
     );
     mocks.auth.mockResolvedValue({ userId: "owner-id" });
     mocks.verifyStoreOwner.mockResolvedValue(undefined);
+    mocks.requireStoreRead.mockResolvedValue({ userId: "owner-id", role: "owner" });
     mocks.boxFindMany.mockResolvedValue([]);
     mocks.boxFindFirst.mockResolvedValue(storedBox);
     mocks.boxCreate.mockResolvedValue({ ...storedBox, ...validPayload });
@@ -183,7 +187,8 @@ describe("boxes API", () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get("Cache-Control")).toBe("no-store");
-      expect(mocks.verifyStoreOwner).toHaveBeenCalledWith("owner-id", storeId);
+      // La lista de cajas la puede leer la dueña y una cuenta de solo lectura.
+      expect(mocks.requireStoreRead).toHaveBeenCalledWith(storeId);
     });
 
     it("returns the box with its shipments count", async () => {

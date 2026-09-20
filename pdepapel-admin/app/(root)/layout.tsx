@@ -1,5 +1,6 @@
 import { hasAdminAccess } from "@/lib/admin-access";
 import prismadb from "@/lib/prismadb";
+import { getViewerStoreIds } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
@@ -23,6 +24,19 @@ export default async function SetupLayout({
 
   if (store) {
     redirect(`/${store.id}`);
+  }
+
+  // Una cuenta de solo lectura no es dueña de ninguna tienda: se la lleva a
+  // la primera que tiene permitida, en vez de mandarla a «sin acceso».
+  const viewerStoreIds = await getViewerStoreIds();
+  if (viewerStoreIds.length > 0) {
+    const allowed = await prismadb.store.findFirst({
+      where: { id: { in: viewerStoreIds } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (allowed) {
+      redirect(`/${allowed.id}`);
+    }
   }
 
   // No store yet: only an allowlisted owner may create the first one. Any

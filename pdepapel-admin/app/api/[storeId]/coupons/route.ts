@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { findOtherActiveWelcomeBenefit } from "@/lib/coupon-availability";
 import { COUPON_SELECT, parseCouponInput } from "@/lib/coupons";
@@ -54,9 +55,7 @@ export async function GET(
     // Cada código es una llave de descuento: la lista completa (incluidos los
     // vencidos y el beneficio de bienvenida) es solo del panel. La tienda
     // valida un código concreto con `POST /coupons/validate`.
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const isActive = req.nextUrl.searchParams.get("isActive");
 

@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -89,9 +90,7 @@ export async function GET(
   { params }: { params: { storeId: string; productId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
     await verifyProduct(params.storeId, params.productId);
     return NextResponse.json(
       await prismadb.productVideo.findMany({

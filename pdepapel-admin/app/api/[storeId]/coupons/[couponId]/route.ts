@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { findOtherActiveWelcomeBenefit, getCouponDetail } from "@/lib/coupon-availability";
 import { COUPON_SELECT, parseCouponInput } from "@/lib/coupons";
@@ -13,9 +14,7 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.couponId) throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     // Uso real (pagados y reservados) y los últimos pedidos sin datos personales.
     const coupon = await getCouponDetail(prismadb, params.storeId, params.couponId);

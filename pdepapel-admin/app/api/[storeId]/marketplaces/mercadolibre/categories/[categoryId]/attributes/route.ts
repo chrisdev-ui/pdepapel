@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreRead } from "@/lib/store-access";
 import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -9,16 +9,14 @@ import {
 import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
 import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
 
 export async function GET(
   _request: Request,
   { params }: { params: { storeId: string; categoryId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
     if (!isMercadoLibreCategoryId(params.categoryId)) {
       throw ErrorFactory.InvalidRequest(
         "La categoría de Mercado Libre no es válida",

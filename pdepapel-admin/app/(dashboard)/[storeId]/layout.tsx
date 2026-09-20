@@ -6,6 +6,7 @@ import { ConversationStatus } from "@prisma/client";
 import { overduePresaleWhere } from "@/lib/presale";
 
 import prismadb from "@/lib/prismadb";
+import { getStoreAccess } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
@@ -20,11 +21,17 @@ export default async function DashboardLayout({
   if (!userId) {
     redirect("/iniciar-sesion");
   }
+  // Entra la dueña o una cuenta de solo lectura con esta tienda permitida.
+  // La escritura sigue cerrada en cada ruta: aquí solo se decide si se pinta
+  // el panel. En desarrollo se mantiene el atajo de siempre, porque los ids
+  // de Clerk de desarrollo no coinciden con los de la tienda real.
+  const access = await getStoreAccess(params.storeId);
+  const isDevelopment = process.env.NODE_ENV === "development";
+  if (!access && !isDevelopment) {
+    redirect("/");
+  }
   const store = await prismadb.store.findFirst({
-    where: {
-      id: params.storeId,
-      ...(process.env.NODE_ENV === "development" ? {} : { userId }),
-    },
+    where: { id: params.storeId },
   });
   if (!store) {
     redirect("/");
@@ -32,7 +39,10 @@ export default async function DashboardLayout({
 
   const [stores, pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue] =
     await Promise.all([
-    prismadb.store.findMany({ where: { userId } }),
+    // El selector de tiendas de una cuenta de solo lectura muestra solo esta.
+    access?.role === "viewer"
+      ? Promise.resolve([store])
+      : prismadb.store.findMany({ where: { userId } }),
     prismadb.order
       .count({ where: { storeId: params.storeId, status: "PENDING" } })
       .catch(() => 0),

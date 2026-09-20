@@ -1,10 +1,10 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { getProductDeleteCheck } from "@/lib/product-deletion";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +14,8 @@ export async function GET(
   { params }: { params: { storeId: string; productId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const check = await getProductDeleteCheck(prismadb, {
       storeId: params.storeId,

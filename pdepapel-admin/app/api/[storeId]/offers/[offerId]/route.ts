@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStorePromotionsCache } from "@/lib/cache";
 import { assertFixedAmountBelowPrices, assertOfferTargetsInStore, offerTargetsData, parseOfferInput } from "@/lib/offers";
@@ -13,9 +14,7 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.offerId) throw ErrorFactory.InvalidRequest("ID de oferta requerido");
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const offer = await prismadb.offer.findFirst({
       where: { id: params.offerId, storeId: params.storeId },

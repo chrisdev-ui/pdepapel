@@ -1,19 +1,17 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createMercadoLibreContentReview } from "@/lib/mercadolibre/content-assistant";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
 
 export async function GET(
   _request: Request,
   { params }: { params: { storeId: string; listingId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
     const listing = await prismadb.marketplaceListing.findFirst({
       where: { id: params.listingId, connection: { storeId: params.storeId } },
       select: {

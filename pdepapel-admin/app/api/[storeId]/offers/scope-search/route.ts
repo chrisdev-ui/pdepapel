@@ -1,8 +1,8 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { searchScopeProducts } from "@/lib/offer-scope";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
-import { auth } from "@clerk/nextjs/server";
+import { CACHE_HEADERS } from "@/lib/utils";
 import { NextResponse } from "next/server";
 
 /** Selector de alcance de una oferta: productos buscados de a 20, con las ofertas que ya los alcanzan. */
@@ -11,10 +11,8 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
     const { searchParams } = new URL(req.url);
     const result = await searchScopeProducts(prismadb, params.storeId, {
       query: searchParams.get("q") ?? "",

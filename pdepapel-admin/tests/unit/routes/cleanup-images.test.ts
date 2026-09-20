@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   verifyStoreOwner: vi.fn(),
+  requireStoreRead: vi.fn(),
   deleteResources: vi.fn(),
   resources: vi.fn(),
   imageUrls: [] as string[],
@@ -10,6 +11,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({ requireStoreRead: mocks.requireStoreRead }));
 vi.mock("@/lib/cloudinary", () => ({
   default: {
     v2: {
@@ -73,6 +76,7 @@ describe("cleanup-images route", () => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: "owner" });
     mocks.verifyStoreOwner.mockResolvedValue(undefined);
+    mocks.requireStoreRead.mockResolvedValue({ userId: "owner-id", role: "owner" });
     mocks.imageUrls = [`${CLOUD}/foto-producto.png`];
     mocks.orderItemUrls = [`${CLOUD}/foto-pedido.png`];
     mocks.resources.mockResolvedValue({

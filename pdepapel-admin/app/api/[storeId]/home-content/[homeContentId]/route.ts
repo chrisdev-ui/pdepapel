@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -36,9 +37,16 @@ async function deleteCloudinaryImage(imageUrl: string | null, context: string) {
   }
 }
 
+/** Lectura: la dueña o una cuenta de solo lectura con esta tienda permitida. */
+async function requireRead(params: Params["params"]) {
+  if (!params.storeId) throw ErrorFactory.MissingStoreId();
+  if (!params.homeContentId) throw ErrorFactory.InvalidRequest("Se requiere el ID del contenido");
+  await requireStoreRead(params.storeId);
+}
+
 export async function GET(_req: Request, { params }: Params) {
   try {
-    await requireOwner(params);
+    await requireRead(params);
     const entry = await prismadb.homeContent.findFirst({
       where: { id: params.homeContentId, storeId: params.storeId },
       select: HOME_CONTENT_ADMIN_SELECT,

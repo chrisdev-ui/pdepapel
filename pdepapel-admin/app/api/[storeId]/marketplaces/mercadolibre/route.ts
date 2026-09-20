@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreRead } from "@/lib/store-access";
 import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -6,18 +6,15 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getMercadoLibreConfigurationStatus } from "@/lib/mercadolibre/config";
 import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
 
 export async function GET(
   _request: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
     const connection = await prismadb.marketplaceConnection.findUnique({
       where: {
         storeId_provider: {

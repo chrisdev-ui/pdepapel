@@ -1,3 +1,4 @@
+import { getStoreAccess } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { checkIfStoreOwner } from "@/lib/utils";
@@ -20,7 +21,8 @@ export async function GET(
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+    // Lectura: la dueña o una cuenta de solo lectura con esta tienda permitida.
+    if (!(await getStoreAccess(params.storeId))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   verifyStoreOwner: vi.fn(),
+  requireStoreRead: vi.fn(),
   couponFindFirst: vi.fn(),
   couponFindMany: vi.fn(),
   couponCount: vi.fn(),
@@ -16,6 +17,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+// Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
+vi.mock("@/lib/store-access", () => ({ requireStoreRead: mocks.requireStoreRead }));
 vi.mock("@/lib/utils", () => ({
   verifyStoreOwner: mocks.verifyStoreOwner,
   currencyFormatter: (value: number) => `$ ${value}`,
@@ -58,6 +61,7 @@ describe("coupon routes", () => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: "owner" });
     mocks.verifyStoreOwner.mockResolvedValue(undefined);
+    mocks.requireStoreRead.mockResolvedValue({ userId: "owner-id", role: "owner" });
     mocks.orderCount.mockResolvedValue(0);
     mocks.orderFindMany.mockResolvedValue([]);
   });

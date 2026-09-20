@@ -28,6 +28,7 @@ vi.mock("@/lib/prismadb", () => ({
 
 import {
   getStoreAccess,
+  getViewerStoreIds,
   parsePanelMetadata,
   requireAdminSession,
   requireStoreOwner,
@@ -198,6 +199,25 @@ describe("getStoreAccess", () => {
     await expect(getStoreAccess(STORE)).resolves.toBeNull();
     session.userId = null;
     await expect(getStoreAccess(STORE)).resolves.toBeNull();
+  });
+});
+
+describe("getViewerStoreIds", () => {
+  it("lista las tiendas permitidas de una cuenta de solo lectura y nada más", async () => {
+    signedInAs(VIEWER, { role: "viewer", allowedStoreIds: [STORE, OTHER_STORE] });
+    await expect(getViewerStoreIds()).resolves.toEqual([STORE, OTHER_STORE]);
+
+    signedInAs(OWNER);
+    await expect(getViewerStoreIds()).resolves.toEqual([]);
+
+    signedInAs(VIEWER, { role: "owner", allowedStoreIds: [STORE] });
+    await expect(getViewerStoreIds()).resolves.toEqual([]);
+
+    signedInAs(VIEWER, { role: "viewer", allowedStoreIds: "store-1" });
+    await expect(getViewerStoreIds()).resolves.toEqual([]);
+
+    session.userId = null;
+    await expect(getViewerStoreIds()).resolves.toEqual([]);
   });
 });
 

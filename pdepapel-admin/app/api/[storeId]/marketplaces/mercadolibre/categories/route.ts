@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreRead } from "@/lib/store-access";
 import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -15,16 +15,14 @@ import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validat
 import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import { getMercadoLibreJson } from "@/lib/mercadolibre/client";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
 
 export async function GET(
   request: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    await requireStoreRead(params.storeId);
 
     const query = new URL(request.url).searchParams.get("query")?.trim() ?? "";
     if (query.length < 3 || query.length > 120) {
