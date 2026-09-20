@@ -7,8 +7,10 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
 
 const clerk = vi.hoisted(() => ({ down: false }));
 
+const session = vi.hoisted(() => ({ userId: null as string | null }));
+
 vi.mock("@clerk/nextjs/server", () => ({
-  auth: () => ({ userId: null }),
+  auth: async () => ({ userId: session.userId, sessionClaims: {} }),
   clerkClient: async () => {
     if (clerk.down) throw new Error("Clerk no responde");
     return {
@@ -27,6 +29,17 @@ import {
 } from "@/app/(dashboard)/[storeId]/(routes)/movimientos-inventario/producto/[productId]/server/get-product-kardex";
 
 const daysAgo = (now: Date, days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+/**
+ * Crea la tienda y deja la sesión como su dueña: desde el lote de seguridad,
+ * las cargas de Movimientos exigen serlo (el kardex lleva costo, precio y el
+ * contacto de la clienta del pedido).
+ */
+const signedInFixture = async () => {
+  const created = await createInventoryFixture();
+  session.userId = created.store.userId;
+  return created;
+};
+
 
 interface SeedRow {
   createdAt: Date;
@@ -110,11 +123,13 @@ describe("product kardex loader with MySQL", () => {
     });
   };
 
-  it("returns null when the product belongs to another store", async () => {
-    fixture = await createInventoryFixture();
+  it("rejects another store and returns null for an unknown product", async () => {
+    fixture = await signedInFixture();
     const otherStore = await testPrisma.store.create({ data: { name: `Otra tienda ${randomUUID()}`, userId: `other-${randomUUID()}` } });
     try {
-      expect(await getProductKardex(otherStore.id, fixture.component.id, { now })).toBeNull();
+      // La tienda ajena ni siquiera se consulta: el guardia responde 403.
+      await expect(getProductKardex(otherStore.id, fixture.component.id, { now })).rejects.toMatchObject({ statusCode: 403 });
+      // Un producto que no existe en la tienda propia sigue siendo un 404 de la página.
       expect(await getProductKardex(fixture.store.id, "no-existe", { now })).toBeNull();
     } finally {
       await testPrisma.store.delete({ where: { id: otherStore.id } });
@@ -122,7 +137,7 @@ describe("product kardex loader with MySQL", () => {
   });
 
   it("bounds the default history to 90 days, reports the opening balance and lifts the window with all", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     await seed([
       { createdAt: daysAgo(now, 400), previousStock: 0, newStock: 10 },
       { createdAt: daysAgo(now, 200), previousStock: 10, newStock: 12 },
@@ -151,7 +166,7 @@ describe("product kardex loader with MySQL", () => {
   });
 
   it("filters by type without changing the metrics", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     await seed([
       { createdAt: daysAgo(now, 3), type: InventoryMovementType.DAMAGE, quantity: -1, previousStock: 7, newStock: 6 },
       { createdAt: daysAgo(now, 2), type: InventoryMovementType.ORDER_PLACED, quantity: -2, previousStock: 6, newStock: 4, createdBy: null },
@@ -170,7 +185,7 @@ describe("product kardex loader with MySQL", () => {
   });
 
   it("flags when Product.stock drifted from the latest movement balance", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     // El componente del fixture tiene stock 6.
     await seed([{ createdAt: daysAgo(now, 1), previousStock: 5, newStock: 6 }]);
     const balanced = await getProductKardex(fixture.store.id, fixture.component.id, { now });
@@ -185,7 +200,7 @@ describe("product kardex loader with MySQL", () => {
   });
 
   it("derives sales, weekly rate and cover days from paid orders, kits included, like Inventario", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     // El libro dice otra cosa a propósito: las ventas salen de los pedidos pagados.
     await seed([
       { createdAt: daysAgo(now, 5), type: InventoryMovementType.ORDER_PLACED, quantity: -9, previousStock: 15, newStock: 6 },
@@ -205,7 +220,7 @@ describe("product kardex loader with MySQL", () => {
   });
 
   it("keeps rendering without names when Clerk is down", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     await seed([{ createdAt: daysAgo(now, 1), previousStock: 5, newStock: 6, createdBy: "USER_user_camila" }]);
     clerk.down = true;
     try {
@@ -218,7 +233,7 @@ describe("product kardex loader with MySQL", () => {
   });
 
   it("stops at the window cap, says so, and still reports what lies beyond", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     const rows = Array.from({ length: KARDEX_WINDOW_TAKE + 2 }, (_, index) => ({
       createdAt: new Date(daysAgo(now, 30).getTime() + index * 60_000),
       previousStock: index,
@@ -235,7 +250,7 @@ describe("product kardex loader with MySQL", () => {
   });
 
   it("resolves order, restock and fair references scoped to the store and names Clerk users", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     const supplier = await testPrisma.supplier.create({ data: { storeId: fixture.store.id, name: `Henko ${randomUUID().slice(0, 6)}` } });
     supplierId = supplier.id;
     await testPrisma.product.update({ where: { id: fixture.component.id }, data: { supplierId: supplier.id } });

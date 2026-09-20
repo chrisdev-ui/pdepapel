@@ -106,6 +106,8 @@ Trece rutas de la lista original ya eran **públicas** (las consume la tienda en
 
 **Pantallas reservadas**, escondidas del menú: Punto de venta, Mercado Libre, Envíos, Clientes, Preventas, Conversaciones, Proveedores, Inventario, Movimientos, Aprovisionamiento, Boletín, Rendimiento, Tributarios y Ajustes. Si alguien entra por la URL, `app/(dashboard)/[storeId]/error.tsx` explica que la pantalla es solo para la dueña, dentro del panel y sin parecer una falla.
 
+> **Esconder del menú no es cerrar la pantalla.** La bandera `ownerOnly` solo quita el enlace: quien escriba la URL llega igual, y lo que decide es el guardia del cargador. La auditoría de Movimientos (2026-09-19) encontró que ese módulo no tenía ninguno, así que una cuenta de solo lectura podía leer el kardex entero con el costo de compra, el precio de venta y el nombre y el correo de la clienta de cada pedido. Corregido: `getInventoryMovements`, `getProductKardex`, las dos páginas y `GET /inventory/reconciliation-template` exigen `requireStoreOwner`, y `tests/unit/security/movimientos-owner-only.test.ts` falla si alguien agrega otra carga al módulo sin el guardia. Al revisar cualquier otra pantalla reservada, comprobar el cargador, no el menú.
+
 **Qué se recorta** (`lib/viewer-payloads.ts`, una sola lista para todas las lecturas):
 
 | Dato | Se quita |

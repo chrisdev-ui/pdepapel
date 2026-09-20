@@ -3,14 +3,27 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
+const session = vi.hoisted(() => ({ userId: null as string | null }));
+
 vi.mock("@clerk/nextjs/server", () => ({
-  auth: () => ({ userId: null }),
+  auth: async () => ({ userId: session.userId, sessionClaims: {} }),
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
 
 import { getInventoryMovements, MOVEMENTS_ALL_TAKE, MOVEMENTS_WINDOW_DAYS, MOVEMENTS_WINDOW_TAKE } from "@/app/(dashboard)/[storeId]/(routes)/movimientos-inventario/server/get-movements";
 
 const daysAgo = (now: Date, days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+/**
+ * Crea la tienda y deja la sesión como su dueña: desde el lote de seguridad,
+ * las cargas de Movimientos exigen serlo (el kardex lleva costo, precio y el
+ * contacto de la clienta del pedido).
+ */
+const signedInFixture = async () => {
+  const created = await createInventoryFixture();
+  session.userId = created.store.userId;
+  return created;
+};
+
 
 /**
  * El kardex de producción supera los 3.000 movimientos: la lista por defecto
@@ -55,7 +68,7 @@ describe("inventory movements loader with MySQL", () => {
   };
 
   it("returns every movement of a reference even when it is older than the default window", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     const referenceId = `restock-${fixture.store.id}`;
     await seed([
       { createdAt: daysAgo(now, 400), referenceId },
@@ -76,7 +89,7 @@ describe("inventory movements loader with MySQL", () => {
   });
 
   it("bounds the default list to the last 90 days and flags when the cap trimmed it", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     await seed([
       { createdAt: daysAgo(now, MOVEMENTS_WINDOW_DAYS + 5) },
       { createdAt: daysAgo(now, MOVEMENTS_WINDOW_DAYS - 1) },
@@ -100,7 +113,7 @@ describe("inventory movements loader with MySQL", () => {
   });
 
   it("lifts the window for the full history but keeps the hard cap", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     await seed([
       { createdAt: daysAgo(now, 500) },
       { createdAt: daysAgo(now, 120) },
@@ -120,7 +133,7 @@ describe("inventory movements loader with MySQL", () => {
   });
 
   it("filters by product and stays scoped to the store", async () => {
-    fixture = await createInventoryFixture();
+    fixture = await signedInFixture();
     await seed([{ createdAt: daysAgo(now, 1) }, { createdAt: daysAgo(now, 2) }]);
     await testPrisma.inventoryMovement.create({
       data: { storeId: fixture.store.id, productId: fixture.kit.id, type: "MANUAL_ADJUSTMENT", quantity: 1, previousStock: 0, newStock: 1, createdAt: daysAgo(now, 1), createdBy: "SYSTEM" },
@@ -130,7 +143,8 @@ describe("inventory movements loader with MySQL", () => {
     expect(byProduct.movements).toHaveLength(2);
     expect(byProduct.movements.every((movement) => movement.productId === fixture!.component.id)).toBe(true);
 
-    const otherStore = await getInventoryMovements("otra-tienda", { now });
-    expect(otherStore.movements).toHaveLength(0);
+    // Desde el lote de seguridad, pedir la tienda de otra persona no devuelve
+    // una lista vacía: responde 403 antes de consultar.
+    await expect(getInventoryMovements("otra-tienda", { now })).rejects.toMatchObject({ statusCode: 403 });
   });
 });

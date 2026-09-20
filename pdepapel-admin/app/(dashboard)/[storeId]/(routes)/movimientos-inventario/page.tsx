@@ -4,6 +4,7 @@ import { getInventoryMovements } from "./server/get-movements";
 import { InventoryIssuesPanel } from "@/components/inventory/inventory-issues-panel";
 import { OPEN_INVENTORY_ISSUE_SELECT } from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 
 export const revalidate = 0;
 export const maxDuration = 60;
@@ -23,6 +24,9 @@ interface InventoryMovementsPageProps {
 }
 
 export default async function InventoryMovementsPage({ params, searchParams }: InventoryMovementsPageProps) {
+  // La página también consulta por su cuenta, así que comprueba antes del
+  // `Promise.all` en vez de esperar a que el cargador lance dentro de él.
+  await requireStoreOwner(params.storeId);
   const referenceId = searchParams?.referencia?.trim() || null;
   const productId = searchParams?.producto?.trim() || null;
   const fairParam = searchParams?.feria;

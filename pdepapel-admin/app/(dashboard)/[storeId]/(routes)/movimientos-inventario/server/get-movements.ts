@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 import { clerkClient } from "@clerk/nextjs/server";
 import { subDays } from "date-fns";
 
@@ -67,6 +68,9 @@ async function resolveClerkUsers(userIds: Iterable<string>): Promise<Map<string,
 }
 
 export const getInventoryMovements = async (storeId: string, options: GetInventoryMovementsOptions = {}) => {
+  // Solo la dueña. El kardex lleva el costo de compra, el precio de venta y,
+  // en los movimientos de un pedido, el nombre y el correo de la clienta.
+  await requireStoreOwner(storeId);
   const referenceId = options.referenceId?.trim() || null;
   const productId = options.productId?.trim() || null;
   const now = options.now ?? new Date();

@@ -14,6 +14,28 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import type { ReconciliationPreviewRow } from "@/lib/fair-reconciliation-import";
 
+/**
+ * Lo que de verdad va a pasar al confirmar. Sin esto `AlertModal` cae en su
+ * copia por defecto («¿Eliminar de forma definitiva?» y un botón rojo «Sí,
+ * eliminar»), que describe un borrado y no un ajuste de inventario.
+ */
+export function reconciliationConfirmCopy(count: number): {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  destructive: boolean;
+} {
+  const one = count === 1;
+  return {
+    title: one ? "¿Aplicar 1 ajuste de inventario?" : `¿Aplicar ${count} ajustes de inventario?`,
+    description: one
+      ? "Se corrige el stock de un producto y queda un movimiento en el kardex a tu nombre. También se actualiza lo disponible en la tienda en línea y en Mercado Libre. No se puede deshacer: para corregirlo habría que registrar otro movimiento."
+      : `Se corrige el stock de ${count} productos y queda un movimiento en el kardex por cada uno, a tu nombre. También se actualiza lo disponible en la tienda en línea y en Mercado Libre. No se puede deshacer: para corregirlo habría que registrar otro movimiento.`,
+    confirmLabel: one ? "Sí, aplicar el ajuste" : `Sí, aplicar los ${count} ajustes`,
+    destructive: false,
+  };
+}
+
 type PreviewResponse = {
   rows: ReconciliationPreviewRow[];
   totalRows: number;
@@ -134,6 +156,7 @@ export const ReconciliationImportModal: React.FC<
 
   const errorRows = preview?.rows.filter((row) => row.status === "error") ?? [];
   const readyRows = preview?.rows.filter((row) => row.status === "ready") ?? [];
+  const confirmCopy = reconciliationConfirmCopy(readyRows.length);
 
   return (
     <>
@@ -142,6 +165,7 @@ export const ReconciliationImportModal: React.FC<
         onClose={() => setConfirmOpen(false)}
         onConfirm={applyImport}
         loading={isApplying}
+        {...confirmCopy}
       />
       <Modal
         title="Conciliar inventario de una feria anterior"

@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Models } from "@/constants";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
@@ -62,6 +63,7 @@ export const InventoryMovementClient: React.FC<InventoryMovementClientProps> = (
 }) => {
   const params = useParams();
   const router = useRouter();
+  const canWrite = useCanWrite();
   const [open, setOpen] = useState(false);
   const [reconciliationOpen, setReconciliationOpen] = useState(openImporter || fairContext !== null);
 
@@ -99,16 +101,18 @@ export const InventoryMovementClient: React.FC<InventoryMovementClientProps> = (
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <Heading title={`Movimientos de Inventario (${numberFormatter.format(data.length)})`} description="Historial de cambios en el stock." />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setReconciliationOpen(true)}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Conciliar feria anterior
-          </Button>
-          <Button onClick={() => setOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Ajustar Inventario
-          </Button>
-        </div>
+        {canWrite && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setReconciliationOpen(true)}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Conciliar feria anterior
+            </Button>
+            <Button onClick={() => setOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Ajustar Inventario
+            </Button>
+          </div>
+        )}
       </div>
       <Separator />
       {reference && (

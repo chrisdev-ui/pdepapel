@@ -99,7 +99,6 @@ const READ_ROUTES: RouteCase[] = [
   { path: "fair-events", load: () => import("@/app/api/[storeId]/fair-events/route"), params: { storeId: STORE } },
   { path: "home-content/[homeContentId]", load: () => import("@/app/api/[storeId]/home-content/[homeContentId]/route"), params: { storeId: STORE, homeContentId: "home-1" } },
   { path: "home-content", load: () => import("@/app/api/[storeId]/home-content/route"), params: { storeId: STORE } },
-  { path: "inventory/reconciliation-template", load: () => import("@/app/api/[storeId]/inventory/reconciliation-template/route"), params: { storeId: STORE } },
   { path: "marketplaces/mercadolibre/advertising/overview", load: () => import("@/app/api/[storeId]/marketplaces/mercadolibre/advertising/overview/route"), params: { storeId: STORE } },
   { path: "marketplaces/mercadolibre/categories/[categoryId]/attributes", load: () => import("@/app/api/[storeId]/marketplaces/mercadolibre/categories/[categoryId]/attributes/route"), params: { storeId: STORE, categoryId: "MLC1" } },
   { path: "marketplaces/mercadolibre/categories", load: () => import("@/app/api/[storeId]/marketplaces/mercadolibre/categories/route"), params: { storeId: STORE } },
@@ -121,6 +120,7 @@ const READ_ROUTES: RouteCase[] = [
 
 const HOLD_ROUTES: (RouteCase & { reason: string })[] = [
   { path: "customers/search", load: () => import("@/app/api/[storeId]/customers/search/route"), params: { storeId: STORE }, reason: "datos personales de clientas" },
+  { path: "inventory/reconciliation-template", load: () => import("@/app/api/[storeId]/inventory/reconciliation-template/route"), params: { storeId: STORE }, reason: "Movimientos es un módulo solo de la dueña: la plantilla lleva el stock esperado de cada producto" },
   { path: "suppliers", load: () => import("@/app/api/[storeId]/suppliers/route"), params: { storeId: STORE }, reason: "proveedores" },
   { path: "settings", load: () => import("@/app/api/[storeId]/settings/route"), params: { storeId: STORE }, reason: "cuentas bancarias de la tienda" },
   { path: "restock-orders", load: () => import("@/app/api/[storeId]/restock-orders/route"), params: { storeId: STORE }, reason: "costos de compra" },

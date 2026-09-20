@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import prismadb from "@/lib/prismadb";
+import { getStoreAccess } from "@/lib/store-access";
 
 import { ProductKardexView } from "./components/product-kardex";
 import { getProductKardex } from "./server/get-product-kardex";
@@ -28,8 +29,14 @@ function parseType(value: string | undefined): InventoryMovementType | null {
 }
 
 export async function generateMetadata({ params }: ProductKardexPageProps): Promise<Metadata> {
-  // Solo el nombre: el kardex completo se carga una vez, en la página.
-  const product = await prismadb.product.findFirst({ where: { id: params.productId, storeId: params.storeId }, select: { name: true } });
+  // Solo el nombre: el kardex completo se carga una vez, en la página. El
+  // módulo es solo de la dueña, así que quien no lo sea ni siquiera lo consulta
+  // (la página responde 403 por su cuenta; aquí solo se evita el título).
+  const access = await getStoreAccess(params.storeId);
+  const product =
+    access?.role === "owner"
+      ? await prismadb.product.findFirst({ where: { id: params.productId, storeId: params.storeId }, select: { name: true } })
+      : null;
   return {
     title: product ? `Kardex · ${product.name} | PdePapel Admin` : "Kardex | PdePapel Admin",
     description: "Historial de movimientos con saldo de un producto.",

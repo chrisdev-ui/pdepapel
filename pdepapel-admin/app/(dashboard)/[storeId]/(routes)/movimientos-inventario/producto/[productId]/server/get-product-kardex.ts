@@ -11,6 +11,7 @@ import {
   type KardexMetrics,
 } from "@/lib/kardex";
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
 import { getUnitsOnOrderByProduct, getUnitsSoldForProduct } from "@/lib/replenishment-db";
 
@@ -106,6 +107,8 @@ const joinParts = (parts: (string | null | undefined)[]) => parts.map((part) => 
  * `Product.stock` y el historial con saldo. `null` si el producto no es de la tienda.
  */
 export async function getProductKardex(storeId: string, productId: string, options: GetProductKardexOptions = {}): Promise<ProductKardex | null> {
+  // Solo la dueña: el kardex muestra costo de compra y margen por movimiento.
+  await requireStoreOwner(storeId);
   const now = options.now ?? new Date();
   const windowDays = options.all ? null : KARDEX_WINDOW_DAYS;
   const take = options.all ? KARDEX_ALL_TAKE : KARDEX_WINDOW_TAKE;

@@ -21,6 +21,7 @@ import {
   MOVEMENT_TONES,
 } from "@/lib/kardex";
 import { describeRate } from "@/lib/replenishment";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { cn, currencyFormatter } from "@/lib/utils";
 
 import { AdjustInventoryModal } from "../../../components/adjust-inventory-modal";
@@ -82,6 +83,7 @@ interface ProductKardexProps {
 
 export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: ProductKardexProps) {
   const router = useRouter();
+  const canWrite = useCanWrite();
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustDefaults, setAdjustDefaults] = useState<{ action: "add" | "subtract"; quantity: number; reason: string } | null>(null);
   const { product, threshold, metrics, rows } = kardex;
@@ -157,18 +159,20 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => openAdjust(null)} disabled={product.isKit} title={product.isKit ? "El stock de un kit se calcula desde sus componentes" : undefined}>
-            <History className="h-4 w-4" aria-hidden="true" />Ajustar inventario
-          </Button>
+          {canWrite && (
+            <Button variant="outline" onClick={() => openAdjust(null)} disabled={product.isKit} title={product.isKit ? "El stock de un kit se calcula desde sus componentes" : undefined}>
+              <History className="h-4 w-4" aria-hidden="true" />Ajustar inventario
+            </Button>
+          )}
           {product.isKit ? (
             <Button asChild variant="outline" title="Un kit no se compra: se reponen sus componentes">
               <Link href={`/${storeId}/productos/${product.id}`}><Package className="h-4 w-4" aria-hidden="true" />Ver componentes</Link>
             </Button>
-          ) : (
+          ) : canWrite ? (
             <Button asChild>
               <Link href={restockHref}><Package className="h-4 w-4" aria-hidden="true" />Reponer</Link>
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -202,7 +206,7 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
           tint={metrics.balanced ? "bg-tint-mint" : "bg-tint-pink"}
           tone={metrics.balanced ? "default" : "care"}
           action={
-            !metrics.balanced && drift !== 0 && !product.isKit ? (
+            canWrite && !metrics.balanced && drift !== 0 && !product.isKit ? (
               <Button
                 type="button"
                 variant="outline"

@@ -1,4 +1,4 @@
-import { requireStoreRead } from "@/lib/store-access";
+import { requireStoreOwner } from "@/lib/store-access";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -14,7 +14,7 @@ export async function GET(
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    await requireStoreRead(params.storeId);
+    await requireStoreOwner(params.storeId);
 
     const products = await prismadb.product.findMany({
       where: {
