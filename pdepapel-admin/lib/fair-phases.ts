@@ -57,6 +57,21 @@ export function isFairView(value: string | null | undefined): value is FairView 
   return FAIR_VIEWS.some((view) => view.id === value);
 }
 
+/**
+ * Los estados de cada vista, para filtrar en SQL en vez de traer todas las
+ * ferias y descartarlas en el navegador. `todas` no acota nada.
+ */
+export function fairViewStatuses(view: FairView): FairEventStatus[] | null {
+  switch (view) {
+    case "activas":
+      return ["DRAFT", "OPEN", "RECONCILING"];
+    case "cerradas":
+      return ["CLOSED", "CANCELLED"];
+    default:
+      return null;
+  }
+}
+
 export function fairMatchesView(status: FairEventStatus, view: FairView): boolean {
   switch (view) {
     case "activas":
@@ -132,7 +147,17 @@ export interface ReconciliationCount {
   lostQuantity: number;
 }
 
-export type ReconciliationRowStatus = "balanced" | "missing" | "over" | "sold-out";
+/**
+ * `untouched` es «todavía no la he contado», distinto de «conté de menos»:
+ * al abrir la conciliación todas las filas están así, y la diferencia es la
+ * que evita que un formulario sin tocar parezca una cuenta hecha.
+ */
+export type ReconciliationRowStatus =
+  | "balanced"
+  | "untouched"
+  | "missing"
+  | "over"
+  | "sold-out";
 
 export interface ReconciliationRowState {
   /** Unidades que la feria espera ver contadas (reservado − vendido). */
@@ -159,6 +184,9 @@ export function getReconciliationRowState(
   if (delta === 0) {
     return { expected, entered, delta, status: "balanced", label: "Cuadra", tone: "mint" };
   }
+  if (entered === 0) {
+    return { expected, entered, delta, status: "untouched", label: "Sin contar", tone: "cream" };
+  }
   if (delta > 0) {
     return { expected, entered, delta, status: "missing", label: `Faltan ${delta}`, tone: "cream" };
   }
@@ -171,6 +199,10 @@ export interface ReconciliationSummary {
   lost: number;
   /** Filas que aún no cuadran. */
   unbalanced: number;
+  /** Filas que nadie ha tocado todavía. */
+  untouched: number;
+  /** Unidades que faltan por repartir entre las tres columnas. */
+  pending: number;
   balanced: boolean;
 }
 
@@ -183,13 +215,42 @@ export function summarizeReconciliation(
   let damaged = 0;
   let lost = 0;
   let unbalanced = 0;
+  let untouched = 0;
+  let pending = 0;
   for (const item of items) {
     const count = counts[item.productId];
     const state = getReconciliationRowState(item, count);
-    if (state.status === "missing" || state.status === "over") unbalanced += 1;
+    if (state.status !== "balanced" && state.status !== "sold-out") unbalanced += 1;
+    if (state.status === "untouched") untouched += 1;
+    if (state.delta > 0) pending += state.delta;
     returned += count?.returnedQuantity ?? 0;
     damaged += count?.damagedQuantity ?? 0;
     lost += count?.lostQuantity ?? 0;
   }
-  return { returned, damaged, lost, unbalanced, balanced: unbalanced === 0 };
+  return { returned, damaged, lost, unbalanced, untouched, pending, balanced: unbalanced === 0 };
 }
+
+/**
+ * Unidades que todavía están en la mesa de la feria: lo reservado menos lo
+ * vendido, lo empacado en cápsulas y lo ya conciliado.
+ *
+ * Vive aquí y no en `lib/fair-events.ts` porque el navegador también la
+ * necesita y ese módulo arrastra Prisma. Antes estaba escrita dos veces,
+ * idéntica, en el servidor y en el cliente.
+ */
+export interface FairStockCounts {
+  allocatedQuantity: number;
+  soldQuantity: number;
+  packedQuantity: number;
+  returnedQuantity: number;
+  damagedQuantity: number;
+  lostQuantity: number;
+}
+
+export const getFairStockAvailability = (item: FairStockCounts): number =>
+  item.allocatedQuantity -
+  item.soldQuantity -
+  item.packedQuantity -
+  item.returnedQuantity -
+  item.damagedQuantity -
+  item.lostQuantity;

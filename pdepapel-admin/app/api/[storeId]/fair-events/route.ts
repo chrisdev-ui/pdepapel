@@ -1,11 +1,9 @@
-import { requireStoreRead } from "@/lib/store-access";
-import { auth } from "@clerk/nextjs/server";
+import { requireStoreOwner, requireStoreRead } from "@/lib/store-access";
 import { FairEventStatus, OrderStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,9 +70,7 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const userId = await requireStoreOwner(params.storeId);
 
     const body = await req.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";

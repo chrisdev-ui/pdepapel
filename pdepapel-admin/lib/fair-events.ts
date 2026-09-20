@@ -55,20 +55,8 @@ type FairSaleLine = {
   cost: number;
 };
 
-export const getFairStockAvailability = (item: {
-  allocatedQuantity: number;
-  soldQuantity: number;
-  packedQuantity: number;
-  returnedQuantity: number;
-  damagedQuantity: number;
-  lostQuantity: number;
-}) =>
-  item.allocatedQuantity -
-  item.soldQuantity -
-  item.packedQuantity -
-  item.returnedQuantity -
-  item.damagedQuantity -
-  item.lostQuantity;
+export { getFairStockAvailability } from "@/lib/fair-phases";
+import { getFairStockAvailability } from "@/lib/fair-phases";
 
 export const getCapsuleMargin = (salePrice: number, productCost: number) => {
   if (salePrice <= 0) return -Infinity;

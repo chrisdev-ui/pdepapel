@@ -34,10 +34,10 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 
 1. Pulsa **Pasar a conciliación**. La feria queda en **Conciliando**: el panel de venta se bloquea y aparece la tabla de conteo. Si todavía falta vender, **Reabrir ventas** la devuelve a **Abierta** sin perder nada.
 2. Cuenta físicamente cada producto no vendido.
-3. En **Conciliación**, reparte para cada producto las unidades no vendidas entre **Devuelto**, **Dañado** y **Perdido**. Cada fila muestra «Cuadra», «Faltan N» o «Sobran N»; las cápsulas que sigan empacadas se cuentan por el producto que contienen.
-4. Debajo de la tabla ves el resumen: cuántas unidades vuelven al stock en línea, cuántas quedan como daño o pérdida y cuántas cápsulas empacadas se anularán. El botón **Cerrar la feria** se activa cuando todas las filas cuadran.
+3. En **Conciliación**, las tres columnas arrancan en cero: nada se da por contado. Reparte para cada producto las unidades no vendidas entre **Volvió bien**, **Dañado** y **No apareció**. Arriba ves cuántas unidades faltan por contar y cuánto llevas; cada fila muestra «Sin contar», «Cuadra», «Faltan N», «Sobran N» o «Todo vendido». Si la feria volvió completa y sin daños, **Todo volvió intacto** llena las tres columnas de una vez y tú solo corriges lo que no cuadre. Las cápsulas que sigan empacadas se cuentan por el producto que contienen.
+4. Debajo de la tabla ves qué va a pasar al cerrar: cuántas unidades **vuelven a bodega**, cuántas **se dan de baja** (dañadas y perdidas), cuántas siguen **sin contar** y cuántas cápsulas empacadas se anularán. El botón **Cerrar la feria** se enciende cuando todas las filas cuadran.
 5. Al pulsarlo, el diálogo repite esas cifras y pide confirmar que contaste físicamente. El cierre es definitivo: no se puede reabrir la feria, registrar más ventas ni anular las existentes.
-6. Las unidades en **Devuelto** entran al inventario de la tienda en línea como «Devolución de feria». Las unidades en daño o pérdida quedan registradas solo en la feria. Si alguna devolución no pudo entrar (por ejemplo, el producto ya no existe), la feria se cierra igual y la línea queda como incidencia en **Movimientos de inventario** para reintentarla o conciliarla a mano.
+6. Las unidades en **Volvió bien** entran al inventario de la tienda en línea como «Devolución de feria». Las unidades en daño o pérdida quedan registradas solo en la feria. Si alguna devolución no pudo entrar (por ejemplo, el producto ya no existe), la feria se cierra igual y la línea queda como incidencia en **Movimientos de inventario** para reintentarla o conciliarla a mano.
 
 ## Qué no hace falta configurar
 

@@ -356,7 +356,8 @@ describe("solo los archivos declarados sirven una entidad con depurador", () => 
   const all = loaders();
   const PARITY: Record<string, string[]> = {
     fairEvent: [
-      "ferias/page.tsx",
+      // La lista consulta desde su carga; la página ya no toca la base.
+      "ferias/server/get-fair-events.ts",
       "ferias/[fairEventId]/page.tsx",
       // El filtro «feria» del kardex; el módulo entero exige la dueña.
       "movimientos-inventario/page.tsx",

@@ -28,7 +28,12 @@ import {
   type QrPrintLabel,
 } from "@/components/labels/qr-label-print-sheet";
 import { AlertModal } from "@/components/modals/alert-modal";
+import { MetricCard } from "@/components/ui/metric-card";
 import { SellPanel, type SellSource } from "@/components/sales/sell-panel";
+
+import { useFairSellSource } from "./use-fair-sell-source";
+import { PhaseClosed } from "./phase-closed";
+import { PhaseReconcile } from "./phase-reconcile";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
 import { ProductScanButton } from "@/components/ui/product-scan-button";
@@ -58,74 +63,23 @@ import {
   getReconciliationRowState,
   summarizeFairInventory,
   summarizeReconciliation,
+  getFairStockAvailability,
   type ReconciliationCount,
 } from "@/lib/fair-phases";
 import { DEFAULT_LABEL_SHEET, DEFAULT_SHEET_OPTIONS, getLabelSheetTemplate } from "@/lib/label-printing";
 import { capsuleLine, productLine, toSaleItems } from "@/lib/sell-cart";
 
 import { FairPhaseHeader } from "./fair-phase-header";
+import type {
+  FairCapsule,
+  FairEventDetail,
+  FairInventoryItem,
+  FairOrder,
+  FairProduct,
+  FairStatus,
+} from "./fair-event-types";
 
-type FairStatus = "DRAFT" | "OPEN" | "RECONCILING" | "CLOSED" | "CANCELLED";
-
-type FairProduct = {
-  id: string;
-  name: string;
-  sku: string;
-  stock: number;
-  price: number;
-  acqPrice: number | null;
-  gtin: string | null;
-  images: { url: string }[];
-};
-
-type FairInventoryItem = {
-  id: string;
-  productId: string;
-  allocatedQuantity: number;
-  soldQuantity: number;
-  packedQuantity: number;
-  returnedQuantity: number;
-  damagedQuantity: number;
-  lostQuantity: number;
-  product: FairProduct;
-};
-
-type FairCapsule = {
-  id: string;
-  code: string;
-  salePrice: number;
-  /** Nulos en una cuenta de solo lectura: `scrubFairEvent` los quita. */
-  productCost: number | null;
-  minimumMarginPct: number | null;
-  status: "PACKED" | "SOLD" | "VOID";
-  product: { id: string; name: string; sku: string };
-};
-
-type FairOrder = {
-  id: string;
-  orderNumber: string;
-  status: "PAID" | "CANCELLED";
-  total: number;
-  createdAt: string;
-  payment: { method: "CASH" | "BankTransfer" } | null;
-  orderItems: { id: string; name: string; quantity: number; price: number }[];
-};
-
-export type FairEventDetail = {
-  id: string;
-  name: string;
-  location: string | null;
-  startsAt: string | null;
-  endsAt: string | null;
-  status: FairStatus;
-  notes: string | null;
-  openedAt: string | null;
-  closedAt: string | null;
-  updatedAt: string;
-  inventoryItems: FairInventoryItem[];
-  capsules: FairCapsule[];
-  orders: FairOrder[];
-};
+export type { FairEventDetail };
 
 type PendingAllocation = {
   product: Pick<FairProduct, "id" | "name" | "sku" | "stock"> & {
@@ -163,36 +117,7 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
-function getAvailableFairStock(item: FairInventoryItem) {
-  return (
-    item.allocatedQuantity -
-    item.soldQuantity -
-    item.packedQuantity -
-    item.returnedQuantity -
-    item.damagedQuantity -
-    item.lostQuantity
-  );
-}
 
-function Kpi({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: typeof Boxes;
-  value: string | number;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
-      <Icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <div className="min-w-0">
-        <p className="truncate text-2xl font-bold text-primary">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  );
-}
 
 export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   // Una cuenta de solo lectura ve la feria entera, pero no mueve nada: el
@@ -237,7 +162,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   const paidOrders = event.orders.filter((order) => order.status === "PAID");
   const salesTotal = paidOrders.reduce((total, order) => total + order.total, 0);
   const availableItems = event.inventoryItems.filter(
-    (item) => getAvailableFairStock(item) > 0,
+    (item) => getFairStockAvailability(item) > 0,
   );
   const packedCapsules = event.capsules.filter(
     (capsule) => capsule.status === "PACKED",
@@ -583,9 +508,9 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
         productLine({
           productId: selected.productId,
           name: selected.product.name,
-          detail: `SKU ${selected.product.sku} · ${getAvailableFairStock(selected)} reservadas`,
+          detail: `SKU ${selected.product.sku} · ${getFairStockAvailability(selected)} reservadas`,
           price: selected.product.price,
-          maxQuantity: getAvailableFairStock(selected),
+          maxQuantity: getFairStockAvailability(selected),
           imageUrl: selected.product.images?.[0]?.url ?? null,
         }),
       );
@@ -614,79 +539,13 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
     });
   };
 
-  const fairSellSource = useMemo<SellSource>(
-    () => ({
-      lookup: async (code) => {
-        const response = await axios.get(
-          `/api/${storeId}/fair-events/${event.id}/lookup`,
-          { params: { code } },
-        );
-        if (response.data.kind === "capsule") {
-          return capsuleLine({
-            code: String(response.data.code),
-            productId: String(response.data.product.id),
-            price: Number(response.data.salePrice),
-            detail: `Contiene: ${response.data.product.name}`,
-          });
-        }
-        const product = response.data.product as FairProduct;
-        const eventItem = eventItemsByProduct.get(product.id);
-        const available = eventItem ? getAvailableFairStock(eventItem) : 0;
-        return productLine({
-          productId: product.id,
-          name: product.name,
-          detail: `SKU ${product.sku} · ${available} reservadas`,
-          price: Number(product.price),
-          maxQuantity: available,
-          imageUrl: product.images?.[0]?.url ?? null,
-        });
-      },
-      submit: async ({ lines, paymentMethod, idempotencyKey }) => {
-        const response = await axios.post(
-          `/api/${storeId}/fair-events/${event.id}/sales`,
-          { items: toSaleItems(lines), paymentMethod, idempotencyKey },
-        );
-        return {
-          orderNumber: response.data.order.orderNumber as string,
-          duplicate: Boolean(response.data.duplicate),
-        };
-      },
-      renderPicker: (add) => (
-        <Combobox
-          id="fair-product"
-          aria-label="Producto reservado"
-          value={null}
-          onChange={(productId) => {
-            if (productId) addReservedProduct(add, productId);
-          }}
-          options={availableItems.map((item) => ({
-            value: item.productId,
-            label: item.product.name,
-            description: `${getAvailableFairStock(item)} reservadas · SKU ${item.product.sku}`,
-            keywords: [item.product.sku, item.product.gtin ?? ""].filter(
-              Boolean,
-            ),
-          }))}
-          placeholder="Buscar producto reservado"
-          searchPlaceholder="Nombre o SKU"
-          emptyText="Ningún producto reservado coincide."
-        />
-      ),
-      copy: {
-        addDescription:
-          "Escanea la etiqueta del producto o el QR de la cápsula. Solo se venden unidades reservadas para esta feria.",
-        pickerLabel: "Producto reservado",
-        scannerDescription:
-          "Apunta la cámara a la etiqueta del producto o al QR de la cápsula.",
-        confirmNote:
-          "Cada venta queda como pedido pagado. Si falta reserva, no se registra ni descuenta parcialmente.",
-        submitError:
-          "No se cobró la venta; revisa el inventario de feria e intenta de nuevo.",
-        saleNoun: "venta de feria",
-      },
-    }),
-    [addReservedProduct, availableItems, event.id, eventItemsByProduct, storeId],
-  );
+  const fairSellSource = useFairSellSource({
+    storeId,
+    fairEventId: event.id,
+    availableItems,
+    eventItemsByProduct,
+    addReservedProduct,
+  });
 
   const headerAction =
     event.status === "DRAFT" ? (
@@ -771,49 +630,65 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
       )}
 
       {event.status === "CLOSED" ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Kpi
-            icon={CircleDollarSign}
+        <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+          <MetricCard
+            label="Ventas registradas"
             value={formatCurrency(salesTotal)}
-            label={`${paidOrders.length} ventas registradas`}
+            note={`${paidOrders.length} cobros en la feria`}
+            icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-mint"
           />
-          <Kpi
-            icon={PackageCheck}
+          <MetricCard
+            label="Unidades vendidas"
             value={`${inventoryTotals.sold} / ${inventoryTotals.allocated}`}
-            label="Unidades vendidas / reservadas"
+            note="Vendidas sobre reservadas"
+            icon={<PackageCheck className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-sky"
           />
-          <Kpi
-            icon={Undo2}
+          <MetricCard
+            label="Volvieron a bodega"
             value={`+${inventoryTotals.returned}`}
-            label="Devueltas al stock en línea"
+            note="Se sumaron otra vez al stock en línea"
+            icon={<Undo2 className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-lavender"
           />
-          <Kpi
-            icon={PackageX}
-            value={inventoryTotals.damaged + inventoryTotals.lost}
-            label="Dañadas o perdidas (no vuelven al stock)"
+          <MetricCard
+            label="Dañadas o perdidas"
+            value={(inventoryTotals.damaged + inventoryTotals.lost).toLocaleString("es-CO")}
+            note="No vuelven al stock"
+            icon={<PackageX className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-pink"
           />
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Kpi
-            icon={Boxes}
-            value={inventoryTotals.allocated}
+        <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+          <MetricCard
             label="Unidades reservadas"
+            value={inventoryTotals.allocated.toLocaleString("es-CO")}
+            note="Salieron de bodega para esta feria"
+            icon={<Boxes className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-sky"
           />
-          <Kpi
-            icon={PackageCheck}
-            value={inventoryTotals.sold}
+          <MetricCard
             label="Unidades vendidas"
+            value={inventoryTotals.sold.toLocaleString("es-CO")}
+            note="Cobradas en el puesto"
+            icon={<PackageCheck className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-mint"
           />
-          <Kpi
-            icon={CircleDollarSign}
-            value={formatCurrency(salesTotal)}
+          <MetricCard
             label="Ventas registradas"
+            value={formatCurrency(salesTotal)}
+            note={`${paidOrders.length} cobros`}
+            icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-lavender"
           />
-          <Kpi
-            icon={QrCode}
-            value={event.capsules.length}
+          <MetricCard
             label="Cápsulas sorpresa"
+            value={event.capsules.length.toLocaleString("es-CO")}
+            note="Armadas para esta feria"
+            icon={<QrCode className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-cream"
           />
         </div>
       )}
@@ -941,7 +816,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                 options={availableItems.map((item) => ({
                   value: item.productId,
                   label: item.product.name,
-                  description: `${getAvailableFairStock(item)} disponibles · SKU ${item.product.sku}`,
+                  description: `${getFairStockAvailability(item)} disponibles · SKU ${item.product.sku}`,
                   keywords: [item.product.sku],
                 }))}
                 placeholder="Seleccionar producto"
@@ -1124,269 +999,34 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
           id="cierre"
           tone="care"
           title="Conciliación"
-          description="Por cada producto, reparte las unidades no vendidas entre devuelto, dañado y perdido. La suma debe cuadrar con «Por conciliar»."
-          action={
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                disabled={!canWrite}
-                onClick={assumeEverythingReturned}
-              >
-                Todo volvió intacto
-              </Button>
-              <TintBadge
-                label={
-                  reconciliationSummary.balanced
-                    ? "Todo cuadra"
-                    : `${event.inventoryItems.length - reconciliationSummary.unbalanced} de ${event.inventoryItems.length} cuadran`
-                }
-                tone={reconciliationSummary.balanced ? "mint" : "slate"}
-              />
-            </div>
-          }
+          description="Cuenta lo que volvió: reparte las unidades no vendidas entre lo que volvió bien, lo dañado y lo que no apareció."
         >
-          <div className="hidden grid-cols-[minmax(0,1fr)_80px_80px_110px_110px_110px_100px] gap-3 px-2 text-xs font-medium text-muted-foreground md:grid">
-            <span>Producto</span>
-            <span className="text-right">Reservado</span>
-            <span className="text-right">Vendido</span>
-            <span>Devuelto</span>
-            <span>Dañado</span>
-            <span>Perdido</span>
-            <span />
-          </div>
-          {event.inventoryItems.map((item) => {
-            const values = reconciliation[item.productId];
-            const state = getReconciliationRowState(item, values);
-            const soldOut = state.status === "sold-out";
-            return (
-              <div
-                key={item.id}
-                className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_80px_80px_110px_110px_110px_100px] md:items-center md:border-0 md:p-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{item.product.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    SKU {item.product.sku} · Por conciliar:{" "}
-                    <span className="font-semibold text-primary">
-                      {state.expected}
-                    </span>
-                    {item.packedQuantity > 0 &&
-                      ` · ${item.packedQuantity} en cápsulas empacadas`}
-                  </p>
-                </div>
-                <p className="text-sm md:text-right">{item.allocatedQuantity}</p>
-                <p className="text-sm md:text-right">{item.soldQuantity}</p>
-                <div className="grid gap-1">
-                  <Label className="text-xs md:sr-only">Devuelto</Label>
-                  <StockQuantityInput
-                    min={0}
-                    size="sm"
-                    disabled={soldOut}
-                    value={values?.returnedQuantity ?? 0}
-                    onChange={(quantity) =>
-                      updateReconciliation(
-                        item.productId,
-                        "returnedQuantity",
-                        quantity,
-                      )
-                    }
-                    ariaLabel={`Cantidad devuelta de ${item.product.name}`}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs md:sr-only">Dañado</Label>
-                  <StockQuantityInput
-                    min={0}
-                    size="sm"
-                    disabled={soldOut}
-                    value={values?.damagedQuantity ?? 0}
-                    onChange={(quantity) =>
-                      updateReconciliation(
-                        item.productId,
-                        "damagedQuantity",
-                        quantity,
-                      )
-                    }
-                    ariaLabel={`Cantidad dañada de ${item.product.name}`}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs md:sr-only">Perdido</Label>
-                  <StockQuantityInput
-                    min={0}
-                    size="sm"
-                    disabled={soldOut}
-                    value={values?.lostQuantity ?? 0}
-                    onChange={(quantity) =>
-                      updateReconciliation(
-                        item.productId,
-                        "lostQuantity",
-                        quantity,
-                      )
-                    }
-                    ariaLabel={`Cantidad perdida de ${item.product.name}`}
-                  />
-                </div>
-                <div>
-                  <TintBadge label={state.label} tone={state.tone} />
-                </div>
-              </div>
-            );
-          })}
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi
-              icon={Undo2}
-              value={reconciliationSummary.returned}
-              label="Vuelven al stock en línea"
-            />
-            <Kpi
-              icon={PackageX}
-              value={reconciliationSummary.damaged}
-              label="Dañadas · solo en el registro de la feria"
-            />
-            <Kpi
-              icon={PackageX}
-              value={reconciliationSummary.lost}
-              label="Perdidas · solo en el registro de la feria"
-            />
-            <Kpi
-              icon={QrCode}
-              value={packedCapsules.length}
-              label="Cápsulas empacadas que se anulan"
-            />
-          </div>
-
-          {packedCapsules.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Las cápsulas empacadas sin vender se anulan al cerrar. Cuenta su
-              producto como devuelto, dañado o perdido en la fila del producto
-              que contienen.
-            </p>
-          )}
-
-          <div className="flex items-start gap-3 rounded-lg border border-tint-cream bg-tint-cream/40 p-3 text-xs leading-relaxed text-primary">
-            <RotateCcw className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>
-              <span className="font-semibold">Cerrar es definitivo.</span>{" "}
-              Después del cierre no se puede reabrir la feria, registrar más
-              ventas ni cambiar estas cantidades. Una venta olvidada se corrige
-              después desde{" "}
-              <Link
-                href={`/${storeId}/movimientos-inventario?feria=${event.id}`}
-                className="font-semibold underline underline-offset-2"
-              >
-                Movimientos → Conciliar feria anterior
-              </Link>{" "}
-              con la plantilla, no desde aquí.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-            {!reconciliationSummary.balanced && (
-              <p className="text-xs text-muted-foreground sm:mr-auto">
-                El botón se activa cuando todas las filas cuadran.
-              </p>
-            )}
-            <Button
-              type="button"
-              onClick={() => setIsCloseConfirmationOpen(true)}
-              disabled={!canWrite || isReconciling || !reconciliationSummary.balanced}
-            >
-              Cerrar la feria
-            </Button>
-          </div>
+          <PhaseReconcile
+            storeId={storeId}
+            fairEventId={event.id}
+            items={event.inventoryItems}
+            counts={reconciliation}
+            summary={reconciliationSummary}
+            packedCapsules={packedCapsules.length}
+            canWrite={canWrite}
+            isReconciling={isReconciling}
+            onChange={updateReconciliation}
+            onAssumeIntact={assumeEverythingReturned}
+            onClose={() => setIsCloseConfirmationOpen(true)}
+          />
         </SectionCard>
       )}
 
       {event.status === "CLOSED" && (
-        <>
-          <SectionCard
-            id="despues"
-            title="Después del cierre"
-            description={`Cerrada el ${formatDate(event.closedAt) ?? "—"}. Todo lo que la feria dejó en el sistema, y el único lugar donde se corrige.`}
-          >
-            <div className="grid gap-3 md:grid-cols-3">
-              <Link
-                href={`/${storeId}/movimientos-inventario?referencia=${event.id}`}
-                className="flex flex-col gap-1 rounded-xl border bg-white p-4 transition-colors hover:bg-accent/40"
-              >
-                <span className="font-semibold text-primary">
-                  Movimientos en el kardex
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Reserva −{inventoryTotals.allocated} · Devolución +
-                  {inventoryTotals.returned}, con referencia a esta feria.
-                </span>
-              </Link>
-              <a
-                href="#ventas-feria"
-                className="flex flex-col gap-1 rounded-xl border bg-white p-4 transition-colors hover:bg-accent/40"
-              >
-                <span className="font-semibold text-primary">
-                  {paidOrders.length} ventas de feria
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Pedidos pagados tipo feria; solo lectura. También aparecen en
-                  Pedidos y en los reportes tributarios.
-                </span>
-              </a>
-              <Link
-                href={`/${storeId}/movimientos-inventario?feria=${event.id}`}
-                className="flex flex-col gap-1 rounded-xl border border-tint-pink bg-tint-pink/20 p-4 transition-colors hover:bg-tint-pink/40"
-              >
-                <span className="inline-flex items-center gap-2 font-semibold text-primary">
-                  <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
-                  ¿Faltó registrar ventas?
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Conciliar con la plantilla desde Movimientos, ya con esta
-                  feria elegida.
-                </span>
-              </Link>
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            id="inventario-cerrado"
-            title="Inventario conciliado"
-            description="Solo lectura. Lo devuelto volvió al stock en línea; lo dañado y perdido quedó solo aquí."
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="px-2 py-2 text-left font-medium">Producto</th>
-                    <th className="px-2 py-2 text-right font-medium">Reservado</th>
-                    <th className="px-2 py-2 text-right font-medium">Vendido</th>
-                    <th className="px-2 py-2 text-right font-medium">Devuelto</th>
-                    <th className="px-2 py-2 text-right font-medium">Dañado</th>
-                    <th className="px-2 py-2 text-right font-medium">Perdido</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {event.inventoryItems.map((item) => (
-                    <tr key={item.id} className="border-b last:border-0">
-                      <td className="px-2 py-2">
-                        <span className="font-medium">{item.product.name}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          SKU {item.product.sku}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2 text-right">{item.allocatedQuantity}</td>
-                      <td className="px-2 py-2 text-right">{item.soldQuantity}</td>
-                      <td className="px-2 py-2 text-right">{item.returnedQuantity}</td>
-                      <td className="px-2 py-2 text-right">{item.damagedQuantity}</td>
-                      <td className="px-2 py-2 text-right">{item.lostQuantity}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
-        </>
+        <PhaseClosed
+          storeId={storeId}
+          fairEventId={event.id}
+          closedAt={event.closedAt}
+          paidOrders={paidOrders.length}
+          totals={inventoryTotals}
+          items={event.inventoryItems}
+          formatDate={formatDate}
+        />
       )}
 
       {event.orders.length > 0 && (

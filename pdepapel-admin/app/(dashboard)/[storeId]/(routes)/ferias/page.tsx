@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 
-import prismadb from "@/lib/prismadb";
-import { requireStoreRead } from "@/lib/store-access";
-
 import { FairEventsClient } from "./components/fair-events-client";
+import { getFairEvents } from "./server/get-fair-events";
 
 export const revalidate = 0;
 
@@ -14,36 +12,23 @@ export const metadata: Metadata = {
 
 /**
  * La lista de ferias no enseña costos, así que la ve también una cuenta de
- * solo lectura; el guardia va aquí igual, y no solo en el armazón del panel.
+ * solo lectura; el guardia vive en la carga, junto a la consulta.
+ *
+ * La vista (`?vista=`) se resuelve en el servidor: antes se traían todas las
+ * ferias y el navegador escondía las que no tocaban.
  */
-export default async function FairEventsPage({ params }: { params: { storeId: string } }) {
-  await requireStoreRead(params.storeId);
-  const fairs = await prismadb.fairEvent.findMany({
-    where: { storeId: params.storeId },
-    include: {
-      inventoryItems: { select: { allocatedQuantity: true, soldQuantity: true } },
-      orders: { select: { total: true } },
-      _count: { select: { capsules: true } },
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-  });
+export default async function FairEventsPage({
+  params,
+  searchParams,
+}: {
+  params: { storeId: string };
+  searchParams?: { vista?: string };
+}) {
+  const { view, counts, metrics, fairs } = await getFairEvents(params.storeId, searchParams?.vista);
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
-      <FairEventsClient
-        data={fairs.map((fair) => ({
-          id: fair.id,
-          name: fair.name,
-          location: fair.location,
-          startsAt: fair.startsAt?.toISOString() || null,
-          endsAt: fair.endsAt?.toISOString() || null,
-          status: fair.status,
-          totalAllocated: fair.inventoryItems.reduce((total, item) => total + item.allocatedQuantity, 0),
-          totalSold: fair.inventoryItems.reduce((total, item) => total + item.soldQuantity, 0),
-          salesTotal: fair.orders.reduce((total, order) => total + Number(order.total), 0),
-          capsules: fair._count.capsules,
-        }))}
-      />
+      <FairEventsClient data={fairs} view={view} counts={counts} metrics={metrics} />
     </div>
   );
 }

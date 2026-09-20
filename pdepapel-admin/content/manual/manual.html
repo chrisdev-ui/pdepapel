@@ -422,7 +422,8 @@
       <div class="chapter-head"><span class="area">Ventas</span><h2>6. Ferias</h2></div>
       <div class="route">Ruta: <code>/ferias</code> · vistas Activas, Cerradas, Todas</div>
       <p>Una feria tiene cuatro fases y el panel las muestra como pasos: <strong>Preparar</strong> (reservar inventario y armar cápsulas), <strong>Vender</strong> (registrar cada cobro), <strong>Conciliar</strong> (contar lo que volvió) y <strong>Cerrada</strong>.</p>
-      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ferias" alt="La lista de ferias como tarjetas: reservado, vendido, barra de avance y el botón de la fase actual." loading="lazy" width="1440" height="900"></div><figcaption>La lista de ferias como tarjetas: reservado, vendido, barra de avance y el botón de la fase actual.</figcaption></figure>
+      <p>La lista abre con cuatro cifras de las ferias activas —reservado, vendido, cuánto llevas vendido de lo reservado y cuántas están conciliando— y debajo la tabla de ferias con su estado, sus cifras y el botón de la fase en la que está cada una.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ferias" alt="La lista de ferias: las cifras de las activas arriba y la tabla con estado, reservado, vendido y el botón de la fase actual." loading="lazy" width="1440" height="900"></div><figcaption>La lista de ferias: las cifras de las activas arriba y la tabla con estado, reservado, vendido y el botón de la fase actual.</figcaption></figure>
       <h3>Crear y preparar</h3>
       <ol class="steps">
         <li>Pulsa <strong>Nueva feria</strong>, escribe nombre, lugar y fechas.</li>
@@ -438,10 +439,11 @@
       <h3>Conciliar y cerrar</h3>
       <ol class="steps">
         <li>Al terminar, pulsa <strong>Pasar a conciliación</strong>: las ventas se detienen y aparece la tabla de conteo. Si falta vender, <strong>Reabrir ventas</strong> devuelve la feria a Abierta.</li>
-        <li>Anota por producto cuántas unidades regresaron, cuántas se dañaron y cuántas se perdieron. Cada fila dice «Cuadra», «Faltan N» o «Sobran N»; las cápsulas que sigan empacadas se cuentan por el producto que contienen.</li>
-        <li>Cuando todo cuadra se activa <strong>Cerrar la feria</strong>. El diálogo repite las cifras: lo devuelto vuelve a la tienda en línea, daños y pérdidas quedan solo en la feria y las cápsulas empacadas se anulan. Confirma que contaste físicamente.</li>
+        <li>Cuenta físicamente y anota por producto cuántas unidades <strong>volvieron bien</strong>, cuántas quedaron <strong>dañadas</strong> y cuántas <strong>no aparecieron</strong>. Las tres columnas arrancan en cero a propósito: nada se da por contado. Arriba ves cuántas unidades faltan por contar y cada fila dice «Sin contar», «Cuadra», «Faltan N», «Sobran N» o «Todo vendido»; las cápsulas que sigan empacadas se cuentan por el producto que contienen.</li>
+        <li>Si la feria volvió completa y sin daños, <strong>Todo volvió intacto</strong> llena las tres columnas de una vez y tú solo corriges lo que no cuadre.</li>
+        <li>Debajo de la tabla se lee qué va a pasar al cerrar: cuántas unidades <strong>vuelven a bodega</strong>, cuántas <strong>se dan de baja</strong>, cuántas siguen <strong>sin contar</strong> y cuántas cápsulas se anulan. Cuando todas las filas cuadran se enciende <strong>Cerrar la feria</strong> y el diálogo repite esas cifras: lo devuelto vuelve a la tienda en línea, daños y pérdidas quedan solo en la feria y las cápsulas empacadas se anulan. Confirma que contaste físicamente.</li>
       </ol>
-      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/feria-cierre" alt="La conciliación: por producto se cuenta lo devuelto, dañado y perdido." loading="lazy" width="1440" height="900"></div><figcaption>La conciliación: por producto se cuenta lo devuelto, dañado y perdido.</figcaption></figure>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/feria-cierre" alt="La conciliación: cuánto falta por contar arriba y, por producto, lo que volvió bien, lo dañado y lo que no apareció." loading="lazy" width="1440" height="900"></div><figcaption>La conciliación: cuánto falta por contar arriba y, por producto, lo que volvió bien, lo dañado y lo que no apareció.</figcaption></figure>
       <div class="note care"><strong>El cierre es irreversible</strong><p>Cuenta físicamente antes de confirmar. La feria cerrada muestra sus cifras y la tarjeta «Después del cierre» con enlaces al kardex, a sus ventas y a «Conciliar feria anterior» (también en la lista de Ferias y en Movimientos): crea los movimientos correctos sin inventar ventas.</p></div>
     </section>
 

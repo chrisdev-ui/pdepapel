@@ -1,10 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
 import { PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createFairSale } from "@/lib/fair-events";
-import { verifyStoreOwner } from "@/lib/utils";
+import { requireStoreOwner } from "@/lib/store-access";
 
 const supportedPaymentMethods = [
   PaymentMethod.CASH,
@@ -16,9 +15,7 @@ export async function POST(
   { params }: { params: { storeId: string; fairEventId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const userId = await requireStoreOwner(params.storeId);
 
     const { items, paymentMethod, idempotencyKey } = await req.json();
     if (!Array.isArray(items)) {

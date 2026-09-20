@@ -159,11 +159,26 @@ describe("la conciliación no da por contado lo que no se contó", () => {
     expect(summary.unbalanced).toBe(1);
   });
 
-  it("una fila sin contar dice cuántas faltan, no «cuadra»", () => {
+  it("una fila sin tocar dice «Sin contar», no «cuadra» ni «faltan»", () => {
     const row = getReconciliationRowState(items[0], untouched.p1);
-    expect(row.status).toBe("missing");
+    // `untouched` se distingue de `missing`: nadie la ha contado todavía,
+    // que no es lo mismo que haber contado de menos.
+    expect(row.status).toBe("untouched");
+    expect(row.label).toBe("Sin contar");
     expect(row.expected).toBe(6);
     expect(row.delta).toBe(6);
+  });
+
+  it("contar de menos sí es «faltan N»", () => {
+    const partial = { returnedQuantity: 2, damagedQuantity: 0, lostQuantity: 0 };
+    const row = getReconciliationRowState(items[0], partial);
+    expect(row.status).toBe("missing");
+    expect(row.label).toBe("Faltan 4");
+  });
+
+  it("el resumen dice cuántas unidades faltan por repartir", () => {
+    expect(summarizeReconciliation(items, untouched).pending).toBe(6);
+    expect(summarizeReconciliation(items, untouched).untouched).toBe(1);
   });
 
   it("un producto vendido entero no pide cuenta", () => {

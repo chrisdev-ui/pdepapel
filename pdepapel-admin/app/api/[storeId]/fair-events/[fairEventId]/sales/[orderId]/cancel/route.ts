@@ -1,9 +1,8 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-errors";
 import { cancelFairSale } from "@/lib/fair-events";
-import { verifyStoreOwner } from "@/lib/utils";
+import { requireStoreOwner } from "@/lib/store-access";
 
 /**
  * Anula una venta de feria. Es la única vía: el PATCH/DELETE genérico de
@@ -17,9 +16,7 @@ export async function POST(
   }: { params: { storeId: string; fairEventId: string; orderId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const userId = await requireStoreOwner(params.storeId);
 
     return NextResponse.json(
       await cancelFairSale({

@@ -1,19 +1,16 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { reconcileFairEvent } from "@/lib/fair-events";
-import { verifyStoreOwner } from "@/lib/utils";
+import { requireStoreOwner } from "@/lib/store-access";
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; fairEventId: string } },
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    await verifyStoreOwner(userId, params.storeId);
+    const userId = await requireStoreOwner(params.storeId);
 
     const { items } = await req.json();
     if (!Array.isArray(items)) {

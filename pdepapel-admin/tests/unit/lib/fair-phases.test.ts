@@ -62,12 +62,16 @@ describe("fair-phases", () => {
     expect(canCancelFairSale("CLOSED")).toBe(false);
   });
 
-  it("labels each reconciliation row as balanced, missing, over or sold out", () => {
+  it("labels each reconciliation row as balanced, untouched, missing, over or sold out", () => {
     const item = { allocatedQuantity: 10, soldQuantity: 7 };
     expect(getReconciliationRowState(item, { returnedQuantity: 2, damagedQuantity: 1, lostQuantity: 0 })).toMatchObject({ status: "balanced", label: "Cuadra", expected: 3, delta: 0 });
     expect(getReconciliationRowState(item, { returnedQuantity: 1, damagedQuantity: 0, lostQuantity: 0 })).toMatchObject({ status: "missing", label: "Faltan 2" });
     expect(getReconciliationRowState(item, { returnedQuantity: 4, damagedQuantity: 0, lostQuantity: 0 })).toMatchObject({ status: "over", label: "Sobran 1" });
-    expect(getReconciliationRowState(item, undefined)).toMatchObject({ status: "missing", label: "Faltan 3" });
+    // Sin contar nada es «untouched», no «missing»: el rediseño de la
+    // conciliación distingue «no la he contado» de «conté de menos», para que
+    // un formulario sin tocar no parezca una cuenta hecha.
+    expect(getReconciliationRowState(item, undefined)).toMatchObject({ status: "untouched", label: "Sin contar" });
+    expect(getReconciliationRowState(item, { returnedQuantity: 0, damagedQuantity: 0, lostQuantity: 0 })).toMatchObject({ status: "untouched", label: "Sin contar" });
     expect(getReconciliationRowState({ allocatedQuantity: 4, soldQuantity: 4 }, { returnedQuantity: 0, damagedQuantity: 0, lostQuantity: 0 })).toMatchObject({ status: "sold-out", label: "Todo vendido" });
   });
 
@@ -81,12 +85,12 @@ describe("fair-phases", () => {
       a: { returnedQuantity: 2, damagedQuantity: 1, lostQuantity: 0 },
       c: { returnedQuantity: 1, damagedQuantity: 0, lostQuantity: 0 },
     });
-    expect(partial).toEqual({ returned: 3, damaged: 1, lost: 0, unbalanced: 1, balanced: false });
+    expect(partial).toEqual({ returned: 3, damaged: 1, lost: 0, unbalanced: 1, untouched: 0, pending: 4, balanced: false });
     const full = summarizeReconciliation(items, {
       a: { returnedQuantity: 2, damagedQuantity: 1, lostQuantity: 0 },
       b: { returnedQuantity: 0, damagedQuantity: 0, lostQuantity: 0 },
       c: { returnedQuantity: 3, damagedQuantity: 0, lostQuantity: 2 },
     });
-    expect(full).toEqual({ returned: 5, damaged: 1, lost: 2, unbalanced: 0, balanced: true });
+    expect(full).toEqual({ returned: 5, damaged: 1, lost: 2, unbalanced: 0, untouched: 0, pending: 0, balanced: true });
   });
 });

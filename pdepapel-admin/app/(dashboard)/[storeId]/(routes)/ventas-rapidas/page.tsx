@@ -55,7 +55,7 @@ export default async function PointOfSalePage({ params, searchParams }: PointOfS
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold tracking-tight text-primary">Punto de venta</h1>
         <p className="text-sm text-muted-foreground">
-          {today ? `${today} ` : ""}Cada venta descuenta el inventario al confirmar el pago; dentro de una feria vende desde Ferias.
+          {today ? `${today} ` : ""}Cada venta descuenta el inventario al confirmar el pago. En una feria se cobra igual, desde la feria abierta, con el stock que reservaste para ella.
         </p>
       </div>
       <nav

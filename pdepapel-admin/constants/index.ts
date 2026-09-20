@@ -183,6 +183,7 @@ export enum Models {
   MarketplaceListings = "marketplace-listings",
   NewsletterSubscribers = "newsletter-subscribers",
   Conversations = "conversations",
+  FairEvents = "fair-events",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -213,6 +214,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Offers]: "Ofertas",
   [Models.Boxes]: "Cajas",
   [Models.NewsletterSubscribers]: "Suscriptores del boletín",
+  [Models.FairEvents]: "Ferias",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -387,6 +389,13 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     endDate: "Fin",
     isActive: "Activa",
     createdAt: "Fecha de creación",
+  },
+  [Models.FairEvents]: {
+    fair: "Feria",
+    status: "Estado",
+    progress: "Vendido",
+    salesTotal: "Recaudado",
+    capsules: "Cápsulas",
   },
   [Models.Boxes]: {
     name: "Nombre",

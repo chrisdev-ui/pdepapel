@@ -1,11 +1,9 @@
 import { scrubFairEvent } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-errors";
 import { getFairEventDetail } from "@/lib/fair-events";
-import { verifyStoreOwner } from "@/lib/utils";
 
 export async function GET(
   _req: Request,
