@@ -20,7 +20,12 @@
  *   npm run prod:approve -- "recategorizar los 4 Kit oficina fuera de Kits sorpresa"
  *   npm run prod:write -- scripts/recategorize-office-kits.mjs
  *
- * Con `--dry-run` sólo informa, sin escribir.
+ * `--dry-run` informa sin escribir, pero OJO: `prod-write` gasta la aprobación
+ * en cuanto el proceso hijo arranca, mire lo que mire el guion. Un ensayo
+ * cuesta una aprobación entera y habría que pedir otra para la corrida de
+ * verdad. Como este guion ya se planta solo si algo no cuadra —falta un
+ * producto, cambió de nombre, la categoría destino está archivada— y se puede
+ * repetir sin daño, lo normal es correrlo directo.
  */
 import { createProdClient } from "./lib/prod-client.mjs";
 
