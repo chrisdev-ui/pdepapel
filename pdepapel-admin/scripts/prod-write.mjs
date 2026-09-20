@@ -56,7 +56,15 @@ const writeUrl = envText
 if (!writeUrl) fail(`${PROD_WRITE_ENV_FILE} no trae DATABASE_URL.`);
 if (!isProductionDatabaseUrl(writeUrl)) fail(`el destino no es la base de producción de Railway (${describeDatabaseUrl(writeUrl)}).`);
 
-const approvalFile = resolve(projectRoot, APPROVAL_FILE);
+// `PROD_WRITE_APPROVAL_FILE` existe para las pruebas, igual que
+// `PROD_WRITE_EXTRA_ROOT`: la prueba del envoltorio lo apunta a un archivo que
+// no existe para comprobar que se niega. Sin eso, correr `npm run test:unit`
+// con una aprobación viva en el disco la gastaba y ejecutaba el guion contra
+// producción; pasó de verdad y se llevó por delante dos aprobaciones.
+//
+// No debilita nada: quien puede poner variables de entorno también puede
+// escribir el archivo de aprobación, que no está firmado.
+const approvalFile = resolve(projectRoot, process.env.PROD_WRITE_APPROVAL_FILE || APPROVAL_FILE);
 let approval = null;
 if (existsSync(approvalFile)) {
   try {

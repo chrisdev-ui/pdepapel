@@ -46,6 +46,22 @@ describe("la categoría de cápsulas apunta a algo real", () => {
   });
 });
 
+describe("un kit de oficina mal categorizado vuelve a contarse al arreglarlo", () => {
+  // El caso real: cuatro «Kit oficina» estaban en «Kits sorpresa», así que
+  // Inventario dejó de listarlos. No son cápsulas —nadie empacó un lote con
+  // ellos— y su stock es el que hay en la estantería.
+  const officeKit = { isKit: false, categoryId: CAPSULAS_SORPRESA_ID };
+  const fixed = { isKit: false, categoryId: "kits-de-oficina-id" };
+
+  it("mientras está en «Kits sorpresa» se esconde de las existencias", () => {
+    expect(isBundleProduct(officeKit)).toBe(true);
+  });
+
+  it("al moverlo fuera vuelve a contarse", () => {
+    expect(isBundleProduct(fixed)).toBe(false);
+  });
+});
+
 describe("el fragmento excluye lo que debe", () => {
   it("deja fuera kits y cápsulas, y deja pasar un producto normal", () => {
     expect(isBundleProduct({ isKit: true, categoryId: "otra" })).toBe(true);

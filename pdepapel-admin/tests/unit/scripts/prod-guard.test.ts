@@ -110,16 +110,38 @@ describe("prod-write wrapper", () => {
   it("refuses to run an unapproved write and leaves no log line", () => {
     const logFile = resolve(projectRoot, "ops/prod-writes.log");
     const before = existsSync(logFile) ? readFileSync(logFile, "utf8") : "";
+    // La aprobación se busca en un archivo que no existe, a propósito.
+    //
+    // Antes esta prueba leía la aprobación de verdad del proyecto: si había
+    // una viva, el envoltorio la gastaba y corría el guion CONTRA PRODUCCIÓN.
+    // Pasó el 2026-09-20 y se llevó dos aprobaciones recién pedidas. Una
+    // prueba unitaria no puede tocar producción ni por accidente.
+    const approvalFile = join(mkdtempSync(join(tmpdir(), "prod-guard-approval-")), "no-existe.json");
     const result = spawnSync(process.execPath, [wrapper, "scripts/verify-schema.ts"], {
       cwd: projectRoot,
       encoding: "utf8",
-      env: { ...process.env, PROD_WRITE_EXTRA_ROOT: "" },
+      env: { ...process.env, PROD_WRITE_EXTRA_ROOT: "", PROD_WRITE_APPROVAL_FILE: approvalFile },
     });
     expect(result.status).toBe(2);
-    // En la máquina de un desarrollador puede quedar una aprobación vieja: cualquiera de estas negativas vale.
-    expect(result.stderr).toMatch(/^prod-write: .*(falta \.env\.prod-write|No hay aprobación|ya se usó|venció|el destino no es)/);
+    // Ahora la negativa es siempre la misma, no «cualquiera de estas».
+    expect(result.stderr).toMatch(/^prod-write: .*(falta \.env\.prod-write|No hay aprobación)/);
     const after = existsSync(logFile) ? readFileSync(logFile, "utf8") : "";
     expect(after).toBe(before);
+  });
+
+  it("nunca gasta la aprobación real del proyecto", () => {
+    // El fallo concreto que hay que impedir: que correr las pruebas marque
+    // como usada la aprobación que la dueña acaba de pedir para otra cosa.
+    const real = resolve(projectRoot, ".prod-write-approval.json");
+    const beforeStamp = existsSync(real) ? readFileSync(real, "utf8") : null;
+    const approvalFile = join(mkdtempSync(join(tmpdir(), "prod-guard-approval-")), "no-existe.json");
+    spawnSync(process.execPath, [wrapper, "scripts/verify-schema.ts"], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      env: { ...process.env, PROD_WRITE_EXTRA_ROOT: "", PROD_WRITE_APPROVAL_FILE: approvalFile },
+    });
+    const afterStamp = existsSync(real) ? readFileSync(real, "utf8") : null;
+    expect(afterStamp).toBe(beforeStamp);
   });
 
   it("refuses a script outside scripts/ even with a valid-looking approval file elsewhere", () => {
