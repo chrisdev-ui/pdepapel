@@ -44,7 +44,19 @@ const ALLOWED_WITHOUT_OWNER_GUARD: Record<string, string> = {
   "products/[productId]/reviews/[reviewId]/route.ts":
     "la autora edita la suya; borrar lo permite la autora o la dueña, comprobado en línea",
   "shipment/quote/route.ts": "cotización de envío desde la tienda",
+  // POST que no escribe: consulta el precio de unas líneas. Es POST porque
+  // recibe una lista, no porque cambie algo. Verificado abajo, no de palabra.
+  "point-of-sale/price/route.ts": "consulta de precio sin escritura, con requireStoreRead",
 };
+
+/**
+ * Entradas cuyo motivo es «no escribe». Un motivo escrito a mano no prueba
+ * nada —ya pasó antes que uno fuera falso—, así que estas se comprueban
+ * contra el archivo: tiene guardia de lectura y no llama a ninguna escritura
+ * de Prisma.
+ */
+const CLAIMED_READ_ONLY = ["point-of-sale/price/route.ts"] as const;
+const PRISMA_WRITES = /\.(create|createMany|update|updateMany|upsert|delete|deleteMany|executeRaw)\b/;
 
 /** Acciones de servidor con efectos que no acotan por tienda, con su motivo. */
 const ALLOWED_ACTIONS_WITHOUT_OWNER_GUARD: Record<string, string> = {
@@ -87,6 +99,16 @@ describe("toda escritura del panel comprueba la propiedad de la tienda", () => {
     }
     expect(unguarded).toEqual([]);
   });
+
+  it.each(CLAIMED_READ_ONLY)(
+    "%s dice que no escribe, y de verdad no escribe",
+    (relative) => {
+      const source = readFileSync(path.join(STORE_API, relative), "utf8");
+      // El motivo de la lista se sostiene solo si estas dos cosas son ciertas.
+      expect(source).toContain("requireStoreRead(");
+      expect(source).not.toMatch(PRISMA_WRITES);
+    },
+  );
 
   it("cada excepción sigue existiendo y sigue sin usar el guardia", () => {
     for (const [relative, reason] of Object.entries(ALLOWED_WITHOUT_OWNER_GUARD)) {

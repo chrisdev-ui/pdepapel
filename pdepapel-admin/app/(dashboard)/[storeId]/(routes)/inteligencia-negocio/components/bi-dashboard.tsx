@@ -12,6 +12,7 @@ import {
   getProductProfitRanking,
 } from "@/actions/get-product-profitability";
 import { BiDailyChart } from "@/components/bi/bi-daily-chart";
+import { BiChannelBreakdown } from "./bi-channel-breakdown";
 import { BiKpiCards } from "@/components/bi/bi-kpi-cards";
 import { BiMonthPicker } from "@/components/bi/bi-month-picker";
 import { BiRiskDrilldown } from "@/components/bi/bi-risk-drilldown";
@@ -117,6 +118,11 @@ export async function BiDashboard({
 
         {/* Top KPIs */}
         <BiKpiCards data={momData} />
+
+        <BiChannelBreakdown
+          channels={momData.currentMonth.byChannel}
+          totalRevenue={momData.currentMonth.total_revenue}
+        />
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-7">
           {/* Main Chart */}

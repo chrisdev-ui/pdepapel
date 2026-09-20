@@ -14,7 +14,9 @@ export type MovementType =
   | "FESTIVAL_ALLOCATION"
   | "FESTIVAL_RETURN"
   | "IN_PERSON_SALE"
-  | "VARIANT_CONVERSION";
+  | "VARIANT_CONVERSION"
+  | "CAPSULE_PACKED"
+  | "CAPSULE_UNPACKED";
 
 /**
  * **El** catálogo de etiquetas por tipo de movimiento. Antes había dos (este y
@@ -44,6 +46,8 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   FESTIVAL_RETURN: "Retorno de feria",
   IN_PERSON_SALE: "Venta presencial",
   VARIANT_CONVERSION: "Conversión a variantes",
+  CAPSULE_PACKED: "Empaque de cápsulas",
+  CAPSULE_UNPACKED: "Cápsulas deshechas",
 };
 
 export const MANUAL_ADJUSTMENT_OPTIONS: {

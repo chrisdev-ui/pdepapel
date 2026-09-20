@@ -1,4 +1,4 @@
-import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { EXCLUDE_CAPSULE_PRODUCTS } from "@/lib/catalog-filters";
 import prismadb from "@/lib/prismadb";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
 import { addKitDemand, computeReplenishment, limitingKitComponent, type ReplenishmentSignal } from "@/lib/replenishment";
@@ -25,7 +25,7 @@ export async function getInventory(storeId: string, now = new Date()) {
   const access = await requireStoreRead(storeId);
   const [products, store, context] = await Promise.all([
     prismadb.product.findMany({
-      where: { storeId, isArchived: false, categoryId: { not: CAPSULAS_SORPRESA_ID } },
+      where: { storeId, isArchived: false, ...EXCLUDE_CAPSULE_PRODUCTS },
       select: {
         id: true,
         name: true,

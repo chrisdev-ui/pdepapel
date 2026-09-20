@@ -8,7 +8,7 @@ import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availabilit
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
-import { getProductsPrices } from "@/lib/discount-engine";
+import { priceLines } from "@/lib/product-pricing";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { normalizePhone } from "@/lib/phone";
 
@@ -369,10 +369,17 @@ async function createOrder(
       // Create a map for faster lookups
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      // Calculate discounted prices for all products
-      const discountedPricesMap = await getProductsPrices(
-        products,
+      // Un pedido del panel cobra igual que la tienda: precio de lista, mejor
+      // oferta vigente o escalera por cantidad, el que salga más bajo.
+      const discountedPricesMap = await priceLines(
         params.storeId,
+        orderItems
+          .filter((item: { productId: string | null }) => Boolean(item.productId))
+          .map((item: { productId: string; quantity?: number }) => ({
+            productId: item.productId,
+            quantity: Number(item.quantity) || 1,
+          })),
+        products,
       );
 
       const itemsWithPrices = orderItems.map(
@@ -393,8 +400,8 @@ async function createOrder(
               );
             }
 
-            const pricing = discountedPricesMap.get(item.productId);
-            const finalPrice = pricing ? pricing.price : product.price;
+            const finalPrice =
+              discountedPricesMap.get(item.productId)?.unitPrice ?? product.price;
 
             return {
               product: { price: finalPrice },

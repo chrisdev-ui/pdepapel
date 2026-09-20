@@ -49,10 +49,31 @@ export function SellPanel({ dayClose, storeName }: SellPanelProps) {
         { value: "BankTransfer", title: "Transferencia", hint: "Con referencia" },
         { value: "Bold", title: "Datáfono", hint: "Bold confirma" },
       ],
+      // El precio de cada línea lo decide el servidor, no el navegador: con
+      // escalera por cantidad el unitario cambia al subir la cantidad.
+      reprice: async (lines) => {
+        const response = await axios.post(`/api/${storeId}/point-of-sale/price`, { lines });
+        const priced = response.data.lines as {
+          productId: string;
+          unitPrice: number;
+          originalPrice: number;
+          offerLabel: string | null;
+        }[];
+        return new Map(
+          priced.map((line) => [
+            line.productId,
+            {
+              unitPrice: line.unitPrice,
+              originalPrice: line.originalPrice,
+              offerLabel: line.offerLabel,
+            },
+          ]),
+        );
+      },
       requireTransferReference: true,
       renderAfterSale: (sale, { reset, update }) => <SaleDoneCard storeId={storeId} storeName={storeName} sale={sale} onNewSale={reset} onChange={update} />,
       copy: {
-        addDescription: "Escribe, pega o escanea: nombre, SKU o código de barras. El código exacto entra solo; el precio ya trae la oferta vigente.",
+        addDescription: "Escribe, pega o escanea: nombre, SKU o código de barras. El código exacto entra solo; el precio ya trae la oferta vigente y el descuento por cantidad.",
         saleNoun: "venta presencial",
         submitError: "No se registró la venta ni se descontó inventario. Revisa los productos e intenta de nuevo.",
       },

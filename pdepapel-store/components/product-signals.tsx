@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Check, CreditCard, Flame, PackageX, ShieldCheck, Truck, Undo2 } from "lucide-react";
+import { CalendarClock, Check, CreditCard, Flame, Gift, PackageX, ShieldCheck, Truck, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -10,7 +10,8 @@ import { useCart } from "@/hooks/use-cart";
 import { ProductAvailability } from "@/lib/product-availability";
 import { formatArrivalDate } from "@/lib/product-card";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
-import { calculateTotals, cn } from "@/lib/utils";
+import { blindBoxFloor, isBlindBox } from "@/lib/blind-box";
+import { calculateTotals, cn, effectiveUnitPrice } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 import { Product } from "@/types";
 
@@ -52,7 +53,9 @@ export function ProductSignals({ product, availability, quantity, className }: P
   const inCart = items.some((item) => item.id === product.id);
   const projectedSubtotal = isMounted
     ? calculateTotals(items, null).subtotal +
-      (inCart || !availability.canBuy ? 0 : Number(product.price) * quantity)
+      (inCart || !availability.canBuy
+        ? 0
+        : effectiveUnitPrice({ ...product, quantity }) * quantity)
     : 0;
 
   return (
@@ -61,6 +64,16 @@ export function ProductSignals({ product, availability, quantity, className }: P
         <tone.Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
         <span>{availability.stockLabel}</span>
       </p>
+      {isBlindBox(product) && (
+        <p className="flex items-start gap-2">
+          <Gift aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>No se puede escoger qué viene adentro.</strong> Llevas{" "}
+            {blindBoxFloor(quantity)}: el contenido es al azar y puede repetirse
+            entre cápsulas.
+          </span>
+        </p>
+      )}
       {availability.status === "presale" && availability.presale && (
         <>
           <p className="flex items-center gap-2">

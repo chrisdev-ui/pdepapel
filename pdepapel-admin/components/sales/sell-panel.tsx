@@ -129,6 +129,15 @@ export interface SellSource {
   requireTransferReference?: boolean;
   /** Tarjeta que reemplaza al aviso flotante cuando la venta queda registrada. */
   renderAfterSale?: (sale: SellCompletedSale, actions: SellAfterSaleActions) => ReactNode;
+  /**
+   * Vuelve a preguntarle al servidor cuánto vale cada línea con la cantidad
+   * que hay ahora. Con escalera por cantidad el unitario depende de cuántas
+   * lleve, así que multiplicar aquí diría un número y la venta guardaría otro.
+   * Sin esto, el panel se queda con el precio que trajo la línea.
+   */
+  reprice?: (
+    lines: { productId: string; quantity: number }[],
+  ) => Promise<Map<string, { unitPrice: number; originalPrice: number; offerLabel: string | null }>>;
   copy?: SellSourceCopy;
 }
 
@@ -349,6 +358,52 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
       return change.cart;
     });
   };
+
+  /**
+   * Cuando cambian las cantidades, le pregunta al servidor cuánto vale cada
+   * línea. Va en un efecto y no dentro de `setCart` porque React puede llamar
+   * dos veces a un actualizador, y eso serían dos consultas por cada clic.
+   *
+   * Si la consulta falla, el carrito se queda con el precio que tenía: es
+   * mejor que vaciarlo, y el servidor vuelve a calcular el precio al cobrar de
+   * todas formas.
+   */
+  const quantitySignature = cart
+    .filter((line) => line.kind === "product")
+    .map((line) => `${line.productId}:${line.quantity}`)
+    .join(",");
+  const reprice = source.reprice;
+  useEffect(() => {
+    if (!reprice || quantitySignature === "") return;
+    let cancelled = false;
+    const lines = quantitySignature.split(",").map((entry) => {
+      const [productId, quantity] = entry.split(":");
+      return { productId, quantity: Number(quantity) };
+    });
+    void reprice(lines)
+      .then((priced) => {
+        if (cancelled) return;
+        setCart((current) =>
+          current.map((line) => {
+            if (line.kind !== "product") return line;
+            const fresh = priced.get(line.productId);
+            if (!fresh || fresh.unitPrice === line.price) return line;
+            return {
+              ...line,
+              price: fresh.unitPrice,
+              originalPrice: fresh.originalPrice,
+              offerLabel: fresh.offerLabel,
+            };
+          }),
+        );
+      })
+      .catch(() => {
+        // Silencio a propósito: ver arriba.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quantitySignature, reprice]);
 
   const registerSale = async () => {
     if (cart.length === 0 || !referenceOk) return;

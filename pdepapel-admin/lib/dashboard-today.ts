@@ -1,4 +1,4 @@
-import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
 import { compareUrgency, computeReplenishment, describeCover } from "@/lib/replenishment";
 import { getUnitsOnOrderByProduct, getUnitsSoldByProduct } from "@/lib/replenishment-db";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
@@ -390,7 +390,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
   // «Por reponer» con la misma regla que Inventario: cobertura por ventas de
   // los últimos 30 días, umbral de la tienda como respaldo, sin kits (su stock
   // sale de los componentes) ni cápsulas sorpresa (se venden en feria).
-  const stockWhere = { storeId, isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID } };
+  const stockWhere = { storeId, isArchived: false, ...EXCLUDE_BUNDLE_PRODUCTS };
   const lowStockBatch = Promise.all([
     prismadb.store.findUnique({ where: { id: storeId }, select: { lowStockThreshold: true } }),
     prismadb.product.findMany({ where: stockWhere, select: { id: true, name: true, stock: true } }),

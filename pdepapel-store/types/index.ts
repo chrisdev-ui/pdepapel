@@ -65,6 +65,8 @@ export interface Product {
     /** Apartadas por pedidos recientes sin pagar; solo viene en consultas sin caché. */
     heldUnits?: number;
   }[];
+  /** Escalera de precio por cantidad; vacía o ausente = precio plano. */
+  priceTiers?: { minQuantity: number; unitPrice: number }[];
   createdAt?: string;
   quantity?: number;
   updatedAt?: string;

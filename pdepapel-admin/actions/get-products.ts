@@ -1,13 +1,11 @@
-import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
+import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
 import prismadb from "@/lib/prismadb";
 
 export async function getProducts(storeId: string) {
   return await prismadb.product.findMany({
     where: {
       storeId: storeId,
-      categoryId: {
-        notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
-      },
+      ...EXCLUDE_BUNDLE_PRODUCTS,
       stock: {
         gt: 0,
       },

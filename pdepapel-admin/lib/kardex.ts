@@ -37,6 +37,8 @@ export const MOVEMENT_TONES: Record<InventoryMovementType, TintTone> = {
   RETURN: "mint",
   ORDER_CANCELLED: "mint",
   VARIANT_CONVERSION: "lavender",
+  CAPSULE_PACKED: "lavender",
+  CAPSULE_UNPACKED: "lavender",
 };
 
 /** Salidas por venta (se cuentan en valor absoluto). */

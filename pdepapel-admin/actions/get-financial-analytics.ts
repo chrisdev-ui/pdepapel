@@ -6,7 +6,7 @@ import {
   getMarketplaceSaleDate,
 } from "@/lib/mercadolibre/reporting";
 import prismadb from "@/lib/prismadb";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, OrderType } from "@prisma/client";
 import {
   startOfMonth,
   endOfMonth,
@@ -20,6 +20,48 @@ export interface MonthlySummary {
   total_net_profit: number;
   average_margin: number;
   total_orders: number;
+  /** El mismo dinero, repartido por canal. Los cuatro suman `total_revenue`. */
+  byChannel: ChannelSummary[];
+}
+
+/** Los cuatro canales por los que entra plata. El orden es el de la vista. */
+export const SALES_CHANNELS = [
+  "online",
+  "point_of_sale",
+  "fair",
+  "marketplace",
+] as const;
+export type SalesChannel = (typeof SALES_CHANNELS)[number];
+
+export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = {
+  online: "Tienda en línea",
+  point_of_sale: "Punto de venta",
+  fair: "Feria",
+  marketplace: "Mercado Libre",
+};
+
+export interface ChannelSummary {
+  channel: SalesChannel;
+  label: string;
+  revenue: number;
+  net_profit: number;
+  orders: number;
+  /** Porcentaje de `total_revenue`; 0 cuando todavía no hay ventas. */
+  share: number;
+}
+
+/**
+ * A qué canal pertenece un pedido del panel.
+ *
+ * `CUSTOM` y `QUOTATION` son ventas de la tienda con otra forma de cerrarse
+ * (pedido a medida, cotización), no otro canal: entran en «Tienda en línea»
+ * para que los cuatro canales sumen exactamente el total y no quede plata
+ * fuera de la vista.
+ */
+export function channelForOrderType(type: OrderType): SalesChannel {
+  if (type === OrderType.POINT_OF_SALE) return "point_of_sale";
+  if (type === OrderType.FESTIVAL) return "fair";
+  return "online";
 }
 
 export interface DailyBreakdown {
@@ -120,11 +162,43 @@ export async function getMonthlyFinancialSummary(
   const average_margin =
     total_revenue > 0 ? (total_net_profit / total_revenue) * 100 : 0;
 
+  // El reparto por canal sale de las filas que ya están en memoria: ni una
+  // consulta más, ni una columna nueva. `OrderType` ya distingue los canales
+  // desde siempre; lo único que faltaba era sumarlos por separado.
+  const totals = new Map<SalesChannel, { revenue: number; net_profit: number; orders: number }>(
+    SALES_CHANNELS.map((channel) => [channel, { revenue: 0, net_profit: 0, orders: 0 }]),
+  );
+  for (const order of orders) {
+    const bucket = totals.get(channelForOrderType(order.type))!;
+    bucket.revenue += order.total || order.subtotal || 0;
+    bucket.net_profit += getOrderNetProfit(order);
+    bucket.orders += 1;
+  }
+  const marketplaceBucket = totals.get("marketplace")!;
+  for (const order of marketplaceOrders) {
+    marketplaceBucket.revenue += getMarketplaceNetRevenue(order);
+    marketplaceBucket.net_profit += getMarketplaceOrderNetProfit(order);
+    marketplaceBucket.orders += 1;
+  }
+
+  const byChannel: ChannelSummary[] = SALES_CHANNELS.map((channel) => {
+    const bucket = totals.get(channel)!;
+    return {
+      channel,
+      label: SALES_CHANNEL_LABELS[channel],
+      revenue: bucket.revenue,
+      net_profit: bucket.net_profit,
+      orders: bucket.orders,
+      share: total_revenue > 0 ? (bucket.revenue / total_revenue) * 100 : 0,
+    };
+  });
+
   return {
     total_revenue,
     total_net_profit,
     average_margin,
     total_orders,
+    byChannel,
   };
 }
 

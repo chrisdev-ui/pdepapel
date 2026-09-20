@@ -138,8 +138,21 @@ export const yearColors = {
   default: "#A4C3FE",
 };
 
-export const CAPSULAS_SORPRESA_ID = "3825ae1d-be71-493f-aaf3-32916c2d18b9";
-export const KITS_ID = "6fd0c357-45c3-4d61-84b1-78921cfb1f21";
+/**
+ * Categoría «Kits sorpresa»: las cápsulas sorpresa viven ahí.
+ *
+ * El id anterior (`3825ae1d…`) no correspondía a ninguna categoría real, así
+ * que los cuatro filtros que lo usaban llevaban meses sin excluir nada. Este
+ * es el id verdadero, verificado contra producción el 2026-09-20.
+ *
+ * `KITS_ID` se retiró: tampoco existía, y para «esto es un kit» ya está la
+ * columna `isKit`, que no depende de que nadie renombre una categoría.
+ * Ambos filtros viven ahora en `EXCLUDE_BUNDLE_PRODUCTS` (lib/catalog-filters.ts).
+ */
+export const CAPSULAS_SORPRESA_ID = "9bdebb9f-8a23-4bed-a8a4-8e6de8b58f47";
+
+/** Slug de esa misma categoría; la tienda la reconoce así (lib/blind-box.ts). */
+export const CAPSULAS_SORPRESA_SLUG = "kits-sorpresa";
 
 export const TRESHOLD_LOW_STOCK = 5;
 

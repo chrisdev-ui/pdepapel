@@ -8,7 +8,7 @@ import {
 import { movementActor } from "@/lib/movement-actor";
 import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { pushToBoldDatafono } from "@/lib/bold-terminal";
-import { getProductsPrices } from "@/lib/discount-engine";
+import { priceLines } from "@/lib/product-pricing";
 import { createInventoryMovementBatch, recalculateKitStock } from "@/lib/inventory";
 import { SALE_UNDO_WINDOW_MS, undoTimeLeft } from "@/lib/sell-cart";
 import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
@@ -248,19 +248,22 @@ export async function createPointOfSaleSale({
       throw new AppError(describeInsufficientStock(insufficientItems), 422, { items: insufficientItems });
     }
 
-    // Mismo precio que ve la clienta en la tienda: la oferta vigente rebaja la
-    // línea; el costo (kardex, margen) sigue siendo el real de compra.
-    const pricing = await getProductsPrices(
-      selectedProducts.map((product) => ({ id: product.id, categoryId: product.categoryId, price: Number(product.price), productGroupId: product.productGroupId })),
+    // Mismo precio que ve la clienta en la tienda: la oferta vigente o la
+    // escalera por cantidad rebajan la línea, la que salga más baja —nunca las
+    // dos—; el costo (kardex, margen) sigue siendo el real de compra. La cuenta
+    // es la misma que hace el checkout, en el mismo sitio.
+    const pricing = await priceLines(
       storeId,
+      Array.from(requestedQuantities, ([productId, quantity]) => ({ productId, quantity })),
+      selectedProducts.map((product) => ({ id: product.id, categoryId: product.categoryId, price: Number(product.price), productGroupId: product.productGroupId })),
     );
     const selectedLines = Array.from(
       requestedQuantities,
       ([productId, quantity]) => {
         const product = productsById.get(productId)!;
         const listPrice = Number(product.price);
-        const offer = pricing.get(productId);
-        const price = offer && offer.price < listPrice ? Number(offer.price) : listPrice;
+        const resolved = pricing.get(productId);
+        const price = resolved ? resolved.unitPrice : listPrice;
         const cost = getOrderItemCost(product);
         return {
           productId,

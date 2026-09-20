@@ -18,7 +18,7 @@ import {
   activeCouponWhere,
   assertCouponHasUses,
 } from "@/lib/coupon-availability";
-import { getProductsPrices } from "@/lib/discount-engine";
+import { priceLines } from "@/lib/product-pricing";
 import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { requoteCartShipping, type RequotedRate } from "@/lib/shipping-helpers";
@@ -622,10 +622,19 @@ async function createCheckout(
     // Create product map for O(1) lookups
     const productMap = new Map(products.map((p) => [p.id, p]));
 
-    // Calculate discounted prices
-    const discountedPricesMap = await getProductsPrices(
-      products, // Use the validated products
+    // El precio que se cobra sale de UNA sola cuenta en el servidor: precio de
+    // lista, mejor oferta vigente y escalera por cantidad, y gana el más bajo
+    // —nunca los dos encadenados—. La tienda hace exactamente la misma cuenta
+    // con `lib/price-tiers.ts`, que es el mismo archivo en las dos apps.
+    const pricedLines = await priceLines(
       params.storeId,
+      orderItems.map(
+        ({ productId, quantity = 1 }: { productId: string; quantity?: number }) => ({
+          productId,
+          quantity,
+        }),
+      ),
+      products, // Use the validated products
     );
 
     const errors: string[] = [];
@@ -650,9 +659,8 @@ async function createCheckout(
       //   continue;
       // }
 
-      // Priority: Discounted Price > Base Price
-      const finalPrice =
-        discountedPricesMap.get(productId)?.price || product.price;
+      // El precio ya resuelto arriba: lista, oferta o peldaño, el que salga más bajo.
+      const finalPrice = pricedLines.get(productId)?.unitPrice ?? product.price;
 
       orderItemsData.push({
         product: { connect: { id: productId } },
@@ -722,10 +730,7 @@ async function createCheckout(
           throw ErrorFactory.NotFound(`Producto ${productId} no encontrado`);
         }
 
-        const pricing = discountedPricesMap.get(productId);
-
-        // Priority: Discounted Price > Base Price
-        const finalPrice = pricing ? pricing.price : product.price;
+        const finalPrice = pricedLines.get(productId)?.unitPrice ?? product.price;
 
         return {
           product: { price: finalPrice },

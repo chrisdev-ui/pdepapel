@@ -4,6 +4,7 @@ import {
   INTERRAPIDISIMO_KEYSIZE,
   INTERRAPIDISIMO_SALTSIZE,
 } from "@/constants";
+import { resolveUnitPrice } from "@/lib/price-tiers";
 import { Coupon, Product, Review } from "@/types";
 import { clsx, type ClassValue } from "clsx";
 import CryptoES from "crypto-es";
@@ -122,6 +123,29 @@ export function base64ToHex(str: string) {
   return hex.join("");
 }
 
+/**
+ * Lo que cuesta una unidad de esta línea, con la cantidad ya en cuenta.
+ *
+ * `item.price` ya viene rebajado por la oferta vigente y `originalPrice` es el
+ * precio de lista. Sobre eso se mira la escalera por cantidad y gana el más
+ * bajo de los dos, nunca los dos encadenados. La misma cuenta la hace el
+ * checkout en el servidor con este mismo archivo de reglas
+ * (`lib/price-tiers.ts`, idéntico en las dos apps), que es lo que impide que
+ * el cliente vea un precio y se le cobre otro.
+ */
+export const effectiveUnitPrice = (item: Product): number => {
+  const offerPrice = Number(item.price) || 0;
+  const basePrice = Number(item.originalPrice) || offerPrice;
+  const quantity = Number(item.quantity ?? 1);
+  return resolveUnitPrice({
+    basePrice,
+    offerPrice: offerPrice < basePrice ? offerPrice : null,
+    offerLabel: item.offerLabel ?? null,
+    tiers: item.priceTiers ?? [],
+    quantity,
+  }).unitPrice;
+};
+
 export const calculateTotals = (
   orderItems: Product[],
   coupon: Coupon | null,
@@ -132,19 +156,16 @@ export const calculateTotals = (
   // Calculate subtotal using discounted prices when available
   // Calculate subtotal using effective price
   const subtotal = orderItems.reduce((total, item) => {
-    return total + Number(item.price) * Number(item.quantity ?? 1);
+    return total + effectiveUnitPrice(item) * Number(item.quantity ?? 1);
   }, 0);
 
   // Calculate total product-level savings (from offers)
   const productSavings = orderItems.reduce((total, item) => {
-    if (
-      item.hasDiscount ||
-      (item.originalPrice && item.originalPrice > Number(item.price))
-    ) {
-      const savings =
-        (Number(item.originalPrice) - Number(item.price)) *
-        Number(item.quantity ?? 1);
-      return total + savings;
+    const quantity = Number(item.quantity ?? 1);
+    const unitPrice = effectiveUnitPrice(item);
+    const listPrice = Number(item.originalPrice) || Number(item.price) || 0;
+    if (listPrice > unitPrice) {
+      return total + (listPrice - unitPrice) * quantity;
     }
     return total;
   }, 0);

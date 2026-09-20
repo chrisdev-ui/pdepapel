@@ -21,7 +21,7 @@ import { formatArrivalDate } from "@/lib/product-card";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
 import { productPath } from "@/lib/routes";
-import { cn, currencyFormatter } from "@/lib/utils";
+import { cn, currencyFormatter, effectiveUnitPrice } from "@/lib/utils";
 import { Product } from "@/types";
 
 export interface PriceChange {
@@ -53,7 +53,9 @@ export const CartItem: React.FC<CartItemProps> = ({
   const mainImage =
     item.images?.find((image) => image.isMain) ?? item.images?.[0];
   const quantity = Number(item.quantity ?? 1);
-  const unit = Number(item.price);
+  // Con escalera por cantidad el unitario depende de cuántas lleve, así que
+  // sale de la misma cuenta que hace el checkout en el servidor.
+  const unit = effectiveUnitPrice(item);
   const lineTotal = unit * quantity;
   const hasOffer = Boolean(
     item.hasDiscount || (item.originalPrice && item.originalPrice > unit),

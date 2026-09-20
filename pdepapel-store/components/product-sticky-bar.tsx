@@ -7,7 +7,7 @@ import { useAddProductToCart } from "@/hooks/use-add-product-to-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { ProductAvailability } from "@/lib/product-availability";
-import { cn, currencyFormatter } from "@/lib/utils";
+import { cn, currencyFormatter, effectiveUnitPrice } from "@/lib/utils";
 import { Product } from "@/types";
 
 interface ProductStickyBarProps {
@@ -40,7 +40,9 @@ export function ProductStickyBar({ product, availability, quantity, targetRef, o
   const image = product.images?.find((item) => item.isMain) ?? product.images?.[0];
   const options = [product.design?.name, product.color?.name].filter(Boolean).join(" · ");
   const canBuy = availability.canBuy;
-  const total = currencyFormatter.format(Number(product.price) * quantity);
+  const total = currencyFormatter.format(
+    effectiveUnitPrice({ ...product, quantity }) * quantity,
+  );
   const action = canBuy ? (
     <button
       type="button"

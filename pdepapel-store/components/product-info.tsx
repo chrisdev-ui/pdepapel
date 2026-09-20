@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { RefObject, useEffect, useMemo, useState } from "react";
 
 import { ProductDetailsAccordion } from "@/components/product-details-accordion";
+import { PriceTierLadder } from "@/components/price-tier-ladder";
 import { ProductSignals } from "@/components/product-signals";
 import { REVIEWS_SECTION_ID } from "@/components/reviews/reviews";
 import { ShareButton } from "@/components/share-button";
@@ -31,7 +32,7 @@ import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
 import { isCustomerFacingLegacySize } from "@/lib/product-options";
 import { getStableProductVariants } from "@/lib/product-variants";
 import { productPath } from "@/lib/routes";
-import { cn, currencyFormatter } from "@/lib/utils";
+import { cn, currencyFormatter, effectiveUnitPrice } from "@/lib/utils";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
 
 interface ProductInfoProps {
@@ -311,6 +312,14 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         )}
       </div>
 
+      {data.priceTiers && data.priceTiers.length > 0 && (
+        <PriceTierLadder
+          basePrice={Number(data.originalPrice) || Number(data.price)}
+          tiers={data.priceTiers}
+          quantity={quantity}
+        />
+      )}
+
       <div className="h-px bg-border" />
 
       <div className="flex flex-col gap-5">
@@ -531,7 +540,10 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                 {availability.ctaLabel}
                 <span className="sm:hidden xl:inline">
                   {" "}
-                  · {currencyFormatter.format(Number(data.price) * quantity)}
+                  ·{" "}
+                  {currencyFormatter.format(
+                    effectiveUnitPrice({ ...data, quantity }) * quantity,
+                  )}
                 </span>
               </span>
             )}

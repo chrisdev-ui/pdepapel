@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   generateOrderNumber: vi.fn(),
   getLastOrderTimestamp: vi.fn(),
   getProductsPrices: vi.fn(),
+  priceLines: vi.fn(),
   normalizeGoogleAnalyticsClientId: vi.fn(),
   orderCreate: vi.fn(),
   orderFindMany: vi.fn(),
@@ -78,6 +79,13 @@ vi.mock("@/lib/order-totals", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/order-totals")>()),
   calculateOrderTotals: mocks.calculateOrderTotals,
 }));
+// El checkout resuelve el precio con `priceLines`: precio de lista, mejor
+// oferta y escalera por cantidad, el más bajo de los tres. Se dobla entero
+// porque además consulta `ProductPriceTier`, que aquí no hay base que responda.
+vi.mock("@/lib/product-pricing", () => ({
+  priceLines: mocks.priceLines,
+}));
+
 vi.mock("@/lib/discount-engine", () => ({
   getProductsPrices: mocks.getProductsPrices,
 }));
@@ -162,6 +170,23 @@ describe("POST /api/[storeId]/checkout", () => {
             discount: 0,
             offerLabel: null,
             matchedOfferId: null,
+          },
+        ],
+      ]),
+    );
+    mocks.priceLines.mockResolvedValue(
+      new Map([
+        [
+          product.id,
+          {
+            productId: product.id,
+            quantity: 1,
+            unitPrice: 10000,
+            originalPrice: 10000,
+            source: "base",
+            offerLabel: null,
+            tierMinQuantity: null,
+            lineTotal: 10000,
           },
         ],
       ]),

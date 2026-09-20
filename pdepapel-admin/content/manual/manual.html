@@ -250,7 +250,7 @@
         <tr><td><strong>Pedido</strong></td><td>Cualquier venta: de la tienda en línea, del punto de venta, de una feria, una cotización o un pedido personalizado. Todos viven en la misma lista.</td></tr>
         <tr><td><strong>Punto de venta</strong></td><td>Ventas presenciales del día a día fuera de una feria.</td></tr>
         <tr><td><strong>Feria</strong></td><td>Un evento presencial: se reserva inventario antes, se vende con el lector durante el evento y se concilia al volver.</td></tr>
-        <tr><td><strong>Cápsula sorpresa</strong></td><td>Producto aleatorio que se vende en feria con un QR único; por dentro siempre es un producto real del inventario.</td></tr>
+        <tr><td><strong>Cápsula sorpresa</strong></td><td>Producto empacado que se vende sin decir qué trae. Es un producto normal del catálogo: se vende en el mostrador, en la tienda en línea y en una feria. Su stock entra empacando un lote (capítulo 12).</td></tr>
         <tr><td><strong>Publicación</strong></td><td>Un anuncio en Mercado Libre. No es una venta.</td></tr>
         <tr><td><strong>Venta de Mercado Libre</strong></td><td>Un pedido pagado en Mercado Libre; se registra lo que realmente se cobra después de comisiones.</td></tr>
         <tr><td><strong>Guía</strong></td><td>La etiqueta de envío con la transportadora y el número de seguimiento.</td></tr>
@@ -676,6 +676,20 @@
     </section>
 
     <!-- 11 -->
+      <h3>Cápsulas sorpresa</h3>
+      <div class="route">Ruta: <code>/productos/capsulas</code></div>
+      <p>Una cápsula sorpresa es un <strong>producto normal</strong> en la categoría <strong>Kits sorpresa</strong>: se vende igual que una agenda, en el punto de venta, en la tienda en línea y en una feria. Lo único distinto es de dónde sale su stock, que entra por un <strong>lote empacado</strong> en vez de por una compra.</p>
+      <ol class="steps">
+        <li>Crea el producto cápsula en Productos, en la categoría <strong>Kits sorpresa</strong>, con su precio de venta y sin stock.</li>
+        <li>En <strong>Empacar cápsulas</strong>, elige la cápsula, cuántas salen y qué productos entran. El panel calcula el costo por cápsula y el margen antes de guardar.</li>
+        <li>Al guardar, las unidades salen de bodega y entran como cápsulas: los dos movimientos quedan en el kardex enlazados por el lote.</li>
+        <li>Mientras no se venda ninguna, <strong>Deshacer</strong> devuelve el lote a sus productos. Si ya se vendió una, el botón desaparece.</li>
+      </ol>
+      <div class="note care"><strong>Sin costo no se empaca</strong><p>Un producto sin precio de compra registrado no se puede meter en un lote: sin eso el costo de la cápsula —y el margen de cada venta— saldría inventado. Tampoco se puede pedir más de lo que hay en bodega: si una línea no alcanza, no se guarda nada y no queda medio lote empacado.</p></div>
+      <h3>Precio por cantidad</h3>
+      <p>Cualquier producto puede tener una <strong>escalera de precio por cantidad</strong>: desde 3 unidades cuesta tanto, desde 5 tanto, desde 10 tanto. Gana el peldaño más alto que no pase de lo que se lleva, así que con peldaños en 3, 5 y 10 quien lleva 7 paga el de 5. Dos líneas del mismo producto suman: pedir «5 y 5» cuesta lo mismo que pedir 10.</p>
+      <div class="note care"><strong>Una oferta y un peldaño nunca se suman</strong><p>Se cobra el más barato de los dos, nunca la oferta rebajada otra vez por el peldaño. Encadenarlos es como se termina vendiendo por debajo del costo sin darse cuenta. El precio lo decide siempre el servidor, en la tienda y en el mostrador, para que lo que se ve y lo que se cobra sean el mismo número.</p></div>
+
     <section class="chapter" id="atributos" style="--dot:#5FC98D">
       <div class="chapter-head"><span class="area">Catálogo</span><h2>13. Atributos</h2></div>
       <div class="route">Ruta: <code>/atributos</code> · pestañas Categorías, Subcategorías, Tamaños, Colores, Diseños, Opciones para clientes</div>
@@ -830,6 +844,7 @@
       <div class="route">Rutas: <code>/rendimiento</code> (pestañas Resumen y caja, Productos y riesgos, Envíos) y <code>/reportes-tributarios</code></div>
       <p><strong>Rendimiento</strong> responde cuánto vendes, cuánto te cuesta y cuánto te queda, por mes. La pestaña <strong>Resumen y caja</strong> sugiere reserva para impuestos, reinversión y retiro; <strong>Productos y riesgos</strong> muestra ingresos contra beneficio, inventario muerto, riesgo de agotarse, clientes inactivos y VIP; <strong>Envíos</strong> resume costos y entregas.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/rendimiento" alt="Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes." loading="lazy" width="1440" height="900"></div><figcaption>Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes.</figcaption></figure>
+      <p><strong>De dónde viene la plata</strong> reparte las ventas del mes en cuatro canales: tienda en línea, punto de venta, feria y Mercado Libre. Los cuatro suman el total, así que ninguna venta queda fuera. Un canal en <code>$ 0</code> no es un error: significa que ese mes no se vendió por ahí.</p>
       <div class="note care"><strong>Este panel decide, no mueve dinero</strong><p>Las cifras son guía. Registra gastos y retiros reales, valida impuestos con tu contador y conserva el banco como fuente final.</p></div>
       <h3>Reportes tributarios</h3>
       <p>Prepara el Excel de ventas y compras del periodo para el contador. Elige las fechas y cómo se determina la fecha de cada venta (fecha de pago o de venta). La tarjeta <strong>Revisión previa</strong> avisa si algo impide exportar. Incluye pedidos pagados o enviados, ventas de Mercado Libre con liquidación confirmada y las facturas de compra registradas.</p>

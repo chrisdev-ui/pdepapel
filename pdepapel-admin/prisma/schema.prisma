@@ -78,6 +78,8 @@ model Store {
   whatsAppBotReplies             WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
   productPresales                ProductPresale[]                @relation("StoreToProductPresale")
   fairEvents                     FairEvent[]
+  capsuleBatches                 CapsuleBatch[]
+  productPriceTiers              ProductPriceTier[]
   marketplaceConnections         MarketplaceConnection[]
   marketplaceOAuthStates         MarketplaceOAuthState[]
   marketplaceCategoryTemplates   MarketplaceCategoryTemplate[]
@@ -436,6 +438,14 @@ model Product {
   homeContents                HomeContentProduct[]
   presales                    ProductPresale[]
 
+  // -- CÁPSULAS SORPRESA --
+  /// Lotes empacados de este producto cápsula (la cápsula es un producto normal).
+  capsuleBatches    CapsuleBatch[]
+  /// Veces que este producto se consumió empacando cápsulas.
+  capsuleBatchItems CapsuleBatchItem[]
+  /// Escalera de precio por cantidad. Sin filas, el precio es `price` a secas.
+  priceTiers        ProductPriceTier[]
+
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
   kitComponents ProductKit[] @relation("KitToComponent")
@@ -591,6 +601,82 @@ model ProductKit {
   @@index([componentId])
 }
 
+/**
+ * Un empaque de cápsulas: N cápsulas salen de una lista de productos de
+ * origen. Es una transferencia de stock, igual que `VARIANT_CONVERSION`:
+ * baja en los productos que entraron, sube en el producto cápsula. El costo
+ * unitario se congela aquí porque el `acqPrice` de los orígenes cambia con el
+ * tiempo y el margen de una venta vieja no debe moverse con él.
+ */
+model CapsuleBatch {
+  id               String    @id @default(uuid())
+  storeId          String
+  /// El producto cápsula que este lote produce. Un producto normal y corriente.
+  capsuleProductId String
+  /// Cápsulas producidas. El stock del producto cápsula sube en esta cantidad.
+  quantity         Int
+  /// Costo por cápsula: suma de los orígenes / `quantity`, congelado al empacar.
+  unitCost         Float
+  /// Costo total del lote, congelado por la misma razón.
+  totalCost        Float
+  notes            String?   @db.Text
+  createdBy        String?
+  /// Fecha en que se deshizo el lote; mientras sea null el lote está vigente.
+  unpackedAt       DateTime?
+  unpackedBy       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  store          Store              @relation(fields: [storeId], references: [id])
+  capsuleProduct Product            @relation(fields: [capsuleProductId], references: [id])
+  items          CapsuleBatchItem[]
+
+  @@index([storeId, createdAt])
+  @@index([capsuleProductId])
+}
+
+model CapsuleBatchItem {
+  id        String @id @default(uuid())
+  batchId   String
+  productId String
+  /// Unidades de este producto que entraron al lote completo (no por cápsula).
+  quantity  Int
+  /// `acqPrice` del producto al momento de empacar, congelado.
+  unitCost  Float
+
+  batch   CapsuleBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  product Product      @relation(fields: [productId], references: [id])
+
+  @@unique([batchId, productId])
+  @@index([productId])
+}
+
+/**
+ * Escalera de precio por cantidad para cualquier producto. Gana el peldaño
+ * con el `minQuantity` más alto que no pase de lo pedido. No hay `maxQuantity`:
+ * el siguiente peldaño marca dónde termina el anterior.
+ * Nunca se suma a una oferta: `lib/price-tiers.ts` se queda con el precio más
+ * bajo de los dos, jamás con los dos aplicados.
+ */
+model ProductPriceTier {
+  id          String   @id @default(uuid())
+  storeId     String
+  productId   String
+  /// Desde cuántas unidades aplica este peldaño. El peldaño 1 es opcional.
+  minQuantity Int
+  /// Precio por unidad en este peldaño.
+  unitPrice   Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store   Store   @relation(fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, minQuantity])
+  @@index([storeId])
+  @@index([productId, minQuantity])
+}
+
 model Supplier {
   id            String         @id @default(uuid())
   storeId       String
@@ -632,38 +718,38 @@ model Image {
 }
 
 model Order {
-  id                       String          @id @default(uuid())
-  storeId                  String
-  email                    String?         @default("")
-  phone                    String          @default("")
-  address                  String          @default("")
-  address2                 String?         @default("")
-  city                     String?         @default("")
-  department               String?         @default("")
-  daneCode                 String?         @default("")
-  neighborhood             String?         @default("") // suburb en EnvioClick
-  addressReference         String?         @default("") // reference en EnvioClick
-  company                  String?         @default("")
-  createdAt                DateTime        @default(now())
-  updatedAt                DateTime        @updatedAt
-  orderNumber              String          @unique
-  fullName                 String          @default("")
-  documentId               String?         @default("")
-  status                   OrderStatus     @default(CREATED)
-  userId                   String?         @default("")
-  guestId                  String?         @default("")
-  subtotal                 Float           @default(0)
-  discount                 Float           @default(0)
-  discountType             DiscountType?
-  discountReason           String?
-  couponId                 String?
-  couponDiscount           Float           @default(0)
-  total                    Float           @default(0)
-  coupon                   Coupon?         @relation(fields: [couponId], references: [id])
-  store                    Store           @relation("StoreToOrder", fields: [storeId], references: [id])
-  orderItems               OrderItem[]
-  shipping                 Shipping?
-  payment                  PaymentDetails?
+  id               String          @id @default(uuid())
+  storeId          String
+  email            String?         @default("")
+  phone            String          @default("")
+  address          String          @default("")
+  address2         String?         @default("")
+  city             String?         @default("")
+  department       String?         @default("")
+  daneCode         String?         @default("")
+  neighborhood     String?         @default("") // suburb en EnvioClick
+  addressReference String?         @default("") // reference en EnvioClick
+  company          String?         @default("")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  orderNumber      String          @unique
+  fullName         String          @default("")
+  documentId       String?         @default("")
+  status           OrderStatus     @default(CREATED)
+  userId           String?         @default("")
+  guestId          String?         @default("")
+  subtotal         Float           @default(0)
+  discount         Float           @default(0)
+  discountType     DiscountType?
+  discountReason   String?
+  couponId         String?
+  couponDiscount   Float           @default(0)
+  total            Float           @default(0)
+  coupon           Coupon?         @relation(fields: [couponId], references: [id])
+  store            Store           @relation("StoreToOrder", fields: [storeId], references: [id])
+  orderItems       OrderItem[]
+  shipping         Shipping?
+  payment          PaymentDetails?
 
   // -- UNIFIED ORDER FIELDS --
   type OrderType @default(STANDARD)
@@ -697,7 +783,9 @@ model Order {
 
   // Sender Info
   createdBy String? // Admin User ID
-  /** Canal que originó el pedido; `null` en los pedidos anteriores a 2026-09-13. */
+  /**
+   * Canal que originó el pedido; `null` en los pedidos anteriores a 2026-09-13.
+   */
   source    OrderSource?
 
   quoteRequests   QuoteRequest[]
@@ -837,12 +925,12 @@ model OrderItem {
   isCustom Boolean @default(false)
 
   /// Esta línea se vendió por adelantado: al pagarse NO descontó inventario.
-  isPreorder Boolean @default(false)
+  isPreorder         Boolean   @default(false)
   /// Cuándo se liberó (llegó la mercancía y se escribió su movimiento). Con
   /// `isPreorder` en true y esto en null, el PEDIDO ENTERO está frenado.
   preorderReleasedAt DateTime?
   /// Campaña de la que salió; sin relación declarada para no cargar el modelo.
-  presaleId String?
+  presaleId          String?
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product?     @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
@@ -1272,18 +1360,18 @@ enum OrderInventoryIssueKind {
 /// llegó el correo a esta clienta?»: no hay reintento automático todavía, así
 /// que quien mire esta tabla es quien lo resuelve a mano.
 model FailedNotification {
-  id        String   @id @default(uuid())
-  storeId   String?
+  id         String    @id @default(uuid())
+  storeId    String?
   /// EMAIL | WHATSAPP
-  channel   String
+  channel    String
   /// Para qué era: confirmación de pedido, aviso de envío, retraso de preventa…
-  kind      String
+  kind       String
   /// A quién se intentaba llegar (correo o teléfono), para poder buscarlo.
-  recipient String?
+  recipient  String?
   /// Pedido relacionado, cuando lo hay.
-  orderId   String?
-  error     String   @db.Text
-  createdAt DateTime @default(now())
+  orderId    String?
+  error      String    @db.Text
+  createdAt  DateTime  @default(now())
   /// Cuando alguien ya lo resolvió a mano.
   resolvedAt DateTime?
 
@@ -1309,37 +1397,37 @@ model StoreSettings {
 
   /// Atención a toda hora. Cuando está en true el horario por día no se mira:
   /// el horario describe cuándo contesta Paula, y el bot cubre el resto.
-  alwaysOpen       Boolean            @default(false)
+  alwaysOpen                Boolean          @default(false)
   /// Horario por día: { "lun": { "abre": "08:00", "cierra": "20:00" }, … }.
   /// Un día ausente o null significa cerrado.
-  openingHours     Json?
-  cityName         String?
-  hasPhysicalStore Boolean            @default(false)
-  physicalAddress  String?
-  minOrderRule     MinimumOrderRule   @default(NONE)
+  openingHours              Json?
+  cityName                  String?
+  hasPhysicalStore          Boolean          @default(false)
+  physicalAddress           String?
+  minOrderRule              MinimumOrderRule @default(NONE)
   /// Solo se usa con la regla FIXED.
-  minOrderAmount   Int?
+  minOrderAmount            Int?
   /// Subtotal desde el cual el envío es gratis; lo que el bot responde a la
   /// pregunta general de envíos sin tener que cotizar.
-  freeShippingThreshold Int?
+  freeShippingThreshold     Int?
   /// Cuánto tarda en llegar un pedido, tal como se le dice a la clienta
   /// («2 a 4 días hábiles»). Único sitio: la tienda y el bot leen de aquí.
-  deliveryEstimate String?
+  deliveryEstimate          String?
   /// Las formas de pago, una por campo. Separadas y no un solo texto porque el
   /// bot las ofrece en un menú: cada una es una opción que se toca, y cada
   /// opción enseña SOLO lo suyo. Vacía significa «esa no la ofrecemos», y el
   /// menú ni la muestra.
   /// Efectivo: la nota humana; la dirección ya vive en `physicalAddress`.
-  paymentCashInfo           String? @db.Text
+  paymentCashInfo           String?          @db.Text
   /// La cuenta de ahorros, tal como se le dicta a una clienta.
-  paymentBancolombiaAccount String? @db.Text
-  paymentNequiNumber        String? @db.Text
-  paymentDaviplataNumber    String? @db.Text
+  paymentBancolombiaAccount String?          @db.Text
+  paymentNequiNumber        String?          @db.Text
+  paymentDaviplataNumber    String?          @db.Text
   /// El datáfono (Bold): qué tarjetas, si hay recargo, dónde se usa.
-  paymentCardInfo           String? @db.Text
+  paymentCardInfo           String?          @db.Text
   /// Apaga el bot sin borrar sus respuestas. Apagado por defecto a propósito:
   /// se enciende cuando alguien lo decide, no por crear la fila.
-  botEnabled       Boolean            @default(false)
+  botEnabled                Boolean          @default(false)
 
   /// Visto bueno de Paula a los textos con los que el bot contesta los datos
   /// del negocio. `botFactsVersion` guarda la versión aprobada: si se edita
@@ -1584,6 +1672,8 @@ enum InventoryMovementType {
   FESTIVAL_RETURN // Returned to online availability
   IN_PERSON_SALE // Decrease from a confirmed in-person sale
   VARIANT_CONVERSION // Reparto del stock de un producto suelto entre sus variantes nuevas
+  CAPSULE_PACKED // Empaque de cápsulas: salida en los productos de origen, entrada en la cápsula
+  CAPSULE_UNPACKED // Deshacer un empaque: la cápsula vuelve a ser sus productos de origen
 }
 
 enum FairEventStatus {
@@ -1644,18 +1734,18 @@ model RestockOrderItem {
 /// bodega. La clave de idempotencia la genera el diálogo al abrirse, así un
 /// reintento tras una respuesta lenta no vuelve a sumar stock.
 model RestockOrderReceipt {
-  id              String   @id @default(uuid())
-  storeId         String
-  restockOrderId  String
-  idempotencyKey  String   @db.VarChar(64)
-  receivedUnits   Int
-  lineCount       Int
-  excessUnits     Int      @default(0)
-  updatedCosts    Boolean  @default(false)
+  id             String   @id @default(uuid())
+  storeId        String
+  restockOrderId String
+  idempotencyKey String   @db.VarChar(64)
+  receivedUnits  Int
+  lineCount      Int
+  excessUnits    Int      @default(0)
+  updatedCosts   Boolean  @default(false)
   /// [{ restockOrderItemId, productId, quantity, excess, unitCost, landedUnitCost }]
-  lines           Json
-  createdBy       String?
-  createdAt       DateTime @default(now())
+  lines          Json
+  createdBy      String?
+  createdAt      DateTime @default(now())
 
   restockOrder RestockOrder @relation(fields: [restockOrderId], references: [id], onDelete: Cascade)
   store        Store        @relation("StoreToRestockOrderReceipt", fields: [storeId], references: [id])
@@ -1691,8 +1781,8 @@ model QuoteRequest {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  store   Store  @relation("StoreToQuoteRequest", fields: [storeId], references: [id])
-  order   Order? @relation(fields: [orderId], references: [id])
+  store   Store   @relation("StoreToQuoteRequest", fields: [storeId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
   orderId String?
 
   @@index([storeId])
@@ -1702,7 +1792,6 @@ model QuoteRequest {
   @@index([customerPhone])
   @@index([createdAt])
 }
-
 
 model Invoice {
   id            String        @id @default(uuid())
@@ -2331,25 +2420,25 @@ enum ProductPresaleStatus {
 /// `committedUnits`, que solo se mira en la pantalla de Preventas: Inventario,
 /// «Por reponer» y el kardex siguen leyendo únicamente el stock real.
 model ProductPresale {
-  id        String               @id @default(uuid())
-  storeId   String
-  productId String
-  status    ProductPresaleStatus @default(ACTIVE)
+  id                String               @id @default(uuid())
+  storeId           String
+  productId         String
+  status            ProductPresaleStatus @default(ACTIVE)
   /// Fecha que se le promete a la clienta. Pasada esta fecha sin liberar, la
   /// preventa está vencida.
   expectedArrivalAt DateTime
   /// Cuántas unidades se pueden prometer como máximo.
-  unitLimit Int
+  unitLimit         Int
   /// Unidades ya reservadas. Se sube con el mismo candado atómico que el stock.
-  committedUnits Int @default(0)
-  releasedAt     DateTime?
-  releasedBy     String?
+  committedUnits    Int                  @default(0)
+  releasedAt        DateTime?
+  releasedBy        String?
   /// Aviso de retraso: queda anotado por si una clienta reclama después.
-  delayNotifiedAt DateTime?
-  delayNotifiedBy String?
-  createdBy       String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  delayNotifiedAt   DateTime?
+  delayNotifiedBy   String?
+  createdBy         String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   store   Store   @relation("StoreToProductPresale", fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -2395,29 +2484,29 @@ model Conversation {
 /// Respuestas automáticas de WhatsApp, editables desde el panel: la dueña
 /// define aquí qué contesta el bot, sin tocar código.
 model WhatsAppBotReply {
-  id        String   @id @default(uuid())
-  storeId   String
+  id         String    @id @default(uuid())
+  storeId    String
   /// Nombre corto con el que ella la reconoce («Horarios», «Envíos»).
-  label     String
+  label      String
   /// Frases que disparan la respuesta, ya normalizadas (minúsculas, sin tildes).
-  triggers  Json
-  answer    String   @db.Text
+  triggers   Json
+  answer     String    @db.Text
   /// Apagarla la deja guardada sin que el bot la use.
-  isActive  Boolean  @default(true)
+  isActive   Boolean   @default(true)
   /// Gana la primera que coincida, así que el orden importa.
-  sortOrder Int      @default(0)
+  sortOrder  Int       @default(0)
   /// Botones que se mandan con la respuesta: `[{ title, targetReplyId }]`.
   /// Máximo dos; el sistema siempre añade «Hablar con Paula» como último
   /// botón, así que nunca se guarda aquí.
-  buttons   Json?
+  buttons    Json?
   /// Cuándo aprobó Paula este menú. Una respuesta CON botones no se manda
   /// hasta tenerlo, y editar el texto o los botones lo borra: así un cambio
   /// no puede colarse con la aprobación de la versión anterior.
   approvedAt DateTime?
   /// Clerk id de quien aprobó, para saber de quién fue el visto bueno.
   approvedBy String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   store Store @relation("StoreToWhatsAppBotReply", fields: [storeId], references: [id])
 

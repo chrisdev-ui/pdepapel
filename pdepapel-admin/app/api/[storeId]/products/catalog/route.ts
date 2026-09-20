@@ -1,6 +1,6 @@
 import { scrubProducts } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
-import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
+import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { calculateDiscountedPrice } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
@@ -26,9 +26,7 @@ export async function GET(
         where: {
           storeId: params.storeId,
           isArchived: false,
-          categoryId: {
-            notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
-          },
+          ...EXCLUDE_BUNDLE_PRODUCTS,
           stock: {
             gt: 0,
           },

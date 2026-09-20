@@ -73,6 +73,12 @@ export const PUBLIC_KIT_COMPONENT_SELECT = {
 } satisfies Prisma.ProductKitSelect;
 
 /** Producto para listas y tarjetas: identidad, precio, stock, medios y taxonomía. */
+/** Un peldaño de la escalera por cantidad. Nunca sale el costo, solo el precio. */
+export const PUBLIC_PRICE_TIER_SELECT = {
+  minQuantity: true,
+  unitPrice: true,
+} satisfies Prisma.ProductPriceTierSelect;
+
 export const PUBLIC_PRODUCT_SELECT = {
   id: true,
   slug: true,
@@ -107,6 +113,10 @@ export const PUBLIC_PRODUCT_SELECT = {
   design: { select: PUBLIC_DESIGN_SELECT },
   productGroup: { select: PUBLIC_PRODUCT_GROUP_SELECT },
   reviews: PUBLIC_REVIEW_INCLUDE,
+  // Escalera de precio por cantidad. La tienda la necesita para cobrar lo
+  // mismo que el checkout: las dos usan `lib/price-tiers.ts`, que es el mismo
+  // archivo en las dos apps.
+  priceTiers: { select: PUBLIC_PRICE_TIER_SELECT, orderBy: { minQuantity: "asc" as const } },
 } satisfies Prisma.ProductSelect;
 
 /** Producto para la página de detalle: lo anterior más opciones de catálogo y kit. */
@@ -129,7 +139,7 @@ export type PublicProductDetailRecord = Prisma.ProductGetPayload<{
  * cuando cambie lo que se devuelve: las entradas viejas dejan de leerse en el
  * acto y caducan solas (máximo 15 minutos) sin ningún paso manual.
  */
-export const PUBLIC_PRODUCTS_CACHE_VERSION = "v2";
+export const PUBLIC_PRODUCTS_CACHE_VERSION = "v3";
 
 /** Campos de `Product` que nunca deben salir por una ruta pública (para pruebas). */
 export const INTERNAL_PRODUCT_FIELDS = [
