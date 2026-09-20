@@ -1,5 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { hasAdminAccess } from "@/lib/admin-access";
+import { canCreateStore } from "@/lib/admin-access";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, parseErrorDetails } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
@@ -11,7 +11,9 @@ export async function POST(req: Request) {
   try {
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
-    if (!(await hasAdminAccess(userId))) throw ErrorFactory.Unauthorized();
+    // Crear una tienda exige autorización explícita del dueño
+    // (`ADMIN_ALLOWED_USER_IDS`), no basta con ya tener una.
+    if (!canCreateStore(userId)) throw ErrorFactory.Unauthorized();
 
     const body = await req.json();
     const { name } = body;
@@ -33,6 +35,15 @@ export async function POST(req: Request) {
 
     const store = await prismadb.store.create({
       data: { name: name.trim(), userId },
+    });
+
+    // Rastro de la creación: la fila ya guarda `userId` y `createdAt`, y esta
+    // línea deja el hecho en los registros del servidor, como los webhooks.
+    console.info("[STORE_CREATED]", {
+      storeId: store.id,
+      name: store.name,
+      createdBy: userId,
+      at: store.createdAt.toISOString(),
     });
 
     return NextResponse.json(store, {

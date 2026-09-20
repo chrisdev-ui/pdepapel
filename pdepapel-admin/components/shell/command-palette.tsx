@@ -12,6 +12,8 @@ import {
 import {
   FOOTER_ITEMS,
   NAV_GROUPS,
+  navGroupsFor,
+  footerItemsFor,
   QUICK_ACTIONS,
   dashboardHref,
 } from "@/lib/admin-navigation";
@@ -32,6 +34,8 @@ interface CommandPaletteProps {
   storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Sesión en `ADMIN_ALLOWED_USER_IDS`: ve además las entradas reservadas. */
+  ownerAllowlisted?: boolean;
   /** Permite inyectar la búsqueda en pruebas. */
   searchProducts?: (query: string) => Promise<ProductHit[]>;
 }
@@ -52,7 +56,13 @@ const defaultSearchProducts =
  * Barra de comando (⌘ K): acciones, secciones del panel y productos.
  * Cada resultado navega al estado exacto para actuar.
  */
-export function CommandPalette({ storeId, open, onOpenChange, searchProducts }: CommandPaletteProps) {
+export function CommandPalette({
+  storeId,
+  open,
+  onOpenChange,
+  searchProducts,
+  ownerAllowlisted = false,
+}: CommandPaletteProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<ProductHit[]>([]);
@@ -100,7 +110,7 @@ export function CommandPalette({ storeId, open, onOpenChange, searchProducts }: 
 
   const destinations = useMemo(() => {
     const items: { label: string; segment: string; group: string }[] = [];
-    for (const group of NAV_GROUPS) {
+    for (const group of navGroupsFor(ownerAllowlisted)) {
       for (const item of group.items) {
         items.push({ label: item.label, segment: item.segment, group: group.label ?? "Inicio" });
         for (const child of item.children ?? []) {
@@ -110,7 +120,7 @@ export function CommandPalette({ storeId, open, onOpenChange, searchProducts }: 
         }
       }
     }
-    for (const item of FOOTER_ITEMS) {
+    for (const item of footerItemsFor(ownerAllowlisted)) {
       items.push({ label: item.label, segment: item.segment, group: "Ajustes" });
       for (const child of item.children ?? []) {
         if (child.segment !== item.segment) items.push({ label: `${item.label} › ${child.label}`, segment: child.segment, group: "Ajustes" });

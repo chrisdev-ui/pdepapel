@@ -9,6 +9,8 @@ import {
 import {
   FOOTER_ITEMS,
   NAV_GROUPS,
+  navGroupsFor,
+  footerItemsFor,
   dashboardHref,
   isSegmentActive,
   type NavBadgeKey,
@@ -25,6 +27,8 @@ export type NavCounts = Partial<Record<NavBadgeKey, number>>;
 interface SidebarNavProps {
   storeId: string;
   counts?: NavCounts;
+  /** Sesión en `ADMIN_ALLOWED_USER_IDS`: ve además las entradas reservadas. */
+  ownerAllowlisted?: boolean;
   /** Solo iconos. */
   collapsed?: boolean;
   onNavigate?: () => void;
@@ -161,7 +165,7 @@ function ItemLink({
   );
 }
 
-export function SidebarNav({ storeId, counts, collapsed = false, onNavigate }: SidebarNavProps) {
+export function SidebarNav({ storeId, counts, collapsed = false, onNavigate, ownerAllowlisted = false }: SidebarNavProps) {
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
@@ -171,7 +175,7 @@ export function SidebarNav({ storeId, counts, collapsed = false, onNavigate }: S
         aria-label="Secciones del panel"
         className={cn("flex flex-1 flex-col gap-1 overflow-y-auto", collapsed ? "items-center px-2 py-2" : "px-3 py-2")}
       >
-        {NAV_GROUPS.map((group) => (
+        {navGroupsFor(ownerAllowlisted).map((group) => (
           <div key={group.id} className={cn("flex flex-col gap-0.5", collapsed && "items-center")}>
             {group.label &&
               (collapsed ? (
@@ -203,7 +207,7 @@ export function SidebarNav({ storeId, counts, collapsed = false, onNavigate }: S
         ))}
       </nav>
       <div className={cn("border-t border-border", collapsed ? "flex justify-center px-2 py-2" : "px-3 py-2")}>
-        {FOOTER_ITEMS.map((item) => (
+        {footerItemsFor(ownerAllowlisted).map((item) => (
           <ItemLink
             key={item.id}
             item={item}

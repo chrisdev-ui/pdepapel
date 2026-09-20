@@ -16,6 +16,11 @@ import { useEffect, useState } from "react";
 interface AppShellProps {
   storeId: string;
   stores: Store[];
+  /**
+   * Sesión en `ADMIN_ALLOWED_USER_IDS`: además de crear tiendas, ve las
+   * entradas reservadas del menú (invitaciones).
+   */
+  canCreateStore?: boolean;
   storeUrl?: string;
   counts?: NavCounts;
   children: React.ReactNode;
@@ -29,6 +34,7 @@ interface AppShellProps {
 export function AppShell({
   storeId,
   stores,
+  canCreateStore = false,
   storeUrl,
   counts,
   children,
@@ -73,9 +79,9 @@ export function AppShell({
             collapsed ? "justify-center px-2" : "px-3",
           )}
         >
-          <StoreSwitcher items={stores} compact={collapsed} />
+          <StoreSwitcher items={stores} compact={collapsed} canCreateStore={canCreateStore} />
         </div>
-        <SidebarNav storeId={storeId} counts={counts} collapsed={collapsed} />
+        <SidebarNav storeId={storeId} counts={counts} collapsed={collapsed} ownerAllowlisted={canCreateStore} />
       </aside>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -86,9 +92,10 @@ export function AppShell({
         >
           <SheetTitle className="sr-only">Menú del panel</SheetTitle>
           <div className="flex h-16 items-center border-b px-3">
-            <StoreSwitcher items={stores} />
+            <StoreSwitcher items={stores} canCreateStore={canCreateStore} />
           </div>
           <SidebarNav
+            ownerAllowlisted={canCreateStore}
             storeId={storeId}
             counts={counts}
             onNavigate={() => setMenuOpen(false)}
@@ -119,6 +126,7 @@ export function AppShell({
       <MobileNav storeId={storeId} onOpenMenu={() => setMenuOpen(true)} />
       <CommandPalette
         storeId={storeId}
+        ownerAllowlisted={canCreateStore}
         open={commandOpen}
         onOpenChange={setCommandOpen}
       />

@@ -6,6 +6,16 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -31,6 +41,9 @@ export function StoreModal() {
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
+  // Crear una tienda era un clic sin vuelta atrás: ahora se confirma con el
+  // nombre a la vista, porque la tienda nueva nace vacía y separada.
+  const [pendingName, setPendingName] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -41,10 +54,16 @@ export function StoreModal() {
 
   useFormValidationToast({ form });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
+    setPendingName(values.name.trim());
+  };
+
+  const createStore = async () => {
+    if (!pendingName) return;
     try {
       setLoading(true);
-      const response = await axios.post("/api/stores", values);
+      setPendingName(null);
+      const response = await axios.post("/api/stores", { name: pendingName });
       window.location.assign(`/${response.data.id}`);
     } catch (error) {
       toast({
@@ -91,7 +110,7 @@ export function StoreModal() {
                 >
                   Cancelar
                 </Button>
-                <Button disabled={loading} type="submit">
+                <Button disabled={loading} isLoading={loading} type="submit">
                   Continuar
                 </Button>
               </div>
@@ -99,6 +118,30 @@ export function StoreModal() {
           </Form>
         </div>
       </div>
+
+      <AlertDialog open={pendingName !== null} onOpenChange={(open) => !open && setPendingName(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Crear la tienda «{pendingName}»?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Nace vacía y aparte: no comparte productos, pedidos ni inventario con las
+              tiendas que ya existen. Quedará registrada a tu nombre.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={loading}
+              onClick={(event) => {
+                event.preventDefault();
+                void createStore();
+              }}
+            >
+              Sí, crear la tienda
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Modal>
   );
 }

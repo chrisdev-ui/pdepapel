@@ -12,9 +12,48 @@ Estado: **fase 1 completa.** Una cuenta de solo lectura ya entra al panel y pued
 
 La propiedad de la tienda la decide siempre la base. El metadato de Clerk **no puede** convertir a nadie en dueña: un `role: "owner"` escrito a mano no concede nada.
 
+## Crear tiendas: solo con autorización explícita
+
+Crear una tienda exige estar en `ADMIN_ALLOWED_USER_IDS` (`canCreateStore`).
+**Tener una tienda ya no basta**: antes cualquier dueña podía crear tiendas
+nuevas y lo único que lo impedía era que la lista estuviera vacía.
+
+- `hasAdminAccess` **no cambió**: entrar al panel sigue siendo «tener una
+  tienda o estar en la lista», así que cerrar la creación no deja a nadie
+  fuera del panel.
+- Sin la variable puesta, el panel funciona igual pero la opción «Crea una
+  tienda» del selector no aparece y `POST /api/stores` responde 403.
+- Crear una tienda pide confirmación con el nombre a la vista y deja una
+  línea `[STORE_CREATED]` en los registros del servidor, además de lo que ya
+  guarda la fila (`userId`, `createdAt`).
+
+Para volver a habilitarla, en Vercel (proyecto `pdepapel-admin`, entorno
+Production) se agrega `ADMIN_ALLOWED_USER_IDS` con el id de Clerk del dueño.
+
+## Invitar sin tocar Clerk a mano
+
+`/[storeId]/invitaciones` (Ajustes → Invitaciones) solo la ve y la abre quien
+está en `ADMIN_ALLOWED_USER_IDS` y es dueño de esa tienda. Desde ahí se envía
+una invitación de Clerk con el permiso ya puesto:
+
+```
+{ role: "viewer", allowedStoreIds: ["<storeId>", ...] }
+```
+
+Clerk copia ese metadato a la persona cuando acepta y se registra, así que
+`requireStoreRead` la reconoce sin que nadie edite nada en el panel de Clerk.
+La pantalla lista las pendientes y permite anularlas. No hay tabla propia: la
+invitación vive en Clerk.
+
+El correo lleva a `/aceptar-invitacion` **en el dominio del panel**, no a la
+página de registro de la tienda. Esa ruta es pública en el middleware pero
+exige el billete (`__clerk_ticket`) con forma válida y sin caducar; sin él
+manda a iniciar sesión, para que no se convierta en un registro abierto (la
+instancia de Clerk es compartida con la tienda y su registro es público).
+
 ## El metadato
 
-En el panel de Clerk: **Users → la cuenta → Metadata → Public**, se escribe exactamente:
+Lo normal es **invitar desde el panel** (arriba), que lo escribe solo. A mano, en el panel de Clerk (**Users → la cuenta → Metadata → Public**), se escribe exactamente:
 
 ```json
 {

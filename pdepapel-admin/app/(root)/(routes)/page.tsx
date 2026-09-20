@@ -1,17 +1,19 @@
-"use client";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
-import { useStoreModal } from "@/hooks/use-store-modal";
-import { useEffect } from "react";
+import { canCreateStore } from "@/lib/admin-access";
 
-export default function Home() {
-  const onOpen = useStoreModal((state) => state.onOpen);
-  const isOpen = useStoreModal((state) => state.isOpen);
+import { OpenStoreCreator } from "./components/open-store-creator";
 
-  useEffect(() => {
-    if (!isOpen) {
-      onOpen();
-    }
-  }, [isOpen, onOpen]);
+/**
+ * Solo se llega aquí sin tener ninguna tienda. Abrir el creador exige la
+ * autorización explícita del dueño (`ADMIN_ALLOWED_USER_IDS`): sin ella la
+ * pantalla no ofrece crear nada y la sesión sale a «sin acceso».
+ */
+export default async function Home() {
+  const { userId } = await auth();
+  if (!userId) redirect("/iniciar-sesion");
+  if (!canCreateStore(userId)) redirect("/sin-acceso");
 
-  return null;
+  return <OpenStoreCreator />;
 }

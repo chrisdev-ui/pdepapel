@@ -47,6 +47,8 @@ export type NavBadgeKey =
 export interface NavChild {
   label: string;
   segment: string;
+  /** Solo para quien está en `ADMIN_ALLOWED_USER_IDS`; el resto ni lo ve. */
+  ownerOnly?: boolean;
 }
 
 export interface NavItem {
@@ -284,6 +286,7 @@ export const FOOTER_ITEMS: NavItem[] = [
     segment: "configuracion",
     children: [
       { label: "Tienda", segment: "configuracion" },
+      { label: "Invitaciones", segment: "invitaciones", ownerOnly: true },
       { label: "Envíos y empaques", segment: "configuracion?tab=envios" },
       { label: "Pagos", segment: "configuracion?tab=pagos" },
       { label: "Integraciones", segment: "configuracion?tab=integraciones" },
@@ -364,6 +367,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   "inteligencia-negocio": "Rendimiento detallado",
   "reportes-tributarios": "Tributarios",
   configuracion: "Ajustes",
+  invitaciones: "Invitaciones",
   cajas: "Cajas y empaques",
   cloudinary: "Imágenes",
   nuevo: "Nuevo",
@@ -414,4 +418,21 @@ export function isSegmentActive(
   if (search === undefined) return true;
   const current = search.replace(/^\?/, "");
   return query ? current === query : current === "";
+}
+
+function withoutOwnerOnly(items: NavItem[]): NavItem[] {
+  return items.map((item) =>
+    item.children ? { ...item, children: item.children.filter((child) => !child.ownerOnly) } : item,
+  );
+}
+
+/** Menú sin las entradas reservadas cuando la sesión no está en la lista del dueño. */
+export function navGroupsFor(isOwnerAllowlisted: boolean): NavGroup[] {
+  if (isOwnerAllowlisted) return NAV_GROUPS;
+  return NAV_GROUPS.map((group) => ({ ...group, items: withoutOwnerOnly(group.items) }));
+}
+
+/** Lo mismo para el pie de la barra lateral, donde vive «Ajustes». */
+export function footerItemsFor(isOwnerAllowlisted: boolean): NavItem[] {
+  return isOwnerAllowlisted ? FOOTER_ITEMS : withoutOwnerOnly(FOOTER_ITEMS);
 }

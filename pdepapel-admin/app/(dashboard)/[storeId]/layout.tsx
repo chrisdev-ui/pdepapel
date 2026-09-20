@@ -1,3 +1,4 @@
+import { canCreateStore } from "@/lib/admin-access";
 import { AppShell } from "@/components/shell/app-shell";
 import { StoreInitializer } from "@/components/store-initializer";
 import { env } from "@/lib/env.mjs";
@@ -71,6 +72,7 @@ export default async function DashboardLayout({
       <AppShell
         storeId={params.storeId}
         stores={stores}
+        canCreateStore={canCreateStore(userId)}
         storeUrl={env.FRONTEND_STORE_URL}
         counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue }}
       >

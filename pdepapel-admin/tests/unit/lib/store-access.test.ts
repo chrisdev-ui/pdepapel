@@ -156,6 +156,23 @@ describe("requireStoreRead", () => {
     expect(mocks.getUser).toHaveBeenCalledWith(VIEWER);
   });
 
+  it("reconoce el permiso puesto en una invitación en la primera sesión, sin refrescar el token", async () => {
+    // Al aceptar una invitación, Clerk copia su `publicMetadata` a la persona.
+    // Si la plantilla del token de sesión todavía no lo trae (primer inicio de
+    // sesión), el ayudante lo pide a Clerk y la cuenta entra igual: nunca se
+    // queda atrapada en «sin acceso» esperando un refresco.
+    session.userId = VIEWER;
+    session.sessionClaims = {};
+    mocks.getUser.mockResolvedValue({ publicMetadata: { role: "viewer", allowedStoreIds: [STORE] } });
+    await expect(requireStoreRead(STORE)).resolves.toEqual({ userId: VIEWER, role: "viewer" });
+
+    // Y cuando el token sí lo trae, ni siquiera consulta a Clerk.
+    mocks.getUser.mockClear();
+    signedInAs(VIEWER, { role: "viewer", allowedStoreIds: [STORE] });
+    await expect(requireStoreRead(STORE)).resolves.toEqual({ userId: VIEWER, role: "viewer" });
+    expect(mocks.getUser).not.toHaveBeenCalled();
+  });
+
   it("rechaza si la consulta a Clerk falla", async () => {
     session.userId = VIEWER;
     session.sessionClaims = {};

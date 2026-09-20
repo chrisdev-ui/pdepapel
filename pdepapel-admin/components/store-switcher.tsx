@@ -36,12 +36,15 @@ interface StoreSwitcherProps extends PopoverTriggerProps {
   items: Store[];
   /** Solo el icono (barra lateral contraída). */
   compact?: boolean;
+  /** Crear tiendas exige autorización explícita del dueño; si no la hay, la opción ni se muestra. */
+  canCreateStore?: boolean;
 }
 
 export function StoreSwitcher({
   className,
   compact = false,
   items = [],
+  canCreateStore = false,
   ...props
 }: StoreSwitcherProps) {
   const [open, setOpen] = useState(false);
@@ -113,20 +116,24 @@ export function StoreSwitcher({
               ))}
             </CommandGroup>
           </CommandList>
-          <CommandSeparator />
-          <CommandList>
-            <CommandGroup>
-              <CommandItem
-                onSelect={() => {
-                  setOpen(false);
-                  storeModal.onOpen();
-                }}
-              >
-                <PlusCircle className="mr-2 h-5 w-5" />
-                Crea una tienda
-              </CommandItem>
-            </CommandGroup>
-          </CommandList>
+          {canCreateStore && (
+            <>
+              <CommandSeparator />
+              <CommandList>
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => {
+                      setOpen(false);
+                      storeModal.onOpen();
+                    }}
+                  >
+                    <PlusCircle className="mr-2 h-5 w-5" />
+                    Crea una tienda
+                  </CommandItem>
+                </CommandGroup>
+              </CommandList>
+            </>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

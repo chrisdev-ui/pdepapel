@@ -6,7 +6,7 @@ vi.mock("@/lib/prismadb", () => ({
   default: { store: { count: mocks.count } },
 }));
 
-import { getAllowedAdminUserIds, hasAdminAccess, isAllowlistedAdmin } from "@/lib/admin-access";
+import { canCreateStore, getAllowedAdminUserIds, hasAdminAccess, isAllowlistedOwner } from "@/lib/admin-access";
 
 describe("admin access", () => {
   const originalAllowlist = process.env.ADMIN_ALLOWED_USER_IDS;
@@ -25,9 +25,9 @@ describe("admin access", () => {
     expect(getAllowedAdminUserIds()).toEqual([]);
     process.env.ADMIN_ALLOWED_USER_IDS = " user_a, user_b ,,";
     expect(getAllowedAdminUserIds()).toEqual(["user_a", "user_b"]);
-    expect(isAllowlistedAdmin("user_b")).toBe(true);
-    expect(isAllowlistedAdmin("user_c")).toBe(false);
-    expect(isAllowlistedAdmin(null)).toBe(false);
+    expect(isAllowlistedOwner("user_b")).toBe(true);
+    expect(isAllowlistedOwner("user_c")).toBe(false);
+    expect(isAllowlistedOwner(null)).toBe(false);
   });
 
   it("grants access to a store owner without touching the allowlist", async () => {
@@ -46,5 +46,22 @@ describe("admin access", () => {
     process.env.ADMIN_ALLOWED_USER_IDS = "new_owner";
     await expect(hasAdminAccess("new_owner")).resolves.toBe(true);
     expect(mocks.count).not.toHaveBeenCalled();
+  });
+
+  it("solo deja crear tiendas a la lista explícita, nunca por ya tener una", () => {
+    expect(canCreateStore("owner_1")).toBe(false);
+    expect(canCreateStore(null)).toBe(false);
+
+    process.env.ADMIN_ALLOWED_USER_IDS = "owner_1";
+    expect(canCreateStore("owner_1")).toBe(true);
+    expect(canCreateStore("otro")).toBe(false);
+    expect(isAllowlistedOwner("owner_1")).toBe(true);
+  });
+
+  it("cerrar la creación no toca el acceso al panel: la dueña entra con la lista vacía", async () => {
+    delete process.env.ADMIN_ALLOWED_USER_IDS;
+    mocks.count.mockResolvedValue(1);
+    await expect(hasAdminAccess("owner_1")).resolves.toBe(true);
+    expect(canCreateStore("owner_1")).toBe(false);
   });
 });

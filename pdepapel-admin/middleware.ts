@@ -14,6 +14,9 @@ export const publicRoutes = [
   "/api(.*)",
   "/iniciar-sesion(.*)",
   "/sin-acceso(.*)",
+  // Aceptar una invitación ocurre sin sesión; la propia página exige el
+  // billete de invitación y, sin él, no muestra nada (lib/invitation-ticket.ts).
+  "/aceptar-invitacion(.*)",
 ];
 
 const isPublicRoute = createRouteMatcher(publicRoutes);

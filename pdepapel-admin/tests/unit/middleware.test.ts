@@ -61,6 +61,8 @@ describe("authentication middleware", () => {
       "/api(.*)",
       "/iniciar-sesion(.*)",
       "/sin-acceso(.*)",
+      // Aceptar una invitación ocurre sin sesión; la página exige el billete.
+      "/aceptar-invitacion(.*)",
     ]);
     expect(mocks.options).toEqual({ signInUrl: "/iniciar-sesion" });
   });
@@ -82,7 +84,7 @@ describe("authentication middleware", () => {
     expect(scripted?.status).toBe(401);
 
     mocks.redirectToSignIn.mockClear();
-    for (const path of ["/api/store-id/products", "/iniciar-sesion", "/sin-acceso"]) {
+    for (const path of ["/api/store-id/products", "/iniciar-sesion", "/sin-acceso", "/aceptar-invitacion"]) {
       const response = await run(path, { headers: { accept: "text/html" } });
       expect(response?.status, path).toBe(200);
     }

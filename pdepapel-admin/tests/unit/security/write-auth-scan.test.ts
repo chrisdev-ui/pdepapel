@@ -15,7 +15,9 @@ import { describe, expect, it } from "vitest";
  */
 const ROOT = path.resolve(__dirname, "../..", "..");
 const STORE_API = path.join(ROOT, "app", "api", "[storeId]");
-const OWNER_GUARDS = ["verifyStoreOwner", "checkIfStoreOwner", "requireStoreOwner"];
+// `requireInviter` es más estricto que los demás: exige la lista explícita del
+// dueño y, dentro, el mismo `requireStoreOwner`.
+const OWNER_GUARDS = ["verifyStoreOwner", "checkIfStoreOwner", "requireStoreOwner", "requireInviter"];
 const MUTATING = ["POST", "PUT", "PATCH", "DELETE"];
 
 /** Rutas de escritura bajo `/api/[storeId]` que no usan el guardia, con su motivo. */
