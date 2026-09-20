@@ -4,12 +4,12 @@ import { subDays } from "date-fns";
 
 import {
   describeWho,
-  FAIR_LINKED_TYPES,
   KARDEX_METRICS_DAYS,
-  ORDER_LINKED_TYPES,
   summarizeKardex,
   type KardexMetrics,
 } from "@/lib/kardex";
+import { collectMovementActorIds } from "@/lib/movement-actor";
+import { buildMovementReference, loadMovementReferences } from "@/lib/movement-reference";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
@@ -31,12 +31,8 @@ export interface GetProductKardexOptions {
   now?: Date;
 }
 
-export interface KardexReference {
-  kind: "order" | "restock" | "fair" | "note";
-  label: string;
-  secondary: string | null;
-  href: string | null;
-}
+/** La referencia la resuelve `lib/movement-reference.ts`, igual que la lista. */
+export type { MovementReference as KardexReference } from "@/lib/movement-reference";
 
 export interface KardexRow {
   id: string;
@@ -47,7 +43,7 @@ export interface KardexRow {
   cost: number | null;
   createdAt: Date;
   who: string;
-  reference: KardexReference | null;
+  reference: import("@/lib/movement-reference").MovementReference | null;
 }
 
 export interface ProductKardex {
@@ -100,7 +96,6 @@ async function resolveFirstNames(userIds: Iterable<string>): Promise<Map<string,
   return names;
 }
 
-const joinParts = (parts: (string | null | undefined)[]) => parts.map((part) => part?.trim()).filter(Boolean).join(" · ") || null;
 
 /**
  * Kardex de un producto: cabecera, métricas de 30/90 días, cuadre contra
@@ -194,84 +189,15 @@ export async function getProductKardex(storeId: string, productId: string, optio
       ])
     : [0, null];
 
-  const orderIds = new Set<string>();
-  const restockIds = new Set<string>();
-  const fairIds = new Set<string>();
-  const userIds = new Set<string>();
-  for (const movement of visible) {
-    if (movement.createdBy?.startsWith("USER_")) userIds.add(movement.createdBy.slice("USER_".length));
-    if (!movement.referenceId) continue;
-    if (ORDER_LINKED_TYPES.has(movement.type)) orderIds.add(movement.referenceId);
-    else if (movement.type === "RESTOCK_RECEIVED") restockIds.add(movement.referenceId);
-    else if (FAIR_LINKED_TYPES.has(movement.type)) fairIds.add(movement.referenceId);
-  }
-
-  const [names, orders, restockOrders, fairs] = await Promise.all([
-    resolveFirstNames(userIds),
-    orderIds.size > 0
-      ? prismadb.order.findMany({
-          where: { storeId, id: { in: Array.from(orderIds) } },
-          select: { id: true, orderNumber: true, fullName: true, city: true },
-        })
-      : Promise.resolve([]),
-    restockIds.size > 0
-      ? prismadb.restockOrder.findMany({
-          where: { storeId, id: { in: Array.from(restockIds) } },
-          select: { id: true, orderNumber: true, supplier: { select: { name: true } } },
-        })
-      : Promise.resolve([]),
-    fairIds.size > 0
-      ? prismadb.fairEvent.findMany({
-          where: { storeId, id: { in: Array.from(fairIds) } },
-          select: { id: true, name: true },
-        })
-      : Promise.resolve([]),
+  const [names, references] = await Promise.all([
+    // Antes solo se resolvían los ids con prefijo `USER_`, así que la mayoría
+    // de las filas de producción mostraba «—» en la columna «Quién».
+    resolveFirstNames(collectMovementActorIds(visible)),
+    loadMovementReferences(storeId, visible),
   ]);
-  const ordersById = new Map(orders.map((order) => [order.id, order]));
-  const restockById = new Map(restockOrders.map((order) => [order.id, order]));
-  const fairsById = new Map(fairs.map((fair) => [fair.id, fair]));
-
-  const noteReference = (reason: string | null, description: string | null): KardexReference | null => {
-    const label = reason?.trim() || description?.trim();
-    if (!label) return null;
-    return {
-      kind: "note",
-      label: `“${label}”`,
-      secondary: reason?.trim() && description?.trim() && description.trim() !== reason.trim() ? description.trim() : null,
-      href: null,
-    };
-  };
 
   const rows: KardexRow[] = visible.map((movement) => {
-    let reference: KardexReference | null = null;
-    if (movement.referenceId && ORDER_LINKED_TYPES.has(movement.type)) {
-      const order = ordersById.get(movement.referenceId);
-      if (order) {
-        reference = {
-          kind: "order",
-          label: order.orderNumber,
-          secondary: joinParts([order.fullName, order.city]),
-          href: `/${storeId}/pedidos/${order.id}`,
-        };
-      }
-    } else if (movement.referenceId && movement.type === "RESTOCK_RECEIVED") {
-      const restock = restockById.get(movement.referenceId);
-      if (restock) {
-        reference = {
-          kind: "restock",
-          label: restock.orderNumber,
-          secondary: restock.supplier?.name ?? null,
-          href: `/${storeId}/aprovisionamiento/${restock.id}`,
-        };
-      }
-    } else if (movement.referenceId && FAIR_LINKED_TYPES.has(movement.type)) {
-      const fair = fairsById.get(movement.referenceId);
-      if (fair) {
-        reference = { kind: "fair", label: fair.name, secondary: null, href: `/${storeId}/ferias/${fair.id}` };
-      }
-    }
-    // Referencia borrada o movimiento sin referencia: queda la razón escrita.
-    if (!reference) reference = noteReference(movement.reason, movement.description);
+    const reference = buildMovementReference(movement, references, storeId);
 
     return {
       id: movement.id,

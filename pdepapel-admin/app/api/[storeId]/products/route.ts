@@ -5,6 +5,7 @@ import {
   parseProductAvailability,
   productAvailabilityWhere,
 } from "@/lib/product-availability";
+import { movementActor } from "@/lib/movement-actor";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
   PRICE_RANGE_BUCKETS,
@@ -371,7 +372,7 @@ export async function POST(
         quantity: stock,
         reason: "Inventario inicial al crear producto",
         cost: acqPrice || undefined,
-        createdBy: `USER_${userId}`,
+        createdBy: movementActor(userId),
       });
     }
 

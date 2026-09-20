@@ -225,7 +225,6 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
         isOpen={adjustOpen}
         onClose={() => setAdjustOpen(false)}
         onConfirm={() => { setAdjustOpen(false); router.refresh(); }}
-        products={data.filter((row) => !row.isKit).map((row) => ({ id: row.id, name: row.name, stock: row.stock }))}
         defaultProductId={adjustProductId}
       />
     </div>

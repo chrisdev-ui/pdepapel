@@ -4,6 +4,7 @@ import {
   MarketplaceProvider,
 } from "@prisma/client";
 
+import { movementActor } from "@/lib/movement-actor";
 import { ErrorFactory } from "@/lib/api-errors";
 import {
   createInventoryMovementBatchResilient,
@@ -121,7 +122,7 @@ export async function confirmMercadoLibreOrderReturn({
           ? `Mercado Libre: retorno físico confirmado ${externalOrderId} (Kit: ${line.kitName})`
           : `Mercado Libre: retorno físico confirmado ${externalOrderId}`,
         referenceId: order.id,
-        createdBy: `USER_${userId}`,
+        createdBy: movementActor(userId),
       }),
     );
     const result = await createInventoryMovementBatchResilient(tx, movements);

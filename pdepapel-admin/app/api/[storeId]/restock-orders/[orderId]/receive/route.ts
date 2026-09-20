@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+import { movementActor } from "@/lib/movement-actor";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { createInventoryMovementBatch, type CreateInventoryMovementParams } from "@/lib/inventory";
@@ -78,7 +79,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
           excessUnits: plan.excessUnits,
           updatedCosts: input.updateCosts,
           lines: plan.lines as unknown as Prisma.InputJsonArray,
-          createdBy: `USER_${userId}`,
+          createdBy: movementActor(userId),
         },
       });
 
@@ -98,7 +99,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
         description: line.excess > 0 ? `Recepción ${receipt.id} · ${line.excess} de más sobre lo pedido` : `Recepción ${receipt.id}`,
         referenceId: order.id,
         cost: line.landedUnitCost,
-        createdBy: `USER_${userId}`,
+        createdBy: movementActor(userId),
       }));
       await createInventoryMovementBatch(tx, movements);
 

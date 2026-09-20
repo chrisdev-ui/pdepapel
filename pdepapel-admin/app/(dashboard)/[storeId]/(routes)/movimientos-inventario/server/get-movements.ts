@@ -1,3 +1,5 @@
+import { collectMovementActorIds, normalizeMovementActor } from "@/lib/movement-actor";
+import { buildMovementReference, loadMovementReferences, type MovementReference } from "@/lib/movement-reference";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import { clerkClient } from "@clerk/nextjs/server";
@@ -42,7 +44,6 @@ const SYSTEM_LABELS: Record<string, string> = {
   SYSTEM_MIGRATION_SCRIPT: "Migración",
 };
 
-const ORDER_LINKED_TYPES = new Set(["ORDER_PLACED", "ORDER_CANCELLED", "IN_PERSON_SALE"]);
 
 /** Nombres y fotos de Clerk por id; nunca tumba la página si Clerk falla. */
 async function resolveClerkUsers(userIds: Iterable<string>): Promise<Map<string, ClerkUserLite>> {
@@ -113,42 +114,29 @@ export const getInventoryMovements = async (storeId: string, options: GetInvento
   const hasMore = take !== undefined && movements.length > take;
   const rows = hasMore ? movements.slice(0, take) : movements;
 
-  const uniqueUserIds = new Set<string>();
-  const orderIds = new Set<string>();
-  for (const item of rows) {
-    if (item.createdBy && !item.createdBy.startsWith("SYSTEM")) uniqueUserIds.add(item.createdBy.replace("USER_", ""));
-    if (ORDER_LINKED_TYPES.has(item.type) && item.referenceId) orderIds.add(item.referenceId);
-  }
-
-  const [usersMap, orders, store] = await Promise.all([
-    resolveClerkUsers(uniqueUserIds),
-    orderIds.size > 0
-      ? prismadb.order.findMany({
-          where: { storeId, id: { in: Array.from(orderIds) } },
-          select: { id: true, fullName: true, userId: true, email: true },
-        })
-      : Promise.resolve([]),
+  const [usersMap, references, store] = await Promise.all([
+    resolveClerkUsers(collectMovementActorIds(rows)),
+    loadMovementReferences(storeId, rows),
     prismadb.store.findUnique({ where: { id: storeId }, select: { userId: true } }),
   ]);
-  const ordersMap = new Map(orders.map((order) => [order.id, order]));
 
   const formatted = rows.map((item) => {
     let userName = "Sistema";
     let userImage = "";
     let isOwner = false;
-    const clerkId = item.createdBy && !item.createdBy.startsWith("SYSTEM") ? item.createdBy.replace("USER_", "") : null;
-    const user = clerkId ? usersMap.get(clerkId) : undefined;
-    const linkedOrder = item.referenceId ? ordersMap.get(item.referenceId) : undefined;
+    const actor = normalizeMovementActor(item.createdBy);
+    const user = actor.userId ? usersMap.get(actor.userId) : undefined;
+    const linkedOrder = item.referenceId ? references.orders.get(item.referenceId) : undefined;
 
     if (linkedOrder) {
       // El cliente del pedido (invitado o registrado) importa más que quien disparó el movimiento.
       userName = linkedOrder.fullName ? `${linkedOrder.fullName}${linkedOrder.userId ? "" : " (Invitado)"}` : linkedOrder.email || "Cliente";
       if (user?.hasImage) userImage = user.imageUrl;
-    } else if (clerkId) {
-      isOwner = store?.userId === clerkId;
+    } else if (actor.userId) {
+      isOwner = store?.userId === actor.userId;
       userName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Usuario" : "Usuario desconocido";
       userImage = user?.hasImage ? user.imageUrl : "";
-    } else if (item.createdBy?.startsWith("SYSTEM")) {
+    } else if (actor.system && item.createdBy) {
       userName = SYSTEM_LABELS[item.createdBy] || item.createdBy;
       if (item.createdBy === "SYSTEM_MIGRATION_SCRIPT") userImage = "BOT";
     }
@@ -164,6 +152,8 @@ export const getInventoryMovements = async (storeId: string, options: GetInvento
       reason: item.reason || "",
       description: item.description || "",
       referenceId: item.referenceId ?? null,
+      /** De dónde viene, ya resuelto a un enlace (misma lógica que el kardex). */
+      reference: buildMovementReference(item, references, storeId) as MovementReference | null,
       createdAt: item.createdAt,
       userName,
       userImage,

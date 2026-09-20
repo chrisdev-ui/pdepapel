@@ -1,342 +1,271 @@
 "use client";
 
-import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
-import { useToast } from "@/hooks/use-toast";
-import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 
+import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
-
-import { AsyncProductSelect } from "@/components/ui/async-product-select";
-import { ProductScanButton } from "@/components/ui/product-scan-button";
-import { MANUAL_ADJUSTMENT_OPTIONS } from "@/lib/inventory-constants";
-
-const formSchema = z.object({
-  productId: z.string().min(1, "Producto es requerido"),
-  type: z.enum(
-    MANUAL_ADJUSTMENT_OPTIONS.map((opt) => opt.value) as [string, ...string[]],
-  ),
-  action: z.enum(["add", "subtract"]),
-  quantity: z.coerce.number().min(1, "Cantidad debe ser al menos 1"),
-  reason: z.string().min(3, "Razón es requerida (min 3 caracteres)"),
-  description: z.string().optional(),
-});
-
-const EMPTY_VALUES: z.infer<typeof formSchema> = {
-  productId: "",
-  type: "MANUAL_ADJUSTMENT",
-  action: "add",
-  quantity: 1,
-  reason: "",
-  description: "",
-};
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
+import { MOVEMENT_INTENTS, resolveIntentSign, type MovementIntent } from "@/lib/movement-reasons";
+import { cn } from "@/lib/utils";
 
 interface AdjustInventoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  products: { id: string; name: string; stock: number }[];
-  /** Producto ya elegido al abrir (por ejemplo, desde una fila de Inventario). */
   defaultProductId?: string | null;
-  /** Ajuste ya calculado al abrir (por ejemplo, la diferencia de un cuadre del kardex). */
-  defaults?: { action?: "add" | "subtract"; quantity?: number; reason?: string } | null;
+  /** Precarga desde el cuadre del kardex: qué pasó, cuántas y por qué. */
+  defaults?: { intentId?: string; action?: "add" | "subtract"; quantity?: number; reasonId?: string } | null;
 }
 
-export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  products,
-  defaultProductId = null,
-  defaults = null,
-}) => {
-  const [loading, setLoading] = useState(false);
+const SIGN_LABEL: Record<MovementIntent["sign"], string> = { add: "+", subtract: "−", both: "+ o −" };
+const SIGN_TINT: Record<MovementIntent["sign"], string> = {
+  add: "bg-tint-mint",
+  subtract: "bg-tint-pink",
+  both: "bg-tint-cream",
+};
+
+/**
+ * Registrar un movimiento a mano.
+ *
+ * El formulario pregunta primero **qué pasó** y de ahí deduce el tipo y el
+ * signo. Antes pedía «Tipo de Ajuste», luego «Acción», y cuando el tipo ya
+ * imponía el signo mostraba un campo de solo lectura llamado «Acción
+ * Implícita»: vocabulario de la base de datos, no de quien atiende la tienda.
+ *
+ * El motivo es una categoría fija (ver `lib/movement-reasons.ts`) y la nota
+ * libre queda en `description`.
+ */
+export function AdjustInventoryModal({ isOpen, onClose, onConfirm, defaultProductId, defaults }: AdjustInventoryModalProps) {
   const params = useParams();
-  const router = useRouter();
+  const storeId = String(params.storeId);
   const { toast } = useToast();
 
-  const initialValues = (): z.infer<typeof formSchema> => ({
-    ...EMPTY_VALUES,
-    productId: defaultProductId ?? "",
-    action: defaults?.action ?? EMPTY_VALUES.action,
-    quantity: defaults?.quantity && defaults.quantity > 0 ? Math.floor(defaults.quantity) : EMPTY_VALUES.quantity,
-    reason: defaults?.reason ?? EMPTY_VALUES.reason,
-  });
+  const [intentId, setIntentId] = useState<string>(MOVEMENT_INTENTS[0].id);
+  const [requestedAction, setRequestedAction] = useState<"add" | "subtract">("add");
+  const [productId, setProductId] = useState<string>(defaultProductId ?? "");
+  const [product, setProduct] = useState<AsyncProductOption | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [reasonId, setReasonId] = useState<string>("");
+  const [note, setNote] = useState<string>("");
+  const [loading, setLoading] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: initialValues(),
-  });
-
-  useFormValidationToast({ form });
+  const intent = useMemo(() => MOVEMENT_INTENTS.find((item) => item.id === intentId) ?? MOVEMENT_INTENTS[0], [intentId]);
+  const sign = resolveIntentSign(intent, requestedAction);
+  const reason = intent.reasons.find((item) => item.id === reasonId) ?? null;
 
   useEffect(() => {
-    if (isOpen) {
-      form.reset(initialValues());
-    }
-    // `initialValues` lee props que ya están en las dependencias.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, defaultProductId, defaults?.action, defaults?.quantity, defaults?.reason, form]);
+    if (!isOpen) return;
+    const nextIntent = MOVEMENT_INTENTS.find((item) => item.id === defaults?.intentId) ?? MOVEMENT_INTENTS[0];
+    setIntentId(nextIntent.id);
+    setRequestedAction(defaults?.action ?? "add");
+    setProductId(defaultProductId ?? "");
+    setProduct(null);
+    setQuantity(defaults?.quantity && defaults.quantity > 0 ? defaults.quantity : 1);
+    setReasonId(defaults?.reasonId ?? "");
+    setNote("");
+  }, [isOpen, defaultProductId, defaults]);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  // Al cambiar de intención el motivo anterior ya no aplica.
+  const chooseIntent = (next: MovementIntent) => {
+    setIntentId(next.id);
+    setReasonId("");
+    if (next.sign !== "both") setRequestedAction(next.sign);
+  };
+
+  const delta = sign === "subtract" ? -Math.abs(quantity) : Math.abs(quantity);
+  const currentStock = product?.stock ?? null;
+  const resultingStock = currentStock === null ? null : currentStock + delta;
+  const wouldGoNegative = resultingStock !== null && resultingStock < 0;
+  const canSubmit = Boolean(productId) && Boolean(reason) && quantity > 0 && !wouldGoNegative && !loading;
+
+  async function onSubmit() {
+    if (!canSubmit || !reason) return;
     try {
       setLoading(true);
-      // Determine sign based on action
-      const signedQuantity =
-        values.action === "subtract" ? -values.quantity : values.quantity;
-
-      const payload = {
-        ...values,
-        quantity: signedQuantity,
-      };
-
-      await axios.post(`/api/${params.storeId}/inventory`, payload);
-      toast({
-        title: "Inventario ajustado correctamente.",
-        variant: "success",
+      await axios.post(`/api/${storeId}/inventory`, {
+        productId,
+        type: intent.id,
+        action: sign,
+        quantity: Math.abs(quantity),
+        reason: `${intent.label} · ${reason.label}`,
+        description: note.trim() || undefined,
       });
+      toast({ title: "Movimiento registrado", description: `${intent.label}: ${sign === "subtract" ? "−" : "+"}${Math.abs(quantity)}` });
       onConfirm();
     } catch (error) {
-      toast({ title: "Error al ajustar inventario.", variant: "destructive" });
+      toast({ variant: "destructive", title: "No se pudo registrar", description: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <Modal
-      title="Ajustar Inventario"
-      description="Registra daños, pérdidas, usos internos o correcciones."
+      title="Registrar movimiento"
+      description="Queda en el kardex con tu nombre y la fecha. No se puede borrar, solo corregir con otro movimiento."
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={loading ? () => undefined : onClose}
+      className="max-h-[90vh] max-w-2xl overflow-y-auto"
     >
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="min-w-0 space-y-4"
-        >
-          <FormField
-            control={form.control}
-            name="productId"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel isRequired>Producto</FormLabel>
-                <div className="flex min-w-0 items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <FormControl>
-                      <AsyncProductSelect
-                        value={field.value ?? ""}
-                        onChange={field.onChange}
-                        placeholder="Buscar producto..."
-                        className="w-full"
-                        modal={true}
-                      />
-                    </FormControl>
-                  </div>
-                  <ProductScanButton compact onFound={(product) => field.onChange(product.id)} />
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Tipo de Ajuste</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={(val) => {
-                      field.onChange(val);
-                      // Force action based on type
-                      if (
-                        ["DAMAGE", "LOST", "STORE_USE", "PROMOTION"].includes(
-                          val,
-                        )
-                      ) {
-                        form.setValue("action", "subtract");
-                      } else if (
-                        ["PURCHASE", "RETURN", "INITIAL_INTAKE"].includes(val)
-                      ) {
-                        form.setValue("action", "add");
-                      } else {
-                        // For MANUAL_ADJUSTMENT, reset to default or keep current?
-                        // Resetting to add is safe default
-                        form.setValue("action", "add");
-                      }
-                    }}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue defaultValue={field.value} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {MANUAL_ADJUSTMENT_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {form.watch("type") === "MANUAL_ADJUSTMENT" && (
-              <FormField
-                control={form.control}
-                name="action"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel isRequired>Acción</FormLabel>
-                    <Select
-                      disabled={loading}
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue defaultValue={field.value} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="add">Agregar (+)</SelectItem>
-                        <SelectItem value="subtract">
-                          Restar / Quitar (-)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            {/* If not manual, show a read-only indicator of the action */}
-            {form.watch("type") !== "MANUAL_ADJUSTMENT" && (
-              <FormItem>
-                <FormLabel>Acción Implicita</FormLabel>
-                <div className="flex h-10 items-center rounded-md border border-input bg-muted px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                  {["DAMAGE", "LOST", "STORE_USE", "PROMOTION"].includes(
-                    form.watch("type"),
-                  ) ? (
-                    <span className="flex items-center font-semibold text-destructive">
-                      Restar Stock (-)
-                    </span>
-                  ) : (
-                    <span className="flex items-center font-semibold text-green-600">
-                      Sumar Stock (+)
-                    </span>
+      <div className="flex flex-col gap-5 pt-2">
+        <fieldset className="flex flex-col gap-2.5 border-0 p-0">
+          <legend className="text-sm font-semibold text-primary">1 · ¿Qué pasó?</legend>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {MOVEMENT_INTENTS.map((item) => {
+              const active = item.id === intent.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => chooseIntent(item)}
+                  className={cn(
+                    "flex min-w-0 flex-col gap-1.5 rounded-xl border bg-white p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active ? "border-primary ring-1 ring-primary" : "hover:bg-accent",
                   )}
-                </div>
-              </FormItem>
-            )}
+                >
+                  <span className={cn("self-start rounded-full px-2 py-0.5 text-[11px] font-bold text-primary", SIGN_TINT[item.sign])}>
+                    {SIGN_LABEL[item.sign]}
+                  </span>
+                  <span className="truncate text-sm font-semibold text-primary">{item.label}</span>
+                  <span className="text-xs text-muted-foreground">{item.hint}</span>
+                </button>
+              );
+            })}
           </div>
+          <p className="text-xs text-muted-foreground">
+            Las entradas por compra se registran en Aprovisionamiento, para que queden con su costo y su factura.
+          </p>
+        </fieldset>
 
-          <FormField
-            control={form.control}
-            name="quantity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel isRequired>Cantidad</FormLabel>
-                <FormControl>
-                  <StockQuantityInput
-                    disabled={loading}
-                    value={field.value}
-                    onChange={field.onChange}
-                    min={1}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="movimiento-producto" className="text-sm font-semibold text-primary">
+            2 · Producto
+          </label>
+          <div className="flex items-center gap-2">
+            <AsyncProductSelect
+              id="movimiento-producto"
+              value={productId}
+              onChange={(value, picked) => {
+                setProductId(value);
+                setProduct(picked ?? null);
+              }}
+              modal
+              placeholder="Buscar por nombre, SKU o código…"
+              className="min-w-0 flex-1"
+            />
+            <ProductScanButton
+              storeId={storeId}
+              compact
+              notify
+              onFound={(found) => {
+                setProductId(found.id);
+                setProduct(found);
+              }}
+            />
+          </div>
+          {product ? (
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {product.sku} · {product.stock.toLocaleString("es-CO")} unidades hoy
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-semibold text-primary">3 · Cuántas unidades</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <StockQuantityInput value={quantity} onChange={setQuantity} min={1} ariaLabel="Unidades" />
+            {intent.sign === "both" ? (
+              <div className="flex gap-1.5">
+                {(["add", "subtract"] as const).map((option) => (
+                  <Button
+                    key={option}
+                    type="button"
+                    size="sm"
+                    variant={requestedAction === option ? "default" : "outline"}
+                    onClick={() => setRequestedAction(option)}
+                  >
+                    {option === "add" ? "Sumar" : "Restar"}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+            {resultingStock !== null ? (
+              <span
+                className={cn(
+                  "ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm tabular-nums",
+                  wouldGoNegative ? "bg-tint-pink" : "bg-tint-mint",
+                )}
+              >
+                <span className="text-xs text-muted-foreground">Queda</span>
+                <span className="font-bold text-primary">
+                  {currentStock?.toLocaleString("es-CO")} → {resultingStock.toLocaleString("es-CO")}
+                </span>
+              </span>
+            ) : null}
+          </div>
+          {wouldGoNegative ? <p className="text-xs font-medium text-red-600">No se puede restar más de lo que hay.</p> : null}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-semibold text-primary">4 · Por qué</span>
+          <div className="flex flex-wrap gap-1.5">
+            {intent.reasons.map((option) => {
+              const active = option.id === reasonId;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setReasonId(option.id)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active ? "border-primary bg-primary text-primary-foreground" : "bg-white text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <Textarea
+            aria-label="Nota (opcional)"
+            rows={2}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Nota opcional: un detalle que ayude a entenderlo después."
           />
+        </div>
 
-          <FormField
-            control={form.control}
-            name="reason"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel isRequired>Razón del ajuste</FormLabel>
-                <FormControl>
-                  <Textarea
-                    disabled={loading}
-                    placeholder="Ej: Caja rota, conteo mensual..."
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            {reason ? (
+              <>
+                Se registra como <span className="font-semibold text-primary">{`${intent.label} · ${reason.label}`}</span>{" "}
+                {sign === "subtract" ? "−" : "+"}
+                {Math.abs(quantity)}.
+              </>
+            ) : (
+              "Elige un motivo para poder registrarlo."
             )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Detalles Adicionales</FormLabel>
-                <FormControl>
-                  <Textarea
-                    disabled={loading}
-                    placeholder="Describe los detalles..."
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="flex w-full flex-col-reverse gap-2 pt-6 sm:flex-row sm:justify-end">
-            <Button
-              disabled={loading}
-              variant="outline"
-              onClick={onClose}
-              type="button"
-              className="w-full sm:w-auto"
-            >
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
-            <Button
-              disabled={loading}
-              type="submit"
-              className="w-full sm:w-auto"
-            >
-              Confirmar Ajuste
+            <Button type="button" onClick={onSubmit} disabled={!canSubmit} isLoading={loading}>
+              Registrar movimiento
             </Button>
           </div>
-        </form>
-      </Form>
+        </div>
+      </div>
     </Modal>
   );
-};
+}

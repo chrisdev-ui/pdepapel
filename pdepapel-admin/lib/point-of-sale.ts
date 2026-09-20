@@ -5,6 +5,7 @@ import {
   PaymentMethod,
 } from "@prisma/client";
 
+import { movementActor } from "@/lib/movement-actor";
 import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { pushToBoldDatafono } from "@/lib/bold-terminal";
 import { getProductsPrices } from "@/lib/discount-engine";
@@ -371,7 +372,7 @@ export async function createPointOfSaleSale({
           price: product.price,
           reason: `Venta presencial: ${Array.from(requirement.sourceNames).join(", ")}`,
           referenceId: order.id,
-          createdBy: `USER_${userId}`,
+          createdBy: movementActor(userId),
         },
       });
     }
@@ -530,7 +531,7 @@ export async function undoPointOfSaleSale(params: {
         referenceId: order.id,
         cost: row.cost,
         price: row.price,
-        createdBy: `USER_${params.userId}`,
+        createdBy: movementActor(params.userId),
       }));
       await createInventoryMovementBatch(tx, movements, false);
       productIds = movements.map((movement) => movement.productId);

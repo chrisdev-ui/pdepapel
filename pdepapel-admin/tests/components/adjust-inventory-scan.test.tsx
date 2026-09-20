@@ -28,7 +28,7 @@ afterEach(cleanup);
 /** Movimientos de inventario: la lectura deja el producto elegido en el ajuste. */
 describe("Ajuste de inventario · escanear", () => {
   it("fills the product of the adjustment with the scanned product", async () => {
-    render(<AdjustInventoryModal isOpen onClose={() => undefined} onConfirm={() => undefined} products={[]} />);
+    render(<AdjustInventoryModal isOpen onClose={() => undefined} onConfirm={() => undefined} />);
     expect((await screen.findByTestId("picker-value")).textContent).toBe("");
     fireEvent.click(screen.getByRole("button", { name: "Escanear" }));
     expect(screen.getByTestId("picker-value").textContent).toBe("p-scan");

@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { FairEventStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+import { movementActor } from "@/lib/movement-actor";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import {
@@ -237,7 +238,7 @@ export async function POST(
               .filter(Boolean)
               .join(" "),
             referenceId: freshPreview.importReference,
-            createdBy: `USER_${userId}`,
+            createdBy: movementActor(userId),
           },
         });
       }

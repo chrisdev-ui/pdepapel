@@ -1,3 +1,4 @@
+import { movementActor } from "@/lib/movement-actor";
 import { getStoreAccess } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
@@ -446,7 +447,7 @@ export async function PATCH(
             : stopsBeingKit
               ? KIT_DISSOLUTION_REASON
               : KIT_COMPOSITION_REASON,
-          createdBy: `USER_${userId}`,
+          createdBy: movementActor(userId),
           skipWhenUnchanged: !becomesKit && !stopsBeingKit,
         });
         if (settled.quantity !== 0) {

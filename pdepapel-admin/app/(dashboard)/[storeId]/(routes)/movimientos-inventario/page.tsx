@@ -37,7 +37,7 @@ export default async function InventoryMovementsPage({ params, searchParams }: I
   // Enlaces desde una feria: `referencia` filtra el kardex por sus
   // movimientos (reserva y devolución) y `feria` abre «Conciliar feria
   // anterior» con la feria como contexto.
-  const [result, referencedFair, referencedRestockOrder, contextFair, product, products, openIssues] = await Promise.all([
+  const [result, referencedFair, referencedRestockOrder, contextFair, product, openIssues] = await Promise.all([
     getInventoryMovements(params.storeId, { referenceId, productId, sinceDays: showAll ? null : undefined }),
     referenceId
       ? prismadb.fairEvent.findFirst({ where: { id: referenceId, storeId: params.storeId }, select: { id: true, name: true } })
@@ -51,11 +51,6 @@ export default async function InventoryMovementsPage({ params, searchParams }: I
     productId
       ? prismadb.product.findFirst({ where: { id: productId, storeId: params.storeId }, select: { id: true, name: true } })
       : null,
-    prismadb.product.findMany({
-      where: { storeId: params.storeId, isArchived: false },
-      select: { id: true, name: true, stock: true },
-      orderBy: { name: "asc" },
-    }),
     // Deuda con el kardex de cualquier pedido, incluidos los ya borrados: es el
     // único sitio donde una incidencia sin pedido sigue siendo visible.
     prismadb.orderInventoryIssue.findMany({
@@ -67,11 +62,11 @@ export default async function InventoryMovementsPage({ params, searchParams }: I
 
   return (
     <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <InventoryIssuesPanel storeId={params.storeId} issues={openIssues} showOrder />
+      <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
         <InventoryMovementClient
+          issuesPanel={<InventoryIssuesPanel storeId={params.storeId} issues={openIssues} showOrder />}
+          openIssues={openIssues.length}
           data={result.movements}
-          products={products}
           scope={{ days: result.windowDays, hasMore: result.hasMore, take: result.take ?? null, showAll }}
           reference={
             referenceId

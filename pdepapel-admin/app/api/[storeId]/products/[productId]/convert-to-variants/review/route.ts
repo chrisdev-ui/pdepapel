@@ -1,3 +1,4 @@
+import { movementActor } from "@/lib/movement-actor";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { auth } from "@clerk/nextjs/server";
 import { Prisma } from "@prisma/client";
@@ -397,7 +398,7 @@ export async function POST(
         referenceId: group.id,
         cost: product.acqPrice ?? undefined,
         price: product.price,
-        createdBy: `USER_${userId}`,
+        createdBy: movementActor(userId),
       });
       const inventoryMovements = [
         movement(product.id, existingVariant.stock - product.stock),

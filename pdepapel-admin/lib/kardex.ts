@@ -1,6 +1,7 @@
 import type { InventoryMovementType } from "@prisma/client";
 
 import type { TintTone } from "@/components/ui/tint-badge";
+import { MOVEMENT_TYPE_LABELS } from "@/lib/inventory-constants";
 import { computeReplenishment } from "@/lib/replenishment";
 
 /**
@@ -8,27 +9,16 @@ import { computeReplenishment } from "@/lib/replenishment";
  * que el cargador y la página compartan una sola fuente de verdad.
  */
 
-/** Etiqueta corta por tipo de movimiento (la lista general usa las largas de `inventory-constants`). */
-export const MOVEMENT_LABELS: Record<InventoryMovementType, string> = {
-  ORDER_PLACED: "Venta",
-  IN_PERSON_SALE: "Venta presencial",
-  // Una feria reserva stock al abrir y devuelve lo no vendido al cerrar; lo
-  // vendido es la diferencia, no un movimiento aparte.
-  FESTIVAL_ALLOCATION: "Reserva de feria",
-  FESTIVAL_RETURN: "Retorno de feria",
-  RESTOCK_RECEIVED: "Recepción",
-  PURCHASE: "Recepción",
-  MANUAL_ADJUSTMENT: "Ajuste",
-  DAMAGE: "Daño",
-  LOST: "Pérdida",
-  RETURN: "Devolución",
-  ORDER_CANCELLED: "Cancelación",
-  STORE_USE: "Uso interno",
-  PROMOTION: "Promoción",
-  INITIAL_INTAKE: "Ingreso inicial",
-  INITIAL_MIGRATION: "Migración",
-  VARIANT_CONVERSION: "Conversión a variantes",
-};
+/**
+ * Etiqueta por tipo. Vive en `lib/inventory-constants.ts` (el archivo sin
+ * Prisma, que también usa el formulario); aquí se reexporta con el tipo del
+ * enum para los consumidores que ya lo importaban desde el kardex.
+ *
+ * Nota de negocio que conviene no perder: una feria reserva stock al abrir y
+ * devuelve lo no vendido al cerrar, así que lo vendido en la feria es la
+ * diferencia entre ambos movimientos y no una fila aparte.
+ */
+export const MOVEMENT_LABELS: Record<InventoryMovementType, string> = MOVEMENT_TYPE_LABELS;
 
 export const MOVEMENT_TONES: Record<InventoryMovementType, TintTone> = {
   ORDER_PLACED: "sky",

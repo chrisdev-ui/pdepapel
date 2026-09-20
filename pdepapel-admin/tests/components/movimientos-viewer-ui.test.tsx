@@ -12,6 +12,7 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ storeId: "store-1" }),
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/store-1/movimientos-inventario",
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/env.mjs", () => ({ env: new Proxy({}, { get: () => "test" }) }));
@@ -27,7 +28,8 @@ const asOwner = (node: React.ReactNode) => render(<ViewerAccessProvider role="ow
 const list = (
   <InventoryMovementClient
     data={[]}
-    products={[]}
+    issuesPanel={<div data-testid="panel-incidencias" />}
+    openIssues={0}
     scope={{ days: 90, hasMore: false, take: 500, showAll: false }}
     reference={null}
     product={null}
@@ -39,15 +41,17 @@ const list = (
 afterEach(cleanup);
 
 describe("botones que escriben en Movimientos", () => {
-  it("la dueña ve «Ajustar Inventario» y «Conciliar feria anterior»", () => {
+  it("la dueña ve «Registrar movimiento» y «Conciliar feria anterior»", () => {
     asOwner(list);
-    expect(screen.getByRole("button", { name: /Ajustar Inventario/i })).toBeInTheDocument();
+    // Con la lista vacía el botón sale dos veces: en la cabecera y como acción
+    // del estado vacío. Las dos son de la dueña.
+    expect(screen.getAllByRole("button", { name: /Registrar movimiento/i }).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /Conciliar feria anterior/i })).toBeInTheDocument();
   });
 
   it("una cuenta de solo lectura no ve ninguno de los dos", () => {
     asViewer(list);
-    expect(screen.queryByRole("button", { name: /Ajustar Inventario/i })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: /Registrar movimiento/i })).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /Conciliar feria anterior/i })).not.toBeInTheDocument();
   });
 

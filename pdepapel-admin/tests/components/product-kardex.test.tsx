@@ -107,7 +107,12 @@ describe("ProductKardexView", () => {
     expect(screen.getByText("No cuadra").closest("div.rounded-xl")).toHaveClass("border-tint-pink");
     // El libro dice 11 y hay 8: un ajuste de −3 deja el saldo en el stock real.
     await userEvent.click(screen.getByRole("button", { name: "Registrar ajuste de −3" }));
-    expect(modalProps.last).toMatchObject({ isOpen: true, defaultProductId: "p1", defaults: { action: "subtract", quantity: 3, reason: "Cuadre de kardex" } });
+    expect(modalProps.last).toMatchObject({
+      isOpen: true,
+      defaultProductId: "p1",
+      // El motivo ya no es texto libre: es una categoría de `lib/movement-reasons`.
+      defaults: { intentId: "MANUAL_ADJUSTMENT", action: "subtract", quantity: 3, reasonId: "cuadre-kardex" },
+    });
   });
 
   it("explains a kit mismatch instead of offering an adjustment, and mentions kit sales in the note", () => {
@@ -139,7 +144,7 @@ describe("ProductKardexView", () => {
     expect(first.getByText("Tienda en línea")).toBeInTheDocument();
     const second = within(rows[1]);
     expect(second.getByText("Recepción")).toHaveClass("bg-tint-mint");
-    expect(second.getByText("+20")).toHaveClass("text-green-600");
+    expect(second.getByText("+20")).toHaveClass("text-emerald-700");
     expect(within(rows[3]).getByText("—")).toBeInTheDocument();
   });
 
@@ -165,6 +170,7 @@ describe("ProductKardexView", () => {
 
   it("shows an empty state when the window has no rows", () => {
     render(<ProductKardexView storeId="store-1" kardex={kardex({ rows: [], olderCount: 0, openingBalance: 0 })} showAll={false} typeFilter={null} />);
-    expect(screen.getByText("No hay movimientos en últimos 90 días.")).toBeInTheDocument();
+    // El historial usa el estado vacío del DataTable compartido.
+    expect(screen.getByText("No hay movimientos en últimos 90 días")).toBeInTheDocument();
   });
 });

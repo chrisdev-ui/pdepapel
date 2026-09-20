@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
+import { movementActor } from "@/lib/movement-actor";
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
 import {
@@ -94,7 +95,7 @@ export async function POST(
         reason,
         description,
         cost: cost ? parseFloat(cost) : undefined,
-        createdBy: `USER_${userId}`,
+        createdBy: movementActor(userId),
       });
     });
     await invalidateStoreProductsCache(params.storeId, targetProductId);

@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 
+import { movementActor } from "@/lib/movement-actor";
 import { ErrorFactory } from "@/lib/api-errors";
 import {
   createInventoryMovementBatchResilient,
@@ -272,7 +273,7 @@ export async function allocateFairInventory({
           price: product.price,
           reason: `Asignado a feria: ${fairEvent.name}`,
           referenceId: fairEventId,
-          createdBy: `USER_${userId}`,
+          createdBy: movementActor(userId),
         },
       });
     }
@@ -907,7 +908,7 @@ export async function reconcileFairEvent({
           referenceId: fairEventId,
           cost: Number(inventoryItem.product.acqPrice) || 0,
           price: Number(inventoryItem.product.price) || 0,
-          createdBy: `USER_${userId}`,
+          createdBy: movementActor(userId),
         });
       }
     }

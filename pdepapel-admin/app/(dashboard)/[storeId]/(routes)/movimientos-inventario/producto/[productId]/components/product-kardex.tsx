@@ -8,9 +8,10 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/ui/metric-card";
+import { Models } from "@/constants";
+
+import { DataTable } from "@/components/ui/data-table";
 import { SectionCard } from "@/components/ui/section-card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TintBadge } from "@/components/ui/tint-badge";
 import {
   describeAdjustmentCounts,
@@ -18,36 +19,16 @@ import {
   formatKardexMonth,
   formatSignedQuantity,
   MOVEMENT_LABELS,
-  MOVEMENT_TONES,
 } from "@/lib/kardex";
 import { describeRate } from "@/lib/replenishment";
 import { useCanWrite } from "@/components/shell/viewer-access";
-import { cn, currencyFormatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 
 import { AdjustInventoryModal } from "../../../components/adjust-inventory-modal";
+import { kardexColumns } from "./kardex-columns";
 import type { KardexRow, ProductKardex } from "../server/get-product-kardex";
 
-const ALL_TYPES = "todos";
 
-/** Orden de los tipos en el filtro: primero lo que más se consulta. */
-const FILTER_TYPES: InventoryMovementType[] = [
-  "ORDER_PLACED",
-  "IN_PERSON_SALE",
-  "ORDER_CANCELLED",
-  "RESTOCK_RECEIVED",
-  "PURCHASE",
-  "MANUAL_ADJUSTMENT",
-  "DAMAGE",
-  "LOST",
-  "STORE_USE",
-  "PROMOTION",
-  "RETURN",
-  "FESTIVAL_ALLOCATION",
-  "FESTIVAL_RETURN",
-  "INITIAL_INTAKE",
-  "INITIAL_MIGRATION",
-  "VARIANT_CONVERSION",
-];
 
 function stockTone(stock: number, threshold: number): string {
   if (stock <= 0) return "pink";
@@ -55,22 +36,6 @@ function stockTone(stock: number, threshold: number): string {
   return "mint";
 }
 
-function ReferenceCell({ reference }: { reference: KardexRow["reference"] }) {
-  if (!reference) return <span className="text-muted-foreground">—</span>;
-  const label = reference.href ? (
-    <Link href={reference.href} className="font-semibold text-primary underline-offset-4 hover:underline">
-      {reference.label}
-    </Link>
-  ) : (
-    <span className="text-primary">{reference.label}</span>
-  );
-  return (
-    <div className="flex min-w-0 flex-col">
-      <span className="truncate">{label}</span>
-      {reference.secondary && <span className="truncate text-xs text-muted-foreground">{reference.secondary}</span>}
-    </div>
-  );
-}
 
 interface ProductKardexProps {
   storeId: string;
@@ -85,7 +50,7 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
   const router = useRouter();
   const canWrite = useCanWrite();
   const [adjustOpen, setAdjustOpen] = useState(false);
-  const [adjustDefaults, setAdjustDefaults] = useState<{ action: "add" | "subtract"; quantity: number; reason: string } | null>(null);
+  const [adjustDefaults, setAdjustDefaults] = useState<{ intentId: string; action: "add" | "subtract"; quantity: number; reasonId: string } | null>(null);
   const { product, threshold, metrics, rows } = kardex;
 
   const buildHref = (next: { all?: boolean; type?: InventoryMovementType | null }) => {
@@ -107,7 +72,7 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
 
   const movementsHref = `/${storeId}/movimientos-inventario?producto=${encodeURIComponent(product.id)}`;
 
-  const openAdjust = (defaults: { action: "add" | "subtract"; quantity: number; reason: string } | null) => {
+  const openAdjust = (defaults: { intentId: string; action: "add" | "subtract"; quantity: number; reasonId: string } | null) => {
     setAdjustDefaults(defaults);
     setAdjustOpen(true);
   };
@@ -211,12 +176,16 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
                 type="button"
                 variant="outline"
                 size="sm"
+                // A 390 px la tarjeta mide ~187 px y el texto no cabe en una
+                // línea: sin esto el botón se sale de su propia tarjeta.
+                className="h-auto w-full whitespace-normal py-1.5"
                 onClick={() =>
                   openAdjust({
                     // El libro va por detrás del stock: el ajuste lleva el saldo hasta el stock real.
+                    intentId: "MANUAL_ADJUSTMENT",
                     action: drift > 0 ? "add" : "subtract",
                     quantity: Math.abs(drift),
-                    reason: "Cuadre de kardex",
+                    reasonId: "cuadre-kardex",
                   })
                 }
               >
@@ -233,58 +202,24 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
         id="historial"
         title="Historial con saldo"
         description={`${rows.length.toLocaleString("es-CO")} ${rows.length === 1 ? "movimiento" : "movimientos"} · ${periodLabel}${typeFilter ? ` · solo ${MOVEMENT_LABELS[typeFilter].toLowerCase()}` : ""}${kardex.hasMore ? " · la lista se cortó en el tope" : ""}`}
-        action={
-          <Select value={typeFilter ?? ALL_TYPES} onValueChange={(value) => router.push(buildHref({ type: value === ALL_TYPES ? null : (value as InventoryMovementType) }))}>
-            <SelectTrigger className="w-[190px]" aria-label="Filtrar por tipo de movimiento">
-              <SelectValue placeholder="Todos los movimientos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_TYPES}>Todos los movimientos</SelectItem>
-              {FILTER_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>{MOVEMENT_LABELS[type]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        }
       >
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Movimiento</TableHead>
-                <TableHead>Referencia</TableHead>
-                <TableHead className="text-right">Cantidad</TableHead>
-                <TableHead className="text-right">Saldo</TableHead>
-                <TableHead className="text-right">Costo</TableHead>
-                <TableHead>Quién</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                    {typeFilter ? "No hay movimientos de este tipo en el periodo." : `No hay movimientos en ${periodLabel}.`}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="whitespace-nowrap text-sm text-primary">{formatKardexDate(row.createdAt)}</TableCell>
-                    <TableCell><TintBadge label={MOVEMENT_LABELS[row.type]} tone={MOVEMENT_TONES[row.type]} /></TableCell>
-                    <TableCell className="max-w-[280px] text-sm"><ReferenceCell reference={row.reference} /></TableCell>
-                    <TableCell className={cn("whitespace-nowrap text-right font-mono text-sm font-semibold", row.quantity < 0 ? "text-red-600" : "text-green-600")}>
-                      {formatSignedQuantity(row.quantity)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right font-mono text-sm font-bold text-primary">{row.newStock.toLocaleString("es-CO")}</TableCell>
-                    <TableCell className="whitespace-nowrap text-right font-mono text-sm text-primary">{row.cost === null ? "—" : currencyFormatter(row.cost)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-primary">{row.who}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          columns={kardexColumns}
+          data={rows}
+          tableKey={Models.ProductKardex}
+          searchPlaceholder="Buscar origen, motivo o quién…"
+          filters={[
+            {
+              columnKey: "type",
+              title: "Movimiento",
+              options: Array.from(new Set(rows.map((row) => row.type))).map((type) => ({ label: MOVEMENT_LABELS[type], value: type })),
+            },
+          ]}
+          emptyState={{
+            title: typeFilter ? "No hay movimientos de este tipo en el periodo" : `No hay movimientos en ${periodLabel}`,
+            description: "Cada venta, recepción o ajuste de este producto deja una fila con su saldo.",
+          }}
+        />
         <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
             Saldo inicial del periodo: <span className="font-semibold text-primary">{kardex.openingBalance.toLocaleString("es-CO")}</span> ·{" "}
@@ -308,7 +243,6 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
           setAdjustOpen(false);
           router.refresh();
         }}
-        products={[{ id: product.id, name: product.name, stock: product.stock }]}
         defaultProductId={product.id}
         defaults={adjustDefaults}
       />

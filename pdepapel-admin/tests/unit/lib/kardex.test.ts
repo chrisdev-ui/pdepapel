@@ -130,11 +130,20 @@ describe("labels and tones", () => {
     expect(MOVEMENT_LABELS.ORDER_PLACED).toBe("Venta");
     expect(MOVEMENT_LABELS.IN_PERSON_SALE).toBe("Venta presencial");
     expect(MOVEMENT_LABELS.RESTOCK_RECEIVED).toBe("Recepción");
-    expect(MOVEMENT_LABELS.PURCHASE).toBe("Recepción");
+    // Antes «Compra» también decía «Recepción», así que el filtro por tipo
+    // ofrecía dos opciones con el mismo texto y ninguna se podía distinguir.
+    expect(MOVEMENT_LABELS.PURCHASE).toBe("Compra");
     expect(MOVEMENT_TONES.DAMAGE).toBe("pink");
     expect(MOVEMENT_TONES.LOST).toBe("pink");
     // Fase 2B: el reparto al convertir un producto en variantes tiene tipo propio.
     expect(MOVEMENT_LABELS.VARIANT_CONVERSION).toBe("Conversión a variantes");
+  });
+
+  it("no repite una etiqueta entre dos tipos", () => {
+    // El filtro por tipo se arma desde este mapa: dos tipos con el mismo texto
+    // dan dos opciones idénticas en la lista desplegable.
+    const labels = Object.values(MOVEMENT_LABELS);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 
   it("describes adjustment counts in Spanish with plurals", () => {
