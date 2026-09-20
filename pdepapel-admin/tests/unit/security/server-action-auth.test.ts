@@ -24,6 +24,26 @@ vi.mock("@/lib/dane-api", () => ({
   formatLocationForDisplay: () => "",
 }));
 vi.mock("@/lib/cloudinary", () => ({ default: { uploader: { destroy: vi.fn() } } }));
+/**
+ * `lib/discount-engine.ts` crea su cliente de Upstash al importarse
+ * (`Redis.fromEnv()`), y `getOrder` y `getProducts` acaban pasando por
+ * `getActiveOffers`. Sin las variables `UPSTASH_REDIS_REST_*` el cliente sale
+ * a la red igual y reintenta hasta pasarse de los 5 s de la prueba: en CI
+ * estas dos pruebas caían por tiempo de espera, no por el guardia que se está
+ * comprobando aquí. Se sustituye por el mismo doble que usa
+ * `read-access-routes.test.ts`.
+ */
+vi.mock("@upstash/redis", () => ({
+  Redis: class {
+    static fromEnv() { return new this(); }
+    async get() { return null; }
+    async set() { return "OK"; }
+    async del() { return 0; }
+    async keys() { return []; }
+    async scan() { return [0, []]; }
+    async ttl() { return -1; }
+  },
+}));
 
 /** Prisma de mentira: la propiedad de la tienda es real, lo demás devuelve vacío. */
 const storeFindFirst = vi.fn(async (query: any) => {
