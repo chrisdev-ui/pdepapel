@@ -13,6 +13,7 @@ import { TintBadge } from "@/components/ui/tint-badge";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -64,6 +65,7 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
   const storeId = String(params.storeId);
   const { toast } = useToast();
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
+  const canWrite = useCanWrite();
   const [loading, setLoading] = useState(false);
 
   const defaultValues = useMemo<DraftValues>(
@@ -346,9 +348,13 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
               </SectionCard>
               {initialData && (
                 <SectionCard id="zona-de-cuidado" title="Zona de cuidado" tone="care" description="Un borrador se puede eliminar sin consecuencias: nunca tocó el inventario.">
-                  <Button type="button" variant="outline" size="sm" className="self-start border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onDelete} disabled={loading}>
-                    Eliminar borrador
-                  </Button>
+                  {canWrite ? (
+                    <Button type="button" variant="outline" size="sm" className="self-start border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onDelete} disabled={loading}>
+                      Eliminar borrador
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Sin acciones disponibles.</p>
+                  )}
                 </SectionCard>
               )}
             </div>
@@ -356,14 +362,16 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
 
           <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">Guardar como borrador no afecta nada. «Pedir al proveedor» fija las líneas y habilita la recepción.</p>
-            <div className="flex items-center gap-2">
-              <Button type="submit" variant="outline" disabled={loading}>
-                Guardar borrador
-              </Button>
-              <Button type="button" onClick={placeOrder} disabled={loading} isLoading={loading} loadingText="Guardando…">
-                Pedir al proveedor
-              </Button>
-            </div>
+            {canWrite && (
+              <div className="flex items-center gap-2">
+                <Button type="submit" variant="outline" disabled={loading}>
+                  Guardar borrador
+                </Button>
+                <Button type="button" onClick={placeOrder} disabled={loading} isLoading={loading} loadingText="Guardando…">
+                  Pedir al proveedor
+                </Button>
+              </div>
+            )}
           </div>
         </form>
       </Form>

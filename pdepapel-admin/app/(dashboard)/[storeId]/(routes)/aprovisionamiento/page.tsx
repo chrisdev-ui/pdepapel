@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import dynamicImport from "next/dynamic";
 
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
+
 import { getRestockOrders } from "./server/get-restock-orders";
 
 const RestockOrderClient = dynamicImport(() => import("./components/client"), { ssr: false });
@@ -20,6 +22,9 @@ export default async function RestockOrdersPage({
   params: { storeId: string };
   searchParams?: { proveedor?: string };
 }) {
+  // La página también consulta por su cuenta, así que comprueba antes del
+  // `Promise.all` en vez de esperar a que el cargador lance dentro de él.
+  await requireStoreOwner(params.storeId);
   const supplierId = searchParams?.proveedor?.trim() || null;
   const [restockOrders, supplier] = await Promise.all([
     getRestockOrders(params.storeId, supplierId),

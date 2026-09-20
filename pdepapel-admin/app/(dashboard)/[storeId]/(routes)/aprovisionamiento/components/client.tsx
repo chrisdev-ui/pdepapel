@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
@@ -36,6 +37,7 @@ export const RestockOrderClient: React.FC<RestockOrderClientProps> = ({ data, su
   const router = useRouter();
   const params = useParams();
   const storeId = String(params.storeId);
+  const canWrite = useCanWrite();
   const open = data.filter((row) => row.status === RestockOrderStatus.ORDERED || row.status === RestockOrderStatus.PARTIALLY_RECEIVED).length;
 
   return (
@@ -47,12 +49,14 @@ export const RestockOrderClient: React.FC<RestockOrderClientProps> = ({ data, su
         />
         <div className="flex flex-wrap items-center gap-2">
           <RefreshButton />
-          <Button asChild>
-            <Link href={`/${storeId}/aprovisionamiento/nuevo`}>
-              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-              Crear pedido
-            </Link>
-          </Button>
+          {canWrite && (
+            <Button asChild>
+              <Link href={`/${storeId}/aprovisionamiento/nuevo`}>
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                Crear pedido
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
       {supplierFilter && (

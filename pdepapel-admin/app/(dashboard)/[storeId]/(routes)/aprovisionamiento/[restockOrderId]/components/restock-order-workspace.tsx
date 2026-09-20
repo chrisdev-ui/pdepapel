@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import {
@@ -50,6 +51,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
   const { toast } = useToast();
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [notes, setNotes] = useState(order.notes ?? "");
+  const canWrite = useCanWrite();
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(openReceive);
@@ -59,8 +61,8 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
   const receivable = RECEIVABLE_STATUSES.includes(order.status);
   const cancelled = order.status === RestockOrderStatus.CANCELLED;
   const completed = order.status === RestockOrderStatus.COMPLETED;
-  const canCancel = canTransitionRestockOrder(order.status, RestockOrderStatus.CANCELLED, context) && !cancelled;
-  const canClose = receivable && canTransitionRestockOrder(order.status, RestockOrderStatus.COMPLETED, context);
+  const canCancel = canWrite && canTransitionRestockOrder(order.status, RestockOrderStatus.CANCELLED, context) && !cancelled;
+  const canClose = canWrite && receivable && canTransitionRestockOrder(order.status, RestockOrderStatus.COMPLETED, context);
   const notesDirty = notes.trim() !== (order.notes ?? "").trim();
   const factor = landedCostFactor(order.totalAmount, order.shippingCost);
   const shippingPercent = Math.round((factor - 1) * 1000) / 10;
@@ -157,10 +159,12 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
             <Button asChild variant="outline" size="sm">
               <Link href={`/${storeId}/aprovisionamiento`}>Volver a aprovisionamiento</Link>
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={saveNotes} disabled={!notesDirty || saving || busy} isLoading={saving} loadingText="Guardando…">
-              Guardar notas
-            </Button>
-            {receivable && (
+            {canWrite && (
+              <Button type="button" variant="outline" size="sm" onClick={saveNotes} disabled={!notesDirty || saving || busy} isLoading={saving} loadingText="Guardando…">
+                Guardar notas
+              </Button>
+            )}
+            {receivable && canWrite && (
               <Button type="button" size="sm" onClick={() => setReceiveOpen(true)} disabled={busy}>
                 <PackageCheck className="mr-2 h-4 w-4" aria-hidden="true" />
                 Recibir mercancía
@@ -258,11 +262,11 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
               onChange={(event) => setNotes(event.target.value)}
               rows={4}
               maxLength={2000}
-              disabled={busy || cancelled}
+              disabled={busy || cancelled || !canWrite}
               aria-label="Notas del pedido"
               placeholder="Ej: llegan en dos entregas; la segunda con los resaltadores."
             />
-            {notesDirty && !cancelled && (
+            {notesDirty && !cancelled && canWrite && (
               <Button type="button" size="sm" className="self-end" onClick={saveNotes} disabled={saving || busy} isLoading={saving} loadingText="Guardando…">
                 Guardar notas
               </Button>
@@ -314,7 +318,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
                   Cancelar pedido
                 </Button>
               )}
-              {cancelled && (
+              {cancelled && canWrite && (
                 <>
                   <Button type="button" variant="outline" size="sm" onClick={reopen} disabled={busy}>
                     Volver a borrador

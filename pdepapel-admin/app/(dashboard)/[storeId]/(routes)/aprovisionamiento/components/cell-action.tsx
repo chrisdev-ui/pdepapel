@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { canTransitionRestockOrder } from "@/lib/restock-orders";
@@ -28,6 +29,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   const storeId = String(params.storeId);
+  const canWrite = useCanWrite();
   const { toast } = useToast();
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [loading, setLoading] = useState(false);
@@ -36,8 +38,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const isCancelled = data.status === RestockOrderStatus.CANCELLED;
   const receivable = data.status === RestockOrderStatus.ORDERED || data.status === RestockOrderStatus.PARTIALLY_RECEIVED;
   const context = { receivedUnits: data.progress.receivedUnits };
-  const canCancel = canTransitionRestockOrder(data.status, RestockOrderStatus.CANCELLED, context) && !isCancelled;
-  const canDelete = (isDraft || isCancelled) && data.progress.receivedUnits === 0;
+  const canCancel = canWrite && canTransitionRestockOrder(data.status, RestockOrderStatus.CANCELLED, context) && !isCancelled;
+  const canDelete = canWrite && (isDraft || isCancelled) && data.progress.receivedUnits === 0;
 
   const run = async (work: () => Promise<void>, success: string) => {
     try {
@@ -93,10 +95,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Pedido {data.orderNumber}</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => router.push(`/${storeId}/aprovisionamiento/${data.id}`)}>
-            {isDraft ? <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> : <Eye className="mr-2 h-4 w-4" aria-hidden="true" />}
-            {isDraft ? "Editar borrador" : "Ver pedido"}
+            {isDraft && canWrite ? <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> : <Eye className="mr-2 h-4 w-4" aria-hidden="true" />}
+            {isDraft && canWrite ? "Editar borrador" : "Ver pedido"}
           </DropdownMenuItem>
-          {receivable && (
+          {receivable && canWrite && (
             <DropdownMenuItem onClick={() => router.push(`/${storeId}/aprovisionamiento/${data.id}?recibir=1`)}>
               <PackageCheck className="mr-2 h-4 w-4" aria-hidden="true" />
               Recibir mercancía

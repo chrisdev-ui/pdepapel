@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { landedCostFactor, landedUnitCost, remainingUnits } from "@/lib/restock-orders";
@@ -51,6 +52,7 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
   const [excessConfirmed, setExcessConfirmed] = useState<Record<string, boolean>>({});
   const [updateCosts, setUpdateCosts] = useState(true);
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
+  const canWrite = useCanWrite();
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -203,7 +205,7 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
               Cancelar
             </Button>
-            <Button type="button" onClick={submit} disabled={submitting || receivingUnits === 0 || unconfirmedExcess} isLoading={submitting} loadingText="Recibiendo…">
+            <Button type="button" onClick={submit} disabled={!canWrite || submitting || receivingUnits === 0 || unconfirmedExcess} isLoading={submitting} loadingText="Recibiendo…">
               Recibir {receivingUnits} {receivingUnits === 1 ? "unidad" : "unidades"}
             </Button>
           </div>

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import prismadb from "@/lib/prismadb";
 import { RESTOCK_ORDER_INCLUDE } from "@/lib/restock-orders-db";
+import { requireStoreOwner } from "@/lib/store-access";
 import { RestockOrderStatus } from "@prisma/client";
 
 import { RestockOrderDraftForm } from "./components/restock-order-draft-form";
@@ -18,6 +19,10 @@ export default async function RestockOrderPage({
 }) {
   // La ruta canónica es /nuevo; /new sigue llegando desde enlaces viejos.
   if (params.restockOrderId === "new") redirect(`/${params.storeId}/aprovisionamiento/nuevo`);
+
+  // Solo la dueña: el pedido lleva costo unitario, costo puesto en bodega y
+  // el margen que sale de ellos.
+  await requireStoreOwner(params.storeId);
 
   const isNew = NEW_SEGMENTS.has(params.restockOrderId);
   const [restockOrder, suppliers] = await Promise.all([
