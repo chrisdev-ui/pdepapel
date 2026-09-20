@@ -40,7 +40,14 @@ function ArrivalCell({ row }: { row: RestockOrderRow }) {
   const arrival = expectedArrival(row);
   switch (arrival.state) {
     case "sin-plazo":
-      return <span className="text-xs text-muted-foreground">Sin plazo del proveedor</span>;
+      // A 1280 la frase completa queda pegada al borde de la columna, así que
+      // se acorta y el texto entero vive en el `title`, como en las demás
+      // celdas que se recortan.
+      return (
+        <span className="text-xs text-muted-foreground" title="Sin plazo del proveedor">
+          Sin plazo
+        </span>
+      );
     case "sin-pedir":
       return <span className="text-xs text-muted-foreground">Sin pedir</span>;
     case "cerrado":

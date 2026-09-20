@@ -85,6 +85,20 @@ describe("la lista en solo lectura", () => {
   });
 });
 
+describe("la columna «Cuándo llega» sin plazo del proveedor", () => {
+  it("muestra el texto corto y guarda la frase completa en el título", () => {
+    // A 1280 la frase entera quedaba pegada al borde de la columna. Hoy 28 de
+    // los 29 proveedores no tienen plazo, así que es el caso corriente.
+    const sinPlazo = { ...row, supplierLeadTimeDays: null };
+    asOwner(<RestockOrderClient data={[sinPlazo]} supplierFilter={null} />);
+    const cells = screen.getAllByTitle("Sin plazo del proveedor");
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells[0]).toHaveTextContent("Sin plazo");
+    // La frase larga ya no se pinta como texto visible.
+    expect(screen.queryAllByText("Sin plazo del proveedor")).toHaveLength(0);
+  });
+});
+
 describe("el pedido en solo lectura", () => {
   it("la dueña conserva recibir, guardar notas y cerrar", () => {
     asOwner(<RestockOrderWorkspace order={order} />);
