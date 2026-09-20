@@ -103,7 +103,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
       action: initialData ? "Guardar cambios" : "Crear publicación",
       pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
-    [initialData],
+    [initialData, canWrite],
   );
 
   const defaultValues = useMemo<Partial<PostFormValues>>(

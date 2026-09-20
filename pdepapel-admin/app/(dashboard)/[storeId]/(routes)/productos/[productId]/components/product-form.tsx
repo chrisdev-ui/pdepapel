@@ -362,7 +362,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       action: initialData ? "Guardar cambios" : "Crear",
       pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
-    [initialData],
+    [initialData, canWrite],
   );
 
   const defaultValues = useMemo(

@@ -91,8 +91,6 @@ export function DataTableActionOptions<TData>({
   model,
 }: DataTableActionOptionsProps<TData>) {
   const canWrite = useCanWrite();
-  // Una cuenta de solo lectura no ve acciones masivas.
-  if (!canWrite) return null;
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
@@ -437,6 +435,11 @@ export function DataTableActionOptions<TData>({
       setOpen(true);
     }
   }, [action]);
+
+  // Una cuenta de solo lectura no ve acciones masivas. La comprobación va
+  // después de todos los hooks: si corta antes, React los ve en distinto
+  // orden entre renders y el estado del menú se puede mezclar.
+  if (!canWrite) return null;
 
   return (
     <>

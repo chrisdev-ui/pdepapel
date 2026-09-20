@@ -129,7 +129,7 @@ export function CommandPalette({
       }
     }
     return items;
-  }, []);
+  }, [canWrite, ownerAllowlisted]);
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
