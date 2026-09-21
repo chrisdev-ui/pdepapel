@@ -13,9 +13,13 @@ import {
 import prismadb from "@/lib/prismadb";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
 import {
+  BUSINESS_FACT_TEMPLATES,
+  type BusinessFactIntent,
   areBusinessFactsApproved,
   buildPaymentMenuRows,
+  buildWelcomeMenuRows,
   classifyBusinessFact,
+  isWelcomeGreeting,
   parsePaymentOption,
   renderBusinessFact,
   renderPaymentOption,
@@ -49,6 +53,7 @@ import {
   getActiveBotKeywords,
   getSendableBotReply,
   readButtonTarget,
+  readFactTarget,
 } from "@/lib/whatsapp/bot-replies";
 import {
   sendWhatsAppButtonMessage,
@@ -479,6 +484,54 @@ export async function runWhatsAppBot(input: {
     };
   }
 
+  // 1 quater. Tocó una fila del menú de bienvenida. Igual que `pay:`: el id
+  //    dice qué dato quiere, así que no hay nada que interpretar. Las filas
+  //    llevan a las MISMAS respuestas que salen de los ajustes, no a un texto
+  //    copiado, para que no se desfasen cuando Paula cambie un número.
+  const factTarget = readFactTarget(buttonId) as BusinessFactIntent | null;
+  if (factTarget) {
+    const settings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    const answer =
+      settings && areBusinessFactsApproved(settings)
+        ? renderBusinessFact(factTarget, settings)
+        : null;
+    if (!answer) {
+      await escalate(conversation.id);
+      await deliver(
+        conversation.id,
+        input.recipient,
+        UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
+        [],
+        pacing(input),
+      );
+      return { outcome: "escalated_button_unavailable" };
+    }
+    // «Cómo pagar» no es un texto sino la puerta al menú de pagos de siempre.
+    const filas =
+      factTarget === "payment.methods" && settings
+        ? buildPaymentMenuRows(settings)
+        : [];
+    const sent = await deliver(
+      conversation.id,
+      input.recipient,
+      answer,
+      [],
+      pacing(input),
+      filas.length > 0 ? { list: { body: answer, rows: filas } } : {},
+    );
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.ok) {
+      return { outcome: "replied_business_fact", trigger: factTarget };
+    }
+    await escalate(conversation.id);
+    return {
+      outcome: "escalated_send_failed",
+      trigger: factTarget,
+      error: sent.error,
+    };
+  }
+
   const buttonTarget = readButtonTarget(buttonId);
 
   // 2. Detenido: la conversación ya espera a una persona. Un mensaje escrito
@@ -647,6 +700,51 @@ export async function runWhatsAppBot(input: {
       // `none` —y un producto del que no se pudo contar nada— siguen su camino
       // sin tocar nada, como si esto no existiera.
     }
+  }
+
+  // 4 ter. Saludó. Antes esto lo contestaba una respuesta escrita de Paula con
+  //    un texto suelto y ninguna opción; ahora el saludo abre el menú de lo que
+  //    más le preguntan. Va ANTES del paso 5 porque si no, su «Saludo» ganaría
+  //    y el menú no saldría nunca.
+  //
+  //    Se reconoce con `matchWhatsAppKeyword` —palabras enteras—, no con el
+  //    `includes` de `classifyBusinessFact`: aquí hay disparadores de tres
+  //    letras y con `includes` volverían a colarse dentro de «escolares».
+  if (isWelcomeGreeting(input.body)) {
+    const welcomeSettings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    if (welcomeSettings && areBusinessFactsApproved(welcomeSettings)) {
+      const cuerpo = BUSINESS_FACT_TEMPLATES["welcome.body"]();
+      const filas = buildWelcomeMenuRows(welcomeSettings);
+      const sent = await deliver(
+        conversation.id,
+        input.recipient,
+        cuerpo,
+        [],
+        pacing(input),
+        filas.length > 0
+          ? {
+              list: {
+                body: cuerpo,
+                rows: filas,
+                section: BUSINESS_FACT_TEMPLATES["welcome.section"](),
+              },
+            }
+          : {},
+      );
+      if (sent.aborted) return { outcome: "skipped_owner_active" };
+      if (sent.ok) {
+        return { outcome: "replied_business_fact", trigger: "welcome" };
+      }
+      await escalate(conversation.id);
+      return {
+        outcome: "escalated_send_failed",
+        trigger: "welcome",
+        error: sent.error,
+      };
+    }
+    // Sin el visto bueno de Paula esto no sale; sigue de largo y contesta lo
+    // que ella tenga escrito, como hasta ahora.
   }
 
   // 5. Lo que Paula escribió gana al catálogo: va antes que la búsqueda.
@@ -826,8 +924,17 @@ async function deliver(
      * un «el primero»; no se enseña nunca ni sale de aquí.
      */
     shown?: ShownProducts | null;
-    /** Las opciones tocables. `answer` queda como la versión escrita. */
-    list?: { body: string; rows: WhatsAppListRow[] } | null;
+    /**
+     * Las opciones tocables. `answer` queda como la versión escrita.
+     * `button` y `section` se pueden cambiar: el menú de bienvenida no dice
+     * «Elige uno» como el de productos.
+     */
+    list?: {
+      body: string;
+      rows: WhatsAppListRow[];
+      button?: string;
+      section?: string;
+    } | null;
   } = {},
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
   const { photo, shown, list } = extras;
@@ -880,8 +987,8 @@ async function deliver(
     salioConFoto = false;
     const cuerpo = formatBotReply(list.body);
     sent = await sendWhatsAppListMessage(phone, cuerpo, {
-      button: PRODUCT_TEMPLATES["list.button"](),
-      section: PRODUCT_TEMPLATES["list.section"](),
+      button: list.button ?? PRODUCT_TEMPLATES["list.button"](),
+      section: list.section ?? PRODUCT_TEMPLATES["list.section"](),
       footer: PRODUCT_TEMPLATES["list.footer"](),
       rows: [...list.rows, buildOwnerRow()],
     });

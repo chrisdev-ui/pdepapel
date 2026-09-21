@@ -3,9 +3,14 @@ import { createHash } from "node:crypto";
 import { MinimumOrderRule } from "@prisma/client";
 
 import { formatOpeningHours, type ResolvedStoreSettings } from "@/lib/store-settings";
-import { normalizeBotText } from "@/lib/whatsapp/bot-matching";
+import {
+  matchWhatsAppKeyword,
+  normalizeBotText,
+  type WhatsAppBotKeyword,
+} from "@/lib/whatsapp/bot-matching";
 import {
   TALK_TO_OWNER_BUTTON_TITLE,
+  buildFactRowId,
   buildPaymentRowId,
   readPaymentTarget,
 } from "@/lib/whatsapp/bot-replies";
@@ -234,6 +239,68 @@ export function buildPaymentMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[
     .map(row);
 }
 
+/**
+ * Las frases con las que alguien saluda.
+ *
+ * Se comparan con `matchWhatsAppKeyword`, **no** con el `includes` que usa
+ * `classifyBusinessFact`. Aquí hay disparadores de tres letras («ola», «oli»)
+ * y con `includes` volverían a colarse dentro de «escolares» y «bolígrafos»,
+ * que es justo lo que se corrigió en el lote 3.
+ */
+const WELCOME_TRIGGERS: WhatsAppBotKeyword[] = [
+  {
+    triggers: [
+      "hola", "ola", "holi", "oli", "buenas", "buenos dias", "buenas tardes",
+      "buenas noches", "saludos", "hey", "que mas", "buen dia",
+    ],
+    answer: "",
+  },
+];
+
+/** ¿Este mensaje es un saludo y nada más que un saludo? */
+export function isWelcomeGreeting(body: string): boolean {
+  return matchWhatsAppKeyword(body, WELCOME_TRIGGERS) !== null;
+}
+
+/**
+ * Las filas del menú de bienvenida, en el orden acordado.
+ *
+ * Cada fila solo sale si su respuesta se puede armar de verdad, igual que en el
+ * menú de pagos: una fila que lleva a un campo vacío contestaría «esa opción ya
+ * no está disponible», que es peor que no ofrecerla.
+ */
+export function buildWelcomeMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[] {
+  const filas: { intent: BusinessFactIntent; title: string; description: string }[] = [
+    {
+      intent: "payment.methods",
+      title: BUSINESS_FACT_TEMPLATES["welcome.row.payment.title"](),
+      description: BUSINESS_FACT_TEMPLATES["welcome.row.payment.description"](),
+    },
+    {
+      intent: "shipping.delivery_days",
+      title: BUSINESS_FACT_TEMPLATES["welcome.row.shipping.title"](),
+      description: BUSINESS_FACT_TEMPLATES["welcome.row.shipping.description"](),
+    },
+    {
+      intent: "business.city",
+      title: BUSINESS_FACT_TEMPLATES["welcome.row.city.title"](),
+      description: BUSINESS_FACT_TEMPLATES["welcome.row.city.description"](),
+    },
+    {
+      intent: "business.hours",
+      title: BUSINESS_FACT_TEMPLATES["welcome.row.hours.title"](),
+      description: BUSINESS_FACT_TEMPLATES["welcome.row.hours.description"](),
+    },
+  ];
+  return filas
+    .filter((fila) => Boolean(renderBusinessFact(fila.intent, s)))
+    .map((fila) => ({
+      id: buildFactRowId(fila.intent),
+      title: fila.title,
+      description: fila.description,
+    }));
+}
+
 /** Las tres cuentas, con el mismo criterio. */
 export function buildTransferMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[] {
   return TRANSFER_OPTIONS.filter((option) => Boolean(paymentValue(option, s))).map(row);
@@ -284,6 +351,20 @@ export const BUSINESS_FACT_TEMPLATES = {
     `Nequi\n${number}\nCuando realices el pago, me envías el comprobante, por favor 🤗`,
   "payment.daviplata": (number: string) =>
     `Daviplata\n${number}\nCuando realices el pago, me envías el comprobante, por favor 🤗`,
+
+  // El saludo. Va aquí dentro a propósito: así cambiarlo retira el visto bueno
+  // de Paula, igual que cualquier otra palabra que lea una clienta.
+  "welcome.body": () =>
+    `¡Hola! 💛 Qué gusto que escribas a P de Papel. Cuéntame qué buscas y te ayudo, o mira lo que más me preguntan.`,
+  "welcome.section": () => `¿En qué te ayudo?`,
+  "welcome.row.payment.title": () => `Cómo pagar`,
+  "welcome.row.payment.description": () => `Efectivo, transferencia o datáfono`,
+  "welcome.row.shipping.title": () => `Envíos y tiempos`,
+  "welcome.row.shipping.description": () => `Cuánto tarda en llegarte y cómo lo sigues`,
+  "welcome.row.city.title": () => `Dónde estamos`,
+  "welcome.row.city.description": () => `En qué ciudad y cómo te lo hacemos llegar`,
+  "welcome.row.hours.title": () => `Horario`,
+  "welcome.row.hours.description": () => `A qué horas te puedo responder`,
 } as const;
 
 /**

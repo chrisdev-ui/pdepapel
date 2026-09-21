@@ -31,6 +31,8 @@ export const BUTTON_TARGET_PREFIX = "r:";
 export const PRODUCT_ROW_PREFIX = "p:";
 /** Las del menú de pagos, como `pay:<opcion>`. */
 export const PAYMENT_ROW_PREFIX = "pay:";
+/** Las del menú de bienvenida, como `fact:<intencion>`. */
+export const FACT_ROW_PREFIX = "fact:";
 
 export interface BotReplyButton {
   title: string;
@@ -91,6 +93,26 @@ export function buildPaymentRowId(option: string): string {
 export function readPaymentTarget(rowId: string | null | undefined): string | null {
   if (!rowId || !rowId.startsWith(PAYMENT_ROW_PREFIX)) return null;
   const target = rowId.slice(PAYMENT_ROW_PREFIX.length).trim();
+  return target || null;
+}
+
+/** `fact:<intencion>` para las filas del menú de bienvenida. */
+export function buildFactRowId(intent: string): string {
+  return `${FACT_ROW_PREFIX}${intent}`;
+}
+
+/**
+ * Qué dato del negocio señala una fila tocada, si señala alguno.
+ *
+ * Existe porque un dato del negocio se reconocía solo por lo que la clienta
+ * escribía: no había ningún id con el que un menú pudiera apuntarle. Con esto
+ * las filas de bienvenida reusan las mismas respuestas que salen de los
+ * ajustes, en vez de duplicar el texto en una respuesta escrita a mano que se
+ * quedaría desfasada en cuanto Paula cambie un número.
+ */
+export function readFactTarget(rowId: string | null | undefined): string | null {
+  if (!rowId || !rowId.startsWith(FACT_ROW_PREFIX)) return null;
+  const target = rowId.slice(FACT_ROW_PREFIX.length).trim();
   return target || null;
 }
 

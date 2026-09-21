@@ -648,6 +648,95 @@ describe("runWhatsAppBot", () => {
     });
   });
 
+  describe("el menú de bienvenida", () => {
+    const abierta = () =>
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: null,
+      });
+
+    it("un saludo abre la lista en vez de un texto suelto", async () => {
+      abierta();
+      mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.LISTA" });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "Hola", settings: ajustesBase }),
+      ).resolves.toEqual({ outcome: "replied_business_fact", trigger: "welcome" });
+
+      expect(mocks.sendList).toHaveBeenCalledTimes(1);
+      const [, cuerpo, lista] = mocks.sendList.mock.calls[0];
+      expect(cuerpo).toContain("Qué gusto que escribas a P de Papel");
+      expect(lista.section).toBe("¿En qué te ayudo?");
+      expect(lista.rows.map((r: { id: string }) => r.id)).toEqual([
+        "fact:payment.methods",
+        "fact:shipping.delivery_days",
+        "fact:business.city",
+        "fact:business.hours",
+        TALK_TO_OWNER_BUTTON_ID,
+      ]);
+    });
+
+    it("«escolares» no abre el menú: eso es una pregunta por productos", async () => {
+      abierta();
+      await runWhatsAppBot({
+        ...input,
+        body: "¿Tienen útiles escolares?",
+        settings: ajustesBase,
+      });
+      expect(mocks.sendList).not.toHaveBeenCalled();
+    });
+
+    it("tocar una fila contesta ese dato y no otro", async () => {
+      abierta();
+
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "Dónde estamos",
+          interactiveReplyId: "fact:business.city",
+          settings: ajustesBase,
+        }),
+      ).resolves.toEqual({
+        outcome: "replied_business_fact",
+        trigger: "business.city",
+      });
+      expect(mocks.send.mock.calls[0][1]).toContain("Medellín");
+    });
+
+    it("«Cómo pagar» abre el menú de pagos de siempre", async () => {
+      abierta();
+      mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.PAGOS" });
+
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "Cómo pagar",
+          interactiveReplyId: "fact:payment.methods",
+          settings: ajustesBase,
+        }),
+      ).resolves.toEqual({
+        outcome: "replied_business_fact",
+        trigger: "payment.methods",
+      });
+      const [, , lista] = mocks.sendList.mock.calls[0];
+      expect(lista.rows.map((r: { id: string }) => r.id)).toContain("pay:efectivo");
+    });
+
+    it("sin el visto bueno de Paula no sale, y contesta lo de antes", async () => {
+      abierta();
+      const sinAprobar = { ...ajustesBase, botFactsApprovedAt: null };
+
+      await runWhatsAppBot({ ...input, body: "Hola", settings: sinAprobar });
+
+      expect(mocks.sendList).not.toHaveBeenCalled();
+      // Cae a las palabras clave de Paula; aquí no hay ninguna que case, así
+      // que acaba en el acuse de siempre.
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+    });
+  });
+
   describe("preguntas por productos", () => {
     const aprobado: ResolvedStoreSettings = {
       ...ajustesBase,
