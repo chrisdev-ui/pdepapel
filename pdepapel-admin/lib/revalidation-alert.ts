@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 
+import { RevalidationAlert } from "@/emails/revalidation-alert";
 import { env } from "@/lib/env.mjs";
 import { resend } from "@/lib/resend";
 
@@ -44,6 +45,13 @@ export async function sendRevalidationFailureAlert({
       from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
       to: RECIPIENTS,
       subject: "[Alerta] Falló la actualización de la tienda en línea",
+      react: RevalidationAlert({
+        generatedAt: now,
+        endpoints,
+        details,
+      }) as React.ReactElement,
+      // El cuerpo en texto plano se conserva: era lo único que había antes y
+      // sigue siendo lo que ve quien lee el correo sin HTML.
       text: `La revalidación de la tienda en línea falló el ${now}.\nOrigen del aviso: una actualización del catálogo solicitó refrescar la tienda en línea.\n\nEndpoints:\n${endpointList}\n\nDetalles:\n${detailList}\n\nLa alerta se limita a una por hora. Revisa los registros de Vercel para identificar y resolver la causa.`,
     });
   } catch (error) {

@@ -1,15 +1,14 @@
 import {
-  Body,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+  CardText,
+  Cta,
+  Foot,
+  KeyValues,
+  Meta,
+  PanelShell,
+  SectionLabel,
+  StickerCard,
+  Title,
+} from "./components";
 
 type MercadoLibreOrderNotificationProps = {
   buyerName: string | null;
@@ -40,185 +39,71 @@ export function MercadoLibreOrderNotification({
   const inventoryLabel =
     inventoryLabels[inventoryStatus] ?? "Venta registrada en el panel";
 
+  /* La línea se arma en JS, no interpolada en el JSX: React mete un comentario
+     entre cada trozo y partiría la frase en el HTML final. */
+  const netLine = netAmount
+    ? `Neto de la venta: ${netAmount}`
+    : "Liquidación neta: pendiente de Mercado Libre";
+  const metaLine = `Venta #${orderNumber} · ${netLine}`;
+
+  const rows: { key: string; value: React.ReactNode }[] = [
+    { key: "Comprador", value: buyerName ?? "No disponible" },
+  ];
+  if (paidAt) rows.push({ key: "Pago confirmado", value: paidAt });
+  rows.push({
+    key: "Origen del aviso",
+    value: "Mercado Libre confirmó el pago",
+  });
+  rows.push({ key: "Vínculo en P de Papel", value: inventoryLabel });
+
   return (
-    <Html>
-      <Head />
-      <Preview>
-        Venta pagada y registrada de Mercado Libre #{orderNumber}
-      </Preview>
-      <Body style={main}>
-        <Container style={container}>
-          <Section style={header}>
-            <Img
-              src="https://admin.papeleriapdepapel.com/images/marketplaces/mercadolibre-logo.png"
-              width="134"
-              height="34"
-              alt="Mercado Libre"
-              style={mercadoLibreLogo}
-            />
-            <Text style={eyebrow}>Notificación administrativa</Text>
-            <Heading style={heading}>Venta pagada y registrada</Heading>
-          </Section>
+    <PanelShell
+      preview={`Venta pagada y registrada de Mercado Libre #${orderNumber}`}
+      tint="yellow"
+      label="Panel · Mercado Libre"
+    >
+      <Title panel>Venta pagada y registrada</Title>
+      <Meta>{metaLine}</Meta>
 
-          <Section style={content}>
-            <Container style={orderBox}>
-              <Text style={orderNumberText}>Venta #{orderNumber}</Text>
-              <Text style={orderTotal}>
-                {netAmount
-                  ? `Neto de la venta: ${netAmount}`
-                  : "Liquidación neta: pendiente de Mercado Libre"}
-              </Text>
-            </Container>
+      <StickerCard tint="slate">
+        <KeyValues rows={rows} />
+      </StickerCard>
 
-            <Text style={paragraph}>
-              <strong>Comprador:</strong> {buyerName ?? "No disponible"}
-            </Text>
-            {paidAt ? (
-              <Text style={paragraph}>
-                <strong>Pago confirmado:</strong> {paidAt}
-              </Text>
-            ) : null}
-            <Text style={paragraph}>
-              <strong>Origen del aviso:</strong> Mercado Libre confirmó el pago
-              de esta venta. Los cambios de envío no generan este correo.
-            </Text>
-            {netAmount === null ? (
-              <Text style={paragraph}>
-                <strong>Liquidación:</strong> Mercado Libre todavía no publicó
-                el valor neto. P de Papel lo actualizará automáticamente sin
-                modificar el inventario ni esta venta.
-              </Text>
-            ) : null}
-            <Text style={paragraph}>
-              <strong>Vínculo en P de Papel:</strong> {inventoryLabel}
-            </Text>
+      {netAmount === null ? (
+        <StickerCard tint="yellow" filled>
+          <CardText>
+            <strong>Liquidación pendiente.</strong> Mercado Libre todavía no
+            publicó el valor neto. P de Papel lo actualizará solo, sin tocar el
+            inventario ni esta venta.
+          </CardText>
+        </StickerCard>
+      ) : null}
 
-            <Heading as="h2" style={sectionTitle}>
-              Productos vinculados
-            </Heading>
-            <Container style={summaryBox}>
-              <Text style={summaryText}>{orderSummary}</Text>
-            </Container>
+      <SectionLabel tint="slate">Productos vinculados</SectionLabel>
+      <StickerCard tint="slate">
+        <CardText>{orderSummary}</CardText>
+      </StickerCard>
 
-            <Section style={actionSection}>
-              <Link href={orderUrl} style={actionButton}>
-                Ver venta en Administración
-              </Link>
-            </Section>
-          </Section>
-        </Container>
-      </Body>
-    </Html>
+      <Cta href={orderUrl} ghost>
+        Ver la venta en el panel
+      </Cta>
+
+      <Foot>
+        Panel de P de Papel · los cambios de envío no generan este correo.
+      </Foot>
+    </PanelShell>
   );
 }
 
-const main = {
-  backgroundColor: "#f8fafc",
-  fontFamily: "Arial, sans-serif",
-  padding: "24px 0",
-};
+/* Datos de muestra para `npm run email:dev`. No se envían a nadie. */
+MercadoLibreOrderNotification.PreviewProps = {
+  buyerName: "andrea.mv",
+  inventoryStatus: "DECREMENTED",
+  orderNumber: "2000018407778482",
+  orderSummary: "• 1 × Termo Owala 710ml (TERMO-OWALA-01)",
+  orderUrl: "https://admin.papeleriapdepapel.com/demo/mercadolibre",
+  netAmount: null,
+  paidAt: "15 de septiembre de 2026, 8:17 p. m.",
+} satisfies MercadoLibreOrderNotificationProps;
 
-const container = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
-  margin: "0 auto",
-  maxWidth: "600px",
-  overflow: "hidden",
-};
-
-const header = {
-  backgroundColor: "#fff8cf",
-  padding: "28px 32px 24px",
-  textAlign: "center" as const,
-};
-
-const mercadoLibreLogo = {
-  display: "block",
-  height: "34px",
-  margin: "0 auto 18px",
-  width: "134px",
-};
-
-const eyebrow = {
-  color: "#475569",
-  fontSize: "12px",
-  fontWeight: "bold",
-  letterSpacing: "0.8px",
-  margin: "0 0 8px",
-  textTransform: "uppercase" as const,
-};
-
-const heading = {
-  color: "#0f172a",
-  fontSize: "24px",
-  margin: "0",
-};
-
-const content = {
-  padding: "28px 32px 32px",
-};
-
-const orderBox = {
-  backgroundColor: "#f8fafc",
-  borderLeft: "4px solid #ffe600",
-  borderRadius: "8px",
-  marginBottom: "22px",
-  padding: "16px",
-};
-
-const orderNumberText = {
-  color: "#0f172a",
-  fontSize: "17px",
-  fontWeight: "bold",
-  margin: "0 0 6px",
-};
-
-const orderTotal = {
-  color: "#334155",
-  fontSize: "15px",
-  margin: "0",
-};
-
-const paragraph = {
-  color: "#334155",
-  fontSize: "15px",
-  lineHeight: "1.6",
-  margin: "0 0 12px",
-};
-
-const sectionTitle = {
-  color: "#0f172a",
-  fontSize: "16px",
-  margin: "26px 0 12px",
-};
-
-const summaryBox = {
-  backgroundColor: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  borderRadius: "8px",
-  padding: "14px",
-};
-
-const summaryText = {
-  color: "#334155",
-  fontFamily: "monospace",
-  fontSize: "14px",
-  lineHeight: "1.55",
-  margin: "0",
-  whiteSpace: "pre-wrap" as const,
-};
-
-const actionSection = {
-  marginTop: "28px",
-  textAlign: "center" as const,
-};
-
-const actionButton = {
-  backgroundColor: "#0f172a",
-  borderRadius: "8px",
-  color: "#ffffff",
-  display: "inline-block",
-  fontWeight: "bold",
-  padding: "12px 20px",
-  textDecoration: "none",
-};
+export default MercadoLibreOrderNotification;
