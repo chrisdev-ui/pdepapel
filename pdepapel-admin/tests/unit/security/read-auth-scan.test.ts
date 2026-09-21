@@ -120,6 +120,29 @@ function read(file: string): string {
   return sources.get(file) as string;
 }
 
+/**
+ * Cuerpo de una función exportada, por llaves. El escaneo de arriba mira el
+ * archivo entero, y eso no distingue **qué** función lleva **qué** guardia:
+ * `clientes/server/get-customers.ts` tiene `requireStoreOwner` para la lista y
+ * `requireStoreRead` para el agregado, así que un `toContain` sobre el archivo
+ * seguiría en verde si alguien cambiara una por la otra.
+ */
+function functionBody(source: string, name: string): string | null {
+  const signature = new RegExp(`export\\s+(?:async\\s+)?function\\s+${name}\\b`);
+  const match = signature.exec(source);
+  if (!match) return null;
+  const open = source.indexOf("{", match.index + match[0].length);
+  if (open === -1) return null;
+  let depth = 1;
+  let index = open + 1;
+  while (index < source.length && depth > 0) {
+    if (source[index] === "{") depth += 1;
+    else if (source[index] === "}") depth -= 1;
+    index += 1;
+  }
+  return source.slice(open, index);
+}
+
 const isFile = (candidate: string): boolean => {
   try {
     return Boolean(statSync(candidate, { throwIfNoEntry: false })?.isFile());
@@ -329,6 +352,27 @@ describe("toda lectura del panel dice a quién deja entrar", () => {
     expect(read(path.join(ROUTES, relative))).toContain("requireStoreOwner(");
   });
 
+  /**
+   * Y para los archivos que sirven **dos** públicos, la guardia función por
+   * función. Un archivo con las dos guardias dentro pasa la tabla de arriba
+   * pase lo que pase; esta dice cuál va en cada una.
+   */
+  it.each([
+    ["clientes/server/get-customers.ts", "getCustomers", "requireStoreOwner(", "la lista con nombre, teléfono y correo"],
+    ["clientes/server/get-customers.ts", "getCustomerDetail", "requireStoreOwner(", "la ficha de una persona"],
+    ["clientes/server/get-customers.ts", "getCustomerOverview", "requireStoreRead(", "solo cuántos hay y de qué ciudades"],
+    ["envios/server/get-shipments.ts", "getDispatchQueue", "requireStoreOwner(", "la cola de despacho"],
+    ["envios/server/get-shipments.ts", "getShipments", "requireStoreRead(", "envíos depurados"],
+  ])("%s · %s lleva %s (%s)", (relative, fn, guard) => {
+    const body = functionBody(read(path.join(ROUTES, relative)), fn);
+    expect(body, `${relative} ya no exporta ${fn}: actualiza la tabla`).not.toBeNull();
+    expect(body, `${fn} tiene que llamar a ${guard} en su propio cuerpo`).toContain(guard);
+    const otras = GUARDS.filter((otra) => `${otra}(` !== guard).map((otra) => `${otra}(`);
+    for (const otra of otras) {
+      expect(body, `${fn} llama además a ${otra}: una función, una guardia`).not.toContain(otra);
+    }
+  });
+
   /** Pantallas abiertas a solo lectura, siempre depuradas. */
   it.each([
     ["inventario/server/get-inventory.ts", "scrubInventoryRows"],
@@ -432,6 +476,36 @@ describe("el escáner atrapa las fugas que ya ocurrieron", () => {
 
   it("Proveedores: la consulta sin select queda sin guardia y se marca", () => {
     expect(hasGuard(PROVEEDORES_ANTES)).toBe(false);
+  });
+
+  it("Clientes: cambiar la guardia de la lista por la de lectura ya no pasa", () => {
+    const ANTES = `
+      export async function getCustomers(storeId: string) {
+        await requireStoreRead(storeId);
+        return buildCustomerRecords(storeId);
+      }
+      export async function getCustomerOverview(storeId: string) {
+        await requireStoreRead(storeId);
+        return resumen(await buildCustomerRecords(storeId));
+      }`;
+    // El archivo entero seguía conteniendo la cadena buena en la versión real,
+    // así que el `toContain` de archivo no veía nada. El de función sí.
+    expect(functionBody(ANTES, "getCustomers")).not.toContain("requireStoreOwner(");
+    expect(functionBody(ANTES, "getCustomers")).toContain("requireStoreRead(");
+    expect(functionBody(ANTES, "getCustomerNoExiste")).toBeNull();
+  });
+
+  it("el cuerpo de una función no se lleva el de la siguiente", () => {
+    const DOS = `
+      export async function primera(storeId: string) {
+        if (true) { await requireStoreRead(storeId); }
+      }
+      export async function segunda(storeId: string) {
+        await requireStoreOwner(storeId);
+      }`;
+    expect(functionBody(DOS, "primera")).not.toContain("requireStoreOwner(");
+    expect(functionBody(DOS, "primera")).toContain("requireStoreRead(");
+    expect(functionBody(DOS, "segunda")).toContain("requireStoreOwner(");
   });
 
   it("un `_count` no se confunde con traer las filas", () => {
