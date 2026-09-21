@@ -233,6 +233,19 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - Never edit marketplace order stock or financial fields in the database to "fix" a queue issue. Fix and retry the audited workflow.
 - Reconnect from the admin UI after any scope, secret or token change.
 
+### Boletín: subscribers, issues and campaigns
+
+The newsletter has **one sender**, `lib/newsletter-campaigns.ts`. Everything that mails subscribers goes through its `sendInBatches` helper — Resend `batch.send` in batches of 100, `List-Unsubscribe` plus `List-Unsubscribe-Post: One-Click` headers on every message, and recipients read from `activeSubscribers()`, which only returns `ACTIVE` subscribers that hold an `unsubscribeTokenHash`. **Never add a second sender**: a path that skips these headers or that consent filter breaks one-click unsubscribe and the double opt-in guarantee.
+
+- **Models.** `NewsletterSubscriber` is unchanged and still owns consent. Added alongside it: `NewsletterIssue` (the magazine, unique on `[storeId, slug]`), `NewsletterIssuePage` (one image per page, ordered by `position`), and `NewsletterCampaignSend` (the send ledger). `NewsletterIssueStatus` is `DRAFT | SENT`.
+- **A sent issue is immutable.** `updateNewsletterIssue` and `deleteNewsletterIssue` reject anything already `SENT` with a 409. The mail is out and `/boletin/<slug>` has to keep showing what people received.
+- **`NewsletterCampaignSend` is written by all three kinds**, not just the new one. Before it, a send left only a timestamp on the home-content row (`earlyAccessSentAt`, `arrivalSentAt`) and there was no way to know how many people it reached. `recordSend()` takes `kind` as a plain string; the union type `NewsletterCampaignKind` still covers only `"early-access" | "arrival"`, and the magazine records the literal `"issue"`.
+- **API.** `GET /api/[storeId]/newsletter/issues` serves the owner's list, or one public issue when called with `?slug=`; `POST` creates. `PATCH`/`DELETE /api/[storeId]/newsletter/issues/[issueId]` edit a draft. `POST /api/[storeId]/newsletter/issues/[issueId]/send` mails it and carries `maxDuration = 60`, like the campaigns route.
+- **Public route.** The storefront renders `/boletin/[slug]` with `revalidate = 300`. Only `SENT` issues resolve; a draft 404s so a half-built magazine cannot leak by guessing the URL.
+- **Pages are images, never attachments.** An attachment on a bulk send is a textbook spam signal, and the sending domain is shared with order confirmations. The cover rides inside the email; the remaining pages live on the storefront. `MAX_ISSUE_PAGES` caps an issue at 12.
+- `MAX_ISSUE_PAGES` lives in `lib/newsletter-issues-shared.ts`, a neutral module, because `lib/newsletter-issues.ts` imports `server-only` and the client panel needs that constant. Importing it from the `server-only` module makes the page fail at render time only.
+- `sendInBatches` returns early when `NODE_ENV === "development"`, so no local or test run can mail a real subscriber. `scripts/with-test-env.mjs` forces `NODE_ENV=development`, which is why the guard also holds during integration tests.
+
 ### Catalog cache and revalidation
 
 - After catalog mutations the admin calls the storefront's `POST /api/revalidate` (`lib/revalidate-store.ts`). **A successful database write with a stale public page is still a customer-visible defect — verify both.**

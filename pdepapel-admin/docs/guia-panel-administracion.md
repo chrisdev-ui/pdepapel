@@ -442,7 +442,20 @@ retira a quien lo pida. Al confirmar, cada suscriptora recibe un cupón de
 bienvenida del 10 % (un uso, 30 días). Desde un banner «Cargamento nuevo»
 (Contenido › Portada) se envían una sola vez el acceso anticipado (enlace
 firmado para comprar lo «Próximamente» antes de su fecha) y el aviso «Ya
-llegó». El boletín general se envía fuera del panel.
+llegó».
+
+La revista se sube y se envía **desde esta pantalla** —antes decía que el envío
+se hacía por fuera del panel, y era falso—. «Crear número»: título, entradilla
+opcional, portada y hasta doce páginas como imágenes, con el mismo cargador de
+las fotos de producto. Mientras es borrador se edita o se borra; «Enviar» dice
+a cuántas personas llegará y pide confirmar con ese número a la vista.
+
+Un número enviado queda **cerrado**: no se edita ni se borra, porque el correo
+ya salió y el enlace que recibió la gente tiene que seguir mostrando lo mismo.
+Cada número enviado gana su página pública en `papeleriapdepapel.com/boletin/`,
+compartible sin estar suscrito; un borrador responde 404. Las páginas van como
+imágenes y no como PDF adjunto: un adjunto en un envío masivo es señal de spam
+y saldría del mismo dominio que las confirmaciones de pedido.
 
 ## 17. Rendimiento y tributarios (`/rendimiento`, `/reportes-tributarios`)
 
