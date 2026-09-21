@@ -13,6 +13,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(rootDir),
+      // `server-only` existe para romper el build si un módulo de servidor
+      // acaba en el paquete del navegador. Fuera de Next no hay tal paquete:
+      // el paquete real lanza «cannot be imported from a Client Component» en
+      // cuanto lo carga Vitest, así que un módulo que se protege a sí mismo
+      // dejaba de poderse probar. Aquí se sustituye por un módulo vacío; la
+      // protección la sigue aplicando `next build`, que es quien la conoce.
+      "server-only": path.resolve(rootDir, "tests/stubs/server-only.ts"),
     },
   },
   test: {

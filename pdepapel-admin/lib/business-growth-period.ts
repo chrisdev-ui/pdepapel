@@ -1,6 +1,10 @@
 import { getColombiaDate } from "@/lib/date-utils";
+import { addMonths, startOfMonth } from "date-fns";
+import { zonedTimeToUtc } from "date-fns-tz";
 
 export const BUSINESS_GROWTH_START_YEAR = 2024;
+
+const TZ = "America/Bogota";
 
 type RawPeriodValue = string | string[] | null | undefined;
 
@@ -63,6 +67,37 @@ export function getBusinessGrowthPeriodDateBounds(
     min: `${period.year}-${month}-01`,
     max: `${period.year}-${month}-${String(lastDay).padStart(2, "0")}`,
   };
+}
+
+/**
+ * El mes del período como instantes UTC, para acotar consultas.
+ *
+ * `getBusinessGrowthPeriodDateBounds` devuelve cadenas `YYYY-MM-DD` para los
+ * campos de fecha del formulario; esto es lo otro que hace falta: el mismo mes
+ * pero medido en la zona de Colombia y expresado en UTC, que es como Prisma
+ * compara `createdAt`. Sin la conversión, «septiembre» empieza cinco horas
+ * antes de tiempo y se cuelan envíos de agosto.
+ */
+export function getBusinessGrowthPeriodRange(
+  period: Pick<BusinessGrowthPeriodIdentity, "year" | "month">,
+) {
+  const firstDay = startOfMonth(new Date(period.year, period.month - 1, 1));
+  const start = zonedTimeToUtc(firstDay, TZ);
+  const end = new Date(
+    zonedTimeToUtc(addMonths(firstDay, 1), TZ).getTime() - 1,
+  );
+  return { start, end };
+}
+
+/** El mismo rango, un mes antes: sirve para comparar «frente al mes pasado». */
+export function getPreviousBusinessGrowthPeriodRange(
+  period: Pick<BusinessGrowthPeriodIdentity, "year" | "month">,
+) {
+  const previous = addMonths(new Date(period.year, period.month - 1, 1), -1);
+  return getBusinessGrowthPeriodRange({
+    year: previous.getFullYear(),
+    month: previous.getMonth() + 1,
+  });
 }
 
 export function formatColombiaDateInput(value = new Date()) {
