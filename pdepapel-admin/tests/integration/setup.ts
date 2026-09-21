@@ -1,3 +1,5 @@
+import { vi } from "vitest";
+
 /**
  * Fills the baseline env contract with placeholders for variables that are
  * absent, so integration suites that (transitively) import lib/env.mjs
@@ -41,3 +43,38 @@ const placeholders: Record<string, string> = {
 for (const [key, value] of Object.entries(placeholders)) {
   process.env[key] ??= value;
 }
+
+/**
+ * Upstash nunca se llama de verdad en integración.
+ *
+ * Resolver el precio de una línea pasa por las ofertas vigentes, que se
+ * cachean en Redis (`lib/discount-engine.ts`). Contra un Upstash real —o
+ * inalcanzable— esa llamada se queda esperando en la red: la prueba muere por
+ * tiempo a los 30 s y, de paso, deja el pedido a medio crear, así que la
+ * limpieza de la fixture tampoco puede borrar la tienda y el fallo se lee como
+ * si fuera de la base.
+ *
+ * Pasó dos veces seguidas en archivos distintos —cápsulas y punto de venta— y
+ * las dos se veían como fallos de otra cosa. Estas pruebas van contra el MySQL
+ * local: ninguna necesita salir a la red, y dieciséis archivos del código
+ * tocan este camino, así que el doble vive aquí y no en cada prueba.
+ */
+vi.mock("@upstash/redis", () => ({
+  Redis: class {
+    static fromEnv() {
+      return new this();
+    }
+    async get() {
+      return null;
+    }
+    async set() {
+      return "OK";
+    }
+    async del() {
+      return 0;
+    }
+    async keys() {
+      return [];
+    }
+  },
+}));
