@@ -7,6 +7,7 @@ import {
   ShippingStatus,
   OrderType,
 } from "@prisma/client";
+import type { EmailLineItem } from "@/emails/components";
 import { OrderNotification } from "@/emails/order-notification";
 import { resend } from "@/lib/resend";
 import { recordFailedNotification } from "@/lib/notification-failures";
@@ -22,11 +23,41 @@ import {
 } from "@/lib/order-account-claims";
 import prismadb from "@/lib/prismadb";
 
+/**
+ * Las líneas del pedido, con cantidad y precio.
+ *
+ * El nombre sale del campo congelado de `OrderItem`, no del producto vivo: un
+ * pedido pagado es una foto de lo que se compró, y si el producto se renombra
+ * después el correo viejo no puede cambiar de contenido.
+ *
+ * El precio es el de la línea (unitario × cantidad), no el unitario: es lo que
+ * suma al total que aparece debajo.
+ */
+function getOrderLineItems(order: any): EmailLineItem[] {
+  if (!order.orderItems || !Array.isArray(order.orderItems)) return [];
+  return order.orderItems.map((item: any) => {
+    const quantity = typeof item.quantity === "number" ? item.quantity : 1;
+    const unitPrice = typeof item.price === "number" ? item.price : null;
+    return {
+      name: item.name || item.product?.name || "Producto",
+      quantity,
+      price:
+        unitPrice !== null && unitPrice > 0
+          ? currencyFormatter(unitPrice * quantity)
+          : null,
+    };
+  });
+}
+
+/**
+ * El mismo resumen en texto plano, para el cuerpo `text` que reciben los
+ * clientes de correo que rechazan HTML. Nunca se deja de mandar.
+ */
 function getOrderSummary(order: any) {
-  if (!order.orderItems || !Array.isArray(order.orderItems)) return "";
-  return order.orderItems
+  return getOrderLineItems(order)
     .map(
-      (item: any) => `• ${item.product?.name || "Producto"} x${item.quantity}`,
+      (item) =>
+        `• ${item.name} x${item.quantity}${item.price ? ` — ${item.price}` : ""}`,
     )
     .join("\n");
 }
@@ -122,6 +153,7 @@ export const sendOrderEmail = async (
 
     const readableStatus = getReadableStatus(status);
     const readablePayment = getReadablePaymentMethod(order.payment);
+    const orderItems = getOrderLineItems(order);
     const orderSummary = getOrderSummary(order);
     const orderLink = getOrderLink(order.id);
     const accountClaimLink =
@@ -157,6 +189,7 @@ export const sendOrderEmail = async (
           total: order.total ? currencyFormatter(order.total) : undefined,
           address: order.address,
           phone: order.phone,
+          items: orderItems,
           orderSummary,
           orderLink,
           thanksParagraph,
@@ -178,6 +211,7 @@ export const sendOrderEmail = async (
           status: status as string,
           paymentMethod: readablePayment,
           trackingInfo: order.shipping?.trackingCode ?? undefined,
+          items: orderItems,
           orderSummary,
           city: order.city || undefined,
           orderLink,
@@ -223,6 +257,7 @@ export const sendShippingEmail = async (
     }
 
     const readableStatus = getReadableStatus(shippingStatus);
+    const orderItems = getOrderLineItems(order);
     const orderSummary = getOrderSummary(order);
     const orderLink = getOrderLink(order.id);
 
@@ -280,6 +315,7 @@ export const sendShippingEmail = async (
         address: order.address,
         city: order.city || undefined,
         phone: order.phone,
+        items: orderItems,
         orderSummary,
         orderLink,
         thanksParagraph,
@@ -300,6 +336,7 @@ export const sendShippingEmail = async (
           status: shippingStatus as string,
           paymentMethod: getReadablePaymentMethod(order.payment),
           trackingInfo: order.shipping?.trackingCode ?? undefined,
+          items: orderItems,
           orderSummary,
           city: order.city || undefined,
           orderLink,

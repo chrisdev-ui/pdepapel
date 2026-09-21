@@ -1,21 +1,28 @@
+import { Link } from "@react-email/components";
+
 import {
-  Body,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+  CardText,
+  Cta,
+  EmailLineItem,
+  Foot,
+  ItemsTable,
+  KeyValues,
+  Meta,
+  P,
+  PanelShell,
+  Pill,
+  SectionLabel,
+  Shell,
+  StickerCard,
+  Title,
+} from "./components";
+import { Tint, link } from "./theme";
 
 interface OrderNotificationProps {
   name: string;
   orderNumber: string;
-  status: string; // "PENDING", "PAID", "SENT", "DELIVERED", "CANCELLED"
+  /** `OrderStatus` o `ShippingStatus`, tal como llega de Prisma. */
+  status: string;
   isAdminEmail?: boolean;
   paymentMethod?: string;
   trackingInfo?: string;
@@ -23,6 +30,12 @@ interface OrderNotificationProps {
   phone?: string;
   email?: string;
   total?: string;
+  /** Las líneas del pedido, con cantidad y precio. */
+  items?: EmailLineItem[];
+  /**
+   * El resumen en texto plano. Se conserva como red de seguridad para quien
+   * todavía no manda `items`; se pinta como párrafo, ya no en monoespaciada.
+   */
   orderSummary?: string;
   orderLink?: string;
   thanksParagraph?: string;
@@ -31,510 +44,265 @@ interface OrderNotificationProps {
   accountClaimLink?: string | null;
 }
 
+interface Look {
+  tint: Tint;
+  pill: string;
+  /** El titular para el cliente. Recibe el primer nombre. */
+  headline: (firstName: string) => string;
+}
+
+/**
+ * Cada estado tiene su tinte y su frase.
+ *
+ * El tinte vive en la pastilla, no en la franja: los correos de pedido llevan
+ * la franja rosa siempre, porque el color de la marca no se negocia por un
+ * estado de envío.
+ */
+function getLook(status: string): Look {
+  switch (status) {
+    case "PENDING":
+      return {
+        tint: "yellow",
+        pill: "Pendiente de pago",
+        headline: (n) => (n ? `Recibimos tu pedido, ${n}.` : "Recibimos tu pedido."),
+      };
+    case "PAID":
+      return {
+        tint: "mint",
+        pill: "Pago confirmado",
+        headline: (n) =>
+          n
+            ? `Listo, ${n}. Ya estamos empacando tu pedido.`
+            : "Listo. Ya estamos empacando tu pedido.",
+      };
+    case "Preparing":
+      return {
+        tint: "yellow",
+        pill: "Preparando tu envío",
+        headline: () => "Estamos empacando tu pedido.",
+      };
+    case "SENT":
+    case "SHIPPED":
+    case "Shipped":
+    case "PickedUp":
+      return {
+        tint: "blue",
+        pill: "En camino",
+        headline: () => "Tu pedido salió de la papelería.",
+      };
+    case "InTransit":
+      return {
+        tint: "blue",
+        pill: "En tránsito",
+        headline: () => "Tu pedido va en camino.",
+      };
+    case "OutForDelivery":
+      return {
+        tint: "blue",
+        pill: "Sale hoy",
+        headline: () => "Tu pedido llega hoy.",
+      };
+    case "DELIVERED":
+    case "Delivered":
+      return {
+        tint: "mint",
+        pill: "Entregado",
+        headline: () => "Tu pedido ya está en tus manos.",
+      };
+    case "CANCELLED":
+    case "Cancelled":
+      return {
+        tint: "alert",
+        pill: "Cancelado",
+        headline: () => "Cancelamos tu pedido.",
+      };
+    case "FailedDelivery":
+      return {
+        tint: "alert",
+        pill: "Entrega fallida",
+        headline: () => "No pudimos entregar tu pedido.",
+      };
+    case "Returned":
+      return {
+        tint: "alert",
+        pill: "Devuelto",
+        headline: () => "Tu pedido volvió a la papelería.",
+      };
+    case "Exception":
+      return {
+        tint: "alert",
+        pill: "Necesita revisión",
+        headline: () => "Hubo un problema con tu envío.",
+      };
+    default:
+      return {
+        tint: "lavender",
+        pill: "Actualización",
+        headline: () => "Hay novedades con tu pedido.",
+      };
+  }
+}
+
 export const OrderNotification = ({
-  name = "John Doe",
+  name = "Cliente",
   orderNumber = "123456",
   status = "PAID",
   isAdminEmail = false,
-  paymentMethod = "Wompi",
+  paymentMethod,
   trackingInfo,
-  address = "Calle 123",
-  phone = "1234567890",
-  email = "john@example.com",
-  total = "$ 50.000",
-  orderSummary = "• Producto x1\n• Otro producto x2",
+  address,
+  phone,
+  email,
+  total,
+  items = [],
+  orderSummary,
   orderLink = "https://papeleriapdepapel.com",
-  thanksParagraph = "¡Gracias por tu compra!",
-  city = "Bogotá",
+  thanksParagraph,
+  city,
   notificationSource,
   accountClaimLink,
 }: OrderNotificationProps) => {
-  const getStatusMessage = () => {
-    switch (status) {
-      case "PENDING":
-        return isAdminEmail
-          ? `Nuevo pedido de ${name}`
-          : `¡Gracias por tu pedido ${name}!`;
-      case "PAID":
-        return isAdminEmail
-          ? `Pago confirmado para pedido #${orderNumber}`
-          : `¡Pago confirmado para tu pedido #${orderNumber}!`;
-      case "SENT":
-      case "SHIPPED": // ShippingStatus
-        return isAdminEmail
-          ? `Pedido #${orderNumber} enviado`
-          : `¡Tu pedido #${orderNumber} ha sido enviado!`;
-      case "DELIVERED":
-        return isAdminEmail
-          ? `Pedido #${orderNumber} entregado`
-          : `¡Tu pedido #${orderNumber} ha sido entregado!`;
-      case "CANCELLED":
-        return isAdminEmail
-          ? `Pedido #${orderNumber} cancelado`
-          : `Tu pedido #${orderNumber} ha sido cancelado`;
-      default:
-        return `Actualización de pedido #${orderNumber}`;
-    }
-  };
+  const look = getLook(status);
+  const firstName = name ? name.split(" ")[0] : "";
+  const hasTracking = Boolean(trackingInfo) && trackingInfo !== "TRACK-123";
 
-  const getStatusColor = () => {
-    switch (status) {
-      case "PENDING":
-        return "#f59e0b";
-      case "PAID":
-        return "#10b981";
-      case "SENT":
-      case "SHIPPED":
-        return "#3b82f6";
-      case "DELIVERED":
-        return "#059669";
-      case "CANCELLED":
-        return "#ef4444";
-      default:
-        return "#6b7280";
-    }
-  };
+  /* ------------------------------------------------------------- panel */
 
-  const getStatusIcon = () => {
-    switch (status) {
-      case "PENDING":
-        return "⏳";
-      case "PAID":
-        return "✅";
-      case "SENT":
-      case "SHIPPED":
-        return "🚚";
-      case "DELIVERED":
-        return "📦";
-      case "CANCELLED":
-        return "❌";
-      default:
-        return "📋";
-    }
-  };
+  if (isAdminEmail) {
+    const rows: { key: string; value: React.ReactNode }[] = [
+      { key: "Cliente", value: name },
+      { key: "Correo", value: email || "Sin correo" },
+      { key: "Teléfono", value: phone || "Sin teléfono" },
+      { key: "Dirección", value: address || "Sin dirección" },
+      { key: "Ciudad", value: city || "Sin ciudad" },
+    ];
+    if (total) rows.push({ key: "Total", value: total });
+    if (hasTracking) rows.push({ key: "Guía", value: trackingInfo as string });
+    if (notificationSource)
+      rows.push({ key: "Origen del aviso", value: notificationSource });
 
-  const statusColor = getStatusColor();
-  const statusMessage = getStatusMessage();
+    return (
+      <PanelShell
+        preview={`Pedido #${orderNumber} · ${look.pill}`}
+        label="Panel · pedido"
+      >
+        <Title panel>
+          {status === "PENDING" ? `Nuevo pedido de ${name}` : `Pedido #${orderNumber}`}
+        </Title>
+        <Meta>{`${look.pill} · ${name}`}</Meta>
+
+        <StickerCard tint="slate">
+          <KeyValues rows={rows} />
+        </StickerCard>
+
+        <SectionLabel tint="slate">Artículos</SectionLabel>
+        <StickerCard tint="slate">
+          {items.length > 0 ? (
+            <ItemsTable items={items} total={total} />
+          ) : (
+            <CardText>{orderSummary || "Sin artículos registrados."}</CardText>
+          )}
+        </StickerCard>
+
+        <Cta href={orderLink} ghost>
+          Abrir el pedido en el panel
+        </Cta>
+
+        <Foot>Panel de P de Papel</Foot>
+      </PanelShell>
+    );
+  }
+
+  /* ------------------------------------------------------------ tienda */
 
   return (
-    <Html>
-      <Head />
-      <Preview>{statusMessage}</Preview>
-      <Body style={main}>
-        <Container style={container}>
-          {/* Header */}
-          <Section
-            style={{
-              ...headerSection,
-              backgroundColor: isAdminEmail ? "#f1f5f9" : "#f9d6e4",
-              borderBottom: isAdminEmail ? "1px solid #e2e8f0" : "none",
-            }}
-          >
-            <Img
-              src="https://papeleriapdepapel.com/images/text-below-transparent-bg.png"
-              width="200"
-              height="200"
-              alt="Papelería P de Papel"
-              style={logo}
-            />
-            {isAdminEmail && (
-              <Text style={adminBadge}>Panel de Administración</Text>
-            )}
-          </Section>
+    <Shell
+      preview={`${look.headline(firstName)} Pedido #${orderNumber}`}
+      tint="pink"
+      kicker="Papelería · Medellín"
+    >
+      <Pill tint={look.tint}>{look.pill}</Pill>
+      <Title>{look.headline(firstName)}</Title>
+      {thanksParagraph ? <P>{thanksParagraph}</P> : null}
 
-          {/* Status Banner */}
-          {isAdminEmail ? (
-            <Section
-              style={{
-                ...statusBanner,
-                backgroundColor: "#1e293b",
-                borderBottom: `4px solid ${statusColor}`,
-              }}
-            >
-              <Text style={adminNotificationLabel}>
-                Notificación Administrativa
-              </Text>
-              <Text style={{ ...statusBannerText, color: "#fff" }}>
-                <span style={{ marginRight: "10px" }}>{getStatusIcon()}</span>
-                {statusMessage}
-              </Text>
-            </Section>
-          ) : (
-            <Section style={{ ...statusBanner, backgroundColor: statusColor }}>
-              <Text style={{ ...statusBannerText, color: "#fff" }}>
-                <span style={{ marginRight: "10px", fontSize: "24px" }}>
-                  {getStatusIcon()}
-                </span>
-                {statusMessage}
-              </Text>
-            </Section>
-          )}
+      <SectionLabel tint={look.tint}>Tu pedido #{orderNumber}</SectionLabel>
+      <StickerCard tint={look.tint}>
+        {items.length > 0 ? (
+          <ItemsTable items={items} total={total} />
+        ) : (
+          <CardText>{orderSummary || "Sin artículos registrados."}</CardText>
+        )}
+      </StickerCard>
 
-          <Section style={contentSection}>
-            <Container
-              style={{
-                ...orderNumberBox,
-                borderLeft: `4px solid ${statusColor}`,
-              }}
-            >
-              <Text style={orderNumberText}>
-                Número de pedido: #{orderNumber}
-              </Text>
-            </Container>
+      {paymentMethod ? (
+        <>
+          <SectionLabel tint={look.tint}>Pago</SectionLabel>
+          <StickerCard tint={look.tint} filled>
+            <CardText>{paymentMethod}</CardText>
+          </StickerCard>
+        </>
+      ) : null}
 
-            {thanksParagraph && !isAdminEmail && (
-              <Text style={paragraph}>{thanksParagraph}</Text>
-            )}
-
-            {isAdminEmail && (
-              <Container style={adminDetailsBox}>
-                <Heading style={adminDetailsTitle}>
-                  🪪 Detalles Técnicos del Pedido
-                </Heading>
-                <Text style={adminDetailsText}>
-                  <strong>Cliente:</strong> {name}
-                </Text>
-                <Text style={adminDetailsText}>
-                  <strong>Email:</strong> {email || "N/A"}
-                </Text>
-                <Text style={adminDetailsText}>
-                  <strong>Teléfono:</strong> {phone || "N/A"}
-                </Text>
-                <Text style={adminDetailsText}>
-                  <strong>Dirección:</strong> {address || "N/A"}
-                </Text>
-                <Text style={adminDetailsText}>
-                  <strong>Ciudad:</strong> {city || "N/A"}
-                </Text>
-                {total && (
-                  <Text style={adminDetailsText}>
-                    <strong>Total:</strong> {total}
-                  </Text>
-                )}
-                {notificationSource && (
-                  <Text style={adminDetailsText}>
-                    <strong>Origen del aviso:</strong> {notificationSource}
-                  </Text>
-                )}
-              </Container>
-            )}
-
-            {orderSummary && (
-              <Section style={{ marginBottom: "25px" }}>
-                <Heading style={sectionTitle}>🛍️ Resumen de tu pedido</Heading>
-                <Container style={summaryBox}>
-                  <Text style={summaryText}>{orderSummary}</Text>
-                </Container>
-              </Section>
-            )}
-
-            {paymentMethod && (
-              <Text style={paragraph}>
-                <strong>💳 Método de pago:</strong> {paymentMethod}
-              </Text>
-            )}
-
-            {Boolean(trackingInfo) && trackingInfo !== "TRACK-123" && (
-              <Container style={trackingBox}>
-                <Heading style={trackingTitle}>🚚 Información de envío</Heading>
-                <Text style={trackingText}>
-                  <strong>Guía de envío:</strong> {trackingInfo}
-                </Text>
-                <Link
-                  href={`https://www.envioclick.com/co/track/${trackingInfo}`}
-                  style={trackingLink}
-                >
-                  Consultar estado del envío
-                </Link>
-              </Container>
-            )}
-
-            {orderLink && !isAdminEmail && (
-              <Section style={{ textAlign: "center", marginBottom: "25px" }}>
-                <Link href={orderLink} style={orderActionButton}>
-                  Ver o modificar mi pedido
-                </Link>
-              </Section>
-            )}
-
-            {accountClaimLink && !isAdminEmail && (
-              <Section style={accountClaimBox}>
-                <Heading style={accountClaimTitle}>
-                  Guarda tu pedido en una cuenta gratis
-                </Heading>
-                <Text style={paragraph}>
-                  Inicia sesión o crea tu cuenta con este mismo correo para
-                  consultar este pedido desde cualquier dispositivo.
-                </Text>
-                <Link href={accountClaimLink} style={accountClaimButton}>
-                  Guardar mi pedido
-                </Link>
-              </Section>
-            )}
-
-            <Text style={dateText}>
-              <strong>📅 Fecha:</strong>{" "}
-              {new Date().toLocaleDateString("es-ES", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </Text>
-
-            <Hr style={divider} />
-
-            <Section>
-              <Text style={signatureText}>Saludos cordiales,</Text>
-              <Text style={signatureName}>Equipo Web P de Papel 📝</Text>
-            </Section>
-          </Section>
-
-          {/* Footer */}
-          <Section style={footerSection}>
-            <Text style={footerText}>
-              &copy; {new Date().getFullYear()} Papelería P de Papel Co.
+      {hasTracking ? (
+        <>
+          <SectionLabel tint="blue">Seguimiento</SectionLabel>
+          <StickerCard tint="blue" filled>
+            <CardText>
+              Guía de envío: <strong>{trackingInfo}</strong>
               <br />
-              Todos los derechos reservados.
-            </Text>
-          </Section>
-        </Container>
-      </Body>
-    </Html>
+              <Link
+                href={`https://www.envioclick.com/co/track/${trackingInfo}`}
+                style={link}
+              >
+                Consultar el estado del envío
+              </Link>
+            </CardText>
+          </StickerCard>
+        </>
+      ) : null}
+
+      <Cta href={orderLink}>Ver mi pedido</Cta>
+
+      {accountClaimLink ? (
+        <StickerCard tint="lavender" filled>
+          <CardText>
+            <strong>Guarda tu pedido en una cuenta gratis.</strong> Con este
+            mismo correo puedes consultarlo desde cualquier dispositivo.{" "}
+            <Link href={accountClaimLink} style={link}>
+              Guardar mi pedido
+            </Link>
+          </CardText>
+        </StickerCard>
+      ) : null}
+
+      <Foot>
+        P de Papel · Medellín, Colombia
+        <br />
+        ¿Algo no cuadra? Responde este correo, te lee una persona.
+      </Foot>
+    </Shell>
   );
 };
 
+/* Datos de muestra para `npm run email:dev`. No se envían a nadie. */
+OrderNotification.PreviewProps = {
+  name: "Luisa Sánchez",
+  orderNumber: "ORD-1789487579001-684",
+  status: "PAID",
+  paymentMethod: "Pago en línea",
+  total: "$ 85.900",
+  items: [
+    { name: "Cuaderno cosido Osito", quantity: 2, price: "$ 36.000" },
+    { name: "Set de micropuntas", quantity: 1, price: "$ 28.900" },
+    { name: "Washi tape pastel", quantity: 3, price: "$ 21.000" },
+  ],
+  orderLink: "https://papeleriapdepapel.com/pedido/demo",
+  thanksParagraph:
+    "Recibimos tu pago. Te escribimos otra vez en cuanto salga de la papelería.",
+  city: "Medellín",
+  email: "luisa@ejemplo.com",
+  phone: "300 123 4567",
+  address: "Calle 45 #32-18, apto 402",
+} satisfies OrderNotificationProps;
+
 export default OrderNotification;
-
-const main = {
-  backgroundColor: "#f8fafc",
-  fontFamily: "Arial, sans-serif",
-  padding: "20px 0",
-};
-
-const container = {
-  backgroundColor: "#ffffff",
-  margin: "0 auto",
-  borderRadius: "12px",
-  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-  overflow: "hidden",
-  maxWidth: "600px",
-};
-
-const headerSection = {
-  padding: "30px 20px",
-  textAlign: "center" as const,
-};
-
-const logo = {
-  display: "block",
-  margin: "0 auto",
-  maxWidth: "200px",
-  height: "auto",
-  borderRadius: "8px",
-};
-
-const adminBadge = {
-  marginTop: "10px",
-  color: "#475569",
-  fontSize: "14px",
-  fontWeight: "bold",
-  textAlign: "center" as const,
-};
-
-const accountClaimBox = {
-  marginBottom: "25px",
-  padding: "20px",
-  backgroundColor: "#faf5ff",
-  border: "1px solid #e9d5ff",
-  borderRadius: "10px",
-  textAlign: "center" as const,
-};
-
-const accountClaimTitle = {
-  margin: "0 0 8px",
-  color: "#581c87",
-  fontSize: "18px",
-  lineHeight: "1.35",
-};
-
-const accountClaimButton = {
-  display: "inline-block",
-  marginTop: "8px",
-  padding: "12px 18px",
-  backgroundColor: "#581c87",
-  borderRadius: "8px",
-  color: "#ffffff",
-  fontWeight: "bold",
-  textDecoration: "none",
-};
-
-const statusBanner = {
-  padding: "20px",
-  textAlign: "center" as const,
-};
-
-const adminNotificationLabel = {
-  textTransform: "uppercase" as const,
-  fontSize: "12px",
-  letterSpacing: "1px",
-  marginBottom: "10px",
-  color: "#94a3b8",
-  textAlign: "center" as const,
-};
-
-const statusBannerText = {
-  fontSize: "18px",
-  fontWeight: "bold",
-  margin: 0,
-  textAlign: "center" as const,
-};
-
-const contentSection = {
-  padding: "30px",
-};
-
-const orderNumberBox = {
-  backgroundColor: "#f1f5f9",
-  padding: "15px",
-  borderRadius: "8px",
-  marginBottom: "25px",
-};
-
-const orderNumberText = {
-  fontSize: "16px",
-  color: "#1e293b",
-  fontWeight: "bold",
-  margin: 0,
-};
-
-const paragraph = {
-  marginBottom: "25px",
-  lineHeight: "1.6",
-  color: "#475569",
-};
-
-const adminDetailsBox = {
-  backgroundColor: "#fefce8",
-  padding: "20px",
-  borderRadius: "8px",
-  marginBottom: "25px",
-  border: "1px solid #facc15",
-};
-
-const adminDetailsTitle = {
-  margin: "0 0 15px 0",
-  color: "#854d0e",
-  fontSize: "16px",
-  textTransform: "uppercase" as const,
-  letterSpacing: "0.5px",
-  borderBottom: "1px solid #fde047",
-  paddingBottom: "10px",
-};
-
-const adminDetailsText = {
-  color: "#422006",
-  margin: "5px 0",
-};
-
-const sectionTitle = {
-  margin: "0 0 15px 0",
-  color: "#1e293b",
-  fontSize: "16px",
-};
-
-const summaryBox = {
-  backgroundColor: "#f8fafc",
-  padding: "15px",
-  borderRadius: "8px",
-  border: "1px solid #e2e8f0",
-};
-
-const summaryText = {
-  fontFamily: "monospace",
-  fontSize: "14px",
-  lineHeight: "1.5",
-  whiteSpace: "pre-wrap" as const,
-  color: "#475569",
-  margin: 0,
-};
-
-const trackingBox = {
-  backgroundColor: "#dbeafe",
-  padding: "20px",
-  borderRadius: "8px",
-  marginBottom: "25px",
-  border: "1px solid #3b82f6",
-};
-
-const trackingTitle = {
-  margin: "0 0 15px 0",
-  color: "#1e40af",
-  fontSize: "16px",
-};
-
-const trackingText = {
-  color: "#1e40af",
-  lineHeight: "1.6",
-  margin: "0 0 10px 0",
-};
-
-const trackingLink = {
-  display: "inline-block",
-  backgroundColor: "#3b82f6",
-  color: "#ffffff",
-  padding: "10px 20px",
-  borderRadius: "6px",
-  textDecoration: "none",
-  fontWeight: "bold",
-  marginTop: "10px",
-};
-
-const orderActionButton = {
-  display: "inline-block",
-  backgroundColor: "#f9d6e4",
-  color: "#831843",
-  padding: "12px 24px",
-  borderRadius: "8px",
-  textDecoration: "none",
-  fontWeight: "bold",
-  border: "2px solid #be185d",
-  textAlign: "center" as const,
-};
-
-const dateText = {
-  color: "#64748b",
-  fontSize: "14px",
-  marginBottom: "25px",
-};
-
-const divider = {
-  borderColor: "#f1f5f9",
-  borderTopWidth: "2px",
-  borderTopStyle: "solid" as const,
-  margin: "20px 0",
-};
-
-const signatureText = {
-  margin: "0 0 10px 0",
-  color: "#475569",
-};
-
-const signatureName = {
-  fontWeight: "bold",
-  color: "#1e293b",
-  margin: 0,
-};
-
-const footerSection = {
-  backgroundColor: "#f8fafc",
-  padding: "20px",
-  textAlign: "center" as const,
-  borderTop: "1px solid #e2e8f0",
-};
-
-const footerText = {
-  color: "#64748b",
-  fontSize: "12px",
-  lineHeight: "1.5",
-  margin: 0,
-};
