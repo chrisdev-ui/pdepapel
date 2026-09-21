@@ -1,14 +1,16 @@
 import { fakerES_MX as faker } from "@faker-js/faker";
 import { Prisma, PrismaClient } from "@prisma/client";
 
+import { collectUnique } from "./seed-helpers";
+
 const getDesigns = (
   storeId: string,
 ): Prisma.DesignCreateManyInput | Prisma.DesignCreateManyInput[] => {
-  const designsSet = new Set<string>();
-  while (designsSet.size < 10) {
-    designsSet.add(faker.commerce.productMaterial());
-  }
-  return Array.from(designsSet).map((design) => ({
+  // `Design` lleva `@@unique([storeId, name])`. El `Set<string>` sí deduplicaba
+  // bien, pero `faker.commerce.productMaterial()` da 11 valores y aquí se piden
+  // 10: un margen de uno. El día que faker recorte esa lista, el bucle sin tope
+  // se queda girando para siempre en vez de fallar.
+  return collectUnique(10, () => faker.commerce.productMaterial()).map((design) => ({
     name: design,
     storeId,
   }));

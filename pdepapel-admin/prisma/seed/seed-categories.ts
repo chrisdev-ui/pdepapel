@@ -1,35 +1,33 @@
 import { fakerES_MX as faker } from "@faker-js/faker";
 import { Prisma, PrismaClient } from "@prisma/client";
 
-const getRandomTypeId = async (prismadb: PrismaClient, storeId: string) => {
-  const types = await prismadb.type.findMany({ where: { storeId } });
-  const randomIndex = Math.floor(Math.random() * types.length);
-  return types[randomIndex].id;
-};
+import { collectUnique, uniqueSlug } from "./seed-helpers";
+
+const CATEGORY_COUNT = 20;
 
 const getCategories = async (
   storeId: string,
   prismadb: PrismaClient,
-): Promise<
-  Prisma.CategoryCreateManyInput | Prisma.CategoryCreateManyInput[]
-> => {
-  const categorySet = new Set<string>();
-  const categories: Prisma.CategoryCreateManyInput[] = [];
-
-  while (categorySet.size < 20) {
-    categorySet.add(faker.commerce.department());
+): Promise<Prisma.CategoryCreateManyInput[]> => {
+  // Los tipos se piden una vez, no una por categoría.
+  const types = await prismadb.type.findMany({
+    where: { storeId },
+    select: { id: true },
+  });
+  if (types.length === 0) {
+    throw new Error("Siembra los tipos antes que las categorías.");
   }
 
-  for (let i = 0; i < categorySet.size; i++) {
-    const typeId = await getRandomTypeId(prismadb, storeId);
-    categories.push({
-      name: Array.from(categorySet)[i],
-      typeId,
-      storeId,
-    });
-  }
-
-  return categories;
+  const names = collectUnique(CATEGORY_COUNT, () => faker.commerce.department());
+  const slugs = new Set<string>();
+  return names.map((name, index) => ({
+    name,
+    // `slug` tiene `@default("")` y `@@unique([storeId, slug])`: sin esto las
+    // veinte categorías entran con la cadena vacía y la segunda choca.
+    slug: uniqueSlug(name, slugs, `categoria-${index + 1}`),
+    typeId: types[Math.floor(Math.random() * types.length)].id,
+    storeId,
+  }));
 };
 
 export async function seedCategories(storeId: string, prismadb: PrismaClient) {
@@ -39,5 +37,5 @@ export async function seedCategories(storeId: string, prismadb: PrismaClient) {
     data: categories,
   });
 
-  console.log("Categories seeded successfully!");
+  console.log(`Categories seeded successfully! (${categories.length})`);
 }

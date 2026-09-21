@@ -1,6 +1,8 @@
 import { fakerES_MX as faker, simpleFaker } from "@faker-js/faker";
 import { Prisma, PrismaClient } from "@prisma/client";
 
+import { uniqueSlug } from "./seed-helpers";
+
 let trueCount = 0;
 
 function getRandomBoolean() {
@@ -55,28 +57,34 @@ const getProductData = async (
   prismadb: PrismaClient,
   storeId: string,
 ): Promise<Prisma.ProductCreateManyInput | Prisma.ProductCreateManyInput[]> => {
-  const productsSet = new Set<{
-    name: string;
-    sku: string;
-  }>();
-
+  /*
+    Antes esto era un `Set` de objetos literales: cada uno es una referencia
+    distinta, así que no quitaba ni un repetido y solo servía para contar hasta
+    mil. `sku` lleva `@unique` global, de modo que un choque —improbable con
+    diez alfanuméricos, pero posible— habría tumbado el `createMany` entero.
+    Ahora se deduplica por sku de verdad.
+  */
+  const bySku = new Map<string, { name: string; sku: string }>();
   const products: Prisma.ProductCreateManyInput[] = [];
 
-  while (productsSet.size < 1000) {
-    productsSet.add({
-      name: faker.commerce.productName(),
-      sku: faker.string.alphanumeric(10),
-    });
+  while (bySku.size < 1000) {
+    const sku = faker.string.alphanumeric(10);
+    if (bySku.has(sku)) continue;
+    bySku.set(sku, { name: faker.commerce.productName(), sku });
   }
+  const productsSet = Array.from(bySku.values());
+  // `slug` tiene `@default("")`: sin esto, mil productos entran con la cadena
+  // vacía y ninguno es alcanzable por su dirección en la tienda.
+  const slugs = new Set<string>();
 
-  for (let i = 0; i < productsSet.size; i++) {
+  for (let i = 0; i < productsSet.length; i++) {
     const categoryId = await getRandomCategoryId(prismadb, storeId);
     const sizeId = await getRandomSizeId(prismadb, storeId);
     const colorId = await getRandomColorId(prismadb, storeId);
     const designId = await getRandomDesignId(prismadb, storeId);
     const supplierId = await getRandomSupplierId(prismadb, storeId);
-    const name = Array.from(productsSet)[i].name;
-    const sku = Array.from(productsSet)[i].sku;
+    const name = productsSet[i].name;
+    const sku = productsSet[i].sku;
 
     const acqPrice = Number(
       faker.commerce.price({
@@ -90,6 +98,7 @@ const getProductData = async (
 
     products.push({
       name,
+      slug: uniqueSlug(name, slugs, `producto-${i + 1}`),
       description: faker.commerce.productDescription(),
       acqPrice,
       price,
