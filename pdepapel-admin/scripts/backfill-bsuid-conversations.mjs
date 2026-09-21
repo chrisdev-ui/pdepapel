@@ -98,6 +98,33 @@ async function main() {
   const porContacto = new Map();
   let totalMensajes = 0;
   let totalEcos = 0;
+  /**
+   * BSUID → teléfono, aprendido del corpus entero.
+   *
+   * Hace falta para no duplicar: de los nueve, uno (Valentinosky) sí mandó su
+   * número más tarde y ya tiene conversación. Si se archivaran sus mensajes
+   * solo con el BSUID se abriría una segunda conversación para la misma
+   * persona. Pasándole también el teléfono, el resolutor encuentra la que ya
+   * está y le pega el BSUID, que es lo que habría hecho solo con el siguiente
+   * mensaje que trajera las dos identidades.
+   */
+  const telefonoDe = new Map();
+  for (const evento of eventos) {
+    for (const c of (evento.payload?.entry ?? []).flatMap((e) => e?.changes ?? [])) {
+      const v = c?.value;
+      if (!v) continue;
+      const ct = (v.contacts ?? [])[0] ?? {};
+      const pares = [];
+      if (ct.user_id && ct.wa_id) pares.push([ct.user_id, ct.wa_id]);
+      for (const m of v.messages ?? []) if (m?.from_user_id && m?.from) pares.push([m.from_user_id, m.from]);
+      for (const e of v.message_echoes ?? []) if (e?.to_user_id && e?.to) pares.push([e.to_user_id, e.to]);
+      for (const [b, tel] of pares) {
+        const bsuid = asBsuid(b);
+        const digits = String(tel).replace(/\D/g, "");
+        if (bsuid && digits) telefonoDe.set(bsuid, digits);
+      }
+    }
+  }
 
   for (const evento of eventos) {
     const { mensajes, ecos } = soloBsuid(evento.payload);
@@ -151,6 +178,7 @@ async function main() {
       usuario: c.username ? `@${c.username}` : "—",
       nombre: c.nombre ?? "—",
       tienda: c.storeId ? c.storeId.slice(0, 8) + "…" : "SIN CONEXIÓN",
+      telefono_conocido: telefonoDe.get(c.bsuid) ?? "—",
       de_ella: c.entrantes,
       de_Paula: c.ecos,
     })),
@@ -219,7 +247,9 @@ async function main() {
     for (const item of contacto.items) {
       const comun = {
         externalId: item.externalId,
-        phone: null,
+        // Con teléfono conocido, el resolutor adopta la conversación que ya
+        // existe en vez de abrir otra.
+        phone: telefonoDe.get(contacto.bsuid) ?? null,
         bsuid: contacto.bsuid,
         username: contacto.username,
         body: item.body,
