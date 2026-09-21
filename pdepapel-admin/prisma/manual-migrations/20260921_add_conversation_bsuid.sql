@@ -33,22 +33,32 @@
 --   npm run prod:approve -- "columna bsuid en Conversation y phone nullable"
 --   npm run prod:migrate -- prisma/manual-migrations/20260921_add_conversation_bsuid.sql
 --
--- Correrlo dos veces no rompe nada: el MODIFY deja la columna igual y el ADD
--- COLUMN / CREATE INDEX llevan IF NOT EXISTS.
+
+
+-- **NO es idempotente, y no puede serlo.** `ADD COLUMN IF NOT EXISTS` y
+-- `CREATE INDEX IF NOT EXISTS` son sintaxis de MariaDB; MySQL 8.4 (que es lo
+-- que corre en Railway) las rechaza con un 1064. Lo aprendimos aplicando este
+-- mismo archivo: la sentencia 1 pasó y la 2 murió, dejando la migración a
+-- medias —sin romper nada, porque lo único aplicado era una relajación—.
+--
+-- Las tres sentencias son independientes, así que si una falla se comprueba el
+-- estado con las consultas del final y se corren solo las que falten. Volver a
+-- correr la 1 es inofensivo (deja la columna igual); las otras dos fallan si ya
+-- existen, y ese error significa «ya estaba», no «se rompió».
 
 ALTER TABLE `Conversation`
   MODIFY COLUMN `phone` VARCHAR(191) NULL;
 
 ALTER TABLE `Conversation`
-  ADD COLUMN IF NOT EXISTS `bsuid` VARCHAR(191) NULL;
+  ADD COLUMN `bsuid` VARCHAR(191) NULL;
 
 -- El nombre de usuario (`@mrs_han14`) viene en `contacts[].profile.username` y
 -- en estos contactos suele ser lo único legible: `profile.name` llega vacío.
 -- Sin esto, la lista mostraría una fila sin teléfono y sin nombre.
 ALTER TABLE `Conversation`
-  ADD COLUMN IF NOT EXISTS `username` VARCHAR(191) NULL;
+  ADD COLUMN `username` VARCHAR(191) NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS `Conversation_storeId_channel_bsuid_key`
+CREATE UNIQUE INDEX `Conversation_storeId_channel_bsuid_key`
   ON `Conversation` (`storeId`, `channel`, `bsuid`);
 
 -- Verificación (las tres deben responder):
