@@ -73,7 +73,12 @@ const SENSITIVE_FIELDS = [
  */
 const WIDE_RELATIONS = ["products", "product", "variants", "supplier", "orders", "orderItems"];
 
-type Mechanism = "narrow-select" | "owner-guard" | "scrubbed" | "public-catalog";
+type Mechanism =
+  | "narrow-select"
+  | "owner-guard"
+  | "scrubbed"
+  | "public-catalog"
+  | "client-shell";
 
 interface Exception {
   reason: string;
@@ -98,6 +103,17 @@ const ALLOWED: Record<string, Exception> = {
   "disenos/[designId]/page.tsx": { reason: "un diseño del catálogo público", mechanism: "public-catalog" },
   "tamanos/[sizeId]/page.tsx": { reason: "un tamaño del catálogo público", mechanism: "public-catalog" },
   "tipos/[typeId]/page.tsx": { reason: "un tipo del catálogo público", mechanism: "public-catalog" },
+  // Las dos siguientes salieron del punto ciego que este archivo arregla: no
+  // eran fugas, pero pasaban por cercanía y no por mérito propio. Quedan
+  // declaradas para que se vean, con el mecanismo que la prueba comprueba.
+  "configuracion/cloudinary/page.tsx": {
+    reason: "no consulta nada: monta un cliente que llama a rutas de API ya cerradas",
+    mechanism: "client-shell",
+  },
+  "productos/opciones/page.tsx": {
+    reason: "no consulta nada: monta el asistente de migración, que llama a rutas de API ya cerradas",
+    mechanism: "client-shell",
+  },
 };
 
 function walk(dir: string): string[] {
@@ -192,8 +208,39 @@ function pathFiles(file: string, depth = 2): string[] {
   return found;
 }
 
+/**
+ * Una **definición** no es una llamada.
+ *
+ * `lib/store-access.ts` es donde se escriben `requireStoreOwner`,
+ * `requireStoreRead` y `getStoreAccess`; `lib/utils.ts` es donde se escribe
+ * `verifyStoreOwner`. Medio panel importa uno de los dos por un ayudante que
+ * no tiene nada que ver —`cn()`, sin ir más lejos—, así que si el escaneo
+ * cuenta cualquier aparición del nombre en la cadena de imports, esos dos
+ * archivos avalan a todo el que los toque. Dentro de ellos, además, una
+ * guardia llama a otra (`verifyStoreOwner` llama a `checkIfStoreOwner`), así
+ * que borrar solo las declaraciones tampoco basta.
+ *
+ * Eso no es teórico: en la auditoría de Portada y finanzas, **7 de 100
+ * cargas** pasaban solo por esa cercanía, y una era `reportes-tributarios`,
+ * que el barrido de septiembre dio por cerrada sin que lo estuviera.
+ *
+ * La regla, hermana de la tabla por función: **el archivo donde una guardia
+ * se declara es fontanería y no avala a nadie**. Solo cuenta una llamada
+ * hecha desde fuera de ese archivo.
+ */
+function declaresGuard(source: string): boolean {
+  return GUARDS.some((guard) =>
+    new RegExp(
+      `(?:export\\s+)?(?:async\\s+)?function\\s+${guard}\\b|(?:export\\s+)?(?:const|let|var)\\s+${guard}\\s*[:=]`,
+    ).test(source),
+  );
+}
+
 const hasGuard = (source: string) =>
-  GUARDS.some((guard) => source.includes(`${guard}(`)) || INLINE_OWNERSHIP.test(source);
+  !declaresGuard(source) &&
+  (GUARDS.some((guard) => source.includes(`${guard}(`)) ||
+    INLINE_OWNERSHIP.test(source));
+
 const hasScrub = (source: string) => /\bscrub[A-Z]\w*\(/.test(source);
 const sensitiveIn = (source: string) =>
   SENSITIVE_FIELDS.filter((field) => new RegExp(`\\b${field}\\b`).test(source));
@@ -330,6 +377,16 @@ describe("toda lectura del panel dice a quién deja entrar", () => {
       }
       if (exception.mechanism === "scrubbed") {
         expect(hasScrub(source), `${label} dice scrubbed y no llama a ningún scrub*`).toBe(true);
+      }
+      if (exception.mechanism === "client-shell") {
+        // Decir «no consulta nada» es fácil; aquí se comprueba. La pantalla no
+        // puede nombrar `prismadb` ni esperar a un cargador: si mañana alguien
+        // le añade datos de servidor, esta excepción deja de valer y falla.
+        expect(touchesDatabase(source), `${label} sí consulta la base`).toBe(false);
+        expect(
+          /await\s+[A-Za-z_$][\w$]*\s*\(/.test(source),
+          `${label} espera a un cargador: ya no es una cáscara`,
+        ).toBe(false);
       }
       if (exception.mechanism === "narrow-select" || exception.mechanism === "public-catalog") {
         expect(sensitiveIn(source), `${label} trae campos sensibles`).toEqual([]);
@@ -476,6 +533,35 @@ describe("el escáner atrapa las fugas que ya ocurrieron", () => {
 
   it("Proveedores: la consulta sin select queda sin guardia y se marca", () => {
     expect(hasGuard(PROVEEDORES_ANTES)).toBe(false);
+  });
+
+  it("Tributarios: importar `cn` ya no vale como guardia", () => {
+    // Lo que de verdad tenía la pantalla: ni una guardia, y un import de
+    // `lib/utils.ts` por un ayudante de estilos.
+    const TRIBUTARIOS_ANTES = `
+      import { getTaxReadiness } from "@/lib/tax-readiness";
+      import { cn } from "@/lib/utils";
+      export default async function Page({ params }) {
+        const readiness = await getTaxReadiness(params.storeId);
+        return <Client readiness={readiness} className={cn("flex")} />;
+      }`;
+    expect(hasGuard(TRIBUTARIOS_ANTES)).toBe(false);
+    // Y el archivo donde las guardias se escriben no avala a nadie, ni
+    // siquiera a sí mismo: dentro, una guardia llama a otra.
+    const STORE_ACCESS = `
+      export async function requireStoreOwner(storeId) { return resolveAccess(storeId); }
+      export async function requireStoreRead(storeId) { return resolveAccess(storeId); }`;
+    const UTILS = `
+      async function checkIfStoreOwner(userId, storeId) { return true; }
+      export async function verifyStoreOwner(userId, storeId) {
+        if (!(await checkIfStoreOwner(userId, storeId))) throw new Error("no");
+      }`;
+    expect(declaresGuard(STORE_ACCESS)).toBe(true);
+    expect(declaresGuard(UTILS)).toBe(true);
+    expect(hasGuard(STORE_ACCESS)).toBe(false);
+    expect(hasGuard(UTILS)).toBe(false);
+    // Una llamada de verdad, desde fuera, sí cuenta.
+    expect(hasGuard(`await requireStoreOwner(params.storeId);`)).toBe(true);
   });
 
   it("Clientes: cambiar la guardia de la lista por la de lectura ya no pasa", () => {

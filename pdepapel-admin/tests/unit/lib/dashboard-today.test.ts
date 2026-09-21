@@ -17,6 +17,16 @@ const db = vi.hoisted(() => {
 
 vi.mock("@/lib/prismadb", () => ({ default: db }));
 
+/**
+ * Estas pruebas miran cómo se ordena la reposición, no quién puede entrar. La
+ * guardia de `getTodaySummary` es real y se comprueba en
+ * `tests/unit/security/`; aquí se dobla como dueña para que el caso hable de
+ * lo suyo.
+ */
+vi.mock("@/lib/store-access", () => ({
+  requireStoreRead: vi.fn(async () => ({ userId: "user_owner", role: "owner" })),
+}));
+
 import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import { buildTodaySummary, channelForOrderType, getColombiaDayBounds, getTodaySummary, paidWithin, type TodayRawInput } from "@/lib/dashboard-today";
 import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/product-readiness";
@@ -102,6 +112,46 @@ describe("dashboard today", () => {
     expect(summary.pending[2].meta).toContain("hace 4 h");
     expect(summary.pending[3].meta).toContain("Bogotá");
     expect(summary.pending[5]).toMatchObject({ href: "/s1/productos/p1", meta: "1 unidad" });
+  });
+
+  /**
+   * Lo que veía una cuenta de solo lectura en la pantalla de inicio: las
+   * acciones pendientes con nombre y apellido de cada clienta. Las ventas sí
+   * son suyas —la agencia las necesita—; los nombres no, y `fullName` es uno
+   * de los campos que `scrubOrder` borra justamente por eso.
+   */
+  describe("una cuenta de solo lectura no recibe nombres de clientas", () => {
+    const CLIENTAS = ["Mariana Torres", "Laura Gómez", "Camila Ruiz", "Andrés Pérez", "Sofía Mesa"];
+    const conNovedad = () => ({
+      ...base(),
+      shippingIssues: { count: 2, sample: [{ orderNumber: "ORD-9", fullName: "Sofía Mesa", status: ShippingStatus.InTransit, stale: true }] },
+    });
+
+    it("los escribe para la dueña", () => {
+      const meta = buildTodaySummary(conNovedad(), "s1").pending.map((p) => p.meta).join(" | ");
+      for (const nombre of CLIENTAS) expect(meta).toContain(nombre);
+    });
+
+    it("no los escribe para solo lectura, en ninguno de los cinco pendientes", () => {
+      const summary = buildTodaySummary(conNovedad(), "s1", { includeCustomerNames: false });
+      const meta = summary.pending.map((p) => p.meta).join(" | ");
+      for (const nombre of CLIENTAS) expect(meta).not.toContain(nombre);
+      // Y no es que se hayan perdido los pendientes: siguen todos, con su cifra.
+      expect(summary.pending.map((p) => p.kind)).toEqual(
+        buildTodaySummary(conNovedad(), "s1").pending.map((p) => p.kind),
+      );
+      expect(meta).toContain("Bogotá");
+      expect(meta).toContain("Bold");
+      expect(summary.today.net).toBe(170200);
+    });
+
+    it("la línea del envío con novedad no queda con dos puntos colgando", () => {
+      const summary = buildTodaySummary(conNovedad(), "s1", { includeCustomerNames: false });
+      const novedad = summary.pending.find((p) => p.kind === "shipping-issue");
+      expect(novedad?.meta).toContain("ORD-9");
+      expect(novedad?.meta).not.toContain(" · :");
+      expect(novedad?.meta).not.toContain("Sofía");
+    });
   });
 
   it("keeps working when the loader sends no stale online payments", () => {

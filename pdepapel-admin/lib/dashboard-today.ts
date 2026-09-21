@@ -6,6 +6,7 @@ import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TR
 import { countRecentPaymentWebhookIssues } from "@/lib/payment-webhook-events";
 import { ORDER_READY_TO_DISPATCH } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
+import { requireStoreRead } from "@/lib/store-access";
 import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
 import { OrderStatus, OrderType, PaymentMethod, PaymentWebhookProvider, ShippingStatus } from "@prisma/client";
 import { addDays, startOfDay, subDays, subHours } from "date-fns";
@@ -157,9 +158,34 @@ const cop = (value: number) =>
     .format(value)
     .replace(/ /g, " ");
 
+export interface TodaySummaryOptions {
+  /**
+   * Si las acciones pendientes pueden nombrar a la clienta.
+   *
+   * Una cuenta de solo lectura ve las ventas —eso está decidido y es lo que la
+   * agencia necesita—, pero no quién compró: `fullName` es uno de los campos
+   * que `scrubOrder` borra justamente para eso, y Clientes se lo esconde.
+   * Inicio se lo entregaba en la línea de cada pendiente.
+   *
+   * No se depura después: **el nombre no se escribe**. Es la lección de
+   * Clientes —no hay nada que depurar si nunca se construyó— y evita que
+   * mañana alguien añada un pendiente nuevo y se olvide de pasarlo por el
+   * depurador.
+   */
+  includeCustomerNames?: boolean;
+}
+
 /** Construye el resumen del día a partir de filas ya cargadas (puro, testeable). */
-export function buildTodaySummary(input: TodayRawInput, storeId: string): TodaySummary {
+export function buildTodaySummary(
+  input: TodayRawInput,
+  storeId: string,
+  options: TodaySummaryOptions = {},
+): TodaySummary {
   const { now } = input;
+  const { includeCustomerNames = true } = options;
+  /** El nombre de la clienta, o nada si quien mira no puede verlo. */
+  const who = (fullName: string | null | undefined) =>
+    includeCustomerNames ? fullName ?? null : null;
   const todayNet = input.todayOrders.reduce((sum, o) => sum + Number(o.total), 0) + input.todayMarketplaceNet;
 
   const pending: TodayPendingAction[] = [];
@@ -167,7 +193,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
     pending.push({
       kind: "verify-payment",
       title: `Verificar transferencia · ${order.orderNumber}`,
-      meta: [order.fullName, cop(Number(order.total)), order.method === PaymentMethod.BankTransfer ? "transferencia" : null, relative(order.createdAt, now)].filter(Boolean).join(" · "),
+      meta: [who(order.fullName), cop(Number(order.total)), order.method === PaymentMethod.BankTransfer ? "transferencia" : null, relative(order.createdAt, now)].filter(Boolean).join(" · "),
       href: `/${storeId}/pedidos/${order.id}`,
       action: "Verificar pago",
       weight: 0,
@@ -177,7 +203,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
     pending.push({
       kind: "awaiting-payment",
       title: `Pago en línea sin completar · ${order.orderNumber}`,
-      meta: [order.fullName, cop(Number(order.total)), order.method === PaymentMethod.Wompi ? "Wompi" : order.method === PaymentMethod.Bold ? "Bold" : null, relative(order.createdAt, now)].filter(Boolean).join(" · "),
+      meta: [who(order.fullName), cop(Number(order.total)), order.method === PaymentMethod.Wompi ? "Wompi" : order.method === PaymentMethod.Bold ? "Bold" : null, relative(order.createdAt, now)].filter(Boolean).join(" · "),
       href: `/${storeId}/pedidos/${order.id}#pago`,
       action: "Reenviar enlace",
       weight: 1,
@@ -187,7 +213,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
     pending.push({
       kind: "create-guide",
       title: `Crear guía · ${order.orderNumber}`,
-      meta: [order.fullName, order.city, order.paidAt ? `pagado ${relative(order.paidAt, now)}` : null].filter(Boolean).join(" · "),
+      meta: [who(order.fullName), order.city, order.paidAt ? `pagado ${relative(order.paidAt, now)}` : null].filter(Boolean).join(" · "),
       href: `/${storeId}/pedidos/${order.id}`,
       action: "Crear guía",
       weight: 2,
@@ -207,7 +233,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
     pending.push({
       kind: "expiring-quote",
       title: `Cotización por vencer · ${quote.orderNumber}`,
-      meta: [quote.fullName, cop(Number(quote.total)), quote.expiresAt ? `vence ${isoDay(quote.expiresAt) === isoDay(now) ? "hoy" : "mañana"}` : null].filter(Boolean).join(" · "),
+      meta: [who(quote.fullName), cop(Number(quote.total)), quote.expiresAt ? `vence ${isoDay(quote.expiresAt) === isoDay(now) ? "hoy" : "mañana"}` : null].filter(Boolean).join(" · "),
       href: `/${storeId}/pedidos/${quote.id}`,
       action: "Renovar",
       weight: 4,
@@ -258,7 +284,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       kind: "shipping-issue",
       title: `${count} ${count === 1 ? "envío con novedad" : "envíos con novedad"}`,
       meta: first
-        ? `${first.orderNumber} · ${first.fullName}: ${first.stale ? "en tránsito sin novedades hace días" : SHIPPING_ISSUE_LABEL[first.status] ?? "novedad de la transportadora"}${count > 1 ? " y más" : ""}`
+        ? `${[first.orderNumber, who(first.fullName)].filter(Boolean).join(" · ")}: ${first.stale ? "en tránsito sin novedades hace días" : SHIPPING_ISSUE_LABEL[first.status] ?? "novedad de la transportadora"}${count > 1 ? " y más" : ""}`
         : "La transportadora reportó un problema o el paquete lleva días sin moverse.",
       href: `/${storeId}/pedidos?vista=con-novedad`,
       action: "Revisar",
@@ -350,7 +376,18 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
 }
 
 /** Carga desde la base de datos lo que Inicio necesita para hoy. */
+/**
+ * El resumen que abre el panel.
+ *
+ * Abierto a una cuenta de solo lectura a propósito —ventas, pendientes y
+ * stock son lo que la agencia necesita ver—, pero sin nombres de clientas: la
+ * guardia devuelve el papel y el papel decide si se escriben.
+ *
+ * Esto no se memoriza: son las cifras de hoy, y una venta recién registrada
+ * tiene que aparecer al recargar.
+ */
 export async function getTodaySummary(storeId: string, now = new Date()): Promise<TodaySummary> {
+  const access = await requireStoreRead(storeId);
   const { start: dayStart, end: dayEnd, local } = getColombiaDayBounds(now);
   const weekStart = zonedTimeToUtc(startOfDay(subDays(local, 6)), TZ);
   const previousWeekStart = zonedTimeToUtc(startOfDay(subDays(local, 13)), TZ);
@@ -538,5 +575,6 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       },
     },
     storeId,
+    { includeCustomerNames: access.role !== "viewer" },
   );
 }

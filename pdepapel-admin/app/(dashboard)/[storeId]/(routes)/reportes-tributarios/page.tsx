@@ -1,4 +1,5 @@
 import { getTaxReadiness } from "@/lib/tax-readiness";
+import { requireStoreOwner } from "@/lib/store-access";
 import type { Metadata } from "next";
 
 import TaxReportsClient from "./components/client";
@@ -10,7 +11,12 @@ export const metadata: Metadata = {
   description: "Exporta las ventas y compras para declaraciones tributarias",
 };
 
+/**
+ * Solo la dueña: ventas y compras del período para la declaración. El menú ya
+ * la escondía, pero esconder una entrada no cierra una URL.
+ */
 export default async function TaxReportsPage({ params }: { params: { storeId: string } }) {
+  await requireStoreOwner(params.storeId);
   const readiness = await getTaxReadiness(params.storeId);
   return (
     <div className="flex-col">

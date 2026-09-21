@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "@/lib/mercadolibre/order-status";
 import { MarketplaceOrderStatus, OrderStatus, RestockOrderStatus } from "@prisma/client";
 
@@ -61,7 +62,15 @@ export function buildTaxReadiness(counts: TaxReadinessCounts, storeId: string, y
   return { year, items, ready: items.length === 0 };
 }
 
+/**
+ * Solo la dueña. Los conteos dicen cuántos pedidos se pagaron sin fecha,
+ * cuántas ventas de Mercado Libre están sin liquidar y cuántas facturas de
+ * compra faltan: es el estado de los libros del negocio. Las cuatro rutas de
+ * API que exportan el Excel ya lo exigían; la pantalla no, y por eso una
+ * cuenta de solo lectura podía abrirla escribiendo la URL.
+ */
 export async function getTaxReadiness(storeId: string, year = new Date().getFullYear()): Promise<TaxReadiness> {
+  await requireStoreOwner(storeId);
   const start = new Date(Date.UTC(year, 0, 1, 5));
   const end = new Date(Date.UTC(year + 1, 0, 1, 5) - 1);
   const [paidWithoutDate, marketplacePendingSettlement, restockCompleted, purchasesRegistered] = await Promise.all([
