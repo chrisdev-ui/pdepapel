@@ -463,9 +463,16 @@ producto, la lista de envíos con novedad, Promociones.
 primeras vistas y ahora solo redirigen a `/rendimiento`; ya no existen como
 pantallas aparte.
 
-Tributarios: Excel de ventas y compras del periodo; «Revisión previa» avisa si
+Tributarios: Excel de ventas y compras del periodo; «Antes de exportar» avisa si
 algo impide exportar; incluye pedidos pagados o enviados, ventas de Mercado
 Libre liquidadas y facturas de compra.
+
+La pantalla **abre en el año en curso** —antes traía escrito a mano jul–dic de
+2025, así que envejecía sola— y ofrece atajos: este año, año pasado y cada
+semestre. Debajo de «Descargar Excel» dice **qué período se llevará el
+archivo**, y si cambias las fechas sin aplicarlas lo avisa: el Excel siempre es
+el reporte que estás viendo, nunca el formulario a medio escribir. Las dos
+tablas tienen buscador y orden por columna, y el número de orden abre el pedido.
 
 ## 18. Ajustes (`/configuracion`)
 
