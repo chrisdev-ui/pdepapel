@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
-  DEFAULT_TAX_REPORT_PERIOD,
+  getDefaultTaxReportPeriod,
   createTaxReportPeriod,
   getTaxReport,
   parseTaxSalesDateBasis,
@@ -12,9 +12,9 @@ import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 function getReportOptions(searchParams: URLSearchParams) {
   const startDate =
-    searchParams.get("startDate") ?? DEFAULT_TAX_REPORT_PERIOD.startDate;
+    searchParams.get("startDate") ?? getDefaultTaxReportPeriod().startDate;
   const endDate =
-    searchParams.get("endDate") ?? DEFAULT_TAX_REPORT_PERIOD.endDate;
+    searchParams.get("endDate") ?? getDefaultTaxReportPeriod().endDate;
 
   try {
     return {

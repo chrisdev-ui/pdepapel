@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createTaxReportWorkbook } from "@/lib/tax-report-xlsx";
 import {
-  DEFAULT_TAX_REPORT_PERIOD,
+  getDefaultTaxReportPeriod,
   createTaxReportPeriod,
   getTaxReport,
   parseTaxSalesDateBasis,
@@ -24,9 +24,9 @@ export async function GET(
 
     const searchParams = new URL(req.url).searchParams;
     const startDate =
-      searchParams.get("startDate") ?? DEFAULT_TAX_REPORT_PERIOD.startDate;
+      searchParams.get("startDate") ?? getDefaultTaxReportPeriod().startDate;
     const endDate =
-      searchParams.get("endDate") ?? DEFAULT_TAX_REPORT_PERIOD.endDate;
+      searchParams.get("endDate") ?? getDefaultTaxReportPeriod().endDate;
 
     let period;
     let salesDateBasis;

@@ -15,6 +15,7 @@ describe("createTaxReportWorkbook", () => {
       salesDateBasis: "saleDate",
       sales: [
         {
+          orderId: "order-001",
           orderNumber: "ORD-001",
           customerName: "Ana Pérez",
           channel: "Tienda en línea",

@@ -7,10 +7,18 @@ import prismadb from "@/lib/prismadb";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const COLOMBIA_UTC_OFFSET_HOURS = 5;
 
-export const DEFAULT_TAX_REPORT_PERIOD = {
-  startDate: "2025-07-01",
-  endDate: "2025-12-31",
-};
+/**
+ * El período por defecto ya no es una constante: se calcula, y vive en
+ * `lib/tax-report-period.ts` para que la pantalla lo importe en vez de volver
+ * a escribirlo. Se reexporta aquí porque es donde lo buscan las rutas de API.
+ */
+export {
+  getDefaultTaxReportPeriod,
+  type TaxReportPeriodValue,
+} from "@/lib/tax-report-period";
+
+/** Tope del rango pedido. Un reporte tributario nunca cruza varios años. */
+export const MAX_TAX_REPORT_PERIOD_DAYS = 800;
 
 export const TAX_SALES_DATE_BASIS = {
   SALE_DATE: "saleDate",
@@ -28,6 +36,8 @@ export type TaxReportPeriod = {
 };
 
 export type TaxSaleRow = {
+  /** Para abrir el pedido desde la tabla. Las ventas de Mercado Libre no tienen uno propio en el panel. */
+  orderId: string | null;
   orderNumber: string;
   customerName: string;
   channel: "Tienda en línea" | "Venta presencial" | "Mercado Libre";
@@ -84,6 +94,14 @@ export function createTaxReportPeriod(
 
   if (start > endInclusive) {
     throw new Error("La fecha inicial no puede ser posterior a la fecha final");
+  }
+
+  const days =
+    (endInclusive.getTime() - start.getTime()) / (1000 * 60 * 60 * 24) + 1;
+  if (days > MAX_TAX_REPORT_PERIOD_DAYS) {
+    throw new Error(
+      "El período es demasiado largo: pide como mucho unos dos años seguidos",
+    );
   }
 
   const endExclusive = new Date(endInclusive);
@@ -149,6 +167,7 @@ export async function getTaxReport(
           ...createTaxSalesDateFilter(period, salesDateBasis),
         },
         select: {
+          id: true,
           orderNumber: true,
           fullName: true,
           total: true,
@@ -204,6 +223,7 @@ export async function getTaxReport(
 
   const sales = [
     ...orders.map((order) => ({
+      orderId: order.id,
       orderNumber: order.orderNumber,
       customerName: order.fullName.trim() || "Consumidor final",
       channel:
@@ -218,6 +238,7 @@ export async function getTaxReport(
           : order.createdAt,
     })),
     ...marketplaceOrders.map((order) => ({
+      orderId: null,
       orderNumber: `ML-${order.externalOrderId}`,
       customerName: order.buyerName?.trim() || "Consumidor final",
       channel: "Mercado Libre" as const,
