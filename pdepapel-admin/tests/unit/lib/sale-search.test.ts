@@ -28,10 +28,26 @@ const candidate = (overrides: Partial<SaleCandidate>): SaleCandidate => ({
  */
 describe("sale-search · ranking", () => {
   it("matches the SKU or GTIN exactly, ignoring case, accents and spaces", () => {
-    expect(isExactCode({ sku: "LIB-1", gtin: "7701234567890" }, " lib-1 ")).toBe(true);
-    expect(isExactCode({ sku: "LIB-1", gtin: "7701234567890" }, "7701234567890")).toBe(true);
-    expect(isExactCode({ sku: "LIB-1", gtin: null }, "LIB")).toBe(false);
-    expect(isExactCode({ sku: "LIB-1", gtin: null }, "")).toBe(false);
+    expect(isExactCode({ id: "p-1", sku: "LIB-1", gtin: "7701234567890" }, " lib-1 ")).toBe(true);
+    expect(isExactCode({ id: "p-1", sku: "LIB-1", gtin: "7701234567890" }, "7701234567890")).toBe(true);
+    expect(isExactCode({ id: "p-1", sku: "LIB-1", gtin: null }, "LIB")).toBe(false);
+    expect(isExactCode({ id: "p-1", sku: "LIB-1", gtin: null }, "")).toBe(false);
+  });
+
+  /**
+   * El QR de la etiqueta lleva el id, no el SKU. Sin esto una etiqueta se
+   * resolvía pero no contaba como «exacta», así que había que elegir el
+   * producto a mano de la lista —justo lo que escanear evita—.
+   */
+  it("reconoce el QR de la etiqueta como código exacto", () => {
+    const fila = { id: "fc555542-87dc-45db-8c0c-54ff366b0a51", sku: "GUI-GAT-AMA-M-L-9413", gtin: null };
+    expect(isExactCode(fila, "PDP:fc555542-87dc-45db-8c0c-54ff366b0a51")).toBe(true);
+    expect(isExactCode(fila, "pdp:FC555542-87DC-45DB-8C0C-54FF366B0A51")).toBe(true);
+    expect(isExactCode(fila, "  PDP:fc555542-87dc-45db-8c0c-54ff366b0a51  ")).toBe(true);
+    // El QR de OTRO producto no casa con este.
+    expect(isExactCode(fila, "PDP:00000000-0000-0000-0000-000000000000")).toBe(false);
+    // Y el SKU sigue funcionando igual que siempre.
+    expect(isExactCode(fila, "GUI-GAT-AMA-M-L-9413")).toBe(true);
   });
 
   it("classifies a query as exact code, name prefix or contains", () => {

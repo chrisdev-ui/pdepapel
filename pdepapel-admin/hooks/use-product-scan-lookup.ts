@@ -5,29 +5,23 @@ import { useParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import type { AsyncProductOption } from "@/components/ui/async-product-select";
+// El análisis del código vive en un módulo neutro: la ruta de búsqueda, que es
+// de servidor, necesita el mismo patrón y no puede importar este archivo.
+import { parseScannedCode, type ScannedCode } from "@/lib/scanned-code";
 
-/** Lo que imprime el QR de cada etiqueta: `PDP:<id del producto>`. */
-const QR_CODE_PATTERN = /^PDP:([a-z0-9-]+)$/i;
-
-export type ScannedCode = { kind: "id"; value: string } | { kind: "code"; value: string };
+export { parseScannedCode };
+export type { ScannedCode };
 
 /** Lo mínimo que se usa de axios, para poder pasar un cliente de prueba. */
 export interface ScanHttp {
   get(url: string, config?: { params?: Record<string, string | number> }): Promise<{ data?: unknown }>;
 }
 
-export function parseScannedCode(raw: string): ScannedCode | null {
-  const code = raw.trim();
-  if (!code) return null;
-  const match = QR_CODE_PATTERN.exec(code);
-  return match ? { kind: "id", value: match[1] } : { kind: "code", value: code };
-}
-
 /**
  * Resuelve un código leído (QR de etiqueta, SKU o GTIN) a un producto usando
- * la búsqueda de productos, no el lookup de Vender: aquel responde 409 sin
- * stock, y un producto agotado también necesita etiquetas (por ejemplo al
- * preparar una reposición). Devuelve `null` si nada coincide exactamente.
+ * la búsqueda general de productos, no la de Vender: aquella ordena y filtra
+ * para el mostrador, y un producto agotado también necesita etiquetas (por
+ * ejemplo al preparar una reposición). Devuelve `null` si nada coincide.
  */
 export async function resolveScannedProduct(
   storeId: string,

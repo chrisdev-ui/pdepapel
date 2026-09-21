@@ -1,4 +1,5 @@
 import { productLine, type SellLine } from "@/lib/sell-cart";
+import { readScannedProductId } from "@/lib/scanned-code";
 
 /**
  * Búsqueda para vender (Vender, punto de venta): una sola entrada por la que
@@ -44,8 +45,20 @@ const fold = (value: string | null | undefined) =>
     .toLowerCase()
     .trim();
 
-/** `true` cuando el código escrito o leído es exactamente el SKU o el GTIN del producto. */
-export function isExactCode(candidate: Pick<SaleCandidate, "sku" | "gtin">, code: string): boolean {
+/**
+ * `true` cuando el código escrito o leído identifica exactamente al producto:
+ * su SKU, su GTIN, o el QR de su etiqueta.
+ *
+ * El QR lleva el id (`PDP:<id>`), no el SKU, así que comparando solo SKU y GTIN
+ * una etiqueta nunca era «exacta»: se resolvía el producto pero había que
+ * elegirlo a mano de la lista, que es justo lo que escanear viene a evitar.
+ */
+export function isExactCode(candidate: Pick<SaleCandidate, "id" | "sku" | "gtin">, code: string): boolean {
+  const scannedId = readScannedProductId(code);
+  // Sin distinguir mayúsculas, igual que el prefijo `PDP:`: el patrón ya es
+  // insensible, así que comparar el id de forma sensible dejaba fuera un
+  // «pdp:ABC…» que el propio patrón sí había aceptado.
+  if (scannedId) return candidate.id.toLowerCase() === scannedId.toLowerCase();
   const wanted = fold(code);
   if (!wanted) return false;
   return fold(candidate.sku) === wanted || (Boolean(candidate.gtin) && fold(candidate.gtin) === wanted);

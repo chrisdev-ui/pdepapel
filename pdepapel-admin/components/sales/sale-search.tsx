@@ -31,6 +31,26 @@ const fetcher = (url: string) => axios.get<SaleSearchResponse>(url).then((respon
 const buildUrl = (storeId: string, query: string) => `/api/${storeId}/products/search?mode=venta&q=${encodeURIComponent(query)}&limit=30`;
 
 /**
+ * Qué decirle cuando lo leído no se pudo agregar solo.
+ *
+ * Antes cualquier fallo decía «no coincide con ningún producto a la venta»,
+ * incluso escaneando el QR de un producto activo y con unidades: mandaba a
+ * Paula a buscar un problema de datos que no existía. Ahora se separan los dos
+ * casos de verdad, y el genérico nombra el QR además del SKU y el código de
+ * barras, con las mismas palabras que la pestaña de Etiquetas.
+ */
+export function describeUnresolvedCode(code: string, candidates: readonly SaleCandidate[]): string {
+  if (candidates.length === 0) {
+    return `«${code}» no coincide con ningún SKU, código de barras ni QR de etiqueta.`;
+  }
+  // Se encontró algo pero ninguno es exacto: que elija, sin acusar al código.
+  if (candidates.length === 1) {
+    return `«${code}» no es un código exacto. ¿Buscabas «${candidates[0].name}»?`;
+  }
+  return `«${code}» no es un código exacto: elige el producto de la lista.`;
+}
+
+/**
  * Una sola entrada para vender: escribir, pegar, el lector de mano (escribe
  * y pulsa Enter), la cámara y el celular vinculado entran por aquí y se
  * resuelven con la búsqueda ordenada para el mostrador. El código exacto se
@@ -102,7 +122,7 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
         setQuery(code);
         setNotice({
           tone: "cream",
-          text: fresh.data.length > 0 ? `«${code}» no es un código exacto: elige el producto de la lista.` : `«${code}» no coincide con ningún producto a la venta.`,
+          text: describeUnresolvedCode(code, fresh.data),
         });
       } catch {
         setNotice({ tone: "pink", text: "No se pudo buscar. Revisa la conexión e inténtalo de nuevo." });

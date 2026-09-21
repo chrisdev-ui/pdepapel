@@ -51,6 +51,76 @@ describe("GET /products/search?mode=venta", () => {
     expect(mocks.redisSet.mock.calls[0][0]).toBe("store:store-1:admin-select:venta:lib-1:1");
   });
 
+  /**
+   * El QR de la etiqueta lleva `PDP:<id>`, no el SKU. Antes la rama exacta solo
+   * miraba SKU y GTIN, así que escanear en Vender no encontraba nada nunca
+   * —ningún producto tiene un SKU que empiece por `PDP:`— y Paula veía «no
+   * coincide con ningún producto a la venta» con el producto activo delante.
+   */
+  describe("QR de etiqueta «PDP:<id>»", () => {
+    const QR = "PDP:fc555542-87dc-45db-8c0c-54ff366b0a51";
+    const ID = "fc555542-87dc-45db-8c0c-54ff366b0a51";
+
+    it("resuelve el producto por id, igual que si se hubiera escaneado su SKU", async () => {
+      mocks.findFirst.mockResolvedValue(row(ID, { name: "Guillotina cortes circulares", sku: "GUI-GAT-AMA-M-L-9413", stock: 3 }));
+      mocks.findMany.mockResolvedValue([]);
+
+      const body = await (await call(`mode=venta&q=${encodeURIComponent(QR)}&limit=30`)).json();
+
+      // La rama exacta añade el id SIN soltar el acotado por tienda ni el de
+      // archivados: una etiqueta de otra tienda no puede resolver aquí.
+      expect(mocks.findFirst.mock.calls[0][0].where).toMatchObject({
+        storeId: "store-1",
+        isArchived: false,
+        OR: [{ id: ID }, { sku: QR }, { gtin: QR }],
+      });
+      expect(body.data[0]).toMatchObject({ id: ID, match: "codigo", available: true });
+    });
+
+    it("un producto archivado no resuelve: el filtro de siempre sigue puesto", async () => {
+      // `isArchived: false` va en el where, así que Prisma no lo devuelve.
+      mocks.findFirst.mockResolvedValue(null);
+      mocks.findMany.mockResolvedValue([]);
+
+      const body = await (await call(`mode=venta&q=${encodeURIComponent(QR)}&limit=30`)).json();
+
+      expect(mocks.findFirst.mock.calls[0][0].where).toMatchObject({ isArchived: false });
+      expect(body.data).toEqual([]);
+    });
+
+    it("un agotado sí resuelve, y llega marcado como no disponible", async () => {
+      // No es «no encontrado»: la pantalla lo enseña y avisa que no hay unidades.
+      mocks.findFirst.mockResolvedValue(row(ID, { name: "Guillotina", sku: "GUI-1", stock: 0 }));
+      mocks.findMany.mockResolvedValue([]);
+
+      const body = await (await call(`mode=venta&q=${encodeURIComponent(QR)}&limit=30`)).json();
+
+      expect(body.data[0]).toMatchObject({ id: ID, available: false, stock: 0 });
+    });
+
+    it("un «PDP:» mal formado sigue el camino de siempre, sin romper nada", async () => {
+      mocks.findFirst.mockResolvedValue(null);
+      mocks.findMany.mockResolvedValue([]);
+
+      // El patrón pide [a-z0-9-]; un espacio no encaja, así que no es un id.
+      const response = await call(`mode=venta&q=${encodeURIComponent("PDP: no es un id")}&limit=30`);
+
+      expect(response.status).toBe(200);
+      const where = mocks.findFirst.mock.calls[0][0].where;
+      expect(where.OR).toEqual([{ sku: "PDP: no es un id" }, { gtin: "PDP: no es un id" }]);
+      expect((await response.json()).data).toEqual([]);
+    });
+
+    it("sin QR, la rama exacta queda exactamente como estaba", async () => {
+      mocks.findFirst.mockResolvedValue(row("codigo", { sku: "LIB-1" }));
+      mocks.findMany.mockResolvedValue([]);
+
+      await call("mode=venta&q=LIB-1&limit=30");
+
+      expect(mocks.findFirst.mock.calls[0][0].where.OR).toEqual([{ sku: "LIB-1" }, { gtin: "LIB-1" }]);
+    });
+  });
+
   it("returns best-sellers with units for the empty query (preloaded first page)", async () => {
     mocks.findMany.mockResolvedValue([row("b", { soldCount: 5 }), row("a", { soldCount: 20 })]);
     const response = await call("mode=venta&q=&limit=30");

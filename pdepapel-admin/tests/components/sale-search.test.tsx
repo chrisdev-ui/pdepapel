@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { SWRConfig } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SaleSearch } from "@/components/sales/sale-search";
+import { SaleSearch, describeUnresolvedCode } from "@/components/sales/sale-search";
 import type { SellLine } from "@/lib/sell-cart";
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), detected: null as null | ((code: string) => void) }));
@@ -105,7 +105,10 @@ describe("SaleSearch", () => {
     await act(async () => mocks.detected?.("LIB-1"));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ productId: "p-1" })));
     await act(async () => mocks.detected?.("ZZZ-404"));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("«ZZZ-404» no coincide con ningún producto a la venta."));
+    // El texto ya no dice «no está a la venta»: dice qué se miró. Aquel mensaje
+    // mandaba a buscar un problema de datos incluso cuando el producto estaba
+    // activo y con unidades, que es lo que pasaba con el QR de una etiqueta.
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("«ZZZ-404» no coincide con ningún SKU, código de barras ni QR de etiqueta."));
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
@@ -113,5 +116,49 @@ describe("SaleSearch", () => {
     renderSearch();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "nada" } });
     await screen.findByText("Nada coincide con «nada».");
+  });
+
+  /**
+   * El aviso cuando lo leído no entra solo. El texto viejo decía siempre «no
+   * coincide con ningún producto a la venta», también con el QR de un producto
+   * activo y con unidades: mandaba a Paula a buscar un problema que no existía.
+   */
+  describe("el aviso de un código que no entra solo", () => {
+    const fila = (over: Record<string, unknown> = {}) =>
+      ({ id: "p-9", name: "Guillotina cortes circulares", sku: "GUI-1", gtin: null, stock: 3, price: 25000, ...over }) as never;
+
+    it("sin candidatos, dice qué se miró y no habla de «a la venta»", () => {
+      const texto = describeUnresolvedCode("ZZZ-404", []);
+      expect(texto).toBe("«ZZZ-404» no coincide con ningún SKU, código de barras ni QR de etiqueta.");
+      expect(texto).not.toContain("a la venta");
+    });
+
+    it("con un solo candidato, lo nombra en vez de dejar el código solo", () => {
+      expect(describeUnresolvedCode("guillo", [fila()])).toBe(
+        "«guillo» no es un código exacto. ¿Buscabas «Guillotina cortes circulares»?",
+      );
+    });
+
+    it("con varios, manda a elegir de la lista", () => {
+      expect(describeUnresolvedCode("lib", [fila(), fila({ id: "p-8", name: "Libreta" })])).toBe(
+        "«lib» no es un código exacto: elige el producto de la lista.",
+      );
+    });
+  });
+
+  /**
+   * Un agotado NO cae en el aviso genérico: lo atrapa `add()` antes, con su
+   * propio mensaje, que es el que le dice a Paula dónde mirar.
+   */
+  it("un producto sin unidades conserva su propio aviso, distinto del genérico", async () => {
+    const onAdd = renderSearch();
+    await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+    await act(async () => mocks.detected?.("LIB-2"));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "«Libreta agotada» no tiene unidades: revisa Inventario antes de venderlo.",
+      ),
+    );
+    expect(onAdd).not.toHaveBeenCalled();
   });
 });

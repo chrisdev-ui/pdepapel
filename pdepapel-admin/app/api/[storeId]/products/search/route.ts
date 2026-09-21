@@ -9,6 +9,7 @@ import { handleErrorResponse } from "@/lib/api-errors";
 import { verifyStoreOwner } from "@/lib/utils";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { rankSaleCandidates, type SaleCandidate } from "@/lib/sale-search";
+import { readScannedProductId } from "@/lib/scanned-code";
 
 // Cache Headers
 const corsHeaders = {
@@ -184,14 +185,27 @@ const SALE_SELECT = {
  * Búsqueda para vender: sin texto, los más vendidos con unidades; con texto,
  * el código exacto más las coincidencias por nombre, SKU o GTIN. Se ordena
  * en `rankSaleCandidates` y cada fila trae el precio con su oferta vigente.
+ *
+ * El código exacto incluye el **QR de la etiqueta** (`PDP:<id>`). Antes no: la
+ * etiqueta llevaba el id del producto y aquí solo se miraba SKU y GTIN, así que
+ * escanear en Vender no encontraba nada nunca —ninguno de los 853 productos
+ * activos tiene un SKU que empiece por `PDP:`— y se contestaba «no coincide con
+ * ningún producto a la venta» aunque el producto estuviera activo y con
+ * unidades.
  */
 async function searchForSale(storeId: string, rawQuery: string, limit: number) {
   const query = rawQuery.trim();
   const take = Math.min(Math.max(limit, 10), 40);
   const base = { storeId, isArchived: false } as const;
+  // El id sale del QR; `base` sigue acotando por tienda y por no archivado, así
+  // que una etiqueta de otra tienda no resuelve aquí.
+  const scannedId = readScannedProductId(query);
+  const exactWhere = scannedId
+    ? [{ id: scannedId }, { sku: query }, { gtin: query }]
+    : [{ sku: query }, { gtin: query }];
   const [exact, matches, defaults] = await Promise.all([
     query
-      ? prismadb.product.findFirst({ where: { ...base, OR: [{ sku: query }, { gtin: query }] }, select: SALE_SELECT })
+      ? prismadb.product.findFirst({ where: { ...base, OR: exactWhere }, select: SALE_SELECT })
       : Promise.resolve(null),
     query
       ? prismadb.product.findMany({
