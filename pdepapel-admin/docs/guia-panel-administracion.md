@@ -447,9 +447,21 @@ llegó». El boletín general se envía fuera del panel.
 ## 17. Rendimiento y tributarios (`/rendimiento`, `/reportes-tributarios`)
 
 Rendimiento: Resumen y caja (reserva para impuestos, reinversión, retiro
-sugerido), Productos y riesgos (ingresos vs beneficio, inventario muerto,
-riesgo de agotarse, inactivos, VIP), Envíos. Este panel decide, no mueve
-dinero: registra gastos y retiros reales y valida con el contador.
+sugerido), Productos y riesgos (ingresos contra ganancia, sin rotación, se
+agotan pronto, clientes inactivos y mejores clientes), Envíos (cuántos
+salieron, en qué punto están y con qué transportadora). Este panel decide, no
+mueve dinero: registra gastos y retiros reales y valida con el contador.
+
+El **selector de mes** manda en las tres vistas, Envíos incluido —antes esa
+pestaña mostraba siempre el mes en curso sin decirlo—. La vista de adentro de
+«Resumen y caja» (Resumen, Caja y distribución, Campañas actuales) viaja en la
+dirección como `?sub=`, así que se conserva al volver y se puede compartir.
+Cada producto y cada cifra de riesgo **abre** lo que nombra: la ficha del
+producto, la lista de envíos con novedad, Promociones.
+
+`/negocio` e `/inteligencia-negocio` son las direcciones viejas de las dos
+primeras vistas y ahora solo redirigen a `/rendimiento`; ya no existen como
+pantallas aparte.
 
 Tributarios: Excel de ventas y compras del periodo; «Revisión previa» avisa si
 algo impide exportar; incluye pedidos pagados o enviados, ventas de Mercado

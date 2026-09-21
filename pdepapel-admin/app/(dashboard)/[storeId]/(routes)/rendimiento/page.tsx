@@ -1,13 +1,20 @@
+import { BrandedLoader } from "@/components/ui/branded-loader";
+import { TabNav } from "@/components/ui/tab-nav";
 import { getBusinessGrowthOverview } from "@/lib/business-growth-data";
-import { resolveBusinessGrowthPeriod } from "@/lib/business-growth-period";
+import {
+  resolveBusinessGrowthPeriod,
+  type BusinessGrowthPeriodSelection,
+} from "@/lib/business-growth-period";
+import {
+  isBusinessGrowthSection,
+  type BusinessGrowthSection,
+} from "@/lib/business-growth-sections";
 import { requireStoreOwner } from "@/lib/store-access";
-import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Suspense } from "react";
+
 import { BiDashboard } from "../inteligencia-negocio/components/bi-dashboard";
 import { BusinessGrowthClient } from "../negocio/components/client";
-import { BrandedLoader } from "@/components/ui/branded-loader";
-import { Suspense } from "react";
 import { ShippingAnalytics } from "./components/shipping-analytics";
 
 export const revalidate = 0;
@@ -29,6 +36,7 @@ interface RendimientoPageProps {
   params: { storeId: string };
   searchParams: {
     tab?: string;
+    sub?: string;
     month?: string | string[];
     year?: string | string[];
   };
@@ -52,6 +60,12 @@ export default async function RendimientoPage({
         ? "envios"
         : "resumen";
   const period = resolveBusinessGrowthPeriod(searchParams);
+  const section: BusinessGrowthSection = isBusinessGrowthSection(
+    searchParams.sub,
+  )
+    ? searchParams.sub
+    : "resumen";
+
   const query = new URLSearchParams();
   if (typeof searchParams.month === "string")
     query.set("month", searchParams.month);
@@ -76,81 +90,70 @@ export default async function RendimientoPage({
           no mueve dinero.
         </p>
       </div>
-      <nav
-        role="tablist"
-        aria-label="Vistas de rendimiento"
-        className="flex max-w-full gap-1 self-start overflow-x-auto rounded-full border bg-white p-1"
+
+      <TabNav
+        items={TABS.map((item) => ({ ...item, href: hrefFor(item.id) }))}
+        activeId={tab}
+        label="Vistas de rendimiento"
+      />
+
+      {/*
+        Cada vista tras su propia frontera.
+        Antes solo la primera la tenía: entrar en Envíos dejaba la pantalla
+        entera —cabecera y barra incluidas— esperando a una consulta que traía
+        todos los envíos de la historia. La clave lleva el período para que
+        cambiar de mes vuelva a mostrar el cargador en vez de congelar las
+        cifras del mes anterior.
+      */}
+      <Suspense
+        key={`${tab}-${period.year}-${period.month}`}
+        fallback={<BrandedLoader />}
       >
-        {TABS.map((item) => (
-          <Link
-            key={item.id}
-            role="tab"
-            aria-selected={item.id === tab}
-            href={hrefFor(item.id)}
-            className={cn(
-              "flex h-9 shrink-0 items-center rounded-full px-3.5 text-sm font-semibold transition-colors",
-              item.id === tab
-                ? "bg-primary text-primary-foreground"
-                : "text-primary hover:bg-accent",
-            )}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      {tab === "resumen" ? (
-        <Suspense
-          key={`${period.year}-${period.month}`}
-          fallback={<BrandedLoader />}
-        >
+        {tab === "resumen" ? (
           <ResumenYCaja
             storeId={params.storeId}
-            referenceDate={period.referenceDate}
+            period={period}
+            section={section}
           />
-        </Suspense>
-      ) : tab === "envios" ? (
-        <ShippingAnalytics storeId={params.storeId} />
-      ) : (
-        <BiDashboard
-          params={params}
-          searchParams={{
-            month:
-              typeof searchParams.month === "string"
-                ? searchParams.month
-                : undefined,
-            year:
-              typeof searchParams.year === "string"
-                ? searchParams.year
-                : undefined,
-          }}
-          embedded
-        />
-      )}
+        ) : tab === "envios" ? (
+          <ShippingAnalytics storeId={params.storeId} period={period} />
+        ) : (
+          <BiDashboard
+            params={params}
+            searchParams={{
+              month:
+                typeof searchParams.month === "string"
+                  ? searchParams.month
+                  : undefined,
+              year:
+                typeof searchParams.year === "string"
+                  ? searchParams.year
+                  : undefined,
+            }}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
 
-/**
- * El resumen del mes, tras su propia frontera.
- *
- * Antes se esperaba dentro del JSX de la página, así que cambiar de pestaña
- * bloqueaba la pantalla entera mientras se recalculaba el mes: las pestañas
- * son enlaces, y el servidor rehacía todo antes de pintar nada. Con la
- * frontera, la cabecera y las pestañas salen de inmediato y solo este bloque
- * espera.
- */
 async function ResumenYCaja({
   storeId,
-  referenceDate,
+  period,
+  section,
 }: {
   storeId: string;
-  referenceDate: Date;
+  period: BusinessGrowthPeriodSelection;
+  section: BusinessGrowthSection;
 }) {
   return (
     <BusinessGrowthClient
       storeId={storeId}
-      initialData={await getBusinessGrowthOverview(storeId, referenceDate)}
-      embedded
+      initialData={await getBusinessGrowthOverview(
+        storeId,
+        period.referenceDate,
+      )}
+      section={section}
     />
   );
 }

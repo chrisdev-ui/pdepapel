@@ -2,13 +2,13 @@
 
 ## Para qué sirve
 
-La pantalla **Ventas → Negocio y crecimiento** ayuda a tomar decisiones mensuales con ventas registradas, utilidad estimada, gastos que anotes y una propuesta de distribución. También indica qué productos conviene preparar para contenido o una prueba de difusión en Instagram o TikTok.
+La pantalla **Reportes → Rendimiento → Resumen y caja** ayuda a tomar decisiones mensuales con ventas registradas, utilidad estimada, gastos que anotes y una propuesta de distribución. También indica qué productos conviene preparar para contenido o una prueba de difusión en Instagram o TikTok.
 
 No mueve dinero, no modifica pedidos, no cambia inventario, no presenta impuestos y no crea anuncios externos. El banco, Mercado Pago, Meta y TikTok siguen siendo la fuente final de cada movimiento real.
 
 ## Revisión semanal de dinero
 
-1. Entra a **Ventas → Negocio y crecimiento** y pulsa **Actualizar datos**.
+1. Entra a **Reportes → Rendimiento → Resumen y caja** y pulsa **Actualizar datos**.
 2. Revisa **Ventas netas registradas** y **Utilidad operativa estimada**. Esta última depende de que los productos tengan costo de compra correcto.
 3. En **Caja y distribución**, define una reserva operativa, la reserva para impuestos, el porcentaje de reinversión y el porcentaje máximo de retiro personal. Reinversión y retiro juntos no pueden superar 100 %.
 4. Pulsa **Guardar reglas**. El valor de **Retiro personal sugerido** es una guía; compara siempre con el saldo real del banco antes de retirar.

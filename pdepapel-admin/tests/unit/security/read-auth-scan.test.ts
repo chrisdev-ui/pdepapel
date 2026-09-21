@@ -398,8 +398,7 @@ describe("toda lectura del panel dice a quién deja entrar", () => {
   /** Lo que se le escapó al barrido a ojo, fijado una por una. */
   it.each([
     ["rendimiento/page.tsx", "ventas netas, utilidad y retiro personal"],
-    ["negocio/page.tsx", "el mismo resumen de caja en su propia ruta"],
-    ["inteligencia-negocio/page.tsx", "margen por producto e inventario muerto"],
+    ["rendimiento/server/get-shipping-analytics.ts", "costos de envío y transportadoras"],
     ["ventas-rapidas/page.tsx", "el punto de venta escribe de principio a fin"],
     ["conversaciones/[conversationId]/server/get-conversation.ts", "teléfono, nombre y el hilo entero"],
     ["pedidos/[orderId]/server/get-available-customers.ts", "nombre, correo, teléfono y documento"],
@@ -407,6 +406,24 @@ describe("toda lectura del panel dice a quién deja entrar", () => {
     ["clientes/server/get-customers.ts", "nombre y teléfono de cada clienta"],
   ])("%s exige la dueña (%s)", (relative) => {
     expect(read(path.join(ROUTES, relative))).toContain("requireStoreOwner(");
+  });
+
+  /**
+   * `negocio` e `inteligencia-negocio` ya no son pantallas: son las direcciones
+   * viejas de las dos primeras vistas de Rendimiento, conservadas por si alguien
+   * las tiene guardadas. Sin guardia porque no leen nada —y eso es justo lo que
+   * hay que comprobar—: el día que alguien vuelva a colgarles una consulta,
+   * quedarían sirviendo cifras de la dueña sin preguntar, y este caso falla.
+   */
+  it.each([
+    ["negocio/page.tsx", "rendimiento"],
+    ["inteligencia-negocio/page.tsx", "rendimiento?"],
+  ])("%s solo redirige, no lee nada", (relative, target) => {
+    const source = read(path.join(ROUTES, relative));
+    expect(source).toContain("redirect(");
+    expect(source).toContain(target);
+    expect(source).not.toContain("prismadb");
+    expect(source).not.toMatch(/await\s/);
   });
 
   /**

@@ -5,7 +5,7 @@ import { BiMonthPicker } from "@/components/bi/bi-month-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -15,10 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { Heading } from "@/components/ui/heading";
 import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
+import { MetricCard } from "@/components/ui/metric-card";
 import { PercentageInput } from "@/components/ui/percentage-input";
+import { SectionCard } from "@/components/ui/section-card";
 import {
   Select,
   SelectContent,
@@ -35,6 +36,19 @@ import {
   type BusinessCashPolicyInput,
 } from "@/lib/business-growth";
 import type { BusinessGrowthOverview } from "@/lib/business-growth-data";
+import {
+  MOVEMENT_OPTIONS,
+  formatMonth,
+  joinEs,
+} from "./business-growth-labels";
+import { SectionCaja } from "./section-caja";
+import { SectionCampanas } from "./section-campanas";
+import { SectionResumen } from "./section-resumen";
+import {
+  BUSINESS_GROWTH_SECTIONS,
+  isBusinessGrowthSection,
+  type BusinessGrowthSection,
+} from "@/lib/business-growth-sections";
 import {
   getBusinessGrowthPeriodDateBounds,
   getDefaultBusinessMovementDate,
@@ -59,47 +73,7 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-
-const MOVEMENT_LABELS: Record<BusinessCashMovementType, string> = {
-  OPERATING_EXPENSE: "Gasto operativo",
-  MARKETING_SPEND: "Inversión en marketing",
-  TAX_PAYMENT: "Pago de impuestos",
-  INVENTORY_PURCHASE: "Compra o reposición de inventario",
-  OWNER_DRAW: "Retiro personal",
-  OWNER_CONTRIBUTION: "Aporte personal al negocio",
-  OTHER_INFLOW: "Otro ingreso",
-  OTHER_OUTFLOW: "Otro egreso",
-};
-
-const MOVEMENT_OPTIONS = Object.entries(MOVEMENT_LABELS) as Array<
-  [BusinessCashMovementType, string]
->;
-
-const CAMPAIGN_STATE = {
-  READY_TO_TEST: {
-    label: "Lista para prueba",
-    variant: "success" as const,
-  },
-  ORGANIC_FIRST: {
-    label: "Primero orgánico",
-    variant: "info" as const,
-  },
-  HOLD: {
-    label: "No promocionar aún",
-    variant: "warning" as const,
-  },
-};
-
-const CAMPAIGN_STATUS = {
-  DRAFT: "Borrador",
-  READY: "Lista para revisar",
-  ACTIVE: "Activa externamente",
-  PAUSED: "Pausada",
-  COMPLETED: "Finalizada",
-  ARCHIVED: "Archivada",
-};
 
 type CashMovementForm = {
   type: BusinessCashMovementType;
@@ -129,18 +103,6 @@ const INITIAL_MOVEMENT_FORM: CashMovementForm = {
   notes: "",
 };
 
-function formatMonth(value: string) {
-  return value.replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-CO", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
 async function readError(response: Response) {
   const body = (await response.json().catch(() => null)) as {
     error?: string;
@@ -162,69 +124,20 @@ function policyPayload(policy: BusinessCashPolicyInput) {
   };
 }
 
-function CashPlanCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  tone = "default",
-}: {
-  title: string;
-  value: number;
-  description: string;
-  icon: LucideIcon;
-  tone?: "default" | "positive" | "warning";
-}) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p
-              className={cn(
-                "mt-2 text-2xl font-bold tracking-tight",
-                tone === "positive" && "text-green-700",
-                tone === "warning" && "text-amber-700",
-              )}
-            >
-              {currencyFormatter(value)}
-            </p>
-          </div>
-          <Icon
-            className={cn(
-              "h-5 w-5 text-muted-foreground",
-              tone === "positive" && "text-green-600",
-              tone === "warning" && "text-amber-600",
-            )}
-          />
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          {description}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** «a, b y c» — para enumerar en español sin que suene a lista de sistema. */
-function joinEs(items: string[]): string {
-  if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
-}
-
 export function BusinessGrowthClient({
   storeId,
   initialData,
-  embedded = false,
+  section = "resumen",
 }: {
   storeId: string;
   initialData: BusinessGrowthOverview;
-  /** Dentro de Reportes › Rendimiento la cabecera la pone la página. */
-  embedded?: boolean;
+  /** La vista de adentro con la que se entra, leída de `?sub=`. */
+  section?: BusinessGrowthSection;
 }) {
   const { toast } = useToast();
   const [overview, setOverview] = useState(initialData);
+  const [activeSection, setActiveSection] =
+    useState<BusinessGrowthSection>(section);
   const [policy, setPolicy] = useState<BusinessCashPolicyInput>(
     policyPayload(initialData.policy),
   );
@@ -274,6 +187,26 @@ export function BusinessGrowthClient({
       setIsRefreshing(false);
     }
   }, [overview.period.month, overview.period.year, storeId, toast]);
+
+  /**
+   * La vista de adentro, recordada.
+   *
+   * Antes era `defaultValue`: cambiabas de pestaña arriba, volvías, y siempre
+   * caías en «Resumen» aunque estuvieras trabajando en Caja. Ahora viaja en la
+   * dirección, así que sobrevive a recargar, a compartir el enlace y al botón
+   * de atrás. Se escribe con `history.replaceState` y no con el router para
+   * que cambiar de vista siga siendo instantáneo: no hay nada que volver a
+   * pedirle al servidor.
+   */
+  const changeSection = useCallback((next: string) => {
+    if (!isBusinessGrowthSection(next)) return;
+    setActiveSection(next);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (next === "resumen") url.searchParams.delete("sub");
+    else url.searchParams.set("sub", next);
+    window.history.replaceState(null, "", url.toString());
+  }, []);
 
   const currentCashPlan = overview.cashPlan;
   const configuredPercent = useMemo(
@@ -527,17 +460,13 @@ export function BusinessGrowthClient({
         aria-busy={isChangingPeriod}
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          {embedded ? (
-            <p className="text-sm text-muted-foreground">
-              Caja de {formatMonth(overview.period.label)} y campañas basadas en
-              la situación actual.
-            </p>
-          ) : (
-            <Heading
-              title="Negocio y crecimiento"
-              description={`Caja de ${formatMonth(overview.period.label)} y campañas basadas en la situación actual.`}
-            />
-          )}
+          <p className="text-sm text-muted-foreground">
+            Caja de{" "}
+            <strong className="text-primary">
+              {formatMonth(overview.period.label)}
+            </strong>{" "}
+            y campañas basadas en la situación actual.
+          </p>
           <div className="flex flex-col gap-2 sm:items-end">
             <span className="text-xs font-medium text-muted-foreground">
               Período financiero
@@ -595,574 +524,80 @@ export function BusinessGrowthClient({
           </Alert>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <CashPlanCard
-            title="Ventas netas registradas"
-            value={overview.financial.netRevenue}
-            description={`${overview.financial.salesCount} ventas pagadas o enviadas del período, incluyendo ventas liquidadas de Mercado Libre.`}
-            icon={CircleDollarSign}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            label="Ventas netas registradas"
+            value={currencyFormatter(overview.financial.netRevenue)}
+            note={`${overview.financial.salesCount} ventas del mes`}
+            icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-sky"
           />
-          <CashPlanCard
-            title="Utilidad operativa estimada"
-            value={currentCashPlan.operatingProfit}
-            description="Antes de descontar los gastos manuales que registres abajo. Revisa costos de productos faltantes."
-            icon={WalletCards}
-            tone="positive"
+          <MetricCard
+            label="Utilidad operativa estimada"
+            value={currencyFormatter(currentCashPlan.operatingProfit)}
+            note="Antes de los gastos de abajo"
+            icon={<WalletCards className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-mint"
           />
-          <CashPlanCard
-            title="Gastos registrados"
-            value={currentCashPlan.registeredExpenses}
-            description="Incluye gastos operativos, marketing, impuestos y otros egresos de este período."
-            icon={ArrowDownRight}
-            tone="warning"
+          <MetricCard
+            label="Gastos registrados"
+            value={currencyFormatter(currentCashPlan.registeredExpenses)}
+            note="Operación, marketing e impuestos"
+            icon={<ArrowDownRight className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-cream"
           />
-          <CashPlanCard
-            title="Retiro personal sugerido"
-            value={currentCashPlan.remainingOwnerDraw}
-            description="Orientación después de la reserva y de los retiros que ya registraste. No confirma saldo bancario."
-            icon={Landmark}
-            tone="positive"
+          <MetricCard
+            label="Retiro personal sugerido"
+            value={currencyFormatter(currentCashPlan.remainingOwnerDraw)}
+            note="Guía; no es tu saldo real"
+            icon={<Landmark className="h-4 w-4" aria-hidden="true" />}
+            tint="bg-tint-lavender"
           />
         </div>
 
-        <Tabs defaultValue="summary" className="space-y-5">
+        <Tabs
+          value={activeSection}
+          onValueChange={changeSection}
+          className="space-y-5"
+        >
           <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-3 sm:gap-3">
-            <TabsTrigger
-              value="summary"
-              className="border bg-background px-4 py-2.5"
-            >
-              Resumen
-            </TabsTrigger>
-            <TabsTrigger
-              value="cash"
-              className="border bg-background px-4 py-2.5"
-            >
-              Caja y distribución
-            </TabsTrigger>
-            <TabsTrigger
-              value="campaigns"
-              className="border bg-background px-4 py-2.5"
-            >
-              Campañas actuales
-            </TabsTrigger>
+            {BUSINESS_GROWTH_SECTIONS.map((item) => (
+              <TabsTrigger
+                key={item.id}
+                value={item.id}
+                className="min-h-11 border bg-background px-4 py-2.5"
+              >
+                {item.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="summary" className="space-y-5">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <WalletCards className="h-5 w-5" />
-                    Propuesta para la utilidad del período
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Reserva para impuestos
-                    </p>
-                    <p className="mt-1 text-xl font-bold">
-                      {currencyFormatter(currentCashPlan.proposedTaxReserve)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Reinversión sugerida
-                    </p>
-                    <p className="mt-1 text-xl font-bold text-green-700">
-                      {currencyFormatter(
-                        currentCashPlan.recommendedReinvestment,
-                      )}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Prueba de marketing incluida
-                    </p>
-                    <p className="mt-1 text-xl font-bold">
-                      {currencyFormatter(
-                        currentCashPlan.suggestedMarketingTestBudget,
-                      )}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Retiro ya registrado
-                    </p>
-                    <p className="mt-1 text-xl font-bold">
-                      {currencyFormatter(currentCashPlan.recordedOwnerDraws)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Compras de inventario registradas
-                    </p>
-                    <p className="mt-1 text-xl font-bold">
-                      {currencyFormatter(
-                        currentCashPlan.inventoryPurchaseCommitments,
-                      )}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Monto sin asignar
-                    </p>
-                    <p className="mt-1 text-xl font-bold">
-                      {currencyFormatter(
-                        currentCashPlan.unallocatedSafetyAmount,
-                      )}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <ClipboardList className="h-5 w-5" />
-                    Calidad actual de los datos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm text-muted-foreground">
-                  <p>{overview.dataQuality.note}</p>
-                  {!overview.period.isCurrent && (
-                    <p>
-                      Este control revisa el catálogo activo hoy, no una copia
-                      histórica del catálogo.
-                    </p>
-                  )}
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
-                    <span className="font-semibold">
-                      {overview.dataQuality.productsWithoutCost}
-                    </span>{" "}
-                    productos activos sin costo de compra válido.
-                  </div>
-                  <p>
-                    La utilidad histórica puede cambiar si faltan costos,
-                    comisiones o gastos. Este panel no reemplaza la contabilidad
-                    formal.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+          <TabsContent value="resumen" className="space-y-5">
+            <SectionResumen overview={overview} />
           </TabsContent>
 
-          <TabsContent value="cash" className="space-y-5">
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PencilLine className="h-5 w-5" />
-                    Reglas de distribución vigentes
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Ajusta los límites que quieres usar para decidir. Estas
-                    reglas también recalculan períodos históricos y la suma de
-                    reinversión y retiro no puede pasar del 100%.
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="space-y-2 text-sm font-medium sm:col-span-2">
-                      Reserva operativa mínima
-                      <CurrencyInput
-                        value={policy.minimumOperatingReserve}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            minimumOperatingReserve: value ?? 0,
-                          }))
-                        }
-                        placeholder="Ej. 500000"
-                      />
-                      <span className="block text-xs font-normal text-muted-foreground">
-                        Monto que prefieres no distribuir este período.
-                      </span>
-                    </label>
-                    <label className="space-y-2 text-sm font-medium">
-                      Reserva para impuestos
-                      <PercentageInput
-                        value={policy.taxReserveRate}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            taxReserveRate: value ?? 0,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm font-medium">
-                      Reinversión sugerida
-                      <PercentageInput
-                        value={policy.reinvestmentRate}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            reinvestmentRate: value ?? 0,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm font-medium">
-                      Retiro personal sugerido
-                      <PercentageInput
-                        value={policy.ownerDrawRate}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            ownerDrawRate: value ?? 0,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm font-medium">
-                      Porción para probar marketing
-                      <PercentageInput
-                        value={policy.marketingTestRate}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            marketingTestRate: value ?? 0,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm font-medium">
-                      Margen mínimo para pauta
-                      <PercentageInput
-                        value={policy.minimumCampaignMarginPct}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            minimumCampaignMarginPct: value ?? 0,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm font-medium">
-                      Stock mínimo para pauta
-                      <StockQuantityInput
-                        value={policy.minimumCampaignStock}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            minimumCampaignStock: value,
-                          }))
-                        }
-                        min={0}
-                        size="md"
-                        ariaLabel="Stock mínimo para pauta"
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm font-medium sm:col-span-2">
-                      Cobertura mínima antes de promocionar (días)
-                      <StockQuantityInput
-                        value={policy.minimumCampaignDaysCover}
-                        onChange={(value) =>
-                          setPolicy((current) => ({
-                            ...current,
-                            minimumCampaignDaysCover: value,
-                          }))
-                        }
-                        min={0}
-                        size="md"
-                        ariaLabel="Cobertura mínima antes de promocionar"
-                      />
-                    </label>
-                  </div>
-                  <Alert
-                    variant={
-                      configuredPercent > 100 ? "destructive" : "default"
-                    }
-                  >
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>
-                      {configuredPercent}% de la utilidad distribuible
-                    </AlertTitle>
-                    <AlertDescription>
-                      Reinversión {policy.reinvestmentRate}% + retiro personal{" "}
-                      {policy.ownerDrawRate}%.
-                      {configuredPercent > 100
-                        ? " Reduce uno de los dos valores antes de guardar."
-                        : configuredPercent === 100
-                          ? " No queda nada sin repartir."
-                          : ` El ${100 - configuredPercent}% restante queda como margen de seguridad.`}
-                    </AlertDescription>
-                  </Alert>
-                  {cushions.length > 0 && (
-                    <div className="flex items-start gap-2 rounded-xl border border-yellow-500/50 bg-yellow-50 p-3 text-xs leading-relaxed text-yellow-800">
-                      <AlertTriangle
-                        className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                        aria-hidden="true"
-                      />
-                      <p>
-                        Con estas reglas no estás apartando {joinEs(cushions)}.
-                        Puedes guardarlas igual —estas cifras solo alimentan
-                        recomendaciones, no mueven dinero—, pero el mes que
-                        llegue un gasto grande o la declaración, no habrá de
-                        dónde sacarlo.
-                      </p>
-                    </div>
-                  )}
-                  <Button
-                    onClick={savePolicy}
-                    disabled={isSavingPolicy || configuredPercent > 100}
-                  >
-                    {isSavingPolicy ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    Guardar reglas
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <CalendarDays className="h-5 w-5" />
-                      Movimientos de {formatMonth(overview.period.label)}
-                    </CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Registra lo que efectivamente salió o entró. Las compras
-                      de inventario se muestran aparte para no duplicar el costo
-                      de venta.
-                    </p>
-                  </div>
-                  <Button size="sm" onClick={openNewMovement}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Registrar
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {overview.cashMovements.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                      Aún no hay movimientos manuales este mes. Empieza por
-                      gastos, impuestos, compras de inventario o retiros
-                      personales.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {overview.cashMovements.map((movement) => (
-                        <div
-                          key={movement.id}
-                          className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium">
-                                {movement.description}
-                              </p>
-                              <Badge variant="secondary">
-                                {MOVEMENT_LABELS[movement.type]}
-                              </Badge>
-                            </div>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {formatDate(movement.occurredAt)}
-                              {movement.reference
-                                ? ` · ${movement.reference}`
-                                : ""}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 sm:justify-end">
-                            <p className="mr-auto font-semibold sm:mr-2">
-                              {currencyFormatter(movement.amount)}
-                            </p>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditMovement(movement)}
-                              aria-label={`Editar ${movement.description}`}
-                            >
-                              <PencilLine className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setMovementToDelete(movement.id)}
-                              aria-label={`Eliminar ${movement.description}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+          <TabsContent value="caja" className="space-y-5">
+            <SectionCaja
+              overview={overview}
+              policy={policy}
+              setPolicy={setPolicy}
+              configuredPercent={configuredPercent}
+              cushions={cushions}
+              isSavingPolicy={isSavingPolicy}
+              onSavePolicy={savePolicy}
+              onNewMovement={openNewMovement}
+              onEditMovement={openEditMovement}
+              onDeleteMovement={setMovementToDelete}
+            />
           </TabsContent>
 
-          <TabsContent value="campaigns" className="space-y-5">
-            <Alert variant="info">
-              <Megaphone className="h-4 w-4" />
-              <AlertTitle>
-                Recomendaciones actuales, sin anuncios automáticos
-              </AlertTitle>
-              <AlertDescription>
-                Estas sugerencias usan el stock, los riesgos y el presupuesto
-                del mes actual, aunque estés revisando otro período. Esta
-                primera versión guarda borradores con enlace medible, pero nunca
-                publica, enciende, pausa ni cambia presupuestos en Instagram o
-                TikTok.
-              </AlertDescription>
-            </Alert>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              {overview.campaignRecommendations.map((recommendation) => {
-                const state = CAMPAIGN_STATE[recommendation.state];
-                return (
-                  <Card key={recommendation.productId}>
-                    <CardContent className="space-y-4 p-5">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="font-semibold">
-                            {recommendation.productName}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {recommendation.reason}
-                          </p>
-                        </div>
-                        <Badge variant={state.variant}>{state.label}</Badge>
-                      </div>
-                      <div className="rounded-md bg-muted/60 p-3 text-sm">
-                        <p className="font-medium">Idea de contenido</p>
-                        <p className="mt-1 text-muted-foreground">
-                          {recommendation.brief}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                        <span>
-                          Presupuesto de prueba:{" "}
-                          {currencyFormatter(recommendation.suggestedBudget)}
-                        </span>
-                        <span className="truncate">
-                          {recommendation.landingPath}
-                        </span>
-                      </div>
-                      <Button
-                        variant={
-                          recommendation.state === "HOLD"
-                            ? "outline"
-                            : "default"
-                        }
-                        onClick={() => openCampaignDraft(recommendation)}
-                      >
-                        <Lightbulb className="mr-2 h-4 w-4" />
-                        Preparar borrador
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5" />
-                  Borradores y seguimiento interno
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {overview.campaigns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Guarda un borrador para organizar una idea y conservar su
-                    enlace medible.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {overview.campaigns.map((campaign) => (
-                      <div
-                        key={campaign.id}
-                        className="flex flex-col gap-3 rounded-lg border p-4 lg:flex-row lg:items-center lg:justify-between"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium">{campaign.name}</p>
-                            <Badge variant="secondary">
-                              {CAMPAIGN_STATUS[campaign.status]}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {campaign.productNames.join(", ")} ·{" "}
-                            {campaign.channel === "MULTI_CHANNEL"
-                              ? "Instagram y TikTok"
-                              : campaign.channel === "INSTAGRAM"
-                                ? "Instagram"
-                                : "TikTok"}
-                            {campaign.plannedBudget
-                              ? ` · ${currencyFormatter(campaign.plannedBudget)}`
-                              : " · Sin presupuesto asignado"}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-muted-foreground">
-                            {campaign.landingPath}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => copyCampaignLink(campaign)}
-                          >
-                            <ExternalLink className="mr-2 h-4 w-4" />
-                            Copiar enlace
-                          </Button>
-                          {campaign.status === "DRAFT" && (
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                updateCampaignStatus(campaign.id, "READY")
-                              }
-                            >
-                              Marcar lista
-                            </Button>
-                          )}
-                          {campaign.status !== "ARCHIVED" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                updateCampaignStatus(campaign.id, "ARCHIVED")
-                              }
-                            >
-                              Archivar
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Conexiones de Instagram y TikTok</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border p-4">
-                  <p className="font-medium">Instagram / Meta</p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    La siguiente entrega conectará una cuenta profesional
-                    mediante OAuth, consultará resultados y exigirá confirmación
-                    antes de crear o modificar anuncios.
-                  </p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="font-medium">TikTok</p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    La integración usará una cuenta Business y autorización
-                    explícita. Los borradores actuales ya conservan producto,
-                    presupuesto y UTM para enlazarla.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+          <TabsContent value="campanas" className="space-y-5">
+            <SectionCampanas
+              overview={overview}
+              onPrepareDraft={openCampaignDraft}
+              onUpdateStatus={updateCampaignStatus}
+              onCopyLink={copyCampaignLink}
+            />
           </TabsContent>
         </Tabs>
       </div>
@@ -1205,7 +640,7 @@ export function BusinessGrowthClient({
                 </SelectContent>
               </Select>
             </label>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="space-y-2 text-sm font-medium">
                 Valor
                 <CurrencyInput
@@ -1318,7 +753,7 @@ export function BusinessGrowthClient({
                   }
                 />
               </label>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="space-y-2 text-sm font-medium">
                   Canal previsto
                   <Select
@@ -1371,7 +806,7 @@ export function BusinessGrowthClient({
                   </Select>
                 </label>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="space-y-2 text-sm font-medium">
                   Presupuesto máximo (opcional)
                   <CurrencyInput

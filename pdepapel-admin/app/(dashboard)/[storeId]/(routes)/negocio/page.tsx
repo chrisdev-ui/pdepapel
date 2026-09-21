@@ -1,38 +1,28 @@
-import { getBusinessGrowthOverview } from "@/lib/business-growth-data";
-import { resolveBusinessGrowthPeriod } from "@/lib/business-growth-period";
-import { requireStoreOwner } from "@/lib/store-access";
+import { redirect } from "next/navigation";
 
-import { BusinessGrowthClient } from "./components/client";
-
-export const revalidate = 0;
-
+/**
+ * «Negocio y crecimiento» ya vive dentro de Reportes › Rendimiento.
+ *
+ * Esta ruta quedó fuera del menú cuando se armó Rendimiento, pero seguía
+ * respondiendo: la misma pantalla en dos direcciones, y solo una con la
+ * cabecera nueva. Se conserva como redirección porque puede estar guardada en
+ * los favoritos de alguien; borrarla rompería ese enlace sin avisar.
+ */
 interface BusinessGrowthPageProps {
   params: { storeId: string };
   searchParams: { month?: string | string[]; year?: string | string[] };
 }
 
-/**
- * Solo la dueña: aquí va el dinero de la casa —ventas netas, utilidad,
- * margen por producto y el retiro personal sugerido—. No hay versión
- * depurada para una cuenta de solo lectura; si algún día la agencia
- * necesita cifras, se le hace una vista aparte con unidades y campañas.
- */
-export default async function BusinessGrowthPage({
+export default function BusinessGrowthPage({
   params,
   searchParams,
 }: BusinessGrowthPageProps) {
-  await requireStoreOwner(params.storeId);
-  const period = resolveBusinessGrowthPeriod(searchParams);
-  const overview = await getBusinessGrowthOverview(
-    params.storeId,
-    period.referenceDate,
-  );
+  const query = new URLSearchParams();
+  if (typeof searchParams.month === "string")
+    query.set("month", searchParams.month);
+  if (typeof searchParams.year === "string")
+    query.set("year", searchParams.year);
+  const suffix = query.toString();
 
-  return (
-    <BusinessGrowthClient
-      key={`${period.year}-${period.month}`}
-      storeId={params.storeId}
-      initialData={overview}
-    />
-  );
+  redirect(`/${params.storeId}/rendimiento${suffix ? `?${suffix}` : ""}`);
 }

@@ -1,16 +1,21 @@
-import { requireStoreOwner } from "@/lib/store-access";
-
-import { BiDashboard } from "./components/bi-dashboard";
-
-export const revalidate = 0;
+import { redirect } from "next/navigation";
 
 /**
- * Solo la dueña: aquí va el dinero de la casa —ventas netas, utilidad,
- * margen por producto y el retiro personal sugerido—. No hay versión
- * depurada para una cuenta de solo lectura; si algún día la agencia
- * necesita cifras, se le hace una vista aparte con unidades y campañas.
+ * «Inteligencia de negocio» ya vive dentro de Reportes › Rendimiento, en la
+ * vista «Productos y riesgos». Igual que `negocio`, esta ruta se queda como
+ * redirección para no romper un enlace guardado. Ver el comentario de
+ * `../negocio/page.tsx`.
  */
-export default async function BIDashboardPage(props: { params: { storeId: string }; searchParams: { month?: string; year?: string } }) {
-  await requireStoreOwner(props.params.storeId);
-  return <BiDashboard {...props} />;
+export default function BIDashboardPage({
+  params,
+  searchParams,
+}: {
+  params: { storeId: string };
+  searchParams: { month?: string; year?: string };
+}) {
+  const query = new URLSearchParams({ tab: "detalle" });
+  if (searchParams.month) query.set("month", searchParams.month);
+  if (searchParams.year) query.set("year", searchParams.year);
+
+  redirect(`/${params.storeId}/rendimiento?${query.toString()}`);
 }
