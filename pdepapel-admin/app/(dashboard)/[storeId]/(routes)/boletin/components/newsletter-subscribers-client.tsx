@@ -3,7 +3,7 @@
 import { NewsletterSubscriberStatus } from "@prisma/client";
 import type { ColumnDef } from "@tanstack/react-table";
 import axios from "axios";
-import { Download, MailCheck, UserMinus } from "lucide-react";
+import { Download, MailCheck, MailQuestion, UserMinus, Users } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
@@ -20,15 +20,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { MetricCard } from "@/components/ui/metric-card";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { TabNav } from "@/components/ui/tab-nav";
+import { TintBadge } from "@/components/ui/tint-badge";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 
-import { TintBadge } from "../../pedidos/components/order-badges";
 import { relativeDate } from "../../pedidos/components/columns";
 import type { NewsletterSubscriberRow } from "../server/get-newsletter-subscribers";
+import { IssuesPanel } from "./issues-panel";
 
 const STATUS_COPY: Record<NewsletterSubscriberStatus, { label: string; tone: "mint" | "cream" | "slate" | "pink" }> = {
   ACTIVE: { label: "Confirmada", tone: "mint" },
@@ -54,9 +57,10 @@ interface NewsletterSubscribersClientProps {
   subscribers: NewsletterSubscriberRow[];
   counts: Record<NewsletterSubscriberStatus, number>;
   total: number;
+  storefrontUrl: string;
 }
 
-export function NewsletterSubscribersClient({ storeId, subscribers, counts, total }: NewsletterSubscribersClientProps) {
+export function NewsletterSubscribersClient({ storeId, subscribers, counts, total, storefrontUrl }: NewsletterSubscribersClientProps) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -173,10 +177,10 @@ export function NewsletterSubscribersClient({ storeId, subscribers, counts, tota
   );
 
   const metrics = [
-    { label: "Confirmados", value: counts.ACTIVE, hint: "Se les puede escribir" },
-    { label: "Por confirmar", value: counts.PENDING, hint: "No abrieron el correo de confirmación" },
-    { label: "Bajas", value: counts.UNSUBSCRIBED + counts.SUPPRESSED, hint: "Cancelaron o rebotaron" },
-    { label: "Registrados", value: total, hint: "Desde el formulario de la tienda" },
+    { label: "Confirmados", value: counts.ACTIVE, hint: "Se les puede escribir", tint: "bg-tint-mint", icon: <MailCheck className="h-4 w-4" aria-hidden="true" /> },
+    { label: "Por confirmar", value: counts.PENDING, hint: "No abrieron el correo de confirmación", tint: "bg-tint-cream", icon: <MailQuestion className="h-4 w-4" aria-hidden="true" /> },
+    { label: "Bajas", value: counts.UNSUBSCRIBED + counts.SUPPRESSED, hint: "Cancelaron o rebotaron", tint: "bg-tint-pink", icon: <UserMinus className="h-4 w-4" aria-hidden="true" /> },
+    { label: "Registrados", value: total, hint: "Desde el formulario de la tienda", tint: "bg-tint-sky", icon: <Users className="h-4 w-4" aria-hidden="true" /> },
   ];
 
   return (
@@ -185,42 +189,52 @@ export function NewsletterSubscribersClient({ storeId, subscribers, counts, tota
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-primary">Boletín</h1>
           <p className="text-sm text-muted-foreground">
-            Personas que pidieron novedades desde la tienda. Solo las confirmadas se exportan para escribirles; el envío del boletín se hace fuera del panel.
+            Personas que pidieron novedades desde la tienda. Prepara el número del boletín aquí abajo y se lo envías desde el panel; solo lo reciben las confirmadas.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <RefreshButton />
-          <Button asChild variant="outline">
+          {/* Exportar deja de ser el camino principal: ahora se envía desde aquí. */}
+          <Button asChild variant="ghost" size="sm">
             <a href={`/api/${storeId}/newsletter/export`}>
               <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-              Exportar confirmados
+              Exportar CSV
             </a>
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
-          <div key={metric.label} className="rounded-xl border bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{metric.label}</p>
-            <p className={cn("mt-1 text-2xl font-bold tabular-nums", metric.label === "Confirmados" ? "text-primary" : "text-foreground")}>{metric.value}</p>
-            <p className="text-xs text-muted-foreground">{metric.hint}</p>
-          </div>
+          <MetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value.toLocaleString("es-CO")}
+            note={metric.hint}
+            icon={metric.icon}
+            tint={metric.tint}
+          />
         ))}
       </div>
 
-      <div role="tablist" aria-label="Vistas de suscriptores" className="flex max-w-full gap-1 overflow-x-auto self-start rounded-full border bg-white p-1">
+      <IssuesPanel storeId={storeId} storefrontUrl={storefrontUrl} recipientCount={counts.ACTIVE} />
+
+      {/*
+        Botones, no pestañas: filtran la lista en el sitio y no navegan, así que
+        `role="tab"` prometía un `tabpanel` que no existe. `aria-pressed` dice
+        lo que de verdad pasa. Tampoco puede ser `TabNav`, que son enlaces.
+      */}
+      <div role="group" aria-label="Filtrar suscriptores" className="flex max-w-full flex-wrap gap-1 self-start rounded-2xl border bg-white p-1 sm:rounded-full">
         {VIEWS.map((item) => {
           const active = item.id === view;
           return (
             <button
               key={item.id}
               type="button"
-              role="tab"
-              aria-selected={active}
+              aria-pressed={active}
               onClick={() => setView(item.id)}
               className={cn(
-                "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex min-h-11 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:min-h-0",
                 active ? "bg-primary text-primary-foreground" : "text-primary hover:bg-accent",
               )}
             >

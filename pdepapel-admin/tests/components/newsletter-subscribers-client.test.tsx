@@ -32,6 +32,7 @@ describe("NewsletterSubscribersClient", () => {
     render(
       <NewsletterSubscribersClient
         storeId="store-1"
+      storefrontUrl="https://papeleriapdepapel.com"
         subscribers={[
           subscriber({}),
           subscriber({ id: "s2", email: "luis@example.com", status: "PENDING", confirmedAt: null, lastConfirmationSentAt: "2026-09-02T15:00:00.000Z" }),
@@ -43,19 +44,22 @@ describe("NewsletterSubscribersClient", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "Boletín" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Exportar confirmados/ })).toHaveAttribute("href", "/api/store-1/newsletter/export");
+    // Exportar deja de ser la acción principal: el envío se hace desde el panel.
+    expect(screen.getByRole("link", { name: /Exportar CSV/ })).toHaveAttribute("href", "/api/store-1/newsletter/export");
 
-    const tabs = screen.getByRole("tablist", { name: "Vistas de suscriptores" });
-    expect(within(tabs).getByRole("tab", { name: /Confirmados/ })).toHaveAttribute("aria-selected", "true");
+    // Filtran la lista en el sitio, no navegan: son botones con `aria-pressed`,
+    // no pestañas con un panel detrás.
+    const tabs = screen.getByRole("group", { name: "Filtrar suscriptores" });
+    expect(within(tabs).getByRole("button", { name: /Confirmados/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByText("ana@example.com").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("luis@example.com")).toHaveLength(0);
     expect(screen.getAllByRole("button", { name: /Dar de baja/ }).length).toBeGreaterThan(0);
 
-    fireEvent.click(within(tabs).getByRole("tab", { name: /Por confirmar/ }));
+    fireEvent.click(within(tabs).getByRole("button", { name: /Por confirmar/ }));
     expect(screen.getAllByText("luis@example.com").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Reenviar confirmación/ }).length).toBeGreaterThan(0);
 
-    fireEvent.click(within(tabs).getByRole("tab", { name: /Todos/ }));
+    fireEvent.click(within(tabs).getByRole("button", { name: /Todos/ }));
     expect(screen.getAllByText("baja@example.com").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Cancelada").length).toBeGreaterThan(0);
   });
