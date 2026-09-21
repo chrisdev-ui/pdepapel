@@ -97,11 +97,30 @@ export async function BiDashboard({
 
   return (
     <div className="flex-col">
-      <div className={embedded ? "flex-1 space-y-4" : "flex-1 space-y-4 p-8 pt-6"}>
-        <div className="flex items-center justify-between">
+      {/*
+        Suelta o dentro de Rendimiento, la misma pantalla. El relleno fijo de
+        `p-8` hacía que la versión suelta se desbordara 94 px a 375 mientras la
+        embebida se desbordaba 47: la misma pantalla en dos URLs, y solo una
+        arreglada. El relleno de celular es el mismo que usa el resto del panel.
+      */}
+      <div
+        className={
+          embedded
+            ? "flex-1 space-y-4"
+            : "flex-1 space-y-4 p-4 pt-6 sm:p-8 sm:pt-6"
+        }
+      >
+        {/*
+          En una sola línea, el título y el selector de mes (308 px) no caben a
+          375: era el desbordamiento de verdad de esta pantalla, el mismo en las
+          dos URLs. En celular se apilan; desde `sm` vuelven a la misma línea.
+        */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {embedded ? (
-            <p className="text-sm text-muted-foreground">
-              Rendimiento de {format(displayDate, "MMMM 'de' yyyy", { locale: es })}: productos, riesgos y clientes.
+            <p className="min-w-0 text-sm text-muted-foreground">
+              Rendimiento de{" "}
+              {format(displayDate, "MMMM 'de' yyyy", { locale: es })}:
+              productos, riesgos y clientes.
             </p>
           ) : (
             <Heading
@@ -109,10 +128,12 @@ export async function BiDashboard({
               description={`Métricas avanzadas (Rendimiento de ${format(displayDate, "MMMM 'de' yyyy", { locale: es }).replace(/^\w/, (c) => c.toUpperCase())})`}
             />
           )}
-          <BiMonthPicker
-            activeYear={requestedYear}
-            activeMonth={requestedMonth}
-          />
+          <div className="min-w-0 shrink-0 overflow-x-auto">
+            <BiMonthPicker
+              activeYear={requestedYear}
+              activeMonth={requestedMonth}
+            />
+          </div>
         </div>
         {!embedded && <Separator />}
 

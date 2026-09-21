@@ -68,7 +68,7 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="truncate text-2xl font-bold tabular-nums">
               {currencyFormatter(currentMonth.total_revenue)}
             </div>
             {renderChange(percentageChange.revenue)}
@@ -96,7 +96,7 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
             <Activity className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+            <div className="truncate text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
               {currencyFormatter(currentMonth.total_net_profit)}
             </div>
             {renderChange(percentageChange.net_profit)}
@@ -123,7 +123,7 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
             <Percent className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="truncate text-2xl font-bold tabular-nums">
               {Math.round(currentMonth.average_margin)}%
             </div>
             {/* We don't have MoM margin change mapped directly, so just showing status */}
@@ -153,7 +153,7 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
             <ShoppingBag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="truncate text-2xl font-bold tabular-nums">
               +{currentMonth.total_orders}
             </div>
             {renderChange(percentageChange.orders)}

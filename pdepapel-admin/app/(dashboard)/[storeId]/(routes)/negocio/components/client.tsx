@@ -207,6 +207,12 @@ function CashPlanCard({
   );
 }
 
+/** «a, b y c» — para enumerar en español sin que suene a lista de sistema. */
+function joinEs(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+}
+
 export function BusinessGrowthClient({
   storeId,
   initialData,
@@ -274,6 +280,25 @@ export function BusinessGrowthClient({
     () => policy.reinvestmentRate + policy.ownerDrawRate,
     [policy.ownerDrawRate, policy.reinvestmentRate],
   );
+  /**
+   * Qué falta por apartar. El panel no impone un mínimo —no hay una regla
+   * tributaria real que copiar, y cualquier piso que ponga el código sería un
+   * número inventado—, pero tampoco puede afirmar que hay colchón cuando no lo
+   * hay: con el reparto al 100 % exacto el aviso decía «el resto queda como
+   * margen de seguridad», y el resto era cero.
+   */
+  const cushions = useMemo(() => {
+    const missing: string[] = [];
+    if (policy.taxReserveRate === 0) missing.push("nada para impuestos");
+    if (policy.minimumOperatingReserve === 0)
+      missing.push("nada de reserva operativa");
+    if (configuredPercent >= 100) missing.push("nada sin repartir");
+    return missing;
+  }, [
+    configuredPercent,
+    policy.minimumOperatingReserve,
+    policy.taxReserveRate,
+  ]);
 
   const savePolicy = async () => {
     setIsSavingPolicy(true);
@@ -504,7 +529,8 @@ export function BusinessGrowthClient({
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           {embedded ? (
             <p className="text-sm text-muted-foreground">
-              Caja de {formatMonth(overview.period.label)} y campañas basadas en la situación actual.
+              Caja de {formatMonth(overview.period.label)} y campañas basadas en
+              la situación actual.
             </p>
           ) : (
             <Heading
@@ -858,9 +884,26 @@ export function BusinessGrowthClient({
                       {policy.ownerDrawRate}%.
                       {configuredPercent > 100
                         ? " Reduce uno de los dos valores antes de guardar."
-                        : " El resto queda como margen de seguridad."}
+                        : configuredPercent === 100
+                          ? " No queda nada sin repartir."
+                          : ` El ${100 - configuredPercent}% restante queda como margen de seguridad.`}
                     </AlertDescription>
                   </Alert>
+                  {cushions.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-xl border border-yellow-500/50 bg-yellow-50 p-3 text-xs leading-relaxed text-yellow-800">
+                      <AlertTriangle
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <p>
+                        Con estas reglas no estás apartando {joinEs(cushions)}.
+                        Puedes guardarlas igual —estas cifras solo alimentan
+                        recomendaciones, no mueven dinero—, pero el mes que
+                        llegue un gasto grande o la declaración, no habrá de
+                        dónde sacarlo.
+                      </p>
+                    </div>
+                  )}
                   <Button
                     onClick={savePolicy}
                     disabled={isSavingPolicy || configuredPercent > 100}

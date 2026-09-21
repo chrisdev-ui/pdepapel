@@ -73,6 +73,23 @@ function nonNegative(value: number) {
   return Math.max(0, value);
 }
 
+/**
+ * Cómo se llama cada regla en la pantalla. Los mensajes salían con el nombre
+ * del campo en inglés dentro de una frase en español («El valor de
+ * taxReserveRate debe estar entre 0 y 100»), que es lo que acaba viendo quien
+ * guarda las reglas: la capa de API ya usaba etiquetas en español y esta no.
+ */
+export const POLICY_FIELD_LABELS: Record<keyof BusinessCashPolicyInput, string> = {
+  minimumOperatingReserve: "La reserva operativa mínima",
+  taxReserveRate: "La reserva para impuestos",
+  reinvestmentRate: "La reinversión sugerida",
+  ownerDrawRate: "El retiro personal sugerido",
+  marketingTestRate: "La prueba de marketing",
+  minimumCampaignMarginPct: "El margen mínimo para publicitar",
+  minimumCampaignStock: "El stock mínimo para publicitar",
+  minimumCampaignDaysCover: "Los días de cobertura mínimos para publicitar",
+};
+
 export function validateBusinessCashPolicy(policy: BusinessCashPolicyInput) {
   const percentageFields: Array<keyof BusinessCashPolicyInput> = [
     "taxReserveRate",
@@ -93,13 +110,15 @@ export function validateBusinessCashPolicy(policy: BusinessCashPolicyInput) {
       policy[field] < 0 ||
       policy[field] > 100
     ) {
-      throw new Error(`El valor de ${field} debe estar entre 0 y 100`);
+      throw new Error(
+        `${POLICY_FIELD_LABELS[field]} debe estar entre 0 y 100`,
+      );
     }
   }
 
   for (const field of nonNegativeFields) {
     if (!Number.isFinite(policy[field]) || policy[field] < 0) {
-      throw new Error(`El valor de ${field} no puede ser negativo`);
+      throw new Error(`${POLICY_FIELD_LABELS[field]} no puede ser negativa`);
     }
   }
 

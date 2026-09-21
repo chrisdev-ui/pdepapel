@@ -1,10 +1,19 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/ui/metric-card";
 import { useSensitiveDataStore } from "@/hooks/use-sensitive-data-store";
 import type { TodaySummary } from "@/lib/dashboard-today";
-import { cn, currencyFormatter } from "@/lib/utils";
-import { AlertTriangle, Banknote, ChevronRight, CreditCard, Eye, EyeOff, PackageCheck } from "lucide-react";
+import { currencyFormatter } from "@/lib/utils";
+import {
+  AlertTriangle,
+  Banknote,
+  ChevronRight,
+  CreditCard,
+  Eye,
+  EyeOff,
+  PackageCheck,
+} from "lucide-react";
 import Link from "next/link";
 
 interface TodayKpisProps {
@@ -14,6 +23,14 @@ interface TodayKpisProps {
 
 const numberFormatter = new Intl.NumberFormat("es-CO");
 
+/**
+ * Las cuatro cifras de Inicio, sobre la tarjeta compartida del panel.
+ *
+ * Antes eran una tarjeta propia, casi calcada de `MetricCard`: mismo borde,
+ * mismo icono con su tinte, misma nota. Lo único que `MetricCard` no tenía era
+ * el ojo que tapa la cifra y el enlace de abajo; ahora lo tiene, y hay una
+ * sola tarjeta de cifra en todo el panel.
+ */
 function Kpi({
   title,
   value,
@@ -34,35 +51,39 @@ function Kpi({
   sensitive?: { id: string; visible: boolean; toggle: () => void };
 }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2.5 rounded-xl border bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-muted-foreground">{title}</span>
-        <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg text-primary", tint)}>{icon}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[26px] font-bold leading-none tracking-tight text-primary">
-          {sensitive && !sensitive.visible ? "••••••" : value}
-        </span>
-        {sensitive && (
+    <MetricCard
+      label={title}
+      value={sensitive && !sensitive.visible ? "••••••" : value}
+      note={note}
+      icon={icon}
+      tint={tint}
+      valueAdornment={
+        sensitive ? (
           <Button
             variant="ghost"
             size="icon-sm"
             aria-label={sensitive.visible ? "Ocultar cifra" : "Mostrar cifra"}
             onClick={sensitive.toggle}
-            className="text-muted-foreground"
+            className="shrink-0 text-muted-foreground"
           >
-            {sensitive.visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            {sensitive.visible ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
           </Button>
-        )}
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs text-muted-foreground">{note}</span>
-        <Link href={href} className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary hover:underline">
+        ) : undefined
+      }
+      action={
+        <Link
+          href={href}
+          className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary hover:underline"
+        >
           {linkLabel}
           <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
-      </div>
-    </div>
+      }
+    />
   );
 }
 
@@ -84,7 +105,11 @@ export function TodayKpis({ storeId, summary }: TodayKpisProps) {
         linkLabel="Ver pedidos"
         icon={<Banknote className="h-4 w-4" aria-hidden="true" />}
         tint="bg-tint-mint"
-        sensitive={{ id: "today-net", visible, toggle: () => toggleVisibility("today-net") }}
+        sensitive={{
+          id: "today-net",
+          visible,
+          toggle: () => toggleVisibility("today-net"),
+        }}
       />
       <Kpi
         title="Por despachar"
@@ -98,7 +123,11 @@ export function TodayKpis({ storeId, summary }: TodayKpisProps) {
       <Kpi
         title="Pagos por verificar"
         value={numberFormatter.format(summary.pendingPayments.count)}
-        note={summary.pendingPayments.count ? `Transferencias de 14 días · ${visible ? currencyFormatter(summary.pendingPayments.amount) : "••••"}` : "Sin transferencias pendientes"}
+        note={
+          summary.pendingPayments.count
+            ? `Transferencias de 14 días · ${visible ? currencyFormatter(summary.pendingPayments.amount) : "••••"}`
+            : "Sin transferencias pendientes"
+        }
         href={`${base}/pedidos?vista=por-verificar`}
         linkLabel="Verificar"
         icon={<CreditCard className="h-4 w-4" aria-hidden="true" />}
