@@ -197,6 +197,8 @@ export enum Models {
   NewsletterSubscribers = "newsletter-subscribers",
   Conversations = "conversations",
   FairEvents = "fair-events",
+  TaxSales = "tax-sales",
+  TaxPurchases = "tax-purchases",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -228,6 +230,8 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Boxes]: "Cajas",
   [Models.NewsletterSubscribers]: "Suscriptores del boletín",
   [Models.FairEvents]: "Ferias",
+  [Models.TaxSales]: "Ventas declarables",
+  [Models.TaxPurchases]: "Facturas de compra",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -447,6 +451,19 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     status: "Estado",
     consentedAt: "Se suscribió",
     confirmedAt: "Confirmó",
+  },
+  [Models.TaxSales]: {
+    orderNumber: "Número de orden",
+    customerName: "Nombre de la persona",
+    channel: "Canal",
+    occurredAt: "Fecha",
+    totalAmount: "Valor",
+  },
+  [Models.TaxPurchases]: {
+    invoiceNumber: "Número de factura",
+    supplierName: "Empresa",
+    issuedAt: "Fecha",
+    totalAmount: "Valor",
   },
 };
 

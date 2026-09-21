@@ -2,25 +2,21 @@
 
 import type { TaxReadiness } from "@/lib/tax-readiness";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { DataTable } from "@/components/ui/data-table";
+import { DateField } from "@/components/ui/date-field";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CurrencyInput } from "@/components/ui/currency-input";
-import { useActionConfirmation } from "@/hooks/use-action-confirmation";
-import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MetricCard } from "@/components/ui/metric-card";
+import { SectionCard } from "@/components/ui/section-card";
 import {
   Select,
   SelectContent,
@@ -29,54 +25,40 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { TintBadge } from "@/components/ui/tint-badge";
+import { Models } from "@/constants";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { useToast } from "@/hooks/use-toast";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  formatTaxPeriodLabel,
+  getDefaultTaxReportPeriod,
+  getTaxReportPeriodPresets,
+  isSameTaxReportPeriod,
+  matchTaxReportPreset,
+  type TaxReportPeriodValue,
+} from "@/lib/tax-report-period";
+import { cn, currencyFormatter } from "@/lib/utils";
 import {
+  AlertTriangle,
+  Coins,
   Download,
   Eye,
   FileSpreadsheet,
-  Pencil,
+  Loader2,
   Plus,
   RefreshCw,
-  Trash2,
 } from "lucide-react";
 import { useParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import {
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-const DEFAULT_START_DATE = "2025-07-01";
-const DEFAULT_END_DATE = "2025-12-31";
-const DEFAULT_SALES_DATE_BASIS = "saleDate";
+import {
+  buildPurchasesColumns,
+  buildSalesColumns,
+  type TaxPurchaseRow,
+  type TaxSaleRow,
+} from "./columns";
 
 type SalesDateBasis = "saleDate" | "paymentDate";
-
-type TaxSaleRow = {
-  orderNumber: string;
-  customerName: string;
-  channel: "Tienda en línea" | "Venta presencial" | "Mercado Libre";
-  totalAmount: number;
-  occurredAt: string;
-};
-
-type TaxPurchaseRow = {
-  id: string;
-  invoiceNumber: string;
-  supplierName: string;
-  totalAmount: number;
-  issuedAt: string;
-  notes: string | null;
-};
 
 type TaxReport = {
   salesDateBasis: SalesDateBasis;
@@ -104,41 +86,63 @@ const emptyPurchaseForm: PurchaseForm = {
   notes: "",
 };
 
-const currencyFormatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
+const READINESS_TONE: Record<string, string> = {
+  cream: "bg-tint-cream",
+  pink: "bg-tint-pink",
+  sky: "bg-tint-sky",
+};
 
-const dateFormatter = new Intl.DateTimeFormat("es-CO", {
-  timeZone: "America/Bogota",
-});
-
-function formatDate(value: string) {
-  return dateFormatter.format(new Date(value));
+/**
+ * El cuerpo de la respuesta se leía crudo y se pintaba tal cual: para un 500
+ * eso es un JSON en la cara. Se traduce, y el detalle técnico se queda en la
+ * consola.
+ */
+async function readError(response: Response, fallback: string) {
+  const body = await response.text().catch(() => "");
+  try {
+    const parsed = JSON.parse(body) as { error?: string; message?: string };
+    const message = parsed.error || parsed.message;
+    if (message && message.length < 160) return message;
+  } catch {
+    if (body && body.length < 160 && !body.includes("<")) return body;
+  }
+  return fallback;
 }
 
-function getErrorMessage(response: Response) {
-  return response
-    .text()
-    .then((message) => message || "No fue posible completar la solicitud");
-}
-
-const READINESS_TONE: Record<string, string> = { cream: "bg-tint-cream", pink: "bg-tint-pink", sky: "bg-tint-sky" };
-
-export default function TaxReportsClient({ readiness }: { readiness?: TaxReadiness }) {
+export default function TaxReportsClient({
+  readiness,
+}: {
+  readiness?: TaxReadiness;
+}) {
+  const canWrite = useCanWrite();
+  const { toast } = useToast();
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;
-  const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
-  const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
-  const [salesDateBasis, setSalesDateBasis] = useState<SalesDateBasis>(
-    DEFAULT_SALES_DATE_BASIS,
-  );
+
+  const defaultPeriod = useMemo(() => getDefaultTaxReportPeriod(), []);
+  const presets = useMemo(() => getTaxReportPeriodPresets(), []);
+
+  // Lo que hay escrito en el formulario.
+  const [form, setForm] = useState<TaxReportPeriodValue>(defaultPeriod);
+  const [salesDateBasis, setSalesDateBasis] =
+    useState<SalesDateBasis>("saleDate");
+  /**
+   * El período **del reporte que está en pantalla**. Es el que manda para
+   * descargar: antes el botón leía el formulario, así que cambiar una fecha y
+   * no pulsar «Actualizar» producía un Excel de un período que nunca se vio.
+   */
+  const [applied, setApplied] = useState<{
+    period: TaxReportPeriodValue;
+    salesDateBasis: SalesDateBasis;
+  }>({ period: defaultPeriod, salesDateBasis: "saleDate" });
+
   const [report, setReport] = useState<TaxReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState("");
+  const [exportError, setExportError] = useState("");
   // La API contesta 403 a una cuenta de solo lectura. Sin esto, el cuerpo JSON
   // crudo se pintaba tal cual en la pantalla.
   const [forbidden, setForbidden] = useState(false);
@@ -146,20 +150,22 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
   const [purchaseForm, setPurchaseForm] =
     useState<PurchaseForm>(emptyPurchaseForm);
 
+  const pendingChanges =
+    !isSameTaxReportPeriod(form, applied.period) ||
+    salesDateBasis !== applied.salesDateBasis;
+  const activePreset = matchTaxReportPreset(form);
+
   const loadReport = useCallback(
-    async (
-      nextStartDate: string,
-      nextEndDate: string,
-      nextSalesDateBasis: SalesDateBasis,
-    ) => {
+    async (period: TaxReportPeriodValue, basis: SalesDateBasis) => {
       setIsLoading(true);
       setError("");
+      setExportError("");
 
       try {
         const searchParams = new URLSearchParams({
-          startDate: nextStartDate,
-          endDate: nextEndDate,
-          salesDateBasis: nextSalesDateBasis,
+          startDate: period.startDate,
+          endDate: period.endDate,
+          salesDateBasis: basis,
         });
         const response = await fetch(
           `/api/${storeId}/tax-reports?${searchParams.toString()}`,
@@ -171,13 +177,15 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
           setReport(null);
           return;
         }
-
         if (!response.ok) {
-          throw new Error(await getErrorMessage(response));
+          throw new Error(
+            await readError(response, "No fue posible cargar el reporte"),
+          );
         }
 
         setForbidden(false);
         setReport(await response.json());
+        setApplied({ period, salesDateBasis: basis });
       } catch (requestError) {
         setError(
           requestError instanceof Error
@@ -192,28 +200,83 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
   );
 
   useEffect(() => {
-    void loadReport(
-      DEFAULT_START_DATE,
-      DEFAULT_END_DATE,
-      DEFAULT_SALES_DATE_BASIS,
-    );
-  }, [loadReport]);
+    void loadReport(defaultPeriod, "saleDate");
+  }, [loadReport, defaultPeriod]);
 
   const handlePeriodSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void loadReport(startDate, endDate, salesDateBasis);
+    void loadReport(form, salesDateBasis);
+  };
+
+  const applyPreset = (preset: TaxReportPeriodValue) => {
+    setForm({ startDate: preset.startDate, endDate: preset.endDate });
+    void loadReport(
+      { startDate: preset.startDate, endDate: preset.endDate },
+      salesDateBasis,
+    );
+  };
+
+  /**
+   * La descarga se lleva **el período aplicado**, y pasa por `fetch`.
+   *
+   * Antes navegaba el navegador a la ruta del archivo: si el servidor fallaba,
+   * la pantalla entera desaparecía y quedaba el cuerpo del error en una página
+   * en blanco. Es lo que ya hacían Envíos, Cupones y Productos.
+   */
+  const handleDownload = async () => {
+    setIsExporting(true);
+    setExportError("");
+    try {
+      const searchParams = new URLSearchParams({
+        startDate: applied.period.startDate,
+        endDate: applied.period.endDate,
+        salesDateBasis: applied.salesDateBasis,
+      });
+      const response = await fetch(
+        `/api/${storeId}/tax-reports/export?${searchParams.toString()}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        throw new Error(
+          await readError(response, "No se pudo preparar el archivo"),
+        );
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `reporte-tributario-${applied.period.startDate}-a-${applied.period.endDate}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast({
+        title: "Excel descargado",
+        description: `Ventas y compras de ${formatTaxPeriodLabel(applied.period)}.`,
+      });
+    } catch (requestError) {
+      setExportError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No se pudo preparar el archivo",
+      );
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const openNewPurchaseDialog = () => {
-    setPurchaseForm({
-      ...emptyPurchaseForm,
-      issuedAt: startDate,
-    });
+    /*
+      La fecha arrancaba con el inicio del período: un valor plausible y casi
+      siempre falso en una casilla que va a un documento tributario. Mejor
+      vacía, que se nota.
+    */
+    setPurchaseForm(emptyPurchaseForm);
     setError("");
     setIsDialogOpen(true);
   };
 
-  const openEditPurchaseDialog = (purchase: TaxPurchaseRow) => {
+  const openEditPurchaseDialog = useCallback((purchase: TaxPurchaseRow) => {
     setPurchaseForm({
       id: purchase.id,
       invoiceNumber: purchase.invoiceNumber,
@@ -224,7 +287,7 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
     });
     setError("");
     setIsDialogOpen(true);
-  };
+  }, []);
 
   const handlePurchaseSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -245,11 +308,13 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
       );
 
       if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
+        throw new Error(
+          await readError(response, "No fue posible guardar la compra"),
+        );
       }
 
       setIsDialogOpen(false);
-      await loadReport(startDate, endDate, salesDateBasis);
+      await loadReport(applied.period, applied.salesDateBasis);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -261,400 +326,414 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
     }
   };
 
-  const handleDeletePurchase = async (purchase: TaxPurchaseRow) => {
-    if (
-      !(await requestConfirmation({
-        title: "¿Eliminar compra?",
-        description: `Se eliminará la factura ${purchase.invoiceNumber} de ${purchase.supplierName}. Esta acción no se puede deshacer.`,
-        confirmLabel: "Eliminar compra",
-        destructive: true,
-      }))
-    ) {
-      return;
-    }
-
-    setError("");
-    try {
-      const response = await fetch(
-        `/api/${storeId}/tax-purchases/${purchase.id}`,
-        { method: "DELETE" },
-      );
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
+  const handleDeletePurchase = useCallback(
+    async (purchase: TaxPurchaseRow) => {
+      if (
+        !(await requestConfirmation({
+          title: "¿Eliminar compra?",
+          description: `Se eliminará la factura ${purchase.invoiceNumber} de ${purchase.supplierName}. Esta acción no se puede deshacer.`,
+          confirmLabel: "Eliminar compra",
+          destructive: true,
+        }))
+      ) {
+        return;
       }
 
-      await loadReport(startDate, endDate, salesDateBasis);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "No fue posible eliminar la compra",
-      );
-    }
-  };
+      setError("");
+      try {
+        const response = await fetch(
+          `/api/${storeId}/tax-purchases/${purchase.id}`,
+          { method: "DELETE" },
+        );
+        if (!response.ok) {
+          throw new Error(
+            await readError(response, "No fue posible eliminar la compra"),
+          );
+        }
+        await loadReport(applied.period, applied.salesDateBasis);
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "No fue posible eliminar la compra",
+        );
+      }
+    },
+    [applied, loadReport, requestConfirmation, storeId],
+  );
 
-  const handleDownload = () => {
-    const searchParams = new URLSearchParams({
-      startDate,
-      endDate,
-      salesDateBasis,
-    });
-    window.location.assign(
-      `/api/${storeId}/tax-reports/export?${searchParams.toString()}`,
-    );
-  };
+  const dateHeader =
+    applied.salesDateBasis === "paymentDate"
+      ? "Fecha de pago"
+      : "Fecha de venta";
 
-  const salesTable = useReactTable<TaxSaleRow>({
-    data: report?.sales ?? [],
-    columns: [],
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-  });
-  const purchasesTable = useReactTable<TaxPurchaseRow>({
-    data: report?.purchases ?? [],
-    columns: [],
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-  });
-
-  useEffect(() => {
-    salesTable.setPageIndex(0);
-    purchasesTable.setPageIndex(0);
-  }, [report, salesTable, purchasesTable]);
+  const salesColumns = useMemo(
+    () => buildSalesColumns(storeId, dateHeader),
+    [storeId, dateHeader],
+  );
+  const purchasesColumns = useMemo(
+    () => buildPurchasesColumns(openEditPurchaseDialog, handleDeletePurchase, canWrite),
+    [openEditPurchaseDialog, handleDeletePurchase, canWrite],
+  );
 
   if (forbidden) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Reportes tributarios
-          </h1>
-        </div>
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 p-10 text-center">
-            <Eye className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-            <p className="text-base font-semibold text-foreground">Solo lectura</p>
-            <p className="max-w-md text-sm text-muted-foreground">
-              Los reportes tributarios los ve solo la dueña de la tienda. Pídele acceso si
-              necesitas el archivo del período.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex flex-col gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-primary">
+          Reportes tributarios
+        </h1>
+        <SectionCard
+          id="tributarios-solo-lectura"
+          title="Solo lectura"
+          description="Los reportes tributarios los ve solo la dueña de la tienda. Pídele acceso si necesitas el archivo del período."
+        >
+          <Eye className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+        </SectionCard>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold tracking-tight text-primary">
             Reportes tributarios
           </h1>
           <p className="text-sm text-muted-foreground">
-            Prepara un archivo Excel con las ventas y compras del período.
+            Prepara el Excel de ventas y compras para tu contador.
           </p>
         </div>
-        <Button onClick={handleDownload} disabled={isLoading}>
-          <Download className="mr-2 h-4 w-4" />
-          Descargar Excel
-        </Button>
+        <div className="flex flex-col items-start gap-1 sm:items-end">
+          <Button onClick={handleDownload} disabled={isLoading || isExporting}>
+            {isExporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+            )}
+            Descargar Excel
+          </Button>
+          {/* Qué se lleva el archivo, antes de pulsar y no en la carpeta de descargas. */}
+          <span className="text-xs text-muted-foreground">
+            El archivo llevará{" "}
+            <strong className="text-primary">
+              {formatTaxPeriodLabel(applied.period)}
+            </strong>
+          </span>
+        </div>
       </div>
 
+      {exportError && (
+        <SectionCard
+          id="tributarios-error-export"
+          title="No se pudo preparar el archivo"
+          description={exportError}
+          tone="care"
+        >
+          <Button variant="outline" size="sm" onClick={handleDownload}>
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            Reintentar
+          </Button>
+        </SectionCard>
+      )}
+
       {readiness && (
-        <section aria-labelledby="revision-previa" className="rounded-xl border bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 id="revision-previa" className="text-[15px] font-bold text-primary">
-              Revisión previa · {readiness.year}
-            </h2>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold text-primary ${readiness.ready ? "bg-tint-mint" : "bg-tint-cream"}`}>
-              {readiness.ready ? "Listo para exportar" : `${readiness.items.length} ${readiness.items.length === 1 ? "cosa por revisar" : "cosas por revisar"}`}
-            </span>
-          </div>
+        <SectionCard
+          id="revision-previa"
+          title="Antes de exportar"
+          description={
+            readiness.ready
+              ? `Los libros de ${readiness.year} están al día.`
+              : `Lo que falta por cuadrar en ${readiness.year}.`
+          }
+          action={
+            <TintBadge
+              tone={readiness.ready ? "mint" : "cream"}
+              label={
+                readiness.ready
+                  ? "Listo para exportar"
+                  : `${readiness.items.length} por revisar`
+              }
+            />
+          }
+        >
           {readiness.ready ? (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Ventas con fecha de pago, ventas de Mercado Libre liquidadas y facturas de compra al día. Rendimiento usa estimaciones para decidir; este reporte usa documentos para declarar, así que sus totales pueden diferir.
+            <p className="text-sm text-muted-foreground">
+              Ventas con fecha de pago, ventas de Mercado Libre liquidadas y
+              facturas de compra al día. Rendimiento usa estimaciones para
+              decidir; este reporte usa documentos para declarar, así que sus
+              totales pueden diferir.
             </p>
           ) : (
-            <ul className="mt-3 flex flex-col gap-2">
+            <ul className="flex flex-col gap-2">
               {readiness.items.map((item) => (
-                <li key={item.id} className={`flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center sm:justify-between ${READINESS_TONE[item.tone]}`}>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-semibold text-primary">{item.title}</span>
-                    <span className="text-xs text-primary/80">{item.detail}</span>
+                <li
+                  key={item.id}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center sm:justify-between",
+                    READINESS_TONE[item.tone],
+                  )}
+                >
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm font-semibold text-primary">
+                      {item.title}
+                    </span>
+                    <span className="text-xs text-primary/80">
+                      {item.detail}
+                    </span>
                   </div>
-                  <Button asChild variant="outline" size="sm" className="shrink-0 bg-white">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 bg-white"
+                  >
                     <a href={item.href}>Revisar</a>
                   </Button>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </SectionCard>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Período del reporte</CardTitle>
-          <CardDescription>
-            Elige cómo se determina la fecha de cada venta. Para recuperar el
-            histórico de 2025, usa la fecha de venta.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={handlePeriodSubmit}
-            className="flex flex-col gap-4 sm:flex-row sm:items-end"
-          >
-            <div className="grid flex-1 gap-2">
-              <Label htmlFor="report-start-date">Desde</Label>
-              <DateField
-                id="report-start-date"
-                value={startDate}
-                onChange={setStartDate}
-                max={endDate || undefined}
-                required
-                presets={false}
-              />
-            </div>
-            <div className="grid flex-1 gap-2">
-              <Label htmlFor="report-end-date">Hasta</Label>
-              <DateField
-                id="report-end-date"
-                value={endDate}
-                onChange={setEndDate}
-                min={startDate || undefined}
-                required
-                presets={false}
-              />
-            </div>
-            <div className="grid flex-1 gap-2">
-              <Label htmlFor="report-sales-date-basis">Fecha para ventas</Label>
-              <Select
-                value={salesDateBasis}
-                onValueChange={(value) =>
-                  setSalesDateBasis(value as SalesDateBasis)
-                }
+      <SectionCard
+        id="periodo-reporte"
+        title="Período del reporte"
+        description="Elige el rango y con qué fecha entra cada venta. Los totales y las tablas de abajo son siempre de este período."
+      >
+        <div className="flex flex-wrap gap-2">
+          {presets.map((preset) => {
+            const isActive = activePreset?.id === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => applyPreset(preset)}
+                disabled={isLoading}
+                className={cn(
+                  "inline-flex min-h-11 items-center rounded-full border px-3.5 text-sm font-semibold transition-colors sm:min-h-0 sm:h-9",
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-white text-primary hover:bg-accent",
+                )}
               >
-                <SelectTrigger id="report-sales-date-basis">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="saleDate">
-                    Fecha de venta (pedido)
-                  </SelectItem>
-                  <SelectItem value="paymentDate">
-                    Confirmación de pago
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="submit" variant="outline" disabled={isLoading}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Actualizar
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <form
+          onSubmit={handlePeriodSubmit}
+          className="flex flex-col gap-4 sm:flex-row sm:items-end"
+        >
+          <div className="grid flex-1 gap-2">
+            <Label htmlFor="report-start-date">Desde</Label>
+            <DateField
+              id="report-start-date"
+              value={form.startDate}
+              onChange={(startDate) =>
+                setForm((current) => ({ ...current, startDate }))
+              }
+              max={form.endDate || undefined}
+              required
+              presets={false}
+            />
+          </div>
+          <div className="grid flex-1 gap-2">
+            <Label htmlFor="report-end-date">Hasta</Label>
+            <DateField
+              id="report-end-date"
+              value={form.endDate}
+              onChange={(endDate) =>
+                setForm((current) => ({ ...current, endDate }))
+              }
+              min={form.startDate || undefined}
+              required
+              presets={false}
+            />
+          </div>
+          <div className="grid flex-1 gap-2">
+            <Label htmlFor="report-sales-date-basis">Fecha para ventas</Label>
+            <Select
+              value={salesDateBasis}
+              onValueChange={(value) =>
+                setSalesDateBasis(value as SalesDateBasis)
+              }
+            >
+              <SelectTrigger id="report-sales-date-basis">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="saleDate">Fecha de venta (pedido)</SelectItem>
+                <SelectItem value="paymentDate">
+                  Confirmación de pago
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            type="submit"
+            variant={pendingChanges ? "default" : "outline"}
+            disabled={isLoading || !pendingChanges}
+          >
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            )}
+            {pendingChanges ? "Aplicar" : "Aplicado"}
+          </Button>
+        </form>
+
+        {/*
+          El aviso que faltaba: si el formulario y el reporte no coinciden, el
+          botón de descarga se lleva el reporte, no el formulario. Decirlo es lo
+          que impide bajarse un archivo de un período que nunca se miró.
+        */}
+        {pendingChanges && !isLoading && (
+          <div className="flex flex-col gap-2 rounded-lg bg-tint-cream p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-start gap-2 text-sm text-primary">
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
+              <span>
+                Cambiaste el período y no lo has aplicado. El Excel se llevará{" "}
+                <strong>{formatTaxPeriodLabel(applied.period)}</strong>, que es
+                lo que ves abajo.
+              </span>
+            </p>
+            <Button
+              size="sm"
+              className="shrink-0"
+              onClick={() => void loadReport(form, salesDateBasis)}
+            >
+              Aplicar
             </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </SectionCard>
 
       {error && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </p>
+        <SectionCard
+          id="tributarios-error"
+          title="No se pudo cargar el reporte"
+          description={error}
+          tone="care"
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadReport(applied.period, applied.salesDateBasis)}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            Reintentar
+          </Button>
+        </SectionCard>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Ventas incluidas</CardDescription>
-            <CardTitle className="text-2xl">
-              {isLoading
-                ? "—"
-                : currencyFormatter.format(report?.salesTotal ?? 0)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {isLoading
-              ? "Cargando..."
-              : `${report?.sales.length ?? 0} ventas con pago o liquidación confirmada`}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Compras registradas</CardDescription>
-            <CardTitle className="text-2xl">
-              {isLoading
-                ? "—"
-                : currencyFormatter.format(report?.purchasesTotal ?? 0)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {isLoading
-              ? "Cargando..."
-              : `${report?.purchases.length ?? 0} facturas de proveedor`}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <MetricCard
+          label="Ventas incluidas"
+          value={isLoading ? "—" : currencyFormatter(report?.salesTotal ?? 0)}
+          note={
+            isLoading
+              ? "Cargando…"
+              : `${report?.sales.length ?? 0} ventas con pago o liquidación confirmada`
+          }
+          icon={<Coins className="h-4 w-4" aria-hidden="true" />}
+          tint="bg-tint-mint"
+        />
+        <MetricCard
+          label="Compras registradas"
+          value={
+            isLoading ? "—" : currencyFormatter(report?.purchasesTotal ?? 0)
+          }
+          note={
+            isLoading
+              ? "Cargando…"
+              : `${report?.purchases.length ?? 0} facturas de proveedor`
+          }
+          icon={<FileSpreadsheet className="h-4 w-4" aria-hidden="true" />}
+          tint="bg-tint-lavender"
+        />
       </div>
 
       {!isLoading && (report?.pendingMarketplaceSalesCount ?? 0) > 0 ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="rounded-lg bg-tint-cream p-3 text-sm text-primary">
           {report?.pendingMarketplaceSalesCount === 1
             ? "Una venta pagada en Mercado Libre aún no se incluye porque falta su liquidación neta."
             : `${report?.pendingMarketplaceSalesCount} ventas pagadas en Mercado Libre aún no se incluyen porque falta su liquidación neta.`}
         </p>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5" />
-            Ventas
-          </CardTitle>
-          <CardDescription>
-            Incluye pedidos pagados o enviados y ventas de Mercado Libre con
-            liquidación neta confirmada. El período usa{" "}
-            {report?.salesDateBasis === "paymentDate"
-              ? "la confirmación de pago."
-              : "la fecha de venta del pedido."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Número de orden</TableHead>
-                <TableHead>Nombre de la persona</TableHead>
-                <TableHead>Canal</TableHead>
-                <TableHead>
-                  {report?.salesDateBasis === "paymentDate"
-                    ? "Fecha de pago"
-                    : "Fecha de venta"}
-                </TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!isLoading && report?.sales.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    No hay ventas declarables en este período.
-                  </TableCell>
-                </TableRow>
-              )}
-              {salesTable.getRowModel().rows.map((row) => {
-                const sale = row.original;
+      <SectionCard
+        id="tributarios-ventas"
+        title="Ventas"
+        description={`Pedidos pagados o enviados y ventas de Mercado Libre ya liquidadas, por ${
+          applied.salesDateBasis === "paymentDate"
+            ? "confirmación de pago"
+            : "fecha de venta del pedido"
+        }.`}
+      >
+        <DataTable
+          columns={salesColumns}
+          data={report?.sales ?? []}
+          tableKey={Models.TaxSales}
+          selectable={false}
+          searchPlaceholder="Busca orden, persona o canal…"
+          isLoading={isLoading}
+          filters={[
+            {
+              columnKey: "channel",
+              title: "Canal",
+              options: [
+                { label: "Tienda en línea", value: "Tienda en línea" },
+                { label: "Venta presencial", value: "Venta presencial" },
+                { label: "Mercado Libre", value: "Mercado Libre" },
+              ],
+            },
+          ]}
+          emptyState={{
+            title: "No hay ventas declarables en este período",
+            description:
+              "Prueba con otro rango, o revisa si faltan pagos por confirmar.",
+          }}
+          getRowId={(row) => row.orderNumber}
+        />
+      </SectionCard>
 
-                return (
-                  <TableRow key={sale.orderNumber}>
-                    <TableCell className="font-medium">
-                      {sale.orderNumber}
-                    </TableCell>
-                    <TableCell>{sale.customerName}</TableCell>
-                    <TableCell>{sale.channel}</TableCell>
-                    <TableCell>{formatDate(sale.occurredAt)}</TableCell>
-                    <TableCell className="text-right">
-                      {currencyFormatter.format(sale.totalAmount)}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          {(report?.sales.length ?? 0) > 0 && (
-            <div className="py-3">
-              <DataTablePagination table={salesTable} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle>Compras</CardTitle>
-            <CardDescription>
-              Registra cada factura de proveedor. No se usan órdenes de
-              aprovisionamiento como sustituto de una factura real.
-            </CardDescription>
-          </div>
-          <Button onClick={openNewPurchaseDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            Registrar compra
-          </Button>
-        </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Número de factura</TableHead>
-                <TableHead>Empresa</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="w-[96px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!isLoading && report?.purchases.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    Registra las facturas de proveedor para incluirlas en el
-                    Excel.
-                  </TableCell>
-                </TableRow>
-              )}
-              {purchasesTable.getRowModel().rows.map((row) => {
-                const purchase = row.original;
-
-                return (
-                  <TableRow key={purchase.id}>
-                    <TableCell className="font-medium">
-                      {purchase.invoiceNumber}
-                    </TableCell>
-                    <TableCell>{purchase.supplierName}</TableCell>
-                    <TableCell>{formatDate(purchase.issuedAt)}</TableCell>
-                    <TableCell className="text-right">
-                      {currencyFormatter.format(purchase.totalAmount)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Editar factura ${purchase.invoiceNumber}`}
-                          onClick={() => openEditPurchaseDialog(purchase)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Eliminar factura ${purchase.invoiceNumber}`}
-                          onClick={() => void handleDeletePurchase(purchase)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          {(report?.purchases.length ?? 0) > 0 && (
-            <div className="py-3">
-              <DataTablePagination table={purchasesTable} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <SectionCard
+        id="tributarios-compras"
+        title="Compras"
+        description="Registra cada factura de proveedor. No se usan órdenes de aprovisionamiento como sustituto de una factura real."
+        action={
+          canWrite ? (
+            <Button onClick={openNewPurchaseDialog}>
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              Registrar compra
+            </Button>
+          ) : undefined
+        }
+      >
+        <DataTable
+          columns={purchasesColumns}
+          data={report?.purchases ?? []}
+          tableKey={Models.TaxPurchases}
+          selectable={false}
+          searchPlaceholder="Busca factura o empresa…"
+          isLoading={isLoading}
+          emptyState={{
+            title: "Todavía no hay facturas en este período",
+            description:
+              "Registra las facturas de proveedor para incluirlas en el Excel.",
+          }}
+          getRowId={(row) => row.id}
+        />
+      </SectionCard>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
@@ -714,15 +793,12 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="purchase-issued-at">Fecha</Label>
+                <Label htmlFor="purchase-issued-at">Fecha de la factura</Label>
                 <DateField
                   id="purchase-issued-at"
                   value={purchaseForm.issuedAt}
                   onChange={(issuedAt) =>
-                    setPurchaseForm((current) => ({
-                      ...current,
-                      issuedAt,
-                    }))
+                    setPurchaseForm((current) => ({ ...current, issuedAt }))
                   }
                   required
                 />
@@ -741,6 +817,11 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
                 }
               />
             </div>
+            {error && (
+              <p className="rounded-lg bg-tint-pink p-3 text-sm text-primary">
+                {error}
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
@@ -751,7 +832,8 @@ export default function TaxReportsClient({ readiness }: { readiness?: TaxReadine
                 Cancelar
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Guardando..." : "Guardar compra"}
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar compra
               </Button>
             </div>
           </form>

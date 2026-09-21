@@ -74,6 +74,12 @@ interface DataTableProps<TData, TValue> {
   onGlobalFilterChange?: (value: string) => void;
   /** Acciones para las filas seleccionadas; aparecen en la barra flotante. */
   bulkActions?: (table: ReactTable<TData>) => React.ReactNode;
+  /**
+   * Casilla de selección por fila. Por defecto sí, que es como nació. Una
+   * tabla de solo lectura la pone en `false`: casillas que no hacen nada
+   * invitan a marcarlas y no llevan a ningún sitio.
+   */
+  selectable?: boolean;
   rowSelection?: Record<string, boolean>;
   onRowSelectionChange?: (selection: Record<string, boolean>) => void;
   /** Muestra filas de esqueleto en lugar de datos. */
@@ -103,6 +109,7 @@ export function DataTable<TData, TValue>({
   onColumnFiltersChange: onColumnFiltersChangeProp,
   onGlobalFilterChange,
   bulkActions,
+  selectable = true,
   rowSelection: controlledRowSelection,
   onRowSelectionChange: controlledOnRowSelectionChange,
   isLoading = false,
@@ -160,7 +167,7 @@ export function DataTable<TData, TValue>({
   };
 
   const allColumns = useMemo<ColumnDef<TData, TValue>[]>(
-    () => [
+    () => (!selectable ? columns : [
       {
         id: "select",
         header: ({ table }) => (
@@ -187,8 +194,8 @@ export function DataTable<TData, TValue>({
         enableGlobalFilter: false,
       },
       ...columns,
-    ],
-    [columns],
+    ]),
+    [columns, selectable],
   );
 
   const table = useReactTable({
