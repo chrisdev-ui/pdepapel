@@ -1,7 +1,13 @@
 import { cn } from "@/lib/utils";
 
 interface MetricCardProps {
-  label: string;
+  /**
+   * Casi siempre una cadena. Admite nodo porque algunas cifras necesitan una
+   * ayuda al lado del nombre («¿qué cuenta exactamente "ingresos recibidos"?»)
+   * y esa explicación pertenece al rótulo, no a la nota de abajo, que se
+   * recorta.
+   */
+  label: React.ReactNode;
   value: string;
   note?: string;
   icon: React.ReactNode;

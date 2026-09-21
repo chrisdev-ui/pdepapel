@@ -1,7 +1,7 @@
 "use client";
 
 import { DailyBreakdown } from "@/actions/get-financial-analytics";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { currencyFormatter } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -57,20 +57,27 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
     return null;
   };
 
-  const getChartTitle = () => {
-    if (!data || data.length === 0) return "Rendimiento Mensual";
-    const firstDate = parseISO(data[0].date);
-    const monthYear = format(firstDate, "MMMM 'de' yyyy", { locale: es });
-    return `Rendimiento de ${monthYear.replace(/^\w/, (c) => c.toUpperCase())} (Ingresos vs Beneficio)`;
-  };
+  const periodo =
+    data && data.length > 0
+      ? format(parseISO(data[0].date), "MMMM 'de' yyyy", { locale: es })
+      : null;
 
   return (
-    <Card className="col-span-4">
-      <CardHeader>
-        <CardTitle>{getChartTitle()}</CardTitle>
-      </CardHeader>
-      <CardContent className="pl-2">
-        <div className="mt-4 h-[350px] w-full">
+    <SectionCard
+      id="bi-dia-a-dia"
+      title="Día a día del mes"
+      description={
+        periodo
+          ? `Lo que entró y lo que te quedó libre cada día de ${periodo}.`
+          : "Lo que entró y lo que te quedó libre cada día."
+      }
+    >
+      {data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No hay ventas registradas en este mes.
+        </p>
+      ) : (
+        <div className="-ml-2 h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={formattedData}
@@ -106,7 +113,6 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
                 strokeDasharray="3 3"
                 vertical={false}
                 stroke={CHART_COLORS.grid}
-                className="dark:stroke-gray-800"
               />
               <XAxis
                 dataKey="formattedDate"
@@ -138,7 +144,7 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
               <Area
                 type="monotone"
                 dataKey="profit"
-                name="Beneficio Neto"
+                name="Te quedó libre"
                 stroke={CHART_COLORS.mint}
                 strokeWidth={2}
                 fillOpacity={1}
@@ -147,7 +153,7 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </SectionCard>
   );
 };
