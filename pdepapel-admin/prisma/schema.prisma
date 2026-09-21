@@ -77,6 +77,8 @@ model Store {
   conversations                  Conversation[]                  @relation("StoreToConversation")
   whatsAppBotReplies             WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
   productPresales                ProductPresale[]                @relation("StoreToProductPresale")
+  newsletterIssues               NewsletterIssue[]               @relation("StoreToNewsletterIssue")
+  newsletterCampaignSends        NewsletterCampaignSend[]        @relation("StoreToNewsletterCampaignSend")
   fairEvents                     FairEvent[]
   capsuleBatches                 CapsuleBatch[]
   productPriceTiers              ProductPriceTier[]
@@ -2298,6 +2300,78 @@ model CustomerReactivation {
   @@index([storeId, customerEmail])
 }
 
+/**
+ * Un número del boletín: la revista que Paula arma en Canva y exporta como
+ * imágenes. La portada se ve dentro del correo; las páginas viven en la tienda.
+ * No se guarda un PDF a propósito: la cuenta de Cloudinary se pasó del plan
+ * gratuito en septiembre de 2026 y cada descarga cuenta como GB servido. Con
+ * imágenes se reusa el cargador que ya reduce a 2000 px.
+ */
+model NewsletterIssue {
+  id         String                @id @default(uuid())
+  storeId    String
+  slug       String                @db.VarChar(160)
+  title      String                @db.VarChar(160)
+  intro      String?               @db.VarChar(600)
+  coverUrl   String                @db.VarChar(500)
+  coverAlt   String?               @db.VarChar(160)
+  status     NewsletterIssueStatus @default(DRAFT)
+  /**
+   * Cuándo salió el correo y a cuántas personas. Null mientras es borrador.
+   */
+  sentAt     DateTime?
+  recipients Int?
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  store Store                 @relation("StoreToNewsletterIssue", fields: [storeId], references: [id])
+  pages NewsletterIssuePage[]
+
+  @@unique([storeId, slug])
+  @@index([storeId, status, createdAt])
+  @@index([storeId, sentAt])
+}
+
+/**
+ * Una página de la revista, en su orden.
+ */
+model NewsletterIssuePage {
+  id        String   @id @default(uuid())
+  issueId   String
+  imageUrl  String   @db.VarChar(500)
+  alt       String?  @db.VarChar(160)
+  position  Int
+  createdAt DateTime @default(now())
+
+  issue NewsletterIssue @relation(fields: [issueId], references: [id])
+
+  @@index([issueId, position])
+}
+
+/**
+ * Qué se envió, cuándo y a cuántas.
+ * Hasta ahora un envío solo dejaba una marca de tiempo en la fila del banner
+ * (`earlyAccessSentAt`, `arrivalSentAt`): no había forma de saber a cuántas
+ * personas llegó ni de ver los envíos juntos. Esta tabla la escriben los tres
+ * tipos, no solo el nuevo.
+ */
+model NewsletterCampaignSend {
+  id            String   @id @default(uuid())
+  storeId       String
+  kind          String   @db.VarChar(40)
+  subject       String   @db.VarChar(200)
+  recipients    Int
+  issueId       String?
+  homeContentId String?
+  sentAt        DateTime @default(now())
+
+  store Store @relation("StoreToNewsletterCampaignSend", fields: [storeId], references: [id])
+
+  @@index([storeId, sentAt])
+  @@index([issueId])
+  @@index([homeContentId])
+}
+
 model NewsletterSubscriber {
   id                     String                     @id @default(uuid())
   storeId                String
@@ -2351,6 +2425,11 @@ enum ReactivationStatus {
   OPENED // Customer opened email
   CLICKED // Customer clicked CTA
   FAILED // Send failed
+}
+
+enum NewsletterIssueStatus {
+  DRAFT
+  SENT
 }
 
 enum NewsletterSubscriberStatus {

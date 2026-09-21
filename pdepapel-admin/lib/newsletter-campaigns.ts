@@ -1,7 +1,8 @@
-import { NewsletterSubscriberStatus } from "@prisma/client";
+import { NewsletterIssueStatus, NewsletterSubscriberStatus } from "@prisma/client";
 import { addDays } from "date-fns";
 
 import { NewsletterArrival } from "@/emails/newsletter-arrival";
+import { NewsletterIssueEmail } from "@/emails/newsletter-issue";
 import { NewsletterEarlyAccess } from "@/emails/newsletter-early-access";
 import { ErrorFactory } from "@/lib/api-errors";
 import { createEarlyAccessToken, isEarlyAccessConfigured } from "@/lib/early-access";
@@ -44,6 +45,33 @@ async function sendInBatches(messages: Message[]) {
     sent += batch.length;
   }
   return sent;
+}
+
+/**
+ * Deja constancia del envío.
+ *
+ * Hasta ahora un envío solo escribía una marca de tiempo en la fila del banner:
+ * no había forma de saber a cuántas personas llegó ni de ver los envíos
+ * juntos. Lo llaman los tres tipos.
+ */
+async function recordSend(input: {
+  storeId: string;
+  kind: string;
+  subject: string;
+  recipients: number;
+  issueId?: string | null;
+  homeContentId?: string | null;
+}) {
+  await prismadb.newsletterCampaignSend.create({
+    data: {
+      storeId: input.storeId,
+      kind: input.kind,
+      subject: input.subject.slice(0, 200),
+      recipients: input.recipients,
+      issueId: input.issueId ?? null,
+      homeContentId: input.homeContentId ?? null,
+    },
+  });
 }
 
 function unsubscribeUrl(storeId: string, unsubscribeTokenHash: string) {
@@ -104,6 +132,7 @@ export async function sendNewsletterCampaign(input: { storeId: string; homeConte
       }),
     );
     await prismadb.homeContent.update({ where: { id: entry.id }, data: { earlyAccessSentAt: new Date() } });
+    await recordSend({ storeId: input.storeId, kind: "early-access", subject: `Acceso anticipado: ${entry.title}`, recipients: sent, homeContentId: entry.id });
     return { sent };
   }
 
@@ -122,5 +151,106 @@ export async function sendNewsletterCampaign(input: { storeId: string; homeConte
     }),
   );
   await prismadb.homeContent.update({ where: { id: entry.id }, data: { arrivalSentAt: new Date() } });
+  await recordSend({ storeId: input.storeId, kind: "arrival", subject: `Ya llegó: ${entry.title}`, recipients: sent, homeContentId: entry.id });
+  return { sent };
+}
+
+/**
+ * Cuántas personas recibirían un envío ahora mismo.
+ *
+ * La pantalla lo pide antes de confirmar: un correo enviado no se recoge, así
+ * que la cifra tiene que estar delante antes de pulsar.
+ */
+export async function countNewsletterRecipients(storeId: string) {
+  return prismadb.newsletterSubscriber.count({
+    where: {
+      storeId,
+      status: NewsletterSubscriberStatus.ACTIVE,
+      unsubscribeTokenHash: { not: null },
+    },
+  });
+}
+
+/**
+ * Envía un número del boletín a las suscriptoras confirmadas.
+ *
+ * Reusa el mismo enviador por lotes, las mismas cabeceras de baja en un clic y
+ * el mismo remitente que los otros dos tipos: no hay un segundo camino de
+ * envío que mantener. Nada va adjunto; la portada viaja en el cuerpo y las
+ * páginas viven en la tienda.
+ */
+export async function sendNewsletterIssue(input: {
+  storeId: string;
+  issueId: string;
+}) {
+  const issue = await prismadb.newsletterIssue.findFirst({
+    where: { id: input.issueId, storeId: input.storeId },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      intro: true,
+      coverUrl: true,
+      coverAlt: true,
+      status: true,
+      _count: { select: { pages: true } },
+    },
+  });
+  if (!issue) throw ErrorFactory.NotFound("El número no existe");
+  if (issue.status === NewsletterIssueStatus.SENT) {
+    throw ErrorFactory.Conflict("Este número ya se envió");
+  }
+  if (issue._count.pages === 0) {
+    throw ErrorFactory.InvalidRequest("Sube al menos una página antes de enviar");
+  }
+
+  const subscribers = await activeSubscribers(input.storeId);
+  if (subscribers.length === 0) {
+    throw ErrorFactory.InvalidRequest("No hay suscriptoras confirmadas");
+  }
+
+  const issueUrl = storefrontUrl(`/boletin/${issue.slug}`);
+  const subject = issue.title;
+
+  const sent = await sendInBatches(
+    subscribers.map((subscriber) => {
+      const cancelUrl = unsubscribeUrl(
+        input.storeId,
+        subscriber.unsubscribeTokenHash!,
+      );
+      return {
+        to: subscriber.email,
+        subject,
+        react: NewsletterIssueEmail({
+          title: issue.title,
+          intro: issue.intro,
+          coverUrl: issue.coverUrl,
+          coverAlt: issue.coverAlt,
+          issueUrl,
+          pageCount: issue._count.pages,
+          unsubscribeUrl: cancelUrl,
+        }) as React.ReactElement,
+        text: `${issue.title}\n\n${issue.intro ?? ""}\n\nVer el número completo: ${issueUrl}\n\nCancelar suscripción: ${cancelUrl}`,
+        headers: listHeaders(cancelUrl),
+      };
+    }),
+  );
+
+  await prismadb.newsletterIssue.update({
+    where: { id: issue.id },
+    data: {
+      status: NewsletterIssueStatus.SENT,
+      sentAt: new Date(),
+      recipients: sent,
+    },
+  });
+  await recordSend({
+    storeId: input.storeId,
+    kind: "issue",
+    subject,
+    recipients: sent,
+    issueId: issue.id,
+  });
+
   return { sent };
 }
