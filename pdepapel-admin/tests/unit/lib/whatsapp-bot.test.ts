@@ -401,6 +401,90 @@ describe("runWhatsAppBot", () => {
     });
   });
 
+  /**
+   * La carrera de la pausa humana.
+   *
+   * El freno se miraba UNA vez, al entrar, y entre esa mirada y el envío pasan
+   * hasta 7 segundos. Si Paula contestaba en ese rato, su respuesta ya estaba
+   * puesta y la del bot le caía encima. Pasó 11 veces entre el 16 y el 21 de
+   * septiembre de 2026; el caso claro es `b3ae6030`, donde ella escribió
+   * «Hola Lili! Cómo estás?» y un segundo después el bot soltó su saludo.
+   */
+  describe("si Paula entra durante la pausa", () => {
+    /** Al entrar no había nada; al ir a enviar, sí. */
+    const paulaEntraMientrasEscribe = () => {
+      mocks.conversationFindUnique
+        .mockResolvedValueOnce({
+          id: "conversation-1",
+          status: "OPEN",
+          storeId: "store-1",
+          lastOwnerAt: null,
+        })
+        .mockResolvedValueOnce({ lastOwnerAt: new Date() });
+    };
+
+    it("no manda la respuesta que ya tenía preparada", async () => {
+      paulaEntraMientrasEscribe();
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "skipped_owner_active",
+      });
+
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.sendImage).not.toHaveBeenCalled();
+      expect(mocks.sendList).not.toHaveBeenCalled();
+      // Tampoco queda archivada: a la clienta no le llegó nada.
+      expect(mocks.messageCreate).not.toHaveBeenCalled();
+    });
+
+    it("no le pelea el estado al eco de Paula", async () => {
+      paulaEntraMientrasEscribe();
+
+      await runWhatsAppBot(input);
+
+      // El eco acaba de dejar la conversación como ella la quiere. Volver a
+      // marcarla aquí es justo lo que se está corrigiendo.
+      expect(mocks.conversationUpdate).not.toHaveBeenCalled();
+    });
+
+    it("si Paula no entra, la respuesta sale igual que siempre", async () => {
+      mocks.conversationFindUnique
+        .mockResolvedValueOnce({
+          id: "conversation-1",
+          status: "OPEN",
+          storeId: "store-1",
+          lastOwnerAt: null,
+        })
+        .mockResolvedValueOnce({ lastOwnerAt: null });
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "replied",
+        trigger: "horario",
+      });
+      expect(mocks.send).toHaveBeenCalledTimes(1);
+    });
+
+    it("una ráfaga que entra durante la pausa también la calla", async () => {
+      mocks.conversationFindUnique
+        .mockResolvedValueOnce({
+          id: "conversation-1",
+          status: "OPEN",
+          storeId: "store-1",
+          lastOwnerAt: null,
+        })
+        .mockResolvedValueOnce({ lastOwnerAt: null });
+      // Al entrar no había nada más; al ir a enviar ya había llegado otro.
+      mocks.messageFindFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: "mensaje-nuevo" });
+
+      await expect(
+        runWhatsAppBot({ ...input, inboundAt: new Date("2026-09-21T19:52:00.000Z") }),
+      ).resolves.toEqual({ outcome: "skipped_owner_active" });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+  });
 
   describe("datos del negocio", () => {
     const aprobados: ResolvedStoreSettings = ajustesBase;
@@ -1243,7 +1327,10 @@ describe("ritmo humano", () => {
         outcome: "replied",
         trigger: "horario",
       });
-      expect(mocks.conversationFindUnique).toHaveBeenCalledTimes(2);
+      // Tres lecturas, no dos: una por mensaje al entrar, más la que se hace
+      // justo antes de enviar en el mensaje que sí se contesta. Esa segunda
+      // es el guardia contra la carrera de la pausa humana.
+      expect(mocks.conversationFindUnique).toHaveBeenCalledTimes(3);
     });
   });
 

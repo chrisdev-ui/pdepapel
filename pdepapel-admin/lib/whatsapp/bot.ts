@@ -250,6 +250,32 @@ async function hasNewerInbound(
   return masNuevo !== null;
 }
 
+/**
+ * ¿Sigue teniendo sentido hablar? Se pregunta justo antes de enviar, no al
+ * entrar.
+ *
+ * Dos motivos para callarse:
+ * - **Paula entró.** `hasNewerInbound` no puede verlo: filtra por entrantes de
+ *   la clienta (`INBOUND`/`CUSTOMER`) y el eco de ella es `OUTBOUND`/`OWNER`.
+ *   Lo que sí lo delata es `lastOwnerAt`, que es justo lo que pone el eco.
+ * - **La clienta siguió escribiendo.** Ya se miraba al entrar; mirarlo otra
+ *   vez aquí cubre la ráfaga que llega DURANTE la pausa.
+ */
+async function shouldStayQuiet(
+  conversationId: string,
+  pace: Pacing,
+): Promise<"owner_active" | "superseded" | null> {
+  const actual = await prismadb.conversation.findUnique({
+    where: { id: conversationId },
+    select: { lastOwnerAt: true },
+  });
+  if (isOwnerActive(actual?.lastOwnerAt, new Date())) return "owner_active";
+  if (pace.supersedable && (await hasNewerInbound(conversationId, pace.inboundAt))) {
+    return "superseded";
+  }
+  return null;
+}
+
 /** Corta a propósito: si vuelve a preguntar lo mismo, merece respuesta. */
 export const REPEAT_WINDOW_MS = 60 * 1000;
 
@@ -341,6 +367,7 @@ export async function runWhatsAppBot(input: {
       pacing(input),
     );
     await escalate(conversation.id);
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
     return sent.ok
       ? { outcome: "escalated_owner_requested" }
       : { outcome: "escalated_owner_requested", error: sent.error };
@@ -391,6 +418,7 @@ export async function runWhatsAppBot(input: {
           : null,
       },
     );
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
     if (sent.ok) {
       return { outcome: "replied_product_reference", trigger: answer.intent };
     }
@@ -441,6 +469,7 @@ export async function runWhatsAppBot(input: {
           : {}),
       },
     );
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
     if (sent.ok) {
       return { outcome: "replied_business_fact", trigger: `payment.${paymentTarget}` };
     }
@@ -473,6 +502,7 @@ export async function runWhatsAppBot(input: {
       [],
       pacing(input),
     );
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
     return sent.ok
       ? { outcome: "escalated_unprocessable_media" }
       : { outcome: "escalated_unprocessable_media", error: sent.error };
@@ -534,7 +564,8 @@ export async function runWhatsAppBot(input: {
           pacing(input),
           filas.length > 0 ? { list: { body: answer, rows: filas } } : {},
         );
-        if (sent.ok) {
+        if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.ok) {
           return { outcome: "replied_business_fact", trigger: factIntent };
         }
         // Si no salió, se trata como cualquier envío fallido: pasa a Paula.
@@ -586,7 +617,8 @@ export async function runWhatsAppBot(input: {
               list: answer.list,
             },
           );
-          if (sent.ok) {
+          if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.ok) {
             return {
               outcome: "replied_product_reference",
               trigger: answer.intent,
@@ -609,6 +641,7 @@ export async function runWhatsAppBot(input: {
           [],
           pacing(input),
         );
+        if (sent.aborted) return { outcome: "skipped_owner_active" };
         if (sent.ok) return { outcome: "replied_reference_lost" };
         await escalate(conversation.id);
         return { outcome: "escalated_send_failed", error: sent.error };
@@ -679,7 +712,8 @@ export async function runWhatsAppBot(input: {
           list: answer.list,
         },
       );
-      if (sent.ok) {
+      if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.ok) {
         return { outcome: "replied_product", trigger: answer.intent };
       }
       await escalate(conversation.id);
@@ -710,15 +744,26 @@ export async function runWhatsAppBot(input: {
 interface Pacing {
   inboundMessageId: string | null;
   skip: boolean;
+  /** Cuándo llegó el mensaje que se está contestando. */
+  inboundAt: Date | null;
+  /**
+   * Si una ráfaga posterior puede dejar esta respuesta obsoleta. Los toques de
+   * botón no: cada toque es una elección suya y se contesta siempre.
+   */
+  supersedable: boolean;
 }
 
 function pacing(input: {
   inboundMessageId?: string | null;
   skipHumanPause?: boolean;
+  inboundAt?: Date | null;
+  interactiveReplyId?: string | null;
 }): Pacing {
   return {
     inboundMessageId: input.inboundMessageId?.trim() || null,
     skip: Boolean(input.skipHumanPause),
+    inboundAt: input.inboundAt ?? null,
+    supersedable: !input.interactiveReplyId?.trim(),
   };
 }
 
@@ -737,6 +782,7 @@ async function respond(
     keyword.buttons ?? [],
     pace,
   );
+  if (sent.aborted) return { outcome: "skipped_owner_active" };
   if (!sent.ok) {
     await escalate(conversationId);
     return { outcome: "escalated_send_failed", trigger, error: sent.error };
@@ -765,7 +811,7 @@ async function deliver(
     /** Las opciones tocables. `answer` queda como la versión escrita. */
     list?: { body: string; rows: WhatsAppListRow[] } | null;
   } = {},
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
   const { photo, shown, list } = extras;
   const reply = formatBotReply(answer);
 
@@ -786,6 +832,24 @@ async function deliver(
     }
   }
   if (!pace.skip) await sleep(getHumanPauseMs(reply));
+
+  // Volver a decidir DESPUÉS de la pausa. Esta es la corrección de fondo: el
+  // freno de 24 h se miraba una sola vez, al entrar, y entre esa mirada y este
+  // punto pasan hasta 7 segundos. Si Paula contestó en ese rato, su eco ya
+  // marcó `lastOwnerAt` y esta respuesta le caería encima —lo que pasó 11
+  // veces entre el 16 y el 21 de septiembre, p. ej. en b3ae6030, donde ella
+  // saludó y el bot saludó un segundo después.
+  //
+  // Al abortar NO se toca el estado: el eco acaba de dejar la conversación
+  // como ella la quiere y pelearse con él sería volver al problema anterior.
+  const frenada = await shouldStayQuiet(conversationId, pace);
+  if (frenada) {
+    console.info("[WHATSAPP_BOT] Se calla: la conversación cambió durante la pausa", {
+      conversationId,
+      motivo: frenada,
+    });
+    return { ok: true, aborted: true };
+  }
 
   const conBotones = buildReplyButtons(buttons);
   let salioConFoto = Boolean(photo);
