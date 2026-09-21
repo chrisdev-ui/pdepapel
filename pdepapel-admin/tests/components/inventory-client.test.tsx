@@ -97,7 +97,9 @@ describe("InventoryClient", () => {
     const user = userEvent.setup();
     render(<InventoryClient data={data} threshold={5} initialView="todo" />);
     const rowEl = screen.getByText("Regla Kawaii").closest("tr") as HTMLElement;
-    expect(within(rowEl).getByRole("link", { name: "Poner en oferta" })).toHaveAttribute("href", "/store-1/ofertas/nuevo");
+    // El enlace se lleva el producto ya elegido: antes aterrizaba en un
+    // formulario vacío donde había que volver a buscarlo a mano.
+    expect(within(rowEl).getByRole("link", { name: "Poner en oferta" })).toHaveAttribute("href", "/store-1/ofertas/nuevo?productos=p2");
     const selling = screen.getByText("Cuaderno Snoopy").closest("tr") as HTMLElement;
     // 14 en 30 días con 3 en stock: 4 semanas ≈ 13,1 unidades − 3 = 11 sugeridas.
     expect(within(selling).getByRole("link", { name: "Reponer" })).toHaveAttribute("href", "/store-1/aprovisionamiento/nuevo?proveedor=sup-1&producto=p1&cantidad=11");

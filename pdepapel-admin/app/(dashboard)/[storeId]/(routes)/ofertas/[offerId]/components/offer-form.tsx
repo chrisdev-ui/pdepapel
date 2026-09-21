@@ -69,12 +69,24 @@ const formSchema = z
 type OfferFormValues = z.infer<typeof formSchema>;
 type ScopeTab = "productIds" | "categoryIds" | "productGroupIds";
 
-/** Datos con los que arranca una oferta nueva creada con «Duplicar». */
+/** Datos con los que arranca una oferta nueva: «Duplicar» o productos preelegidos. */
 export interface OfferSeed {
+  /**
+   * De dónde viene la semilla. «Duplicar» trae una oferta entera —nombre,
+   * descuento y alcance— y la pantalla lo dice en el título; `?productos=`
+   * solo trae qué productos, y es una oferta nueva de verdad, no una copia.
+   */
+  origin: "duplicate" | "preselection";
   name: string;
   label: string | null;
-  type: DiscountType;
-  amount: number;
+  /**
+   * Opcionales porque hay dos semillas distintas. «Duplicar» copia el descuento
+   * de la oferta de origen; la que llega de `?productos=` solo trae el alcance
+   * —qué productos— y deja que Paula decida el descuento, así que `defaultValues`
+   * cae en porcentaje y monto vacío, que es lo que ya hacía un formulario nuevo.
+   */
+  type?: DiscountType;
+  amount?: number;
   productIds: string[];
   categoryIds: string[];
   productGroupIds: string[];
@@ -282,7 +294,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker, seed 
       {leaveDialog}
       <AlertModal isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={onDelete} loading={loading} title={OFFER_DELETE_COPY.title(initialData?.name ?? "")} description={OFFER_DELETE_COPY.description} />
       <FormPageHeader
-        title={initialData ? (canWrite ? "Editar oferta" : "Ver oferta") : seed ? "Nueva oferta (copia)" : "Nueva oferta"}
+        title={initialData ? (canWrite ? "Editar oferta" : "Ver oferta") : seed?.origin === "duplicate" ? "Nueva oferta (copia)" : "Nueva oferta"}
         badge={status && <TintBadge label={PROMOTION_STATUS[status].label} tone={PROMOTION_STATUS[status].tone} />}
         summary={
           initialData

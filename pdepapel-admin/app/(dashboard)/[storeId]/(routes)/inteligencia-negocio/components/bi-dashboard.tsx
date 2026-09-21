@@ -18,6 +18,10 @@ import { BiRiskDrilldown } from "@/components/bi/bi-risk-drilldown";
 import { SectionCard } from "@/components/ui/section-card";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { getColombiaDate } from "@/lib/date-utils";
+import {
+  OFFER_PRESELECTION_LIMIT,
+  buildOfferPreselectionHref,
+} from "@/lib/offer-preselection";
 import { currencyFormatter } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -221,12 +225,28 @@ export async function BiDashboard({
           description="Llevan más de 60 días sin venderse. Abre el que quieras para bajarle el precio, ponerlo en oferta o archivarlo."
           tone={deadInventory.length > 0 ? "care" : "default"}
           action={
-            <Link
-              href={`/${storeId}/promociones`}
-              className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
-            >
-              Crear una oferta
-            </Link>
+            deadInventory.length > 0 ? (
+              /*
+                El enlace se lleva los productos ya elegidos. Recorta a
+                `OFFER_PRESELECTION_LIMIT` para que la dirección no se pase de
+                largo, y cuando recorta lo dice: `getDeadInventory` ordena por
+                plata inmovilizada, así que los que entran son los que más
+                pesan, no los que llevan más tiempo quietos.
+              */
+              <Link
+                href={buildOfferPreselectionHref(
+                  storeId,
+                  deadInventory.map((product: any) => product.id),
+                )}
+                className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                {deadInventory.length > OFFER_PRESELECTION_LIMIT
+                  ? `Crear oferta con los ${OFFER_PRESELECTION_LIMIT} de más plata quieta`
+                  : deadInventory.length === 1
+                    ? "Crear oferta con este producto"
+                    : `Crear oferta con los ${deadInventory.length}`}
+              </Link>
+            ) : undefined
           }
         >
           {deadInventory.length === 0 ? (

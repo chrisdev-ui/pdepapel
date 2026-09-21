@@ -112,9 +112,19 @@ describe("OfferForm", () => {
     expect(mocks.patch).not.toHaveBeenCalled();
   });
 
+  it("una semilla de productos preelegidos no se anuncia como copia", () => {
+    // `?productos=` trae el alcance y nada más: nombre vacío, descuento por
+    // decidir y el título de una oferta nueva, no de una copia.
+    render(<OfferForm initialData={null} picker={picker} seed={{ origin: "preselection", name: "", label: null, productIds: ["p1"], categoryIds: [], productGroupIds: [] }} />);
+    expect(screen.getByRole("heading", { name: "Nueva oferta" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Nueva oferta (copia)" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quitar Termo lila" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("10")).toHaveValue(null);
+  });
+
   it("starts a duplicate with the source scope and creates a new offer", async () => {
     const user = userEvent.setup();
-    render(<OfferForm initialData={null} picker={picker} seed={{ name: "Hasta agotar (copia)", label: "ÚLTIMAS", type: "FIXED", amount: 9000, productIds: ["p1"], categoryIds: [], productGroupIds: [] }} />);
+    render(<OfferForm initialData={null} picker={picker} seed={{ origin: "duplicate", name: "Hasta agotar (copia)", label: "ÚLTIMAS", type: "FIXED", amount: 9000, productIds: ["p1"], categoryIds: [], productGroupIds: [] }} />);
     expect(screen.getByRole("heading", { name: "Nueva oferta (copia)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Quitar Termo lila" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("Hasta agotar (copia)")).toBeInTheDocument();

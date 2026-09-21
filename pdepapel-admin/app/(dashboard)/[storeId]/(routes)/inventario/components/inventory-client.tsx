@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MetricCard } from "@/components/ui/metric-card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TintBadge } from "@/components/ui/tint-badge";
+import { buildOfferPreselectionHref } from "@/lib/offer-preselection";
 import { Models } from "@/constants";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { INVENTORY_VIEWS, inventoryMatchesView, inventoryRowValue, normalizeInventoryView, summarizeInventory, type InventoryView } from "@/lib/inventory-views";
@@ -154,7 +155,7 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
       cell: ({ row }) => (
         <div className="flex justify-end gap-1" data-no-row-click>
           {row.original.signal.dormant ? (
-            <Button asChild variant="ghost" size="sm"><Link href={`/${storeId}/ofertas/nuevo`}>Poner en oferta</Link></Button>
+            <Button asChild variant="ghost" size="sm"><Link href={buildOfferPreselectionHref(storeId, [row.original.id])}>Poner en oferta</Link></Button>
           ) : row.original.isKit ? (
             <Button asChild variant="ghost" size="sm" title="Un kit no se compra: se reponen sus componentes"><Link href={`/${storeId}/productos/${row.original.id}`}>Ver componentes</Link></Button>
           ) : (
