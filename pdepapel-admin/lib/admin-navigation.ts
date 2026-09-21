@@ -397,7 +397,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Etiqueta en español para un segmento de URL; los ids se leen como “Detalle”. */
 export function segmentLabel(segment: string): string {
   if (SEGMENT_LABELS[segment]) return SEGMENT_LABELS[segment];
-  // Ids: UUID, ids largos (Clerk, cuid) y teléfonos normalizados (página de cliente).
+  // Ids: UUID, ids largos (Clerk, cuid, y la huella de 24 hex de la ficha de
+  // un cliente) y los numéricos sueltos. La miga nunca debe pintar el id en
+  // crudo: antes lo hacía con el teléfono del cliente, que iba en la URL.
   if (UUID.test(segment) || /^[0-9a-z]{20,}$/i.test(segment) || /^\d{7,}$/.test(segment)) return "Detalle";
   return segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ");
 }

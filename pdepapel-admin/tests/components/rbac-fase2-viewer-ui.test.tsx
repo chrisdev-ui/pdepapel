@@ -100,6 +100,7 @@ describe("Clientes: el agregado no identifica a nadie", () => {
       { city: "Bogotá", customers: 7 },
       { city: "Medellín", customers: 5 },
     ],
+    truncated: false,
   };
 
   it("enseña cuántos hay y de dónde compran", () => {
@@ -117,5 +118,12 @@ describe("Clientes: el agregado no identifica a nadie", () => {
   it("no hay teléfonos ni nombres de personas en el agregado", () => {
     const { container } = asViewer(<CustomerOverviewPanel overview={overview} />);
     expect(container.textContent).not.toMatch(/\d{3}\s?\d{3}\s?\d{4}/);
+  });
+
+  it("calla el aviso del tope mientras no muerda, y lo dice cuando muerde", () => {
+    const { container } = asViewer(<CustomerOverviewPanel overview={overview} />);
+    expect(container.textContent).not.toMatch(/pedidos más recientes/i);
+    asViewer(<CustomerOverviewPanel overview={{ ...overview, truncated: true }} />);
+    expect(screen.getAllByText(/pedidos más recientes/i).length).toBeGreaterThan(0);
   });
 });

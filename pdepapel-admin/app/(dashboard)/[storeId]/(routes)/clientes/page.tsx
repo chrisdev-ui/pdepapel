@@ -9,8 +9,13 @@ import { cn } from "@/lib/utils";
 import { ReviewsPanel } from "../resenas/components/reviews-panel";
 import { getReviews } from "../resenas/server/get-reviews";
 import CustomerClient from "./components/client";
+import { GroupingNote, TruncationNote } from "./components/customer-notes";
 import { CustomerOverviewPanel } from "./components/customer-overview-panel";
-import { getCustomerOverview, getCustomers, toCustomerRows } from "./server/get-customers";
+import {
+  getCustomerOverview,
+  getCustomers,
+  toCustomerRows,
+} from "./server/get-customers";
 
 export const revalidate = 0;
 
@@ -30,10 +35,17 @@ interface CustomerPageProps {
   searchParams: { tab?: string };
 }
 
-export default async function CustomerPage({ params, searchParams }: CustomerPageProps) {
+export default async function CustomerPage({
+  params,
+  searchParams,
+}: CustomerPageProps) {
   const tab: Tab = searchParams.tab === "resenas" ? "resenas" : "clientes";
-  const hrefFor = (id: Tab) => `/${params.storeId}/clientes${id === "clientes" ? "" : `?tab=${id}`}`;
-  const store = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { name: true } });
+  const hrefFor = (id: Tab) =>
+    `/${params.storeId}/clientes${id === "clientes" ? "" : `?tab=${id}`}`;
+  const store = await prismadb.store.findUnique({
+    where: { id: params.storeId },
+    select: { name: true },
+  });
   // La lista con nombre y teléfono es de la dueña; la cuenta de solo lectura
   // ve el agregado. Lo decide el servidor, no el navegador.
   const access = await getStoreAccess(params.storeId);
@@ -42,12 +54,19 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-primary">Clientes</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-primary">
+          Clientes
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Quién compra, quién repite y a quién vale la pena escribirle. Cada persona se arma con sus pedidos por teléfono.
+          Quién compra, quién repite y a quién vale la pena escribirle. Cada
+          persona se arma con sus pedidos por teléfono.
         </p>
       </div>
-      <nav role="tablist" aria-label="Secciones de clientes" className="flex max-w-full gap-1 overflow-x-auto self-start rounded-full border bg-white p-1">
+      <nav
+        role="tablist"
+        aria-label="Secciones de clientes"
+        className="flex max-w-full gap-1 self-start overflow-x-auto rounded-full border bg-white p-1"
+      >
         {TABS.map((item) => (
           <Link
             key={item.id}
@@ -56,26 +75,51 @@ export default async function CustomerPage({ params, searchParams }: CustomerPag
             href={hrefFor(item.id)}
             className={cn(
               "flex h-9 shrink-0 items-center rounded-full px-3.5 text-sm font-semibold transition-colors",
-              item.id === tab ? "bg-primary text-primary-foreground" : "text-primary hover:bg-accent",
+              item.id === tab
+                ? "bg-primary text-primary-foreground"
+                : "text-primary hover:bg-accent",
             )}
           >
             {item.label}
           </Link>
         ))}
       </nav>
+      {tab === "clientes" && <GroupingNote />}
       {tab === "clientes" ? (
         isViewer ? (
-          <CustomerOverviewPanel overview={await getCustomerOverview(params.storeId)} />
+          <CustomerOverviewPanel
+            overview={await getCustomerOverview(params.storeId)}
+          />
         ) : (
-          <CustomerClient
-            data={toCustomerRows(await getCustomers(params.storeId))}
+          <CustomerList
+            storeId={params.storeId}
             storeName={store?.name ?? "P de Papel"}
-            storeUrl={env.FRONTEND_STORE_URL}
           />
         )
       ) : (
         <ReviewsPanel data={await getReviews(params.storeId)} />
       )}
     </div>
+  );
+}
+
+/** La lista de la dueña, con el aviso del tope cuando el tope muerde. */
+async function CustomerList({
+  storeId,
+  storeName,
+}: {
+  storeId: string;
+  storeName: string;
+}) {
+  const { records, truncated } = await getCustomers(storeId);
+  return (
+    <>
+      {truncated && <TruncationNote />}
+      <CustomerClient
+        data={toCustomerRows(records)}
+        storeName={storeName}
+        storeUrl={env.FRONTEND_STORE_URL}
+      />
+    </>
   );
 }

@@ -188,6 +188,21 @@ Revisa «Con novedad» a diario.
 
 ## 9. Clientes y reseñas (`/clientes`)
 
+Aquí no hay una tabla de clientes: **cada persona se arma agrupando los pedidos
+que comparten el mismo teléfono**, y la pantalla lo dice. La consecuencia hay
+que tenerla presente al leer las cifras: dos personas que piden con el mismo
+número aparecen como un solo cliente, y una persona que pidió con dos números
+aparece dos veces. Por eso tampoco se puede crear, fusionar ni borrar a nadie
+desde aquí.
+
+La dirección de una ficha (`/clientes/<id>`) lleva una huella del teléfono, no
+el número: así no queda en el historial del navegador ni en los registros. Un
+enlace viejo que llevara el teléfono ya no abre nada.
+
+Se agrupan los 5.000 pedidos más recientes. Mientras no se llegue a ese tope no
+cambia nada; si se llegara, la pantalla avisa de que «gastado» y «compras» se
+quedan cortos.
+
 Segmentos: **VIP** (10 % que más gasta), **Recurrente** (2+ compras),
 **Ocasional** (1), **Inactivo** (>90 días sin comprar), **Sin compra**. La
 ficha muestra compras pagadas, gastado, unidades, última compra, pedidos y lo
