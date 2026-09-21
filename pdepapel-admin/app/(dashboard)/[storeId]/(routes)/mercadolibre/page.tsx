@@ -1,11 +1,10 @@
-import { auth } from "@clerk/nextjs/server";
 import { MarketplaceProvider } from "@prisma/client";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { getMercadoLibreConfigurationStatus } from "@/lib/mercadolibre/config";
 import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
 import prismadb from "@/lib/prismadb";
+import { requireStoreOwner } from "@/lib/store-access";
 
 import MercadoLibreClient from "./components/client";
 
@@ -22,8 +21,11 @@ export default async function MercadoLibrePage({
 }: {
   params: { storeId: string };
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect("/iniciar-sesion");
+  // Solo la dueña. Antes esto comprobaba únicamente que hubiera sesión, así
+  // que una cuenta de solo lectura entraba escribiendo la dirección aunque el
+  // menú escondiera la entrada: esconder no es cerrar. El guardia va ANTES de
+  // cualquier consulta, para que una sesión sin permiso no dispare ni una.
+  await requireStoreOwner(params.storeId);
 
   const connection = await prismadb.marketplaceConnection.findUnique({
     where: {

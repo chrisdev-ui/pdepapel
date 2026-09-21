@@ -1,4 +1,4 @@
-import { requireStoreRead } from "@/lib/store-access";
+import { requireStoreOwner } from "@/lib/store-access";
 import {
   MarketplaceConnectionStatus,
   MarketplaceProvider,
@@ -15,7 +15,11 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    await requireStoreRead(params.storeId);
+    // Solo la dueña: esto devuelve gasto, presupuesto y retorno de la
+    // publicidad, y no lleva depurador. Cerrar la página no bastaba —los datos
+    // los pide el navegador a ESTA ruta, que es otra puerta— así que una
+    // cuenta de solo lectura podía leerlos aunque la pantalla la rechazara.
+    await requireStoreOwner(params.storeId);
 
     const connection = await prismadb.marketplaceConnection.findUnique({
       where: {
