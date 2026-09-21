@@ -10,3 +10,4 @@
 2026-09-21T00:36:05.561Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "aplicar migración de cápsulas y escalera de precio"
 2026-09-21T07:22:28.017Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=error | exit=1 | rows=? | "aplicar migración de BSUID en Conversation"
 2026-09-21T07:25:25.338Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "terminar migración de BSUID en Conversation (sentencias 2 a 4)"
+2026-09-21T07:57:13.525Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/backfill-bsuid-conversations.ts@2e7eacec622a31a2 | estado=ok | exit=0 | rows=? | "rescatar 147 mensajes de WhatsApp perdidos por BSUID"
