@@ -1,4 +1,7 @@
 import prismadb from "@/lib/prismadb";
+import { salesWatermark } from "@/lib/sales-watermark";
+import { shortMemo } from "@/lib/short-memo";
+import { requireStoreRead } from "@/lib/store-access";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, startOfYear } from "date-fns";
 import {
@@ -6,7 +9,17 @@ import {
   getMarketplaceNetRevenue,
 } from "@/lib/mercadolibre/reporting";
 
+/** Ventas del año para las analíticas de inicio; misma regla que el gráfico. */
 export const getSalesCount = async (storeId: string, year: number) => {
+  await requireStoreRead(storeId);
+  return shortMemo({
+    key: `conteo-ventas:${storeId}:${year}`,
+    watermark: () => salesWatermark(storeId),
+    build: () => buildSalesCount(storeId, year),
+  });
+};
+
+const buildSalesCount = async (storeId: string, year: number) => {
   const yearDate = new Date(year, 0, 1);
   const firstDayOfYear = startOfYear(yearDate);
   const lastDayOfYear = endOfYear(yearDate);

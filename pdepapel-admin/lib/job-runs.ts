@@ -1,4 +1,6 @@
 import prismadb from "@/lib/prismadb";
+import { shortMemo } from "@/lib/short-memo";
+import { requireStoreRead } from "@/lib/store-access";
 
 /**
  * Última corrida de cada tarea de fondo. Una fila por (nombre, tienda) que se
@@ -161,9 +163,29 @@ export function buildSystemsStatus(
   });
 }
 
+/**
+ * El estado de los trabajos automáticos que enseña Inicio.
+ *
+ * Se reutiliza durante un minuto **sin marca de agua**, y es el único sitio
+ * donde eso es correcto: son tareas que corren una vez al día, así que un
+ * minuto de retraso no le miente a nadie. Con un `now` explícito (pruebas) no
+ * se memoriza, porque el estado depende de él.
+ */
 export async function getSystemsStatus(
   storeId: string,
-  now = new Date(),
+  now?: Date,
+): Promise<SystemStatusRow[]> {
+  await requireStoreRead(storeId);
+  if (now) return loadSystemsStatus(storeId, now);
+  return shortMemo({
+    key: `sistemas:${storeId}`,
+    build: () => loadSystemsStatus(storeId, new Date()),
+  });
+}
+
+async function loadSystemsStatus(
+  storeId: string,
+  now: Date,
 ): Promise<SystemStatusRow[]> {
   const runs = await prismadb.jobRun
     .findMany({

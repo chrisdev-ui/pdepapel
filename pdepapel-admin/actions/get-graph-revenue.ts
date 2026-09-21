@@ -1,4 +1,7 @@
 import prismadb from "@/lib/prismadb";
+import { salesWatermark } from "@/lib/sales-watermark";
+import { shortMemo } from "@/lib/short-memo";
+import { requireStoreRead } from "@/lib/store-access";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, getMonth, startOfYear } from "date-fns";
 import {
@@ -16,7 +19,29 @@ interface GraphData {
   marketplaceRevenue: number;
 }
 
+/**
+ * El gráfico de ventas del año de la pantalla de inicio.
+ *
+ * Abierto a una cuenta de solo lectura a propósito: son ventas, que es lo que
+ * la agencia necesita ver. La guardia va aquí, en el punto de la consulta, y
+ * no solo en la pantalla.
+ *
+ * Se reutiliza mientras las ventas no cambien: recorre el año entero y la
+ * pantalla se abre en cada inicio de sesión.
+ */
 export const getGraphRevenue = async (
+  storeId: string,
+  year: number,
+): Promise<GraphData[]> => {
+  await requireStoreRead(storeId);
+  return shortMemo({
+    key: `grafico-ventas:${storeId}:${year}`,
+    watermark: () => salesWatermark(storeId),
+    build: () => buildGraphRevenue(storeId, year),
+  });
+};
+
+const buildGraphRevenue = async (
   storeId: string,
   year: number,
 ): Promise<GraphData[]> => {
