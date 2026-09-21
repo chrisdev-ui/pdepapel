@@ -2,6 +2,7 @@ import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import {
   parseCartMetadata,
+  parseTapMetadata,
   resolveCart,
   type ConversationDetail,
 } from "@/lib/conversations";
@@ -64,9 +65,10 @@ export async function getConversation(
   const { messages, ...fields } = conversation;
   return {
     ...fields,
-    messages: messages.map(({ metadata: _metadata, ...message }, index) => ({
+    messages: messages.map(({ metadata, ...message }, index) => ({
       ...message,
       cart: carts[index] ? resolveCart(carts[index]!, products) : null,
+      tappedOptionId: parseTapMetadata(metadata),
     })),
   };
 }

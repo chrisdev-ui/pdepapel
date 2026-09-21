@@ -643,8 +643,19 @@ export async function fileInboundMessage(
     mediaType: message.mediaType,
     status: ConversationMessageStatus.RECEIVED,
     rawEventId: eventId,
-    ...(message.metadata
-      ? { metadata: message.metadata as Prisma.InputJsonValue }
+    // El toque se guarda junto al carrito, no en vez de él: un mensaje puede
+    // traer las dos cosas. Sin esto el panel no puede distinguir un botón
+    // tocado de un texto escrito, porque Meta manda los dos con el mismo
+    // cuerpo.
+    ...(message.metadata || message.interactiveReplyId
+      ? {
+          metadata: {
+            ...(message.metadata ?? {}),
+            ...(message.interactiveReplyId
+              ? { tap: { id: message.interactiveReplyId } }
+              : {}),
+          } as Prisma.InputJsonValue,
+        }
       : {}),
     ...(message.sentAt ? { createdAt: message.sentAt } : {}),
   };

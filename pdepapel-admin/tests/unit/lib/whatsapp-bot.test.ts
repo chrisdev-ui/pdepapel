@@ -486,6 +486,42 @@ describe("runWhatsAppBot", () => {
     });
   });
 
+  describe("si escribe a mano lo que dice el botón", () => {
+    it("se le contesta como si lo hubiera tocado, no «esa no me la sé»", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: null,
+      });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: TALK_TO_OWNER_BUTTON_TITLE }),
+      ).resolves.toEqual({ outcome: "escalated_owner_requested" });
+
+      expect(mocks.send.mock.calls[0][1]).toBe(TALK_TO_OWNER_ACKNOWLEDGEMENT);
+      expect(mocks.send.mock.calls[0][1]).not.toBe(NO_MATCH_ACKNOWLEDGEMENT);
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
+
+    it("da igual cómo lo escriba de mayúsculas o tildes", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: null,
+      });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "  HABLAR CON PAULA  " }),
+      ).resolves.toEqual({ outcome: "escalated_owner_requested" });
+      expect(mocks.send.mock.calls[0][1]).toBe(TALK_TO_OWNER_ACKNOWLEDGEMENT);
+    });
+  });
+
   describe("datos del negocio", () => {
     const aprobados: ResolvedStoreSettings = ajustesBase;
     const preguntar = (body: string, settings = aprobados) =>

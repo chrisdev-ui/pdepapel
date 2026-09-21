@@ -723,6 +723,26 @@ export async function runWhatsAppBot(input: {
     }
   }
 
+  // 6 bis. Escribió a mano lo que dice el botón. Hoy no pasa —los 23 «Hablar
+  //    con Paula» de septiembre fueron toques— pero si pasara caería en el
+  //    paso 7 y se le contestaría «Esa no me la sé» a alguien que está pidiendo
+  //    una persona, que es lo contrario de lo que necesita oír. Va después de
+  //    las palabras clave para que una respuesta de Paula siga mandando.
+  if (normalizeBotText(input.body) === normalizeBotText(TALK_TO_OWNER_BUTTON_TITLE)) {
+    const sent = await deliver(
+      conversation.id,
+      input.recipient,
+      TALK_TO_OWNER_ACKNOWLEDGEMENT,
+      [],
+      pacing(input),
+    );
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    await escalate(conversation.id);
+    return sent.ok
+      ? { outcome: "escalated_owner_requested" }
+      : { outcome: "escalated_owner_requested", error: sent.error };
+  }
+
   // 7. Nada encajó: no se inventa una respuesta, se le pasa a Paula.
   //
   //    El orden importa: se marca primero. La pausa humana de `deliver` dura

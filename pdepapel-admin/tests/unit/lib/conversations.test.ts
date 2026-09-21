@@ -4,6 +4,7 @@ import {
   CONVERSATION_STATUS_LABELS,
   describeMedia,
   parseCartMetadata,
+  parseTapMetadata,
   previewMessage,
   resolveCart,
 } from "@/lib/conversations";
@@ -107,5 +108,30 @@ describe("labels", () => {
     expect(describeMedia("audio")).toBe("Nota de voz");
     expect(describeMedia("algo-nuevo")).toBe("algo-nuevo");
     expect(describeMedia(null)).toBeNull();
+  });
+});
+
+describe("el toque guardado en el mensaje", () => {
+  it("distingue un botón tocado de un texto escrito", () => {
+    expect(parseTapMetadata({ tap: { id: "owner" } })).toBe("owner");
+    expect(parseTapMetadata({ tap: { id: "pay:nequi" } })).toBe("pay:nequi");
+    // Un texto escrito no trae nada: es justo el caso que no se distinguía.
+    expect(parseTapMetadata(null)).toBeNull();
+    expect(parseTapMetadata({})).toBeNull();
+  });
+
+  it("convive con el carrito en el mismo mensaje", () => {
+    const metadata = {
+      tap: { id: "p:producto-1" },
+      order: { items: [{ sku: "SKU-1", quantity: 2 }] },
+    };
+    expect(parseTapMetadata(metadata)).toBe("p:producto-1");
+    expect(parseCartMetadata(metadata)).toHaveLength(1);
+  });
+
+  it("no se fía de una forma rara", () => {
+    expect(parseTapMetadata({ tap: { id: "" } })).toBeNull();
+    expect(parseTapMetadata({ tap: "owner" })).toBeNull();
+    expect(parseTapMetadata("owner")).toBeNull();
   });
 });

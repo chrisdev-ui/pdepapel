@@ -45,18 +45,79 @@ export function normalizeBotText(value: string): string {
     .trim();
 }
 
-/** Primera entrada cuyo trigger aparezca en el mensaje; `null` si ninguna. */
+/**
+ * Parte el texto en palabras. Separa por todo lo que no sea letra ni número,
+ * así que la puntuación y los emoji no pegan palabras entre sí.
+ *
+ * La clase va escrita a mano en vez de con `\p{L}` porque el `target` de este
+ * proyecto no admite esa forma; da igual, porque aquí el texto ya pasó por
+ * `normalizeBotText`, que quita las tildes y deja letras sin marcas.
+ */
+function tokenize(value: string): string[] {
+  return value.split(/[^a-z0-9ñ]+/i).filter(Boolean);
+}
+
+/**
+ * Aplana la vocal estirada del chat: «hoola», «holaaa» y «siii» son «hola» y
+ * «si».
+ *
+ * Solo vocales. En español doblar una consonante cambia la palabra —«calle» no
+ * es «cale», «carro» no es «caro»— y aplanarlas inventaría coincidencias.
+ * Doblar una vocal, en cambio, casi nunca es ortografía: es alguien alargando
+ * el saludo.
+ */
+function collapseStretchedVowels(word: string): string {
+  return word.replace(/([aeiou])\1+/g, "$1");
+}
+
+function comparable(value: string): string[] {
+  return tokenize(value).map(collapseStretchedVowels);
+}
+
+/** ¿Están estas palabras, seguidas y enteras, dentro de aquellas? */
+function containsPhrase(haystack: string[], needle: string[]): boolean {
+  if (needle.length === 0 || needle.length > haystack.length) return false;
+  for (let start = 0; start <= haystack.length - needle.length; start += 1) {
+    let todas = true;
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      if (haystack[start + offset] !== needle[offset]) {
+        todas = false;
+        break;
+      }
+    }
+    if (todas) return true;
+  }
+  return false;
+}
+
+/**
+ * Primera entrada cuyo disparador aparezca en el mensaje, **por palabras
+ * enteras**; `null` si ninguna.
+ *
+ * Antes esto era un `includes` sobre la cadena entera, y en una papelería eso
+ * es una trampa: el disparador «ola» del saludo vive dentro de «escolares» y
+ * «oli» dentro de «bolígrafos», así que «¿tienen útiles escolares?» contestaba
+ * «¡Hola! 💛 Qué gusto que escribas…» en vez de buscar el producto. El saludo
+ * se prueba de último (`sortOrder` 100), pero igual gana al clasificador de
+ * productos, que va después en `runWhatsAppBot`.
+ *
+ * Un disparador de varias palabras —«a que hora», «hoja oficio»— sigue valiendo:
+ * tiene que aparecer seguido y entero.
+ */
 export function matchWhatsAppKeyword(
   body: string,
   keywords: WhatsAppBotKeyword[],
 ): { keyword: WhatsAppBotKeyword; trigger: string } | null {
-  const normalized = normalizeBotText(body);
-  if (!normalized) return null;
+  const palabras = comparable(normalizeBotText(body));
+  if (palabras.length === 0) return null;
 
   for (const keyword of keywords) {
     for (const trigger of keyword.triggers) {
       const needle = normalizeBotText(trigger);
-      if (needle && normalized.includes(needle)) return { keyword, trigger: needle };
+      if (!needle) continue;
+      if (containsPhrase(palabras, comparable(needle))) {
+        return { keyword, trigger: needle };
+      }
     }
   }
   return null;

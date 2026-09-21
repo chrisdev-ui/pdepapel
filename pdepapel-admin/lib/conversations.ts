@@ -77,6 +77,13 @@ const messageMetadataSchema = z.object({
       items: z.array(cartItemSchema).min(1),
     })
     .optional(),
+  /**
+   * El botón o la fila que tocó la clienta. Meta manda el cuerpo del mensaje
+   * igual al título del botón, así que sin esto un toque y un texto escrito se
+   * ven idénticos en el panel: los 23 «Hablar con Paula» de septiembre eran
+   * todos toques y parecían mecanografiados.
+   */
+  tap: z.object({ id: z.string().min(1) }).optional(),
 });
 
 export type ConversationCartItemInput = z.infer<typeof cartItemSchema>;
@@ -86,6 +93,16 @@ export function parseCartMetadata(metadata: unknown): ConversationCartItemInput[
   const parsed = messageMetadataSchema.safeParse(metadata);
   if (!parsed.success || !parsed.data.order) return null;
   return parsed.data.order.items;
+}
+
+/**
+ * ¿Este mensaje llegó por un toque? Devuelve el id de lo que se tocó.
+ * `owner` es el botón de escape; `r:`, `p:` y `pay:` llevan a dónde apuntaba.
+ */
+export function parseTapMetadata(metadata: unknown): string | null {
+  const parsed = messageMetadataSchema.safeParse(metadata);
+  if (!parsed.success || !parsed.data.tap) return null;
+  return parsed.data.tap.id;
 }
 
 /** Un renglón del carrito ya cruzado con el catálogo. */
@@ -203,6 +220,8 @@ export interface ConversationThreadMessage {
   mediaType: string | null;
   createdAt: Date;
   cart: ConversationCart | null;
+  /** Id de lo tocado, o `null` si lo escribió a mano. */
+  tappedOptionId: string | null;
 }
 
 export interface ConversationDetail {

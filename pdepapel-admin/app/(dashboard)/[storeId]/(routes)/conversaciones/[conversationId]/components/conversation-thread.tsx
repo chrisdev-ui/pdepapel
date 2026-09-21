@@ -7,7 +7,7 @@ import {
   describeBotPause,
   formatBotPause,
 } from "@/lib/conversation-bot-pause";
-import { AlertTriangle, ArrowLeft, Bot, BotOff, CheckCircle2, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, BotOff, CheckCircle2, MousePointerClick, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -135,6 +135,18 @@ function MessageBubble({ message }: { message: ConversationThreadMessage }) {
         >
           <span>{CONVERSATION_SENT_BY_LABELS[message.sentBy]}</span>
           <span>{dateFormatter.format(message.createdAt)}</span>
+          {/* Meta manda el toque de un botón con el mismo cuerpo que si lo
+              hubieran escrito. Sin decirlo aquí, «Hablar con Paula» parece
+              siempre tecleado —y en septiembre los 23 fueron toques. */}
+          {message.tappedOptionId ? (
+            <span
+              className="flex items-center gap-1 rounded-full bg-muted px-1.5 font-medium"
+              title="La clienta tocó esta opción; no la escribió."
+            >
+              <MousePointerClick className="h-3 w-3 shrink-0" aria-hidden="true" />
+              Tocó la opción
+            </span>
+          ) : null}
           {message.status === ConversationMessageStatus.FAILED ? (
             <span className="text-destructive">
               {CONVERSATION_MESSAGE_STATUS_LABELS[message.status]}
