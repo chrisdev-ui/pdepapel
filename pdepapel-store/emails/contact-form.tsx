@@ -19,6 +19,7 @@ import {
   cardText,
   container,
   divider,
+  fontFaceCss,
   footer,
   heading,
   kvKey,
@@ -54,7 +55,9 @@ export const ContactFormEmail = ({
 }: ContactFormEmailProps) => {
   return (
     <Html lang="es">
-      <Head />
+      <Head>
+        <style dangerouslySetInnerHTML={{ __html: fontFaceCss }} />
+      </Head>
       <Preview>{`Nueva solicitud de contacto: ${subject}`}</Preview>
       <Body style={main}>
         <Container style={container}>

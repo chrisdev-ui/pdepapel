@@ -42,6 +42,7 @@ import {
   container,
   cover,
   divider,
+  fontFaceCss,
   footer,
   footerLink,
   h1,
@@ -80,6 +81,25 @@ import {
   totalCell,
 } from "./theme";
 
+/* ----------------------------------------------------------- tipografías */
+
+/**
+ * El `@font-face` de Fredoka y Quicksand, dentro del `<head>`.
+ *
+ * Va con `dangerouslySetInnerHTML` porque React escapa las comillas simples de
+ * un texto normal —`'Fredoka'` saldría como `&#x27;Fredoka&#x27;`— y la regla
+ * quedaría inservible. Es la misma técnica que usa `@react-email/font` por
+ * dentro; se escribe a mano porque ese componente añade además una regla
+ * `* { font-family: … }` que borraría la diferencia entre la tipografía de los
+ * títulos y la del cuerpo.
+ *
+ * Lo que se inyecta es una constante de este repositorio: no entra nada de
+ * fuera, ni nada que venga de un pedido o de un cliente.
+ */
+export function EmailFonts() {
+  return <style dangerouslySetInnerHTML={{ __html: fontFaceCss }} />;
+}
+
 /* ------------------------------------------------------------- cáscaras */
 
 interface ShellProps {
@@ -95,7 +115,9 @@ interface ShellProps {
 export function Shell({ preview, tint = "pink", kicker, children }: ShellProps) {
   return (
     <Html lang="es">
-      <Head />
+      <Head>
+        <EmailFonts />
+      </Head>
       <Preview>{preview}</Preview>
       <Body style={main}>
         <Container style={container}>
@@ -133,7 +155,9 @@ export function PanelShell({
 }: PanelShellProps) {
   return (
     <Html lang="es">
-      <Head />
+      <Head>
+        <EmailFonts />
+      </Head>
       <Preview>{preview}</Preview>
       <Body style={main}>
         <Container style={container}>

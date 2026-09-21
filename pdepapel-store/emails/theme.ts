@@ -42,6 +42,32 @@ export const fonts = {
   body: "'Quicksand', 'Trebuchet MS', 'Segoe UI', Arial, sans-serif",
 } as const;
 
+/**
+ * Las tipografías viven en `public/fonts` de esta misma aplicación, servidas
+ * con `access-control-allow-origin: *`; sin esa cabecera un cliente de correo
+ * no puede cargar una fuente de otro dominio.
+ *
+ * Gemelo de `pdepapel-admin/emails/theme.ts`: si cambia allá, cambia aquí.
+ * Solo los pesos que usan los tokens. Instancias estáticas, no un archivo
+ * variable, para que la negrita se vea negrita también donde el motor no sepa
+ * instanciar el eje.
+ */
+export const FONT_BASE_URL = "https://papeleriapdepapel.com/fonts";
+
+const FONT_FACES = [
+  { family: "Fredoka", weight: 600, file: "fredoka-600.woff2" },
+  { family: "Quicksand", weight: 400, file: "quicksand-400.woff2" },
+  { family: "Quicksand", weight: 600, file: "quicksand-600.woff2" },
+  { family: "Quicksand", weight: 700, file: "quicksand-700.woff2" },
+] as const;
+
+/** Va en un `<style>` dentro del `<head>`: un `@font-face` no se puede poner
+ *  en línea sobre un elemento. Gmail lo borra y cae en Trebuchet MS. */
+export const fontFaceCss = FONT_FACES.map(
+  ({ family, weight, file }) =>
+    `@font-face{font-family:'${family}';font-style:normal;font-weight:${weight};font-display:swap;mso-font-alt:'Trebuchet MS';src:url(${FONT_BASE_URL}/${file}) format('woff2');}`,
+).join("");
+
 export const main = {
   backgroundColor: palette.page,
   color: palette.ink,

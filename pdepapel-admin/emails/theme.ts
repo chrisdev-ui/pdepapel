@@ -105,16 +105,58 @@ export const tints: Record<Tint, { base: string; pale: string; ink: string }> = 
 };
 
 /**
- * Fredoka y Quicksand son las mismas de `tailwind.config.ts`. Apple Mail y
- * iOS las descargan; Gmail web borra las tipografías web y cae en Trebuchet
- * MS, que es la cara redonda que está instalada en todas partes. Esa caída
- * está elegida a propósito: una serif caería en Times y no se parecería en
- * nada a la tienda.
+ * Fredoka y Quicksand son las mismas de `tailwind.config.ts`. Apple Mail, Mail
+ * de iOS, Outlook para Mac y Thunderbird las descargan con el `@font-face` de
+ * más abajo; Gmail (web y apps), Outlook de Windows y Yahoo borran las
+ * tipografías web y caen en Trebuchet MS, la cara redonda que está instalada
+ * en todas partes.
+ *
+ * Esa caída está elegida a propósito, y cubre la mayoría de los envíos: una
+ * serif caería en Times y no se parecería en nada a la tienda. Si el
+ * `@font-face` no llega, no se rompe nada: se ve como se veía antes.
  */
 export const fonts = {
   display: "'Fredoka', 'Trebuchet MS', 'Segoe UI', Arial, sans-serif",
   body: "'Quicksand', 'Trebuchet MS', 'Segoe UI', Arial, sans-serif",
 } as const;
+
+/**
+ * De dónde bajan las tipografías: `pdepapel-store/public/fonts`, el mismo
+ * sitio del que sale el logo del correo. La tienda las sirve con
+ * `access-control-allow-origin: *`; sin esa cabecera un cliente de correo no
+ * puede cargar una fuente de otro dominio y no se vería ninguna.
+ *
+ * Si se mueven, hay que cambiar esto **y** su gemelo en
+ * `pdepapel-store/emails/theme.ts`.
+ */
+export const FONT_BASE_URL = "https://papeleriapdepapel.com/fonts";
+
+/** Los pesos que de verdad usan los tokens de abajo, y nada más. */
+const FONT_FACES = [
+  { family: "Fredoka", weight: 600, file: "fredoka-600.woff2" },
+  { family: "Quicksand", weight: 400, file: "quicksand-400.woff2" },
+  { family: "Quicksand", weight: 600, file: "quicksand-600.woff2" },
+  { family: "Quicksand", weight: 700, file: "quicksand-700.woff2" },
+] as const;
+
+/**
+ * El bloque `@font-face`. Es lo único del diseño que no puede ir en línea: no
+ * existe un atributo `style` donde declarar una tipografía, así que va en un
+ * `<style>` dentro del `<head>`, que es el único sitio donde un cliente de
+ * correo lo lee.
+ *
+ * Son instancias **estáticas** por peso, no un archivo variable. Un variable
+ * declarado con tres pesos distintos se apoya en que el motor sepa instanciar
+ * el eje; un cliente que no lo haga pintaría la negrita igual que la redonda.
+ *
+ * `font-display: swap` para que el texto se lea de una con la tipografía de
+ * respaldo en vez de quedarse en blanco esperando la descarga, y
+ * `mso-font-alt` para decirle a Outlook a qué caer.
+ */
+export const fontFaceCss = FONT_FACES.map(
+  ({ family, weight, file }) =>
+    `@font-face{font-family:'${family}';font-style:normal;font-weight:${weight};font-display:swap;mso-font-alt:'Trebuchet MS';src:url(${FONT_BASE_URL}/${file}) format('woff2');}`,
+).join("");
 
 export const LOGO_URL =
   "https://papeleriapdepapel.com/images/text-below-transparent-bg.png";
