@@ -6,6 +6,10 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import {
+  OWNER_TAKEOVER_WINDOW_HOURS,
+  describeBotPause,
+} from "@/lib/conversation-bot-pause";
 import prismadb from "@/lib/prismadb";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
 import {
@@ -194,23 +198,17 @@ export function buildReplyButtons(
 }
 
 /**
- * Cuánto se aparta el bot después de que Paula escriba.
- *
- * Un día: cubre que ella conteste de noche y siga por la mañana. Pasado eso
- * el hilo se da por frío y el bot vuelve a atender, que es justo lo que el
- * parche del 2026-09-15 no hacía: callaba para siempre.
+ * Cuánto se aparta el bot después de que Paula escriba. Vive en un módulo
+ * neutro porque el panel necesita la misma cuenta para decirle a ella cuánto
+ * le queda al silencio, y no puede importar este archivo.
  */
-export const OWNER_TAKEOVER_WINDOW_HOURS = 24;
+export { OWNER_TAKEOVER_WINDOW_HOURS };
 
 export function isOwnerActive(
   lastOwnerAt: Date | null | undefined,
   now: Date,
 ): boolean {
-  if (!lastOwnerAt) return false;
-  return (
-    now.getTime() - lastOwnerAt.getTime() <
-    OWNER_TAKEOVER_WINDOW_HOURS * 60 * 60 * 1000
-  );
+  return describeBotPause(lastOwnerAt, now).paused;
 }
 
 /** Los ajustes; si la lectura falla el bot sigue por el camino de siempre. */

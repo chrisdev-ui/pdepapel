@@ -1,6 +1,8 @@
 "use client";
 
 import axios from "axios";
+
+import { canHandBackToBot } from "@/lib/conversation-bot-pause";
 import { Bot, CheckCircle2, MessageSquare, MoreHorizontal, RotateCcw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -57,6 +59,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     }
   };
 
+  const puedeDevolver = canHandBackToBot(data.lastOwnerAt);
+
   /** Le devuelve la conversación al bot. No le manda nada a la clienta. */
   const handBack = async () => {
     try {
@@ -94,8 +98,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         >
           <MessageSquare className="mr-2 h-4 w-4" /> Ver conversación
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={handBack}>
-          <Bot className="mr-2 h-4 w-4" /> Devolver al bot
+        {/* Sin freno puesto no hay nada que devolver: el botón se veía
+            encendido igual y no hacía nada. */}
+        <DropdownMenuItem onClick={handBack} disabled={!puedeDevolver}>
+          <Bot className="mr-2 h-4 w-4" />
+          {puedeDevolver ? "Devolver al bot" : "El bot ya contesta"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isResolved ? (

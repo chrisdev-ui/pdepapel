@@ -181,6 +181,11 @@ export interface ConversationRow {
   status: ConversationStatus;
   lastInboundAt: Date | null;
   lastOutboundAt: Date | null;
+  /**
+   * Última vez que Paula escribió desde su celular. Es lo que calla al bot 24 h;
+   * el panel lo necesita para poder decírselo a ella.
+   */
+  lastOwnerAt: Date | null;
   messageCount: number;
   /** Vista previa del último mensaje, ya legible (o el tipo de adjunto). */
   lastMessagePreview: string | null;
@@ -210,6 +215,11 @@ export interface ConversationDetail {
   status: ConversationStatus;
   lastInboundAt: Date | null;
   lastOutboundAt: Date | null;
+  /**
+   * Última vez que Paula escribió desde su celular. Es lo que calla al bot 24 h;
+   * el panel lo necesita para poder decírselo a ella.
+   */
+  lastOwnerAt: Date | null;
   orderId: string | null;
   createdAt: Date;
   messages: ConversationThreadMessage[];

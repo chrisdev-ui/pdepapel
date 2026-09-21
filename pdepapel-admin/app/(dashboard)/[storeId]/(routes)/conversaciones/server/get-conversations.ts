@@ -20,6 +20,7 @@ export async function getConversations(storeId: string): Promise<ConversationRow
       status: true,
       lastInboundAt: true,
       lastOutboundAt: true,
+      lastOwnerAt: true,
       orderId: true,
       _count: { select: { messages: true } },
       messages: {

@@ -31,6 +31,7 @@ export async function getConversation(
       status: true,
       lastInboundAt: true,
       lastOutboundAt: true,
+      lastOwnerAt: true,
       orderId: true,
       createdAt: true,
       messages: {

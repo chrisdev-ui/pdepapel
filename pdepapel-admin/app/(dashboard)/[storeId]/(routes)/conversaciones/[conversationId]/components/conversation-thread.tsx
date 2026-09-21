@@ -1,7 +1,13 @@
 "use client";
 
 import axios from "axios";
-import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
+
+import {
+  canHandBackToBot,
+  describeBotPause,
+  formatBotPause,
+} from "@/lib/conversation-bot-pause";
+import { AlertTriangle, ArrowLeft, Bot, BotOff, CheckCircle2, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -225,6 +231,9 @@ export function ConversationThread({
     }
   };
 
+  const puedeDevolver = canHandBackToBot(conversation.lastOwnerAt);
+  const pausaDelBot = formatBotPause(describeBotPause(conversation.lastOwnerAt));
+
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -236,6 +245,14 @@ export function ConversationThread({
           <Badge variant={isResolved ? "secondary" : "default"}>
             {CONVERSATION_STATUS_LABELS[conversation.status]}
           </Badge>
+          {/* Tras contestar Paula, el estado vuelve a «Abierta» pero el bot
+              sigue callado 24 h. Sin decirlo, ella no tenía cómo saberlo. */}
+          {pausaDelBot ? (
+            <span className="flex items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <BotOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {pausaDelBot}
+            </span>
+          ) : null}
           {conversation.orderId ? (
             <Button
               variant="outline"
@@ -249,7 +266,17 @@ export function ConversationThread({
               <Receipt className="mr-2 h-4 w-4" /> Crear pedido
             </Button>
           ) : null}
-          <Button variant="outline" size="sm" disabled={loading} onClick={handBack}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading || !puedeDevolver}
+            onClick={handBack}
+            title={
+              puedeDevolver
+                ? "Quita la pausa y deja que el bot vuelva a contestar."
+                : "El bot ya está contestando: no hay pausa que quitar."
+            }
+          >
             <Bot className="mr-2 h-4 w-4" /> Reanudar
           </Button>
           <Button

@@ -5,12 +5,16 @@ import { DataTableCellPhone } from "@/components/ui/data-table-cell-phone";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import {
+  describeBotPause,
+  formatBotPause,
+} from "@/lib/conversation-bot-pause";
+import {
   CONVERSATION_STATUS_LABELS,
   type ConversationRow,
 } from "@/lib/conversations";
 import { ConversationStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { ShoppingBag } from "lucide-react";
+import { BotOff, ShoppingBag } from "lucide-react";
 import { CellAction } from "./cell-action";
 
 export type ConversationColumn = ConversationRow;
@@ -75,11 +79,25 @@ export const columns: ColumnDef<ConversationColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Estado" />
     ),
-    cell: ({ row }) => (
-      <Badge variant={STATUS_VARIANT[row.original.status]}>
-        {CONVERSATION_STATUS_LABELS[row.original.status]}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      // «Abierta» no cuenta toda la verdad: tras contestar Paula, el estado
+      // vuelve a OPEN pero el bot sigue callado 24 h. Sin esto no había forma
+      // de saberlo desde el panel.
+      const pausa = formatBotPause(describeBotPause(row.original.lastOwnerAt));
+      return (
+        <div className="flex flex-col gap-1">
+          <Badge variant={STATUS_VARIANT[row.original.status]} className="w-fit">
+            {CONVERSATION_STATUS_LABELS[row.original.status]}
+          </Badge>
+          {pausa ? (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <BotOff className="h-3 w-3 shrink-0" aria-hidden="true" />
+              {pausa}
+            </span>
+          ) : null}
+        </div>
+      );
+    },
     filterFn: (row, id, value: string[]) => value.includes(row.getValue(id)),
   },
   {
