@@ -10,18 +10,67 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import { currencyFormatter } from "@/lib/utils";
 import axios from "axios";
-import { Copy, Send } from "lucide-react";
+import { ChevronRight, Copy, Loader2, Send } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
+type DrilldownType =
+  | "dead_stock"
+  | "stockout"
+  | "inactive"
+  | "vip"
+  | "top_products";
+
 interface BiRiskDrilldownProps {
-  type: "dead_stock" | "stockout" | "inactive" | "vip" | "top_products";
+  type: DrilldownType;
   count: number;
   data: any[];
 }
+
+const COPY: Record<
+  DrilldownType,
+  { title: string; description: string; action: string; empty: string }
+> = {
+  dead_stock: {
+    title: "Productos sin rotación",
+    description:
+      "Productos activos que llevan más de 60 días sin venderse. Ocupan espacio y tienen tu plata quieta.",
+    action: "Ver los que no rotan",
+    empty: "Ninguno lleva 60 días sin venderse. Todo está en movimiento.",
+  },
+  stockout: {
+    title: "Se van a agotar pronto",
+    description:
+      "Con el ritmo de venta de ahora, el stock alcanza para menos de 7 días.",
+    action: "Ver los que se agotan",
+    empty: "Ninguno se agota en la próxima semana.",
+  },
+  inactive: {
+    title: "Clientes que no compran hace 90 días",
+    description:
+      "Ya te compraron antes y llevan cerca de tres meses sin volver.",
+    action: "Ver los inactivos",
+    empty: "Nadie lleva 90 días sin volver.",
+  },
+  vip: {
+    title: "Tus mejores clientes",
+    description: "El grupo que más ha comprado, medido por el total gastado.",
+    action: "Ver los mejores clientes",
+    empty: "Todavía no hay suficientes compras para armar el grupo.",
+  },
+  top_products: {
+    title: "Los que más te dejan",
+    description:
+      "Ganancia real del período, ya descontadas comisiones y envío.",
+    action: "Ver el ranking completo",
+    empty: "Todavía no hay ventas con costo cargado en este período.",
+  },
+};
 
 export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
   type,
@@ -32,206 +81,236 @@ export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
   const params = useParams();
   const router = useRouter();
   const [isReactivating, setIsReactivating] = useState(false);
+  const [isConfirmingReactivation, setIsConfirmingReactivation] =
+    useState(false);
 
-  const isDanger = type === "dead_stock" || type === "stockout";
-
-  const getTitle = () => {
-    switch (type) {
-      case "dead_stock":
-        return "Inventario Muerto (Detalle)";
-      case "stockout":
-        return "Riesgo de Agotado (<7 días)";
-      case "inactive":
-        return "Clientes Inactivos (Elegibles para Reactivación)";
-      case "vip":
-        return "Clientes VIP (Top 10% Facturación)";
-      case "top_products":
-        return "Ranking de Productos Más Vendidos";
-      default:
-        return "Detalle";
-    }
-  };
-
-  const getDescription = () => {
-    switch (type) {
-      case "dead_stock":
-        return "Productos activos sin ventas en los últimos 60 días.";
-      case "stockout":
-        return "Productos con stock estimado para menos de 7 días.";
-      case "inactive":
-        return "Clientes con compras anteriores pero inactivos cerca de 90 días.";
-      case "vip":
-        return "Tus clientes más valiosos por volumen total comprado.";
-      case "top_products":
-        return "Productos con mayor cantidad de unidades vendidas en este período.";
-      default:
-        return "";
-    }
-  };
+  const storeId = String(params.storeId ?? "");
+  const copy = COPY[type];
+  const isProductList =
+    type === "dead_stock" || type === "stockout" || type === "top_products";
 
   const copyEmail = (email: string) => {
     navigator.clipboard.writeText(email);
-    toast({
-      description: "Correo copiado al portapapeles",
-    });
+    toast({ description: "Correo copiado al portapapeles" });
   };
+
+  const reactivate = async () => {
+    try {
+      setIsReactivating(true);
+      const res = await axios.post(`/api/${storeId}/customers/reactivation`);
+      const processed = res.data?.processed || 0;
+      toast({
+        title: "Campaña de reactivación",
+        description:
+          processed > 0
+            ? `Se enviaron correos a ${processed} cliente(s) exitosamente.`
+            : "Todos los clientes elegibles ya fueron contactados recientemente (protección anti-spam de 60 días).",
+      });
+      router.refresh();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Hubo un problema procesando las reactivaciones.",
+      });
+    } finally {
+      setIsReactivating(false);
+      setIsConfirmingReactivation(false);
+    }
+  };
+
+  const productHref = (item: any) =>
+    `/${storeId}/productos/${item.id ?? item.productId}`;
+
+  /*
+    «Ver 0» abría un diálogo vacío para decir que no hay nada. Cuando no hay
+    nada, la respuesta cabe en la propia fila y no hace falta abrir nada.
+  */
+  if (count === 0) {
+    return <TintBadge tone="mint" label="ninguno" />;
+  }
 
   return (
     <Dialog>
+      {/*
+        El disparador era un `<div>` con `cursor-pointer`: nada decía que se
+        pudiera pulsar, el tabulador se lo saltaba y el número medía 15 px.
+        Ahora es un botón de verdad, dice qué abre y alcanza los 44 px.
+      */}
       <DialogTrigger asChild>
-        <div
-          className={`cursor-pointer font-bold transition-all hover:underline hover:opacity-75 ${isDanger ? (type === "dead_stock" ? "text-red-500" : "text-orange-500") : type === "vip" ? "text-emerald-500" : "text-blue-500"}`}
+        <button
+          type="button"
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-bold text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {count}
-        </div>
+          Ver {count}
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">— {copy.title}</span>
+        </button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] sm:max-w-[600px]">
-        <DialogHeader className="flex flex-row items-start justify-between">
-          <div>
-            <DialogTitle>{getTitle()}</DialogTitle>
-            <DialogDescription>{getDescription()}</DialogDescription>
-          </div>
-          {type === "inactive" && data.length > 0 && (
-            <Button
-              size="sm"
-              disabled={isReactivating}
-              onClick={async () => {
-                try {
-                  setIsReactivating(true);
-                  const res = await axios.post(
-                    `/api/${params.storeId}/customers/reactivation`,
-                  );
-                  const processed = res.data?.processed || 0;
-                  toast({
-                    title: "Campaña de reactivación",
-                    description:
-                      processed > 0
-                        ? `Se enviaron correos a ${processed} cliente(s) exitosamente.`
-                        : "Todos los clientes elegibles ya fueron contactados recientemente (protección anti-spam de 60 días).",
-                  });
-                  router.refresh();
-                } catch (error) {
-                  toast({
-                    variant: "destructive",
-                    title: "Error",
-                    description:
-                      "Hubo un problema procesando las reactivaciones.",
-                  });
-                } finally {
-                  setIsReactivating(false);
-                }
-              }}
-              className="mr-6 mt-2 bg-emerald-600 hover:bg-emerald-700" // Added mr-6 to prevent overlapping with the "x" close button
-            >
-              <Send className="mr-2 h-4 w-4" />
-              {isReactivating ? "Enviando..." : "Reactivar a Todos"}
-            </Button>
-          )}
+
+      <DialogContent className="max-h-[85vh] sm:max-w-[620px]">
+        <DialogHeader>
+          <DialogTitle>{copy.title}</DialogTitle>
+          <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="h-[400px] w-full rounded-md border p-4">
-          <div className="space-y-4">
-            {data.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
-                No hay registros para mostrar en esta categoría.
-              </p>
-            ) : type === "top_products" ? (
-              // Top Products Ranking Drilldown
-              data.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between border-b pb-2 last:border-0"
+        {type === "inactive" && data.length > 0 && (
+          <div className="rounded-xl border bg-muted/40 p-3">
+            {/*
+              Este botón manda correos de verdad a clientes de verdad, y no se
+              puede deshacer. Antes salía de un solo clic, sin decir a cuántos.
+              Ahora el envío pasa por una confirmación que nombra la cifra.
+            */}
+            {isConfirmingReactivation ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-primary">
+                  Se enviará el correo de reactivación a{" "}
+                  <strong>{data.length} cliente(s)</strong> ahora mismo. No se
+                  puede deshacer. Los que ya recibieron uno en los últimos 60
+                  días quedan fuera automáticamente.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={reactivate}
+                    disabled={isReactivating}
+                  >
+                    {isReactivating ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    Sí, enviar a {data.length}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsConfirmingReactivation(false)}
+                    disabled={isReactivating}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Puedes escribirles a todos de una vez.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsConfirmingReactivation(true)}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 font-bold text-muted-foreground">
+                  <Send className="mr-2 h-4 w-4" />
+                  Enviar correo de reactivación…
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+          <div className="flex flex-col">
+            {data.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {copy.empty}
+              </p>
+            ) : isProductList ? (
+              data.map((item, index) => (
+                <Link
+                  key={item.id ?? item.productId ?? index}
+                  href={productHref(item)}
+                  className="flex items-center gap-3 border-b py-2.5 last:border-0 hover:bg-accent/50"
+                >
+                  {type === "top_products" && (
+                    <span className="w-4 shrink-0 text-xs font-bold text-muted-foreground">
                       {index + 1}
-                    </div>
-                    <div>
-                      <p className="max-w-[400px] text-sm font-medium">
-                        {item.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Margen de ganancia: {item.profitMarginPct.toFixed(1)}% (
-                        {item.totalQuantitySold} uds vivas)
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-right">
-                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-primary underline-offset-2 hover:underline">
+                      {item.name}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {type === "top_products"
+                        ? `${item.profitMarginPct.toFixed(1)} % de margen · ${item.totalQuantitySold} uds`
+                        : `${item.stock ?? item.currentStock} unidades en stock`}
+                    </span>
+                  </span>
+                  {type === "top_products" ? (
+                    <span className="shrink-0 text-sm font-bold text-primary tabular-nums">
                       {currencyFormatter(item.totalProfit)}
                     </span>
-                  </div>
-                </div>
-              ))
-            ) : type === "dead_stock" || type === "stockout" ? (
-              // Products DrilLdown
-              data.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between border-b pb-2 last:border-0"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Stock Actual: {item.stock ?? item.currentStock} unidades
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    {type === "dead_stock" ? (
-                      <span className="text-xs font-semibold text-red-500">
-                        {item.daysSinceLastSale !== null
-                          ? `${item.daysSinceLastSale}d estancado`
-                          : "Nunca vendido"}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-semibold text-orange-500">
-                        {item.daysUntilStockout === 0
-                          ? "Agotado"
-                          : `Quedan ${item.daysUntilStockout.toFixed(1)} días`}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                  ) : type === "dead_stock" ? (
+                    <TintBadge
+                      tone="pink"
+                      label={
+                        item.daysSinceLastSale !== null
+                          ? `${item.daysSinceLastSale} días quieto`
+                          : "nunca vendido"
+                      }
+                    />
+                  ) : (
+                    <TintBadge
+                      tone="cream"
+                      label={
+                        item.daysUntilStockout === 0
+                          ? "agotado"
+                          : `quedan ${item.daysUntilStockout.toFixed(1)} días`
+                      }
+                    />
+                  )}
+                  <ChevronRight
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </Link>
               ))
             ) : (
-              // Customers Drilldown (VIP / Inactive)
               data.map((item, index) => (
                 <div
-                  key={index}
-                  className="flex items-center justify-between border-b pb-2 last:border-0"
+                  key={item.email ?? index}
+                  className="flex items-center gap-3 border-b py-2.5 last:border-0"
                 >
-                  <div className="flex flex-col gap-1">
-                    <p className="text-sm font-medium">
-                      {item.email || "Cliente Anónimo"}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-primary">
+                      {item.email || "Cliente sin correo"}
                     </p>
-                    <div className="flex gap-2 text-xs text-muted-foreground">
-                      <span>{item.totalOrders} pedidos</span>
-                      <span>•</span>
-                      <span>
-                        {item.daysSinceLastPurchase}d desde última compra
-                      </span>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {item.totalOrders}{" "}
+                      {item.totalOrders === 1 ? "pedido" : "pedidos"} · última
+                      compra hace {item.daysSinceLastPurchase} días
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold">
-                      {currencyFormatter(item.totalSpent)}
-                    </span>
-                    {item.email && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => copyEmail(item.email)}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
+                  <span className="shrink-0 text-sm font-bold text-primary tabular-nums">
+                    {currencyFormatter(item.totalSpent)}
+                  </span>
+                  {item.email && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      aria-label={`Copiar el correo de ${item.email}`}
+                      onClick={() => copyEmail(item.email)}
+                    >
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  )}
                 </div>
               ))
             )}
           </div>
         </ScrollArea>
+
+        {!isProductList && (
+          <Link
+            href={`/${storeId}/clientes`}
+            className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+          >
+            Abrir Clientes
+          </Link>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -12,24 +12,18 @@ import {
   getProductProfitRanking,
 } from "@/actions/get-product-profitability";
 import { BiDailyChart } from "@/components/bi/bi-daily-chart";
-import { BiChannelBreakdown } from "./bi-channel-breakdown";
 import { BiKpiCards } from "@/components/bi/bi-kpi-cards";
 import { BiMonthPicker } from "@/components/bi/bi-month-picker";
 import { BiRiskDrilldown } from "@/components/bi/bi-risk-drilldown";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Heading } from "@/components/ui/heading";
-import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { SectionCard } from "@/components/ui/section-card";
+import { TintBadge } from "@/components/ui/tint-badge";
 import { getColombiaDate } from "@/lib/date-utils";
 import { currencyFormatter } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Info } from "lucide-react";
+import Link from "next/link";
+
+import { BiChannelBreakdown } from "./bi-channel-breakdown";
 
 interface BIDashboardPageProps {
   params: { storeId: string };
@@ -39,8 +33,7 @@ interface BIDashboardPageProps {
 export async function BiDashboard({
   params,
   searchParams,
-  embedded = false,
-}: BIDashboardPageProps & { embedded?: boolean }) {
+}: BIDashboardPageProps) {
   const storeId = params.storeId;
 
   // Use Colombia timezone to determine the current date — the server may
@@ -53,284 +46,223 @@ export async function BiDashboard({
     ? parseInt(searchParams.month) - 1
     : colombiaToday.getMonth();
   const now = new Date(requestedYear, requestedMonth, 1);
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
 
-  // 1. Financial Analytics
-  const momData = await getMonthOverMonthComparison(
-    storeId,
-    now.getFullYear(),
-    now.getMonth() + 1,
-  );
-  const dailyData = await getDailyFinancialBreakdown(
-    storeId,
-    now.getFullYear(),
-    now.getMonth() + 1,
-  );
+  /*
+    Las seis consultas iban una detrás de otra, cada una esperando a que
+    terminara la anterior: seis viajes en fila para datos que no dependen
+    entre sí. No hay motivo, y esta pestaña ya era la más lenta de las tres.
+  */
+  const [
+    momData,
+    dailyData,
+    topProducts,
+    deadInventory,
+    stockoutRisks,
+    customerSegments,
+    inactives,
+  ] = await Promise.all([
+    getMonthOverMonthComparison(storeId, year, month),
+    getDailyFinancialBreakdown(storeId, year, month),
+    getProductProfitRanking(storeId, year, month, 5),
+    getDeadInventory(storeId, 60),
+    getInventoryRisk(storeId),
+    getCustomerIntelligence(storeId),
+    getInactiveCustomersEligibleForReactivation(storeId, 90),
+  ]);
 
-  // 2. Product Capital Efficiency
-  const topProducts = await getProductProfitRanking(
-    storeId,
-    now.getFullYear(),
-    now.getMonth() + 1,
-    5,
+  const criticalStockouts = stockoutRisks.filter(
+    (risk: any) => risk.daysUntilStockout !== null && risk.daysUntilStockout < 7,
   );
-  const deadInventoryCount = await getDeadInventory(storeId, 60);
-
-  // 3. Smart Inventory Risk
-  const stockoutRisks = await getInventoryRisk(storeId);
-  const criticalStockoutsItems = stockoutRisks.filter(
-    (r: any) => r.daysUntilStockout !== null && r.daysUntilStockout < 7,
-  );
-  const criticalStockoutsCount = criticalStockoutsItems.length;
-
-  // 4. Customer Intelligence
-  const customerSegments = await getCustomerIntelligence(storeId);
-  const VIPItems = customerSegments.filter((c: any) => c.segment === "VIP");
-  const VIPcount = VIPItems.length;
-  const inactives = await getInactiveCustomersEligibleForReactivation(
-    storeId,
-    90,
+  const vipCustomers = customerSegments.filter(
+    (customer: any) => customer.segment === "VIP",
   );
 
   // Use the 15th of the month for display formatting to avoid timezone
   // boundary issues (midnight UTC on the 1st = previous month in UTC-5).
   const displayDate = new Date(requestedYear, requestedMonth, 15);
+  const periodLabel = format(displayDate, "MMMM 'de' yyyy", { locale: es });
+
+  const riesgos = [
+    {
+      key: "dead_stock" as const,
+      title: "Sin rotación hace 60 días",
+      note: "Ocupan espacio y tienen tu plata quieta",
+      data: deadInventory,
+    },
+    {
+      key: "stockout" as const,
+      title: "Se agotan en menos de 7 días",
+      note: "Pídelos antes de quedarte sin nada",
+      data: criticalStockouts,
+    },
+    {
+      key: "inactive" as const,
+      title: "Clientes que no compran hace 90 días",
+      note: "Se les puede escribir",
+      data: inactives,
+    },
+    {
+      key: "vip" as const,
+      title: "Tus mejores clientes",
+      note: "Los que más han comprado",
+      data: vipCustomers,
+    },
+  ];
 
   return (
-    <div className="flex-col">
-      {/*
-        Suelta o dentro de Rendimiento, la misma pantalla. El relleno fijo de
-        `p-8` hacía que la versión suelta se desbordara 94 px a 375 mientras la
-        embebida se desbordaba 47: la misma pantalla en dos URLs, y solo una
-        arreglada. El relleno de celular es el mismo que usa el resto del panel.
-      */}
-      <div
-        className={
-          embedded
-            ? "flex-1 space-y-4"
-            : "flex-1 space-y-4 p-4 pt-6 sm:p-8 sm:pt-6"
-        }
-      >
-        {/*
-          En una sola línea, el título y el selector de mes (308 px) no caben a
-          375: era el desbordamiento de verdad de esta pantalla, el mismo en las
-          dos URLs. En celular se apilan; desde `sm` vuelven a la misma línea.
-        */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {embedded ? (
-            <p className="min-w-0 text-sm text-muted-foreground">
-              Rendimiento de{" "}
-              {format(displayDate, "MMMM 'de' yyyy", { locale: es })}:
-              productos, riesgos y clientes.
-            </p>
-          ) : (
-            <Heading
-              title={`Inteligencia de Negocios`}
-              description={`Métricas avanzadas (Rendimiento de ${format(displayDate, "MMMM 'de' yyyy", { locale: es }).replace(/^\w/, (c) => c.toUpperCase())})`}
-            />
-          )}
-          <div className="min-w-0 shrink-0 overflow-x-auto">
-            <BiMonthPicker
-              activeYear={requestedYear}
-              activeMonth={requestedMonth}
-            />
-          </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="min-w-0 text-sm text-muted-foreground">
+          Productos, riesgos y clientes de{" "}
+          <strong className="text-primary">{periodLabel}</strong>.
+        </p>
+        <div className="min-w-0 shrink-0 overflow-x-auto">
+          <BiMonthPicker
+            activeYear={requestedYear}
+            activeMonth={requestedMonth}
+          />
         </div>
-        {!embedded && <Separator />}
+      </div>
 
-        {/* Top KPIs */}
-        <BiKpiCards data={momData} />
+      <BiKpiCards data={momData} />
 
-        <BiChannelBreakdown
-          channels={momData.currentMonth.byChannel}
-          totalRevenue={momData.currentMonth.total_revenue}
-        />
+      <BiChannelBreakdown
+        channels={momData.currentMonth.byChannel}
+        totalRevenue={momData.currentMonth.total_revenue}
+      />
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-7">
-          {/* Main Chart */}
-          <div className="col-span-1 lg:col-span-4">
-            <BiDailyChart data={dailyData} />
-          </div>
-
-          {/* Quick Risk Counters / Segments */}
-          <Card className="col-span-1 lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Riesgos y Oportunidades</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-2">
-                <div>
-                  <p className="font-medium">Inventario Muerto (60+ días)</p>
-                  <p className="text-sm text-muted-foreground">
-                    Capital inmovilizado
-                  </p>
-                </div>
-                <BiRiskDrilldown
-                  type="dead_stock"
-                  count={deadInventoryCount.length}
-                  data={deadInventoryCount}
-                />
-              </div>
-
-              <div className="flex items-center justify-between border-b pb-2">
-                <div>
-                  <p className="font-medium">Riesgo Inminente de Stockout</p>
-                  <p className="text-sm text-muted-foreground">
-                    Agotamiento en &lt; 7 días
-                  </p>
-                </div>
-                <BiRiskDrilldown
-                  type="stockout"
-                  count={criticalStockoutsCount}
-                  data={criticalStockoutsItems}
-                />
-              </div>
-
-              <div className="flex items-center justify-between border-b pb-2">
-                <div>
-                  <p className="font-medium">Clientes Inactivos (90 días)</p>
-                  <p className="text-sm text-muted-foreground">
-                    Listos para reactivación
-                  </p>
-                </div>
-                <BiRiskDrilldown
-                  type="inactive"
-                  count={inactives.length}
-                  data={inactives}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Clientes VIP</p>
-                  <p className="text-sm text-muted-foreground">
-                    Top 20% de LTV
-                  </p>
-                </div>
-                <BiRiskDrilldown type="vip" count={VIPcount} data={VIPItems} />
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-7">
+        <div className="lg:col-span-4">
+          <BiDailyChart data={dailyData} />
         </div>
 
-        {/* Table Sections */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {/* Top Products */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className="flex items-center gap-2">
-                <CardTitle>Top 5 Productos (Por Beneficio)</CardTitle>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="h-4 w-4 cursor-help text-muted-foreground transition-colors hover:text-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-[300px]">
-                      <p>
-                        Rango de rentabilidad real por producto. Se calcula
-                        sumando la ganancia neta final de cada pedido (restando
-                        comisiones y envío) y repartiéndola de forma
-                        proporcional según el peso del producto en la compra.
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+        <SectionCard
+          id="bi-riesgos"
+          title="Qué necesita tu atención"
+          description="Cada uno abre su lista, y desde ahí se llega al producto o al cliente."
+          className="lg:col-span-3"
+        >
+          <ul className="flex flex-col">
+            {riesgos.map((riesgo) => (
+              <li
+                key={riesgo.key}
+                className="flex flex-wrap items-center justify-between gap-3 border-b py-3 first:pt-0 last:border-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-primary">
+                    {riesgo.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{riesgo.note}</p>
+                </div>
+                <BiRiskDrilldown
+                  type={riesgo.key}
+                  count={riesgo.data.length}
+                  data={riesgo.data}
+                />
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SectionCard
+          id="bi-top-productos"
+          title="Los que más te dejan"
+          description={`Ganancia real de ${periodLabel}, ya descontadas comisiones y envío.`}
+          action={
+            topProducts.length > 0 ? (
               <BiRiskDrilldown
                 type="top_products"
                 count={topProducts.length}
                 data={topProducts}
               />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {topProducts.slice(0, 5).map((p: any, index: number) => (
-                  <div
-                    key={p.productId}
-                    className="flex items-center justify-between"
+            ) : undefined
+          }
+        >
+          {topProducts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Todavía no hay ventas con costo cargado en {periodLabel}.
+            </p>
+          ) : (
+            <ul className="flex flex-col">
+              {topProducts.slice(0, 5).map((product: any, index: number) => (
+                <li key={product.productId}>
+                  <Link
+                    href={`/${storeId}/productos/${product.productId}`}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 font-bold text-muted-foreground">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="max-w-full font-medium">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Margen: {p.profitMarginPct.toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                      {currencyFormatter(p.totalProfit)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                    <span className="w-4 shrink-0 text-xs font-bold text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-primary underline-offset-2 hover:underline">
+                        {product.name}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {product.profitMarginPct.toFixed(1)} % de margen
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-primary tabular-nums">
+                      {currencyFormatter(product.totalProfit)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
 
-          {/* Bottom Products or specific actionable insight */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className="flex items-center gap-2">
-                <CardTitle>Alertas de Inventario (ABC / Dead Stock)</CardTitle>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="h-4 w-4 cursor-help text-muted-foreground transition-colors hover:text-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-[300px]">
-                      <p>
-                        <strong>Clasificación ABC:</strong> Segrega tu
-                        inventario según su rotación (A = Alta, B = Media, C =
-                        Baja).
-                        <br />
-                        <br />
-                        <strong>Dead Stock:</strong> Son tus peores productos en
-                        la categoría C. Artículos que ocupan espacio y llevan
-                        más de 60 días sin venderse, inmovilizando tu capital.
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <BiRiskDrilldown
-                type="dead_stock"
-                count={deadInventoryCount.length}
-                data={deadInventoryCount}
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {deadInventoryCount.slice(0, 5).map((p: any) => (
-                  <div key={p.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="max-w-full font-medium text-red-500">
-                        {p.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Stock: {p.stock} uni.
-                      </p>
-                    </div>
-                    <div className="text-right text-sm">
-                      {p.daysSinceLastSale !== null ? (
-                        <span>Última venta: {p.daysSinceLastSale} días</span>
-                      ) : (
-                        <span className="text-xs font-semibold text-red-500">
-                          Nunca vendido
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {deadInventoryCount.length === 0 && (
-                  <p className="py-4 text-center text-sm text-muted-foreground">
-                    Excelente salud de inventario. Todo está en movimiento.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <SectionCard
+          id="bi-sin-rotacion"
+          title="Productos sin rotación"
+          description="Llevan más de 60 días sin venderse. Abre el que quieras para bajarle el precio, ponerlo en oferta o archivarlo."
+          tone={deadInventory.length > 0 ? "care" : "default"}
+          action={
+            <Link
+              href={`/${storeId}/promociones`}
+              className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            >
+              Crear una oferta
+            </Link>
+          }
+        >
+          {deadInventory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Ninguno lleva 60 días sin venderse. Todo está en movimiento.
+            </p>
+          ) : (
+            <ul className="flex flex-col">
+              {deadInventory.slice(0, 5).map((product: any) => (
+                <li key={product.id}>
+                  <Link
+                    href={`/${storeId}/productos/${product.id}`}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-primary underline-offset-2 hover:underline">
+                        {product.name}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {product.stock} unidades quietas
+                      </span>
+                    </span>
+                    <TintBadge
+                      tone="pink"
+                      label={
+                        product.daysSinceLastSale !== null
+                          ? `${product.daysSinceLastSale} días quieto`
+                          : "nunca vendido"
+                      }
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
     </div>
   );
