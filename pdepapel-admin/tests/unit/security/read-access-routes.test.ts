@@ -108,7 +108,6 @@ const READ_ROUTES: RouteCase[] = [
   { path: "offers/[offerId]", load: () => import("@/app/api/[storeId]/offers/[offerId]/route"), params: { storeId: STORE, offerId: "offer-1" } },
   { path: "offers", load: () => import("@/app/api/[storeId]/offers/route"), params: { storeId: STORE } },
   { path: "offers/scope-search", load: () => import("@/app/api/[storeId]/offers/scope-search/route"), params: { storeId: STORE } },
-  { path: "point-of-sale/lookup", load: () => import("@/app/api/[storeId]/point-of-sale/lookup/route"), params: { storeId: STORE } },
   { path: "presales/[presaleId]/release", load: () => import("@/app/api/[storeId]/presales/[presaleId]/release/route"), params: { storeId: STORE, presaleId: "presale-1" } },
   { path: "presales", load: () => import("@/app/api/[storeId]/presales/route"), params: { storeId: STORE } },
   { path: "products/[productId]/delete-check", load: () => import("@/app/api/[storeId]/products/[productId]/delete-check/route"), params: { storeId: STORE, productId: "product-1" } },

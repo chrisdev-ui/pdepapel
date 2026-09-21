@@ -6,8 +6,9 @@ const zeroStock = { id: "p-zero", name: "Cartuchera Wisdom", sku: "CAR-AES-ROS-S
 const other = { id: "p-other", name: "Cartuchera Wisdom XL", sku: "CAR-AES-ROS-S-L-9090-XL", gtin: null, stock: 4, price: 15000 };
 
 /**
- * Vender resuelve códigos con `/point-of-sale/lookup`, que responde 409 sin
- * stock. Etiquetas no puede usarlo: un producto agotado también se etiqueta
+ * Vender resuelve códigos con su propia búsqueda (`products/search?mode=venta`,
+ * que desde 2026-09-21 entiende el QR `PDP:<id>`). Etiquetas no la usa: aquella
+ * ordena y filtra para el mostrador, y un producto agotado también se etiqueta
  * (preparar una reposición), así que aquí se pasa por la búsqueda.
  */
 describe("resolveScannedProduct", () => {
