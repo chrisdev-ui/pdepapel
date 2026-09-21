@@ -1,6 +1,6 @@
 import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus } from "@prisma/client";
 
-import { DISPATCH_WINDOW_DAYS, getColombiaDayBounds } from "@/lib/dashboard-today";
+import { DISPATCH_WINDOW_DAYS, getColombiaDayBounds } from "@/lib/dashboard-windows";
 
 /**
  * Vistas de trabajo de Envíos (rediseño 2026-09).

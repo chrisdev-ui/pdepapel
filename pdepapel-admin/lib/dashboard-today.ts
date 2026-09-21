@@ -5,6 +5,11 @@ import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting
 import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS } from "@/lib/order-queues";
 import { countRecentPaymentWebhookIssues } from "@/lib/payment-webhook-events";
 import { ORDER_READY_TO_DISPATCH } from "@/lib/presale";
+import {
+  DISPATCH_WINDOW_DAYS as VENTANA_DESPACHO,
+  TRANSFER_WINDOW_DAYS as VENTANA_TRANSFERENCIA,
+  getColombiaDayBounds as limitesDelDia,
+} from "@/lib/dashboard-windows";
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
 import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
@@ -14,8 +19,11 @@ import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
 
 const TZ = "America/Bogota";
 /** Ventana de trabajo para “por despachar” y “pagos por verificar”: lo viejo es ruido, no pendiente. */
-export const DISPATCH_WINDOW_DAYS = 30;
-export const TRANSFER_WINDOW_DAYS = 14;
+export {
+  DISPATCH_WINDOW_DAYS,
+  TRANSFER_WINDOW_DAYS,
+  getColombiaDayBounds,
+} from "@/lib/dashboard-windows";
 
 /**
  * Pedidos pagados en un rango. Los pedidos marcados a mano antes de que
@@ -83,12 +91,6 @@ export function channelForOrderType(type: OrderType): SalesChannel {
 }
 
 /** Inicio y fin (UTC) del día actual en Colombia. */
-export function getColombiaDayBounds(now = new Date()) {
-  const local = utcToZonedTime(now, TZ);
-  const start = zonedTimeToUtc(startOfDay(local), TZ);
-  const end = new Date(zonedTimeToUtc(startOfDay(addDays(local, 1)), TZ).getTime() - 1);
-  return { start, end, local };
-}
 
 const DAY_LABELS = ["D", "L", "M", "X", "J", "V", "S"];
 
@@ -305,7 +307,7 @@ export function buildTodaySummary(
   pending.sort((a, b) => a.weight - b.weight);
 
   // Semana: 7 días terminando hoy, por día en hora de Colombia.
-  const { local } = getColombiaDayBounds(now);
+  const { local } = limitesDelDia(now);
   const dayKeys: string[] = [];
   const dayNets = new Map<string, number>();
   for (let i = 6; i >= 0; i--) {
@@ -388,13 +390,13 @@ export function buildTodaySummary(
  */
 export async function getTodaySummary(storeId: string, now = new Date()): Promise<TodaySummary> {
   const access = await requireStoreRead(storeId);
-  const { start: dayStart, end: dayEnd, local } = getColombiaDayBounds(now);
+  const { start: dayStart, end: dayEnd, local } = limitesDelDia(now);
   const weekStart = zonedTimeToUtc(startOfDay(subDays(local, 6)), TZ);
   const previousWeekStart = zonedTimeToUtc(startOfDay(subDays(local, 13)), TZ);
   const previousWeekEnd = new Date(weekStart.getTime() - 1);
   const quoteHorizon = addDays(now, 2);
-  const dispatchSince = subDays(now, DISPATCH_WINDOW_DAYS);
-  const transferSince = subDays(now, TRANSFER_WINDOW_DAYS);
+  const dispatchSince = subDays(now, VENTANA_DESPACHO);
+  const transferSince = subDays(now, VENTANA_TRANSFERENCIA);
   const awaitingSince = subDays(now, AWAITING_PAYMENT_WINDOW_DAYS);
   const awaitingUntil = subHours(now, AWAITING_PAYMENT_STALE_HOURS);
   const staleTransitBefore = subDays(now, STALE_IN_TRANSIT_DAYS);
