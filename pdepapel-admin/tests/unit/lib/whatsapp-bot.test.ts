@@ -102,7 +102,7 @@ const keywords = [
 
 const input = {
   conversationId: "conversation-1",
-  phone: "573001234567",
+  recipient: "573001234567",
   body: "¿Cuál es el horario?",
   keywords,
   // Sin esto cada prueba esperaría la pausa humana de verdad.

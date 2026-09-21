@@ -8,7 +8,15 @@ const mocks = vi.hoisted(() => ({
   updateEvent: vi.fn(),
   storeFindFirst: vi.fn(),
   conversationUpsert: vi.fn(),
+  conversationFindUnique: vi.fn(),
+  conversationCreate: vi.fn(),
+  conversationUpdate: vi.fn(),
+  conversationDelete: vi.fn(),
   conversationUpdateMany: vi.fn(),
+  messageFindMany: vi.fn(),
+  messageFindFirst: vi.fn(),
+  messageUpdate: vi.fn(),
+  messageDelete: vi.fn(),
   messageUpsert: vi.fn(),
   messageCreate: vi.fn(),
   messageFindUnique: vi.fn(),
@@ -29,12 +37,20 @@ vi.mock("@/lib/prismadb", () => ({
     store: { findFirst: mocks.storeFindFirst },
     conversation: {
       upsert: mocks.conversationUpsert,
+      findUnique: mocks.conversationFindUnique,
+      create: mocks.conversationCreate,
+      update: mocks.conversationUpdate,
+      delete: mocks.conversationDelete,
       updateMany: mocks.conversationUpdateMany,
     },
     conversationMessage: {
       upsert: mocks.messageUpsert,
       create: mocks.messageCreate,
       findUnique: mocks.messageFindUnique,
+      findMany: mocks.messageFindMany,
+      findFirst: mocks.messageFindFirst,
+      update: mocks.messageUpdate,
+      delete: mocks.messageDelete,
       updateMany: mocks.messageUpdateMany,
     },
   },
@@ -167,6 +183,8 @@ describe("extractWhatsAppEvents", () => {
       {
         externalId: "wamid.a",
         phone: "573001234567",
+        bsuid: null,
+        username: null,
         contactName: null,
         body: "uno",
         mediaType: null,
@@ -180,7 +198,7 @@ describe("extractWhatsAppEvents", () => {
     ]);
     expect(extracted.skipped).toEqual([
       "message:not-an-object",
-      "message:wamid.nophone:no-phone",
+      "message:wamid.nophone:sin-identidad",
     ]);
   });
 
@@ -287,6 +305,8 @@ describe("extractWhatsAppEvents", () => {
         externalId: "wamid.echo1",
         // El teléfono de la clienta, no el de la tienda.
         phone: "573001234567",
+        bsuid: null,
+        username: null,
         body: "Claro, te confirmo",
         mediaType: null,
         sentAt: new Date(1789300100 * 1000),
@@ -352,7 +372,7 @@ describe("extractWhatsAppEvents", () => {
       ["e3", "Corregido", "edit"],
     ]);
     expect(extracted.skipped).toEqual([
-      "echo:e4:no-phone",
+      "echo:e4:sin-identidad",
       "echo:not-an-object",
     ]);
   });
@@ -444,6 +464,114 @@ describe("extractWhatsAppEvents", () => {
     expect(junk.messages[0].mediaType).toBe("order");
   });
 
+  /**
+   * El caso de Eliana, tal como llegó de verdad: nombre de usuario activo, así
+   * que Meta no manda `wa_id` ni `from`, solo el BSUID. Antes esto se
+   * descartaba con `:no-phone` y la conversación no existía: doce mensajes
+   * suyos y catorce respuestas de Paula que el panel nunca vio.
+   */
+  describe("clienta con nombre de usuario (solo BSUID)", () => {
+    const BSUID = "CO.2465629583926901";
+
+    it("archiva su mensaje aunque Meta no mande teléfono", () => {
+      const extracted = extractWhatsAppEvents({
+        entry: [
+          {
+            id: WABA,
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  contacts: [{ profile: { name: "Eliana", username: "mrs_han14" }, user_id: BSUID }],
+                  messages: [
+                    {
+                      id: "wamid.eliana1",
+                      type: "text",
+                      text: { body: "Tienes marcadores acrílicos" },
+                      timestamp: "1789300000",
+                      from_user_id: BSUID,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(extracted.skipped).toEqual([]);
+      expect(extracted.messages).toEqual([
+        {
+          externalId: "wamid.eliana1",
+          phone: null,
+          bsuid: BSUID,
+          username: "mrs_han14",
+          // El nombre del perfil se indexa por BSUID, no solo por teléfono.
+          contactName: "Eliana",
+          body: "Tienes marcadores acrílicos",
+          mediaType: null,
+          sentAt: new Date(1789300000 * 1000),
+          interactiveReplyId: null,
+          metadata: null,
+        },
+      ]);
+    });
+
+    it("archiva también las respuestas de Paula, que es lo que mueve lastOwnerAt", () => {
+      const extracted = extractWhatsAppEvents({
+        entry: [
+          {
+            id: WABA,
+            changes: [
+              {
+                field: "smb_message_echoes",
+                value: {
+                  contacts: [{ profile: { username: "mrs_han14" }, user_id: BSUID }],
+                  message_echoes: [
+                    {
+                      id: "wamid.eco",
+                      type: "text",
+                      text: { body: "Stickers de que tipo buscas?" },
+                      timestamp: "1789300100",
+                      from: "573999999999",
+                      to_user_id: BSUID,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(extracted.skipped).toEqual([]);
+      expect(extracted.ownerEchoes).toEqual([
+        {
+          externalId: "wamid.eco",
+          phone: null,
+          bsuid: BSUID,
+          username: "mrs_han14",
+          body: "Stickers de que tipo buscas?",
+          mediaType: null,
+          sentAt: new Date(1789300100 * 1000),
+        },
+      ]);
+    });
+
+    it("sigue descartando lo que no trae ninguna de las dos identidades", () => {
+      const extracted = extractWhatsAppEvents({
+        entry: [
+          {
+            id: WABA,
+            changes: [
+              { field: "messages", value: { messages: [{ id: "wamid.x", type: "text" }] } },
+            ],
+          },
+        ],
+      });
+      expect(extracted.messages).toEqual([]);
+      expect(extracted.skipped).toEqual(["message:wamid.x:sin-identidad"]);
+    });
+  });
+
   it("returns an empty result for bodies that are not Meta-shaped", () => {
     const empty = { messages: [], ownerEchoes: [], statuses: [], skipped: [] };
     expect(extractWhatsAppEvents({ _rawUnparsable: "x" })).toEqual(empty);
@@ -474,7 +602,30 @@ describe("processWhatsAppWebhookEvent", () => {
     mocks.updateEvent.mockResolvedValue({});
     mocks.storeFindFirst.mockResolvedValue({ id: "store-fallback" });
     mocks.conversationUpsert.mockResolvedValue({ id: "conversation-1" });
+    // El resolutor busca por BSUID, luego por teléfono, y crea si no hay nada.
+    // El doble lleva estado a propósito: sin él, tres mensajes de la misma
+    // persona parecerían crear tres conversaciones, que es justo lo que no
+    // pasa contra una base de verdad.
+    const creadas = new Map<string, { id: string; phone: string | null; bsuid: string | null }>();
+    mocks.conversationFindUnique.mockImplementation(async ({ where }) => {
+      const porTelefono = where.storeId_channel_phone?.phone;
+      const porBsuid = where.storeId_channel_bsuid?.bsuid;
+      const clave = porBsuid ? `b:${porBsuid}` : porTelefono ? `p:${porTelefono}` : null;
+      return clave ? (creadas.get(clave) ?? null) : null;
+    });
+    mocks.conversationCreate.mockImplementation(async ({ data }) => {
+      const fila = { id: "conversation-1", phone: data.phone ?? null, bsuid: data.bsuid ?? null };
+      if (fila.phone) creadas.set(`p:${fila.phone}`, fila);
+      if (fila.bsuid) creadas.set(`b:${fila.bsuid}`, fila);
+      return fila;
+    });
+    mocks.conversationUpdate.mockResolvedValue({ id: "conversation-1" });
+    mocks.conversationDelete.mockResolvedValue({});
     mocks.conversationUpdateMany.mockResolvedValue({ count: 0 });
+    mocks.messageFindMany.mockResolvedValue([]);
+    mocks.messageFindFirst.mockResolvedValue(null);
+    mocks.messageUpdate.mockResolvedValue({});
+    mocks.messageDelete.mockResolvedValue({});
     mocks.messageUpsert.mockResolvedValue({});
     mocks.messageCreate.mockResolvedValue({});
     mocks.messageFindUnique.mockResolvedValue(null);
@@ -510,29 +661,25 @@ describe("processWhatsAppWebhookEvent", () => {
       now: expect.any(Date),
     });
 
-    // One conversation keyed by store + channel + normalized phone, refreshed on every message.
-    expect(mocks.conversationUpsert).toHaveBeenCalledTimes(3);
-    expect(mocks.conversationUpsert.mock.calls[0][0]).toEqual({
-      where: {
-        storeId_channel_phone: {
-          storeId: "store-1",
-          channel: "WHATSAPP",
-          phone: "573001234567",
-        },
-      },
-      create: {
+    // Una sola conversación por tienda + canal + identidad, refrescada en cada
+    // mensaje. Ya no es un `upsert`: se resuelve por BSUID, luego por teléfono,
+    // y se crea si no existía ninguna de las dos.
+    expect(mocks.conversationCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.conversationCreate.mock.calls[0][0].data).toMatchObject({
+      storeId: "store-1",
+      channel: "WHATSAPP",
+      phone: "573001234567",
+      bsuid: null,
+      contactName: "Laura",
+      status: "OPEN",
+      lastInboundAt: new Date(1789300000 * 1000),
+    });
+    expect(mocks.conversationFindUnique.mock.calls[0][0].where).toEqual({
+      storeId_channel_phone: {
         storeId: "store-1",
         channel: "WHATSAPP",
         phone: "573001234567",
-        contactName: "Laura",
-        status: "OPEN",
-        lastInboundAt: new Date(1789300000 * 1000),
       },
-      update: {
-        contactName: "Laura",
-        lastInboundAt: new Date(1789300000 * 1000),
-      },
-      select: { id: true },
     });
     expect(mocks.conversationUpdateMany).toHaveBeenCalledWith({
       where: { id: "conversation-1", status: "RESOLVED" },
@@ -608,7 +755,7 @@ describe("processWhatsAppWebhookEvent", () => {
       where: { externalId: "wamid.out" },
       data: { status: "DELIVERED" },
     });
-    expect(mocks.conversationUpsert).not.toHaveBeenCalled();
+    expect(mocks.conversationCreate).not.toHaveBeenCalled();
   });
 
   it("skips a status for a message it does not know and still marks the event PROCESSED", async () => {
@@ -656,7 +803,7 @@ describe("processWhatsAppWebhookEvent", () => {
     expect(console.warn).toHaveBeenCalledWith(
       "[WHATSAPP_SYNC] Ítems del evento sin reconocer",
       expect.objectContaining({
-        skipped: ["message:wamid.nophone:no-phone", "status:wamid.s:warning"],
+        skipped: ["message:wamid.nophone:sin-identidad", "status:wamid.s:warning"],
       }),
     );
     expect(mocks.messageUpdateMany).not.toHaveBeenCalled();
@@ -666,7 +813,7 @@ describe("processWhatsAppWebhookEvent", () => {
     mocks.findEvent.mockResolvedValue(event({ connection: null }));
     await processWhatsAppWebhookEvent("event-1");
     expect(mocks.storeFindFirst).toHaveBeenCalledTimes(1);
-    expect(mocks.conversationUpsert.mock.calls[0][0].create.storeId).toBe(
+    expect(mocks.conversationCreate.mock.calls[0][0].data.storeId).toBe(
       "store-fallback",
     );
   });
@@ -704,7 +851,7 @@ describe("processWhatsAppWebhookEvent", () => {
     });
 
     expect(mocks.claim).not.toHaveBeenCalled();
-    expect(mocks.conversationUpsert).not.toHaveBeenCalled();
+    expect(mocks.conversationCreate).not.toHaveBeenCalled();
   });
 
   it("anota en lastOwnerAt la hora del mensaje de Paula, no la de ahora", async () => {
@@ -745,9 +892,9 @@ describe("processWhatsAppWebhookEvent", () => {
       { processed: true, ownerEchoes: 1 },
     );
 
-    const payload = mocks.conversationUpsert.mock.calls[0][0];
-    expect(payload.update.lastOwnerAt).toEqual(new Date(enviado * 1000));
-    expect(payload.create.lastOwnerAt).toEqual(new Date(enviado * 1000));
+    expect(mocks.conversationCreate.mock.calls[0][0].data.lastOwnerAt).toEqual(
+      new Date(enviado * 1000),
+    );
   });
 
   it("files an owner echo as OUTBOUND and clears NEEDS_OWNER", async () => {
@@ -789,27 +936,11 @@ describe("processWhatsAppWebhookEvent", () => {
       },
     );
 
-    expect(mocks.conversationUpsert).toHaveBeenCalledWith({
-      where: {
-        storeId_channel_phone: {
-          storeId: "store-1",
-          channel: "WHATSAPP",
-          phone: "573001234567",
-        },
-      },
-      create: {
-        storeId: "store-1",
-        channel: "WHATSAPP",
-        phone: "573001234567",
-        status: "OPEN",
-        lastOutboundAt: new Date(1789300100 * 1000),
-        lastOwnerAt: new Date(1789300100 * 1000),
-      },
-      update: {
-        lastOutboundAt: new Date(1789300100 * 1000),
-        lastOwnerAt: new Date(1789300100 * 1000),
-      },
-      select: { id: true },
+    expect(mocks.conversationCreate.mock.calls[0][0].data).toMatchObject({
+      storeId: "store-1",
+      channel: "WHATSAPP",
+      phone: "573001234567",
+      status: "OPEN",
     });
     // Paula contestó desde el celular: la conversación deja de esperarla.
     expect(mocks.conversationUpdateMany).toHaveBeenCalledWith({
@@ -885,7 +1016,7 @@ describe("processWhatsAppWebhookEvent", () => {
     );
     expect(mocks.runBot).toHaveBeenCalledWith({
       conversationId: "conversation-1",
-      phone: "573001234567",
+      recipient: "573001234567",
       // Cuándo llegó, para saber si ya hay otro mensaje más nuevo detrás.
       inboundAt: expect.any(Date),
       body: "Hola, ¿tienen stickers?",
@@ -916,13 +1047,13 @@ describe("processWhatsAppWebhookEvent", () => {
       processed: false,
       reason: "claimed_elsewhere",
     });
-    expect(mocks.conversationUpsert).not.toHaveBeenCalled();
+    expect(mocks.conversationCreate).not.toHaveBeenCalled();
     expect(mocks.updateEvent).not.toHaveBeenCalled();
   });
 
   it("schedules a retry with its own delay when the database fails", async () => {
     mocks.findEvent.mockResolvedValue(event());
-    mocks.conversationUpsert.mockRejectedValue(new Error("db down"));
+    mocks.conversationFindUnique.mockRejectedValue(new Error("db down"));
     const before = Date.now();
 
     await expect(processWhatsAppWebhookEvent("event-1")).resolves.toEqual({
@@ -946,7 +1077,7 @@ describe("processWhatsAppWebhookEvent", () => {
         status: MarketplaceWebhookEventStatus.RETRY,
       }),
     );
-    mocks.conversationUpsert.mockRejectedValue(new Error("db down"));
+    mocks.conversationFindUnique.mockRejectedValue(new Error("db down"));
 
     await expect(processWhatsAppWebhookEvent("event-1")).resolves.toEqual({
       processed: false,

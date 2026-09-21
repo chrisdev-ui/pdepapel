@@ -45,6 +45,14 @@ const asString = (value: unknown): string | null => {
   return null;
 };
 
+/** Un BSUID de Meta: `CO.2465629583926901`. Prefijo de dos letras y dígitos. */
+const BSUID_PATTERN = /^[A-Z]{2}\.\d{6,}$/;
+
+const asBsuid = (value: unknown): string | null => {
+  const raw = asString(value);
+  return raw && BSUID_PATTERN.test(raw) ? raw : null;
+};
+
 /** Meta manda `timestamp` en segundos Unix (como texto); si no se puede leer, `null`. */
 function parseMetaTimestamp(value: unknown): Date | null {
   const raw = asString(value);
@@ -56,7 +64,12 @@ function parseMetaTimestamp(value: unknown): Date | null {
 
 export interface WhatsAppInboundMessage {
   externalId: string | null;
-  phone: string;
+  /** Teléfono, cuando Meta lo manda. Ver `WhatsAppContactIdentity`. */
+  phone: string | null;
+  /** BSUID; llega siempre, con teléfono o sin él. */
+  bsuid: string | null;
+  /** `@mrs_han14` sin arroba. A menudo es lo único legible que manda Meta. */
+  username: string | null;
   contactName: string | null;
   body: string | null;
   mediaType: string | null;
@@ -92,8 +105,11 @@ export interface WhatsAppMessageMetadata {
 /** Mensaje que Paula mandó desde su celular y volvió como eco. */
 export interface WhatsAppOwnerEcho {
   externalId: string | null;
-  /** Teléfono de la clienta: en un eco viene en `to`, no en `from`. */
-  phone: string;
+  /** Teléfono de la clienta: en un eco viene en `to`, no en `from`. Opcional. */
+  phone: string | null;
+  /** BSUID de la clienta: en un eco viene en `to_user_id`. */
+  bsuid: string | null;
+  username: string | null;
   body: string | null;
   mediaType: string | null;
   sentAt: Date | null;
@@ -285,15 +301,32 @@ export function extractWhatsAppEvents(
         isRecord(change) && isRecord(change.value) ? change.value : null;
       if (!value) continue;
 
+      // El nombre del perfil se indexa por las dos identidades: a un contacto
+      // con nombre de usuario le llega `user_id` y no `wa_id`.
       const names = new Map<string, string>();
+      const usernames = new Map<string, string>();
+      let contactBsuid: string | null = null;
+      let contactUsername: string | null = null;
       if (Array.isArray(value.contacts)) {
         for (const contact of value.contacts) {
           if (!isRecord(contact)) continue;
           const waId = asString(contact.wa_id);
-          const name = isRecord(contact.profile)
-            ? asString(contact.profile.name)
-            : null;
-          if (waId && name) names.set(normalizePhone(waId), name);
+          const userId = asBsuid(contact.user_id);
+          contactBsuid ??= userId;
+          const profile = isRecord(contact.profile) ? contact.profile : null;
+          const name = profile ? asString(profile.name) : null;
+          // `profile.name` viene vacío en casi todos los contactos con nombre
+          // de usuario: ahí el `username` es lo único con lo que Paula puede
+          // reconocer a quién le escribe.
+          const username = profile ? asString(profile.username) : null;
+          contactUsername ??= username;
+          if (username) {
+            if (waId) usernames.set(normalizePhone(waId), username);
+            if (userId) usernames.set(userId, username);
+          }
+          if (!name) continue;
+          if (waId) names.set(normalizePhone(waId), name);
+          if (userId) names.set(userId, name);
         }
       }
 
@@ -303,10 +336,12 @@ export function extractWhatsAppEvents(
             result.skipped.push("message:not-an-object");
             continue;
           }
-          const phone = normalizePhone(asString(message.from));
-          if (!phone) {
+          const phone = normalizePhone(asString(message.from)) || null;
+          const bsuid = asBsuid(message.from_user_id) ?? contactBsuid;
+          if (!phone && !bsuid) {
+            // Sin ninguna de las dos identidades no hay a quién atribuirlo.
             result.skipped.push(
-              `message:${asString(message.id) ?? "?"}:no-phone`,
+              `message:${asString(message.id) ?? "?"}:sin-identidad`,
             );
             continue;
           }
@@ -315,7 +350,15 @@ export function extractWhatsAppEvents(
           result.messages.push({
             externalId: asString(message.id),
             phone,
-            contactName: names.get(phone) ?? null,
+            bsuid,
+            contactName:
+              (phone ? names.get(phone) : null) ??
+              (bsuid ? names.get(bsuid) : null) ??
+              null,
+            username:
+              (phone ? usernames.get(phone) : null) ??
+              (bsuid ? usernames.get(bsuid) : null) ??
+              contactUsername,
             // Un carrito trae su nota en `order.text`; si no hay, queda sin cuerpo.
             body: getMessageBody(message) ?? metadata?.order?.note ?? null,
             mediaType: type && type !== "text" ? type : null,
@@ -335,16 +378,27 @@ export function extractWhatsAppEvents(
             result.skipped.push("echo:not-an-object");
             continue;
           }
-          // El teléfono de la clienta es `to`: en un eco los papeles se invierten.
-          const phone = normalizePhone(asString(echo.to));
-          if (!phone) {
-            result.skipped.push(`echo:${asString(echo.id) ?? "?"}:no-phone`);
+          // El teléfono de la clienta es `to`: en un eco los papeles se
+          // invierten. Con nombre de usuario no viene, y el BSUID está en
+          // `to_user_id`. Sin esto, las respuestas de Paula se perdían y con
+          // ellas `lastOwnerAt`, que es lo que aparta al bot.
+          const phone = normalizePhone(asString(echo.to)) || null;
+          const bsuid = asBsuid(echo.to_user_id) ?? contactBsuid;
+          if (!phone && !bsuid) {
+            result.skipped.push(
+              `echo:${asString(echo.id) ?? "?"}:sin-identidad`,
+            );
             continue;
           }
           const type = asString(echo.type);
           result.ownerEchoes.push({
             externalId: asString(echo.id),
             phone,
+            bsuid,
+            username:
+              (phone ? usernames.get(phone) : null) ??
+              (bsuid ? usernames.get(bsuid) : null) ??
+              contactUsername,
             body: getEchoBody(echo),
             mediaType: type && type !== "text" ? type : null,
             sentAt: parseMetaTimestamp(echo.timestamp),
@@ -394,6 +448,165 @@ async function resolveStoreId(connectionStoreId: string | null | undefined) {
 }
 
 /**
+ * A qué conversación pertenece esta identidad, creándola si hace falta.
+ *
+ * Reemplaza al `upsert` por teléfono de antes, que no servía para un contacto
+ * con nombre de usuario: sin teléfono no había llave.
+ *
+ * El orden importa. Se busca **primero por BSUID**, porque es la identidad que
+ * no se pierde; el teléfono puede aparecer un día y no estar al siguiente. Si
+ * el BSUID no da nada se busca por teléfono, y si aparece una fila que todavía
+ * no tenía BSUID se le pega ahí: es como una conversación vieja adopta su
+ * identidad nueva sin duplicarse.
+ *
+ * El caso feo es que existan las dos filas —una creada por BSUID y otra por
+ * teléfono, de antes de que supiéramos que eran la misma persona—. Ahí se
+ * fusionan: los mensajes se mudan a la que tiene BSUID y la otra se borra.
+ * Pasa una sola vez por contacto.
+ */
+async function resolveConversation(
+  storeId: string,
+  identity: { phone: string | null; bsuid: string | null },
+  seed: {
+    contactName?: string | null;
+    username?: string | null;
+    lastInboundAt?: Date;
+    lastOutboundAt?: Date;
+    lastOwnerAt?: Date;
+  },
+): Promise<{ id: string }> {
+  const { phone, bsuid } = identity;
+  const channel = ConversationChannel.WHATSAPP;
+
+  const byBsuid = bsuid
+    ? await prismadb.conversation.findUnique({
+        where: { storeId_channel_bsuid: { storeId, channel, bsuid } },
+        select: { id: true, phone: true },
+      })
+    : null;
+  const byPhone = phone
+    ? await prismadb.conversation.findUnique({
+        where: { storeId_channel_phone: { storeId, channel, phone } },
+        select: { id: true, bsuid: true },
+      })
+    : null;
+
+  const update = {
+    ...(seed.contactName ? { contactName: seed.contactName } : {}),
+    ...(seed.username ? { username: seed.username } : {}),
+    ...(seed.lastInboundAt ? { lastInboundAt: seed.lastInboundAt } : {}),
+    ...(seed.lastOutboundAt ? { lastOutboundAt: seed.lastOutboundAt } : {}),
+    ...(seed.lastOwnerAt ? { lastOwnerAt: seed.lastOwnerAt } : {}),
+  };
+
+  if (byBsuid) {
+    // La misma persona tenía además una fila por teléfono: se fusionan.
+    if (byPhone && byPhone.id !== byBsuid.id) {
+      await mergeConversations(byBsuid.id, byPhone.id);
+    }
+    await prismadb.conversation.update({
+      where: { id: byBsuid.id },
+      // El teléfono se pega cuando por fin aparece; nunca se borra si ya estaba.
+      data: { ...update, ...(phone && !byBsuid.phone ? { phone } : {}) },
+    });
+    return { id: byBsuid.id };
+  }
+
+  if (byPhone) {
+    await prismadb.conversation.update({
+      where: { id: byPhone.id },
+      data: { ...update, ...(bsuid && !byPhone.bsuid ? { bsuid } : {}) },
+    });
+    return { id: byPhone.id };
+  }
+
+  const created = await prismadb.conversation.create({
+    data: {
+      storeId,
+      channel,
+      phone,
+      bsuid,
+      username: seed.username ?? null,
+      contactName: seed.contactName ?? null,
+      status: ConversationStatus.OPEN,
+      ...update,
+    },
+    select: { id: true },
+  });
+  return { id: created.id };
+}
+
+/**
+ * Deja una sola conversación con toda la historia. Los mensajes se mudan uno a
+ * uno porque `externalId` es único: si el mismo `wamid` ya estaba en la que se
+ * queda (un eco archivado por las dos vías), el mensaje duplicado se borra en
+ * vez de mudarse.
+ */
+async function mergeConversations(
+  keepId: string,
+  dropId: string,
+): Promise<void> {
+  const moving = await prismadb.conversationMessage.findMany({
+    where: { conversationId: dropId },
+    select: { id: true, externalId: true },
+  });
+  for (const message of moving) {
+    if (message.externalId) {
+      const clash = await prismadb.conversationMessage.findFirst({
+        where: { conversationId: keepId, externalId: message.externalId },
+        select: { id: true },
+      });
+      if (clash) {
+        await prismadb.conversationMessage.delete({
+          where: { id: message.id },
+        });
+        continue;
+      }
+    }
+    await prismadb.conversationMessage.update({
+      where: { id: message.id },
+      data: { conversationId: keepId },
+    });
+  }
+
+  // Lo que la fila que se va sabía y la que se queda no: las marcas de tiempo
+  // más recientes, el nombre y el pedido asociado.
+  const [keep, drop] = await Promise.all([
+    prismadb.conversation.findUnique({ where: { id: keepId } }),
+    prismadb.conversation.findUnique({ where: { id: dropId } }),
+  ]);
+  // El borrado va ANTES de heredar el teléfono: las dos filas lo comparten y
+  // `(storeId, channel, phone)` es único, así que copiarlo mientras la otra
+  // sigue viva lo rechaza la base. Lo encontró la prueba de la fusión.
+  await prismadb.conversation.delete({ where: { id: dropId } });
+
+  if (keep && drop) {
+    const later = (a: Date | null, b: Date | null) =>
+      !a ? b : !b ? a : a > b ? a : b;
+    await prismadb.conversation.update({
+      where: { id: keepId },
+      data: {
+        phone: keep.phone ?? drop.phone,
+        contactName: keep.contactName ?? drop.contactName,
+        username: keep.username ?? drop.username,
+        orderId: keep.orderId ?? drop.orderId,
+        lastInboundAt: later(keep.lastInboundAt, drop.lastInboundAt),
+        lastOutboundAt: later(keep.lastOutboundAt, drop.lastOutboundAt),
+        lastOwnerAt: later(keep.lastOwnerAt, drop.lastOwnerAt),
+      },
+    });
+  }
+}
+
+/**
+ * `fileInboundMessage` y `fileOwnerEcho` se exportan para el rescate de las
+ * conversaciones que se perdieron antes de que existiera el BSUID
+ * (`scripts/backfill-bsuid-conversations.mjs`): ese guion archiva historia
+ * vieja y **no** puede despertar al bot, así que entra por aquí y no por
+ * `processWhatsAppWebhookEvent`. Fuera de eso, nadie más debería llamarlas.
+ */
+
+/**
  * Qué pasó al archivar un entrante. Solo `created` habilita al bot: un webhook
  * reenviado (`duplicate`) no puede volver a disparar una respuesta, y un
  * mensaje sin `externalId` (`created_without_id`) no se puede deduplicar, así
@@ -401,33 +614,20 @@ async function resolveStoreId(connectionStoreId: string | null | undefined) {
  */
 type FiledInboundOutcome = "created" | "duplicate" | "created_without_id";
 
-async function fileInboundMessage(
+export async function fileInboundMessage(
   storeId: string,
   message: WhatsAppInboundMessage,
   eventId: string,
 ): Promise<{ conversationId: string; outcome: FiledInboundOutcome }> {
-  const conversation = await prismadb.conversation.upsert({
-    where: {
-      storeId_channel_phone: {
-        storeId,
-        channel: ConversationChannel.WHATSAPP,
-        phone: message.phone,
-      },
-    },
-    create: {
-      storeId,
-      channel: ConversationChannel.WHATSAPP,
-      phone: message.phone,
+  const conversation = await resolveConversation(
+    storeId,
+    { phone: message.phone, bsuid: message.bsuid },
+    {
       contactName: message.contactName,
-      status: ConversationStatus.OPEN,
+      username: message.username,
       lastInboundAt: message.sentAt ?? new Date(),
     },
-    update: {
-      ...(message.contactName ? { contactName: message.contactName } : {}),
-      lastInboundAt: message.sentAt ?? new Date(),
-    },
-    select: { id: true },
-  });
+  );
   // Una conversación cerrada vuelve a abrirse con el siguiente mensaje; una
   // que espera a la dueña sigue esperándola.
   await prismadb.conversation.updateMany({
@@ -477,33 +677,20 @@ async function fileInboundMessage(
  * saca la conversación de `NEEDS_OWNER`: es la única señal de que una persona
  * respondió, y lo único que vuelve a habilitar al bot.
  */
-async function fileOwnerEcho(
+export async function fileOwnerEcho(
   storeId: string,
   echo: WhatsAppOwnerEcho,
   eventId: string,
 ): Promise<boolean> {
   const sentAt = echo.sentAt ?? new Date();
-  const conversation = await prismadb.conversation.upsert({
-    where: {
-      storeId_channel_phone: {
-        storeId,
-        channel: ConversationChannel.WHATSAPP,
-        phone: echo.phone,
-      },
-    },
-    create: {
-      storeId,
-      channel: ConversationChannel.WHATSAPP,
-      phone: echo.phone,
-      status: ConversationStatus.OPEN,
-      lastOutboundAt: sentAt,
-      lastOwnerAt: sentAt,
-    },
-    // `lastOwnerAt` es lo que aparta al bot 24 h: aquí es donde se sabe que
-    // quien escribió fue ella y no él, porque esto es el eco de su celular.
-    update: { lastOutboundAt: sentAt, lastOwnerAt: sentAt },
-    select: { id: true },
-  });
+  // `lastOwnerAt` es lo que aparta al bot 24 h: aquí es donde se sabe que
+  // quien escribió fue ella y no él, porque esto es el eco de su celular. Con
+  // un contacto con nombre de usuario esto se perdía entero.
+  const conversation = await resolveConversation(
+    storeId,
+    { phone: echo.phone, bsuid: echo.bsuid },
+    { username: echo.username, lastOutboundAt: sentAt, lastOwnerAt: sentAt },
+  );
 
   await prismadb.conversation.updateMany({
     where: { id: conversation.id, status: ConversationStatus.NEEDS_OWNER },
@@ -602,7 +789,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
     const botResults: WhatsAppBotResult[] = [];
     const botCandidates: Array<{
       conversationId: string;
-      phone: string;
+      recipient: string;
       body: string;
       interactiveReplyId: string | null;
       inboundMessageId: string | null;
@@ -619,9 +806,13 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       // el chat sin saber si su foto había llegado.
       const paraPaula = isMediaForOwner(message.mediaType);
       if (!message.body && !paraPaula) continue;
+      // Sin teléfono se contesta al BSUID; `fileInboundMessage` ya garantizó
+      // que al menos uno de los dos existe.
+      const recipient = message.phone ?? message.bsuid;
+      if (!recipient) continue;
       botCandidates.push({
         conversationId: filed.conversationId,
-        phone: message.phone,
+        recipient,
         body: message.body ?? "",
         interactiveReplyId: message.interactiveReplyId,
         // Hace falta para mostrar «escribiendo…» y marcar como leído.

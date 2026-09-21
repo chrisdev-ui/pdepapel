@@ -230,7 +230,7 @@ export function ConversationThread({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Heading
           title={conversation.contactName?.trim() || "Sin nombre"}
-          description={`${conversation.phone} · ${conversation.messages.length} mensaje(s)`}
+          description={`${conversation.phone ?? (conversation.username ? `@${conversation.username}` : "Sin teléfono")} · ${conversation.messages.length} mensaje(s)`}
         />
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={isResolved ? "secondary" : "default"}>

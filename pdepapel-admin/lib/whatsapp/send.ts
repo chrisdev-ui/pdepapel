@@ -9,6 +9,29 @@ import { env } from "@/lib/env.mjs";
  */
 
 const CHAKRA_API_BASE = "https://api.chakrahq.com/v1/ext/plugin/whatsapp";
+
+/** Un BSUID de Meta: `CO.2465629583926901`. */
+const BSUID_PATTERN = /^[A-Z]{2}\.\d{6,}$/;
+
+/**
+ * Dónde va el destinatario en el cuerpo.
+ *
+ * Meta lo dice sin rodeos: para escribirle a alguien de quien solo se tiene el
+ * BSUID, va en `recipient` y **se omite `to`**. Si se conocen los dos, `to`
+ * manda —y conviene mandarlo, porque es lo que hace que el teléfono siga
+ * llegando en los webhooks—.
+ *
+ * Esto vale porque el endpoint que usamos es el genérico de mensajes
+ * (`/{phoneNumberId}/messages`), que Chakra deja pasar tal cual. El de
+ * «plantilla por número de teléfono», que no admite BSUID, no se usa aquí.
+ */
+export function buildRecipientFields(
+  recipient: string | null,
+): Record<string, string> {
+  const value = recipient?.trim();
+  if (!value) return {};
+  return BSUID_PATTERN.test(value) ? { recipient: value } : { to: value };
+}
 const CHAKRA_API_VERSION = "v24.0";
 
 /**
@@ -82,24 +105,33 @@ function readError(payload: unknown): string | null {
     if (first && typeof first === "object") {
       const { message, code } = first as { message?: unknown; code?: unknown };
       if (typeof message === "string" && message.trim()) {
-        return code === undefined || code === null ? message.trim() : `${message.trim()} (${String(code)})`;
+        return code === undefined || code === null
+          ? message.trim()
+          : `${message.trim()} (${String(code)})`;
       }
     }
   } else if (errors && typeof errors === "object") {
     const { message, code } = errors as { message?: unknown; code?: unknown };
     if (typeof message === "string" && message.trim()) {
-      return code === undefined || code === null ? message.trim() : `${message.trim()} (${String(code)})`;
+      return code === undefined || code === null
+        ? message.trim()
+        : `${message.trim()} (${String(code)})`;
     }
   }
 
   // Por si Chakra reenvía el error nativo de Meta, sin envolver o dentro de `_data`.
-  const nativeError = (root.error ?? (root._data as Record<string, unknown> | undefined)?.error) as
+  const nativeError = (root.error ??
+    (root._data as Record<string, unknown> | undefined)?.error) as
     | { message?: unknown; code?: unknown }
     | undefined;
   if (nativeError && typeof nativeError === "object") {
     const { message, code } = nativeError;
-    const text = typeof message === "string" && message.trim() ? message.trim() : null;
-    if (text) return code === undefined || code === null ? text : `${text} (${String(code)})`;
+    const text =
+      typeof message === "string" && message.trim() ? message.trim() : null;
+    if (text)
+      return code === undefined || code === null
+        ? text
+        : `${text} (${String(code)})`;
   }
 
   return null;
@@ -110,14 +142,18 @@ function readTraceId(payload: unknown): string | null {
   const root = payload as Record<string, unknown>;
   const candidates = [
     (root.error as { fbtrace_id?: unknown } | undefined)?.fbtrace_id,
-    ((root._data as Record<string, unknown> | undefined)?.error as { fbtrace_id?: unknown } | undefined)
-      ?.fbtrace_id,
+    (
+      (root._data as Record<string, unknown> | undefined)?.error as
+        | { fbtrace_id?: unknown }
+        | undefined
+    )?.fbtrace_id,
     Array.isArray(root._errors)
       ? (root._errors[0] as { fbtrace_id?: unknown } | undefined)?.fbtrace_id
       : undefined,
   ];
   for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    if (typeof candidate === "string" && candidate.trim())
+      return candidate.trim();
   }
   return null;
 }
@@ -127,7 +163,11 @@ function readRequestId(response: Response, payload: unknown): string | null {
   // seguimiento a una petición, a diferencia de `x-dualhook-request-id`.
   // Se prueban las variantes más comunes; si ninguna aparece, queda null y
   // el primer fallo real en producción dirá cuál usar.
-  const headerCandidates = ["x-chakra-request-id", "x-request-id", "x-amzn-requestid"];
+  const headerCandidates = [
+    "x-chakra-request-id",
+    "x-request-id",
+    "x-amzn-requestid",
+  ];
   for (const name of headerCandidates) {
     const value = response.headers?.get?.(name);
     if (value) return value;
@@ -136,7 +176,8 @@ function readRequestId(response: Response, payload: unknown): string | null {
     const meta = (payload as Record<string, unknown>)._meta;
     if (meta && typeof meta === "object") {
       const requestId = (meta as Record<string, unknown>).requestId;
-      if (typeof requestId === "string" && requestId.trim()) return requestId.trim();
+      if (typeof requestId === "string" && requestId.trim())
+        return requestId.trim();
     }
   }
   return null;
@@ -172,6 +213,7 @@ function readExternalId(payload: unknown): string | null {
  * nunca dependa de que el envío esté listo.
  */
 async function postToChakra(
+  /** Teléfono de siempre, o BSUID cuando la clienta tiene nombre de usuario. */
   to: string | null,
   // `payload` a secas está tomado más abajo por el cuerpo de la RESPUESTA,
   // que es lo que leen readError/readTraceId/readExternalId.
@@ -209,7 +251,7 @@ async function postToChakra(
           // `recipient_type` se omite a propósito: es opcional y su valor por
           // defecto ya es "individual". Así el mensaje de texto sale byte a
           // byte como el que lleva meses funcionando en producción.
-          ...(to ? { to: to.trim() } : {}),
+          ...buildRecipientFields(to),
           ...messagePayload,
         }),
       },
@@ -234,7 +276,8 @@ async function postToChakra(
     });
     return { ok: false, error, requestId, fbTraceId };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
+    const message =
+      error instanceof Error ? error.message : "Error desconocido";
     console.error("[WHATSAPP_SEND] No se pudo contactar a Chakra", { message });
     return { ok: false, error: message.slice(0, 500) };
   }
@@ -294,7 +337,9 @@ export async function sendWhatsAppButtonMessage(
             type: "reply",
             reply: {
               id: button.id.trim(),
-              title: button.title.trim().slice(0, WHATSAPP_BUTTON_TITLE_MAX_LENGTH),
+              title: button.title
+                .trim()
+                .slice(0, WHATSAPP_BUTTON_TITLE_MAX_LENGTH),
             },
           })),
         },
@@ -354,7 +399,9 @@ export async function sendWhatsAppImageButtonMessage(
             type: "reply",
             reply: {
               id: button.id.trim(),
-              title: button.title.trim().slice(0, WHATSAPP_BUTTON_TITLE_MAX_LENGTH),
+              title: button.title
+                .trim()
+                .slice(0, WHATSAPP_BUTTON_TITLE_MAX_LENGTH),
             },
           })),
         },
@@ -413,7 +460,8 @@ export async function sendWhatsAppListMessage(
   if (rows.length === 0) return { ok: false, error: "sin opciones que mandar" };
 
   const button = list.button.trim().slice(0, WHATSAPP_LIST_BUTTON_MAX_LENGTH);
-  if (!button) return { ok: false, error: "sin texto para el botón de la lista" };
+  if (!button)
+    return { ok: false, error: "sin texto para el botón de la lista" };
 
   const footer = list.footer?.trim().slice(0, WHATSAPP_LIST_FOOTER_MAX_LENGTH);
 
@@ -446,7 +494,8 @@ export async function sendWhatsAppTypingIndicator(
   inboundMessageId: string,
   environment: SendEnvironment = env,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!inboundMessageId.trim()) return { ok: false, error: "sin mensaje al que responder" };
+  if (!inboundMessageId.trim())
+    return { ok: false, error: "sin mensaje al que responder" };
 
   const result = await postToChakra(
     // El destinatario va implícito en `message_id`; mandar `to` sobra.

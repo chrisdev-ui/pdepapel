@@ -7,7 +7,7 @@ import { readWebhookToken, safeSecretEquals } from "@/lib/webhook-auth";
 import { enqueueWhatsAppWebhookEvent } from "@/lib/whatsapp/queue";
 import {
   classifyWhatsAppWebhookEvent,
-  getWhatsAppWebhookPhone,
+  getWhatsAppWebhookConversationKey,
   parseWhatsAppWebhookPayload,
   verifyWhatsAppWebhookSignature,
 } from "@/lib/whatsapp/webhook";
@@ -47,11 +47,19 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ error: "Verificación rechazada" }, { status: 403 });
+  return NextResponse.json(
+    { error: "Verificación rechazada" },
+    { status: 403 },
+  );
 }
 
 function isAuthenticated(request: Request, rawBody: string): boolean {
-  if (safeSecretEquals(readWebhookToken(request), env.WHATSAPP_WEBHOOK_VERIFY_TOKEN)) {
+  if (
+    safeSecretEquals(
+      readWebhookToken(request),
+      env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+    )
+  ) {
     return true;
   }
   return verifyWhatsAppWebhookSignature(
@@ -63,7 +71,10 @@ function isAuthenticated(request: Request, rawBody: string): boolean {
 
 export async function POST(request: Request) {
   const contentLength = Number(request.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_WEBHOOK_BODY_BYTES) {
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_WEBHOOK_BODY_BYTES
+  ) {
     return NextResponse.json(
       { error: "El webhook excede el tamaño permitido" },
       { status: 413 },
@@ -83,7 +94,8 @@ export async function POST(request: Request) {
   }
 
   const payload = parseWhatsAppWebhookPayload(body);
-  const { topic, resource, sellerId, eventKey } = classifyWhatsAppWebhookEvent(payload);
+  const { topic, resource, sellerId, eventKey } =
+    classifyWhatsAppWebhookEvent(payload);
 
   try {
     const connection = sellerId
@@ -97,7 +109,10 @@ export async function POST(request: Request) {
     try {
       event = await prismadb.marketplaceWebhookEvent.upsert({
         where: {
-          provider_eventKey: { provider: MarketplaceProvider.WHATSAPP, eventKey },
+          provider_eventKey: {
+            provider: MarketplaceProvider.WHATSAPP,
+            eventKey,
+          },
         },
         update: {},
         create: {
@@ -116,10 +131,16 @@ export async function POST(request: Request) {
       // restricción única: ambas intentan crear la fila a la vez y una gana.
       // La otra no falló de verdad — el evento ya quedó guardado por la
       // primera, así que se reusa esa fila en vez de tratarlo como error.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
         event = await prismadb.marketplaceWebhookEvent.findUniqueOrThrow({
           where: {
-            provider_eventKey: { provider: MarketplaceProvider.WHATSAPP, eventKey },
+            provider_eventKey: {
+              provider: MarketplaceProvider.WHATSAPP,
+              eventKey,
+            },
           },
           select: { id: true, connectionId: true },
         });
@@ -132,7 +153,12 @@ export async function POST(request: Request) {
     // el evento ya está guardado y la recuperación lo tomará después.
     let queued = false;
     try {
-      queued = await enqueueWhatsAppWebhookEvent(event.id, getWhatsAppWebhookPhone(payload));
+      queued = await enqueueWhatsAppWebhookEvent(
+        event.id,
+        // Teléfono cuando llega; si no, el BSUID: así cada contacto con nombre
+        // de usuario tiene su propia fila de espera y no se mezclan entre sí.
+        getWhatsAppWebhookConversationKey(payload),
+      );
     } catch (error) {
       console.error("[WHATSAPP_WEBHOOK] No se pudo encolar el evento", {
         eventId: event.id,
@@ -159,6 +185,9 @@ export async function POST(request: Request) {
       eventKey,
       message: error instanceof Error ? error.message : "unknown",
     });
-    return NextResponse.json({ received: true, stored: false, topic }, { status: 200 });
+    return NextResponse.json(
+      { received: true, stored: false, topic },
+      { status: 200 },
+    );
   }
 }

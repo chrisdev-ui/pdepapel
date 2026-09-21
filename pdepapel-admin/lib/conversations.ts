@@ -171,7 +171,12 @@ export function resolveCart(
 
 export interface ConversationRow {
   id: string;
-  phone: string;
+  /** `null` cuando Meta no manda el teléfono (contacto con nombre de usuario). */
+  phone: string | null;
+  /** Identidad de Meta que sí llega siempre; lo que sostiene la conversación. */
+  bsuid: string | null;
+  /** `@mrs_han14` sin arroba; a veces lo único con lo que reconocerla. */
+  username: string | null;
   contactName: string | null;
   status: ConversationStatus;
   lastInboundAt: Date | null;
@@ -197,7 +202,10 @@ export interface ConversationThreadMessage {
 
 export interface ConversationDetail {
   id: string;
-  phone: string;
+  /** `null` cuando Meta no manda el teléfono (contacto con nombre de usuario). */
+  phone: string | null;
+  bsuid: string | null;
+  username: string | null;
   contactName: string | null;
   status: ConversationStatus;
   lastInboundAt: Date | null;

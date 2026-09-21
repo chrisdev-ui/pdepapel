@@ -33,7 +33,8 @@ export const columns: ColumnDef<ConversationColumn>[] = [
     ),
     cell: ({ row }) => (
       <span className="font-medium">
-        {row.original.contactName?.trim() || "Sin nombre"}
+        {row.original.contactName?.trim() ||
+          (row.original.username ? `@${row.original.username}` : "Sin nombre")}
       </span>
     ),
   },
@@ -42,9 +43,32 @@ export const columns: ColumnDef<ConversationColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Teléfono" />
     ),
-    cell: ({ row }) => (
-      <DataTableCellPhone phoneNumber={row.original.phone} showCountry />
-    ),
+    // Sin teléfono la celda quedaba en blanco: `DataTableCellPhone` devuelve
+    // `null`. Desde que Meta admite nombres de usuario eso pasa de verdad, y
+    // una fila muda parecía un error de datos. En su lugar va el nombre de
+    // usuario, que es como aparece en el celular de Paula (`@mrs_han14`).
+    cell: ({ row }) =>
+      row.original.phone ? (
+        <DataTableCellPhone phoneNumber={row.original.phone} showCountry />
+      ) : row.original.username ? (
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-medium">
+            @{row.original.username}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Nombre de usuario · sin teléfono
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-col">
+          <span className="text-sm text-muted-foreground">Sin teléfono</span>
+          <span className="text-xs text-muted-foreground">
+            {row.original.bsuid
+              ? "Usa nombre de usuario"
+              : "No lo mandó WhatsApp"}
+          </span>
+        </div>
+      ),
   },
   {
     accessorKey: "status",

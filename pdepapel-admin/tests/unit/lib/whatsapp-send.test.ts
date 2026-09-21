@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 
 import {
+  buildRecipientFields,
   WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
   WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH,
   sendWhatsAppListMessage,
@@ -289,5 +290,35 @@ describe("sendWhatsAppListMessage", () => {
       sendWhatsAppListMessage(to, body, l as typeof lista, configured),
     ).resolves.toMatchObject({ ok: false });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+
+/**
+ * A quién se le manda cuando la clienta tiene nombre de usuario.
+ *
+ * Meta lo dice sin rodeos: con solo el BSUID va en `recipient` y se **omite**
+ * `to`; si se conocen los dos, `to` manda. El endpoint que usamos es el
+ * genérico de mensajes, que Chakra deja pasar tal cual — el de «plantilla por
+ * número de teléfono», que no admite BSUID, no se usa aquí.
+ */
+describe("buildRecipientFields", () => {
+  it("manda el teléfono en `to`, como siempre", () => {
+    expect(buildRecipientFields("573001234567")).toEqual({ to: "573001234567" });
+  });
+
+  it("manda el BSUID en `recipient`, y sin `to`", () => {
+    const fields = buildRecipientFields("CO.2465629583926901");
+    expect(fields).toEqual({ recipient: "CO.2465629583926901" });
+    expect(fields).not.toHaveProperty("to");
+  });
+
+  it("no manda nada si no hay destinatario", () => {
+    expect(buildRecipientFields(null)).toEqual({});
+    expect(buildRecipientFields("   ")).toEqual({});
+  });
+
+  it("no confunde con un BSUID un número raro", () => {
+    expect(buildRecipientFields("CO.123")).toEqual({ to: "CO.123" });
   });
 });

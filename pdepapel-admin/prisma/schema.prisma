@@ -2459,8 +2459,20 @@ model Conversation {
   id             String              @id @default(uuid())
   storeId        String
   channel        ConversationChannel @default(WHATSAPP)
-  /// Solo dígitos con indicativo (`normalizePhone`), la misma llave que agrupa Clientes.
-  phone          String
+  /// Solo dígitos con indicativo (`normalizePhone`), la misma llave que agrupa
+  /// Clientes. **Puede faltar**: desde que Meta admite nombres de usuario, el
+  /// webhook omite el teléfono de quien tiene uno salvo que haya habido trato
+  /// en 30 días o esté en la libreta del negocio. Responderle no basta.
+  phone          String?
+  /// Identificador de Meta por negocio (BSUID, p. ej. `CO.2465629583926901`).
+  /// Llega siempre, con teléfono o sin él, y es estable para un mismo contacto,
+  /// así que es la identidad que no se pierde. `null` en las conversaciones
+  /// anteriores a que esto existiera.
+  bsuid          String?
+  /// Nombre de usuario de WhatsApp (`@mrs_han14`), sin la arroba. Meta lo
+  /// manda en `contacts[].profile.username` y muchas veces es lo ÚNICO legible
+  /// que llega: `profile.name` viene vacío para la mayoría de estos contactos.
+  username       String?
   contactName    String?
   status         ConversationStatus  @default(OPEN)
   lastInboundAt  DateTime?
@@ -2477,6 +2489,7 @@ model Conversation {
   messages ConversationMessage[]
 
   @@unique([storeId, channel, phone])
+  @@unique([storeId, channel, bsuid])
   @@index([storeId, status, lastInboundAt])
   @@index([orderId])
 }

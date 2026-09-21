@@ -110,7 +110,12 @@ export async function createOrderFromConversationCart(input: {
         source: OrderSource.WHATSAPP,
         createdBy: input.createdBy,
         fullName: conversation.contactName?.trim() || "Clienta de WhatsApp",
-        phone: conversation.phone,
+        // Un borrador necesita un teléfono: `Order.phone` es la llave con la
+        // que Clientes agrupa. Si la conversación todavía no lo tiene —clienta
+        // con nombre de usuario—, se deja vacío en vez de guardar el BSUID,
+        // que no es un número y ensuciaría el agrupado y los enlaces de
+        // WhatsApp. Paula lo completa al cerrar el pedido.
+        phone: conversation.phone ?? "",
         subtotal: totals.subtotal,
         total: totals.total,
         orderItems: {

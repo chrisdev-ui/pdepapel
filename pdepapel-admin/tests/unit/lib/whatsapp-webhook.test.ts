@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifyWhatsAppWebhookEvent,
   getWhatsAppWebhookPhone,
+  getWhatsAppWebhookIdentity,
+  getWhatsAppWebhookConversationKey,
   hashWhatsAppWebhookPayload,
   parseWhatsAppWebhookPayload,
   verifyWhatsAppWebhookSignature,
@@ -100,8 +102,84 @@ describe("getWhatsAppWebhookPhone", () => {
 
   it("returns null for bodies without a phone instead of throwing", () => {
     expect(getWhatsAppWebhookPhone({ _rawUnparsable: "x" })).toBeNull();
-    expect(getWhatsAppWebhookPhone(metaMessage({ messages: [{ id: "wamid.1" }], statuses: "nope" }))).toBeNull();
     expect(getWhatsAppWebhookPhone({ entry: [{ changes: [{ value: { messages: [{ from: "abc" }] } }] }] })).toBeNull();
+  });
+
+  it("toma el teléfono de `contacts[]` cuando el mensaje no trae `from`", () => {
+    // Meta lo manda en los dos sitios; leer el segundo hace que la llave de la
+    // cola sea más fiable, no menos.
+    expect(
+      getWhatsAppWebhookPhone(metaMessage({ messages: [{ id: "wamid.1" }], statuses: "nope" })),
+    ).toBe("573000000000");
+  });
+});
+
+/**
+ * Lo que rompió con las clientas que tienen nombre de usuario: Meta deja de
+ * mandar el teléfono y manda un BSUID. Antes esto devolvía `null` y todas
+ * compartían la misma fila de espera de la cola.
+ */
+describe("getWhatsAppWebhookIdentity", () => {
+  const sinTelefono = (value: Record<string, unknown>) => ({
+    object: "whatsapp_business_account",
+    entry: [{ id: "WABA", changes: [{ field: "messages", value }] }],
+  });
+
+  it("saca el BSUID de un mensaje entrante sin teléfono", () => {
+    const payload = sinTelefono({
+      contacts: [{ profile: { name: "Eliana" }, user_id: "CO.2465629583926901" }],
+      messages: [{ id: "wamid.1", type: "text", from_user_id: "CO.2465629583926901" }],
+    });
+    expect(getWhatsAppWebhookIdentity(payload)).toEqual({
+      phone: null,
+      bsuid: "CO.2465629583926901",
+    });
+    expect(getWhatsAppWebhookConversationKey(payload)).toBe("CO.2465629583926901");
+  });
+
+  it("saca el BSUID de un eco de Paula, que lo trae en `to_user_id`", () => {
+    const payload = {
+      entry: [
+        {
+          id: "WABA",
+          changes: [
+            {
+              field: "smb_message_echoes",
+              value: {
+                contacts: [{ user_id: "CO.2465629583926901" }],
+                message_echoes: [
+                  { id: "wamid.eco", type: "text", from: "573999999999", to_user_id: "CO.2465629583926901" },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(getWhatsAppWebhookIdentity(payload)).toEqual({
+      phone: null,
+      bsuid: "CO.2465629583926901",
+    });
+  });
+
+  it("prefiere el teléfono cuando llegan los dos, y conserva el BSUID", () => {
+    const payload = sinTelefono({
+      contacts: [{ wa_id: "573001234567", user_id: "CO.123456789" }],
+      messages: [{ id: "wamid.1", from: "573001234567", from_user_id: "CO.123456789" }],
+    });
+    expect(getWhatsAppWebhookIdentity(payload)).toEqual({
+      phone: "573001234567",
+      bsuid: "CO.123456789",
+    });
+    expect(getWhatsAppWebhookConversationKey(payload)).toBe("573001234567");
+  });
+
+  it("no confunde con un BSUID algo que no lo es", () => {
+    const payload = sinTelefono({
+      messages: [{ id: "wamid.1", from_user_id: "no-es-un-bsuid" }],
+    });
+    expect(getWhatsAppWebhookIdentity(payload)).toEqual({ phone: null, bsuid: null });
+    expect(getWhatsAppWebhookConversationKey(payload)).toBeNull();
   });
 });
 

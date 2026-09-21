@@ -53,7 +53,9 @@ export function hashWhatsAppWebhookPayload(payload: unknown): string {
  * Nunca lanza: un cuerpo que no es JSON (o que es un JSON que no es objeto)
  * se envuelve para guardarlo igual.
  */
-export function parseWhatsAppWebhookPayload(body: string): WhatsAppWebhookPayload {
+export function parseWhatsAppWebhookPayload(
+  body: string,
+): WhatsAppWebhookPayload {
   try {
     const parsed = JSON.parse(body) as unknown;
     if (isRecord(parsed)) return parsed;
@@ -87,12 +89,16 @@ export function classifyWhatsAppWebhookEvent(
     const sellerId = asTrimmedString(firstEntry.id);
     const changes = Array.isArray(firstEntry.changes) ? firstEntry.changes : [];
     const firstChange = changes.find(isRecord);
-    const value = firstChange && isRecord(firstChange.value) ? firstChange.value : null;
+    const value =
+      firstChange && isRecord(firstChange.value) ? firstChange.value : null;
     const metadata = value && isRecord(value.metadata) ? value.metadata : null;
 
-    const topic = (firstChange && asTrimmedString(firstChange.field)) ?? "unknown";
+    const topic =
+      (firstChange && asTrimmedString(firstChange.field)) ?? "unknown";
     const resource =
-      (metadata && asTrimmedString(metadata.phone_number_id)) ?? sellerId ?? "unknown";
+      (metadata && asTrimmedString(metadata.phone_number_id)) ??
+      sellerId ??
+      "unknown";
 
     const ids: string[] = [];
     for (const entry of entries) {
@@ -120,37 +126,113 @@ export function classifyWhatsAppWebhookEvent(
   }
 }
 
+/** Un BSUID de Meta: `CO.2465629583926901`, `US.13491…`. Prefijo de dos letras. */
+const BSUID = /^[A-Z]{2}\.\d{6,}$/;
+
+const asBsuid = (value: unknown): string | null => {
+  const raw = asTrimmedString(value);
+  return raw && BSUID.test(raw) ? raw : null;
+};
+
+export interface WhatsAppContactIdentity {
+  /** Teléfono de la clienta, solo dígitos. `null` si el cuerpo no lo trae. */
+  phone: string | null;
+  /** BSUID de la clienta. Llega con teléfono o sin él. */
+  bsuid: string | null;
+}
+
 /**
- * Teléfono de la clienta a la que pertenece el evento (para ordenar la cola
- * por conversación): el `from` del primer mensaje, el `to` del primer eco de
- * `smb_message_echoes` (en un eco los papeles se invierten: `from` es el
- * número de la tienda) o el `recipient_id` del primer estado, solo dígitos.
- * `null` cuando el cuerpo no trae ninguno.
+ * Quién es la clienta a la que pertenece el evento.
+ *
+ * Meta manda el teléfono en `from` (mensaje entrante), en `to` (eco del
+ * celular de Paula: ahí los papeles se invierten) o en `recipient_id` (estado
+ * de entrega). **Desde que existen los nombres de usuario, puede no mandar
+ * ninguno**: a quien tiene uno se le omite el teléfono salvo que haya habido
+ * trato en 30 días o esté en la libreta del negocio —y contestarle no basta,
+ * comprobado con una conversación de venta de veinte minutos en la que nunca
+ * apareció—. Lo que sí llega siempre es el BSUID, en `from_user_id`,
+ * `to_user_id` o `contacts[].user_id`.
+ *
+ * Por eso esto devuelve los dos y no uno: el teléfono cuando esté, el BSUID
+ * siempre, y quien llama decide con cuál se queda.
  */
-export function getWhatsAppWebhookPhone(payload: WhatsAppWebhookPayload): string | null {
-  const digits = (value: string | null) => (value ? value.replace(/\D/g, "") || null : null);
+export function getWhatsAppWebhookIdentity(
+  payload: WhatsAppWebhookPayload,
+): WhatsAppContactIdentity {
+  const digits = (value: string | null) =>
+    value ? value.replace(/\D/g, "") || null : null;
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  let phone: string | null = null;
+  let bsuid: string | null = null;
 
   for (const entry of entries) {
     if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
     for (const change of entry.changes) {
       if (!isRecord(change) || !isRecord(change.value)) continue;
-      const { messages, statuses, message_echoes: echoes } = change.value;
+      const {
+        messages,
+        statuses,
+        message_echoes: echoes,
+        contacts,
+      } = change.value;
 
       const first = (Array.isArray(messages) ? messages : []).find(isRecord);
-      const fromMessage = digits(first ? asTrimmedString(first.from) : null);
-      if (fromMessage) return fromMessage;
+      if (first) {
+        phone ??= digits(asTrimmedString(first.from));
+        bsuid ??= asBsuid(first.from_user_id);
+      }
 
       const firstEcho = (Array.isArray(echoes) ? echoes : []).find(isRecord);
-      const echoRecipient = digits(firstEcho ? asTrimmedString(firstEcho.to) : null);
-      if (echoRecipient) return echoRecipient;
+      if (firstEcho) {
+        phone ??= digits(asTrimmedString(firstEcho.to));
+        bsuid ??= asBsuid(firstEcho.to_user_id);
+      }
 
-      const firstStatus = (Array.isArray(statuses) ? statuses : []).find(isRecord);
-      const recipient = digits(firstStatus ? asTrimmedString(firstStatus.recipient_id) : null);
-      if (recipient) return recipient;
+      const firstStatus = (Array.isArray(statuses) ? statuses : []).find(
+        isRecord,
+      );
+      if (firstStatus) {
+        phone ??= digits(asTrimmedString(firstStatus.recipient_id));
+        bsuid ??= asBsuid(firstStatus.recipient_user_id);
+      }
+
+      // `contacts[]` acompaña a los entrantes y trae el BSUID aunque el
+      // mensaje no lo repita.
+      const firstContact = (Array.isArray(contacts) ? contacts : []).find(
+        isRecord,
+      );
+      if (firstContact) {
+        phone ??= digits(asTrimmedString(firstContact.wa_id));
+        bsuid ??= asBsuid(firstContact.user_id);
+      }
+
+      if (phone && bsuid) return { phone, bsuid };
     }
   }
-  return null;
+  return { phone, bsuid };
+}
+
+/**
+ * Llave con la que se serializa la cola: una conversación a la vez, para que
+ * dos mensajes de la misma persona no se procesen a la vez.
+ *
+ * Se prefiere el teléfono —es lo que han usado las conversaciones de siempre—
+ * y se cae al BSUID. Antes, sin teléfono devolvía `null` y **todos** los
+ * contactos con nombre de usuario compartían la misma fila de espera
+ * (`…-unknown`), así que sus mensajes se mezclaban entre sí.
+ */
+export function getWhatsAppWebhookConversationKey(
+  payload: WhatsAppWebhookPayload,
+): string | null {
+  const { phone, bsuid } = getWhatsAppWebhookIdentity(payload);
+  return phone ?? bsuid;
+}
+
+/** @deprecated Usa `getWhatsAppWebhookIdentity`: puede no haber teléfono. */
+export function getWhatsAppWebhookPhone(
+  payload: WhatsAppWebhookPayload,
+): string | null {
+  return getWhatsAppWebhookIdentity(payload).phone;
 }
 
 /**
@@ -163,10 +245,16 @@ export function verifyWhatsAppWebhookSignature(
   appSecret: string | null | undefined,
 ): boolean {
   if (!signatureHeader || !appSecret) return false;
-  const received = signatureHeader.trim().replace(/^sha256=/i, "").toLowerCase();
+  const received = signatureHeader
+    .trim()
+    .replace(/^sha256=/i, "")
+    .toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(received)) return false;
   const expected = createHmac("sha256", appSecret)
     .update(Buffer.from(rawBody, "utf8"))
     .digest("hex");
-  return timingSafeEqual(Buffer.from(received, "utf8"), Buffer.from(expected, "utf8"));
+  return timingSafeEqual(
+    Buffer.from(received, "utf8"),
+    Buffer.from(expected, "utf8"),
+  );
 }

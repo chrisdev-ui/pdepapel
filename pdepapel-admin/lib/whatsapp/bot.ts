@@ -280,7 +280,12 @@ async function escalate(conversationId: string) {
  */
 export async function runWhatsAppBot(input: {
   conversationId: string;
-  phone: string;
+  /**
+   * A quién se le contesta. Es el teléfono de siempre, o el BSUID cuando la
+   * clienta tiene nombre de usuario y Meta no manda teléfono: dentro de la
+   * ventana de atención, Meta admite las dos formas en `to`.
+   */
+  recipient: string;
   body: string;
   /** Id del botón tocado, si el mensaje fue un toque y no texto escrito. */
   interactiveReplyId?: string | null;
@@ -330,7 +335,7 @@ export async function runWhatsAppBot(input: {
   if (buttonId === TALK_TO_OWNER_BUTTON_ID) {
     const sent = await deliver(
       conversation.id,
-      input.phone,
+      input.recipient,
       TALK_TO_OWNER_ACKNOWLEDGEMENT,
       [],
       pacing(input),
@@ -365,7 +370,7 @@ export async function runWhatsAppBot(input: {
       await escalate(conversation.id);
       await deliver(
         conversation.id,
-        input.phone,
+        input.recipient,
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
@@ -374,7 +379,7 @@ export async function runWhatsAppBot(input: {
     }
     const sent = await deliver(
       conversation.id,
-      input.phone,
+      input.recipient,
       answer.text,
       [],
       pacing(input),
@@ -415,7 +420,7 @@ export async function runWhatsAppBot(input: {
       await escalate(conversation.id);
       await deliver(
         conversation.id,
-        input.phone,
+        input.recipient,
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
@@ -425,7 +430,7 @@ export async function runWhatsAppBot(input: {
 
     const sent = await deliver(
       conversation.id,
-      input.phone,
+      input.recipient,
       leaf.text,
       [],
       pacing(input),
@@ -463,7 +468,7 @@ export async function runWhatsAppBot(input: {
     await escalate(conversation.id);
     const sent = await deliver(
       conversation.id,
-      input.phone,
+      input.recipient,
       UNREADABLE_MEDIA_ACKNOWLEDGEMENT,
       [],
       pacing(input),
@@ -486,7 +491,7 @@ export async function runWhatsAppBot(input: {
       await escalate(conversation.id);
       await deliver(
         conversation.id,
-        input.phone,
+        input.recipient,
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
@@ -495,7 +500,7 @@ export async function runWhatsAppBot(input: {
     }
     return respond(
       conversation.id,
-      input.phone,
+      input.recipient,
       target,
       undefined,
       pacing(input),
@@ -521,7 +526,7 @@ export async function runWhatsAppBot(input: {
           factIntent === "payment.methods" ? buildPaymentMenuRows(settings) : [];
         const sent = await deliver(
           conversation.id,
-          input.phone,
+          input.recipient,
           answer,
           // Sin menú propio: `deliver` ya añade «Hablar con Paula», que es la
           // salida que lleva todo mensaje del bot.
@@ -569,7 +574,7 @@ export async function runWhatsAppBot(input: {
         if (answer) {
           const sent = await deliver(
             conversation.id,
-            input.phone,
+            input.recipient,
             answer.text,
             [],
             pacing(input),
@@ -599,7 +604,7 @@ export async function runWhatsAppBot(input: {
         // es una conversación de un mensaje más y no una espera a Paula.
         const sent = await deliver(
           conversation.id,
-          input.phone,
+          input.recipient,
           PRODUCT_TEMPLATES["reference.lost"](),
           [],
           pacing(input),
@@ -620,7 +625,7 @@ export async function runWhatsAppBot(input: {
   if (match) {
     return respond(
       conversation.id,
-      input.phone,
+      input.recipient,
       match.keyword,
       match.trigger,
       pacing(input),
@@ -645,7 +650,7 @@ export async function runWhatsAppBot(input: {
             onSlow: async () => {
               const avisado = await deliver(
                 conversation.id,
-                input.phone,
+                input.recipient,
                 SLOW_ANSWER_ACKNOWLEDGEMENT,
                 [],
                 { ...pacing(input), skip: true },
@@ -662,7 +667,7 @@ export async function runWhatsAppBot(input: {
     if (answer) {
       const sent = await deliver(
         conversation.id,
-        input.phone,
+        input.recipient,
         answer.text,
         [],
         pacing(input),
@@ -694,7 +699,7 @@ export async function runWhatsAppBot(input: {
   await escalate(conversation.id);
   await deliver(
     conversation.id,
-    input.phone,
+    input.recipient,
     NO_MATCH_ACKNOWLEDGEMENT,
     [],
     pacing(input),

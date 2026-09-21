@@ -14,6 +14,8 @@ export async function getConversations(storeId: string): Promise<ConversationRow
     select: {
       id: true,
       phone: true,
+      bsuid: true,
+      username: true,
       contactName: true,
       status: true,
       lastInboundAt: true,
