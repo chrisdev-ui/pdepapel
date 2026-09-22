@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ProductCard from "@/components/ui/product-card";
@@ -34,6 +34,47 @@ describe("ProductCard", () => {
   afterEach(cleanup);
 
   const lastButton = (name: string | RegExp) => screen.getAllByRole("button", { name }).at(-1)!;
+
+  /**
+   * Entre tocar la foto y ver la ficha pasaban ~839 ms medidos en escritorio
+   * —más en un teléfono— sin que cambiara nada en pantalla, así que la
+   * reacción normal era volver a tocar. El enlace nunca estuvo roto: lo que
+   * faltaba era decir «ya te oí».
+   */
+  describe("señal al abrir el producto", () => {
+    const enlace = () => screen.getByRole("link", { name: /^Ver / });
+
+    it("no enseña nada hasta que la tocan", () => {
+      render(<ProductCard product={base} />);
+      expect(document.querySelector('[data-opening="true"]')).toBeNull();
+    });
+
+    it("al tocarla se apaga y sale la rueda", () => {
+      render(<ProductCard product={base} />);
+      fireEvent.click(enlace(), { button: 0 });
+      expect(document.querySelector('[data-opening="true"]')).not.toBeNull();
+    });
+
+    /**
+     * Con Cmd/Ctrl o el botón central, la pestaña actual se queda donde está:
+     * encender la rueda dejaría la tarjeta apagada para siempre.
+     */
+    it("abrir en otra pestaña no la apaga", () => {
+      render(<ProductCard product={base} />);
+      fireEvent.click(enlace(), { button: 0, metaKey: true });
+      expect(document.querySelector('[data-opening="true"]')).toBeNull();
+      fireEvent.click(enlace(), { button: 1 });
+      expect(document.querySelector('[data-opening="true"]')).toBeNull();
+    });
+
+    /** El enlace sigue siendo un enlace: no se intercepta la navegación. */
+    it("no toca el comportamiento del enlace", () => {
+      render(<ProductCard product={base} />);
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+      enlace().dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    });
+  });
 
   it("shows the offer badge, the struck price and a working add button", () => {
     render(<ProductCard product={base} />);

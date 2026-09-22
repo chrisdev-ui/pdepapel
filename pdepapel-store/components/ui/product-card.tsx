@@ -5,12 +5,13 @@ import {
   Expand,
   Heart,
   ImageOff,
+  Loader2,
   Plus,
   ShoppingCart,
   Star,
 } from "lucide-react";
 import Link from "next/link";
-import { MouseEventHandler, useCallback, useEffect, useState } from "react";
+import { MouseEventHandler, memo, useCallback, useEffect, useState } from "react";
 
 import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { useCart } from "@/hooks/use-cart";
@@ -118,6 +119,37 @@ const ProductCard: React.FC<ProductCardProps> = ({
     event.stopPropagation();
   };
 
+  /**
+   * «Ya te oí»: la tarjeta se apaga un poco y saca una rueda mientras llega
+   * la ficha.
+   *
+   * Entre tocar la foto y ver el producto pasaban ~839 ms medidos en
+   * escritorio, y bastantes más en un teléfono, con la pantalla idéntica. Sin
+   * ninguna señal, la reacción normal es volver a tocar: son los clics
+   * muertos que Clarity marcaba sobre la foto.
+   *
+   * No se toca el enlace. Nada de `preventDefault` ni de navegar a mano: el
+   * `<Link>` sigue haciendo exactamente lo de antes, así que abrir en otra
+   * pestaña —clic central, Cmd/Ctrl— se conserva. Por eso mismo, un clic con
+   * modificador no enciende nada: esa pestaña se abre aparte y esta se queda
+   * como está.
+   */
+  const [opening, setOpening] = useState(false);
+  useEffect(() => {
+    if (!opening) return;
+    // Si la navegación se cae o la cancelan, la tarjeta no se queda apagada.
+    const timer = window.setTimeout(() => setOpening(false), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [opening]);
+
+  const opensInThisTab = (event: React.MouseEvent) =>
+    !event.defaultPrevented &&
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey;
+
   const onPreview = useCallback<MouseEventHandler<HTMLButtonElement>>(
     (event) => {
       stop(event);
@@ -201,13 +233,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
         href={href}
         aria-label={`Ver ${product.name}`}
         className="relative block aspect-square overflow-hidden rounded-xl bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
-        onClick={() =>
+        onClick={(event) => {
+          if (opensInThisTab(event)) setOpening(true);
           trackCustomerEvent("select_item", {
             item_list_id: "catalog",
             item_list_name: "Catálogo",
             items: [toAnalyticsItem(product, 1)],
-          })
-        }
+          });
+        }}
       >
         {mainImage?.url ? (
           <CloudinaryImage
@@ -238,6 +271,15 @@ const ProductCard: React.FC<ProductCardProps> = ({
             sizes={sizes}
             className="hidden object-cover opacity-0 transition-opacity duration-300 can-hover:block can-hover:group-hover:opacity-100"
           />
+        )}
+        {opening && (
+          <span
+            aria-hidden="true"
+            data-opening="true"
+            className="absolute inset-0 flex items-center justify-center bg-white/55 backdrop-blur-[1px]"
+          >
+            <Loader2 className="h-6 w-6 animate-spin text-blue-yankees" />
+          </span>
         )}
       </Link>
 
@@ -429,4 +471,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
   );
 };
 
-export default ProductCard;
+/**
+ * En `memo` porque la cuadrícula del catálogo ya no se queda en 24 tarjetas:
+ * encadenando «Cargar más» puede acumular cientos, y cualquier cambio de
+ * estado del contenedor —la rueda del botón, por ejemplo— las repintaba
+ * todas. Las props son estables (el producto viene de la caché de la consulta
+ * y `sizes` es una constante), así que la comparación por defecto basta.
+ */
+export default memo(ProductCard);
