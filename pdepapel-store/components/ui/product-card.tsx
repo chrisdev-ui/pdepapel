@@ -290,19 +290,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </div>
       )}
 
-      <button
-        type="button"
-        aria-label={heartLabel}
-        aria-pressed={isWishlistProduct}
-        onClick={onToggleWishlist}
-        className={cn(
-          ICON_BUTTON,
-          "absolute right-4 top-4 h-9 w-9 can-hover:hidden sm:right-5 sm:top-5",
-        )}
-      >
-        {heart}
-      </button>
-
       <div className="pointer-events-none absolute inset-x-2 top-2 hidden aspect-square can-hover:block sm:inset-x-3 sm:top-3">
         <div className="pointer-events-auto absolute inset-x-0 bottom-3 flex justify-center gap-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
           <button
@@ -441,30 +428,62 @@ const ProductCard: React.FC<ProductCardProps> = ({
               ) : null}
             </span>
           </div>
-          <button
-            type="button"
-            aria-label={
-              presale
-                ? soldOut
-                  ? "Reservas agotadas"
-                  : "Reservar ahora"
-                : comingSoon
-                  ? "Llega pronto"
-                  : soldOut
-                    ? "Agotado"
-                    : product.isGroup
-                      ? "Elegir opción"
-                      : "Agregar al carrito"
-            }
-            onClick={onAddToCart}
-            disabled={!canBuy}
-            className={cn(
-              "disabled:opacity-35 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-yankees text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed sm:h-10 sm:w-10",
-              isCartProduct && "ring-2 ring-pink-froly ring-offset-1",
-            )}
-          >
-            <Plus aria-hidden="true" className="h-[18px] w-[18px]" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/*
+             * En táctil, favoritos vive aquí y no sobre la foto.
+             *
+             * Estaba en la esquina superior derecha de la imagen: 36 px sobre
+             * una foto de 156 px en el teléfono, un 5% de su superficie y
+             * justo donde cae el pulgar. Comprobado con un iPhone 13 de
+             * verdad —tres productos, tres de tres—: tocar esa esquina no
+             * abría el producto, guardaba en favoritos sin que nadie lo
+             * pidiera. Doble daño: el toque parecía muerto y encima hacía
+             * algo a escondidas.
+             *
+             * Aquí abajo acompaña al de agregar, que es donde el pulgar ya
+             * busca las acciones de la tarjeta, y la foto entera —esquinas
+             * incluidas— vuelve a ser un solo destino: abrir el producto.
+             *
+             * `can-hover:hidden` se conserva: en escritorio manda la capa que
+             * aparece al pasar el puntero, y eso no se toca.
+             */}
+            <button
+              type="button"
+              aria-label={heartLabel}
+              aria-pressed={isWishlistProduct}
+              onClick={onToggleWishlist}
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-[1.5px] border-blue-baby bg-white text-blue-yankees transition-colors hover:bg-blue-baby/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 can-hover:hidden sm:h-10 sm:w-10",
+                isWishlistProduct && "border-rose-200 bg-rose-50",
+              )}
+            >
+              {heart}
+            </button>
+            <button
+              type="button"
+              aria-label={
+                presale
+                  ? soldOut
+                    ? "Reservas agotadas"
+                    : "Reservar ahora"
+                  : comingSoon
+                    ? "Llega pronto"
+                    : soldOut
+                      ? "Agotado"
+                      : product.isGroup
+                        ? "Elegir opción"
+                        : "Agregar al carrito"
+              }
+              onClick={onAddToCart}
+              disabled={!canBuy}
+              className={cn(
+                "disabled:opacity-35 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-yankees text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed sm:h-10 sm:w-10",
+                isCartProduct && "ring-2 ring-pink-froly ring-offset-1",
+              )}
+            >
+              <Plus aria-hidden="true" className="h-[18px] w-[18px]" />
+            </button>
+          </div>
         </div>
       </div>
     </article>
