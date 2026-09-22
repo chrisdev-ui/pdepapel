@@ -1,0 +1,9 @@
+# Red de seguridad: si alguien apunta las carpetas de trabajo aquí dentro en
+# vez de a ~/Fotos P de Papel, que los RAW y los JPEG no acaben en el
+# repositorio. Un .ARW de la a6400 pesa unos 25 MB.
+entrada/
+salida/
+procesadas/
+fallidas/
+*.ARW
+*.arw

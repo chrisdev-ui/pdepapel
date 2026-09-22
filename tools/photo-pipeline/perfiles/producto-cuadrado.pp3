@@ -1,0 +1,51 @@
+[Version]
+AppVersion=5.13
+Version=353
+
+# Perfil de revelado de las fotos de producto.
+#
+# Dos partes con dueños distintos:
+#
+#   1. EL COLOR Y LA LUZ  ([Exposure], [White Balance])  -> se cambia
+#      Lo que hay aquí es un punto de partida neutro: balance de blancos
+#      automático y exposición automática. NO es el look de P de Papel; ese
+#      sale de abrir una foto de verdad en RawTherapee, dejarla como debe
+#      verse y guardar el perfil encima de este archivo. Está explicado paso
+#      a paso en el README, en «Cambiar el color y la luz».
+#
+#   2. EL RECORTE  ([Crop])  -> no se toca
+#      Cuadrado centrado, fijo, sin nada que decida por su cuenta. Los
+#      números son los del sensor de la a6400: la foto sale de 6016x4016 y el
+#      cuadrado más grande que cabe centrado es 4016x4016 empezando en
+#      X=1000. Se recortan 1000 px por la izquierda y 1000 por la derecha.
+#
+#      Es tonto a propósito. En septiembre de 2026 se probó un recorte
+#      «inteligente» que busca el sujeto (g_auto de Cloudinary) sobre fotos
+#      reales del catálogo y falló en la mitad: cortó un planillero hasta
+#      dejar solo la pinza, partió una cartuchera por la mitad y en una foto
+#      con dos productos borró justo el que distinguía a un SKU de otro. Lo
+#      que hace fiable este recorte no es el programa, es el encuadre: hay
+#      que dejar aire a izquierda y derecha al disparar. Está explicado en el
+#      README, en «Cómo encuadrar».
+
+[Exposure]
+Auto=true
+Clip=0.02
+HistogramMatching=false
+
+[White Balance]
+Enabled=true
+Setting=Auto
+
+[Crop]
+Enabled=true
+X=1000
+Y=0
+W=4016
+H=4016
+FixedRatio=true
+Ratio=1:1
+Orientation=As Image
+
+[Resize]
+Enabled=false
