@@ -4,13 +4,15 @@ import {
   BrowserMultiFormatReader,
   type IScannerControls,
 } from "@zxing/browser";
-import { Camera, Loader2, RefreshCw, Smartphone } from "lucide-react";
+import { Camera, Loader2, RefreshCw, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { RemoteScannerDialog } from "@/components/ui/remote-scanner-dialog";
 import { useRemoteScanner } from "@/hooks/use-remote-scanner";
+import { useScanFeedback } from "@/hooks/use-scan-feedback";
+import { settleScan, type ScanOutcome, type ScanResult } from "@/lib/scan-outcome";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -21,7 +23,11 @@ import {
 } from "@/components/ui/dialog";
 
 type BarcodeScannerProps = {
-  onDetected: (code: string) => void;
+  /**
+   * Recibe el código leído. Si devuelve cómo le fue, el pitido lo respeta:
+   * quien no devuelve nada se da por bueno (ver `lib/scan-outcome.ts`).
+   */
+  onDetected: (code: string) => ScanResult;
   description?: string;
   label?: string;
   /** Solo el icono en celular; el nombre sigue en `aria-label`. */
@@ -33,6 +39,8 @@ type BarcodeScannerProps = {
   size?: "default" | "sm";
   /** Con un solo lector en pantalla, dice en texto que el celular vinculado recibe aquí. */
   remoteStatusLabel?: boolean;
+  /** Tienda, cuando no se puede sacar de la ruta. Por defecto, la de la ruta. */
+  storeId?: string;
 };
 
 export function getCameraErrorMessage(cameraError: unknown) {
@@ -60,9 +68,10 @@ export function BarcodeScanner({
   remote = true,
   size = "default",
   remoteStatusLabel = false,
+  storeId: storeIdOverride,
 }: BarcodeScannerProps) {
   const params = useParams();
-  const storeId = remote ? String(params?.storeId ?? "") : "";
+  const storeId = remote ? (storeIdOverride ?? String(params?.storeId ?? "")) : "";
   const [remoteOpen, setRemoteOpen] = useState(false);
   const controlsRef = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -80,8 +89,33 @@ export function BarcodeScanner({
   useEffect(() => {
     onDetectedRef.current = onDetected;
   }, [onDetected]);
-  // El celular vinculado entrega por el mismo camino que la cámara local.
-  const remoteScanner = useRemoteScanner(storeId, (code) => onDetectedRef.current(code));
+
+  const { playSuccess, playReject, flash, muted, toggleMuted } = useScanFeedback();
+
+  /**
+   * Único punto donde suena el panel. La cámara local y el celular vinculado
+   * pasan los dos por aquí, así que el aviso se escribe una vez y vale para
+   * las once pantallas con lector. Suena después de saber cómo terminó, no al
+   * leer: celebrar una unidad que no se agregó es peor que no sonar.
+   */
+  const handleCode = useCallback(
+    async (code: string): Promise<ScanOutcome> => {
+      const outcome = await settleScan(() => onDetectedRef.current(code));
+      if (outcome.ok) playSuccess();
+      else playReject();
+      return outcome;
+    },
+    [playReject, playSuccess],
+  );
+  const handleCodeRef = useRef(handleCode);
+  useEffect(() => {
+    handleCodeRef.current = handleCode;
+  }, [handleCode]);
+
+  // El celular vinculado entrega por el mismo camino que la cámara local, y
+  // devuelve el resultado para que la ventana de vinculación pueda nombrar el
+  // producto en vez del código crudo.
+  const remoteScanner = useRemoteScanner(storeId, (code) => handleCodeRef.current(code));
   const remotePaired = remoteScanner.status === "paired";
 
   const stopScanner = useCallback(() => {
@@ -144,7 +178,7 @@ export function BarcodeScanner({
         const code = result.getText().trim();
         setDetectedCode(code);
         stopScanner();
-        onDetectedRef.current(code);
+        void handleCodeRef.current(code);
         // Deja ver «Código leído» un instante antes de cerrar.
         window.setTimeout(() => setOpen(false), 350);
       })
@@ -191,11 +225,32 @@ export function BarcodeScanner({
           variant="outline"
           size={size === "sm" ? "sm" : "default"}
           aria-label={label}
-          className={size === "sm" ? undefined : "min-h-[2.5rem]"}
+          data-scan-flash={flash ?? undefined}
+          className={cn(
+            size === "sm" ? undefined : "min-h-[2.5rem]",
+            // El destello acompaña al pitido para quien trabaja en silencio o
+            // con ruido alrededor; dura lo mismo que el tono.
+            "transition-colors duration-150",
+            flash === "success" && "border-green-500 bg-green-50 text-green-800",
+            flash === "reject" && "border-rose-400 bg-rose-50 text-rose-800",
+          )}
           onClick={() => void requestCamera()}
         >
           <Camera className={compact ? "h-4 w-4 sm:mr-2" : "mr-2 h-4 w-4"} aria-hidden="true" />
           <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={muted ? "Activar el sonido al escanear" : "Silenciar el sonido al escanear"}
+          aria-pressed={muted}
+          title={muted ? "Sonido apagado · pulsa para activarlo" : "Suena al escanear · pulsa para silenciar"}
+          className="shrink-0 text-muted-foreground"
+          data-scan-mute={muted ? "on" : "off"}
+          onClick={toggleMuted}
+        >
+          {muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
         </Button>
         {remoteScanner.enabled && (
           <Button

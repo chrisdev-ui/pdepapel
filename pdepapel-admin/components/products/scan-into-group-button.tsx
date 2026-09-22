@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 
 import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { useToast } from "@/hooks/use-toast";
+import { scanAccepted, scanRejected } from "@/lib/scan-outcome";
 
 /** La misma fila que devuelve «Traer existentes» (search/products/isolated). */
 export interface AdoptableProduct {
@@ -68,11 +69,15 @@ export function ScanIntoGroupButton({ onImport, compact = true, disabled = false
               description: `«${product.name}» ya pertenece a otro grupo o está archivado. Solo se traen productos sueltos a la venta.`,
               variant: "destructive",
             });
-            return;
+            // El producto existe, pero aquí no sirve: el lector suena a
+            // rechazo para que no parezca que entró al grupo.
+            return scanRejected(product.name);
           }
           onImport([row]);
+          return scanAccepted(product.name);
         } catch {
           toast({ title: "No se pudo comprobar el producto", description: "Revisa la conexión e inténtalo de nuevo.", variant: "destructive" });
+          return scanRejected(product.name);
         }
       }}
     />

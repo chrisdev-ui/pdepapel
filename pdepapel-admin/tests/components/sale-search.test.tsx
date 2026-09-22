@@ -7,13 +7,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SaleSearch, describeUnresolvedCode } from "@/components/sales/sale-search";
 import type { SellLine } from "@/lib/sell-cart";
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), detected: null as null | ((code: string) => void) }));
+const mocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  // `resolveCode` ya contesta cómo terminó la lectura: es lo que hace que el
+  // lector suene a aceptado o a rechazo.
+  detected: null as null | ((code: string) => Promise<{ ok: boolean; label?: string | null }> | void),
+}));
 
 vi.mock("axios", () => ({ default: { get: mocks.get } }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }) }));
 vi.mock("next/image", () => ({ default: (props: { alt: string }) => <img alt={props.alt} /> }));
 vi.mock("@/components/ui/barcode-scanner", () => ({
-  BarcodeScanner: ({ onDetected, label, remoteStatusLabel }: { onDetected: (code: string) => void; label?: string; remoteStatusLabel?: boolean }) => {
+  BarcodeScanner: ({ onDetected, label, remoteStatusLabel }: { onDetected: (code: string) => Promise<{ ok: boolean }> | void; label?: string; remoteStatusLabel?: boolean }) => {
     mocks.detected = onDetected;
     return <button type="button" data-remote-label={String(Boolean(remoteStatusLabel))}>{label ?? "Escanear"}</button>;
   },
@@ -24,7 +29,9 @@ const rows = [
   { id: "p-2", name: "Libreta agotada", sku: "LIB-2", gtin: null, stock: 0, price: 12000, offerPrice: 12000, available: false, images: [] },
 ];
 
-function renderSearch(onAdd = vi.fn<(line: SellLine) => void>()) {
+type AddMock = ReturnType<typeof vi.fn<(line: SellLine) => void | boolean | Promise<void | boolean>>>;
+
+function renderSearch(onAdd: AddMock = vi.fn<(line: SellLine) => void>()) {
   render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
       <SaleSearch onAdd={onAdd} />
@@ -110,6 +117,71 @@ describe("SaleSearch", () => {
     // activo y con unidades, que es lo que pasaba con el QR de una etiqueta.
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("«ZZZ-404» no coincide con ningún SKU, código de barras ni QR de etiqueta."));
     expect(onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Lo que el lector necesita para sonar distinto. El tono no se decide en el
+   * lector —allí no se sabe nada— sino aquí, que es donde se sabe si la unidad
+   * entró en la venta.
+   */
+  describe("lo que se le contesta al lector", () => {
+    it("un código exacto contesta aceptado, con el nombre para nombrarlo", async () => {
+      renderSearch();
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      let outcome: unknown;
+      await act(async () => {
+        outcome = await mocks.detected?.("LIB-1");
+      });
+      expect(outcome).toEqual({ ok: true, label: "Libreta rosa" });
+    });
+
+    it("un código que no existe contesta rechazado", async () => {
+      renderSearch();
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      let outcome: unknown;
+      await act(async () => {
+        outcome = await mocks.detected?.("ZZZ-404");
+      });
+      expect(outcome).toEqual({ ok: false, label: null });
+    });
+
+    it("un producto agotado contesta rechazado, no aceptado", async () => {
+      renderSearch();
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      let outcome: unknown;
+      await act(async () => {
+        outcome = await mocks.detected?.("LIB-2");
+      });
+      expect(outcome).toEqual({ ok: false, label: "Libreta agotada" });
+    });
+
+    /**
+     * El caso de escanear la misma etiqueta para sumar unidades: la venta
+     * rechaza la que pasa del stock. Sonar «aceptado» ahí sería peor que no
+     * sonar, porque diría que la cuenta subió cuando no subió.
+     */
+    it("si la venta rechaza la línea por el tope, la lectura es un rechazo", async () => {
+      const onAdd = vi.fn().mockResolvedValue(false);
+      renderSearch(onAdd);
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      let outcome: unknown;
+      await act(async () => {
+        outcome = await mocks.detected?.("LIB-1");
+      });
+      expect(onAdd).toHaveBeenCalled();
+      expect(outcome).toEqual({ ok: false, label: "Libreta rosa" });
+    });
+
+    it("una venta que no contesta nada se da por buena", async () => {
+      const onAdd = vi.fn();
+      renderSearch(onAdd);
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      let outcome: unknown;
+      await act(async () => {
+        outcome = await mocks.detected?.("LIB-1");
+      });
+      expect(outcome).toEqual({ ok: true, label: "Libreta rosa" });
+    });
   });
 
   it("shows a plain empty state for a query with no matches", async () => {

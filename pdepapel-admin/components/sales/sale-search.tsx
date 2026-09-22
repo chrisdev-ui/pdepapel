@@ -13,6 +13,7 @@ import { TintBadge } from "@/components/ui/tint-badge";
 import { useDebounce } from "@/hooks/use-debounce";
 import { findExactSaleCandidate, saleCandidateChips, saleCandidateToLine, type SaleCandidate } from "@/lib/sale-search";
 import type { SellLine } from "@/lib/sell-cart";
+import { scanAccepted, scanRejected, type ScanOutcome } from "@/lib/scan-outcome";
 import { cn, currencyFormatter } from "@/lib/utils";
 
 interface SaleSearchResponse {
@@ -21,7 +22,8 @@ interface SaleSearchResponse {
 }
 
 interface SaleSearchProps {
-  onAdd: (line: SellLine) => void;
+  /** Contesta si la línea entró; `void` de quien no lo sepa se da por buena. */
+  onAdd: (line: SellLine) => void | boolean | Promise<void | boolean>;
   disabled?: boolean;
   storeId?: string;
 }
@@ -88,44 +90,44 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
   useEffect(() => setHighlight(0), [debounced]);
 
   const add = useCallback(
-    (candidate: SaleCandidate & { available?: boolean }) => {
+    async (candidate: SaleCandidate & { available?: boolean }): Promise<ScanOutcome> => {
       if (candidate.stock <= 0) {
         setNotice({ tone: "pink", text: `«${candidate.name}» no tiene unidades: revisa Inventario antes de venderlo.` });
-        return;
+        return scanRejected(candidate.name);
       }
-      onAdd(saleCandidateToLine(candidate));
+      // La venta puede rechazarla igual si ya se llegó al tope de unidades:
+      // esa respuesta es la que hace que el lector suene distinto.
+      const added = await onAdd(saleCandidateToLine(candidate));
+      if (added === false) return scanRejected(candidate.name);
       setNotice(null);
       setQuery("");
       inputRef.current?.focus();
+      return scanAccepted(candidate.name);
     },
     [onAdd],
   );
 
   /** Enter, lector de mano, cámara o celular: solo el código exacto entra sin elegir. */
   const resolveCode = useCallback(
-    async (raw: string) => {
+    async (raw: string): Promise<ScanOutcome> => {
       const code = raw.trim();
-      if (!code) return;
+      if (!code) return scanRejected();
       const local = findExactSaleCandidate(rows, code);
-      if (local) {
-        add(local);
-        return;
-      }
+      if (local) return add(local);
       try {
         setResolving(true);
         const fresh = await fetcher(buildUrl(storeId, code));
         const exact = findExactSaleCandidate(fresh.data, code);
-        if (exact) {
-          add(exact);
-          return;
-        }
+        if (exact) return add(exact);
         setQuery(code);
         setNotice({
           tone: "cream",
           text: describeUnresolvedCode(code, fresh.data),
         });
+        return scanRejected();
       } catch {
         setNotice({ tone: "pink", text: "No se pudo buscar. Revisa la conexión e inténtalo de nuevo." });
+        return scanRejected();
       } finally {
         setResolving(false);
       }
@@ -143,9 +145,9 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
     } else if (event.key === "Enter") {
       event.preventDefault();
       const exact = findExactSaleCandidate(rows, query);
-      if (exact) return add(exact);
+      if (exact) return void add(exact);
       const highlighted = rows[highlight];
-      if (query.trim() && rowsMatchQuery && highlighted?.available) return add(highlighted);
+      if (query.trim() && rowsMatchQuery && highlighted?.available) return void add(highlighted);
       void resolveCode(query);
     } else if (event.key === "Escape") {
       setQuery("");
@@ -189,7 +191,7 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
           compact
           label="Escanear"
           description="Apunta al QR de la etiqueta o al código de barras del empaque. Lo leído entra por la misma búsqueda."
-          onDetected={(code) => void resolveCode(code)}
+          onDetected={resolveCode}
           remoteStatusLabel
         />
       </div>
@@ -227,7 +229,7 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
                 aria-disabled={!candidate.available}
                 data-available={candidate.available}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => add(candidate)}
+                onClick={() => void add(candidate)}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isHighlighted && "bg-accent/60",

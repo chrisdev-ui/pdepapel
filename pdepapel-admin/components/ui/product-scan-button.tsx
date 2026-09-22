@@ -3,11 +3,19 @@
 import type { AsyncProductOption } from "@/components/ui/async-product-select";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { useProductScanLookup } from "@/hooks/use-product-scan-lookup";
+import { useParams } from "next/navigation";
+
 import { useToast } from "@/hooks/use-toast";
+import { scanAccepted, scanRejected, settleScan, type ScanOutcome, type ScanResult } from "@/lib/scan-outcome";
 
 interface ProductScanButtonProps {
-  /** Recibe el producto resuelto: cada pantalla decide dónde cae (elegirlo, agregarlo, abrir su ficha). */
-  onFound: (product: AsyncProductOption) => void;
+  /**
+   * Recibe el producto resuelto: cada pantalla decide dónde cae (elegirlo,
+   * agregarlo, abrir su ficha). Puede devolver `scanRejected()` si lo
+   * encontrado no le sirve —un producto que ya está en otro grupo, por
+   * ejemplo— y entonces el lector suena a rechazo en vez de a aceptado.
+   */
+  onFound: (product: AsyncProductOption) => ScanResult;
   /** Solo el icono en celular. */
   compact?: boolean;
   label?: string;
@@ -34,13 +42,15 @@ export function ProductScanButton({
   description = "Apunta al QR de una etiqueta o al código de barras del empaque.",
   className,
   notify = false,
-  storeId,
+  storeId: storeIdOverride,
   size = "default",
 }: ProductScanButtonProps) {
+  const params = useParams();
+  const storeId = storeIdOverride ?? String(params?.storeId ?? "");
   const { resolve } = useProductScanLookup(storeId);
   const { toast } = useToast();
 
-  async function onDetected(code: string) {
+  async function onDetected(code: string): Promise<ScanOutcome> {
     const product = await resolve(code);
     if (!product) {
       toast({
@@ -48,11 +58,17 @@ export function ProductScanButton({
         description: `«${code}» no coincide con ningún SKU, código de barras ni QR de etiqueta.`,
         variant: "destructive",
       });
-      return;
+      return scanRejected();
     }
     if (notify) toast({ title: "Producto encontrado", description: product.name, variant: "success" });
-    onFound(product);
+    // El pitido lo pone el lector para las nueve pantallas de una vez: antes
+    // solo dos avisaban con un toast y las otras siete no confirmaban nada.
+    const outcome = await settleScan(() => onFound(product));
+    return outcome.ok ? scanAccepted(product.name) : scanRejected(product.name);
   }
 
-  return <BarcodeScanner onDetected={(code) => void onDetected(code)} description={description} label={label} compact={compact} className={className} size={size} />;
+  // `storeId` también al lector: antes solo llegaba a la búsqueda y el lector
+  // lo sacaba siempre de la ruta, así que fuera de una ruta con `[storeId]`
+  // el celular vinculado se habría quedado sin tienda a la que preguntar.
+  return <BarcodeScanner onDetected={onDetected} description={description} label={label} compact={compact} className={className} size={size} storeId={storeId} />;
 }

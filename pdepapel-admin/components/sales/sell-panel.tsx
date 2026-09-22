@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
+import { scanAccepted, scanRejected, type ScanOutcome } from "@/lib/scan-outcome";
 import {
   addLineToCart,
   cartTotals,
@@ -116,13 +117,18 @@ export interface SellSource {
   lookup?: (code: string) => Promise<SellLine>;
   /** Registra la venta; el servidor descuenta inventario una sola vez. */
   submit: (input: SellSubmitInput) => Promise<SellSubmitResult>;
-  /** Selector alterno al lector (catálogo, productos reservados). */
-  renderPicker?: (add: (line: SellLine) => void) => ReactNode;
+  /**
+   * Selector alterno al lector (catálogo, productos reservados).
+   *
+   * `add` contesta si la línea entró: el lector necesita saberlo para sonar
+   * distinto cuando el producto llegó al tope de unidades.
+   */
+  renderPicker?: (add: (line: SellLine) => Promise<boolean>) => ReactNode;
   /**
    * Una sola entrada (buscar o escanear) que reemplaza al lector con casilla
    * de código y al selector: el punto de venta la usa; las ferias no.
    */
-  renderEntry?: (add: (line: SellLine) => void) => ReactNode;
+  renderEntry?: (add: (line: SellLine) => Promise<boolean>) => ReactNode;
   /** Métodos de pago que ofrece la pantalla; por defecto efectivo y transferencia. */
   paymentOptions?: SellPaymentOption[];
   /** Pide la referencia del comprobante al cobrar por transferencia (misma regla que Pedidos). */
@@ -302,33 +308,46 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
   const needsReference = Boolean(source.requireTransferReference) && paymentMethod === "BankTransfer";
   const referenceOk = !needsReference || reference.trim().length >= TRANSFER_REFERENCE_MIN;
 
+  /**
+   * Agrega y contesta si entró.
+   *
+   * La respuesta no es un lujo: el carrito rechaza la unidad cuando ya se
+   * llegó al stock, y ese es justo el caso de escanear la misma etiqueta
+   * varias veces. Sin saberlo, el lector pitaría «aceptado» en la lectura que
+   * no sumó nada, que es peor que no pitar. El aviso se resuelve dentro del
+   * actualizador porque es donde se conoce el carrito de ese momento; volver
+   * a leerlo fuera daría el valor anterior.
+   */
   const addLine = useCallback(
-    (line: SellLine) => {
-      showLastSale(null);
-      setCart((current) => {
-        const change = addLineToCart(current, line);
-        if (change.error) {
-          const { title, description } = change.error;
-          setTimeout(
-            () => toast({ title, description, variant: "destructive" }),
-            0,
-          );
-        }
-        return change.cart;
-      });
-    },
+    (line: SellLine) =>
+      new Promise<boolean>((resolve) => {
+        showLastSale(null);
+        setCart((current) => {
+          const change = addLineToCart(current, line);
+          if (change.error) {
+            const { title, description } = change.error;
+            setTimeout(
+              () => toast({ title, description, variant: "destructive" }),
+              0,
+            );
+          }
+          resolve(!change.error);
+          return change.cart;
+        });
+      }),
     [showLastSale, toast],
   );
 
   const lookupCode = useCallback(
-    async (rawCode: string) => {
+    async (rawCode: string): Promise<ScanOutcome> => {
       const code = rawCode.trim();
-      if (!code || !source.lookup) return;
+      if (!code || !source.lookup) return scanRejected();
       try {
         setIsLookingUp(true);
         const line = await source.lookup(code);
-        addLine(line);
+        const added = await addLine(line);
         setManualCode("");
+        return added ? scanAccepted(line.name) : scanRejected(line.name);
       } catch (error) {
         toast({
           title: "Código no disponible",
@@ -338,6 +357,7 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
           ),
           variant: "destructive",
         });
+        return scanRejected();
       } finally {
         setIsLookingUp(false);
       }
