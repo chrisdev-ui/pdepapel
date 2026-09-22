@@ -3,7 +3,8 @@
 import axios from "axios";
 import { useCallback, useEffect, useId, useRef, useSyncExternalStore } from "react";
 
-import { REMOTE_SCAN_POLL_MS, type ScannerSessionStatus } from "@/lib/scanner-pairing";
+import { REMOTE_SCAN_ACTIVE_POLL_MS, REMOTE_SCAN_POLL_MS, type ScannerSessionStatus } from "@/lib/scanner-pairing";
+import { settleScan, type ScanResult } from "@/lib/scan-outcome";
 
 export type RemoteScannerStatus = "idle" | "creating" | ScannerSessionStatus | "error";
 
@@ -11,6 +12,15 @@ export interface RemoteScan {
   id: string;
   code: string;
   createdAt: string;
+  /**
+   * Cómo se llama lo que resolvió la pantalla, cuando lo dijo. La ventana de
+   * vinculación enseña esto en vez del código: un `PDP:<uuid>` no le dice
+   * nada a nadie, y era lo único que se veía mientras la ventana tapaba la
+   * venta.
+   */
+  label?: string | null;
+  /** `false` cuando la pantalla rechazó la lectura. */
+  ok?: boolean;
 }
 
 export interface RemoteScannerState {
@@ -48,7 +58,7 @@ const IDLE: RemoteScannerState = {
 const storageKey = (storeId: string) => `pdepapel:escaner:${storeId}`;
 
 type Listener = () => void;
-type ScanHandler = (code: string) => void;
+type ScanHandler = (code: string) => ScanResult;
 
 /**
  * Un controlador por tienda, compartido por todos los botones de escanear de
@@ -158,6 +168,20 @@ class RemoteScannerController {
     }
   }
 
+  /**
+   * Entrega una lectura a la pantalla y se queda con el nombre que resolvió.
+   *
+   * No se espera aquí dentro: la consulta siguiente no puede quedarse
+   * colgada de lo que tarde una búsqueda. Cuando la pantalla contesta, se
+   * completa la última lectura solo si sigue siendo la última.
+   */
+  private deliver(target: ScanHandler, scan: RemoteScan) {
+    void settleScan(() => target(scan.code)).then((outcome) => {
+      if (this.state.lastScan?.id !== scan.id) return;
+      this.set({ lastScan: { ...this.state.lastScan, label: outcome.label ?? null, ok: outcome.ok } });
+    });
+  }
+
   private set(patch: Partial<RemoteScannerState>) {
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener());
@@ -202,7 +226,7 @@ class RemoteScannerController {
         error: null,
       });
       const target = (this.state.activeTargetId && this.targets.get(this.state.activeTargetId)) || this.targets.get(this.order[0]);
-      if (target) fresh.forEach((scan) => target(scan.code));
+      if (target) fresh.forEach((scan) => this.deliver(target, scan));
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         this.persist(null);
@@ -212,7 +236,11 @@ class RemoteScannerController {
       }
     } finally {
       this.polling = false;
-      this.schedule(REMOTE_SCAN_POLL_MS);
+      // Con el celular vinculado se consulta más seguido: ahí es donde se
+      // nota la espera entre leer y ver la unidad en la venta. Mientras solo
+      // se espera el emparejamiento no hay nada que correr, y el ritmo lento
+      // mantiene el gasto donde estaba.
+      this.schedule(this.state.status === "paired" ? REMOTE_SCAN_ACTIVE_POLL_MS : REMOTE_SCAN_POLL_MS);
     }
   }
 }

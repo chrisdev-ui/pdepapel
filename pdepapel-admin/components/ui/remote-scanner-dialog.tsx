@@ -2,13 +2,14 @@
 
 import { Loader2, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TintBadge } from "@/components/ui/tint-badge";
+import { cn } from "@/lib/utils";
 import type { RemoteScanner } from "@/hooks/use-remote-scanner";
-import { formatPairingCode, minutesLeft, relativeTime } from "@/lib/scanner-pairing";
+import { PAIRED_DIALOG_AUTOCLOSE_MS, formatPairingCode, minutesLeft, relativeTime } from "@/lib/scanner-pairing";
 
 interface RemoteScannerDialogProps {
   open: boolean;
@@ -41,6 +42,32 @@ export function RemoteScannerDialog({ open, onOpenChange, remote }: RemoteScanne
     if (open && status === "idle") void remote.start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, status]);
+
+  /**
+   * Al vincular, la ventana se cierra sola.
+   *
+   * Es una ventana modal con velo: mientras está abierta tapa la venta
+   * entera. Quedaba abierta hasta que alguien pulsara «Cerrar», así que se
+   * escaneaba contra un fondo oscuro —la unidad entraba en la venta, pero no
+   * se veía— y parecía que el escáner no hacía nada. Se deja un momento para
+   * alcanzar a leer «Celular vinculado» y se sale a la venta.
+   *
+   * Solo se cierra sola la primera vez que se vincula: si se vuelve a abrir a
+   * mano, la ventana se queda, que para eso se abrió.
+   */
+  const closedOnPairRef = useRef(false);
+  useEffect(() => {
+    if (!open) return;
+    if (status !== "paired") {
+      // Otro emparejamiento futuro vuelve a tener derecho a cerrarse solo.
+      if (status === "waiting" || status === "idle") closedOnPairRef.current = false;
+      return;
+    }
+    if (closedOnPairRef.current) return;
+    closedOnPairRef.current = true;
+    const timer = setTimeout(() => onOpenChange(false), PAIRED_DIALOG_AUTOCLOSE_MS);
+    return () => clearTimeout(timer);
+  }, [open, status, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,9 +144,27 @@ export function RemoteScannerDialog({ open, onOpenChange, remote }: RemoteScanne
             <div className="flex flex-col gap-1">
               <span className="text-sm font-medium">Última lectura</span>
               {lastScan ? (
-                <div className="rounded-lg border border-tint-lavender bg-tint-lavender/30 px-3 py-2 text-sm">
-                  <span className="block truncate font-mono text-xs">{lastScan.code}</span>
-                  <span className="text-xs text-muted-foreground">{relativeTime(lastScan.createdAt, now)}</span>
+                <div
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-sm",
+                    lastScan.ok === false ? "border-rose-200 bg-rose-50" : "border-tint-lavender bg-tint-lavender/30",
+                  )}
+                  data-last-scan={lastScan.ok === false ? "rejected" : "accepted"}
+                >
+                  {/* El nombre del producto en cuanto la pantalla lo resuelve; el
+                      código crudo solo mientras se resuelve o si no se reconoció. */}
+                  {lastScan.label ? (
+                    <>
+                      <span className="block break-words font-semibold text-primary">{lastScan.label}</span>
+                      <span className="block truncate font-mono text-[11px] text-muted-foreground">{lastScan.code}</span>
+                    </>
+                  ) : (
+                    <span className="block truncate font-mono text-xs">{lastScan.code}</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {lastScan.ok === false ? "No se reconoció · " : ""}
+                    {relativeTime(lastScan.createdAt, now)}
+                  </span>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">Todavía ninguna. Apunta el celular a un código.</p>

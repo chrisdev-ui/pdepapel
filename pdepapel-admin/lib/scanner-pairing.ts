@@ -13,7 +13,21 @@ export const PAIRING_CODE_LENGTH = 6;
 /** Diez minutos sin actividad; cada lectura los renueva. */
 export const PAIRING_TTL_MS = 10 * 60 * 1000;
 /** Cada cuánto pregunta la pantalla por lecturas nuevas. */
+/**
+ * Lo que la ventana de vinculación deja ver «Celular vinculado» antes de
+ * cerrarse sola. Suficiente para leerlo, poco para no estorbar.
+ */
+export const PAIRED_DIALOG_AUTOCLOSE_MS = 1200;
+
 export const REMOTE_SCAN_POLL_MS = 1500;
+
+/**
+ * Ritmo mientras hay un celular vinculado. Con 1500 ms una lectura tardaba
+ * hasta segundo y medio en aparecer en la venta y parecía que no había
+ * entrado. Solo corre cuando de verdad se está escaneando —la vinculación
+ * vence a los 10 minutos sin actividad—, así que el gasto sigue acotado.
+ */
+export const REMOTE_SCAN_ACTIVE_POLL_MS = 700;
 /** Cuántas lecturas devuelve una consulta como máximo. */
 export const REMOTE_SCAN_PAGE = 50;
 
