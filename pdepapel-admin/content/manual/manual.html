@@ -120,8 +120,10 @@
   h4 { font-size: 16px; margin: 22px 0 6px; letter-spacing: 0.02em; }
   p, li { max-width: 72ch; }
   p { margin: 0 0 14px; }
-  .route { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; margin: 4px 0 8px; }
-  .route code { background: var(--code-bg); }
+  /* `flex-wrap` porque en el teléfono hay rutas de dos y tres tramos: sin él
+     la línea empujaba la página 168 px a la derecha. */
+  .route { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); font-size: 14px; margin: 4px 0 8px; }
+  .route code { background: var(--code-bg); overflow-wrap: anywhere; }
 
   ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 14px 0 18px; display: grid; gap: 10px; max-width: 76ch; }
   ol.steps > li { counter-increment: step; position: relative; padding: 12px 16px 12px 56px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
@@ -147,7 +149,10 @@
   .note.rule { background: var(--tint-mint); } .note.rule::before { content: "R"; }
   .note.care { background: var(--tint-cream); } .note.care::before { content: "!"; }
   .note.tip { background: var(--tint-lavender); } .note.tip::before { content: "i"; }
-  .note strong:first-child { display: block; margin-bottom: 2px; }
+  /* `>` a propósito: el título es hijo directo del aviso. Sin él la regla
+     también cogía el primer <strong> de un párrafo —`:first-child` cuenta
+     elementos, no texto— y lo partía en su propia línea. */
+  .note > strong:first-child { display: block; margin-bottom: 2px; }
   .note p:last-child { margin-bottom: 0; }
 
   table.states { border-collapse: collapse; width: 100%; font-size: 15px; margin: 12px 0 20px; }
