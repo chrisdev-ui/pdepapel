@@ -14,12 +14,12 @@ interface ProductStickyBarProps {
   product: Product;
   availability: ProductAvailability;
   quantity: number;
-  /** Fila del botón principal: la barra aparece cuando queda por encima de la pantalla. */
+  /** Fila del botón principal: la barra aparece siempre que ese botón no esté en pantalla. */
   targetRef: RefObject<HTMLElement>;
   onNotify: () => void;
 }
 
-/** Sigue el botón principal cuando la clienta baja: escritorio como píldora ancha, móvil como barra inferior. */
+/** Reemplaza al botón principal mientras ese no esté en pantalla: escritorio como píldora ancha, móvil como barra inferior. */
 export function ProductStickyBar({ product, availability, quantity, targetRef, onNotify }: ProductStickyBarProps) {
   const [visible, setVisible] = useState(false);
   const addProductToCart = useAddProductToCart("product_sticky_bar");
@@ -30,7 +30,14 @@ export function ProductStickyBar({ product, availability, quantity, targetRef, o
     const target = targetRef.current;
     if (!target || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(
-      ([entry]) => setVisible(!entry.isIntersecting && entry.boundingClientRect.top < 0),
+      // Sin mirar hacia dónde quedó: basta con que el botón no esté a la
+      // vista. Antes se exigía además `boundingClientRect.top < 0`, o sea que
+      // ya se hubiera pasado de largo, y en el teléfono el botón nace entre
+      // 286 y 458 px por debajo del borde —cinco de cinco productos—, así que
+      // `top` era positivo y la barra no salía. Resultado: los primeros ~550
+      // px de cada ficha no tenían ningún botón de agregar en pantalla, justo
+      // donde se pierde el 72 % de quienes abren un producto.
+      ([entry]) => setVisible(!entry.isIntersecting),
       { threshold: 0 },
     );
     observer.observe(target);

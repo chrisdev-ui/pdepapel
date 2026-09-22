@@ -37,18 +37,37 @@ function renderBar(stock = 5) {
 }
 
 describe("ProductStickyBar", () => {
-  it("stays hidden until the main button scrolls above the viewport, then shows the line total", () => {
+  const aviso = (isIntersecting: boolean, top: number) =>
+    act(() =>
+      callback?.(
+        [{ isIntersecting, boundingClientRect: { top } } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      ),
+    );
+
+  it("shows whenever the main button is off screen, whichever side it is on", () => {
     renderBar();
     const bar = screen.getByTestId("product-sticky-bar");
     expect(bar).toHaveAttribute("aria-hidden", "true");
 
-    act(() => callback?.([{ isIntersecting: false, boundingClientRect: { top: -10 } } as IntersectionObserverEntry], {} as IntersectionObserver));
+    /*
+     * El caso que faltaba, y el que rompía la ficha en el teléfono: el botón
+     * todavía no se ha alcanzado, queda 400 px por debajo del borde. Antes se
+     * exigía además `top < 0` —haberlo pasado de largo— así que aquí la barra
+     * se quedaba escondida y no había ningún botón de agregar en pantalla.
+     */
+    aviso(false, 400);
     expect(bar).toHaveAttribute("aria-hidden", "false");
     expect(bar).toHaveTextContent("$ 50.000");
     expect(screen.getByRole("button", { name: /Agregar al carrito/ })).toBeInTheDocument();
 
-    act(() => callback?.([{ isIntersecting: false, boundingClientRect: { top: 400 } } as IntersectionObserverEntry], {} as IntersectionObserver));
+    // Con el botón de verdad a la vista, la barra se quita de en medio.
+    aviso(true, 120);
     expect(bar).toHaveAttribute("aria-hidden", "true");
+
+    // Y lo que ya funcionaba —pasarlo de largo hacia arriba— sigue igual.
+    aviso(false, -10);
+    expect(bar).toHaveAttribute("aria-hidden", "false");
   });
 
   it("offers the notify action instead of add-to-cart when the product is sold out", () => {

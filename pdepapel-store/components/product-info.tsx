@@ -8,6 +8,7 @@ import {
   Star,
   Truck,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefObject, useEffect, useMemo, useState } from "react";
 
@@ -31,7 +32,7 @@ import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
 import { isCustomerFacingLegacySize } from "@/lib/product-options";
 import { getStableProductVariants } from "@/lib/product-variants";
-import { productPath } from "@/lib/routes";
+import { STOREFRONT_ROUTES, productPath } from "@/lib/routes";
 import { cn, currencyFormatter, effectiveUnitPrice } from "@/lib/utils";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
 
@@ -513,7 +514,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         )}
       </div>
 
-      <div ref={ctaRef} className="flex flex-wrap items-center gap-3">
+      <div
+        ref={ctaRef}
+        data-testid="product-cta-row"
+        className="flex flex-wrap items-center gap-3"
+      >
         {canBuy && (
           <QuantitySelector
             key={data.id}
@@ -609,10 +614,20 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           />
           Compra segura
         </span>
-        <span className="flex flex-col items-center gap-1">
+        {/*
+          El único de los tres que lleva a alguna parte, y a propósito: la
+          gente lo toca preguntando cuánto cuesta y cuánto tarda el envío
+          —diez toques en treinta días—, y hasta ahora era un `span` pelado
+          que no hacía nada. El subrayado lo separa de los otros dos, que
+          siguen siendo sellos sin destino.
+        */}
+        <Link
+          href={STOREFRONT_ROUTES.shippingPolicy}
+          className="flex flex-col items-center gap-1 rounded-lg underline decoration-purple-300 underline-offset-2 hover:decoration-purple-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2"
+        >
           <Truck aria-hidden="true" className="h-4 w-4 text-purple-600" />
           Envíos a toda Colombia
-        </span>
+        </Link>
         <span className="flex flex-col items-center gap-1">
           <Award aria-hidden="true" className="h-4 w-4 text-amber-500" />
           Calidad P de Papel
