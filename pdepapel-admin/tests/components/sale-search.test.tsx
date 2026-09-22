@@ -184,6 +184,62 @@ describe("SaleSearch", () => {
     });
   });
 
+  /**
+   * Lo que de verdad le pasaba a Paula con el celular vinculado.
+   *
+   * El código exacto SÍ entraba solo —eso nunca estuvo roto—, pero al agregar
+   * se devolvía el foco a la casilla y el foco abría la lista con los treinta
+   * más vendidos, con el producto recién escaneado dentro. En pantalla eso es
+   * idéntico a un resultado esperando un clic, así que ella pulsaba la fila y
+   * sumaba una segunda unidad de algo que escaneó una vez: cobraba de más y
+   * descontaba de más.
+   */
+  describe("después de escanear no queda una lista pidiendo clic", () => {
+    it("el código exacto entra solo y la lista NO se despliega", async () => {
+      const onAdd = renderSearch();
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      await act(async () => void (await mocks.detected?.("LIB-1")));
+
+      await waitFor(() => expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ productId: "p-1" })));
+      // La casilla conserva el foco: el lector de mano escribe ahí.
+      expect(screen.getByRole("combobox")).toHaveFocus();
+      // Pero sin lista encima, que es lo que invitaba al clic de más.
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+      expect(screen.getByRole("combobox")).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("volver a escribir trae la lista de vuelta", async () => {
+      renderSearch();
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      await act(async () => void (await mocks.detected?.("LIB-1")));
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "lib" } });
+      await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    });
+
+    it("pulsar la casilla a propósito también la trae", async () => {
+      renderSearch();
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      await act(async () => void (await mocks.detected?.("LIB-1")));
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+      fireEvent.pointerDown(screen.getByRole("combobox"));
+      fireEvent.focus(screen.getByRole("combobox"));
+      await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    });
+
+    /** Elegir de la lista a mano tampoco debe dejarla abierta detrás. */
+    it("elegir una fila con el ratón cierra la lista", async () => {
+      const onAdd = renderSearch();
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "rosa" } });
+      const fila = await screen.findByRole("option", { name: /Libreta rosa/ });
+      fireEvent.click(fila);
+      await waitFor(() => expect(onAdd).toHaveBeenCalled());
+      await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    });
+  });
+
   it("shows a plain empty state for a query with no matches", async () => {
     renderSearch();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "nada" } });

@@ -4,7 +4,7 @@ import axios from "axios";
 import { Package, Search } from "lucide-react";
 import Image from "next/image";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
@@ -52,6 +52,77 @@ export function describeUnresolvedCode(code: string, candidates: readonly SaleCa
   return `«${code}» no es un código exacto: elige el producto de la lista.`;
 }
 
+type SaleRow = SaleCandidate & { available: boolean };
+
+/**
+ * Una fila de la lista.
+ *
+ * Va en `memo` porque la lista trae hasta treinta filas con su imagen y en el
+ * mostrador se teclea rápido: sin esto, cada pulsación y cada flecha volvían a
+ * pintar las treinta. Con `onPick` estable —y el resaltado como booleano— solo
+ * se repintan la fila que entra y la que sale del resaltado.
+ */
+const SaleResultRow = memo(function SaleResultRow({
+  candidate,
+  highlighted,
+  onPick,
+}: {
+  candidate: SaleRow;
+  highlighted: boolean;
+  onPick: (candidate: SaleRow) => void;
+}) {
+  const chips = saleCandidateChips(candidate);
+  const offer = candidate.offerPrice != null && candidate.offerPrice < candidate.price;
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={highlighted}
+      aria-disabled={!candidate.available}
+      data-available={candidate.available}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => onPick(candidate)}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        highlighted && "bg-accent/60",
+        !candidate.available && "opacity-55",
+      )}
+    >
+      <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border bg-muted">
+        {candidate.images?.[0]?.url ? (
+          <Image src={candidate.images[0].url} alt="" fill sizes="36px" className="object-cover" />
+        ) : (
+          <span className="flex h-full items-center justify-center text-muted-foreground">
+            <Package className="h-4 w-4" aria-hidden="true" />
+          </span>
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        {/* El nombre parte de línea en vez de cortarse: un nombre largo en 390 px ensanchaba toda la tarjeta. */}
+        <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="min-w-0 break-words text-sm font-semibold leading-tight">{candidate.name}</span>
+          {chips.map((chip) => (
+            <TintBadge key={chip} label={chip} tone="lavender" className="text-[11px]" />
+          ))}
+        </span>
+        <span className="truncate font-mono text-[11px] text-muted-foreground">
+          {candidate.sku} · {candidate.stock} und
+        </span>
+      </span>
+      <span className="flex shrink-0 flex-col items-end gap-0.5">
+        {candidate.available ? (
+          <>
+            <span className="text-sm font-semibold tabular-nums">{currencyFormatter(offer ? (candidate.offerPrice as number) : candidate.price)}</span>
+            {offer && <span className="text-[11px] text-muted-foreground line-through">{currencyFormatter(candidate.price)}</span>}
+          </>
+        ) : (
+          <TintBadge label="Agotado" tone="pink" className="text-[11px]" />
+        )}
+      </span>
+    </button>
+  );
+});
+
 /**
  * Una sola entrada para vender: escribir, pegar, el lector de mano (escribe
  * y pulsa Enter), la cámara y el celular vinculado entran por aquí y se
@@ -63,6 +134,18 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
   const storeId = storeIdOverride ?? String(params?.storeId ?? "");
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
+  /**
+   * Tapa la lista después de meter algo por código.
+   *
+   * Al agregar se devuelve el foco a la casilla —el lector de mano escribe
+   * ahí— y el foco por sí solo abría la lista con los más vendidos. Quedaba
+   * en pantalla una lista de treinta productos con el recién escaneado
+   * dentro, idéntica a un resultado de búsqueda esperando un clic: Paula
+   * pulsaba la fila creyendo que hacía falta y **sumaba una segunda unidad**
+   * de algo que escaneó una vez. La lista vuelve en cuanto se escribe o se
+   * pulsa la casilla a propósito.
+   */
+  const [listSuppressed, setListSuppressed] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [notice, setNotice] = useState<{ tone: "pink" | "cream"; text: string } | null>(null);
   const [resolving, setResolving] = useState(false);
@@ -82,7 +165,11 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
   // La primera página (más vendidos con unidades) se pide al abrir la pantalla, no al hacer clic.
   const { data, isLoading, error } = useSWR(buildUrl(storeId, debounced), fetcher, { keepPreviousData: true, revalidateOnFocus: false });
   const rows = useMemo(() => data?.data ?? [], [data]);
-  const open = focused || query.trim().length > 0;
+  // El lector guarda `resolveCode` en una referencia; si `resolveCode` se
+  // rehiciera con cada revalidación de SWR, ese efecto correría sin parar.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const open = (focused || query.trim().length > 0) && !listSuppressed;
   // Las filas corresponden a lo escrito solo cuando el retardo ya pasó y la
   // respuesta llegó: un lector de mano escribe y pulsa Enter antes de eso.
   const rowsMatchQuery = debounced === query.trim() && !isLoading;
@@ -101,18 +188,23 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
       if (added === false) return scanRejected(candidate.name);
       setNotice(null);
       setQuery("");
+      // El foco vuelve para el lector de mano, pero sin desplegar la lista.
+      setListSuppressed(true);
       inputRef.current?.focus();
       return scanAccepted(candidate.name);
     },
     [onAdd],
   );
 
+  /** Identidad estable: si cambiara en cada pintado, `memo` en la fila no serviría. */
+  const pick = useCallback((candidate: SaleRow) => void add(candidate), [add]);
+
   /** Enter, lector de mano, cámara o celular: solo el código exacto entra sin elegir. */
   const resolveCode = useCallback(
     async (raw: string): Promise<ScanOutcome> => {
       const code = raw.trim();
       if (!code) return scanRejected();
-      const local = findExactSaleCandidate(rows, code);
+      const local = findExactSaleCandidate(rowsRef.current, code);
       if (local) return add(local);
       try {
         setResolving(true);
@@ -132,12 +224,13 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
         setResolving(false);
       }
     },
-    [add, rows, storeId],
+    [add, storeId],
   );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      setListSuppressed(false);
       setHighlight((index) => Math.min(index + 1, Math.max(rows.length - 1, 0)));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
@@ -180,7 +273,10 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
             onChange={(event) => {
               setQuery(event.target.value);
               setNotice(null);
+              setListSuppressed(false);
             }}
+            // Pulsar la casilla a propósito sí quiere ver el catálogo.
+            onPointerDown={() => setListSuppressed(false)}
             onFocus={() => setFocused(true)}
             onBlur={() => setTimeout(() => setFocused(false), 150)}
             onKeyDown={onKeyDown}
@@ -216,60 +312,14 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
           {!showSkeleton && !error && rows.length === 0 && (
             <p className="px-3 py-3 text-sm text-muted-foreground">{debounced ? `Nada coincide con «${debounced}».` : "Aún no hay productos con unidades para vender."}</p>
           )}
-          {rows.map((candidate, index) => {
-            const chips = saleCandidateChips(candidate);
-            const offer = candidate.offerPrice != null && candidate.offerPrice < candidate.price;
-            const isHighlighted = index === highlight && query.trim().length > 0;
-            return (
-              <button
-                key={candidate.id}
-                type="button"
-                role="option"
-                aria-selected={isHighlighted}
-                aria-disabled={!candidate.available}
-                data-available={candidate.available}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => void add(candidate)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  isHighlighted && "bg-accent/60",
-                  !candidate.available && "opacity-55",
-                )}
-              >
-                <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border bg-muted">
-                  {candidate.images?.[0]?.url ? (
-                    <Image src={candidate.images[0].url} alt="" fill sizes="36px" className="object-cover" />
-                  ) : (
-                    <span className="flex h-full items-center justify-center text-muted-foreground">
-                      <Package className="h-4 w-4" aria-hidden="true" />
-                    </span>
-                  )}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  {/* El nombre parte de línea en vez de cortarse: un nombre largo en 390 px ensanchaba toda la tarjeta. */}
-                  <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <span className="min-w-0 break-words text-sm font-semibold leading-tight">{candidate.name}</span>
-                    {chips.map((chip) => (
-                      <TintBadge key={chip} label={chip} tone="lavender" className="text-[11px]" />
-                    ))}
-                  </span>
-                  <span className="truncate font-mono text-[11px] text-muted-foreground">
-                    {candidate.sku} · {candidate.stock} und
-                  </span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-0.5">
-                  {candidate.available ? (
-                    <>
-                      <span className="text-sm font-semibold tabular-nums">{currencyFormatter(offer ? (candidate.offerPrice as number) : candidate.price)}</span>
-                      {offer && <span className="text-[11px] text-muted-foreground line-through">{currencyFormatter(candidate.price)}</span>}
-                    </>
-                  ) : (
-                    <TintBadge label="Agotado" tone="pink" className="text-[11px]" />
-                  )}
-                </span>
-              </button>
-            );
-          })}
+          {rows.map((candidate, index) => (
+            <SaleResultRow
+              key={candidate.id}
+              candidate={candidate}
+              highlighted={index === highlight && query.trim().length > 0}
+              onPick={pick}
+            />
+          ))}
           {truncated && <p className="px-3 py-2 text-xs text-muted-foreground">Mostrando los primeros 30 · escribe más para acotar.</p>}
         </div>
       )}
