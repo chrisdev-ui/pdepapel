@@ -28,6 +28,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
 import type { AttributeSibling } from "@/lib/attribute-usage";
+import {
+  CATEGORY_SEO_DESCRIPTION_MAX,
+  CATEGORY_SEO_TITLE_MAX,
+  CATEGORY_SEO_TITLE_RECOMMENDED,
+} from "@/lib/category-seo";
 import { slugify } from "@/lib/slugify";
 import { AttributeNameHints } from "../../../atributos/components/attribute-form-hints";
 import { formatRelativeDate } from "../../../atributos/components/attribute-cells";
@@ -35,8 +40,9 @@ import { AttributeMergeCard } from "../../../atributos/components/merge-card";
 import { MergeAttributesDialog } from "../../../atributos/components/merge-dialog";
 import { stripLeadingSymbol } from "@/lib/taxonomy-icons";
 
-export const SEO_TITLE_MAX = 70;
-export const SEO_DESCRIPTION_MAX = 170;
+/** Los topes viven en el módulo neutro: los comparte con el generador de IA. */
+export const SEO_TITLE_MAX = CATEGORY_SEO_TITLE_MAX;
+export const SEO_DESCRIPTION_MAX = CATEGORY_SEO_DESCRIPTION_MAX;
 /** Largo recomendado de la intro; la API acepta hasta 1200 para no romper textos existentes. */
 export const SEO_INTRO_RECOMMENDED_MAX = 160;
 export const SEO_INTRO_HARD_MAX = 1200;
@@ -99,7 +105,33 @@ interface CategoryFormProps {
 interface CoverResponse {
   imageUrl: string | null;
   seoIntro: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
   generated: string[];
+}
+
+/** Qué se le está pidiendo a la IA ahora mismo; `null` cuando no hay nada en curso. */
+type AiTarget = "cover" | "intro" | "seo" | "all";
+
+/**
+ * Qué se acaba de rellenar, dicho con las palabras del formulario. El botón
+ * de la sección completa no fuerza, así que puede no tocar nada: eso también
+ * hay que decirlo, o parece que no funcionó.
+ */
+const CAMPO_EN_ESPANOL: Record<string, string> = {
+  imageUrl: "la portada",
+  seoIntro: "la intro",
+  seoTitle: "el título",
+  seoDescription: "la descripción",
+};
+
+function describeGenerated(generated: string[]): string {
+  const nombres = generated.map((campo) => CAMPO_EN_ESPANOL[campo]).filter(Boolean);
+  if (nombres.length === 0) {
+    return "La sección ya estaba completa. Para cambiar algo, usa el botón del campo que quieras rehacer.";
+  }
+  const lista = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(", ")} y ${nombres.at(-1)}`;
+  return `Se completó ${lista}. Revísalo y guarda si cambias algo más.`;
 }
 
 const plural = (count: number, singular: string, pluralForm: string) => `${count} ${count === 1 ? singular : pluralForm}`;
@@ -121,7 +153,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
   const hubHref = `/${storeId}/atributos?tab=subcategorias${initialData?.isArchived ? "&vista=archivados" : ""}`;
 
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState<"cover" | "intro" | null>(null);
+  const [generating, setGenerating] = useState<AiTarget | null>(null);
 
   const defaultValues = useMemo<CategoryFormValues>(
     () => ({
@@ -198,24 +230,40 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
    * La API de portadas genera la parte pedida (`part`) y la guarda en la
    * categoría; el formulario recibe el resultado para revisarlo.
    */
-  const generate = async (target: "cover" | "intro") => {
+  /**
+   * `force` en `false` solo rellena lo que esté vacío: es lo que hace el botón
+   * de la sección completa, para no volver a pagar una imagen que ya está.
+   * Los botones de cada campo sí fuerzan, porque ahí lo que se pide es otra
+   * propuesta distinta de la que ya se ve.
+   */
+  const generate = async (target: AiTarget, force = true) => {
     if (!initialData) return;
     try {
       setGenerating(target);
-      const { data } = await axios.post<CoverResponse>(`/api/${storeId}/categories/${initialData.id}/cover`, { part: target, force: true });
+      const { data } = await axios.post<CoverResponse>(`/api/${storeId}/categories/${initialData.id}/cover`, { part: target, force });
       if (target === "cover" && data.imageUrl) {
         form.setValue("imageUrl", data.imageUrl, { shouldDirty: true, shouldValidate: true });
       }
       if (target === "intro" && data.seoIntro) {
         form.setValue("seoIntro", data.seoIntro, { shouldDirty: true, shouldValidate: true });
       }
-      toast({
-        description:
-          target === "cover"
-            ? "Portada generada. Quedó guardada en la categoría; revísala y guarda si cambias algo más."
-            : "Intro propuesta. Edítala antes de guardar; ya quedó registrada en la categoría.",
-        variant: "success",
-      });
+      if (target === "seo" || target === "all") {
+        if (data.seoTitle) form.setValue("seoTitle", data.seoTitle, { shouldDirty: true, shouldValidate: true });
+        if (data.seoDescription) {
+          form.setValue("seoDescription", data.seoDescription, { shouldDirty: true, shouldValidate: true });
+        }
+      }
+      if (target === "all") {
+        if (data.imageUrl) form.setValue("imageUrl", data.imageUrl, { shouldDirty: true, shouldValidate: true });
+        if (data.seoIntro) form.setValue("seoIntro", data.seoIntro, { shouldDirty: true, shouldValidate: true });
+      }
+      const aviso = {
+        cover: "Portada generada. Quedó guardada en la categoría; revísala y guarda si cambias algo más.",
+        intro: "Intro propuesta. Edítala antes de guardar; ya quedó registrada en la categoría.",
+        seo: "Título y descripción propuestos. Edítalos antes de guardar; ya quedaron registrados en la categoría.",
+        all: describeGenerated(data.generated),
+      } as const;
+      toast({ description: aviso[target], variant: "success" });
     } catch (error) {
       toast({ title: "No se pudo generar con IA", description: getErrorMessage(error), variant: "destructive" });
     } finally {
@@ -347,18 +395,40 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
               title="Página en la tienda y SEO"
               description={seoEnabled ? "La página se indexa en buscadores: título, descripción e intro son obligatorios." : "Activa la indexación solo con contenido propio y stock estable."}
               action={
-                <FormField
-                  control={form.control}
-                  name="seoEnabled"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center gap-2 space-y-0">
-                      <FormLabel className="text-xs font-semibold">Indexar</FormLabel>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={loading} aria-label="Indexar la página de la subcategoría" />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                <div className="flex flex-wrap items-center gap-3">
+                  {/*
+                    Un solo botón para toda la sección: portada, intro, título
+                    y descripción en una sola petición. No fuerza, así que
+                    completa lo que falte y deja en paz lo que ya está —volver
+                    a generar la portada cuesta una imagen—. Para rehacer algo
+                    en concreto está el botón de su campo.
+                  */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    disabled={loading || Boolean(aiHint) || generating !== null}
+                    isLoading={generating === "all"}
+                    loadingText="Generando…"
+                    onClick={() => void generate("all", false)}
+                    title={aiHint ?? "Completa con IA lo que falte de esta sección."}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    Completar sección con IA
+                  </Button>
+                  <FormField
+                    control={form.control}
+                    name="seoEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0">
+                        <FormLabel className="text-xs font-semibold">Indexar</FormLabel>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={loading} aria-label="Indexar la página de la subcategoría" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
               }
             >
               <FormField
@@ -370,16 +440,16 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
                       <FormLabel isRequired={seoEnabled && form.watch("seoFeatured")}>Portada</FormLabel>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="ghost"
                         size="xs"
                         disabled={loading || Boolean(aiHint) || generating !== null}
                         isLoading={generating === "cover"}
                         loadingText="Generando…"
                         onClick={() => void generate("cover")}
-                        title={aiHint ?? undefined}
+                        title={aiHint ?? "Propone otra portada, aunque ya haya una."}
                       >
                         <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                        Generar con IA
+                        Generar
                       </Button>
                     </div>
                     <FormControl>
@@ -414,6 +484,32 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
                 )}
               />
 
+              {/*
+                El par se genera de una sola vez: el título y la descripción
+                son lo que se ve en Google uno encima del otro y se escriben
+                mirándose. Además son los dos campos menos evidentes del
+                formulario —cuánto miden, que la tienda ya añade la marca
+                detrás del título— y ahí es donde una propuesta ayuda más.
+              */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-sans text-sm font-medium text-muted-foreground">
+                  Lo que se ve en Google
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  disabled={loading || Boolean(aiHint) || generating !== null}
+                  isLoading={generating === "seo"}
+                  loadingText="Generando…"
+                  onClick={() => void generate("seo")}
+                  title={aiHint ?? "Propone otro título y otra descripción, aunque ya haya."}
+                >
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  Generar
+                </Button>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -426,6 +522,8 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
                       </FormControl>
                       <FormDescription>
                         <Counter length={seoTitle.length} max={SEO_TITLE_MAX} />
+                        {" · "}
+                        La tienda le añade «| Papelería P de Papel», así que va mejor cerca de {CATEGORY_SEO_TITLE_RECOMMENDED} caracteres y sin repetir la marca.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -458,16 +556,16 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
                       <FormLabel isRequired={seoEnabled}>Intro (110–160 caracteres)</FormLabel>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="ghost"
                         size="xs"
                         disabled={loading || Boolean(aiHint) || generating !== null}
                         isLoading={generating === "intro"}
                         loadingText="Generando…"
                         onClick={() => void generate("intro")}
-                        title={aiHint ?? undefined}
+                        title={aiHint ?? "Propone otra intro, aunque ya haya una."}
                       >
                         <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                        Generar con IA
+                        Generar
                       </Button>
                     </div>
                     <FormControl>

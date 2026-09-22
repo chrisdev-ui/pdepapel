@@ -2,6 +2,13 @@ import cloudinary from "@/lib/cloudinary";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { getCategoryRevalidationPaths } from "@/lib/category-slugs";
+import {
+  CATEGORY_SEO_DESCRIPTION_MAX,
+  CATEGORY_SEO_TITLE_MAX,
+  CATEGORY_SEO_TITLE_RECOMMENDED,
+  CATEGORY_SEO_TITLE_SUFFIX,
+  clampSeoText,
+} from "@/lib/category-seo";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 
 /**
@@ -79,6 +86,66 @@ export async function generateCategoryIntro(categoryName: string, typeName: stri
   return data.choices[0].message.content.trim().replace(/^["«]|["»]$/g, "");
 }
 
+/**
+ * Propone el título y la descripción SEO de una subcategoría en una sola
+ * llamada.
+ *
+ * Van juntos a propósito: son el par que ve quien busca en Google y se
+ * escriben mirándose —el título promete y la descripción cumple—, así que
+ * pedirlos por separado sale más caro y menos coherente.
+ *
+ * Los dos se recortan al volver: son columnas `VarChar` y el modelo se pasa
+ * de largo con facilidad.
+ */
+export async function generateCategorySeo(
+  categoryName: string,
+  typeName: string,
+  fetchImpl?: FetchLike,
+): Promise<{ seoTitle: string; seoDescription: string }> {
+  const nombre = stripTaxonomyIcon(categoryName);
+  const data = await openAi<{ choices: { message: { content: string } }[] }>(
+    "chat/completions",
+    {
+      model: TEXT_MODEL,
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "Escribes metadatos SEO para una papelería colombiana en línea (Medellín, envíos a toda Colombia). Español de Colombia, sin emojis, sin signos de exclamación, sin comillas, sin mayúsculas sostenidas. No prometas precios, descuentos ni stock. Responde solo con JSON.",
+        },
+        {
+          role: "user",
+          content: [
+            `Subcategoría: «${nombre}» (categoría: ${stripTaxonomyIcon(typeName)}).`,
+            "Devuelve un JSON con dos claves:",
+            `- "titulo": el título de la pestaña del navegador. Alrededor de ${CATEGORY_SEO_TITLE_RECOMMENDED} caracteres y nunca más de ${CATEGORY_SEO_TITLE_MAX}. La tienda le añade después «${CATEGORY_SEO_TITLE_SUFFIX.trim()}», así que no nombres la marca ni la repitas. Empieza por lo que la persona buscaría.`,
+            `- "descripcion": el resumen que sale bajo el título en Google. Entre 140 y ${CATEGORY_SEO_DESCRIPTION_MAX} caracteres, una o dos frases, diciendo qué va a encontrar y para qué sirve. Puede mencionar que hay envíos a toda Colombia.`,
+          ].join("\n"),
+        },
+      ],
+    },
+    fetchImpl,
+  );
+
+  const bruto = data.choices[0]?.message?.content ?? "";
+  let parsed: { titulo?: unknown; descripcion?: unknown };
+  try {
+    parsed = JSON.parse(bruto) as { titulo?: unknown; descripcion?: unknown };
+  } catch {
+    throw new Error("La IA no devolvió un JSON que se pueda leer.");
+  }
+
+  const seoTitle = clampSeoText(typeof parsed.titulo === "string" ? parsed.titulo : "", CATEGORY_SEO_TITLE_MAX);
+  const seoDescription = clampSeoText(
+    typeof parsed.descripcion === "string" ? parsed.descripcion : "",
+    CATEGORY_SEO_DESCRIPTION_MAX,
+  );
+  if (!seoTitle || !seoDescription) throw new Error("La IA devolvió el título o la descripción vacíos.");
+  return { seoTitle, seoDescription };
+}
+
 export async function uploadCategoryCover(image: Buffer, slug: string): Promise<string> {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const result = await cloudinary.v2.uploader.upload(`data:image/png;base64,${image.toString("base64")}`, {
@@ -92,13 +159,26 @@ export async function uploadCategoryCover(image: Buffer, slug: string): Promise<
 export interface CategoryAssetsResult {
   imageUrl: string | null;
   seoIntro: string | null;
-  generated: ("imageUrl" | "seoIntro")[];
+  seoTitle: string | null;
+  seoDescription: string | null;
+  generated: ("imageUrl" | "seoIntro" | "seoTitle" | "seoDescription")[];
 }
 
-/** Qué generar: la portada, la intro o las dos (valor por defecto). */
-export type CategoryAssetPart = "cover" | "intro" | "both";
+/**
+ * Qué generar:
+ *
+ * - `cover`: la portada.
+ * - `intro`: la intro de la página.
+ * - `seo`: el par de metadatos —título y descripción, juntos—.
+ * - `all`: la sección entera, en una sola petición.
+ * - `both`: portada + intro. Es el valor por defecto y se queda como estaba,
+ *   sin el SEO: es lo que contesta el endpoint cuando no le piden nada en
+ *   concreto, y meterle una llamada más por defecto encarecería en silencio a
+ *   quien ya lo usa. Para la sección completa está `all`.
+ */
+export type CategoryAssetPart = "cover" | "intro" | "seo" | "all" | "both";
 
-export const CATEGORY_ASSET_PARTS: readonly CategoryAssetPart[] = ["cover", "intro", "both"];
+export const CATEGORY_ASSET_PARTS: readonly CategoryAssetPart[] = ["cover", "intro", "seo", "all", "both"];
 
 export const isCategoryAssetPart = (value: unknown): value is CategoryAssetPart =>
   typeof value === "string" && (CATEGORY_ASSET_PARTS as readonly string[]).includes(value);
@@ -124,15 +204,25 @@ export async function ensureCategoryAssets(
 ): Promise<CategoryAssetsResult> {
   const category = await prismadb.category.findFirst({
     where: { id: categoryId, storeId },
-    select: { id: true, name: true, slug: true, imageUrl: true, seoIntro: true, type: { select: { name: true } } },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      imageUrl: true,
+      seoIntro: true,
+      seoTitle: true,
+      seoDescription: true,
+      type: { select: { name: true } },
+    },
   });
   if (!category) throw new Error("La subcategoría no existe en esta tienda.");
 
   const part = options.part ?? "both";
-  const wantsCover = part === "cover" || part === "both";
-  const wantsIntro = part === "intro" || part === "both";
+  const wantsCover = part === "cover" || part === "both" || part === "all";
+  const wantsIntro = part === "intro" || part === "both" || part === "all";
+  const wantsSeo = part === "seo" || part === "all";
   const generated: CategoryAssetsResult["generated"] = [];
-  const data: { imageUrl?: string; seoIntro?: string } = {};
+  const data: { imageUrl?: string; seoIntro?: string; seoTitle?: string; seoDescription?: string } = {};
   const typeName = category.type?.name ?? "Papelería";
 
   if (wantsCover && (options.force || !category.imageUrl)) {
@@ -144,11 +234,25 @@ export async function ensureCategoryAssets(
     data.seoIntro = await generateCategoryIntro(category.name, typeName, options.fetchImpl);
     generated.push("seoIntro");
   }
+  // El par va junto: si falta uno de los dos se piden los dos, porque se
+  // escriben mirándose y un título nuevo con la descripción vieja descuadra.
+  if (wantsSeo && (options.force || !category.seoTitle || !category.seoDescription)) {
+    const seo = await generateCategorySeo(category.name, typeName, options.fetchImpl);
+    data.seoTitle = seo.seoTitle;
+    data.seoDescription = seo.seoDescription;
+    generated.push("seoTitle", "seoDescription");
+  }
 
   if (generated.length > 0) {
     await prismadb.category.update({ where: { id: category.id }, data });
     await triggerStorefrontRevalidation({ paths: getCategoryRevalidationPaths(category.slug), tags: ["categories", "catalog"] });
   }
 
-  return { imageUrl: data.imageUrl ?? category.imageUrl, seoIntro: data.seoIntro ?? category.seoIntro, generated };
+  return {
+    imageUrl: data.imageUrl ?? category.imageUrl,
+    seoIntro: data.seoIntro ?? category.seoIntro,
+    seoTitle: data.seoTitle ?? category.seoTitle,
+    seoDescription: data.seoDescription ?? category.seoDescription,
+    generated,
+  };
 }

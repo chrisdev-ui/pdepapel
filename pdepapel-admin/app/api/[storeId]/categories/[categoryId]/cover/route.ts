@@ -11,10 +11,12 @@ import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 export const maxDuration = 60;
 
 /**
- * Genera con IA la portada, la intro o las dos de una subcategoría (solo dueña
- * de la tienda). Cuerpo: `{ part?: "cover" | "intro" | "both", force?: boolean }`;
- * `part` por defecto es `both` y `force` regenera aunque ya exista. Es el
- * único lugar donde se llama a OpenAI: crear la subcategoría nunca espera aquí.
+ * Genera con IA la portada, la intro o el par de metadatos SEO —título y
+ * descripción— de una subcategoría (solo dueña de la tienda). Cuerpo:
+ * `{ part?: "cover" | "intro" | "seo" | "both", force?: boolean }`; `part` por
+ * defecto es `both` (portada + intro, sin SEO) y `force` regenera aunque ya
+ * exista. Es el único lugar donde se llama a OpenAI: crear la subcategoría
+ * nunca espera aquí.
  */
 export async function POST(req: Request, { params }: { params: { storeId: string; categoryId: string } }) {
   try {
@@ -30,7 +32,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
 
     const body = (await req.json().catch(() => ({}))) as { part?: unknown; force?: unknown };
     if (body.part !== undefined && !isCategoryAssetPart(body.part)) {
-      throw ErrorFactory.InvalidRequest("Indica qué generar: la portada (cover), la intro (intro) o las dos (both).");
+      throw ErrorFactory.InvalidRequest("Indica qué generar: la portada (cover), la intro (intro), los metadatos SEO (seo) o portada e intro (both).");
     }
 
     const category = await prismadb.category.findFirst({
