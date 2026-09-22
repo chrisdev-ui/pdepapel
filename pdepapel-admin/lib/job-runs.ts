@@ -16,6 +16,7 @@ export type JobName =
   | "image-health"
   | "storefront-revalidation"
   | "whatsapp-webhook-retention"
+  | "whatsapp-webhook-volume"
   | "payment-webhook-retention";
 
 export interface JobDefinition {
@@ -55,6 +56,12 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     name: "whatsapp-webhook-retention",
     label: "Retención de eventos de WhatsApp",
+    expectedEveryHours: 24,
+    perStore: false,
+  },
+  {
+    name: "whatsapp-webhook-volume",
+    label: "Volumen de eventos de WhatsApp",
     expectedEveryHours: 24,
     perStore: false,
   },

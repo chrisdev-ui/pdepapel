@@ -1,0 +1,40 @@
+# Early warning for the QStash daily cap.
+#
+# Every WhatsApp webhook event — inbound and the echo of Paula's own replies —
+# costs one QStash publish, and the plan allows 1000 a day. On 2026-09-21 the
+# day closed at 1104: the quota ran out mid-afternoon and real customers'
+# messages silently stopped being processed for hours. Nobody noticed until
+# the next day.
+#
+# This lives in its own workflow instead of `admin-scheduled-tasks.yml`
+# because that one runs once at 13:00 UTC (08:00 Bogota). A daily count taken
+# at 08:00 reports on a day that has barely started — it would always be
+# green, and the alert would arrive a day late. This runs through the day so
+# a spike is caught while there is still quota left to protect.
+name: WhatsApp webhook volume watch
+
+on:
+  schedule:
+    # 14:00, 18:00, 22:00 and 02:00 UTC = 09:00, 13:00, 17:00 and 21:00 Bogota.
+    - cron: "0 14,18,22,2 * * *"
+  workflow_dispatch:
+
+jobs:
+  whatsapp-webhook-volume:
+    name: WhatsApp webhook daily volume
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      # The endpoint answers 200 whether or not the threshold was crossed; the
+      # warning surfaces in the panel's «Sistemas» card, not in CI. A red run
+      # here means the check itself could not run.
+      - name: Check today's WhatsApp webhook event volume
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/whatsapp-webhook-volume"
