@@ -160,6 +160,21 @@ test.describe("barra pegajosa de la ficha de producto", () => {
 
     await abrirUnProducto(page);
 
+    /*
+     * Esperar a que el observador esté conectado antes de barrer.
+     *
+     * El catálogo se hidrata después de pintar y el `IntersectionObserver`
+     * nace con la hidratación; si el barrido empieza antes, el primer tramo
+     * sale sin barra y se cuenta como hueco aunque el código esté bien. Se
+     * nota sobre todo con varias pruebas a la vez. Esto no tapa el fallo que
+     * la prueba busca: que la barra salga al abrir ya lo comprueba la
+     * primera prueba del archivo; aquí solo interesa el relevo.
+     */
+    await expect(async () => {
+      const estado = await estadoDeLaBarra(page);
+      expect(estado!.visible, "La barra no llegó a encenderse al abrir.").toBe(true);
+    }).toPass({ timeout: 20_000 });
+
     const huecos: Array<{ y: number; visto: number; alto: number }> = [];
     for (let y = 0; y <= 900; y += 20) {
       await page.evaluate((t) => window.scrollTo({ top: t, behavior: "instant" }), y);

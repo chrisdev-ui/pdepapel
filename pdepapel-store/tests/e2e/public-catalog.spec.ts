@@ -88,6 +88,36 @@ test("oculta productos archivados de la tienda", async ({
   ).toBeVisible();
 });
 
+/**
+ * El estado, no solo lo que se ve.
+ *
+ * Con un `loading.tsx` en la ruta, Next 14.2 suelta el esqueleto —y con él
+ * la cabecera HTTP 200— antes de que `notFound()` llegue a decir nada, así
+ * que la página contestaba 200 enseñando «No encontramos esta página»: un
+ * 404 blando. Para quien busca en Google eso es una página buena, y había
+ * 1179 productos archivados y cualquier slug mal escrito entrando por ahí.
+ *
+ * La ficha de producto ya lo cubre arriba con un archivado de verdad; la
+ * categoría no tenía nada y llevaba con el fallo desde septiembre. No se usa
+ * una categoría archivada porque hoy no hay ninguna: el caso real es una
+ * dirección vieja que ya no resuelve.
+ */
+test("contesta 404 de verdad en un producto y una categoría que no existen", async ({
+  page,
+}) => {
+  for (const ruta of [
+    "/producto/no-existe-jamas-e2e",
+    "/categoria/no-existe-jamas-e2e",
+  ]) {
+    const response = await page.goto(ruta, { waitUntil: "domcontentloaded" });
+
+    expect(response?.status(), `${ruta} debería contestar 404`).toBe(404);
+    await expect(
+      page.getByRole("heading", { name: "No encontramos esta página" }),
+    ).toBeVisible();
+  }
+});
+
 test("muestra una página de orden no encontrada sin convertirla en error 500", async ({
   page,
 }) => {
