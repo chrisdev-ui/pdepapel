@@ -229,6 +229,35 @@ describe("SaleSearch", () => {
       await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
     });
 
+    /**
+     * Comprobado en producción: tras agregar por código la casilla ya tiene el
+     * foco del navegador, así que volver a pulsarla no dispara `focus` y
+     * `focused` se quedaba en `false`. El clic quitaba la tapa pero la lista
+     * no se abría, y para ver el catálogo había que escribir una letra.
+     */
+    it("pulsarla cuando ya tenía el cursor dentro también la trae", async () => {
+      renderSearch();
+      await waitFor(() => expect(mocks.detected).toBeTypeOf("function"));
+      await act(async () => void (await mocks.detected?.("LIB-1")));
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+      const casilla = screen.getByRole("combobox");
+      // Se reproduce el estado real: el cursor sigue dentro de la casilla,
+      // pero el componente ya se apuntó como «sin foco» por un blur previo
+      // (el suyo tarda 150 ms). A partir de aquí el navegador no volverá a
+      // mandar `focus` al pulsarla, porque nunca lo perdió de verdad.
+      fireEvent.blur(casilla);
+      // El componente apunta el «sin foco» 150 ms después del blur; hay que
+      // dejarlo pasar o la prueba mediría el estado anterior.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      });
+
+      // Sin `fireEvent.focus`: es justo lo que el navegador no manda.
+      fireEvent.pointerDown(casilla);
+      await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    });
+
     /** Elegir de la lista a mano tampoco debe dejarla abierta detrás. */
     it("elegir una fila con el ratón cierra la lista", async () => {
       const onAdd = renderSearch();

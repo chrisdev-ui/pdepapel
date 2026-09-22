@@ -275,8 +275,19 @@ export function SaleSearch({ onAdd, disabled, storeId: storeIdOverride }: SaleSe
               setNotice(null);
               setListSuppressed(false);
             }}
-            // Pulsar la casilla a propósito sí quiere ver el catálogo.
-            onPointerDown={() => setListSuppressed(false)}
+            /*
+             * Pulsar la casilla a propósito sí quiere ver el catálogo.
+             *
+             * También marca el foco a mano: al agregar por código se devuelve
+             * el foco a una casilla que a menudo ya lo tenía, y entonces el
+             * navegador no dispara `focus`, así que `focused` se quedaba en
+             * `false` mientras el cursor sí estaba dentro. Con eso, el clic
+             * quitaba la tapa pero la lista seguía sin abrirse.
+             */
+            onPointerDown={() => {
+              setListSuppressed(false);
+              setFocused(true);
+            }}
             onFocus={() => setFocused(true)}
             onBlur={() => setTimeout(() => setFocused(false), 150)}
             onKeyDown={onKeyDown}
