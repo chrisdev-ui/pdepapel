@@ -4,6 +4,7 @@ import type { AsyncProductOption } from "@/components/ui/async-product-select";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { useProductScanLookup } from "@/hooks/use-product-scan-lookup";
 import { useParams } from "next/navigation";
+import { useCallback } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { scanAccepted, scanRejected, settleScan, type ScanOutcome, type ScanResult } from "@/lib/scan-outcome";
@@ -50,7 +51,9 @@ export function ProductScanButton({
   const { resolve } = useProductScanLookup(storeId);
   const { toast } = useToast();
 
-  async function onDetected(code: string): Promise<ScanOutcome> {
+  // Estable: el lector la guarda en una referencia con un efecto, y sin
+  // `useCallback` ese efecto corría en cada pintado de las nueve pantallas.
+  const onDetected = useCallback(async (code: string): Promise<ScanOutcome> => {
     const product = await resolve(code);
     if (!product) {
       toast({
@@ -65,7 +68,7 @@ export function ProductScanButton({
     // solo dos avisaban con un toast y las otras siete no confirmaban nada.
     const outcome = await settleScan(() => onFound(product));
     return outcome.ok ? scanAccepted(product.name) : scanRejected(product.name);
-  }
+  }, [notify, onFound, resolve, toast]);
 
   // `storeId` también al lector: antes solo llegaba a la búsqueda y el lector
   // lo sacaba siempre de la ruta, así que fuera de una ruta con `[storeId]`
