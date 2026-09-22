@@ -83,9 +83,19 @@ test.describe("tarjeta de producto en táctil", () => {
     await expect(favorito).toBeVisible();
     await expect(favorito).toHaveAttribute("aria-pressed", "false");
 
-    await favorito.tap();
-
-    await expect(favorito).toHaveAttribute("aria-pressed", "true");
+    /*
+     * El toque se reintenta hasta que prenda.
+     *
+     * El catálogo se hidrata después de pintar, así que un toque que llega
+     * antes cae sobre un botón que todavía no escucha: no falla, no hace
+     * nada, y ninguna espera posterior lo arregla porque el evento ya se
+     * perdió. Reintentar es lo único que cubre esa ventana; `toPass` corta en
+     * cuanto el atributo cambia, así que en el caso normal es un solo toque.
+     */
+    await expect(async () => {
+      await favorito.tap();
+      await expect(favorito).toHaveAttribute("aria-pressed", "true", { timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
     // Guardar no navega: la clienta se queda donde estaba.
     await expect(page).toHaveURL(/\/tienda/);
   });
