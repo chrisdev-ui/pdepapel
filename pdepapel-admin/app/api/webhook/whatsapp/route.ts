@@ -1,13 +1,23 @@
-import { MarketplaceProvider, Prisma } from "@prisma/client";
+import {
+  MarketplaceProvider,
+  MarketplaceWebhookEventStatus,
+  Prisma,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { readWebhookToken, safeSecretEquals } from "@/lib/webhook-auth";
+import {
+  IGNORED_EVENT_NOTE,
+  countSkippedEvent,
+  findIgnoredContact,
+} from "@/lib/whatsapp/ignored-contacts";
 import { enqueueWhatsAppWebhookEvent } from "@/lib/whatsapp/queue";
 import {
   classifyWhatsAppWebhookEvent,
   getWhatsAppWebhookConversationKey,
+  getWhatsAppWebhookIdentity,
   parseWhatsAppWebhookPayload,
   verifyWhatsAppWebhookSignature,
 } from "@/lib/whatsapp/webhook";
@@ -28,6 +38,22 @@ import {
  */
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+
+/**
+ * Tienda a la que atribuir el evento cuando no hay conexión por `sellerId`.
+ *
+ * Solo se consulta si hay identidad que comprobar, para no meter una consulta
+ * de más en el camino caliente de los eventos sin remitente (cambios de
+ * plantilla y demás).
+ */
+async function resolveFallbackStoreId(identity: {
+  phone: string | null;
+  bsuid: string | null;
+}): Promise<string | null> {
+  if (!identity.phone && !identity.bsuid) return null;
+  const store = await prismadb.store.findFirst({ select: { id: true } });
+  return store?.id ?? null;
+}
 
 /** Apretón de manos de Meta al registrar la URL. */
 export async function GET(request: Request) {
@@ -101,7 +127,7 @@ export async function POST(request: Request) {
     const connection = sellerId
       ? await prismadb.marketplaceConnection.findFirst({
           where: { provider: MarketplaceProvider.WHATSAPP, sellerId },
-          select: { id: true },
+          select: { id: true, storeId: true },
         })
       : null;
 
@@ -149,6 +175,59 @@ export async function POST(request: Request) {
       }
     }
 
+    /*
+     * Contacto ignorado: se guarda el evento y no se encola.
+     *
+     * Aquí y no más adelante porque la cuota de QStash se gasta al publicar,
+     * no al procesar: cualquier corte posterior ya la habría pagado. La
+     * identidad está a mano una línea antes de encolar —es la misma que arma
+     * la llave de flujo—, así que no cuesta ninguna consulta de más.
+     *
+     * Tapa los dos sentidos: el mensaje que entra y el eco de lo que Paula
+     * contesta desde su celular, que también es un evento y también costaba.
+     */
+    const identity = getWhatsAppWebhookIdentity(payload);
+    let ignored: { id: string } | null = null;
+    try {
+      const storeId = connection?.storeId ?? (await resolveFallbackStoreId(identity));
+      ignored = storeId ? await findIgnoredContact(storeId, identity) : null;
+    } catch (error) {
+      // Si no se puede comprobar, se sigue como siempre: encolar de más es
+      // recuperable, dejar de atender a una clienta no lo es.
+      console.error("[WHATSAPP_WEBHOOK] No se pudo consultar la lista de ignorados", {
+        eventId: event.id,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+
+    if (ignored) {
+      await countSkippedEvent(ignored.id);
+      // Se cierra el evento para que ninguna recuperación ni reintento lo
+      // vuelva a tomar, y para que la limpieza de 30 días se lo lleve: solo
+      // borra los PROCESSED, y dejarlo PENDING lo haría eterno.
+      await prismadb.marketplaceWebhookEvent
+        .update({
+          where: { id: event.id },
+          data: {
+            status: MarketplaceWebhookEventStatus.PROCESSED,
+            processedAt: new Date(),
+            nextRetryAt: null,
+            lastError: IGNORED_EVENT_NOTE,
+          },
+        })
+        .catch((error: unknown) => {
+          console.error("[WHATSAPP_WEBHOOK] No se pudo marcar el evento ignorado", {
+            eventId: event.id,
+            message: error instanceof Error ? error.message : "unknown",
+          });
+        });
+
+      return NextResponse.json(
+        { received: true, stored: true, eventId: event.id, topic, connectedAccount: Boolean(event.connectionId), queued: false, ignored: true },
+        { status: 200 },
+      );
+    }
+
     // Encolar es lo mejor que se puede: si QStash no está configurado o falla,
     // el evento ya está guardado y la recuperación lo tomará después.
     let queued = false;
@@ -174,6 +253,7 @@ export async function POST(request: Request) {
         topic,
         connectedAccount: Boolean(event.connectionId),
         queued,
+        ignored: false,
       },
       { status: 200 },
     );

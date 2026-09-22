@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
   upsert: vi.fn(),
   findUniqueOrThrow: vi.fn(),
   enqueue: vi.fn(),
+  ignoredFindFirst: vi.fn(),
+  ignoredUpdate: vi.fn(),
+  eventUpdate: vi.fn(),
+  storeFindFirst: vi.fn(),
   env: { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789", WHATSAPP_APP_SECRET: undefined as string | undefined },
 }));
 
@@ -20,7 +24,10 @@ vi.mock("@/lib/prismadb", () => ({
     marketplaceWebhookEvent: {
       upsert: mocks.upsert,
       findUniqueOrThrow: mocks.findUniqueOrThrow,
+      update: mocks.eventUpdate,
     },
+    ignoredContact: { findFirst: mocks.ignoredFindFirst, update: mocks.ignoredUpdate },
+    store: { findFirst: mocks.storeFindFirst },
   },
 }));
 
@@ -71,6 +78,11 @@ describe("POST /api/webhook/whatsapp", () => {
     mocks.findFirst.mockResolvedValue(null);
     mocks.upsert.mockResolvedValue({ id: "event-id", connectionId: null });
     mocks.enqueue.mockResolvedValue(true);
+    // Por defecto no hay nadie ignorado: el camino de siempre.
+    mocks.ignoredFindFirst.mockResolvedValue(null);
+    mocks.ignoredUpdate.mockResolvedValue({});
+    mocks.eventUpdate.mockResolvedValue({});
+    mocks.storeFindFirst.mockResolvedValue({ id: "store-1" });
   });
 
   it("rejects a request without the shared secret before touching the database", async () => {
@@ -88,7 +100,9 @@ describe("POST /api/webhook/whatsapp", () => {
   it("stores a Meta-shaped event keyed by the message id when the token is in the URL", async () => {
     const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ received: true, stored: true, eventId: "event-id", topic: "messages", connectedAccount: false, queued: true });
+    // `ignored: false` es nuevo: la respuesta ahora dice también si el
+    // contacto está en la lista, para poder verlo desde fuera.
+    await expect(response.json()).resolves.toEqual({ received: true, stored: true, eventId: "event-id", topic: "messages", connectedAccount: false, queued: true, ignored: false });
     expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { provider: "WHATSAPP", sellerId: "WABA-123" } }));
     expect(mocks.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -181,5 +195,113 @@ describe("POST /api/webhook/whatsapp", () => {
     expect(error).toHaveBeenCalled();
     expect(mocks.enqueue).not.toHaveBeenCalled();
     error.mockRestore();
+  });
+});
+
+/**
+ * El corte de los contactos ignorados.
+ *
+ * Va antes de encolar porque la cuota de QStash se gasta al publicar, no al
+ * procesar: cortar más adelante ya la habría pagado. Lo que se comprueba aquí
+ * es justo eso —que no se publica— y que el evento crudo sí queda guardado,
+ * que es lo que hace reversible la decisión.
+ */
+describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
+  const entrante = (from: string) =>
+    JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [{ id: "WABA-123", changes: [{ field: "messages", value: { metadata: { phone_number_id: "PHONE-9" }, messages: [{ from, id: "wamid.IN", type: "text", text: { body: "hola" } }] } }] }],
+    });
+
+  /** El eco de lo que Paula contesta desde su celular: también cuesta cuota. */
+  const eco = (to: string) =>
+    JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [{ id: "WABA-123", changes: [{ field: "smb_message_echoes", value: { metadata: { phone_number_id: "PHONE-9" }, message_echoes: [{ to, id: "wamid.ECHO", type: "text", text: { body: "ya te cuento" } }] } }] }],
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.env.WHATSAPP_APP_SECRET = undefined;
+    mocks.findFirst.mockResolvedValue({ id: "conn-1", storeId: "store-1" });
+    mocks.upsert.mockResolvedValue({ id: "event-id", connectionId: "conn-1" });
+    mocks.enqueue.mockResolvedValue(true);
+    mocks.ignoredFindFirst.mockResolvedValue(null);
+    mocks.ignoredUpdate.mockResolvedValue({});
+    mocks.eventUpdate.mockResolvedValue({});
+    mocks.storeFindFirst.mockResolvedValue({ id: "store-1" });
+  });
+
+  it("un contacto ignorado no gasta cuota, pero su evento sí se guarda", async () => {
+    mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
+
+    const response = await post(entrante("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ received: true, stored: true, queued: false, ignored: true });
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+    // Guardado: es lo que permite deshacerlo sin haber perdido nada.
+    expect(mocks.upsert).toHaveBeenCalled();
+  });
+
+  /** Los dos sentidos cuestan, así que los dos se cortan. */
+  it("también corta el eco de lo que contesta Paula en ese hilo", async () => {
+    mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
+
+    const response = await post(eco("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+
+    await expect(response.json()).resolves.toMatchObject({ queued: false, ignored: true });
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("el evento se cierra para que ninguna recuperación lo retome", async () => {
+    mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
+    await post(entrante("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+
+    expect(mocks.eventUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "event-id" },
+        data: expect.objectContaining({ status: "PROCESSED", nextRetryAt: null, lastError: expect.stringContaining("IGNORADO") }),
+      }),
+    );
+  });
+
+  it("lleva la cuenta de lo que se dejó pasar", async () => {
+    mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
+    await post(entrante("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+
+    expect(mocks.ignoredUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "ign-1" }, data: expect.objectContaining({ skippedCount: { increment: 1 } }) }),
+    );
+  });
+
+  it("una clienta que no está en la lista sigue igual que siempre", async () => {
+    const response = await post(entrante("573116164568"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+
+    await expect(response.json()).resolves.toMatchObject({ queued: true, ignored: false });
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+    expect(mocks.eventUpdate).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Si la comprobación revienta se encola igual. Encolar de más se recupera;
+   * dejar a una clienta sin atender por un fallo de la lista, no.
+   */
+  it("si no se puede consultar la lista, se encola como siempre", async () => {
+    mocks.ignoredFindFirst.mockRejectedValue(new Error("base caída"));
+    const errores = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await post(entrante("573116164568"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+
+    await expect(response.json()).resolves.toMatchObject({ queued: true });
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+    errores.mockRestore();
+  });
+
+  it("la lista se consulta acotada a la tienda de la conexión", async () => {
+    await post(entrante("573116164568"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    expect(mocks.ignoredFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ storeId: "store-1" }) }),
+    );
   });
 });

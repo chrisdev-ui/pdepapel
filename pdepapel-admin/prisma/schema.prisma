@@ -75,6 +75,7 @@ model Store {
   customerReactivations          CustomerReactivation[]          @relation("StoreToCustomerReactivation")
   newsletterSubscribers          NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
   conversations                  Conversation[]                  @relation("StoreToConversation")
+  ignoredContacts                IgnoredContact[]
   whatsAppBotReplies             WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
   productPresales                ProductPresale[]                @relation("StoreToProductPresale")
   newsletterIssues               NewsletterIssue[]               @relation("StoreToNewsletterIssue")
@@ -2603,6 +2604,49 @@ model WhatsAppBotReply {
   store Store @relation("StoreToWhatsAppBotReply", fields: [storeId], references: [id])
 
   @@index([storeId, isActive, sortOrder])
+}
+
+/**
+ * Contactos a los que el panel no les hace caso.
+ * Existe por dinero, no por ruido: cada evento de WhatsApp —el que entra y el
+ * eco de lo que contesta Paula desde su celular— cuesta una publicación en
+ * QStash, y el tope es de 1000 al día. El 21 de septiembre de 2026 un solo
+ * contacto puso 394 de 1104 eventos y la cuota se agotó a media tarde; los
+ * mensajes de clientas reales se perdieron en silencio durante horas.
+ * Al estar en esta lista, el webhook guarda el evento igual pero **no lo
+ * encola**: no se gasta cuota, no se expande a conversación y el bot ni se
+ * entera. Nada se pierde —el cuerpo crudo queda en `MarketplaceWebhookEvent`—
+ * así que quitar a alguien de aquí es reversible.
+ * El emparejamiento es **exacto** a propósito: teléfono completo normalizado
+ * o BSUID entero. Nada de prefijos ni de «contiene»: una coincidencia de más
+ * deja a una clienta real sin respuesta y sin que nadie se dé cuenta.
+ */
+model IgnoredContact {
+  id              String    @id @default(uuid())
+  storeId         String
+  /// Solo dígitos con indicativo, la misma forma que `Conversation.phone`.
+  phone           String?
+  /// BSUID de Meta (`CN.1377520137782797`), tal cual llega.
+  bsuid           String?
+  /// Por qué se ignora. Obligatorio: una lista con números sin explicación
+  /// es imposible de revisar seis meses después.
+  reason          String    @db.Text
+  /// Quién lo puso, para poder preguntarle.
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  /// Cuántos eventos se han dejado pasar desde que se ignoró. Lo lleva el
+  /// webhook con un UPDATE por evento saltado: es muchísimo más barato que lo
+  /// que sustituye (una publicación en QStash más el procesado entero) y
+  /// evita tener que rastrear los payloads guardados para saber cuánto se
+  /// está perdiendo de vista.
+  skippedCount    Int       @default(0)
+  lastSkippedAt   DateTime?
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, phone])
+  @@unique([storeId, bsuid])
+  @@index([storeId])
 }
 
 model ConversationMessage {
