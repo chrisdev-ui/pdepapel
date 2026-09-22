@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import MobileFilters from "@/components/mobile-filters";
 import { SaveSearchButton } from "@/components/shop/save-search-button";
@@ -154,6 +154,27 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const totalItems = data?.totalItems ?? initialTotalItems;
   const isCatalogUnavailable = Boolean(data?.isUnavailable);
   const products = data?.products ?? [];
+
+  /**
+   * Trae otra página con los filtros vigentes, para que «Cargar más» pueda
+   * seguir en vez de morirse al acabar la página actual.
+   *
+   * Vive aquí y no dentro de la cuadrícula porque los filtros están aquí: si
+   * la cuadrícula los armara por su cuenta, «Cargar más» podría traer una
+   * página de otra búsqueda. Devuelve `null` cuando el catálogo no responde,
+   * que es cómo `fetchCatalogFromClient` avisa de un fallo —no lanza—.
+   */
+  const loadPage = useCallback(
+    async (page: number) => {
+      const response = await fetchCatalogFromClient({
+        ...filtersToQuery(effectiveFilters, fixedCategoryId),
+        page,
+        itemsPerPage: LIMIT_SHOP_ITEMS,
+      });
+      return response.isUnavailable ? null : response.products;
+    },
+    [effectiveFilters, fixedCategoryId],
+  );
   const rangeText = formatResultRange(filters.page, LIMIT_SHOP_ITEMS, totalItems);
   const correction = data?.searchCorrection ?? null;
 
@@ -248,7 +269,12 @@ export const ShopContent: React.FC<ShopContentProps> = ({
               onClearFilters={activeCount > 0 ? clearFilters : undefined}
             />
           ) : (
-            <Products products={products} totalPages={data?.totalPages ?? 0} />
+            <Products
+              products={products}
+              totalPages={data?.totalPages ?? 0}
+              currentPage={effectiveFilters.page ?? 1}
+              loadPage={loadPage}
+            />
           )}
         </section>
       </div>
