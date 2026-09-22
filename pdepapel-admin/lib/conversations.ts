@@ -7,6 +7,10 @@ import {
 import { z } from "zod";
 
 import prismadb from "@/lib/prismadb";
+import {
+  normalizeIgnoredBsuid,
+  normalizeIgnoredPhone,
+} from "@/lib/whatsapp/ignored-contacts";
 
 /**
  * Conversaciones de WhatsApp para el panel: tipos de vista, etiquetas en
@@ -209,6 +213,10 @@ export interface ConversationRow {
   lastMessageAt: Date | null;
   hasCart: boolean;
   orderId: string | null;
+  /** En la lista de ignorados: el panel dejó de reflejar lo que llega. */
+  ignored: boolean;
+  /** Eventos que se dejaron pasar desde que se ignoró (0 si no lo está). */
+  skippedCount: number;
 }
 
 export interface ConversationThreadMessage {
@@ -242,6 +250,10 @@ export interface ConversationDetail {
   orderId: string | null;
   createdAt: Date;
   messages: ConversationThreadMessage[];
+  /** En la lista de ignorados: el panel dejó de reflejar lo que llega. */
+  ignored: boolean;
+  /** Eventos dejados pasar desde que se ignoró. */
+  skippedCount: number;
 }
 
 /** Texto corto para la lista: el cuerpo, o el tipo de adjunto entre paréntesis. */
@@ -268,6 +280,94 @@ export type ConversationStatusUpdate = z.infer<typeof conversationStatusUpdateSc
  * Quita la parada de 24 h y deja la conversación abierta. `lastOwnerAt` a null
  * porque es lo que ese campo ya significa. No manda ningún mensaje.
  */
+/**
+ * Ignora al contacto de una conversación: el panel deja de reflejarlo.
+ *
+ * Guarda la identidad **completa** que tenga la conversación —teléfono y/o
+ * BSUID, los dos si los hay— en una sola fila, para que el webhook la tape
+ * venga por donde venga. No se inventa nada: si la conversación no tiene
+ * ninguna de las dos, no hay con qué emparejar de forma exacta y se rechaza
+ * antes que arriesgar una coincidencia de más.
+ *
+ * No manda nada a la clienta ni toca el WhatsApp de Paula.
+ */
+export async function ignoreConversationContact(
+  storeId: string,
+  conversationId: string,
+  input: { reason: string; userId: string },
+): Promise<
+  | { ok: true; phone: string | null; bsuid: string | null }
+  | { ok: false; reason: "not_found" | "no_identity" }
+> {
+  const conversation = await prismadb.conversation.findFirst({
+    where: { id: conversationId, storeId },
+    select: { phone: true, bsuid: true },
+  });
+  if (!conversation) return { ok: false, reason: "not_found" };
+
+  const phone = normalizeIgnoredPhone(conversation.phone);
+  const bsuid = normalizeIgnoredBsuid(conversation.bsuid);
+  if (!phone && !bsuid) return { ok: false, reason: "no_identity" };
+
+  // Puede existir ya por una de las dos identidades (se ignoró cuando solo se
+  // conocía el teléfono y ahora además hay BSUID). Se completa la fila en vez
+  // de crear una segunda que taparía al mismo contacto por duplicado.
+  const existing = await prismadb.ignoredContact.findFirst({
+    where: {
+      storeId,
+      OR: [...(phone ? [{ phone }] : []), ...(bsuid ? [{ bsuid }] : [])],
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await prismadb.ignoredContact.update({
+      where: { id: existing.id },
+      data: { phone, bsuid, reason: input.reason, createdByUserId: input.userId },
+    });
+  } else {
+    await prismadb.ignoredContact.create({
+      data: { storeId, phone, bsuid, reason: input.reason, createdByUserId: input.userId },
+    });
+  }
+
+  return { ok: true, phone, bsuid };
+}
+
+/**
+ * Deja de ignorar al contacto.
+ *
+ * Devuelve cuántos eventos se dejaron pasar mientras tanto. **No los reprocesa
+ * aquí a propósito**: pueden ser miles y cada uno costaría una publicación en
+ * QStash, que es exactamente la cuota que esto vino a proteger. Recuperarlos
+ * es una acción aparte y por lotes.
+ */
+export async function unignoreConversationContact(
+  storeId: string,
+  conversationId: string,
+): Promise<{ ok: true; removed: number; pending: number } | { ok: false }> {
+  const conversation = await prismadb.conversation.findFirst({
+    where: { id: conversationId, storeId },
+    select: { phone: true, bsuid: true },
+  });
+  if (!conversation) return { ok: false };
+
+  const phone = normalizeIgnoredPhone(conversation.phone);
+  const bsuid = normalizeIgnoredBsuid(conversation.bsuid);
+  if (!phone && !bsuid) return { ok: true, removed: 0, pending: 0 };
+
+  const conditions = [...(phone ? [{ phone }] : []), ...(bsuid ? [{ bsuid }] : [])];
+  const pendientes = await prismadb.ignoredContact.aggregate({
+    where: { storeId, OR: conditions },
+    _sum: { skippedCount: true },
+  });
+  const { count } = await prismadb.ignoredContact.deleteMany({
+    where: { storeId, OR: conditions },
+  });
+
+  return { ok: true, removed: count, pending: pendientes._sum.skippedCount ?? 0 };
+}
+
 export async function handBackToBot(
   storeId: string,
   conversationId: string,

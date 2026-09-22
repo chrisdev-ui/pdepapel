@@ -7,10 +7,11 @@ import {
   describeBotPause,
   formatBotPause,
 } from "@/lib/conversation-bot-pause";
-import { AlertTriangle, ArrowLeft, Bot, BotOff, CheckCircle2, MousePointerClick, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BellOff, Bot, BotOff, CheckCircle2, MousePointerClick, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { IgnoreContactDialog } from "@/components/conversations/ignore-contact-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -168,6 +169,7 @@ export function ConversationThread({
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [ignoreOpen, setIgnoreOpen] = useState(false);
   const isResolved = conversation.status === ConversationStatus.RESOLVED;
   // Solo se ofrece crear el pedido si de verdad llegó un carrito.
   const hasCart = conversation.messages.some((message) => message.cart !== null);
@@ -243,11 +245,46 @@ export function ConversationThread({
     }
   };
 
+  /** Deja de ignorar. No recupera lo de atrás: solo vuelve a escuchar. */
+  const dejarDeIgnorar = async () => {
+    try {
+      setLoading(true);
+      const { data } = await axios.delete(
+        `/api/${storeId}/conversations/${conversation.id}/ignore`,
+      );
+      router.refresh();
+      toast({
+        title: "Se vuelve a reflejar en el panel",
+        description:
+          data.pending > 0
+            ? `Quedaron ${data.pending} mensajes sin reflejar de mientras; no se recuperan solos.`
+            : "Lo que llegue de ahora en adelante aparece aquí.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo quitar de ignorados",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const puedeDevolver = canHandBackToBot(conversation.lastOwnerAt);
   const pausaDelBot = formatBotPause(describeBotPause(conversation.lastOwnerAt));
 
   return (
     <>
+      <IgnoreContactDialog
+        open={ignoreOpen}
+        onOpenChange={setIgnoreOpen}
+        storeId={storeId}
+        conversationId={conversation.id}
+        contactLabel={conversation.contactName?.trim() || conversation.phone || conversation.bsuid || "este contacto"}
+        onDone={() => router.refresh()}
+      />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Heading
           title={conversation.contactName?.trim() || "Sin nombre"}
@@ -265,6 +302,16 @@ export function ConversationThread({
               {pausaDelBot}
             </span>
           ) : null}
+          {/* Ignorado: se dice aquí y con el número, para que no parezca que
+              la conversación simplemente se quedó quieta. */}
+          {conversation.ignored ? (
+            <span className="flex items-center gap-1.5 rounded-full border border-tint-cream bg-tint-cream/60 px-2.5 py-1 text-xs font-medium text-primary">
+              <BellOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {conversation.skippedCount > 0
+                ? `Ignorado · ${conversation.skippedCount} sin reflejar`
+                : "Ignorado"}
+            </span>
+          ) : null}
           {conversation.orderId ? (
             <Button
               variant="outline"
@@ -278,6 +325,20 @@ export function ConversationThread({
               <Receipt className="mr-2 h-4 w-4" /> Crear pedido
             </Button>
           ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={() => (conversation.ignored ? void dejarDeIgnorar() : setIgnoreOpen(true))}
+            title={
+              conversation.ignored
+                ? "Vuelve a reflejar en el panel lo que llegue de este contacto."
+                : "Deja de reflejar y de contestar a este contacto. Tu WhatsApp no cambia."
+            }
+          >
+            <BellOff className="mr-2 h-4 w-4" />
+            {conversation.ignored ? "Dejar de ignorar" : "Ignorar"}
+          </Button>
           <Button
             variant="outline"
             size="sm"

@@ -14,7 +14,7 @@ import {
 } from "@/lib/conversations";
 import { ConversationStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { BotOff, ShoppingBag } from "lucide-react";
+import { BellOff, BotOff, ShoppingBag } from "lucide-react";
 import { CellAction } from "./cell-action";
 
 export type ConversationColumn = ConversationRow;
@@ -36,9 +36,24 @@ export const columns: ColumnDef<ConversationColumn>[] = [
       <DataTableColumnHeader column={column} title="Clienta" />
     ),
     cell: ({ row }) => (
-      <span className="font-medium">
-        {row.original.contactName?.trim() ||
-          (row.original.username ? `@${row.original.username}` : "Sin nombre")}
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="font-medium">
+          {row.original.contactName?.trim() ||
+            (row.original.username ? `@${row.original.username}` : "Sin nombre")}
+        </span>
+        {/* Discreto pero visible: sin esto una conversación ignorada parece
+            una que simplemente dejó de escribir. */}
+        {row.original.ignored ? (
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-tint-cream bg-tint-cream/60 px-2 py-0.5 text-[11px] font-semibold text-primary"
+            title="El panel no refleja lo que llega de este contacto. Tu WhatsApp no cambia."
+          >
+            <BellOff className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {row.original.skippedCount > 0
+              ? `Ignorado · ${row.original.skippedCount} sin reflejar`
+              : "Ignorado"}
+          </span>
+        ) : null}
       </span>
     ),
   },

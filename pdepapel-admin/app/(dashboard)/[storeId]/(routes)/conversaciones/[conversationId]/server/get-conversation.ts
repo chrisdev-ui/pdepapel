@@ -62,9 +62,26 @@ export async function getConversation(
       })
     : [];
 
+  // Exacto por teléfono o por BSUID; nunca por parecido.
+  const ignorado =
+    conversation.phone || conversation.bsuid
+      ? await prismadb.ignoredContact.findFirst({
+          where: {
+            storeId,
+            OR: [
+              ...(conversation.phone ? [{ phone: conversation.phone }] : []),
+              ...(conversation.bsuid ? [{ bsuid: conversation.bsuid }] : []),
+            ],
+          },
+          select: { skippedCount: true },
+        })
+      : null;
+
   const { messages, ...fields } = conversation;
   return {
     ...fields,
+    ignored: Boolean(ignorado),
+    skippedCount: ignorado?.skippedCount ?? 0,
     messages: messages.map(({ metadata, ...message }, index) => ({
       ...message,
       cart: carts[index] ? resolveCart(carts[index]!, products) : null,

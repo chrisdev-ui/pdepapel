@@ -33,14 +33,29 @@ export async function getConversations(storeId: string): Promise<ConversationRow
     orderBy: [{ lastInboundAt: "desc" }, { createdAt: "desc" }],
   });
 
+  // Una sola consulta para toda la lista: son pocas filas y se cruzan en
+  // memoria. Preguntar por conversación sería una consulta por fila.
+  const ignorados = await prismadb.ignoredContact.findMany({
+    where: { storeId },
+    select: { phone: true, bsuid: true, skippedCount: true },
+  });
+  const porTelefono = new Map(ignorados.filter((i) => i.phone).map((i) => [i.phone as string, i]));
+  const porBsuid = new Map(ignorados.filter((i) => i.bsuid).map((i) => [i.bsuid as string, i]));
+
   return conversations.map(({ _count, messages, ...fields }) => {
     const last = messages[0] ?? null;
+    // Exacto por teléfono o por BSUID, nunca por parecido.
+    const ignorado =
+      (fields.phone ? porTelefono.get(fields.phone) : undefined) ??
+      (fields.bsuid ? porBsuid.get(fields.bsuid) : undefined);
     return {
       ...fields,
       messageCount: _count.messages,
       lastMessagePreview: last ? previewMessage(last.body, last.mediaType) : null,
       lastMessageAt: last?.createdAt ?? null,
       hasCart: Boolean(last && parseCartMetadata(last.metadata)),
+      ignored: Boolean(ignorado),
+      skippedCount: ignorado?.skippedCount ?? 0,
     };
   });
 }
