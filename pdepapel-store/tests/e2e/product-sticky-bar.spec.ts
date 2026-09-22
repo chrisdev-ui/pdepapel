@@ -144,6 +144,58 @@ test.describe("barra pegajosa de la ficha de producto", () => {
   });
 
   /**
+   * El relevo: en ningún punto puede quedar la pantalla sin barra y sin
+   * botón.
+   *
+   * La barra se apagaba en cuanto asomaba el borde de arriba de la fila del
+   * botón, y en el teléfono esa fila se parte en dos líneas —el botón baja a
+   * la suya por `order-last basis-full`—, así que del botón de verdad
+   * todavía no se veía nada: un tramo de ~110 px sin nada que tocar. El
+   * `rootMargin` de abajo recorta esos 116 px (52 del corazón + 12 de
+   * `gap-3` + 52 del botón) para que el relevo pase con el botón entero ya
+   * en pantalla. Medido sin el recorte: 12 posiciones en hueco; con él, 0.
+   */
+  test("nunca deja la pantalla sin barra y sin botón al bajar", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "En escritorio la fila no se parte y el botón nace a la vista.");
+
+    await abrirUnProducto(page);
+
+    const huecos: Array<{ y: number; visto: number; alto: number }> = [];
+    for (let y = 0; y <= 900; y += 20) {
+      await page.evaluate((t) => window.scrollTo({ top: t, behavior: "instant" }), y);
+      await page.waitForTimeout(60);
+      const punto = await page.evaluate(() => {
+        const barra = document.querySelector('[data-testid="product-sticky-bar"]')!;
+        const fila = document.querySelector('[data-testid="product-cta-row"]')!;
+        const boton = Array.from(fila.querySelectorAll("button")).find((b) =>
+          /Agregar|Avísame|Agotado/i.test(b.textContent ?? ""),
+        );
+        if (!boton) return null;
+        const caja = boton.getBoundingClientRect();
+        const visto = Math.max(0, Math.min(caja.bottom, window.innerHeight) - Math.max(caja.top, 0));
+        return {
+          barraVisible:
+            barra.getAttribute("aria-hidden") === "false" &&
+            Number(window.getComputedStyle(barra).opacity) > 0.9,
+          visto: Math.round(visto),
+          alto: Math.round(caja.height),
+          // Solo interesa la entrada por abajo; la salida por arriba es otro caso.
+          entrandoPorAbajo: caja.top > window.innerHeight / 2,
+        };
+      });
+      if (!punto || !punto.entrandoPorAbajo) continue;
+      if (!punto.barraVisible && punto.visto < punto.alto) {
+        huecos.push({ y, visto: punto.visto, alto: punto.alto });
+      }
+    }
+
+    expect(
+      huecos,
+      `Hubo ${huecos.length} posición(es) sin barra y con el botón a medias: ${JSON.stringify(huecos.slice(0, 5))}`,
+    ).toEqual([]);
+  });
+
+  /**
    * «Envíos a toda Colombia» era un `span` sin destino en una fila de tres
    * sellos, y recogía toques de gente preguntando por el envío antes de
    * decidir. Ahora lleva a la política de envíos.

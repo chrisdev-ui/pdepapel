@@ -38,7 +38,14 @@ export function ProductStickyBar({ product, availability, quantity, targetRef, o
       // px de cada ficha no tenían ningún botón de agregar en pantalla, justo
       // donde se pierde el 72 % de quienes abren un producto.
       ([entry]) => setVisible(!entry.isIntersecting),
-      { threshold: 0 },
+      // El borde de abajo se recorta la altura de la fila del botón (52 del
+      // corazón + 12 de `gap-3` + 52 del botón, que en el teléfono baja a su
+      // propia línea por `order-last basis-full`). Sin ese recorte la barra
+      // se quitaba en cuanto asomaba el borde superior de la fila, o sea
+      // cuando del botón de verdad todavía no se veía nada: quedaba un tramo
+      // sin barra y sin botón. Con él, el relevo pasa con el botón entero ya
+      // en pantalla.
+      { threshold: 0, rootMargin: "0px 0px -116px 0px" },
     );
     observer.observe(target);
     return () => observer.disconnect();
