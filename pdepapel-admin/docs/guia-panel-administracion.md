@@ -105,8 +105,9 @@ Menú de fila: copiar ID o número, link de pago (si no está pagado), datáfono
 
 **Vender**
 
-1. Una sola casilla «Buscar o escanear»: nombre, SKU o código de barras,
-   lector de mano (Enter), cámara o celular vinculado. La lista se ordena
+1. Una sola casilla «Buscar o escanear»: nombre, SKU, código de barras o el
+   QR de la etiqueta impresa; lector de mano (Enter), cámara o celular
+   vinculado. La lista se ordena
    para vender: código exacto, con unidades (más vendidos primero),
    agotados al final y sin poderse agregar. Cada fila trae color/tamaño y el
    precio con la oferta vigente.
@@ -126,6 +127,14 @@ Las ofertas de la tienda aplican en el mostrador; no hay descuento manual.
 
 **Etiquetas**: hoja adhesiva con el código de cada producto; elige producto,
 cantidad y formato, agrega a la hoja e imprime. Una etiqueta se reutiliza.
+
+Para probar una etiqueta recién impresa no hay que vender: en Vender, con el
+cursor en «Buscar o escanear», léela; si está bien el producto se agrega solo
+y basta con quitarlo de la venta, que solo se registra al pulsar «Registrar
+pago». Los avisos distinguen dos casos: «no es un código exacto» (hay
+candidatos, elige de la lista) y «no coincide con ningún SKU, código de barras
+ni QR de etiqueta» (no se leyó completo o no es de esta tienda). En una feria
+la prueba es igual, pero solo responde lo reservado para el evento.
 
 Dentro de un evento vende desde Ferias, no desde el punto de venta.
 
@@ -519,7 +528,8 @@ Activo / Archivado; «Faltan N» en «Listo para vender».
 | «Pagado» pero no bajó el stock | Movimientos › buscar el pedido; si no hay movimiento, avisa a soporte antes de tocar inventario |
 | Transferencia «pendiente» | Normal: verifica en el banco y marca pagado |
 | Falta un color o categoría en el formulario | Está archivado: Atributos › Archivados › Restaurar |
-| El lector no agrega | Cursor en «Código de barras o QR» y SKU existente; escríbelo y «Agregar código» |
+| El lector no agrega en el producto | Cursor en «Código de barras o QR» y SKU existente; escríbelo y «Agregar código» |
+| La etiqueta escaneada no agrega nada al vender | Si dice «no coincide con ningún SKU…», el QR se leyó a medias: repite más cerca o escribe el SKU impreso |
 | Mercado Libre «Sin conectar» | Resumen › Conectar (solo la dueña) |
 | Aviso rojo al guardar | Falta un dato obligatorio; corrige y guarda |
 | «No tienes permisos» | Acción solo para la dueña |
