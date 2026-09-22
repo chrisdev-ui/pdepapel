@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { CheckCircle2, Loader2, Smartphone } from "lucide-react";
+import { CheckCircle2, Loader2, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { ContinuousBarcodeScanner } from "@/components/ui/continuous-barcode-sca
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TintBadge } from "@/components/ui/tint-badge";
+import { useScanFeedback } from "@/hooks/use-scan-feedback";
 import { getErrorMessage } from "@/lib/api-errors";
 import { isValidPairingCode, normalizePairingCode, PROBLEM_MESSAGES, relativeTime, type ScanProblem } from "@/lib/scanner-pairing";
 
@@ -41,10 +42,12 @@ export function RemoteScannerPhone({ storeId, initialCode }: RemoteScannerPhoneP
   const [code, setCode] = useState(initialCode);
   const [phase, setPhase] = useState<Phase>("enter");
   const [token, setToken] = useState<string | null>(null);
-  const [device, setDevice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState<string | null>(null);
   const [sent, setSent] = useState<SentScan[]>([]);
+  // El pitido de aceptado lo da el lector al leer; aquí solo el de fallo, que
+  // es lo único que este lado sabe y el lector no.
+  const { playReject, muted, toggleMuted } = useScanFeedback();
 
   const pair = useCallback(async () => {
     const normalized = normalizePairingCode(code);
@@ -57,7 +60,6 @@ export function RemoteScannerPhone({ storeId, initialCode }: RemoteScannerPhoneP
     try {
       const response = await axios.post(`/api/${storeId}/scanner-sessions/${normalized}/pair`);
       setToken(response.data.token as string);
-      setDevice((response.data.deviceLabel as string | null) ?? null);
       setCode(normalized);
       setPhase("scanning");
     } catch (pairError) {
@@ -75,6 +77,7 @@ export function RemoteScannerPhone({ storeId, initialCode }: RemoteScannerPhoneP
       try {
         await axios.post(`/api/${storeId}/scanner-sessions/${code}/scans`, { token, code: scanned });
       } catch (sendError) {
+        playReject();
         const problem = problemFromError(sendError);
         if (problem) {
           setGone(PROBLEM_MESSAGES[problem]);
@@ -85,7 +88,7 @@ export function RemoteScannerPhone({ storeId, initialCode }: RemoteScannerPhoneP
         setError(getErrorMessage(sendError));
       }
     },
-    [code, storeId, token],
+    [code, playReject, storeId, token],
   );
 
   async function unlink() {
@@ -147,7 +150,25 @@ export function RemoteScannerPhone({ storeId, initialCode }: RemoteScannerPhoneP
         <section className="flex flex-col gap-3 rounded-2xl border bg-white p-4" data-phase="scanning">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-primary">Escáner</h2>
-            <TintBadge tone="mint" label={`Vinculado · ${device ?? "este celular"}`} />
+            <div className="flex min-w-0 items-center gap-1">
+              {/* Solo «Vinculado»: en el propio celular, decirle que es un
+                  «Android · Chrome» no informa de nada y dejaba la fila a dos
+                  píxeles de desbordar a 390 px. El aparato se sigue nombrando
+                  en la pantalla del panel, que es donde sirve saber cuál es. */}
+              <TintBadge tone="mint" label="Vinculado" className="min-w-0 overflow-hidden" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 text-muted-foreground"
+                aria-label={muted ? "Activar el sonido al escanear" : "Silenciar el sonido al escanear"}
+                aria-pressed={muted}
+                data-scan-mute={muted ? "on" : "off"}
+                onClick={toggleMuted}
+              >
+                {muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
+              </Button>
+            </div>
           </div>
           <ContinuousBarcodeScanner onDetected={(scanned) => void send(scanned)} />
           {error && (
