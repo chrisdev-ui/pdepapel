@@ -59,6 +59,7 @@ import {
   sendWhatsAppButtonMessage,
   sendWhatsAppImageButtonMessage,
   sendWhatsAppListMessage,
+  sendWhatsAppTextMessage,
   sendWhatsAppTypingIndicator,
   type WhatsAppListRow,
   type WhatsAppReplyButton,
@@ -186,16 +187,30 @@ export const UNAVAILABLE_OPTION_ACKNOWLEDGEMENT =
   "Esa opción ya no está disponible 💛 Le aviso a Paula para que te ayude.";
 
 /**
- * Botones de un mensaje del bot. El de «Hablar con Paula» se añade siempre y
- * va de último: es la salida, no una opción más del menú.
+ * Botones de un mensaje del bot. El de «Hablar con Paula» se añade **siempre**
+ * y va de último: es la salida, no una opción más del menú.
+ *
+ * `includeOwnerButton: false` es la única forma de no ponerlo, y está
+ * reservada a los acuses que cierran una escalada que **ya ocurrió en esta
+ * misma llamada**: ahí el mensaje ya dice que Paula va a escribir, y volver a
+ * ofrecer el botón invita a tocarlo otra vez. Quien lo toca de nuevo no ve
+ * nada —`deliver()` se come el repetido dentro de los 60 s de `justSaid()`— y
+ * parece que su mensaje no salió.
+ *
+ * No es un interruptor de uso general: cualquier otro mensaje del bot lleva el
+ * botón sin excepción, y hay pruebas que lo vigilan. Si alguna vez hace falta
+ * quitarlo en un caso nuevo, que sea porque ese caso también escala de verdad
+ * antes de contestar.
  */
 export function buildReplyButtons(
   buttons: { title: string; targetReplyId: string }[] | undefined,
+  { includeOwnerButton = true }: { includeOwnerButton?: boolean } = {},
 ): WhatsAppReplyButton[] {
   const menu = (buttons ?? []).map((button) => ({
     id: buildButtonId(button.targetReplyId),
     title: button.title,
   }));
+  if (!includeOwnerButton) return menu;
   return [
     ...menu,
     { id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE },
@@ -368,6 +383,9 @@ export async function runWhatsAppBot(input: {
       TALK_TO_OWNER_ACKNOWLEDGEMENT,
       [],
       pacing(input),
+      // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
+      // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
+      { omitOwnerButton: true },
     );
     await escalate(conversation.id);
     if (sent.aborted) return { outcome: "skipped_owner_active" };
@@ -552,6 +570,9 @@ export async function runWhatsAppBot(input: {
       UNREADABLE_MEDIA_ACKNOWLEDGEMENT,
       [],
       pacing(input),
+      // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
+      // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
+      { omitOwnerButton: true },
     );
     if (sent.aborted) return { outcome: "skipped_owner_active" };
     return sent.ok
@@ -833,6 +854,9 @@ export async function runWhatsAppBot(input: {
       TALK_TO_OWNER_ACKNOWLEDGEMENT,
       [],
       pacing(input),
+      // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
+      // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
+      { omitOwnerButton: true },
     );
     if (sent.aborted) return { outcome: "skipped_owner_active" };
     await escalate(conversation.id);
@@ -907,8 +931,16 @@ async function respond(
 }
 
 /**
- * Envía y archiva. Siempre con botones: aunque la respuesta no tenga menú,
- * va el de «Hablar con Paula», que es la promesa que se le hizo a la clienta.
+ * Envía y archiva. Con botones casi siempre: aunque la respuesta no tenga
+ * menú, va el de «Hablar con Paula», que es la promesa que se le hizo a la
+ * clienta.
+ *
+ * Las dos excepciones son los acuses que cierran una escalada hecha en esta
+ * misma llamada —`TALK_TO_OWNER_ACKNOWLEDGEMENT` y
+ * `UNREADABLE_MEDIA_ACKNOWLEDGEMENT`—, que se mandan con
+ * `omitOwnerButton: true`. Esos mensajes ya dicen que Paula escribe enseguida:
+ * dejar el botón ahí invita a tocar algo que ya se hizo, y el segundo toque o
+ * repite el mismo texto o no enseña nada. Ver `buildReplyButtons`.
  */
 async function deliver(
   conversationId: string,
@@ -935,9 +967,14 @@ async function deliver(
       button?: string;
       section?: string;
     } | null;
+    /**
+     * Manda el mensaje sin el botón de «Hablar con Paula». Solo para los
+     * acuses que cierran una escalada ya hecha; ver `buildReplyButtons`.
+     */
+    omitOwnerButton?: boolean;
   } = {},
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
-  const { photo, shown, list } = extras;
+  const { photo, shown, list, omitOwnerButton } = extras;
   const reply = formatBotReply(answer);
 
   // Red contra un envío doble; las ráfagas se resuelven antes.
@@ -976,7 +1013,23 @@ async function deliver(
     return { ok: true, aborted: true };
   }
 
-  const conBotones = buildReplyButtons(buttons);
+  const conBotones = buildReplyButtons(buttons, { includeOwnerButton: !omitOwnerButton });
+
+  /**
+   * El texto por el camino que corresponda: interactivo si hay botones, y
+   * mensaje normal si no queda ninguno.
+   *
+   * Sin esto los dos acuses con `omitOwnerButton` no saldrían. Meta no acepta
+   * un interactivo con cero botones, y `sendWhatsAppButtonMessage` ni lo
+   * intenta: corta antes con «sin botones que mandar». O sea que quitar el
+   * botón sin esta salida dejaría a la clienta sin el acuse, que es peor que
+   * el problema que se quería arreglar.
+   */
+  const enviarTexto = () =>
+    conBotones.length > 0
+      ? sendWhatsAppButtonMessage(phone, reply, conBotones)
+      : sendWhatsAppTextMessage(phone, reply);
+
   let salioConFoto = Boolean(photo);
 
   // La lista manda cuando la hay: una lista no admite ni foto ni botones, así
@@ -1003,12 +1056,12 @@ async function deliver(
         conversationId,
         error: sent.error,
       });
-      sent = await sendWhatsAppButtonMessage(phone, reply, conBotones);
+      sent = await enviarTexto();
     }
   } else {
     sent = photo
       ? await sendWhatsAppImageButtonMessage(phone, reply, conBotones, photo)
-      : await sendWhatsAppButtonMessage(phone, reply, conBotones);
+      : await enviarTexto();
   }
 
   // Si lo que falló fue la foto (URL caída, formato raro, un no de Meta), se
@@ -1021,7 +1074,7 @@ async function deliver(
       error: sent.error,
     });
     salioConFoto = false;
-    sent = await sendWhatsAppButtonMessage(phone, reply, conBotones);
+    sent = await enviarTexto();
   }
 
   if (!sent.ok) {

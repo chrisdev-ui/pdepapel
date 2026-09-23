@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   shownIntent: vi.fn(),
   sendImage: vi.fn(),
   sendList: vi.fn(),
+  sendText: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
@@ -52,6 +53,9 @@ vi.mock("@/lib/whatsapp/send", async (importOriginal) => ({
   sendWhatsAppButtonMessage: mocks.send,
   sendWhatsAppImageButtonMessage: mocks.sendImage,
   sendWhatsAppListMessage: mocks.sendList,
+  // Los dos acuses que cierran una escalada salen sin botones, y un
+  // interactivo sin botones no existe: van por aquí, como texto normal.
+  sendWhatsAppTextMessage: mocks.sendText,
   sendWhatsAppTypingIndicator: mocks.typing,
 }));
 // Los ayudantes puros (ids de botón, constantes) se dejan reales: son la
@@ -90,10 +94,35 @@ import {
   TALK_TO_OWNER_BUTTON_TITLE,
 } from "@/lib/whatsapp/bot-replies";
 
-/** Todo mensaje del bot sale con este botón de escape al final. */
+/** Casi todo mensaje del bot sale con este botón de escape al final. */
 const ESCAPE = [
   { id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE },
 ];
+
+/**
+ * Las dos únicas excepciones al botón de escape: los acuses que cierran una
+ * escalada que acaba de ocurrir.
+ *
+ * Esos mensajes ya dicen que Paula escribe enseguida. Dejar el botón invitaba
+ * a tocarlo otra vez, y el segundo toque o repetía el mismo texto o —dentro
+ * de los 60 s de `justSaid()`— no enseñaba nada, que es peor: parecía que el
+ * mensaje no había salido.
+ *
+ * Se comprueba por los dos lados, porque un interactivo con cero botones no
+ * existe en Meta: el acuse sale por el envío de TEXTO, y no por el de
+ * botones. Si alguien volviera a meterlo por el camino interactivo, esto
+ * falla.
+ */
+function esperarAcuseSinBotonDePaula(texto: string) {
+  expect(mocks.sendText).toHaveBeenCalledTimes(1);
+  expect(mocks.sendText.mock.calls[0][1]).toBe(texto);
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(mocks.sendImage).not.toHaveBeenCalled();
+  // Ni el título ni el id del botón viajan en el mensaje.
+  const enviado = JSON.stringify(mocks.sendText.mock.calls);
+  expect(enviado).not.toContain(TALK_TO_OWNER_BUTTON_TITLE);
+  expect(enviado).not.toContain(TALK_TO_OWNER_BUTTON_ID);
+}
 
 const keywords = [
   { triggers: ["horario", "a que hora"], answer: "Abrimos de 9 a 6." },
@@ -194,6 +223,7 @@ describe("runWhatsAppBot", () => {
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.BOTTXT" });
     mocks.typing.mockResolvedValue({ ok: true });
     // Desde que se puede nombrar el producto, casi cualquier mensaje corto
     // entra en la etapa de referencias. Que por defecto no resuelva nada es lo
@@ -388,6 +418,7 @@ describe("runWhatsAppBot", () => {
       });
       mocks.conversationUpdate.mockResolvedValue({});
       mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT2" });
+      mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.BOT2TXT" });
       mocks.typing.mockResolvedValue({ ok: true });
 
       await expect(
@@ -499,8 +530,8 @@ describe("runWhatsAppBot", () => {
         runWhatsAppBot({ ...input, body: TALK_TO_OWNER_BUTTON_TITLE }),
       ).resolves.toEqual({ outcome: "escalated_owner_requested" });
 
-      expect(mocks.send.mock.calls[0][1]).toBe(TALK_TO_OWNER_ACKNOWLEDGEMENT);
-      expect(mocks.send.mock.calls[0][1]).not.toBe(NO_MATCH_ACKNOWLEDGEMENT);
+      esperarAcuseSinBotonDePaula(TALK_TO_OWNER_ACKNOWLEDGEMENT);
+      expect(mocks.sendText.mock.calls[0][1]).not.toBe(NO_MATCH_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
         data: { status: "NEEDS_OWNER" },
@@ -518,7 +549,7 @@ describe("runWhatsAppBot", () => {
       await expect(
         runWhatsAppBot({ ...input, body: "  HABLAR CON PAULA  " }),
       ).resolves.toEqual({ outcome: "escalated_owner_requested" });
-      expect(mocks.send.mock.calls[0][1]).toBe(TALK_TO_OWNER_ACKNOWLEDGEMENT);
+      esperarAcuseSinBotonDePaula(TALK_TO_OWNER_ACKNOWLEDGEMENT);
     });
   });
 
@@ -554,6 +585,7 @@ describe("runWhatsAppBot", () => {
           lastOwnerAt: null,
         });
         mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+        mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.BOT1TXT" });
         mocks.typing.mockResolvedValue({ ok: true });
         const res = await preguntar(pregunta);
         expect(res.outcome).toBe("replied_business_fact");
@@ -905,6 +937,7 @@ describe("runWhatsAppBot", () => {
         error: "(#131053) Media upload error",
       });
       mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.TEXTO" });
+      mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.TEXTOTXT" });
 
       await expect(preguntar()).resolves.toEqual({
         outcome: "replied_product",
@@ -1078,6 +1111,7 @@ describe("botón «Hablar con Paula»", () => {
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.BOT1TXT" });
     mocks.typing.mockResolvedValue({ ok: true });
   });
 
@@ -1088,17 +1122,60 @@ describe("botón «Hablar con Paula»", () => {
     ).toEqual([{ id: "r:abc", title: "Ver horarios" }, ...ESCAPE]);
   });
 
+  /**
+   * La excepción de los acuses es de dos mensajes, y de dos nada más.
+   *
+   * Estas pruebas son las que se caen si alguien ensancha la excepción: el
+   * botón de «Hablar con Paula» tiene que seguir saliendo en todo lo demás,
+   * porque es la salida que se le prometió a la clienta y lo único que la
+   * rescata si cualquier otra cosa falla en silencio.
+   */
+  it("solo se quita cuando se pide a propósito; por defecto sigue ahí", () => {
+    expect(buildReplyButtons(undefined, {})).toEqual(ESCAPE);
+    expect(buildReplyButtons(undefined, { includeOwnerButton: true })).toEqual(ESCAPE);
+    expect(buildReplyButtons(undefined, { includeOwnerButton: false })).toEqual([]);
+    // Con menú, quitarlo deja el menú intacto y nada más.
+    expect(
+      buildReplyButtons([{ title: "Ver horarios", targetReplyId: "abc" }], {
+        includeOwnerButton: false,
+      }),
+    ).toEqual([{ id: "r:abc", title: "Ver horarios" }]);
+  });
+
+  it("una respuesta normal por palabra clave lo sigue llevando", async () => {
+    await expect(
+      runWhatsAppBot({ ...input, body: "¿cuál es el horario?" }),
+    ).resolves.toMatchObject({ outcome: "replied" });
+
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+    // Y no se fue por el camino de texto, que es el de la excepción.
+    expect(mocks.sendText).not.toHaveBeenCalled();
+  });
+
+  it("«Esa no me la sé» lo sigue llevando: es cuando más falta hace", async () => {
+    await expect(
+      runWhatsAppBot({ ...input, body: "¿venden bicicletas de montaña?" }),
+    ).resolves.toMatchObject({ outcome: "escalated_no_match" });
+
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+    expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+    expect(mocks.sendText).not.toHaveBeenCalled();
+  });
+
   it("confirma y deja la conversación para Paula", async () => {
     await expect(
       runWhatsAppBot({ ...input, interactiveReplyId: TALK_TO_OWNER_BUTTON_ID }),
     ).resolves.toEqual({ outcome: "escalated_owner_requested" });
 
-    expect(mocks.send).toHaveBeenCalledWith(
+    // Sin botones y por el camino de texto: el acuse ya dice que Paula
+    // escribe, así que no se vuelve a ofrecer el botón que se acaba de tocar.
+    expect(mocks.sendText).toHaveBeenCalledWith(
       "573001234567",
       TALK_TO_OWNER_ACKNOWLEDGEMENT,
-      // El acuse no lleva menú, pero sí la salida: nunca se manda sin botones.
-      ESCAPE,
     );
+    esperarAcuseSinBotonDePaula(TALK_TO_OWNER_ACKNOWLEDGEMENT);
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
       data: { status: "NEEDS_OWNER" },
@@ -1111,10 +1188,7 @@ describe("botón «Hablar con Paula»", () => {
       runWhatsAppBot({ ...input, interactiveReplyId: TALK_TO_OWNER_BUTTON_ID }),
     ).resolves.toMatchObject({ outcome: "escalated_owner_requested" });
 
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(mocks.send.mock.calls[0][1]).toContain(
-      TALK_TO_OWNER_ACKNOWLEDGEMENT,
-    );
+    esperarAcuseSinBotonDePaula(TALK_TO_OWNER_ACKNOWLEDGEMENT);
   });
 });
 
@@ -1140,6 +1214,7 @@ describe("menús por botón", () => {
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.BOT1TXT" });
     mocks.typing.mockResolvedValue({ ok: true });
   });
 
@@ -1248,6 +1323,7 @@ describe("ritmo humano", () => {
     mocks.conversationUpdate.mockResolvedValue({});
     mocks.messageCreate.mockResolvedValue({});
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.BOT1TXT" });
     mocks.typing.mockResolvedValue({ ok: true });
   });
 
@@ -1466,8 +1542,7 @@ describe("ritmo humano", () => {
       await expect(runWhatsAppBot(soloFoto)).resolves.toEqual({
         outcome: "escalated_unprocessable_media",
       });
-      expect(mocks.send.mock.calls[0][1]).toBe(UNREADABLE_MEDIA_ACKNOWLEDGEMENT);
-      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+      esperarAcuseSinBotonDePaula(UNREADABLE_MEDIA_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
         data: { status: "NEEDS_OWNER" },
@@ -1476,7 +1551,7 @@ describe("ritmo humano", () => {
 
     it("no dice «esa no me la sé»: no preguntó nada con palabras", async () => {
       await runWhatsAppBot(soloFoto);
-      expect(mocks.send.mock.calls[0][1]).not.toBe(NO_MATCH_ACKNOWLEDGEMENT);
+      expect(mocks.sendText.mock.calls[0][1]).not.toBe(NO_MATCH_ACKNOWLEDGEMENT);
     });
 
     it("no habla de «foto»: por aquí pasan audios y documentos", async () => {
@@ -1524,7 +1599,7 @@ describe("ritmo humano", () => {
           mediaForOwner: true,
         }),
       ).resolves.toEqual({ outcome: "escalated_unprocessable_media" });
-      expect(mocks.send.mock.calls[0][1]).toBe(UNREADABLE_MEDIA_ACKNOWLEDGEMENT);
+      esperarAcuseSinBotonDePaula(UNREADABLE_MEDIA_ACKNOWLEDGEMENT);
     });
 
     it("un audio va por el mismo camino que una foto", async () => {
@@ -1534,7 +1609,12 @@ describe("ritmo humano", () => {
     });
 
     it("si el acuse no sale, queda igualmente marcada para Paula", async () => {
-      mocks.send.mockResolvedValue({ ok: false, error: "Meta dijo que no" });
+      // El acuse sale sin botones, así que el que puede fallar es el envío de
+      // texto, no el interactivo.
+      // `Once`, como en el resto del archivo: `clearAllMocks` limpia las
+      // llamadas pero no la implementación, así que un `mockResolvedValue`
+      // aquí se colaría en las pruebas de más abajo.
+      mocks.sendText.mockResolvedValueOnce({ ok: false, error: "Meta dijo que no" });
 
       await expect(runWhatsAppBot(soloFoto)).resolves.toMatchObject({
         outcome: "escalated_unprocessable_media",
@@ -1975,7 +2055,7 @@ describe("ritmo humano", () => {
         }),
       ).resolves.toEqual({ outcome: "escalated_owner_requested" });
       expect(mocks.answerAboutProduct).not.toHaveBeenCalled();
-      expect(mocks.send.mock.calls[0][1]).toBe(TALK_TO_OWNER_ACKNOWLEDGEMENT);
+      esperarAcuseSinBotonDePaula(TALK_TO_OWNER_ACKNOWLEDGEMENT);
     });
   });
 
