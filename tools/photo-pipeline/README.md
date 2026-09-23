@@ -8,86 +8,128 @@ color puesto**, listos para subir al panel.
 mano** por el panel, como siempre, mirándolas antes. Es un alto a propósito,
 para que ninguna foto rara llegue sola a la tienda.
 
-Esto no es parte de la tienda ni del panel: vive aparte, en `tools/`, y no
-toca ningún despliegue.
+Funciona igual en **Windows** (el computador de Paula) y en **macOS** (donde
+se desarrolla). Esto no es parte de la tienda ni del panel: vive aparte, en
+`tools/`, y no toca ningún despliegue.
 
 ---
 
-## 1. Instalar (una sola vez, en cada computador)
+# Windows — el computador de Paula
 
-Hace falta **RawTherapee**, que es gratis y de código abierto:
+## Para Paula: el día a día
+
+Son dos pasos y ninguno es la Terminal.
+
+1. **Doble clic en `Revelar fotos`.** Se abre una ventana negra con letras.
+   **Déjala abierta**: mientras esté ahí, está trabajando.
+2. **Copia los `.ARW` de la tarjeta a la carpeta `entrada`.** Puedes
+   arrastrarlas todas de una vez. Cada foto aparece revelada en `salida` a
+   los pocos segundos.
+
+Cuando termines, **cierra la ventana**. Ya está.
+
+En la ventana se va viendo lo que pasa, en cristiano:
+
+```
+[10:14:02] Revelando DSC00412.ARW (24.8 MB)…
+[10:14:05] ✓ DSC00412.ARW → DSC00412.jpg 4016×4016
+```
+
+Las carpetas están en **`C:\Users\<tu usuario>\Fotos P de Papel\`**:
+
+| Carpeta      | Qué hay ahí                                                   |
+|--------------|---------------------------------------------------------------|
+| `entrada`    | Aquí copias los `.ARW` de la tarjeta                           |
+| `salida`     | Aquí salen los JPEG listos para subir al panel                 |
+| `procesadas` | Los RAW ya revelados (**no se borran nunca**)                  |
+| `fallidas`   | Los RAW que dieron problema, por si hay que mirarlos           |
+
+### Si algo sale mal
+
+La ventana lo dice con el nombre de la foto y el motivo, y esa foto queda en
+`fallidas` (no se pierde). Si no entiendes el mensaje, mándale la foto de la
+pantalla a Christian. Lo más común:
+
+- **«Error loading file»**: la foto se copió a medias o está dañada. Vuelve a
+  copiarla de la tarjeta.
+- **«No encuentro RawTherapee»** o **«No encuentro Node»**: falta algo de la
+  instalación. Eso lo arregla Christian.
+
+---
+
+## Para Christian: preparar el computador de Paula (una sola vez)
+
+Son tres cosas. Al terminar, Paula no vuelve a ver nada de esto.
+
+### 1. RawTherapee
+
+Bajar de <https://www.rawtherapee.com/downloads/> la versión de Windows
+(**5.13**, julio de 2026). Hay dos formas y sirven las dos:
+
+- **Instalador** `RawTherapee_5.13_win64_x86_64_release.exe` (45 MB), o
+- **Portátil** `RawTherapee_5.13_win64_x86_64_release.zip` (115 MB), que no
+  instala nada: se descomprime y ya.
+
+> Hay también versión **arm64**, por si el portátil es de esos. El archivo se
+> llama igual pero con `arm64`.
+
+**El paquete ya trae `rawtherapee-cli.exe`**, que es lo que usa este
+programa; no hay que bajar nada aparte. (Comprobado leyendo el contenido del
+`.zip` oficial de la versión 5.13.)
+
+Si se usa la versión portátil, lo más cómodo es dejarla **aquí mismo**, en
+`windows\RawTherapee\`, junto a este README: el programa la busca ahí
+primero. Si se usa el instalador, la encuentra sola en `Archivos de programa`.
+
+### 2. Node portátil
+
+No hace falta instalar Node en el computador de Paula. Se baja el **zip** de
+Windows desde <https://nodejs.org/en/download> (la opción *Windows Binary
+(.zip)*, no el instalador `.msi`), se descomprime, y se copia el contenido a:
+
+```
+tools\photo-pipeline\windows\node\
+```
+
+de modo que quede **`windows\node\node.exe`**. Eso es todo lo que se necesita:
+no hay `npm install` ni dependencias.
+
+> Esta carpeta `windows\` **no va en git** (está en el `.gitignore`): son
+> cientos de MB y se bajan una vez por computador.
+
+### 3. Comprobar
+
+Doble clic en **`Comprobar instalacion`**. Revisa que Node, RawTherapee, el
+perfil y las carpetas estén en su sitio, y lo dice en pantalla. Si sale todo
+con ✓, ya se puede usar.
+
+### Dejarlo a mano para Paula
+
+Clic derecho sobre `Revelar fotos.bat` → **Enviar a** → **Escritorio (crear
+acceso directo)**. Y renombrar el acceso directo a algo como
+**«Revelar fotos»**. Eso es lo único que Paula toca.
+
+---
+
+# macOS — el computador de Christian
 
 ```bash
 brew install --cask rawtherapee
 ```
 
-Para comprobar que quedó bien:
+Y desde esta carpeta:
 
 ```bash
-/Applications/RawTherapee.app/Contents/MacOS/rawtherapee-cli --version
+node procesar-fotos.mjs            # se queda vigilando; Ctrl+C para parar
+node procesar-fotos.mjs --una-vez  # procesa lo que haya y termina
+node procesar-fotos.mjs --comprobar
 ```
 
-Debe responder algo como `RawTherapee, version 5.13, command line.`
-
-> Si `brew` no existe todavía en el computador, se instala primero Homebrew
-> desde <https://brew.sh>. Node ya está instalado (es el mismo que usan la
-> tienda y el panel).
+Las carpetas cuelgan de `~/Fotos P de Papel/`.
 
 ---
 
-## 2. Las carpetas
-
-La primera vez que se ejecuta, se crean solas dentro de
-**`~/Fotos P de Papel/`** (o sea, en la carpeta personal):
-
-| Carpeta      | Para qué                                                      |
-|--------------|---------------------------------------------------------------|
-| `entrada`    | Aquí se copian los `.ARW` de la tarjeta                        |
-| `salida`     | Aquí aparecen los JPEG listos para subir                        |
-| `procesadas` | Aquí se guardan los RAW ya revelados (**no se borran nunca**)  |
-| `fallidas`   | Aquí van los RAW que dieron error, para mirarlos               |
-
----
-
-## 3. Cómo se usa en el día a día
-
-Antes de empezar a pasar fotos, abrir la Terminal y dejar corriendo:
-
-```bash
-cd "ruta/al/repositorio/pdepapel/tools/photo-pipeline"
-node procesar-fotos.mjs
-```
-
-Queda vigilando y escribiendo lo que hace. Ahora sí, copiar los `.ARW` de la
-tarjeta a `entrada`. Cada foto se revela sola y aparece en `salida` a los
-pocos segundos.
-
-Espera a que cada archivo **termine de copiarse** antes de tocarlo, así que
-se pueden arrastrar todas de una vez sin miedo.
-
-Al terminar, **Ctrl+C** para parar. Dice cuántas hizo y cuántas fallaron.
-
-Si prefiere copiar primero todas las fotos y revelarlas después, de una
-sola vez:
-
-```bash
-node procesar-fotos.mjs --una-vez
-```
-
-Procesa lo que haya y termina.
-
-### Si algo sale mal
-
-El programa avisa en pantalla, con el nombre del archivo y el motivo. Esas
-fotos quedan en `fallidas` (no se pierden). Lo más común:
-
-- **«Error loading file»**: el archivo se copió a medias o está dañado.
-  Vuelve a copiarlo de la tarjeta.
-- **«No encuentro RawTherapee»**: falta el paso 1.
-
----
-
-## 4. Cambiar el color y la luz
+# Cambiar el color y la luz
 
 El perfil que viene puesto —`perfiles/producto-cuadrado.pp3`— tiene un
 arranque **neutro**: balance de blancos y exposición automáticos. **No es
@@ -96,7 +138,7 @@ de verdad, y después queda para siempre.
 
 Cómo se hace, entre Paula y Christian, una sola tarde:
 
-1. Abrir **RawTherapee** (la aplicación, no la Terminal).
+1. Abrir **RawTherapee** (la aplicación, no la ventana negra).
 2. Abrir una foto de producto representativa, de las normales, ni la más
    clara ni la más oscura.
 3. Ajustar hasta que se vea como debe verse: exposición, balance de blancos,
@@ -120,14 +162,13 @@ Cómo se hace, entre Paula y Christian, una sola tarde:
    Ratio=1:1
    ```
 
-6. Probar con dos o tres fotos (`node procesar-fotos.mjs --una-vez`) y mirar
-   el resultado antes de darlo por bueno.
+6. Probar con dos o tres fotos y mirar el resultado antes de darlo por bueno.
 
 A partir de ahí, todas las fotos salen con ese look.
 
 ---
 
-## 5. Cómo encuadrar para que el recorte no corte el producto
+# Cómo encuadrar para que el recorte no corte el producto
 
 Esta es la parte que depende de Paula, y es la que hace que todo lo demás
 funcione.
@@ -178,27 +219,124 @@ pasaría exactamente igual.
 
 ---
 
-## 6. Detalles para Christian
+# Si las fotos no salen cuadradas
+
+Si aparece este error:
+
+```
+salió de 3000×4016, y tiene que salir cuadrada.
+```
+
+significa que las fotos ya no miden lo que el perfil da por sentado
+(**6016×4016**, que es lo que saca la a6400). Pasa si se cambia de cámara o
+si se dispara en un modo distinto. **No se arregla solo a propósito**: una
+foto detenida con un aviso es mejor que cientos recortadas mal en silencio.
+
+Para arreglarlo, hay que recalcular el recorte una vez:
+
+1. Abrir una de esas fotos en RawTherapee y mirar cuánto mide (ancho × alto).
+2. El lado del cuadrado es **el menor de los dos**.
+3. `X` es `(ancho − lado) ÷ 2`, y `Y` es `(alto − lado) ÷ 2`.
+4. Poner esos cuatro números en la sección `[Crop]` de
+   `perfiles/producto-cuadrado.pp3`.
+
+Ejemplo con los de la a6400: 6016 × 4016 → lado 4016, X = (6016−4016)÷2 =
+1000, Y = 0.
+
+---
+
+# Detalles para Christian
 
 - **Sin dependencias.** Es Node pelado (`procesar-fotos.mjs`), sin
-  `package.json` ni `node_modules`. No hay nada que instalar ni actualizar.
+  `package.json` ni `node_modules`. El mismo archivo corre en Windows y en
+  macOS; no hay dos versiones que mantener.
+- **Por qué Node portátil y no un ejecutable (SEA):** el
+  *single executable application* de Node sigue en **estabilidad 1.1,
+  «desarrollo activo»**, y además habría que compilarlo y probarlo en
+  Windows cada vez que se cambie una línea. Con Node portátil, cambiar el
+  programa es reemplazar un archivo de texto.
 - **Por qué sondeo y no `fs.watch`:** hay que esperar a que el archivo deje
   de crecer de todos modos (una tarjeta SD no copia al instante), y
-  `fs.watch` es poco de fiar en volúmenes extraíbles en macOS. Se mira la
-  carpeta cada 3 segundos y se procesa un archivo cuando mide igual dos
-  veces seguidas.
+  `fs.watch` es poco de fiar en unidades extraíbles. Se mira la carpeta cada
+  3 segundos y se procesa un archivo cuando mide igual dos veces seguidas.
+- **Medir el JPEG se hace leyendo el archivo**, no con un programa de fuera.
+  Antes era `sips`, que solo existe en macOS; ahora se lee el marcador SOF
+  de la cabecera JPEG, que es idéntico en los dos sistemas.
+- **Dónde busca `rawtherapee-cli`**, en orden: la opción `--rawtherapee`, la
+  variable `RAWTHERAPEE_CLI`, la copia portátil en `windows\RawTherapee\`,
+  las carpetas de `Archivos de programa` (incluida la subcarpeta con el
+  número de versión) y, por último, el `PATH`. En macOS,
+  `/Applications/RawTherapee.app/…` y luego el `PATH`.
 - **Los RAW no se borran nunca**, se mueven a `procesadas/`. Si ya hay uno
   con ese nombre, el nuevo queda como `DSC00087-2.ARW`.
 - **Los errores se apartan** a `fallidas/` en vez de dejarlos en `entrada/`.
   Si se quedaran, se reintentarían cada 3 segundos para siempre y el registro
   se llenaría del mismo error.
-- **Red de seguridad del recorte:** el `[Crop]` del perfil trae las
-  coordenadas del sensor de la a6400 (6016×4016 → cuadrado de 4016 desde
-  X=1000). Si algún día entra una foto de otro tamaño, el JPEG no saldría
-  cuadrado; el programa lo detecta, lo recorta al centro con `sips` (que
-  viene en macOS) y lo deja anotado en el registro.
+- **Nada de `shell: true`** al lanzar RawTherapee: Node le pasa el ejecutable
+  y los argumentos por separado, así que los espacios de
+  `C:\Archivos de programa\…` no hay que escaparlos. Con `shell: true` sí, y
+  es de ahí de donde salen los errores clásicos de rutas en Windows.
 - **Opciones** (`--ayuda` las lista): `--entrada`, `--salida`,
-  `--procesadas`, `--fallidas`, `--perfil`, `--una-vez`.
-- **No hay arranque automático** (launchd) a propósito: para v1 basta con
-  abrir la Terminal antes de una sesión de fotos. Si termina siendo molesto,
-  se añade después.
+  `--procesadas`, `--fallidas`, `--perfil`, `--rawtherapee`, `--una-vez`,
+  `--comprobar`.
+- **No hay arranque automático** (ni servicio de Windows ni launchd) a
+  propósito: para v1 basta con el doble clic antes de una sesión de fotos.
+
+---
+
+# Lista de comprobación de la primera vez en el computador de Paula
+
+Esto **no se ha podido probar en un Windows de verdad** —se desarrolló y se
+probó en un Mac—, así que la primera vez hay que ir punto por punto. Marca
+cada uno; si alguno falla, ahí está el problema.
+
+### Antes de empezar
+
+- [ ] **1.** Está la carpeta `windows\node\node.exe`.
+- [ ] **2.** RawTherapee está instalado, o está la carpeta
+      `windows\RawTherapee\rawtherapee-cli.exe`.
+- [ ] **3.** Doble clic en **`Comprobar instalacion`**: sale todo con ✓ y
+      dice «Todo listo». Anota la ruta de RawTherapee que imprime.
+
+### Que arranque y se quede corriendo
+
+- [ ] **4.** Doble clic en **`Revelar fotos`**: se abre la ventana negra,
+      muestra las rutas de entrada/salida y dice «Vigilando».
+- [ ] **5.** La ventana **sigue abierta** un minuto después, sin cerrarse
+      sola y sin mensajes de error.
+- [ ] **6.** Se crearon solas las cuatro carpetas dentro de
+      `C:\Users\<usuario>\Fotos P de Papel\`.
+
+### Que revele una foto de verdad
+
+- [ ] **7.** Copiar **un** `.ARW` de la tarjeta a `entrada`.
+- [ ] **8.** En la ventana sale `Revelando …` y después `✓ … → ….jpg`.
+- [ ] **9.** El JPEG está en `salida`, y al abrirlo **se ve bien** (no
+      cuadros de colores ni medio gris).
+- [ ] **10.** Clic derecho en el JPEG → Propiedades → Detalles: mide
+      **4016 × 4016** (los dos números iguales).
+- [ ] **11.** El `.ARW` ya no está en `entrada` y sí está en `procesadas`.
+
+### Que aguante varias a la vez
+
+- [ ] **12.** Copiar **diez o más** `.ARW` de golpe, arrastrándolas juntas.
+- [ ] **13.** Salen todas, una tras otra, y ninguna queda a medias. Aquí es
+      donde se vería si la espera a que termine la copia funciona en Windows:
+      **ninguna** debe fallar con «Error loading file».
+
+### Que un archivo malo no tumbe el programa
+
+- [ ] **14.** Crear un archivo de mentira: un `.txt` cualquiera renombrado a
+      `PRUEBA.ARW`, y copiarlo a `entrada`.
+- [ ] **15.** La ventana muestra un ✗ con el motivo, y `PRUEBA.ARW` aparece
+      en `fallidas`.
+- [ ] **16.** **La ventana sigue abierta y funcionando.** Copiar otro `.ARW`
+      bueno después: debe revelarse con normalidad.
+
+### Cerrar
+
+- [ ] **17.** Cerrar la ventana. No queda ningún proceso raro (Administrador
+      de tareas: no debería haber un `node.exe` suelto).
+
+Si los 17 salen bien, el pipeline funciona en Windows. Si falla alguno,
+apunta **cuál** y qué decía la pantalla.

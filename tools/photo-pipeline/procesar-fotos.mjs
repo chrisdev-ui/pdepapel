@@ -11,18 +11,23 @@
  * mano por el panel, mirándolas antes. Es un alto a propósito, no algo que
  * falte.
  *
+ * Funciona igual en Windows —el computador de Paula— y en macOS —donde se
+ * desarrolla—. No hay nada escrito a la medida de un sistema: las rutas
+ * pasan todas por `node:path` y lo único externo es `rawtherapee-cli`, que
+ * se busca según el sistema (ver `buscarRawtherapee`).
+ *
  * Sin dependencias a propósito: solo Node (24, el mismo de los dos proyectos).
  * No hace falta `npm install` ni un `node_modules` aquí. Se vigila sondeando
  * la carpeta en vez de con `fs.watch` porque de todos modos hay que esperar a
  * que el archivo deje de crecer —una tarjeta SD no copia al instante— y
- * porque `fs.watch` es poco de fiar en volúmenes extraíbles en macOS, que es
- * justo de donde vienen estas fotos.
+ * porque `fs.watch` es poco de fiar en unidades extraíbles, que es justo de
+ * donde vienen estas fotos.
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir, readdir, rename, stat } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { mkdir, readdir, readFile, rename, stat } from "node:fs/promises";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -37,7 +42,60 @@ const AQUI = fileURLToPath(new URL(".", import.meta.url));
 /** Dónde vive todo por defecto: fuera del repositorio, que los RAW pesan. */
 const BASE_POR_DEFECTO = join(homedir(), "Fotos P de Papel");
 
-const RAWTHERAPEE = "/Applications/RawTherapee.app/Contents/MacOS/rawtherapee-cli";
+const ES_WINDOWS = process.platform === "win32";
+
+/**
+ * Dónde buscar `rawtherapee-cli`, en orden. Gana lo primero que exista.
+ *
+ * Se puede saltar todo esto con la variable de entorno `RAWTHERAPEE_CLI` o
+ * con la opción `--rawtherapee`, que es lo que hay que usar si está instalado
+ * en un sitio raro.
+ */
+export function candidatosRawtherapee(plataforma = process.platform) {
+  if (plataforma === "win32") {
+    const programas = [process.env["ProgramFiles"], process.env["ProgramW6432"], process.env["ProgramFiles(x86)"]]
+      .filter(Boolean);
+    const candidatos = [
+      // 1. La copia portátil que vive junto a este script (no hace falta instalar).
+      join(AQUI, "windows", "RawTherapee", "rawtherapee-cli.exe"),
+    ];
+    for (const base of programas) {
+      candidatos.push(join(base, "RawTherapee", "rawtherapee-cli.exe"));
+      // El instalador de Windows suele crear una subcarpeta con la versión
+      // («RawTherapee\5.13\»). Se mira una capa más abajo en vez de dar por
+      // sentado un número que cambia en cada versión.
+      try {
+        for (const hijo of readdirSync(join(base, "RawTherapee"), { withFileTypes: true })) {
+          if (hijo.isDirectory()) candidatos.push(join(base, "RawTherapee", hijo.name, "rawtherapee-cli.exe"));
+        }
+      } catch {
+        // Esa carpeta no existe: se sigue con el resto de candidatos.
+      }
+    }
+    // 2. Por último, lo que haya en el PATH.
+    candidatos.push("rawtherapee-cli.exe");
+    return candidatos;
+  }
+  return [
+    "/Applications/RawTherapee.app/Contents/MacOS/rawtherapee-cli",
+    "rawtherapee-cli",
+  ];
+}
+
+/** El primero de los candidatos que exista de verdad; `null` si ninguno. */
+function buscarRawtherapee(indicado) {
+  if (indicado) return existsSync(indicado) ? indicado : null;
+  const delEntorno = process.env.RAWTHERAPEE_CLI;
+  if (delEntorno) return existsSync(delEntorno) ? delEntorno : null;
+  for (const candidato of candidatosRawtherapee()) {
+    // El último candidato es un nombre suelto (el del PATH): ese no se puede
+    // comprobar con `existsSync`, se deja pasar y ya fallará al ejecutarlo
+    // con un mensaje claro.
+    if (!candidato.includes(sep)) return candidato;
+    if (existsSync(candidato)) return candidato;
+  }
+  return null;
+}
 
 /** Calidad del JPEG. 92 es el punto donde ya no se nota y el archivo no se dispara. */
 const CALIDAD_JPEG = 92;
@@ -69,7 +127,9 @@ function leerOpciones(argv) {
     procesadas: join(BASE_POR_DEFECTO, "procesadas"),
     fallidas: join(BASE_POR_DEFECTO, "fallidas"),
     perfil: join(AQUI, "perfiles", "producto-cuadrado.pp3"),
+    rawtherapee: null,
     unaVez: false,
+    comprobar: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -87,7 +147,9 @@ function leerOpciones(argv) {
     else if (arg === "--procesadas") opciones.procesadas = valor();
     else if (arg === "--fallidas") opciones.fallidas = valor();
     else if (arg === "--perfil") opciones.perfil = valor();
+    else if (arg === "--rawtherapee") opciones.rawtherapee = valor();
     else if (arg === "--una-vez") opciones.unaVez = true;
+    else if (arg === "--comprobar") opciones.comprobar = true;
     else if (arg === "--ayuda" || arg === "-h") {
       console.log(AYUDA);
       process.exit(0);
@@ -109,7 +171,9 @@ Revelado automático de los RAW de producto.
   --procesadas <carpeta>  Dónde se archivan los RAW ya revelados
   --fallidas <carpeta>    Dónde van los RAW que dieron error
   --perfil <archivo.pp3>  Perfil de revelado de RawTherapee
+  --rawtherapee <ruta>    Dónde está rawtherapee-cli, si no se encuentra solo
   --una-vez               Procesa lo que haya y termina, sin quedarse vigilando
+  --comprobar             Revisa que todo esté en su sitio y sale
   --ayuda                 Esto
 
 Por defecto todo cuelga de: ${BASE_POR_DEFECTO}
@@ -127,32 +191,53 @@ function ejecutar(comando, argumentos) {
   });
 }
 
-/** Ancho y alto de una imagen, con `sips`, que viene en macOS. */
-async function medir(archivo) {
-  const { codigo, salida } = await ejecutar("sips", ["-g", "pixelWidth", "-g", "pixelHeight", archivo]);
-  if (codigo !== 0) return null;
-  const ancho = /pixelWidth:\s*(\d+)/.exec(salida)?.[1];
-  const alto = /pixelHeight:\s*(\d+)/.exec(salida)?.[1];
-  return ancho && alto ? { ancho: Number(ancho), alto: Number(alto) } : null;
+/**
+ * Ancho y alto de un JPEG, leyendo el archivo directamente.
+ *
+ * Antes esto lo hacía `sips`, que solo existe en macOS. En Windows no hay
+ * nada equivalente que venga de fábrica y sea fiable, así que se lee la
+ * cabecera a mano: es la misma cuenta en los dos sistemas, sin depender de
+ * ningún programa de fuera.
+ *
+ * Se busca el marcador SOF (el que declara el tamaño). Están entre 0xC0 y
+ * 0xCF salvo 0xC4, 0xC8 y 0xCC, que son otra cosa (tablas Huffman,
+ * extensiones y codificación aritmética).
+ */
+function medirJpeg(datos) {
+  if (datos.length < 4 || datos[0] !== 0xff || datos[1] !== 0xd8) return null;
+  let i = 2;
+  while (i < datos.length - 9) {
+    if (datos[i] !== 0xff) {
+      i += 1;
+      continue;
+    }
+    const marcador = datos[i + 1];
+    // Relleno entre segmentos.
+    if (marcador === 0xff) {
+      i += 1;
+      continue;
+    }
+    // Marcadores sin longitud detrás.
+    if (marcador === 0x01 || (marcador >= 0xd0 && marcador <= 0xd9)) {
+      i += 2;
+      continue;
+    }
+    const largo = datos.readUInt16BE(i + 2);
+    if (marcador >= 0xc0 && marcador <= 0xcf && marcador !== 0xc4 && marcador !== 0xc8 && marcador !== 0xcc) {
+      return { alto: datos.readUInt16BE(i + 5), ancho: datos.readUInt16BE(i + 7) };
+    }
+    if (largo < 2) return null; // cabecera corrupta: mejor no seguir adivinando
+    i += 2 + largo;
+  }
+  return null;
 }
 
-/**
- * Deja la foto cuadrada recortando por el centro.
- *
- * Es la red de seguridad del recorte del perfil: el `.pp3` trae el cuadrado
- * calculado para el sensor de la a6400 (6000×4000) y si algún día entra una
- * foto de otro tamaño, RawTherapee ajusta el recorte y el resultado ya no
- * sale cuadrado. Entonces se recorta aquí y queda dicho en el registro.
- *
- * Recorte **centrado y tonto a propósito**: se probó uno «inteligente» que
- * busca el sujeto (`g_auto` de Cloudinary) y se cayó en la mitad de las fotos
- * reales, recortando el producto. Lo que hace fiable este es el encuadre, no
- * el algoritmo: hay que dejar margen en el lado largo al disparar.
- */
-async function recortarCuadrado(archivo, medidas) {
-  const lado = Math.min(medidas.ancho, medidas.alto);
-  const { codigo, error } = await ejecutar("sips", ["-c", String(lado), String(lado), archivo]);
-  return codigo === 0 ? { ok: true, lado } : { ok: false, error };
+async function medir(archivo) {
+  try {
+    return medirJpeg(await readFile(archivo));
+  } catch {
+    return null;
+  }
 }
 
 /** Un nombre que no pise a otro ya archivado: `foto.ARW`, `foto-2.ARW`… */
@@ -172,7 +257,12 @@ async function procesarUno(archivo, opciones) {
   const nombre = basename(archivo);
   const esperado = join(opciones.salida, `${basename(nombre, extname(nombre))}.jpg`);
 
-  const { codigo, error } = await ejecutar(RAWTHERAPEE, [
+  // Sin `shell: true` a propósito: Node le pasa el ejecutable y cada
+  // argumento por separado a CreateProcess/execvp, así que los espacios de
+  // «C:\\Program Files\\…» o «P de Papel Ecommerce» no hay que escaparlos.
+  // Con `shell: true` sí habría que hacerlo, y es de donde salen los errores
+  // clásicos de rutas en Windows.
+  const { codigo, error } = await ejecutar(opciones.rawtherapee, [
     "-o", opciones.salida,
     "-p", opciones.perfil,
     `-j${CALIDAD_JPEG}`,
@@ -192,14 +282,22 @@ async function procesarUno(archivo, opciones) {
     return { ok: true, jpeg: esperado, nota: "no se pudieron medir los lados; revísala a ojo" };
   }
   if (medidas.ancho !== medidas.alto) {
-    const recorte = await recortarCuadrado(esperado, medidas);
-    if (!recorte.ok) {
-      return { ok: false, motivo: `salió de ${medidas.ancho}×${medidas.alto} y no se pudo cuadrar: ${recorte.error}` };
-    }
+    /*
+     * No se arregla solo a propósito.
+     *
+     * Que salga rectangular significa que la foto no mide lo que el perfil
+     * da por sentado (6016×4016, el sensor de la a6400), así que RawTherapee
+     * ajustó el recorte a lo que cabía. Recortarla aquí por las bravas
+     * taparía el problema y dejaría pasar fotos mal encuadradas una por una;
+     * es el mismo error que ya se cometió con el recorte «inteligente».
+     * Mejor una sola foto detenida y un aviso que diga qué hacer.
+     */
     return {
-      ok: true,
-      jpeg: esperado,
-      nota: `salió de ${medidas.ancho}×${medidas.alto} (no es una foto de la a6400) y se recortó al centro a ${recorte.lado}×${recorte.lado}`,
+      ok: false,
+      motivo:
+        `salió de ${medidas.ancho}×${medidas.alto}, y tiene que salir cuadrada. ` +
+        `La foto no mide lo que espera el perfil (6016×4016, el de la a6400). ` +
+        `Hay que ajustar la sección [Crop] de ${basename(opciones.perfil)}: ver el README, «Si las fotos no salen cuadradas».`,
     };
   }
   return { ok: true, jpeg: esperado, medidas };
@@ -208,21 +306,58 @@ async function procesarUno(archivo, opciones) {
 async function main() {
   const opciones = leerOpciones(process.argv.slice(2));
 
-  if (!existsSync(RAWTHERAPEE)) {
-    log.error("No encuentro RawTherapee. Instálalo con:  brew install --cask rawtherapee");
+  const encontrado = buscarRawtherapee(opciones.rawtherapee);
+  if (!encontrado) {
+    log.error("No encuentro RawTherapee.");
+    log.error(ES_WINDOWS
+      ? "   Instálalo desde rawtherapee.com/downloads (el paquete de Windows ya trae rawtherapee-cli.exe),"
+      : "   Instálalo con:  brew install --cask rawtherapee,");
+    log.error("   o dime dónde está con:  --rawtherapee <ruta>");
     process.exit(1);
   }
+  opciones.rawtherapee = encontrado;
+
   if (!existsSync(opciones.perfil)) {
     log.error(`No encuentro el perfil de revelado: ${opciones.perfil}`);
     process.exit(1);
   }
+
+  let carpetasOk = true;
   for (const carpeta of [opciones.entrada, opciones.salida, opciones.procesadas, opciones.fallidas]) {
-    await mkdir(carpeta, { recursive: true });
+    try {
+      await mkdir(carpeta, { recursive: true });
+    } catch (e) {
+      log.error(`No pude crear la carpeta ${carpeta}: ${String(e.message ?? e)}`);
+      carpetasOk = false;
+    }
+  }
+  if (!carpetasOk) process.exit(1);
+
+  if (opciones.comprobar) {
+    const { salida, error } = await ejecutar(opciones.rawtherapee, ["--version"]);
+    const texto = `${salida}${error}`.trim();
+    const version = texto.split("\n")[0] || "";
+    // `rawtherapee-cli --version` imprime la versión y sale con código 2, así
+    // que el código no sirve para saber si funciona: lo que vale es que haya
+    // contestado diciendo su nombre.
+    const responde = /rawtherapee/i.test(texto);
+    log.ok(`Node ${process.version} sobre ${process.platform}`);
+    log.ok(`RawTherapee: ${opciones.rawtherapee}`);
+    if (responde) {
+      log.ok(`             ${version}`);
+    } else {
+      log.error("             no contestó como se esperaba; revisa la instalación");
+    }
+    log.ok(`Perfil: ${opciones.perfil}`);
+    log.ok(`Carpetas listas dentro de ${dirname(opciones.entrada)}`);
+    log.info(responde ? "Todo en su sitio. Ya se puede revelar." : "Falta algo, mira arriba.");
+    process.exit(responde ? 0 : 1);
   }
 
   log.info("Entrada :", opciones.entrada);
   log.info("Salida  :", opciones.salida);
   log.info("Perfil  :", basename(opciones.perfil));
+  log.info("RawTherapee:", opciones.rawtherapee);
   log.info(opciones.unaVez ? "Una pasada y listo." : "Vigilando. Ctrl+C para parar.");
 
   /** Lo medido la vuelta anterior, para saber si el archivo dejó de crecer. */
@@ -327,7 +462,14 @@ async function main() {
   process.on("SIGTERM", despedir);
 }
 
-main().catch((e) => {
-  log.error("Se cayó el programa:", String(e?.stack ?? e));
-  process.exit(1);
-});
+/**
+ * Solo arranca si lo llamaron directamente. Así una prueba puede importar
+ * `candidatosRawtherapee` —para comprobar desde un Mac la rama de Windows—
+ * sin que se ponga a vigilar carpetas.
+ */
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    log.error("Se cayó el programa:", String(e?.stack ?? e));
+    process.exit(1);
+  });
+}

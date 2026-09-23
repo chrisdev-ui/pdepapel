@@ -7,3 +7,8 @@ procesadas/
 fallidas/
 *.ARW
 *.arw
+
+# Los binarios portátiles de Windows (Node y, si se usa, RawTherapee). Son
+# cientos de MB y se bajan una sola vez por computador; no van en git.
+# Ver el README, «Preparar el computador de Paula».
+windows/
