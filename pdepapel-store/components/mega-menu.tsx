@@ -13,17 +13,23 @@ import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { categoryPath, productPath, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
+import { Category } from "@/types";
 
 interface MegaMenuProps {
   types: NavigationType[];
   featuredByType: FeaturedByType;
+  /**
+   * Subcategorías destacadas. Se pintan aparte, fuera del panel que depende
+   * del tipo que se esté señalando, para que estén siempre a un clic.
+   */
+  featuredSubcategories: Category[];
 }
 
 /**
  * Desktop "Todas las categorías" panel: hover or focus a type on the left,
  * its subcategories and a featured product appear on the right.
  */
-export function MegaMenu({ types, featuredByType }: MegaMenuProps) {
+export function MegaMenu({ types, featuredByType, featuredSubcategories }: MegaMenuProps) {
   const pathname = usePathname();
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -88,8 +94,38 @@ export function MegaMenu({ types, featuredByType }: MegaMenuProps) {
           id={panelId}
           role="region"
           aria-label="Categorías de la tienda"
-          className="absolute left-0 top-full z-50 mt-2 flex w-[980px] max-w-[calc(100vw-6rem)] overflow-hidden rounded-xl border border-border bg-white shadow-[0_16px_48px_rgba(34,27,65,0.22)] animate-in fade-in-0 zoom-in-95"
+          className="absolute left-0 top-full z-50 mt-2 flex w-[980px] max-w-[calc(100vw-6rem)] flex-col overflow-hidden rounded-xl border border-border bg-white shadow-[0_16px_48px_rgba(34,27,65,0.22)] animate-in fade-in-0 zoom-in-95"
         >
+          {/*
+            Atajo fijo: no depende del tipo que se esté señalando, así que
+            «Agendas» y compañía están a un clic desde que se abre el menú.
+            Antes solo se llegaba señalando primero el tipo correcto.
+          */}
+          {featuredSubcategories.length > 0 ? (
+            <div className="flex items-center gap-3 border-b border-border bg-kawaii-lavender-light/50 px-5 py-2.5">
+              <p className="shrink-0 font-sans text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Destacadas
+              </p>
+              <ul className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                {featuredSubcategories.map((category) => {
+                  const label = stripTaxonomyIcon(category.name);
+                  return (
+                    <li key={category.id}>
+                      <Link
+                        href={categoryPath(category.slug || category.id)}
+                        onClick={() => track("category_featured", category.slug || category.id, label)}
+                        className="flex h-8 items-center rounded-full bg-white px-3 font-sans text-[13px] font-semibold text-blue-yankees shadow-sm transition-colors hover:bg-pink-froly hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees"
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="flex min-h-0">
           <ul className="flex w-[276px] shrink-0 flex-col border-r border-border bg-slate-50 p-2 font-sans text-[15px] font-medium">
             {types.map((type) => {
               const isActive = type.id === active.id;
@@ -183,6 +219,7 @@ export function MegaMenu({ types, featuredByType }: MegaMenuProps) {
                 </span>
               </Link>
             ) : null}
+          </div>
           </div>
         </div>
       ) : null}

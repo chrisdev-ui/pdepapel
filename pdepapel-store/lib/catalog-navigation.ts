@@ -83,6 +83,24 @@ export function buildNavigationTypes(
 }
 
 /**
+ * Subcategorías que Paula marcó como destacadas, para el atajo del menú.
+ *
+ * Mismo filtro que usa el carrusel de la portada (`CategoryRail`), y a
+ * propósito: es una sola decisión de la administración —«indexar» y
+ * «destacar»— y tiene que verse igual en los dos sitios. Se conserva el
+ * orden en que vienen; `filter` no lo altera.
+ *
+ * Una subcategoría sin `slug` no entra: su enlace no llevaría a ninguna
+ * parte. Si no hay ninguna destacada, devuelve un arreglo vacío y quien lo
+ * pinta no pinta nada.
+ */
+export function buildFeaturedSubcategories(categories: Category[]): Category[] {
+  return categories.filter(
+    (category) => category.seoEnabled && category.seoFeatured && category.slug,
+  );
+}
+
+/**
  * One featured, in-stock product with a photo per type, for the mega menu
  * tile. The admin's "destacado" flag decides; without a photo there is no tile.
  */

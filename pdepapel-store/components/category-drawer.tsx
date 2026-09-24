@@ -32,9 +32,15 @@ import {
 } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
+import { Category } from "@/types";
 
 interface CategoryDrawerProps {
   types: NavigationType[];
+  /**
+   * Subcategorías destacadas. Van sueltas arriba, fuera de todo acordeón:
+   * se llega a ellas sin desplegar nada.
+   */
+  featuredSubcategories: Category[];
   logoSrc: string;
 }
 
@@ -46,7 +52,7 @@ const rowClass =
  * with its subcategories (accordion), the offers and info pages, and the
  * account shortcuts. Replaces the old five-link dropdown.
  */
-export function CategoryDrawer({ types, logoSrc }: CategoryDrawerProps) {
+export function CategoryDrawer({ types, featuredSubcategories, logoSrc }: CategoryDrawerProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -100,6 +106,36 @@ export function CategoryDrawer({ types, logoSrc }: CategoryDrawerProps) {
             <span className="flex-1">Todos los productos</span>
             <ArrowRight aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
           </Link>
+
+          {/*
+            Atajo fijo, fuera de los acordeones: antes llegar a «Agendas»
+            pedía abrir primero el acordeón del tipo correcto. Aquí está a un
+            toque desde que se abre el cajón.
+          */}
+          {featuredSubcategories.length > 0 ? (
+            <div className="border-b border-border bg-[#FAF8FE] px-4 py-3">
+              <p className="mb-2 font-sans text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Destacadas
+              </p>
+              <ul className="flex flex-wrap gap-2">
+                {featuredSubcategories.map((category) => {
+                  const label = stripTaxonomyIcon(category.name);
+                  return (
+                    <li key={category.id}>
+                      <Link
+                        href={categoryPath(category.slug || category.id)}
+                        onClick={() => track("category_featured", category.slug || category.id, label)}
+                        className="flex min-h-11 items-center rounded-full bg-white px-4 font-sans text-[15px] font-medium text-blue-yankees shadow-sm transition-colors hover:text-pink-froly focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees"
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+
           <Accordion type="single" collapsible className="w-full">
             {types.map((type) =>
               type.subcategories.length === 0 ? (

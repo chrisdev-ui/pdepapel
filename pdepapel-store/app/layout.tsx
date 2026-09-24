@@ -15,6 +15,7 @@ import { getCurrentSeason } from "@/lib/date-utils";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
 import {
   buildFeaturedByType,
+  buildFeaturedSubcategories,
   buildNavigationTypes,
 } from "@/lib/catalog-navigation";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -128,6 +129,10 @@ export default async function RootLayout({
   ]);
   const navigationTypes = buildNavigationTypes(types, categories);
   const featuredByType = buildFeaturedByType(featured.products);
+  // Las mismas destacadas del carrusel de la portada, ahora también como
+  // atajo fijo del menú: se resuelven aquí, de las categorías que la
+  // cabecera ya trae, sin pedir nada más.
+  const featuredSubcategories = buildFeaturedSubcategories(categories);
 
   return (
     <ClerkProvider
@@ -157,6 +162,7 @@ export default async function RootLayout({
                   season={currentSeason}
                   types={navigationTypes}
                   featuredByType={featuredByType}
+                  featuredSubcategories={featuredSubcategories}
                   freeShippingThreshold={settings.freeShippingThreshold}
                 />
                 <ClarityPrivacyBoundary>{children}</ClarityPrivacyBoundary>

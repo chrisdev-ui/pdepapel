@@ -20,12 +20,14 @@ import { FeaturedByType, NavigationType } from "@/lib/catalog-navigation";
 import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import { accountAccessPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import { Season } from "@/types";
+import { Category, Season } from "@/types";
 
 interface NavbarProps {
   season?: Season;
   types: NavigationType[];
   featuredByType: FeaturedByType;
+  /** Atajo fijo a las subcategorías destacadas, en el menú y en el cajón. */
+  featuredSubcategories: Category[];
   freeShippingThreshold: number | null;
 }
 
@@ -43,6 +45,7 @@ const TOP_TYPES = 6;
 const Navbar: React.FC<NavbarProps> = ({
   season = Season.Default,
   types,
+  featuredSubcategories,
   featuredByType,
   freeShippingThreshold,
 }) => {
@@ -62,7 +65,11 @@ const Navbar: React.FC<NavbarProps> = ({
         {/* Phones and tablets */}
         <div className="flex h-16 items-center justify-between gap-2 px-3 sm:px-6 lg:hidden">
           <div className="flex w-[124px] items-center">
-            <CategoryDrawer types={types} logoSrc={seasonConfig.navbarText} />
+            <CategoryDrawer
+              types={types}
+              featuredSubcategories={featuredSubcategories}
+              logoSrc={seasonConfig.navbarText}
+            />
           </div>
           {/* `loading="eager"` y no `priority`: los dos logos —el de teléfono y
               el de escritorio— viven siempre en el DOM, así que `priority`
@@ -171,7 +178,11 @@ const Navbar: React.FC<NavbarProps> = ({
 
       {/* Desktop category row */}
       <div className="hidden h-[52px] items-center gap-7 border-b border-border bg-white px-8 lg:flex xl:px-12">
-        <MegaMenu types={types} featuredByType={featuredByType} />
+        <MegaMenu
+          types={types}
+          featuredByType={featuredByType}
+          featuredSubcategories={featuredSubcategories}
+        />
         <ul className="flex items-center gap-6 whitespace-nowrap font-sans text-[15px] font-semibold">
           <li>
             <NavigationLink href={STOREFRONT_ROUTES.shop}>Tienda</NavigationLink>

@@ -40,6 +40,14 @@ const types = buildNavigationTypes(
   ] as Category[],
 );
 
+/**
+ * Las destacadas del atajo: «Agendas» cumple las tres condiciones; las otras
+ * fallan una cada una y no deben aparecer en ninguno de los dos menús.
+ */
+const destacadas = [
+  { id: "c-age", typeId: "t-cua", name: "📅 Agendas", slug: "agendas", seoEnabled: true, seoFeatured: true },
+] as Category[];
+
 describe("CategoryDrawer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,7 +56,7 @@ describe("CategoryDrawer", () => {
   afterEach(cleanup);
 
   it("opens from the menu button and lists emoji-free categories with their subcategories", async () => {
-    render(<CategoryDrawer types={types} logoSrc="/logo.webp" />);
+    render(<CategoryDrawer types={types} featuredSubcategories={destacadas} logoSrc="/logo.webp" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Abrir menú de categorías" }));
 
@@ -81,6 +89,35 @@ describe("CategoryDrawer", () => {
     expect(screen.getByRole("link", { name: /Iniciar sesión/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Favoritos/ })).toBeInTheDocument();
   });
+
+  /**
+   * El atajo tiene que estar sin abrir ningún acordeón: ese toque de más era
+   * justo el problema. «Agendas» cuelga de «Cuadernos», que aquí se queda
+   * cerrado a propósito.
+   */
+  it("enseña las destacadas sin desplegar ningún acordeón", async () => {
+    render(<CategoryDrawer types={types} featuredSubcategories={destacadas} logoSrc="/logo.webp" />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir menú de categorías" }));
+    await screen.findByRole("dialog");
+
+    // Ningún acordeón abierto.
+    for (const boton of screen.getAllByRole("button", { expanded: false })) {
+      expect(boton).toHaveAttribute("aria-expanded", "false");
+    }
+    // Y aun así el enlace está, sin emoji y apuntando a su página.
+    const agendas = screen.getByRole("link", { name: "Agendas" });
+    expect(agendas).toHaveAttribute("href", "/categoria/agendas");
+    expect(agendas).not.toHaveTextContent("📅");
+  });
+
+  it("sin destacadas no pinta la fila ni rompe el cajón", async () => {
+    render(<CategoryDrawer types={types} featuredSubcategories={[]} logoSrc="/logo.webp" />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir menú de categorías" }));
+    const drawer = await screen.findByRole("dialog");
+
+    expect(screen.queryByText("Destacadas")).not.toBeInTheDocument();
+    expect(drawer).toHaveTextContent("Todos los productos");
+  });
 });
 
 describe("MegaMenu", () => {
@@ -90,6 +127,7 @@ describe("MegaMenu", () => {
     render(
       <MegaMenu
         types={types}
+        featuredSubcategories={destacadas}
         featuredByType={{
           "t-cua": {
             id: "p1",
@@ -121,6 +159,38 @@ describe("MegaMenu", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
+
+  /**
+   * El atajo vive fuera del panel que depende del tipo señalado: da igual
+   * cuál esté activo, «Agendas» sigue ahí. Antes había que señalar primero
+   * el tipo correcto para verla.
+   */
+  it("mantiene las destacadas al cambiar de tipo señalado", () => {
+    render(<MegaMenu types={types} featuredSubcategories={destacadas} featuredByType={{}} />);
+    fireEvent.click(screen.getByRole("button", { name: /Todas las categorías/ }));
+
+    const agendas = () => screen.getByRole("link", { name: "Agendas" });
+    // Con el primer tipo activo (Cuadernos, por el orden de mercadeo).
+    expect(agendas()).toHaveAttribute("href", "/categoria/agendas");
+
+    // Y señalando otro tipo distinto del primero.
+    fireEvent.mouseEnter(screen.getByRole("link", { name: /Escritura/ }));
+    expect(screen.getByRole("link", { name: "Marcadores" })).toBeInTheDocument();
+    expect(agendas()).toHaveAttribute("href", "/categoria/agendas");
+
+    fireEvent.mouseEnter(screen.getByRole("link", { name: /Kits/ }));
+    expect(agendas()).toBeInTheDocument();
+  });
+
+  it("sin destacadas no pinta la fila ni descuadra el panel", () => {
+    render(<MegaMenu types={types} featuredSubcategories={[]} featuredByType={{}} />);
+    fireEvent.click(screen.getByRole("button", { name: /Todas las categorías/ }));
+
+    expect(screen.queryByText("Destacadas")).not.toBeInTheDocument();
+    // El panel sigue enseñando lo suyo.
+    expect(screen.getByRole("link", { name: "Argollados" })).toBeInTheDocument();
+  });
+
 });
 
 describe("CategoryChips", () => {
@@ -137,4 +207,5 @@ describe("CategoryChips", () => {
     ]);
     expect(links[2]).toHaveAttribute("href", "/tienda");
   });
+
 });
