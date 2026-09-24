@@ -1940,7 +1940,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <FormItem>
                     <FormLabel isRequired>Tamaños</FormLabel>
                     <FormControl>
-                      <MultiSelect options={selectOptions.sizes} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige tamaños…" variant="secondary" responsive className="h-10" />
+                      <MultiSelect options={selectOptions.sizes} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige tamaños…" variant="secondary" responsive />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1953,7 +1953,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <FormItem>
                     <FormLabel isRequired>Colores</FormLabel>
                     <FormControl>
-                      <MultiSelect options={selectOptions.colors} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige colores…" variant="secondary" responsive className="h-10" />
+                      <MultiSelect options={selectOptions.colors} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige colores…" variant="secondary" responsive />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1966,7 +1966,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <FormItem>
                     <FormLabel isRequired>Diseños</FormLabel>
                     <FormControl>
-                      <MultiSelect options={selectOptions.designs} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige diseños…" variant="secondary" responsive className="h-10" />
+                      <MultiSelect options={selectOptions.designs} defaultValue={field.value} value={field.value} onValueChange={field.onChange} placeholder="Elige diseños…" variant="secondary" responsive />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
