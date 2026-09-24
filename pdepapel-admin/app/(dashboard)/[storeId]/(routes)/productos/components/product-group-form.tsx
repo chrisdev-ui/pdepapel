@@ -93,6 +93,7 @@ import {
   archivePayload,
   deriveArchiveMode,
   describeArchiveRows,
+  shouldBlockForUnassignedImages,
   stripAdoptedRowsFromDraft,
   type GroupArchiveMode,
 } from "@/lib/product-group-form-state";
@@ -949,6 +950,40 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       const mapping = (data.imageMapping || []).filter(
         (entry) => !pending.has(entry.url),
       );
+
+      /*
+       * Freno: no se guarda un grupo de varias variantes con fotos que nadie
+       * repartió.
+       *
+       * Una foto sin entrada en el reparto no queda «pendiente» para el
+       * servidor: `resolveVariantImages` la trata igual que un «todas»
+       * explícito y la copia a todas las variantes. Como el bloque de reparto
+       * vive en el paso 1 y solo aparece cuando ya hay colores o diseños
+       * —que se eligen más abajo, en el paso 2—, en un grupo nuevo casi nunca
+       * se ve, y las fotos se repartían solas sin que nadie lo pidiera.
+       *
+       * Se mira sobre las fotos que SOBREVIVEN al guardado y sobre el reparto
+       * ya filtrado: una foto marcada para quitar no tiene por qué repartirse.
+       * Elegir «Todas las variantes» a mano sigue valiendo: eso deja su
+       * entrada y no cae aquí.
+       */
+      const { block, missing } = shouldBlockForUnassignedImages(
+        images,
+        mapping,
+        data.variants?.length ?? 0,
+      );
+      if (block) {
+        toast({
+          title: "Faltan fotos por repartir",
+          description: `${missing.length} ${missing.length === 1 ? "foto no tiene" : "fotos no tienen"} un destino asignado. Baja a «Fotos y reparto» y elige a quién le toca cada una (puede ser «Todas las variantes» si es a propósito).`,
+          variant: "destructive",
+        });
+        document
+          .getElementById("fotos")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+
       const { archiveMode, ...rest } = data;
       const payload = {
         ...rest,

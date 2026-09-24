@@ -67,6 +67,51 @@ export function applyPendingImageRemovals<T extends { url: string }>(
   return images.filter((image) => !pending.has(image.url));
 }
 
+/**
+ * Fotos del grupo que nadie repartió: ni a una variante ni, a propósito, a
+ * todas.
+ *
+ * El bloque «Reparto por variante» vive en el paso 1 y solo aparece cuando ya
+ * hay colores o diseños elegidos, que se eligen en el paso 2, más abajo en la
+ * misma página. En un grupo nuevo el orden real es: subo las fotos (todavía
+ * sin colores, así que el bloque no está), bajo, elijo colores y diseños, y
+ * guardo sin haber vuelto a subir. El bloque ya existía para entonces, pero
+ * queda por encima de donde se está mirando, así que no se ve.
+ *
+ * Y una foto sin entrada en el reparto no es «sin decidir» para el servidor:
+ * `resolveVariantImages` la trata igual que un «todas» explícito, así que se
+ * copia a todas las variantes. De ahí el «se repartieron solas» de Paula.
+ *
+ * Esto NO opina sobre el reparto: solo dice qué fotos nadie tocó. Una entrada
+ * con `scope: "all"` puesta a mano es una decisión válida y no sale aquí.
+ */
+export function findUnassignedGroupImages(
+  images: { url: string }[],
+  mapping: { url: string; scope: string }[] | undefined,
+): string[] {
+  const repartidas = new Set((mapping ?? []).map((entry) => entry.url));
+  return images.map((image) => image.url).filter((url) => !repartidas.has(url));
+}
+
+/**
+ * ¿Hay que frenar el guardado?
+ *
+ * Solo con dos condiciones a la vez: que el grupo vaya a quedar con más de
+ * una variante —con una sola no hay nada que repartir— y que quede alguna
+ * foto sin tocar. Se mira el número de variantes de verdad, no cuántos
+ * colores y diseños se marcaron: un color por un diseño sigue siendo una
+ * variante.
+ */
+export function shouldBlockForUnassignedImages(
+  images: { url: string }[],
+  mapping: { url: string; scope: string }[] | undefined,
+  variantCount: number,
+): { block: boolean; missing: string[] } {
+  if (variantCount <= 1) return { block: false, missing: [] };
+  const missing = findUnassignedGroupImages(images, mapping);
+  return { block: missing.length > 0, missing };
+}
+
 export interface GeneratedCombination {
   sizeId: string;
   colorId: string;
