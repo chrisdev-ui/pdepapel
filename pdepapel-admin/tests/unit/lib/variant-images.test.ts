@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { imageUrlKey, resolveVariantImages } from "@/lib/variant-images";
+import {
+  imageUrlKey,
+  resolveVariantImages,
+  withVariantCover,
+} from "@/lib/variant-images";
 
 const groupImages = [
   { url: "https://res.cloudinary.com/x/all.jpg", isMain: true },
@@ -72,5 +76,89 @@ describe("imageUrlKey", () => {
   it("ignores order, duplicates and surrounding spaces", () => {
     expect(imageUrlKey(["b", " a", "a", "b "])).toBe(imageUrlKey(["a", "b"]));
     expect(imageUrlKey(["a"])).not.toBe(imageUrlKey(["a", "b"]));
+  });
+});
+
+/**
+ * La portada de una variante con fotos propias.
+ *
+ * Paula entró a una variante solo a cargarle stock y al guardar le cambió la
+ * foto de portada. La rama de fotos propias devolvía únicamente la url y se
+ * dejaba el `isMain` por el camino, mientras que la rama del grupo sí lo
+ * llevaba. Resultado: toda variante con fotos propias —las adoptadas con
+ * «Traer existentes», y cualquiera editada aparte— perdía su portada en cada
+ * guardado del grupo, por cualquier motivo. Sin portada marcada, cada
+ * pantalla elegía una por su cuenta y la que se guardara después pasaba a ser
+ * la buena.
+ */
+describe("la portada de las fotos propias de una variante", () => {
+  const propias = [
+    { url: "https://res.cloudinary.com/x/v-1.jpg", isMain: false },
+    { url: "https://res.cloudinary.com/x/v-2.jpg", isMain: true },
+    { url: "https://res.cloudinary.com/x/v-3.jpg", isMain: false },
+  ];
+
+  it("conserva cuál es la portada", () => {
+    const resultado = resolveVariantImages({ variantImages: propias, groupImages });
+    expect(resultado).toEqual(propias);
+    expect(resultado.filter((i) => i.isMain)).toHaveLength(1);
+    expect(resultado.find((i) => i.isMain)?.url).toBe(propias[1].url);
+  });
+
+  it("una lista de urls sueltas sigue sin portada: no hay nada que conservar", () => {
+    const resultado = resolveVariantImages({
+      variantImages: ["https://res.cloudinary.com/x/v-1.jpg"],
+      groupImages,
+    });
+    expect(resultado).toEqual([{ url: "https://res.cloudinary.com/x/v-1.jpg" }]);
+  });
+
+  it("no toca la rama del grupo, que ya llevaba la portada", () => {
+    const resultado = resolveVariantImages({ groupImages, imageMapping, colorId: null, designId: null });
+    expect(resultado.some((i) => i.isMain)).toBe(true);
+  });
+});
+
+/**
+ * La red que faltaba: el formulario del producto suelto exige una y solo una
+ * portada, el camino del grupo no exigía ninguna.
+ */
+describe("withVariantCover", () => {
+  it("asciende la primera cuando ninguna está marcada", () => {
+    expect(withVariantCover([{ url: "a.jpg" }, { url: "b.jpg" }])).toEqual([
+      { url: "a.jpg", isMain: true },
+      { url: "b.jpg", isMain: false },
+    ]);
+  });
+
+  it("respeta la portada que ya venía elegida", () => {
+    expect(
+      withVariantCover([
+        { url: "a.jpg", isMain: false },
+        { url: "b.jpg", isMain: true },
+      ]),
+    ).toEqual([
+      { url: "a.jpg", isMain: false },
+      { url: "b.jpg", isMain: true },
+    ]);
+  });
+
+  it("sin fotos no inventa ninguna", () => {
+    expect(withVariantCover([])).toEqual([]);
+  });
+
+  it("deja exactamente una portada, nunca dos", () => {
+    const r = withVariantCover([{ url: "a.jpg" }, { url: "b.jpg" }, { url: "c.jpg" }]);
+    expect(r.filter((i) => i.isMain)).toHaveLength(1);
+  });
+
+  /** Lo que de verdad importa: lo que sale de resolver ya va con portada. */
+  it("encadenado con el resolvedor, una variante nunca se queda sin portada", () => {
+    const sinMarcar = resolveVariantImages({
+      variantImages: [{ url: "p-1.jpg" }, { url: "p-2.jpg" }],
+      groupImages,
+    });
+    expect(sinMarcar.some((i) => i.isMain)).toBe(false);
+    expect(withVariantCover(sinMarcar).filter((i) => i.isMain)).toHaveLength(1);
   });
 });

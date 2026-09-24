@@ -568,8 +568,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     );
     variantImages.forEach((img) => {
       if (!map.has(img.url)) {
-        // Variant-only images are not main by default
-        map.set(img.url, { url: img.url, isMain: false });
+        // La portada de la variante se lee de lo guardado, no se da por
+        // falsa. Forzar `isMain: false` aquí borraba la portada de toda
+        // variante con fotos propias en cuanto se abría el grupo.
+        map.set(img.url, { url: img.url, isMain: img.isMain ?? false });
       }
     });
     return Array.from(map.values());

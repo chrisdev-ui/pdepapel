@@ -12,7 +12,7 @@ import {
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
-import { resolveVariantImages } from "@/lib/variant-images";
+import { resolveVariantImages, withVariantCover } from "@/lib/variant-images";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { findProductWithGtin } from "@/lib/product-identifiers";
@@ -217,11 +217,15 @@ export async function POST(
           colorId: ids.colorId,
           designId: ids.designId,
         });
-        const imageData = applicableImages.map(
-          (img: { url: string; isMain?: boolean }) => ({
+        // `withVariantCover` asegura que quede exactamente una portada: si
+        // ninguna foto viene marcada, asciende la primera. Sin esto una
+        // variante podía guardarse sin portada y cada pantalla elegía una
+        // distinta.
+        const imageData = withVariantCover(
+          applicableImages.map((img: { url: string; isMain?: boolean }) => ({
             url: img.url,
             isMain: img.isMain || false,
-          }),
+          })),
         );
 
         if (existing) {
