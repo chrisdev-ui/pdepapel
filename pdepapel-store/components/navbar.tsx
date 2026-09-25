@@ -16,18 +16,18 @@ import { SearchBar } from "@/components/search-bar";
 import { WishlistButton } from "@/components/wishlist-button";
 import { SEASON_CONFIG } from "@/constants";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
-import { FeaturedByType, NavigationType } from "@/lib/catalog-navigation";
+import { FeaturedByType, NavigationCategory, NavigationType } from "@/lib/catalog-navigation";
 import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import { accountAccessPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import { Category, Season } from "@/types";
+import { Season } from "@/types";
 
 interface NavbarProps {
   season?: Season;
   types: NavigationType[];
   featuredByType: FeaturedByType;
   /** Atajo fijo a las subcategorías destacadas, en el menú y en el cajón. */
-  featuredSubcategories: Category[];
+  featuredSubcategories: NavigationCategory[];
   freeShippingThreshold: number | null;
 }
 

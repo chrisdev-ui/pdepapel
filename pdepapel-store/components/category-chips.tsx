@@ -12,7 +12,8 @@ import { Type } from "@/types";
 const CHIP_TINTS = ["bg-kawaii-lavender-light", "bg-kawaii-pink-light/60", "bg-kawaii-mint-light", "bg-kawaii-yellow-light", "bg-kawaii-blue-light"];
 
 interface CategoryChipsProps {
-  types: Type[];
+  /** Solo lo que la fila de chips lee; así también sirve el árbol recortado de la cabecera. */
+  types: Pick<Type, "id" | "name" | "slug" | "icon" | "iconSvg">[];
   limit?: number;
   /** Tipo de la página actual: se marca y se muestra primero. */
   activeTypeId?: string;

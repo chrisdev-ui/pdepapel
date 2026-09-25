@@ -21,7 +21,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
-import { NavigationType } from "@/lib/catalog-navigation";
+import { NavigationCategory, NavigationType } from "@/lib/catalog-navigation";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import {
   accountAccessPath,
@@ -32,7 +32,6 @@ import {
 } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
-import { Category } from "@/types";
 
 interface CategoryDrawerProps {
   types: NavigationType[];
@@ -40,7 +39,7 @@ interface CategoryDrawerProps {
    * Subcategorías destacadas. Van sueltas arriba, fuera de todo acordeón:
    * se llega a ellas sin desplegar nada.
    */
-  featuredSubcategories: Category[];
+  featuredSubcategories: NavigationCategory[];
   logoSrc: string;
 }
 

@@ -1,11 +1,42 @@
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { Category, Product, Type } from "@/types";
 
-export interface NavigationType extends Type {
+/**
+ * Lo que la cabecera sabe de una subcategoría. Es una proyección a propósito:
+ * el árbol de navegación cruza al cliente por la raíz —en cada página de la
+ * tienda— y las 107 subcategorías con su `seoIntro`, `seoTitle`, `imageUrl` y
+ * demás pesaban 59 KB por respuesta cuando el menú, el cajón y el buscador
+ * solo leen estos cuatro campos. Cualquier consumidor que necesite otro
+ * campo lo declara aquí, y así se ve cuánto cuesta.
+ */
+export interface NavigationCategory {
+  id: string;
+  typeId: string;
+  name: string;
+  slug?: string;
+}
+
+/** Un tipo tal como lo pinta la cabecera; misma proyección, mismo motivo. */
+export interface NavigationType {
+  id: string;
+  slug?: string;
+  name: string;
   /** Clean label without any leading emoji. */
   label: string;
+  icon?: string | null;
+  iconSvg?: string | null;
   /** Subcategories of this type, sorted by name. */
-  subcategories: Category[];
+  subcategories: NavigationCategory[];
+}
+
+/** Recorta una categoría a lo que la navegación lee; nunca se propaga el registro entero. */
+export function toNavigationCategory(category: Category): NavigationCategory {
+  return {
+    id: category.id,
+    typeId: category.typeId,
+    name: category.name,
+    slug: category.slug,
+  };
 }
 
 export interface FeaturedTile {
@@ -68,13 +99,21 @@ export function buildNavigationTypes(
   }
 
   return types
-    .map((type) => ({
-      ...type,
-      label: stripTaxonomyIcon(type.name),
-      subcategories: [...(byType.get(type.id) ?? [])].sort((a, b) =>
-        collator.compare(stripTaxonomyIcon(a.name), stripTaxonomyIcon(b.name)),
-      ),
-    }))
+    .map(
+      (type): NavigationType => ({
+        id: type.id,
+        slug: type.slug,
+        name: type.name,
+        label: stripTaxonomyIcon(type.name),
+        icon: type.icon,
+        iconSvg: type.iconSvg,
+        subcategories: [...(byType.get(type.id) ?? [])]
+          .sort((a, b) =>
+            collator.compare(stripTaxonomyIcon(a.name), stripTaxonomyIcon(b.name)),
+          )
+          .map(toNavigationCategory),
+      }),
+    )
     .filter((type) => type.label.length > 0)
     .sort(
       (a, b) =>
@@ -94,10 +133,10 @@ export function buildNavigationTypes(
  * parte. Si no hay ninguna destacada, devuelve un arreglo vacío y quien lo
  * pinta no pinta nada.
  */
-export function buildFeaturedSubcategories(categories: Category[]): Category[] {
-  return categories.filter(
-    (category) => category.seoEnabled && category.seoFeatured && category.slug,
-  );
+export function buildFeaturedSubcategories(categories: Category[]): NavigationCategory[] {
+  return categories
+    .filter((category) => category.seoEnabled && category.seoFeatured && category.slug)
+    .map(toNavigationCategory);
 }
 
 /**

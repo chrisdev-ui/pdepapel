@@ -8,12 +8,11 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Currency } from "@/components/ui/currency";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
-import { FeaturedByType, NavigationType } from "@/lib/catalog-navigation";
+import { FeaturedByType, NavigationCategory, NavigationType } from "@/lib/catalog-navigation";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { categoryPath, productPath, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
-import { Category } from "@/types";
 
 interface MegaMenuProps {
   types: NavigationType[];
@@ -22,7 +21,7 @@ interface MegaMenuProps {
    * Subcategorías destacadas. Se pintan aparte, fuera del panel que depende
    * del tipo que se esté señalando, para que estén siempre a un clic.
    */
-  featuredSubcategories: Category[];
+  featuredSubcategories: NavigationCategory[];
 }
 
 /**
