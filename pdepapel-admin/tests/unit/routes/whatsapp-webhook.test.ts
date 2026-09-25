@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   ignoredUpdate: vi.fn(),
   eventUpdate: vi.fn(),
   storeFindFirst: vi.fn(),
+  convFindUnique: vi.fn(),
+  convUpdateMany: vi.fn(),
   env: { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789", WHATSAPP_APP_SECRET: undefined as string | undefined },
 }));
 
@@ -28,6 +30,7 @@ vi.mock("@/lib/prismadb", () => ({
     },
     ignoredContact: { findFirst: mocks.ignoredFindFirst, update: mocks.ignoredUpdate },
     store: { findFirst: mocks.storeFindFirst },
+    conversation: { findUnique: mocks.convFindUnique, updateMany: mocks.convUpdateMany },
   },
 }));
 
@@ -303,5 +306,102 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
     expect(mocks.ignoredFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ storeId: "store-1" }) }),
     );
+  });
+});
+
+/**
+ * El eco de Paula marca `lastOwnerAt` AQUÍ, al recibirlo, antes de encolar.
+ *
+ * Reproduce el 2026-09-24 (conversación 98ee6263): cuatro mensajes de la
+ * clienta ya estaban en la fila, de a uno y en orden, y cada uno retenía el
+ * turno mientras corría el bot. El eco llegó al webhook 1,7 s antes del
+ * primer envío del bot, pero como solo lo escribía la fila, `shouldStayQuiet`
+ * lo releyó vacío. Ahora la marca está puesta en cuanto se recibe: cuando la
+ * fila llega al primer mensaje de la ráfaga, el freno ya la ve.
+ */
+describe("POST /api/webhook/whatsapp — eco de Paula", () => {
+  const ECO_TS = 1790291407; // 2026-09-24T23:10:07Z, el «Hola buen día» real
+  const echoBody = (timestamp = ECO_TS) =>
+    JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "WABA-123",
+          changes: [
+            {
+              field: "smb_message_echoes",
+              value: {
+                metadata: { phone_number_id: "PHONE-9" },
+                message_echoes: [
+                  {
+                    from: "573132582293",
+                    to: "573003179332",
+                    to_user_id: "CO.1545049727288623",
+                    id: "wamid.ECO",
+                    timestamp: String(timestamp),
+                    type: "text",
+                    text: { body: "Hola buen día" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.env.WHATSAPP_APP_SECRET = undefined;
+    mocks.findFirst.mockResolvedValue({ id: "conn-1", storeId: "store-1" });
+    mocks.upsert.mockResolvedValue({ id: "event-eco", connectionId: "conn-1" });
+    mocks.ignoredFindFirst.mockResolvedValue(null);
+    mocks.enqueue.mockResolvedValue(true);
+    mocks.convFindUnique.mockResolvedValue({ id: "conv-98ee6263" });
+    mocks.convUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("marca lastOwnerAt con la hora del eco, y lo hace ANTES de encolar", async () => {
+    const response = await post(echoBody(), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    expect(response.status).toBe(200);
+
+    expect(mocks.convUpdateMany).toHaveBeenCalledTimes(1);
+    expect(mocks.convUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: "conv-98ee6263",
+        OR: [{ lastOwnerAt: null }, { lastOwnerAt: { lt: new Date(ECO_TS * 1000) } }],
+      },
+      data: { lastOwnerAt: new Date(ECO_TS * 1000) },
+    });
+    // Lo que cierra el hueco: la marca queda puesta sin esperar a la fila.
+    expect(mocks.convUpdateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.enqueue.mock.invocationCallOrder[0],
+    );
+    // Y se resuelve por BSUID, que es la identidad que no se pierde.
+    expect(mocks.convFindUnique.mock.calls[0][0].where).toEqual({
+      storeId_channel_bsuid: { storeId: "store-1", channel: "WHATSAPP", bsuid: "CO.1545049727288623" },
+    });
+  });
+
+  it("un mensaje de la clienta no toca lastOwnerAt", async () => {
+    await post(metaBody, { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    expect(mocks.convUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("si marcar falla, el evento se encola igual: la fila lo escribirá después", async () => {
+    mocks.convUpdateMany.mockRejectedValue(new Error("base caída"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const response = await post(echoBody(), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    expect(response.status).toBe(200);
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it("sin conversación todavía no crea nada: la fila sigue siendo quien la crea", async () => {
+    mocks.convFindUnique.mockResolvedValue(null);
+    await post(echoBody(), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    expect(mocks.convUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
   });
 });

@@ -13,6 +13,7 @@ import { claimQueueRow } from "@/lib/atomic-claim";
 import { normalizePhone } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
 import { runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
+import { bumpLastOwnerAt } from "@/lib/whatsapp/owner-activity";
 
 /**
  * Convierte un `MarketplaceWebhookEvent` de WhatsApp en historial: una
@@ -697,11 +698,17 @@ export async function fileOwnerEcho(
   // `lastOwnerAt` es lo que aparta al bot 24 h: aquí es donde se sabe que
   // quien escribió fue ella y no él, porque esto es el eco de su celular. Con
   // un contacto con nombre de usuario esto se perdía entero.
+  //
+  // La marca ya no va en el `seed`: la pone `bumpLastOwnerAt`, que solo la
+  // mueve hacia adelante. El webhook la escribe también en cuanto recibe el
+  // eco (antes de encolar), así que cuando esto corre desde la fila suele
+  // estar puesta; la guarda deja las dos escrituras idempotentes.
   const conversation = await resolveConversation(
     storeId,
     { phone: echo.phone, bsuid: echo.bsuid },
-    { username: echo.username, lastOutboundAt: sentAt, lastOwnerAt: sentAt },
+    { username: echo.username, lastOutboundAt: sentAt },
   );
+  await bumpLastOwnerAt(conversation.id, sentAt);
 
   await prismadb.conversation.updateMany({
     where: { id: conversation.id, status: ConversationStatus.NEEDS_OWNER },

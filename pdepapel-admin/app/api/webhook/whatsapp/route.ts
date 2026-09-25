@@ -13,11 +13,13 @@ import {
   countSkippedEvent,
   findIgnoredContact,
 } from "@/lib/whatsapp/ignored-contacts";
+import { markOwnerActivity } from "@/lib/whatsapp/owner-activity";
 import { enqueueWhatsAppWebhookEvent } from "@/lib/whatsapp/queue";
 import {
   classifyWhatsAppWebhookEvent,
   getWhatsAppWebhookConversationKey,
   getWhatsAppWebhookIdentity,
+  getWhatsAppWebhookOwnerEchoAt,
   parseWhatsAppWebhookPayload,
   verifyWhatsAppWebhookSignature,
 } from "@/lib/whatsapp/webhook";
@@ -188,8 +190,10 @@ export async function POST(request: Request) {
      */
     const identity = getWhatsAppWebhookIdentity(payload);
     let ignored: { id: string } | null = null;
+    // Se resuelve una vez y se reusa más abajo para marcar el eco de Paula.
+    let storeId: string | null = null;
     try {
-      const storeId = connection?.storeId ?? (await resolveFallbackStoreId(identity));
+      storeId = connection?.storeId ?? (await resolveFallbackStoreId(identity));
       ignored = storeId ? await findIgnoredContact(storeId, identity) : null;
     } catch (error) {
       // Si no se puede comprobar, se sigue como siempre: encolar de más es
@@ -226,6 +230,33 @@ export async function POST(request: Request) {
         { received: true, stored: true, eventId: event.id, topic, connectedAccount: Boolean(event.connectionId), queued: false, ignored: true },
         { status: 200 },
       );
+    }
+
+    /*
+     * Eco de Paula: `lastOwnerAt` se marca AQUÍ, antes de encolar.
+     *
+     * El eco entra a la misma fila que los mensajes de esa clienta, de a uno
+     * y en orden. Si ella acaba de mandar una ráfaga, cada mensaje retiene
+     * la fila mientras corre el bot (hasta 7 s de pausa más el envío) y el
+     * eco se procesa cuando ya se contestó encima de Paula. El 2026-09-24 el
+     * eco llevaba 1,7 s y 15,5 s en nuestras manos cuando salieron los dos
+     * mensajes del bot: `shouldStayQuiet` releyó la marca justo antes de
+     * enviar, como debe, y la encontró vacía porque el evento que la escribe
+     * seguía esperando turno.
+     *
+     * Una consulta indexada y una sola sentencia con guarda (nunca mueve la
+     * marca hacia atrás). Si falla, se sigue: la fila la escribirá igual.
+     */
+    const ownerEchoAt = getWhatsAppWebhookOwnerEchoAt(payload);
+    if (ownerEchoAt && storeId) {
+      try {
+        await markOwnerActivity(storeId, identity, ownerEchoAt);
+      } catch (error) {
+        console.error("[WHATSAPP_WEBHOOK] No se pudo marcar lastOwnerAt al recibir el eco", {
+          eventId: event.id,
+          message: error instanceof Error ? error.message : "unknown",
+        });
+      }
     }
 
     // Encolar es lo mejor que se puede: si QStash no está configurado o falla,

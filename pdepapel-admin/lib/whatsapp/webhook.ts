@@ -228,6 +228,36 @@ export function getWhatsAppWebhookConversationKey(
   return phone ?? bsuid;
 }
 
+/**
+ * Cuándo escribió Paula, según el eco: el `timestamp` (segundos Unix) más
+ * reciente de `message_echoes` en todo el cuerpo, o `null` si no hay ecos o
+ * ninguno trae fecha legible.
+ *
+ * Es la hora del mensaje y no la de ahora a propósito: `lastOwnerAt` mide
+ * las 24 h de silencio del bot desde ahí, y un eco que Meta reintente tarde
+ * no debe alargarlas.
+ */
+export function getWhatsAppWebhookOwnerEchoAt(
+  payload: WhatsAppWebhookPayload,
+): Date | null {
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  let latest: number | null = null;
+  for (const entry of entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      if (!isRecord(change) || !isRecord(change.value)) continue;
+      const echoes = change.value.message_echoes;
+      for (const echo of Array.isArray(echoes) ? echoes : []) {
+        if (!isRecord(echo)) continue;
+        const seconds = Number(asTrimmedString(echo.timestamp));
+        if (!Number.isFinite(seconds) || seconds <= 0) continue;
+        if (latest === null || seconds > latest) latest = seconds;
+      }
+    }
+  }
+  return latest === null ? null : new Date(latest * 1000);
+}
+
 /** @deprecated Usa `getWhatsAppWebhookIdentity`: puede no haber teléfono. */
 export function getWhatsAppWebhookPhone(
   payload: WhatsAppWebhookPayload,

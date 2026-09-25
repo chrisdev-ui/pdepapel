@@ -892,9 +892,17 @@ describe("processWhatsAppWebhookEvent", () => {
       { processed: true, ownerEchoes: 1 },
     );
 
-    expect(mocks.conversationCreate.mock.calls[0][0].data.lastOwnerAt).toEqual(
-      new Date(enviado * 1000),
-    );
+    // La marca ya no viaja en el `create`: la pone `bumpLastOwnerAt` justo
+    // después, con la guarda que solo la mueve hacia adelante. Así la fila y
+    // el webhook (que la escribe al recibir el eco) son idempotentes entre sí.
+    expect(mocks.conversationCreate.mock.calls[0][0].data.lastOwnerAt).toBeUndefined();
+    expect(mocks.conversationUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: expect.any(String),
+        OR: [{ lastOwnerAt: null }, { lastOwnerAt: { lt: new Date(enviado * 1000) } }],
+      },
+      data: { lastOwnerAt: new Date(enviado * 1000) },
+    });
   });
 
   it("files an owner echo as OUTBOUND and clears NEEDS_OWNER", async () => {

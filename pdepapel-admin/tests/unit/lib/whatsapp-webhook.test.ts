@@ -198,3 +198,44 @@ describe("verifyWhatsAppWebhookSignature", () => {
     expect(verifyWhatsAppWebhookSignature(body, signature, undefined)).toBe(false);
   });
 });
+
+import { getWhatsAppWebhookOwnerEchoAt } from "@/lib/whatsapp/webhook";
+
+/**
+ * La hora del eco, para marcar `lastOwnerAt` en cuanto llega al webhook.
+ * Es la hora del mensaje y no la de ahora: las 24 h de silencio del bot se
+ * miden desde ahí, y un reintento tardío no debe alargarlas.
+ */
+describe("getWhatsAppWebhookOwnerEchoAt", () => {
+  const cuerpo = (echoes: unknown[]) =>
+    ({
+      object: "whatsapp_business_account",
+      entry: [{ id: "WABA", changes: [{ field: "smb_message_echoes", value: { message_echoes: echoes } }] }],
+    }) as never;
+
+  it("lee el timestamp en segundos del eco", () => {
+    expect(getWhatsAppWebhookOwnerEchoAt(cuerpo([{ id: "w", timestamp: "1790291407" }]))).toEqual(
+      new Date(1790291407 * 1000),
+    );
+  });
+
+  it("con varios ecos se queda con el más reciente", () => {
+    const at = getWhatsAppWebhookOwnerEchoAt(
+      cuerpo([{ id: "a", timestamp: "1790291407" }, { id: "b", timestamp: "1790291415" }, { id: "c", timestamp: "1790291410" }]),
+    );
+    expect(at).toEqual(new Date(1790291415 * 1000));
+  });
+
+  it("sin ecos, o con un timestamp ilegible, devuelve null en vez de inventar la hora", () => {
+    expect(getWhatsAppWebhookOwnerEchoAt(cuerpo([]))).toBeNull();
+    expect(getWhatsAppWebhookOwnerEchoAt(cuerpo([{ id: "w", timestamp: "ayer" }]))).toBeNull();
+    expect(getWhatsAppWebhookOwnerEchoAt(cuerpo([{ id: "w" }]))).toBeNull();
+    // Un cuerpo de mensajes entrantes, sin ecos, tampoco es hora de Paula.
+    expect(
+      getWhatsAppWebhookOwnerEchoAt({
+        object: "whatsapp_business_account",
+        entry: [{ id: "WABA", changes: [{ field: "messages", value: { messages: [{ from: "57300", id: "m", timestamp: "1790291407" }] } }] }],
+      } as never),
+    ).toBeNull();
+  });
+});
