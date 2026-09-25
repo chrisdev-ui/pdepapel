@@ -38,7 +38,7 @@ export function ProductDetailsAccordion({ product }: ProductDetailsAccordionProp
           <h2 className="font-sans text-base font-bold">Descripción</h2>
         </AccordionTrigger>
         <AccordionContent>
-          <RichTextDisplay content={product.description} fallback="Pronto agregaremos la descripción de este producto." />
+          <RichTextDisplay html={product.description} fallback="Pronto agregaremos la descripción de este producto." />
         </AccordionContent>
       </AccordionItem>
       <AccordionItem value="detalles">

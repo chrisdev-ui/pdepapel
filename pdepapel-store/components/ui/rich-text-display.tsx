@@ -1,28 +1,25 @@
-"use client";
-
-import { richTextToPlainText, sanitizeRichTextHtml } from "@/lib/rich-text";
+import { stripHtmlTags } from "@/lib/html-text";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
 
 interface RichTextDisplayProps {
-  content?: string | null;
+  /**
+   * HTML **ya saneado en el servidor** (`lib/product-description.ts`). Este
+   * componente lo pinta tal cual y no vuelve a sanear: hacerlo aquí metía
+   * `sanitize-html` y su analizador en el paquete de la ficha de producto.
+   * Nunca le pases texto que venga del navegador sin pasar por el servidor.
+   */
+  html?: string | null;
   className?: string;
   fallback?: string;
 }
 
 export function RichTextDisplay({
-  content,
+  html,
   className,
   fallback = "Sin descripción",
 }: RichTextDisplayProps) {
-  const sanitizedContent = useMemo(
-    () => sanitizeRichTextHtml(content),
-    [content],
-  );
-  const plainText = useMemo(
-    () => richTextToPlainText(sanitizedContent),
-    [sanitizedContent],
-  );
+  const sanitizedContent = html?.trim() ?? "";
+  const plainText = stripHtmlTags(sanitizedContent);
 
   if (!sanitizedContent || !plainText) {
     return (

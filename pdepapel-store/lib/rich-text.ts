@@ -1,5 +1,7 @@
 import sanitizeHtml from "sanitize-html";
 
+import { stripHtmlTags } from "@/lib/html-text";
+
 const ALLOWED_TAGS = [
   "p",
   "br",
@@ -145,21 +147,7 @@ export function sanitizeRichTextHtml(content?: string | null) {
 }
 
 export function richTextToPlainText(content?: string | null) {
-  return sanitizeRichTextHtml(content)
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<\/(?:p|h[2-4]|li|blockquote|pre)>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&(nbsp|amp|quot|#39);/gi, (entity) => {
-      const entities: Record<string, string> = {
-        "&nbsp;": " ",
-        "&amp;": "&",
-        "&quot;": '"',
-        "&#39;": "'",
-      };
-      return entities[entity.toLowerCase()] ?? " ";
-    })
-    .replace(/\s+/g, " ")
-    .trim();
+  return stripHtmlTags(sanitizeRichTextHtml(content));
 }
 
 export function createRichTextExcerpt(

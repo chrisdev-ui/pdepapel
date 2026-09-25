@@ -7,12 +7,12 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePat
 vi.mock("@/lib/customer-analytics", () => ({ trackCustomerEvent: vi.fn(), toAnalyticsItem: () => ({}), getAnalyticsValue: () => 0 }));
 vi.mock("@/providers/cart-preview-provider", () => ({ useCartPreview: () => ({ markCartTouched: vi.fn(), showCartPreview: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn(), useToast: () => ({ toast: vi.fn() }) }));
-vi.mock("@/actions/get-product", () => ({ getProduct: vi.fn() }));
+vi.mock("@/lib/catalog-client", () => ({ fetchProductFromClient: vi.fn() }));
 vi.mock("@/components/gallery", () => ({ Gallery: () => null }));
 vi.mock("@/components/kit-contents", () => ({ KitContents: () => null }));
 vi.mock("@/components/reviews/reviews", () => ({ Reviews: () => null }));
 
-import { getProduct } from "@/actions/get-product";
+import { fetchProductFromClient } from "@/lib/catalog-client";
 import { SingleProductPage } from "@/components/single-product-page";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
@@ -88,7 +88,7 @@ describe("SingleProductPage", () => {
         { ...otherColor, quantity: 6 } as unknown as Product,
       ],
     });
-    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
     expect(screen.getAllByRole("spinbutton")[0]).toHaveAttribute("aria-valuenow", "3");
 
@@ -104,7 +104,7 @@ describe("SingleProductPage", () => {
       <link rel="canonical" href="https://papeleriapdepapel.com/producto/cuaderno-snoopy" />
       <meta property="og:title" content="Cuaderno Snoopy - Snoopy, Rosa" />
     `;
-    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
@@ -121,7 +121,7 @@ describe("SingleProductPage", () => {
   it("updates the title in the same commit that rewrites the url", async () => {
     const pushState = vi.spyOn(window.history, "pushState");
     document.head.innerHTML = `<title>Cuaderno Snoopy - Snoopy, Rosa</title>`;
-    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
@@ -134,13 +134,13 @@ describe("SingleProductPage", () => {
 
   it("puts the title back when the shopper goes back to the previous variant", async () => {
     document.head.innerHTML = `<title>Cuaderno Snoopy - Snoopy, Rosa</title>`;
-    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
     await waitFor(() => expect(document.title).toBe("Cuaderno Snoopy - Snoopy, Lila"));
 
-    vi.mocked(getProduct).mockResolvedValue(product);
+    vi.mocked(fetchProductFromClient).mockResolvedValue(product);
     window.history.pushState(null, "", "/producto/cuaderno-snoopy");
     act(() => {
       window.dispatchEvent(new PopStateEvent("popstate"));
@@ -151,7 +151,7 @@ describe("SingleProductPage", () => {
 
   it("drops back to one unit when the new variant is not in the cart", async () => {
     useCart.setState({ items: [{ ...product, quantity: 3 } as unknown as Product] });
-    vi.mocked(getProduct).mockResolvedValue(otherColor);
+    vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
     expect(screen.getAllByRole("spinbutton")[0]).toHaveAttribute("aria-valuenow", "3");
 

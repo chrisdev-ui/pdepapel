@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CATALOG_ENDPOINT, fetchCatalogFromClient } from "@/lib/catalog-client";
+import {
+  CATALOG_ENDPOINT,
+  PRODUCT_ENDPOINT,
+  fetchCatalogFromClient,
+  fetchProductFromClient,
+} from "@/lib/catalog-client";
 import {
   buildCatalogSearchParams,
   parseCatalogSearchParams,
@@ -125,5 +130,30 @@ describe("parámetros del catálogo", () => {
   it("mantiene minPrice=0, que sí es un filtro", () => {
     const params = buildCatalogSearchParams({ minPrice: 0, maxPrice: 0 });
     expect(parseCatalogSearchParams(params)).toEqual({ minPrice: 0, maxPrice: 0 });
+  });
+});
+
+describe("producto desde el cliente", () => {
+  beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("pide la variante a la ruta de la tienda, no al administrador", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: "p2", slug: "agenda-lila" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchProductFromClient("agenda-lila")).resolves.toMatchObject({ id: "p2" });
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`${PRODUCT_ENDPOINT}/agenda-lila`);
+  });
+
+  it("codifica el slug y distingue «no existe» de «falló»", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 404 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchProductFromClient("con espacio/raro")).resolves.toBeNull();
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`${PRODUCT_ENDPOINT}/con%20espacio%2Fraro`);
+    await expect(fetchProductFromClient("agenda")).rejects.toThrow("503");
   });
 });

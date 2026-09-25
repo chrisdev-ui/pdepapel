@@ -14,6 +14,7 @@ import { BASE_URL } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
 import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
 import { buildProductMetaTitle } from "@/lib/product-metadata";
+import { withSanitizedDescription } from "@/lib/product-description";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
 import { createRichTextExcerpt } from "@/lib/rich-text";
 import { categoryPath, productPath } from "@/lib/routes";
@@ -53,8 +54,11 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 export const revalidate = 300;
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  const product = await getProduct(params.slug);
-  if (!product) return notFound();
+  const fetched = await getProduct(params.slug);
+  if (!fetched) return notFound();
+  // La descripción se sanea aquí, una vez, y cruza al cliente lista para
+  // pintarse: `RichTextDisplay` ya no lleva el saneador al navegador.
+  const product = withSanitizedDescription(fetched);
 
   const canonicalSlug = product.slug || product.id;
   if (params.slug !== canonicalSlug) permanentRedirect(productPath(canonicalSlug));

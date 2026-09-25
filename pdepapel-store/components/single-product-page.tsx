@@ -3,7 +3,6 @@
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { getProduct } from "@/actions/get-product";
 import { Gallery } from "@/components/gallery";
 import { KitContents } from "@/components/kit-contents";
 import { ProductInfo } from "@/components/product-info";
@@ -16,6 +15,7 @@ import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { getProductAvailability } from "@/lib/product-availability";
 import { getProductCardBadges, isRecentlyCreated } from "@/lib/product-card";
+import { fetchProductFromClient } from "@/lib/catalog-client";
 import { syncProductDocumentMetadata } from "@/lib/product-metadata";
 import { getStableProductVariants } from "@/lib/product-variants";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
@@ -57,7 +57,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
     const requestId = ++variantRequestRef.current;
     setIsVariantLoading(true);
     try {
-      const nextProduct = await getProduct(variant.slug || variant.id);
+      const nextProduct = await fetchProductFromClient(variant.slug || variant.id);
       if (requestId !== variantRequestRef.current) return;
       if (!nextProduct) {
         toast({ description: "No pudimos cargar esta opción. Inténtalo de nuevo.", variant: "destructive" });
