@@ -86,7 +86,7 @@ CI (`.github/workflows/quality.yml`) runs `type-check` and `test:coverage`. `pub
 
 - Server data plus route-level `loading.tsx` and skeletons is preferred over client-only fetches that leave a blank content area. Product detail is the deliberate exception: it must resolve product existence before streaming so a missing or archived product returns a real HTTP `404`.
 - Spanish for all customer-facing copy. English is fine in internal code and identifiers where already conventional.
-- Commit messages: the historical convention is English, but recent history in this repository uses Spanish conventional commits (`feat(acceso): …`). Match the surrounding history and the user's stated preference.
+- Commit messages: Spanish conventional commits (`fix(tienda): …`).
 
 ## Critical operational context
 
@@ -95,8 +95,8 @@ Everything in this section is a guardrail. Each one exists because it already we
 ### Deployment and Git
 
 - **Never `git push` without explicit user approval.** A push to `main` auto-deploys both Vercel projects, which is a production deployment action. Work local-first, validate, then hand off. Commit and push are separate gates.
-- **Never stage `.env*` files, scratch output, or local agent-instruction files** (`CLAUDE.md`, `AGENTS.md` at the repo root) unless the user explicitly asks.
-- **Never run `vercel env rm` / `vercel env add` or edit variables in the dashboard without explicit per-variable approval.** `vercel env rm NAME` with no environment argument deletes the variable from **all** environments, and deleted values are unrecoverable. On 2026-08-31 an agent "cleanup" deleted the analytics variables from Production this way and analytics went dark until 2026-09-04. To scope a variable, re-add it for the environment you want; never delete first.
+- **Never stage `.env*` files, scratch output, or local agent-instruction files** (`CLAUDE.md`) unless the user explicitly asks. The three `AGENTS.md` files are tracked and are updated in the same commit as the change they describe.
+- **Never run `vercel env rm` / `vercel env add` or edit variables in the dashboard without explicit per-variable approval.** `vercel env rm NAME` with no environment argument deletes the variable from **all** environments, and deleted values are unrecoverable, and a deleted analytics or feature key does not fail anything — the feature just goes dark until someone notices. To scope a variable, re-add it for the environment you want; never delete first.
 - **Secrets never enter Git, this repository's docs, terminal history, screenshots, email or chat.** Ask in chat before reading a production secret, even read-only. Client-visible `NEXT_PUBLIC_*` values are public by design; **never `NEXT_PUBLIC_`-prefix a secret**.
 - Production environment changes need a new deployment to take effect.
 - `tmp/` and `outputs/` are gitignored scratch. `output/` (singular) is **tracked** and holds deliberate artifacts; do not treat it as disposable.
@@ -131,13 +131,13 @@ When adding a customer-navigable route:
 
 `middleware.ts` (Clerk v6 `clerkMiddleware` + `createRouteMatcher`) runs only on routes that read the session on the server and on the protected account routes. Public catalog routes bypass Clerk so genuine `notFound()` responses keep their HTTP `404` and ISR keeps working.
 
-**Any new page that calls `auth()` or `currentUser()` on the server must be added to `requiresServerAuth` in `middleware.ts`, or Clerk throws and the page answers 500.** This is not theoretical: `/pedido/[id]` answered 500 for 35 minutes on 2026-09-12 for exactly this reason.
+**Any new page that calls `auth()` or `currentUser()` on the server must be added to `requiresServerAuth` in `middleware.ts`, or Clerk throws and the page answers 500.** `/pedido/[id]` has shipped in that state.
 
-When a change touches authentication or authorization, verify that route list **and** confirm the assumption the change rests on with a read-only query against production data rather than reading it off the schema. The same incident lost customers their own orders, because 521 of 703 production orders carry the **owner's** `userId`: the owner registers WhatsApp orders on the customer's behalf. True in the schema, false in the data.
+When a change touches authentication or authorization, verify that route list **and** confirm the assumption the change rests on with a read-only query against production data rather than reading it off the schema. Most production orders carry the **owner's** `userId`: the owner registers WhatsApp orders on the customer's behalf. True in the schema, false in the data.
 
 ### Cache and revalidation
 
-- After catalog mutations the admin calls this app's `POST /api/revalidate` to refresh ISR. It requires `REVALIDATION_SECRET` to be an **identical single printable line** in both Vercel projects: no quotes, spaces or embedded newlines. A newline in the header previously caused a production alert.
+- After catalog mutations the admin calls this app's `POST /api/revalidate` to refresh ISR. It requires `REVALIDATION_SECRET` to be an **identical single printable line** in both Vercel projects: no quotes, spaces or embedded newlines; the store rejects a header that carries one, and revalidation then fails silently from the panel's point of view.
 - **A successful admin database write with a stale public page is still a customer-visible defect — verify both.**
 - **Vercel Firewall on this project must not challenge `/api/revalidate`.** The admin calls it server to server, and Bot Protection set to «Challenge» answers 429 with `x-vercel-mitigated: challenge` before the route runs, so this app's logs show nothing and the catalog stays stale. Keep a Bypass custom rule for that path, or set Bot Protection to «Log». The same applies to any other non-browser client (Playwright in `public-health.yml`, uptime monitors).
 - Public catalog fetches use a five-minute fallback cache. Do not shrink that window without measuring the extra server work.

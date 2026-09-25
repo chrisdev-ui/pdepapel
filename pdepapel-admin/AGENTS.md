@@ -107,7 +107,7 @@ CI (`.github/workflows/quality.yml`) runs `prisma generate`, `tsc --noEmit`, `te
   - `.parse()` on a **request body** is safe: a schema failure becomes a readable 400 naming the field.
   - `.parse()` on **data read back from MySQL** is not: that is corrupt data of ours, not a bad request. Catch it and raise a 500 that says so (see `parseStoredSuggestionPayload` in `lib/catalog-migration.ts`).
 - Spanish for all user-facing copy and error messages; English is fine in internal code and identifiers where already conventional.
-- Commit messages: the canonical document says English, but recent history in this repository uses Spanish conventional commits (`feat(acceso): …`). Match the surrounding history and the user's stated preference.
+- Commit messages: Spanish conventional commits (`fix(whatsapp): …`).
 - `pdepapel-admin/.gitignore` ignores `*md`, so a new Markdown file here needs `git add -f` (or its own negation line) to be tracked.
 
 ## Critical operational context
@@ -117,13 +117,13 @@ Everything in this section is a guardrail. Each one exists because it already we
 ### Deployment and Git
 
 - **Never `git push` without explicit user approval.** A push to `main` auto-deploys both Vercel projects, which is a production deployment action. Work local-first, validate, then hand off. Commit and push are separate gates.
-- **Never stage `.env*` files, scratch output, or local agent-instruction files** (`CLAUDE.md`, `AGENTS.md` at the repo root) unless the user explicitly asks.
+- **Never stage `.env*` files, scratch output, or local agent-instruction files** (`CLAUDE.md`) unless the user explicitly asks. The three `AGENTS.md` files are tracked and are updated in the same commit as the change they describe.
 - `tmp/` and `outputs/` are gitignored scratch. `output/` (singular) is **tracked** and holds deliberate artifacts such as PDF guides; do not treat it as disposable.
 - **If a change touches authentication or authorization, run two checks before asking for approval:**
   1. Every page or route that now calls `auth()`/`currentUser()` is in the middleware's route list (the public-route matcher here, `requiresServerAuth` in the store). Clerk throws outside its middleware, and the page answers 500.
   2. The assumption the change rests on is confirmed with a read-only query against production data, not read off the schema.
 
-  Both checks exist because of the 2026-09-12 order-page incident: `/pedido/[id]` answered 500 for 35 minutes, and customers lost their own orders because 521 of 703 production orders carry the **owner's** `userId` (the owner registers WhatsApp orders on the customer's behalf). One `SELECT` would have shown it. State both results in the approval request.
+  Clerk throws outside its middleware and the page answers 500; and the data contradicts the schema in at least one known way — most production orders carry the **owner's** `userId`, because the owner registers WhatsApp orders on the customer's behalf, so «the order's user is the customer» is true in the schema and false in the data. One `SELECT` shows it. State both results in the approval request.
 - After deployment, state the human follow-ups: migrations, Vercel variables, OAuth reconnect, webhook registration.
 
 ### Production database writes
@@ -153,7 +153,7 @@ The schema is `prisma/schema.prisma` (roughly 77 models) on MySQL at Railway.
 
 **A rollback of the variants-conversion work is not a plain `git revert`.**
 
-Measured 2026-09-19 with the pre-change Prisma client against a local row of type `VARIANT_CONVERSION`: MySQL keeps the ENUM value after a code rollback, but the old Prisma client **throws** on any query that selects the `type` column of a row carrying that value (`Value 'VARIANT_CONVERSION' not found in enum 'InventoryMovementType'`), and **the whole `findMany` fails, not just that row**. `count`, selects that omit `type`, and `$queryRaw` still work; writes are unaffected.
+With the pre-change Prisma client against a row of type `VARIANT_CONVERSION`: MySQL keeps the ENUM value after a code rollback, but the old Prisma client **throws** on any query that selects the `type` column of a row carrying that value (`Value 'VARIANT_CONVERSION' not found in enum 'InventoryMovementType'`), and **the whole `findMany` fails, not just that row**. `count`, selects that omit `type`, and `$queryRaw` still work; writes are unaffected.
 
 In the pre-change code that breaks the Movimientos list (`movimientos-inventario/server/get-movements.ts`) for the entire store and the kardex of every product that went through a conversion (`get-product-kardex.ts`). The UI fallbacks (`typeLabels[type] || type`, `TONES[tone] ?? …`) are never reached, because the query itself fails.
 
@@ -165,7 +165,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 
 - **Secrets never enter Git, this repository's docs, terminal history, screenshots, email or chat.** `.env*` files, Vercel environment screens, Railway connection strings, OAuth secrets, signing keys, payment keys and encryption keys are all secrets. Ask in chat before reading a production secret, even read-only.
 - A Mercado Libre client secret was leaked previously and must be treated as compromised: rotate it, update Vercel, redeploy, then reconnect from the admin UI.
-- **Never run `vercel env rm` / `vercel env add` or edit variables in the dashboard without explicit per-variable approval.** `vercel env rm NAME` with no environment argument deletes the variable from **all** environments, and deleted values are unrecoverable. On 2026-08-31 an agent "cleanup" deleted the GA4/Clarity variables from Production this way and analytics went dark until 2026-09-04. To scope a variable, re-add it for the environment you want; never delete first.
+- **Never run `vercel env rm` / `vercel env add` or edit variables in the dashboard without explicit per-variable approval.** `vercel env rm NAME` with no environment argument deletes the variable from **all** environments, and deleted values are unrecoverable, and a deleted analytics or feature key does not fail anything — the feature just goes dark until someone notices. To scope a variable, re-add it for the environment you want; never delete first.
 - Add mandatory new variables to `lib/env.mjs` or the build fails. **Never `NEXT_PUBLIC_`-prefix a secret.**
 - `MERCADOLIBRE_TOKEN_ENCRYPTION_KEY` must stay stable: changing it makes every stored token unreadable.
 - `REVALIDATION_SECRET` must be an **identical single printable line** in both Vercel projects: no quotes, spaces or embedded newlines.
@@ -191,7 +191,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - **Bank transfer reaches `PAID` only after manual admin verification.**
 - `paidAt` is written only when an order genuinely becomes paid, never during an unrelated update, and never adjusted to satisfy a tax report's date range.
 - Provider webhooks validate the already stored method and must never silently convert a bank-transfer order to an online payment.
-- `updateMany` with a status guard is **only atomic inside an explicit `$transaction`**. Prisma compiles it into a `SELECT` then an `UPDATE … WHERE id IN (?)`, so outside a transaction the guard is evaluated by the read. Measured 2026-09-14: four concurrent deliveries of the same webhook all claimed it and three processed the same event. Queue claims that cannot sit in a transaction use `claimQueueRow` (`lib/atomic-claim.ts`). The same applies to `stock: { gte: n }` guards.
+- `updateMany` with a status guard is **only atomic inside an explicit `$transaction`**. Prisma compiles it into a `SELECT` then an `UPDATE … WHERE id IN (?)`, so outside a transaction the guard is evaluated by the read, and concurrent deliveries of one webhook all claim it and process the same event. Queue claims that cannot sit in a transaction use `claimQueueRow` (`lib/atomic-claim.ts`). The same applies to `stock: { gte: n }` guards.
 
 ### Inventory
 
@@ -255,7 +255,7 @@ The newsletter has **one sender**, `lib/newsletter-campaigns.ts`. Everything tha
 
 ### Images
 
-One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`); this app uses the global `images.loaderFile`. Every distinct transformation and width is a derived copy that is stored forever and billed, so **do not add loaders, `quality` values, crops or wider `deviceSizes`**. Widths snap to `CLOUDINARY_DELIVERY_WIDTHS`. **Never purge derived copies before a width-matrix reduction is actually live** — the 2026-09-11 purge made the catalog regenerate under the old matrix and caused the overage. Runbook: `docs/imagenes-cloudinary.md`.
+One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`); this app uses the global `images.loaderFile`. Every distinct transformation and width is a derived copy that is stored forever and billed, so **do not add loaders, `quality` values, crops or wider `deviceSizes`**. Widths snap to `CLOUDINARY_DELIVERY_WIDTHS`. **Never purge derived copies before a width-matrix reduction is actually live** — purging first makes the catalog regenerate every copy under the old matrix, which is the overage. Runbook: `docs/imagenes-cloudinary.md`.
 
 ### Scheduled work and database pool
 
