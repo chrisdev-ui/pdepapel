@@ -4,6 +4,7 @@ import { Redis } from "@upstash/redis";
 import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
 
+import { logModelUsage } from "@/lib/ai-usage";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import {
@@ -198,6 +199,7 @@ export async function POST(
       }
       throw getModelError(modelError);
     }
+    logModelUsage("products.image-analysis", result.usage);
 
     if (!result.output) {
       throw new AppError(

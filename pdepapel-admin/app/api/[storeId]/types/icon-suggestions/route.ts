@@ -5,6 +5,7 @@ import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { logModelUsage } from "@/lib/ai-usage";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import { ICON_SVG_MAX_LENGTH, sanitizeIconSvg } from "@/lib/svg-icon";
@@ -113,6 +114,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
         output: Output.object({ schema: outputSchema }),
         prompt: buildIconSuggestionsPrompt(prompt, seed),
       });
+      logModelUsage("types.icon-suggestions", result.usage);
       output = result.output;
     } catch (error) {
       throw getModelError(error);

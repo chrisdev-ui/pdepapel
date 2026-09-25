@@ -1,5 +1,7 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { Output, generateText } from "ai";
+
+import { logModelUsage } from "@/lib/ai-usage";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -99,7 +101,7 @@ export type ProductClassification = z.infer<typeof productClassificationSchema>;
 export const PRODUCT_CLASSIFIER_PROMPT_VERSION = "productos-v1";
 
 export const PRODUCT_CLASSIFIER_SYSTEM = `Clasificas mensajes de WhatsApp de una papelería colombiana (artículos kawaii, Sanrio, anime).
-Tu única tarea es decir de qué va el mensaje y qué se busca. NUNCA redactes una respuesta para la clienta.
+Tu única tarea es decir de qué va el mensaje y qué se busca.
 
 intent:
 - "product.search": pregunta si tienen algo ("¿tienen algo de Kuromi?", "manejan stickers?")
@@ -151,6 +153,8 @@ export async function classifyProductQuestion(
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(PRODUCT_CLASSIFIER_TIMEOUT_MS),
     });
+
+    logModelUsage("whatsapp.classifier", result.usage);
 
     const parsed = productClassificationSchema.safeParse(result.output);
     if (!parsed.success) return { ok: false, reason: "invalid" };

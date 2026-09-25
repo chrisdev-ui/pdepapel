@@ -7,6 +7,7 @@ import { ConversationMessageDirection } from "@prisma/client";
 import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
 
+import { logModelUsage } from "@/lib/ai-usage";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
@@ -233,6 +234,7 @@ export async function POST(
     } catch (error) {
       throw getModelError(error);
     }
+    logModelUsage("bot-replies.assistant", result.usage);
 
     if (!result.output) {
       throw new AppError(

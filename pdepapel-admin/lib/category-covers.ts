@@ -7,8 +7,16 @@ import {
   CATEGORY_SEO_TITLE_MAX,
   CATEGORY_SEO_TITLE_RECOMMENDED,
   CATEGORY_SEO_TITLE_SUFFIX,
+  INTRO_SYSTEM_PROMPT,
+  buildCoverPrompt,
+  buildIntroUserPrompt,
   clampSeoText,
+  stripTaxonomyIcon,
 } from "@/lib/category-seo";
+
+// Los prompts viven en `lib/category-seo.ts`; estos nombres siguen saliendo de
+// aquí porque las rutas de tipos y la prueba de portadas los importan así.
+export { buildCoverPrompt, stripTaxonomyIcon, COVER_STYLE_PROMPT as STYLE_PROMPT } from "@/lib/category-seo";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 
 /**
@@ -22,22 +30,8 @@ import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 export const IMAGE_MODEL = "gpt-image-1";
 export const TEXT_MODEL = "gpt-4.1-mini";
 
-export const STYLE_PROMPT = [
-  "Square product photography for a Colombian kawaii stationery shop.",
-  "Top-down flat lay on a soft pastel pink or peach paper background, gentle daylight, subtle soft shadows.",
-  "A few cute pastel-colored items of the category arranged loosely with small kawaii accents (tiny stars, hearts, a bow, a strawberry) and one or two washi tapes at the edges.",
-  "Colors: baby pink, lavender, mint, butter yellow, baby blue. Clean, uncluttered, no text, no logos, no people, no hands, no watermark.",
-  "Style of a curated e-commerce category cover: airy, sweet, high quality, 1:1.",
-].join(" ");
-
-export const stripTaxonomyIcon = (name: string) => name.replace(/^[^A-Za-z0-9À-ɏ]+/, "").trim();
-
 export function isCategoryCoverConfigured(): boolean {
   return Boolean(env.OPENAI_API_KEY);
-}
-
-export function buildCoverPrompt(categoryName: string, typeName: string): string {
-  return `${STYLE_PROMPT} Category: "${stripTaxonomyIcon(categoryName)}" (${stripTaxonomyIcon(typeName)}). Show items that belong to this category.`;
 }
 
 type FetchLike = typeof fetch;
@@ -70,15 +64,8 @@ export async function generateCategoryIntro(categoryName: string, typeName: stri
       model: TEXT_MODEL,
       temperature: 0.8,
       messages: [
-        {
-          role: "system",
-          content:
-            "Escribes textos cortos para una papelería colombiana en línea (P de Papel, Medellín, envíos a toda Colombia). Tono cercano y alegre, español de Colombia, sin emojis, sin signos de exclamación, sin comillas, sin nombrar la marca. No prometas precios ni stock.",
-        },
-        {
-          role: "user",
-          content: `Escribe la intro de la subcategoría «${stripTaxonomyIcon(categoryName)}» (categoría: ${stripTaxonomyIcon(typeName)}): entre 110 y 160 caracteres, una o dos frases, sobre para qué sirven los productos o a quién le gustan. Devuelve solo el texto.`,
-        },
+        { role: "system", content: INTRO_SYSTEM_PROMPT },
+        { role: "user", content: buildIntroUserPrompt(categoryName, typeName) },
       ],
     },
     fetchImpl,

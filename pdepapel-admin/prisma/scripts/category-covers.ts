@@ -20,21 +20,19 @@ import cloudinary from "cloudinary";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  INTRO_SYSTEM_PROMPT,
+  buildCoverPrompt,
+  buildIntroUserPrompt,
+  stripTaxonomyIcon as strip,
+} from "../../lib/category-seo";
+
 const STORE_ID = process.env.CATEGORY_COVERS_STORE_ID ?? "f23ee5bc-1f6f-4c10-9872-9e6217cc17fd";
 const OUT_DIR = path.resolve("tmp/category-covers");
 const IMAGE_MODEL = "gpt-image-1";
 const TEXT_MODEL = "gpt-4.1-mini";
 
-const STYLE_PROMPT = [
-  "Square product photography for a Colombian kawaii stationery shop.",
-  "Top-down flat lay on a soft pastel pink or peach paper background, gentle daylight, subtle soft shadows.",
-  "A few cute pastel-colored items of the category arranged loosely with small kawaii accents (tiny stars, hearts, a bow, a strawberry) and one or two washi tapes at the edges.",
-  "Colors: baby pink, lavender, mint, butter yellow, baby blue. Clean, uncluttered, no text, no logos, no people, no hands, no watermark.",
-  "Style of a curated e-commerce category cover: airy, sweet, high quality, 1:1.",
-].join(" ");
-
 const prisma = new PrismaClient();
-const strip = (name: string) => name.replace(/^[^A-Za-z0-9\u00C0-\u024F]+/, "").trim();
 const slugify = (value: string) =>
   strip(value)
     .normalize("NFD")
@@ -73,7 +71,7 @@ async function openAi<T>(endpoint: string, body: unknown): Promise<T> {
 async function generateCover(row: Row): Promise<Buffer> {
   const data = await openAi<{ data: { b64_json: string }[] }>("images/generations", {
     model: IMAGE_MODEL,
-    prompt: `${STYLE_PROMPT} Category: "${strip(row.name)}" (${strip(row.type.name)}). Show items that belong to this category.`,
+    prompt: buildCoverPrompt(row.name, row.type.name),
     size: "1024x1024",
     quality: "medium",
     n: 1,
@@ -86,15 +84,8 @@ async function generateIntro(row: Row): Promise<string> {
     model: TEXT_MODEL,
     temperature: 0.8,
     messages: [
-      {
-        role: "system",
-        content:
-          "Escribes textos cortos para una papelería colombiana en línea (P de Papel, Medellín, envíos a toda Colombia). Tono cercano y alegre, español de Colombia, sin emojis, sin signos de exclamación, sin comillas. No prometas precios ni stock.",
-      },
-      {
-        role: "user",
-        content: `Escribe la intro de la categoría «${strip(row.name)}» (tipo: ${strip(row.type.name)}): entre 110 y 160 caracteres, una o dos frases, sobre para qué sirven los productos o a quién le gustan. Devuelve solo el texto.`,
-      },
+      { role: "system", content: INTRO_SYSTEM_PROMPT },
+      { role: "user", content: buildIntroUserPrompt(row.name, row.type.name) },
     ],
   });
   return data.choices[0].message.content.trim().replace(/^["«]|["»]$/g, "");
