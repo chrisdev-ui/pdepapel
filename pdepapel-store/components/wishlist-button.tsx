@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Icons } from "@/components/icons";
+import { HeartIcon } from "@/components/icons";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ export const WishlistButton: React.FC<{
       )}
       aria-label="Favoritos: ver lista de deseos"
     >
-      <Icons.heart className="h-6 w-6" isFilled={totalItems > 0} />
+      <HeartIcon className="h-6 w-6" isFilled={totalItems > 0} />
       {withLabel ? <span className="hidden xl:inline">Favoritos</span> : null}
       {totalItems > 0 && (
         <span className="absolute -right-3 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-yankees font-sans text-xxs text-white">

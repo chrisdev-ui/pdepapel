@@ -16,7 +16,7 @@ import { AboutPage as AboutPageSchema, WithContext } from "schema-dts";
 
 import { getPosts } from "@/actions/get-posts";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
-import { Icons } from "@/components/icons";
+import { FacebookIcon, FlagIcons, InstagramIcon, TiktokIcon } from "@/components/icons";
 import Newsletter from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -162,7 +162,7 @@ const buildFacts = (openingHoursLabel: string | null) => [
     description: (
       <span className="inline-flex items-center gap-1.5">
         {openingHoursLabel ?? "8:00 a. m. a 8:00 p. m."}
-        <Icons.flags.colombia className="h-3.5 w-3.5" aria-hidden="true" />
+        <FlagIcons.colombia className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
     ),
     icon: <Clock className="h-7 w-7 xl:h-8 xl:w-8" aria-hidden="true" />,
@@ -233,12 +233,12 @@ export default async function AboutPage() {
               </Link>
               <SocialOutlineLink
                 href={INSTAGRAM_URL}
-                icon={<Icons.instagram className="h-[18px] w-[18px]" />}
+                icon={<InstagramIcon className="h-[18px] w-[18px]" />}
                 label="Instagram"
               />
               <SocialOutlineLink
                 href={TIKTOK_URL}
-                icon={<Icons.tiktok className="h-[18px] w-[18px]" />}
+                icon={<TiktokIcon className="h-[18px] w-[18px]" />}
                 label="TikTok"
               />
             </div>
@@ -432,17 +432,17 @@ export default async function AboutPage() {
             <div className="mt-4 flex flex-wrap justify-center gap-3 sm:gap-6">
               <SocialButton
                 href={INSTAGRAM_URL}
-                icon={<Icons.instagram className="h-6 w-6" />}
+                icon={<InstagramIcon className="h-6 w-6" />}
                 label="Instagram"
               />
               <SocialButton
                 href={FACEBOOK_PAGE_URL}
-                icon={<Icons.facebook className="h-6 w-6" />}
+                icon={<FacebookIcon className="h-6 w-6" />}
                 label="Facebook"
               />
               <SocialButton
                 href={TIKTOK_URL}
-                icon={<Icons.tiktok className="h-5 w-5" />}
+                icon={<TiktokIcon className="h-5 w-5" />}
                 label="TikTok"
               />
             </div>

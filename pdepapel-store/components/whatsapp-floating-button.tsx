@@ -1,6 +1,6 @@
 "use client";
 
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { usePathname } from "next/navigation";
@@ -40,7 +40,7 @@ export function WhatsAppFloatingButton() {
       className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex h-14 w-14 touch-manipulation items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 hover:bg-[#20bd5a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128C7E] focus-visible:ring-offset-2 motion-reduce:transform-none md:bottom-6 md:right-6"
       onClick={() => trackWhatsAppClick("floating_button", pathname)}
     >
-      <Icons.whatsapp aria-hidden="true" className="h-7 w-7" />
+      <WhatsappIcon aria-hidden="true" className="h-7 w-7" />
       <span className="sr-only">Abrir WhatsApp en una nueva pestaña</span>
     </a>
   );

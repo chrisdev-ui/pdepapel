@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { CategoryDrawer } from "@/components/category-drawer";
-import { Icons } from "@/components/icons";
+import { UserIcon } from "@/components/icons";
 import { MegaMenu } from "@/components/mega-menu";
 import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
@@ -167,7 +167,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 className="flex items-center gap-2 rounded-md font-sans font-semibold text-blue-yankees transition-opacity hover:opacity-75"
                 aria-label="Mi cuenta: iniciar sesión o crear una cuenta"
               >
-                <Icons.user className="h-6 w-6" />
+                <UserIcon className="h-6 w-6" />
                 <span className="hidden xl:inline">Mi cuenta</span>
               </Link>
             </SignedOut>

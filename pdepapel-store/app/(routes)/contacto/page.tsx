@@ -14,7 +14,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ContactPage as ContactPageSchema, WithContext } from "schema-dts";
 
-import { Icons } from "@/components/icons";
+import { FlagIcons, WhatsappIcon } from "@/components/icons";
 import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -70,7 +70,7 @@ const contactChannels: ContactChannel[] = [
     hint: "Escríbenos por chat",
     href: WHATSAPP_URL,
     external: true,
-    icon: <Icons.whatsapp className="h-6 w-6" aria-hidden="true" />,
+    icon: <WhatsappIcon className="h-6 w-6" aria-hidden="true" />,
     tileClassName: "bg-green-50 text-green-600",
     labelClassName: "text-green-600",
     tag: "Más rápido",
@@ -107,7 +107,7 @@ const contactChannels: ContactChannel[] = [
     ),
     hint: (
       <>
-        <Icons.flags.colombia className="h-4 w-4" aria-hidden="true" />
+        <FlagIcons.colombia className="h-4 w-4" aria-hidden="true" />
         Hora de Colombia
       </>
     ),

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountPrompt } from "@/components/account-prompt";
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
 import {
   trackWhatsAppClick,
   WHATSAPP_URL,
@@ -241,7 +241,7 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
             onClick={() => trackWhatsAppClick("cart_sticky_bar", pathname)}
             className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-[#25D366] text-white transition hover:bg-[#20bd5a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128C7E] focus-visible:ring-offset-2"
           >
-            <Icons.whatsapp aria-hidden="true" className="h-5 w-5" />
+            <WhatsappIcon aria-hidden="true" className="h-5 w-5" />
           </a>
         </div>
       </div>

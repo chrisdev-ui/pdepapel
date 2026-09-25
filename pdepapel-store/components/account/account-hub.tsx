@@ -35,7 +35,7 @@ import { formatOrderDate } from "@/lib/order-dates";
 import { getOrderStage, isAwaitingPayment } from "@/lib/order-status";
 import { orderPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn, currencyFormatter } from "@/lib/utils";
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
 
 const SUPPORT_WHATSAPP_URL =
   "https://wa.me/573132582293?text=" +
@@ -463,7 +463,7 @@ export function AccountHub() {
             className="gap-2 rounded-full border-[1.5px] border-blue-yankees font-sans font-semibold text-blue-yankees"
           >
             <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-              <Icons.whatsapp className="h-4 w-4" aria-hidden="true" />
+              <WhatsappIcon className="h-4 w-4" aria-hidden="true" />
               WhatsApp
             </a>
           </Button>

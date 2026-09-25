@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Currency } from "@/components/ui/currency";
@@ -1362,7 +1362,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           Cambios hasta 5 días después de recibir.
         </li>
         <li className="flex items-center gap-2">
-          <Icons.whatsapp className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          <WhatsappIcon className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
           ¿Dudas? Escríbenos por WhatsApp.
         </li>
       </ul>

@@ -1,7 +1,7 @@
 import { ChevronRight, MessageCircle, Undo2 } from "lucide-react";
 import Link from "next/link";
 
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
 import { getOrderSupportWhatsAppUrl } from "@/lib/order-status";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { OrderSection } from "./order-section";
@@ -18,7 +18,7 @@ export function OrderHelpCard({ orderNumber }: OrderHelpCardProps) {
       description: `Con el número ${orderNumber} listo en el mensaje`,
       href: getOrderSupportWhatsAppUrl(orderNumber),
       external: true,
-      icon: <Icons.whatsapp className="h-[18px] w-[18px] text-green-600" aria-hidden="true" />,
+      icon: <WhatsappIcon className="h-[18px] w-[18px] text-green-600" aria-hidden="true" />,
       tile: "bg-green-50",
     },
     {

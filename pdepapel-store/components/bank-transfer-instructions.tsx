@@ -24,7 +24,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
+import { PaymentIcons } from "@/components/payment-icons";
 import { currencyFormatter } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -276,7 +277,7 @@ export const BankTransferInstructions: React.FC<
             <div className="space-y-3 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-sm dark:border-purple-900/40 dark:bg-zinc-900">
               <div className="flex items-center justify-between border-b pb-2.5 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
-                  <Icons.payments.bancolombia className="h-5 w-auto" />
+                  <PaymentIcons.bancolombia className="h-5 w-auto" />
                   <span className="font-sans text-xs font-bold text-zinc-900 dark:text-zinc-100">
                     Bancolombia - Cuenta Ahorros
                   </span>
@@ -327,7 +328,7 @@ export const BankTransferInstructions: React.FC<
           <div className="flex flex-col gap-3">
             <div className="space-y-1">
               <span className="flex items-center text-xs font-bold text-emerald-950 dark:text-emerald-200">
-                <Icons.whatsapp className="mr-1.5 h-4 w-4 shrink-0 text-[#25D366]" />
+                <WhatsappIcon className="mr-1.5 h-4 w-4 shrink-0 text-[#25D366]" />
                 Paso Final: Envía tu comprobante
               </span>
               <p className="text-xs leading-relaxed text-emerald-900/80 dark:text-emerald-300">
@@ -341,7 +342,7 @@ export const BankTransferInstructions: React.FC<
               className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] text-sm font-bold text-white shadow-md transition-[transform,background-color] duration-200 hover:bg-[#20bd5a] active:scale-[0.98]"
             >
               <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-                <Icons.whatsapp className="h-5 w-5 text-white" />
+                <WhatsappIcon className="h-5 w-5 text-white" />
                 Enviar Comprobante por WhatsApp
                 <ExternalLink className="h-4 w-4 opacity-80" />
               </a>

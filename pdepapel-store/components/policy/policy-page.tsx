@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -237,7 +237,7 @@ export function PolicyPage({
                 rel="noopener noreferrer"
                 className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-blue-yankees px-5 font-sans text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
               >
-                <Icons.whatsapp className="h-4 w-4" aria-hidden="true" />
+                <WhatsappIcon className="h-4 w-4" aria-hidden="true" />
                 WhatsApp {POLICY_CONTACT.phoneDisplay}
               </a>
               <a

@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
-import { Icons } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
+import { GatewayIcons, PaymentIcons } from "@/components/payment-icons";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PaymentMethod } from "@/constants";
@@ -36,7 +37,7 @@ interface PaymentMethodOption {
 const BankTransferSteps = () => (
   <div className="space-y-3 font-sans text-sm">
     <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/90 p-2.5 text-xs font-semibold text-emerald-950">
-      <Icons.payments.breB className="h-5 w-auto shrink-0" />
+      <PaymentIcons.breB className="h-5 w-auto shrink-0" />
       <span>
         <strong>Transferencia sin comisión</strong> desde cualquier banco
         colombiano con <strong>Bre-B</strong> o transferencia directa.
@@ -56,7 +57,7 @@ const BankTransferSteps = () => (
         <p className="flex flex-wrap items-center gap-x-2">
           Transfiere a la cuenta de ahorros
           <span className="inline-flex items-center gap-1.5 font-bold text-foreground">
-            <Icons.payments.bancolombia className="h-4 w-auto" />
+            <PaymentIcons.bancolombia className="h-4 w-auto" />
             236-000036-64
           </span>
           o a la llave Bre-B.
@@ -74,7 +75,7 @@ const BankTransferSteps = () => (
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-bold text-green-700 hover:underline"
           >
-            <Icons.whatsapp className="h-4 w-4" />
+            <WhatsappIcon className="h-4 w-4" />
             WhatsApp 313 258 2293
           </Link>
         </p>
@@ -103,11 +104,11 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
     // Neutral icon on purpose: customer-facing copy never names the gateway.
     icon: (props: LucideProps) => <CreditCard {...props} />,
     badges: [
-      { name: "Visa", icon: Icons.gateways.visa },
-      { name: "Mastercard", icon: Icons.gateways.mastercard },
-      { name: "American Express", icon: Icons.gateways.amex },
-      { name: "Nequi", icon: Icons.gateways.nequi },
-      { name: "Bancolombia", icon: Icons.payments.bancolombia },
+      { name: "Visa", icon: GatewayIcons.visa },
+      { name: "Mastercard", icon: GatewayIcons.mastercard },
+      { name: "American Express", icon: GatewayIcons.amex },
+      { name: "Nequi", icon: GatewayIcons.nequi },
+      { name: "Bancolombia", icon: PaymentIcons.bancolombia },
     ],
     details: (
       <p className="font-sans text-sm text-muted-foreground">
@@ -122,12 +123,12 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
     summary: "Bre-B o Bancolombia, sin comisión.",
     icon: (props: LucideProps) => <Landmark {...props} />,
     badges: [
-      { name: "Bre-B (cualquier banco)", icon: Icons.payments.breB },
-      { name: "Bancolombia", icon: Icons.payments.bancolombia },
-      { name: "Nequi", icon: Icons.gateways.nequi },
-      { name: "Davivienda / Daviplata", icon: Icons.payments.davivienda },
-      { name: "BBVA", icon: Icons.payments.bbva },
-      { name: "Banco de Bogotá", icon: Icons.payments.bancoDeBogota },
+      { name: "Bre-B (cualquier banco)", icon: PaymentIcons.breB },
+      { name: "Bancolombia", icon: PaymentIcons.bancolombia },
+      { name: "Nequi", icon: GatewayIcons.nequi },
+      { name: "Davivienda / Daviplata", icon: PaymentIcons.davivienda },
+      { name: "BBVA", icon: PaymentIcons.bbva },
+      { name: "Banco de Bogotá", icon: PaymentIcons.bancoDeBogota },
     ],
     notice: <BankTransferNotice />,
     details: <BankTransferSteps />,
@@ -293,7 +294,7 @@ export const PaymentMethodSelector = ({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Icons.whatsapp className="h-4 w-4 shrink-0 text-emerald-600" />
+          <WhatsappIcon className="h-4 w-4 shrink-0 text-emerald-600" />
           <span>
             <strong>¿Dudas?</strong> Te ayudamos por WhatsApp.
           </span>

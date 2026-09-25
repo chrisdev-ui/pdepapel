@@ -1,4 +1,4 @@
-import { Icons } from "@/components/icons";
+import { InstagramIcon, TiktokIcon, WhatsappIcon } from "@/components/icons";
 import { PrivacyPreferencesButton } from "@/components/privacy-preferences-button";
 import { SEASON_CONFIG } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -84,7 +84,7 @@ export const Footer: React.FC<FooterProps> = ({
                   href="https://api.whatsapp.com/send/?phone=%2B573132582293&text&type=phone_number&app_absent=0"
                   className={footerLinkClassName}
                 >
-                  <Icons.whatsapp
+                  <WhatsappIcon
                     aria-hidden="true"
                     className="h-5 w-5 shrink-0"
                   />
@@ -178,7 +178,7 @@ export const Footer: React.FC<FooterProps> = ({
                 className="flex h-11 w-11 items-center justify-center rounded-full border bg-background text-blue-yankees hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
                 target="_blank"
               >
-                <Icons.instagram aria-hidden="true" className="h-5 w-5" />
+                <InstagramIcon aria-hidden="true" className="h-5 w-5" />
               </Link>
               <Link
                 rel="noopener noreferrer"
@@ -187,7 +187,7 @@ export const Footer: React.FC<FooterProps> = ({
                 className="flex h-11 w-11 items-center justify-center rounded-full border bg-background text-blue-yankees hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
                 target="_blank"
               >
-                <Icons.tiktok aria-hidden="true" className="h-5 w-5" />
+                <TiktokIcon aria-hidden="true" className="h-5 w-5" />
               </Link>
             </div>
           </section>
