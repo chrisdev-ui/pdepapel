@@ -23,8 +23,16 @@ interface GalleryProps {
   badge?: React.ReactNode;
 }
 
+/**
+ * Los dos últimos tramos se declaran un poco por debajo de lo que mide la caja
+ * (608 px desde 1280; `50vw - 3rem` entre 1024 y 1279) a propósito: el
+ * cargador redondea al siguiente ancho de su lista (640, 1080, 1600), y en una
+ * pantalla 2x «608 px» pedía 1216 → la copia de 1600 (147–300 KB) para una
+ * caja que con 1080 se ve igual. Con 540 una pantalla 1x sigue recibiendo 640
+ * —nada que perder— y una 2x recibe 1080.
+ */
 const PRODUCT_IMAGE_SIZES =
-  "(max-width: 639px) calc(100vw - 2rem), (max-width: 1023px) calc(100vw - 3rem), (max-width: 1279px) calc(50vw - 3rem), 608px";
+  "(max-width: 639px) calc(100vw - 2rem), (max-width: 1023px) calc(100vw - 3rem), (max-width: 1279px) calc(45vw - 3rem), 540px";
 const SWIPE_THRESHOLD = 40;
 const ARROW =
   "absolute top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-blue-yankees shadow-md transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink can-hover:flex can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100";

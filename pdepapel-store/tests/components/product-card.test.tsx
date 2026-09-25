@@ -76,6 +76,60 @@ describe("ProductCard", () => {
     });
   });
 
+  /**
+   * La segunda foto es invisible hasta pasar el ratón, pero en escritorio el
+   * navegador la bajaba de inmediato, al mismo ancho que la principal y en el
+   * mismo instante que la foto del LCP. Se pide cuando la página ya cargó, o
+   * antes si el ratón entra en la tarjeta.
+   */
+  describe("la foto del ratón espera a que cargue la página", () => {
+    const conDos = {
+      ...base,
+      images: [
+        { id: "i1", url: "https://res.cloudinary.com/demo/a.jpg", isMain: true },
+        { id: "i2", url: "https://res.cloudinary.com/demo/b.jpg", isMain: false },
+      ],
+    } as unknown as Product;
+    const fotos = () => document.querySelectorAll("img").length;
+    const readyState = (value: DocumentReadyState) =>
+      Object.defineProperty(document, "readyState", { value, configurable: true });
+
+    afterEach(() => readyState("complete"));
+
+    it("no está en la primera pintura si la página sigue cargando", () => {
+      readyState("loading");
+      render(<ProductCard product={conDos} />);
+      expect(fotos()).toBe(1);
+    });
+
+    it("aparece cuando la ventana termina de cargar", () => {
+      readyState("loading");
+      render(<ProductCard product={conDos} />);
+      fireEvent(window, new Event("load"));
+      expect(fotos()).toBe(2);
+    });
+
+    it("aparece antes si el ratón entra en la tarjeta", () => {
+      readyState("loading");
+      render(<ProductCard product={conDos} />);
+      fireEvent.pointerEnter(screen.getByRole("article"));
+      expect(fotos()).toBe(2);
+    });
+
+    it("está desde el principio si la página ya había cargado", () => {
+      readyState("complete");
+      render(<ProductCard product={conDos} />);
+      expect(fotos()).toBe(2);
+    });
+
+    it("con una sola foto no hay nada que esperar", () => {
+      readyState("loading");
+      render(<ProductCard product={base} />);
+      fireEvent(window, new Event("load"));
+      expect(fotos()).toBe(1);
+    });
+  });
+
   it("shows the offer badge, the struck price and a working add button", () => {
     render(<ProductCard product={base} />);
     expect(screen.getByText("15 % OFF")).toBeInTheDocument();

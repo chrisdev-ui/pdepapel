@@ -42,6 +42,13 @@ interface ProductCardProps {
   product: Product;
   isNew?: boolean;
   priority?: boolean;
+  /**
+   * `"eager"` para las tarjetas que caen en la primera pantalla pero no son
+   * el candidato a LCP: el navegador las descubre al leer el HTML en vez de
+   * esperar a saber dónde quedan. Sin `priority` no se añaden avisos de
+   * precarga. Se ignora cuando ya hay `priority`.
+   */
+  loading?: "eager" | "lazy";
   /** Ancho de imagen que pide el navegador; cambia según la cuadrícula. */
   sizes?: string;
   className?: string;
@@ -75,10 +82,23 @@ const ProductCard: React.FC<ProductCardProps> = ({
   product,
   isNew,
   priority = false,
+  loading,
   sizes = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw",
   className,
 }) => {
   const [isMounted, setIsMounted] = useState(false);
+  /**
+   * La segunda foto —la que aparece al pasar el ratón— no se pide hasta que
+   * la página terminó de cargar, o hasta que el ratón entra en la tarjeta.
+   *
+   * Es invisible (`opacity-0`) pero en escritorio está en el DOM y dentro de
+   * la pantalla, así que el navegador la bajaba de inmediato al mismo ancho
+   * que la principal: en `/tienda` eran ocho o diez fotos de ~60 KB compitiendo
+   * con la foto que sí se ve —la del LCP— en el mismo instante. En táctil no
+   * cambia nada: ahí la segunda foto ni se muestra.
+   */
+  const [hoverReady, setHoverReady] = useState(false);
+  const [hoverLoaded, setHoverLoaded] = useState(false);
   const openPreview = usePreviewModal((state) => state.onOpen);
   const addToCart = useCart((state) => state.addItem);
   const { showCartPreview } = useCartPreview();
@@ -99,6 +119,18 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const images = product.images ?? [];
   const mainImage = images.find((image) => image.isMain) ?? images[0];
   const hoverImage = images.find((image) => image !== mainImage);
+  const hoverImageUrl = hoverImage?.url;
+
+  useEffect(() => {
+    if (!hoverImageUrl) return;
+    if (document.readyState === "complete") {
+      setHoverReady(true);
+      return;
+    }
+    const onLoad = () => setHoverReady(true);
+    window.addEventListener("load", onLoad, { once: true });
+    return () => window.removeEventListener("load", onLoad);
+  }, [hoverImageUrl]);
   const comingSoon = isComingSoon(product);
   // Una preventa se compra hoy aunque no haya bodega: lo que la agota es el
   // cupo de la campaña.
@@ -228,6 +260,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
         "group relative flex flex-col gap-2.5 rounded-xl border border-blue-baby bg-white p-2 shadow-card transition-shadow hover:shadow-card-hover sm:p-3",
         className,
       )}
+      // Si el ratón llega antes de que cargue la página, se pide en ese momento.
+      onPointerEnter={hoverImageUrl ? () => setHoverReady(true) : undefined}
     >
       <Link
         href={href}
@@ -249,10 +283,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
             fill
             sizes={sizes}
             priority={priority}
+            loading={priority ? undefined : loading}
             className={cn(
               "object-cover transition-opacity duration-300",
               (soldOut || comingSoon) && "opacity-60 saturate-50",
-              hoverImage && "can-hover:group-hover:opacity-0",
+              // La principal solo se aparta cuando la segunda ya llegó: si no,
+              // el primer paso del ratón dejaba un hueco gris mientras cargaba.
+              hoverLoaded && "can-hover:group-hover:opacity-0",
             )}
           />
         ) : (
@@ -263,12 +300,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
             <ImageOff className="h-8 w-8" />
           </div>
         )}
-        {hoverImage?.url && (
+        {hoverImageUrl && hoverReady && (
           <CloudinaryImage
-            src={hoverImage.url}
+            src={hoverImageUrl}
             alt=""
             fill
             sizes={sizes}
+            onLoad={() => setHoverLoaded(true)}
             className="hidden object-cover opacity-0 transition-opacity duration-300 can-hover:block can-hover:group-hover:opacity-100"
           />
         )}

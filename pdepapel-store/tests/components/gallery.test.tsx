@@ -38,7 +38,7 @@ describe("Gallery", () => {
     expect(mainImage).toHaveAttribute("data-priority", "true");
     expect(mainImage).toHaveAttribute(
       "sizes",
-      "(max-width: 639px) calc(100vw - 2rem), (max-width: 1023px) calc(100vw - 3rem), (max-width: 1279px) calc(50vw - 3rem), 608px",
+      "(max-width: 639px) calc(100vw - 2rem), (max-width: 1023px) calc(100vw - 3rem), (max-width: 1279px) calc(45vw - 3rem), 540px",
     );
     // Las miniaturas son de tamaño fijo: width/height (srcset 1x/2x), sin sizes.
     const thumbnail = screen.getByAltText("Vista 1 de Cuaderno Snoopy");

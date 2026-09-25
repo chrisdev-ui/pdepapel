@@ -107,7 +107,12 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages, currentPage =
           <ProductCard
             key={product.id}
             product={product}
-            priority={index < 2}
+            // La primera fila de escritorio son cuatro: cualquiera de ellas
+            // puede ser el LCP, y con `priority` en dos, las otras dos salían
+            // perezosas. Hasta la octava se piden sin esperar al diseño, pero
+            // sin más avisos de precarga.
+            priority={index < 4}
+            loading={index < 8 ? "eager" : undefined}
             sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 22vw"
           />
         ))}
