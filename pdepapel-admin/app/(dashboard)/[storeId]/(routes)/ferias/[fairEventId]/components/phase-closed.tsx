@@ -13,7 +13,8 @@ export interface PhaseClosedProps {
   fairEventId: string;
   closedAt: string | null;
   paidOrders: number;
-  totals: { allocated: number; returned: number };
+  /** `allocatedUnits` y `returned` son piezas: lo que el kardex movió de verdad. */
+  totals: { allocated: number; allocatedUnits: number; returned: number };
   items: {
     id: string;
     allocatedQuantity: number;
@@ -58,8 +59,8 @@ export function PhaseClosed({
               Movimientos en el kardex
             </span>
             <span className="text-xs text-muted-foreground">
-              Reserva −{totals.allocated} · Devolución +{totals.returned}, con
-              referencia a esta feria.
+              Reserva −{totals.allocatedUnits} · Devolución +{totals.returned},
+              con referencia a esta feria.
             </span>
           </Link>
           <a

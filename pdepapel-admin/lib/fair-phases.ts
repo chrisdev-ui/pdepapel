@@ -85,26 +85,57 @@ export function fairMatchesView(status: FairEventStatus, view: FairView): boolea
   }
 }
 
+/**
+ * Cuántas unidades físicas mueve una unidad de esta fila: 1 en un producto
+ * suelto, la suma de piezas en un kit reservado como kit. Reservar, vender y
+ * contar se hacen por fila (un kit es 1); el stock y el kardex se mueven por
+ * pieza, y eso es lo que la administradora quiere leer cuando el cierre le
+ * dice cuánto vuelve a bodega.
+ */
+export function fairRowUnitSize(item: {
+  kitComponents?: { quantityPerKit: number }[] | null;
+  [field: string]: unknown;
+}): number {
+  const lines = item.kitComponents ?? [];
+  if (lines.length === 0) return 1;
+  return lines.reduce((total, line) => total + line.quantityPerKit, 0);
+}
+
 export interface FairInventoryTotals {
+  /** Unidades de fila (un kit cuenta 1). */
   allocated: number;
   sold: number;
+  /** Unidades físicas que salieron del stock (las piezas de cada kit). */
+  allocatedUnits: number;
+  /** Unidades físicas: lo que entra o no entra al stock en línea. */
   returned: number;
   damaged: number;
   lost: number;
 }
 
 export function summarizeFairInventory(
-  items: { allocatedQuantity: number; soldQuantity: number; returnedQuantity?: number; damagedQuantity?: number; lostQuantity?: number }[],
+  items: {
+    allocatedQuantity: number;
+    soldQuantity: number;
+    returnedQuantity?: number;
+    damagedQuantity?: number;
+    lostQuantity?: number;
+    kitComponents?: { quantityPerKit: number }[] | null;
+  }[],
 ): FairInventoryTotals {
   return items.reduce<FairInventoryTotals>(
-    (totals, item) => ({
-      allocated: totals.allocated + item.allocatedQuantity,
-      sold: totals.sold + item.soldQuantity,
-      returned: totals.returned + (item.returnedQuantity ?? 0),
-      damaged: totals.damaged + (item.damagedQuantity ?? 0),
-      lost: totals.lost + (item.lostQuantity ?? 0),
-    }),
-    { allocated: 0, sold: 0, returned: 0, damaged: 0, lost: 0 },
+    (totals, item) => {
+      const size = fairRowUnitSize(item);
+      return {
+        allocated: totals.allocated + item.allocatedQuantity,
+        sold: totals.sold + item.soldQuantity,
+        allocatedUnits: totals.allocatedUnits + item.allocatedQuantity * size,
+        returned: totals.returned + (item.returnedQuantity ?? 0) * size,
+        damaged: totals.damaged + (item.damagedQuantity ?? 0) * size,
+        lost: totals.lost + (item.lostQuantity ?? 0) * size,
+      };
+    },
+    { allocated: 0, sold: 0, allocatedUnits: 0, returned: 0, damaged: 0, lost: 0 },
   );
 }
 
@@ -194,6 +225,7 @@ export function getReconciliationRowState(
 }
 
 export interface ReconciliationSummary {
+  /** Unidades físicas (las piezas de cada kit): lo que vuelve o no al stock en línea. */
   returned: number;
   damaged: number;
   lost: number;
@@ -208,7 +240,12 @@ export interface ReconciliationSummary {
 
 /** Totales de la conciliación tal como está escrita ahora mismo, y si ya cuadra completa. */
 export function summarizeReconciliation(
-  items: { productId: string; allocatedQuantity: number; soldQuantity: number }[],
+  items: {
+    productId: string;
+    allocatedQuantity: number;
+    soldQuantity: number;
+    kitComponents?: { quantityPerKit: number }[] | null;
+  }[],
   counts: Record<string, ReconciliationCount | undefined>,
 ): ReconciliationSummary {
   let returned = 0;
@@ -223,9 +260,11 @@ export function summarizeReconciliation(
     if (state.status !== "balanced" && state.status !== "sold-out") unbalanced += 1;
     if (state.status === "untouched") untouched += 1;
     if (state.delta > 0) pending += state.delta;
-    returned += count?.returnedQuantity ?? 0;
-    damaged += count?.damagedQuantity ?? 0;
-    lost += count?.lostQuantity ?? 0;
+    // Se cuenta por fila (un kit es 1), pero el stock se mueve por pieza.
+    const size = fairRowUnitSize(item);
+    returned += (count?.returnedQuantity ?? 0) * size;
+    damaged += (count?.damagedQuantity ?? 0) * size;
+    lost += (count?.lostQuantity ?? 0) * size;
   }
   return { returned, damaged, lost, unbalanced, untouched, pending, balanced: unbalanced === 0 };
 }
