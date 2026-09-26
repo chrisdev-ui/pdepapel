@@ -5,6 +5,8 @@ import Link from "next/link";
 
 import { SectionCard } from "@/components/ui/section-card";
 
+import { KitRowDetail } from "./kit-row-detail";
+
 /** Lo que la feria dejó en el sistema, ya cerrada. Solo lectura. */
 export interface PhaseClosedProps {
   storeId: string;
@@ -20,6 +22,8 @@ export interface PhaseClosedProps {
     damagedQuantity: number;
     lostQuantity: number;
     product: { name: string; sku: string };
+    /** Piezas de un kit reservado; vacío o ausente en un producto suelto. */
+    kitComponents?: { name: string; quantityPerKit: number }[];
   }[];
   formatDate: (value: string | null) => string | null;
 }
@@ -54,8 +58,8 @@ export function PhaseClosed({
               Movimientos en el kardex
             </span>
             <span className="text-xs text-muted-foreground">
-              Reserva −{totals.allocated} · Devolución +
-              {totals.returned}, con referencia a esta feria.
+              Reserva −{totals.allocated} · Devolución +{totals.returned}, con
+              referencia a esta feria.
             </span>
           </Link>
           <a
@@ -79,8 +83,8 @@ export function PhaseClosed({
               ¿Faltó registrar ventas?
             </span>
             <span className="text-xs text-muted-foreground">
-              Conciliar con la plantilla desde Movimientos, ya con esta
-              feria elegida.
+              Conciliar con la plantilla desde Movimientos, ya con esta feria
+              elegida.
             </span>
           </Link>
         </div>
@@ -111,11 +115,21 @@ export function PhaseClosed({
                     <span className="block text-xs text-muted-foreground">
                       SKU {item.product.sku}
                     </span>
+                    <KitRowDetail
+                      components={item.kitComponents}
+                      className="mt-1"
+                    />
                   </td>
-                  <td className="px-2 py-2 text-right">{item.allocatedQuantity}</td>
+                  <td className="px-2 py-2 text-right">
+                    {item.allocatedQuantity}
+                  </td>
                   <td className="px-2 py-2 text-right">{item.soldQuantity}</td>
-                  <td className="px-2 py-2 text-right">{item.returnedQuantity}</td>
-                  <td className="px-2 py-2 text-right">{item.damagedQuantity}</td>
+                  <td className="px-2 py-2 text-right">
+                    {item.returnedQuantity}
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    {item.damagedQuantity}
+                  </td>
                   <td className="px-2 py-2 text-right">{item.lostQuantity}</td>
                 </tr>
               ))}

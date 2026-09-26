@@ -453,6 +453,8 @@ model Product {
   isKit         Boolean      @default(false)
   kitComponents ProductKit[] @relation("KitToComponent")
   componentIn   ProductKit[] @relation("ComponentToKit")
+  /// Ferias en las que este producto salió como pieza de un kit reservado.
+  fairKitComponentRows FairEventKitComponent[] @relation("FairKitComponentToProduct")
 
   // -- BI INTELLIGENCE --
   abcClassification String? // "A", "B", "C" or null
@@ -1634,9 +1636,31 @@ model FairEventInventoryItem {
 
   fairEvent FairEvent @relation(fields: [fairEventId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id])
+  /// Vacío en un producto suelto. En un kit, la receta congelada al reservar.
+  kitComponents FairEventKitComponent[]
 
   @@unique([fairEventId, productId])
   @@index([productId])
+}
+
+/// Un kit reservado para una feria: qué piezas se apartaron por cada kit,
+/// tal como decía la receta en el momento de reservar. La venta, la anulación
+/// y el cierre leen esta foto y nunca `ProductKit`, así que editar el kit a
+/// mitad de feria no cambia lo que la feria devuelve. Las unidades reales
+/// salieron del stock de cada componente (`FESTIVAL_ALLOCATION`); el kit no
+/// tiene stock propio (`recalculateKitStock` lo deriva).
+model FairEventKitComponent {
+  id                       String   @id @default(uuid())
+  fairEventInventoryItemId String
+  componentId              String
+  quantityPerKit           Int
+  createdAt                DateTime @default(now())
+
+  inventoryItem FairEventInventoryItem @relation(fields: [fairEventInventoryItemId], references: [id], onDelete: Cascade)
+  component     Product                @relation("FairKitComponentToProduct", fields: [componentId], references: [id])
+
+  @@unique([fairEventInventoryItemId, componentId])
+  @@index([componentId])
 }
 
 model FairCapsule {

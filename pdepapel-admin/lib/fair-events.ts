@@ -10,7 +10,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 import { movementActor } from "@/lib/movement-actor";
-import { ErrorFactory } from "@/lib/api-errors";
+import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { isPaymentProofForStore } from "@/lib/payment-proof-key";
 import {
   createInventoryMovementBatchResilient,
@@ -111,6 +111,230 @@ async function refreshAffectedKits(
   return kitIds;
 }
 
+/** Una pieza de la receta de un kit, tal como se leyó al reservar. */
+type KitRecipeLine = {
+  componentId: string;
+  quantityPerKit: number;
+  component: { id: string; name: string; price: unknown; acqPrice: unknown };
+};
+
+/**
+ * La receta con la que se puede reservar un kit: las mismas reglas que el
+ * Punto de venta exige para vender uno (piezas propias, activas, sin kits
+ * anidados, cantidades positivas).
+ */
+function assertReservableKitRecipe(
+  kit: {
+    name: string;
+    kitComponents: {
+      componentId: string;
+      quantity: number;
+      component: {
+        id: string;
+        name: string;
+        price: unknown;
+        acqPrice: unknown;
+        storeId: string;
+        isArchived: boolean;
+        isKit: boolean;
+      };
+    }[];
+  },
+  storeId: string,
+): KitRecipeLine[] {
+  if (kit.kitComponents.length === 0) {
+    throw ErrorFactory.InvalidRequest(
+      `El kit “${kit.name}” no tiene productos configurados`,
+    );
+  }
+  for (const line of kit.kitComponents) {
+    if (
+      line.quantity <= 0 ||
+      line.component.storeId !== storeId ||
+      line.component.isArchived ||
+      line.component.isKit
+    ) {
+      throw ErrorFactory.InvalidRequest(
+        `El kit “${kit.name}” tiene una configuración de inventario no válida`,
+      );
+    }
+  }
+  return kit.kitComponents.map((line) => ({
+    componentId: line.componentId,
+    quantityPerKit: line.quantity,
+    component: line.component,
+  }));
+}
+
+/** ¿La receta viva es exactamente la foto que guardó la feria? */
+export function kitRecipeMatchesSnapshot(
+  recipe: { componentId: string; quantityPerKit: number }[],
+  snapshot: { componentId: string; quantityPerKit: number }[],
+): boolean {
+  if (recipe.length !== snapshot.length) return false;
+  const byComponent = new Map(
+    snapshot.map((line) => [line.componentId, line.quantityPerKit]),
+  );
+  return recipe.every(
+    (line) => byComponent.get(line.componentId) === line.quantityPerKit,
+  );
+}
+
+/**
+ * Las piezas de las recetas congeladas, leídas aparte de la relación. Con
+ * `relationMode = "prisma"` un `include` sobre una pieza que ya no existe
+ * hace fallar la consulta entera; leyéndolas así, una pieza desaparecida es
+ * un hueco en el mapa (costo cero, incidencia al cerrar), no una feria que no
+ * se puede cerrar ni abrir.
+ */
+async function loadKitComponentProducts(
+  tx: TransactionClient | typeof prismadb,
+  componentIds: string[],
+) {
+  const ids = Array.from(new Set(componentIds));
+  if (ids.length === 0) {
+    return new Map<
+      string,
+      { id: string; name: string; sku: string; acqPrice: unknown; price: unknown }
+    >();
+  }
+  const products = await tx.product.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, sku: true, acqPrice: true, price: true },
+  });
+  return new Map(products.map((product) => [product.id, product]));
+}
+
+/** Costo de una unidad de kit: la suma de sus piezas, como en el Punto de venta. */
+export function kitLineCost(
+  lines: { quantityPerKit: number; component: { acqPrice: unknown } }[],
+): number {
+  return lines.reduce(
+    (total, line) =>
+      total + Number(line.component.acqPrice || 0) * line.quantityPerKit,
+    0,
+  );
+}
+
+/**
+ * Descuenta `units` del stock de un producto con guardia atómica y devuelve
+ * el stock previo real. Se relee justo antes porque una misma pieza puede
+ * salir dos veces en la misma reserva (suelta y dentro de un kit, o en dos
+ * kits): el valor de la consulta inicial ya estaría viejo para el kardex.
+ */
+async function takeStockForFair(
+  tx: TransactionClient,
+  storeId: string,
+  productId: string,
+  units: number,
+): Promise<{ previousStock: number } | null> {
+  const before = await tx.product.findFirst({
+    where: { id: productId, storeId },
+    select: { stock: true },
+  });
+  if (!before) return null;
+  const update = await tx.product.updateMany({
+    where: { id: productId, storeId, stock: { gte: units } },
+    data: { stock: { decrement: units } },
+  });
+  if (update.count !== 1) return null;
+  return { previousStock: before.stock };
+}
+
+/**
+ * Reserva `quantity` kits para la feria: aparta cada pieza del stock en línea
+ * (movimiento por componente, nunca sobre el kit), deja una sola línea de
+ * feria para el kit y congela la receta. Si el kit ya estaba reservado, la
+ * receta viva tiene que ser la misma foto: los kits ya armados llevan la
+ * receta de entonces.
+ */
+async function reserveKitForFair({
+  tx,
+  storeId,
+  fairEvent,
+  kit,
+  recipe,
+  quantity,
+  userId,
+}: {
+  tx: TransactionClient;
+  storeId: string;
+  fairEvent: { id: string; name: string };
+  kit: { id: string; name: string };
+  recipe: KitRecipeLine[];
+  quantity: number;
+  userId: string;
+}) {
+  const existing = await tx.fairEventInventoryItem.findUnique({
+    where: {
+      fairEventId_productId: { fairEventId: fairEvent.id, productId: kit.id },
+    },
+    include: { kitComponents: true },
+  });
+  if (existing && !kitRecipeMatchesSnapshot(recipe, existing.kitComponents)) {
+    throw ErrorFactory.Conflict(
+      `La receta de “${kit.name}” cambió desde que se reservó para esta feria. Los kits ya reservados conservan la receta de entonces; para reservar más con la receta nueva, cierra esta feria y hazlo en una nueva.`,
+    );
+  }
+
+  for (const line of recipe) {
+    const units = quantity * line.quantityPerKit;
+    const taken = await takeStockForFair(tx, storeId, line.componentId, units);
+    if (!taken) {
+      const current = await tx.product.findUnique({
+        where: { id: line.componentId },
+        select: { stock: true },
+      });
+      const stock = current?.stock ?? 0;
+      const possible = Math.floor(stock / line.quantityPerKit);
+      throw new AppError(
+        `Solo alcanza para ${possible} ${possible === 1 ? "kit" : "kits"} de “${kit.name}”: «${line.component.name}» tiene ${stock} y cada kit lleva ${line.quantityPerKit}`,
+        422,
+        { productId: line.componentId, available: stock, requested: units },
+      );
+    }
+    await tx.inventoryMovement.create({
+      data: {
+        storeId,
+        productId: line.componentId,
+        type: InventoryMovementType.FESTIVAL_ALLOCATION,
+        quantity: -units,
+        previousStock: taken.previousStock,
+        newStock: taken.previousStock - units,
+        cost:
+          line.component.acqPrice == null
+            ? undefined
+            : Number(line.component.acqPrice),
+        price: Number(line.component.price || 0),
+        reason: `Asignado a feria: ${fairEvent.name} · kit «${kit.name}» × ${quantity}`,
+        referenceId: fairEvent.id,
+        createdBy: movementActor(userId),
+      },
+    });
+  }
+
+  const row = await tx.fairEventInventoryItem.upsert({
+    where: {
+      fairEventId_productId: { fairEventId: fairEvent.id, productId: kit.id },
+    },
+    create: {
+      fairEventId: fairEvent.id,
+      productId: kit.id,
+      allocatedQuantity: quantity,
+    },
+    update: { allocatedQuantity: { increment: quantity } },
+  });
+  if (!existing) {
+    await tx.fairEventKitComponent.createMany({
+      data: recipe.map((line) => ({
+        fairEventInventoryItemId: row.id,
+        componentId: line.componentId,
+        quantityPerKit: line.quantityPerKit,
+      })),
+    });
+  }
+}
+
 export async function getFairEventDetail(storeId: string, fairEventId: string) {
   const fairEvent = await prismadb.fairEvent.findFirst({
     where: { id: fairEventId, storeId },
@@ -126,8 +350,13 @@ export async function getFairEventDetail(storeId: string, fairEventId: string) {
               price: true,
               acqPrice: true,
               gtin: true,
+              isKit: true,
               images: { orderBy: { isMain: "desc" }, take: 1 },
             },
+          },
+          kitComponents: {
+            select: { componentId: true, quantityPerKit: true },
+            orderBy: { createdAt: "asc" },
           },
         },
         orderBy: { product: { name: "asc" } },
@@ -157,7 +386,28 @@ export async function getFairEventDetail(storeId: string, fairEventId: string) {
   });
 
   if (!fairEvent) throw ErrorFactory.NotFound("Feria no encontrada");
-  return fairEvent;
+  const components = await loadKitComponentProducts(
+    prismadb,
+    fairEvent.inventoryItems.flatMap((item) =>
+      item.kitComponents.map((line) => line.componentId),
+    ),
+  );
+  return {
+    ...fairEvent,
+    inventoryItems: fairEvent.inventoryItems.map((item) => ({
+      ...item,
+      kitComponents: item.kitComponents.map((line) => ({
+        ...line,
+        component: components.get(line.componentId) ?? {
+          id: line.componentId,
+          name: "Producto eliminado",
+          sku: "",
+          acqPrice: null,
+          price: null,
+        },
+      })),
+    })),
+  };
 }
 
 export async function allocateFairInventory({
@@ -209,11 +459,30 @@ export async function allocateFairInventory({
         price: true,
         acqPrice: true,
         isKit: true,
+        kitComponents: {
+          select: {
+            componentId: true,
+            quantity: true,
+            component: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                acqPrice: true,
+                storeId: true,
+                isArchived: true,
+                isKit: true,
+              },
+            },
+          },
+        },
       },
     });
     const productsById = new Map(
       products.map((product) => [product.id, product]),
     );
+    /** Piezas cuyo stock cambió por un kit: sus kits se recalculan al final. */
+    const touchedComponentIds = new Set<string>();
 
     for (const [productId, quantity] of Array.from(
       aggregatedAllocations.entries(),
@@ -221,19 +490,29 @@ export async function allocateFairInventory({
       const product = productsById.get(productId);
       if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
       if (product.isKit) {
-        throw ErrorFactory.InvalidRequest(
-          `“${product.name}” es un kit y no se puede reservar directamente para una feria. Reserva sus productos físicos por separado.`,
-        );
+        const recipe = assertReservableKitRecipe(product, storeId);
+        await reserveKitForFair({
+          tx,
+          storeId,
+          fairEvent,
+          kit: product,
+          recipe,
+          quantity,
+          userId,
+        });
+        recipe.forEach((line) => touchedComponentIds.add(line.componentId));
+        continue;
       }
 
-      const stockUpdate = await tx.product.updateMany({
-        where: { id: productId, storeId, stock: { gte: quantity } },
-        data: { stock: { decrement: quantity } },
-      });
-      if (stockUpdate.count !== 1) {
+      const taken = await takeStockForFair(tx, storeId, productId, quantity);
+      if (!taken) {
+        const current = await tx.product.findUnique({
+          where: { id: productId },
+          select: { stock: true },
+        });
         throw ErrorFactory.InsufficientStock(
           product.name,
-          product.stock,
+          current?.stock ?? product.stock,
           quantity,
         );
       }
@@ -256,8 +535,8 @@ export async function allocateFairInventory({
           productId,
           type: InventoryMovementType.FESTIVAL_ALLOCATION,
           quantity: -quantity,
-          previousStock: product.stock,
-          newStock: product.stock - quantity,
+          previousStock: taken.previousStock,
+          newStock: taken.previousStock - quantity,
           cost: product.acqPrice ?? undefined,
           price: product.price,
           reason: `Asignado a feria: ${fairEvent.name}`,
@@ -267,8 +546,14 @@ export async function allocateFairInventory({
       });
     }
 
-    const kitIds = await refreshAffectedKits(tx, productIds);
-    await queueMarketplaceStockSyncEvents(tx, [...productIds, ...kitIds]);
+    const touched = Array.from(
+      new Set([...productIds, ...Array.from(touchedComponentIds)]),
+    );
+    const kitIds = await refreshAffectedKits(tx, touched);
+    await queueMarketplaceStockSyncEvents(
+      tx,
+      Array.from(new Set([...touched, ...kitIds])),
+    );
   });
 }
 
@@ -398,6 +683,11 @@ export async function packFairCapsules({
     if (!eventItem) {
       throw ErrorFactory.InvalidRequest(
         "El producto debe estar asignado a esta feria antes de empacar cápsulas",
+      );
+    }
+    if (eventItem.product.isKit) {
+      throw ErrorFactory.InvalidRequest(
+        "Las cápsulas se empacan con productos físicos; un kit no se puede empacar en cápsulas",
       );
     }
 
@@ -548,6 +838,9 @@ export async function createFairSale({
                 images: { orderBy: { isMain: "desc" }, take: 1 },
               },
             },
+            kitComponents: {
+              select: { componentId: true, quantityPerKit: true },
+            },
           },
         },
       },
@@ -610,6 +903,12 @@ export async function createFairSale({
     const eventItemsByProduct = new Map(
       fairEvent.inventoryItems.map((item) => [item.productId, item]),
     );
+    const kitComponentProducts = await loadKitComponentProducts(
+      tx,
+      fairEvent.inventoryItems.flatMap((item) =>
+        (item.kitComponents ?? []).map((line) => line.componentId),
+      ),
+    );
     const saleQuantities = new Map<
       string,
       { direct: number; capsules: number }
@@ -656,7 +955,17 @@ export async function createFairSale({
           sku: eventItem.product.sku,
           imageUrl: eventItem.product.images[0]?.url || "",
           price: Number(eventItem.product.price),
-          cost: Number(eventItem.product.acqPrice || 0),
+          // Un kit no tiene costo propio: vale lo que valen sus piezas.
+          cost: eventItem.product.isKit
+            ? kitLineCost(
+                (eventItem.kitComponents ?? []).map((line) => ({
+                  quantityPerKit: line.quantityPerKit,
+                  component: kitComponentProducts.get(line.componentId) ?? {
+                    acqPrice: null,
+                  },
+                })),
+              )
+            : Number(eventItem.product.acqPrice || 0),
         };
       },
     );
@@ -888,7 +1197,14 @@ export async function reconcileFairEvent({
     const fairEvent = await tx.fairEvent.findFirst({
       where: { id: fairEventId, storeId },
       include: {
-        inventoryItems: { include: { product: true } },
+        inventoryItems: {
+          include: {
+            product: true,
+            kitComponents: {
+              select: { componentId: true, quantityPerKit: true },
+            },
+          },
+        },
       },
     });
     if (!fairEvent) throw ErrorFactory.NotFound("Feria no encontrada");
@@ -938,22 +1254,49 @@ export async function reconcileFairEvent({
     // una no puede (producto borrado en medio de la feria) la feria se cierra
     // igual y la deuda queda como incidencia en Movimientos, en vez de dejar
     // la feria abierta para siempre.
+    const kitComponentProducts = await loadKitComponentProducts(
+      tx,
+      fairEvent.inventoryItems.flatMap((item) =>
+        (item.kitComponents ?? []).map((line) => line.componentId),
+      ),
+    );
     const returnMovements: CreateInventoryMovementParams[] = [];
     for (const inventoryItem of fairEvent.inventoryItems) {
       const reconciliation = itemsByProduct.get(inventoryItem.productId)!;
-      if (reconciliation.returnedQuantity > 0) {
-        returnMovements.push({
-          productId: inventoryItem.productId,
-          storeId,
-          type: InventoryMovementType.FESTIVAL_RETURN,
-          quantity: reconciliation.returnedQuantity,
-          reason: `Devuelto de feria: ${fairEvent.name}`,
-          referenceId: fairEventId,
-          cost: Number(inventoryItem.product.acqPrice) || 0,
-          price: Number(inventoryItem.product.price) || 0,
-          createdBy: movementActor(userId),
-        });
+      if (reconciliation.returnedQuantity <= 0) continue;
+      const kitLines = inventoryItem.kitComponents ?? [];
+      if (kitLines.length > 0) {
+        // Un kit devuelto devuelve sus piezas, con la receta congelada al
+        // reservar: nada se escribe sobre el kit, que no tiene stock propio.
+        for (const line of kitLines) {
+          // Una pieza que ya no existe entra igual al lote: el helper la
+          // reporta como «Producto no encontrado» y queda como incidencia.
+          const component = kitComponentProducts.get(line.componentId);
+          returnMovements.push({
+            productId: line.componentId,
+            storeId,
+            type: InventoryMovementType.FESTIVAL_RETURN,
+            quantity: reconciliation.returnedQuantity * line.quantityPerKit,
+            reason: `Devuelto de feria: ${fairEvent.name} · kit «${inventoryItem.product.name}» × ${reconciliation.returnedQuantity}`,
+            referenceId: fairEventId,
+            cost: Number(component?.acqPrice) || 0,
+            price: Number(component?.price) || 0,
+            createdBy: movementActor(userId),
+          });
+        }
+        continue;
       }
+      returnMovements.push({
+        productId: inventoryItem.productId,
+        storeId,
+        type: InventoryMovementType.FESTIVAL_RETURN,
+        quantity: reconciliation.returnedQuantity,
+        reason: `Devuelto de feria: ${fairEvent.name}`,
+        referenceId: fairEventId,
+        cost: Number(inventoryItem.product.acqPrice) || 0,
+        price: Number(inventoryItem.product.price) || 0,
+        createdBy: movementActor(userId),
+      });
     }
     const returns = await createInventoryMovementBatchResilient(
       tx,
@@ -983,7 +1326,14 @@ export async function reconcileFairEvent({
       where: { fairEventId, status: FairCapsuleStatus.PACKED },
       data: { status: FairCapsuleStatus.VOID, voidedAt: new Date() },
     });
-    const productIds = fairEvent.inventoryItems.map((item) => item.productId);
+    const productIds = Array.from(
+      new Set(
+        fairEvent.inventoryItems.flatMap((item) => [
+          item.productId,
+          ...(item.kitComponents ?? []).map((line) => line.componentId),
+        ]),
+      ),
+    );
     const kitIds = await refreshAffectedKits(
       tx,
       productIds,

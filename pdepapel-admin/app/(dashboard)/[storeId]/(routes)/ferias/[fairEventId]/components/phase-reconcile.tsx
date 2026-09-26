@@ -15,6 +15,7 @@ import {
 } from "@/lib/fair-phases";
 
 import { TintBadge } from "../../../pedidos/components/order-badges";
+import { KitRowDetail } from "./kit-row-detail";
 
 /** Lo que la conciliación necesita de cada renglón de la feria. */
 export interface ReconcileItem {
@@ -27,6 +28,8 @@ export interface ReconcileItem {
   damagedQuantity: number;
   lostQuantity: number;
   product: { name: string; sku: string };
+  /** Piezas de un kit reservado; vacío o ausente en un producto suelto. */
+  kitComponents?: { name: string; quantityPerKit: number }[];
 }
 
 export interface PhaseReconcileProps {
@@ -176,6 +179,10 @@ export function PhaseReconcile({
                   {item.packedQuantity > 0 &&
                     ` · ${item.packedQuantity} en cápsulas empacadas`}
                 </p>
+                <KitRowDetail
+                  components={item.kitComponents}
+                  className="mt-1"
+                />
               </div>
               <div className="shrink-0 xl:order-last xl:text-right">
                 <TintBadge label={state.label} tone={state.tone} />

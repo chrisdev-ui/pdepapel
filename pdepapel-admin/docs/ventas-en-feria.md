@@ -43,6 +43,7 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 ## Qué no hace falta configurar
 
 - No hay que crear productos adicionales para cápsulas.
+- **Kits:** se reservan como kit. El panel aparta del stock en línea las piezas de cada kit (movimientos `FESTIVAL_ALLOCATION` sobre los componentes, nunca sobre el kit) con la receta del momento, la feria los muestra como una sola línea «Kit · N piezas», se venden a su precio escaneando el kit y, al cerrar, cada kit devuelto regresa sus piezas (`FESTIVAL_RETURN` por componente). Si la receta cambia con la feria abierta, no se pueden reservar más unidades de ese kit hasta cerrarla. Un kit no se empaca en cápsulas.
 - No hay que modificar manualmente los pedidos que se generan en feria.
 - No hay que cambiar la configuración de pagos en línea: las ventas presenciales usan efectivo o transferencia y quedan pagadas al confirmarlas.
 - El comprobante adjunto se guarda en un bucket **privado** de Cloudflare R2 (no en Cloudinary, ni como archivo público) y solo se ve desde el pedido con la sesión de la dueña, en **Pedidos → Pago → Ver comprobante** o desde **Últimas ventas → Comprobante**. La cuenta de solo lectura no lo ve. Si las variables `CLOUDFLARE_R2_*` no están configuradas en el panel, el botón de adjuntar no aparece y la venta funciona igual. Antes de desplegar esta versión hay que aplicar la migración `20260926_add_payment_proof_key.sql`.

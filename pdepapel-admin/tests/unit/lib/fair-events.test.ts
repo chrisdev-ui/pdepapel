@@ -7,6 +7,7 @@ const { prisma, resilientBatch, recordIssues, queueSync } = vi.hoisted(() => {
     fairCapsule: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     fairEventInventoryItem: { updateMany: vi.fn(), update: vi.fn() },
     productKit: { findMany: vi.fn() },
+    product: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(
@@ -44,11 +45,31 @@ import {
   cancelFairSale,
   getCapsuleMargin,
   getFairStockAvailability,
+  kitLineCost,
+  kitRecipeMatchesSnapshot,
   reconcileFairEvent,
   reopenFairEvent,
   resolveFairSalePayment,
   startFairReconciliation,
 } from "@/lib/fair-events";
+
+describe("kit helpers", () => {
+  it("matches a recipe only when every piece and quantity is the same", () => {
+    const snapshot = [{ componentId: "a", quantityPerKit: 2 }, { componentId: "b", quantityPerKit: 1 }];
+    expect(kitRecipeMatchesSnapshot([{ componentId: "b", quantityPerKit: 1 }, { componentId: "a", quantityPerKit: 2 }], snapshot)).toBe(true);
+    expect(kitRecipeMatchesSnapshot([{ componentId: "a", quantityPerKit: 3 }, { componentId: "b", quantityPerKit: 1 }], snapshot)).toBe(false);
+    expect(kitRecipeMatchesSnapshot([{ componentId: "a", quantityPerKit: 2 }], snapshot)).toBe(false);
+    expect(kitRecipeMatchesSnapshot([...snapshot, { componentId: "c", quantityPerKit: 1 }], snapshot)).toBe(false);
+  });
+
+  it("costs a kit line as the sum of its pieces", () => {
+    expect(kitLineCost([
+      { quantityPerKit: 2, component: { acqPrice: 4000 } },
+      { quantityPerKit: 1, component: { acqPrice: null } },
+      { quantityPerKit: 3, component: { acqPrice: "500" } },
+    ])).toBe(9500);
+  });
+});
 
 const proofKey = "comprobantes/store-1/0f3a9c1e-7b2d-4c8e-9a1f-2b3c4d5e6f70.jpg";
 
@@ -229,6 +250,60 @@ describe("fair reconciliation phase", () => {
     expect(resilientBatch.mock.calls[0][1]).toHaveLength(1);
   });
 
+  it("returns a kit's pieces per component from the frozen recipe, never the kit itself", async () => {
+    prisma.fairEvent.findFirst.mockResolvedValueOnce({
+      id: "fair-1",
+      name: "Feria",
+      status: "RECONCILING",
+      inventoryItems: [
+        {
+          id: "item-kit",
+          productId: "kit-1",
+          allocatedQuantity: 3,
+          soldQuantity: 1,
+          product: { id: "kit-1", name: "Kit de arte", stock: 0, acqPrice: null, price: 45000 },
+          kitComponents: [
+            { componentId: "c1", quantityPerKit: 2 },
+            { componentId: "c2", quantityPerKit: 1 },
+          ],
+        },
+        {
+          id: "item-loose",
+          productId: "p1",
+          allocatedQuantity: 2,
+          soldQuantity: 0,
+          product: { id: "p1", name: "Cuaderno", stock: 10, acqPrice: 4000, price: 9000 },
+          kitComponents: [],
+        },
+      ],
+    });
+    prisma.product.findMany.mockResolvedValueOnce([
+      { id: "c1", name: "Pinceles", sku: "PIN", acqPrice: 4000, price: 9000 },
+      { id: "c2", name: "Bitácora", sku: "BIT", acqPrice: 6000, price: 15000 },
+    ]);
+    resilientBatch.mockResolvedValueOnce({ success: [], failed: [] });
+    await reconcileFairEvent({
+      storeId: "s",
+      fairEventId: "fair-1",
+      items: [
+        { productId: "kit-1", returnedQuantity: 2, damagedQuantity: 0, lostQuantity: 0 },
+        { productId: "p1", returnedQuantity: 1, damagedQuantity: 1, lostQuantity: 0 },
+      ],
+      userId: "u",
+    });
+    const movements = resilientBatch.mock.calls[0][1] as { productId: string; quantity: number; reason: string; cost: number; price: number }[];
+    expect(movements).toEqual([
+      expect.objectContaining({ productId: "c1", quantity: 4, cost: 4000, price: 9000, reason: expect.stringContaining("kit «Kit de arte» × 2") }),
+      expect.objectContaining({ productId: "c2", quantity: 2, cost: 6000, price: 15000 }),
+      expect.objectContaining({ productId: "p1", quantity: 1 }),
+    ]);
+    expect(movements.some((movement) => movement.productId === "kit-1")).toBe(false);
+    // Los kits que contienen esas piezas se recalculan con las piezas, no solo con la fila del kit.
+    expect(prisma.productKit.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { componentId: { in: expect.arrayContaining(["kit-1", "c1", "c2", "p1"]) } } }),
+    );
+  });
+
   it("does not reconcile a count that leaves units unexplained", async () => {
     prisma.fairEvent.findFirst.mockResolvedValueOnce({
       id: "fair-1",
@@ -308,6 +383,25 @@ describe("cancelFairSale", () => {
     expect(result).toMatchObject({ status: "CANCELLED", paidAt: null });
     expect(resilientBatch).not.toHaveBeenCalled();
     expect(queueSync).not.toHaveBeenCalled();
+  });
+
+  it("cancels a kit sale by returning the kit row's counter only, with nothing per component", async () => {
+    prisma.fairEvent.findFirst.mockResolvedValueOnce({ id: "fair-1", status: "OPEN", name: "F" });
+    prisma.order.findFirst.mockResolvedValueOnce({
+      id: "o-kit",
+      type: "FESTIVAL",
+      status: "PAID",
+      adminNotes: "",
+      orderItems: [{ id: "oi-kit", productId: "kit-1", quantity: 1 }],
+    });
+    await cancelFairSale({ storeId: "s", fairEventId: "fair-1", orderId: "o-kit", userId: "u" });
+    expect(prisma.fairEventInventoryItem.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.fairEventInventoryItem.updateMany).toHaveBeenCalledWith({
+      where: { fairEventId: "fair-1", productId: "kit-1", soldQuantity: { gte: 1 } },
+      data: { soldQuantity: { decrement: 1 } },
+    });
+    // El mock de Prisma no tiene inventoryMovement ni productKit aquí: cualquier escritura por pieza habría explotado.
+    expect(prisma.order.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "CANCELLED", paidAt: null }) }));
   });
 
   it("is a no-op for a sale that is already cancelled", async () => {

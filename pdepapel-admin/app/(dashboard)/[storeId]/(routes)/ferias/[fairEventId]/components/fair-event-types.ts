@@ -13,7 +13,16 @@ export type FairProduct = {
   price: number;
   acqPrice: number | null;
   gtin: string | null;
+  isKit: boolean;
   images: { url: string }[];
+};
+
+/** Una pieza de un kit reservado, con la receta congelada al reservar. */
+export type FairKitComponentLine = {
+  componentId: string;
+  name: string;
+  sku: string;
+  quantityPerKit: number;
 };
 
 export type FairInventoryItem = {
@@ -26,6 +35,8 @@ export type FairInventoryItem = {
   damagedQuantity: number;
   lostQuantity: number;
   product: FairProduct;
+  /** Vacío en un producto suelto. */
+  kitComponents: FairKitComponentLine[];
 };
 
 export type FairCapsule = {

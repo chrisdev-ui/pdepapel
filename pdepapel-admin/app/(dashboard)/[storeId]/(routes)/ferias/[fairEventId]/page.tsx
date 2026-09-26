@@ -62,8 +62,15 @@ export default async function FairEventPage({
         price: Number(item.product.price),
         acqPrice: toNumberOrNull(item.product.acqPrice),
         gtin: item.product.gtin,
+        isKit: item.product.isKit,
         images: item.product.images,
       },
+      kitComponents: item.kitComponents.map((line) => ({
+        componentId: line.componentId,
+        name: line.component.name,
+        sku: line.component.sku,
+        quantityPerKit: line.quantityPerKit,
+      })),
     })),
     capsules: fairEvent.capsules.map((capsule) => ({
       id: capsule.id,

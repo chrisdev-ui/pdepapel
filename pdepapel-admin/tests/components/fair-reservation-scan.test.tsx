@@ -53,16 +53,16 @@ afterEach(() => {
  * lector y su propio QR, sin tocar.
  */
 describe("Ferias · escanear producto para reservar", () => {
-  it("leaves the scanned product pending to reserve, and refuses a kit like the picker does", () => {
+  it("leaves the scanned product pending to reserve, and accepts a kit as a kit", () => {
     render(<FairEventWorkspace event={event} paymentProofEnabled={false} />);
     const scan = screen.getByRole("button", { name: "Escanear producto para reservar" });
     fireEvent.click(scan);
     expect(screen.getByLabelText("Producto para reservar").textContent).toBe("p-scan");
-    // Los kits no se reservan: se reservan sus componentes, igual que al elegirlo de la lista.
+    // Un kit se reserva como kit: el servidor aparta sus piezas; aquí solo queda elegido.
     mocks.scanned = { ...mocks.scanned, id: "kit-1", name: "Kit escolar", isKit: true };
     fireEvent.click(scan);
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Reserva los productos físicos del kit", variant: "destructive" }));
-    expect(screen.getByLabelText("Producto para reservar").textContent).toBe("p-scan");
+    expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
+    expect(screen.getByLabelText("Producto para reservar").textContent).toBe("kit-1");
     // Ningún escáner nuevo se cuelga de la cápsula: su QR es de la venta.
     expect(screen.queryByRole("button", { name: /cápsula/i })).toBeNull();
   });

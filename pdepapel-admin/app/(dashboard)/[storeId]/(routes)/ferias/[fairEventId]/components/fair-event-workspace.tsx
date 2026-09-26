@@ -526,17 +526,12 @@ export function FairEventWorkspace({
   );
 
   // Fuente de la pantalla de venta compartida: solo productos reservados en la feria y cápsulas con QR.
-  /** Elegido de la lista o escaneado: los kits no se reservan, se reservan sus componentes. */
+  /**
+   * Elegido de la lista o escaneado. Un kit se reserva como kit: el servidor
+   * aparta sus piezas del stock en línea y la feria lo trata como una sola
+   * línea; `stock` en un kit ya es «cuántos kits alcanzan».
+   */
   const chooseReservationProduct = (product: AsyncProductOption) => {
-    if (product.isKit) {
-      toast({
-        title: "Reserva los productos físicos del kit",
-        description:
-          "Los kits calculan su inventario desde sus componentes y no se reservan directamente para una feria.",
-        variant: "destructive",
-      });
-      return;
-    }
     setPendingProduct({
       id: product.id,
       name: product.name,
@@ -726,8 +721,9 @@ export function FairEventWorkspace({
                 <ProductScanButton compact label="Escanear producto para reservar" onFound={chooseReservationProduct} />
               </div>
               <p className="text-xs text-muted-foreground">
-                Los kits se venden en Punto de venta, pero a una feria solo se
-                reservan sus componentes: busca cada producto físico del kit.
+                Un kit se reserva como kit: el panel aparta sus piezas del
+                stock en línea y las devuelve al cerrar. Se vende y se concilia
+                como una sola unidad.
               </p>
             </div>
             <div className="grid gap-2">
@@ -759,8 +755,11 @@ export function FairEventWorkspace({
                   className="flex items-center justify-between gap-3 text-sm"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-medium">
-                      {allocation.product.name}
+                    <p className="flex flex-wrap items-center gap-2 font-medium">
+                      <span className="truncate">{allocation.product.name}</span>
+                      {allocation.product.isKit && (
+                        <TintBadge tone="lavender" label="Kit" className="text-[11px]" />
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       SKU: {allocation.product.sku}
@@ -821,12 +820,15 @@ export function FairEventWorkspace({
                 aria-label="Producto reservado para la cápsula"
                 value={capsuleProductId || null}
                 onChange={(value) => setCapsuleProductId(value ?? "")}
-                options={availableItems.map((item) => ({
-                  value: item.productId,
-                  label: item.product.name,
-                  description: `${getFairStockAvailability(item)} disponibles · SKU ${item.product.sku}`,
-                  keywords: [item.product.sku],
-                }))}
+                options={availableItems
+                  // Una cápsula lleva un producto físico con su costo; un kit no se empaca.
+                  .filter((item) => !item.product.isKit)
+                  .map((item) => ({
+                    value: item.productId,
+                    label: item.product.name,
+                    description: `${getFairStockAvailability(item)} disponibles · SKU ${item.product.sku}`,
+                    keywords: [item.product.sku],
+                  }))}
                 placeholder="Seleccionar producto"
                 searchPlaceholder="Nombre o SKU"
                 emptyText="Ningún producto reservado coincide."

@@ -126,4 +126,36 @@ describe("conciliación: contar, no confirmar", () => {
     expect(screen.getByRole("button", { name: /Todo volvió intacto/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Cerrar la feria/i })).toBeDisabled();
   });
+
+  it("una fila de kit dice cuántas piezas lleva y cuáles", () => {
+    const kitItems = [
+      {
+        ...items[0],
+        product: { name: "Kit de arte básico", sku: "KIT-1" },
+        kitComponents: [
+          { name: "Acuarelas", quantityPerKit: 1 },
+          { name: "Pinceles", quantityPerKit: 2 },
+        ],
+      },
+    ];
+    render(
+      <PhaseReconcile
+        storeId="store-1"
+        fairEventId="f1"
+        items={kitItems}
+        counts={zeroed}
+        summary={summarizeReconciliation(kitItems, zeroed)}
+        packedCapsules={0}
+        canWrite
+        isReconciling={false}
+        onChange={vi.fn()}
+        onAssumeIntact={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Kit · 3 piezas")).toBeInTheDocument();
+    expect(screen.getByText("1 × Acuarelas · 2 × Pinceles")).toBeInTheDocument();
+    // La fila sigue contando kits enteros: reservados y vendidos no cambian.
+    expect(screen.getByRole("spinbutton", { name: "Unidades que volvieron bien de Kit de arte básico" })).toBeInTheDocument();
+  });
 });
