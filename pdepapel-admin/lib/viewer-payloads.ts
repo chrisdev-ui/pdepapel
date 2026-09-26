@@ -72,6 +72,12 @@ export function scrubProducts<T extends AnyRecord>(products: T[]): T[] {
 export function scrubOrder<T extends AnyRecord | null | undefined>(order: T): T {
   if (!order) return order;
   const clean = omit(order as AnyRecord, VIEWER_HIDDEN_ORDER_FIELDS);
+  // El comprobante de una transferencia trae datos bancarios de la clienta:
+  // la cuenta de solo lectura no ve ni el enlace (la ruta que lo sirve
+  // tampoco se lo daría).
+  if (clean.payment && typeof clean.payment === "object") {
+    clean.payment = { ...(clean.payment as AnyRecord), proofKey: null };
+  }
   const items = clean.orderItems;
   if (Array.isArray(items)) {
     clean.orderItems = items.map((item) => {

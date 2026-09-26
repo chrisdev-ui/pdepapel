@@ -17,7 +17,8 @@ export async function POST(
   try {
     const userId = await requireStoreOwner(params.storeId);
 
-    const { items, paymentMethod, idempotencyKey } = await req.json();
+    const { items, paymentMethod, idempotencyKey, transactionId, proofKey } =
+      await req.json();
     if (!Array.isArray(items)) {
       throw ErrorFactory.InvalidRequest(
         "Los productos de la venta son requeridos",
@@ -35,6 +36,8 @@ export async function POST(
         paymentMethod,
         idempotencyKey,
         userId,
+        transactionId: typeof transactionId === "string" ? transactionId : null,
+        proofKey: typeof proofKey === "string" ? proofKey : null,
       }),
       { status: 201 },
     );

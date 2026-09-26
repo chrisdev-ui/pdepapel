@@ -31,6 +31,7 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import { Copy, CreditCard, Link2, Loader2, Smartphone } from "lucide-react";
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
@@ -259,6 +260,28 @@ export function PaymentCard({
                 </FormItem>
               )}
             />
+          )}
+          {initialData?.payment?.proofKey && (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-medium">Comprobante</p>
+              {/* La imagen llega por la ruta con sesión desde el bucket privado; no existe URL pública. */}
+              <a
+                href={`/api/${storeId}/orders/${initialData.id}/payment-proof`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-accent/40"
+              >
+                <Image
+                  src={`/api/${storeId}/orders/${initialData.id}/payment-proof`}
+                  alt="Comprobante de la transferencia"
+                  width={64}
+                  height={64}
+                  unoptimized
+                  className="h-16 w-16 shrink-0 rounded-md border object-cover"
+                />
+                <span className="text-sm underline underline-offset-4">Ver comprobante</span>
+              </a>
+            </div>
           )}
         </div>
       )}

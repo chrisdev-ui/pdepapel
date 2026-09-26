@@ -109,13 +109,23 @@ describe("recorte para cuentas de solo lectura", () => {
       id: "f-1",
       name: "Feria",
       inventoryItems: [{ id: "i", allocatedQuantity: 3, product: { id: "p", name: "X", acqPrice: 900 } }],
-      orders: [{ id: "o", total: 1000, fullName: "Ana", phone: "300" }],
+      orders: [
+        {
+          id: "o",
+          total: 1000,
+          fullName: "Ana",
+          phone: "300",
+          payment: { method: "BankTransfer", proofKey: "comprobantes/s/0f3a9c1e-7b2d-4c8e-9a1f-2b3c4d5e6f70.jpg" },
+        },
+      ],
     };
     const clean = scrubFairEvent(detail) as Record<string, any>;
     expect(clean.inventoryItems[0].product).not.toHaveProperty("acqPrice");
     expect(clean.inventoryItems[0]).toMatchObject({ allocatedQuantity: 3 });
     expect(clean.orders[0]).not.toHaveProperty("fullName");
     expect(clean.orders[0]).toMatchObject({ total: 1000 });
+    // El comprobante bancario es solo de la dueña: la lectura ve el método, no el enlace.
+    expect(clean.orders[0].payment).toEqual({ method: "BankTransfer", proofKey: null });
   });
 
   it("conserva el nombre de quien reseña y quita la moderación", () => {

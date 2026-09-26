@@ -1,4 +1,5 @@
 import { getFairEventDetail } from "@/lib/fair-events";
+import { isPaymentProofStorageConfigured } from "@/lib/payment-proofs";
 import { requireStoreRead } from "@/lib/store-access";
 import { scrubFairEvent } from "@/lib/viewer-payloads";
 
@@ -80,7 +81,10 @@ export default async function FairEventPage({
       total: Number(order.total),
       createdAt: order.createdAt.toISOString(),
       payment: order.payment
-        ? { method: order.payment.method as "CASH" | "BankTransfer" }
+        ? {
+            method: order.payment.method as "CASH" | "BankTransfer",
+            proofKey: order.payment.proofKey ?? null,
+          }
         : null,
       orderItems: order.orderItems.map((item) => ({
         id: item.id,
@@ -93,7 +97,10 @@ export default async function FairEventPage({
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
-      <FairEventWorkspace event={event} />
+      <FairEventWorkspace
+        event={event}
+        paymentProofEnabled={isPaymentProofStorageConfigured()}
+      />
     </div>
   );
 }

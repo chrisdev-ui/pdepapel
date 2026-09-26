@@ -155,6 +155,109 @@ describe("SellPanel", () => {
     await waitFor(() => expect(source.submit).toHaveBeenCalledWith(expect.objectContaining({ paymentMethod: "BankTransfer", transactionId: "1234" })));
   });
 
+  describe("payment proof", () => {
+    const proofKey = "comprobantes/s/0f3a9c1e-7b2d-4c8e-9a1f-2b3c4d5e6f70.jpg";
+    const file = () => new File(["png"], "captura.png", { type: "image/png" });
+
+    function proofSource(overrides: Partial<SellSource> = {}) {
+      const upload = vi.fn(async (_file: File) => proofKey);
+      const remove = vi.fn(async (_key: string) => {});
+      const source = makeSource({
+        requireTransferReference: true,
+        paymentProof: { upload, remove },
+        ...overrides,
+      });
+      return { source, upload, remove };
+    }
+
+    async function openTransferDialog() {
+      await addCode("LIB-1");
+      fireEvent.click(screen.getByRole("radio", { name: /Transferencia/ }));
+      fireEvent.click(registerButtons()[0]);
+      fireEvent.change(screen.getByLabelText("Referencia de la transferencia"), { target: { value: "TRX-1" } });
+    }
+
+    it("uploads the chosen image on selection and sends its key with the sale", async () => {
+      const { source, upload } = proofSource();
+      render(<SellPanel source={source} />);
+      await openTransferDialog();
+      const input = screen.getByLabelText("Comprobante (opcional)") as HTMLInputElement;
+      expect(input.accept).toBe("image/jpeg,image/png,image/webp");
+
+      fireEvent.change(input, { target: { files: [file()] } });
+      await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+      expect(upload.mock.calls[0][0]).toBeInstanceOf(File);
+      await waitFor(() => expect(screen.getByText("captura.png")).toBeInTheDocument());
+      // La vista previa es local: nunca la clave ni una URL del bucket.
+      expect((screen.getByAltText("Vista previa del comprobante") as HTMLImageElement).src).not.toContain("comprobantes/");
+
+      fireEvent.click(screen.getByRole("button", { name: "Sí, registrar pago" }));
+      await waitFor(() => expect(source.submit).toHaveBeenCalledWith(expect.objectContaining({ paymentMethod: "BankTransfer", transactionId: "TRX-1", proofKey })));
+    });
+
+    it("does not offer the field for cash or without a proof source", async () => {
+      const { source } = proofSource();
+      render(<SellPanel source={source} />);
+      await addCode("LIB-1");
+      fireEvent.click(registerButtons()[0]);
+      expect(screen.queryByLabelText("Comprobante (opcional)")).not.toBeInTheDocument();
+      cleanup();
+
+      render(<SellPanel source={makeSource({ requireTransferReference: true })} />);
+      await openTransferDialog();
+      expect(screen.queryByLabelText("Comprobante (opcional)")).not.toBeInTheDocument();
+    });
+
+    it("deletes an uploaded proof when it is removed, when the sale switches to cash, and when the cart is emptied", async () => {
+      const { source, remove } = proofSource();
+      render(<SellPanel source={source} />);
+      await openTransferDialog();
+      const attach = async () => {
+        fireEvent.change(screen.getByLabelText("Comprobante (opcional)"), { target: { files: [file()] } });
+        await waitFor(() => expect(screen.getByText("captura.png")).toBeInTheDocument());
+      };
+
+      await attach();
+      fireEvent.click(screen.getByRole("button", { name: "Quitar comprobante" }));
+      await waitFor(() => expect(remove).toHaveBeenCalledWith(proofKey));
+      expect(screen.queryByText("captura.png")).not.toBeInTheDocument();
+
+      await attach();
+      fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
+      // «Revisar» no abandona la venta: el comprobante sigue ahí al volver.
+      expect(remove).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole("radio", { name: /Efectivo/ }));
+      await waitFor(() => expect(remove).toHaveBeenCalledTimes(2));
+
+      fireEvent.click(screen.getByRole("radio", { name: /Transferencia/ }));
+      fireEvent.click(registerButtons()[0]);
+      await attach();
+      fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
+      fireEvent.click(screen.getByRole("button", { name: "Quitar Libreta" }));
+      await waitFor(() => expect(remove).toHaveBeenCalledTimes(3));
+      expect(source.submit).not.toHaveBeenCalled();
+    });
+
+    it("keeps the proof after a successful sale (it belongs to the order now) and reports an upload failure", async () => {
+      const { source, remove, upload } = proofSource();
+      render(<SellPanel source={source} />);
+      await openTransferDialog();
+      fireEvent.change(screen.getByLabelText("Comprobante (opcional)"), { target: { files: [file()] } });
+      await waitFor(() => expect(screen.getByText("captura.png")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Sí, registrar pago" }));
+      await waitFor(() => expect(source.submit).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+      expect(remove).not.toHaveBeenCalled();
+
+      upload.mockRejectedValueOnce(Object.assign(new Error("400"), { response: { data: { error: "El comprobante pesa más de 4 MB. Toma una captura más pequeña" } } }));
+      await openTransferDialog();
+      fireEvent.change(screen.getByLabelText("Comprobante (opcional)"), { target: { value: "" } });
+      fireEvent.change(screen.getByLabelText("Comprobante (opcional)"), { target: { files: [file()] } });
+      await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "No se pudo subir el comprobante", description: expect.stringMatching(/4 MB/) })));
+      expect(screen.queryByText("captura.png")).not.toBeInTheDocument();
+    });
+  });
+
   it("explains the card terminal and confirms with «enviar al datáfono»", async () => {
     const source = makeSource({ paymentOptions: [{ value: "CASH", title: "Efectivo" }, { value: "Bold", title: "Datáfono" }] });
     render(<SellPanel source={source} />);

@@ -3,7 +3,7 @@
 import { Banknote, CreditCard, Landmark, Package, ReceiptText, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   AlertDialog,
@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PaymentProofField, type PendingPaymentProof } from "@/components/sales/payment-proof-field";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import { scanAccepted, scanRejected, type ScanOutcome } from "@/lib/scan-outcome";
+import { shrinkImageForUpload } from "@/lib/shrink-image";
 import {
   addLineToCart,
   cartTotals,
@@ -51,6 +53,8 @@ export interface SellSubmitInput {
   idempotencyKey: string;
   /** Referencia del comprobante (transferencia). */
   transactionId?: string;
+  /** Comprobante ya subido (clave que devolvió `SellSource.paymentProof.upload`). */
+  proofKey?: string;
 }
 
 export interface SellSubmitResult {
@@ -72,6 +76,7 @@ export interface SellCompletedSale extends SellSubmitResult {
   units: number;
   savings: number;
   transactionId?: string;
+  proofKey?: string;
   at: Date;
   /** Se deshizo desde la tarjeta: pedido cancelado e inventario devuelto. */
   undone?: boolean;
@@ -108,6 +113,13 @@ export interface SellSourceCopy {
   saleNoun?: string;
 }
 
+export interface SellPaymentProofSource {
+  /** Sube el archivo y devuelve la clave del comprobante. */
+  upload: (file: File) => Promise<string>;
+  /** Borra del almacenamiento un comprobante subido que no llegó a una venta. */
+  remove: (proofKey: string) => Promise<void>;
+}
+
 /**
  * Lo que cambia entre el punto de venta y una feria: de dónde salen los
  * productos y a qué endpoint se cobra. La pantalla es la misma.
@@ -133,6 +145,13 @@ export interface SellSource {
   paymentOptions?: SellPaymentOption[];
   /** Pide la referencia del comprobante al cobrar por transferencia (misma regla que Pedidos). */
   requireTransferReference?: boolean;
+  /**
+   * Adjuntar la foto del comprobante en una transferencia. `upload` sube el
+   * archivo y devuelve la clave que guardará la venta; `remove` borra un
+   * comprobante subido que al final no se usó (venta abandonada, método
+   * cambiado a efectivo). Sin esto no aparece el campo.
+   */
+  paymentProof?: SellPaymentProofSource;
   /** Tarjeta que reemplaza al aviso flotante cuando la venta queda registrada. */
   renderAfterSale?: (sale: SellCompletedSale, actions: SellAfterSaleActions) => ReactNode;
   /**
@@ -261,6 +280,8 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<SellPaymentMethod>("CASH");
   const [reference, setReference] = useState("");
+  const [proof, setProof] = useState<PendingPaymentProof | null>(null);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [lastSale, setLastSale] = useState<SellCompletedSale | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() =>
     createIdempotencyKey(),
@@ -307,6 +328,71 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
   const paymentOptions = source.paymentOptions ?? DEFAULT_PAYMENT_OPTIONS;
   const needsReference = Boolean(source.requireTransferReference) && paymentMethod === "BankTransfer";
   const referenceOk = !needsReference || reference.trim().length >= TRANSFER_REFERENCE_MIN;
+  const proofSource = needsReference ? source.paymentProof : undefined;
+
+  /**
+   * Comprobante subido y todavía sin venta. Vive también en un ref para
+   * poder borrarlo al desmontar (la pantalla se cerró con la venta a medias)
+   * sin arrastrar el estado a las dependencias del efecto.
+   */
+  const pendingProofRef = useRef<PendingPaymentProof | null>(null);
+  const removeProofRef = useRef(source.paymentProof?.remove);
+  removeProofRef.current = source.paymentProof?.remove;
+
+  /** Olvida el comprobante localmente; con `discard` además lo borra del almacenamiento. */
+  const clearProof = useCallback((discard: boolean) => {
+    const current = pendingProofRef.current;
+    if (!current) return;
+    pendingProofRef.current = null;
+    setProof(null);
+    try {
+      URL.revokeObjectURL(current.previewUrl);
+    } catch {
+      // Sin object URLs (pruebas) no hay nada que liberar.
+    }
+    if (discard) {
+      removeProofRef.current?.(current.key).catch(() => {
+        // Se intentó una vez; un comprobante huérfano en el bucket no rompe nada.
+      });
+    }
+  }, []);
+
+  const selectProof = async (file: File) => {
+    if (!source.paymentProof) return;
+    try {
+      setIsUploadingProof(true);
+      const prepared = await shrinkImageForUpload(file);
+      const key = await source.paymentProof.upload(prepared);
+      clearProof(true);
+      const next: PendingPaymentProof = {
+        key,
+        previewUrl: URL.createObjectURL(prepared),
+        name: prepared.name,
+      };
+      pendingProofRef.current = next;
+      setProof(next);
+    } catch (error) {
+      toast({
+        title: "No se pudo subir el comprobante",
+        description: getErrorDescription(
+          error,
+          "Revisa que sea una imagen de menos de 4 MB e intenta de nuevo.",
+        ),
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingProof(false);
+    }
+  };
+
+  // La venta se abandonó (carrito vacío) o ya no es transferencia: el
+  // comprobante subido no tiene a qué pegarse y se borra del almacenamiento.
+  useEffect(() => {
+    if (!pendingProofRef.current) return;
+    if (cart.length === 0 || paymentMethod !== "BankTransfer") clearProof(true);
+  }, [cart.length, paymentMethod, clearProof]);
+
+  useEffect(() => () => clearProof(true), [clearProof]);
 
   /**
    * Agrega y contesta si entró.
@@ -430,11 +516,13 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
     try {
       setIsSelling(true);
       setIsConfirmationOpen(false);
+      const proofKey = needsReference ? proof?.key : undefined;
       const result = await source.submit({
         lines: cart,
         paymentMethod,
         idempotencyKey,
         transactionId: needsReference ? reference.trim() : undefined,
+        proofKey,
       });
       const completed: SellCompletedSale = {
         ...result,
@@ -444,8 +532,11 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
         units: totals.units,
         savings: totals.savings,
         transactionId: needsReference ? reference.trim() : undefined,
+        proofKey,
         at: new Date(),
       };
+      // El comprobante ya es del pedido: se olvida sin borrarlo del almacenamiento.
+      clearProof(false);
       setCart([]);
       setReference("");
       setIdempotencyKey(createIdempotencyKey());
@@ -744,9 +835,18 @@ export function SellPanel({ source, aside, lockedReason, persistLastSaleKey }: S
               <p className="text-xs text-muted-foreground">Mínimo cuatro caracteres. Queda en el pedido, como al marcar pagado en Pedidos.</p>
             </div>
           )}
+          {proofSource && (
+            <PaymentProofField
+              proof={proof}
+              uploading={isUploadingProof}
+              disabled={isSelling}
+              onSelect={selectProof}
+              onRemove={() => clearProof(true)}
+            />
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSelling}>Revisar</AlertDialogCancel>
-            <AlertDialogAction onClick={registerSale} disabled={isSelling || !referenceOk}>
+            <AlertDialogAction onClick={registerSale} disabled={isSelling || isUploadingProof || !referenceOk}>
               {paymentMethod === "Bold" ? "Sí, enviar al datáfono" : "Sí, registrar pago"}
             </AlertDialogAction>
           </AlertDialogFooter>

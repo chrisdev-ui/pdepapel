@@ -54,7 +54,7 @@ afterEach(() => {
  */
 describe("Ferias · escanear producto para reservar", () => {
   it("leaves the scanned product pending to reserve, and refuses a kit like the picker does", () => {
-    render(<FairEventWorkspace event={event} />);
+    render(<FairEventWorkspace event={event} paymentProofEnabled={false} />);
     const scan = screen.getByRole("button", { name: "Escanear producto para reservar" });
     fireEvent.click(scan);
     expect(screen.getByLabelText("Producto para reservar").textContent).toBe("p-scan");

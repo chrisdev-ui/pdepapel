@@ -45,7 +45,7 @@ export type FairOrder = {
   status: "PAID" | "CANCELLED";
   total: number;
   createdAt: string;
-  payment: { method: "CASH" | "BankTransfer" } | null;
+  payment: { method: "CASH" | "BankTransfer"; proofKey: string | null } | null;
   orderItems: { id: string; name: string; quantity: number; price: number }[];
 };
 

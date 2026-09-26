@@ -13,6 +13,8 @@ import type { FairInventoryItem, FairProduct } from "./fair-event-types";
 interface UseFairSellSourceInput {
   storeId: string;
   fairEventId: string;
+  /** Hay bucket de comprobantes configurado (lo decide el servidor). */
+  paymentProofEnabled: boolean;
   availableItems: FairInventoryItem[];
   eventItemsByProduct: Map<string, FairInventoryItem>;
   addReservedProduct: (add: (line: any) => void, productId: string) => void;
@@ -29,6 +31,7 @@ interface UseFairSellSourceInput {
 export function useFairSellSource({
   storeId,
   fairEventId,
+  paymentProofEnabled,
   availableItems,
   eventItemsByProduct,
   addReservedProduct,
@@ -60,16 +63,45 @@ export function useFairSellSource({
           imageUrl: product.images?.[0]?.url ?? null,
         });
       },
-      submit: async ({ lines, paymentMethod, idempotencyKey }) => {
+      submit: async ({ lines, paymentMethod, idempotencyKey, transactionId, proofKey }) => {
         const response = await axios.post(
           `/api/${storeId}/fair-events/${fairEventId}/sales`,
-          { items: toSaleItems(lines), paymentMethod, idempotencyKey },
+          {
+            items: toSaleItems(lines),
+            paymentMethod,
+            idempotencyKey,
+            transactionId,
+            proofKey,
+          },
         );
         return {
           orderNumber: response.data.order.orderNumber as string,
           duplicate: Boolean(response.data.duplicate),
         };
       },
+      // Transferencia en la feria: referencia obligatoria (como en el Punto de
+      // venta) y, si la clienta muestra la pantalla del banco, la foto del
+      // comprobante. La subida va por el servidor a un bucket privado; sin
+      // bucket configurado el campo no aparece.
+      requireTransferReference: true,
+      paymentProof: paymentProofEnabled
+        ? {
+            upload: async (file) => {
+              const body = new FormData();
+              body.append("file", file);
+              const response = await axios.post(
+                `/api/${storeId}/payment-proofs`,
+                body,
+              );
+              return String(response.data.proofKey);
+            },
+            remove: async (proofKey) => {
+              await axios.delete(`/api/${storeId}/payment-proofs`, {
+                data: { proofKey },
+              });
+            },
+          }
+        : undefined,
       renderPicker: (add) => (
         <Combobox
           id="fair-product"
@@ -104,6 +136,6 @@ export function useFairSellSource({
         saleNoun: "venta de feria",
       },
     }),
-    [addReservedProduct, availableItems, fairEventId, eventItemsByProduct, storeId],
+    [addReservedProduct, availableItems, fairEventId, eventItemsByProduct, paymentProofEnabled, storeId],
   );
 }

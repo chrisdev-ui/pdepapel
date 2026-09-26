@@ -46,8 +46,48 @@ import {
   getFairStockAvailability,
   reconcileFairEvent,
   reopenFairEvent,
+  resolveFairSalePayment,
   startFairReconciliation,
 } from "@/lib/fair-events";
+
+const proofKey = "comprobantes/store-1/0f3a9c1e-7b2d-4c8e-9a1f-2b3c4d5e6f70.jpg";
+
+describe("resolveFairSalePayment", () => {
+  it("requires a transfer reference of at least four characters, trimmed", () => {
+    expect(() =>
+      resolveFairSalePayment({ storeId: "store-1", paymentMethod: "BankTransfer" }),
+    ).toThrow(/referencia/);
+    expect(() =>
+      resolveFairSalePayment({ storeId: "store-1", paymentMethod: "BankTransfer", transactionId: " 12 " }),
+    ).toThrow(/referencia/);
+    expect(
+      resolveFairSalePayment({ storeId: "store-1", paymentMethod: "BankTransfer", transactionId: " 1234 " }),
+    ).toEqual({ transactionId: "1234", proofKey: null });
+  });
+
+  it("keeps a proof only when it is a private proof of this store", () => {
+    expect(
+      resolveFairSalePayment({ storeId: "store-1", paymentMethod: "BankTransfer", transactionId: "TRX-1", proofKey }),
+    ).toEqual({ transactionId: "TRX-1", proofKey });
+    expect(() =>
+      resolveFairSalePayment({ storeId: "store-2", paymentMethod: "BankTransfer", transactionId: "TRX-1", proofKey }),
+    ).toThrow(/comprobante/);
+    expect(() =>
+      resolveFairSalePayment({
+        storeId: "store-1",
+        paymentMethod: "BankTransfer",
+        transactionId: "TRX-1",
+        proofKey: "productos/store-1/foto.jpg",
+      }),
+    ).toThrow(/comprobante/);
+  });
+
+  it("drops reference and proof for a cash sale", () => {
+    expect(
+      resolveFairSalePayment({ storeId: "store-1", paymentMethod: "CASH", transactionId: "x", proofKey }),
+    ).toEqual({ transactionId: null, proofKey: null });
+  });
+});
 
 describe("fair event inventory helpers", () => {
   it("keeps direct stock, packed capsules, returns, damage, and losses separated", () => {

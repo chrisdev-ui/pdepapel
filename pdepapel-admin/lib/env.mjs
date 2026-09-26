@@ -16,6 +16,14 @@ export const env = createEnv({
     CLOUDINARY_CLOUD_NAME: z.string().min(1),
     CLOUDINARY_API_KEY: z.string().min(1),
     CLOUDINARY_API_SECRET: z.string().min(1),
+    // Cloudflare R2: bucket PRIVADO de los comprobantes de pago (fotos de
+    // transferencias de feria). Las cuatro son opcionales a propósito: sin
+    // ellas el panel no ofrece «Adjuntar comprobante» y nada más cambia
+    // (lib/payment-proofs.ts). Nunca van con prefijo NEXT_PUBLIC_.
+    CLOUDFLARE_R2_ACCOUNT_ID: z.string().min(1).optional(),
+    CLOUDFLARE_R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    CLOUDFLARE_R2_BUCKET_NAME: z.string().min(1).optional(),
     WOMPI_API_URL: z.string().min(1),
     WOMPI_API_KEY: z.string().min(1),
     WOMPI_API_SECRET: z.string().min(1),

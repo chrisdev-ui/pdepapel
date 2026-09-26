@@ -1152,6 +1152,11 @@ model PaymentDetails {
   orderId       String        @unique
   method        PaymentMethod @default(BankTransfer)
   transactionId String?
+  /// Comprobante de una transferencia (foto o captura): la clave del objeto
+  /// en el bucket privado de Cloudflare R2 (`comprobantes/<storeId>/<uuid>.<ext>`).
+  /// No es una URL: el panel solo lo entrega leyendo el objeto con sesión de
+  /// dueña por /api/[storeId]/orders/[orderId]/payment-proof.
+  proofKey      String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   storeId       String

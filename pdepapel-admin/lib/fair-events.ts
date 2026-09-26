@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { movementActor } from "@/lib/movement-actor";
 import { ErrorFactory } from "@/lib/api-errors";
+import { isPaymentProofForStore } from "@/lib/payment-proof-key";
 import {
   createInventoryMovementBatchResilient,
   recalculateKitStock,
@@ -146,7 +147,7 @@ export async function getFairEventDetail(storeId: string, fairEventId: string) {
           status: true,
           total: true,
           createdAt: true,
-          payment: { select: { method: true } },
+          payment: { select: { method: true, proofKey: true } },
           orderItems: {
             select: { id: true, name: true, quantity: true, price: true },
           },
@@ -454,6 +455,46 @@ export async function packFairCapsules({
   });
 }
 
+/** Mínimo de la referencia de una transferencia: el mismo que en el Punto de venta. */
+export const FAIR_TRANSFER_REFERENCE_MIN = 4;
+
+/**
+ * Referencia y comprobante de una venta de feria, validados antes de tocar
+ * la base. La transferencia exige referencia (como en el Punto de venta) y
+ * admite un comprobante; efectivo no lleva ninguno de los dos. El comprobante
+ * tiene que ser la clave canónica de un objeto de ESTA tienda en el bucket
+ * privado (lib/payment-proof-key.ts): una clave de otra tienda o inventada
+ * no se guarda.
+ */
+export function resolveFairSalePayment({
+  storeId,
+  paymentMethod,
+  transactionId,
+  proofKey,
+}: {
+  storeId: string;
+  paymentMethod: PaymentMethod;
+  transactionId?: string | null;
+  proofKey?: string | null;
+}): { transactionId: string | null; proofKey: string | null } {
+  if (paymentMethod !== PaymentMethod.BankTransfer) {
+    return { transactionId: null, proofKey: null };
+  }
+  const reference = (transactionId ?? "").trim();
+  if (reference.length < FAIR_TRANSFER_REFERENCE_MIN) {
+    throw ErrorFactory.InvalidRequest(
+      "La transferencia necesita la referencia del comprobante (mínimo cuatro caracteres)",
+    );
+  }
+  const proof = (proofKey ?? "").trim();
+  if (proof && !isPaymentProofForStore(proof, storeId)) {
+    throw ErrorFactory.InvalidRequest(
+      "El comprobante no es válido para esta tienda",
+    );
+  }
+  return { transactionId: reference, proofKey: proof || null };
+}
+
 export async function createFairSale({
   storeId,
   fairEventId,
@@ -461,6 +502,8 @@ export async function createFairSale({
   paymentMethod,
   idempotencyKey,
   userId,
+  transactionId,
+  proofKey,
 }: {
   storeId: string;
   fairEventId: string;
@@ -468,6 +511,10 @@ export async function createFairSale({
   paymentMethod: PaymentMethod;
   idempotencyKey: string;
   userId: string;
+  /** Referencia del comprobante; obligatoria en transferencia. */
+  transactionId?: string | null;
+  /** Comprobante (clave devuelta por lib/payment-proofs); solo en transferencia. */
+  proofKey?: string | null;
 }) {
   if (!idempotencyKey || idempotencyKey.length < 12) {
     throw ErrorFactory.InvalidRequest(
@@ -477,6 +524,12 @@ export async function createFairSale({
   if (!items.length) {
     throw ErrorFactory.InvalidRequest("Agrega al menos un producto a la venta");
   }
+  const payment = resolveFairSalePayment({
+    storeId,
+    paymentMethod,
+    transactionId,
+    proofKey,
+  });
 
   return prismadb.$transaction(async (tx) => {
     const existingOrder = await tx.order.findFirst({
@@ -672,6 +725,8 @@ export async function createFairSale({
           create: {
             storeId,
             method: paymentMethod,
+            transactionId: payment.transactionId,
+            proofKey: payment.proofKey,
             details: `Venta presencial · ${fairEvent.name}`,
           },
         },

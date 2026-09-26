@@ -119,7 +119,14 @@ function formatDate(value: string | null) {
 
 
 
-export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
+export function FairEventWorkspace({
+  event,
+  paymentProofEnabled,
+}: {
+  event: FairEventDetail;
+  /** Hay bucket de comprobantes: la venta por transferencia ofrece adjuntar la foto. */
+  paymentProofEnabled: boolean;
+}) {
   // Una cuenta de solo lectura ve la feria entera, pero no mueve nada: el
   // servidor ya rechaza cada escritura y aquí se apagan los controles, que es
   // lo que promete el aviso de solo lectura.
@@ -542,6 +549,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   const fairSellSource = useFairSellSource({
     storeId,
     fairEventId: event.id,
+    paymentProofEnabled,
     availableItems,
     eventItemsByProduct,
     addReservedProduct,
@@ -1078,6 +1086,17 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                   >
                     {formatCurrency(order.total)}
                   </span>
+                  {canWrite && order.payment?.proofKey && (
+                    <a
+                      href={`/api/${storeId}/orders/${order.id}/payment-proof`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs underline underline-offset-4"
+                      aria-label={`Ver el comprobante de la venta ${order.orderNumber}`}
+                    >
+                      Comprobante
+                    </a>
+                  )}
                   {canCancelFairSale(event.status) &&
                     order.status === "PAID" && (
                       <Button
