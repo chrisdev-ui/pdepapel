@@ -38,17 +38,33 @@ export interface PhaseReconcileProps {
   packedCapsules: number;
   canWrite: boolean;
   isReconciling: boolean;
-  onChange: (productId: string, field: keyof ReconciliationCount, quantity: number) => void;
+  onChange: (
+    productId: string,
+    field: keyof ReconciliationCount,
+    quantity: number,
+  ) => void;
   onAssumeIntact: () => void;
   onClose: () => void;
 }
 
 /**
- * La tabla de siete columnas solo cabe desde 1024 px: las seis fijas suman
- * ~644 px y a 768 el nombre del producto se salía de su celda. Por debajo, la
- * fila se lee como tarjeta apilada, que es lo que hace el lienzo a 390.
+ * La tabla de siete columnas solo cabe desde 1280 px. Las seis fijas suman
+ * ~616 px más 72 de separación, y con la barra lateral la tarjeta mide unos
+ * 660 px a 1024: ahí el nombre del producto se quedaba sin columna (0 px) y
+ * los encabezados se montaban. Medido el 2026-09-26 a 1024, 1280 y 1440.
+ *
+ * Por debajo de 1280 la fila se lee como tarjeta: nombre y estado en la
+ * primera línea, reservadas y vendidas con su rótulo, y los tres conteos en
+ * una subcuadrícula de tres con rótulo visible (una sola columna bajo 640 px,
+ * donde tres steppers no caben).
+ *
+ * Las tres columnas de conteo miden 128 px porque el stepper compacto
+ * (botón 28 + campo 56 + botón 28 + relleno) mide ~122 px: con 104 los
+ * botones «−» y «+» se montaban sobre el número. Las dos cifras de solo
+ * lectura (reservadas, vendidas) caben en 64.
  */
-const COLUMNS = "lg:grid-cols-[minmax(0,1fr)_78px_78px_104px_104px_104px_104px]";
+const COLUMNS =
+  "xl:grid-cols-[minmax(0,1fr)_64px_64px_128px_128px_128px_104px]";
 
 /**
  * Conciliar es **contar**, no confirmar.
@@ -72,7 +88,8 @@ export function PhaseReconcile({
   onClose,
 }: PhaseReconcileProps) {
   const toCount = items.reduce(
-    (total, item) => total + Math.max(0, item.allocatedQuantity - item.soldQuantity),
+    (total, item) =>
+      total + Math.max(0, item.allocatedQuantity - item.soldQuantity),
     0,
   );
   const counted = Math.max(0, toCount - summary.pending);
@@ -92,9 +109,12 @@ export function PhaseReconcile({
               : "Ya contaste todo lo que volvió"}
           </p>
           <p className="text-sm text-muted-foreground">
-            Saliste con {items.reduce((total, item) => total + item.allocatedQuantity, 0)} y
-            vendiste {items.reduce((total, item) => total + item.soldQuantity, 0)}. Cuenta cuántas
-            vuelven buenas, cuántas dañadas y cuántas no aparecen.
+            Saliste con{" "}
+            {items.reduce((total, item) => total + item.allocatedQuantity, 0)} y
+            vendiste{" "}
+            {items.reduce((total, item) => total + item.soldQuantity, 0)}.
+            Cuenta cuántas vuelven buenas, cuántas dañadas y cuántas no
+            aparecen.
           </p>
           <div className="flex items-center gap-3">
             <ProgressBar
@@ -120,7 +140,7 @@ export function PhaseReconcile({
       </div>
 
       <div
-        className={`hidden gap-3 px-2 text-xs font-medium text-muted-foreground lg:grid ${COLUMNS}`}
+        className={`hidden gap-3 px-2 text-xs font-medium text-muted-foreground xl:grid ${COLUMNS}`}
       >
         <span>Producto</span>
         <span className="text-right">Reservado</span>
@@ -138,55 +158,83 @@ export function PhaseReconcile({
         return (
           <div
             key={item.id}
-            className={`grid gap-3 rounded-lg border p-3 lg:items-center lg:border-0 lg:p-2 ${COLUMNS} ${
-              state.status === "untouched" ? "border-tint-cream bg-tint-cream/20 lg:bg-transparent" : ""
+            className={`grid gap-3 rounded-lg border p-3 xl:items-center xl:border-0 xl:p-2 ${COLUMNS} ${
+              state.status === "untouched"
+                ? "border-tint-cream bg-tint-cream/20 xl:bg-transparent"
+                : ""
             }`}
           >
-            <div className="min-w-0">
-              <p className="truncate font-medium">{item.product.name}</p>
-              <p className="text-xs text-muted-foreground">
-                SKU {item.product.sku} · Por contar:{" "}
-                <span className="font-semibold text-primary">{state.expected}</span>
-                {item.packedQuantity > 0 && ` · ${item.packedQuantity} en cápsulas empacadas`}
+            {/* Tarjeta (< xl): nombre y estado en la misma línea. En la tabla, `contents` deshace el grupo y el estado pasa al final. */}
+            <div className="flex items-start justify-between gap-3 xl:contents">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{item.product.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  SKU {item.product.sku} · Por contar:{" "}
+                  <span className="font-semibold text-primary">
+                    {state.expected}
+                  </span>
+                  {item.packedQuantity > 0 &&
+                    ` · ${item.packedQuantity} en cápsulas empacadas`}
+                </p>
+              </div>
+              <div className="shrink-0 xl:order-last xl:text-right">
+                <TintBadge label={state.label} tone={state.tone} />
+              </div>
+            </div>
+            <div className="flex gap-6 text-sm xl:contents">
+              <p className="xl:text-right">
+                <span className="mr-1 text-xs text-muted-foreground xl:hidden">
+                  Reservadas
+                </span>
+                {item.allocatedQuantity}
+              </p>
+              <p className="xl:text-right">
+                <span className="mr-1 text-xs text-muted-foreground xl:hidden">
+                  Vendidas
+                </span>
+                {item.soldQuantity}
               </p>
             </div>
-            <p className="text-sm lg:text-right">{item.allocatedQuantity}</p>
-            <p className="text-sm lg:text-right">{item.soldQuantity}</p>
-            <div className="grid gap-1">
-              <Label className="text-xs lg:sr-only">Volvió bien</Label>
-              <StockQuantityInput
-                min={0}
-                size="sm"
-                disabled={soldOut || !canWrite}
-                value={values?.returnedQuantity ?? 0}
-                onChange={(quantity) => onChange(item.productId, "returnedQuantity", quantity)}
-                ariaLabel={`Unidades que volvieron bien de ${item.product.name}`}
-              />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-xs lg:sr-only">Dañado</Label>
-              <StockQuantityInput
-                min={0}
-                size="sm"
-                disabled={soldOut || !canWrite}
-                value={values?.damagedQuantity ?? 0}
-                onChange={(quantity) => onChange(item.productId, "damagedQuantity", quantity)}
-                ariaLabel={`Unidades dañadas de ${item.product.name}`}
-              />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-xs lg:sr-only">No apareció</Label>
-              <StockQuantityInput
-                min={0}
-                size="sm"
-                disabled={soldOut || !canWrite}
-                value={values?.lostQuantity ?? 0}
-                onChange={(quantity) => onChange(item.productId, "lostQuantity", quantity)}
-                ariaLabel={`Unidades perdidas de ${item.product.name}`}
-              />
-            </div>
-            <div className="lg:text-right">
-              <TintBadge label={state.label} tone={state.tone} />
+            <div className="grid gap-3 sm:grid-cols-3 xl:contents">
+              <div className="grid gap-1">
+                <Label className="text-xs xl:sr-only">Volvió bien</Label>
+                <StockQuantityInput
+                  min={0}
+                  size="sm"
+                  disabled={soldOut || !canWrite}
+                  value={values?.returnedQuantity ?? 0}
+                  onChange={(quantity) =>
+                    onChange(item.productId, "returnedQuantity", quantity)
+                  }
+                  ariaLabel={`Unidades que volvieron bien de ${item.product.name}`}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-xs xl:sr-only">Dañado</Label>
+                <StockQuantityInput
+                  min={0}
+                  size="sm"
+                  disabled={soldOut || !canWrite}
+                  value={values?.damagedQuantity ?? 0}
+                  onChange={(quantity) =>
+                    onChange(item.productId, "damagedQuantity", quantity)
+                  }
+                  ariaLabel={`Unidades dañadas de ${item.product.name}`}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-xs xl:sr-only">No apareció</Label>
+                <StockQuantityInput
+                  min={0}
+                  size="sm"
+                  disabled={soldOut || !canWrite}
+                  value={values?.lostQuantity ?? 0}
+                  onChange={(quantity) =>
+                    onChange(item.productId, "lostQuantity", quantity)
+                  }
+                  ariaLabel={`Unidades perdidas de ${item.product.name}`}
+                />
+              </div>
             </div>
           </div>
         );
@@ -227,17 +275,18 @@ export function PhaseReconcile({
 
       {packedCapsules > 0 && (
         <p className="text-xs text-muted-foreground">
-          Las cápsulas empacadas sin vender se anulan al cerrar. Cuenta su producto como devuelto,
-          dañado o perdido en la fila del producto que contienen.
+          Las cápsulas empacadas sin vender se anulan al cerrar. Cuenta su
+          producto como devuelto, dañado o perdido en la fila del producto que
+          contienen.
         </p>
       )}
 
       <div className="flex items-start gap-3 rounded-lg border border-tint-cream bg-tint-cream/40 p-3 text-xs leading-relaxed text-primary">
         <RotateCcw className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
-          <span className="font-semibold">Cerrar es definitivo.</span> Después del cierre no se
-          puede reabrir la feria, registrar más ventas ni cambiar estas cantidades. Una venta
-          olvidada se corrige después desde{" "}
+          <span className="font-semibold">Cerrar es definitivo.</span> Después
+          del cierre no se puede reabrir la feria, registrar más ventas ni
+          cambiar estas cantidades. Una venta olvidada se corrige después desde{" "}
           <Link
             href={`/${storeId}/movimientos-inventario?feria=${fairEventId}`}
             className="font-semibold underline underline-offset-2"
@@ -251,7 +300,8 @@ export function PhaseReconcile({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
         {!summary.balanced && (
           <p className="text-xs text-muted-foreground sm:mr-auto">
-            El botón se enciende cuando las tres columnas sumen lo que falta por contar.
+            El botón se enciende cuando las tres columnas sumen lo que falta por
+            contar.
           </p>
         )}
         <Button
