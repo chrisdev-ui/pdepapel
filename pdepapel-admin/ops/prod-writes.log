@@ -15,3 +15,4 @@
 2026-09-21T22:33:05.563Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Apply newsletter tables migration + deploy 22 pending commits (WhatsApp bot, email, boletín, tributarios, rendimiento)"
 2026-09-22T02:20:36.591Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "crear tabla IgnoredContact"
 2026-09-24T02:44:00.836Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/backfill-variant-cover.mjs@c563f42500b3dc87 | estado=ok | exit=0 | rows=? | "poner isMain en la única foto de las 325 variantes de grupo que quedaron sin portada"
+2026-09-26T16:56:43.749Z | christiantorres | root@monorail.proxy.rlwy.net/railway | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "añadir PaymentDetails.proofKey para los comprobantes de feria"
