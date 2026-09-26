@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { SectionCard } from "@/components/ui/section-card";
 
-import { KitRowDetail } from "./kit-row-detail";
+import { ReservedItemsTable } from "./reserved-items-table";
 
 /** Lo que la feria dejó en el sistema, ya cerrada. Solo lectura. */
 export interface PhaseClosedProps {
@@ -96,47 +96,7 @@ export function PhaseClosed({
         title="Inventario conciliado"
         description="Solo lectura. Lo devuelto volvió al stock en línea; lo dañado y perdido quedó solo aquí."
       >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="px-2 py-2 text-left font-medium">Producto</th>
-                <th className="px-2 py-2 text-right font-medium">Reservado</th>
-                <th className="px-2 py-2 text-right font-medium">Vendido</th>
-                <th className="px-2 py-2 text-right font-medium">Devuelto</th>
-                <th className="px-2 py-2 text-right font-medium">Dañado</th>
-                <th className="px-2 py-2 text-right font-medium">Perdido</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b last:border-0">
-                  <td className="px-2 py-2">
-                    <span className="font-medium">{item.product.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      SKU {item.product.sku}
-                    </span>
-                    <KitRowDetail
-                      components={item.kitComponents}
-                      className="mt-1"
-                    />
-                  </td>
-                  <td className="px-2 py-2 text-right">
-                    {item.allocatedQuantity}
-                  </td>
-                  <td className="px-2 py-2 text-right">{item.soldQuantity}</td>
-                  <td className="px-2 py-2 text-right">
-                    {item.returnedQuantity}
-                  </td>
-                  <td className="px-2 py-2 text-right">
-                    {item.damagedQuantity}
-                  </td>
-                  <td className="px-2 py-2 text-right">{item.lostQuantity}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ReservedItemsTable items={items} closed />
       </SectionCard>
     </>
   );

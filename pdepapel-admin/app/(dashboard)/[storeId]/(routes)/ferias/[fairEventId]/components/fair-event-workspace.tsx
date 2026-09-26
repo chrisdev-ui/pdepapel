@@ -34,6 +34,8 @@ import { SellPanel, type SellSource } from "@/components/sales/sell-panel";
 import { useFairSellSource } from "./use-fair-sell-source";
 import { PhaseClosed } from "./phase-closed";
 import { PhaseReconcile } from "./phase-reconcile";
+import { FairSellGuide } from "./fair-sell-guide";
+import { ReservedItemsTable } from "./reserved-items-table";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
 import { ProductScanButton } from "@/components/ui/product-scan-button";
@@ -300,11 +302,19 @@ export function FairEventWorkspace({
           quantity: item.quantity,
         })),
       });
+      const knownProductIds = new Set(
+        event.inventoryItems.map((item) => item.productId),
+      );
+      const units =
+        inventoryTotals.allocated +
+        pendingAllocations.reduce((total, item) => total + item.quantity, 0);
+      const products =
+        event.inventoryItems.length +
+        pendingAllocations.filter((item) => !knownProductIds.has(item.product.id)).length;
       setPendingAllocations([]);
       toast({
         title: "Inventario reservado",
-        description:
-          "Estas unidades ya no se muestran disponibles para venta en línea.",
+        description: `${units} ${units === 1 ? "unidad reservada" : "unidades reservadas"} en ${products} ${products === 1 ? "producto" : "productos"}; abajo está el detalle. Ya no se muestran disponibles en línea.`,
         variant: "success",
       });
       router.refresh();
@@ -806,6 +816,16 @@ export function FairEventWorkspace({
         </SectionCard>
       )}
 
+      {event.status === "DRAFT" && event.inventoryItems.length > 0 && (
+        <SectionCard
+          id="inventario-reservado"
+          title="Inventario reservado"
+          description="Solo lectura: lo que ya salió de bodega para esta feria. Si falta algo, sigue reservando arriba."
+        >
+          <ReservedItemsTable items={event.inventoryItems} />
+        </SectionCard>
+      )}
+
       {canOperate && event.inventoryItems.length > 0 && (
         <SectionCard
           id="capsulas"
@@ -954,6 +974,18 @@ export function FairEventWorkspace({
         </SectionCard>
       )}
 
+      {sellingOpen && (
+        <FairSellGuide fairEventId={event.id} paymentProofEnabled={paymentProofEnabled} />
+      )}
+      {sellingOpen && event.inventoryItems.length > 0 && (
+        <SectionCard
+          id="inventario-reservado"
+          title="Inventario reservado"
+          description="Solo lectura: lo que queda en la mesa. Se actualiza con cada venta."
+        >
+          <ReservedItemsTable items={event.inventoryItems} />
+        </SectionCard>
+      )}
       {(sellingOpen || reconciling) && (
         <div id="ventas" className="scroll-mt-24">
           <SellPanel
