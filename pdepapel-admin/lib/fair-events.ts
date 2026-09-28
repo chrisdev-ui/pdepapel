@@ -57,7 +57,7 @@ type FairSaleLine = {
 };
 
 export { getFairStockAvailability } from "@/lib/fair-phases";
-import { getFairStockAvailability } from "@/lib/fair-phases";
+import { canRegisterFairSale, getFairStockAvailability } from "@/lib/fair-phases";
 
 export const getCapsuleMargin = (salePrice: number, productCost: number) => {
   if (salePrice <= 0) return -Infinity;
@@ -846,11 +846,15 @@ export async function createFairSale({
       },
     });
     if (!fairEvent) throw ErrorFactory.NotFound("Feria no encontrada");
-    if (fairEvent.status !== FairEventStatus.OPEN) {
+    if (!canRegisterFairSale(fairEvent.status)) {
       throw ErrorFactory.Conflict(
-        "La feria debe estar abierta para registrar ventas",
+        "La feria no está abierta ni en conciliación: no se pueden registrar ventas",
       );
     }
+    // Una venta registrada mientras se cuenta es una venta olvidada en su
+    // momento: se guarda igual, con una marca para saber cuántas veces pasa.
+    const lateSale = fairEvent.status === FairEventStatus.RECONCILING;
+    const saleNote = `Venta presencial · ${fairEvent.name}${lateSale ? " · registrada durante conciliación" : ""}`;
 
     const directQuantities = new Map<string, number>();
     const capsuleCodes: string[] = [];
@@ -1029,14 +1033,14 @@ export async function createFairSale({
           ? ((subtotal - totalProductCost) / subtotal) * 100
           : 0,
         createdBy: userId,
-        adminNotes: `Venta presencial · ${fairEvent.name}`,
+        adminNotes: saleNote,
         payment: {
           create: {
             storeId,
             method: paymentMethod,
             transactionId: payment.transactionId,
             proofKey: payment.proofKey,
-            details: `Venta presencial · ${fairEvent.name}`,
+            details: saleNote,
           },
         },
       },

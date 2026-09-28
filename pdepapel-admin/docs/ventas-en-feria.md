@@ -33,7 +33,7 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 
 ## Al terminar
 
-1. Pulsa **Pasar a conciliación**. La feria queda en **Conciliando**: el panel de venta se bloquea y aparece la tabla de conteo. Si todavía falta vender, **Reabrir ventas** la devuelve a **Abierta** sin perder nada.
+1. Pulsa **Pasar a conciliación**. La feria queda en **Conciliando**: deja de vender al público y aparece la tabla de conteo. Una venta que se olvidó registrar se registra desde ahí mismo (el panel de venta sigue abajo): queda como pedido pagado con la nota «registrada durante conciliación» y la fila del producto pide una unidad menos por contar. El conteo ya escrito no se pierde con esa venta ni al recargar la página (se guarda en el navegador, por feria, hasta cerrar). **Reabrir ventas** es solo para volver a vender de verdad.
 2. Cuenta físicamente cada producto no vendido.
 3. En **Conciliación**, las tres columnas arrancan en cero: nada se da por contado. Reparte para cada producto las unidades no vendidas entre **Volvió bien**, **Dañado** y **No apareció**. Arriba ves cuántas unidades faltan por contar y cuánto llevas; cada fila muestra «Sin contar», «Cuadra», «Faltan N», «Sobran N» o «Todo vendido». Si la feria volvió completa y sin daños, **Todo volvió intacto** llena las tres columnas de una vez y tú solo corriges lo que no cuadre. Las cápsulas que sigan empacadas se cuentan por el producto que contienen.
 4. Debajo de la tabla ves qué va a pasar al cerrar: cuántas unidades **vuelven a bodega**, cuántas **se dan de baja** (dañadas y perdidas), cuántas siguen **sin contar** y cuántas cápsulas empacadas se anularán. El botón **Cerrar la feria** se enciende cuando todas las filas cuadran.

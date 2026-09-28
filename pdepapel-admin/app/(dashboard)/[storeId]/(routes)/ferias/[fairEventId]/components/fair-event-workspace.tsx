@@ -18,7 +18,7 @@ import {
   Undo2,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { LabelSheetPreview } from "@/components/labels/label-sheet-preview";
@@ -195,16 +195,39 @@ export function FairEventWorkspace({
         100
       : null;
 
+  /**
+   * El conteo vive en el navegador hasta que se cierra la feria. Arranca en
+   * cero al ENTRAR a conciliación —nada se da por contado: si arrancara en
+   * «devuelto = todo lo que no se vendió», un envío sin tocar devolvería al
+   * stock lo dañado y lo perdido— y desde ahí sobrevive a los refrescos de
+   * la página (una venta olvidada registrada desde aquí, anular una venta) y
+   * a una recarga, guardado por feria en sessionStorage. Antes se vaciaba con
+   * cada refresco, que era justo lo que perdía el trabajo de Paula.
+   */
+  const countsStorageKey = `pdepapel:feria-conteo:${event.id}`;
+  const previousStatusRef = useRef<FairEventDetail["status"] | null>(null);
   useEffect(() => {
+    const entering =
+      event.status === "RECONCILING" &&
+      previousStatusRef.current !== "RECONCILING";
+    const firstRender = previousStatusRef.current === null;
+    previousStatusRef.current = event.status;
+    if (!entering && !firstRender) return;
+    let saved: Record<string, ReconciliationCount> = {};
+    if (event.status === "RECONCILING") {
+      try {
+        saved = JSON.parse(
+          window.sessionStorage.getItem(countsStorageKey) ?? "{}",
+        ) as Record<string, ReconciliationCount>;
+      } catch {
+        saved = {};
+      }
+    }
     setReconciliation(
       Object.fromEntries(
         event.inventoryItems.map((item) => [
           item.productId,
-          {
-            // Nada se da por contado: si esto arrancara en «devuelto = todo lo
-            // que no se vendió», un envío sin tocar devolvería al stock las
-            // unidades dañadas y perdidas, que no vuelven. El botón de cerrar
-            // solo se enciende cuando las tres columnas suman lo que falta.
+          saved[item.productId] ?? {
             returnedQuantity: 0,
             damagedQuantity: 0,
             lostQuantity: 0,
@@ -213,7 +236,18 @@ export function FairEventWorkspace({
       ),
     );
     setCountedPhysically(false);
-  }, [event.id, event.updatedAt, event.inventoryItems]);
+  }, [event.id, event.status, event.inventoryItems, countsStorageKey]);
+  useEffect(() => {
+    if (event.status !== "RECONCILING") return;
+    try {
+      window.sessionStorage.setItem(
+        countsStorageKey,
+        JSON.stringify(reconciliation),
+      );
+    } catch {
+      // Sin almacenamiento (modo privado) el conteo solo vive en la pestaña.
+    }
+  }, [reconciliation, event.status, countsStorageKey]);
 
   /**
    * Atajo para el caso común, como un acto explícito y no como suposición del
@@ -463,6 +497,11 @@ export function FairEventWorkspace({
         },
       );
       const issues = Number(response.data?.inventoryIssues ?? 0);
+      try {
+        window.sessionStorage.removeItem(countsStorageKey);
+      } catch {
+        // Igual que arriba.
+      }
       setIsCloseConfirmationOpen(false);
       toast({
         title: "Feria cerrada",
@@ -555,6 +594,7 @@ export function FairEventWorkspace({
     storeId,
     fairEventId: event.id,
     paymentProofEnabled,
+    lateSale: reconciling,
     availableItems,
     eventItemsByProduct,
     addReservedProduct,
@@ -634,10 +674,11 @@ export function FairEventWorkspace({
         >
           <ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
-            <span className="font-semibold">Las ventas están detenidas.</span>{" "}
-            Pasaste la feria a conciliación: el panel de venta queda bloqueado
-            mientras cuentas. Si aún falta vender, pulsa{" "}
-            <span className="font-semibold">Reabrir ventas</span>.
+            <span className="font-semibold">Estás contando lo que volvió.</span>{" "}
+            La feria ya no vende al público, pero si se te olvidó registrar una
+            venta que ya entregaste, regístrala abajo como siempre: descuenta de
+            lo que falta por contar en esa fila. Para volver a vender de verdad,
+            pulsa <span className="font-semibold">Reabrir ventas</span>.
           </p>
         </div>
       )}
@@ -995,11 +1036,6 @@ export function FairEventWorkspace({
                 <>
                   Tu cuenta es de solo lectura: puedes ver la feria, pero no
                   registrar cobros.
-                </>
-              ) : reconciling ? (
-                <>
-                  Las ventas están detenidas mientras concilias. Si falta
-                  vender, pulsa <strong>Reabrir ventas</strong> arriba.
                 </>
               ) : undefined
             }

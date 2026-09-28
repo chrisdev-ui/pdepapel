@@ -15,6 +15,8 @@ interface UseFairSellSourceInput {
   fairEventId: string;
   /** Hay bucket de comprobantes configurado (lo decide el servidor). */
   paymentProofEnabled: boolean;
+  /** La feria está en conciliación: la venta es una olvidada, y el diálogo lo dice. */
+  lateSale?: boolean;
   availableItems: FairInventoryItem[];
   eventItemsByProduct: Map<string, FairInventoryItem>;
   addReservedProduct: (add: (line: any) => void, productId: string) => void;
@@ -32,6 +34,7 @@ export function useFairSellSource({
   storeId,
   fairEventId,
   paymentProofEnabled,
+  lateSale = false,
   availableItems,
   eventItemsByProduct,
   addReservedProduct,
@@ -129,13 +132,14 @@ export function useFairSellSource({
         pickerLabel: "Producto reservado",
         scannerDescription:
           "Apunta la cámara a la etiqueta del producto o al QR de la cápsula.",
-        confirmNote:
-          "Cada venta queda como pedido pagado. Si falta reserva, no se registra ni descuenta parcialmente.",
+        confirmNote: lateSale
+          ? "La feria está en conciliación: esta venta olvidada queda como pedido pagado y la fila del producto pedirá una unidad menos por contar."
+          : "Cada venta queda como pedido pagado. Si falta reserva, no se registra ni descuenta parcialmente.",
         submitError:
           "No se cobró la venta; revisa el inventario de feria e intenta de nuevo.",
         saleNoun: "venta de feria",
       },
     }),
-    [addReservedProduct, availableItems, fairEventId, eventItemsByProduct, paymentProofEnabled, storeId],
+    [addReservedProduct, availableItems, fairEventId, eventItemsByProduct, lateSale, paymentProofEnabled, storeId],
   );
 }

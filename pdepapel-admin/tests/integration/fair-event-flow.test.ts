@@ -151,7 +151,8 @@ describe("fair event flow with MySQL", () => {
       status: OrderStatus.PAID,
       type: OrderType.FESTIVAL,
       paidAt: expect.any(Date),
-      payment: { method: PaymentMethod.CASH },
+      adminNotes: "Venta presencial · Feria de pruebas",
+      payment: { method: PaymentMethod.CASH, details: "Venta presencial · Feria de pruebas" },
     });
     expect(sale.order.orderItems).toEqual(
       expect.arrayContaining([
@@ -185,16 +186,34 @@ describe("fair event flow with MySQL", () => {
       storeId: fixture.store.id,
       fairEventId: fairEvent.id,
     });
+    // Una venta olvidada se registra durante la conciliación, con su marca.
+    const lateSale = await createFairSale({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      items: [{ productId: fixture.component.id, quantity: 1 }],
+      paymentMethod: PaymentMethod.CASH,
+      idempotencyKey: "fair-event-test-sale-while-reconciling",
+      userId: fixture.store.userId,
+    });
+    expect(lateSale.order).toMatchObject({
+      status: OrderStatus.PAID,
+      adminNotes: expect.stringContaining("registrada durante conciliación"),
+      payment: { details: expect.stringContaining("registrada durante conciliación") },
+    });
     await expect(
-      createFairSale({
+      testPrisma.fairEventInventoryItem.findUniqueOrThrow({
+        where: { fairEventId_productId: { fairEventId: fairEvent.id, productId: fixture.component.id } },
+      }),
+    ).resolves.toMatchObject({ allocatedQuantity: 4, soldQuantity: 3, packedQuantity: 0 });
+    // Ya se habían vendido 2 (una directa y una cápsula); ahora falta 1 por contar (4 − 3): contar 3 ya no cuadra.
+    await expect(
+      reconcileFairEvent({
         storeId: fixture.store.id,
         fairEventId: fairEvent.id,
-        items: [{ productId: fixture.component.id, quantity: 1 }],
-        paymentMethod: PaymentMethod.CASH,
-        idempotencyKey: "fair-event-test-sale-while-reconciling",
+        items: [{ productId: fixture.component.id, returnedQuantity: 3, damagedQuantity: 0, lostQuantity: 0 }],
         userId: fixture.store.userId,
       }),
-    ).rejects.toMatchObject({ statusCode: 409 });
+    ).rejects.toMatchObject({ statusCode: 400 });
     await reopenFairEvent({
       storeId: fixture.store.id,
       fairEventId: fairEvent.id,
@@ -213,7 +232,7 @@ describe("fair event flow with MySQL", () => {
       items: [
         {
           productId: fixture.component.id,
-          returnedQuantity: 2,
+          returnedQuantity: 1,
           damagedQuantity: 0,
           lostQuantity: 0,
         },
@@ -231,7 +250,7 @@ describe("fair event flow with MySQL", () => {
       testPrisma.product.findUniqueOrThrow({
         where: { id: fixture.component.id },
       }),
-    ).resolves.toMatchObject({ stock: 4 });
+    ).resolves.toMatchObject({ stock: 3 });
     await expect(
       testPrisma.marketplaceOutboxEvent.findMany({
         where: {
@@ -243,11 +262,11 @@ describe("fair event flow with MySQL", () => {
       expect.arrayContaining([
         expect.objectContaining({
           productId: fixture.component.id,
-          payload: { targetQuantity: 4 },
+          payload: { targetQuantity: 3 },
         }),
         expect.objectContaining({
           productId: fixture.kit.id,
-          payload: { targetQuantity: 2 },
+          payload: { targetQuantity: 1 },
         }),
       ]),
     );
@@ -262,7 +281,7 @@ describe("fair event flow with MySQL", () => {
     ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: "FESTIVAL_ALLOCATION", quantity: -4 }),
-        expect.objectContaining({ type: "FESTIVAL_RETURN", quantity: 2 }),
+        expect.objectContaining({ type: "FESTIVAL_RETURN", quantity: 1 }),
       ]),
     );
   });
@@ -697,5 +716,54 @@ describe("fair event flow with MySQL", () => {
       expect.objectContaining({ productId: fixture.component.id, quantity: 2, kind: "RESTOCK" }),
     ]);
     // Cleanup: the fixture only deletes existing products; the deleted piece needs none.
+  });
+
+  it("registers a forgotten kit sale during reconciliation and still refuses sales in DRAFT and CLOSED", async () => {
+    fixture = await createInventoryFixture();
+    const f = fixture;
+    const fairEvent = await testPrisma.fairEvent.create({
+      data: { storeId: f.store.id, name: "Feria kit olvidado", createdBy: f.store.userId },
+    });
+    const sell = (idempotencyKey: string) =>
+      createFairSale({
+        storeId: f.store.id,
+        fairEventId: fairEvent.id,
+        items: [{ productId: f.kit.id, quantity: 1 }],
+        paymentMethod: PaymentMethod.CASH,
+        idempotencyKey,
+        userId: f.store.userId,
+      });
+    await expect(sell("kit-late-draft")).rejects.toMatchObject({ statusCode: 409 });
+    await allocateFairInventory({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      allocations: [{ productId: fixture.kit.id, quantity: 2 }],
+      userId: fixture.store.userId,
+    });
+    await openFairEvent({ storeId: fixture.store.id, fairEventId: fairEvent.id });
+    await startFairReconciliation({ storeId: fixture.store.id, fairEventId: fairEvent.id });
+    const late = await sell("kit-late-reconciling");
+    expect(late.order).toMatchObject({
+      total: 10000,
+      totalProductCost: 8000,
+      adminNotes: expect.stringContaining("registrada durante conciliación"),
+    });
+    await expect(
+      testPrisma.fairEventInventoryItem.findUniqueOrThrow({
+        where: { fairEventId_productId: { fairEventId: fairEvent.id, productId: fixture.kit.id } },
+      }),
+    ).resolves.toMatchObject({ allocatedQuantity: 2, soldQuantity: 1 });
+    // Queda 1 kit por contar; contarlo devuelve sus 2 piezas.
+    const closed = await reconcileFairEvent({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      items: [{ productId: fixture.kit.id, returnedQuantity: 1, damagedQuantity: 0, lostQuantity: 0 }],
+      userId: fixture.store.userId,
+    });
+    expect(closed).toMatchObject({ status: FairEventStatus.CLOSED, inventoryIssues: 0 });
+    await expect(
+      testPrisma.product.findUniqueOrThrow({ where: { id: fixture.component.id } }),
+    ).resolves.toMatchObject({ stock: 4 });
+    await expect(sell("kit-late-closed")).rejects.toMatchObject({ statusCode: 409 });
   });
 });

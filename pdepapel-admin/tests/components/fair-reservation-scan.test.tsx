@@ -66,4 +66,67 @@ describe("Ferias · escanear producto para reservar", () => {
     // Ningún escáner nuevo se cuelga de la cápsula: su QR es de la venta.
     expect(screen.queryByRole("button", { name: /cápsula/i })).toBeNull();
   });
+
+});
+
+const reconcilingEvent: FairEventDetail = {
+  ...event,
+  status: "RECONCILING",
+  inventoryItems: [
+    {
+      id: "row-1",
+      productId: "p-1",
+      allocatedQuantity: 3,
+      soldQuantity: 1,
+      packedQuantity: 0,
+      returnedQuantity: 0,
+      damagedQuantity: 0,
+      lostQuantity: 0,
+      product: { id: "p-1", name: "Libreta", sku: "LIB-1", stock: 5, price: 9000, acqPrice: 4000, gtin: null, isKit: false, images: [] },
+      kitComponents: [],
+    },
+  ],
+};
+
+describe("Ferias · conciliación con ventas olvidadas", () => {
+  afterEach(() => window.sessionStorage.clear());
+
+  it("keeps the sell panel usable while reconciling and says what a sale means now", () => {
+    render(<FairEventWorkspace event={reconcilingEvent} paymentProofEnabled={false} />);
+    expect(screen.getByText("Estás contando lo que volvió.")).toBeInTheDocument();
+    expect(screen.queryByText(/Las ventas están detenidas mientras concilias/)).toBeNull();
+    expect(screen.getByLabelText("Código de barras o QR")).toBeEnabled();
+    expect(screen.getByText(/esta venta olvidada queda como pedido pagado/)).toBeInTheDocument();
+  });
+
+  it("keeps the typed counts across a server refresh and a page reload, and resets them only when entering reconciliation", () => {
+    const { rerender } = render(<FairEventWorkspace event={reconcilingEvent} paymentProofEnabled={false} />);
+    const stepper = () => screen.getByRole("spinbutton", { name: "Unidades que volvieron bien de Libreta" });
+    fireEvent.change(stepper(), { target: { value: "2" } });
+    expect(stepper()).toHaveValue("2");
+    expect(screen.getByText("Cuadra", { exact: true })).toBeInTheDocument();
+
+    // Una venta olvidada registrada desde aquí refresca la página: llega otra
+    // lista de filas con una vendida más; lo escrito se queda y la fila avisa.
+    rerender(
+      <FairEventWorkspace
+        event={{ ...reconcilingEvent, inventoryItems: [{ ...reconcilingEvent.inventoryItems[0], soldQuantity: 2 }] }}
+        paymentProofEnabled={false}
+      />,
+    );
+    expect(stepper()).toHaveValue("2");
+    expect(screen.getByText("Sobran 1", { exact: true })).toBeInTheDocument();
+
+    // Recarga: el conteo vuelve del navegador.
+    expect(JSON.parse(window.sessionStorage.getItem("pdepapel:feria-conteo:f1") ?? "{}")).toMatchObject({ "p-1": { returnedQuantity: 2 } });
+    cleanup();
+    render(<FairEventWorkspace event={reconcilingEvent} paymentProofEnabled={false} />);
+    expect(stepper()).toHaveValue("2");
+
+    // Reabrir ventas y volver a conciliar también conserva lo contado.
+    cleanup();
+    const second = render(<FairEventWorkspace event={{ ...reconcilingEvent, status: "OPEN" }} paymentProofEnabled={false} />);
+    second.rerender(<FairEventWorkspace event={reconcilingEvent} paymentProofEnabled={false} />);
+    expect(stepper()).toHaveValue("2");
+  });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   FAIR_PHASES,
   canCancelFairSale,
+  canRegisterFairSale,
   canSellInFair,
   fairMatchesView,
   getReconciliationRowState,
@@ -55,9 +56,13 @@ describe("fair-phases", () => {
     expect(getFairNextStep({ status: "CLOSED", allocated: 3, sold: 3 })).toBeNull();
   });
 
-  it("only sells while open and only cancels sales before the close", () => {
+  it("only sells while open, registers a forgotten sale while reconciling, and only cancels sales before the close", () => {
     expect(canSellInFair("OPEN")).toBe(true);
     expect(canSellInFair("RECONCILING")).toBe(false);
+    expect(canRegisterFairSale("OPEN")).toBe(true);
+    expect(canRegisterFairSale("RECONCILING")).toBe(true);
+    expect(canRegisterFairSale("DRAFT")).toBe(false);
+    expect(canRegisterFairSale("CLOSED")).toBe(false);
     expect(canCancelFairSale("OPEN")).toBe(true);
     expect(canCancelFairSale("RECONCILING")).toBe(true);
     expect(canCancelFairSale("CLOSED")).toBe(false);

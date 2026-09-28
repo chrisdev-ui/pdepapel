@@ -163,6 +163,16 @@ export function getFairNextStep(input: { status: FairEventStatus; allocated: num
   }
 }
 
+/**
+ * Una venta olvidada durante el conteo sigue siendo una venta: la feria en
+ * conciliación acepta registrarla (descuenta de lo que falta por contar en
+ * esa fila) aunque ya no venda al público. `canSellInFair` sigue diciendo
+ * qué fase está vendiendo de verdad (guía, tarjeta de reservado, cierre).
+ */
+export function canRegisterFairSale(status: FairEventStatus): boolean {
+  return status === "OPEN" || status === "RECONCILING";
+}
+
 /** Estados en los que la feria acepta ventas y en los que aún se puede anular una venta. */
 export function canSellInFair(status: FairEventStatus): boolean {
   return status === "OPEN";

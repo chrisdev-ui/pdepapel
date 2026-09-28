@@ -127,8 +127,10 @@ test.describe("ventas en feria", () => {
     await expect(page.getByText("Conciliando", { exact: true })).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByText("Las ventas están detenidas.")).toBeVisible();
-    // Se reservaron 2 y se vendió 1: la fila propone 1 devuelta y ya cuadra.
+    await expect(page.getByText("Estás contando lo que volvió.")).toBeVisible();
+    // Se reservaron 2 y se vendió 1: nada se da por contado hasta pulsar el atajo.
+    await expect(page.getByText("Sin contar", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Todo volvió intacto" }).click();
     await expect(page.getByText("Cuadra", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Cerrar la feria" }).first().click();
