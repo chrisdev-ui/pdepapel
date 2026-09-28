@@ -111,6 +111,23 @@ async function refreshAffectedKits(
   return kitIds;
 }
 
+/**
+ * Bloquea la fila de la feria hasta que termine la transacción. Vender,
+ * anular y cerrar pasan por aquí primero, así que se turnan en vez de
+ * cruzarse: quien llega segundo espera y luego lee el estado ya escrito
+ * (cerrada, o con una venta más), en vez de decidir sobre una foto vieja.
+ */
+async function lockFairEvent(
+  tx: TransactionClient,
+  storeId: string,
+  fairEventId: string,
+) {
+  await tx.$queryRaw`
+    SELECT \`id\` FROM \`FairEvent\`
+     WHERE \`id\` = ${fairEventId} AND \`storeId\` = ${storeId}
+     FOR UPDATE`;
+}
+
 /** Una pieza de la receta de un kit, tal como se leyó al reservar. */
 type KitRecipeLine = {
   componentId: string;
@@ -827,6 +844,7 @@ export async function createFairSale({
       include: { payment: true, orderItems: true },
     });
     if (existingOrder) return { order: existingOrder, duplicate: true };
+    await lockFairEvent(tx, storeId, fairEventId);
 
     const fairEvent = await tx.fairEvent.findFirst({
       where: { id: fairEventId, storeId },
@@ -1099,6 +1117,7 @@ export async function cancelFairSale({
   userId: string;
 }) {
   return prismadb.$transaction(async (tx) => {
+    await lockFairEvent(tx, storeId, fairEventId);
     const fairEvent = await tx.fairEvent.findFirst({
       where: { id: fairEventId, storeId },
       select: { id: true, status: true, name: true },
@@ -1198,6 +1217,7 @@ export async function reconcileFairEvent({
   userId: string;
 }) {
   return prismadb.$transaction(async (tx) => {
+    await lockFairEvent(tx, storeId, fairEventId);
     const fairEvent = await tx.fairEvent.findFirst({
       where: { id: fairEventId, storeId },
       include: {
@@ -1249,7 +1269,7 @@ export async function reconcileFairEvent({
         reconciliation.lostQuantity;
       if (counted !== expectedToReconcile) {
         throw ErrorFactory.InvalidRequest(
-          `“${inventoryItem.product.name}” debe conciliar ${expectedToReconcile} unidades; recibimos ${counted}`,
+          `“${inventoryItem.product.name}” debe conciliar ${expectedToReconcile} unidades; recibimos ${counted}. Si se registró una venta mientras contabas, actualiza la página: el conteo se conserva.`,
         );
       }
     }
@@ -1314,16 +1334,53 @@ export async function reconcileFairEvent({
       failed: returns.failed,
     });
 
-    for (const inventoryItem of fairEvent.inventoryItems) {
-      const reconciliation = itemsByProduct.get(inventoryItem.productId)!;
-      await tx.fairEventInventoryItem.update({
-        where: { id: inventoryItem.id },
-        data: {
-          returnedQuantity: reconciliation.returnedQuantity,
-          damagedQuantity: reconciliation.damagedQuantity,
-          lostQuantity: reconciliation.lostQuantity,
-        },
+    // Guardia optimista antes de escribir las filas: se releen con bloqueo
+    // (lo último confirmado, no la foto de la transacción) y si a alguna le
+    // cambió lo vendido o lo empacado desde que se validó, se aborta entera.
+    // Con la feria bloqueada arriba no debería pasar; es el cinturón.
+    const rowIds = fairEvent.inventoryItems.map((item) => item.id);
+    if (rowIds.length > 0) {
+      const latest = await tx.$queryRaw<
+        { id: string; soldQuantity: number; packedQuantity: number }[]
+      >`
+        SELECT \`id\`, \`soldQuantity\`, \`packedQuantity\`
+          FROM \`FairEventInventoryItem\`
+         WHERE \`fairEventId\` = ${fairEventId}
+           AND \`id\` IN (${Prisma.join(rowIds)})
+         FOR UPDATE`;
+      const latestById = new Map(latest.map((row) => [row.id, row]));
+      const moved = fairEvent.inventoryItems.some((item) => {
+        const row = latestById.get(item.id);
+        return (
+          !row ||
+          Number(row.soldQuantity) !== (item.soldQuantity ?? 0) ||
+          Number(row.packedQuantity) !== (item.packedQuantity ?? 0)
+        );
       });
+      if (moved) {
+        throw ErrorFactory.Conflict(
+          "Alguien registró una venta mientras cerrabas. Actualiza la página y vuelve a intentar cerrar: el conteo se conserva.",
+        );
+      }
+      // Las tres columnas de todas las filas en UN solo UPDATE parametrizado,
+      // acotado a esta feria y a estos ids.
+      const counts = fairEvent.inventoryItems.map((item) => ({
+        id: item.id,
+        ...itemsByProduct.get(item.productId)!,
+      }));
+      const caseFor = (field: "returnedQuantity" | "damagedQuantity" | "lostQuantity") =>
+        Prisma.sql`CASE \`id\` ${Prisma.join(
+          counts.map((row) => Prisma.sql`WHEN ${row.id} THEN ${row[field]}`),
+          " ",
+        )} END`;
+      await tx.$executeRaw`
+        UPDATE \`FairEventInventoryItem\`
+           SET \`returnedQuantity\` = ${caseFor("returnedQuantity")},
+               \`damagedQuantity\` = ${caseFor("damagedQuantity")},
+               \`lostQuantity\` = ${caseFor("lostQuantity")},
+               \`updatedAt\` = NOW(3)
+         WHERE \`fairEventId\` = ${fairEventId}
+           AND \`id\` IN (${Prisma.join(rowIds)})`;
     }
 
     await tx.fairCapsule.updateMany({

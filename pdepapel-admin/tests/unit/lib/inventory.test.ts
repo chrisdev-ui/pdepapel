@@ -345,57 +345,100 @@ describe("inventory movements", () => {
     const tx = {
       product: {
         findMany: vi.fn().mockResolvedValueOnce([
-          { id: "available", name: "Agenda", stock: 3 },
-          { id: "empty", name: "Llavero", stock: 0 },
+          { id: "available", name: "Agenda", stock: 3, storeId: "store-id" },
+          { id: "empty", name: "Llavero", stock: 0, storeId: "store-id" },
         ]),
-        findFirst: vi
-          .fn()
-          .mockResolvedValue({ stock: 3, name: "Agenda" }),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
-      inventoryMovement: { create: vi.fn() },
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      inventoryMovement: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
       productKit: { findMany: vi.fn().mockResolvedValue([]) },
     };
-
     await expect(
       createInventoryMovementBatchResilient(tx as any, [
-        {
-          productId: "available",
-          storeId: "store-id",
-          type: "ORDER_PLACED",
-          quantity: -2,
-        },
-        {
-          productId: "empty",
-          storeId: "store-id",
-          type: "ORDER_PLACED",
-          quantity: -1,
-        },
-        {
-          productId: "missing",
-          storeId: "store-id",
-          type: "ORDER_PLACED",
-          quantity: -1,
-        },
+        { productId: "available", storeId: "store-id", type: "ORDER_PLACED", quantity: -2 },
+        { productId: "empty", storeId: "store-id", type: "ORDER_PLACED", quantity: -1 },
+        { productId: "missing", storeId: "store-id", type: "ORDER_PLACED", quantity: -1 },
       ]),
     ).resolves.toEqual({
-      success: [
-        { productId: "available", quantity: -2, productName: "Agenda" },
-      ],
+      success: [{ productId: "available", quantity: -2, productName: "Agenda" }],
       failed: [
-        {
-          productId: "empty",
-          quantity: -1,
-          productName: "Llavero",
-          reason: "Stock insuficiente. Disponible: 0",
-        },
-        {
-          productId: "missing",
-          quantity: -1,
-          productName: "Desconocido",
-          reason: "Producto no encontrado",
-        },
+        { productId: "empty", quantity: -1, productName: "Llavero", reason: "Stock insuficiente. Disponible: 0" },
+        { productId: "missing", quantity: -1, productName: "Desconocido", reason: "Producto no encontrado" },
       ],
     });
+    // Un solo UPDATE y un solo createMany, con la instantánea correcta.
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.inventoryMovement.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ productId: "available", quantity: -2, previousStock: 3, newStock: 1 })],
+    });
+  });
+
+  it("writes a whole return batch with one UPDATE, one createMany, one kit pass and one marketplace queue", async () => {
+    const { queueMarketplaceStockSyncEvents } = await import("@/lib/mercadolibre/outbox");
+    vi.mocked(queueMarketplaceStockSyncEvents).mockClear();
+    const tx = {
+      product: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            { id: "a", name: "Acuarelas", stock: 1, storeId: "s" },
+            { id: "b", name: "Pinceles", stock: 2, storeId: "s" },
+          ])
+          // Lectura del kit a recalcular: ninguno con receta en este doble.
+          .mockResolvedValueOnce([]),
+        update: vi.fn(),
+      },
+      $executeRaw: vi.fn().mockResolvedValue(2),
+      inventoryMovement: { createMany: vi.fn().mockResolvedValue({ count: 3 }) },
+      productKit: { findMany: vi.fn().mockResolvedValue([{ kitId: "kit" }]) },
+    };
+    const result = await createInventoryMovementBatchResilient(tx as any, [
+      { productId: "a", storeId: "s", type: "FESTIVAL_RETURN", quantity: 1, referenceId: "fair" },
+      { productId: "b", storeId: "s", type: "FESTIVAL_RETURN", quantity: 2, referenceId: "fair" },
+      { productId: "a", storeId: "s", type: "FESTIVAL_RETURN", quantity: 1, referenceId: "fair" },
+      // Otra tienda con el mismo id de producto: no entra.
+      { productId: "a", storeId: "otra", type: "FESTIVAL_RETURN", quantity: 5 },
+    ]);
+    expect(result.success.map((line) => line.productId)).toEqual(["a", "b", "a"]);
+    expect(result.failed).toEqual([expect.objectContaining({ productId: "a", quantity: 5, reason: "Producto no encontrado" })]);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    // Dos líneas del mismo producto llevan instantáneas consecutivas: 1→2 y 2→3.
+    expect(tx.inventoryMovement.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ productId: "a", previousStock: 1, newStock: 2 }),
+        expect.objectContaining({ productId: "b", previousStock: 2, newStock: 4 }),
+        expect.objectContaining({ productId: "a", previousStock: 2, newStock: 3 }),
+      ],
+    });
+    expect(queueMarketplaceStockSyncEvents).toHaveBeenCalledTimes(1);
+    expect(queueMarketplaceStockSyncEvents).toHaveBeenCalledWith(tx, ["a", "b", "kit"]);
+  });
+
+  it("separates the products whose row did not take the update and keeps the rest", async () => {
+    const tx = {
+      product: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            { id: "a", name: "Acuarelas", stock: 3, storeId: "s" },
+            { id: "b", name: "Pinceles", stock: 3, storeId: "s" },
+          ])
+          // Relectura tras el UPDATE parcial: «b» no bajó (otra venta se lo llevó).
+          .mockResolvedValueOnce([
+            { id: "a", stock: 1 },
+            { id: "b", stock: 3 },
+          ]),
+      },
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      inventoryMovement: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      productKit: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const result = await createInventoryMovementBatchResilient(tx as any, [
+      { productId: "a", storeId: "s", type: "ORDER_PLACED", quantity: -2 },
+      { productId: "b", storeId: "s", type: "ORDER_PLACED", quantity: -2 },
+    ]);
+    expect(result.success).toEqual([expect.objectContaining({ productId: "a" })]);
+    expect(result.failed).toEqual([expect.objectContaining({ productId: "b", reason: expect.stringContaining("Stock insuficiente") })]);
+    expect(tx.inventoryMovement.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ productId: "a" })] });
   });
 });

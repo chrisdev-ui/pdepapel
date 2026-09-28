@@ -8,6 +8,8 @@ const { prisma, resilientBatch, recordIssues, queueSync } = vi.hoisted(() => {
     fairEventInventoryItem: { updateMany: vi.fn(), update: vi.fn() },
     productKit: { findMany: vi.fn() },
     product: { findMany: vi.fn().mockResolvedValue([]) },
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(
@@ -214,6 +216,7 @@ describe("fair reconciliation phase", () => {
     });
     recordIssues.mockResolvedValueOnce(1);
 
+    prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "item-1", soldQuantity: 2, packedQuantity: 0 }]);
     const result = await reconcileFairEvent({
       storeId: "s",
       fairEventId: "fair-1",
@@ -282,6 +285,7 @@ describe("fair reconciliation phase", () => {
       { id: "c2", name: "Bitácora", sku: "BIT", acqPrice: 6000, price: 15000 },
     ]);
     resilientBatch.mockResolvedValueOnce({ success: [], failed: [] });
+    prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "item-kit", soldQuantity: 1, packedQuantity: 0 }, { id: "item-loose", soldQuantity: 0, packedQuantity: 0 }]);
     await reconcileFairEvent({
       storeId: "s",
       fairEventId: "fair-1",

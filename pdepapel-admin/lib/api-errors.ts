@@ -201,6 +201,14 @@ export const handleErrorResponse = (
             503,
             { code: error.code, retryAfterSeconds: 2 },
           );
+        case "P2028":
+          // La transacción interactiva superó su tiempo y Prisma la deshizo
+          // entera: no quedó nada a medias. Reintentable, no un fallo.
+          return new AppError(
+            "La operación tardó demasiado y no se guardó nada. Intenta de nuevo.",
+            503,
+            { code: error.code, retryAfterSeconds: 3 },
+          );
         case "P2034":
           // Con Serializable, dos escrituras a la vez sobre la misma fila
           // abortan una: es reintentable, no un fallo del servidor.

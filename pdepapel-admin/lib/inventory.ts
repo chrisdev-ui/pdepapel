@@ -522,6 +522,24 @@ export async function createInventoryMovementBatch(
   }
 }
 
+/**
+ * Muchos movimientos de una vez, sin que uno malo frene a los demás.
+ *
+ * Antes cada movimiento repetía la ruta individual (leer el producto,
+ * descontar, insertar, recalcular kits, encolar Mercado Libre): cinco viajes
+ * a la base por unidad de trabajo. Al cerrar una feria de 76 filas eran
+ * unos 450 viajes seguidos dentro de una transacción, y desde Vercel a
+ * Railway eso pasa del minuto que tiene una función: el cierre de FERIA
+ * SOLARIS se cortó a los 60 s el 2026-09-28 y la transacción se deshizo.
+ *
+ * Ahora se planea todo en memoria contra una sola lectura de los productos
+ * y se escribe en cuatro pasos: UN `UPDATE … CASE` parametrizado por tienda
+ * (acotado a esos ids y a esa tienda, con la guardia «no bajar de cero» en el
+ * WHERE), UN `createMany` con los movimientos, una pasada de kits y una
+ * cola de Mercado Libre. Lo resiliente sigue igual: un producto que no
+ * existe, que es de otra tienda o que no tiene stock para el descuento se
+ * salta y queda en `failed` con su motivo, y el resto entra.
+ */
 export async function createInventoryMovementBatchResilient(
   tx: PrismaTx,
   movements: CreateInventoryMovementParams[],
@@ -539,76 +557,143 @@ export async function createInventoryMovementBatchResilient(
       reason: string;
     }[],
   };
+  if (movements.length === 0) return results;
 
-  // Pre-fetch names for reporting
   const productIds = Array.from(new Set(movements.map((m) => m.productId)));
   const products = await tx.product.findMany({
     where: { id: { in: productIds } },
-    select: { id: true, name: true, stock: true },
+    select: { id: true, name: true, stock: true, storeId: true },
   });
-  const productMap = new Map(products.map((p) => [p.id, p]));
+  const productMap = new Map(products.map((p) => [p.id, { ...p }]));
 
-  // Process sequentially to isolate failures
+  // Plan en memoria, en orden: el stock corre movimiento a movimiento para que
+  // dos líneas del mismo producto lleven instantáneas consecutivas y correctas.
+  type Planned = CreateInventoryMovementParams & {
+    previousStock: number;
+    newStock: number;
+    productName: string;
+  };
+  const planned: Planned[] = [];
   for (const movement of movements) {
     const product = productMap.get(movement.productId);
-    if (!product) {
+    if (!product || product.storeId !== movement.storeId) {
       results.failed.push({
         productId: movement.productId,
         quantity: movement.quantity,
-        productName: "Desconocido",
+        productName: product?.name ?? "Desconocido",
         reason: "Producto no encontrado",
       });
       continue;
     }
-
-    try {
-      // Validate individual item if it's a decrement
-      if (movement.quantity < 0) {
-        // We check against the LATEST known state in DB?
-        // Or since we are inside a transaction, we accept we verify against snapshot?
-        // Let's re-verify strict availability to be safe (small penalty for safety)
-        if (product.stock < Math.abs(movement.quantity)) {
-          throw new Error(`Stock insuficiente. Disponible: ${product.stock}`);
-        }
-      }
-
-      // Create movement individually (re-using single function which does atomic update)
-      // Note: This calls findUniqueOrThrow inside, which is 1 extra read per item.
-      // But for "Resilient" (partial failure), we accept this cost for safety.
-      // Optimization: we could rewrite logic here to avoid re-read, but let's trust createInventoryMovement
-      // which now uses ATOMIC updates.
-      await createInventoryMovement(tx, movement);
-
-      results.success.push({
-        productId: movement.productId,
-        quantity: movement.quantity,
-        productName: product.name,
-      });
-
-      // Update our local map in case we have multiple Ops for same product in this batch
-      product.stock += movement.quantity;
-    } catch (error: any) {
+    if (movement.quantity < 0 && product.stock < Math.abs(movement.quantity)) {
       results.failed.push({
         productId: movement.productId,
         quantity: movement.quantity,
         productName: product.name,
-        reason: error.message || "Error desconocido",
+        reason: `Stock insuficiente. Disponible: ${product.stock}`,
       });
+      continue;
+    }
+    const previousStock = product.stock;
+    const newStock = previousStock + movement.quantity;
+    planned.push({ ...movement, previousStock, newStock, productName: product.name });
+    product.stock = newStock;
+  }
+  if (planned.length === 0) return results;
+
+  // Un UPDATE por tienda, acotado a sus ids: `stock = stock + delta` respeta lo
+  // que otra venta haya movido mientras tanto, y la guardia del WHERE deja
+  // fuera al producto que ya no tiene con qué descontar.
+  const deltaByStore = new Map<string, Map<string, number>>();
+  for (const line of planned) {
+    const byProduct = deltaByStore.get(line.storeId) ?? new Map<string, number>();
+    byProduct.set(line.productId, (byProduct.get(line.productId) ?? 0) + line.quantity);
+    deltaByStore.set(line.storeId, byProduct);
+  }
+  const rejectedProductIds = new Set<string>();
+  for (const [storeId, byProduct] of Array.from(deltaByStore.entries())) {
+    const entries = Array.from(byProduct.entries()).filter(([, delta]) => delta !== 0);
+    if (entries.length === 0) continue;
+    const ids = entries.map(([id]) => id);
+    const deltaCase = Prisma.sql`CASE \`id\` ${Prisma.join(
+      entries.map(([id, delta]) => Prisma.sql`WHEN ${id} THEN ${delta}`),
+      " ",
+    )} ELSE 0 END`;
+    const affected = await tx.$executeRaw`
+      UPDATE \`Product\`
+         SET \`stock\` = \`stock\` + ${deltaCase},
+             \`updatedAt\` = NOW(3)
+       WHERE \`storeId\` = ${storeId}
+         AND \`id\` IN (${Prisma.join(ids)})
+         AND \`stock\` + ${deltaCase} >= 0`;
+    if (affected !== ids.length) {
+      // Alguna fila no entró (se quedó sin stock o desapareció entre la
+      // lectura y la escritura): se relee esa tienda y se separan.
+      const current = await tx.product.findMany({
+        where: { id: { in: ids }, storeId },
+        select: { id: true, stock: true },
+      });
+      const stockNow = new Map(current.map((p) => [p.id, p.stock]));
+      for (const [id] of entries) {
+        const expected = productMap.get(id)?.stock;
+        if (stockNow.get(id) !== expected) rejectedProductIds.add(id);
+      }
     }
   }
+  const accepted: Planned[] = [];
+  for (const line of planned) {
+    if (rejectedProductIds.has(line.productId)) {
+      results.failed.push({
+        productId: line.productId,
+        quantity: line.quantity,
+        productName: line.productName,
+        reason:
+          line.quantity < 0
+            ? "Stock insuficiente. Otra operación lo descontó al mismo tiempo"
+            : "Producto no encontrado",
+      });
+      continue;
+    }
+    accepted.push(line);
+  }
+  if (accepted.length === 0) return results;
 
-  // Reactive: recalculate kit stock for any affected parent kits
-  if (results.success.length > 0) {
-    const successIds = results.success.map((s) => s.productId);
-    const parentKits = await tx.productKit.findMany({
-      where: { componentId: { in: successIds } },
-      select: { kitId: true },
+  await tx.inventoryMovement.createMany({
+    data: accepted.map((line) => ({
+      storeId: line.storeId,
+      productId: line.productId,
+      type: line.type,
+      quantity: line.quantity,
+      previousStock: line.previousStock,
+      newStock: line.newStock,
+      reason: line.reason,
+      description: line.description,
+      referenceId: line.referenceId,
+      cost: line.cost,
+      price: line.price,
+      createdBy: line.createdBy,
+    })),
+  });
+  for (const line of accepted) {
+    results.success.push({
+      productId: line.productId,
+      quantity: line.quantity,
+      productName: line.productName,
     });
-    if (parentKits.length > 0) {
-      const kitIds = Array.from(new Set(parentKits.map((p) => p.kitId)));
-      await recalculateKitStock(tx, kitIds);
-    }
   }
 
+  // Los kits que contienen estas piezas se recalculan una sola vez, y
+  // Mercado Libre se entera una sola vez (antes, la ruta individual lo
+  // encolaba movimiento a movimiento).
+  const successIds = Array.from(new Set(accepted.map((line) => line.productId)));
+  const parentKits = await tx.productKit.findMany({
+    where: { componentId: { in: successIds } },
+    select: { kitId: true },
+  });
+  const kitIds = Array.from(new Set(parentKits.map((p) => p.kitId)));
+  if (kitIds.length > 0) {
+    await recalculateKitStock(tx, kitIds);
+  }
+  await queueMarketplaceStockSyncEvents(tx, [...successIds, ...kitIds]);
   return results;
 }
