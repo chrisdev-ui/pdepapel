@@ -42,7 +42,7 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 vi.mock("@/lib/utils", () => ({
-  CACHE_HEADERS: { DYNAMIC: { "Cache-Control": "public, max-age=60" } },
+  CACHE_HEADERS: { DYNAMIC: { "Cache-Control": "public, max-age=60" }, NO_CACHE: { "Cache-Control": "no-store" } },
   generateRandomSKU: vi.fn(),
   getPublicIdFromCloudinaryUrl: vi.fn(),
   parseErrorDetails: vi.fn(),
@@ -63,6 +63,7 @@ vi.mock("@/lib/discount-engine", () => ({
   getProductsPrices: mocks.getProductsPrices,
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
+vi.mock("@/lib/product-families", () => ({ loadProductFamilies: vi.fn() }));
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: vi.fn() } }));
 
@@ -145,6 +146,30 @@ describe("GET /api/[storeId]/products", () => {
     ]);
   });
 
+  /*
+   * `groups=` devuelve familias con la forma del listado agrupado, sin caché,
+   * para que un favorito guardado como familia se refresque como tal.
+   */
+  it("answers groups= with family cards and never touches the catalog cache", async () => {
+    const { Redis } = await import("@upstash/redis");
+    const get = vi.fn();
+    const set = vi.fn();
+    vi.mocked(Redis.fromEnv).mockReturnValue({ get, set } as never);
+    const loadProductFamilies = vi.mocked((await import("@/lib/product-families")).loadProductFamilies);
+    loadProductFamilies.mockResolvedValueOnce([{ id: "v1", productGroupId: "g1", name: "Kits Básicos", isGroup: true, variantCount: 2 }] as never);
+    const response = await GET(
+      new Request("https://admin.example.com/api/store-id/products?groups=g1,g2"),
+      { params: { storeId: "store-id" } },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(loadProductFamilies).toHaveBeenCalledWith("store-id", ["g1", "g2"]);
+    expect(await response.json()).toEqual([{ id: "v1", productGroupId: "g1", name: "Kits Básicos", isGroup: true, variantCount: 2 }]);
+    expect(get).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
+    vi.mocked(Redis.fromEnv).mockReset();
+  });
+
   it("never reads or writes the catalog cache for a live-stock request by ids", async () => {
     const { Redis } = await import("@upstash/redis");
     const get = vi.fn().mockResolvedValue({ products: [{ id: "stale" }] });
@@ -156,6 +181,8 @@ describe("GET /api/[storeId]/products", () => {
         { params: { storeId: "store-id" } },
       );
       expect(response.status).toBe(200);
+      // «Siempre fresco para el carrito»: el Cache-Control del catálogo no debe pisarlo.
+      expect(response.headers.get("Cache-Control")).toContain("no-store");
       await expect(response.json()).resolves.toMatchObject([{ id: standaloneProduct.id }]);
       expect(get).not.toHaveBeenCalled();
       expect(set).not.toHaveBeenCalled();

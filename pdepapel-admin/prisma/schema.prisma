@@ -1015,6 +1015,11 @@ model CustomerWishlistItem {
   productId  String
   /// Precio efectivo (con oferta) que vio la clienta al guardar; sirve para avisar «bajó de precio».
   savedPrice Float?
+  /// Guardado como familia (grupo de variantes) desde la tarjeta o la ficha del
+  /// grupo: Favoritos lo muestra como grupo con «Elegir opción», no como la
+  /// variante que le puso cara ese día. `productId` es la variante que
+  /// representaba al grupo al guardarlo.
+  savedAsGroup Boolean @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

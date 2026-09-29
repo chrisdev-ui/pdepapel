@@ -33,6 +33,7 @@ import {
   type PublicProductRecord,
 } from "@/lib/public-catalog";
 import { getHeldUnitsByPresale } from "@/lib/presale";
+import { loadProductFamilies } from "@/lib/product-families";
 import { PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
 import { Prisma } from "@prisma/client";
 import {
@@ -443,6 +444,24 @@ export async function GET(
       : undefined;
 
     // ---------------------------------------------------------
+    // FAMILIAS POR ID DE GRUPO (favoritos guardados como familia)
+    // ---------------------------------------------------------
+    // Como `ids=`, sin caché y antes de todo lo demás: devuelve cada grupo con
+    // la forma del listado agrupado (nombre del grupo, rango, opciones, stock
+    // sumado), para que un favorito guardado como familia se refresque como
+    // familia y no como la variante que le puso cara ese día.
+    const groupIds =
+      searchParams.get("groups")?.split(",").filter(Boolean) || [];
+    if (groupIds.length > 0) {
+      const families = await loadProductFamilies(params.storeId, groupIds);
+      // NO_CACHE va al final: `corsHeaders` trae el Cache-Control del catálogo
+      // y lo pisaría.
+      return NextResponse.json(families, {
+        headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+      });
+    }
+
+    // ---------------------------------------------------------
     // OPTIMIZED BULK FETCH (BY IDs)
     // ---------------------------------------------------------
     // Stock en vivo para el carrito y la caja: sale antes de la caché porque
@@ -515,8 +534,10 @@ export async function GET(
 
       return NextResponse.json(response, {
         headers: {
-          ...CACHE_HEADERS.NO_CACHE, // Always fresh for cart check
           ...corsHeaders,
+          // Always fresh for cart check. Va después de `corsHeaders`, que trae
+          // el Cache-Control del catálogo (public, max-age=60) y lo pisaba.
+          ...CACHE_HEADERS.NO_CACHE,
         },
       });
     }

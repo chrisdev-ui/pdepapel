@@ -24,6 +24,8 @@ export interface CatalogQuery {
   productGroupId?: string;
   isOnSale?: boolean;
   ids?: string;
+  /** Familias (grupos de variantes) por id de grupo, para favoritos guardados como familia. */
+  groups?: string;
   /** Por defecto el API omite los productos «Próximamente». */
   availability?: "available" | "coming-soon" | "all";
 }
@@ -68,6 +70,7 @@ export function buildCatalogSearchParams(query: CatalogQuery): URLSearchParams {
   if (query.exact) params.append("exact", "true");
   if (query.isOnSale) params.append("isOnSale", "true");
   if (query.ids) params.append("ids", query.ids);
+  if (query.groups) params.append("groups", query.groups);
   if (query.availability) params.append("availability", query.availability);
 
   return params;
@@ -88,6 +91,7 @@ const STRING_KEYS = [
   "groupBy",
   "productGroupId",
   "ids",
+  "groups",
 ] as const;
 
 const AVAILABILITY = ["available", "coming-soon", "all"] as const;

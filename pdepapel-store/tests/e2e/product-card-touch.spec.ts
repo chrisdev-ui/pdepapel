@@ -138,6 +138,39 @@ test.describe("tarjeta de producto en táctil", () => {
     // Guardar no abre nada ni navega.
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page).toHaveURL(/\/tienda/);
+
+    // En Favoritos sigue siendo la familia: nombre del grupo y «Elegir opción»,
+    // no la variante que le ponía cara con «Agregar al carrito».
+    const nombreFamilia = (
+      await page.locator("article").nth(indice).locator('a[aria-label^="Ver "]').getAttribute("aria-label")
+    )!.replace(/^Ver /, "").trim();
+    await gotoPublicPage(page, "/favoritos");
+    const guardado = page.locator("article").filter({ hasText: nombreFamilia }).first();
+    await expect(guardado).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("link", { name: "Elegir opción" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(0);
+  });
+
+  test("un producto simple guardado sale en Favoritos con «Agregar al carrito»", async ({ page }) => {
+    await gotoPublicPage(page, "/tienda");
+    await page.waitForSelector("article");
+    const indice = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("article")).findIndex((card) =>
+        card.querySelector('button[aria-label="Agregar al carrito"]'),
+      ),
+    );
+    expect(indice, "una tarjeta de producto simple en /tienda").toBeGreaterThanOrEqual(0);
+    await centrarTarjeta(page, indice);
+    const favorito = page.locator("article").nth(indice).getByRole("button", { name: /favoritos/i });
+    await expect(async () => {
+      await favorito.tap();
+      await expect(favorito).toHaveAttribute("aria-pressed", "true", { timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
+
+    await gotoPublicPage(page, "/favoritos");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("1 producto", { timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Elegir opción" })).toHaveCount(0);
   });
 
   test("el botón de favoritos no se superpone a la foto", async ({ page }) => {

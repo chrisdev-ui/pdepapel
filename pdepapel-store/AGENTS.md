@@ -177,6 +177,7 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
 - Keep global client bundles lean: preview modals, cart details, chat, review forms and newsletter libraries load only when the visitor opens or approaches them.
 - Do not mark below-the-fold assets as `priority`, and use only the fonts and weights actually used.
 - **Server actions run one at a time (Next 14.2).** A server-action call issued while another is in flight can be dropped silently. Sequence them, or move one to a plain fetch.
+- **Favorites keep the family.** The heart on a product-group card saves the group (`savedAsGroup`), and the favorites page must show it as the family with «Elegir opción», never as the variant that fronted it that day: refresh saved groups with `fetchCatalogFromClient({ groups })` by `productGroupId` and everything else with `ids`, keep the saved `id`/`slug` stable, and carry `savedAsGroup` through `slimStoredProduct`, the account sync (`items` in the PUT) and `mergeAccountProducts`. «Agregar al carrito» on a group still opens the preview: buying needs a variant.
 - Seasonal decoration uses optimized local assets, stays `pointer-events-none`, respects `prefers-reduced-motion`, and sits below dialogs and privacy prompts.
 
 ## Definition of done

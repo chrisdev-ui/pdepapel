@@ -10,7 +10,11 @@ import {
   syncAccountWishlist,
 } from "@/actions/account-wishlist";
 import { env } from "@/lib/env.mjs";
-import { useWishlist, WishlistProduct } from "@/hooks/use-wishlist";
+import {
+  refreshWishlistItems,
+  useWishlist,
+  WishlistProduct,
+} from "@/hooks/use-wishlist";
 import { Product } from "@/types";
 
 const getItemsKey = (productIds: string[]) => [...productIds].sort().join(",");
@@ -23,12 +27,13 @@ export function mergeAccountProducts(
   remote: AccountWishlistItem[],
   products: Product[],
   known: Pick<WishlistProduct, "id" | "addedOn">[],
+  families: Product[] = [],
 ): WishlistProduct[] {
   const productsById = new Map(
     products.map((product) => [product.id, product]),
   );
   const addedOnById = new Map(known.map((item) => [item.id, item.addedOn]));
-  return remote.flatMap((entry) => {
+  const items = remote.flatMap((entry) => {
     const product = productsById.get(entry.productId);
     if (!product) return [];
     const serverDate = entry.createdAt ? new Date(entry.createdAt) : null;
@@ -36,8 +41,17 @@ export function mergeAccountProducts(
       serverDate && !Number.isNaN(serverDate.getTime())
         ? serverDate
         : (addedOnById.get(entry.productId) ?? new Date());
-    return [{ ...product, addedOn, savedPrice: entry.savedPrice ?? null }];
+    return [
+      {
+        ...product,
+        addedOn,
+        savedPrice: entry.savedPrice ?? null,
+        savedAsGroup: Boolean(entry.savedAsGroup),
+      },
+    ];
   });
+  // La familia se superpone después, con la misma regla que en Favoritos.
+  return refreshWishlistItems(items, [], families);
 }
 
 async function getProducts(
@@ -50,7 +64,27 @@ async function getProducts(
     `${env.NEXT_PUBLIC_API_URL}/products`,
     { params: { ids: remote.map((entry) => entry.productId).join(",") } },
   );
-  return mergeAccountProducts(remote, response.data, known);
+  // Las familias van por su grupo: el id guardado solo dice qué variante le
+  // ponía cara al grupo ese día.
+  const savedAsGroup = new Set(
+    remote.filter((entry) => entry.savedAsGroup).map((entry) => entry.productId),
+  );
+  const groups = Array.from(
+    new Set(
+      response.data
+        .filter((product) => savedAsGroup.has(product.id) && product.productGroupId)
+        .map((product) => product.productGroupId as string),
+    ),
+  );
+  const families =
+    groups.length > 0
+      ? (
+          await axios.get<Product[]>(`${env.NEXT_PUBLIC_API_URL}/products`, {
+            params: { groups: groups.join(",") },
+          })
+        ).data
+      : [];
+  return mergeAccountProducts(remote, response.data, known, families);
 }
 
 export function WishlistSyncProvider() {
@@ -82,11 +116,13 @@ export function WishlistSyncProvider() {
         if (!sessionToken) return;
 
         const remoteItems = await getAccountWishlist(sessionToken);
-        const guestProductIds = guestItems.map((item) => item.id);
-        const remote = guestProductIds.length
+        const remote = guestItems.length
           ? await syncAccountWishlist({
               sessionToken,
-              productIds: guestProductIds,
+              entries: guestItems.map((item) => ({
+                productId: item.id,
+                savedAsGroup: item.savedAsGroup,
+              })),
               mode: "merge",
             })
           : remoteItems;
@@ -128,6 +164,10 @@ export function WishlistSyncProvider() {
     const productIds = items.map((item) => item.id);
     const currentKey = `${userId}:${getItemsKey(productIds)}`;
     if (lastSyncedKey.current === currentKey) return;
+    const entries = items.map((item) => ({
+      productId: item.id,
+      savedAsGroup: item.savedAsGroup,
+    }));
 
     const timeout = window.setTimeout(async () => {
       try {
@@ -136,7 +176,7 @@ export function WishlistSyncProvider() {
 
         const synced = await syncAccountWishlist({
           sessionToken,
-          productIds,
+          entries,
           mode: "replace",
         });
         const syncedProductIds = synced.map((entry) => entry.productId);

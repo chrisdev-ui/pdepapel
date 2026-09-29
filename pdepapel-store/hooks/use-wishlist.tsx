@@ -12,6 +12,60 @@ export interface WishlistProduct extends Product {
   addedOn: Date;
   /** Precio que vio la clienta al guardar (cuenta); para avisar si bajó. */
   savedPrice?: number | null;
+  /**
+   * Guardado como familia (grupo de variantes) desde la tarjeta o la ficha
+   * del grupo. `id` es la variante que le ponía cara al grupo ese día; al
+   * refrescar, la familia se busca por `productGroupId` y se muestra como
+   * grupo con «Elegir opción», no como esa variante.
+   */
+  savedAsGroup?: boolean;
+}
+
+/**
+ * Refresca cada favorito con lo que hay hoy en el catálogo. Un favorito
+ * guardado como familia toma la familia por su grupo (nombre del grupo,
+ * rango, opciones, stock sumado) y conserva su `id` y su `slug`: son la
+ * llave del favorito y de la fila de la cuenta. Sin familia (grupo borrado)
+ * se queda con la variante, y sin nada fresco se queda como estaba.
+ */
+export function refreshWishlistItems(
+  items: WishlistProduct[],
+  products: Product[],
+  families: Product[] = [],
+): WishlistProduct[] {
+  const fresh = new Map(products.map((product) => [product.id, product]));
+  const byGroup = new Map(
+    families
+      .filter((family) => family.productGroupId)
+      .map((family) => [family.productGroupId as string, family]),
+  );
+  return items.map((item) => {
+    const family =
+      item.savedAsGroup && item.productGroupId
+        ? byGroup.get(item.productGroupId)
+        : undefined;
+    if (family) {
+      return {
+        ...item,
+        ...family,
+        id: item.id,
+        slug: item.slug ?? family.slug,
+        addedOn: item.addedOn,
+        savedPrice: item.savedPrice,
+        savedAsGroup: true,
+      };
+    }
+    const product = fresh.get(item.id);
+    return product
+      ? {
+          ...item,
+          ...product,
+          addedOn: item.addedOn,
+          savedPrice: item.savedPrice,
+          savedAsGroup: item.savedAsGroup,
+        }
+      : item;
+  });
 }
 
 interface WishlistStore {
@@ -26,8 +80,8 @@ interface WishlistStore {
   moveToCartMultiple: (ids: string[]) => void;
   /** Al carrito sin quitarlo de favoritos. Devuelve si se agregó. */
   addToCart: (id: string) => boolean;
-  /** Refresca precio y stock desde el catálogo conservando la fecha de guardado. */
-  refreshItems: (products: Product[]) => void;
+  /** Refresca precio y stock desde el catálogo conservando la fecha de guardado; las familias llegan aparte. */
+  refreshItems: (products: Product[], families?: Product[]) => void;
   /** Agrega los que falten sin avisos; devuelve cuántos entraron. */
   addMany: (products: Product[]) => number;
   clearWishlist: () => void;
@@ -57,6 +111,9 @@ export const useWishlist = create(
         const newItem: WishlistProduct = {
           ...item,
           addedOn: new Date(),
+          // Un grupo se guarda como familia; la variante que lo representa
+          // hoy puede cambiar mañana y no debe convertirse en el favorito.
+          savedAsGroup: Boolean(item.isGroup),
         };
         const items = [...currentItems, newItem];
         set(get().accountUserId ? { items } : { items, guestItems: items });
@@ -154,20 +211,18 @@ export const useWishlist = create(
         const known = new Set(current.map((item) => item.id));
         const fresh = products
           .filter((product) => !known.has(product.id))
-          .map((product) => ({ ...product, addedOn: new Date() }));
+          .map((product) => ({
+            ...product,
+            addedOn: new Date(),
+            savedAsGroup: Boolean(product.isGroup),
+          }));
         if (fresh.length === 0) return 0;
         const items = [...current, ...fresh];
         set(get().accountUserId ? { items } : { items, guestItems: items });
         return fresh.length;
       },
-      refreshItems: (products: Product[]) => {
-        const fresh = new Map(products.map((product) => [product.id, product]));
-        const items = get().items.map((item) => {
-          const product = fresh.get(item.id);
-          return product
-            ? { ...item, ...product, addedOn: item.addedOn }
-            : item;
-        });
+      refreshItems: (products: Product[], families: Product[] = []) => {
+        const items = refreshWishlistItems(get().items, products, families);
         set(get().accountUserId ? { items } : { items, guestItems: items });
       },
       moveToCartMultiple: (ids: string[]) => {
@@ -194,6 +249,7 @@ export const useWishlist = create(
           guestItems: state.guestItems.map((item) => ({
             ...slimStoredProduct(item),
             addedOn: item.addedOn,
+            savedAsGroup: item.savedAsGroup,
           })),
         }) as unknown as WishlistStore,
       migrate: (persisted, version) => {

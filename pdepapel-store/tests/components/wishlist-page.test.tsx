@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/nextjs", () => ({ SignedOut: ({ children }: { children: React.ReactNode }) => <>{children}</>, SignedIn: () => null }));
@@ -8,6 +8,8 @@ vi.mock("@/actions/get-products", () => ({ getProducts: vi.fn(async () => ({ pro
 vi.mock("@/components/ui/product-card", () => ({ default: ({ product }: { product: { name: string } }) => <div data-testid="card">{product.name}</div> }));
 vi.mock("@/components/product-list", () => ({ ProductList: ({ title }: { title: string }) => <div>{title}</div> }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+const catalog = vi.hoisted(() => ({ fetchCatalogFromClient: vi.fn() }));
+vi.mock("@/lib/catalog-client", () => ({ fetchCatalogFromClient: catalog.fetchCatalogFromClient }));
 
 import { Wishlist } from "@/app/(routes)/favoritos/components/wishlist";
 import { useCart } from "@/hooks/use-cart";
@@ -16,6 +18,7 @@ import { useWishlist, WishlistProduct } from "@/hooks/use-wishlist";
 const item = (id: string, name: string, stock: number) => ({ id, slug: id, name, price: "5000", stock, images: [], reviews: [], addedOn: new Date("2026-09-02T12:00:00Z") }) as unknown as WishlistProduct;
 
 beforeEach(() => {
+  catalog.fetchCatalogFromClient.mockReset().mockResolvedValue({ products: [] });
   useCart.setState({ items: [] });
   useWishlist.setState({ items: [item("a", "Washi pastel", 4), item("b", "Libreta Flower", 0), item("c", "Stickers 3D", 2)], guestItems: [], accountUserId: null, isHydrated: true });
 });
@@ -43,5 +46,32 @@ describe("Wishlist page", () => {
     render(<Wishlist categories={[{ id: "c1", typeId: "t", name: "🎀 Stickers", slug: "stickers" }]} />);
     expect(screen.getByText("Todavía no tienes favoritos")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Stickers" })).toHaveAttribute("href", "/categoria/stickers");
+  });
+
+  /*
+   * Un grupo guardado desde la tarjeta sigue siendo la familia después del
+   * refresco: nombre del grupo y «Elegir opción», aunque el catálogo por id
+   * devuelva la variante que le ponía cara. Un producto simple no cambia.
+   */
+  it("shows a saved group as the family with «Elegir opción» after the refresh", async () => {
+    const familyItem = { ...item("v-naranja", "Kits Básicos de apuntes", 3), slug: "kit-naranja", isGroup: true, productGroupId: "g1", variantCount: 4, savedAsGroup: true } as WishlistProduct;
+    useWishlist.setState({ items: [familyItem, item("a", "Washi pastel", 4)], guestItems: [] });
+    catalog.fetchCatalogFromClient.mockImplementation(async (query: { ids?: string; groups?: string }) => {
+      if (query.groups === "g1") return { products: [{ id: "v-azul", slug: "kit-azul", name: "Kits Básicos de apuntes", price: 17000, stock: 5, images: [], reviews: [], isGroup: true, productGroupId: "g1", variantCount: 5 }] };
+      return { products: [
+        { id: "v-naranja", slug: "kit-naranja", name: "Kit Básico de apuntes Girly Naranja", price: 18000, stock: 0, images: [], reviews: [], isGroup: false, productGroupId: "g1" },
+        { id: "a", slug: "a", name: "Washi pastel", price: "4500", stock: 4, images: [], reviews: [] },
+      ] };
+    });
+    render(<Wishlist />);
+    await waitFor(() => expect(useWishlist.getState().items[0].variantCount).toBe(5));
+    expect(catalog.fetchCatalogFromClient).toHaveBeenCalledWith(expect.objectContaining({ ids: "a,v-naranja" }), expect.anything());
+    expect(catalog.fetchCatalogFromClient).toHaveBeenCalledWith(expect.objectContaining({ groups: "g1" }), expect.anything());
+    expect(screen.getAllByTestId("card").map((card) => card.textContent)).toEqual(["Kits Básicos de apuntes", "Washi pastel"]);
+    expect(screen.getByRole("link", { name: "Elegir opción" })).toHaveAttribute("href", "/producto/kit-naranja");
+    expect(screen.getAllByRole("button", { name: "Agregar al carrito" })).toHaveLength(1);
+    expect(useWishlist.getState().items[0]).toMatchObject({ id: "v-naranja", isGroup: true, savedAsGroup: true, price: 17000 });
+    // La familia no entra en «agregar todos»: comprar pide la variante.
+    expect(screen.getByText(/1 disponible ahora/)).toBeInTheDocument();
   });
 });

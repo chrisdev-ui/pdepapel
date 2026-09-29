@@ -25,4 +25,25 @@ describe("mergeAccountProducts", () => {
     expect(merged[1].addedOn).toEqual(known);
     expect(merged[1].savedPrice).toBeNull();
   });
+
+  it("superpone la familia a un favorito guardado como grupo y deja la variante a los demás", () => {
+    const products = [
+      { id: "v-naranja", name: "Kit Básico de apuntes Girly Naranja", isGroup: false, productGroupId: "g1", slug: "kit-naranja" },
+      { id: "s1", name: "Washi pastel", productGroupId: null },
+    ] as unknown as Product[];
+    const families = [
+      { id: "v-azul", name: "Kits Básicos de apuntes", isGroup: true, productGroupId: "g1", variantCount: 4, slug: "kit-azul" },
+    ] as unknown as Product[];
+    const merged = mergeAccountProducts(
+      [
+        { productId: "v-naranja", savedPrice: 18000, savedAsGroup: true, createdAt: "2026-09-20T12:00:00Z" },
+        { productId: "s1", savedPrice: null, createdAt: "2026-09-21T12:00:00Z" },
+      ],
+      products,
+      [],
+      families,
+    );
+    expect(merged[0]).toMatchObject({ id: "v-naranja", slug: "kit-naranja", name: "Kits Básicos de apuntes", isGroup: true, variantCount: 4, savedAsGroup: true, savedPrice: 18000 });
+    expect(merged[1]).toMatchObject({ id: "s1", name: "Washi pastel", savedAsGroup: false });
+  });
 });

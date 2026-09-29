@@ -24,14 +24,39 @@ const normalizeProductIds = (value: unknown) => {
   );
 };
 
+/**
+ * El cuerpo del PUT en sus dos formas: `productIds` (clientes anteriores,
+ * ningún favorito es familia) o `items` con `savedAsGroup` por producto.
+ * Devuelve los ids válidos y qué ids se guardaron como familia.
+ */
+const parseWishlistBody = (body: { productIds?: unknown; items?: unknown }) => {
+  if (Array.isArray(body.items)) {
+    const entries = body.items.filter(
+      (entry): entry is { productId: string; savedAsGroup?: unknown } =>
+        Boolean(entry) && typeof entry === "object" && typeof (entry as { productId?: unknown }).productId === "string",
+    );
+    const productIds = normalizeProductIds(entries.map((entry) => entry.productId));
+    const savedAsGroup = new Set(
+      entries.filter((entry) => entry.savedAsGroup === true).map((entry) => entry.productId),
+    );
+    return { productIds, savedAsGroup };
+  }
+  return { productIds: normalizeProductIds(body.productIds), savedAsGroup: new Set<string>() };
+};
+
 /** Favoritos de la cuenta con el precio visto al guardar y la fecha real de guardado. */
 async function listItems(storeId: string, userId: string) {
   const rows = await prismadb.customerWishlistItem.findMany({
     where: { storeId, userId },
-    select: { productId: true, savedPrice: true, createdAt: true },
+    select: { productId: true, savedPrice: true, savedAsGroup: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
-  return rows.map((row) => ({ productId: row.productId, savedPrice: row.savedPrice, createdAt: row.createdAt }));
+  return rows.map((row) => ({
+    productId: row.productId,
+    savedPrice: row.savedPrice,
+    savedAsGroup: row.savedAsGroup,
+    createdAt: row.createdAt,
+  }));
 }
 
 export async function OPTIONS(req: Request) {
@@ -73,12 +98,13 @@ export async function PUT(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const { productIds, mode = "replace" } = await req.json();
+    const body = await req.json();
+    const mode = body?.mode ?? "replace";
     if (mode !== "merge" && mode !== "replace") {
       throw ErrorFactory.InvalidRequest("Modo de sincronización no válido");
     }
 
-    const requestedProductIds = normalizeProductIds(productIds);
+    const { productIds: requestedProductIds, savedAsGroup } = parseWishlistBody(body ?? {});
     const existingProducts = await prismadb.product.findMany({
       where: {
         storeId: params.storeId,
@@ -120,9 +146,27 @@ export async function PUT(
             userId,
             productId,
             savedPrice: savedPriceFor(productId),
+            savedAsGroup: savedAsGroup.has(productId),
           })),
           skipDuplicates: true,
         });
+        // Una fila que ya existía conserva su precio guardado, pero la intención
+        // (familia o variante) es la de ahora: si la clienta quitó la familia y
+        // guardó esa misma variante a propósito, el flag tiene que bajar.
+        const asGroup = validProductIds.filter((productId) => savedAsGroup.has(productId));
+        const asVariant = validProductIds.filter((productId) => !savedAsGroup.has(productId));
+        if (asGroup.length > 0) {
+          await tx.customerWishlistItem.updateMany({
+            where: { storeId: params.storeId, userId, productId: { in: asGroup }, savedAsGroup: false },
+            data: { savedAsGroup: true },
+          });
+        }
+        if (asVariant.length > 0) {
+          await tx.customerWishlistItem.updateMany({
+            where: { storeId: params.storeId, userId, productId: { in: asVariant }, savedAsGroup: true },
+            data: { savedAsGroup: false },
+          });
+        }
       }
     });
 

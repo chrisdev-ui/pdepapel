@@ -67,10 +67,27 @@ export function Wishlist({ suggestions = [], categories = [] }: WishlistProps) {
       items.map((item) => [item.id, Number(item.price)]),
     );
     const controller = new AbortController();
-    fetchCatalogFromClient({ ids }, controller.signal)
-      .then(({ products }) => {
+    // Las familias se refrescan por su grupo: el `ids=` del catálogo devuelve
+    // variantes sueltas y convertiría un grupo guardado en la variante que le
+    // ponía cara ese día.
+    const groups = Array.from(
+      new Set(
+        items
+          .filter((item) => item.savedAsGroup && item.productGroupId)
+          .map((item) => item.productGroupId as string),
+      ),
+    )
+      .sort()
+      .join(",");
+    Promise.all([
+      fetchCatalogFromClient({ ids }, controller.signal),
+      groups
+        ? fetchCatalogFromClient({ groups }, controller.signal)
+        : Promise.resolve({ products: [] as Product[] }),
+    ])
+      .then(([{ products }, { products: families }]) => {
         setPreviousPrices((current) => ({ ...current, ...stored }));
-        refreshItems(products);
+        refreshItems(products, families);
       })
       .catch((error) => {
         if ((error as Error)?.name === "AbortError") return;
