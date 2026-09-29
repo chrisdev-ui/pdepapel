@@ -470,6 +470,10 @@ export async function PATCH(
     };
 
     let issuedGiftCard: IssuedGiftCard | null = null;
+    // La caché se purga DESPUÉS del commit: dentro de la transacción esperaba a
+    // Redis, a la tienda y a QStash con los bloqueos de inventario tomados, y
+    // el 2026-09-29 eso colgó «Marcar como pagado» hasta los 60 s de Vercel.
+    let purgeCacheAfterCommit = false;
     const updatedOrder = await prismadb.$transaction(async (tx) => {
       // Batch process products for better performance
       const products = await processOrderItemsInBatches(
@@ -959,8 +963,8 @@ export async function PATCH(
           });
         }
 
-        // Invalidate cache since stock changed
-        await invalidateStoreProductsCache(params.storeId);
+        // Invalidate cache since stock changed (after commit)
+        purgeCacheAfterCommit = true;
       }
 
       // El dinero es otra cosa que la mercancia: un pedido contra entrega se
@@ -1033,8 +1037,8 @@ export async function PATCH(
         // We use standard batch because restocking shouldn't fail (unless product deleted?)
         await createInventoryMovementBatch(tx, stockMovements, false);
 
-        // Invalidate cache since stock changed
-        await invalidateStoreProductsCache(params.storeId);
+        // Invalidate cache since stock changed (after commit)
+        purgeCacheAfterCommit = true;
 
         // CRITICAL FIX: Decrement coupon usage when PAID order becomes unpaid
         if (order.coupon) {
@@ -1066,6 +1070,10 @@ export async function PATCH(
 
       return updated;
     });
+
+    if (purgeCacheAfterCommit) {
+      await invalidateStoreProductsCache(params.storeId);
+    }
 
     if (issuedGiftCard) {
       await deliverGiftCard(issuedGiftCard, { buyerName: updatedOrder.fullName });

@@ -319,4 +319,46 @@ describe("PATCH order coupon", () => {
     });
     expect(mocks.orderUpdate).not.toHaveBeenCalled();
   });
+
+  /*
+   * La caché se purga después del commit. Dentro de la transacción esperaba a
+   * Redis, a la tienda y a QStash con los bloqueos tomados, y el 2026-09-29
+   * eso colgó «Marcar como pagado» hasta los 60 s de Vercel.
+   */
+  it("purges the storefront cache only after the transaction has committed", async () => {
+    const { default: prismadb } = await import("@/lib/prismadb");
+    const { invalidateStoreProductsCache } = await import("@/lib/cache");
+    const sequence: string[] = [];
+    // Los modelos que el camino de pago toca y este arnés no declara responden vacío.
+    const fallback = (method: string) =>
+      vi.fn().mockResolvedValue(method === "findMany" ? [] : method.startsWith("find") ? null : {});
+    const lenientModel = (model: Record<string, unknown>) =>
+      new Proxy(model, { get: (target, key: string) => (key in target ? target[key] : fallback(key)) });
+    const lenientTx = new Proxy(mocks.transactionClient as Record<string, Record<string, unknown>>, {
+      get: (target, key: string) => lenientModel(key in target ? target[key] : {}),
+    });
+    vi.mocked(prismadb.$transaction).mockImplementationOnce((async (callback: (tx: unknown) => Promise<unknown>) => {
+      const result = await callback(lenientTx);
+      sequence.push("commit");
+      return result;
+    }) as never);
+    vi.mocked(invalidateStoreProductsCache).mockImplementationOnce(async () => {
+      sequence.push("purge");
+    });
+    const inventory = await import("@/lib/inventory");
+    vi.mocked(inventory.createInventoryMovementBatchResilient).mockResolvedValueOnce({ succeeded: [], failed: [] } as never);
+    mocks.orderUpdate.mockResolvedValue({ ...mocks.existingOrder, status: OrderStatus.PAID, orderItems: [{ productId: "product-1", quantity: 1, price: 10_000 }] });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/store-1/orders/order-1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: OrderStatus.PAID, expectedStatus: OrderStatus.DRAFT, payment: { method: "BankTransfer", transactionId: "REF-1" } }),
+      }),
+      { params: { storeId: "store-1", orderId: "order-1" } },
+    );
+
+    expect(response.status).toBe(200);
+    expect(sequence).toEqual(["commit", "purge"]);
+  });
 });
