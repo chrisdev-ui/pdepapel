@@ -67,3 +67,9 @@ backup_prod_*.sql
 # producción: URL de escritura y aprobación de un solo uso (nunca al repositorio)
 .env.prod-write
 .prod-write-approval.json
+
+# Seguimiento de créditos de Cloudinary: credencial propia y registros locales (nunca se suben)
+/scripts/cloudinary-monitor/.env
+/scripts/cloudinary-monitor/usage-log.csv
+/scripts/cloudinary-monitor/monitoring-log.md
+/scripts/cloudinary-monitor/*.log

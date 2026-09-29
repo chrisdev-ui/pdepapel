@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pdepapel.cloudinary-monitor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/christiantorres/.nvm/versions/node/v24.15.0/bin/node</string>
+    <string>--env-file=/Users/christiantorres/Developer/Proyectos/P de Papel Ecommerce/pdepapel/pdepapel-admin/scripts/cloudinary-monitor/.env</string>
+    <string>/Users/christiantorres/Developer/Proyectos/P de Papel Ecommerce/pdepapel/pdepapel-admin/scripts/cloudinary-monitor/usage.mjs</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/christiantorres/Developer/Proyectos/P de Papel Ecommerce/pdepapel/pdepapel-admin/scripts/cloudinary-monitor</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/christiantorres/Developer/Proyectos/P de Papel Ecommerce/pdepapel/pdepapel-admin/scripts/cloudinary-monitor/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/christiantorres/Developer/Proyectos/P de Papel Ecommerce/pdepapel/pdepapel-admin/scripts/cloudinary-monitor/launchd.err.log</string>
+</dict>
+</plist>

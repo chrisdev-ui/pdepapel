@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "cloudinary:usage": "node --env-file=scripts/cloudinary-monitor/.env scripts/cloudinary-monitor/usage.mjs",
     "email:dev": "email dev -p 3001 -d ./emails",
     "build": "next build",
     "start": "next start",
