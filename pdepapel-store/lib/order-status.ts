@@ -44,13 +44,28 @@ const ISSUE_STATUSES: ReadonlySet<string> = new Set([
 ]);
 
 type StageSource = Pick<Order, "status"> & {
+  type?: string | null;
   payment?: Pick<Order["payment"], "method"> | null;
   shipping?: Pick<Shipping, "status" | "provider"> | null;
 };
 
+/** Compra de una tarjeta de regalo: se entrega por correo, nunca se envía. */
+export const isGiftCardPurchase = (order: { type?: string | null }) =>
+  order.type === "GIFT_CARD";
+
 export function getOrderStage(order: StageSource): OrderStageInfo {
   const paymentMethod = order.payment?.method;
   const shippingStatus = order.shipping?.status;
+
+  if (isGiftCardPurchase(order) && order.status === OrderStatus.PAID) {
+    return {
+      stage: "delivered",
+      label: "Tarjeta enviada por correo",
+      description:
+        "Recibimos tu pago y el código de la tarjeta de regalo ya salió por correo, en un mensaje aparte.",
+      tone: "success",
+    };
+  }
 
   if (order.status === OrderStatus.CANCELLED) {
     return {
@@ -206,6 +221,28 @@ export function getOrderTimeline(order: TimelineSource): TimelineStep[] {
   const { stage } = getOrderStage(order);
   const shippingStatus = order.shipping?.status;
   const pickup = order.shipping?.provider === "NONE";
+
+  // Una tarjeta de regalo tiene tres hitos: creada, pagada, enviada por correo.
+  if (isGiftCardPurchase(order)) {
+    const paid = stage === "delivered";
+    return [
+      { id: "created", label: "Pedido creado", state: "done", date: order.createdAt },
+      {
+        id: "paid",
+        label: "Pago confirmado",
+        state: paid ? "done" : stage === "cancelled" ? "pending" : "current",
+        date: paid ? (order.paidAt ?? null) : null,
+        detail: stage === "verifying" ? "Esperando la verificación del pago" : stage === "unpaid" ? "Pendiente de pago" : undefined,
+      },
+      {
+        id: "shipped",
+        label: "Tarjeta enviada por correo",
+        state: paid ? "done" : "pending",
+        date: paid ? (order.paidAt ?? null) : null,
+        detail: paid ? undefined : "Sale en cuanto el pago se confirme",
+      },
+    ];
+  }
 
   const paidDone =
     stage === "paid" ||

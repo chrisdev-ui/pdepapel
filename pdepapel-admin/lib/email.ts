@@ -218,6 +218,9 @@ export const sendOrderEmail = async (
 
     const readableStatus = getReadableStatus(status);
     const readablePayment = getReadablePaymentMethod(order.payment);
+    // Compra de tarjeta de regalo: no se empaca ni se envía; el código sale
+    // en otro correo (lib/gift-card-delivery.ts).
+    const digital = order.type === OrderType.GIFT_CARD;
     const orderItems = getOrderLineItems(order);
     const orderSummary = getOrderSummary(order);
     const orderLink = getOrderLink(order.id);
@@ -231,8 +234,14 @@ export const sendOrderEmail = async (
     const subjectCustomer = `Tu pedido #${order.orderNumber} - ${readableStatus}`;
 
     // Thank you paragraph
-    const thanksParagraph =
-      status === OrderStatus.PAID
+    const giftCardTarget = order.giftRecipientEmail
+      ? `al correo de ${order.giftRecipientName || "quien la recibe"}`
+      : "a tu correo";
+    const thanksParagraph = digital
+      ? status === OrderStatus.PAID
+        ? `¡Gracias! El código de la tarjeta de regalo ya salió ${giftCardTarget}, en un correo aparte.`
+        : "Recibimos tu compra de la tarjeta de regalo. En cuanto el pago se confirme, el código sale por correo."
+      : status === OrderStatus.PAID
         ? "¡Gracias por tu compra! Estamos procesando tu pedido y te notificaremos cuando sea enviado."
         : "Gracias por confiar en nosotros. Si tienes dudas, responde al correo papeleria.pdepapel@gmail.com o contáctanos por WhatsApp.";
 
@@ -259,9 +268,10 @@ export const sendOrderEmail = async (
           orderLink,
           thanksParagraph,
           notificationSource: getOrderNotificationSource(status),
-          giftRecipientName: isGiftOrder(order)
+          giftRecipientName: isGiftOrder(order) && !digital
             ? order.giftRecipientName
             : null,
+          digital,
         }) as React.ReactElement,
         text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${getOrderNotificationSource(status)}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
       });
@@ -285,16 +295,18 @@ export const sendOrderEmail = async (
           orderLink,
           thanksParagraph,
           accountClaimLink,
-          giftRecipientName: isGiftOrder(order)
+          giftRecipientName: isGiftOrder(order) && !digital
             ? order.giftRecipientName
             : null,
+          digital,
         }) as React.ReactElement,
         text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`,
       });
     }
 
-    // El regalo se anuncia a quien recibe solo con el pago confirmado.
-    if (status === OrderStatus.PAID) {
+    // El regalo se anuncia a quien recibe solo con el pago confirmado. Una
+    // tarjeta de regalo tiene su propio correo con el código: no se avisa dos veces.
+    if (status === OrderStatus.PAID && !digital) {
       await sendGiftNotification(order, status);
     }
   } catch (error) {

@@ -45,6 +45,7 @@ export const CUSTOMER_ORDER_SELECT = {
   id: true,
   orderNumber: true,
   status: true,
+  type: true,
   userId: true,
   guestId: true,
   /** Solo para calcular `createdByAdmin`; nunca se devuelve tal cual. */
@@ -71,6 +72,12 @@ export const CUSTOMER_ORDER_SELECT = {
   isGift: true,
   giftRecipientName: true,
   giftMessage: true,
+  // Tarjeta de regalo: cuánto cubrió (pedido que la usó) o qué tarjeta
+  // compró este pedido (solo nombre, valor, últimos cuatro y si ya salió).
+  giftCardAmount: true,
+  giftCardPurchase: {
+    select: { recipientName: true, initialAmount: true, codeLast4: true, deliveredAt: true },
+  },
   coupon: { select: { code: true } },
   payment: { select: { id: true, method: true, transactionId: true } },
   shipping: {
@@ -138,4 +145,5 @@ export const INTERNAL_ORDER_FIELDS = [
   "idempotencyKey",
   "giftRecipientEmail",
   "giftRecipientPhone",
+  "giftCardId",
 ] as const;

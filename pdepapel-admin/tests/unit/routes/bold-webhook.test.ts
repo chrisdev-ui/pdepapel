@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   invalidateStoreProductsCache: vi.fn(),
   recordPaidOrderInGoogleAnalytics: vi.fn(),
   sendOrderEmail: vi.fn(),
+  issueGiftCardForOrder: vi.fn().mockResolvedValue(null),
+  deliverGiftCard: vi.fn().mockResolvedValue(true),
   transaction: vi.fn(),
 }));
 
@@ -34,6 +36,10 @@ vi.mock("@/lib/prismadb", () => ({
 }));
 
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+// Tarjetas de regalo: la emisión corre dentro de la transacción de pago y el
+// correo con el código después; aquí solo se comprueba que se llaman.
+vi.mock("@/lib/gift-cards", () => ({ issueGiftCardForOrder: mocks.issueGiftCardForOrder }));
+vi.mock("@/lib/gift-card-delivery", () => ({ deliverGiftCard: mocks.deliverGiftCard }));
 vi.mock("@/lib/shipping-helpers", () => ({
   createGuideForOrder: mocks.createGuideForOrder,
 }));
@@ -268,6 +274,48 @@ describe("POST /api/webhook/bold", () => {
       "order-id",
     );
     expect(mocks.createGuideForOrder).not.toHaveBeenCalled();
+  });
+
+  it("issues a gift card inside the payment transaction and mails the code after it commits", async () => {
+    const issued = { card: { id: "card-1", purchaseOrderId: "order-id", codeLast4: "ABCD" }, code: "PDP-AAAA-BBBB-CCCC", deliverTo: "mariana@example.com" };
+    mocks.issueGiftCardForOrder.mockResolvedValueOnce(issued);
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+      couponRedemption: { updateMany: vi.fn() },
+    };
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      storeId: "store-id",
+      fullName: "Luisa Sánchez",
+      type: "GIFT_CARD",
+      payment: { method: PaymentMethod.Bold },
+      status: OrderStatus.PENDING,
+      total: 100000,
+      orderItems: [],
+      coupon: null,
+    });
+    mocks.findUpdatedOrder.mockResolvedValue({ id: "order-id", orderNumber: "ORD-123", storeId: "store-id", status: OrderStatus.PAID, type: "GIFT_CARD", payment: { method: PaymentMethod.Bold }, shipping: null, orderItems: [] });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+    mocks.calculateOrderFinancials.mockResolvedValue({ totalProductCost: 0, gatewayFee: 0, shippingCost: 0, netProfit: 0, profitMarginPct: 0 });
+    mocks.createInventoryMovementBatchResilient.mockResolvedValue({ success: [], failed: [] });
+
+    const response = await POST(
+      createWebhookRequest({
+        type: "SALE_APPROVED",
+        data: { amount: { currency: "COP", total: 100000 }, metadata: { reference: "ORD-123" } },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.issueGiftCardForOrder).toHaveBeenCalledWith(transactionClient, expect.objectContaining({ storeId: "store-id", orderId: "order-id" }));
+    // Una tarjeta no se empaca: no se abre envío.
+    expect(transactionClient.shipping.upsert).not.toHaveBeenCalled();
+    expect(mocks.deliverGiftCard).toHaveBeenCalledWith(issued, { buyerName: "Luisa Sánchez" });
   });
 
   it("does not resurrect a cancelled order when an old approval is replayed", async () => {

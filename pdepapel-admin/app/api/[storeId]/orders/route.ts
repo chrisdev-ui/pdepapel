@@ -12,6 +12,8 @@ import { priceLines } from "@/lib/product-pricing";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeGiftFields, type GiftFields } from "@/lib/gift-orders";
+import { deliverGiftCard } from "@/lib/gift-card-delivery";
+import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
 
 import {
   CACHE_HEADERS,
@@ -350,6 +352,7 @@ async function createOrder(
       }
     }
 
+    let issuedGiftCard: IssuedGiftCard | null = null;
     const order = await prismadb.$transaction(async (tx) => {
       // STRICT VALIDATION: Check if we are creating an active order
       if (
@@ -673,10 +676,19 @@ async function createOrder(
           where: { id: createdOrder.id },
           data: { ...financials, paidAt: new Date() } as any,
         });
+        issuedGiftCard = await issueGiftCardForOrder(tx, {
+          storeId: params.storeId,
+          orderId: createdOrder.id,
+          createdBy: authenticatedUserId || "SYSTEM",
+        });
       }
 
       return createdOrder;
     });
+
+    if (issuedGiftCard) {
+      await deliverGiftCard(issuedGiftCard, { buyerName: order.fullName });
+    }
 
     let guideCreationResult = {
       attempted: false,
@@ -1024,6 +1036,7 @@ export async function PATCH(
 
     await verifyStoreOwner(userId, params.storeId);
 
+    const issuedGiftCards: IssuedGiftCard[] = [];
     const result = await prismadb.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -1271,6 +1284,12 @@ export async function PATCH(
             where: { id: updated.id },
             data: financials as any,
           });
+          const issued = await issueGiftCardForOrder(tx, {
+            storeId: params.storeId,
+            orderId: updated.id,
+            createdBy: userId,
+          });
+          if (issued) issuedGiftCards.push(issued);
         }
 
         if (leavesPaid && updated.coupon) {
@@ -1296,6 +1315,11 @@ export async function PATCH(
       }
       return updatedOrders;
     });
+
+    for (const issued of issuedGiftCards) {
+      const buyer = result.find((row) => row.id === issued.card.purchaseOrderId);
+      await deliverGiftCard(issued, { buyerName: buyer?.fullName ?? null });
+    }
 
     // Send email notifications asynchronously
     setImmediate(async () => {

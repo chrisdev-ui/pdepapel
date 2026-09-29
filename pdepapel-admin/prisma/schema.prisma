@@ -58,6 +58,9 @@ model Store {
   payments                       PaymentDetails[]                @relation("StoreToPaymentDetails")
   suppliers                      Supplier[]                      @relation("StoreToSupplier")
   coupons                        Coupon[]                        @relation("StoreToCoupons")
+  giftCards                      GiftCard[]                      @relation("StoreToGiftCard")
+  giftCardMovements              GiftCardMovement[]              @relation("StoreToGiftCardMovement")
+  giftCardDenominations          GiftCardDenomination[]          @relation("StoreToGiftCardDenomination")
   customerAddresses              CustomerAddress[]               @relation("StoreToCustomerAddress")
   customerWishlistItems          CustomerWishlistItem[]          @relation("StoreToCustomerWishlistItem")
   customerSavedSearches          CustomerSavedSearch[]           @relation("StoreToCustomerSavedSearch")
@@ -450,9 +453,9 @@ model Product {
   priceTiers        ProductPriceTier[]
 
   // -- KIT / COMBO FIELDS --
-  isKit         Boolean      @default(false)
-  kitComponents ProductKit[] @relation("KitToComponent")
-  componentIn   ProductKit[] @relation("ComponentToKit")
+  isKit                Boolean                 @default(false)
+  kitComponents        ProductKit[]            @relation("KitToComponent")
+  componentIn          ProductKit[]            @relation("ComponentToKit")
   /// Ferias en las que este producto salió como pieza de un kit reservado.
   fairKitComponentRows FairEventKitComponent[] @relation("FairKitComponentToProduct")
 
@@ -798,6 +801,16 @@ model Order {
   giftRecipientPhone String?
   giftMessage        String? @db.Text
 
+  // -- Tarjeta de regalo (2026-09) --
+  // Lo que una tarjeta cubrió de este pedido. `total` NO cambia: la tarjeta
+  // es un medio de pago, no un descuento; lo que va a la pasarela es
+  // `total - giftCardAmount` (lib/gift-cards.ts getAmountDue).
+  giftCardId       String?
+  giftCardAmount   Float     @default(0)
+  giftCard         GiftCard? @relation("GiftCardRedemption", fields: [giftCardId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// La tarjeta que ESTE pedido compró (solo pedidos de tipo GIFT_CARD).
+  giftCardPurchase GiftCard? @relation("GiftCardPurchase")
+
   // Sender Info
   createdBy String? // Admin User ID
   /**
@@ -830,6 +843,111 @@ model Order {
   @@index([type])
   @@index([storeId, fairEventId])
   @@index([analyticsPurchaseTrackedAt])
+  @@index([giftCardId])
+}
+
+// ---------------------------------------------------------------------------
+// Tarjetas de regalo (2026-09).
+//
+// El código nunca se guarda en claro ni cifrado: solo su sha256 y los últimos
+// cuatro caracteres. `balance` es una caché del libro (`GiftCardMovement`):
+// toda escritura de saldo pasa por lib/gift-cards.ts, bloquea la fila
+// (SELECT … FOR UPDATE) y deja un movimiento; las pruebas comprueban que la
+// suma del libro coincide con la caché.
+// ---------------------------------------------------------------------------
+
+enum GiftCardStatus {
+  ACTIVE
+  VOID
+}
+
+enum GiftCardMovementType {
+  /// Saldo inicial al confirmarse el pago de la compra.
+  ISSUED
+  /// Reservado por un pedido pendiente de pago (negativo).
+  HELD
+  /// El pedido que la usó quedó pagado: la reserva se vuelve consumo (0, marca).
+  REDEEMED
+  /// La reserva vuelve al saldo: pedido cancelado sin pagar o reserva vencida (positivo).
+  RELEASED
+  /// Un pedido pagado que la usó se canceló o devolvió: el saldo vuelve (positivo).
+  REVERSED
+  /// La tarjeta se anuló (negativo, deja el saldo en cero) o se reemitió con
+  /// código nuevo (0, marca). Solo desde el panel.
+  VOIDED
+  /// Código nuevo para el mismo saldo (0, marca), en la misma transacción que VOIDED.
+  REISSUED
+}
+
+model GiftCard {
+  id              String         @id @default(uuid())
+  storeId         String
+  codeHash        String         @unique @db.VarChar(64)
+  codeLast4       String         @db.VarChar(4)
+  initialAmount   Float
+  balance         Float
+  status          GiftCardStatus @default(ACTIVE)
+  /// El pedido GIFT_CARD que la compró; único: una compra emite una tarjeta.
+  purchaseOrderId String         @unique
+  buyerEmail      String?
+  recipientName   String?
+  recipientEmail  String?
+  message         String?        @db.Text
+  issuedAt        DateTime       @default(now())
+  /// Cuándo salió el correo con el código (o el último reenvío).
+  deliveredAt     DateTime?
+  /// null = sin vencimiento (pendiente de confirmar el mínimo legal en Colombia).
+  expiresAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  store         Store              @relation("StoreToGiftCard", fields: [storeId], references: [id])
+  purchaseOrder Order              @relation("GiftCardPurchase", fields: [purchaseOrderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  redemptions   Order[]            @relation("GiftCardRedemption")
+  movements     GiftCardMovement[]
+
+  @@index([storeId])
+  @@index([storeId, status])
+  @@index([storeId, createdAt])
+}
+
+model GiftCardMovement {
+  id             String               @id @default(uuid())
+  storeId        String
+  giftCardId     String
+  orderId        String?
+  type           GiftCardMovementType
+  /// Con signo: negativo resta saldo, positivo lo devuelve, 0 es una marca.
+  amount         Float
+  balanceAfter   Float
+  reason         String?
+  createdBy      String?
+  /// Una clave por hecho (p. ej. `redeem:<orderId>`): un webhook repetido no
+  /// escribe dos veces.
+  idempotencyKey String?              @unique @db.VarChar(191)
+  createdAt      DateTime             @default(now())
+
+  store    Store    @relation("StoreToGiftCardMovement", fields: [storeId], references: [id])
+  giftCard GiftCard @relation(fields: [giftCardId], references: [id])
+
+  @@index([giftCardId, createdAt])
+  @@index([orderId])
+  @@index([storeId, createdAt])
+}
+
+model GiftCardDenomination {
+  id        String   @id @default(uuid())
+  storeId   String
+  amount    Float
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation("StoreToGiftCardDenomination", fields: [storeId], references: [id])
+
+  @@unique([storeId, amount])
+  @@index([storeId, isActive, sortOrder])
 }
 
 model OrderAccountClaim {
@@ -1235,6 +1353,9 @@ enum OrderType {
   QUOTATION
   FESTIVAL
   POINT_OF_SALE
+  /// Compra de una tarjeta de regalo (2026-09). No es venta de producto: se
+  /// excluye de ingresos, despacho, beneficio de bienvenida y facturación.
+  GIFT_CARD
 }
 
 enum OrderStatus {
@@ -1260,6 +1381,9 @@ enum PaymentMethod {
   PayU
   Bold
   CASH
+  /// Pedido cubierto por completo con una tarjeta de regalo: nunca pasa por
+  /// una pasarela.
+  GiftCard
 }
 
 enum ShippingStatus {
@@ -1646,8 +1770,8 @@ model FairEventInventoryItem {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  fairEvent FairEvent @relation(fields: [fairEventId], references: [id], onDelete: Cascade)
-  product   Product   @relation(fields: [productId], references: [id])
+  fairEvent     FairEvent               @relation(fields: [fairEventId], references: [id], onDelete: Cascade)
+  product       Product                 @relation(fields: [productId], references: [id])
   /// Vacío en un producto suelto. En un kit, la receta congelada al reservar.
   kitComponents FairEventKitComponent[]
 

@@ -1,4 +1,6 @@
 import { sendOrderEmail } from "@/lib/email";
+import { deliverGiftCard } from "@/lib/gift-card-delivery";
+import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
@@ -9,6 +11,7 @@ import {
   OrderStatus,
   PaymentMethod,
   ShippingStatus,
+  OrderType,
 } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
@@ -288,7 +291,8 @@ async function updateOrderData(order: any, transaction: any) {
         },
       });
 
-      if (!paid) return;
+      // Una tarjeta de regalo no se empaca: no se le abre envío.
+      if (!paid || order.type === OrderType.GIFT_CARD) return;
 
       await tx.shipping.upsert({
         where: { orderId: order.id },
@@ -300,6 +304,8 @@ async function updateOrderData(order: any, transaction: any) {
         },
       });
     };
+
+    let issuedGiftCard: IssuedGiftCard | null = null;
 
     const result = await prismadb.$transaction(async (tx) => {
       if (currentStatus === OrderStatus.PAID) {
@@ -417,6 +423,11 @@ async function updateOrderData(order: any, transaction: any) {
         }
 
         await writePaymentArtifacts(tx, true);
+        issuedGiftCard = await issueGiftCardForOrder(tx, {
+          storeId: order.storeId,
+          orderId: order.id,
+          createdBy: "SYSTEM_WOMPI",
+        });
         return { processed: true, shouldInvalidateCache: true };
       }
 
@@ -569,6 +580,10 @@ async function updateOrderData(order: any, transaction: any) {
 
     if (result.shouldInvalidateCache) {
       await invalidateStoreProductsCache(order.storeId);
+    }
+
+    if (issuedGiftCard) {
+      await deliverGiftCard(issuedGiftCard, { buyerName: order.fullName });
     }
 
     // Fetch updated order with relations needed for the email

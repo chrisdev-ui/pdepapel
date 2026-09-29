@@ -1,7 +1,7 @@
 "use client";
 
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { ArrowRight, Bookmark, Heart, LayoutGrid, Mail, Menu, PackageOpen, Store, Tag, User, X } from "lucide-react";
+import { ArrowRight, Bookmark, Heart, LayoutGrid, Mail, Menu, PackageOpen, Store, Tag, User, X, Gift } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -196,6 +196,10 @@ export function CategoryDrawer({ types, featuredSubcategories, logoSrc }: Catego
           <Link href={offersPath} className={cn(rowClass, "font-semibold text-pink-froly")}>
             <Tag aria-hidden="true" className="h-6 w-6 shrink-0" />
             <span className="flex-1">Ofertas</span>
+          </Link>
+          <Link href={STOREFRONT_ROUTES.giftCard} className={rowClass}>
+            <Gift aria-hidden="true" className="h-6 w-6 shrink-0 text-muted-foreground" />
+            <span className="flex-1">Tarjeta de regalo</span>
           </Link>
           <Link href={STOREFRONT_ROUTES.about} className={rowClass}>
             <Store aria-hidden="true" className="h-6 w-6 shrink-0 text-muted-foreground" />

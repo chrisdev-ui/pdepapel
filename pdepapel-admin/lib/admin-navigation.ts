@@ -24,6 +24,7 @@ import {
   Truck,
   Users,
   Warehouse,
+  Gift,
 } from "lucide-react";
 
 /**
@@ -104,6 +105,12 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Vender", segment: "ventas-rapidas" },
           { label: "Etiquetas", segment: "ventas-rapidas?tab=etiquetas" },
         ],
+      },
+      {
+        id: "tarjetas-regalo",
+        label: "Tarjetas de regalo",
+        icon: Gift,
+        segment: "tarjetas-regalo",
       },
       {
         id: "ferias",
@@ -351,6 +358,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   respuestas: "Respuestas automáticas",
   manual: "Manual del panel",
   pedidos: "Pedidos",
+  "tarjetas-regalo": "Tarjetas de regalo",
   "ventas-rapidas": "Punto de venta",
   ferias: "Ferias",
   mercadolibre: "Mercado Libre",

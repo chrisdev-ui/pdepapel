@@ -209,6 +209,9 @@ const Navbar: React.FC<NavbarProps> = ({
         </ul>
         <ul className="ml-auto flex items-center gap-6 whitespace-nowrap font-sans text-sm font-semibold text-muted-foreground">
           <li>
+            <NavigationLink href={STOREFRONT_ROUTES.giftCard}>Tarjeta de regalo</NavigationLink>
+          </li>
+          <li>
             <NavigationLink href={STOREFRONT_ROUTES.about}>Nosotros</NavigationLink>
           </li>
           <li>

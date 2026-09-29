@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   recordPaidOrderInGoogleAnalytics: vi.fn(),
   paymentUpsert: vi.fn(),
   sendOrderEmail: vi.fn(),
+  issueGiftCardForOrder: vi.fn().mockResolvedValue(null),
+  deliverGiftCard: vi.fn().mockResolvedValue(true),
   shippingUpsert: vi.fn(),
   transaction: vi.fn(),
   markWelcomeBenefitRedeemed: vi.fn(),
@@ -36,6 +38,10 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+// Tarjetas de regalo: la emisión corre dentro de la transacción de pago y el
+// correo con el código después; aquí solo se comprueba que se llaman.
+vi.mock("@/lib/gift-cards", () => ({ issueGiftCardForOrder: mocks.issueGiftCardForOrder }));
+vi.mock("@/lib/gift-card-delivery", () => ({ deliverGiftCard: mocks.deliverGiftCard }));
 vi.mock("@/lib/shipping-helpers", () => ({
   createGuideForOrder: mocks.createGuideForOrder,
 }));
@@ -135,6 +141,44 @@ describe("POST /api/webhook/wompi", () => {
         eventType: "transaction.updated",
       }),
     });
+  });
+
+  it("issues a gift card inside the payment transaction and mails the code after it commits", async () => {
+    const issued = { card: { id: "card-1", purchaseOrderId: "order-id", codeLast4: "ABCD" }, code: "PDP-AAAA-BBBB-CCCC", deliverTo: "mariana@example.com" };
+    mocks.issueGiftCardForOrder.mockResolvedValueOnce(issued);
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+      couponRedemption: { updateMany: vi.fn() },
+    };
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      storeId: "store-id",
+      fullName: "Luisa Sánchez",
+      type: "GIFT_CARD",
+      payment: { method: PaymentMethod.Wompi },
+      status: OrderStatus.PENDING,
+      total: 100000,
+      orderItems: [],
+      coupon: null,
+    });
+    mocks.findUpdatedOrder.mockResolvedValue({ id: "order-id", orderNumber: "ORD-123", storeId: "store-id", status: OrderStatus.PAID, type: "GIFT_CARD", payment: { method: PaymentMethod.Wompi }, shipping: null, orderItems: [] });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+    mocks.calculateOrderFinancials.mockResolvedValue({ totalProductCost: 0, gatewayFee: 0, shippingCost: 0, netProfit: 0, profitMarginPct: 0 });
+    mocks.createInventoryMovementBatchResilient.mockResolvedValue({ success: [], failed: [] });
+
+    const response = await POST(
+      createWebhookRequest({ id: "tx-gc", reference: "order-id", status: "APPROVED", amount_in_cents: 10000000, currency: "COP", customer_email: "luisa@example.com", payment_method_type: "CARD" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.issueGiftCardForOrder).toHaveBeenCalledWith(transactionClient, expect.objectContaining({ storeId: "store-id", orderId: "order-id" }));
+    // Una tarjeta no se empaca: no se abre envío.
+    expect(transactionClient.shipping.upsert).not.toHaveBeenCalled();
+    expect(mocks.deliverGiftCard).toHaveBeenCalledWith(issued, { buyerName: "Luisa Sánchez" });
   });
 
   it("processes an approved payment once and prevents duplicate stock deductions", async () => {

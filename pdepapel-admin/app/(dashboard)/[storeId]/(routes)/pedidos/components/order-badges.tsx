@@ -9,4 +9,5 @@ export const CHANNEL_TONE: Record<string, string> = {
   feria: "lavender",
   cotizacion: "lavender",
   personalizado: "cream",
+  regalo: "pink",
 };

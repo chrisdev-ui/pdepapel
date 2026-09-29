@@ -143,13 +143,15 @@ export const orderFormSchema = z
       if (!data.email || !z.string().email().safeParse(data.email).success) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Un pedido activo necesita un correo válido", path: ["email"] });
       }
-      if (!data.phone || !isValidPhoneNumber(data.phone)) {
+      // Una tarjeta de regalo no se envía ni se llama: nombre y correo bastan.
+      const digital = data.type === OrderType.GIFT_CARD;
+      if (!digital && (!data.phone || !isValidPhoneNumber(data.phone))) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Un pedido activo necesita un teléfono válido", path: ["phone"] });
       }
-      if (!data.address || data.address.trim().length === 0) {
+      if (!digital && (!data.address || data.address.trim().length === 0)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Un pedido activo necesita la dirección", path: ["address"] });
       }
-      if (data.orderItems.some((item) => !item.productId)) {
+      if (!digital && data.orderItems.some((item) => !item.productId)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Un pedido activo no puede tener ítems manuales: conviértelos en productos o déjalo como borrador", path: ["orderItems"] });
       }
     }

@@ -72,6 +72,7 @@ export const paymentOptions: Record<PaymentMethod, string> = {
     "Pago en línea (Tarjeta de Crédito / Débito, PSE, Nequi)",
   [PaymentMethod.PayU]: "Pago en línea (No disponible)",
   [PaymentMethod.CASH]: "Pago en efectivo en tienda",
+  [PaymentMethod.GiftCard]: "Tarjeta de regalo (cubre el total)",
 };
 
 export const discountOptions: Record<DiscountType, string> = {
@@ -122,6 +123,7 @@ export const paymentMethodsByOption: {
   },
   [PaymentMethod.Bold]: null,
   [PaymentMethod.PayU]: null,
+  [PaymentMethod.GiftCard]: null,
   [PaymentMethod.BankTransfer]: null,
   [PaymentMethod.COD]: null,
   [PaymentMethod.CASH]: null,
@@ -166,6 +168,7 @@ export const paymentNames: Record<PaymentMethod, string> = {
     "Pago en línea (Tarjeta de Crédito, Débito, PSE, Nequi)",
   [PaymentMethod.PayU]: "Pago en línea (No disponible)",
   [PaymentMethod.CASH]: "Pago en Efectivo (Presencial)",
+  [PaymentMethod.GiftCard]: "Tarjeta de regalo (cubre el total)",
 };
 
 export enum Models {
@@ -199,6 +202,8 @@ export enum Models {
   FairEvents = "fair-events",
   TaxSales = "tax-sales",
   TaxPurchases = "tax-purchases",
+  GiftCards = "gift-cards",
+  GiftCardDenominations = "gift-card-denominations",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -232,6 +237,8 @@ export const ModelLabels: Record<Models, string> = {
   [Models.FairEvents]: "Ferias",
   [Models.TaxSales]: "Ventas declarables",
   [Models.TaxPurchases]: "Facturas de compra",
+  [Models.GiftCards]: "Tarjetas de regalo",
+  [Models.GiftCardDenominations]: "Valores de tarjeta de regalo",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -464,6 +471,19 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     supplierName: "Empresa",
     issuedAt: "Fecha",
     totalAmount: "Valor",
+  },
+  [Models.GiftCards]: {
+    codeLast4: "Termina en",
+    buyer: "Quien compró",
+    recipient: "Quien recibe",
+    initialAmount: "Valor",
+    balance: "Saldo",
+    status: "Estado",
+    issuedAt: "Emitida",
+  },
+  [Models.GiftCardDenominations]: {
+    amount: "Valor",
+    isActive: "Estado",
   },
 };
 

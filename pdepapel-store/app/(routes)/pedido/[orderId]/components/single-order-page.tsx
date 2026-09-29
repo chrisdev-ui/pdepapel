@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { OrderAccountClaimCard } from "@/components/order-account-claim-card";
 import { OrderGiftNotice } from "@/components/order-gift-notice";
+import { OrderGiftCardPurchaseNotice } from "@/components/order-gift-card-purchase-notice";
 import { OrderStageBadge } from "@/components/order-stage-badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import {
   getOrderSupportWhatsAppUrl,
   getOrderTimeline,
   isAwaitingPayment,
+  isGiftCardPurchase,
 } from "@/lib/order-status";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order, ShippingTrackingEvent } from "@/types";
@@ -266,9 +268,10 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       !awaitingPayment,
   );
   const carrier = order.shipping?.carrierName || order.shipping?.courier;
+  const digital = isGiftCardPurchase(order);
   const summaryLine = [
     `Hecho el ${formatOrderDate(order.createdAt, "day")}`,
-    formatUnits(countOrderUnits(order)),
+    digital ? "Tarjeta de regalo" : formatUnits(countOrderUnits(order)),
     stage.stage === "shipped" && carrier ? `Enviado con ${carrier}` : null,
     stage.stage === "delivered" && order.shipping?.actualDeliveryDate
       ? `Entregado el ${formatOrderDate(order.shipping.actualDeliveryDate, "day")}`
@@ -313,6 +316,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           <p className="text-sm text-muted-foreground">{summaryLine}</p>
           <p className="max-w-2xl text-[15px] text-foreground">{stage.description}</p>
           <OrderGiftNotice order={activeOrder} />
+          <OrderGiftCardPurchaseNotice order={activeOrder} />
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
           <Button
@@ -350,23 +354,25 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)] lg:gap-8">
         <div className="order-2 flex flex-col gap-5 lg:order-1">
-          <OrderShippingCard
-            order={activeOrder}
-            awaitingPayment={awaitingPayment}
-            trackingEvents={trackingEvents}
-            canRefreshTracking={canRefreshTracking}
-            isRefreshingTracking={trackingStatus === "pending"}
-            onRefreshTracking={async () =>
-              trackShipment({
-                shippingId: order.shipping.id,
-                guestId: guestId || null,
-                sessionToken: await getToken(),
-              })
-            }
-          />
+          {!digital && order.shipping && (
+            <OrderShippingCard
+              order={activeOrder}
+              awaitingPayment={awaitingPayment}
+              trackingEvents={trackingEvents}
+              canRefreshTracking={canRefreshTracking}
+              isRefreshingTracking={trackingStatus === "pending"}
+              onRefreshTracking={async () =>
+                trackShipment({
+                  shippingId: order.shipping!.id,
+                  guestId: guestId || null,
+                  sessionToken: await getToken(),
+                })
+              }
+            />
+          )}
           <OrderItemsCard
             order={activeOrder}
-            allowReorder={stage.stage !== "unpaid" && stage.stage !== "verifying"}
+            allowReorder={!digital && stage.stage !== "unpaid" && stage.stage !== "verifying"}
           />
           <OrderHelpCard orderNumber={orderNumber} />
         </div>

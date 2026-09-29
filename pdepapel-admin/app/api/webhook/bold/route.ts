@@ -1,4 +1,6 @@
 import { sendOrderEmail } from "@/lib/email";
+import { deliverGiftCard } from "@/lib/gift-card-delivery";
+import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
@@ -17,6 +19,7 @@ import {
   OrderStatus,
   PaymentMethod,
   ShippingStatus,
+  OrderType,
 } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
@@ -290,6 +293,9 @@ async function processBoldPayment(
   }
 
   let paymentProcessed = false;
+  // Compra de tarjeta de regalo: la tarjeta se emite dentro de la misma
+  // transacción que marca el pago y el código sale por correo al confirmar.
+  let issuedGiftCard: IssuedGiftCard | null = null;
   if (targetStatus === OrderStatus.PAID) {
     paymentProcessed = await prismadb.$transaction(async (tx) => {
       // Solo desde un estado sin cobrar. Con CANCELLED aquí, reenviar un
@@ -404,14 +410,23 @@ async function processBoldPayment(
         },
       });
 
-      await tx.shipping.upsert({
-        where: { orderId: order.id },
-        update: { status: ShippingStatus.Preparing },
-        create: {
-          status: ShippingStatus.Preparing,
-          store: { connect: { id: order.storeId } },
-          order: { connect: { id: order.id } },
-        },
+      // Una tarjeta de regalo no se empaca: no se le abre envío.
+      if (order.type !== OrderType.GIFT_CARD) {
+        await tx.shipping.upsert({
+          where: { orderId: order.id },
+          update: { status: ShippingStatus.Preparing },
+          create: {
+            status: ShippingStatus.Preparing,
+            store: { connect: { id: order.storeId } },
+            order: { connect: { id: order.id } },
+          },
+        });
+      }
+
+      issuedGiftCard = await issueGiftCardForOrder(tx, {
+        storeId: order.storeId,
+        orderId: order.id,
+        createdBy: "SYSTEM_BOLD",
       });
 
       return true;
@@ -427,6 +442,10 @@ async function processBoldPayment(
     }
 
     await invalidateStoreProductsCache(order.storeId);
+
+    if (issuedGiftCard) {
+      await deliverGiftCard(issuedGiftCard, { buyerName: order.fullName });
+    }
   } else {
     paymentProcessed = await prismadb.$transaction(async (tx) => {
       // Una anulación puede llegar después de haber cobrado (VOID_APPROVED

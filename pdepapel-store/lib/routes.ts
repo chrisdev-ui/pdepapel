@@ -17,6 +17,7 @@ export const STOREFRONT_ROUTES = {
   newsletterConfirm: "/suscripcion/confirmar",
   newsletterUnsubscribe: "/suscripcion/cancelar",
   comingSoon: "/proximamente",
+  giftCard: "/tarjeta-regalo",
   earlyAccess: "/acceso-anticipado",
 } as const;
 

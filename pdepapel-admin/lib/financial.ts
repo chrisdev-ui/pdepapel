@@ -1,4 +1,6 @@
-import { Order, OrderItem, PaymentMethod } from "@prisma/client";
+import { Order, OrderItem, OrderType, PaymentMethod } from "@prisma/client";
+
+import { getAmountDue } from "@/lib/gift-cards";
 
 interface OrderWithItems extends Order {
   orderItems: OrderItem[];
@@ -131,11 +133,28 @@ export async function calculateOrderFinancials(
   shippingCost: number,
   prismadb: any,
 ): Promise<FinancialMetrics> {
+  // La pasarela cobra sobre lo que pasó por ella: el total menos lo que
+  // cubrió una tarjeta de regalo.
+  const chargedAmount = getAmountDue(order);
+  const gatewayFee = calculateGatewayFee(chargedAmount, paymentMethod);
+
+  // La compra de una tarjeta de regalo no es una venta: no hay producto ni
+  // utilidad; solo la comisión, que sí se paga. El ingreso se reconoce
+  // cuando la tarjeta se usa (lib/revenue-orders.ts).
+  if ((order as { type?: OrderType | null }).type === OrderType.GIFT_CARD) {
+    return {
+      totalProductCost: 0,
+      gatewayFee,
+      shippingCost: 0,
+      netProfit: gatewayFee === 0 ? 0 : -gatewayFee,
+      profitMarginPct: 0,
+    };
+  }
+
   const totalProductCost = await calculateTotalProductCost(
     order.orderItems,
     prismadb,
   );
-  const gatewayFee = calculateGatewayFee(order.total, paymentMethod);
 
   // order.total is the gross amount paid by the customer (subtotal - discount + shipping)
   const netProfit = order.total - totalProductCost - gatewayFee - shippingCost;

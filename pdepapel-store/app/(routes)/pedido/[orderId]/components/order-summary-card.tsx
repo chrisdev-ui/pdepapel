@@ -51,6 +51,10 @@ export function OrderSummaryCard({
   const shippingCost = Number(order.shipping?.cost ?? 0);
   const discount = Number(order.discount ?? 0);
   const couponDiscount = Number(order.couponDiscount ?? 0);
+  const giftCardAmount = Number(order.giftCardAmount ?? 0);
+  const digital = order.type === "GIFT_CARD";
+  // Lo que se pagó por fuera de la tarjeta; el total del pedido no cambia.
+  const amountDue = Math.max(0, order.total - giftCardAmount);
   const canCollectPayment = awaitingPayment && stage.stage !== "cancelled";
   const totalLabel =
     stage.stage === "paid" ||
@@ -92,18 +96,32 @@ export function OrderSummaryCard({
             <Currency value={couponDiscount} isNegative className="text-sm font-semibold text-success" />
           </Row>
         )}
-        <Row label={order.shipping?.provider === "NONE" ? "Retiro en tienda" : "Envío"}>
-          {shippingCost > 0 ? (
-            <Currency value={shippingCost} className="text-sm font-semibold" />
-          ) : (
-            <span className="text-sm font-semibold text-success">Gratis</span>
-          )}
-        </Row>
+        {!digital && (
+          <Row label={order.shipping?.provider === "NONE" ? "Retiro en tienda" : "Envío"}>
+            {shippingCost > 0 ? (
+              <Currency value={shippingCost} className="text-sm font-semibold" />
+            ) : (
+              <span className="text-sm font-semibold text-success">Gratis</span>
+            )}
+          </Row>
+        )}
         <div className="border-t border-dashed border-border pt-2">
-          <Row label={totalLabel} strong>
-            <Currency value={order.total} className="text-2xl font-bold text-pink-froly" />
+          <Row label={giftCardAmount > 0 ? "Total del pedido" : totalLabel} strong={giftCardAmount === 0}>
+            <Currency value={order.total} className={giftCardAmount > 0 ? "text-sm font-semibold" : "text-2xl font-bold text-pink-froly"} />
           </Row>
         </div>
+        {giftCardAmount > 0 && (
+          <>
+            <Row label="Tarjeta de regalo">
+              <Currency value={giftCardAmount} isNegative className="text-sm font-semibold text-success" />
+            </Row>
+            <div className="border-t border-dashed border-border pt-2">
+              <Row label={amountDue === 0 ? "Pagado con la tarjeta" : totalLabel} strong>
+                <Currency value={amountDue} className="text-2xl font-bold text-pink-froly" />
+              </Row>
+            </div>
+          </>
+        )}
       </dl>
 
       <dl className="flex flex-col gap-1.5 border-t border-border pt-3 text-sm">

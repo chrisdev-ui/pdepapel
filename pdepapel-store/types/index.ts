@@ -244,6 +244,8 @@ export interface Order {
   userId: string | null;
   guestId: string | null;
   status: string;
+  /** STANDARD, GIFT_CARD, … Sólo GIFT_CARD cambia la página del pedido. */
+  type?: string;
   fullName: string;
   phone: string;
   email?: string;
@@ -257,7 +259,8 @@ export interface Order {
   company?: string | null;
   orderItems: OrderItem[];
   payment: Payment;
-  shipping: Shipping;
+  /** Una compra de tarjeta de regalo no tiene envío. */
+  shipping?: Shipping | null;
   subtotal: number;
   total: number;
   discount?: number;
@@ -271,6 +274,15 @@ export interface Order {
   isGift?: boolean;
   giftRecipientName?: string | null;
   giftMessage?: string | null;
+  /** Lo que una tarjeta de regalo cubrió de este pedido (0 si ninguna). */
+  giftCardAmount?: number;
+  /** La tarjeta que este pedido compró (solo pedidos de tipo GIFT_CARD). */
+  giftCardPurchase?: {
+    recipientName: string | null;
+    initialAmount: number;
+    codeLast4: string;
+    deliveredAt: string | null;
+  } | null;
   createdAt: string;
   /** Set by the admin only when a genuine payment was confirmed. */
   paidAt?: string | null;
@@ -399,6 +411,20 @@ export interface BoldCheckoutResponse {
 
 /** `POST /checkout` answers with a gateway handshake or, for offline methods, the order itself. */
 export type CheckoutResponse = WompiResponse | BoldCheckoutResponse | Order;
+
+/** `POST /gift-cards/checkout`: la compra de una tarjeta de regalo. */
+export interface GiftCardPurchase {
+  amount: number;
+  buyerName: string;
+  buyerEmail: string;
+  buyerPhone?: string;
+  recipientName?: string;
+  recipientEmail?: string;
+  message?: string;
+  payment: { method: PaymentMethod };
+  userId: string | null;
+  guestId: string | null;
+}
 
 /** `POST /checkout/[orderId]` only ever returns the fallback gateway link. */
 export type CheckoutByOrderResponse = WompiResponse;

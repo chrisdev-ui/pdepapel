@@ -110,6 +110,8 @@ export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQue
   const shippingStatus = order.shipping?.status;
   const hasGuide = Boolean(order.shipping?.trackingCode);
   const inStore = type === OrderType.POINT_OF_SALE || type === OrderType.FESTIVAL;
+  // Una tarjeta de regalo se entrega por correo al pagar: nunca hay nada que despachar.
+  const digital = type === OrderType.GIFT_CARD;
 
   if (shippingStatus && ISSUE_STATUSES.includes(shippingStatus)) return "issue";
   if (shippingStatus === ShippingStatus.Delivered) return "delivered";
@@ -123,7 +125,7 @@ export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQue
   }
 
   if (status === OrderStatus.PAID || status === OrderStatus.SENT) {
-    if (inStore) return "completed";
+    if (inStore || digital) return "completed";
     if (hasGuide || status === OrderStatus.SENT || (shippingStatus && IN_TRANSIT_STATUSES.includes(shippingStatus))) return "in-transit";
     return isOlderThan(order, DISPATCH_WINDOW_DAYS, now) ? "completed" : "dispatch";
   }
@@ -193,7 +195,7 @@ export function isExpiringSoon(expiresAt?: Date | string | null, now = new Date(
   return diff >= 0 && diff <= days * 24 * 60 * 60 * 1000;
 }
 
-export type SalesChannel = "tienda" | "presencial" | "feria" | "cotizacion" | "personalizado";
+export type SalesChannel = "tienda" | "presencial" | "feria" | "cotizacion" | "personalizado" | "regalo";
 
 export function getOrderChannel(type: OrderType): { id: SalesChannel; label: string } {
   switch (type) {
@@ -205,6 +207,8 @@ export function getOrderChannel(type: OrderType): { id: SalesChannel; label: str
       return { id: "cotizacion", label: "Cotización" };
     case OrderType.CUSTOM:
       return { id: "personalizado", label: "Personalizado" };
+    case OrderType.GIFT_CARD:
+      return { id: "regalo", label: "Tarjeta de regalo" };
     default:
       return { id: "tienda", label: "Tienda" };
   }

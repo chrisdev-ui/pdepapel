@@ -6,6 +6,8 @@ import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { sendOrderEmail } from "@/lib/email";
 import { normalizeGiftFields } from "@/lib/gift-orders";
+import { deliverGiftCard } from "@/lib/gift-card-delivery";
+import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
 import {
   assertCouponMinimumOrderValue,
   resolveCouponForOrderUpdate,
@@ -432,7 +434,15 @@ export async function PATCH(
     const targetType = type || order.type;
     const isStandardType = targetType === OrderType.STANDARD;
 
-    if (isActiveStatus || isStandardType) {
+    // Una compra de tarjeta de regalo no se envía: le basta nombre y correo.
+    const isGiftCardPurchase = targetType === OrderType.GIFT_CARD;
+    if (isGiftCardPurchase && isActiveStatus) {
+      if (!(fullName || order.fullName) || !(email || order.email)) {
+        throw ErrorFactory.InvalidRequest(
+          "La compra de una tarjeta de regalo necesita nombre y correo.",
+        );
+      }
+    } else if (isActiveStatus || isStandardType) {
       const finalName = fullName || order.fullName;
       const finalPhone = phone || order.phone;
       const finalEmail = email || order.email;
@@ -451,6 +461,7 @@ export async function PATCH(
       error: null as string | null,
     };
 
+    let issuedGiftCard: IssuedGiftCard | null = null;
     const updatedOrder = await prismadb.$transaction(async (tx) => {
       // Batch process products for better performance
       const products = await processOrderItemsInBatches(
@@ -480,8 +491,9 @@ export async function PATCH(
             );
           }
         } else {
-          // Manual item validation
-          if (!isDraftOrQuote) {
+          // Manual item validation. La línea de una tarjeta de regalo es
+          // manual por diseño (no hay producto): se conserva tal cual.
+          if (!isDraftOrQuote && targetType !== OrderType.GIFT_CARD) {
             throw ErrorFactory.InvalidRequest(
               "No se pueden agregar items manuales a una orden activa (PENDING, PAID, ACCEPTED).",
             );
@@ -502,7 +514,7 @@ export async function PATCH(
         ).includes(status)
       ) {
         const hasManualItems = orderItems.some((item: any) => !item.productId);
-        if (hasManualItems) {
+        if (hasManualItems && targetType !== OrderType.GIFT_CARD) {
           throw ErrorFactory.InvalidRequest(
             "No se puede activar la orden con items manuales. Por favor vincule todos los items a productos existentes.",
           );
@@ -980,6 +992,13 @@ export async function PATCH(
             paidAt: new Date(),
           } as any,
         });
+
+        // Compra de tarjeta de regalo marcada pagada a mano (transferencia).
+        issuedGiftCard = await issueGiftCardForOrder(tx, {
+          storeId: params.storeId,
+          orderId: updated.id,
+          createdBy: userId,
+        });
       }
 
       // 4. Handle Refund/Restock (la mercancia vuelve a bodega)
@@ -1027,6 +1046,10 @@ export async function PATCH(
 
       return updated;
     });
+
+    if (issuedGiftCard) {
+      await deliverGiftCard(issuedGiftCard, { buyerName: updatedOrder.fullName });
+    }
 
     if (
       originalStatus !== OrderStatus.PAID &&

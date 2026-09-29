@@ -44,6 +44,8 @@ interface OrderNotificationProps {
   accountClaimLink?: string | null;
   /** Es un regalo: a quién va. Solo el nombre; el aviso a esa persona es otro correo. */
   giftRecipientName?: string | null;
+  /** Compra de tarjeta de regalo: sin empaque, sin envío, sin seguimiento. */
+  digital?: boolean;
 }
 
 interface Look {
@@ -60,7 +62,29 @@ interface Look {
  * la franja rosa siempre, porque el color de la marca no se negocia por un
  * estado de envío.
  */
-function getLook(status: string): Look {
+function getLook(status: string, digital = false): Look {
+  if (digital) {
+    if (status === "PAID") {
+      return {
+        tint: "mint",
+        pill: "Pago confirmado",
+        headline: (n) =>
+          n
+            ? `Listo, ${n}. Tu tarjeta de regalo ya salió por correo.`
+            : "Listo. Tu tarjeta de regalo ya salió por correo.",
+      };
+    }
+    if (status === "PENDING") {
+      return {
+        tint: "yellow",
+        pill: "Pendiente de pago",
+        headline: (n) =>
+          n
+            ? `Recibimos tu compra, ${n}.`
+            : "Recibimos tu compra.",
+      };
+    }
+  }
   switch (status) {
     case "PENDING":
       return {
@@ -164,10 +188,12 @@ export const OrderNotification = ({
   notificationSource,
   accountClaimLink,
   giftRecipientName,
+  digital = false,
 }: OrderNotificationProps) => {
-  const look = getLook(status);
+  const look = getLook(status, digital);
   const firstName = name ? name.split(" ")[0] : "";
-  const hasTracking = Boolean(trackingInfo) && trackingInfo !== "TRACK-123";
+  const hasTracking =
+    !digital && Boolean(trackingInfo) && trackingInfo !== "TRACK-123";
 
   /* ------------------------------------------------------------- panel */
 
