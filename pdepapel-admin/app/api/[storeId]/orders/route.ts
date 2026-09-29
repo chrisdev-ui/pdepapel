@@ -359,6 +359,10 @@ async function createOrder(
     }
 
     let issuedGiftCard: IssuedGiftCard | null = null;
+    // La caché se purga después del commit (ver b433abe4): dentro de la
+    // transacción esperaba a Redis, a la tienda y a QStash con los bloqueos
+    // de inventario tomados.
+    let purgeCacheAfterCommit = false;
     const order = await prismadb.$transaction(async (tx) => {
       // STRICT VALIDATION: Check if we are creating an active order
       if (
@@ -666,9 +670,9 @@ async function createOrder(
         });
       }
 
-      // Invalidate cache if stock was modified (Paid Order)
+      // Invalidate cache if stock was modified (Paid Order): after commit.
       if (status === OrderStatus.PAID) {
-        await invalidateStoreProductsCache(params.storeId);
+        purgeCacheAfterCommit = true;
 
         // Un pedido que nace pagado (venta registrada por la administradora)
         // lleva fecha de pago y métricas, igual que uno marcado pagado después.
@@ -691,6 +695,10 @@ async function createOrder(
 
       return createdOrder;
     });
+
+    if (purgeCacheAfterCommit) {
+      await invalidateStoreProductsCache(params.storeId);
+    }
 
     if (issuedGiftCard) {
       await deliverGiftCard(issuedGiftCard, { buyerName: order.fullName });
@@ -854,6 +862,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
+    let purgeCacheAfterCommit = false;
     const result = await prismadb.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -958,7 +967,7 @@ export async function DELETE(
             });
           }
 
-          await invalidateStoreProductsCache(params.storeId);
+          purgeCacheAfterCommit = true;
         }
       }
 
@@ -1016,6 +1025,10 @@ export async function DELETE(
       });
     });
 
+    if (purgeCacheAfterCommit) {
+      await invalidateStoreProductsCache(params.storeId);
+    }
+
     return NextResponse.json(result, {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
@@ -1053,6 +1066,7 @@ export async function PATCH(
     await verifyStoreOwner(userId, params.storeId);
 
     const issuedGiftCards: IssuedGiftCard[] = [];
+    let purgeCacheAfterCommit = false;
     const result = await prismadb.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -1337,10 +1351,14 @@ export async function PATCH(
 
       const updatedOrders = await Promise.all(updatePromises);
       if (status === OrderStatus.PAID) {
-        await invalidateStoreProductsCache(params.storeId);
+        purgeCacheAfterCommit = true;
       }
       return updatedOrders;
     });
+
+    if (purgeCacheAfterCommit) {
+      await invalidateStoreProductsCache(params.storeId);
+    }
 
     for (const issued of issuedGiftCards) {
       const buyer = result.find((row) => row.id === issued.card.purchaseOrderId);
