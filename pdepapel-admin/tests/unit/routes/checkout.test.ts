@@ -97,6 +97,9 @@ vi.mock("@/lib/bold", () => ({
   generateBoldCheckoutData: mocks.generateBoldCheckoutData,
 }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+// La invalidación de caché llega a lib/resend por la alerta de revalidación, y
+// Resend exige la clave al cargar: en CI no hay .env, así que se sustituye.
+vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
 vi.mock("@/lib/google-analytics", () => ({
   normalizeGoogleAnalyticsClientId: mocks.normalizeGoogleAnalyticsClientId,
 }));
