@@ -1478,7 +1478,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         ) : null}
         <div className="flex items-center justify-between border-t border-dashed pt-3">
           <dt className="text-base font-bold">
-            {giftCardCoversAll ? "Cubierto con la tarjeta" : "Total a pagar"}
+            {giftCardCoversAll ? "Te queda por pagar" : "Total a pagar"}
           </dt>
           <dd>
             <Currency

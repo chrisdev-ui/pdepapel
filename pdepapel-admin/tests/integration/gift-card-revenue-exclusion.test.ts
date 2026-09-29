@@ -169,7 +169,7 @@ describe("gift card purchases are excluded from every revenue site", () => {
   it("app/(dashboard)/[storeId]/(routes)/clientes/server/get-customers.ts", async () => {
     const { getCustomers } = await import("@/app/(dashboard)/[storeId]/(routes)/clientes/server/get-customers");
     const { records } = await getCustomers(fixture!.store.id, new Date());
-    const luisa = records.find((r) => r.phone?.includes("3001234567") || r.name === customer.fullName);
+    const luisa = records.find((r) => JSON.stringify(r).includes("3001234567"));
     expect(luisa).toMatchObject({ totalSpent: SALE, paidOrders: 1 });
   });
 

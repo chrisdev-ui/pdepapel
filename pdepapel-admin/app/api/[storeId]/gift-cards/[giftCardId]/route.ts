@@ -5,7 +5,7 @@ import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
 import { CACHE_HEADERS } from "@/lib/utils";
 
-import { GIFT_CARD_ADMIN_SELECT } from "../route";
+import { GIFT_CARD_ADMIN_SELECT } from "@/lib/gift-card-admin-select";
 
 /** Una tarjeta con su libro y los pedidos donde se usó. */
 export async function GET(

@@ -13,9 +13,9 @@ import { CACHE_HEADERS } from "@/lib/utils";
  * clienta necesita ver: saldo y terminación. Con límite por IP y por código
  * para que nadie adivine códigos a fuerza de intentos (lib/rate-limit.ts).
  */
-export const VALIDATE_RATE_LIMIT_PER_IP = 20;
-export const VALIDATE_RATE_LIMIT_PER_CODE = 10;
-export const VALIDATE_RATE_WINDOW_SECONDS = 600;
+const VALIDATE_RATE_LIMIT_PER_IP = 20;
+const VALIDATE_RATE_LIMIT_PER_CODE = 10;
+const VALIDATE_RATE_WINDOW_SECONDS = 600;
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),

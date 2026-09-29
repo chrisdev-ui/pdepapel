@@ -77,8 +77,8 @@ export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon,
             <dd>- {currencyFormatter(giftCardAmount)}</dd>
           </div>
           <div className="flex justify-between font-semibold">
-            <dt>{amountDue === 0 ? "Pagado con la tarjeta" : "Cobrado por fuera de la tarjeta"}</dt>
-            <dd>{currencyFormatter(amountDue)}</dd>
+            <dt>{amountDue === 0 ? "Cubierto entero con la tarjeta" : "Cobrado por fuera de la tarjeta"}</dt>
+            <dd>{currencyFormatter(amountDue === 0 ? totals.total : amountDue)}</dd>
           </div>
         </dl>
       )}

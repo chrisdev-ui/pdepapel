@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getAmountDue } from "@/lib/gift-cards";
+import { getAmountDue } from "@/lib/gift-card-amounts";
 
 export interface BoldCheckoutPayload {
   orderId: string;

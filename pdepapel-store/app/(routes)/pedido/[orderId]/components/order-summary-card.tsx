@@ -117,7 +117,7 @@ export function OrderSummaryCard({
             </Row>
             <div className="border-t border-dashed border-border pt-2">
               <Row label={amountDue === 0 ? "Pagado con la tarjeta" : totalLabel} strong>
-                <Currency value={amountDue} className="text-2xl font-bold text-pink-froly" />
+                <Currency value={amountDue === 0 ? giftCardAmount : amountDue} className="text-2xl font-bold text-pink-froly" />
               </Row>
             </div>
           </>

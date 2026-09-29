@@ -9,7 +9,7 @@ import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { getAmountDue } from "@/lib/gift-cards";
+import { getAmountDue } from "@/lib/gift-card-amounts";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),

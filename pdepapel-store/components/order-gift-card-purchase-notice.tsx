@@ -1,6 +1,6 @@
 import { Gift, MailCheck } from "lucide-react";
 
-import { Currency } from "@/components/ui/currency";
+import { currencyFormatter } from "@/lib/utils";
 import type { Order } from "@/types";
 
 /**
@@ -31,12 +31,7 @@ export function OrderGiftCardPurchaseNotice({
         <p>
           <strong>
             Tarjeta de regalo
-            {card ? (
-              <>
-                {" "}
-                de <Currency value={card.initialAmount} className="text-sm font-bold" />
-              </>
-            ) : null}
+            {card ? ` de ${currencyFormatter.format(card.initialAmount)}` : ""}
             {recipient ? ` para ${recipient}` : ""}.
           </strong>{" "}
           {delivered

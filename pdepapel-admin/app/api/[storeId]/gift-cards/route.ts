@@ -2,30 +2,9 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { GIFT_CARD_ADMIN_SELECT } from "@/lib/gift-card-admin-select";
 import { requireStoreRead } from "@/lib/store-access";
 import { CACHE_HEADERS } from "@/lib/utils";
-
-/** Selección de una tarjeta para el panel: nunca el hash del código. */
-export const GIFT_CARD_ADMIN_SELECT = {
-  id: true,
-  codeLast4: true,
-  initialAmount: true,
-  balance: true,
-  status: true,
-  purchaseOrderId: true,
-  buyerEmail: true,
-  recipientName: true,
-  recipientEmail: true,
-  message: true,
-  issuedAt: true,
-  deliveredAt: true,
-  expiresAt: true,
-  createdAt: true,
-  updatedAt: true,
-  purchaseOrder: {
-    select: { id: true, orderNumber: true, fullName: true, status: true, paidAt: true },
-  },
-} as const;
 
 /** Lista de tarjetas (dueña y cuentas de solo lectura). */
 export async function GET(

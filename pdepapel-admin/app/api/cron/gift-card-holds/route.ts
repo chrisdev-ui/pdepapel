@@ -12,6 +12,8 @@ import prismadb from "@/lib/prismadb";
  * Un día sin correr solo alarga la reserva: al pagar tarde se reserva de
  * nuevo (`redeemGiftCardForOrder`), así que nunca se gasta saldo dos veces.
  */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get("authorization")?.split("Bearer ").at(1);

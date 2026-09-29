@@ -27,7 +27,7 @@ export {
   type DiscountConfig,
   type OrderTotals,
 } from "@/lib/order-totals";
-import { getAmountDue } from "@/lib/gift-cards";
+import { getAmountDue } from "@/lib/gift-card-amounts";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

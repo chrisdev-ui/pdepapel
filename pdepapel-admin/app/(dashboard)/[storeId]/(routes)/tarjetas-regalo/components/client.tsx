@@ -50,7 +50,7 @@ export default function GiftCardsClient({ cards, denominations, canWrite }: Gift
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px] 2xl:items-start">
         <DataTable
           tableKey={Models.GiftCards}
           searchPlaceholder="Buscar por terminación, pedido, cliente o correo…"

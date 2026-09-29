@@ -9,8 +9,10 @@ import type { Order } from "@/types";
 export function OrderGiftNotice({
   order,
 }: {
-  order: Pick<Order, "isGift" | "giftRecipientName" | "giftMessage">;
+  order: Pick<Order, "isGift" | "giftRecipientName" | "giftMessage" | "type">;
 }) {
+  // Una tarjeta de regalo tiene su propio aviso: no hay guía ni paquete.
+  if (order.type === "GIFT_CARD") return null;
   if (!order.isGift || !order.giftRecipientName) return null;
 
   return (

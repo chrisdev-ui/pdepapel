@@ -16,6 +16,7 @@ import {
   normalizeGiftCardCode,
 } from "@/lib/gift-card-codes";
 import { round2 } from "@/lib/order-totals";
+import { getAmountDue } from "@/lib/gift-card-amounts";
 
 /**
  * Tarjetas de regalo: el libro de saldo y sus reglas.
@@ -59,22 +60,7 @@ export const GIFT_CARD_STATUS_LABELS: Record<GiftCardStatus, string> = {
 
 /* ------------------------------------------------------------- montos */
 
-/**
- * Lo que va a la pasarela: el total menos lo que cubre la tarjeta. `total`
- * no cambia nunca por una tarjeta (es un medio de pago, no un descuento);
- * los cinco sitios que firman o comprueban montos leen esto, no `total`.
- */
-export function getAmountDue(order: {
-  total: number;
-  giftCardAmount?: number | null;
-}): number {
-  const covered = Number(order.giftCardAmount ?? 0);
-  return Math.max(0, round2(Number(order.total) - covered));
-}
-
-export function isGiftCardOrder(order: { type?: OrderType | null }): boolean {
-  return order.type === OrderType.GIFT_CARD;
-}
+export { getAmountDue, isGiftCardOrder } from "@/lib/gift-card-amounts";
 
 /* ------------------------------------------------------- denominaciones */
 

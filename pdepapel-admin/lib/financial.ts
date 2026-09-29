@@ -1,6 +1,6 @@
 import { Order, OrderItem, OrderType, PaymentMethod } from "@prisma/client";
 
-import { getAmountDue } from "@/lib/gift-cards";
+import { getAmountDue } from "@/lib/gift-card-amounts";
 
 interface OrderWithItems extends Order {
   orderItems: OrderItem[];
