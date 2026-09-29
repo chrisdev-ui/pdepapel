@@ -198,13 +198,21 @@ export const OrderNotification = ({
   /* ------------------------------------------------------------- panel */
 
   if (isAdminEmail) {
-    const rows: { key: string; value: React.ReactNode }[] = [
-      { key: "Cliente", value: name },
-      { key: "Correo", value: email || "Sin correo" },
-      { key: "Teléfono", value: phone || "Sin teléfono" },
-      { key: "Dirección", value: address || "Sin dirección" },
-      { key: "Ciudad", value: city || "Sin ciudad" },
-    ];
+    // Una tarjeta de regalo no se envía: sin dirección ni ciudad en el aviso.
+    const rows: { key: string; value: React.ReactNode }[] = digital
+      ? [
+          { key: "Compra", value: "Tarjeta de regalo (se entrega por correo)" },
+          { key: "Cliente", value: name },
+          { key: "Correo", value: email || "Sin correo" },
+          ...(phone ? [{ key: "Teléfono", value: phone }] : []),
+        ]
+      : [
+          { key: "Cliente", value: name },
+          { key: "Correo", value: email || "Sin correo" },
+          { key: "Teléfono", value: phone || "Sin teléfono" },
+          { key: "Dirección", value: address || "Sin dirección" },
+          { key: "Ciudad", value: city || "Sin ciudad" },
+        ];
     if (total) rows.push({ key: "Total", value: total });
     if (giftRecipientName)
       rows.push({ key: "Regalo para", value: giftRecipientName });

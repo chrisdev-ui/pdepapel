@@ -313,7 +313,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
         <section className="space-y-4">
           <div className="space-y-1">
             <h2 id="gift-card-payment" className="font-serif text-2xl font-bold text-blue-yankees">Pago</h2>
-            <p className="text-sm text-muted-foreground">Igual que cualquier compra. La tarjeta sale en cuanto el pago se confirme.</p>
+            <p className="text-sm text-muted-foreground">En línea o por transferencia. No hay envío: la tarjeta sale por correo en cuanto el pago se confirme.</p>
           </div>
           <FormField
             control={form.control}
@@ -321,7 +321,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <PaymentMethodSelector value={field.value} onChange={field.onChange} disabled={busy} omit={[PaymentMethod.COD]} ariaLabelledBy="gift-card-payment" />
+                  <PaymentMethodSelector value={field.value} onChange={field.onChange} disabled={busy} hide={[PaymentMethod.COD]} ariaLabelledBy="gift-card-payment" />
                 </FormControl>
                 <FormMessage reserveSpace />
               </FormItem>

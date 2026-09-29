@@ -840,7 +840,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 initialData={initialData}
                 total={totals.total}
               />
-              <GiftSection loading={loading} />
+              {watchedType !== OrderType.GIFT_CARD && <GiftSection loading={loading} />}
             </div>
             <div className="order-4 lg:order-none">
               <ItemsSection
@@ -852,6 +852,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 onConvert={setConversionIndex}
               />
             </div>
+            {watchedType !== OrderType.GIFT_CARD && (
             <div className="order-5 lg:order-none">
               <ShippingSection
                 storeId={storeId}
@@ -869,6 +870,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 {shippingInfo}
               </ShippingSection>
             </div>
+            )}
             <div className="order-8 lg:order-none">
               <DiscountsSection
                 storeId={storeId}
@@ -925,6 +927,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             {/* En tableta Pago y Resumen comparten fila, justo después del envío. */}
             <div className="order-6 grid gap-4 md:grid-cols-2 lg:contents">
   <SummaryCard
+                digital={watchedType === OrderType.GIFT_CARD}
                 giftCardAmount={Number(initialData?.giftCardAmount ?? 0)}
                 totals={totals}
                 shippingChargeState={shippingChargeState}
@@ -977,7 +980,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             <p className="hidden text-xs text-muted-foreground lg:block">
               {initialData
                 ? locked
-                  ? "Pagado: se guardan cliente, envío y notas. Productos y precios quedan como registro."
+                  ? watchedType === OrderType.GIFT_CARD
+                    ? "Pagado: se guardan cliente y notas. El valor de la tarjeta queda como registro."
+                    : "Pagado: se guardan cliente, envío y notas. Productos y precios quedan como registro."
                   : "Guardar solo guarda los datos. El estado cambia con las acciones de la barra de arriba."
                 : `Se creará como «${ORDER_STATUS_LABELS[preset.status]}». ${preset.status === OrderStatus.DRAFT ? "Podrás activarlo cuando esté listo." : "Nada se descuenta hasta marcarlo pagado."}`}
             </p>

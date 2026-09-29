@@ -136,6 +136,29 @@ export function buildOrderTimeline(
     },
   ];
 
+  // Una tarjeta de regalo no se empaca: su tercer hito es el correo con el código.
+  if (order.type === OrderType.GIFT_CARD) {
+    steps.push({
+      id: "delivered",
+      label: "Enviada por correo",
+      state: paid ? "done" : closed ? "skipped" : "todo",
+      meta: paid ? "el código salió al confirmar el pago" : "sale al confirmar el pago",
+    });
+    return closed
+      ? [
+          ...steps,
+          {
+            id: "closed",
+            label:
+              order.status === OrderStatus.CANCELLED
+                ? "Cancelado"
+                : "Rechazado",
+            state: "now",
+          },
+        ]
+      : steps;
+  }
+
   if (inStore) {
     steps.push({
       id: "delivered",
@@ -338,6 +361,15 @@ export function getNextStepCard(
         tone: "mint",
       };
     case "completed":
+      if (order.type === OrderType.GIFT_CARD) {
+        return {
+          queue,
+          title: "Tarjeta de regalo emitida",
+          description: "Pago confirmado: el código salió por correo. No hay nada que empacar ni enviar.",
+          primary: { label: "Ver tarjetas de regalo", href: `/${storeId}/tarjetas-regalo` },
+          tone: "mint",
+        };
+      }
       return {
         queue,
         title: "Venta cobrada",

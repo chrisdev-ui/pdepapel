@@ -16,10 +16,12 @@ interface SummaryCardProps {
   itemCount: number;
   /** Lo que una tarjeta de regalo cubrió del pedido (solo pedidos guardados). */
   giftCardAmount?: number;
+  /** Compra de una tarjeta de regalo: se entrega por correo, no hay envío que sumar. */
+  digital?: boolean;
 }
 
 /** Resumen de dinero del pedido: siempre a la vista en la columna lateral. */
-export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon, itemCount, giftCardAmount = 0 }: SummaryCardProps) {
+export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon, itemCount, giftCardAmount = 0, digital = false }: SummaryCardProps) {
   const amountDue = Math.max(0, totals.total - giftCardAmount);
   const { control } = useFormContext<OrderFormValues>();
   const discountType = useWatch({ control, name: "discount.type" });
@@ -58,12 +60,19 @@ export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon,
             <dd>- {currencyFormatter(totals.couponDiscount)}</dd>
           </div>
         )}
-        <div className="flex justify-between text-muted-foreground">
-          <dt>Envío</dt>
-          <dd>
-            {shippingChargeState === "charged" ? `+ ${currencyFormatter(shippingCost)}` : shippingChargeState === "free" ? <span className="font-medium text-success">Gratis</span> : "Por calcular"}
-          </dd>
-        </div>
+        {digital ? (
+          <div className="flex justify-between text-muted-foreground">
+            <dt>Entrega</dt>
+            <dd>Por correo, sin envío</dd>
+          </div>
+        ) : (
+          <div className="flex justify-between text-muted-foreground">
+            <dt>Envío</dt>
+            <dd>
+              {shippingChargeState === "charged" ? `+ ${currencyFormatter(shippingCost)}` : shippingChargeState === "free" ? <span className="font-medium text-success">Gratis</span> : "Por calcular"}
+            </dd>
+          </div>
+        )}
       </dl>
       <Separator />
       <div className="flex items-center justify-between">

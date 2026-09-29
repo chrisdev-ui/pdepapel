@@ -253,7 +253,8 @@ export function isShippingStale(order: QueueableOrder, now = new Date()): boolea
 
 export function getShippingBadge(order: QueueableOrder, now = new Date()): ShippingBadge | null {
   const inStore = order.type === OrderType.POINT_OF_SALE || order.type === OrderType.FESTIVAL;
-  if (inStore) return null;
+  // Una tarjeta de regalo se entrega por correo: no hay guía que mostrar.
+  if (inStore || order.type === OrderType.GIFT_CARD) return null;
   const status = order.shipping?.status;
   if (!status || (!order.shipping?.trackingCode && status === ShippingStatus.Preparing)) return { label: "Sin guía", tone: "slate" };
   if (isShippingStale(order, now)) {

@@ -21,7 +21,7 @@ export function OrderMobileCard({ order, storeId }: { order: OrderColumn; storeI
           </Link>
           <span className="truncate text-sm">
             {order.fullName}
-            {order.city ? ` · ${order.city}` : ""}
+            {order.type === "GIFT_CARD" ? " · por correo" : order.city ? ` · ${order.city}` : ""}
           </span>
         </div>
         <span className="whitespace-nowrap text-base font-bold text-primary">{currencyFormatter(order.total)}</span>

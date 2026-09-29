@@ -53,6 +53,9 @@ export function getAllowedTransitions(
 ): OrderStatus[] {
   const isQuote = context.type === OrderType.QUOTATION;
   const isCod = context.paymentMethod === PaymentMethod.COD;
+  // Una compra de tarjeta de regalo no se envía: el código sale por correo al
+  // confirmar el pago, así que «Enviado» no existe para ella.
+  const isDigital = context.type === OrderType.GIFT_CARD;
   switch (from) {
     case OrderStatus.DRAFT:
       return [
@@ -84,11 +87,14 @@ export function getAllowedTransitions(
     case OrderStatus.PENDING:
       return [
         OrderStatus.PAID,
-        ...(isCod ? [OrderStatus.SENT] : []),
+        ...(isCod && !isDigital ? [OrderStatus.SENT] : []),
         OrderStatus.CANCELLED,
       ];
     case OrderStatus.PAID:
-      return [OrderStatus.SENT, OrderStatus.CANCELLED];
+      return [
+        ...(isDigital ? [] : [OrderStatus.SENT]),
+        OrderStatus.CANCELLED,
+      ];
     case OrderStatus.SENT:
       return [...(isCod ? [OrderStatus.PAID] : []), OrderStatus.CANCELLED];
     case OrderStatus.CANCELLED:
@@ -111,7 +117,11 @@ export function canTransition(
 export function describeForbiddenTransition(
   from: OrderStatus,
   to: OrderStatus,
+  context?: Pick<TransitionContext, "type">,
 ): string {
+  if (context?.type === OrderType.GIFT_CARD && to === OrderStatus.SENT) {
+    return "Una compra de tarjeta de regalo no se envía: el código sale por correo al confirmar el pago. Solo se puede cancelar, y solo si la tarjeta no se ha usado.";
+  }
   if (isPaidLike(from) && !isPaidLike(to) && to !== OrderStatus.CANCELLED) {
     return `Un pedido ${ORDER_STATUS_LABELS[from].toLowerCase()} solo puede pasar a enviado o cancelarse. Para revertir un pago, cancela el pedido (el inventario vuelve) y crea uno nuevo.`;
   }
@@ -141,6 +151,7 @@ export function getStatusActions(
   const allowed = getAllowedTransitions(from, context);
   const isQuote = context.type === OrderType.QUOTATION;
   const isCod = context.paymentMethod === PaymentMethod.COD;
+  const isDigital = context.type === OrderType.GIFT_CARD;
   const isOnline = ONLINE_METHODS.includes(
     context.paymentMethod as PaymentMethod,
   );
@@ -213,7 +224,11 @@ export function getStatusActions(
   }
   push(
     OrderStatus.CANCELLED,
-    isPaidLike(from) ? "Cancelar y devolver el inventario" : "Cancelar pedido",
+    isPaidLike(from)
+      ? isDigital
+        ? "Cancelar y anular la tarjeta"
+        : "Cancelar y devolver el inventario"
+      : "Cancelar pedido",
     false,
     "cancel",
     true,

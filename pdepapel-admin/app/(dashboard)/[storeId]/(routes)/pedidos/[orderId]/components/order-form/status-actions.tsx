@@ -143,8 +143,21 @@ export function StatusActions({
     }
   };
 
+  const isDigital = type === OrderType.GIFT_CARD;
   const consequences = (() => {
     if (!pending) return [] as string[];
+    if (pending.confirm === "pay" && isDigital) {
+      return [
+        ...(paymentMethod && ONLINE_METHODS.includes(paymentMethod)
+          ? [
+              "Bold o Wompi no confirmaron este pago. Solo regístralo a mano si tienes el comprobante de la pasarela; si el cliente paga después por el enlace, el pedido quedaría cobrado dos veces.",
+            ]
+          : []),
+        "Se emite la tarjeta y el código sale por correo a quien la recibe (o a quien la compró, si no dejó otro correo).",
+        "Se fija la fecha de pago de hoy. La venta cuenta cuando la tarjeta se use, no hoy.",
+        "No se toca el inventario ni hay nada que enviar.",
+      ];
+    }
     if (pending.confirm === "pay") {
       return [
         ...(paymentMethod && ONLINE_METHODS.includes(paymentMethod)
@@ -165,6 +178,19 @@ export function StatusActions({
       ];
     }
     const paid = isPaidLike(status);
+    if (isDigital) {
+      return [
+        paid
+          ? "La tarjeta queda anulada y su código deja de servir. Si ya se usó en alguna compra, el sistema no deja cancelar."
+          : "No se emitió ninguna tarjeta: no hay nada que anular.",
+        ...(paid
+          ? [
+              "El cobro no se devuelve solo: el reembolso se gestiona aparte, con Bold o por transferencia.",
+            ]
+          : []),
+        "El cliente recibe un correo de cancelación.",
+      ];
+    }
     return [
       paid
         ? "El inventario vuelve con un movimiento de cancelación."

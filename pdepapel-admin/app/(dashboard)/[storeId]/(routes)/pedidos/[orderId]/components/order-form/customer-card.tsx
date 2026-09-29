@@ -74,6 +74,8 @@ export function CustomerCard({
     ),
   );
   const type = useWatch({ control: form.control, name: "type" });
+  // Una tarjeta de regalo se entrega por correo: no hay dirección que pedir.
+  const digital = type === OrderType.GIFT_CARD;
   const guestId = useWatch({ control: form.control, name: "guestId" });
   const fullName = useWatch({ control: form.control, name: "fullName" });
   const items = useWatch({ control: form.control, name: "orderItems" });
@@ -153,7 +155,7 @@ export function CustomerCard({
       id="cliente"
       step={1}
       title="Cliente"
-      description="Quién compra y a dónde va. La ciudad es la que cotiza el envío."
+      description={digital ? "Quién compra la tarjeta. El código sale por correo, no hay envío." : "Quién compra y a dónde va. La ciudad es la que cotiza el envío."}
     >
       <div className="grid grid-cols-1 gap-4">
         <FormField
@@ -278,6 +280,7 @@ export function CustomerCard({
             )}
           />
         </div>
+        {!digital && (
         <FormField
           control={form.control}
           name="daneCode"
@@ -310,6 +313,8 @@ export function CustomerCard({
             </FormItem>
           )}
         />
+        )}
+        {!digital && (
         <FormField
           control={form.control}
           name="address"
@@ -327,6 +332,8 @@ export function CustomerCard({
             </FormItem>
           )}
         />
+        )}
+        {!digital && (
         <button
           type="button"
           onClick={() => setMoreAddress((value) => !value)}
@@ -339,7 +346,8 @@ export function CustomerCard({
           />
           {moreAddress ? "Menos datos de entrega" : "Más datos de entrega"}
         </button>
-        {moreAddress && (
+        )}
+        {!digital && moreAddress && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
             <FormField
               control={form.control}

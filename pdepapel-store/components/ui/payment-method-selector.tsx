@@ -152,6 +152,8 @@ interface PaymentMethodSelectorProps {
   value: PaymentMethod;
   onChange: (value: PaymentMethod) => void;
   omit?: PaymentMethod[];
+  /** Métodos que no se muestran en absoluto (a diferencia de `omit`, que los deja visibles y apagados). */
+  hide?: PaymentMethod[];
   disabled?: boolean;
   disabledMessages?: Partial<Record<PaymentMethod, string>>;
   ariaLabelledBy?: string;
@@ -184,6 +186,7 @@ export const PaymentMethodSelector = ({
   value,
   onChange,
   omit = [],
+  hide = [],
   disabled = false,
   disabledMessages = {},
   ariaLabelledBy,
@@ -197,7 +200,7 @@ export const PaymentMethodSelector = ({
         aria-labelledby={ariaLabelledBy}
         className="grid grid-cols-1 gap-2.5"
       >
-        {PAYMENT_OPTIONS.map((option) => {
+        {PAYMENT_OPTIONS.filter((option) => !hide.includes(option.value)).map((option) => {
           const Icon = option.icon;
           const isSelected = value === option.value;
           const isOmitted = omit.includes(option.value);

@@ -267,7 +267,9 @@ export async function PATCH(
         })
       ) {
         throw ErrorFactory.InvalidRequest(
-          describeForbiddenTransition(order.status, status),
+          describeForbiddenTransition(order.status, status, {
+            type: transitionType,
+          }),
         );
       }
     }

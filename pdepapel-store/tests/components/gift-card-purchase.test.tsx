@@ -93,6 +93,16 @@ describe("tarjeta de regalo · compra", () => {
     expect(mocks.setPendingOrder).toHaveBeenCalledWith(expect.objectContaining({ id: "order-1", total: 100000 }));
   });
 
+  it("never offers cash on delivery nor any shipping or address step: the card goes by email", () => {
+    renderForm();
+    expect(screen.getByText("Pago en línea")).toBeTruthy();
+    expect(screen.getByText("Transferencia bancaria")).toBeTruthy();
+    expect(screen.queryByText(/contra entrega/i)).toBeNull();
+    expect(screen.queryByText(/al recibir el paquete/i)).toBeNull();
+    expect(screen.queryByText(/dirección|ciudad|envío a|transportadora/i)).toBeNull();
+    expect(screen.getByText(/No hay envío: la tarjeta sale por correo/)).toBeTruthy();
+  });
+
   it("refuses to submit without the buyer's name and email", async () => {
     renderForm();
     fireEvent.click(screen.getByRole("button", { name: /Comprar tarjeta de/ }));

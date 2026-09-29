@@ -1105,7 +1105,7 @@ export async function PATCH(
           const extra =
             rejected.length > 5 ? ` y ${rejected.length - 5} más` : "";
           throw ErrorFactory.InvalidRequest(
-            `${rejected.length} de ${orders.length} ${orders.length === 1 ? "pedido" : "pedidos"} ${rejected.length === 1 ? "no admite" : "no admiten"} pasar a «${ORDER_STATUS_LABELS[status]}»: ${detail}${extra}. ${describeForbiddenTransition(rejected[0].status, status)} No se cambió ninguno.`,
+            `${rejected.length} de ${orders.length} ${orders.length === 1 ? "pedido" : "pedidos"} ${rejected.length === 1 ? "no admite" : "no admiten"} pasar a «${ORDER_STATUS_LABELS[status]}»: ${detail}${extra}. ${describeForbiddenTransition(rejected[0].status, status, { type: rejected[0].type })} No se cambió ninguno.`,
           );
         }
       }
