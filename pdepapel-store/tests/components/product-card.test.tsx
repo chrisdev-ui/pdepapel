@@ -1,9 +1,11 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProductCard from "@/components/ui/product-card";
+import { usePreviewModal } from "@/hooks/use-preview-modal";
+import { useWishlist } from "@/hooks/use-wishlist";
 import type { Product } from "@/types";
 
 vi.mock("@/lib/customer-analytics", () => ({
@@ -153,6 +155,42 @@ describe("ProductCard", () => {
     expect(screen.getByText("· Nuevo")).toBeInTheDocument();
     expect(screen.getByText("Desde")).toBeInTheDocument();
     expect(lastButton("Elegir opción")).toBeEnabled();
+  });
+
+  /*
+   * El corazón de un grupo guardaba nada: abría la vista previa y el toque
+   * parecía muerto. Un grupo se guarda como familia; comprar sí pide variante.
+   */
+  describe("favoritos en un grupo", () => {
+    const grupo = { ...base, id: "g1", slug: "kits-basicos", isGroup: true, variantCount: 4, minPrice: 4500, maxPrice: 9000, originalPrice: undefined } as unknown as Product;
+    beforeEach(() => {
+      useWishlist.setState({ items: [], guestItems: [], accountUserId: null, isHydrated: true });
+      usePreviewModal.setState({ isOpen: false, data: undefined });
+    });
+
+    it("el corazón guarda el grupo en favoritos y no abre la vista previa", () => {
+      render(<ProductCard product={grupo} />);
+      fireEvent.click(lastButton(/Agregar a favoritos/));
+      expect(useWishlist.getState().items.map((item) => item.id)).toEqual(["g1"]);
+      expect(usePreviewModal.getState().isOpen).toBe(false);
+      expect(lastButton(/Quitar de favoritos/)).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("tocarlo otra vez lo quita", () => {
+      render(<ProductCard product={grupo} />);
+      fireEvent.click(lastButton(/Agregar a favoritos/));
+      fireEvent.click(lastButton(/Quitar de favoritos/));
+      expect(useWishlist.getState().items).toEqual([]);
+      expect(lastButton(/Agregar a favoritos/)).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("comprar un grupo sigue pidiendo la variante en la vista previa", () => {
+      render(<ProductCard product={grupo} />);
+      fireEvent.click(lastButton("Elegir opción"));
+      expect(usePreviewModal.getState().isOpen).toBe(true);
+      expect(usePreviewModal.getState().data?.id).toBe("g1");
+      expect(useWishlist.getState().items).toEqual([]);
+    });
   });
 
   it("shows the low stock chip and the coming-soon state", () => {

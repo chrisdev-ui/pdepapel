@@ -82,7 +82,7 @@ test.describe("tarjeta de producto en táctil", () => {
      * el orden del catálogo cambia y un grupo puede caer en ella.
      */
     const indice = await page.evaluate(() =>
-      [...document.querySelectorAll("article")].findIndex((card) =>
+      Array.from(document.querySelectorAll("article")).findIndex((card) =>
         card.querySelector('button[aria-label="Agregar al carrito"]'),
       ),
     );
@@ -110,6 +110,33 @@ test.describe("tarjeta de producto en táctil", () => {
       await expect(favorito).toHaveAttribute("aria-pressed", "true", { timeout: 1500 });
     }).toPass({ timeout: 15_000 });
     // Guardar no navega: la clienta se queda donde estaba.
+    await expect(page).toHaveURL(/\/tienda/);
+  });
+
+  test("el corazón de un grupo guarda la familia sin abrir la vista previa", async ({ page }) => {
+    await gotoPublicPage(page, "/tienda");
+    await page.waitForSelector("article");
+
+    // Un grupo se reconoce porque comprar dice «Elegir opción».
+    const indice = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("article")).findIndex((card) =>
+        card.querySelector('button[aria-label="Elegir opción"]'),
+      ),
+    );
+    test.skip(indice < 0, "Hoy no hay ningún grupo en la primera página de /tienda.");
+    await centrarTarjeta(page, indice);
+
+    const favorito = page
+      .locator("article")
+      .nth(indice)
+      .getByRole("button", { name: /favoritos/i });
+    await expect(favorito).toHaveAttribute("aria-pressed", "false");
+    await expect(async () => {
+      await favorito.tap();
+      await expect(favorito).toHaveAttribute("aria-pressed", "true", { timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
+    // Guardar no abre nada ni navega.
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page).toHaveURL(/\/tienda/);
   });
 

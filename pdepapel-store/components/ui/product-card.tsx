@@ -224,23 +224,22 @@ const ProductCard: React.FC<ProductCardProps> = ({
     [addToCart, openPreview, product, showCartPreview, toast],
   );
 
+  /*
+   * Un grupo se guarda tal cual, como familia. Antes el corazón abría la
+   * vista previa para que se eligiera la variante primero: el primer toque
+   * no guardaba nada ni avisaba, y en el teléfono parecía un botón muerto.
+   * Favoritos ya sabe mostrar un grupo («Elegir opción» lleva a su página) y
+   * la ficha del grupo lo guarda igual, así que la tarjeta hace lo mismo.
+   * Agregar al carrito sí sigue pidiendo la variante: para comprar hace
+   * falta una.
+   */
   const onToggleWishlist = useCallback<MouseEventHandler<HTMLButtonElement>>(
     (event) => {
       stop(event);
-      if (product.isGroup) {
-        openPreview(product);
-        return;
-      }
       if (isWishlistProduct) removeFromWishlist(product.id);
       else addToWishlist(product);
     },
-    [
-      addToWishlist,
-      isWishlistProduct,
-      openPreview,
-      product,
-      removeFromWishlist,
-    ],
+    [addToWishlist, isWishlistProduct, product, removeFromWishlist],
   );
 
   const heartLabel = isWishlistProduct
