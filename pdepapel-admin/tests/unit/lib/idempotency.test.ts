@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const upstash = vi.hoisted(() => ({ fromEnv: vi.fn() }));
+vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: upstash.fromEnv } }));
+
 import {
+  IDEMPOTENCY_BUDGET_MS,
   readIdempotencyKey,
   setIdempotencyRedis,
   withIdempotency,
@@ -99,5 +103,50 @@ describe("withIdempotency", () => {
     const response = await withIdempotency(request("abcdefgh-5"), "store", handler);
     expect(handler).toHaveBeenCalledTimes(1);
     expect(await response.json()).toEqual({ id: "o5" });
+  });
+
+  /*
+   * Redis colgado no retiene una venta (misma familia que el incidente del
+   * 2026-09-29): cada tramo con Redis tiene presupuesto y, si se agota, el
+   * pedido se crea sin guarda o se devuelve sin esperar a guardar el resultado.
+   */
+  describe("con Redis colgado", () => {
+    const hang = () => new Promise<never>(() => {});
+
+    it("crea el pedido sin guarda cuando la lectura no responde", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      redis.get.mockImplementationOnce(hang as never);
+      const handler = vi.fn(async () => NextResponse.json({ id: "o6" }));
+      const started = Date.now();
+      const response = await withIdempotency(request("abcdefgh-6"), "store", handler);
+      expect(Date.now() - started).toBeLessThan(IDEMPOTENCY_BUDGET_MS + 1000);
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(await response.json()).toEqual({ id: "o6" });
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining("se continúa sin guarda"), expect.objectContaining({ name: "IdempotencyTimeout" }));
+    });
+
+    it("devuelve la respuesta aunque guardar el resultado y liberar el bloqueo no respondan", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      // Lectura y bloqueo normales; el segundo set (guardar) y el del cuelgan.
+      redis.set.mockImplementationOnce(async () => "OK").mockImplementationOnce(hang as never);
+      redis.del.mockImplementationOnce(hang as never);
+      const handler = vi.fn(async () => NextResponse.json({ id: "o7" }));
+      const started = Date.now();
+      const response = await withIdempotency(request("abcdefgh-7"), "store", handler);
+      expect(Date.now() - started).toBeLessThan(IDEMPOTENCY_BUDGET_MS * 2 + 1000);
+      expect(await response.json()).toEqual({ id: "o7" });
+    });
+
+    it("sin cliente inyectado usa uno de un solo uso con un reintento corto y señal de aborto", async () => {
+      setIdempotencyRedis(null);
+      const fake = new FakeRedis();
+      upstash.fromEnv.mockReturnValue(fake as never);
+      const handler = vi.fn(async () => NextResponse.json({ id: "o8" }));
+      await withIdempotency(request("abcdefgh-8"), "store", handler);
+      const config = upstash.fromEnv.mock.calls.at(-1)?.[0] as { retry?: { retries?: number }; signal?: AbortSignal };
+      expect(config?.retry?.retries).toBe(1);
+      expect(config?.signal).toBeInstanceOf(AbortSignal);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
   });
 });
