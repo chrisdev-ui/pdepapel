@@ -74,6 +74,16 @@ function comparable(value: string): string[] {
   return tokenize(value).map(collapseStretchedVowels);
 }
 
+/**
+ * Las palabras de un texto tal como las compara `matchWhatsAppKeyword`:
+ * normalizadas, partidas por todo lo que no sea letra ni número y con la
+ * vocal estirada aplanada. Para quien necesite mirar qué queda alrededor de
+ * una coincidencia sin reinventar esta cocina.
+ */
+export function comparableWords(value: string): string[] {
+  return comparable(normalizeBotText(value));
+}
+
 /** ¿Están estas palabras, seguidas y enteras, dentro de aquellas? */
 function containsPhrase(haystack: string[], needle: string[]): boolean {
   if (needle.length === 0 || needle.length > haystack.length) return false;

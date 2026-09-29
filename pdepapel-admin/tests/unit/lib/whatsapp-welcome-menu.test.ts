@@ -63,6 +63,39 @@ describe("reconocer un saludo", () => {
    * `includes` —como hace `classifyBusinessFact`— «ola» volvería a colarse
    * dentro de «escolares» y el saludo taparía la pregunta por un producto.
    */
+  it("un saludo con puntuación, emoji o dos saludos seguidos sigue siendo solo saludo", () => {
+    for (const frase of ["Hola", "hola!", "Buenas", "Buenos días", "Hoola", "¡Hola!", "hola 💛", "Hola, buenas tardes", "buenas   noches!!", "Hey"]) {
+      expect(isWelcomeGreeting(frase), frase).toBe(true);
+    }
+  });
+
+  /*
+   * Caso real: «Buenas, ¿me pueden imprimir esto?» abría el menú de bienvenida
+   * y se comía la respuesta «imprimir» de Paula. El saludo solo cuenta cuando
+   * el mensaje ES el saludo; con una petición detrás, no.
+   */
+  it("también saluda en inglés y en chino, siempre que sea solo el saludo", () => {
+    for (const frase of ["hi", "Hi!", "Hello!", "Hello there", "Good morning", "good evening 🙂", "你好", "您好！", "哈喽", "早上好"]) {
+      expect(isWelcomeGreeting(frase), frase).toBe(true);
+    }
+    for (const frase of ["Hi, can you print this?", "Hello I need the schedule", "你好，我要打印", "hi hola quiero un cuaderno"]) {
+      expect(isWelcomeGreeting(frase), frase).toBe(false);
+    }
+  });
+
+  it("un saludo seguido de una petición de verdad no es un saludo", () => {
+    for (const frase of [
+      "Buenas, ¿me pueden imprimir esto?",
+      "Hola quiero imprimir un documento",
+      "hey necesito saber el horario",
+      "Buenos días, ¿tienen cuadernos?",
+      "hola, envío a Bogotá?",
+      "que mas, cuanto vale el kit",
+    ]) {
+      expect(isWelcomeGreeting(frase), frase).toBe(false);
+    }
+  });
+
   it("no confunde un producto con un saludo", () => {
     for (const frase of ["¿Tienen útiles escolares?", "¿Tienen bolígrafos?", "¿Venden cola escolar?"]) {
       expect(isWelcomeGreeting(frase), frase).toBe(false);

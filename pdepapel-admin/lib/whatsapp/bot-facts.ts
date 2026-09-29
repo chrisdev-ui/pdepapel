@@ -4,9 +4,9 @@ import { MinimumOrderRule } from "@prisma/client";
 
 import { formatOpeningHours, type ResolvedStoreSettings } from "@/lib/store-settings";
 import {
-  matchWhatsAppKeyword,
   normalizeBotText,
   type WhatsAppBotKeyword,
+  comparableWords,
 } from "@/lib/whatsapp/bot-matching";
 import {
   TALK_TO_OWNER_BUTTON_TITLE,
@@ -246,20 +246,77 @@ export function buildPaymentMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[
  * `classifyBusinessFact`. Aquí hay disparadores de tres letras («ola», «oli»)
  * y con `includes` volverían a colarse dentro de «escolares» y «bolígrafos»,
  * que es justo lo que se corrigió en el lote 3.
+ *
+ * También en inglés: hay clientas que escriben «Hi!» o «Hello». Los saludos
+ * en chino van aparte (`CJK_GREETINGS`), porque el partidor de palabras solo
+ * conoce letras latinas.
  */
 const WELCOME_TRIGGERS: WhatsAppBotKeyword[] = [
   {
     triggers: [
       "hola", "ola", "holi", "oli", "buenas", "buenos dias", "buenas tardes",
       "buenas noches", "saludos", "hey", "que mas", "buen dia",
+      "hi", "hello", "hi there", "hello there", "good morning", "good afternoon",
+      "good evening", "greetings",
     ],
     answer: "",
   },
 ];
 
-/** ¿Este mensaje es un saludo y nada más que un saludo? */
+/**
+ * Saludos en chino. El partidor de `bot-matching` descarta todo lo que no sea
+ * letra latina, así que estos se comparan aparte: el mensaje, sin espacios,
+ * puntuación ni emoji, tiene que ser uno de estos y nada más.
+ */
+const CJK_GREETINGS = ["你好", "您好", "哈喽", "嗨", "早上好", "下午好", "晚上好"];
+
+/** Letras latinas, dígitos y sinogramas: lo que cuenta como «contenido» de un mensaje. */
+const NON_CONTENT = /[^0-9A-Za-z\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF]/g;
+
+function isCjkGreeting(body: string): boolean {
+  const content = body.replace(NON_CONTENT, "");
+  if (!content) return false;
+  return CJK_GREETINGS.some((greeting) => content === greeting || content === greeting + greeting);
+}
+
+/** Los disparadores del saludo ya en la forma en que se comparan las palabras. */
+const WELCOME_TRIGGER_WORDS: string[][] = WELCOME_TRIGGERS.flatMap((keyword) =>
+  keyword.triggers.map((trigger) => comparableWords(trigger)).filter((words) => words.length > 0),
+);
+
+/**
+ * ¿Este mensaje es un saludo y nada más que un saludo?
+ *
+ * «Hola», «¡Buenas!», «hola 💛» y «Hola, buenas tardes» sí: puntuación y emoji
+ * no cuentan, y varios saludos seguidos siguen siendo solo saludo. «Buenas,
+ * ¿me pueden imprimir esto?» no: el saludo es la primera palabra de una
+ * petición de verdad, y esa petición tiene que llegar a las respuestas de
+ * Paula (paso 5) y no al menú de bienvenida. Antes bastaba con que el saludo
+ * apareciera en cualquier parte, y el menú se comía «imprimir».
+ */
 export function isWelcomeGreeting(body: string): boolean {
-  return matchWhatsAppKeyword(body, WELCOME_TRIGGERS) !== null;
+  if (isCjkGreeting(body)) return true;
+  const words = comparableWords(body);
+  if (words.length === 0) return false;
+  let position = 0;
+  while (position < words.length) {
+    // El disparador más largo que empiece aquí: «buenas tardes» antes que «buenas».
+    let consumed = 0;
+    for (const trigger of WELCOME_TRIGGER_WORDS) {
+      if (trigger.length <= consumed || position + trigger.length > words.length) continue;
+      let matches = true;
+      for (let offset = 0; offset < trigger.length; offset += 1) {
+        if (words[position + offset] !== trigger[offset]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) consumed = trigger.length;
+    }
+    if (consumed === 0) return false;
+    position += consumed;
+  }
+  return true;
 }
 
 /**

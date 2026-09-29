@@ -710,6 +710,19 @@ describe("runWhatsAppBot", () => {
       ]);
     });
 
+    it("«Buenas, imprimir» llega a la respuesta «imprimir» de Paula, no al menú", async () => {
+      abierta();
+      const conImprimir = [...keywords, { triggers: ["imprimir"], answer: "Sí, imprimimos: manda el archivo." }];
+      mocks.activeKeywords.mockResolvedValue(conImprimir);
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "Buenas, imprimir", keywords: conImprimir, settings: ajustesBase }),
+      ).resolves.toEqual({ outcome: "replied", trigger: "imprimir" });
+
+      expect(mocks.sendList).not.toHaveBeenCalled();
+      expect(JSON.stringify(mocks.send.mock.calls) + JSON.stringify(mocks.sendText.mock.calls)).toContain("Sí, imprimimos");
+    });
+
     it("«escolares» no abre el menú: eso es una pregunta por productos", async () => {
       abierta();
       await runWhatsAppBot({
