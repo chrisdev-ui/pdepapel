@@ -147,8 +147,10 @@ test.describe("tarjeta de producto en táctil", () => {
     await gotoPublicPage(page, "/favoritos");
     const guardado = page.locator("article").filter({ hasText: nombreFamilia }).first();
     await expect(guardado).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("link", { name: "Elegir opción" })).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(0);
+    // La fila de acciones de favoritos vive junto a la tarjeta, en su padre.
+    const fila = guardado.locator("xpath=..");
+    await expect(fila.getByRole("link", { name: "Elegir opción" })).toHaveCount(1);
+    await expect(fila.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(0);
   });
 
   test("un producto simple guardado sale en Favoritos con «Agregar al carrito»", async ({ page }) => {
@@ -169,8 +171,10 @@ test.describe("tarjeta de producto en táctil", () => {
 
     await gotoPublicPage(page, "/favoritos");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("1 producto", { timeout: 20_000 });
-    await expect(page.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(1);
-    await expect(page.getByRole("link", { name: "Elegir opción" })).toHaveCount(0);
+    // Dos «Agregar al carrito»: el de la tarjeta y el de la fila de favoritos.
+    const fila = page.locator("article").first().locator("xpath=..");
+    await expect(fila.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(2);
+    await expect(fila.getByRole("link", { name: "Elegir opción" })).toHaveCount(0);
   });
 
   test("el botón de favoritos no se superpone a la foto", async ({ page }) => {
