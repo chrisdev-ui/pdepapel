@@ -66,6 +66,11 @@ export const CUSTOMER_ORDER_SELECT = {
   discount: true,
   couponDiscount: true,
   total: true,
+  // Regalo: solo la bandera, el nombre y el mensaje. El correo y el teléfono
+  // de quien recibe son datos de un tercero y no salen por la ruta pública.
+  isGift: true,
+  giftRecipientName: true,
+  giftMessage: true,
   coupon: { select: { code: true } },
   payment: { select: { id: true, method: true, transactionId: true } },
   shipping: {
@@ -131,4 +136,6 @@ export const INTERNAL_ORDER_FIELDS = [
   "analyticsClientId",
   "analyticsConsent",
   "idempotencyKey",
+  "giftRecipientEmail",
+  "giftRecipientPhone",
 ] as const;

@@ -46,3 +46,21 @@ describe("getStepFields", () => {
     expect(all.sort()).toEqual(Object.keys(CHECKOUT_FIELD_STEPS).sort());
   });
 });
+
+describe("regalo", () => {
+  it("valida quién recibe en el paso 1, con los datos de contacto", () => {
+    for (const field of [
+      "isGift",
+      "giftRecipientName",
+      "giftRecipientEmail",
+      "giftRecipientPhone",
+      "giftMessage",
+    ]) {
+      expect(CHECKOUT_FIELD_STEPS[field]).toBe(1);
+    }
+    expect(getStepFields(1)).toEqual(
+      expect.arrayContaining(["giftRecipientName", "giftMessage"]),
+    );
+    expect(getFirstInvalidStep({ giftRecipientName: { message: "x" } })).toBe(1);
+  });
+});

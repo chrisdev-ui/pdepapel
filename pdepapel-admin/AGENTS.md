@@ -195,6 +195,13 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - Provider webhooks validate the already stored method and must never silently convert a bank-transfer order to an online payment.
 - `updateMany` with a status guard is **only atomic inside an explicit `$transaction`**. Prisma compiles it into a `SELECT` then an `UPDATE … WHERE id IN (?)`, so outside a transaction the guard is evaluated by the read, and concurrent deliveries of one webhook all claim it and process the same event. Queue claims that cannot sit in a transaction use `claimQueueRow` (`lib/atomic-claim.ts`). The same applies to `stock: { gte: n }` guards.
 
+### Gift orders
+
+- An order has **one identity**: `email`, `fullName`, `phone` and `documentId` are always the **buyer** (account claims, welcome benefit, Clientes, DIAN, reactivation). Never repoint them at a recipient. The recipient of a gift lives in `isGift`, `giftRecipientName`, `giftRecipientEmail`, `giftRecipientPhone`, `giftMessage` (migration `20260928_add_order_gift_fields.sql`).
+- All gift rules are in `lib/gift-orders.ts`: `normalizeGiftFields` (the three order-writing routes use it; with the flag off every field is null, so a non-gift order never stores a third party's data), `getShippingContact` (the EnvioClick destination name and phone are the recipient's; the destination email stays the buyer's) and `getGiftNotificationEmail` (null when the recipient address is the buyer's own).
+- **The buyer always gets the full receipt.** The recipient gets `emails/gift-notification.tsx` only: no items, prices, totals, order number or order link, and never on `PENDING` (a gift is announced only once the payment exists) and again on every shipping update with the guide. A failed recipient email is recorded as `gift:<status>` and never blocks the buyer's email.
+- `giftRecipientEmail` and `giftRecipientPhone` are internal fields: not in `CUSTOMER_ORDER_SELECT` (the public order page shows only the name and message) and scrubbed for read-only accounts.
+
 ### Inventory
 
 - Apply every stock change through the centralized helpers (`lib/inventory.ts`) and write an `InventoryMovement` for every meaningful adjustment. `InventoryMovement` is the auditable ledger and has accounting meaning.

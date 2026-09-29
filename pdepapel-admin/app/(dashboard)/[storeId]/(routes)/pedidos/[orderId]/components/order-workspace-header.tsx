@@ -21,6 +21,8 @@ interface OrderWorkspaceHeaderProps {
     total: number;
     status: TimelineOrder["status"];
     orderItems: { name: string; sku?: string | null; quantity: number }[];
+    isGift?: boolean | null;
+    giftRecipientName?: string | null;
   };
 }
 
@@ -52,6 +54,15 @@ export function OrderWorkspaceHeader({
           </h1>
           <div className="flex flex-wrap items-center gap-2">
             <TintBadge label={channel.label} tone={CHANNEL_TONE[channel.id]} />
+            {order.isGift && order.giftRecipientName && (
+              <a
+                href="#regalo"
+                className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                title={`Regalo para ${order.giftRecipientName}`}
+              >
+                <TintBadge label="Regalo" tone="pink" />
+              </a>
+            )}
             <TintBadge label={payment.label} tone={payment.tone} />
             {shipping && (
               <TintBadge label={shipping.label} tone={shipping.tone} />

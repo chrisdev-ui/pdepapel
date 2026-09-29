@@ -7,6 +7,7 @@ import {
   truncateField,
 } from "@/constants/shipping";
 import prismadb from "@/lib/prismadb";
+import { getShippingContact } from "@/lib/gift-orders";
 import { ErrorFactory } from "./api-errors";
 import { envioClickClient } from "./envioclick";
 import { ShippingStatus } from "@prisma/client";
@@ -82,8 +83,10 @@ export async function createGuideForOrder(
     );
   }
 
-  // 2. Preparar datos
-  const customerName = splitFullName(order.fullName);
+  // 2. Preparar datos. En un regalo el paquete sale a nombre y teléfono de
+  // quien recibe; el correo sigue siendo el de quien compra.
+  const shippingContact = getShippingContact(order);
+  const customerName = splitFullName(shippingContact.fullName);
   const storeName = splitFullName(
     `${STORE_SHIPPING_INFO.firstName} ${STORE_SHIPPING_INFO.lastName}`,
   );
@@ -281,7 +284,7 @@ export async function createGuideForOrder(
         firstName: customerName.firstName,
         lastName: customerName.lastName,
         email: truncateField(order.email || "", "email"),
-        phone: phoneToNational(order.phone),
+        phone: phoneToNational(shippingContact.phone),
         address: truncateField(order.address, "address"),
         suburb: truncateField(order.neighborhood || "NA", "suburb"),
         crossStreet: truncateField(order.address2 || "NA", "crossStreet"),

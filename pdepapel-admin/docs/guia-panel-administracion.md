@@ -101,6 +101,14 @@ viendo en la pestaña «Cotizaciones», pero no se crean nuevos.
 Menú de fila: copiar ID o número, link de pago (si no está pagado), datáfono
 (pedidos completados), ver detalle; eliminar solo si nunca se pagó.
 
+**Regalos.** La sección **Regalo**, debajo de Cliente, tiene el interruptor
+«Es un regalo» y, al encenderlo, quién lo recibe (obligatorio), su correo, su
+teléfono y un mensaje. El cliente de la sección 1 sigue siendo quien compra:
+a su correo va el recibo completo. La guía de EnvioClick sale a nombre y
+teléfono de quien recibe, y a su correo llega solo un aviso sin productos ni
+precios, con el mensaje, cuando el pedido está pagado y en cada novedad del
+envío. En la lista y en el título del pedido aparece la insignia «Regalo».
+
 ## 5. Punto de venta (`/ventas-rapidas`)
 
 **Vender**

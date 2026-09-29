@@ -56,6 +56,7 @@ import {
 } from "@/lib/customer-benefits";
 import { saveCustomerAddressFromCheckout } from "@/lib/customer-addresses";
 import { normalizePhone } from "@/lib/phone";
+import { normalizeGiftFields } from "@/lib/gift-orders";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -237,6 +238,9 @@ async function createCheckout(
       addressLabel,
     } = body as Record<string, any>;
     const normalizedPhone = normalizePhone(phone);
+    // Regalo: quien compra sigue en `email`/`fullName`; quien recibe va en
+    // los campos `gift*`. Sin la bandera, todo queda en null.
+    const gift = normalizeGiftFields(body as Record<string, unknown>);
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
@@ -831,6 +835,7 @@ async function createCheckout(
           daneCode,
           neighborhood: neighborhood || null,
           company: company || null,
+          ...gift,
           subtotal: totals.subtotal,
           total: totals.total,
           couponDiscount: totals.couponDiscount,

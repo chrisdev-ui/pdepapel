@@ -28,6 +28,9 @@ export function OrderMobileCard({ order, storeId }: { order: OrderColumn; storeI
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <TintBadge label={channel.label} tone={CHANNEL_TONE[channel.id]} />
+        {order.isGift && order.giftRecipientName && (
+          <TintBadge label={`Regalo para ${order.giftRecipientName}`} tone="pink" />
+        )}
         <TintBadge label={payment.label} tone={payment.tone} />
         {shipping && <TintBadge label={shipping.label} tone={shipping.tone} />}
         {issue && <TintBadge label={issue.label} tone={issue.tone} />}

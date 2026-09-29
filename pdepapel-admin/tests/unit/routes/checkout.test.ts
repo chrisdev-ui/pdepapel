@@ -350,4 +350,61 @@ describe("POST /api/[storeId]/checkout", () => {
       "analyticsConsent",
     );
   });
+
+  // Regalo: quien compra sigue en email/fullName; quien recibe va aparte.
+  it("stores the recipient of a gift next to the buyer, normalized", async () => {
+    const response = await POST(
+      createCheckoutRequest({
+        isGift: true,
+        giftRecipientName: "  Mariana López ",
+        giftRecipientEmail: "Mariana@Example.com",
+        giftRecipientPhone: "300 123 4567",
+        giftMessage: " ¡Feliz cumpleaños! ",
+      }),
+      { params: { storeId } },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.orderCreate.mock.calls.at(-1)?.[0]?.data).toMatchObject({
+      fullName: "Ana Gómez",
+      email: "ana@example.com",
+      isGift: true,
+      giftRecipientName: "Mariana López",
+      giftRecipientEmail: "mariana@example.com",
+      giftRecipientPhone: "+573001234567",
+      giftMessage: "¡Feliz cumpleaños!",
+    });
+  });
+
+  it("keeps every gift field null when the order is not a gift", async () => {
+    await POST(
+      createCheckoutRequest({
+        isGift: false,
+        giftRecipientName: "Resto de un intento anterior",
+        giftRecipientEmail: "otra@example.com",
+      }),
+      { params: { storeId } },
+    );
+
+    expect(mocks.orderCreate.mock.calls.at(-1)?.[0]?.data).toMatchObject({
+      isGift: false,
+      giftRecipientName: null,
+      giftRecipientEmail: null,
+      giftRecipientPhone: null,
+      giftMessage: null,
+    });
+  });
+
+  it("rejects a gift without the recipient name before creating anything", async () => {
+    const response = await POST(
+      createCheckoutRequest({ isGift: true, giftRecipientName: "" }),
+      { params: { storeId } },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Escribe el nombre de quien recibe el regalo",
+    });
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
 });

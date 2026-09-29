@@ -786,6 +786,18 @@ model Order {
   fairEventId    String?
   idempotencyKey String? @unique
 
+  // -- Regalo (2026-09-28) --
+  // `email`, `fullName`, `phone` y `documentId` siguen siendo de quien COMPRA:
+  // son la identidad del pedido (cuenta, beneficios, clientes, DIAN) y a ese
+  // correo va el recibo completo. Quien RECIBE el regalo va aquí: la
+  // transportadora usa su nombre y teléfono, y a su correo llega solo un
+  // aviso sin productos, precios ni enlace del pedido.
+  isGift             Boolean @default(false)
+  giftRecipientName  String?
+  giftRecipientEmail String?
+  giftRecipientPhone String?
+  giftMessage        String? @db.Text
+
   // Sender Info
   createdBy String? // Admin User ID
   /**

@@ -10,6 +10,8 @@ import {
 import { isValidPhoneNumber } from "react-phone-number-input";
 import z from "zod";
 
+import { GIFT_MESSAGE_MAX, GIFT_RECIPIENT_EMAIL_MAX, GIFT_RECIPIENT_NAME_MAX } from "@/lib/gift-orders";
+
 import type { GetOrderResult, ProductOption } from "../../server/get-order";
 
 /** Esquema, tipos y valores iniciales del formulario de pedido. */
@@ -94,6 +96,12 @@ export const orderFormSchema = z
     company: limited(ENVIOCLICK_LIMITS.company.max, "La empresa"),
     adminNotes: z.string().optional(),
     internalNotes: z.string().optional(),
+    // Regalo: quien recibe. Quien compra sigue en fullName/email/phone.
+    isGift: z.boolean().default(false),
+    giftRecipientName: limited(GIFT_RECIPIENT_NAME_MAX, "El nombre de quien recibe"),
+    giftRecipientEmail: limited(GIFT_RECIPIENT_EMAIL_MAX, "El correo de quien recibe"),
+    giftRecipientPhone: z.string().optional(),
+    giftMessage: limited(GIFT_MESSAGE_MAX, "El mensaje del regalo"),
     orderItems: z.array(orderItemSchema).nonempty({ message: "Agrega al menos un producto" }),
     type: z.nativeEnum(OrderType).default(OrderType.STANDARD),
     status: z.nativeEnum(OrderStatus),
@@ -117,6 +125,19 @@ export const orderFormSchema = z
     }
     if (data.discount?.type && !data.discount.amount) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Escribe el monto del descuento", path: ["discount", "amount"] });
+    }
+    if (data.isGift) {
+      if ((data.giftRecipientName ?? "").trim().length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Escribe el nombre de quien recibe el regalo", path: ["giftRecipientName"] });
+      }
+      const giftEmail = (data.giftRecipientEmail ?? "").trim();
+      if (giftEmail && !z.string().email().safeParse(giftEmail).success) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El correo de quien recibe no es válido", path: ["giftRecipientEmail"] });
+      }
+      const giftPhone = (data.giftRecipientPhone ?? "").trim();
+      if (giftPhone && !isValidPhoneNumber(giftPhone)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El teléfono de quien recibe no es válido", path: ["giftRecipientPhone"] });
+      }
     }
     if (isRealOrderStatus(data.status)) {
       if (!data.email || !z.string().email().safeParse(data.email).success) {
@@ -271,6 +292,11 @@ export function buildNewOrderDefaults(preset: OrderTypePreset, guestId: string):
     payment: preset.paymentMethod ? { method: preset.paymentMethod } : {},
     adminNotes: "",
     internalNotes: "",
+    isGift: false,
+    giftRecipientName: "",
+    giftRecipientEmail: "",
+    giftRecipientPhone: "",
+    giftMessage: "",
     shippingProvider: ShippingProvider.NONE,
     envioClickIdRate: undefined,
     shipping: { ...EMPTY_SHIPPING },
@@ -308,6 +334,12 @@ export function buildExistingOrderDefaults(order: NonNullable<GetOrderResult["or
     },
     adminNotes: raw.adminNotes || "",
     internalNotes: raw.internalNotes || "",
+    isGift: Boolean(order.isGift),
+    giftRecipientName: order.giftRecipientName || "",
+    // La cuenta de solo lectura recibe el pedido sin estos dos campos.
+    giftRecipientEmail: (raw as { giftRecipientEmail?: string | null }).giftRecipientEmail || "",
+    giftRecipientPhone: (raw as { giftRecipientPhone?: string | null }).giftRecipientPhone || "",
+    giftMessage: order.giftMessage || "",
     couponCode: order.coupon?.code || "",
     orderItems: order.orderItems.map((item) => {
       const product = products.find((p) => p.value === item.productId);

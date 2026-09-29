@@ -267,6 +267,10 @@ export interface Order {
   couponDiscount?: number;
   /** El panel creó el pedido; el id de quien lo hizo nunca llega a la tienda. */
   createdByAdmin?: boolean;
+  /** Regalo: solo la bandera, el nombre y el mensaje llegan a la tienda. */
+  isGift?: boolean;
+  giftRecipientName?: string | null;
+  giftMessage?: string | null;
   createdAt: string;
   /** Set by the admin only when a genuine payment was confirmed. */
   paidAt?: string | null;
@@ -442,6 +446,12 @@ export interface CheckoutOrder {
   saveAddress?: boolean;
   savedAddressId?: string | null;
   addressLabel?: string | null;
+  /** Regalo: quien recibe. `email`/`fullName` siguen siendo de quien compra. */
+  isGift?: boolean;
+  giftRecipientName?: string | null;
+  giftRecipientEmail?: string | null;
+  giftRecipientPhone?: string | null;
+  giftMessage?: string | null;
 }
 
 export interface DaneLocation {

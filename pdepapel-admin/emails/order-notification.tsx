@@ -42,6 +42,8 @@ interface OrderNotificationProps {
   city?: string;
   notificationSource?: string;
   accountClaimLink?: string | null;
+  /** Es un regalo: a quién va. Solo el nombre; el aviso a esa persona es otro correo. */
+  giftRecipientName?: string | null;
 }
 
 interface Look {
@@ -161,6 +163,7 @@ export const OrderNotification = ({
   city,
   notificationSource,
   accountClaimLink,
+  giftRecipientName,
 }: OrderNotificationProps) => {
   const look = getLook(status);
   const firstName = name ? name.split(" ")[0] : "";
@@ -177,6 +180,8 @@ export const OrderNotification = ({
       { key: "Ciudad", value: city || "Sin ciudad" },
     ];
     if (total) rows.push({ key: "Total", value: total });
+    if (giftRecipientName)
+      rows.push({ key: "Regalo para", value: giftRecipientName });
     if (hasTracking) rows.push({ key: "Guía", value: trackingInfo as string });
     if (notificationSource)
       rows.push({ key: "Origen del aviso", value: notificationSource });
@@ -224,6 +229,16 @@ export const OrderNotification = ({
       <Pill tint={look.tint}>{look.pill}</Pill>
       <Title>{look.headline(firstName)}</Title>
       {thanksParagraph ? <P>{thanksParagraph}</P> : null}
+
+      {giftRecipientName ? (
+        <StickerCard tint="pink" filled>
+          <CardText>
+            <strong>Es un regalo para {giftRecipientName}.</strong> Este recibo
+            solo te llega a ti; a esa persona le avisamos por correo, sin
+            productos ni precios.
+          </CardText>
+        </StickerCard>
+      ) : null}
 
       <SectionLabel tint={look.tint}>Tu pedido #{orderNumber}</SectionLabel>
       <StickerCard tint={look.tint}>

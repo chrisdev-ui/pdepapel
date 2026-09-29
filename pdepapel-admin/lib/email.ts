@@ -8,7 +8,9 @@ import {
   OrderType,
 } from "@prisma/client";
 import type { EmailLineItem } from "@/emails/components";
+import { GiftNotification } from "@/emails/gift-notification";
 import { OrderNotification } from "@/emails/order-notification";
+import { getGiftNotificationEmail, isGiftOrder } from "@/lib/gift-orders";
 import { resend } from "@/lib/resend";
 import { recordFailedNotification } from "@/lib/notification-failures";
 import {
@@ -99,6 +101,69 @@ async function getOrderAccountClaimEmailLink(order: Order) {
   });
 
   return `${getOrderLink(order.id)}#guardar-pedido=${encodeURIComponent(token)}`;
+}
+
+type NotifiableOrder = Order & {
+  shipping?: Shipping | null;
+};
+
+/**
+ * El aviso a quien recibe un regalo: sin productos, precios, totales ni
+ * enlace del pedido. Solo cuando el pedido es regalo, dejó un correo y ese
+ * correo no es el de quien compra (que ya recibe el recibo completo).
+ *
+ * Nunca en PENDING: un regalo no se anuncia antes de que el pago exista.
+ * Un fallo aquí no tumba el correo de la clienta: se registra aparte.
+ */
+async function sendGiftNotification(
+  order: NotifiableOrder,
+  status: OrderStatus | ShippingStatus,
+) {
+  const recipient = getGiftNotificationEmail(order);
+  if (!recipient) return;
+
+  const trackingInfo = order.shipping?.trackingCode ?? undefined;
+  const recipientName = order.giftRecipientName || "";
+  const buyerName = order.fullName || "Alguien";
+  const subject =
+    status === OrderStatus.PAID
+      ? `${buyerName} te envió un regalo de P de Papel`
+      : `Tu regalo de ${buyerName} · ${getReadableStatus(status)}`;
+
+  try {
+    await resend.emails.send({
+      from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
+      to: [recipient],
+      subject,
+      react: GiftNotification({
+        recipientName,
+        buyerName,
+        message: order.giftMessage,
+        status: status as string,
+        trackingInfo,
+      }) as React.ReactElement,
+      text: [
+        `${buyerName} te envió un regalo de P de Papel.`,
+        order.giftMessage ? `Mensaje: «${order.giftMessage}»` : "",
+        trackingInfo
+          ? `Guía de envío: ${trackingInfo}\nSeguimiento: https://www.envioclick.com/co/track/${trackingInfo}`
+          : "",
+        "Este aviso no muestra qué hay dentro ni cuánto costó: es una sorpresa.",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    });
+  } catch (error) {
+    console.error("[EMAIL] Error sending gift notification:", error);
+    await recordFailedNotification({
+      storeId: order.storeId,
+      channel: "EMAIL",
+      kind: `gift:${status}`,
+      recipient,
+      orderId: order.id,
+      error,
+    });
+  }
 }
 
 function getOrderNotificationSource(status: OrderStatus | ShippingStatus) {
@@ -194,6 +259,9 @@ export const sendOrderEmail = async (
           orderLink,
           thanksParagraph,
           notificationSource: getOrderNotificationSource(status),
+          giftRecipientName: isGiftOrder(order)
+            ? order.giftRecipientName
+            : null,
         }) as React.ReactElement,
         text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${getOrderNotificationSource(status)}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
       });
@@ -217,9 +285,17 @@ export const sendOrderEmail = async (
           orderLink,
           thanksParagraph,
           accountClaimLink,
+          giftRecipientName: isGiftOrder(order)
+            ? order.giftRecipientName
+            : null,
         }) as React.ReactElement,
         text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`,
       });
+    }
+
+    // El regalo se anuncia a quien recibe solo con el pago confirmado.
+    if (status === OrderStatus.PAID) {
+      await sendGiftNotification(order, status);
     }
   } catch (error) {
     console.error("Error sending email:", error);
@@ -320,6 +396,7 @@ export const sendShippingEmail = async (
         orderLink,
         thanksParagraph,
         notificationSource: "Actualización de envío recibida desde EnvíoClick.",
+        giftRecipientName: isGiftOrder(order) ? order.giftRecipientName : null,
       }) as React.ReactElement,
       text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: Actualización de envío recibida desde EnvíoClick.\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
     });
@@ -341,10 +418,16 @@ export const sendShippingEmail = async (
           city: order.city || undefined,
           orderLink,
           thanksParagraph,
+          giftRecipientName: isGiftOrder(order)
+            ? order.giftRecipientName
+            : null,
         }) as React.ReactElement,
         text: `${subjectCustomer}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`,
       });
     }
+
+    // Quien recibe el regalo sigue el paquete con el mismo aviso, sin precios.
+    await sendGiftNotification(order, shippingStatus);
 
     console.log(
       `[EMAIL] Shipping notification sent for order #${order.orderNumber} - ${shippingStatus}`,

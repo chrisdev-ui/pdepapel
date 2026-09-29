@@ -150,6 +150,7 @@ When a change touches authentication or authorization, verify that route list **
 - **Never mark an order paid from a client redirect.** Payment state comes from the admin's provider webhooks. Online payment keeps the cart until the order is genuinely `PAID`.
 - The checkout sends an `Idempotency-Key`; do not remove it. Stock is re-checked right before submitting, and a 422 renders the inline sold-out block.
 - Remove stale "Próximamente" copy for active payment methods.
+- **Gift orders (2026-09-28):** step 1 offers «¿Es un regalo?». The buyer's own name, email, phone and document stay the order's identity; the recipient goes in `isGift`, `giftRecipientName` (required when on), `giftRecipientEmail`, `giftRecipientPhone` and `giftMessage` (all step-1 fields in `lib/checkout-steps.ts`). The payload sends the recipient fields **only** when the flag is on. The public order page (`/pedido/[id]`) receives only the flag, the name and the message, never the recipient's contact.
 
 ### Analytics and privacy
 

@@ -11,6 +11,7 @@ import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { priceLines } from "@/lib/product-pricing";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { normalizePhone } from "@/lib/phone";
+import { normalizeGiftFields, type GiftFields } from "@/lib/gift-orders";
 
 import {
   CACHE_HEADERS,
@@ -91,6 +92,12 @@ type OrderData = {
   internalNotes?: string | null;
   createdBy?: string | null;
   analyticsClientId?: string | null;
+  // Regalo: quien recibe (quien compra sigue en email/fullName/phone).
+  isGift?: GiftFields["isGift"];
+  giftRecipientName?: GiftFields["giftRecipientName"];
+  giftRecipientEmail?: GiftFields["giftRecipientEmail"];
+  giftRecipientPhone?: GiftFields["giftRecipientPhone"];
+  giftMessage?: GiftFields["giftMessage"];
   // Relations
   orderItems: { create: any };
   status?: any;
@@ -167,6 +174,7 @@ async function createOrder(
       analyticsClientId,
     } = body;
     const normalizedPhone = normalizePhone(phone);
+    const gift = normalizeGiftFields(body as Record<string, unknown>);
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
@@ -542,6 +550,7 @@ async function createOrder(
         expiresAt,
         adminNotes,
         internalNotes,
+        ...gift,
         createdBy: isStoreOwner ? createdBy || authenticatedUserId : null,
         ...(normalizedAnalyticsClientId
           ? { analyticsClientId: normalizedAnalyticsClientId }

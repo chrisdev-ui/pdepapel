@@ -32,6 +32,8 @@ export const VIEWER_HIDDEN_ORDER_FIELDS = [
   "daneCode",
   "documentId",
   "company",
+  "giftRecipientEmail",
+  "giftRecipientPhone",
   "totalProductCost",
   "netProfit",
   "gatewayFee",

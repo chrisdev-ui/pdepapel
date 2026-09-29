@@ -58,6 +58,7 @@ import type { NextStepCard, TimelineStep } from "@/lib/order-timeline";
 import type { GetOrderResult, ProductOption } from "../server/get-order";
 import { CustomerCard, type CustomerOption } from "./order-form/customer-card";
 import { DiscountsSection } from "./order-form/discounts-section";
+import { GiftSection } from "./order-form/gift-section";
 import { HistoryCard } from "./order-form/history-card";
 import { ItemsSection } from "./order-form/items-section";
 import { LeaveGuard } from "./order-form/leave-guard";
@@ -290,6 +291,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     notes: "las notas",
     internalNotes: "las notas",
     type: "el tipo",
+    isGift: "el regalo",
+    giftRecipientName: "el regalo",
+    giftRecipientEmail: "el regalo",
+    giftRecipientPhone: "el regalo",
+    giftMessage: "el regalo",
   };
   const changed = Array.from(
     new Set(
@@ -825,7 +831,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   />
                 </div>
               )}
-            <div className="order-3 lg:order-none">
+            <div className="order-3 flex flex-col gap-4 lg:order-none">
               <CustomerCard
                 storeId={storeId}
                 users={users}
@@ -834,6 +840,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 initialData={initialData}
                 total={totals.total}
               />
+              <GiftSection loading={loading} />
             </div>
             <div className="order-4 lg:order-none">
               <ItemsSection

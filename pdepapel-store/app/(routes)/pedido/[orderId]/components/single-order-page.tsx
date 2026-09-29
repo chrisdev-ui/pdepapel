@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { OrderAccountClaimCard } from "@/components/order-account-claim-card";
+import { OrderGiftNotice } from "@/components/order-gift-notice";
 import { OrderStageBadge } from "@/components/order-stage-badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -311,6 +312,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           </h1>
           <p className="text-sm text-muted-foreground">{summaryLine}</p>
           <p className="max-w-2xl text-[15px] text-foreground">{stage.description}</p>
+          <OrderGiftNotice order={activeOrder} />
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
           <Button

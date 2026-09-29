@@ -181,6 +181,27 @@ const formSchema = z
       .or(z.literal("")),
     couponCode: z.string().optional().or(z.literal("")),
     newsletterOptIn: z.boolean().default(false),
+    // Regalo: quien recibe. Los datos de arriba siguen siendo de quien compra.
+    isGift: z.boolean().default(false),
+    giftRecipientName: z
+      .string()
+      .trim()
+      .max(100, "El nombre debe tener menos de 100 caracteres")
+      .optional()
+      .or(z.literal("")),
+    giftRecipientEmail: z
+      .string()
+      .trim()
+      .max(60, "El correo debe tener menos de 60 caracteres")
+      .optional()
+      .or(z.literal("")),
+    giftRecipientPhone: z.string().optional().or(z.literal("")),
+    giftMessage: z
+      .string()
+      .trim()
+      .max(300, "El mensaje debe tener menos de 300 caracteres")
+      .optional()
+      .or(z.literal("")),
     // Business rule: the online gateway is the default; bank transfer stays
     // available but needs manual verification, so it is never preselected.
     paymentMethod: z.nativeEnum(PaymentMethod).default(PaymentMethod.Bold),
@@ -192,6 +213,31 @@ const formSchema = z
     shipping: shippingSchema,
   })
   .superRefine((data, ctx) => {
+    if (data.isGift) {
+      if ((data.giftRecipientName ?? "").trim().length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Escribe el nombre de quien recibe el regalo",
+          path: ["giftRecipientName"],
+        });
+      }
+      const giftEmail = (data.giftRecipientEmail ?? "").trim();
+      if (giftEmail && !z.string().email().safeParse(giftEmail).success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Escribe un correo válido, por ejemplo ana@gmail.com",
+          path: ["giftRecipientEmail"],
+        });
+      }
+      const giftPhone = (data.giftRecipientPhone ?? "").trim();
+      if (giftPhone && !isValidPhoneNumber(giftPhone)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Escribe un celular válido, por ejemplo 300 123 4567",
+          path: ["giftRecipientPhone"],
+        });
+      }
+    }
     if (data.shippingOptionType === "ENVIOCLICK") {
       if (data.envioClickIdRate === undefined || data.envioClickIdRate < 1) {
         ctx.addIssue({
@@ -371,6 +417,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         addressLabel: "",
         couponCode: storedFormData.couponCode ?? "",
         newsletterOptIn: storedFormData.newsletterOptIn ?? false,
+        isGift: storedFormData.isGift ?? false,
+        giftRecipientName: storedFormData.giftRecipientName ?? "",
+        giftRecipientEmail: storedFormData.giftRecipientEmail ?? "",
+        giftRecipientPhone: storedFormData.giftRecipientPhone ?? "",
+        giftMessage: storedFormData.giftMessage ?? "",
         shippingProvider: storedFormData.shippingProvider ?? "ENVIOCLICK",
         shippingOptionType: storedFormData.shippingOptionType ?? "ENVIOCLICK",
         envioClickIdRate: storedFormData.envioClickIdRate ?? 0,
@@ -1013,6 +1064,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         shippingProvider,
         shippingOptionType,
         envioClickIdRate,
+        isGift,
+        giftRecipientName,
+        giftRecipientEmail,
+        giftRecipientPhone,
+        giftMessage,
       } = data;
       const isUserLoggedIn = Boolean(userId);
       let guestUserId = guestId;
@@ -1068,6 +1124,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,
         addressLabel: saveAddress ? addressLabel || null : null,
+        // Regalo: sin la bandera no viaja ningún dato de la otra persona.
+        isGift: Boolean(isGift),
+        giftRecipientName: isGift ? giftRecipientName?.trim() || null : null,
+        giftRecipientEmail: isGift ? giftRecipientEmail?.trim() || null : null,
+        giftRecipientPhone: isGift ? giftRecipientPhone || null : null,
+        giftMessage: isGift ? giftMessage?.trim() || null : null,
       };
 
       trackCustomerEvent("add_payment_info", {

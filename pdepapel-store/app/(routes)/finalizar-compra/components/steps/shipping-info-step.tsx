@@ -135,6 +135,7 @@ export const ShippingInfoStep = ({
     useLocations(debouncedQuery);
 
   const selectedDaneCode = form.watch("daneCode");
+  const isGift = form.watch("isGift");
   const address1 = form.watch("address1");
   const address2 = form.watch("address2");
   const neighborhood = form.watch("neighborhood");
@@ -548,7 +549,9 @@ export const ShippingInfoStep = ({
             ¿A dónde lo enviamos?
           </h2>
           <p className="text-sm text-muted-foreground">
-            Las tarifas se calculan solas cuando completas ciudad y dirección.
+            {isGift
+              ? "Escribe la dirección de quien recibe el regalo. Las tarifas se calculan solas cuando completas ciudad y dirección."
+              : "Las tarifas se calculan solas cuando completas ciudad y dirección."}
           </p>
         </div>
 

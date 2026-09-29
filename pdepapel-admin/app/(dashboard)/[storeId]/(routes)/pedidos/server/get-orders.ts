@@ -22,6 +22,8 @@ export async function getOrders(storeId: string) {
       address: true,
       city: true,
       documentId: true,
+      isGift: true,
+      giftRecipientName: true,
       total: true,
       status: true,
       createdAt: true,

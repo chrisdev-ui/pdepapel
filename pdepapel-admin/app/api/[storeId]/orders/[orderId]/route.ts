@@ -5,6 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { sendOrderEmail } from "@/lib/email";
+import { normalizeGiftFields } from "@/lib/gift-orders";
 import {
   assertCouponMinimumOrderValue,
   resolveCouponForOrderUpdate,
@@ -193,6 +194,12 @@ export async function PATCH(
       internalNotes,
       expiresAt,
     } = body;
+    // Regalo: solo se toca cuando el cuerpo trae la bandera; un PATCH que
+    // no habla de regalo (cambio de estado, guía) deja lo guardado intacto.
+    const gift =
+      typeof body.isGift === "boolean"
+        ? normalizeGiftFields(body as Record<string, unknown>)
+        : null;
 
     const orderItemsRequested: any[] | null = Array.isArray(orderItemsInput)
       ? orderItemsInput
@@ -724,6 +731,7 @@ export async function PATCH(
           ...(type && { type }),
           adminNotes,
           internalNotes,
+          ...(gift ?? {}),
           expiresAt,
           payment: payment && {
             upsert: {

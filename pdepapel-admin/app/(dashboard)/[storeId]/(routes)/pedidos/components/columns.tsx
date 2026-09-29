@@ -66,6 +66,11 @@ export const buildColumns = (storeId: string): ColumnDef<OrderColumn>[] => [
       <div className="flex min-w-0 max-w-[170px] flex-col gap-0.5">
         <span className="truncate text-[13px] font-medium">{row.original.fullName}</span>
         <span className="truncate text-[11px] uppercase text-muted-foreground">{row.original.city || row.original.address}</span>
+        {row.original.isGift && row.original.giftRecipientName && (
+          <span className="truncate text-[11px] text-muted-foreground" title={`Regalo para ${row.original.giftRecipientName}`}>
+            <TintBadge label="Regalo" tone="pink" /> para {row.original.giftRecipientName}
+          </span>
+        )}
       </div>
     ),
   },
