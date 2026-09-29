@@ -74,11 +74,24 @@ test.describe("tarjeta de producto en táctil", () => {
   test("el botón de favoritos sigue guardando cuando se toca a propósito", async ({ page }) => {
     await gotoPublicPage(page, "/tienda");
     await page.waitForSelector("article");
-    await centrarTarjeta(page, 1);
+
+    /*
+     * Una tarjeta de producto simple, no de grupo. En un grupo el corazón
+     * abre la vista previa a propósito (hay que elegir la variante antes de
+     * guardarla), así que la prueba no puede fiarse de una posición fija:
+     * el orden del catálogo cambia y un grupo puede caer en ella.
+     */
+    const indice = await page.evaluate(() =>
+      [...document.querySelectorAll("article")].findIndex((card) =>
+        card.querySelector('button[aria-label="Agregar al carrito"]'),
+      ),
+    );
+    expect(indice, "una tarjeta de producto simple en /tienda").toBeGreaterThanOrEqual(0);
+    await centrarTarjeta(page, indice);
 
     const favorito = page
       .locator("article")
-      .nth(1)
+      .nth(indice)
       .getByRole("button", { name: /favoritos/i });
     await expect(favorito).toBeVisible();
     await expect(favorito).toHaveAttribute("aria-pressed", "false");
