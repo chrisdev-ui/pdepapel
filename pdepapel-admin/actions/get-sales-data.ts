@@ -5,6 +5,7 @@ import {
   getMarketplaceNetRevenue,
   getMarketplaceSaleDate,
 } from "@/lib/mercadolibre/reporting";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 interface SalesByDate {
   revenue: number;
@@ -30,7 +31,7 @@ export async function getSalesData(storeId: string, year: number) {
           gte: startDate,
           lte: endDate,
         },
-        status: { in: ["PAID", "SENT"] },
+        ...revenueOrderWhere(),
       },
       select: {
         createdAt: true,

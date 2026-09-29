@@ -21,7 +21,11 @@ import {
 import { priceLines } from "@/lib/product-pricing";
 import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
-import { requoteCartShipping, type RequotedRate } from "@/lib/shipping-helpers";
+import {
+  createGuideForOrder,
+  requoteCartShipping,
+  type RequotedRate,
+} from "@/lib/shipping-helpers";
 import {
   SHIPPING_RATE_INCIDENT,
   countIncident,
@@ -57,6 +61,17 @@ import {
 import { saveCustomerAddressFromCheckout } from "@/lib/customer-addresses";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeGiftFields } from "@/lib/gift-orders";
+import { parseGiftCardCode } from "@/lib/gift-card-codes";
+import { settleFullyCoveredOrder } from "@/lib/gift-card-checkout";
+import {
+  coverableAmount,
+  holdGiftCardForOrder,
+  isGiftCardUsable,
+  lockGiftCard,
+  redeemGiftCardForOrder,
+} from "@/lib/gift-cards";
+import { invalidateStoreProductsCache } from "@/lib/cache";
+import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -236,7 +251,19 @@ async function createCheckout(
       saveAddress,
       savedAddressId,
       addressLabel,
+      giftCardCode,
     } = body as Record<string, any>;
+    // Tarjeta de regalo: se valida la forma aquí y el saldo dentro de la
+    // transacción, con la fila bloqueada.
+    const giftCardParsed =
+      typeof giftCardCode === "string" && giftCardCode.trim()
+        ? parseGiftCardCode(giftCardCode)
+        : null;
+    if (typeof giftCardCode === "string" && giftCardCode.trim() && !giftCardParsed) {
+      throw ErrorFactory.InvalidRequest(
+        "Ese código no tiene la forma de una tarjeta de regalo (PDP-XXXX-XXXX-XXXX)",
+      );
+    }
     const normalizedPhone = normalizePhone(phone);
     // Regalo: quien compra sigue en `email`/`fullName`; quien recibe va en
     // los campos `gift*`. Sin la bandera, todo queda en null.
@@ -812,6 +839,10 @@ async function createCheckout(
     const orderNumber = generateOrderNumber();
 
     let order: CheckoutOrder;
+    // Se fijan dentro de la transacción, con la tarjeta bloqueada.
+    let giftCardId: string | null = null;
+    let giftCardAmount = 0;
+    let fullyCovered = false;
 
     const createNewOrder = (
       database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
@@ -822,7 +853,10 @@ async function createCheckout(
           userId: authenticatedUserId,
           guestId: !authenticatedUserId ? guestId : null,
           orderNumber: orderNumber,
-          status: OrderStatus.PENDING,
+          // Cubierto entero por la tarjeta: nace pagado y nunca va a la pasarela.
+          status: fullyCovered ? OrderStatus.PAID : OrderStatus.PENDING,
+          giftCardId,
+          giftCardAmount,
           fullName,
           phone: normalizedPhone,
           email,
@@ -853,7 +887,7 @@ async function createCheckout(
           payment: {
             create: {
               storeId: params.storeId,
-              method: payment.method,
+              method: fullyCovered ? PaymentMethod.GiftCard : payment.method,
             },
           },
         },
@@ -907,6 +941,29 @@ async function createCheckout(
         await assertCouponHasUses(tx, coupon);
       }
 
+      // Tarjeta de regalo: cupón primero (ya está en `totals`), la tarjeta
+      // cubre lo que queda. La fila se bloquea hasta confirmar: dos compras a
+      // la vez con la misma tarjeta no se reparten un saldo que no existe.
+      if (giftCardParsed) {
+        const card = await tx.giftCard.findFirst({
+          where: { storeId: params.storeId, codeHash: giftCardParsed.hash },
+        });
+        if (!card || !isGiftCardUsable(card)) {
+          throw ErrorFactory.Conflict(
+            "La tarjeta de regalo no es válida o ya no tiene saldo",
+          );
+        }
+        const locked = await lockGiftCard(tx, params.storeId, card.id);
+        if (!locked || locked.status !== "ACTIVE" || Number(locked.balance) <= 0) {
+          throw ErrorFactory.Conflict(
+            "La tarjeta de regalo ya no tiene saldo: se usó en otra compra hace un momento",
+          );
+        }
+        giftCardId = card.id;
+        giftCardAmount = coverableAmount(locked.balance, totals.total);
+        fullyCovered = giftCardAmount > 0 && giftCardAmount >= totals.total;
+      }
+
       const createdOrder = await createStandardOrder(tx);
 
       if (coupon?.isWelcomeBenefit) {
@@ -918,8 +975,74 @@ async function createCheckout(
         });
       }
 
+      if (giftCardId && giftCardAmount > 0) {
+        await holdGiftCardForOrder(tx, {
+          storeId: params.storeId,
+          giftCardId,
+          orderId: createdOrder.id,
+          amount: giftCardAmount,
+          createdBy: authenticatedUserId || guestId || "STORE",
+        });
+        if (fullyCovered) {
+          await redeemGiftCardForOrder(
+            tx,
+            { id: createdOrder.id, storeId: params.storeId, giftCardId, giftCardAmount },
+            authenticatedUserId || guestId || "STORE",
+          );
+          await settleFullyCoveredOrder(
+            tx,
+            {
+              ...(createdOrder as unknown as Parameters<typeof settleFullyCoveredOrder>[1]),
+              coupon: coupon ? { id: coupon.id, isWelcomeBenefit: Boolean(coupon.isWelcomeBenefit) } : null,
+            },
+            {
+              createdBy: authenticatedUserId || guestId || "STORE",
+              shippingCost: Number(selectedQuote?.cost ?? 0) || 0,
+            },
+          );
+        }
+      }
+
       return createdOrder;
     })) as unknown as CheckoutOrder;
+
+    if (fullyCovered) {
+      // Lo que un webhook haría al confirmar el pago, sin pasarela de por medio.
+      await invalidateStoreProductsCache(params.storeId);
+      const paidOrder = await prismadb.order.findUnique({
+        where: { id: order.id },
+        include: { payment: true, shipping: true, orderItems: { include: { product: true } } },
+      });
+      try {
+        await recordPaidOrderInGoogleAnalytics(order.id);
+      } catch (analyticsError) {
+        console.error("[CHECKOUT] GA4 purchase tracking failed:", analyticsError);
+      }
+      if (paidOrder?.shipping?.envioClickIdRate && !paidOrder.shipping.envioClickIdOrder) {
+        setImmediate(async () => {
+          try {
+            await createGuideForOrder(order.id, params.storeId);
+          } catch (guideError) {
+            console.error("[CHECKOUT] Guide creation failed:", guideError);
+          }
+        });
+      }
+      setImmediate(async () => {
+        try {
+          await sendOrderEmail(
+            {
+              ...(paidOrder ?? order),
+              email: email ?? user?.emailAddresses[0]?.emailAddress,
+              payment: PaymentMethod.GiftCard,
+            } as never,
+            OrderStatus.PAID,
+          );
+        } catch (emailError) {
+          console.error("Failed to send order email:", emailError);
+        }
+      });
+      return NextResponse.json(paidOrder ?? order, { headers: corsHeaders });
+    }
 
     // Send email asynchronously
     setImmediate(async () => {

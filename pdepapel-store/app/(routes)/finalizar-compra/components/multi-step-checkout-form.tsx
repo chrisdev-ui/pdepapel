@@ -26,6 +26,9 @@ import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
+import { validateGiftCard } from "@/actions/validate-gift-card";
+import { useMutation } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import {
   getBrowserContext,
   getCheckoutRequestFailureAnalytics,
@@ -180,6 +183,8 @@ const formSchema = z
       .optional()
       .or(z.literal("")),
     couponCode: z.string().optional().or(z.literal("")),
+    // Tarjeta de regalo: el cupón rebaja el total; la tarjeta paga lo que queda.
+    giftCardCode: z.string().optional().or(z.literal("")),
     newsletterOptIn: z.boolean().default(false),
     // Regalo: quien recibe. Los datos de arriba siguen siendo de quien compra.
     isGift: z.boolean().default(false),
@@ -281,6 +286,11 @@ export interface CouponState {
   isValid: boolean | null;
 }
 
+export interface GiftCardState {
+  card: { balance: number; last4: string } | null;
+  isValid: boolean | null;
+}
+
 export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
   freeShippingThreshold = null,
@@ -295,6 +305,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
   const [stockConflicts, setStockConflicts] = useState<StockConflictItem[]>([]);
+  // La tarjeta de regalo se valida en cada visita: el saldo puede cambiar.
+  const [giftCardState, setGiftCardState] = useState<GiftCardState>({ card: null, isValid: null });
   /** Cotización vencida: se resuelve aquí mismo, sin perder nada de lo puesto. */
   const [shippingRecovery, setShippingRecovery] =
     useState<ShippingRecovery | null>(null);
@@ -416,6 +428,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         savedAddressId: storedFormData.savedAddressId ?? "",
         addressLabel: "",
         couponCode: storedFormData.couponCode ?? "",
+        giftCardCode: "",
         newsletterOptIn: storedFormData.newsletterOptIn ?? false,
         isGift: storedFormData.isGift ?? false,
         giftRecipientName: storedFormData.giftRecipientName ?? "",
@@ -503,6 +516,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         ),
       [activeItems, couponState.coupon, shippingCost, freeShippingThreshold],
     );
+  // Cupón primero (ya está en `total`); la tarjeta cubre lo que queda.
+  const giftCardApplied = giftCardState.card
+    ? Math.max(0, Math.min(giftCardState.card.balance, total))
+    : 0;
+  const amountDue = Math.max(0, total - giftCardApplied);
+  const giftCardCoversAll = giftCardApplied > 0 && amountDue === 0;
 
   // Reenviar SOLO cuando `shipping.cost` ya es el nuevo: en ese render `total`
   // también lo es, porque sale del mismo `useMemo`.
@@ -736,6 +755,34 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       },
     });
 
+  const { mutate: validateGiftCardMutate, status: validateGiftCardStatus } =
+    useMutation({
+      mutationFn: (code: string) => validateGiftCard(code),
+      onError(error) {
+        setGiftCardState({ card: null, isValid: false });
+        const data = isAxiosError(error)
+          ? (error.response?.data as { error?: string } | undefined)
+          : undefined;
+        toast({
+          title: "Tarjeta de regalo no válida",
+          description:
+            data?.error || "No encontramos una tarjeta con ese código.",
+          variant: "destructive",
+        });
+      },
+      onSuccess(data) {
+        setGiftCardState({
+          card: { balance: data.balance, last4: data.last4 },
+          isValid: true,
+        });
+        toast({
+          title: "Tarjeta de regalo aplicada 🎁",
+          description: "Su saldo ya cubre parte o todo el total.",
+          variant: "success",
+        });
+      },
+    });
+
   const applyWelcomeBenefit = (code: string) => {
     form.setValue("couponCode", code, { shouldDirty: true });
     setCouponState((previous) => ({
@@ -884,16 +931,23 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       // Offline methods (COD / bank transfer): the order itself comes back.
       else if ("id" in data && data.id !== undefined) {
         const order = data;
+        // Cubierto entero con una tarjeta de regalo: nace pagado, sin pasarela.
+        const paidWithGiftCard = order.status === "PAID";
         const isBankTransfer =
+          !paidWithGiftCard &&
           form.getValues("paymentMethod") === PaymentMethod.BankTransfer;
         if (!isBankTransfer) fireConfetti();
         toast({
-          title: isBankTransfer
-            ? "Pedido reservado, falta la transferencia"
-            : "¡Pedido creado!",
-          description: isBankTransfer
-            ? "Te mostramos los datos para transferir. Lo verificamos manualmente y te confirmamos."
-            : `Tu pedido #${order.orderNumber || order.id} quedó registrado.`,
+          title: paidWithGiftCard
+            ? "¡Pedido pagado con tu tarjeta de regalo!"
+            : isBankTransfer
+              ? "Pedido reservado, falta la transferencia"
+              : "¡Pedido creado!",
+          description: paidWithGiftCard
+            ? `Tu pedido #${order.orderNumber || order.id} ya está pagado. Empezamos a prepararlo.`
+            : isBankTransfer
+              ? "Te mostramos los datos para transferir. Lo verificamos manualmente y te confirmamos."
+              : `Tu pedido #${order.orderNumber || order.id} quedó registrado.`,
           variant: "success",
         });
         if (wantsNewsletter) void subscribeFromCheckout(email);
@@ -1064,6 +1118,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         shippingProvider,
         shippingOptionType,
         envioClickIdRate,
+        giftCardCode,
         isGift,
         giftRecipientName,
         giftRecipientEmail,
@@ -1116,6 +1171,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         // and the stored shipping record consistent.
         shipping: freeShipping ? { ...shipping, cost: 0 } : shipping,
         couponCode: couponState.coupon?.code ?? null,
+        // Solo viaja si se validó: un código escrito y no aplicado no cuenta.
+        giftCardCode: giftCardState.card ? giftCardCode || null : null,
         earlyAccessToken: readEarlyAccessCookie(),
         subtotal,
         total,
@@ -1170,10 +1227,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     }
   };
 
-  const submitLabel =
-    paymentMethod === PaymentMethod.Bold ||
-    paymentMethod === PaymentMethod.Wompi
-      ? `Pagar ${currencyFormatter.format(total)}`
+  const submitLabel = giftCardCoversAll
+    ? "Confirmar pedido"
+    : paymentMethod === PaymentMethod.Bold ||
+        paymentMethod === PaymentMethod.Wompi
+      ? `Pagar ${currencyFormatter.format(amountDue)}`
       : "Confirmar pedido";
 
   const submitFootnote =
@@ -1395,12 +1453,37 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           <dt>Envío</dt>
           <dd>{shippingSummary}</dd>
         </div>
+        {giftCardApplied > 0 ? (
+          <>
+            <div className="flex items-center justify-between">
+              <dt className="text-muted-foreground">Total del pedido</dt>
+              <dd>
+                <Currency className="text-base font-semibold" value={total} />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-success">
+                Tarjeta de regalo
+                {giftCardState.card ? ` (termina en ${giftCardState.card.last4})` : ""}
+              </dt>
+              <dd>
+                <Currency
+                  className="text-base font-semibold text-success"
+                  value={giftCardApplied}
+                  isNegative
+                />
+              </dd>
+            </div>
+          </>
+        ) : null}
         <div className="flex items-center justify-between border-t border-dashed pt-3">
-          <dt className="text-base font-bold">Total a pagar</dt>
+          <dt className="text-base font-bold">
+            {giftCardCoversAll ? "Cubierto con la tarjeta" : "Total a pagar"}
+          </dt>
           <dd>
             <Currency
               className="font-quicksand text-2xl font-black text-pink-froly"
-              value={total}
+              value={amountDue}
             />
           </dd>
         </div>
@@ -1506,7 +1589,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 </span>
                 <Currency
                   className="font-quicksand text-lg font-black text-pink-froly"
-                  value={total}
+                  value={amountDue}
                 />
               </summary>
               <div className="border-t border-blue-baby/60 bg-background p-4">
@@ -1555,6 +1638,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                           setCouponState={setCouponState}
                           validateCouponMutate={validateCouponMutate}
                           validateCouponStatus={validateCouponStatus}
+                          giftCardState={giftCardState}
+                          setGiftCardState={setGiftCardState}
+                          validateGiftCardMutate={validateGiftCardMutate}
+                          validateGiftCardStatus={validateGiftCardStatus}
+                          giftCardApplied={giftCardApplied}
+                          giftCardCoversAll={giftCardCoversAll}
                           subtotal={subtotal}
                           shippingCost={shippingCost ?? 0}
                           freeShipping={freeShipping}
@@ -1611,7 +1700,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               </span>
               <Currency
                 className="text-lg font-black text-pink-froly"
-                value={total}
+                value={amountDue}
               />
             </div>
             <Button

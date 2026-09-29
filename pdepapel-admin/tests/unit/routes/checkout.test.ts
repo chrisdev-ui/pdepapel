@@ -395,6 +395,18 @@ describe("POST /api/[storeId]/checkout", () => {
     });
   });
 
+  it("rejects a malformed gift-card code before creating anything", async () => {
+    const response = await POST(createCheckoutRequest({ giftCardCode: "no-es-un-codigo" }), {
+      params: { storeId },
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("PDP-XXXX-XXXX-XXXX"),
+    });
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
+
   it("rejects a gift without the recipient name before creating anything", async () => {
     const response = await POST(
       createCheckoutRequest({ isGift: true, giftRecipientName: "" }),

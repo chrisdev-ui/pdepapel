@@ -925,6 +925,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             {/* En tableta Pago y Resumen comparten fila, justo después del envío. */}
             <div className="order-6 grid gap-4 md:grid-cols-2 lg:contents">
   <SummaryCard
+                giftCardAmount={Number(initialData?.giftCardAmount ?? 0)}
                 totals={totals}
                 shippingChargeState={shippingChargeState}
                 shippingCost={shippingCost}

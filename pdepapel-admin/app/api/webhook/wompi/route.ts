@@ -1,6 +1,12 @@
 import { sendOrderEmail } from "@/lib/email";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
-import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
+import {
+  getAmountDue,
+  handleGiftCardOnOrderCancellation,
+  issueGiftCardForOrder,
+  redeemGiftCardForOrder,
+  type IssuedGiftCard,
+} from "@/lib/gift-cards";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
@@ -249,7 +255,8 @@ function isPaymentValid(order: any, transaction: any): boolean {
   const amountInCents = Number(transaction?.amount_in_cents);
   // `total` es un Float: se compara en enteros para que un céntimo de
   // artefacto decimal no rechace un pago legítimo.
-  const expectedCents = Math.round(Number(total) * 100);
+  // Wompi cobró el total menos lo que cubrió una tarjeta de regalo.
+  const expectedCents = Math.round(getAmountDue(order) * 100);
   const currency = transaction?.currency;
 
   if (payment?.method !== PaymentMethod.Wompi) return false;
@@ -428,6 +435,7 @@ async function updateOrderData(order: any, transaction: any) {
           orderId: order.id,
           createdBy: "SYSTEM_WOMPI",
         });
+        await redeemGiftCardForOrder(tx, order, "SYSTEM_WOMPI");
         return { processed: true, shouldInvalidateCache: true };
       }
 
@@ -534,6 +542,13 @@ async function updateOrderData(order: any, transaction: any) {
             orderId: order.id,
           });
         }
+
+        await handleGiftCardOnOrderCancellation(tx, {
+          storeId: order.storeId,
+          orderId: order.id,
+          createdBy: "SYSTEM_WOMPI",
+          reason: `Wompi: ${transaction.status}`,
+        });
 
         await writePaymentArtifacts(tx, false);
         return {

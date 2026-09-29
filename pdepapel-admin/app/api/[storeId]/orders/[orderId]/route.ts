@@ -7,7 +7,13 @@ import { getProductsPrices } from "@/lib/discount-engine";
 import { sendOrderEmail } from "@/lib/email";
 import { normalizeGiftFields } from "@/lib/gift-orders";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
-import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
+import {
+  assertGiftCardPurchaseDeletable,
+  handleGiftCardOnOrderCancellation,
+  issueGiftCardForOrder,
+  redeemGiftCardForOrder,
+  type IssuedGiftCard,
+} from "@/lib/gift-cards";
 import {
   assertCouponMinimumOrderValue,
   resolveCouponForOrderUpdate,
@@ -999,6 +1005,7 @@ export async function PATCH(
           orderId: updated.id,
           createdBy: userId,
         });
+        await redeemGiftCardForOrder(tx, updated, userId);
       }
 
       // 4. Handle Refund/Restock (la mercancia vuelve a bodega)
@@ -1042,6 +1049,17 @@ export async function PATCH(
             });
           }
         }
+      }
+
+      // Cancelar libera o devuelve el saldo de una tarjeta usada y anula la
+      // tarjeta que este pedido compró si nadie la usó.
+      if (status === OrderStatus.CANCELLED || status === OrderStatus.REJECTED) {
+        await handleGiftCardOnOrderCancellation(tx, {
+          storeId: params.storeId,
+          orderId: updated.id,
+          createdBy: userId,
+          reason: "Cancelado desde el panel",
+        });
       }
 
       return updated;
@@ -1167,6 +1185,13 @@ export async function DELETE(
       // transportador sin ningun registro que la ate a nada.
       const bloqueo = describeDeletionBlock(order);
       if (bloqueo) throw ErrorFactory.Conflict(bloqueo);
+      await assertGiftCardPurchaseDeletable(tx, params.storeId, order.id);
+      await handleGiftCardOnOrderCancellation(tx, {
+        storeId: params.storeId,
+        orderId: order.id,
+        createdBy: userId,
+        reason: "Pedido eliminado",
+      });
 
       // La mercancia vuelve a bodega si el pedido todavia la tenia descontada.
       // PAGADO y ENVIADO descuentan igual (`isPaidLike`); un CANCELADO ya la

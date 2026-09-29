@@ -6,6 +6,7 @@ import {
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { startOfMonth, endOfMonth, subDays } from "date-fns";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export interface ProductProfitRanking {
   productId: string;
@@ -57,7 +58,7 @@ export async function getProductProfitRanking(
     prismadb.order.findMany({
       where: {
         storeId,
-        status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
+        ...revenueOrderWhere(),
         OR: [
           {
             paidAt: {
@@ -193,7 +194,7 @@ export async function getDeadInventory(
     include: {
       orderItems: {
         where: {
-          order: { status: { in: [OrderStatus.PAID, OrderStatus.SENT] } },
+          order: { ...revenueOrderWhere() },
         },
         orderBy: { createdAt: "desc" },
         take: 1,

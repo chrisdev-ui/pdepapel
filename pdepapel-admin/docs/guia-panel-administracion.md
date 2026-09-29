@@ -109,6 +109,29 @@ teléfono de quien recibe, y a su correo llega solo un aviso sin productos ni
 precios, con el mensaje, cuando el pedido está pagado y en cada novedad del
 envío. En la lista y en el título del pedido aparece la insignia «Regalo».
 
+## 4b. Tarjetas de regalo (`/tarjetas-regalo`, `/tarjetas-regalo/<id>`)
+
+Las tarjetas se venden en la tienda (`/tarjeta-regalo`) y aparecen aquí
+cuando el pago se confirma. La lista muestra terminación del código, quien
+compró, quien recibe, valor, saldo y estado (Activa, Sin saldo, Anulada;
+«Correo pendiente» si el envío del código falló; «N usos»). A la derecha,
+**Valores a la venta**: sin filas la tienda ofrece 50.000, 100.000 y
+200.000; al agregar un valor manda tu lista, y un valor apagado se retira
+sin borrarse.
+
+La ficha tiene el **libro de movimientos** (emitida, reservada por un
+pedido, usada, reserva liberada, devuelta al saldo, anulada, código nuevo),
+los pedidos que la usaron, y **Reenviar correo**: sale un código nuevo con
+el mismo saldo al correo de quien recibe (o de quien compró) y el anterior
+deja de valer en ese instante. El panel nunca muestra el código completo.
+
+Reglas: cancelar un pedido que usó una tarjeta devuelve lo usado al saldo;
+cancelar la compra de una tarjeta la anula solo si nadie la usó (si ya se
+usó, el panel lo rechaza y la diferencia se devuelve por fuera); esa compra
+no se elimina, se cancela. Una reserva de un pedido sin pagar por más de
+siete días se libera sola cada mañana; si el pedido se paga después, se
+vuelve a reservar.
+
 ## 5. Punto de venta (`/ventas-rapidas`)
 
 **Vender**

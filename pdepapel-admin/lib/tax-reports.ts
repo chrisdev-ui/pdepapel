@@ -16,6 +16,7 @@ export {
   getDefaultTaxReportPeriod,
   type TaxReportPeriodValue,
 } from "@/lib/tax-report-period";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 /** Tope del rango pedido. Un reporte tributario nunca cruza varios años. */
 export const MAX_TAX_REPORT_PERIOD_DAYS = 800;
@@ -161,9 +162,7 @@ export async function getTaxReport(
       prismadb.order.findMany({
         where: {
           storeId,
-          status: {
-            in: [OrderStatus.PAID, OrderStatus.SENT],
-          },
+          ...revenueOrderWhere(),
           ...createTaxSalesDateFilter(period, salesDateBasis),
         },
         select: {

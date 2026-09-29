@@ -5,6 +5,7 @@ import {
   createSettledMarketplaceSalesWhere,
   getMarketplaceNetRevenue,
 } from "@/lib/mercadolibre/reporting";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export const getAverageOrderValue = async (
   storeId: string,
@@ -18,9 +19,7 @@ export const getAverageOrderValue = async (
     prisma.order.findMany({
       where: {
         storeId,
-        status: {
-          in: [OrderStatus.PAID, OrderStatus.SENT],
-        },
+        ...revenueOrderWhere(),
         createdAt: {
           gte: firstDayOfYear,
           lte: lastDayOfYear,

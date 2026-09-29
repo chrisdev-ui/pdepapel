@@ -17,7 +17,8 @@ import { AlertTriangle, MapPin, UserRound } from "lucide-react";
 import { useId } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { CouponField } from "../coupon-field";
-import { CheckoutFormValue, CouponState } from "../multi-step-checkout-form";
+import { GiftCardField } from "../gift-card-field";
+import { CheckoutFormValue, CouponState, GiftCardState } from "../multi-step-checkout-form";
 
 export interface StockConflictItem {
   productId: string;
@@ -39,6 +40,12 @@ interface PaymentInfoStepProps {
   setCouponState: React.Dispatch<React.SetStateAction<CouponState>>;
   validateCouponMutate: (variables: { code: string; subtotal: number }) => void;
   validateCouponStatus: "idle" | "pending" | "success" | "error";
+  giftCardState: GiftCardState;
+  setGiftCardState: React.Dispatch<React.SetStateAction<GiftCardState>>;
+  validateGiftCardMutate: (code: string) => void;
+  validateGiftCardStatus: "idle" | "pending" | "success" | "error";
+  giftCardApplied: number;
+  giftCardCoversAll: boolean;
   subtotal: number;
   shippingCost: number;
   freeShipping: boolean;
@@ -66,6 +73,12 @@ export const PaymentInfoStep = ({
   setCouponState,
   validateCouponMutate,
   validateCouponStatus,
+  giftCardState,
+  setGiftCardState,
+  validateGiftCardMutate,
+  validateGiftCardStatus,
+  giftCardApplied,
+  giftCardCoversAll,
   subtotal,
   shippingCost,
   freeShipping,
@@ -215,7 +228,7 @@ export const PaymentInfoStep = ({
               <PaymentMethodSelector
                 value={field.value}
                 onChange={field.onChange}
-                disabled={isLoading}
+                disabled={isLoading || giftCardCoversAll}
                 ariaLabelledBy={paymentLabelId}
                 omit={!codAvailable ? [PaymentMethod.COD] : []}
                 disabledMessages={
@@ -327,6 +340,23 @@ export const PaymentInfoStep = ({
           validateCouponStatus={validateCouponStatus}
           subtotal={subtotal}
         />
+        <GiftCardField
+          form={form}
+          isLoading={isLoading}
+          giftCardState={giftCardState}
+          setGiftCardState={setGiftCardState}
+          validateGiftCardMutate={validateGiftCardMutate}
+          validateGiftCardStatus={validateGiftCardStatus}
+          appliedAmount={giftCardApplied}
+        />
+        {giftCardCoversAll ? (
+          <p
+            role="status"
+            className="rounded-xl border border-success/40 bg-success/10 p-3 text-sm text-foreground"
+          >
+            La tarjeta de regalo cubre todo el pedido: no tienes que pagar nada más. Confirma y empezamos a prepararlo.
+          </p>
+        ) : null}
       </div>
     </div>
   );

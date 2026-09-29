@@ -445,6 +445,8 @@ export interface CheckoutOrder {
   guestId: string | null;
   documentId: string | null | undefined;
   couponCode: string | null;
+  /** Código validado de una tarjeta de regalo; null si no se aplicó. */
+  giftCardCode?: string | null;
   subtotal: number;
   total: number;
   orderItems: {

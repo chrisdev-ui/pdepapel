@@ -35,6 +35,7 @@ export const CHECKOUT_FIELD_STEPS: Record<string, number> = {
   shipping: 2,
   paymentMethod: 3,
   couponCode: 3,
+  giftCardCode: 3,
 };
 
 /** Lowest step that has at least one invalid field, or null when all is valid. */

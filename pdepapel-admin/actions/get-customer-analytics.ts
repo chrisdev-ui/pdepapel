@@ -5,6 +5,7 @@ import { requireStoreOwner } from "@/lib/store-access";
 import { EMPLOYEE_NAMES, EMPLOYEE_PHONES } from "@/constants";
 import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export async function getCustomerAnalytics(storeId: string) {
   await requireStoreOwner(storeId);
@@ -19,7 +20,7 @@ export async function getCustomerAnalytics(storeId: string) {
       by: ["fullName", "phone"],
       where: {
         storeId,
-        status: { in: ["PAID", "SENT"] },
+        ...revenueOrderWhere(),
         fullName: {
           not: "",
         },
@@ -118,7 +119,9 @@ export async function getCustomerAnalytics(storeId: string) {
     const getMostValuableCustomerDetailed = async (startDate?: Date) => {
       const whereCondition: any = {
         storeId,
-        status: "PAID",
+        // Misma regla de ingreso que el resto: pagado o enviado y sin las
+        // compras de tarjeta de regalo.
+        ...revenueOrderWhere(),
         fullName: { not: "" },
         phone: { not: "", notIn: EMPLOYEE_PHONES },
         NOT: {

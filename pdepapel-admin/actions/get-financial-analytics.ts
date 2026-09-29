@@ -14,6 +14,7 @@ import {
   format,
   subMonths,
 } from "date-fns";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export interface MonthlySummary {
   total_revenue: number;
@@ -97,7 +98,7 @@ export async function getMonthlyFinancialSummary(
     prismadb.order.findMany({
       where: {
         storeId,
-        status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
+        ...revenueOrderWhere(),
         OR: [
           {
             paidAt: {
@@ -218,7 +219,7 @@ export async function getDailyFinancialBreakdown(
     prismadb.order.findMany({
       where: {
         storeId,
-        status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
+        ...revenueOrderWhere(),
         OR: [
           {
             paidAt: {

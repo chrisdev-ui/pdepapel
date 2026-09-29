@@ -14,10 +14,13 @@ interface SummaryCardProps {
   shippingCost: number;
   coupon: Coupon | null;
   itemCount: number;
+  /** Lo que una tarjeta de regalo cubrió del pedido (solo pedidos guardados). */
+  giftCardAmount?: number;
 }
 
 /** Resumen de dinero del pedido: siempre a la vista en la columna lateral. */
-export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon, itemCount }: SummaryCardProps) {
+export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon, itemCount, giftCardAmount = 0 }: SummaryCardProps) {
+  const amountDue = Math.max(0, totals.total - giftCardAmount);
   const { control } = useFormContext<OrderFormValues>();
   const discountType = useWatch({ control, name: "discount.type" });
   const discountAmount = useWatch({ control, name: "discount.amount" });
@@ -67,6 +70,18 @@ export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon,
         <span className="text-sm font-semibold">Total</span>
         <span className="text-xl font-bold text-primary">{currencyFormatter(totals.total)}</span>
       </div>
+      {giftCardAmount > 0 && (
+        <dl className="flex flex-col gap-1.5 border-t pt-2 text-sm">
+          <div className="flex justify-between text-success">
+            <dt>Tarjeta de regalo</dt>
+            <dd>- {currencyFormatter(giftCardAmount)}</dd>
+          </div>
+          <div className="flex justify-between font-semibold">
+            <dt>{amountDue === 0 ? "Pagado con la tarjeta" : "Cobrado por fuera de la tarjeta"}</dt>
+            <dd>{currencyFormatter(amountDue)}</dd>
+          </div>
+        </dl>
+      )}
     </section>
   );
 }

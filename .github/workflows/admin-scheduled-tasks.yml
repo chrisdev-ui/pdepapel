@@ -93,3 +93,23 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/payment-webhook-retention"
+
+  gift-card-holds:
+    name: Gift card hold release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      # Releases gift-card holds of cancelled orders and of orders unpaid for
+      # more than seven days (lib/gift-cards.ts releaseExpiredGiftCardHolds).
+      # A missed day only keeps a hold a day longer: paying late re-holds,
+      # so no balance is ever spent twice.
+      - name: Release expired gift-card holds
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/gift-card-holds"

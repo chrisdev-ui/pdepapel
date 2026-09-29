@@ -1,6 +1,12 @@
 import { sendOrderEmail } from "@/lib/email";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
-import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
+import {
+  getAmountDue,
+  handleGiftCardOnOrderCancellation,
+  issueGiftCardForOrder,
+  redeemGiftCardForOrder,
+  type IssuedGiftCard,
+} from "@/lib/gift-cards";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
@@ -240,7 +246,7 @@ async function processBoldPayment(
     targetStatus === OrderStatus.PAID &&
     (!Number.isFinite(paidAmount) ||
       (!isSandboxZeroAmount &&
-        Math.round(paidAmount) !== Math.round(Number(order.total))))
+        Math.round(paidAmount) !== Math.round(getAmountDue(order))))
   ) {
     return NextResponse.json(
       {
@@ -428,6 +434,8 @@ async function processBoldPayment(
         orderId: order.id,
         createdBy: "SYSTEM_BOLD",
       });
+      // Si el pedido usó una tarjeta, la reserva pasa a consumo.
+      await redeemGiftCardForOrder(tx, order, "SYSTEM_BOLD");
 
       return true;
     });
@@ -529,6 +537,15 @@ async function processBoldPayment(
           });
         }
       }
+
+      // Tarjeta de regalo: la reserva o el consumo vuelve al saldo; si el
+      // pedido compró una tarjeta sin usar, se anula.
+      await handleGiftCardOnOrderCancellation(tx, {
+        storeId: order.storeId,
+        orderId: order.id,
+        createdBy: "SYSTEM_BOLD",
+        reason: `Bold: ${targetStatus}`,
+      });
 
       // El beneficio de bienvenida vuelve al cliente solo cuando el pedido no
       // se cobra: aquí, no en la rama de pago confirmado.

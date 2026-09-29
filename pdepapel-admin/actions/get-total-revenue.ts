@@ -5,6 +5,7 @@ import {
   createSettledMarketplaceSalesWhere,
   getMarketplaceNetRevenue,
 } from "@/lib/mercadolibre/reporting";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export const getTotalRevenue = async (storeId: string, year: number) => {
   const yearDate = new Date(year, 0, 1);
@@ -15,9 +16,7 @@ export const getTotalRevenue = async (storeId: string, year: number) => {
     prismadb.order.findMany({
       where: {
         storeId,
-        status: {
-          in: [OrderStatus.PAID, OrderStatus.SENT],
-        },
+        ...revenueOrderWhere(),
         createdAt: {
           gte: firstDayOfYear,
           lte: lastDayOfYear,

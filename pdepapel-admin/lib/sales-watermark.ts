@@ -1,5 +1,6 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 /**
  * Pregunta barata que cambia cuando cambian las ventas de una tienda: cuántos
@@ -12,7 +13,7 @@ import { OrderStatus } from "@prisma/client";
  */
 export async function salesWatermark(storeId: string): Promise<string> {
   const { _count, _max } = await prismadb.order.aggregate({
-    where: { storeId, status: { in: [OrderStatus.PAID, OrderStatus.SENT] } },
+    where: { storeId, ...revenueOrderWhere() },
     _count: { _all: true },
     _max: { updatedAt: true },
   });

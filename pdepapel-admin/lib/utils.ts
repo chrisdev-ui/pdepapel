@@ -27,6 +27,7 @@ export {
   type DiscountConfig,
   type OrderTotals,
 } from "@/lib/order-totals";
+import { getAmountDue } from "@/lib/gift-cards";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -262,7 +263,8 @@ export async function generateWompiPayment(
     new Date().setHours(new Date().getHours() + 1),
   ).toISOString();
 
-  const amountInCents = order.total * 100;
+  // Lo que cobra Wompi: el total menos lo que cubrió una tarjeta de regalo.
+  const amountInCents = getAmountDue(order) * 100;
 
   const signatureIntegrity = await generateIntegritySignature({
     reference: order.id,

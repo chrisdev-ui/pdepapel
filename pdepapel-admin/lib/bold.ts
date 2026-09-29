@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { getAmountDue } from "@/lib/gift-cards";
 
 export interface BoldCheckoutPayload {
   orderId: string;
@@ -90,7 +91,8 @@ export function getBoldWebhookSecretKey(): string {
 export function generateBoldCheckoutData(order: any) {
   const boldConfig = getBoldConfig();
   const boldOrderReference = getBoldOrderReference(order);
-  const amount = Math.round(order.total);
+  // Lo que cobra Bold: el total menos lo que cubrió una tarjeta de regalo.
+  const amount = Math.round(getAmountDue(order));
   const currency = "COP";
   const integritySignature = generateBoldIntegritySignature(
     boldOrderReference,

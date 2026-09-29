@@ -5,6 +5,7 @@ import {
   createSettledMarketplaceSalesWhere,
   getMarketplaceItemNetRevenue,
 } from "@/lib/mercadolibre/reporting";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 interface CategoryStats {
   sales: number;
@@ -25,9 +26,7 @@ export async function getCategorySales(storeId: string, year: number) {
           gte: startDate,
           lte: endDate,
         },
-        status: {
-          in: [OrderStatus.PAID, OrderStatus.SENT],
-        },
+        ...revenueOrderWhere(),
       },
       select: {
         subtotal: true,

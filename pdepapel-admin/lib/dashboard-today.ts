@@ -24,6 +24,7 @@ export {
   TRANSFER_WINDOW_DAYS,
   getColombiaDayBounds,
 } from "@/lib/dashboard-windows";
+import { NON_REVENUE_ORDER_TYPES } from "@/lib/revenue-orders";
 
 /**
  * Pedidos pagados en un rango. Los pedidos marcados a mano antes de que
@@ -481,7 +482,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     shippingIssueSample,
     shippingIssueCount,
   ] = await Promise.all([
-    prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, ...paidWithin(dayStart, dayEnd) }, select: { total: true } }),
+    prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, type: { notIn: NON_REVENUE_ORDER_TYPES }, ...paidWithin(dayStart, dayEnd) }, select: { total: true } }),
     prismadb.marketplaceOrder.findMany({ where: createSettledMarketplaceSalesWhere(storeId, { start: dayStart, end: dayEnd }), select: { netAmount: true } }),
     prismadb.order.findMany({
       where: { storeId, status: OrderStatus.PENDING, type: { in: SHIPPABLE_TYPES }, createdAt: { gte: transferSince }, payment: { method: { in: [PaymentMethod.BankTransfer] } } },
@@ -517,12 +518,12 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       take: 3,
       select: { id: true, orderNumber: true, fullName: true, total: true, expiresAt: true },
     }),
-    prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, ...paidWithin(weekStart, dayEnd) }, select: { total: true, paidAt: true, createdAt: true, type: true } }),
-    prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, ...paidWithin(previousWeekStart, previousWeekEnd) }, select: { total: true } }),
+    prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, type: { notIn: NON_REVENUE_ORDER_TYPES }, ...paidWithin(weekStart, dayEnd) }, select: { total: true, paidAt: true, createdAt: true, type: true } }),
+    prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, type: { notIn: NON_REVENUE_ORDER_TYPES }, ...paidWithin(previousWeekStart, previousWeekEnd) }, select: { total: true } }),
     prismadb.marketplaceOrder.findMany({ where: createSettledMarketplaceSalesWhere(storeId, { start: weekStart, end: dayEnd }), select: { netAmount: true, paidAt: true, createdAt: true } }),
     prismadb.marketplaceOrder.findMany({ where: createSettledMarketplaceSalesWhere(storeId, { start: previousWeekStart, end: previousWeekEnd }), select: { netAmount: true } }),
     prismadb.orderItem.findMany({
-      where: { order: { storeId, status: { in: PAID_STATUSES }, ...paidWithin(weekStart, dayEnd) } },
+      where: { order: { storeId, status: { in: PAID_STATUSES }, type: { notIn: NON_REVENUE_ORDER_TYPES }, ...paidWithin(weekStart, dayEnd) } },
       select: { productId: true, name: true, quantity: true },
     }),
     prismadb.product.count({ where: { storeId, isArchived: false, images: { some: { brokenAt: { not: null } } } } }),

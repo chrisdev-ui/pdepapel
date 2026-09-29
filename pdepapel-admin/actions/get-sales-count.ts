@@ -8,6 +8,7 @@ import {
   createSettledMarketplaceSalesWhere,
   getMarketplaceNetRevenue,
 } from "@/lib/mercadolibre/reporting";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 /** Ventas del año para las analíticas de inicio; misma regla que el gráfico. */
 export const getSalesCount = async (storeId: string, year: number) => {
@@ -28,9 +29,7 @@ const buildSalesCount = async (storeId: string, year: number) => {
     prismadb.order.findMany({
       where: {
         storeId,
-        status: {
-          in: [OrderStatus.PAID, OrderStatus.SENT],
-        },
+        ...revenueOrderWhere(),
         createdAt: {
           gte: firstDayOfYear,
           lte: lastDayOfYear,

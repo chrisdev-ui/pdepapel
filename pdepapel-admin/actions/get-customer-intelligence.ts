@@ -1,6 +1,7 @@
 import { getOrderNetProfit } from "@/lib/financial";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export type CustomerSegment = "VIP" | "RECURRENT" | "OCCASIONAL" | "INACTIVE";
 
@@ -26,9 +27,7 @@ export async function getCustomerIntelligence(
   const orders = await prismadb.order.findMany({
     where: {
       storeId,
-      status: {
-        in: [OrderStatus.PAID, OrderStatus.SENT],
-      },
+      ...revenueOrderWhere(),
       email: { not: "" }, // Ensure we have an email to group by
     },
     include: {

@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   paymentUpsert: vi.fn(),
   sendOrderEmail: vi.fn(),
   issueGiftCardForOrder: vi.fn().mockResolvedValue(null),
+  redeemGiftCardForOrder: vi.fn().mockResolvedValue(null),
+  handleGiftCardOnOrderCancellation: vi.fn().mockResolvedValue(undefined),
   deliverGiftCard: vi.fn().mockResolvedValue(true),
   shippingUpsert: vi.fn(),
   transaction: vi.fn(),
@@ -40,7 +42,12 @@ vi.mock("@/lib/prismadb", () => ({
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
 // Tarjetas de regalo: la emisión corre dentro de la transacción de pago y el
 // correo con el código después; aquí solo se comprueba que se llaman.
-vi.mock("@/lib/gift-cards", () => ({ issueGiftCardForOrder: mocks.issueGiftCardForOrder }));
+vi.mock("@/lib/gift-cards", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/gift-cards")>()),
+  issueGiftCardForOrder: mocks.issueGiftCardForOrder,
+  redeemGiftCardForOrder: mocks.redeemGiftCardForOrder,
+  handleGiftCardOnOrderCancellation: mocks.handleGiftCardOnOrderCancellation,
+}));
 vi.mock("@/lib/gift-card-delivery", () => ({ deliverGiftCard: mocks.deliverGiftCard }));
 vi.mock("@/lib/shipping-helpers", () => ({
   createGuideForOrder: mocks.createGuideForOrder,

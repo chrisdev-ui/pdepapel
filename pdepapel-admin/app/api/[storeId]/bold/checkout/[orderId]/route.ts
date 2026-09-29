@@ -9,6 +9,7 @@ import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getAmountDue } from "@/lib/gift-cards";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -73,7 +74,13 @@ export async function POST(
     }
 
     const boldOrderReference = getBoldOrderReference(order);
-    const amount = Math.round(order.total);
+    // Lo que cobra Bold: el total menos lo que cubrió una tarjeta de regalo.
+    const amount = Math.round(getAmountDue(order));
+    if (amount <= 0) {
+      throw ErrorFactory.Conflict(
+        `La orden #${order.orderNumber || params.orderId} quedó cubierta con una tarjeta de regalo: no hay nada que pagar en línea.`,
+      );
+    }
     const currency = "COP";
 
     // Calculate official SHA-256 integrity signature: SHA256(order_id + amount + currency + secret_key)

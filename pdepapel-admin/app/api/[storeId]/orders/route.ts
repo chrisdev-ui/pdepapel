@@ -13,7 +13,13 @@ import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeGiftFields, type GiftFields } from "@/lib/gift-orders";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
-import { issueGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
+import {
+  assertGiftCardPurchaseDeletable,
+  handleGiftCardOnOrderCancellation,
+  issueGiftCardForOrder,
+  redeemGiftCardForOrder,
+  type IssuedGiftCard,
+} from "@/lib/gift-cards";
 
 import {
   CACHE_HEADERS,
@@ -990,6 +996,16 @@ export async function DELETE(
         });
       }
 
+      for (const order of orders) {
+        await assertGiftCardPurchaseDeletable(tx, params.storeId, order.id);
+        await handleGiftCardOnOrderCancellation(tx, {
+          storeId: params.storeId,
+          orderId: order.id,
+          createdBy: userId,
+          reason: "Pedido eliminado",
+        });
+      }
+
       return await tx.order.deleteMany({
         where: {
           storeId: params.storeId,
@@ -1290,6 +1306,7 @@ export async function PATCH(
             createdBy: userId,
           });
           if (issued) issuedGiftCards.push(issued);
+          await redeemGiftCardForOrder(tx, updated, userId);
         }
 
         if (leavesPaid && updated.coupon) {
@@ -1304,6 +1321,15 @@ export async function PATCH(
               orderId: updated.id,
             });
           }
+        }
+
+        if (status === OrderStatus.CANCELLED || status === OrderStatus.REJECTED) {
+          await handleGiftCardOnOrderCancellation(tx, {
+            storeId: params.storeId,
+            orderId: updated.id,
+            createdBy: userId,
+            reason: "Cancelado desde la lista",
+          });
         }
 
         return updated;

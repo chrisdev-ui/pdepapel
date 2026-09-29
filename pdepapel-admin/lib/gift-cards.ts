@@ -339,3 +339,263 @@ export function isGiftCardUsable(card: Pick<GiftCard, "status" | "balance" | "ex
 }
 
 export const GIFT_CARD_PAID_STATUSES: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SENT];
+
+/* ------------------------------------------------------------- redención */
+
+/** La tarjeta que corresponde a un código escrito por la clienta, o `null`. */
+export async function findGiftCardByCode(db: Db, storeId: string, input: string | null | undefined) {
+  const canonical = normalizeGiftCardCode(input);
+  if (!canonical) return null;
+  return db.giftCard.findFirst({
+    where: { storeId, codeHash: hashGiftCardCode(canonical) },
+  });
+}
+
+/** Cuánto puede cubrir la tarjeta de un total: el saldo o el total, lo menor. */
+export function coverableAmount(balance: number, total: number): number {
+  return Math.max(0, round2(Math.min(Number(balance), Number(total))));
+}
+
+type RedemptionOrder = {
+  id: string;
+  storeId: string;
+  giftCardId: string | null;
+  giftCardAmount: number;
+  type?: OrderType | null;
+};
+
+/**
+ * Reserva el saldo para un pedido que acaba de crearse (HELD). Corre en la
+ * misma transacción que crea el pedido, con la fila bloqueada: dos pagos a
+ * la vez con una sola tarjeta no se reparten un saldo que no existe.
+ */
+export async function holdGiftCardForOrder(
+  tx: GiftCardTx,
+  input: { storeId: string; giftCardId: string; orderId: string; amount: number; createdBy?: string | null },
+) {
+  return applyGiftCardMovement(tx, {
+    storeId: input.storeId,
+    giftCardId: input.giftCardId,
+    type: GiftCardMovementType.HELD,
+    amount: -round2(input.amount),
+    orderId: input.orderId,
+    reason: "Reservado por el pedido",
+    createdBy: input.createdBy ?? null,
+    idempotencyKey: `hold:${input.orderId}`,
+  });
+}
+
+async function hasMovement(tx: GiftCardTx, key: string) {
+  return Boolean(await tx.giftCardMovement.findUnique({ where: { idempotencyKey: key }, select: { id: true } }));
+}
+
+/**
+ * El pedido que usó la tarjeta quedó pagado: la reserva se vuelve consumo.
+ * Idempotente por pedido. Si la reserva se había liberado (pedido viejo
+ * que se pagó tarde por transferencia), se vuelve a reservar si el saldo
+ * alcanza; si no, se rechaza con un mensaje para el panel.
+ */
+export async function redeemGiftCardForOrder(
+  tx: GiftCardTx,
+  order: RedemptionOrder,
+  createdBy?: string | null,
+) {
+  if (!order.giftCardId || !(order.giftCardAmount > 0)) return null;
+  if (await hasMovement(tx, `redeem:${order.id}`)) return null;
+
+  const heldStillOpen =
+    (await hasMovement(tx, `hold:${order.id}`)) && !(await hasMovement(tx, `release:${order.id}`));
+  if (!heldStillOpen) {
+    // Reserva liberada por el tiempo: se toma otra vez (misma guarda de saldo).
+    const reholds = await tx.giftCardMovement.count({
+      where: { orderId: order.id, type: GiftCardMovementType.HELD },
+    });
+    try {
+      await applyGiftCardMovement(tx, {
+        storeId: order.storeId,
+        giftCardId: order.giftCardId,
+        type: GiftCardMovementType.HELD,
+        amount: -round2(order.giftCardAmount),
+        orderId: order.id,
+        reason: "Reservado de nuevo al confirmar el pago",
+        createdBy: createdBy ?? null,
+        idempotencyKey: `rehold:${order.id}:${reholds}`,
+      });
+    } catch (error) {
+      throw ErrorFactory.Conflict(
+        `La tarjeta de regalo ya no tiene saldo para cubrir ${Math.round(order.giftCardAmount).toLocaleString("es-CO")} de este pedido: la reserva venció y el saldo se usó en otra compra. Cobra la diferencia o cancela el pedido.`,
+      );
+    }
+  }
+  return applyGiftCardMovement(tx, {
+    storeId: order.storeId,
+    giftCardId: order.giftCardId,
+    type: GiftCardMovementType.REDEEMED,
+    amount: 0,
+    orderId: order.id,
+    reason: `Usada por ${Math.round(order.giftCardAmount).toLocaleString("es-CO")}`,
+    createdBy: createdBy ?? null,
+    idempotencyKey: `redeem:${order.id}`,
+  });
+}
+
+/**
+ * El pedido que usó la tarjeta se canceló o se devolvió. Si ya estaba
+ * pagado, el saldo vuelve (REVERSED); si solo estaba reservado, la reserva
+ * se libera (RELEASED). Idempotente por pedido.
+ */
+export async function releaseOrReverseGiftCardForOrder(
+  tx: GiftCardTx,
+  order: RedemptionOrder,
+  input: { createdBy?: string | null; reason?: string | null } = {},
+) {
+  if (!order.giftCardId || !(order.giftCardAmount > 0)) return null;
+  const redeemed = await hasMovement(tx, `redeem:${order.id}`);
+  if (redeemed) {
+    if (await hasMovement(tx, `reverse:${order.id}`)) return null;
+    return applyGiftCardMovement(tx, {
+      storeId: order.storeId,
+      giftCardId: order.giftCardId,
+      type: GiftCardMovementType.REVERSED,
+      amount: round2(order.giftCardAmount),
+      orderId: order.id,
+      reason: input.reason ?? "Pedido cancelado o devuelto",
+      createdBy: input.createdBy ?? null,
+      idempotencyKey: `reverse:${order.id}`,
+    });
+  }
+  const held =
+    (await hasMovement(tx, `hold:${order.id}`)) ||
+    (await tx.giftCardMovement.count({ where: { orderId: order.id, type: GiftCardMovementType.HELD } })) > 0;
+  if (!held || (await hasMovement(tx, `release:${order.id}`))) return null;
+  return applyGiftCardMovement(tx, {
+    storeId: order.storeId,
+    giftCardId: order.giftCardId,
+    type: GiftCardMovementType.RELEASED,
+    amount: round2(order.giftCardAmount),
+    orderId: order.id,
+    reason: input.reason ?? "Pedido cancelado sin pagar",
+    createdBy: input.createdBy ?? null,
+    idempotencyKey: `release:${order.id}`,
+  });
+}
+
+/**
+ * Se cancela el pedido que COMPRÓ la tarjeta. Si nadie la ha usado, se
+ * anula (saldo a cero). Si ya se usó, no se puede: ese dinero lo gastó
+ * otra persona; la diferencia se devuelve por fuera del sistema.
+ */
+export async function voidGiftCardForPurchaseOrder(
+  tx: GiftCardTx,
+  input: { storeId: string; orderId: string; createdBy?: string | null },
+) {
+  const card = await tx.giftCard.findFirst({
+    where: { purchaseOrderId: input.orderId, storeId: input.storeId },
+  });
+  if (!card) return null;
+  if (card.status === GiftCardStatus.VOID) return card;
+  const used = await tx.giftCardMovement.count({
+    where: { giftCardId: card.id, type: { in: [GiftCardMovementType.HELD, GiftCardMovementType.REDEEMED] } },
+  });
+  if (used > 0) {
+    const spent = round2(Number(card.initialAmount) - Number(card.balance));
+    throw ErrorFactory.Conflict(
+      `La tarjeta ya se usó por ${Math.round(spent).toLocaleString("es-CO")}: reembolsa la diferencia por fuera del sistema.`,
+    );
+  }
+  await applyGiftCardMovement(tx, {
+    storeId: input.storeId,
+    giftCardId: card.id,
+    type: GiftCardMovementType.VOIDED,
+    amount: -round2(Number(card.balance)),
+    orderId: input.orderId,
+    reason: "Compra cancelada",
+    createdBy: input.createdBy ?? null,
+    idempotencyKey: `void:${input.orderId}`,
+    allowVoid: true,
+  });
+  return tx.giftCard.update({ where: { id: card.id }, data: { status: GiftCardStatus.VOID } });
+}
+
+/**
+ * Un pedido que se cancela, se elimina o se devuelve: libera o devuelve
+ * el saldo que usó y, si compró una tarjeta, la anula (o se niega si ya se
+ * usó). Es la única entrada que llaman los seis caminos de cancelación.
+ */
+export async function handleGiftCardOnOrderCancellation(
+  tx: GiftCardTx,
+  input: { storeId: string; orderId: string; createdBy?: string | null; reason?: string | null },
+) {
+  const order = await tx.order.findFirst({
+    where: { id: input.orderId, storeId: input.storeId },
+    select: { id: true, storeId: true, type: true, giftCardId: true, giftCardAmount: true },
+  });
+  if (!order) return;
+  await releaseOrReverseGiftCardForOrder(tx, order, { createdBy: input.createdBy, reason: input.reason });
+  if (order.type === OrderType.GIFT_CARD) {
+    await voidGiftCardForPurchaseOrder(tx, { storeId: input.storeId, orderId: order.id, createdBy: input.createdBy });
+  }
+}
+
+/**
+ * Un pedido que emitió una tarjeta no se elimina: la tarjeta lo referencia
+ * y su libro también. Se cancela, y si nadie la usó la anulación va sola.
+ */
+export async function assertGiftCardPurchaseDeletable(tx: GiftCardTx, storeId: string, orderId: string) {
+  const card = await tx.giftCard.findFirst({ where: { purchaseOrderId: orderId, storeId }, select: { id: true } });
+  if (card) {
+    throw ErrorFactory.Conflict(
+      "Este pedido emitió una tarjeta de regalo: cancélalo en vez de eliminarlo. Si nadie la usó, la tarjeta se anula al cancelar.",
+    );
+  }
+}
+
+/* ------------------------------------------------ reservas vencidas (cron) */
+
+export const GIFT_CARD_HOLD_DAYS = 7;
+
+/**
+ * Libera las reservas de pedidos cancelados o que llevan más de
+ * `GIFT_CARD_HOLD_DAYS` sin pagarse. Una reserva por transacción: una fila
+ * mala no frena a las demás. Si el job no corre un día, la reserva dura un
+ * día más; al pagar tarde, `redeemGiftCardForOrder` vuelve a reservar.
+ */
+export async function releaseExpiredGiftCardHolds(
+  db: PrismaClient,
+  input: { now?: Date; storeId?: string } = {},
+): Promise<{ released: number; skipped: number; failed: { orderId: string; error: string }[] }> {
+  const now = input.now ?? new Date();
+  const cutoff = new Date(now.getTime() - GIFT_CARD_HOLD_DAYS * 24 * 60 * 60 * 1000);
+  const orders = await db.order.findMany({
+    where: {
+      ...(input.storeId ? { storeId: input.storeId } : {}),
+      giftCardId: { not: null },
+      giftCardAmount: { gt: 0 },
+      OR: [
+        { status: { in: [OrderStatus.CANCELLED, OrderStatus.REJECTED] } },
+        { status: { in: [OrderStatus.PENDING, OrderStatus.CREATED] }, createdAt: { lt: cutoff } },
+      ],
+    },
+    select: { id: true, storeId: true, giftCardId: true, giftCardAmount: true, status: true },
+    take: 500,
+  });
+  const result = { released: 0, skipped: 0, failed: [] as { orderId: string; error: string }[] };
+  for (const order of orders) {
+    try {
+      const movement = await db.$transaction((tx) =>
+        releaseOrReverseGiftCardForOrder(tx, order, {
+          createdBy: "SYSTEM_CRON",
+          reason:
+            order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REJECTED
+              ? "Pedido cancelado"
+              : `Pedido sin pagar por más de ${GIFT_CARD_HOLD_DAYS} días`,
+        }),
+      );
+      if (movement) result.released += 1;
+      else result.skipped += 1;
+    } catch (error) {
+      result.failed.push({ orderId: order.id, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return result;
+}

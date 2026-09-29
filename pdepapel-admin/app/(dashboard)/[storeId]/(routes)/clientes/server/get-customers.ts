@@ -12,8 +12,10 @@ import {
 } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner, requireStoreRead } from "@/lib/store-access";
+import { isRevenueOrder } from "@/lib/revenue-orders";
 
-const PAID: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SENT];
+// Ingreso: pagado o enviado y que no sea la compra de una tarjeta de regalo.
+const isRevenue = (order: { status: OrderStatus; type: OrderType }) => isRevenueOrder(order);
 const PENDING: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CREATED];
 
 export interface CustomerOrderSummary {
@@ -187,7 +189,7 @@ function groupOrders(
       items,
     });
 
-    if (PAID.includes(order.status)) {
+    if (isRevenue(order)) {
       draft.paidOrders += 1;
       draft.totalSpent += Number(order.total);
       const paidAt = order.paidAt ?? order.createdAt;
@@ -429,7 +431,7 @@ async function withOrderItems(record: CustomerRecord): Promise<CustomerRecord> {
   const counts = new Map<string, number>();
   const orders = record.orders.map((order) => {
     const items = byOrder.get(order.id) ?? [];
-    if (PAID.includes(order.status)) {
+    if (isRevenue(order)) {
       for (const item of items)
         counts.set(item.name, (counts.get(item.name) ?? 0) + item.quantity);
     }

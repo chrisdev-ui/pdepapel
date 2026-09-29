@@ -30,12 +30,12 @@ const card = {
   recipientName: "Mariana López",
   recipientEmail: "mariana@example.com",
   message: "¡Feliz cumpleaños!",
-} as never;
+} as unknown as Parameters<typeof deliverGiftCard>[0]["card"];
 
 describe("deliverGiftCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NODE_ENV = "test";
+    vi.stubEnv("NODE_ENV", "test");
     mocks.send.mockResolvedValue({ data: { id: "email-1" } });
     mocks.update.mockResolvedValue({});
   });
@@ -58,7 +58,7 @@ describe("deliverGiftCard", () => {
 
   it("speaks to the buyer when the code goes to her own inbox", async () => {
     const ok = await deliverGiftCard(
-      { card: { ...card, recipientEmail: null, recipientName: null } as never, code: "PDP-AAAA-BBBB-CCCC", deliverTo: "luisa@example.com" },
+      { card: { ...card, recipientEmail: null, recipientName: null }, code: "PDP-AAAA-BBBB-CCCC", deliverTo: "luisa@example.com" },
       { buyerName: "Luisa Sánchez" },
     );
     expect(ok).toBe(true);

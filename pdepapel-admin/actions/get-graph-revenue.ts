@@ -9,6 +9,7 @@ import {
   getMarketplaceNetRevenue,
   getMarketplaceSaleDate,
 } from "@/lib/mercadolibre/reporting";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 interface GraphData {
   name: string;
@@ -53,9 +54,7 @@ const buildGraphRevenue = async (
     prismadb.order.findMany({
       where: {
         storeId,
-        status: {
-          in: [OrderStatus.PAID, OrderStatus.SENT],
-        },
+        ...revenueOrderWhere(),
         createdAt: {
           gte: startDate,
           lte: endDate,

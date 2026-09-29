@@ -6,6 +6,7 @@ import { endOfYear, startOfYear } from "date-fns";
 
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
 import prisma from "@/lib/prismadb";
+import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export const getTopSellingProducts = async (storeId: string, year: number) => {
   await requireStoreOwner(storeId);
@@ -19,7 +20,7 @@ export const getTopSellingProducts = async (storeId: string, year: number) => {
       where: {
         order: {
           storeId,
-          status: { in: ["PAID", "SENT"] },
+          ...revenueOrderWhere(),
           createdAt: {
             gte: startDate,
             lte: endDate,
