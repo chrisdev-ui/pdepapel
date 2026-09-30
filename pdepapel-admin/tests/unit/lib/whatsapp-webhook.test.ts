@@ -50,9 +50,37 @@ describe("classifyWhatsAppWebhookEvent", () => {
     });
   });
 
-  it("uses the status id when the change carries a delivery status", () => {
-    const payload = metaMessage({ messages: undefined, statuses: [{ id: "wamid.STATUS", status: "delivered" }] });
-    expect(classifyWhatsAppWebhookEvent(payload).eventKey).toBe("wamid.STATUS");
+  it("keys a delivery status by message id, status value and timestamp", () => {
+    const payload = metaMessage({ messages: undefined, statuses: [{ id: "wamid.STATUS", status: "delivered", timestamp: "1727600000" }] });
+    expect(classifyWhatsAppWebhookEvent(payload).eventKey).toBe("wamid.STATUS:delivered:1727600000");
+    // Sin marca de tiempo ni estado legibles, la llave lo dice en vez de inventar.
+    expect(classifyWhatsAppWebhookEvent(metaMessage({ messages: undefined, statuses: [{ id: "wamid.STATUS" }] })).eventKey).toBe("wamid.STATUS:unknown:no-ts");
+  });
+
+  /*
+   * `status.id` es el WAMID del mensaje original y se repite en «sent»,
+   * «delivered» y «read»: con el id a secas el upsert (`update: {}`) guardaba
+   * solo la primera transición y perdía las demás.
+   */
+  it("stores every lifecycle transition of one message: sent, delivered and read get distinct keys", () => {
+    const keys = ["sent", "delivered", "read"].map((status, index) =>
+      classifyWhatsAppWebhookEvent(
+        metaMessage({ messages: undefined, statuses: [{ id: "wamid.SAME", status, timestamp: String(1727600000 + index) }] }),
+      ).eventKey,
+    );
+    expect(new Set(keys).size).toBe(3);
+    expect(keys).toEqual(["wamid.SAME:sent:1727600000", "wamid.SAME:delivered:1727600001", "wamid.SAME:read:1727600002"]);
+    // Un timestamp numérico vale igual que uno en texto.
+    expect(classifyWhatsAppWebhookEvent(metaMessage({ messages: undefined, statuses: [{ id: "wamid.SAME", status: "read", timestamp: 1727600002 }] })).eventKey).toBe("wamid.SAME:read:1727600002");
+  });
+
+  it("a retried, identical status notification still collapses to the same key", () => {
+    const build = () => metaMessage({ messages: undefined, statuses: [{ id: "wamid.SAME", status: "delivered", timestamp: "1727600001" }] });
+    expect(classifyWhatsAppWebhookEvent(build()).eventKey).toBe(classifyWhatsAppWebhookEvent(build()).eventKey);
+  });
+
+  it("a message keeps its plain WAMID as key, untouched by the status rule", () => {
+    expect(classifyWhatsAppWebhookEvent(metaMessage({ messages: [{ id: "wamid.MSG", timestamp: "1727600000" }] })).eventKey).toBe("wamid.MSG");
   });
 
   it("hashes the whole body when a batch carries several ids, so none is lost to deduplication", () => {

@@ -100,16 +100,28 @@ export function classifyWhatsAppWebhookEvent(
       sellerId ??
       "unknown";
 
+    // Un mensaje se identifica por su WAMID. Un estado NO: `status.id` es el
+    // WAMID del mensaje original y es el mismo en «sent», «delivered», «read»
+    // y «failed», así que con el id a secas solo se guardaba la primera
+    // transición y las demás se perdían en el upsert (`update: {}`). La llave
+    // de un estado lleva también el estado y su marca de tiempo: cada
+    // transición es un evento distinto y un reenvío idéntico de Meta sigue
+    // colapsando en la misma llave.
     const ids: string[] = [];
     for (const entry of entries) {
       if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
       for (const change of entry.changes) {
         if (!isRecord(change) || !isRecord(change.value)) continue;
-        for (const list of [change.value.messages, change.value.statuses]) {
-          if (!Array.isArray(list)) continue;
-          for (const item of list) {
+        if (Array.isArray(change.value.messages)) {
+          for (const item of change.value.messages) {
             const id = isRecord(item) ? asTrimmedString(item.id) : null;
             if (id) ids.push(id);
+          }
+        }
+        if (Array.isArray(change.value.statuses)) {
+          for (const item of change.value.statuses) {
+            const key = isRecord(item) ? statusEventKey(item) : null;
+            if (key) ids.push(key);
           }
         }
       }
@@ -124,6 +136,21 @@ export function classifyWhatsAppWebhookEvent(
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Llave de un estado de entrega: id del mensaje original, valor del estado y
+ * marca de tiempo (Meta la manda como texto o número). Sin id no hay llave.
+ */
+function statusEventKey(status: Record<string, unknown>): string | null {
+  const statusId = asTrimmedString(status.id);
+  if (!statusId) return null;
+  const statusValue = asTrimmedString(status.status) ?? "unknown";
+  const statusTimestamp =
+    typeof status.timestamp === "string" || typeof status.timestamp === "number"
+      ? String(status.timestamp).trim() || "no-ts"
+      : "no-ts";
+  return `${statusId}:${statusValue}:${statusTimestamp}`;
 }
 
 /** Un BSUID de Meta: `CO.2465629583926901`, `US.13491…`. Prefijo de dos letras. */
