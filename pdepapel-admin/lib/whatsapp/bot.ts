@@ -31,6 +31,7 @@ import {
   answerProductQuestion,
   buildOwnerRow,
   looksLikeProductQuestion,
+  type ProductDecision,
 } from "@/lib/whatsapp/bot-products";
 import {
   detectProductReference,
@@ -118,6 +119,8 @@ export type WhatsAppBotOutcome =
   | "replied_business_fact"
   /** Se contestó sobre productos (si hay, si queda). */
   | "replied_product"
+  /** Buscó y no encontró nada seguro: contestó con cautela y se lo pasó a Paula. */
+  | "replied_product_unsure"
   /** Dijo «el primero» y se supo cuál era. */
   | "replied_product_reference"
   /** Señaló una opción de una lista que ya no valía; se le pidió repetirla. */
@@ -815,6 +818,10 @@ export async function runWhatsAppBot(input: {
           })
         : null;
     if (answer) {
+      // Sin nada seguro que decir, el texto promete que Paula escribe: se
+      // marca ANTES de mandar, igual que en el paso 7, para que un segundo
+      // mensaje durante la pausa no vuelva a contestar.
+      if (answer.handoff) await escalate(conversation.id);
       const sent = await deliver(
         conversation.id,
         input.recipient,
@@ -827,11 +834,16 @@ export async function runWhatsAppBot(input: {
             ? { ids: answer.shownIds, intent: answer.intent }
             : null,
           list: answer.list,
+          decision: answer.decision,
+          omitOwnerButton: Boolean(answer.handoff),
         },
       );
       if (sent.aborted) return { outcome: "skipped_owner_active" };
-    if (sent.ok) {
-        return { outcome: "replied_product", trigger: answer.intent };
+      if (sent.ok) {
+        return {
+          outcome: answer.handoff ? "replied_product_unsure" : "replied_product",
+          trigger: answer.intent,
+        };
       }
       await escalate(conversation.id);
       return {
@@ -972,9 +984,22 @@ async function deliver(
      * acuses que cierran una escalada ya hecha; ver `buildReplyButtons`.
      */
     omitOwnerButton?: boolean;
+    /**
+     * Qué entendió y qué buscó el bot al contestar sobre productos. Se archiva
+     * con el mensaje para poder revisarlo después; nunca se enseña.
+     */
+    decision?: ProductDecision | null;
   } = {},
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
-  const { photo, shown, list, omitOwnerButton } = extras;
+  const { photo, shown, list, omitOwnerButton, decision } = extras;
+  const metadata = {
+    ...(shown && shown.ids.length > 0 ? { shown } : {}),
+    ...(decision ? { decision } : {}),
+  };
+  const conMetadata =
+    Object.keys(metadata).length > 0
+      ? { metadata: metadata as unknown as Prisma.InputJsonValue }
+      : {};
   const reply = formatBotReply(answer);
 
   // Red contra un envío doble; las ráfagas se resuelven antes.
@@ -1086,6 +1111,9 @@ async function deliver(
         direction: ConversationMessageDirection.OUTBOUND,
         sentBy: ConversationMessageSentBy.BOT,
         body: archivado,
+        // La decisión también aquí: si el envío falló, saber qué se quiso
+        // decir y por qué es justo lo que hace falta para revisarlo.
+        ...(decision ? { metadata: { decision } as unknown as Prisma.InputJsonValue } : {}),
         status: ConversationMessageStatus.FAILED,
       },
     });
@@ -1103,9 +1131,7 @@ async function deliver(
       // Solo si de verdad salió con foto: si hubo que repetir sin ella, en el
       // panel tiene que verse lo mismo que le llegó a la clienta.
       ...(salioConFoto && photo ? { mediaType: "image", mediaUrl: photo } : {}),
-      ...(shown && shown.ids.length > 0
-        ? { metadata: { shown } as unknown as Prisma.InputJsonValue }
-        : {}),
+      ...conMetadata,
       status: ConversationMessageStatus.SENT,
       createdAt: now,
     },

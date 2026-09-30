@@ -2253,4 +2253,98 @@ describe("ritmo humano", () => {
       });
     });
   });
+
+  describe("la decisión del bot queda archivada, y sin nada seguro se lo pasa a Paula", () => {
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+    const decision = {
+      intent: "product.price" as const,
+      slots: { productType: "tote bag", character: "perrito", descriptor: null },
+      query: "tote bag perrito",
+      total: 1,
+      outcome: "match" as const,
+    };
+
+    it("guarda la decisión junto a lo que enseñó", async () => {
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.price",
+        text: 'Tote bag "Un día a la Vez" está en $35.000 💛 ¿Te lo aparto?',
+        photo: null,
+        shownIds: ["tote-1"],
+        decision,
+      });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "Que precio tienen los tote bag de perrito", settings: aprobado }),
+      ).resolves.toEqual({ outcome: "replied_product", trigger: "product.price" });
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: { shown: { ids: ["tote-1"], intent: "product.price" }, decision },
+        }),
+      });
+      // Con algo que enseñar, el botón de Paula sigue ahí.
+      expect(mocks.send).toHaveBeenCalled();
+      expect(mocks.sendText).not.toHaveBeenCalled();
+    });
+
+    it("sin nada seguro: marca para Paula ANTES de mandar, sale sin botón y lo dice", async () => {
+      const cautela = {
+        ...decision,
+        query: "mantel de plástico",
+        total: 0,
+        retry: { query: "mantel", total: 0 },
+        outcome: "unsure" as const,
+      };
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Esa no la tengo ubicada ahora mismo 💛 Déjame confirmarlo con Paula y ella te escribe.",
+        handoff: true,
+        decision: cautela,
+      });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "tienes esos manteles de plástico?", settings: aprobado }),
+      ).resolves.toEqual({ outcome: "replied_product_unsure", trigger: "product.search" });
+
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+      // El texto ya dice que Paula escribe: sin botón de «Hablar con Paula».
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.sendText).toHaveBeenCalledOnce();
+      expect(mocks.sendText.mock.calls[0][1]).toContain("Paula");
+      // Primero se marca, después se manda.
+      const marcado = mocks.conversationUpdate.mock.invocationCallOrder[0];
+      const enviado = mocks.sendText.mock.invocationCallOrder[0];
+      expect(marcado).toBeLessThan(enviado);
+      // Y la decisión queda archivada aunque no haya nada que enseñar.
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ metadata: { decision: cautela } }),
+      });
+    });
+
+    it("si el envío falla, la decisión se archiva con el intento fallido", async () => {
+      mocks.sendText.mockResolvedValue({ ok: false, error: "meta 500" });
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Esa no la tengo ubicada ahora mismo 💛 Déjame confirmarlo con Paula y ella te escribe.",
+        handoff: true,
+        decision: { ...decision, total: 0, outcome: "unsure" as const },
+      });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "tienes manteles de plástico?", settings: aprobado }),
+      ).resolves.toMatchObject({ outcome: "escalated_send_failed" });
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          status: "FAILED",
+          metadata: { decision: expect.objectContaining({ outcome: "unsure" }) },
+        }),
+      });
+    });
+  });
 });

@@ -24,6 +24,9 @@ const SYNONYM_GROUPS: string[][] = [
   ["pegante", "pegamento", "colbón"],
   ["mug", "taza", "pocillo"],
   ["kit", "set", "combo"],
+  // Los tote bags se piden de las cuatro formas. Sin este grupo, «bolso de
+  // perrito» no encontraba ningún «Tote bag» y al revés.
+  ["tote", "bag", "bolso", "bolsa"],
 ];
 
 const MAX_TERMS = 8;
@@ -141,18 +144,11 @@ export function searchTokens(query: string): string[] {
  * Va aparte a propósito: el buscador de la tienda se queda como está.
  */
 export function productTokenSearchWhere(query: string): Prisma.ProductWhereInput[] {
-  return searchTokens(query).map((token) => ({
-    OR: [
-      ...expandSearchTerms(token).map((term) => ({
-        name: { contains: term },
-      })),
-      { description: { contains: token } },
-    ],
-  }));
+  return searchTokens(query).map((token) => tokenWhere(token, { withDescription: true }));
 }
 
 /**
- * Lo mismo, pero mirando SOLO el nombre.
+ * Lo mismo, pero SIN mirar la descripción.
  *
  * Es la primera pasada, y casi siempre la buena. Un color o un material que
  * aparece de pasada en la descripción de otro producto ensuciaba la lista:
@@ -165,12 +161,58 @@ export function productTokenSearchWhere(query: string): Prisma.ProductWhereInput
  * cuando el nombre no encuentra NADA, no para cuando encuentra demasiado.
  */
 export function productNameTokenSearchWhere(query: string): Prisma.ProductWhereInput[] {
-  return searchTokens(query).map((token) => {
-    const variantes = expandSearchTerms(token);
-    return {
-      OR: (variantes.length ? variantes : [token]).map((term) => ({
-        name: { contains: term },
-      })),
-    };
-  });
+  return searchTokens(query).map((token) => tokenWhere(token, { withDescription: false }));
+}
+
+/**
+ * La raíz con la que se compara una palabra contra una etiqueta del catálogo
+ * (diseño, color, categoría, grupo).
+ *
+ * Las etiquetas van en una forma y la clienta escribe en otra: el color es
+ * «Amarillo» y ella pide «amarilla»; el diseño es «Perrito» y ella dice
+ * «perritos»; la categoría es «Cuadernos» y ella busca «cuaderno». Un
+ * `contains` con la palabra tal cual falla en los tres. Quitando el plural y
+ * la última vocal queda «amarill», «perrit» y «cuadern», que sí están dentro.
+ *
+ * Solo para etiquetas, que son cortas y de una o dos palabras: en un nombre o
+ * una descripción larga, una raíz de cuatro letras encuentra de todo.
+ */
+export function labelStem(word: string): string {
+  const base = singular(normalizeSearchTerm(word));
+  return base.length >= 4 && /[aeo]$/.test(base) ? base.slice(0, -1) : base;
+}
+
+/**
+ * Las condiciones de UNA palabra: en el nombre (con sinónimos), en las
+ * etiquetas del catálogo y, si se pide, en la descripción.
+ *
+ * Las etiquetas entraron por un fallo real: «tote bag de perrito» daba cero y
+ * el bot contestó «no lo tengo» con el producto activo y con existencias,
+ * porque «perrito» solo vivía en el diseño del producto, que nadie miraba.
+ * Medido sobre los 867 productos activos, 456 tienen el diseño fuera del
+ * nombre y la descripción, 520 el color y 575 la categoría.
+ *
+ * Diseño y color se buscan por la raíz de la palabra: ahí no hay sinónimos
+ * (un personaje se llama como se llama). Categoría y grupo sí llevan los
+ * sinónimos, porque nombran tipos de producto: «libreta» tiene que dar con la
+ * categoría «Cuadernos».
+ */
+function tokenWhere(
+  token: string,
+  options: { withDescription: boolean },
+): Prisma.ProductWhereInput {
+  const variantes = expandSearchTerms(token);
+  const terminos = variantes.length ? variantes : [token];
+  const raices = Array.from(new Set(terminos.map(labelStem)));
+  const raiz = labelStem(token);
+  return {
+    OR: [
+      ...terminos.map((term) => ({ name: { contains: term } })),
+      { design: { is: { name: { contains: raiz } } } },
+      { color: { is: { name: { contains: raiz } } } },
+      ...raices.map((r) => ({ category: { is: { name: { contains: r } } } })),
+      ...raices.map((r) => ({ productGroup: { is: { name: { contains: r } } } })),
+      ...(options.withDescription ? [{ description: { contains: token } }] : []),
+    ],
+  };
 }

@@ -524,16 +524,32 @@ const linea = (name: string, detalle: string) => `• ${name} — ${detalle}`;
  * `PRODUCT_TEMPLATES_VERSION` y retira el visto bueno de Paula.
  */
 export const PRODUCT_TEMPLATES = {
-  "search.none": () =>
-    `Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.`,
+  /**
+   * Cero resultados ya no es un «no lo tengo». El 30 de septiembre una clienta
+   * preguntó por «los tote bag de perrito», el bot contestó que no lo tenía y
+   * el producto estaba activo y con existencias: la búsqueda no lo encontró.
+   * Cuando no aparece nada, lo honesto es decir que no se sabe y pasárselo a
+   * Paula. Un «no» equivocado cuesta una venta; un «déjame confirmar» no.
+   */
+  "search.unsure": () =>
+    `Esa no la tengo ubicada ahora mismo 💛 Déjame confirmarlo con Paula y ella te escribe.`,
+  /**
+   * Lo que pidió no está, pero el tipo sí: «tote bag de dinosaurio» no hay,
+   * tote bags sí. Se dice lo que falta y se enseña lo que hay, sin fingir
+   * que era lo que pedía.
+   */
+  "search.partial.one": (faltante: string, tipo: string, name: string, price: string) =>
+    `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} tengo ${name} en ${price}. ¿Te sirve?`,
+  "search.partial.few": (faltante: string, tipo: string, lineas: string) =>
+    `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} sí, mira:\n${lineas}\n¿Te sirve alguno?`,
+  "search.partial.many": (faltante: string, tipo: string, lineas: string, resto: number) =>
+    `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} sí, mira:\n${lineas}\n…y ${resto} más. Dime cuál te interesa.`,
   "search.one": (name: string, price: string) =>
     `Sí 💛 Tengo ${name} en ${price}. ¿Te lo aparto?`,
   "search.few": (lineas: string) =>
     `Sí, mira 💛 Tengo estos:\n${lineas}\n¿Cuál te interesa?`,
   "search.many": (lineas: string, resto: number) =>
     `Sí, tengo varios 💛 Estos son los que más salen:\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
-  "availability.none": () =>
-    `Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.`,
   "availability.one.yes": (name: string) =>
     `¡Sí! Tengo ${name} disponible 💛 ¿Te lo aparto?`,
   "availability.one.no": (name: string) =>
@@ -568,6 +584,12 @@ export const PRODUCT_TEMPLATES = {
     `Sí 💛 Tengo ${cuantos} que te pueden servir. Míralos y escoge el que quieras.`,
   "list.body.many": (cuantos: number, resto: number) =>
     `Sí, tengo varios 💛 Aquí van ${cuantos}, y me quedan ${resto} más. Toca el que te guste, o dime algo más preciso y te busco mejor.`,
+  // La lista de lo que sí hay cuando lo pedido no está. No empieza con «Sí»:
+  // a «¿tienen tote bag de dinosaurio?» la respuesta es que no.
+  "list.body.partial": (faltante: string, tipo: string, cuantos: number) =>
+    `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} tengo ${cuantos}. Míralos y escoge el que quieras.`,
+  "list.body.partial.many": (faltante: string, tipo: string, cuantos: number, resto: number) =>
+    `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} tengo varios: aquí van ${cuantos} y me quedan ${resto} más. Toca el que te guste.`,
   "list.button": () => `Ver opciones`,
   "list.section": () => `Elige uno`,
   "list.footer": () => `O escríbeme y te ayudo`,
@@ -632,7 +654,18 @@ export function previewProductTemplates(): { label: string; text: string }[] {
     { label: "Busca algo y hay uno solo", text: renderProductSearch(uno) },
     { label: "Busca algo y hay varios", text: renderProductSearch(varios) },
     { label: "Busca algo y hay muchos", text: renderProductSearch(muchos) },
-    { label: "Busca algo que no tenemos", text: renderProductSearch(sinNada) },
+    {
+      label: "Busca algo que no aparece, pero el tipo sí (p. ej. tote bag de dinosaurio)",
+      text: renderPartialSearch("dinosaurio", "tote bag", {
+        matches: [
+          { name: 'Tote bag "Un día a la Vez"', price: 35000 },
+          { name: 'Tote bag "Caribe"', price: 35000 },
+        ],
+        total: 2,
+        hasMore: false,
+      }),
+    },
+    { label: "Busca algo que no aparece por ningún lado", text: renderProductSearch(sinNada) },
     { label: "Pregunta si queda y sí", text: renderAvailability(dispUno(true)) },
     { label: "Pregunta si queda y se agotó", text: renderAvailability(dispUno(false)) },
     { label: "Pregunta si queda y hay varios", text: renderAvailability(dispVarios) },
@@ -720,7 +753,7 @@ export function areProductAnswersApproved(s: {
 
 export function renderProductPrice(result: SearchResult<ProductMatch>): string {
   const t = PRODUCT_TEMPLATES;
-  if (result.total === 0) return t["search.none"]();
+  if (result.total === 0) return t["search.unsure"]();
   if (result.total === 1) {
     return t["price.one"](result.matches[0].name, formatCOP(result.matches[0].price));
   }
@@ -738,7 +771,7 @@ export function renderProductFeatures(
   result: SearchResult<FeaturesMatch> | SearchResult<ProductMatch>,
 ): string {
   const t = PRODUCT_TEMPLATES;
-  if (result.total === 0) return t["search.none"]();
+  if (result.total === 0) return t["search.unsure"]();
   const first = result.matches[0];
   if (result.total === 1 && first && "description" in first) {
     return t["features.one"](first.name, first.description);
@@ -753,7 +786,7 @@ export function renderProductFeatures(
 
 export function renderProductPhoto(result: SearchResult<ProductMatch>): string {
   const t = PRODUCT_TEMPLATES;
-  if (result.total === 0) return t["search.none"]();
+  if (result.total === 0) return t["search.unsure"]();
   if (result.total === 1) {
     const only = result.matches[0];
     const precio = formatCOP(only.price);
@@ -773,7 +806,7 @@ export function renderProductPhoto(result: SearchResult<ProductMatch>): string {
 
 export function renderProductSearch(result: SearchResult<ProductMatch>): string {
   const t = PRODUCT_TEMPLATES;
-  if (result.total === 0) return t["search.none"]();
+  if (result.total === 0) return t["search.unsure"]();
   if (result.total === 1) {
     return t["search.one"](result.matches[0].name, formatCOP(result.matches[0].price));
   }
@@ -785,11 +818,44 @@ export function renderProductSearch(result: SearchResult<ProductMatch>): string 
     : t["search.few"](lineas);
 }
 
+/**
+ * Lo pedido no está, pero el tipo sí. `faltante` es lo que no se encontró
+ * (personaje, color…) y `tipo` lo que sí, con las palabras de la clienta.
+ */
+export function renderPartialSearch(
+  faltante: string,
+  tipo: string,
+  result: SearchResult<ProductMatch>,
+): string {
+  const t = PRODUCT_TEMPLATES;
+  if (result.total === 1) {
+    const only = result.matches[0];
+    return t["search.partial.one"](faltante, tipo, only.name, formatCOP(only.price));
+  }
+  const lineas = result.matches
+    .map((m) => linea(m.name, formatCOP(m.price)))
+    .join("\n");
+  return result.hasMore
+    ? t["search.partial.many"](faltante, tipo, lineas, result.total - result.matches.length)
+    : t["search.partial.few"](faltante, tipo, lineas);
+}
+
+export function buildPartialListBody(
+  faltante: string,
+  tipo: string,
+  mostrados: number,
+  total: number,
+): string {
+  return total > mostrados
+    ? PRODUCT_TEMPLATES["list.body.partial.many"](faltante, tipo, mostrados, total - mostrados)
+    : PRODUCT_TEMPLATES["list.body.partial"](faltante, tipo, mostrados);
+}
+
 export function renderAvailability(
   result: SearchResult<AvailabilityMatch>,
 ): string {
   const t = PRODUCT_TEMPLATES;
-  if (result.total === 0) return t["availability.none"]();
+  if (result.total === 0) return t["search.unsure"]();
   if (result.total === 1) {
     const only = result.matches[0];
     return only.inStock
@@ -943,9 +1009,42 @@ export function buildOwnerRow(): WhatsAppListRow {
 
 // --- Unir las tres piezas --------------------------------------------------
 
+/**
+ * Lo que el bot decidió al contestar una pregunta de producto. Se guarda con
+ * el mensaje (`ConversationMessage.metadata.decision`) para poder revisar
+ * después qué entendió, qué buscó y cuánto encontró, sin tener que recorrer
+ * las conversaciones una por una como hubo que hacer con el fallo del tote bag.
+ * No lleva existencias ni ids: solo palabras y cuentas.
+ */
+export interface ProductDecision {
+  intent: ProductIntent;
+  /** Las ranuras tal como las devolvió el modelo. */
+  slots: {
+    productType: string | null;
+    character: string | null;
+    descriptor: string | null;
+  };
+  /** Lo que se buscó de verdad, después de las ranuras o del mensaje en crudo. */
+  query: string;
+  /** Cuántos productos dio esa búsqueda. */
+  total: number;
+  /** La segunda búsqueda, solo por el tipo, cuando la primera dio cero. */
+  retry?: { query: string; total: number };
+  /** Cómo acabó: con lo pedido, con lo que sí hay, o pasándoselo a Paula. */
+  outcome: "match" | "partial" | "unsure";
+}
+
 export interface ProductAnswer {
   intent: ProductIntent;
   text: string;
+  /** Para el archivo: qué se entendió, qué se buscó y qué salió. */
+  decision?: ProductDecision;
+  /**
+   * No se encontró nada seguro: el texto ya dice que Paula escribe, así que
+   * la conversación tiene que quedar marcada para ella y el mensaje sale sin
+   * el botón de «Hablar con Paula», que sería pedir lo que ya se hizo.
+   */
+  handoff?: boolean;
   /** Va con la respuesta cuando hay un solo producto y tiene foto sana. */
   photo?: string | null;
   /**
@@ -1060,75 +1159,151 @@ export async function answerProductQuestion(
     character: null,
     descriptor: null,
   };
+  const intent = c.intent;
+  const decision: ProductDecision = {
+    intent,
+    slots: { productType: c.productType, character: c.character, descriptor: c.descriptor },
+    query: consulta,
+    total: 0,
+    outcome: "match",
+  };
 
-  if (c.intent === "product.availability") {
+  const resuelto = await resolverSegunIntencion(storeId, intent, buscar);
+  if (!resuelto) return null;
+  const { value, text, rows } = resuelto;
+  decision.total = value.total;
+
+  if (value.total > 0) {
+    return {
+      intent,
+      text,
+      photo: value.photo,
+      shownIds: value.ids,
+      list: listaSiHayVarios(value, rows),
+      decision,
+    };
+  }
+
+  // Cero. Antes esto era «no lo tengo», y se dijo con un producto activo y
+  // con existencias delante (el tote bag de perrito, 30 de septiembre). Cero
+  // resultados quiere decir que la búsqueda no lo encontró, no que no exista.
+  //
+  // Se prueba una segunda vez solo con el tipo: si «tote bag de dinosaurio» no
+  // da nada pero «tote bag» sí, se dice lo que falta y se enseña lo que hay.
+  // Y si ni el tipo aparece, se le pasa a Paula con un «déjame confirmar», que
+  // es lo único que se sabe con certeza.
+  const soloTipo = tipoSolo(c, consulta);
+  if (soloTipo) {
+    const fact = await resolveProductSearch(storeId, {
+      ...c,
+      productType: soloTipo.tipo,
+      character: null,
+      descriptor: null,
+    });
+    if (fact.known) {
+      decision.retry = { query: soloTipo.tipo, total: fact.value.total };
+      if (fact.value.total > 0) {
+        const v = fact.value;
+        const filas = buildProductRows(v.matches, v.ids ?? []);
+        return {
+          intent,
+          text: renderPartialSearch(soloTipo.faltante, soloTipo.tipo, v),
+          photo: v.photo,
+          shownIds: v.ids,
+          list:
+            v.total >= 2 && filas.length >= 2
+              ? {
+                  body: buildPartialListBody(soloTipo.faltante, soloTipo.tipo, filas.length, v.total),
+                  rows: filas,
+                }
+              : undefined,
+          decision: { ...decision, outcome: "partial" },
+        };
+      }
+    }
+  }
+
+  return {
+    intent,
+    text: PRODUCT_TEMPLATES["search.unsure"](),
+    handoff: true,
+    decision: { ...decision, outcome: "unsure" },
+  };
+}
+
+/**
+ * La búsqueda y el texto que le corresponden a cada intención. `null` cuando
+ * no se sabe: sin nada que buscar, o un solo producto sin descripción útil
+ * (el único caso que se escala por falta de datos).
+ */
+async function resolverSegunIntencion(
+  storeId: string,
+  intent: ProductIntent,
+  buscar: ProductClassification,
+): Promise<{
+  value: SearchResult<ProductMatch | AvailabilityMatch | FeaturesMatch>;
+  text: string;
+  rows: WhatsAppListRow[];
+} | null> {
+  if (intent === "product.availability") {
     const fact = await resolveAvailability(storeId, buscar);
     if (!fact.known) return null;
     return {
-      intent: c.intent,
+      value: fact.value,
       text: renderAvailability(fact.value),
-      photo: fact.value.photo,
-      shownIds: fact.value.ids,
-      list: listaSiHayVarios(
-        fact.value,
-        buildAvailabilityRows(fact.value.matches, fact.value.ids ?? []),
-      ),
+      rows: buildAvailabilityRows(fact.value.matches, fact.value.ids ?? []),
     };
   }
-
-  if (c.intent === "product.price") {
-    const fact = await resolveProductPrice(storeId, buscar);
-    if (!fact.known) return null;
-    return {
-      intent: c.intent,
-      text: renderProductPrice(fact.value),
-      photo: fact.value.photo,
-      shownIds: fact.value.ids,
-      list: listaSiHayVarios(
-        fact.value,
-        buildProductRows(fact.value.matches as ProductMatch[], fact.value.ids ?? []),
-      ),
-    };
-  }
-
-  if (c.intent === "product.features") {
-    // El único caso que se escala por falta de datos: hay UN producto claro
-    // pero su descripción no da para contar nada.
+  if (intent === "product.features") {
     const fact = await resolveProductFeatures(storeId, buscar);
     if (!fact.known) return null;
     return {
-      intent: c.intent,
+      value: fact.value,
       text: renderProductFeatures(fact.value),
-      photo: fact.value.photo,
-      shownIds: fact.value.ids,
-      list: listaSiHayVarios(
-        fact.value,
-        buildProductRows(fact.value.matches as ProductMatch[], fact.value.ids ?? []),
-      ),
+      rows: buildProductRows(fact.value.matches as ProductMatch[], fact.value.ids ?? []),
     };
   }
-
-  if (c.intent === "product.photo") {
-    const fact = await resolveProductSearch(storeId, buscar);
-    if (!fact.known) return null;
-    return {
-      intent: c.intent,
-      text: renderProductPhoto(fact.value),
-      photo: fact.value.photo,
-      shownIds: fact.value.ids,
-      list: listaSiHayVarios(fact.value, buildProductRows(fact.value.matches, fact.value.ids ?? [])),
-    };
-  }
-
-  const fact = await resolveProductSearch(storeId, buscar);
+  const fact =
+    intent === "product.price"
+      ? await resolveProductPrice(storeId, buscar)
+      : await resolveProductSearch(storeId, buscar);
   if (!fact.known) return null;
+  const text =
+    intent === "product.price"
+      ? renderProductPrice(fact.value)
+      : intent === "product.photo"
+        ? renderProductPhoto(fact.value)
+        : renderProductSearch(fact.value);
   return {
-    intent: c.intent,
-    text: renderProductSearch(fact.value),
-    photo: fact.value.photo,
-    shownIds: fact.value.ids,
-    list: listaSiHayVarios(fact.value, buildProductRows(fact.value.matches, fact.value.ids ?? [])),
+    value: fact.value,
+    text,
+    rows: buildProductRows(fact.value.matches, fact.value.ids ?? []),
   };
+}
+
+/**
+ * Qué se vuelve a buscar cuando la consulta entera dio cero: el tipo solo,
+ * si el modelo lo separó y si había algo más que quitar.
+ *
+ * Aquí el tipo puede ser UNA palabra, al contrario que en la primera búsqueda:
+ * «cuaderno» a secas era una lista al azar con cara de respuesta, pero «de
+ * Kuromi no tengo, pero de cuaderno sí, mira» dice exactamente lo que es.
+ */
+export function tipoSolo(
+  c: ProductClassification,
+  consulta: string,
+): { tipo: string; faltante: string } | null {
+  const tipo = c.productType?.trim() ?? "";
+  const faltante = [c.character, c.descriptor]
+    .map((s) => s?.trim() ?? "")
+    .filter(Boolean)
+    .join(" ");
+  if (!tipo || !faltante) return null;
+  const tokensTipo = searchTokens(tipo);
+  if (tokensTipo.length === 0) return null;
+  // Si el tipo ya era toda la consulta, repetirla daría lo mismo.
+  if (tokensTipo.join(" ") === searchTokens(consulta).join(" ")) return null;
+  return { tipo, faltante };
 }
 
 /**

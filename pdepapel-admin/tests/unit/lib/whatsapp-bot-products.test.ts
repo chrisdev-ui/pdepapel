@@ -48,6 +48,9 @@ import {
   renderProductFeatures,
   renderProductPrice,
   renderProductSearch,
+  renderPartialSearch,
+  buildPartialListBody,
+  tipoSolo,
   resolveAvailability,
   resolveProductFeatures,
   resolveProductPrice,
@@ -270,24 +273,30 @@ describe("plantillas", () => {
     expect(texto).toMatch(/cuál te interesa/i);
   });
 
-  it("ninguno: contesta que no, sin escalar", () => {
+  it("ninguno: NO dice que no lo tiene; dice que lo confirma con Paula", () => {
+    // El fallo real del 30 de septiembre: «tote bag de perrito» dio cero y el
+    // bot contestó «no lo tengo» con el producto activo y con existencias.
+    // Cero resultados es «no lo encontré», y eso se dice como lo que es.
     const texto = renderProductSearch(search([], 0));
-    expect(texto).toBe("Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.");
+    expect(texto).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+    expect(texto).not.toMatch(/no lo tengo/i);
+    expect(texto).toMatch(/Paula/);
   });
 
-  it("al decir que no, no se vuelve a preguntar qué buscaba", () => {
-    // Ya lo dijo en su mensaje; volver a preguntarlo se lee a formulario.
-    // Son dos textos distintos (búsqueda y disponibilidad), y los dos tenían
-    // la misma repetición, así que los dos se arreglaron.
+  it("al no encontrar, no se vuelve a preguntar qué buscaba ni se niega nada", () => {
+    // Ya lo dijo en su mensaje; volver a preguntarlo se lee a formulario. Y
+    // las cinco intenciones caen en el mismo texto cauteloso.
     const sinNada = { matches: [], total: 0, hasMore: false };
     for (const texto of [
       renderProductSearch(sinNada),
       renderProductPrice(sinNada),
       renderProductFeatures(sinNada),
+      renderProductPhoto({ ...sinNada, photo: null }),
       renderAvailability({ matches: [], total: 0, hasMore: false }),
     ]) {
       expect(texto).not.toMatch(/buscabas/i);
-      expect(texto).toBe("Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.");
+      expect(texto).not.toMatch(/no lo tengo|se me agot/i);
+      expect(texto).toBe(PRODUCT_TEMPLATES["search.unsure"]());
     }
   });
 
@@ -564,8 +573,10 @@ describe("precio", () => {
     expect(texto).toContain("y 4 más");
   });
 
-  it("ninguno: lo mismo que la búsqueda, sin escalar", () => {
-    expect(renderProductPrice({ matches: [], total: 0, hasMore: false })).toMatch(/no lo tengo/i);
+  it("ninguno: lo mismo que la búsqueda, con cautela", () => {
+    expect(renderProductPrice({ matches: [], total: 0, hasMore: false })).toBe(
+      PRODUCT_TEMPLATES["search.unsure"](),
+    );
   });
 });
 
@@ -851,9 +862,9 @@ describe("intención: pedir una foto", () => {
     expect(texto).toMatch(/cuál te interesa/i);
   });
 
-  it("ninguno: el «no lo tengo» de siempre", () => {
+  it("ninguno: el mismo «déjame confirmarlo» de las demás intenciones", () => {
     expect(renderProductPhoto({ matches: [], total: 0, hasMore: false, photo: null })).toBe(
-      "Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.",
+      PRODUCT_TEMPLATES["search.unsure"](),
     );
   });
 
@@ -995,12 +1006,17 @@ describe("lo que sigue SIN resolverse (hace falta memoria de conversación)", ()
 describe("buscar primero por nombre", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("la búsqueda por nombre no mira la descripción", () => {
+  it("la primera pasada no mira la descripción (las etiquetas sí)", () => {
     const where = productNameTokenSearchWhere("borrador morado");
     expect(where).toHaveLength(2);
     for (const clausula of where) {
       const claves = clausula.OR!.map((c: any) => Object.keys(c)[0]);
-      expect(claves.every((k) => k === "name")).toBe(true);
+      expect(claves).not.toContain("description");
+      expect(claves).toContain("name");
+      // Diseño, color, categoría y grupo entran desde el fallo del tote bag.
+      expect(claves).toEqual(
+        expect.arrayContaining(["design", "color", "category", "productGroup"]),
+      );
     }
     // La amplia sí la mira: son dos consultas distintas a propósito.
     const amplia = productTokenSearchWhere("borrador morado");
@@ -1292,5 +1308,246 @@ describe("la copia de la lista", () => {
 
   it("la de «hay más» se queda como estaba", () => {
     expect(PRODUCT_TEMPLATES["list.body.many"](9, 4)).toContain("Toca el que te guste");
+  });
+});
+
+// ============ Cero resultados: primero el tipo solo, y si no, Paula ============
+
+describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const tote = {
+    id: "tote-1",
+    name: 'Tote bag "Un día a la Vez"',
+    price: 35000,
+    stock: 2,
+    images: [],
+  };
+
+  it("el mensaje real encuentra el producto real, por el diseño", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.price", productType: "tote bag", character: "perrito", descriptor: null },
+    });
+    mocks.findMany.mockResolvedValue([tote]);
+    mocks.count.mockResolvedValue(1);
+
+    const r = await answerProductQuestion("store-1", "Que precio tienen los tote bag de perrito");
+    expect(r?.text).toBe('Tote bag "Un día a la Vez" está en $35.000 💛 ¿Te lo aparto?');
+    expect(r?.handoff).toBeFalsy();
+    expect(r?.decision).toEqual({
+      intent: "product.price",
+      slots: { productType: "tote bag", character: "perrito", descriptor: null },
+      query: "tote bag perrito",
+      total: 1,
+      outcome: "match",
+    });
+    // La consulta que salió a la base mira el diseño con la raíz de la palabra.
+    const where = mocks.findMany.mock.calls[0][0].where;
+    expect(JSON.stringify(where)).toContain('"design":{"is":{"name":{"contains":"perrit"}}}');
+    expect(mocks.count).toHaveBeenCalledOnce();
+  });
+
+  it("si el personaje no existe pero el tipo sí, lo dice y enseña lo que hay", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "tote bag", character: "dinosaurio", descriptor: null },
+    });
+    const totes = [
+      tote,
+      { id: "tote-2", name: 'Tote bag "Caribe"', price: 35000, stock: 2, images: [] },
+    ];
+    // Nombre + etiquetas: 0. Con descripción: 0. Solo el tipo: 2.
+    mocks.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+    mocks.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(totes);
+
+    const r = await answerProductQuestion("store-1", "¿tienen tote bag de dinosaurio?");
+    expect(r?.text).toBe(
+      [
+        "De dinosaurio no tengo por ahora 💛 Pero de tote bag sí, mira:",
+        '• Tote bag "Un día a la Vez" — $35.000',
+        '• Tote bag "Caribe" — $35.000',
+        "¿Te sirve alguno?",
+      ].join("\n"),
+    );
+    expect(r?.handoff).toBeFalsy();
+    expect(r?.shownIds).toEqual(["tote-1", "tote-2"]);
+    // La lista tocable no empieza con «Sí»: a lo que pidió, la respuesta es no.
+    expect(r?.list?.body).toBe("De dinosaurio no tengo por ahora 💛 Pero de tote bag tengo 2. Míralos y escoge el que quieras.");
+    expect(r?.list?.rows).toHaveLength(2);
+    expect(r?.decision).toEqual({
+      intent: "product.search",
+      slots: { productType: "tote bag", character: "dinosaurio", descriptor: null },
+      query: "tote bag dinosaurio",
+      total: 0,
+      retry: { query: "tote bag", total: 2 },
+      outcome: "partial",
+    });
+    // La tercera consulta ya no lleva «dinosaurio».
+    const tercera = mocks.findMany.mock.calls[2][0].where;
+    expect(tercera.AND).toHaveLength(2);
+    expect(JSON.stringify(tercera)).not.toContain("dinosaur");
+  });
+
+  it("con uno solo de repuesto, lo ofrece con su precio y su foto", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.price", productType: "tote bag", character: "dinosaurio", descriptor: null },
+    });
+    mocks.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    mocks.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ ...tote, images: [{ url: "https://res.cloudinary.com/demo/image/upload/v1/tote.jpg" }] }]);
+
+    const r = await answerProductQuestion("store-1", "¿cuánto vale el tote bag de dinosaurio?");
+    expect(r?.text).toBe(
+      'De dinosaurio no tengo por ahora 💛 Pero de tote bag tengo Tote bag "Un día a la Vez" en $35.000. ¿Te sirve?',
+    );
+    expect(r?.photo).toBeTruthy();
+    expect(r?.list).toBeUndefined();
+    expect(r?.decision?.outcome).toBe("partial");
+  });
+
+  it("si ni el tipo aparece, NO dice que no lo tiene: lo confirma con Paula", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "mantel", character: null, descriptor: "de plástico" },
+    });
+    mocks.count.mockResolvedValue(0);
+    mocks.findMany.mockResolvedValue([]);
+
+    const r = await answerProductQuestion("store-1", "tienes esos manteles de plástico?");
+    expect(r?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+    expect(r?.text).not.toMatch(/no lo tengo/i);
+    expect(r?.handoff).toBe(true);
+    expect(r?.shownIds).toBeUndefined();
+    expect(r?.list).toBeUndefined();
+    expect(r?.decision).toEqual({
+      intent: "product.search",
+      slots: { productType: "mantel", character: null, descriptor: "de plástico" },
+      query: "mantel de plástico",
+      total: 0,
+      retry: { query: "mantel", total: 0 },
+      outcome: "unsure",
+    });
+    // Dos pasadas por la consulta entera y dos por el tipo.
+    expect(mocks.count).toHaveBeenCalledTimes(4);
+  });
+
+  it("sin tipo separado no hay segunda búsqueda: va derecho a Paula", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: null, character: "Kuromi", descriptor: "rosado" },
+    });
+    mocks.count.mockResolvedValue(0);
+    mocks.findMany.mockResolvedValue([]);
+
+    const r = await answerProductQuestion("store-1", "¿tienen algo de Kuromi rosado?");
+    expect(r?.handoff).toBe(true);
+    expect(r?.decision?.retry).toBeUndefined();
+    expect(r?.decision?.outcome).toBe("unsure");
+    expect(mocks.count).toHaveBeenCalledTimes(2);
+  });
+
+  it("si el tipo ya era toda la consulta, tampoco se repite", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "tote bag", character: null, descriptor: null },
+    });
+    mocks.count.mockResolvedValue(0);
+    mocks.findMany.mockResolvedValue([]);
+
+    const r = await answerProductQuestion("store-1", "¿tienen tote bag?");
+    expect(r?.handoff).toBe(true);
+    expect(r?.decision?.retry).toBeUndefined();
+    expect(mocks.count).toHaveBeenCalledTimes(2);
+  });
+
+  it("la disponibilidad y las características también caen en la cautela", async () => {
+    for (const intent of ["product.availability", "product.features", "product.photo"]) {
+      vi.clearAllMocks();
+      mocks.generateText.mockResolvedValue({
+        output: { intent, productType: "mantel", character: null, descriptor: "de plástico" },
+      });
+      mocks.count.mockResolvedValue(0);
+      mocks.findMany.mockResolvedValue([]);
+      const r = await answerProductQuestion("store-1", "¿queda el mantel de plástico? mándame foto");
+      expect(r?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+      expect(r?.handoff).toBe(true);
+      expect(r?.decision?.intent).toBe(intent);
+    }
+  });
+
+  it("cuando sí encuentra, la decisión viaja igual y no hay traspaso", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.availability", productType: "cartuchera", character: "capibara", descriptor: null },
+    });
+    mocks.findMany.mockResolvedValue([{ id: "c1", name: "Cartuchera Capibara", price: 30000, stock: 5, images: [] }]);
+    mocks.count.mockResolvedValue(1);
+
+    const r = await answerProductQuestion("store-1", "¿queda cartuchera de capibara?");
+    expect(r?.handoff).toBeFalsy();
+    expect(r?.decision).toMatchObject({ query: "cartuchera capibara", total: 1, outcome: "match" });
+    // Ni existencias ni ids en lo que se archiva.
+    expect(JSON.stringify(r?.decision)).not.toContain("c1");
+    expect(JSON.stringify(r?.decision)).not.toContain('"stock"');
+  });
+});
+
+describe("qué se vuelve a buscar cuando la consulta entera dio cero", () => {
+  const base = { intent: "product.search" as const, productType: null, character: null, descriptor: null };
+
+  it("el tipo solo, con lo que faltó aparte", () => {
+    expect(tipoSolo({ ...base, productType: "tote bag", character: "perrito" }, "tote bag perrito")).toEqual({
+      tipo: "tote bag",
+      faltante: "perrito",
+    });
+    expect(
+      tipoSolo({ ...base, productType: "cuaderno", character: "Kuromi", descriptor: "rosado" }, "cuaderno Kuromi rosado"),
+    ).toEqual({ tipo: "cuaderno", faltante: "Kuromi rosado" });
+  });
+
+  it("aquí el tipo puede ser UNA palabra: el texto dice lo que es", () => {
+    const r = tipoSolo({ ...base, productType: "cuaderno", character: "Kuromi" }, "cuaderno Kuromi");
+    expect(r?.tipo).toBe("cuaderno");
+  });
+
+  it("sin tipo, sin resto, o con el tipo igual a la consulta, no hay nada que repetir", () => {
+    expect(tipoSolo({ ...base, character: "Kuromi", descriptor: "rosado" }, "Kuromi rosado")).toBeNull();
+    expect(tipoSolo({ ...base, productType: "tote bag" }, "tote bag")).toBeNull();
+    expect(tipoSolo({ ...base, productType: "de la", character: "Kuromi" }, "Kuromi")).toBeNull();
+  });
+});
+
+describe("los textos de lo parcial", () => {
+  it("uno, pocos y muchos", () => {
+    const uno = { matches: [{ name: "Tote bag Caribe", price: 35000 }], total: 1, hasMore: false };
+    expect(renderPartialSearch("perrito", "tote bag", uno)).toBe(
+      "De perrito no tengo por ahora 💛 Pero de tote bag tengo Tote bag Caribe en $35.000. ¿Te sirve?",
+    );
+    const muchos = {
+      matches: [{ name: "A", price: 1000 }, { name: "B", price: 2000 }],
+      total: 5,
+      hasMore: true,
+    };
+    const texto = renderPartialSearch("perrito", "tote bag", muchos);
+    expect(texto).toContain("• A — $1.000");
+    expect(texto).toContain("…y 3 más");
+    expect(buildPartialListBody("perrito", "tote bag", 2, 5)).toContain("me quedan 3 más");
+    expect(buildPartialListBody("perrito", "tote bag", 2, 2)).toContain("tengo 2");
+  });
+
+  it("el «no lo tengo» plano ya no existe en ninguna plantilla", () => {
+    expect(PRODUCT_TEMPLATES).not.toHaveProperty("search.none");
+    expect(PRODUCT_TEMPLATES).not.toHaveProperty("availability.none");
+    for (const render of Object.values(PRODUCT_TEMPLATES)) {
+      const texto = (render as (...args: never[]) => string)("x" as never, "y" as never, "z" as never, 1 as never);
+      expect(texto).not.toContain("Ay, eso no lo tengo por ahora");
+    }
+  });
+
+  it("Paula ve el caso parcial y el cauteloso antes de aprobar", () => {
+    const labels = previewProductTemplates().map((p) => p.label);
+    expect(labels.some((l) => /tote bag de dinosaurio/.test(l))).toBe(true);
+    const cauteloso = previewProductTemplates().find((p) => /ningún lado/.test(p.label));
+    expect(cauteloso?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
   });
 });
