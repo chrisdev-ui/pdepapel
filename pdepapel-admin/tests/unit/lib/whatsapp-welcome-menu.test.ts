@@ -83,6 +83,23 @@ describe("reconocer un saludo", () => {
     }
   });
 
+  /*
+   * «Pauuu cómo estás??» y «Como estas?» solos son cortesía, no una pregunta:
+   * caían al «Esa no me la sé» con escalada a Paula. Ahora abren el menú, y el
+   * nombre de Paula no rompe la exclusividad.
+   */
+  it("un «¿cómo estás?» solo, con o sin el nombre de Paula, es un saludo", () => {
+    for (const frase of ["Pauuu cómo estás??", "Como estas?", "¿Cómo estás?", "Paula, qué tal?", "Buenas, cómo van?", "Hola Pau"]) {
+      expect(isWelcomeGreeting(frase), frase).toBe(true);
+    }
+  });
+
+  it("nombre o cortesía seguidos de una petición de verdad siguen sin ser saludo", () => {
+    for (const frase of ["Buenas tardes, cómo estás? me imprimes 2 documentos", "Pau, cómo estás, tienen disponible tal producto?", "Paula necesito fotocopias"]) {
+      expect(isWelcomeGreeting(frase), frase).toBe(false);
+    }
+  });
+
   it("un saludo seguido de una petición de verdad no es un saludo", () => {
     for (const frase of [
       "Buenas, ¿me pueden imprimir esto?",

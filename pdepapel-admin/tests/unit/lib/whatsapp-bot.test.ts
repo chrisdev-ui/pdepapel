@@ -710,6 +710,18 @@ describe("runWhatsAppBot", () => {
       ]);
     });
 
+    it("«Pauuu cómo estás??» abre el menú en vez de caer al «no me la sé» con escalada", async () => {
+      abierta();
+      mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.LISTA" });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "Pauuu cómo estás??", settings: ajustesBase }),
+      ).resolves.toEqual({ outcome: "replied_business_fact", trigger: "welcome" });
+
+      expect(mocks.sendList).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(mocks.sendText.mock.calls)).not.toContain("Esa no me la sé");
+    });
+
     it("«Buenas, imprimir» llega a la respuesta «imprimir» de Paula, no al menú", async () => {
       abierta();
       const conImprimir = [...keywords, { triggers: ["imprimir"], answer: "Sí, imprimimos: manda el archivo." }];

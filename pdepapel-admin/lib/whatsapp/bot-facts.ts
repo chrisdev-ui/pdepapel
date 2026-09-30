@@ -250,6 +250,12 @@ export function buildPaymentMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[
  * También en inglés: hay clientas que escriben «Hi!» o «Hello». Los saludos
  * en chino van aparte (`CJK_GREETINGS`), porque el partidor de palabras solo
  * conoce letras latinas.
+ *
+ * «¿Cómo estás?», «qué tal» y el nombre de Paula («Pauuu», «Paula») cuentan
+ * como saludo: solos son cortesía, no una pregunta, y caían al «Esa no me la
+ * sé» con escalada. Con una petición detrás («Pau, cómo estás, tienen tal
+ * producto?») la exclusividad los deja pasar al paso 5, como a cualquier
+ * saludo.
  */
 const WELCOME_TRIGGERS: WhatsAppBotKeyword[] = [
   {
@@ -258,6 +264,7 @@ const WELCOME_TRIGGERS: WhatsAppBotKeyword[] = [
       "buenas noches", "saludos", "hey", "que mas", "buen dia",
       "hi", "hello", "hi there", "hello there", "good morning", "good afternoon",
       "good evening", "greetings",
+      "como estas", "como estan", "como va", "como van", "que tal", "pau", "paula",
     ],
     answer: "",
   },
