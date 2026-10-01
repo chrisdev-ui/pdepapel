@@ -133,6 +133,24 @@ beforeAll(async () => {
   await producto("Borrador Morado");
   await producto("Sobre plástico oficio");
   await producto("Tote bag Caribe");
+  // Para el orden: la descripción dice «bolsos», el nombre no.
+  await testPrisma.product.create({
+    data: {
+      name: "Llavero peluche abejita",
+      slug: `plural-${suffix}-llavero`,
+      description: "<p>Ideal para colgar en bolsos y mochilas.</p>",
+      stock: 3, price: 16000, acqPrice: 4000, sku: `PL-${suffix}-llavero`,
+      storeId, categoryId: category.id, colorId: color.id, sizeId: size.id, designId: design.id,
+    },
+  });
+  // Para la contigüidad: las dos palabras están, pero no seguidas.
+  await producto("Cuaderno argollado Kuromi");
+  // Para la precisión de las formas cortas: «pin» dentro de «pincel»,
+  // «kit» dentro de «Kitty».
+  await producto("Pin Gato Pusheen");
+  await producto("Set de pinceles pastel");
+  await producto("Kit escolar básico");
+  await producto("Libreta Hello Kitty");
 });
 
 afterAll(async () => {
@@ -150,14 +168,38 @@ afterAll(async () => {
 
 describe("la barra de búsqueda de la tienda (/search/products)", () => {
   it("lo que ya funcionaba: nombre exacto y sinónimos", async () => {
-    expect(await barra("kuromi")).toEqual(["Cuaderno Kuromi"]);
-    expect(await barra("libreta")).toEqual(["Cuaderno Kuromi", "Cuadernos Stitch x3"]);
+    expect(await barra("kuromi")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+    expect(await barra("libreta")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
     expect(await barra("estuche")).toEqual(["Cartuchera Wisdom Rosa"]);
   });
 
   it("plural regular: «cuadernos» encuentra «Cuaderno Kuromi»", async () => {
-    expect(await barra("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuadernos Stitch x3"]);
-    expect(await barra("cuadernos kuromi")).toEqual(["Cuaderno Kuromi"]);
+    expect(await barra("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
+  });
+
+  it("palabra por palabra: «cuadernos kuromi» encuentra también «Cuaderno argollado Kuromi»", async () => {
+    expect(await barra("cuadernos kuromi")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+    expect(await barra("kuromi cuaderno")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+    // Y las dos palabras siguen siendo obligatorias: ni todos los cuadernos ni todo Kuromi.
+    expect(await barra("cuaderno stitch")).toEqual(["Cuadernos Stitch x3"]);
+  });
+
+  it("el orden: un nombre que coincide por sinónimo va antes que una descripción", async () => {
+    const response = await searchGET(
+      request(`http://admin.test/api/x/search/products?search=bolsos`),
+      { params: { storeId } },
+    );
+    const rows = (await response.json()) as { name: string }[];
+    expect(rows.map((r) => r.name)).toEqual(["Tote bag Caribe", "Llavero peluche abejita"]);
+  });
+
+  it("el orden: la frase exacta y seguida sigue primero", async () => {
+    const response = await searchGET(
+      request(`http://admin.test/api/x/search/products?search=${encodeURIComponent("cuaderno kuromi")}`),
+      { params: { storeId } },
+    );
+    const rows = (await response.json()) as { name: string }[];
+    expect(rows.map((r) => r.name)).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
   });
 
   it("-z / -ces: «lápiz» y «lápices» encuentran los dos productos", async () => {
@@ -180,34 +222,72 @@ describe("la barra de búsqueda de la tienda (/search/products)", () => {
     expect(await barra("morada")).toEqual(["Borrador Morado"]);
   });
 
-  it("tote / bolso / bolsa, en singular y en plural", async () => {
+  it("tote / bolso / bolsa, en singular y en plural: el tote bag va primero", async () => {
     for (const q of ["bolso", "bolsos", "bolsa", "totes"]) {
-      expect(await barra(q), q).toEqual(["Tote bag Caribe"]);
+      const response = await searchGET(
+        request(`http://admin.test/api/x/search/products?search=${encodeURIComponent(q)}`),
+        { params: { storeId } },
+      );
+      const nombres = ((await response.json()) as { name: string }[]).map((r) => r.name);
+      // El llavero puede aparecer detrás (su descripción dice «bolsos»), nunca delante.
+      expect(nombres[0], q).toBe("Tote bag Caribe");
+      expect(nombres.filter((n) => n !== "Llavero peluche abejita"), q).toEqual(["Tote bag Caribe"]);
     }
   });
 
   it("lo que no existe sigue sin existir", async () => {
     expect(await barra("dinosaurio")).toEqual([]);
   });
+
+  it("precisión de las formas cortas: «pines» no da pinceles, «kit» no da Kitty", async () => {
+    expect(await barra("pines")).toEqual(["Pin Gato Pusheen"]);
+    expect(await barra("pin")).toEqual(["Pin Gato Pusheen"]);
+    // «set» es sinónimo de kit y palabra corta: entra entero, no dentro de otra.
+    expect(await barra("kit")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
+    expect(await barra("kits")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
+    expect(await barra("set")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
+    expect(await barra("kitty")).toEqual(["Libreta Hello Kitty", "Lápiz Hello Kitty"]);
+  });
 });
 
 describe("el listado de /tienda con ?search= (/products?fromShop=true)", () => {
   it("lo que ya funcionaba: nombre exacto y sinónimos", async () => {
-    expect(await listado("kuromi")).toEqual(["Cuaderno Kuromi"]);
-    expect(await listado("libreta")).toEqual(["Cuaderno Kuromi", "Cuadernos Stitch x3"]);
+    expect(await listado("kuromi")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+    expect(await listado("libreta")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
+  });
+
+  it("palabra por palabra también en el listado", async () => {
+    expect(await listado("cuadernos kuromi")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+    expect(await listado("kuromi argollado")).toEqual(["Cuaderno argollado Kuromi"]);
+  });
+
+  it("precisión de las formas cortas también en el listado", async () => {
+    expect(await listado("pines")).toEqual(["Pin Gato Pusheen"]);
+    expect(await listado("kit")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
+    expect(await listado("kitty")).toEqual(["Libreta Hello Kitty", "Lápiz Hello Kitty"]);
   });
 
   it("plural, -ces y género también aquí", async () => {
-    expect(await listado("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuadernos Stitch x3"]);
+    expect(await listado("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
     expect(await listado("lápices")).toEqual(["Lápices de colores x12", "Lápiz Hello Kitty"]);
     expect(await listado("rosada")).toEqual(["Cartuchera Wisdom Rosa"]);
     expect(await listado("sobres")).toEqual(["Sobre plástico oficio"]);
   });
 
+  it("sin agrupar y con la disponibilidad por defecto, la búsqueda ya no se pierde", async () => {
+    // La trampa: la disponibilidad se esparcía encima del `where` y pisaba el
+    // `OR` de la búsqueda; sin `availability=all` volvía el catálogo entero.
+    expect(await listado("kuromi", "")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+    // Y la disponibilidad sigue aplicándose: nada está «próximamente».
+    expect(await listado("kuromi", "&availability=coming-soon")).toEqual([]);
+    // En la partición de ofertas pasa lo mismo.
+    expect(await listado("kuromi", "&sortOption=isOnSale")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+  });
+
   it("los selectores del panel (sin agrupar, availability=all) también", async () => {
     const panel = "&availability=all";
-    expect(await listado("kuromi", panel)).toEqual(["Cuaderno Kuromi"]);
-    expect(await listado("cuadernos", panel)).toEqual(["Cuaderno Kuromi", "Cuadernos Stitch x3"]);
+    expect(await listado("kuromi", panel)).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
+    expect(await listado("cuadernos", panel)).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
     expect(await listado("lápices", panel)).toEqual(["Lápices de colores x12", "Lápiz Hello Kitty"]);
     expect(await listado("rosada", panel)).toEqual(["Cartuchera Wisdom Rosa"]);
   });

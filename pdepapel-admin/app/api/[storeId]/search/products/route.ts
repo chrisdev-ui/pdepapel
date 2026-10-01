@@ -3,7 +3,13 @@ import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
 import { getStoreVocabulary, suggestQuery } from "@/lib/search-suggestions";
-import { expandSearchTerms, normalizeSearchTerm, productNameSearchWhere } from "@/lib/search-terms";
+import {
+  matchForm,
+  normalizeSearchTerm,
+  productNameSearchConditions,
+  searchTokenForms,
+  wordForms,
+} from "@/lib/search-terms";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -27,7 +33,7 @@ export async function GET(
 
     let search = req.nextUrl.searchParams.get("search") || "";
     if (search && req.nextUrl.searchParams.get("exact") !== "true") {
-      const matches = await prismadb.product.count({ where: { storeId: params.storeId, isArchived: false, OR: productNameSearchWhere(search) } });
+      const matches = await prismadb.product.count({ where: { storeId: params.storeId, isArchived: false, AND: productNameSearchConditions(search) } });
       if (matches === 0) {
         const suggestion = suggestQuery(search, await getStoreVocabulary(params.storeId));
         if (suggestion && suggestion !== normalizeSearchTerm(search)) search = suggestion;
@@ -40,7 +46,7 @@ export async function GET(
     // ---------------------------------------------------------
     // REDIS CACHING (1 Hour)
     // ---------------------------------------------------------
-    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v4`;
+    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v5`;
     try {
       const { Redis } = await import("@upstash/redis");
       const redis = Redis.fromEnv();
@@ -62,16 +68,53 @@ export async function GET(
     // ---------------------------------------------------------
 
     // 1. Get Ranked IDs using Raw SQL
-    // We prioritize:
-    // - Exact Name Match (Score 100)
-    // - Name Starts With Query (Score 50)
-    // - Name Contains Query (Score 20)
-    // - Description Contains Query (Score 5)
-    // Sinónimos («libreta» encuentra cuadernos): cualquier variante en el nombre cuenta.
-    const searchTerms = expandSearchTerms(search);
-    const nameMatches = searchTerms.length
-      ? Prisma.join(searchTerms.map((term) => Prisma.sql`name LIKE ${`%${term}%`}`), " OR ")
-      : Prisma.sql`name LIKE ${`%${search}%`}`;
+    //
+    // Palabra por palabra: cada palabra significativa tiene que aparecer en
+    // el nombre (en alguna de sus formas: plural, sinónimo, lema de color) o
+    // en la descripción (en su raíz). «cuadernos kuromi» ya no exige que
+    // vayan seguidas, y sigue exigiendo las dos.
+    //
+    // Relevancia, de más a menos:
+    //  100  el nombre es exactamente lo que se escribió
+    //   50  el nombre empieza por lo que se escribió
+    //   30  el nombre contiene la frase tal cual, seguida
+    //   20  todas las palabras están en el nombre, en alguna forma
+    //    5  alguna palabra solo está en la descripción
+    // El 20 es lo que faltaba: «bolsos» ponía los llaveros cuya descripción
+    // dice «bolsos» (5) por delante de los tote bags, que solo entraban por
+    // el sinónimo y puntuaban 0.
+    const palabras = searchTokenForms(search);
+    // Formas largas con LIKE; las de tres letras o menos como palabra entera
+    // («pin» no debe dar «pincel»). Misma regla que `formCondition`.
+    const formSql = (column: Prisma.Sql, form: string) => {
+      const match = matchForm(form);
+      if ("contains" in match) return Prisma.sql`${column} LIKE ${`%${match.contains}%`}`;
+      return Prisma.sql`(${Prisma.join(
+        match.words.flatMap((w) => [
+          Prisma.sql`${column} = ${w}`,
+          Prisma.sql`${column} LIKE ${`${w} %`}`,
+          Prisma.sql`${column} LIKE ${`% ${w}`}`,
+          Prisma.sql`${column} LIKE ${`% ${w} %`}`,
+        ]),
+        " OR ",
+      )})`;
+    };
+    const likeName = (form: string) => formSql(Prisma.raw("name"), form);
+    const likeDescription = (form: string) => formSql(Prisma.raw("description"), form);
+    const enNombre = (forms: string[]) =>
+      Prisma.sql`(${Prisma.join(forms.map(likeName), " OR ")})`;
+    const todasEnNombre = palabras.length
+      ? Prisma.join(palabras.map((p) => enNombre(p.forms)), " AND ")
+      : likeName(search);
+    const todasEnAlgunLado = palabras.length
+      ? Prisma.join(
+          palabras.map(
+            (p) =>
+              Prisma.sql`(${enNombre(p.forms)} OR ${Prisma.join(wordForms(p.token).map(likeDescription), " OR ")})`,
+          ),
+          " AND ",
+        )
+      : Prisma.sql`(${likeName(search)} OR ${likeDescription(search)})`;
 
     const rawIds = await prismadb.$queryRaw<{ id: string }[]>`
       SELECT id,
@@ -79,15 +122,15 @@ export async function GET(
         CASE
           WHEN name LIKE ${search} THEN 100
           WHEN name LIKE ${`${search}%`} THEN 50
-          WHEN name LIKE ${`%${search}%`} THEN 20
-          WHEN description LIKE ${`%${search}%`} THEN 5
-          ELSE 0
+          WHEN name LIKE ${`%${search}%`} THEN 30
+          WHEN (${todasEnNombre}) THEN 20
+          ELSE 5
         END
       ) as relevance
       FROM Product
       WHERE storeId = ${params.storeId}
         AND isArchived = 0
-        AND ((${nameMatches}) OR description LIKE ${`%${search}%`})
+        AND (${todasEnAlgunLado})
       ORDER BY relevance DESC, createdAt DESC
       LIMIT ${limit * 5}
       OFFSET ${skip}

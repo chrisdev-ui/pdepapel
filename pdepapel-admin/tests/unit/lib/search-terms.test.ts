@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   expandSearchTerms,
+  nameForms,
   normalizeSearchTerm,
-  productNameSearchWhere,
+  productNameSearchConditions,
+  searchTokenForms,
 } from "@/lib/search-terms";
 
 describe("search terms", () => {
@@ -13,7 +15,7 @@ describe("search terms", () => {
 
   it("returns nothing for an empty query", () => {
     expect(expandSearchTerms("   ")).toEqual([]);
-    expect(productNameSearchWhere("")).toEqual([]);
+    expect(productNameSearchConditions("")).toEqual([]);
   });
 
   it("expands synonyms in both directions", () => {
@@ -35,10 +37,9 @@ describe("search terms", () => {
     expect(expandSearchTerms("kit lapicero cuaderno sticker").length).toBeLessThanOrEqual(12);
   });
 
-  it("builds one contains clause per variant", () => {
-    expect(productNameSearchWhere("goma")).toEqual([
-      { name: { contains: "goma" } },
-      { name: { contains: "borrador" } },
+  it("builds one condition per word, with one contains clause per form", () => {
+    expect(productNameSearchConditions("goma")).toEqual([
+      { OR: [{ name: { contains: "goma" } }, { name: { contains: "borrador" } }] },
     ]);
   });
 });
@@ -48,6 +49,8 @@ describe("search terms", () => {
 import {
   colorLemma,
   colorTerms,
+  formCondition,
+  matchForm,
   pluralStem,
   productNameTokenSearchWhere,
   productTokenSearchWhere,
@@ -83,6 +86,9 @@ describe("la raíz de plural: lo que comparten el singular y el plural", () => {
     expect(wordForms("lápiz")).toEqual(["lápiz", "lápices"]);
     expect(wordForms("lápices")).toEqual(["lápiz", "lápices"]);
     expect(wordForms("cuadernos")).toEqual(["cuaderno"]);
+    // El «-es» ambiguo deja las dos lecturas: «tot» (corta, palabra entera) y «tote».
+    expect(wordForms("totes")).toEqual(["tot", "tote"]);
+    expect(wordForms("colores")).toEqual(["color", "colore"]);
   });
 
   it("-íes: «bisturíes» → «bisturí»", () => {
@@ -153,9 +159,8 @@ describe("la búsqueda de frase de la tienda ya no depende del número ni del g�
   it("«rosada» busca «rosa» y «rosado»", () => {
     const terms = expandSearchTerms("rosada");
     expect(terms).toEqual(expect.arrayContaining(["rosada", "rosa", "rosado"]));
-    expect(productNameSearchWhere("cartuchera rosada")).toContainEqual({
-      name: { contains: "cartuchera rosa" },
-    });
+    const [, rosada] = productNameSearchConditions("cartuchera rosada");
+    expect(rosada.OR).toEqual([{ name: { contains: "rosa" } }]);
   });
 
   it("un color en plural: «amarillas» → «amarillo»", () => {
@@ -221,8 +226,10 @@ describe("cada palabra también se busca en las etiquetas", () => {
 
   it("tote, bag, bolso y bolsa son la misma cosa, en singular y en plural", () => {
     for (const palabra of ["tote", "bag", "bolso", "bolsa", "bolsos", "totes"]) {
-      const nombres = productNameTokenSearchWhere(palabra)[0].OR!.filter((c: any) => c.name).map(
-        (c: any) => c.name.contains,
+      // Las formas largas van en `name.contains`; las cortas («bag», «tot»)
+      // como palabra entera, anidadas en un OR con `equals`.
+      const nombres = productNameTokenSearchWhere(palabra)[0].OR!.flatMap((c: any) =>
+        c.name?.contains ? [c.name.contains] : (c.OR ?? []).flatMap((o: any) => (o.name?.equals ? [o.name.equals] : [])),
       );
       // Cada una de las cuatro formas tiene que quedar cubierta por alguna
       // variante que sea prefijo suyo («tot» cubre «tote»; «bolso», «bolsos»).
@@ -239,5 +246,72 @@ describe("cada palabra también se busca en las etiquetas", () => {
     const [amarillas] = productTokenSearchWhere("amarillas");
     expect(amarillas.OR).toContainEqual({ description: { contains: "amarilla" } });
     expect(amarillas.OR).toContainEqual({ color: { is: { name: { contains: "amarillo" } } } });
+  });
+});
+
+// ============ La tienda busca palabra por palabra, no la frase seguida ============
+
+describe("las formas de una palabra para compararla con un nombre", () => {
+  it("palabra, raíz, sinónimos y lemas, sin las que otra más corta ya cubre", () => {
+    // «cuadernos» sobra porque «cuaderno» ya la cubre; «block» porque «bloc».
+    expect(nameForms("cuadernos")).toEqual(["cuaderno", "libreta", "bloc"]);
+    expect(nameForms("lápices").sort()).toEqual(["lápices", "lápiz"]);
+    // «rosa» ya cubre «rosada» y «rosado».
+    expect(nameForms("rosada")).toEqual(["rosa"]);
+    expect(nameForms("amarilla")).toEqual(["amarilla", "amarillo"]);
+    expect(nameForms("kuromi")).toEqual(["kuromi"]);
+  });
+});
+
+describe("la consulta de la tienda, palabra por palabra", () => {
+  it("«cuadernos kuromi» exige las dos palabras, cada una en sus formas, sin orden", () => {
+    const condiciones = productNameSearchConditions("cuadernos kuromi");
+    expect(condiciones).toHaveLength(2);
+    expect(condiciones[0].OR).toContainEqual({ name: { contains: "cuaderno" } });
+    expect(condiciones[1].OR).toEqual([{ name: { contains: "kuromi" } }]);
+  });
+
+  it("las palabras de unión se caen; las de dos letras se quedan («a5», «hb»)", () => {
+    expect(searchTokenForms("cuaderno de kuromi").map((p) => p.token)).toEqual(["cuaderno", "kuromi"]);
+    expect(searchTokenForms("cuaderno a5").map((p) => p.token)).toEqual(["cuaderno", "a5"]);
+    expect(searchTokenForms("lápiz hb").map((p) => p.token)).toEqual(["lápiz", "hb"]);
+  });
+
+  it("sin palabras significativas se busca la frase tal cual, nunca todo el catálogo", () => {
+    expect(searchTokenForms("de la")).toEqual([{ token: "de la", forms: ["de la"] }]);
+    expect(productNameSearchConditions("de la")).toEqual([{ OR: [{ name: { contains: "de la" } }] }]);
+    expect(searchTokenForms("   ")).toEqual([]);
+  });
+
+  it("la precisión del lote anterior se conserva: «lápices» no toca «lapicero»", () => {
+    const [lapices] = productNameSearchConditions("lápices");
+    expect(JSON.stringify(lapices)).not.toContain('"lápi"');
+  });
+});
+
+describe("las formas cortas se comparan como palabra entera", () => {
+  it("tres letras o menos: la palabra y sus plurales, nunca dentro de otra", () => {
+    expect(matchForm("pin")).toEqual({ words: ["pin", "pins", "pines"] });
+    expect(matchForm("kit")).toEqual({ words: ["kit", "kits", "kites"] });
+    expect(matchForm("cuaderno")).toEqual({ contains: "cuaderno" });
+  });
+
+  it("en Prisma: igual, empieza por, termina en, o entre espacios", () => {
+    const condicion = formCondition("name", "pin") as unknown as { OR: unknown[] };
+    expect(condicion.OR).toContainEqual({ name: { equals: "pin" } });
+    expect(condicion.OR).toContainEqual({ name: { startsWith: "pin " } });
+    expect(condicion.OR).toContainEqual({ name: { endsWith: " pines" } });
+    expect(condicion.OR).toContainEqual({ name: { contains: " pins " } });
+    expect(condicion.OR).toHaveLength(12);
+    expect(formCondition("name", "cuaderno")).toEqual({ name: { contains: "cuaderno" } });
+  });
+
+  it("«pines» y «kit» ya no arrastran «pincel» ni «Kitty»; «totes» sigue dando con «Tote bag»", () => {
+    expect(nameForms("pines")).toEqual(["pin", "pine"]);
+    expect(nameForms("totes")).toEqual(expect.arrayContaining(["tot", "tote"]));
+    const [pines] = productNameSearchConditions("pines");
+    expect(JSON.stringify(pines)).not.toContain('"contains":"pin"');
+    expect(JSON.stringify(pines)).toContain('"contains":" pin "');
+    expect(JSON.stringify(pines)).toContain('"contains":"pine"');
   });
 });

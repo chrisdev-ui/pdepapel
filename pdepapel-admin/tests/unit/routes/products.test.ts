@@ -630,10 +630,11 @@ describe("GET /api/[storeId]/products", () => {
     expect(body.facets.priceRanges).toHaveLength(5);
     expect(body.facets.priceRanges[0]).toEqual({ id: "[0,5000]", count: 1 });
 
+    // La búsqueda va en `AND` (una condición por palabra), nunca en `OR`.
     const standaloneWhere = mocks.findProducts.mock.calls[0][0].where;
-    expect(standaloneWhere.OR).toEqual(
-      expect.arrayContaining([{ name: { contains: "libreta" } }, { name: { contains: "cuaderno" } }]),
-    );
+    expect(standaloneWhere.AND).toContainEqual({
+      OR: expect.arrayContaining([{ name: { contains: "libreta" } }, { name: { contains: "cuaderno" } }]),
+    });
   });
 
   it("corrects a misspelled search when no name matches and reports it", async () => {
@@ -647,7 +648,9 @@ describe("GET /api/[storeId]/products", () => {
 
     expect(body.searchCorrection).toEqual({ original: "resaltadres", corrected: "resaltadores" });
     const standaloneWhere = mocks.findProducts.mock.calls.at(-1)?.[0].where;
-    expect(standaloneWhere.OR).toEqual(expect.arrayContaining([{ name: { contains: "resaltadores" } }]));
+    expect(standaloneWhere.AND).toContainEqual({
+      OR: expect.arrayContaining([{ name: { contains: "resaltador" } }]),
+    });
   });
 
   it("caches the exact search separately from the corrected one", async () => {

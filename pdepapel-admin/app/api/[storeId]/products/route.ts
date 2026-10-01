@@ -16,8 +16,8 @@ import {
 import { getStoreVocabulary, suggestQuery } from "@/lib/search-suggestions";
 import {
   normalizeSearchTerm,
-  productGroupNameSearchWhere,
-  productNameSearchWhere,
+  productGroupNameSearchConditions,
+  productNameSearchConditions,
 } from "@/lib/search-terms";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import { parseTransportationCost } from "@/lib/product-costs";
@@ -435,6 +435,12 @@ export async function GET(
       searchParams.get(PRODUCT_AVAILABILITY_PARAM),
     );
     const availabilityFilter = productAvailabilityWhere(availability);
+    // Para meterla en un `AND` junto a la búsqueda. Esparcida con `...` encima
+    // de un `where` que ya traía `OR` (la búsqueda), su propio `OR` lo pisaba
+    // y la búsqueda desaparecía en silencio cuando la disponibilidad era la
+    // de por defecto. Ningún llamador vivo caía ahí, pero era una trampa.
+    const availabilityConditions: Prisma.ProductWhereInput[] =
+      Object.keys(availabilityFilter).length > 0 ? [availabilityFilter] : [];
 
     const minPrice = searchParams.get("minPrice")
       ? Number(searchParams.get("minPrice"))
@@ -602,7 +608,7 @@ export async function GET(
         where: {
           storeId: params.storeId,
           isArchived: false,
-          OR: productNameSearchWhere(search),
+          AND: productNameSearchConditions(search),
         },
       });
       if (matches === 0) {
@@ -800,15 +806,21 @@ export async function GET(
       const baseGroupWhere: Prisma.ProductGroupWhereInput = {
         storeId: params.storeId,
         products: { some: productFilters },
+        // El grupo entra si su nombre tiene todas las palabras, o si alguna
+        // de sus variantes las tiene. Las condiciones van en `AND`: cada
+        // palabra tiene que estar; en `OR` bastaría una.
         ...(search
           ? {
               OR: [
-                ...productGroupNameSearchWhere(search),
+                { AND: productGroupNameSearchConditions(search) },
                 {
                   products: {
                     some: {
                       ...productFilters,
-                      OR: productNameSearchWhere(search),
+                      AND: [
+                        ...catalogOptionConditions,
+                        ...productNameSearchConditions(search),
+                      ],
                     },
                   },
                 },
@@ -821,7 +833,9 @@ export async function GET(
       const standaloneWhere: Prisma.ProductWhereInput = {
         ...productFilters,
         productGroupId: null,
-        ...(search ? { OR: productNameSearchWhere(search) } : {}),
+        ...(search
+          ? { AND: [...catalogOptionConditions, ...productNameSearchConditions(search)] }
+          : {}),
       };
 
       // Fetch ALL groups and products (no pagination at DB level)
@@ -1143,10 +1157,10 @@ export async function GET(
         if (search) {
           conditions.push({
             OR: [
-              ...productNameSearchWhere(search),
+              { AND: productNameSearchConditions(search) },
               {
                 productGroup: {
-                  is: { OR: productGroupNameSearchWhere(search) },
+                  is: { AND: productGroupNameSearchConditions(search) },
                 },
               },
             ],
@@ -1305,6 +1319,14 @@ export async function GET(
       // ---------------------------------------------------------
 
       // 1. Define Base Filters (Shared)
+      // Opciones, búsqueda y disponibilidad en un solo `AND`, que las dos
+      // particiones heredan: antes cada partición reescribía `AND` y la
+      // búsqueda sobrevivía solo porque iba en `OR`.
+      const baseConditions: Prisma.ProductWhereInput[] = [
+        ...catalogOptionConditions,
+        ...(search ? productNameSearchConditions(search) : []),
+        ...availabilityConditions,
+      ];
       const baseProductWhere: Prisma.ProductWhereInput = {
         storeId: params.storeId,
         productGroupId: productGroupId ? productGroupId : undefined,
@@ -1317,14 +1339,9 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
-        AND:
-          catalogOptionConditions.length > 0
-            ? catalogOptionConditions
-            : undefined,
-        OR: search ? productNameSearchWhere(search) : undefined,
+        AND: baseConditions,
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
-        ...availabilityFilter,
         price: priceFilter,
         NOT: {
           id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,
@@ -1336,14 +1353,14 @@ export async function GET(
       // We use the already calculated `onSaleFilter` which contains IDs of discounted items
       const whereSales: Prisma.ProductWhereInput = {
         ...baseProductWhere,
-        AND: [...catalogOptionConditions, onSaleFilter || { id: "NO_MATCH" }],
+        AND: [...baseConditions, onSaleFilter || { id: "NO_MATCH" }],
       };
 
       // Partition B: Regular Items (NOT in Sale List)
       const whereRegular: Prisma.ProductWhereInput = {
         ...baseProductWhere,
         AND: [
-          ...catalogOptionConditions,
+          ...baseConditions,
           {
             NOT: onSaleFilter,
           },
@@ -1455,16 +1472,17 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
-        AND:
-          catalogOptionConditions.length > 0
-            ? catalogOptionConditions
-            : undefined,
-        OR: search
-          ? [{ name: { search } }, ...productNameSearchWhere(search)]
-          : undefined,
+        // Búsqueda y disponibilidad en el mismo `AND`. El `name: { search }`
+        // de texto completo se fue: con «cuaderno kuromi» traía cualquier
+        // producto con UNA de las dos palabras, y las condiciones por palabra
+        // ya cubren lo que él aportaba (plural, orden) con más precisión.
+        AND: [
+          ...catalogOptionConditions,
+          ...(search ? productNameSearchConditions(search) : []),
+          ...availabilityConditions,
+        ],
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
-        ...availabilityFilter,
         price: priceFilter,
         NOT: {
           id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,

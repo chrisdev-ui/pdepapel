@@ -120,10 +120,49 @@ export function pluralStem(word: string): string {
  * enteras, no prefijos: «lápiz» y «lápices», nunca «lápi».
  */
 export function wordForms(word: string): string[] {
-  const stem = pluralStem(word);
-  return /z$/.test(stem) && stem.length > 2
-    ? [stem, `${stem.slice(0, -1)}ces`]
-    : [stem];
+  const w = word.trim().toLocaleLowerCase("es-CO");
+  const stem = pluralStem(w);
+  if (/z$/.test(stem) && stem.length > 2) return [stem, `${stem.slice(0, -1)}ces`];
+  // El «-es» ambiguo deja las dos lecturas enteras: «totes» → «tot» y
+  // «tote». La corta se compara como palabra entera (ver `matchForm`), así
+  // que sin la larga «Tote bag» no aparecería.
+  if (stem === w.slice(0, -2) && /es$/.test(w)) return [stem, w.slice(0, -1)];
+  return [stem];
+}
+
+/**
+ * Formas de tres letras o menos («pin», «kit», «set», «mug») se comparan
+ * como palabra entera, con su plural: dentro de otras palabras aparecen por
+ * todas partes («pin» está en «pincel», «kit» en «Kitty»). Medido en el
+ * catálogo real: «pines» pasaba de 1 a 19 resultados por los pinceles.
+ * Las largas siguen con `contains`, que es lo que hace que «cuaderno»
+ * encuentre «Cuadernos» y «lápiz» a «Portalápiz».
+ */
+const SHORT_FORM_LENGTH = 3;
+
+export type FormMatch = { contains: string } | { words: string[] };
+
+export function matchForm(form: string): FormMatch {
+  return form.length <= SHORT_FORM_LENGTH
+    ? { words: [form, `${form}s`, `${form}es`] }
+    : { contains: form };
+}
+
+/** La condición de Prisma para una forma en un campo de texto. */
+export function formCondition<T extends "name" | "description">(
+  field: T,
+  form: string,
+): Record<T, unknown> {
+  const match = matchForm(form);
+  if ("contains" in match) return { [field]: { contains: match.contains } } as Record<T, unknown>;
+  return {
+    OR: match.words.flatMap((w) => [
+      { [field]: { equals: w } },
+      { [field]: { startsWith: `${w} ` } },
+      { [field]: { endsWith: ` ${w}` } },
+      { [field]: { contains: ` ${w} ` } },
+    ]),
+  } as unknown as Record<T, unknown>;
 }
 
 const colorGroupByLemma = new Map<string, string[]>();
@@ -237,15 +276,6 @@ export function expandSearchTerms(query: string): string[] {
   return Array.from(terms);
 }
 
-/** Condiciones `name contains` para cada variante; vacío cuando no hay consulta. */
-export function productNameSearchWhere(query: string): Prisma.ProductWhereInput[] {
-  return expandSearchTerms(query).map((term) => ({ name: { contains: term } }));
-}
-
-export function productGroupNameSearchWhere(query: string): Prisma.ProductGroupWhereInput[] {
-  return expandSearchTerms(query).map((term) => ({ name: { contains: term } }));
-}
-
 /** Palabras de unión: aparecen en casi todo y no dicen qué se busca. */
 const STOP_WORDS = new Set([
   // Palabras de unión.
@@ -269,7 +299,11 @@ const STOP_WORDS = new Set([
 /** Palabras de dos letras o menos aparecen dentro de demasiados nombres. */
 const MIN_TOKEN_LENGTH = 3;
 
-export function searchTokens(query: string): string[] {
+export function searchTokens(
+  query: string,
+  options: { minLength?: number } = {},
+): string[] {
+  const minLength = options.minLength ?? MIN_TOKEN_LENGTH;
   return normalizeSearchTerm(query)
     .split(" ")
     // Los signos pegados a la palabra («¿tienes» o «azul?») impedirían
@@ -277,11 +311,92 @@ export function searchTokens(query: string): string[] {
     .map((word) => word.replace(/[¿?¡!.,;:()"']/g, "").trim())
     .filter(
       (word) =>
-        word.length >= MIN_TOKEN_LENGTH &&
+        word.length >= minLength &&
         // Se compara sin tildes: la lista está sin ellas y la clienta escribe
         // «muéstrame», no «muestrame».
         !STOP_WORDS.has(stripAccents(word)),
     );
+}
+
+/**
+ * En la tienda una palabra de dos letras sí distingue: «a5», «hb», «2b».
+ * Por WhatsApp no (ahí «el», «ya», «ok» son ruido y ya están en la lista).
+ */
+const STORE_MIN_TOKEN_LENGTH = 2;
+
+/**
+ * Las formas con las que UNA palabra de la consulta se compara con un
+ * nombre: la palabra, su raíz de plural (y el plural en «ces»), sus
+ * sinónimos y los lemas de su color, cada uno con sus propias raíces.
+ *
+ * Se quitan las formas que otra más corta ya cubre: `contains("cuaderno")`
+ * encuentra todo lo que encuentra `contains("cuadernos")`, así que la
+ * segunda sobra. Menos condiciones, mismo resultado.
+ */
+export function nameForms(token: string): string[] {
+  const formas = new Set<string>();
+  for (const palabra of [normalizeSearchTerm(token), ...synonymsOf(token)]) {
+    formas.add(palabra);
+    for (const forma of wordForms(palabra)) formas.add(forma);
+  }
+  return pruneSubsumed(Array.from(formas));
+}
+
+function pruneSubsumed(forms: string[]): string[] {
+  const unicas = Array.from(new Set(forms.filter(Boolean)));
+  return unicas.filter(
+    (forma) =>
+      !unicas.some(
+        (otra) =>
+          otra !== forma &&
+          // Una forma corta se compara como palabra entera: no cubre nada.
+          otra.length > SHORT_FORM_LENGTH &&
+          forma.startsWith(otra),
+      ),
+  );
+}
+
+/**
+ * La consulta de la tienda, palabra por palabra, con las formas de cada una.
+ *
+ * Antes la tienda buscaba la frase entera dentro del nombre: «cuadernos
+ * kuromi» no encontraba «Cuaderno argollado Kuromi» porque las palabras no
+ * iban seguidas. Ahora cada palabra significativa tiene que aparecer, en
+ * alguna de sus formas, sin importar el orden ni lo que haya en medio. Es
+ * MÁS exigente para dos palabras (las dos tienen que estar) y, para una,
+ * lo mismo de antes más sus formas.
+ *
+ * Sin palabras significativas («de la») se busca la frase tal cual, como
+ * siempre, para no devolver el catálogo entero.
+ */
+export function searchTokenForms(query: string): { token: string; forms: string[] }[] {
+  const tokens = searchTokens(query, { minLength: STORE_MIN_TOKEN_LENGTH });
+  if (tokens.length > 0) return tokens.map((token) => ({ token, forms: nameForms(token) }));
+  const frase = normalizeSearchTerm(query);
+  if (!frase) return [];
+  const variantes = expandSearchTerms(frase);
+  return [{ token: frase, forms: variantes.length ? variantes : [frase] }];
+}
+
+/**
+ * Condiciones para un `AND`: una por palabra, cada una «el nombre contiene
+ * alguna de sus formas». Vacío cuando no hay consulta.
+ *
+ * Va en `AND`, nunca en `OR`: en `OR` bastaría con que apareciera UNA palabra
+ * y «cuaderno kuromi» devolvería todos los cuadernos y todo lo de Kuromi.
+ */
+export function productNameSearchConditions(query: string): Prisma.ProductWhereInput[] {
+  return searchTokenForms(query).map(({ forms }) => ({
+    OR: forms.map((form) => formCondition("name", form) as Prisma.ProductWhereInput),
+  }));
+}
+
+export function productGroupNameSearchConditions(
+  query: string,
+): Prisma.ProductGroupWhereInput[] {
+  return searchTokenForms(query).map(({ forms }) => ({
+    OR: forms.map((form) => formCondition("name", form) as Prisma.ProductGroupWhereInput),
+  }));
 }
 
 /**
@@ -342,20 +457,21 @@ function tokenWhere(
   token: string,
   options: { withDescription: boolean },
 ): Prisma.ProductWhereInput {
-  const variantes = expandSearchTerms(token);
-  const terminos = variantes.length ? variantes : [token];
+  const terminos = nameForms(token);
   const formas = wordForms(token);
   const raices = Array.from(new Set(terminos.flatMap(wordForms)));
   const colores = colorTerms(token);
   const raicesColor = colores.length ? colores : formas;
   return {
     OR: [
-      ...terminos.map((term) => ({ name: { contains: term } })),
+      ...terminos.map((term) => formCondition("name", term) as Prisma.ProductWhereInput),
       ...formas.map((f) => ({ design: { is: { name: { contains: f } } } })),
       ...raicesColor.map((c) => ({ color: { is: { name: { contains: c } } } })),
       ...raices.map((r) => ({ category: { is: { name: { contains: r } } } })),
       ...raices.map((r) => ({ productGroup: { is: { name: { contains: r } } } })),
-      ...(options.withDescription ? formas.map((f) => ({ description: { contains: f } })) : []),
+      ...(options.withDescription
+        ? formas.map((f) => formCondition("description", f) as Prisma.ProductWhereInput)
+        : []),
     ],
   };
 }
