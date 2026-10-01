@@ -151,6 +151,12 @@ beforeAll(async () => {
   await producto("Set de pinceles pastel");
   await producto("Kit escolar básico");
   await producto("Libreta Hello Kitty");
+  // Lo que la palabra entera no debe perder: signos pegados, cantidades, medidas.
+  await producto('Llaveros película "Toy Story"');
+  await producto("Libretas Gatito Azul XS-P");
+  await producto("Plumones pastel x12");
+  await producto("Marcadores x120");
+  await producto("Minas 0.5mm");
 });
 
 afterAll(async () => {
@@ -169,12 +175,12 @@ afterAll(async () => {
 describe("la barra de búsqueda de la tienda (/search/products)", () => {
   it("lo que ya funcionaba: nombre exacto y sinónimos", async () => {
     expect(await barra("kuromi")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
-    expect(await barra("libreta")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
+    expect(await barra("libreta")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty", "Libretas Gatito Azul XS-P"]);
     expect(await barra("estuche")).toEqual(["Cartuchera Wisdom Rosa"]);
   });
 
   it("plural regular: «cuadernos» encuentra «Cuaderno Kuromi»", async () => {
-    expect(await barra("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
+    expect(await barra("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty", "Libretas Gatito Azul XS-P"]);
   });
 
   it("palabra por palabra: «cuadernos kuromi» encuentra también «Cuaderno argollado Kuromi»", async () => {
@@ -243,8 +249,9 @@ describe("la barra de búsqueda de la tienda (/search/products)", () => {
     expect(await barra("pines")).toEqual(["Pin Gato Pusheen"]);
     expect(await barra("pin")).toEqual(["Pin Gato Pusheen"]);
     // «set» es sinónimo de kit y palabra corta: entra entero, no dentro de otra.
-    expect(await barra("kit")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
-    expect(await barra("kits")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
+    // Y «kit» trae además los Hello Kitty (familia real), pero «set» y «kitty» no se mezclan.
+    expect(await barra("kit")).toEqual(["Kit escolar básico", "Libreta Hello Kitty", "Lápiz Hello Kitty", "Set de pinceles pastel"]);
+    expect(await barra("kits")).toEqual(["Kit escolar básico", "Libreta Hello Kitty", "Lápiz Hello Kitty", "Set de pinceles pastel"]);
     expect(await barra("set")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
     expect(await barra("kitty")).toEqual(["Libreta Hello Kitty", "Lápiz Hello Kitty"]);
   });
@@ -253,7 +260,7 @@ describe("la barra de búsqueda de la tienda (/search/products)", () => {
 describe("el listado de /tienda con ?search= (/products?fromShop=true)", () => {
   it("lo que ya funcionaba: nombre exacto y sinónimos", async () => {
     expect(await listado("kuromi")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
-    expect(await listado("libreta")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
+    expect(await listado("libreta")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty", "Libretas Gatito Azul XS-P"]);
   });
 
   it("palabra por palabra también en el listado", async () => {
@@ -263,12 +270,23 @@ describe("el listado de /tienda con ?search= (/products?fromShop=true)", () => {
 
   it("precisión de las formas cortas también en el listado", async () => {
     expect(await listado("pines")).toEqual(["Pin Gato Pusheen"]);
-    expect(await listado("kit")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
+    expect(await listado("kit")).toEqual(["Kit escolar básico", "Libreta Hello Kitty", "Lápiz Hello Kitty", "Set de pinceles pastel"]);
     expect(await listado("kitty")).toEqual(["Libreta Hello Kitty", "Lápiz Hello Kitty"]);
   });
 
+  it("palabras cortas pegadas a signos, cantidades y medidas no se pierden", async () => {
+    expect(await listado("toy story")).toEqual(['Llaveros película "Toy Story"']);
+    expect(await listado("xs")).toEqual(["Libretas Gatito Azul XS-P"]);
+    expect(await listado("plumones 12")).toEqual(["Plumones pastel x12"]);
+    expect(await listado("12")).toEqual(["Lápices de colores x12", "Plumones pastel x12"]);
+    expect(await listado("minas 0.5mm")).toEqual(["Minas 0.5mm"]);
+    expect(await listado("minas 0.5")).toEqual(["Minas 0.5mm"]);
+    expect(await barra("toy story")).toEqual(['Llaveros película "Toy Story"']);
+    expect(await barra("0.5mm")).toEqual(["Minas 0.5mm"]);
+  });
+
   it("plural, -ces y género también aquí", async () => {
-    expect(await listado("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
+    expect(await listado("cuadernos")).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty", "Libretas Gatito Azul XS-P"]);
     expect(await listado("lápices")).toEqual(["Lápices de colores x12", "Lápiz Hello Kitty"]);
     expect(await listado("rosada")).toEqual(["Cartuchera Wisdom Rosa"]);
     expect(await listado("sobres")).toEqual(["Sobre plástico oficio"]);
@@ -287,7 +305,7 @@ describe("el listado de /tienda con ?search= (/products?fromShop=true)", () => {
   it("los selectores del panel (sin agrupar, availability=all) también", async () => {
     const panel = "&availability=all";
     expect(await listado("kuromi", panel)).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi"]);
-    expect(await listado("cuadernos", panel)).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty"]);
+    expect(await listado("cuadernos", panel)).toEqual(["Cuaderno Kuromi", "Cuaderno argollado Kuromi", "Cuadernos Stitch x3", "Libreta Hello Kitty", "Libretas Gatito Azul XS-P"]);
     expect(await listado("lápices", panel)).toEqual(["Lápices de colores x12", "Lápiz Hello Kitty"]);
     expect(await listado("rosada", panel)).toEqual(["Cartuchera Wisdom Rosa"]);
   });

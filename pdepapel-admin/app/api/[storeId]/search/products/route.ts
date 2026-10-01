@@ -8,6 +8,7 @@ import {
   normalizeSearchTerm,
   productNameSearchConditions,
   searchTokenForms,
+  wholeWordPieces,
   wordForms,
 } from "@/lib/search-terms";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -90,12 +91,15 @@ export async function GET(
       const match = matchForm(form);
       if ("contains" in match) return Prisma.sql`${column} LIKE ${`%${match.contains}%`}`;
       return Prisma.sql`(${Prisma.join(
-        match.words.flatMap((w) => [
-          Prisma.sql`${column} = ${w}`,
-          Prisma.sql`${column} LIKE ${`${w} %`}`,
-          Prisma.sql`${column} LIKE ${`% ${w}`}`,
-          Prisma.sql`${column} LIKE ${`% ${w} %`}`,
-        ]),
+        match.words.flatMap((w) => {
+          const piezas = wholeWordPieces(w);
+          return [
+            Prisma.sql`${column} = ${piezas.equals}`,
+            ...piezas.startsWith.map((v) => Prisma.sql`${column} LIKE ${`${v}%`}`),
+            ...piezas.endsWith.map((v) => Prisma.sql`${column} LIKE ${`%${v}`}`),
+            ...piezas.contains.map((v) => Prisma.sql`${column} LIKE ${`%${v}%`}`),
+          ];
+        }),
         " OR ",
       )})`;
     };

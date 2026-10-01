@@ -52,6 +52,7 @@ import {
   formCondition,
   matchForm,
   pluralStem,
+  wholeWordPieces,
   productNameTokenSearchWhere,
   productTokenSearchWhere,
   searchTokens,
@@ -302,7 +303,11 @@ describe("las formas cortas se comparan como palabra entera", () => {
     expect(condicion.OR).toContainEqual({ name: { startsWith: "pin " } });
     expect(condicion.OR).toContainEqual({ name: { endsWith: " pines" } });
     expect(condicion.OR).toContainEqual({ name: { contains: " pins " } });
-    expect(condicion.OR).toHaveLength(12);
+    // Y con los signos que van pegados en el catálogo: comillas, guion, punto…
+    expect(condicion.OR).toContainEqual({ name: { contains: '"pin ' } });
+    expect(condicion.OR).toContainEqual({ name: { contains: " pin-" } });
+    expect(condicion.OR).toContainEqual({ name: { endsWith: " pin" } });
+    expect(condicion.OR).toContainEqual({ name: { startsWith: "pin." } });
     expect(formCondition("name", "cuaderno")).toEqual({ name: { contains: "cuaderno" } });
   });
 
@@ -313,5 +318,38 @@ describe("las formas cortas se comparan como palabra entera", () => {
     expect(JSON.stringify(pines)).not.toContain('"contains":"pin"');
     expect(JSON.stringify(pines)).toContain('"contains":" pin "');
     expect(JSON.stringify(pines)).toContain('"contains":"pine"');
+  });
+});
+
+describe("lo que la palabra entera no debe perder", () => {
+  it("«kit» también trae Hello Kitty; «set» y «kitty» no se mezclan", () => {
+    expect(nameForms("kit")).toContain("kitty");
+    expect(nameForms("kits")).toContain("kitty");
+    expect(nameForms("set")).not.toContain("kitty");
+    expect(nameForms("kitty")).toEqual(["kitty"]);
+  });
+
+  it("un número corto busca la cantidad: «12» da con «x12» y «100» con «100h», no con «120»", () => {
+    expect(matchForm("12")).toEqual({ words: ["12", "x12", "12h", "12hojas"] });
+    expect(matchForm("100")).toEqual({ words: ["100", "x100", "100h", "100hojas"] });
+    expect(JSON.stringify(formCondition("name", "12"))).not.toContain('"contains":"12"');
+  });
+
+  it("una medida con decimales se busca tal cual: «0.5mm» y «0.5»", () => {
+    expect(searchTokens("minas 0.5mm", { minLength: 2 })).toEqual(["minas", "0.5mm"]);
+    expect(searchTokens("¿tienes minas 0.5?", { minLength: 2 })).toEqual(["minas", "0.5"]);
+    expect(matchForm("0.5")).toEqual({ contains: "0.5" });
+    expect(matchForm("0.5mm")).toEqual({ contains: "0.5mm" });
+    // Los signos de los bordes siguen cayendo.
+    expect(searchTokens("¿tienes azul?")).toEqual(["azul"]);
+  });
+
+  it("los bordes de palabra entera: comillas, guion, punto, paréntesis, apóstrofo", () => {
+    const piezas = wholeWordPieces("toy");
+    expect(piezas.contains).toContain('"toy ');
+    expect(piezas.contains).toContain(" toy-");
+    expect(piezas.endsWith).toContain(" toy");
+    expect(piezas.startsWith).toContain("toy ");
+    expect(piezas.equals).toBe("toy");
   });
 });

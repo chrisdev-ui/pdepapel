@@ -143,9 +143,45 @@ const SHORT_FORM_LENGTH = 3;
 export type FormMatch = { contains: string } | { words: string[] };
 
 export function matchForm(form: string): FormMatch {
-  return form.length <= SHORT_FORM_LENGTH
-    ? { words: [form, `${form}s`, `${form}es`] }
-    : { contains: form };
+  if (form.length > SHORT_FORM_LENGTH) return { contains: form };
+  // Una medida con decimales («0.5») es lo bastante concreta para buscarse
+  // dentro de otra palabra: «0.5mm».
+  if (/^\d+[.,]\d+$/.test(form)) return { contains: form };
+  // Un número corto se pide como cantidad: «12» tiene que dar con «x12»
+  // (paquete de doce) y con «100h» (cien hojas), no con «120» ni «2026».
+  if (/^\d+$/.test(form)) return { words: [form, `x${form}`, `${form}h`, `${form}hojas`] };
+  return { words: [form, `${form}s`, `${form}es`] };
+}
+
+/**
+ * Lo que puede ir pegado a una palabra entera en un nombre. Medido en el
+ * catálogo: comillas («"Toy Story"»), guion («XS-P»), punto («INC.»),
+ * paréntesis, apóstrofo. Sin esto, «toy story» perdía el llavero porque
+ * «toy» iba entre comillas.
+ */
+const WORD_BOUNDARIES = [" ", '"', "'", "(", ")", "-", ".", ",", "/", "+", ":"];
+
+/**
+ * Las piezas con que se emula «palabra entera» con LIKE: igual a la
+ * palabra; empieza por ella seguida de un borde; termina en un borde
+ * seguido de ella; o va entre un espacio y un borde (en cualquier orden).
+ * Se asume que al menos uno de los dos lados es un espacio o el extremo:
+ * una palabra entre dos signos («("kit")») queda fuera, y es rarísima.
+ */
+export function wholeWordPieces(word: string): {
+  equals: string;
+  startsWith: string[];
+  endsWith: string[];
+  contains: string[];
+} {
+  return {
+    equals: word,
+    startsWith: WORD_BOUNDARIES.map((b) => `${word}${b}`),
+    endsWith: WORD_BOUNDARIES.map((b) => `${b}${word}`),
+    contains: Array.from(
+      new Set(WORD_BOUNDARIES.flatMap((b) => [` ${word}${b}`, `${b}${word} `])),
+    ),
+  };
 }
 
 /** La condición de Prisma para una forma en un campo de texto. */
@@ -156,14 +192,28 @@ export function formCondition<T extends "name" | "description">(
   const match = matchForm(form);
   if ("contains" in match) return { [field]: { contains: match.contains } } as Record<T, unknown>;
   return {
-    OR: match.words.flatMap((w) => [
-      { [field]: { equals: w } },
-      { [field]: { startsWith: `${w} ` } },
-      { [field]: { endsWith: ` ${w}` } },
-      { [field]: { contains: ` ${w} ` } },
-    ]),
+    OR: match.words.flatMap((w) => {
+      const piezas = wholeWordPieces(w);
+      return [
+        { [field]: { equals: piezas.equals } },
+        ...piezas.startsWith.map((v) => ({ [field]: { startsWith: v } })),
+        ...piezas.endsWith.map((v) => ({ [field]: { endsWith: v } })),
+        ...piezas.contains.map((v) => ({ [field]: { contains: v } })),
+      ];
+    }),
   } as unknown as Record<T, unknown>;
 }
+
+/**
+ * Palabras que contienen una forma corta y SON una familia real, no ruido:
+ * quien escribe «kit» también quiere ver los de Hello Kitty (medido: 10
+ * productos que la palabra entera dejaba fuera). Solo valen para la
+ * palabra propia de la consulta, no para sus sinónimos: «set» no trae
+ * Kitty.
+ */
+const SHORT_FORM_FAMILIES: Record<string, string[]> = {
+  kit: ["kitty"],
+};
 
 const colorGroupByLemma = new Map<string, string[]>();
 for (const group of COLOR_GROUPS) {
@@ -307,8 +357,9 @@ export function searchTokens(
   return normalizeSearchTerm(query)
     .split(" ")
     // Los signos pegados a la palabra («¿tienes» o «azul?») impedirían
-    // reconocerla, tanto para descartarla como para buscarla.
-    .map((word) => word.replace(/[¿?¡!.,;:()"']/g, "").trim())
+    // reconocerla, tanto para descartarla como para buscarla. Solo en los
+    // bordes: «0.5mm» es una medida y el punto es parte de ella.
+    .map((word) => word.replace(/^[¿?¡!.,;:()"']+|[¿?¡!.,;:()"']+$/g, "").trim())
     .filter(
       (word) =>
         word.length >= minLength &&
@@ -335,9 +386,13 @@ const STORE_MIN_TOKEN_LENGTH = 2;
  */
 export function nameForms(token: string): string[] {
   const formas = new Set<string>();
-  for (const palabra of [normalizeSearchTerm(token), ...synonymsOf(token)]) {
+  const propia = normalizeSearchTerm(token);
+  for (const palabra of [propia, ...synonymsOf(token)]) {
     formas.add(palabra);
     for (const forma of wordForms(palabra)) formas.add(forma);
+  }
+  for (const forma of [propia, ...wordForms(propia)]) {
+    for (const familia of SHORT_FORM_FAMILIES[forma] ?? []) formas.add(familia);
   }
   return pruneSubsumed(Array.from(formas));
 }
