@@ -1343,7 +1343,7 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
     });
     // La consulta que salió a la base mira el diseño con la raíz de la palabra.
     const where = mocks.findMany.mock.calls[0][0].where;
-    expect(JSON.stringify(where)).toContain('"design":{"is":{"name":{"contains":"perrit"}}}');
+    expect(JSON.stringify(where)).toContain('"design":{"is":{"name":{"contains":"perrito"}}}');
     expect(mocks.count).toHaveBeenCalledOnce();
   });
 

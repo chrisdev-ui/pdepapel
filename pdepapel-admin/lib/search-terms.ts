@@ -29,26 +29,167 @@ const SYNONYM_GROUPS: string[][] = [
   ["tote", "bag", "bolso", "bolsa"],
 ];
 
-const MAX_TERMS = 8;
+/**
+ * Colores tal como los escribe la clientela. Cada grupo lleva los lemas en
+ * masculino singular; el femenino («rosada», «amarilla») y el plural
+ * («rosadas», «azules») se derivan solos, no hay que listarlos.
+ *
+ * Los grupos salen del catálogo real (36 colores en uso): «Rosa pastel»,
+ * «Rosado», «Palo de rosa», «Lila», «Morado», «Café», «Verde aguamarina»…
+ * Un grupo de uno («amarillo») existe para que «amarilla» sepa que es un
+ * color y se pliegue al lema.
+ */
+const COLOR_GROUPS: string[][] = [
+  ["rosa", "rosado"],
+  ["azul"],
+  ["lila", "morado", "violeta", "púrpura", "lavanda"],
+  ["café", "marrón", "castaño"],
+  ["negro"],
+  ["blanco"],
+  ["verde"],
+  ["amarillo"],
+  ["rojo"],
+  ["naranja", "anaranjado"],
+  ["crema", "beige", "hueso"],
+  ["gris", "plomo"],
+  ["plateado", "plata"],
+  ["dorado", "oro"],
+  ["fucsia", "fuxia"],
+  ["transparente"],
+  ["multicolor"],
+  ["aguamarina", "turquesa"],
+  ["fluorescente", "neón", "fluor"],
+  ["metalizado", "metálico"],
+  ["pastel"],
+];
+
+const MAX_TERMS = 12;
 
 const stripAccents = (value: string) =>
-  value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  value.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-const singular = (word: string) =>
-  word.length > 4 && word.endsWith("es") && !word.endsWith("ses")
-    ? word.slice(0, -2)
-    : word.length > 3 && word.endsWith("s")
-      ? word.slice(0, -1)
-      : word;
+/**
+ * Palabras con «s» final que no son plural, o cuyo plural no se forma
+ * quitando nada: recortarlas daría otra palabra («gris» → «gri», «tres» →
+ * «tre», que está dentro de «estrella»).
+ */
+const INVARIANT_S_WORDS = new Set([
+  "gris", "dos", "tres", "seis", "mes", "bus", "gas", "pais",
+  "lunes", "martes", "miercoles", "jueves", "viernes",
+  "virus", "bonus", "crisis", "tesis", "dosis", "analisis",
+]);
 
+/**
+ * La raíz que comparten el singular y el plural de una palabra.
+ *
+ * MySQL solo sabe `contains`, así que no se puede singularizar lo que está
+ * guardado: lo único que sirve a los dos lados es buscar el trozo que tienen
+ * en común. Para la mayoría de las palabras es el singular entero
+ * («cuaderno» está dentro de «cuadernos», «papel» dentro de «papeles»).
+ *
+ * El «-es» es ambiguo: «sobres» es sobre + s, pero «colores» es color + es.
+ * Sin diccionario no se distinguen, y no hace falta: quitando «es» queda
+ * «sobr» y «color», y las dos están dentro de su singular y de su plural.
+ *
+ * «-z / -ces» es la excepción: «lápiz» no está dentro de «lápices», y la raíz
+ * común «lápi» también está dentro de «lapicero», que es otra cosa (medido:
+ * «lápices» pasaba de 10 a 76 resultados en el catálogo real). Para esas
+ * palabras se devuelve el singular con z y `wordForms` añade el plural con
+ * «ces» como forma aparte, sin recortar nada.
+ *
+ * Reglas del español, no una lista de palabras: -íes/-úes (bisturíes),
+ * -ces (lápices), -es (papeles, estuches, colores), -s (cuadernos, kits,
+ * stickers), y las invariables de arriba. Las tildes se dejan como vienen:
+ * la base compara sin ellas («botón» encuentra «Botones»).
+ */
+export function pluralStem(word: string): string {
+  const w = word.trim().toLocaleLowerCase("es-CO");
+  if (w.length <= 3) return w;
+  const plain = stripAccents(w);
+  if (INVARIANT_S_WORDS.has(plain) || /(sis|xis)$/.test(plain)) return w;
+  if (/[íú]es$/.test(w)) return w.slice(0, -2);
+  if (/ces$/.test(w) && w.length > 4) return `${w.slice(0, -3)}z`;
+  if (/es$/.test(w) && w.length > 4) return w.slice(0, -2);
+  if (/s$/.test(w)) return w.slice(0, -1);
+  return w;
+}
+
+/**
+ * Las formas con las que se compara una palabra contra el catálogo: su raíz
+ * de plural y, si acaba en z, también el plural en «ces». Son formas
+ * enteras, no prefijos: «lápiz» y «lápices», nunca «lápi».
+ */
+export function wordForms(word: string): string[] {
+  const stem = pluralStem(word);
+  return /z$/.test(stem) && stem.length > 2
+    ? [stem, `${stem.slice(0, -1)}ces`]
+    : [stem];
+}
+
+const colorGroupByLemma = new Map<string, string[]>();
+for (const group of COLOR_GROUPS) {
+  for (const lemma of group) colorGroupByLemma.set(stripAccents(lemma), group);
+}
+
+/**
+ * El lema de un color, o null si la palabra no es un color conocido.
+ * «rosadas» → «rosado», «amarilla» → «amarillo», «azules» → «azul»,
+ * «grises» → «gris». Plural y género se pliegan aquí, no en la tabla.
+ */
+export function colorLemma(word: string): string | null {
+  let w = stripAccents(word.trim().toLocaleLowerCase("es-CO"));
+  if (!w) return null;
+  const known = (candidate: string) => colorGroupByLemma.has(candidate);
+  if (known(w)) return w;
+  // Plural: «azules» → «azul», «marrones» → «marron», «rosadas» → «rosada».
+  if (w.endsWith("es") && known(w.slice(0, -2))) return w.slice(0, -2);
+  if (w.endsWith("s")) w = w.slice(0, -1);
+  if (known(w)) return w;
+  // Femenino: «rosada» → «rosado», «amarilla» → «amarillo».
+  if (w.endsWith("a") && known(`${w.slice(0, -1)}o`)) return `${w.slice(0, -1)}o`;
+  return null;
+}
+
+/** Los lemas del grupo de ese color: lo que hay que buscar en el catálogo. */
+export function colorTerms(word: string): string[] {
+  const lemma = colorLemma(word);
+  return lemma ? [...(colorGroupByLemma.get(lemma) ?? [])] : [];
+}
+
+/**
+ * Sinónimos por palabra, indexados por la palabra sin tildes y también por
+ * su raíz de plural, para que «bolígrafos» y «libretas» encuentren su grupo.
+ * Los colores entran como un grupo más: «rosada» se cambia por «rosa» y por
+ * «rosado» igual que «libreta» se cambia por «cuaderno».
+ */
 const synonymsByWord = new Map<string, string[]>();
-for (const group of SYNONYM_GROUPS) {
+for (const group of [...SYNONYM_GROUPS, ...COLOR_GROUPS]) {
   for (const word of group) {
-    synonymsByWord.set(
-      stripAccents(word),
-      group.filter((other) => other !== word),
-    );
+    const others = group.filter((other) => other !== word);
+    for (const key of Array.from(new Set([stripAccents(word), stripAccents(pluralStem(word))]))) {
+      if (!synonymsByWord.has(key)) synonymsByWord.set(key, others);
+    }
   }
+}
+
+function synonymsOf(word: string): string[] {
+  const lemma = colorLemma(word);
+  if (lemma) {
+    // Para un color, TODOS los lemas del grupo valen, incluido el propio:
+    // «rosada» tiene que convertirse en «rosa» y en «rosado».
+    return colorGroupByLemma.get(lemma) ?? [];
+  }
+  // Tres llaves: la palabra, su raíz de plural y la palabra sin la «s»
+  // final. La tercera es por el «-es» ambiguo: la raíz de «totes» es «tot»,
+  // pero su grupo está indexado por «tote».
+  const plain = stripAccents(word);
+  const candidatas = [plain, stripAccents(pluralStem(word))];
+  if (plain.endsWith("s")) candidatas.push(plain.slice(0, -1));
+  for (const key of candidatas) {
+    const found = synonymsByWord.get(key);
+    if (found) return found;
+  }
+  return [];
 }
 
 export function normalizeSearchTerm(query: string): string {
@@ -56,26 +197,42 @@ export function normalizeSearchTerm(query: string): string {
 }
 
 /**
- * Devuelve el término tal cual más sus variantes con sinónimos, sin
- * duplicados y acotado. Una consulta vacía devuelve una lista vacía.
+ * Devuelve el término tal cual más sus variantes, sin duplicados y acotado.
+ * Una consulta vacía devuelve una lista vacía.
+ *
+ * Las variantes son, en este orden: la frase como se escribió; la frase con
+ * cada palabra reducida a su raíz de plural («cuadernos kuromi» → «cuaderno
+ * kuromi», que sí está dentro de «Cuaderno Kuromi»); y, sobre cada una de
+ * esas dos, la frase con una palabra cambiada por cada sinónimo o lema de
+ * color («rosada» → «rosa», «rosado»). La búsqueda de la tienda sigue siendo
+ * de frase entera: lo que cambia es que la frase ya no depende del número ni
+ * del género con que la escribió la clienta.
  */
 export function expandSearchTerms(query: string): string[] {
   const normalized = normalizeSearchTerm(query);
   if (!normalized) return [];
 
-  const terms = new Set<string>([normalized]);
   const words = normalized.split(" ");
+  const stemmed = words.map(pluralStem);
+  // Las palabras en z van en las dos formas: «lápiz» busca también «lápices».
+  const enCes = stemmed.map((w) => (/z$/.test(w) && w.length > 2 ? `${w.slice(0, -1)}ces` : w));
+  const bases: string[][] = [words];
+  for (const base of [stemmed, enCes]) {
+    if (!bases.some((b) => b.join(" ") === base.join(" "))) bases.push(base);
+  }
 
-  words.forEach((word, index) => {
-    const key = singular(stripAccents(word));
-    const synonyms = synonymsByWord.get(key) ?? [];
-    for (const synonym of synonyms) {
-      if (terms.size >= MAX_TERMS) return;
-      const variant = [...words];
-      variant[index] = synonym;
-      terms.add(variant.join(" "));
-    }
-  });
+  const terms = new Set<string>(bases.map((base) => base.join(" ")));
+
+  for (const base of bases) {
+    base.forEach((word, index) => {
+      for (const synonym of synonymsOf(word)) {
+        if (terms.size >= MAX_TERMS) return;
+        const variant = [...base];
+        variant[index] = synonym;
+        terms.add(variant.join(" "));
+      }
+    });
+  }
 
   return Array.from(terms);
 }
@@ -165,24 +322,6 @@ export function productNameTokenSearchWhere(query: string): Prisma.ProductWhereI
 }
 
 /**
- * La raíz con la que se compara una palabra contra una etiqueta del catálogo
- * (diseño, color, categoría, grupo).
- *
- * Las etiquetas van en una forma y la clienta escribe en otra: el color es
- * «Amarillo» y ella pide «amarilla»; el diseño es «Perrito» y ella dice
- * «perritos»; la categoría es «Cuadernos» y ella busca «cuaderno». Un
- * `contains` con la palabra tal cual falla en los tres. Quitando el plural y
- * la última vocal queda «amarill», «perrit» y «cuadern», que sí están dentro.
- *
- * Solo para etiquetas, que son cortas y de una o dos palabras: en un nombre o
- * una descripción larga, una raíz de cuatro letras encuentra de todo.
- */
-export function labelStem(word: string): string {
-  const base = singular(normalizeSearchTerm(word));
-  return base.length >= 4 && /[aeo]$/.test(base) ? base.slice(0, -1) : base;
-}
-
-/**
  * Las condiciones de UNA palabra: en el nombre (con sinónimos), en las
  * etiquetas del catálogo y, si se pide, en la descripción.
  *
@@ -192,10 +331,12 @@ export function labelStem(word: string): string {
  * Medido sobre los 867 productos activos, 456 tienen el diseño fuera del
  * nombre y la descripción, 520 el color y 575 la categoría.
  *
- * Diseño y color se buscan por la raíz de la palabra: ahí no hay sinónimos
- * (un personaje se llama como se llama). Categoría y grupo sí llevan los
- * sinónimos, porque nombran tipos de producto: «libreta» tiene que dar con la
- * categoría «Cuadernos».
+ * Todo se compara por la raíz de plural (`pluralStem`), que está dentro del
+ * singular y del plural guardados. El color además se pliega a sus lemas
+ * («amarilla» busca «amarillo»; «rosada», «rosa» y «rosado»). Categoría y
+ * grupo llevan los sinónimos, porque nombran tipos de producto: «libreta»
+ * tiene que dar con la categoría «Cuadernos». El diseño no: un personaje se
+ * llama como se llama.
  */
 function tokenWhere(
   token: string,
@@ -203,16 +344,18 @@ function tokenWhere(
 ): Prisma.ProductWhereInput {
   const variantes = expandSearchTerms(token);
   const terminos = variantes.length ? variantes : [token];
-  const raices = Array.from(new Set(terminos.map(labelStem)));
-  const raiz = labelStem(token);
+  const formas = wordForms(token);
+  const raices = Array.from(new Set(terminos.flatMap(wordForms)));
+  const colores = colorTerms(token);
+  const raicesColor = colores.length ? colores : formas;
   return {
     OR: [
       ...terminos.map((term) => ({ name: { contains: term } })),
-      { design: { is: { name: { contains: raiz } } } },
-      { color: { is: { name: { contains: raiz } } } },
+      ...formas.map((f) => ({ design: { is: { name: { contains: f } } } })),
+      ...raicesColor.map((c) => ({ color: { is: { name: { contains: c } } } })),
       ...raices.map((r) => ({ category: { is: { name: { contains: r } } } })),
       ...raices.map((r) => ({ productGroup: { is: { name: { contains: r } } } })),
-      ...(options.withDescription ? [{ description: { contains: token } }] : []),
+      ...(options.withDescription ? formas.map((f) => ({ description: { contains: f } })) : []),
     ],
   };
 }

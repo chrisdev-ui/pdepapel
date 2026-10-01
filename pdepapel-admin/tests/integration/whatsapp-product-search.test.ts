@@ -102,6 +102,7 @@ async function crearTienda(nombre: string) {
     amarillo: await color("Amarillo"),
     rojo: await color("Rojo"),
     azul: await color("Azul"),
+    rosaPastel: await color("Rosa pastel"),
   };
 
   let n = 0;
@@ -169,6 +170,9 @@ beforeAll(async () => {
   await producto("Cartuchera Wisdom", { categoria: c.cartucheras, diseno: d.clasico, color: k.amarillo });
   // Ni el tipo ni el color en el nombre: solo la categoría y el color lo dicen.
   await producto("Wisdom Azul Pastel", { categoria: c.cartucheras, diseno: d.clasico, color: k.azul });
+  // Color «Rosa pastel» y nombre con sinónimo: «cartuchera rosada» tiene que
+  // llegar por el sinónimo (estuche) y por el género (rosada → rosa).
+  await producto("Estuche Kuromi", { categoria: c.cartucheras, diseno: d.clasico, color: k.rosaPastel });
   // Otro producto con el mismo diseño Perrito, de otro tipo.
   await producto("Kit Puppy Pochacco", { categoria: c.kits, diseno: d.perrito, color: k.amarillo, price: 48000 });
   // Uno archivado que nunca debe salir.
@@ -244,6 +248,17 @@ describe("los otros casos expuestos: color, categoría y sinónimos", () => {
   it("«bolso de perrito» y «bolsa de perrito» son el mismo tote", async () => {
     expect(await nombres("bolso de perrito")).toEqual(['Tote bag "Un día a la Vez"']);
     expect(await nombres("bolsa de perrito")).toEqual(['Tote bag "Un día a la Vez"']);
+  });
+
+  it("plural en la pregunta: «kits de perrito», «totes de perrito», «cartucheras amarillas»", async () => {
+    expect(await nombres("kits de perrito")).toEqual(["Kit Puppy Pochacco"]);
+    expect(await nombres("totes de perrito")).toEqual(['Tote bag "Un día a la Vez"']);
+    expect(await nombres("cartucheras amarillas")).toEqual(["Cartuchera Wisdom"]);
+  });
+
+  it("género en el color y sinónimo en el tipo: «cartuchera rosada»", async () => {
+    expect(await nombres("cartuchera rosada")).toEqual(["Estuche Kuromi"]);
+    expect(await nombres("estuches rosados")).toEqual(["Estuche Kuromi"]);
   });
 
   it("un diseño que no existe sigue dando cero: no se inventa nada", async () => {
