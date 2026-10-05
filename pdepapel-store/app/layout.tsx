@@ -89,9 +89,9 @@ export const metadata: Metadata = {
     email: true,
     address: true,
   },
-  alternates: {
-    canonical: "/",
-  },
+  // Sin canónica aquí: cada página indexable declara la suya
+  // (tests/unit/app/canonical-per-template.test.ts). Heredar «/» hacía que
+  // los 404 y cualquier página nueva sin canónica apuntaran al inicio.
   verification: {
     google: "bNg7w8CM30aKsixoCkhoBU7yhISJBm8isqVm6SrtBOY",
   },
