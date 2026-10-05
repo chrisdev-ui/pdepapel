@@ -548,3 +548,42 @@ Cada una con copia previa en JSON fuera del repositorio, simulación, aplicació
 - Revalidación: en la última hora no se vio ningún `POST /api/revalidate` real (nadie editó el catálogo). Sigue abierto.
 - `catalog_no_results` y `catalog_search` con `search_term`: la dimensión empieza a llenarse desde el despliegue de `a17f8851`; GA4 tarda 24–48 h.
 - Vigilar `product-sticky-bar.spec.ts:126` en la próxima corrida semanal (lunes 14:00 UTC).
+
+## 9. Ola 2, Bloque 2 (Tanda 2B, 2026-10-05)
+
+### 9.1 Commits
+
+| Ítem | Commit | Estado |
+|---|---|---|
+| P1-8c `session_id` de GA4 | `20acd73c` | Migración aplicada 08:03Z (antes del código); desplegado. Reversión: `git revert 20acd73c`; la columna puede quedarse sin uso (opcional después: `ALTER TABLE \`Order\` DROP COLUMN \`analyticsSessionId\`;`). |
+| P0-4(a) mapa sin cadenas | `1e3e2642`, `5beeae1f` | 1.128 → 1.024 reglas (997 iguales, 11 colapsadas, 120 quitadas por destino muerto, 16 alias añadidos). E2E `legacy-redirect-map` en verde contra producción. |
+| P0-4(b) archivado → lo más parecido | `52ba2a95`, `e60a945f`, `a46de60e` | `mini-kit-lector` → 308 `/categoria/kits-de-lectura#producto-no-disponible` → 200 con aviso; slug inexistente → 404. El aviso no salía (el `Toaster` se suscribía después del efecto): corregido en `e60a945f`. |
+| P1-7a variante borrada desde su ficha | `37a8d4b1` | Su slug y alias pasan a la hermana viva. |
+| P1-7b producto borrado sin hermana | `fec79572` | **Local, sin push.** Necesita la migración `20261005_add_deleted_product_url.sql` (tabla nueva vacía) aplicada antes del despliegue. |
+| P2-7 contrato SEO en E2E | `9a521c1f` | Canónica por plantilla, ld+json, id viejo → 308. En verde contra producción. |
+| P1-9 Merchant Center | — | Los 867 productos del feed enlazan a `/producto/<slug>` y todos están en el sitemap vivo. |
+| P1-10 www → apex 308 | — (Vercel) | `www` no estaba en ningún proyecto (el 307 era el valor por defecto). Se añadió `www.papeleriapdepapel.com` al proyecto de la tienda con redirección 308 al apex. Antes: 307; después: 308, conservando ruta y query. Reversión: `vercel api -X DELETE "/v9/projects/prj_UHwsq67ho0pDb5krrcgcdPTl5aaV/domains/www.papeleriapdepapel.com?teamId=team_KCRyaMNhGNjeVkOf6Np3CWIQ"` (vuelve el 307 implícito). |
+
+### 9.2 A dónde van los archivados
+
+1.178 archivados: 17 a una hermana, 543 a una categoría indexable, 618 a una categoría `noindex`. De las 121 URL archivadas visibles en Search Console: 4 a una hermana (76 impresiones), 51 a una categoría indexable (807), 66 a una categoría `noindex` (1.859).
+
+### 9.3 Hallazgos
+
+- **Railway sin copias de seguridad:** el MySQL de producción muestra «No Backups» (el plan no las incluye) y el binlog está apagado (`log_bin=0`), así que no hay recuperación a un punto en el tiempo. Opciones: plan Pro de Railway, o un volcado lógico programado (`mysqldump` a R2). No se cambió nada.
+- `/tienda?page=2` declara como canónica `/tienda`: las páginas de un listado deberían ser canónicas de sí mismas. Fuera del alcance de este bloque.
+- Las pruebas de integración se cortaron dos veces por la carga de la máquina (carga media 25). Pasaron al repetirlas; la suite completa terminó en verde.
+
+### 9.4 Pendientes
+
+- **Aprobar y aplicar** la migración de P1-7b; después, push de `fec79572` y verificación.
+- P1-1: comparar `price`/`sale_price` del feed con el JSON-LD de una muestra tras el cron diario de mañana.
+- `robots.txt`: Search Console ya tiene el archivo vivo (1.235 bytes, tras `77f37211`). No se pidió validar «Bloqueada por robots.txt»: 11 de sus 13 URL son `/sign-in?…`, que siguen bloqueadas a propósito, y la validación fallaría.
+- `POST /api/revalidate 200` real: la consulta de logs de Vercel no termina (timeout). Sigue abierto.
+- `search_term` en GA4 y el `session_id` de la próxima compra real (revisar a las 24–48 h).
+- Corrida semanal de public-health (lunes 14:00 UTC), sobre todo `product-sticky-bar.spec.ts:126`.
+- La Preview del panel no tiene `DATABASE_URL`, `FRONTEND_STORE_URL` ni `CRON_SECRET`.
+
+### 9.5 Para Paula (además de §8.5)
+
+- Muchos archivados caen en categorías `noindex`; vale la pena revisar `seoEnabled` de esas categorías (ola 3).
