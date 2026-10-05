@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { cookies } from "next/headers";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -12,7 +11,6 @@ import { SingleProductPage } from "@/components/single-product-page";
 import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
-import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
 import { buildProductMetaTitle } from "@/lib/product-metadata";
 import { withSanitizedDescription } from "@/lib/product-description";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
@@ -53,6 +51,20 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export const revalidate = 300;
 
+/**
+ * Lista vacía a propósito: no se prerenderiza nada en el build, pero declarar
+ * `generateStaticParams` es lo que hace que Next 14 guarde cada ficha en la
+ * caché ISR la primera vez que alguien la pide. Sin esta función la ruta se
+ * renderizaba en cada visita (`no-store`) pese a `revalidate`.
+ *
+ * Las 308 de alias y de rutas por UUID también quedan en caché. Vercel guarda
+ * la respuesta completa y conserva `Location`; `next start` en local la
+ * sirve sin `Location` desde la caché, así que esa prueba no sirve aquí.
+ */
+export function generateStaticParams() {
+  return [];
+}
+
 export default async function ProductPage({ params }: ProductPageProps) {
   const fetched = await getProduct(params.slug);
   if (!fetched) return notFound();
@@ -74,7 +86,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
     design: variant.design,
     stock: variant.stock,
   }));
-  const hasEarlyAccess = Boolean(cookies().get(EARLY_ACCESS_COOKIE)?.value);
   const categoryName = product.category ? stripTaxonomyIcon(product.category.name) : null;
 
   return (
@@ -85,7 +96,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductBreadcrumbJsonLd(product)) }} />
         </>
       )}
-      <SingleProductPage product={product} siblings={siblings} earlyAccess={hasEarlyAccess} />
+      <SingleProductPage product={product} siblings={siblings} />
       <Container className="max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
         <Suspense fallback={<RelatedProductsSkeleton />}>
           <RelatedProducts

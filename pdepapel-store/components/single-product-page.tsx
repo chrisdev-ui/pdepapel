@@ -12,6 +12,7 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { ProductBadge } from "@/components/ui/product-badge";
 import { useCart } from "@/hooks/use-cart";
+import { useEarlyAccess } from "@/hooks/use-early-access";
 import { toast } from "@/hooks/use-toast";
 import { getProductAvailability } from "@/lib/product-availability";
 import { getProductCardBadges, isRecentlyCreated } from "@/lib/product-card";
@@ -24,10 +25,10 @@ import { Product, ProductVariant } from "@/types";
 interface SingleProductPageProps {
   product: Product;
   siblings?: ProductVariant[];
-  earlyAccess?: boolean;
 }
 
-export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, siblings, earlyAccess = false }) => {
+export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, siblings }) => {
+  const earlyAccess = useEarlyAccess();
   const [selectedProduct, setSelectedProduct] = useState(product);
   const [isVariantLoading, setIsVariantLoading] = useState(false);
   const [quantity, setQuantity] = useState(1);

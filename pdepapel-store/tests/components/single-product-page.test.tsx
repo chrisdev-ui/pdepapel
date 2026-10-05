@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/producto/cuaderno-snoopy" }));
@@ -159,5 +160,36 @@ describe("SingleProductPage", () => {
     await waitFor(() =>
       expect(screen.getAllByRole("spinbutton")[0]).toHaveAttribute("aria-valuenow", "1"),
     );
+  });
+  /**
+   * La ficha leía la cookie con `cookies()` y eso la sacaba de la caché. Ahora
+   * el HTML del servidor siempre trae el estado público y el navegador cambia
+   * al botón de compra solo si encuentra la cookie.
+   */
+  describe("early access", () => {
+    const comingSoon = { ...product, availableAt: "2099-01-01T00:00:00.000Z" } as unknown as Product;
+    const clearCookie = () => {
+      document.cookie = "pdp_early_access=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    };
+    afterEach(clearCookie);
+
+    it("shows the public coming-soon state without the cookie", () => {
+      render(<SingleProductPage product={comingSoon} />);
+      expect(screen.queryAllByRole("button", { name: /Agregar al carrito/ })).toHaveLength(0);
+      expect(screen.getAllByText(/Avísame cuando llegue/).length).toBeGreaterThan(0);
+    });
+
+    it("unlocks the buy button in the browser when the early-access cookie is present", async () => {
+      document.cookie = "pdp_early_access=token-firmado; path=/";
+      render(<SingleProductPage product={comingSoon} />);
+      await waitFor(() => expect(screen.getAllByRole("button", { name: /Agregar al carrito/ }).length).toBeGreaterThan(0));
+    });
+
+    it("never puts the early-access state in server-rendered HTML, even with the cookie set", () => {
+      document.cookie = "pdp_early_access=token-firmado; path=/";
+      const html = renderToString(<SingleProductPage product={comingSoon} />);
+      expect(html).toContain("Avísame cuando llegue");
+      expect(html).not.toContain("Agregar al carrito");
+    });
   });
 });
