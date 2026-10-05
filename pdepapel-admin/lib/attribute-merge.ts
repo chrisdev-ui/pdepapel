@@ -271,8 +271,8 @@ export async function mergeAttributes(
       await db.categorySlugAlias.updateMany({ where: { storeId, categoryId: { in: input.sourceIds } }, data: { categoryId: input.targetId } });
       await db.category.updateMany({ where, data: archive });
       for (const source of sources) {
-        // La fuente conserva su slug (archivada), así que el alias solo se crea si nadie más lo usa;
-        // el lector público resuelve primero la subcategoría activa y después el alias.
+        // La fuente archivada conserva su slug y su URL pasa a ser un alias del destino
+        // (el lector público resuelve primero la subcategoría activa y después el alias).
         await preserveCategorySlugAlias(db, { storeId, categoryId: input.targetId, slug: source.slug });
       }
       categorySlugs = [...sources.map((source) => source.slug), target?.slug ?? ""].filter(Boolean);

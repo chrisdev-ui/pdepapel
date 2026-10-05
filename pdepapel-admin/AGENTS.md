@@ -271,7 +271,7 @@ The newsletter has **one sender**, `lib/newsletter-campaigns.ts`. Everything tha
 
 - After catalog mutations the admin calls the storefront's `POST /api/revalidate` (`lib/revalidate-store.ts`). **A successful database write with a stale public page is still a customer-visible defect — verify both.**
 - Vercel Firewall on `pdepapel-store` must not challenge `/api/revalidate`. Bot Protection set to «Challenge» answers 429 before the route runs and the catalog stays stale silently. Keep a Bypass rule for that path.
-- Never delete slug aliases (`ProductSlugAlias`, `CategorySlugAlias`) or existing redirects without a deliberate SEO plan. Archived products must 404 on the storefront and must not be redirected to a category or another product, which creates soft-404 behaviour.
+- Never delete slug aliases (`ProductSlugAlias`, `CategorySlugAlias`) or existing redirects without a deliberate SEO plan. Archived products redirect on the storefront to a live sibling, else their category, else their type, else `/tienda` (`lib/archived-product-redirect.ts`, policy change 2026-10-05); a product that never existed still returns `404`. A merged subcategory keeps its URL as an alias of the target.
 - Bump `PUBLIC_PRODUCTS_CACHE_VERSION` whenever the public product shape changes.
 
 ### Images

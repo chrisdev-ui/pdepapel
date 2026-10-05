@@ -146,8 +146,10 @@ describe("attribute merge flow with MySQL", () => {
     await expect(testPrisma.category.findUniqueOrThrow({ where: { id: source.id } })).resolves.toMatchObject({ isArchived: true });
     // The offer keeps one row for the target (no duplicate pair) and none for the source.
     await expect(testPrisma.offerCategory.findMany({ where: { offerId: offer.id } })).resolves.toEqual([expect.objectContaining({ categoryId: target.id })]);
-    // The old alias now points at the target; the source slug itself stays with the archived row, so no alias is created for it.
+    // Política del 2026-10-05: la URL de la fuente ya no muere. Su alias viejo y su propio slug
+    // apuntan ahora al destino (antes el slug quedaba con la fila archivada y daba 404).
     await expect(testPrisma.categorySlugAlias.findMany({ where: { storeId }, orderBy: { slug: "asc" } })).resolves.toEqual([
+      expect.objectContaining({ slug: `cinta-${storeId}`, categoryId: target.id }),
       expect.objectContaining({ slug: `cintas-${storeId}`, categoryId: target.id }),
     ]);
 

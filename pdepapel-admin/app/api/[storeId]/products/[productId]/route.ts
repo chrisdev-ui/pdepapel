@@ -50,6 +50,7 @@ import {
 import { auth } from "@clerk/nextjs/server";
 import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { findArchivedProductRedirect } from "@/lib/archived-product-redirect";
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json(
@@ -148,6 +149,18 @@ export async function GET(
     }
 
     if (!product || (isStorefrontRequest && product.isArchived)) {
+      // Un producto archivado ya no es un 404 a secas: la tienda redirige a
+      // lo más parecido que siga a la venta (lib/archived-product-redirect.ts).
+      // Sigue respondiendo 404 para quien solo espere el producto.
+      if (isStorefrontRequest) {
+        const redirect = await findArchivedProductRedirect(prismadb, params.storeId, params.productId);
+        if (redirect) {
+          return NextResponse.json(
+            { message: "Producto no disponible", redirect },
+            { status: 404, headers: corsHeaders },
+          );
+        }
+      }
       throw ErrorFactory.NotFound("Producto no encontrado");
     }
 

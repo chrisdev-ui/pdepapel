@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { getProduct } from "@/actions/get-product";
+import { getProductRoute } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import Newsletter from "@/components/newsletter";
@@ -17,13 +17,16 @@ import { withSanitizedDescription } from "@/lib/product-description";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
 import { categoryPath, productPath } from "@/lib/routes";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
+import { archivedProductRedirectPath } from "@/lib/archived-product-redirect";
 
 interface ProductPageProps {
   params: { slug: string };
 }
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const product = await getProduct(params.slug);
+  const route = await getProductRoute(params.slug);
+  if (route?.redirect) permanentRedirect(archivedProductRedirectPath(route.redirect));
+  const product = route?.product;
   if (!product) notFound();
   const [siblingsResponse, storefrontSettings] = await Promise.all([
     product.productGroupId ? getProducts({ productGroupId: product.productGroupId }) : Promise.resolve({ products: [] }),
@@ -70,7 +73,11 @@ export function generateStaticParams() {
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  const fetched = await getProduct(params.slug);
+  const route = await getProductRoute(params.slug);
+  // Archivado: 308 a lo más parecido que siga a la venta (hermana, categoría,
+  // tipo o tienda). Inexistente: 404 real.
+  if (route?.redirect) permanentRedirect(archivedProductRedirectPath(route.redirect));
+  const fetched = route?.product;
   if (!fetched) return notFound();
   // La descripción se sanea aquí, una vez, y cruza al cliente lista para
   // pintarse: `RichTextDisplay` ya no lleva el saneador al navegador.

@@ -60,10 +60,14 @@ export async function preserveCategorySlugAlias(
   if (!slug) return;
 
   const [categoryWithSlug, existingAlias] = await Promise.all([
+    // Una categoría archivada que conserva el slug no bloquea el alias: el
+    // lector público solo resuelve categorías activas y después los alias.
+    // Así la URL de una subcategoría fusionada redirige al destino (antes 404).
     client.category.findFirst({
       where: {
         storeId,
         slug,
+        isArchived: false,
         NOT: { id: categoryId },
       },
       select: { id: true },

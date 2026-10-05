@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  findArchivedProductRedirect: vi.fn().mockResolvedValue(null),
   getStoreAccess: vi.fn(),
   findProduct: vi.fn(),
   findProductSlugAlias: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock("@/lib/api-errors", () => ({
   ),
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
+vi.mock("@/lib/archived-product-redirect", () => ({ findArchivedProductRedirect: mocks.findArchivedProductRedirect }));
 vi.mock("@/lib/product-archive", () => ({ pauseMarketplaceListingsForProducts: vi.fn() }));
 vi.mock("@/lib/mercadolibre/outbox", () => ({ queueMarketplaceStockSyncEvents: vi.fn() }));
 vi.mock("@/lib/cloudinary-cleanup", () => ({ deleteCloudinaryImages: vi.fn() }));
@@ -165,6 +167,33 @@ describe("public product detail CORS", () => {
         },
       }),
     );
+  });
+
+  /** Política del 2026-10-05: el archivado lleva a la tienda lo más parecido que siga a la venta. */
+  it("tells the storefront where to send an archived product, still as a 404 with CORS", async () => {
+    mocks.findProduct.mockResolvedValue(null);
+    mocks.findProductSlugAlias.mockResolvedValue(null);
+    mocks.findArchivedProductRedirect.mockResolvedValueOnce({ kind: "category", slug: "termos" });
+
+    const response = await GET(
+      new Request("https://admin.example.com/api/store-id/products/termo-owala-rojo?scope=storefront", {
+        headers: { Origin: "https://papeleriapdepapel.com" },
+      }),
+      { params: { storeId: "store-id", productId: "termo-owala-rojo" } },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ message: "Producto no disponible", redirect: { kind: "category", slug: "termos" } });
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://papeleriapdepapel.com");
+    expect(mocks.findArchivedProductRedirect).toHaveBeenCalledWith(expect.anything(), "store-id", "termo-owala-rojo");
+  });
+
+  it("never computes a redirect for admin (non-storefront) requests", async () => {
+    mocks.findArchivedProductRedirect.mockClear();
+    mocks.findProduct.mockResolvedValue(null);
+    mocks.findProductSlugAlias.mockResolvedValue(null);
+    await GET(new Request("https://admin.example.com/api/store-id/products/x"), { params: { storeId: "store-id", productId: "x" } });
+    expect(mocks.findArchivedProductRedirect).not.toHaveBeenCalled();
   });
 
   it("supports a browser CORS preflight request", async () => {

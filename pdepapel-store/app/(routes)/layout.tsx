@@ -1,6 +1,7 @@
 import { CartReminderStrip } from "@/components/cart-reminder-strip";
 import { DeferredWhatsAppFloatingButton } from "@/components/deferred-whatsapp-floating-button";
 import { MobileCartBar } from "@/components/mobile-cart-bar";
+import { UnavailableProductNotice } from "@/components/unavailable-product-notice";
 import { ReactNode } from "react";
 
 export default function StorefrontLayout({
@@ -17,6 +18,7 @@ export default function StorefrontLayout({
       {children}
       <MobileCartBar />
       <DeferredWhatsAppFloatingButton />
+      <UnavailableProductNotice />
     </div>
   );
 }

@@ -75,17 +75,23 @@ test("mantiene la categoría acotada, canónica y sin filtro de categorías", as
   expect(canonical).toContain(`/categoria/${categorySlug}`);
 });
 
-test("oculta productos archivados de la tienda", async ({
+/**
+ * Política del 2026-10-05: un producto archivado ya no es un 404. Responde 308
+ * hacia lo más parecido que siga a la venta (hermana, categoría, tipo o
+ * tienda) con `#producto-no-disponible`, y ese destino es una página viva.
+ */
+test("redirige un producto archivado a lo más parecido que siga a la venta", async ({
+  request,
   page,
 }) => {
-  const response = await page.goto(`/producto/${archivedProductSlug}`, {
-    waitUntil: "domcontentloaded",
-  });
+  const redirect = await request.get(`/producto/${archivedProductSlug}`, { maxRedirects: 0 });
+  expect(redirect.status()).toBe(308);
+  const location = redirect.headers().location ?? "";
+  expect(location).toMatch(/^\/(producto|categoria|tienda)\b[^#]*#producto-no-disponible$/);
 
-  expect(response?.status()).toBe(404);
-  await expect(
-    page.getByRole("heading", { name: "No encontramos esta página" }),
-  ).toBeVisible();
+  const destination = await page.goto(location, { waitUntil: "domcontentloaded" });
+  expect(destination?.status()).toBe(200);
+  await expect(page.getByText("Ese producto ya no está disponible")).toBeVisible();
 });
 
 /**
