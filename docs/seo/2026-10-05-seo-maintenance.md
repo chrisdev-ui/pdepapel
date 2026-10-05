@@ -815,3 +815,35 @@ Ningún pedido tuvo envío gratis por umbral: el umbral de 250.000 es de septiem
 ### 9.14 Copias de seguridad de la base
 
 **Activas y con prueba de restauración (2026-10-05, 19:16 UTC):** copia diaria cifrada a R2 (`pdepapel-db-backups`, 08:30 UTC); primera copia de 10,7 MB restaurada con 96 de 96 tablas idénticas a producción. Detalle en `docs/runbooks/db-backups.md`.
+
+## 10. Ola 3 — Fase 1 (2026-10-05)
+
+Solo tienda (`pdepapel-store`), un push. No toca Merchant Center, feeds, redirecciones ni robots.
+
+### 10.1 Qué cambió
+
+| Commit | Cambio | Archivos |
+|---|---|---|
+| `a21be221` | **P1-5, selectores y paginador como enlaces.** Diseño, color y tamaño son `<a href="/producto/<variante>">`: la URL de cada variante ya existía y ya está en el sitemap, así que no hay URL nuevas. El paginador usa `<a href="?page=N">` y conserva los demás filtros; la página 1 es la URL base. El clic normal se intercepta y cambia en la misma página como antes; Cmd/Ctrl/Shift o el botón central abren la URL. `aria-current="page"` en vez de `aria-pressed` (que no vale en un enlace). Anterior y Siguiente en los extremos quedan sin `href` y con `aria-disabled`. La elipsis va dentro de un `<li>` | S `components/product-info.tsx`, `components/ui/pagination.tsx`, `app/(routes)/tienda/components/paginator.tsx`, `lib/link-click.ts` |
+| `ad4b3247` | **Canónica de la paginación.** Solo `?page=N` (N ≥ 2, sin otros parámetros) lleva canónica a sí misma; antes apuntaba a la página 1. Sigue `noindex, follow`. `page=1`, valores no válidos, filtros, orden y búsqueda quedan como estaban: canónica a la base y `noindex`. El sitemap no cambia: solo lista la base | S `lib/listing-seo.ts`, `app/(routes)/tienda/page.tsx`, `app/(routes)/categoria/[slug]/page.tsx` |
+| `3c73bc5b` | **Marcado de envío alineado con Merchant Center (§9.13.2).** `Offer.shippingDetails` declara 13.000 COP, o 0 si el precio de la unidad alcanza el umbral; preparación 0–1 y tránsito 2–5 días (`DAY`), destino CO. La organización del inicio lleva `hasShippingService`: menos de 250.000 cuesta 13.000, desde 250.000 es gratis (el umbral sale de `Store.freeShippingThreshold`, no está escrito a mano), corte `12:00:00-05:00`, lunes a viernes, y `hasMerchantReturnPolicy`. Devoluciones, igual que antes: 7 días, por correo, la paga la clienta por cambio de opinión | S `lib/commerce-policies.ts`, `lib/product-schema.ts`, `app/(routes)/page.tsx` |
+
+**Lo que se interpretó, por ser ambiguo:**
+- **Canónica y `noindex` a la vez.** P1-5 decía «sigue noindex con canónica a la base»; la ola 3 pide canónica propia. Se tomó la lectura conservadora: canónica propia y `noindex, follow` como antes. La pregunta «¿indexar `?page=N`?» queda en la fase 2: un `noindex` largo termina tratándose como `nofollow`.
+- **`seoEnabled` en categorías con demanda.** Es la parte de datos de P1-5 y queda para la fase 2C.
+- **«Gratis desde el umbral».** El marcado de producto no puede expresarlo por valor del pedido. Va en la organización (`orderValue`, como el ejemplo de Google, que usa `maxValue: 29.99` y `minValue: 30`); el producto declara lo que cuesta enviar una unidad.
+- **Tarjeta de regalo.** Sin cambios: es digital, no se envía y no tiene política de devoluciones publicada.
+- **Prioridad de Google:** Merchant Center, después el marcado de producto y por último el de organización.
+
+**Diferencia pendiente con la página.** `/politicas/envios` todavía dice que la transportadora calcula el costo y «2 a 4 días hábiles». El marcado dice 13.000 y 2–6 días, como Merchant Center. El texto nuevo espera a Paula (fase 2A); el test `commerce-policies.test.ts` documenta la excepción y hay que cambiarlo cuando cambie el texto.
+
+### 10.2 Verificación local
+
+- **Revisiones:** type-check y lint sin errores; 740 de 740 pruebas; `next build` termina bien y `/producto/[slug]` sigue siendo ISR (●, 208 kB).
+- **Cobertura:** bajó de 82,3 a 77,4 % de líneas. No se perdió nada: el test nuevo importa las dos plantillas y sus componentes entran por primera vez en el cálculo. Sin ese test vuelve a 82,3 %. El umbral es 70.
+- **JSON-LD contra el build local, 5 fichas del sitemap** (portacarnet-doraemon, sombrilla-capibara-transp, lapiz-de-gatos-borrador, llavero-pan-cafe, vaso-termico-stitch): 6 de 6 ofertas con 13.000, CO, 0–1 + 2–5 días, 7 días, por correo y a cargo de la clienta. Ninguna llega a 250.000; la tarifa 0 la cubren las pruebas. Inicio: las dos franjas y el corte.
+- **Medidas y estilos frente a producción:** iguales en los selectores de `agenda-mini-conejito-cafe` y en el paginador de `/tienda` a 390, 768 y 1920 px, sin scroll horizontal.
+
+### 10.3 Cómo revertir
+
+`git revert 3c73bc5b ad4b3247 a21be221` en un solo push. Los tres son independientes: se puede revertir uno solo. No hay datos ni migraciones.
