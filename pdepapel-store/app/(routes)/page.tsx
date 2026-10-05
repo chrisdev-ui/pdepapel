@@ -15,7 +15,7 @@ import { NewArrivalsRail } from "@/components/home/new-arrivals-rail";
 import { ReviewsCarousel } from "@/components/home/reviews-carousel";
 import { ProductRowSkeleton, RailSkeleton } from "@/components/home/skeletons";
 import { Newsletter } from "@/components/newsletter";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { getCurrentSeason } from "@/lib/date-utils";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -99,17 +99,13 @@ export const metadata: Metadata = {
     locale: "es_CO",
     type: "website",
     images: [
+      // Primera: es la que toman WhatsApp, Facebook e Instagram.
+      DEFAULT_SHARE_IMAGE,
       {
         url: "/images/no-text-lightpink-bg.webp",
         width: 800,
         height: 600,
         alt: "Logo Papelería P de Papel",
-      },
-      {
-        url: "/opengraph-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Papelería P de Papel",
       },
     ],
   },

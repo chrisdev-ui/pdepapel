@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/shop/page-header";
 import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
-import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE, LIMIT_SHOP_ITEMS } from "@/constants";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { categoryPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
@@ -53,7 +53,7 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
     description += ` Filtro de precio activo: ${min} - ${max}.`;
   }
 
-  const images = ["/opengraph-image.png"];
+  const images = [DEFAULT_SHARE_IMAGE];
   const keywords = ["papelería", "útiles escolares", "papelería bonita", "oficina", "regalos", "arte"];
   if (title !== "Tienda") keywords.unshift(title.toLowerCase());
   if (search) keywords.push(search);

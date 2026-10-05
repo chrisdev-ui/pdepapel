@@ -107,6 +107,18 @@ export const DOTS = "...";
 
 export const BASE_URL = "https://papeleriapdepapel.com";
 
+/**
+ * Vista previa por defecto para inicio y /tienda: el logo existente sobre su
+ * fondo blanco, 1200×630 y ~40 KB. Antes apuntaban a `/opengraph-image.png`,
+ * que no existe (404).
+ */
+export const DEFAULT_SHARE_IMAGE = {
+  url: "/images/og-p-de-papel-1200x630.jpg",
+  width: 1200,
+  height: 630,
+  alt: "Papelería P de Papel",
+} as const;
+
 /** Carrier delivery window promised on the PDP, the checkout and the shipping policy. */
 export const LETTER_REGEX = /^[a-zA-Z]*$/;
 export const DIGIT_REGEX = /^[0-9]*$/;
