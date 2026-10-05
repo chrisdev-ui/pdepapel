@@ -658,3 +658,22 @@ Christian aprobó (2026-10-05): envío gratis desde `Store.freeShippingThreshold
 | Método | En tienda, por correo | Por correo (¿y en tienda?) | La política no habla de devolver en tienda |
 | Reembolso | 5 días | 5 días (≤ 15 días calendario que pide el art. 47) | Revisión legal (saldo a favor) |
 | URL | `/policies/returns` | `https://papeleriapdepapel.com/politicas/devoluciones` | — |
+
+### 9.12 Regiones en Merchant Center: aprobadas, no creadas (2026-10-05, 16:30 UTC)
+
+Christian aprobó crear las regiones y después la política de envío por región (§9.10). **No se creó nada:**
+
+- En **Configuración › Información de empresa** solo hay las pestañas Detalles, Tiendas y Países; **no hay pestaña «Regiones»**, a diferencia de la ayuda de Google ([Set up regions](https://support.google.com/merchants/answer/15406457?hl=en)). Países: solo Colombia, «Completada», 867 de 867 aprobados.
+- Buscar «Regiones» en Merchant Center solo ofrece **«Descubrir complementos: Regiones»**: en esta cuenta las regiones son un **complemento** que hay que activar primero. Activarlo es otro cambio de la cuenta (y puede pedir aceptar condiciones), que no estaba aprobado. Se paró ahí.
+- La política de envío vieja (tarifa plana 12.000) sigue igual y es la única.
+
+Definiciones listas para cuando se active el complemento (4-72, [datos.gov.co ixig-z8b5](https://www.datos.gov.co/Ordenamiento-Territorial/C-digos-Postales-Nacionales/ixig-z8b5), códigos reconstruidos a 6 dígitos):
+
+| Región | Códigos postales | Comprobación |
+|---|---|---|
+| Área Medellín | `0500*`, `05542*`, `05541*`, `05545*`, `05546*`, `05544*`, `05105*`, `05104*`, `05103*`, `05102*`, `05404*` | Cada prefijo es exclusivo de su municipio |
+| Resto de Antioquia | `050100-051019`, `051060-054039`, `054050-055409`, `055430-055439`, `055470-059999` | 384 filas de Antioquia, 125 municipios: todas caen en el área o aquí, ninguna en las dos |
+| Bogotá D.C. | `11*` (81 códigos, 110111–112041) | Todo código `11*` es de Bogotá y todo código de Bogotá empieza por 11. Cundinamarca es entera `25*` (250001–254057): no comparten códigos |
+| Resto de Colombia | Respaldo a nivel de país si la política lo permite; si no, `000000-049999`, `060000-109999`, `120000-999999` | Ningún otro departamento tiene códigos `05*` ni `11*`; ningún código está en dos departamentos (3.681 filas, 33 departamentos) |
+
+Reversión cuando se apliquen: borrar la política nueva, después las regiones y, si se activó solo para esto, el complemento. La política vieja vuelve a cubrir todo.
