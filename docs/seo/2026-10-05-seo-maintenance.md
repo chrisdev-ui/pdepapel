@@ -326,13 +326,13 @@ Impacto: A/M/B · Esfuerzo: S (< 1 h), M (medio día), L (más) · Confianza: qu
 
 ## 7. Estado de la Fase 1 (lote aprobado: P0-1, P0-2, P0-3, P1-4)
 
-Todo está en commits locales en `main`, sin push. P0-3 queda **detenido** por decisión pendiente (§7.2).
+Los cuatro ítems están en producción. P0-3 estuvo detenido hasta probarlo en una vista previa de Vercel (§7.2, §7.6) y se fusionó como `10843e01` (§7.7).
 
 | Ítem | Commit | Estado | Tests añadidos |
 |---|---|---|---|
 | P0-2 robots.txt | `1344c582` | Hecho. `*` → `Allow: /`, `/_next/static/`, `/_next/image`; `Disallow` intacto, incluido `/_next/` | `tests/unit/app/robots.test.ts`: las tres rutas permitidas exactas, `/_next/` sigue bloqueado, filtros y rutas privadas siguen bloqueados |
 | P0-1 `variesBy` | `bb214548` | Hecho. `variesBy` sale del marcado de las variantes: un atributo entra solo si todas lo tienen y hay ≥ 2 valores; sin atributos o con combinaciones repetidas se publica `Product` | `tests/unit/lib/product-schema.test.ts`: solo color, solo talla, ambos, ninguno, solo estampado (caso `lapices-mafalda-x6`), atributo faltante en una variante, talla interna de envío. 6 de 7 fallaban con el código anterior |
-| P0-3 caché de la ficha | rama local `seo/p0-3-en-espera` (`b82e9ba5`, `8820826a`) | **Detenido.** Ver §7.2 | `tests/components/single-product-page.test.tsx` (estado público sin cookie, botón de compra con cookie, HTML del servidor nunca trae el estado desbloqueado) y `tests/unit/app/producto-page-cache.test.ts` |
+| P0-3 caché de la ficha | `10843e01` (un solo commit; la rama `seo/p0-3-en-espera` quedó fusionada) | Hecho y en producción. Ver §7.7 | `tests/components/single-product-page.test.tsx` (estado público sin cookie, botón de compra con cookie, HTML del servidor nunca trae el estado desbloqueado) y `tests/unit/app/producto-page-cache.test.ts` |
 | P1-4 `og:image` | `6e99902a` | Hecho. `/images/og-p-de-papel-1200x630.jpg`: el logo `text-beside-white-bg.webp` reducido y completado con su mismo blanco `#FFFFFF`, 1200×630, 38,5 KB. Es la **primera** `og:image` de inicio y la de `/tienda` (constante `DEFAULT_SHARE_IMAGE`). En inicio, `/images/no-text-lightpink-bg.webp` queda segunda (declara 800×600, pero el archivo es 4000×4000), y `twitter.images` de inicio sigue apuntando a ese webp: sin cambio, fuera del lote | `tests/unit/app/share-images.test.ts`: tamaño leído del marcador SOF del JPEG (sin `sharp`, que solo llega como dependencia transitiva de Next) y peso < 100 KB; ninguna página apunta a una imagen local inexistente (fallaba con el código anterior) |
 
 **Puertas (en `main`, 2026-10-05):** tienda `lint` sin avisos, `test:coverage` 131 archivos / 624 tests, `type-check`, `build`. Administración `tsc --noEmit` sin errores, `test:coverage` 396 archivos / 3.261 tests e integración contra MySQL local en Docker 63 archivos / 456 tests. En una primera pasada de cobertura de administración, dos tests de componentes (`bulk-manual-update-modal`, `product-group-unassigned-images`) superaron el límite de 5 s porque la cobertura de la tienda corría a la vez. Solos tardan 172 y 513 ms, y la pasada sin carga salió verde: no se tocaron. Administración `test:unit` tenía **1 fallo previo y ajeno** a este lote: `tests/components/coupon-form.test.tsx` usa un cupón que vence el `2026-10-01T04:59:59Z`, y con el reloj real dejó de mostrar «Desactivar». Christian pidió arreglar todos los tests, así que se corrigió en un commit aparte que fija solo `Date` en 2026-09-15 (`vi.useFakeTimers({ toFake: ["Date"] })`).
@@ -358,7 +358,7 @@ Todo está en commits locales en `main`, sin push. P0-3 queda **detenido** por d
 - **Otras API dinámicas en la ruta:** ninguna. Se revisaron `cookies()`, `headers()`, `searchParams`, `noStore` y `force-dynamic` en la página, `app/layout.tsx`, `app/(routes)/layout.tsx`, `RelatedProducts` y `Newsletter`. Los fetch de `getProduct` y `getProducts` ya usan `CATALOG_FETCH_CACHE` (revalidate 300, etiqueta `products`).
 - **Cambio en la rama:** el hook `useEarlyAccess` (`hooks/use-early-access.ts`) arranca en `false` y lee la cookie después de hidratar. El HTML que se cachee siempre trae el estado público.
 
-### 7.2 Por qué P0-3 está detenido: decisión pendiente
+### 7.2 Por qué P0-3 se detuvo (resuelto en §7.6 y §7.7)
 
 Mover la cookie al navegador **no basta**. Con `next build` + `next start` (API de producción, solo lectura), la ficha seguía en `private, no-store`. La causa es que, sin `generateStaticParams`, Next 14 renderiza la ruta dinámica en cada visita. Con `generateStaticParams()` → `[]` sí funciona:
 
@@ -435,8 +435,8 @@ Fecha base = día del despliegue (D). Si se despliega el 2026-10-05: **+7 = 2026
 | Recursos sin cargar en la prueba en tiempo real de una ficha (GSC) | 49/61 (45 por robots) | 0 por robots.txt | — |
 | «Bloqueada por robots.txt» (GSC › Páginas) | 13 | sin URL `/_next/` nuevas | ≤ 13 |
 | Clics de fichas de comerciantes, 28 d (GSC › Aparición) | 68 · 390 impr. | — | comparar |
-| CWV móvil, LCP «necesita mejora» (GSC) | 81 URL | sin cambio esperado (P0-3 detenido) | comparar |
-| `x-vercel-cache` de la ficha (curl) | MISS / `no-store` | MISS mientras P0-3 esté detenido | — |
+| CWV móvil, LCP «necesita mejora» (GSC) | 81 URL | comparar (P0-3 en producción desde 2026-10-05) | comparar |
+| `x-vercel-cache` de la ficha (curl) | MISS / `no-store` | MISS → HIT (verificado 2026-10-05) | — |
 | `og:image` de inicio y `/tienda` (curl) | 404 | 200 | 200 |
 | Cuota de impresiones con URL `/product/` (GSC › Páginas) | 40 % | — | comparar (sin cambio esperado por este lote) |
 | Cuota de impresiones que terminan en 404 (barrido) | 22 % | — | comparar (P0-4 no aprobado) |
@@ -465,3 +465,25 @@ Push de `62a70b22..5270cd09` a `main`. CI «Quality checks» en verde (tienda y 
 **Diferencia con `next start`:** la caché ISR de Vercel guarda la respuesta completa, con estado y cabeceras, y sirve al navegador con `cache-control: public, max-age=0, must-revalidate`. La caché de archivos de `next start` (Next 14.2 autoalojado) pierde `Location` en la 308 cacheada. Producción corre en Vercel, así que la opción 1 de §7.2 resuelve P0-3 sin cambiar la arquitectura. No se probó el caso «Próximamente» con cookie porque hoy no hay productos en `/proximamente`; lo cubre el test que renderiza el HTML del servidor con la cookie puesta.
 
 **Incidente durante la prueba:** el primer intento de vista previa usó los metadatos de git, cuyos commits estaban firmados con `christian.gabriel.torres@depalmastudios.com`, un correo que ya no existe. Vercel lo bloqueó y envió un aviso de «no es miembro del equipo». Desde entonces el repositorio firma con `121559192+chrisdev-ui@users.noreply.github.com` (solo `git config` del repo; el global queda igual y no se reescribió historia). Ese despliegue bloqueado quedó en estado `UNKNOWN` y no se borró.
+
+### 7.7 P0-3 en producción (2026-10-05)
+
+- **Commit:** `10843e01`, un solo commit (`generateStaticParams()` → `[]` + `useEarlyAccess`), fusionado como fast-forward y sin force-push. Puertas: tienda `type-check`, `lint`, 132 archivos / 630 tests y `build` (la ficha sale como ● ISR). CI «Quality checks» en verde. En producción la tienda se desplegó y la administración se saltó por el Ignored Build Step.
+- **Producción, solo lectura:**
+  - `block-iris-x35-hojas`, `lapices-mafalda-x6` y `cuaderno-5-materias-peq-norma`: 200, MISS → HIT, `cache-control: public, max-age=0, must-revalidate`, canónica propia, JSON-LD válido (`lapices-mafalda-x6` es ProductGroup con `variesBy` pattern).
+  - Alias `carpeta-plastica-oficio-lila` y `planillero-con-tapa-fashion-pastel`: 308 HIT con `Location`.
+  - `/product/<uuid>`: 2 saltos y luego 200.
+  - `mini-kit-lector` (archivado) y un slug inexistente: 404 MISS → HIT.
+  - Inicio, `robots.txt` y `sitemap.xml` (890 URL): 200.
+  - `/tienda` y las categorías siguen en `no-store`: leen `searchParams` (P2-8).
+- **`public-health.yml`:** desde 2026-09-10 ya no corre tras cada despliegue; corre los lunes a las 14:00 UTC y a mano. Corrida manual 37272537823 sobre `10843e01`: 50 pasaron, 33 se saltaron, **1 inestable**: `tests/e2e/product-sticky-bar.spec.ts:126` («sigue apareciendo cuando el botón queda por encima»). No falló en las 5 corridas anteriores ni en 15 repeticiones locales contra producción. Hay que vigilarlo en la corrida semanal.
+- **Vista previa de administración:** cada push de rama marca «Vercel – pdepapel-admin: failure». El build falla en `lib/env.mjs` («Invalid environment variables») porque al ámbito Preview le faltan variables obligatorias. Es previo a este trabajo y no afecta a producción.
+- **Revalidación, pendiente:** `POST /api/revalidate` sin el secreto recibe el 401 de la propia ruta y ningún `x-vercel-mitigated`. El proyecto de la tienda no tiene configuración de firewall propia. Todavía no se ha visto un 200 real desde el panel (los registros solo guardan unos 60 minutos y nadie editó el catálogo). Al primer cambio real: buscar `POST /api/revalidate 200` en los registros de la tienda en menos de una hora, y comprobar que la ficha responde MISS una vez y HIT después.
+- **Huecos de datos desactualizados (abiertos):**
+  - Cuando un producto pasa su `availableAt` no se dispara ninguna invalidación; vale la expiración de 300 s, y una página poco visitada puede servirse vieja una vez mientras se regenera.
+  - Opciones aplazadas: refrescar el stock en el navegador con `/api/producto/[slug]`, o bajar `revalidate` (AGENTS.md pide medir antes).
+  - El checkout revalida el stock contra la base de datos, así que una página vieja no puede vender de más.
+- **Search Console (2026-10-05, con permiso de Christian):**
+  - «Falta el campo "size"»: validación iniciada.
+  - `robots.txt`: se pidió un nuevo rastreo.
+  - «Bloqueada por robots.txt»: pendiente hasta que Search Console muestre el archivo de 1.279 bytes.
