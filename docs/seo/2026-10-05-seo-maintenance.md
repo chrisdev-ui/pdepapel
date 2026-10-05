@@ -613,3 +613,48 @@ Fuente primaria: [Ley 1480 de 2011, art. 47 (Secretaría del Senado)](http://www
 - **`merchantReturnDays`:** sigue en 5. Google lo cuenta en días desde la entrega, sin hábiles; 5 días hábiles son de 5 a 11 días calendario en 2026 (7 la mayoría de las veces). Opciones para decidir con Paula: (a) 7; (b) 11; (c) cambiar la política a un número fijo de días calendario ≥ 11; (d) fijar el plazo en la configuración de devoluciones de Merchant Center, que Google usa por encima del marcado.
 - **Reembolso:** el artículo dice que «se deberá reintegrar el dinero». Para comercio electrónico (inciso modificado por la Ley 2439 de 2024) la devolución «no podrá exceder de quince (15) días calendario» desde que se ejerció el derecho, y «la suma será aplicada directamente sobre el instrumento de pago o medio de pago correspondiente o a través del medio acordado entre las partes». La política dice «Si te retractas de la compra, el valor queda como saldo a favor»: revisar con asesoría legal. No se cambió.
 - **Sábado:** los cálculos de días hábiles de esta auditoría suponen lunes a viernes sin festivos. Si el sábado cuenta como hábil, el plazo máximo baja de 11 a 9 días calendario. Revisar con asesoría legal.
+
+### 9.9 Hallazgos de la tarde (2026-10-05)
+
+- **Cantidades de empaque aplicadas** a las 16:02:18 UTC por `npm run prod:write` (línea en `ops/prod-writes.log`, `rows=2`): `lapiceros-marfil-pastel-x10` «x 12 unidades» → «x 10 unidades»; `colores-norma-x12-doble-punta` nombre y descripción x12 → x13. Solo cambiaron `name` y `description` (comparado con `~/pdepapel-backups/2026-10-05/b-pack-sizes-backup.json`). Verificado en las fichas pasados los 300 s. El slug sigue con «x12».
+- **8.000 nunca aparece** como costo de envío en 12 meses de pedidos pagados. 15.000 aparece 7 veces, todas a mano (6 en Antioquia, 1 en Santander). En el panel no hay valor por defecto ni lista de precios: el costo se escribe a mano en «Otra transportadora».
+- **132 pedidos sin transportadora** (de 349 pagados): 95 sin fila de envío (92 con costo 0, 3 vacíos; 82 en Antioquia; sin origen registrado; de noviembre de 2025 a agosto de 2026) y 37 «Recoge en tienda» (`ShippingProvider.NONE`: 28 en 0, 8 vacíos, 1 en 8.500). Los datos no dicen si los 95 fueron recogidas o domicilios cobrados por fuera.
+- **Códigos postales**, del conjunto oficial de 4-72 en [datos.gov.co, «Códigos Postales Nacionales» (ixig-z8b5)](https://www.datos.gov.co/Ordenamiento-Territorial/C-digos-Postales-Nacionales/ixig-z8b5). El conjunto guarda los códigos como números («50.01» = 050010), así que se reconstruyeron a 6 dígitos. Confianza alta.
+  - Área Medellín (11 municipios): `0500*` Medellín, `05542*` Envigado, `05541*` Itagüí, `05545*` Sabaneta, `05546*` La Estrella, `05544*` Caldas, `05105*` Bello, `05104*` Copacabana, `05103*` Girardota, `05102*` Barbosa, `05404*` Rionegro. Cada prefijo es exclusivo de su municipio; con 4 dígitos (`0510`, `0540`, `0554`) se colarían otros municipios.
+  - Resto de Antioquia (114 municipios), sin solaparse con el área: `050100-051019`, `051060-054039`, `054050-055409`, `055430-055439`, `055470-059999`.
+  - Merchant Center acepta códigos sueltos, rangos, prefijos con comodín (`94*`) y rangos de comodines, hasta 25.000 entradas ([Set up regions](https://support.google.com/merchants/answer/15406457?hl=en)). No dice qué pasa si dos regiones se solapan, por eso no se solapan.
+- **Merchant Center contradice a la tienda** (y manda sobre el marcado):
+
+| Ajuste | Merchant Center hoy | Tienda |
+|---|---|---|
+| Plazo de devolución | 5 días | 5 días hábiles desde la entrega |
+| Estado del producto | «Nuevos y poco usados» | Sin abrir ni usar |
+| Etiqueta de devolución | «Incluida en el paquete, Sin coste» | Por decisión del cliente, el envío lo paga el cliente |
+| URL de la política | `/policies/returns` (inglés, redirige) | `/politicas/devoluciones` |
+| Hora límite | 21:00 | 12:00 |
+| Preparación | 0–2 días, lunes a domingo | 0–1 día, lunes a viernes |
+| Transporte | 2 días, todos los destinos, lunes a sábado | según la transportadora |
+| Costo | Tarifa plana 12.000, sin envío gratis | por región; gratis desde 250.000 |
+
+- `colores-scribe-x18` dice «12 colores clásicos vibrantes» en un set de 18: pregunta para Paula (puede ser 12 + 6 de otro tipo).
+
+### 9.10 Envíos en Merchant Center: aprobado, no aplicado todavía
+
+Christian aprobó (2026-10-05): envío gratis desde `Store.freeShippingThreshold` (250.000) en toda Colombia; área Medellín 10.000; resto de Antioquia 15.000; Bogotá D.C. 15.000; otros departamentos 17.000; preparación 0–1 día, hora límite 12:00 (Bogotá), lunes a viernes. Tránsito en días hábiles (mínimo = mediana, máximo = p90 de los días cotizados por EnvioClick, 12 meses): área Medellín 1–2 (n=58), Bogotá 2–3 (n=23), otros departamentos 2–5 (n=36), resto de Antioquia 1–6 (n=3: valor conservador, poco dato), lunes a sábado.
+
+**No se aplicó.** En el flujo de nueva política de envío, el tiempo de transporte solo ofrece «Todos los destinos» y la tabla de costos avanzada solo tiene las dimensiones Precio, Peso y Número de artículos. Las tarifas y tiempos por región necesitan regiones creadas antes, en **Configuración › Información de la empresa › pestaña «Regiones»**, y esa pantalla no estaba en lo aprobado. Se canceló sin guardar nada. Solo existe la política vieja.
+
+**Valores anteriores** (para revertir): política «Política de envíos a toda Colombia», Colombia, todos los productos (867); tarifa fija 12.000 COP; sin envío gratis por valor de pedido; hora límite 21:00 (GMT-05:00, Bogotá); preparación 0–2 días, lunes a domingo; transporte 2–2 días, todos los destinos, lunes a sábado; total 2–4 días hábiles.
+
+**Reversión** (cuando se aplique): dejar la política vieja tal como está hasta verificar la nueva; si hay que volver atrás, borrar la política nueva («Envíos por región 2026-10») y, si se crearon, las regiones «Área Medellín», «Resto de Antioquia» y «Bogotá D.C.». La vieja vuelve a cubrir todo.
+
+### 9.11 Devoluciones en Merchant Center: valores preparados (sin aplicar)
+
+| Campo | Hoy | Se pondría | Depende de |
+|---|---|---|---|
+| Plazo | 5 días | (a) 7 · (b) 11 · (c) el número de días calendario de la nueva política · (d) el valor elegido aquí, en Merchant Center | Opción a–d, con Paula |
+| Estado del producto | Nuevos y poco usados | Nuevos (sin abrir ni usar) | — (lo dice la política) |
+| Etiqueta / costo | Incluida en el paquete, sin coste | El cliente paga el envío si es por su decisión; gratis si es error nuestro | Si la etiqueta gratis es intencional (pregunta a la dueña) |
+| Método | En tienda, por correo | Por correo (¿y en tienda?) | La política no habla de devolver en tienda |
+| Reembolso | 5 días | 5 días (≤ 15 días calendario que pide el art. 47) | Revisión legal (saldo a favor) |
+| URL | `/policies/returns` | `https://papeleriapdepapel.com/politicas/devoluciones` | — |
