@@ -743,6 +743,75 @@ Las dos primeras filas son las que Merchant Center compara en «Calidad de la ti
 4. Corregir el código postal de la dirección de la empresa («500023» → 050023), que no estaba aprobado.
 5. Mañana, revisar Diagnóstico frente a la línea base de 867.
 
+#### 9.13.2 Tercera tanda: tarifa plana nueva y política de devoluciones editada (2026-10-05, ~20:20 UTC)
+
+Christian aprobó: probar `Bogotá` `11*` y, si fallaba, volver a una sola tarifa nacional; además, editar en su sitio «Estándar para Colombia».
+
+**Paso 0: costo real cobrado** (solo lectura, usuario `pdepapel_ro`; pedidos pagados con envío por EnvioClick, 2025-09-02 → 2026-10-01). `Shipping.cost` es lo que pagó la clienta; vale 0 cuando aplica el envío gratis. Agrupado por `Order.daneCode` (los 122 pedidos lo tienen), sin datos personales.
+
+| Grupo | Pedidos | Envío gratis | p50 | p75 | p90 | Propuesta | p90 > propuesta + 3.000 |
+|---|---|---|---|---|---|---|---|
+| Medellín metro (11 municipios) | 59 (1 en 0 bajo el umbral) | 0 % | 7.189 | 8.798 | 9.719 | 10.000 | No |
+| Resto de Antioquia | 3 | 0 % | 13.997 | 13.997 | 13.997 | 15.000 | No |
+| Bogotá | 23 | 0 % | 13.436 | 14.422 | 14.846 | 15.000 | No |
+| Resto de Colombia | 37 | 0 % | 13.436 | 14.846 | 15.272 | 17.000 | No |
+| **Nacional (cobrados)** | 121 | — | 11.859 | **13.436** | 14.846 | — | — |
+
+Ningún pedido tuvo envío gratis por umbral: el umbral de 250.000 es de septiembre de 2026.
+
+**Paso 1, regiones: no se pueden usar para envíos en Colombia.**
+- Con `Bogotá` (ID `BOG`), Colombia, «Códigos postales» y `11*` solo, el formulario aceptó el código («Se ha seleccionado 1 ubicación») y mostró: «**Tipo de zona no admitido.** Las zonas de este tipo no se pueden usar como zona de entrega en este país.»
+- La ayuda de Google ([Set up regions](https://support.google.com/merchants/answer/15406457?hl=en)) lo confirma: en Colombia las regiones (por departamento o código postal) solo sirven para disponibilidad y precios regionales, no para costos de envío ni tiempos de entrega.
+- No se guardó la región: no habría servido para envíos y borrarla después no estaba aprobado. Se canceló y la lista de regiones sigue vacía.
+- Esto explica también el falso «se solapan» de §9.13.1. Se pasó al respaldo (paso 4).
+
+**Paso 4, respaldo: política de envío plana editada en su sitio.**
+
+| Campo | Antes | Ahora |
+|---|---|---|
+| Nombre | Política de envíos a toda Colombia | igual |
+| País / productos | Colombia / todos (867) | igual |
+| Hora límite | 21:00 (GMT-05:00, Bogotá) | **12:00** (GMT-05:00, Bogotá) |
+| Preparación | 0–2 días, lunes a domingo | **0–1 día, lunes a viernes** |
+| Transporte | 2–2 días, «Todos los destinos», lunes a sábado | **2–5 días**, «Todos los destinos», **lunes a viernes** |
+| Total que muestra Google | 2–4 días hábiles | **2–6 días hábiles** |
+| Envío gratis | ninguno | **pedidos de más de 249.999 COP** (equivale a 250.000 o más, como la tienda) |
+| Tarifa | fija 12.000 COP | **fija 13.000 COP** |
+
+- **Por qué 13.000:** es el p75 nacional (13.436) redondeado al millar más cercano, dentro del rango 12.000–17.000.
+- **Lo que implica:** cubre lo que se cobró en 3 de cada 4 envíos. Medellín metro paga menos en el checkout (p90 9.719), y a Resto de Colombia y Bogotá a veces se les cobra un poco más (máximos 19.912 y 15.622).
+- **Al guardar:** «Se ha añadido tu información de envío a Merchant Center». Productos 867 / 0 / 0 / 0, sin avisos nuevos en Notificaciones.
+- **Reversión:** editar la misma política y volver a los valores de la columna «Antes»: desmarcar el envío gratis, tarifa 12.000, hora 21:00, preparación 0–2 lunes a domingo, transporte 2–2 lunes a sábado.
+
+**Paso 3: «Estándar para Colombia» editada en su sitio.**
+
+| Campo | Antes | Ahora |
+|---|---|---|
+| URL | `https://papeleriapdepapel.com/policies/returns` | **`https://papeleriapdepapel.com/politicas/devoluciones`** |
+| Devoluciones / cambios | Defectuosos y no defectuosos / acepta cambios | igual |
+| Estado del producto | Nuevos y poco usados | **Solo nuevos** |
+| Plazo | 5 días | **7 días** |
+| Método | En tienda, por correo | **Solo por correo** |
+| Etiqueta de devolución | Incluida en el paquete, sin costo | **Responsabilidad del cliente** |
+| Tarifa de reposición | Sin costo | igual |
+| Tiempo de procesamiento del reembolso | 5 días | igual: el formulario no pregunta el medio de reembolso, solo este tiempo, que no estaba en la lista |
+
+- **Qué bloqueaba «Guardar»:** la casilla obligatoria «Confirmo que la información que he introducido coincide con la política de devoluciones de mi sitio web». Sin marcarla, el botón queda deshabilitado aunque no haya ningún error a la vista. Era la causa del bloqueo de §9.13.
+- **Al guardar:** la política pasó a estado **«Pendiente»**; Google la revisa en hasta 10 días. El `policyId` cambió de 7714177965 a 9364265866: Merchant Center guarda la edición como una versión nueva y la lista sigue mostrando una sola política. Productos 867 / 0 / 0 / 0.
+- **Reversión:** editar «Estándar para Colombia» con los valores de la columna «Antes» y marcar la casilla.
+
+**Diferencias con la tienda que siguen abiertas** (no se cambió código ni texto):
+1. La tienda dice que el costo «lo calcula la transportadora según tu ciudad» (`pdepapel-store/app/(routes)/politicas/envios/page.tsx`); Merchant Center ahora declara 13.000 fijos.
+2. La tienda dice «2 a 4 días hábiles» (`DEFAULT_DELIVERY_ESTIMATE`, `pdepapel-admin/lib/store-settings.ts:255`, editable en Configuración); Merchant Center declara 2–6.
+3. El envío gratis de la tienda es desde 250.000 inclusive (`pdepapel-store/lib/utils.ts:190`). En Merchant Center se puso «más de 249.999», que da lo mismo.
+4. El plazo de devolución en la tienda es de 5 días hábiles y en Merchant Center 7 días: diferencia conocida (§9.13).
+
+**Pendientes:**
+- Mañana, revisar Diagnóstico frente a los 867.
+- Seguir el estado de la política de devoluciones hasta que deje de estar «Pendiente» (hasta 10 días).
+- El código postal de la dirección de la empresa sigue en «500023».
+- Si Google marca la diferencia de costo o plazo en «Calidad de la tienda», alinear el texto de la tienda: es una decisión aparte.
+
 ### 9.14 Copias de seguridad de la base
 
 **Activas y con prueba de restauración (2026-10-05, 19:16 UTC):** copia diaria cifrada a R2 (`pdepapel-db-backups`, 08:30 UTC); primera copia de 10,7 MB restaurada con 96 de 96 tablas idénticas a producción. Detalle en `docs/runbooks/db-backups.md`.
