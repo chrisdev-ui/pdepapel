@@ -1,0 +1,55 @@
+name: Database backup
+
+# Copia diaria de la base de producción a R2, cifrada con age
+# (docs/runbooks/db-backups.md). No corre hasta que la variable del
+# repositorio BACKUP_ENABLED sea «true»: así subir este archivo no dispara
+# nada contra producción antes de que existan los secretos. Con la variable
+# activa y un secreto faltante, el primer paso falla y nombra lo que falta.
+# GitHub avisa por correo de las corridas programadas que fallan a quien
+# editó por última vez el cron de este archivo.
+on:
+  schedule:
+    - cron: "30 8 * * *" # 03:30 en Colombia; no se cruza con admin-scheduled-tasks (13:00 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump, encrypt and upload
+    if: vars.BACKUP_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKUP_DB_HOST: ${{ secrets.BACKUP_DB_HOST }}
+      BACKUP_DB_PORT: ${{ secrets.BACKUP_DB_PORT }}
+      BACKUP_DB_USER: ${{ secrets.BACKUP_DB_USER }}
+      BACKUP_DB_PASSWORD: ${{ secrets.BACKUP_DB_PASSWORD }}
+      BACKUP_DB_NAME: ${{ secrets.BACKUP_DB_NAME }}
+      BACKUP_R2_ACCOUNT_ID: ${{ secrets.BACKUP_R2_ACCOUNT_ID }}
+      BACKUP_R2_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
+      BACKUP_R2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
+      BACKUP_R2_BUCKET: ${{ secrets.BACKUP_R2_BUCKET }}
+      BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: pdepapel-admin/scripts/backup
+
+      - name: Check configuration (no network)
+        run: bash pdepapel-admin/scripts/backup/db-backup.sh --check-config
+
+      - name: Install age and MySQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age mysql-client >/dev/null
+          age --version
+          mysqldump --version
+
+      - name: Dump, encrypt and upload to R2
+        run: bash pdepapel-admin/scripts/backup/db-backup.sh
