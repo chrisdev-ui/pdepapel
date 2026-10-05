@@ -107,6 +107,15 @@ describe("buildProductMetaDescription", () => {
     expect(description.startsWith("Cuaderno argollado")).toBe(true);
   });
 
+  /** En producción «Carpeta plástica oficio azul pastel » publicaba «… pastel . Carpeta…». */
+  it("ignores stray spaces in the product name", () => {
+    const shared = "<p>Carpeta KLIPP.</p>";
+    const azul = product({ id: "a", name: "Carpeta plástica oficio azul pastel ", description: shared, color: { id: "c3", name: "Azul pastel" } } as unknown as Partial<Product>);
+    const verde = product({ id: "v", name: "Carpeta plástica oficio verde pastel", description: shared, color: { id: "c2", name: "Verde pastel" } } as unknown as Partial<Product>);
+    expect(buildProductMetaDescription(azul, { siblings: [azul, verde] })).toBe("Carpeta plástica oficio azul pastel. Carpeta KLIPP.");
+    expect(buildProductMetaTitle(azul, [azul, verde])).toBe("Carpeta plástica oficio azul pastel | P de Papel");
+  });
+
   it("gives sibling variants different descriptions even when they share the text", () => {
     const shared = "<p>Carpeta plástica tamaño oficio con cierre de botón.</p>";
     const rosa = product({ id: "r", description: shared, color: { id: "c1", name: "Rosado" } } as unknown as Partial<Product>);

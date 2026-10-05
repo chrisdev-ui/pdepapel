@@ -36,7 +36,9 @@ export function getDistinguishingAttributes(product: Product, siblings: VariantA
 /** Título único por ficha: nombre, lo que distingue a la variante y la marca si cabe. */
 export function buildProductMetaTitle(product: Product, siblings: VariantAttributes[] = []) {
   const attributes = getDistinguishingAttributes(product, siblings);
-  const title = attributes.length ? `${product.name} - ${attributes.join(", ")}` : product.name;
+  // Algunos nombres traen espacios de más en los datos («…azul pastel »).
+  const name = product.name.replace(/\s+/g, " ").trim();
+  const title = attributes.length ? `${name} - ${attributes.join(", ")}` : name;
   return `${title}${BRAND_SUFFIX}`.length <= TITLE_MAX_LENGTH ? `${title}${BRAND_SUFFIX}` : title;
 }
 
@@ -61,6 +63,7 @@ export function buildProductMetaDescription(
   options: { siblings?: VariantAttributes[]; freeShippingThreshold?: number | null } = {},
 ) {
   const attributes = getDistinguishingAttributes(product, options.siblings);
+  const name = product.name.replace(/\s+/g, " ").trim();
   const ownText = richTextToPlainText(product.description);
   if (ownText) {
     // En un grupo las hermanas suelen compartir el texto: algo propio de la
@@ -69,13 +72,13 @@ export function buildProductMetaDescription(
     const isVariant = (options.siblings?.length ?? 0) > 1;
     const prefix = attributes.length
       ? `${attributes.join(", ")}. `
-      : isVariant && !normalize(ownText).startsWith(normalize(product.name))
-        ? `${product.name}. `
+      : isVariant && !normalize(ownText).startsWith(normalize(name))
+        ? `${name}. `
         : "";
     return truncate(`${prefix}${ownText}`, DESCRIPTION_MAX_LENGTH);
   }
 
-  const label = attributes.length ? `${product.name} (${attributes.join(", ")})` : product.name;
+  const label = attributes.length ? `${name} (${attributes.join(", ")})` : name;
   const shipping = options.freeShippingThreshold
     ? `Envío a toda Colombia, gratis desde ${formatPrice(options.freeShippingThreshold)}.`
     : "Envío a toda Colombia.";
