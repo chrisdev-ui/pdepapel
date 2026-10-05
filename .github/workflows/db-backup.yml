@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: "30 8 * * *" # 03:30 en Colombia; no se cruza con admin-scheduled-tasks (13:00 UTC)
   workflow_dispatch:
+    inputs:
+      keep_artifact:
+        description: "Guardar también el archivo CIFRADO (.age) como artefacto por 1 día, para la prueba de restauración"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -52,4 +57,23 @@ jobs:
           mysqldump --version
 
       - name: Dump, encrypt and upload to R2
+        id: backup
+        env:
+          # La copia cifrada queda aquí después del paso (el runner se destruye
+          # al terminar); nunca hay un volcado en claro en disco.
+          BACKUP_OUTPUT_DIR: ${{ runner.temp }}/backup
         run: bash pdepapel-admin/scripts/backup/db-backup.sh
+
+      - name: Summary
+        run: echo "Copia ${{ steps.backup.outputs.key }} · ${{ steps.backup.outputs.bytes }} bytes cifrados" >> "$GITHUB_STEP_SUMMARY"
+
+      # Solo con keep_artifact=true (corrida manual): el archivo .age cifrado,
+      # nada más, por un día. Las corridas programadas no lo suben.
+      - name: Keep encrypted copy as artifact (manual runs only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.keep_artifact }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-encrypted
+          path: ${{ runner.temp }}/backup/*.sql.gz.age
+          if-no-files-found: error
+          retention-days: 1

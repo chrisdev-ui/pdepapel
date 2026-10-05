@@ -103,7 +103,11 @@ for key in "${keys[@]}"; do
     --metadata "sha256=$sha,tables=$tables"
   remote="$(aws s3api head-object --bucket "$BACKUP_R2_BUCKET" --key "$key" --endpoint-url "$endpoint" \
     --query ContentLength --output text)"
+  [[ "$remote" =~ ^[0-9]+$ ]] && ((remote > 0)) || fail "$key no está en R2 o está vacío (ContentLength: $remote)."
   [[ "$remote" == "$bytes" ]] || fail "$key quedó con $remote bytes en R2 y se esperaban $bytes."
   echo "db-backup: subido $key ($remote bytes)"
+  if [[ -n "${GITHUB_OUTPUT:-}" && "$key" == daily/* ]]; then
+    { echo "key=$key"; echo "bytes=$remote"; } >> "$GITHUB_OUTPUT"
+  fi
 done
 done_ok=1
