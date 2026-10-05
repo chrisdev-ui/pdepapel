@@ -45,8 +45,7 @@ import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
   preserveProductSlugAlias,
-  synchronizeProductGroupSlugs,
-} from "@/lib/product-slugs";
+  synchronizeProductGroupSlugs, deleteGroupedVariantKeepingUrls } from "@/lib/product-slugs";
 import { auth } from "@clerk/nextjs/server";
 import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -591,10 +590,33 @@ export async function DELETE(
         where: { productId: params.productId },
       });
 
-      // Finally delete the product
-      await tx.product.delete({
-        where: { id: params.productId, storeId: params.storeId },
-      });
+      // Una variante borrada no se lleva su URL: si el grupo tiene otra
+      // variante viva, su slug y sus alias pasan a ella (308). Antes solo lo
+      // hacía el guardado del grupo y borrar desde la ficha dejaba un 404.
+      const sibling = product.productGroupId
+        ? await tx.product.findFirst({
+            where: {
+              storeId: params.storeId,
+              productGroupId: product.productGroupId,
+              isArchived: false,
+              id: { not: product.id },
+            },
+            orderBy: [{ stock: "desc" }, { createdAt: "asc" }],
+            select: { id: true },
+          })
+        : null;
+
+      if (sibling) {
+        await deleteGroupedVariantKeepingUrls(tx, {
+          storeId: params.storeId,
+          product,
+          redirectToProductId: sibling.id,
+        });
+      } else {
+        await tx.product.delete({
+          where: { id: params.productId, storeId: params.storeId },
+        });
+      }
     });
 
     await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCT_DELETE");

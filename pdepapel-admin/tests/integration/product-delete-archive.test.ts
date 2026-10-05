@@ -85,6 +85,34 @@ describe("product delete guard and archive with MySQL", () => {
     await expect(testPrisma.product.findUnique({ where: { id: fixture.kit.id } })).resolves.toBeNull();
   });
 
+  /**
+   * P1-7: borrar una variante desde su ficha dejaba su URL en 404 (solo el
+   * guardado del grupo conservaba los slugs). Ahora su slug pasa a la hermana viva.
+   */
+  it("keeps a deleted variant's URL as an alias of its live sibling", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const storeId = fixture.store.id;
+    const group = await testPrisma.productGroup.create({
+      data: { name: "Grupo", slug: `grupo-borrar-${storeId}`, description: "x", storeId },
+    });
+    await testPrisma.product.update({ where: { id: fixture.kit.id }, data: { productGroupId: group.id, slug: `kit-rosa-${storeId}` } });
+    await testPrisma.product.update({ where: { id: fixture.component.id }, data: { productGroupId: group.id, slug: `kit-azul-${storeId}` } });
+    await testPrisma.productSlugAlias.create({ data: { storeId, productId: fixture.kit.id, slug: `kit-rosa-viejo-${storeId}` } });
+
+    const { DELETE } = await import("@/app/api/[storeId]/products/[productId]/route");
+    const response = await DELETE(json("DELETE"), { params: { storeId, productId: fixture.kit.id } });
+    expect(response.status).toBe(200);
+
+    await expect(testPrisma.product.findUnique({ where: { id: fixture.kit.id } })).resolves.toBeNull();
+    await expect(
+      testPrisma.productSlugAlias.findMany({ where: { storeId, productId: fixture.component.id }, orderBy: { slug: "asc" }, select: { slug: true } }),
+    ).resolves.toEqual([{ slug: `kit-rosa-${storeId}` }, { slug: `kit-rosa-viejo-${storeId}` }]);
+
+    await testPrisma.product.updateMany({ where: { productGroupId: group.id }, data: { productGroupId: null } });
+    await testPrisma.productGroup.delete({ where: { id: group.id } });
+  });
+
   it("queues a pause for the active Mercado Libre listing when the product is archived, from the form and in bulk", async () => {
     fixture = await createInventoryFixture();
     session.userId = fixture.store.userId;
