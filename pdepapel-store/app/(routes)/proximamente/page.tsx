@@ -9,17 +9,27 @@ import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
 
 export const revalidate = 300;
 
-export const metadata: Metadata = {
-  title: "Lo que viene",
-  description:
-    "Los productos que están por llegar a Papelería P de Papel. Suscríbete y míralos antes que nadie.",
-  alternates: { canonical: "/proximamente" },
-  openGraph: {
-    title: "Lo que viene | Papelería P de Papel",
-    description: "Los productos que están por llegar a la tienda.",
-    url: `${BASE_URL}/proximamente`,
-  },
-};
+const COMING_SOON_QUERY = { availability: "coming-soon", limit: 48, groupBy: "parents" } as const;
+
+/**
+ * Sin productos por llegar la página es solo un título y un párrafo: queda
+ * fuera del índice (y del sitemap) hasta que vuelva a tener contenido.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const { products } = await getProducts(COMING_SOON_QUERY);
+  return {
+    title: "Lo que viene",
+    description:
+      "Los productos que están por llegar a Papelería P de Papel. Suscríbete y míralos antes que nadie.",
+    alternates: { canonical: "/proximamente" },
+    ...(products.length === 0 ? { robots: { index: false, follow: true } } : {}),
+    openGraph: {
+      title: "Lo que viene | Papelería P de Papel",
+      description: "Los productos que están por llegar a la tienda.",
+      url: `${BASE_URL}/proximamente`,
+    },
+  };
+}
 
 export default async function ComingSoonPage({
   searchParams,
@@ -27,7 +37,7 @@ export default async function ComingSoonPage({
   searchParams: { acceso?: string };
 }) {
   const [{ products }, cookieStore] = await Promise.all([
-    getProducts({ availability: "coming-soon", limit: 48, groupBy: "parents" }),
+    getProducts(COMING_SOON_QUERY),
     Promise.resolve(cookies()),
   ]);
   const hasAccess = Boolean(cookieStore.get(EARLY_ACCESS_COOKIE)?.value);

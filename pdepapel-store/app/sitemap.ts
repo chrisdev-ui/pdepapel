@@ -1,4 +1,5 @@
 import { getCategories } from "@/actions/get-categories";
+import { getProducts } from "@/actions/get-products";
 import { getSitemapProducts } from "@/actions/get-sitemap-products";
 import { BASE_URL } from "@/constants";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
@@ -42,6 +43,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("Failed to fetch SEO categories for sitemap:", error);
   }
 
+  // /proximamente sin productos es noindex: anunciarla en el sitemap haría que
+  // Search Console la marque como «enviada pero excluida por noindex».
+  let comingSoonUrls: MetadataRoute.Sitemap = [];
+  try {
+    const { products } = await getProducts({ availability: "coming-soon", limit: 1, groupBy: "parents" });
+    if (products.length > 0) comingSoonUrls = [{ url: `${BASE_URL}${STOREFRONT_ROUTES.comingSoon}` }];
+  } catch (error) {
+    console.warn("Failed to check coming-soon products for sitemap:", error);
+  }
+
   return [
     {
       url: BASE_URL,
@@ -67,9 +78,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: `${BASE_URL}${STOREFRONT_ROUTES.giftCard}`,
     },
-    {
-      url: `${BASE_URL}${STOREFRONT_ROUTES.comingSoon}`,
-    },
+    ...comingSoonUrls,
     ...categoryUrls,
     ...productsUrls,
   ];
