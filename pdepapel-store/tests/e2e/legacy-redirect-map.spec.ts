@@ -27,6 +27,8 @@ test.describe("mapa de redirecciones de producto", () => {
   test.beforeEach(({}, testInfo) => {
     test.skip(testInfo.project.name !== "chromium", "una sola pasada");
   });
+  // El sitemap y la muestra pueden caer en fichas sin caché (render en frío).
+  test.setTimeout(3 * 60 * 1000);
 
   test("cada destino es una ficha viva del sitemap: sin 404 ni otra redirección", async ({ request }) => {
     const sitemap = await request.get("/sitemap.xml");
