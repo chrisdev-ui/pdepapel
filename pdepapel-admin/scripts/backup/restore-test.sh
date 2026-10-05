@@ -9,6 +9,7 @@
 #   RESTORE_* = MySQL de borrador (por defecto, el contenedor local de pruebas)
 #   SOURCE_*  = base contra la que se compara (producción en solo lectura)
 #   scripts/backup/restore-test.sh <copia.sql.gz.age> <llave-privada-age.txt>
+#   RESTORE_TEST_PRINT_ALL=1 … también imprime el conteo de cada tabla.
 set -euo pipefail
 
 fail() { echo "restore-test: $*" >&2; exit 1; }
@@ -69,6 +70,13 @@ while IFS=$'\t' read -r table restored source; do
     echo "restore-test: aviso $table creció desde la copia ($restored → $source)"
   fi
 done < "$work/joined.tsv"
+if [[ "${RESTORE_TEST_PRINT_ALL:-}" == "1" ]]; then
+  # Solo nombres de tabla y conteos: nunca datos.
+  printf 'restore-test: %-40s %12s %12s\n' tabla restaurada origen
+  while IFS=$'\t' read -r table restored source; do
+    printf 'restore-test: %-40s %12s %12s\n' "$table" "$restored" "$source"
+  done < "$work/joined.tsv"
+fi
 same="$(awk -F'\t' '$2 == $3' "$work/joined.tsv" | wc -l | tr -d ' ')"
 echo "restore-test: $same de $source_tables tablas con el mismo número exacto de filas"
 ((status == 0)) && echo "restore-test: OK" || echo "restore-test: FALLÓ"
