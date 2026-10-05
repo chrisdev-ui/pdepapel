@@ -11,12 +11,18 @@ const ENTITIES: Record<string, string> = {
   "&#39;": "'",
 };
 
+/**
+ * Las etiquetas de bloque separan palabras; las de línea (strong, em, a,
+ * span…) no. Cambiar estas últimas por un espacio publicaba «con caucho ,
+ * ideal» cuando el HTML era «con <strong>caucho</strong>, ideal».
+ */
+const BLOCK_TAG = /<\/?(?:p|div|h[1-6]|li|ul|ol|blockquote|pre|table|tr|td|th|section|article|header|footer|figure|figcaption|hr)\b[^>]*>|<br\s*\/?>/gi;
+
 export function stripHtmlTags(html?: string | null) {
   if (!html) return "";
   return html
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<\/(?:p|h[2-4]|li|blockquote|pre)>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+    .replace(BLOCK_TAG, " ")
+    .replace(/<[^>]+>/g, "")
     .replace(/&(nbsp|amp|quot|#39);/gi, (entity) => ENTITIES[entity.toLowerCase()] ?? " ")
     .replace(/\s+/g, " ")
     .trim();
