@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import {
+  HANDLING_DAYS,
   RETURN_WINDOW_DAYS,
   buildFreeShippingDetails,
   buildMerchantReturnPolicy,
@@ -13,6 +14,14 @@ import type { Product } from "@/types";
 
 const page = (path: string) =>
   readFileSync(join(__dirname, "../../../app/(routes)/politicas", path, "page.tsx"), "utf8");
+const source = (path: string) => readFileSync(join(__dirname, "../../..", path), "utf8");
+/** Todos los .ts/.tsx bajo una carpeta. */
+const walk = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? walk(join(dir, entry.name)) : /\.tsx?$/.test(entry.name) ? [join(dir, entry.name)] : [],
+  );
+/** El texto tal como se lee: sin los saltos de línea del JSX. */
+const flat = (text: string) => text.replace(/\s+/g, " ");
 
 const base = {
   id: "p1",
@@ -33,10 +42,83 @@ const base = {
 describe("commerce policies match the published policy pages", () => {
   it("uses the return window published on /politicas/devoluciones", () => {
     const returns = page("devoluciones");
-    expect(returns).toContain(`(${RETURN_WINDOW_DAYS}) días calendario`);
-    expect(returns).toContain(`${RETURN_WINDOW_DAYS} días calendario`);
+    expect(flat(returns)).toContain(`cinco (${RETURN_WINDOW_DAYS}) días hábiles contados desde la entrega`);
+    expect(returns).toContain(`${RETURN_WINDOW_DAYS} días hábiles`);
     // El cliente paga el envío cuando la devolución es por decisión suya.
     expect(returns).toMatch(/costos de envío corren por tu cuenta/);
+  });
+
+  /**
+   * Desde el 2026-10-05 la ventana es de cinco días hábiles contados desde la
+   * entrega (el mínimo del retracto, Ley 1480 art. 47). Ningún texto de la
+   * tienda puede volver a contarlos desde la compra.
+   */
+  it("counts the return window from delivery everywhere it is stated", () => {
+    expect(page("devoluciones")).toContain("contados desde la entrega para avisarnos");
+    for (const file of [
+      "app/(routes)/politicas/devoluciones/page.tsx",
+      "components/product-signals.tsx",
+      "components/product-details-accordion.tsx",
+    ]) {
+      expect(flat(source(file)), file).toContain("cinco (5) días hábiles contados desde la entrega");
+    }
+    for (const file of [
+      "app/(routes)/politicas/devoluciones/page.tsx",
+      "components/product-signals.tsx",
+      "components/product-details-accordion.tsx",
+      "app/(routes)/finalizar-compra/components/multi-step-checkout-form.tsx",
+      "app/(routes)/pedido/[orderId]/components/order-help-card.tsx",
+    ]) {
+      const text = flat(source(file));
+      expect(text, file).not.toMatch(/(desde|después de|fecha de) (la )?compra/);
+      expect(text, file).toMatch(/(entrega|recibir)/);
+    }
+  });
+
+  /**
+   * Los textos que repiten la ventana fuera de la página de políticas: la
+   * meta de la página, la ayuda del pedido y el checkout.
+   */
+  it("states the five business days in every short copy of the window", () => {
+    expect(source("app/(routes)/politicas/devoluciones/page.tsx")).toContain(
+      "cinco (5) días hábiles contados desde la entrega, condiciones del producto",
+    );
+    expect(source("app/(routes)/pedido/[orderId]/components/order-help-card.tsx")).toContain(
+      "Cinco (5) días hábiles contados desde la entrega",
+    );
+    expect(flat(source("app/(routes)/finalizar-compra/components/multi-step-checkout-form.tsx"))).toContain(
+      "Cambios hasta cinco (5) días hábiles contados desde la entrega.",
+    );
+  });
+
+  /**
+   * Guardia: el plazo de cambios es de días HÁBILES (Ley 1480, art. 47).
+   * Falla si cualquier texto de la tienda vuelve a hablar de «días calendario»
+   * cerca de cambios, devoluciones o retracto.
+   */
+  it("never states the return window in calendar days", () => {
+    const files = [...walk(join(__dirname, "../../../app")), ...walk(join(__dirname, "../../../components"))];
+    const offenders: string[] = [];
+    for (const file of files) {
+      const lines = readFileSync(file, "utf8").split("\n");
+      lines.forEach((line, index) => {
+        if (!/d[ií]as calendario/i.test(line)) return;
+        const around = lines.slice(Math.max(0, index - 3), index + 4).join(" ");
+        if (/cambio|devoluci|retract|recib|entrega/i.test(around)) offenders.push(`${relative(join(__dirname, "../../.."), file)}:${index + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /** Mismo día si se paga antes de las 12:00, de lunes a viernes; si no, el siguiente día hábil. */
+  it("states the same handling rule the markup declares", () => {
+    const shipping = flat(page("envios"));
+    expect(shipping).toContain("el mismo día si el pago se confirma antes de las 12:00 m. (hora de Colombia), de lunes a viernes; si no, el siguiente día hábil");
+    expect(shipping).not.toContain("después de confirmar el pago");
+    expect(shipping).not.toContain("sábado");
+    expect(flat(source("components/product-details-accordion.tsx"))).toContain("antes de las 12:00 m. (lunes a viernes), el pedido sale el mismo día");
+    expect(flat(source("components/home/hero.tsx"))).not.toContain("1 a 2 días hábiles");
+    expect(HANDLING_DAYS).toEqual({ min: 0, max: 1 });
   });
 
   it("only promises a shipping rate the shipping page publishes", () => {
@@ -70,7 +152,13 @@ describe("buildFreeShippingDetails", () => {
       "@type": "OfferShippingDetails",
       shippingRate: { "@type": "MonetaryAmount", value: 0, currency: "COP" },
       shippingDestination: { "@type": "DefinedRegion", addressCountry: "CO" },
+      deliveryTime: {
+        "@type": "ShippingDeliveryTime",
+        handlingTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 1, unitCode: "DAY" },
+      },
     });
+    // Sin tránsito: depende de la transportadora y no hay un dato publicado.
+    expect(buildFreeShippingDetails(250000, 250000)?.deliveryTime).not.toHaveProperty("transitTime");
   });
 });
 

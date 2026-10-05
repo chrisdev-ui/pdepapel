@@ -139,7 +139,7 @@ export function ProductSignals({ product, availability, quantity, className }: P
       <p className="flex items-center gap-2">
         <Undo2 aria-hidden="true" className="h-4 w-4 shrink-0" />
         <span>
-          Cambios hasta 5 días después de la compra ·{" "}
+          Cambios hasta cinco (5) días hábiles contados desde la entrega ·{" "}
           <Link href={STOREFRONT_ROUTES.returnsPolicy} className="underline underline-offset-2">
             ver condiciones
           </Link>

@@ -24,7 +24,7 @@ export function OrderHelpCard({ orderNumber }: OrderHelpCardProps) {
     {
       id: "returns",
       title: "Cambios y devoluciones",
-      description: "Hasta 5 días calendario después de recibir",
+      description: "Cinco (5) días hábiles contados desde la entrega",
       href: STOREFRONT_ROUTES.returnsPolicy,
       icon: <Undo2 className="h-[18px] w-[18px]" aria-hidden="true" />,
       tile: "bg-kawaii-pink-light",

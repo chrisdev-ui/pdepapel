@@ -1515,7 +1515,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
             className="h-3.5 w-3.5 shrink-0 text-blue-yankees"
             aria-hidden="true"
           />
-          Cambios hasta 5 días después de recibir.
+          Cambios hasta cinco (5) días hábiles contados desde la entrega.
         </li>
         <li className="flex items-center gap-2">
           <WhatsappIcon className="h-3.5 w-3.5 shrink-0 text-emerald-600" />

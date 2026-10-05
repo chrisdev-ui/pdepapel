@@ -9,7 +9,7 @@ import { STOREFRONT_ROUTES } from "@/lib/routes";
 export const metadata: Metadata = {
   title: "Política de cambios y devoluciones",
   description:
-    "Cómo pedir un cambio o una devolución en Papelería P de Papel: plazo de 5 días calendario, condiciones del producto, quién paga el envío y cómo funcionan los reembolsos.",
+    "Cambios y devoluciones en Papelería P de Papel: cinco (5) días hábiles contados desde la entrega, condiciones del producto, quién paga el envío y reembolsos.",
   alternates: {
     canonical: STOREFRONT_ROUTES.returnsPolicy,
   },
@@ -22,8 +22,8 @@ const facts: PolicyFact[] = [
   {
     icon: CalendarClock,
     tint: "bg-kawaii-yellow-light",
-    value: "5 días calendario",
-    label: "desde la compra para avisarnos",
+    value: "5 días hábiles",
+    label: "contados desde la entrega para avisarnos",
   },
   {
     icon: PackageOpen,
@@ -46,8 +46,8 @@ const sections: PolicySection[] = [
     content: (
       <>
         <p>
-          Tienes <strong>cinco (5) días calendario</strong> a partir de la fecha
-          de compra para avisarnos de cualquier cambio o devolución. Escríbenos
+          Tienes <strong>cinco (5) días hábiles contados desde la entrega</strong>{" "}
+          para avisarnos de cualquier cambio o devolución. Escríbenos
           por WhatsApp o correo con el número de pedido, el producto y, si
           aplica, una foto del problema. Te respondemos con los pasos a seguir.
         </p>
@@ -136,7 +136,7 @@ export default function ReturnsPolicyPage() {
       eyebrowClassName="bg-kawaii-yellow-light text-yellow-900"
       title="Cambios y devoluciones"
       lede="Queremos que quedes feliz con cada compra. Si algo no salió bien, así lo resolvemos."
-      updatedAt="2026-09-09"
+      updatedAt="2026-10-05"
       facts={facts}
       sections={sections}
       contactPrompt="¿Necesitas un cambio o una devolución?"

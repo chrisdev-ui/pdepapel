@@ -35,7 +35,7 @@ export default async function ShippingPolicyPage() {
             icon: Clock,
             tint: "bg-kawaii-blue-light",
             value: deliveryEstimate,
-            label: "después de confirmar el pago",
+            label: "después del despacho",
           } satisfies PolicyFact,
         ]
       : []),
@@ -67,8 +67,9 @@ export default async function ShippingPolicyPage() {
       content: (
         <>
           <p>
-            Preparamos y despachamos los pedidos desde Medellín después de
-            confirmar el pago.{" "}
+            Preparamos y despachamos los pedidos desde Medellín el mismo día si
+            el pago se confirma antes de las 12:00 m. (hora de Colombia), de
+            lunes a viernes; si no, el siguiente día hábil.{" "}
             {deliveryEstimate ? (
               <>
                 A partir de ahí, la transportadora entrega en{" "}
@@ -90,8 +91,8 @@ export default async function ShippingPolicyPage() {
               de 48 horas hábiles después de la compra.
             </li>
             <li>
-              Los pedidos pagados el sábado después de la 1:00 p. m., los
-              domingos o en días festivos se despachan el siguiente día hábil.
+              Los pedidos pagados el fin de semana o en días festivos se
+              despachan el siguiente día hábil.
             </li>
             <li>
               Si necesitas una entrega urgente, escríbenos antes de comprar y
@@ -186,7 +187,7 @@ export default async function ShippingPolicyPage() {
       eyebrowClassName="bg-kawaii-mint-light text-emerald-900"
       title="Envíos y entregas"
       lede="Cómo, cuándo y cuánto cuesta recibir tu pedido. Lo que dice aquí es lo mismo que ves en el checkout."
-      updatedAt="2026-09-09"
+      updatedAt="2026-10-05"
       facts={facts}
       sections={sections}
       contactPrompt="¿Tienes una duda sobre tu envío?"

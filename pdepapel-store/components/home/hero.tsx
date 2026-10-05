@@ -15,7 +15,7 @@ const DEFAULT_HERO = {
   eyebrow: null,
   title: "Papelería bonita desde Medellín con envíos a toda Colombia",
   subtitle:
-    "Agendas, cuadernos, útiles y regalos que dan ganas de estudiar. Pago en línea seguro o transferencia, y tu pedido sale de Medellín en 1 a 2 días hábiles.",
+    "Agendas, cuadernos, útiles y regalos que dan ganas de estudiar. Pago en línea seguro o transferencia, y tu pedido sale de Medellín el mismo día si pagas antes del mediodía, o el siguiente día hábil.",
   primaryLabel: "Ver la tienda",
   primaryUrl: STOREFRONT_ROUTES.shop,
   secondaryLabel: "Ver novedades",

@@ -71,8 +71,8 @@ export function ProductDetailsAccordion({ product }: ProductDetailsAccordionProp
               {deliveryEstimate ? `; llega en ${deliveryEstimate} después del pago.` : " una vez se confirma el pago."}
             </li>
             {freeShippingThreshold ? <li>Envío gratis en pedidos desde {currencyFormatter.format(freeShippingThreshold)}.</li> : null}
-            <li>Pago en línea o transferencia bancaria; el pedido se despacha cuando el pago se confirma.</li>
-            <li>Cambios hasta 5 días calendario después de la compra, con el producto sin uso y en su empaque.</li>
+            <li>Pago en línea o transferencia bancaria; si el pago se confirma antes de las 12:00 m. (lunes a viernes), el pedido sale el mismo día; si no, el siguiente día hábil.</li>
+            <li>Cambios hasta cinco (5) días hábiles contados desde la entrega, con el producto sin uso y en su empaque.</li>
           </ul>
           <p className="mt-3 font-sans text-sm">
             <Link href={STOREFRONT_ROUTES.shippingPolicy} className="font-semibold underline underline-offset-2">
