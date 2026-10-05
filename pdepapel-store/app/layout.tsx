@@ -1,7 +1,6 @@
 import { esES } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 
 import { getCategories } from "@/actions/get-categories";
@@ -183,7 +182,6 @@ export default async function RootLayout({
               }
             />
             <Analytics />
-            <SpeedInsights />
           </ReactQueryProvider>
         </body>
       </html>

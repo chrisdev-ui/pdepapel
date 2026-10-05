@@ -46,7 +46,6 @@
     "@t3-oss/env-nextjs": "^0.7.1",
     "@tanstack/react-query": "^5.17.19",
     "@vercel/analytics": "^1.1.1",
-    "@vercel/speed-insights": "^1.0.4",
     "axios": "^1.5.1",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.0",
