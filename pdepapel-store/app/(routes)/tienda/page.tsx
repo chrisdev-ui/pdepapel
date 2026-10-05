@@ -17,6 +17,7 @@ import { Container } from "@/components/ui/container";
 import { BASE_URL, DEFAULT_SHARE_IMAGE, LIMIT_SHOP_ITEMS } from "@/constants";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
+import { getListingIndexing, type ListingSearchParams } from "@/lib/listing-seo";
 import { categoryPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 
@@ -30,7 +31,12 @@ const HEADER_IMAGES = 3;
 
 export async function generateMetadata({ searchParams }: ShopPageProps): Promise<Metadata> {
   const { typeId, categoryId, search, minPrice, maxPrice } = searchParams;
-  const hasActiveFilters = Object.values(searchParams).some((value) => value !== undefined && value !== "");
+  // Next entrega cada parámetro como texto aunque el tipo diga `number`.
+  const { canonical: canonicalPath, index: shouldIndex } = getListingIndexing(
+    STOREFRONT_ROUTES.shop,
+    searchParams as unknown as ListingSearchParams,
+    true,
+  );
   let title = "Tienda en línea";
   let description =
     "Explora nuestra tienda online en Papelería P de Papel. Un mundo de artículos bonitos, suministros de oficina y papelería general te espera.";
@@ -58,7 +64,7 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
   if (title !== "Tienda en línea") keywords.unshift(title.toLowerCase());
   if (search) keywords.push(search);
 
-  const canonicalUrl = `${BASE_URL}${STOREFRONT_ROUTES.shop}`;
+  const canonicalUrl = `${BASE_URL}${canonicalPath}`;
 
   return {
     // La plantilla del layout añade « | Papelería P de Papel».
@@ -66,9 +72,9 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
     description,
     keywords,
     robots: {
-      index: !hasActiveFilters,
+      index: shouldIndex,
       follow: true,
-      googleBot: { index: !hasActiveFilters, follow: true, "max-video-preview": -1, "max-image-preview": "large", "max-snippet": -1 },
+      googleBot: { index: shouldIndex, follow: true, "max-video-preview": -1, "max-image-preview": "large", "max-snippet": -1 },
     },
     alternates: { canonical: canonicalUrl },
     openGraph: { title: `${title} | Papelería P de Papel`, description, type: "website", locale: "es_CO", siteName: "Papelería P de Papel", images, url: canonicalUrl },

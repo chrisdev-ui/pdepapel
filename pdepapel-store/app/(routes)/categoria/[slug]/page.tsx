@@ -18,6 +18,7 @@ import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
+import { getListingIndexing } from "@/lib/listing-seo";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 
@@ -51,15 +52,14 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   const title = category.seoTitle || name;
   const description = category.seoDescription || `Explora ${name} en Papelería P de Papel. Encuentra artículos creativos con envíos a toda Colombia.`;
   const socialImages = category.imageUrl ? [{ url: getCloudinaryImageUrl(category.imageUrl, CLOUDINARY_MAX_WIDTH), alt: name }] : undefined;
-  const hasActiveFilters = Object.values(searchParams).some((value) => value !== undefined && value !== "");
-  const shouldIndex = Boolean(category.seoEnabled) && !hasActiveFilters;
+  const { canonical, index: shouldIndex } = getListingIndexing(categoryUrl, searchParams, Boolean(category.seoEnabled));
 
   return {
     title,
     description,
     robots: { index: shouldIndex, follow: true, googleBot: { index: shouldIndex, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
-    alternates: { canonical: categoryUrl },
-    openGraph: { title: `${title} | Papelería P de Papel`, description, url: `${BASE_URL}${categoryUrl}`, siteName: "Papelería P de Papel", locale: "es_CO", type: "website", images: socialImages },
+    alternates: { canonical },
+    openGraph: { title: `${title} | Papelería P de Papel`, description, url: `${BASE_URL}${canonical}`, siteName: "Papelería P de Papel", locale: "es_CO", type: "website", images: socialImages },
     twitter: { card: "summary_large_image", title: `${title} | Papelería P de Papel`, description, images: socialImages },
   };
 }
