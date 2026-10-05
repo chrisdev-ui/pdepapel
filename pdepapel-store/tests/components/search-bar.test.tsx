@@ -64,6 +64,28 @@ describe("SearchBar", () => {
     await waitFor(() => expect(input).toHaveAttribute("aria-expanded", "false"));
   });
 
+  /** GA4 prohíbe datos personales: un correo pegado en el buscador no sale del navegador. */
+  it("still navigates but never sends an email or phone to analytics", () => {
+    render(<SearchBar variant="desktop" />);
+    const input = screen.getByRole("combobox", { name: "Buscar productos" });
+
+    fireEvent.change(input, { target: { value: "Ana.Perez@Gmail.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+
+    expect(mocks.push).toHaveBeenCalledWith("/tienda?search=Ana.Perez%40Gmail.com");
+    expect(mocks.track).toHaveBeenCalledWith("search", { search_term: null });
+  });
+
+  it("sends the term in lowercase so the same search counts once", () => {
+    render(<SearchBar variant="desktop" />);
+    const input = screen.getByRole("combobox", { name: "Buscar productos" });
+
+    fireEvent.change(input, { target: { value: "Cuaderno NORMA" } });
+    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+
+    expect(mocks.track).toHaveBeenCalledWith("search", { search_term: "cuaderno norma" });
+  });
+
   it("does not query for a single character and clears with Escape", () => {
     render(<SearchBar variant="inline" />);
     const input = screen.getByRole("combobox", { name: "Buscar productos" });

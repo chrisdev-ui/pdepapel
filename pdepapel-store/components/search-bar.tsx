@@ -15,6 +15,7 @@ import { categoryPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/rou
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
 import { SearchResult } from "@/types";
+import { sanitizeSearchTerm } from "@/lib/analytics-search-term";
 
 interface SearchBarProps {
   /** `inline`: full-width field (phones/tablets). `desktop`: wide field with a Buscar button. */
@@ -126,7 +127,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ variant = "inline", placeh
         inputRef.current?.focus();
         return;
       }
-      trackCustomerEvent("search", { search_term: term });
+      trackCustomerEvent("search", { search_term: sanitizeSearchTerm(term) });
       setRecents(rememberSearch(term));
       close();
       inputRef.current?.blur();

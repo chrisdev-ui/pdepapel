@@ -7,6 +7,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useProductFilters } from "@/hooks/use-product-filters";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { cn } from "@/lib/utils";
+import { sanitizeSearchTerm } from "@/lib/analytics-search-term";
 
 interface ShopSearchBarProps {
   className?: string;
@@ -36,7 +37,12 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className, placeholder = 
   useEffect(() => {
     if (debouncedSearch !== filters.search && inputRef.current && inputRef.current.offsetParent !== null) {
       setFilter("search", debouncedSearch || null);
-      if (debouncedSearch) trackCustomerEvent("catalog_search", { query_length: debouncedSearch.length });
+      if (debouncedSearch) {
+        trackCustomerEvent("catalog_search", {
+          query_length: debouncedSearch.length,
+          search_term: sanitizeSearchTerm(debouncedSearch),
+        });
+      }
     }
   }, [debouncedSearch, filters.search, setFilter]);
 

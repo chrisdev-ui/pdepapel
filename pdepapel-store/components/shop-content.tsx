@@ -21,6 +21,7 @@ import { CatalogOption, Category, Color, Design, Product, ProductsResponse, Type
 import Products from "../app/(routes)/tienda/components/products";
 import ShopSearchBar from "../app/(routes)/tienda/components/shop-search-bar";
 import { ProductListSkeleton } from "../app/(routes)/tienda/components/skeletons";
+import { sanitizeSearchTerm } from "@/lib/analytics-search-term";
 
 /** How long the grid may show its loading tint before giving up on it. */
 const CATALOG_BUSY_HINT_MS = 8_000;
@@ -192,6 +193,8 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     noResultsQueryRef.current = queryKey;
     trackCustomerEvent("catalog_no_results", {
       has_search: Boolean(effectiveFilters.search),
+      // Lo que se buscó sin encontrar nada: la señal de demanda que faltaba.
+      search_term: sanitizeSearchTerm(effectiveFilters.search),
       active_filters: countActiveFilters(effectiveFilters, ["search", "isOnSale"]) + Number(effectiveFilters.isOnSale),
     });
   }, [data, effectiveFilters, isFetching, isMounted]);
