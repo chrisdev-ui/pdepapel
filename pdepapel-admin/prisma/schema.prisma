@@ -50,6 +50,7 @@ model Store {
   designs                        Design[]                        @relation("StoreToDesign")
   products                       Product[]                       @relation("StoreToProduct")
   productSlugAliases             ProductSlugAlias[]
+  deletedProductUrls             DeletedProductUrl[]
   categorySlugAliases            CategorySlugAlias[]
   typeSlugAliases                TypeSlugAlias[]
   orders                         Order[]                         @relation("StoreToOrder")
@@ -525,6 +526,25 @@ model ProductSlugAlias {
   @@unique([storeId, slug])
   @@index([productId])
   @@index([storeId, createdAt])
+}
+
+/// URL de un producto borrado de verdad (no archivado). La fila del producto
+/// ya no existe, así que aquí queda lo necesario para mandar su URL a lo más
+/// parecido: una hermana viva del grupo, su categoría o su tipo. `slug` es el
+/// slug o un alias que tenía; `productId` cubre los enlaces viejos por id.
+model DeletedProductUrl {
+  id             String   @id @default(uuid())
+  storeId        String
+  slug           String
+  productId      String
+  categoryId     String
+  productGroupId String?
+  deletedAt      DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, slug])
+  @@index([storeId, productId])
 }
 
 model CategorySlugAlias {

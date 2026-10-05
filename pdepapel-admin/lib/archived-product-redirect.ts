@@ -1,5 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
+import { findDeletedProductUrl } from "@/lib/deleted-product-urls";
+
 /**
  * A dónde manda la tienda a quien llega a un producto archivado (cambio de
  * política del 2026-10-05: antes era un 404 y se perdía el 22 % de las
@@ -34,7 +36,8 @@ export function chooseArchivedProductRedirect(input: {
 
 /**
  * Si la referencia (id, slug o alias) es un producto archivado de la tienda,
- * su destino; si no existe, null (sigue siendo un 404 real).
+ * o uno borrado cuya URL quedó en `DeletedProductUrl`, su destino; si nunca
+ * existió, null (sigue siendo un 404 real).
  */
 export async function findArchivedProductRedirect(
   db: Db,
@@ -58,7 +61,11 @@ export async function findArchivedProductRedirect(
       });
     }
   }
-  if (!archived) return null;
+  if (!archived) {
+    const deleted = await findDeletedProductUrl(db, storeId, reference);
+    if (!deleted) return null;
+    archived = { id: deleted.productId, productGroupId: deleted.productGroupId, categoryId: deleted.categoryId };
+  }
 
   const [sibling, category] = await Promise.all([
     archived.productGroupId

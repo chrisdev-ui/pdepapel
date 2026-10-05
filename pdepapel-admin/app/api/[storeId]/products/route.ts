@@ -57,6 +57,7 @@ import {
   getUniqueProductSlug,
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
+import { recordDeletedProductUrls } from "@/lib/deleted-product-urls";
 
 import { getActiveOffers, getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs/server";
@@ -1712,6 +1713,9 @@ export async function DELETE(
           },
         },
       });
+
+      // Sus URL no se pierden: van a una hermana viva o a su categoría.
+      await recordDeletedProductUrls(tx, params.storeId, products);
 
       await tx.product.deleteMany({
         where: {

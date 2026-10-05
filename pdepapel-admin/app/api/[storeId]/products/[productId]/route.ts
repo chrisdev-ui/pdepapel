@@ -45,7 +45,10 @@ import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
   preserveProductSlugAlias,
-  synchronizeProductGroupSlugs, deleteGroupedVariantKeepingUrls } from "@/lib/product-slugs";
+  synchronizeProductGroupSlugs,
+  deleteGroupedVariantKeepingUrls,
+} from "@/lib/product-slugs";
+import { recordDeletedProductUrls } from "@/lib/deleted-product-urls";
 import { auth } from "@clerk/nextjs/server";
 import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -613,6 +616,8 @@ export async function DELETE(
           redirectToProductId: sibling.id,
         });
       } else {
+        // Sin hermana viva: la URL queda registrada y va a su categoría.
+        await recordDeletedProductUrls(tx, params.storeId, [product]);
         await tx.product.delete({
           where: { id: params.productId, storeId: params.storeId },
         });

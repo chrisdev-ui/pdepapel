@@ -113,6 +113,90 @@ describe("product delete guard and archive with MySQL", () => {
     await testPrisma.productGroup.delete({ where: { id: group.id } });
   });
 
+  /**
+   * P1-7b: sin hermana viva, borrar dejaba la URL en 404 para siempre. Ahora
+   * su slug, sus alias y su id quedan en DeletedProductUrl y la tienda los
+   * manda a su categoría, igual que a un archivado.
+   */
+  it("records a deleted product's URLs so they redirect to its category", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const storeId = fixture.store.id;
+    await testPrisma.product.update({ where: { id: fixture.kit.id }, data: { slug: `kit-unico-${storeId}` } });
+    await testPrisma.productSlugAlias.create({ data: { storeId, productId: fixture.kit.id, slug: `kit-unico-viejo-${storeId}` } });
+
+    const { DELETE } = await import("@/app/api/[storeId]/products/[productId]/route");
+    const response = await DELETE(json("DELETE"), { params: { storeId, productId: fixture.kit.id } });
+    expect(response.status).toBe(200);
+
+    await expect(
+      testPrisma.deletedProductUrl.findMany({ where: { storeId }, orderBy: { slug: "asc" }, select: { slug: true, productId: true, categoryId: true } }),
+    ).resolves.toEqual([
+      { slug: `kit-unico-${storeId}`, productId: fixture.kit.id, categoryId: fixture.category.id },
+      { slug: `kit-unico-viejo-${storeId}`, productId: fixture.kit.id, categoryId: fixture.category.id },
+    ]);
+
+    const { findArchivedProductRedirect } = await import("@/lib/archived-product-redirect");
+    const toCategory = { kind: "category", slug: fixture.category.slug };
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `kit-unico-${storeId}`)).resolves.toEqual(toCategory);
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `kit-unico-viejo-${storeId}`)).resolves.toEqual(toCategory);
+    await expect(findArchivedProductRedirect(testPrisma, storeId, fixture.kit.id)).resolves.toEqual(toCategory);
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `nunca-existio-${storeId}`)).resolves.toBeNull();
+    // Otra tienda no ve el registro.
+    await expect(findArchivedProductRedirect(testPrisma, "otra-tienda", `kit-unico-${storeId}`)).resolves.toBeNull();
+  });
+
+  it("records the URLs of a bulk delete and sends a deleted variant to its live sibling", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const storeId = fixture.store.id;
+    const group = await testPrisma.productGroup.create({
+      data: { name: "Grupo", slug: `grupo-masivo-${storeId}`, description: "x", storeId },
+    });
+    await testPrisma.product.update({ where: { id: fixture.kit.id }, data: { productGroupId: group.id, slug: `kit-verde-${storeId}` } });
+    await testPrisma.product.update({ where: { id: fixture.component.id }, data: { productGroupId: group.id, slug: `kit-lila-${storeId}` } });
+
+    const { DELETE } = await import("@/app/api/[storeId]/products/route");
+    const response = await DELETE(json("DELETE", { ids: [fixture.kit.id] }), { params: { storeId } });
+    expect(response.status).toBe(200);
+
+    const { findArchivedProductRedirect } = await import("@/lib/archived-product-redirect");
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `kit-verde-${storeId}`)).resolves.toEqual({
+      kind: "product",
+      slug: `kit-lila-${storeId}`,
+    });
+
+    await testPrisma.product.updateMany({ where: { productGroupId: group.id }, data: { productGroupId: null } });
+    await testPrisma.productGroup.delete({ where: { id: group.id } });
+  });
+
+  it("records every variant's URL when a group is deleted with its variants", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const storeId = fixture.store.id;
+    await testPrisma.productKit.deleteMany({ where: { kitId: fixture.kit.id } });
+    const group = await testPrisma.productGroup.create({
+      data: { name: "Grupo", slug: `grupo-entero-${storeId}`, description: "x", storeId },
+    });
+    await testPrisma.product.update({ where: { id: fixture.kit.id }, data: { productGroupId: group.id, slug: `kit-a-${storeId}` } });
+    await testPrisma.product.update({ where: { id: fixture.component.id }, data: { productGroupId: group.id, slug: `kit-b-${storeId}` } });
+
+    const { DELETE } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");
+    const response = await DELETE(new Request("http://admin.test/api/x?deleteVariants=true", { method: "DELETE" }), {
+      params: { storeId, productGroupId: group.id },
+    });
+    expect(response.status).toBe(200);
+    await expect(testPrisma.product.count({ where: { storeId } })).resolves.toBe(0);
+
+    const { findArchivedProductRedirect } = await import("@/lib/archived-product-redirect");
+    for (const slug of [`kit-a-${storeId}`, `kit-b-${storeId}`]) {
+      await expect(findArchivedProductRedirect(testPrisma, storeId, slug)).resolves.toEqual({
+        kind: "category",
+        slug: fixture.category.slug,
+      });
+    }
+  });
+
   it("queues a pause for the active Mercado Libre listing when the product is archived, from the form and in bulk", async () => {
     fixture = await createInventoryFixture();
     session.userId = fixture.store.userId;

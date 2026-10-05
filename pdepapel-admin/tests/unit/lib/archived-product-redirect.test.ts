@@ -43,6 +43,7 @@ describe("findArchivedProductRedirect", () => {
       productSlugAlias: { findUnique: vi.fn() },
       category: { findFirst: vi.fn().mockResolvedValue({ slug: "termos", isArchived: false, typeId: "t1" }) },
       type: { findFirst: vi.fn().mockResolvedValue({ id: "t1", isArchived: false }) },
+      deletedProductUrl: { findFirst: vi.fn().mockResolvedValue(null) },
       ...overrides,
     };
   };
@@ -71,6 +72,25 @@ describe("findArchivedProductRedirect", () => {
     await expect(findArchivedProductRedirect(client as never, "store-1", "termo-owala-rojo-aesthetic-l")).resolves.toEqual({
       kind: "category",
       slug: "termos",
+    });
+  });
+
+  it("falls back to the URL record of a deleted product, scoped to the store", async () => {
+    const deletedProductUrl = {
+      findFirst: vi.fn().mockResolvedValue({ productId: "borrado", productGroupId: null, categoryId: "c1" }),
+    };
+    const client = db({
+      product: { findFirst: vi.fn().mockResolvedValue(null) },
+      productSlugAlias: { findUnique: vi.fn().mockResolvedValue(null) },
+      deletedProductUrl,
+    });
+    await expect(findArchivedProductRedirect(client as never, "store-1", "termo-borrado")).resolves.toEqual({
+      kind: "category",
+      slug: "termos",
+    });
+    expect(deletedProductUrl.findFirst.mock.calls[0][0].where).toEqual({
+      storeId: "store-1",
+      OR: [{ slug: "termo-borrado" }, { productId: "termo-borrado" }],
     });
   });
 

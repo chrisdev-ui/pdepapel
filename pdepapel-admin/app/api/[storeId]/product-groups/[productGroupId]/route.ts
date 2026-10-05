@@ -10,6 +10,7 @@ import {
   getUniqueProductSlug,
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
+import { recordDeletedProductUrls } from "@/lib/deleted-product-urls";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
 import { resolveVariantImages, withVariantCover } from "@/lib/variant-images";
@@ -223,6 +224,8 @@ export async function PATCH(
           slug: true,
           isArchived: true,
           createdAt: true,
+          categoryId: true,
+          productGroupId: true,
         },
       });
       const referenced = await loadAdoptableProducts(tx, {
@@ -273,6 +276,7 @@ export async function PATCH(
             redirectToProductId: survivor.id,
           });
         } else {
+          await recordDeletedProductUrls(tx, params.storeId, [product]);
           await tx.product.delete({ where: { id: product.id } });
         }
       }
@@ -461,7 +465,14 @@ export async function DELETE(
 
       const children = await tx.product.findMany({
         where: { productGroupId: params.productGroupId, storeId: params.storeId },
-        select: { id: true, name: true, images: { select: { url: true } } },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          categoryId: true,
+          productGroupId: true,
+          images: { select: { url: true } },
+        },
       });
       const groupImages = await tx.image.findMany({
         where: { productGroupId: params.productGroupId },
@@ -496,6 +507,7 @@ export async function DELETE(
         imageUrlsToDelete.push(
           ...children.flatMap((child) => child.images.map((image) => image.url)),
         );
+        await recordDeletedProductUrls(tx, params.storeId, children);
         await tx.product.deleteMany({
           where: { productGroupId: params.productGroupId, storeId: params.storeId },
         });

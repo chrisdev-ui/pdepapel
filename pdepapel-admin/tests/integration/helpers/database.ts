@@ -215,6 +215,9 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
     },
   });
   await testPrisma.product.deleteMany({ where: { storeId: fixture.store.id } });
+  await testPrisma.deletedProductUrl.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
   await testPrisma.category.deleteMany({
     where: { storeId: fixture.store.id },
   });
