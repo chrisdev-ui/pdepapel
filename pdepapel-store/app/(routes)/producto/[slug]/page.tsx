@@ -4,6 +4,7 @@ import { Suspense } from "react";
 
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
+import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import Newsletter from "@/components/newsletter";
 import { RelatedProducts } from "@/components/related-products";
 import { RelatedProductsSkeleton } from "@/components/related-products-skeleton";
@@ -77,7 +78,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const siblingsPromise = product.productGroupId ? getProducts({ productGroupId: product.productGroupId }) : Promise.resolve({ products: [] });
   const suggestedProductsPromise = getProducts({ categoryId: product.category?.id, excludeProducts: product.id, groupBy: "parents", limit: 4 });
-  const siblingsResponse = await siblingsPromise;
+  const [siblingsResponse, storefrontSettings] = await Promise.all([siblingsPromise, getStorefrontSettings()]);
   const siblings = siblingsResponse.products.map((variant) => ({
     id: variant.id,
     slug: variant.slug,
@@ -92,7 +93,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     <>
       {!product.isArchived && (
         <>
-          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductJsonLd(product, siblingsResponse.products)) }} />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductJsonLd(product, siblingsResponse.products, { freeShippingThreshold: storefrontSettings.freeShippingThreshold })) }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductBreadcrumbJsonLd(product)) }} />
         </>
       )}

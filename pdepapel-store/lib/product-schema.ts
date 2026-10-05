@@ -3,6 +3,7 @@ import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-lo
 
 import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { BASE_URL } from "@/constants";
+import { buildFreeShippingDetails, buildMerchantReturnPolicy } from "@/lib/commerce-policies";
 import { getAverageRating, isComingSoon } from "@/lib/product-card";
 import { getStructuredProductSize } from "@/lib/product-options";
 import { createRichTextExcerpt } from "@/lib/rich-text";
@@ -42,14 +43,22 @@ function buildReviewSchema(reviews: Review[] | undefined) {
   };
 }
 
+export type ProductSchemaOptions = {
+  /** `Store.freeShippingThreshold`: a partir de ahí el envío es gratis. */
+  freeShippingThreshold?: number | null;
+};
+
 export function buildProductSchema(
   product: Product,
   includeGroupReference = true,
+  options: ProductSchemaOptions = {},
 ) {
   const slug = product.slug || product.id;
   const path = productPath(slug);
   const brand = product.brand || product.productGroup?.brand;
   const size = getStructuredProductSize(product);
+  const price = Number(product.price);
+  const shippingDetails = buildFreeShippingDetails(price, options.freeShippingThreshold);
 
   return {
     "@type": "Product",
@@ -76,7 +85,7 @@ export function buildProductSchema(
       "@type": "Offer",
       url: `${BASE_URL}${path}`,
       priceCurrency: "COP",
-      price: Number(product.price),
+      price,
       itemCondition: "https://schema.org/NewCondition",
       // Una preventa es PreOrder aunque la bodega esté en cero: se vende hoy
       // y llega en la fecha prometida.
@@ -94,6 +103,8 @@ export function buildProductSchema(
         : isComingSoon(product) && product.availableAt
           ? { availabilityStarts: product.availableAt }
           : {}),
+      ...(shippingDetails ? { shippingDetails } : {}),
+      hasMerchantReturnPolicy: buildMerchantReturnPolicy(),
     },
   };
 }
@@ -126,8 +137,12 @@ export function getVariesBy(variants: VariantSchema[]) {
  * variante tiene una combinación distinta de esos atributos; si no, el
  * producto suelto.
  */
-export function buildProductJsonLd(product: Product, siblings: Product[]) {
-  const variants = siblings.map((variant) => buildProductSchema(variant));
+export function buildProductJsonLd(
+  product: Product,
+  siblings: Product[],
+  options: ProductSchemaOptions = {},
+) {
+  const variants = siblings.map((variant) => buildProductSchema(variant, true, options));
   const variesBy = getVariesBy(variants);
   const combinations = new Set(
     variants.map((variant) => variesBy.map(([key]) => variant[key]).join("|")),
@@ -142,7 +157,7 @@ export function buildProductJsonLd(product: Product, siblings: Product[]) {
   if (!hasVariants) {
     return {
       "@context": "https://schema.org",
-      ...buildProductSchema(product, false),
+      ...buildProductSchema(product, false, options),
     };
   }
 
