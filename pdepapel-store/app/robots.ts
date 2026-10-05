@@ -53,7 +53,11 @@ export default function robots(): MetadataRoute.Robots {
       },
       {
         userAgent: "*",
-        allow: "/",
+        // Google necesita los JS/CSS y las imágenes de `/_next/` para pintar la
+        // página: con todo `/_next/` bloqueado, la prueba en vivo de Search
+        // Console no pudo cargar 49 de 61 recursos (2026-10-05). Gana la regla
+        // más larga, así que el resto de `/_next/` sigue bloqueado.
+        allow: ["/", "/_next/static/", "/_next/image"],
         disallow: [...PRIVATE_PATHS, ...FILTERED_PATHS, "/_next/"],
       },
     ],
