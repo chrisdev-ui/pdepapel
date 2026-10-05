@@ -170,4 +170,107 @@ describe("product group variant removal keeps the old URLs", () => {
       { slug: `carpeta-pastel-azul-${suffix}`, productId: keep.id },
     ]);
   });
+
+  /**
+   * P1-7b: si no queda ninguna variante viva (la única que sigue está
+   * archivada), no hay hermana a la que pasar la URL. Antes se perdía; ahora
+   * su slug y sus alias quedan en DeletedProductUrl y van a la categoría.
+   */
+  it("records the removed variant's URLs when no live variant survives", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const suffix = randomUUID();
+    const keep = fixture.component;
+
+    const group = await testPrisma.productGroup.create({
+      data: {
+        name: "Carpeta pastel",
+        slug: `carpeta-pastel-${suffix}`,
+        description: "Grupo de pruebas",
+        storeId: fixture.store.id,
+      },
+    });
+    groupId = group.id;
+    const color = await testPrisma.color.create({
+      data: { name: "Azul pastel", value: `azul-${suffix}`, storeId: fixture.store.id },
+    });
+    colorId = color.id;
+    await testPrisma.product.update({
+      where: { id: keep.id },
+      data: { productGroupId: group.id, isArchived: true },
+    });
+    const removed = await testPrisma.product.create({
+      data: {
+        name: "Carpeta pastel Azul",
+        slug: `carpeta-pastel-azul-${suffix}`,
+        description: "Variante que se va",
+        stock: 0,
+        price: 10000,
+        acqPrice: 4000,
+        sku: `TEST-${suffix}-AZUL`,
+        storeId: fixture.store.id,
+        categoryId: fixture.category.id,
+        colorId: color.id,
+        sizeId: keep.sizeId,
+        designId: keep.designId,
+        productGroupId: group.id,
+      },
+    });
+    await testPrisma.productSlugAlias.create({
+      data: { storeId: fixture.store.id, productId: removed.id, slug: `carpeta-azul-vieja-${suffix}` },
+    });
+
+    const response = await PATCH(
+      new Request("https://admin.test/api/store/product-groups/x", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Carpeta pastel",
+          images: [{ url: "https://res.cloudinary.com/test/carpeta.jpg", isMain: true }],
+          categoryId: fixture.category.id,
+          preserveSlug: true,
+          confirmRemovals: true,
+          variants: [
+            {
+              id: keep.id,
+              sizeId: keep.sizeId,
+              colorId: keep.colorId,
+              designId: keep.designId,
+              sku: keep.sku,
+              price: "10000",
+              acqPrice: "4000",
+              stock: keep.stock,
+              isArchived: true,
+            },
+          ],
+        }),
+      }),
+      { params: { storeId: fixture.store.id, productGroupId: group.id } },
+    );
+    expect(response.status).toBe(200);
+    expect(await testPrisma.product.findUnique({ where: { id: removed.id } })).toBeNull();
+
+    // No pasó a la variante archivada: quedó registrada como URL borrada.
+    expect(
+      await testPrisma.productSlugAlias.count({ where: { storeId: fixture.store.id, productId: keep.id } }),
+    ).toBe(0);
+    expect(
+      await testPrisma.deletedProductUrl.findMany({
+        where: { storeId: fixture.store.id },
+        orderBy: { slug: "asc" },
+        select: { slug: true, productId: true, categoryId: true, productGroupId: true },
+      }),
+    ).toEqual([
+      { slug: `carpeta-azul-vieja-${suffix}`, productId: removed.id, categoryId: fixture.category.id, productGroupId: group.id },
+      { slug: `carpeta-pastel-azul-${suffix}`, productId: removed.id, categoryId: fixture.category.id, productGroupId: group.id },
+    ]);
+
+    const { findArchivedProductRedirect } = await import("@/lib/archived-product-redirect");
+    for (const slug of [`carpeta-pastel-azul-${suffix}`, `carpeta-azul-vieja-${suffix}`]) {
+      await expect(findArchivedProductRedirect(testPrisma, fixture.store.id, slug)).resolves.toEqual({
+        kind: "category",
+        slug: fixture.category.slug,
+      });
+    }
+  });
 });
