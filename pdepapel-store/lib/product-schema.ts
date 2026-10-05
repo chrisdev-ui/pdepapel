@@ -98,21 +98,45 @@ export function buildProductSchema(
   };
 }
 
-/** Grupo con variantes cuando todas las combinaciones son distintas; si no, el producto suelto. */
-export function buildProductJsonLd(product: Product, siblings: Product[]) {
-  const seen = new Set<string>();
-  const hasDuplicateCombination = siblings.some((variant) => {
-    const combination = [
-      variant.size?.id,
-      variant.color?.id,
-      variant.design?.id,
-    ].join("|");
-    if (seen.has(combination)) return true;
-    seen.add(combination);
-    return false;
+const VARIANT_ATTRIBUTES = [
+  ["color", "https://schema.org/color"],
+  ["size", "https://schema.org/size"],
+  ["pattern", "https://schema.org/pattern"],
+] as const;
+
+type VariantSchema = ReturnType<typeof buildProductSchema>;
+
+/**
+ * Atributos por los que el grupo varía de verdad, leídos del marcado que ve
+ * Google: todas las variantes tienen valor y hay al menos dos distintos.
+ * Declarar uno que no varía (o que a alguna variante le falta) hace que
+ * Merchant exija el campo en cada variante: «Falta el campo "size"» dejó
+ * 101 fichas no válidas cuando `variesBy` era fijo (2026-10-02).
+ */
+export function getVariesBy(variants: VariantSchema[]) {
+  return VARIANT_ATTRIBUTES.filter(([key]) => {
+    const values = variants.map((variant) => variant[key]);
+    if (values.some((value) => !value)) return false;
+    return new Set(values).size > 1;
   });
+}
+
+/**
+ * Grupo con variantes cuando el grupo varía por algún atributo y cada
+ * variante tiene una combinación distinta de esos atributos; si no, el
+ * producto suelto.
+ */
+export function buildProductJsonLd(product: Product, siblings: Product[]) {
+  const variants = siblings.map((variant) => buildProductSchema(variant));
+  const variesBy = getVariesBy(variants);
+  const combinations = new Set(
+    variants.map((variant) => variesBy.map(([key]) => variant[key]).join("|")),
+  );
   const hasVariants = Boolean(
-    product.productGroupId && siblings.length > 1 && !hasDuplicateCombination,
+    product.productGroupId &&
+      siblings.length > 1 &&
+      variesBy.length > 0 &&
+      combinations.size === variants.length,
   );
 
   if (!hasVariants) {
@@ -131,12 +155,8 @@ export function buildProductJsonLd(product: Product, siblings: Product[]) {
       `Descubre ${product.name} en Papelería P de Papel.`,
     ),
     productGroupID: product.productGroupId,
-    variesBy: [
-      "https://schema.org/color",
-      "https://schema.org/size",
-      "https://schema.org/pattern",
-    ],
-    hasVariant: siblings.map((variant) => buildProductSchema(variant)),
+    variesBy: variesBy.map(([, url]) => url),
+    hasVariant: variants,
   };
 }
 
