@@ -56,6 +56,23 @@ describe("storefront robots policy", () => {
   });
 
   /**
+   * meta-externalagent y PetalBot regeneraban fichas sin caché (55 % de las
+   * peticiones a la tienda en una semana). Las vistas previas, Merchant y la
+   * búsqueda tienen que seguir pasando por la regla pública.
+   */
+  it("blocks Meta's AI crawler and PetalBot but keeps previews, Merchant and search crawlers allowed", () => {
+    const policy = robots();
+    const rules = Array.isArray(policy.rules) ? policy.rules : [policy.rules];
+    for (const agent of ["meta-externalagent", "PetalBot"]) {
+      expect(rules.find((rule) => rule.userAgent === agent)).toEqual({ userAgent: agent, disallow: "/" });
+    }
+    for (const agent of ["facebookexternalhit", "meta-externalfetcher", "Googlebot", "Google-InspectionTool", "Storebot-Google", "AdsBot-Google", "Bingbot"]) {
+      expect(rules.some((rule) => String(rule.userAgent).toLowerCase() === agent.toLowerCase()), agent).toBe(false);
+    }
+    expect(rules.map((rule) => rule.userAgent)).toEqual(["AhrefsBot", "Amazonbot", "meta-externalagent", "PetalBot", "Clarity-Bot", "*"]);
+  });
+
+  /**
    * Con `/_next/` entero bloqueado, Googlebot no podía bajar los JS ni las
    * imágenes de `/_next/image` (Search Console: 49 de 61 recursos sin cargar).
    * Solo se abren esas dos rutas; el bloqueo de `/_next/` se queda para el resto.

@@ -44,8 +44,16 @@ const FILTERED_PATHS = ["/tienda?", "/categoria/*?", "/shop?"];
  * fue el 6 % del ancho de banda de septiembre de 2026 y Amazonbot otro 6 %
  * (no hay canal de venta en Amazon). Googlebot-Image no va aquí: alimenta
  * Google Imágenes y Merchant.
+ *
+ * meta-externalagent (el rastreador de IA de Meta) hizo el 55 % de las
+ * peticiones a la tienda en la semana al 2026-10-05, con 28 % de caché: cada
+ * ficha regenerada cuesta funciones e ISR en Vercel. PetalBot (Huawei) bajaba
+ * fichas sin caché (2 %). No tocan el feed de Meta (vive en el admin, otro
+ * host) ni las vistas previas: esas las pide facebookexternalhit, que sigue
+ * permitido, igual que Googlebot, Google-InspectionTool, Storebot-Google,
+ * AdsBot-Google y Bingbot.
  */
-const BLOCKED_CRAWLERS = ["AhrefsBot", "Amazonbot"];
+const BLOCKED_CRAWLERS = ["AhrefsBot", "Amazonbot", "meta-externalagent", "PetalBot"];
 
 export default function robots(): MetadataRoute.Robots {
   return {
