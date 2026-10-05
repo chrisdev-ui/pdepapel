@@ -19,5 +19,8 @@ export async function getSitemapProducts(): Promise<SitemapProduct[]> {
   }
 
   const payload: unknown = await response.json();
-  return Array.isArray(payload) ? (payload as SitemapProduct[]) : [];
+  if (!Array.isArray(payload)) {
+    throw new Error("Respuesta de productos inválida para el sitemap");
+  }
+  return payload as SitemapProduct[];
 }

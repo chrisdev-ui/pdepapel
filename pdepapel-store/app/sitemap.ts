@@ -1,4 +1,4 @@
-import { getCategories } from "@/actions/get-categories";
+import { getCategoriesOrThrow } from "@/actions/get-categories";
 import { getProducts } from "@/actions/get-products";
 import { getSitemapProducts } from "@/actions/get-sitemap-products";
 import { BASE_URL } from "@/constants";
@@ -12,36 +12,34 @@ const getLastModified = (updatedAt?: string) => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
+/**
+ * Si el catálogo no responde, el sitemap falla a propósito: Next sigue
+ * sirviendo la última versión buena (ISR) en lugar de cachear durante minutos
+ * uno con solo las páginas fijas. Un catálogo sin productos activos también se
+ * trata como fallo: la tienda nunca está vacía, así que es la API o su
+ * configuración.
+ */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  let productsUrls: MetadataRoute.Sitemap = [];
-  let categoryUrls: MetadataRoute.Sitemap = [];
+  const [sitemapProducts, categories] = await Promise.all([
+    getSitemapProducts(),
+    getCategoriesOrThrow(),
+  ]);
 
-  try {
-    const products = (await getSitemapProducts()).filter(
-      (product) => !product.isArchived,
-    );
+  const products = sitemapProducts.filter((product) => !product.isArchived);
+  if (products.length === 0) {
+    throw new Error("El catálogo devolvió 0 productos activos para el sitemap");
+  }
 
-    productsUrls = products.map((product) => ({
-      url: `${BASE_URL}${productPath(product.slug || product.id)}`,
-      lastModified: getLastModified(product.updatedAt),
+  const productsUrls: MetadataRoute.Sitemap = products.map((product) => ({
+    url: `${BASE_URL}${productPath(product.slug || product.id)}`,
+    lastModified: getLastModified(product.updatedAt),
+  }));
+
+  const categoryUrls: MetadataRoute.Sitemap = categories
+    .filter((category) => category.seoEnabled && category.slug)
+    .map((category) => ({
+      url: `${BASE_URL}${categoryPath(category.slug!)}`,
     }));
-  } catch (error) {
-    console.warn(
-      "Failed to fetch products for sitemap, using static routes only:",
-      error,
-    );
-  }
-
-  try {
-    const categories = await getCategories();
-    categoryUrls = categories
-      .filter((category) => category.seoEnabled && category.slug)
-      .map((category) => ({
-        url: `${BASE_URL}${categoryPath(category.slug!)}`,
-      }));
-  } catch (error) {
-    console.warn("Failed to fetch SEO categories for sitemap:", error);
-  }
 
   // /proximamente sin productos es noindex: anunciarla en el sitemap haría que
   // Search Console la marque como «enviada pero excluida por noindex».
