@@ -37,21 +37,34 @@ En GitHub › Settings › Secrets and variables › Actions:
 
 La **llave privada** de age no vive en GitHub, ni en el repositorio, ni en Cloudflare. La guarda Christian fuera de línea (gestor de contraseñas o un medio offline). Sin ella las copias no se pueden leer, y si se pierde, las copias existentes no sirven.
 
-## Estado actual (2026-10-05)
+## Estado actual
 
-- **Bucket:** `pdepapel-db-backups` en la cuenta de Cloudflare de P de Papel. Privado: acceso público deshabilitado, sin r2.dev, sin dominio propio.
-- **Ciclo de vida:** `daily/` se borra a los 35 días (`daily-35-dias`); `monthly/` a los 400 días (`monthly-400-dias`). Además está la regla por defecto de R2 que aborta subidas a medias a los 7 días.
-- **Bloqueo:** `daily-lock-30-dias`, prefijo `daily/`, 30 días: nada en `daily/` se puede borrar ni sobrescribir antes de 30 días. Es menor que los 35 del ciclo de vida, así que no chocan.
-- **Llave de age:** la privada está en `~/pdepapel-backups/keys/pdepapel-db-backups-age.key` (0600) en el equipo de Christian. Hay que pasarla al gestor de contraseñas y a una copia fuera de línea. **Sin ella, ninguna copia se puede descifrar.** La pública está en la variable `BACKUP_AGE_RECIPIENT`.
-- **Secretos ya creados en GitHub:** `BACKUP_DB_HOST`, `BACKUP_DB_PORT`, `BACKUP_DB_USER`, `BACKUP_DB_PASSWORD`, `BACKUP_DB_NAME` (usuario de solo lectura) y `BACKUP_R2_BUCKET`.
-- **Faltan:** el token de R2 y tres secretos (`BACKUP_R2_ACCOUNT_ID`, `BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY`). Después, `BACKUP_ENABLED=true`, la primera corrida manual y la prueba de restauración.
+- **Activa desde el 2026-10-05, 19:16 UTC** (`BACKUP_ENABLED=true`). Corre todos los días a las **08:30 UTC** (03:30 en Colombia).
+- **Primera copia:** corrida manual [37362198609](https://github.com/chrisdev-ui/pdepapel/actions/runs/37362198609), 3 min 42 s, `daily/railway-2026-10-05T19-17-03Z.sql.gz.age`, 96 tablas, 10.742.533 bytes cifrados.
+  - Prueba de restauración con la llave real: 96 de 96 tablas con el mismo número exacto de filas que producción (36.786 filas).
+- **Dónde viven:** bucket privado `pdepapel-db-backups` en la cuenta de Cloudflare de P de Papel (sin acceso público, sin r2.dev, sin dominio propio).
+  - `daily/`: se borra a los 35 días (`daily-35-dias`), con bloqueo de 30 días (`daily-lock-30-dias`): nada se puede borrar ni sobrescribir antes.
+  - `monthly/`: la copia del día 1 de cada mes, se borra a los 400 días (`monthly-400-dias`).
+- **Token de R2:** «Account API token» `pdepapel-db-backups-github`, permiso Object Read & Write solo sobre `pdepapel-db-backups`, sin vencimiento, sin filtro de IP. Sus valores están solo en los secretos de GitHub.
+- **Llave de age:** la privada la custodia Christian en su gestor de contraseñas, más una copia fuera de línea; nunca en el repositorio, GitHub ni Cloudflare. **Sin ella, ninguna copia se puede descifrar.** La pública está en la variable `BACKUP_AGE_RECIPIENT`.
 
-### Crear el token de R2 (lo hace Christian)
+## Correr la copia a mano
 
-1. Cloudflare › R2 › Manage API Tokens › Create Account API token.
-2. Permiso **Object Read & Write**; «Apply to specific buckets only» → solo `pdepapel-db-backups`. Sin vencimiento (lo usa una tarea programada; se rota a mano, ver abajo). Sin filtro de IP (las IP de GitHub Actions cambian).
-3. En la pantalla final, copiar cada valor directamente a GitHub (Settings › Secrets and variables › Actions): «Access Key ID» → `BACKUP_R2_ACCESS_KEY_ID`; «Secret Access Key» → `BACKUP_R2_SECRET_ACCESS_KEY`. El Account ID (R2 › Overview › Account Details) → `BACKUP_R2_ACCOUNT_ID`. La pantalla del secreto se muestra una sola vez.
-4. Avisar para encender `BACKUP_ENABLED`, correr el flujo y hacer la prueba de restauración.
+```bash
+gh workflow run db-backup.yml --repo chrisdev-ui/pdepapel -f keep_artifact=true
+gh run list --repo chrisdev-ui/pdepapel --workflow db-backup.yml -L 1
+```
+
+`keep_artifact=true` deja además el archivo **cifrado** (`.age`, nada en claro) como artefacto del run por 1 día, para la prueba de restauración. Sin esa opción solo se sube a R2. En el resumen del run salen la clave y el tamaño.
+
+## Si falla la corrida diaria
+
+- **Aviso:** GitHub manda un correo a la cuenta que editó por última vez el `cron` del flujo (chrisdev-ui, Christian). Revisarlo con `gh run list --repo chrisdev-ui/pdepapel --workflow db-backup.yml`.
+- **«faltan variables»:** falta un secreto o la variable; ver la tabla de arriba.
+- **Access denied / no conecta con la base:** el usuario de lectura o la red de Railway. Revisar el usuario en Railway y `BACKUP_DB_*`.
+- **403 de R2:** el token se revocó o cambió de alcance. Rotarlo (ver Rotación).
+- **«el volcado no terminó»:** el volcado se cortó; volver a correrlo a mano.
+- Después de arreglarlo, correrlo a mano y confirmar el objeto nuevo en `daily/`.
 
 ## Preparación (una sola vez)
 
@@ -67,11 +80,15 @@ La **llave privada** de age no vive en GitHub, ni en el repositorio, ni en Cloud
 
 Para una emergencia, o para revisar datos de una fecha:
 
+1. **Conseguir la copia cifrada:** Cloudflare › R2 › `pdepapel-db-backups` › `daily/` (o `monthly/`) › descargar el `.age` más reciente. O, si es de una corrida manual de hoy, `gh run download <run-id> --repo chrisdev-ui/pdepapel -n db-backup-encrypted -D <carpeta>`.
+2. **Sacar la llave privada** del gestor de contraseñas a un archivo temporal 0600, solo para este paso.
+3. **Restaurar en una base NUEVA**, nunca encima de producción:
+
 ```bash
-# 1. Descargar la copia de R2 (panel de Cloudflare o aws s3 cp con el token)
-# 2. Restaurar en una base NUEVA, nunca encima de producción
-age --decrypt --identity pdepapel-backups.key railway-<fecha>.sql.gz.age | gunzip | mysql <base-nueva>
+age --decrypt --identity <llave.txt> railway-<fecha>.sql.gz.age | gunzip | mysql <base-nueva>
 ```
+
+4. Borrar el archivo temporal de la llave y la base de prueba al terminar.
 
 Volver a poner datos en producción es una escritura en producción: pasa por `npm run prod:write` / `prod:migrate` con aprobación (`pdepapel-admin/AGENTS.md`), nunca por un `mysql` directo.
 

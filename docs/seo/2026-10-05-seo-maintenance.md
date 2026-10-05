@@ -696,3 +696,8 @@ Aplicado y verificado en producción (16:59 UTC):
 No aplicado:
 - **Política de devoluciones en Merchant Center:** se cargaron los valores aprobados (URL `/politicas/devoluciones`, «Solo productos nuevos», 7 días, etiqueta «Responsabilidad del cliente»), pero en el resumen el botón «Guardar» quedó deshabilitado (`disabled`) sin mensaje de error, dos veces. Se canceló; la política sigue con los valores anteriores (§9.9). Valores anteriores para revertir: URL `/policies/returns`, «Nuevos y poco usados», 5 días, método en tienda y por correo, etiqueta «Incluida en el paquete», sin tarifa de reposición, reembolso en 5 días.
 - **Complemento «Regiones»:** el permiso automático de la sesión bloqueó el clic en «Añadir»; hay que activarlo a mano (Complementos › Descubrir › Regiones › Añadir). Después se crean las regiones de §9.12 y la política de envío de §9.10.
+
+
+### 9.14 Copias de seguridad de la base
+
+**Activas y con prueba de restauración (2026-10-05, 19:16 UTC):** copia diaria cifrada a R2 (`pdepapel-db-backups`, 08:30 UTC); primera copia de 10,7 MB restaurada con 96 de 96 tablas idénticas a producción. Detalle en `docs/runbooks/db-backups.md`.
