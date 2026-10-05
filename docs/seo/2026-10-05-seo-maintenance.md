@@ -487,3 +487,64 @@ Push de `62a70b22..5270cd09` a `main`. CI «Quality checks» en verde (tienda y 
   - «Falta el campo "size"»: validación iniciada.
   - `robots.txt`: se pidió un nuevo rastreo.
   - «Bloqueada por robots.txt»: pendiente hasta que Search Console muestre el archivo de 1.279 bytes.
+
+---
+
+## 8. Ola 2, Bloque 0 y Bloque 1 (2026-10-05)
+
+### 8.1 Bloque 0 (Search Console, con capturas antes y después)
+
+- **Fichas de comerciantes:** la validación de «Falta el campo "size"» sigue en «Iniciada» (101). No se reinició.
+- **`robots.txt`:** Search Console sigue mostrando la versión de 1.237 bytes del 25/9 (la nueva tiene 1.279). Se pidió un nuevo rastreo por segunda y última vez.
+- **«Bloqueada por robots.txt» → «Validar corrección»:** pendiente, hasta que Search Console lea el archivo nuevo.
+- **Indexación solicitada solo para tres URL:**
+  - `/`, que ya estaba indexada;
+  - `/producto/lapices-mafalda-x6`, que ya muestra 4 fichas de comerciante válidas;
+  - `/producto/tapete-de-corte-mini`, que seguía «Duplicada» con la canónica antigua.
+- **Vista previa de administración:** el build falla por las variables `DATABASE_URL`, `FRONTEND_STORE_URL` y `CRON_SECRET`, que faltan en el ámbito Preview (según el registro del build). No se tocó nada.
+
+### 8.2 Bloque 1: commits en `main`
+
+| Ítem | Commit | Qué cambia | Tests |
+|---|---|---|---|
+| P1-1 | `cb5333f7` | `sale_price` y `sale_price_effective_date` en los feeds de Google y Meta y en el exportador manual, calculados con el mismo motor de descuentos que la API de la tienda (`lib/feed-pricing.ts`) | contrato feed ↔ ficha en los dos feeds (oferta directa, por categoría, sin oferta) y en la tienda (el JSON-LD publica el precio efectivo) |
+| P1-2 | `9dd666ff` | `hasMerchantReturnPolicy` en cada oferta (5 días, por correo, envío a cargo del cliente) y `shippingDetails` gratis solo desde `Store.freeShippingThreshold` (250.000 COP) | valores comparados con el texto de las páginas de políticas |
+| P1-3 | `28239987` + `296ce4a0` + `64efa60c` | títulos sin «- estampado, color» ni marca repetida; descripción de respaldo con precio y envío; variantes con descripción propia; `stripHtmlTags` ya no mete espacios en las etiquetas de línea («caucho , ideal») | títulos y descripciones por plantilla, unicidad entre hermanas, texto plano |
+| P1-8 (código) | `a17f8851` | `search_term` saneado (minúsculas, ≤ 100, sin correos ni teléfonos) en `search`, `catalog_search` y `catalog_no_results` | saneador y eventos de la barra de búsqueda |
+| P2-1 | `c6824f73` | sin SearchAction en el inicio | fuente del inicio |
+| P2-2 | `9e1844f1` | `/proximamente` sin productos: noindex y fuera del sitemap | sitemap y metadata |
+| P2-3 | `a2a91be9` | si el catálogo falla, el sitemap falla y se sigue sirviendo el último bueno | 3 casos de fallo |
+| P2-4 | `d621ad42` | sin canónica «/» en el layout raíz | canónica por plantilla (12) |
+| P2-5 | `011cf6ad` | una sola Organization (dirección de Medellín, redes, correo) y la marca en el ProductGroup cuando todas las variantes la comparten | organización y marca del grupo |
+| P2-6 | `77f37211` | rutas privadas de `robots.txt` sin barra final | ninguna ruta pública cae bajo un prefijo privado |
+
+### 8.3 GA4 (consola, con capturas antes y después)
+
+- **Eventos clave:** de 27 quedaron 4: `purchase`, `begin_checkout`, `add_to_cart` y `whatsapp_cta_clicked` (este último se añadió).
+  - Desmarcados: `page_view`, `session_start`, `first_visit`, `user_engagement`, `scroll`, `click`, `form_start`, `view_item`, `view_item_list`, `select_item`, `select_item_variant`, `select_category`, `view_cart`, `view_search_results`, `catalog_filter`, `catalog_search`, `catalog_no_results`, `cart_preview_action`, `cart_preview_dismiss`, `cart_preview_view`, `checkout_initiated`, `checkout_step_view`, `close_convert_lead` y `qualify_lead`.
+  - **Revertir:** Administrar › Eventos › «Eventos recientes» › estrella en cada evento.
+- **Dimensión personalizada:** `search_term` (ámbito evento, parámetro `search_term`), creada el 2026-10-05. **Revertir:** Definiciones personalizadas › ⋮ › Archivar.
+- **P1-8(c), compras sin sesión:** está **preparado en la rama local `seo/p1-8c-ga4-session-id` (`f3667589`) y no se ha subido**. La tienda envía el `session_id` de GA4 al hacer el pedido, y el panel lo guarda y lo manda en el evento `purchase`. **Requiere la migración `prisma/manual-migrations/20261005_add_order_analytics_session_id.sql`, que espera tu aprobación** y debe aplicarse antes de desplegar.
+
+### 8.4 Correcciones de datos en producción (solo campos de contenido)
+
+Cada una con copia previa en JSON fuera del repositorio, simulación, aplicación y lectura de vuelta. La base de datos usa un usuario de solo lectura (`pdepapel_ro`); las escrituras se hicieron con `.env.prod-write`.
+
+- **`Category.seoTitle`:** 15 categorías sin « | P de Papel» al final (agendas, argollados, blocks-de-hojas-decorativas, boligrafos-lapiceros, borradores, cartucheras, herramientas-de-oficina, lapices, libretas, llaveros, marcadores, mugs, notas-adhesivas, resaltadores y stickers). Verificado en producción tras la expiración de la caché: «Agendas bonitas y kawaii en Colombia | Papelería P de Papel».
+- **`plumones-offi-esco-punta-pincel-x24`:** «lettering ,Ilustraciones» → «lettering, ilustraciones». Verificado en producción.
+- Las «393 descripciones con espacio antes de coma» eran un artefacto de convertir HTML a texto, no un error en los datos (se arregló en el código, `64efa60c`). Solo había una errata real.
+
+### 8.5 Para Paula
+
+- `lapiceros-marfil-pastel-x10`: la descripción dice «x 12 unidades». ¿Son 10 o 12?
+- `colores-norma-x12-doble-punta`: tiene el color «Amarillo» siendo un set de 12. ¿Qué color corresponde?
+- **Tarifa de envío** por debajo de 250.000 COP: la política dice que «lo calcula la transportadora», así que el marcado no declara tarifa. Hace falta una tarifa fija o máxima publicable, o configurar el envío en Merchant Center, para quitar los 152 avisos de `shippingDetails`.
+- **Tiempo de preparación en días** (para `deliveryTime`): la política solo dice «después de confirmar el pago».
+- **Plazo de devolución:** la política cuenta los 5 días «desde la compra»; Google los interpreta desde la entrega. ¿Se mantiene así?
+- La tarjeta regalo no tiene una imagen real de producto para el marcado.
+
+### 8.6 Pendientes
+
+- Revalidación: en la última hora no se vio ningún `POST /api/revalidate` real (nadie editó el catálogo). Sigue abierto.
+- `catalog_no_results` y `catalog_search` con `search_term`: la dimensión empieza a llenarse desde el despliegue de `a17f8851`; GA4 tarda 24–48 h.
+- Vigilar `product-sticky-bar.spec.ts:126` en la próxima corrida semanal (lunes 14:00 UTC).
