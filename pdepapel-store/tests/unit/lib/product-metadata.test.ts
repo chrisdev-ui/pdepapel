@@ -80,6 +80,18 @@ describe("buildProductMetaTitle", () => {
 });
 
 describe("buildProductMetaDescription", () => {
+  it("starts with the variant name when the name already carries the colour (carpeta-plastica-oficio-*)", () => {
+    const shared = "<p>Carpeta KLIPP en formato sobre con caucho, ideal para documentos tamaño oficio.</p>";
+    const verde = product({ id: "v", name: "Carpeta plástica oficio verde pastel", description: shared, color: { id: "c2", name: "Verde pastel" } } as unknown as Partial<Product>);
+    const azul = product({ id: "a", name: "Carpeta plástica oficio azul pastel", description: shared, color: { id: "c3", name: "Azul pastel" } } as unknown as Partial<Product>);
+    const [a, b] = [verde, azul].map((variant) => buildProductMetaDescription(variant, { siblings: [verde, azul] }));
+    expect(a).not.toBe(b);
+    expect(a.startsWith("Carpeta plástica oficio verde pastel. Carpeta KLIPP")).toBe(true);
+    // Un producto suelto no lleva prefijo.
+    expect(buildProductMetaDescription(verde).startsWith("Carpeta KLIPP")).toBe(true);
+  });
+
+
   it("uses real price and shipping instead of the generic fallback when there is no description", () => {
     const description = buildProductMetaDescription(product({ name: "Block iris x35 hojas", price: "6000" } as unknown as Partial<Product>), {
       freeShippingThreshold: 250000,

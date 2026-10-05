@@ -63,7 +63,15 @@ export function buildProductMetaDescription(
   const attributes = getDistinguishingAttributes(product, options.siblings);
   const ownText = richTextToPlainText(product.description);
   if (ownText) {
-    const prefix = attributes.length ? `${attributes.join(", ")}. ` : "";
+    // En un grupo las hermanas suelen compartir el texto: algo propio de la
+    // variante va delante (lo que la distingue o, si el nombre ya lo dice,
+    // el nombre mismo) para que no publiquen la misma descripción.
+    const isVariant = (options.siblings?.length ?? 0) > 1;
+    const prefix = attributes.length
+      ? `${attributes.join(", ")}. `
+      : isVariant && !normalize(ownText).startsWith(normalize(product.name))
+        ? `${product.name}. `
+        : "";
     return truncate(`${prefix}${ownText}`, DESCRIPTION_MAX_LENGTH);
   }
 
