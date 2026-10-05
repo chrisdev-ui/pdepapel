@@ -118,3 +118,5 @@ Christian aprobó solo los puntos 1, 2, 3, 5 y 6 y el presupuesto de $15. Lo dem
 - **Pausa de producción:** nunca. Pone en 503 todos los proyectos.
 
 **Qué revisar:** el 8 de octubre, en Usage, comparar los minutos de CPU de build por día con el 5 de octubre. En Commerce Manager, confirmar que el catálogo sigue leyendo el feed.
+
+**Verificado (2026-10-05):** el push `9c4d4bca` compiló una vez cada proyecto en máquina de 4 núcleos (admin 2 min 23 s, tienda 1 min 11 s, ambos READY) y el registro muestra el paso `ops/vercel-ignore-build.sh`. El push siguiente, que solo tocó este documento y los `AGENTS.md`, no compiló ninguno de los dos.
