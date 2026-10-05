@@ -587,3 +587,29 @@ Cada una con copia previa en JSON fuera del repositorio, simulación, aplicació
 ### 9.5 Para Paula (además de §8.5)
 
 - Muchos archivados caen en categorías `noindex`; vale la pena revisar `seoEnabled` de esas categorías (ola 3).
+
+### 9.6 Escrituras que no pasaron por el envoltorio
+
+`pdepapel-admin/AGENTS.md` exige que toda escritura en producción pase por `npm run prod:write` / `prod:migrate`, con un token de `prod:approve` y una línea en `ops/prod-writes.log`. Estas cuatro se aprobaron en el chat, pero se ejecutaron directamente con `node --env-file=.env.prod-write`: no hubo token ni línea en el registro. El envoltorio no tiene forma de anotar una corrida pasada, así que el registro no se tocó. Desde el 2026-10-05 todas las escrituras pasan por el envoltorio.
+
+| Hora (UTC, 2026-10-05) | Guion (borrador de la sesión) | Qué tocó | Copia previa (`~/pdepapel-backups/2026-10-05/`) |
+|---|---|---|---|
+| 07:21:37 | `fix-category-seotitles.mjs --apply` | `Category.seoTitle` de 15 filas (sin « \| P de Papel» al final) | `category-seotitle-2026-10-05.json` (15 filas completas, tomada 07:19:42) |
+| 07:23:55 | `fix-plumones-typo.mjs --apply` | `Product.description` de 1 fila (`plumones-offi-esco-punta-pincel-x24`: «lettering ,Ilustraciones» → «lettering, ilustraciones») | `product-plumones-description-2026-10-05.json` (1 fila, tomada 07:23:52) |
+| 08:03:11 | `apply-session-id-migration.mjs --apply` | `ALTER TABLE Order ADD COLUMN analyticsSessionId VARCHAR(32) NULL`; 721 filas intactas, 0 valores | Solo la estructura: `order-create-table-before.sql` y `-after.sql`. **No hubo copia de datos** (la columna es nueva y vacía). |
+| 14:14:34 | `apply-deleted-product-url.mjs --apply` | `CREATE TABLE DeletedProductUrl` (vacía) | Volcado completo `railway-2026-10-05T14-07-41-021Z.sql.gz`, restaurado y comparado tabla por tabla |
+
+Las cuatro las aprobó Christian en el chat antes de correrlas.
+
+### 9.7 Ítem de auditoría retirado: `url` e `image` en el `ProductGroup`
+
+La auditoría (§3, «`ProductGroup` sin url, imagen ni marca») pedía añadir `url` e `image` al `ProductGroup`. **Se retira.** La [documentación de variantes de producto de Google](https://developers.google.com/search/docs/appearance/structured-data/product-variants) define `url` como «For single-page websites only … Don't use this property for multi-page websites», y explica que en un sitio de varias páginas «there is no single canonical URL representing the ProductGroup». La tienda es de varias páginas: cada variante tiene su propia URL `/producto/<slug>`. Además, `image` no está entre las propiedades de `ProductGroup` que Google lista. La marca sí se añadió (P2-5, `011cf6ad`). No se cambió código.
+
+### 9.8 Pendientes legales (sin cambiar)
+
+Fuente primaria: [Ley 1480 de 2011, art. 47 (Secretaría del Senado)](http://www.secretariasenado.gov.co/senado/basedoc/ley_1480_2011_pr001.html). No es asesoría legal.
+
+- **Plazo:** «El término máximo para ejercer el derecho de retracto será de cinco (5) días hábiles contados a partir de la entrega del bien». La tienda ya lo dice así (`a27ce6f5`).
+- **`merchantReturnDays`:** sigue en 5. Google lo cuenta en días desde la entrega, sin hábiles; 5 días hábiles son de 5 a 11 días calendario en 2026 (7 la mayoría de las veces). Opciones para decidir con Paula: (a) 7; (b) 11; (c) cambiar la política a un número fijo de días calendario ≥ 11; (d) fijar el plazo en la configuración de devoluciones de Merchant Center, que Google usa por encima del marcado.
+- **Reembolso:** el artículo dice que «se deberá reintegrar el dinero». Para comercio electrónico (inciso modificado por la Ley 2439 de 2024) la devolución «no podrá exceder de quince (15) días calendario» desde que se ejerció el derecho, y «la suma será aplicada directamente sobre el instrumento de pago o medio de pago correspondiente o a través del medio acordado entre las partes». La política dice «Si te retractas de la compra, el valor queda como saldo a favor»: revisar con asesoría legal. No se cambió.
+- **Sábado:** los cálculos de días hábiles de esta auditoría suponen lunes a viernes sin festivos. Si el sábado cuenta como hábil, el plazo máximo baja de 11 a 9 días calendario. Revisar con asesoría legal.
