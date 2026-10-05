@@ -222,8 +222,14 @@ export const legacyProductRedirects = [
     destination: "/producto/almohadillas-mini-para-sellos-de-colores",
   },
   {
+    source: "/producto/archivador-media-carta-pastel-x13",
+    destination:
+      "/producto/archivador-media-carta-klipp-con-13-compartimentos-lila-clasico",
+  },
+  {
     source: "/producto/archivador-media-carta-pastel-x13-clasico-pastel-m",
-    destination: "/producto/archivador-media-carta-pastel-x13",
+    destination:
+      "/producto/archivador-media-carta-klipp-con-13-compartimentos-lila-clasico",
   },
   {
     source: "/producto/banderitas-adhesivas-blanco-clasico-blanco-m",
@@ -388,24 +394,12 @@ export const legacyProductRedirects = [
     destination: "/producto/block-hojas-blancas-oficio-x70h",
   },
   {
-    source: "/producto/block-hojas-decorativas-6-vintage-pastel-s",
-    destination: "/producto/block-hojas-decorativas-6",
-  },
-  {
-    source: "/producto/block-hojas-decorativas-7-vintage-pastel-m",
-    destination: "/producto/block-hojas-decorativas-7",
-  },
-  {
     source: "/producto/block-iris-en-tonos-pastel-clasico-pastel-s",
     destination: "/producto/block-iris-en-tonos-pastel",
   },
   {
     source: "/producto/block-iris-x35-hojas-clasico-multicolor-m",
     destination: "/producto/block-iris-x35-hojas",
-  },
-  {
-    source: "/producto/block-mantequilla-clasico-blanco-l",
-    destination: "/producto/block-mantequilla",
   },
   {
     source: "/producto/block-media-carta-rayado-clasico-blanco-s",
@@ -699,26 +693,14 @@ export const legacyProductRedirects = [
     destination: "/producto/calendario-mini-panda-2026",
   },
   {
-    source: "/producto/carpeta-archivadora-13-degrade-sunset-girly-pastel-xl",
-    destination: "/producto/carpeta-archivadora-13-degrade-sunset",
-  },
-  {
     source:
-      "/producto/carpeta-archivadora-degrade-animalitos-animalitos-pastel-m",
-    destination: "/producto/carpeta-archivadora-degrade-animalitos",
-  },
-  {
-    source: "/producto/carpeta-archivadora-pastel-clasico-pastel-l",
-    destination: "/producto/carpeta-archivadora-pastel",
+      "/producto/carpeta-archivadora-fashion-pastel-con-5-compartimientos-azul-pastel-moderno",
+    destination:
+      "/producto/carpeta-archivadora-fashion-pastel-con-5-compartimientos-moderno-lila",
   },
   {
     source: "/producto/carpeta-de-tela-oficio-vintage-vintage-crema-l",
     destination: "/producto/carpeta-de-tela-oficio-vintage",
-  },
-  {
-    source:
-      "/producto/carpeta-oficio-harry-potter-harry-potter-transparente-xl",
-    destination: "/producto/carpeta-oficio-harry-potter",
   },
   {
     source:
@@ -730,17 +712,16 @@ export const legacyProductRedirects = [
     destination: "/producto/carpeta-plastica-oficio-azul-pastel",
   },
   {
+    source: "/producto/carpeta-plastica-oficio-lila",
+    destination: "/producto/carpeta-plastica-oficio-verde-pastel",
+  },
+  {
     source: "/producto/carpeta-plastica-oficio-lila-clasico-lila-xl",
-    destination: "/producto/carpeta-plastica-oficio-lila",
+    destination: "/producto/carpeta-plastica-oficio-verde-pastel",
   },
   {
     source: "/producto/carpeta-plastica-oficio-lila-clasico-xl",
-    destination: "/producto/carpeta-plastica-oficio-lila",
-  },
-  {
-    source:
-      "/producto/carpeta-plastica-oficio-rosa-pastel-clasico-rosa-pastel-xl",
-    destination: "/producto/carpeta-plastica-oficio-rosa-pastel",
+    destination: "/producto/carpeta-plastica-oficio-verde-pastel",
   },
   {
     source: "/producto/carpeta-plastica-oficio-rosada-clasico-rosado-xl",
@@ -765,16 +746,12 @@ export const legacyProductRedirects = [
     destination: "/producto/carpeta-sobre-hermetico-harry-carta",
   },
   {
-    source: "/producto/carpeta-tela-oficio-de-cuadros-vintage-pastel-l",
-    destination: "/producto/carpeta-tela-oficio-de-cuadros",
+    source: "/producto/carpeta-van-gogh",
+    destination: "/producto/carpeta-hermetica-carta-de-van-gogh-verde",
   },
   {
     source: "/producto/carpeta-van-gogh-van-gogh-amarillo-l",
-    destination: "/producto/carpeta-van-gogh",
-  },
-  {
-    source: "/producto/carton-industrial-18-clasico-cafe-l",
-    destination: "/producto/carton-industrial-18",
+    destination: "/producto/carpeta-hermetica-carta-de-van-gogh-verde",
   },
   {
     source: "/producto/cartuchera-angoo-lila-clasico-l",
@@ -799,10 +776,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/cartuchera-angoo-verde-pastel-clasico-azul-pastel-l",
     destination: "/producto/cartuchera-angoo-verde-pastel-azul",
-  },
-  {
-    source: "/producto/cartuchera-bolsillos-magicos-kawaii-pastel-m",
-    destination: "/producto/cartuchera-bolsillos-magicos",
   },
   {
     source: "/producto/cartuchera-caja-de-leche-kawaii-kawaii-pastel-m",
@@ -838,10 +811,6 @@ export const legacyProductRedirects = [
     destination: "/producto/cartuchera-clasico-verde-pastel",
   },
   {
-    source: "/producto/cartuchera-de-orejitas-sanrio-sanrio-pastel-m",
-    destination: "/producto/cartuchera-de-orejitas-sanrio",
-  },
-  {
     source: "/producto/cartuchera-hello-kitty-mcdonalds-hello-kitty-rojo-s",
     destination: "/producto/cartuchera-hello-kitty-mcdonalds",
   },
@@ -863,8 +832,12 @@ export const legacyProductRedirects = [
     destination: "/producto/cartuchera-impermeable-lila",
   },
   {
+    source: "/producto/cartuchera-lucky-girls",
+    destination: "/producto/cartuchera-lucky-girls-kawaii-rosa-pastel",
+  },
+  {
     source: "/producto/cartuchera-lucky-girls-kawaii-rosa-pastel-l",
-    destination: "/producto/cartuchera-lucky-girls",
+    destination: "/producto/cartuchera-lucky-girls-kawaii-rosa-pastel",
   },
   {
     source: "/producto/cartuchera-maleta-azul-vintage-azul-s",
@@ -896,15 +869,11 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/cartuchera-panda-osito-panda-verde-l",
-    destination: "/producto/cartuchera-panda",
+    destination: "/producto/cartuchera-panda-verde-osito",
   },
   {
     source: "/producto/cartuchera-puppy-cuadros-blanco-l",
     destination: "/producto/cartuchera-puppy",
-  },
-  {
-    source: "/producto/cartuchera-rectangular-girly-girly-pastel-m",
-    destination: "/producto/cartuchera-rectangular-girly",
   },
   {
     source: "/producto/cartuchera-retro-osito-multicolor-m",
@@ -913,6 +882,14 @@ export const legacyProductRedirects = [
   {
     source: "/producto/cartuchera-rosa-kawaii-rosado-s",
     destination: "/producto/cartuchera-rosa-2",
+  },
+  {
+    source: "/producto/cartuchera-wisdom-azul-aesthetic-pastel",
+    destination: "/producto/cartuchera-wisdom-azul-pastel",
+  },
+  {
+    source: "/producto/cartuchera-wisdom-rosa-aesthetic-pastel",
+    destination: "/producto/cartuchera-wisdom-rosa-pastel",
   },
   {
     source: "/producto/cartulina-18-blanca-paquete-x10-clasico-blanco-m",
@@ -940,20 +917,8 @@ export const legacyProductRedirects = [
     destination: "/producto/cepillo-animalitos-kawaii-pequeno",
   },
   {
-    source: "/producto/cinta-ancha-x20mtrs-clasico-amarillo-pastel-xs",
-    destination: "/producto/cinta-ancha-x20mtrs",
-  },
-  {
-    source: "/producto/cinta-ancha-x50mtrs-clasico-amarillo-pastel-xs",
-    destination: "/producto/cinta-ancha-x50mtrs",
-  },
-  {
     source: "/producto/cinta-doble-faz-de-malteada-malteada-pastel-s",
     destination: "/producto/cinta-doble-faz-de-malteada",
-  },
-  {
-    source: "/producto/cinta-gruesa-transparente-tesa-x100mtrs-clasico-crema-s",
-    destination: "/producto/cinta-gruesa-transparente-tesa-x100mtrs",
   },
   {
     source: "/producto/cintas-resaltadoras-azul-pastel-aesthetic-azul-pastel-s",
@@ -962,11 +927,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/cintas-resaltadoras-azul-pastel-aesthetic-s",
     destination: "/producto/cintas-resaltadoras-azul-pastel",
-  },
-  {
-    source:
-      "/producto/cintas-resaltadoras-en-linea-con-disenos-magico-palo-de-rosa-s",
-    destination: "/producto/cintas-resaltadoras-en-linea-con-disenos",
   },
   {
     source: "/producto/cintas-resaltadoras-lila-aesthetic-lila-s",
@@ -1200,17 +1160,6 @@ export const legacyProductRedirects = [
     destination: "/producto/cuaderno-argollado-rayado-kraft-girly",
   },
   {
-    source:
-      "/producto/cuaderno-argollado-rayado-mafalda-x80h-mafalda-amarillo-pastel-m",
-    destination: "/producto/cuaderno-argollado-rayado-mafalda-x80h",
-  },
-  {
-    source:
-      "/producto/cuaderno-argollado-rayado-pequeno-80hojas-flower-power-girly-rosa-pastel-s",
-    destination:
-      "/producto/cuaderno-argollado-rayado-pequeno-80hojas-flower-power",
-  },
-  {
     source: "/producto/cuaderno-cocido-med-flores-multicolor-m",
     destination: "/producto/cuaderno-cocido-med",
   },
@@ -1258,10 +1207,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/cuaderno-pochacco-pequeno-pochacco-blanco-m",
     destination: "/producto/cuaderno-pochacco-pequeno",
-  },
-  {
-    source: "/producto/cuaderno-silvestre-flores-multicolor-s",
-    destination: "/producto/cuaderno-silvestre",
   },
   {
     source: "/producto/cuaderno-sweet-kawaii-pastel-l",
@@ -1538,6 +1483,10 @@ export const legacyProductRedirects = [
     destination: "/producto/impresora-termica-mini",
   },
   {
+    source: "/producto/jabon-en-petalos-kawaii-pastel-m",
+    destination: "/producto/jabon-en-petalos",
+  },
+  {
     source: "/producto/juego-geometrico-azul-clasico-azul-l",
     destination: "/producto/juego-geometrico-azul",
   },
@@ -1591,10 +1540,6 @@ export const legacyProductRedirects = [
     destination: "/producto/juego-geometrico-verde-neon-fluorescente",
   },
   {
-    source: "/producto/juego-sticker-room-pinocho-animados-amarillo-l",
-    destination: "/producto/juego-sticker-room-pinocho",
-  },
-  {
     source: "/producto/kit-escolar-lila-clasico-lila-s",
     destination: "/producto/kit-escolar-lila",
   },
@@ -1617,26 +1562,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/kit-escolar-verde-pastel-clasico-verde-pastel-s",
     destination: "/producto/kit-escolar-verde-pastel",
-  },
-  {
-    source: "/producto/kit-journal-arte-arte-cafe-l",
-    destination: "/producto/kit-journal-arte-cafe",
-  },
-  {
-    source: "/producto/kit-journal-arte-cafe-l",
-    destination: "/producto/kit-journal-arte-cafe",
-  },
-  {
-    source: "/producto/kit-journal-gatos-gatito-rosado-l",
-    destination: "/producto/kit-journal-gatos-gatito-rosado",
-  },
-  {
-    source: "/producto/kit-journal-vintage-verde-l",
-    destination: "/producto/kit-journal-vintage-verde",
-  },
-  {
-    source: "/producto/kit-journal-vintage-vintage-verde-l",
-    destination: "/producto/kit-journal-vintage-verde",
   },
   {
     source: "/producto/kit-kawaii-amarillo-pastel-x-5-productos-s",
@@ -1740,10 +1665,6 @@ export const legacyProductRedirects = [
     destination: "/producto/lapicero-aplique-kuromi",
   },
   {
-    source: "/producto/lapicero-aplique-panda-x-unidad-osito-panda-verde-s",
-    destination: "/producto/lapicero-aplique-panda-x-unidad",
-  },
-  {
     source: "/producto/lapicero-blanco-07mm-clasico-blanco-xs",
     destination: "/producto/lapicero-blanco-07mm",
   },
@@ -1758,10 +1679,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/lapicero-borrable-stitch-stitch-azul-s",
     destination: "/producto/lapicero-borrable-stitch",
-  },
-  {
-    source: "/producto/lapicero-capibara-de-caritas-capibara-cafe-s",
-    destination: "/producto/lapicero-capibara-de-caritas",
   },
   {
     source: "/producto/lapicero-capibara-eco-capibara-cafe-s",
@@ -1797,20 +1714,12 @@ export const legacyProductRedirects = [
     destination: "/producto/lapicero-fino-metalico-pastel",
   },
   {
-    source: "/producto/lapicero-flores-flores-azul-pastel-s",
-    destination: "/producto/lapicero-flores",
-  },
-  {
     source: "/producto/lapicero-garritas-huellita-rosado-m",
     destination: "/producto/lapicero-garritas",
   },
   {
     source: "/producto/lapicero-halloween-halloween-multicolor-s",
     destination: "/producto/lapicero-halloween-2",
-  },
-  {
-    source: "/producto/lapicero-intensamente-intensamente-multicolor-s",
-    destination: "/producto/lapicero-intensamente",
   },
   {
     source: "/producto/lapicero-kiut-negro-girly-negro-s",
@@ -1847,10 +1756,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/lapicero-offi-esco-rojo-clasico-s",
     destination: "/producto/lapicero-offi-esco-rojo",
-  },
-  {
-    source: "/producto/lapicero-offi-esco-unidad-pastel-clasico-pastel-s",
-    destination: "/producto/lapicero-offi-esco-unidad-pastel",
   },
   {
     source: "/producto/lapicero-offi-fucsia-clasico-fucsia-s",
@@ -1893,38 +1798,6 @@ export const legacyProductRedirects = [
     destination: "/producto/lapicero-piedritas",
   },
   {
-    source: "/producto/lapicero-pocket-gel-azul-pastel-moderno-azul-pastel-s",
-    destination: "/producto/lapicero-pocket-gel-azul-pastel",
-  },
-  {
-    source: "/producto/lapicero-pocket-gel-azul-pastel-moderno-s",
-    destination: "/producto/lapicero-pocket-gel-azul-pastel",
-  },
-  {
-    source: "/producto/lapicero-pocket-gel-gris-moderno-gris-s",
-    destination: "/producto/lapicero-pocket-gel-gris",
-  },
-  {
-    source: "/producto/lapicero-pocket-gel-gris-moderno-s",
-    destination: "/producto/lapicero-pocket-gel-gris",
-  },
-  {
-    source: "/producto/lapicero-pocket-gel-rosa-pastel-moderno-rosa-pastel-s",
-    destination: "/producto/lapicero-pocket-gel-rosa-pastel",
-  },
-  {
-    source: "/producto/lapicero-pocket-gel-rosa-pastel-moderno-s",
-    destination: "/producto/lapicero-pocket-gel-rosa-pastel",
-  },
-  {
-    source: "/producto/lapicero-pocket-gel-verde-pastel-moderno-s",
-    destination: "/producto/lapicero-pocket-gel-verde-pastel",
-  },
-  {
-    source: "/producto/lapicero-pocket-gel-verde-pastel-moderno-verde-pastel-s",
-    destination: "/producto/lapicero-pocket-gel-verde-pastel",
-  },
-  {
     source: "/producto/lapicero-principito-el-principito-pastel-s",
     destination: "/producto/lapicero-principito",
   },
@@ -1944,10 +1817,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/lapicero-retractil-stitch-stitch-azul-s",
     destination: "/producto/lapicero-retractil-stitch",
-  },
-  {
-    source: "/producto/lapicero-tulipan-flores-lila-s",
-    destination: "/producto/lapicero-tulipan",
   },
   {
     source: "/producto/lapiceros-07mm-degrade-girly-pastel-m",
@@ -2038,20 +1907,8 @@ export const legacyProductRedirects = [
     destination: "/producto/lapices-snoopy-x6",
   },
   {
-    source: "/producto/lapiz-clasico-pastel-clasico-pastel-s",
-    destination: "/producto/lapiz-clasico-pastel",
-  },
-  {
-    source: "/producto/lapiz-conejito-conejito-rosado-s",
-    destination: "/producto/lapiz-conejito",
-  },
-  {
     source: "/producto/lapiz-de-gatos-borrador-gatito-multicolor-s",
     destination: "/producto/lapiz-de-gatos-borrador",
-  },
-  {
-    source: "/producto/lapiz-dino-dino-verde-s",
-    destination: "/producto/lapiz-dino",
   },
   {
     source: "/producto/lapiz-infinito-aguacate-aguacate-verde-s",
@@ -2068,10 +1925,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/lapiz-infinito-osito-osito-cafe-s",
     destination: "/producto/lapiz-infinito-osito",
-  },
-  {
-    source: "/producto/lapiz-infinito-pastel-aesthetic-pastel-s",
-    destination: "/producto/lapiz-infinito-pastel",
   },
   {
     source: "/producto/lapiz-infinito-perrito-perrito-cafe-s",
@@ -2299,26 +2152,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/llavero-pelicula-intensamente-intensamente-multicolor-s",
     destination: "/producto/llavero-pelicula-intensamente",
-  },
-  {
-    source: "/producto/llavero-peluche-igor-animados-azul-s",
-    destination: "/producto/llavero-peluche-igor-azul",
-  },
-  {
-    source: "/producto/llavero-peluche-lucifer-gatito-negro-s",
-    destination: "/producto/llavero-peluche-lucifer",
-  },
-  {
-    source: "/producto/llavero-peluche-piglet-animados-rosado-s",
-    destination: "/producto/llavero-peluche-piglet-rosado",
-  },
-  {
-    source: "/producto/llavero-peluche-pooh-animados-amarillo-s",
-    destination: "/producto/llavero-peluche-pooh-amarillo",
-  },
-  {
-    source: "/producto/llavero-peluche-tiger-animados-naranja-s",
-    destination: "/producto/llavero-peluche-tiger-naranja",
   },
   {
     source: "/producto/llavero-peluche-zootopia-animados-multicolor-s",
@@ -2600,10 +2433,6 @@ export const legacyProductRedirects = [
     destination: "/producto/minas-07mm-azul",
   },
   {
-    source: "/producto/minas-gatitu-05mm-gatito-pastel-s",
-    destination: "/producto/minas-gatitu-05mm",
-  },
-  {
     source: "/producto/minas-kawaii-07mm-kawaii-multicolor-s",
     destination: "/producto/minas-kawaii-07mm",
   },
@@ -2660,10 +2489,6 @@ export const legacyProductRedirects = [
     destination: "/producto/mug-butterfly-rosa-pastel",
   },
   {
-    source: "/producto/mug-cute-kawaii-pastel-s",
-    destination: "/producto/mug-cute",
-  },
-  {
     source: "/producto/mug-degrade-hello-kawaii-pastel-s",
     destination: "/producto/mug-degrade-hello",
   },
@@ -2691,10 +2516,6 @@ export const legacyProductRedirects = [
     source:
       "/producto/notas-adhesivas-de-renglones-transparentes-clasico-transparente-xs",
     destination: "/producto/notas-adhesivas-de-renglones-transparentes",
-  },
-  {
-    source: "/producto/notas-adhesivas-girly-azul-corazones-azul-pastel-s",
-    destination: "/producto/notas-adhesivas-girly-azul",
   },
   {
     source: "/producto/notas-adhesivas-girly-rosa-corazones-pastel-s",
@@ -2793,10 +2614,6 @@ export const legacyProductRedirects = [
     destination: "/producto/notas-stitch",
   },
   {
-    source: "/producto/notas-translucidas-a-color-aesthetic-pastel-s",
-    destination: "/producto/notas-translucidas-a-color",
-  },
-  {
     source:
       "/producto/organizador-de-escritorio-giratorio-clasico-multicolor-l",
     destination: "/producto/organizador-de-escritorio-giratorio",
@@ -2832,10 +2649,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/organizador-rosa-pastel-clasico-s",
     destination: "/producto/organizador-rosa-pastel",
-  },
-  {
-    source: "/producto/pack-x4-hojas-de-stickers-letras-original-multicolor-s",
-    destination: "/producto/pack-x4-hojas-de-stickers-letras",
   },
   {
     source: "/producto/pad-mouse-kawaii-kawaii-multicolor-s",
@@ -2962,78 +2775,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/papel-crepe-verde-clasico-verde-l",
     destination: "/producto/papel-crepe-verde",
-  },
-  {
-    source: "/producto/papel-seda-azul-clasico-azul-xl",
-    destination: "/producto/papel-seda-azul",
-  },
-  {
-    source: "/producto/papel-seda-azul-clasico-xl",
-    destination: "/producto/papel-seda-azul",
-  },
-  {
-    source: "/producto/papel-seda-azul-pastel-clasico-azul-pastel-xl",
-    destination: "/producto/papel-seda-azul-pastel",
-  },
-  {
-    source: "/producto/papel-seda-azul-pastel-clasico-xl",
-    destination: "/producto/papel-seda-azul-pastel",
-  },
-  {
-    source: "/producto/papel-seda-curuba-clasico-curuba-xl",
-    destination: "/producto/papel-seda-curuba",
-  },
-  {
-    source: "/producto/papel-seda-curuba-clasico-xl",
-    destination: "/producto/papel-seda-curuba",
-  },
-  {
-    source: "/producto/papel-seda-fucsia-clasico-fucsia-xl",
-    destination: "/producto/papel-seda-fucsia",
-  },
-  {
-    source: "/producto/papel-seda-fucsia-clasico-xl",
-    destination: "/producto/papel-seda-fucsia",
-  },
-  {
-    source: "/producto/papel-seda-lila-clasico-lila-xl",
-    destination: "/producto/papel-seda-lila",
-  },
-  {
-    source: "/producto/papel-seda-lila-clasico-xl",
-    destination: "/producto/papel-seda-lila",
-  },
-  {
-    source: "/producto/papel-seda-morado-clasico-morado-xl",
-    destination: "/producto/papel-seda-morado",
-  },
-  {
-    source: "/producto/papel-seda-morado-clasico-xl",
-    destination: "/producto/papel-seda-morado",
-  },
-  {
-    source: "/producto/papel-seda-rosa-clasico-pastel-xl",
-    destination: "/producto/papel-seda-rosa-pastel",
-  },
-  {
-    source: "/producto/papel-seda-rosa-clasico-rosa-pastel-xl",
-    destination: "/producto/papel-seda-rosa-pastel",
-  },
-  {
-    source: "/producto/papel-seda-verde-clasico-verde-xl",
-    destination: "/producto/papel-seda-verde",
-  },
-  {
-    source: "/producto/papel-seda-verde-clasico-xl",
-    destination: "/producto/papel-seda-verde",
-  },
-  {
-    source: "/producto/papel-seda-verde-pastel-clasico-verde-pastel-xl",
-    destination: "/producto/papel-seda-verde-pastel",
-  },
-  {
-    source: "/producto/papel-seda-verde-pastel-clasico-xl",
-    destination: "/producto/papel-seda-verde-pastel",
   },
   {
     source: "/producto/paquete-cartulina-acuarela-x5-moderno-blanco-l",
@@ -3290,8 +3031,14 @@ export const legacyProductRedirects = [
     destination: "/producto/planeador-vertical-perfect-day",
   },
   {
+    source: "/producto/planillero-con-tapa-fashion-pastel",
+    destination:
+      "/producto/planillero-fashion-con-tapa-oficio-azul-pastel-moderno",
+  },
+  {
     source: "/producto/planillero-con-tapa-fashion-pastel-clasico-pastel-xl",
-    destination: "/producto/planillero-con-tapa-fashion-pastel",
+    destination:
+      "/producto/planillero-fashion-con-tapa-oficio-azul-pastel-moderno",
   },
   {
     source: "/producto/planillero-sanrio-sanrio-transparente-m",
@@ -3304,47 +3051,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/plato-ceramica-snoopy-mediano-snoopy-crema-m",
     destination: "/producto/plato-ceramica-snoopy-mediano",
-  },
-  {
-    source:
-      "/producto/pliego-cartulina-amarillo-pastel-clasico-amarillo-pastel-l",
-    destination: "/producto/pliego-cartulina-amarillo-pastel",
-  },
-  {
-    source: "/producto/pliego-cartulina-amarillo-pastel-clasico-l",
-    destination: "/producto/pliego-cartulina-amarillo-pastel",
-  },
-  {
-    source: "/producto/pliego-cartulina-azul-pastel-clasico-azul-pastel-l",
-    destination: "/producto/pliego-cartulina-azul-pastel",
-  },
-  {
-    source: "/producto/pliego-cartulina-azul-pastel-clasico-l",
-    destination: "/producto/pliego-cartulina-azul-pastel",
-  },
-  {
-    source: "/producto/pliego-cartulina-blanco-clasico-blanco-l",
-    destination: "/producto/pliego-cartulina-blanco",
-  },
-  {
-    source: "/producto/pliego-cartulina-blanco-clasico-l",
-    destination: "/producto/pliego-cartulina-blanco",
-  },
-  {
-    source: "/producto/pliego-cartulina-rosa-pastel-clasico-l",
-    destination: "/producto/pliego-cartulina-rosa-pastel",
-  },
-  {
-    source: "/producto/pliego-cartulina-rosa-pastel-clasico-rosa-pastel-l",
-    destination: "/producto/pliego-cartulina-rosa-pastel",
-  },
-  {
-    source: "/producto/pliego-cartulina-verde-pastel-clasico-l",
-    destination: "/producto/pliego-cartulina-verde-pastel",
-  },
-  {
-    source: "/producto/pliego-cartulina-verde-pastel-clasico-verde-pastel-l",
-    destination: "/producto/pliego-cartulina-verde-pastel",
   },
   {
     source:
@@ -3633,15 +3339,19 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/regla-flexible-dino-30cm-dino-azul-l",
-    destination: "/producto/regla-flexible-dino-30cm",
+    destination: "/producto/regla-flexible-30cm-dinosaurios-dino-azul",
   },
   {
     source: "/producto/regla-flexible-munequita-30cm-kawaii-rosado-l",
-    destination: "/producto/regla-flexible-munequita-30cm",
+    destination: "/producto/regla-flexible-de-30cm-munequita-kawaii-rosado",
+  },
+  {
+    source: "/producto/regla-flexible-sanrio-30cm",
+    destination: "/producto/regla-flexible-sanrio-30cm-lila",
   },
   {
     source: "/producto/regla-flexible-sanrio-30cm-sanrio-lila-l",
-    destination: "/producto/regla-flexible-sanrio-30cm",
+    destination: "/producto/regla-flexible-sanrio-30cm-lila",
   },
   {
     source: "/producto/regla-flores-flores-transparente-s",
@@ -3678,10 +3388,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/regla-kawaii-verde-pastel-xs",
     destination: "/producto/regla-kawaii-verde-pastel",
-  },
-  {
-    source: "/producto/regla-kuromi-kuromi-morado-m",
-    destination: "/producto/regla-kuromi",
   },
   {
     source: "/producto/regla-stitch-stitch-azul-s",
@@ -3880,38 +3586,6 @@ export const legacyProductRedirects = [
     destination: "/producto/sello-acrilico-de-viajes",
   },
   {
-    source: "/producto/sello-lacre-amarillo-pastel-kawaii-amarillo-pastel-s",
-    destination: "/producto/sello-lacre-amarillo-pastel",
-  },
-  {
-    source: "/producto/sello-lacre-amarillo-pastel-kawaii-s",
-    destination: "/producto/sello-lacre-amarillo-pastel",
-  },
-  {
-    source: "/producto/sello-lacre-azul-pastel-kawaii-azul-pastel-s",
-    destination: "/producto/sello-lacre-azul-pastel",
-  },
-  {
-    source: "/producto/sello-lacre-azul-pastel-kawaii-s",
-    destination: "/producto/sello-lacre-azul-pastel",
-  },
-  {
-    source: "/producto/sello-lacre-lila-kawaii-lila-s",
-    destination: "/producto/sello-lacre-lila",
-  },
-  {
-    source: "/producto/sello-lacre-lila-kawaii-s",
-    destination: "/producto/sello-lacre-lila",
-  },
-  {
-    source: "/producto/sello-lacre-rosa-pastel-kawaii-rosa-pastel-s",
-    destination: "/producto/sello-lacre-rosa-pastel",
-  },
-  {
-    source: "/producto/sello-lacre-rosa-pastel-kawaii-s",
-    destination: "/producto/sello-lacre-rosa-pastel",
-  },
-  {
     source: "/producto/separador-de-paginas-en-iman",
     destination: "/producto/separador-de-paginas-en-iman-mycardcol-x2",
   },
@@ -4007,10 +3681,6 @@ export const legacyProductRedirects = [
     destination: "/producto/set-borradores-milky-x5",
   },
   {
-    source: "/producto/set-clips-x4-plan-white-clasico-blanco-s",
-    destination: "/producto/set-clips-x4-plan-white",
-  },
-  {
     source:
       "/producto/set-de-acuarelas-en-tonos-calidos-metalizados-x24-clasico-metalizado-m",
     destination: "/producto/set-de-acuarelas-en-tonos-calidos-metalizados-x24",
@@ -4036,10 +3706,6 @@ export const legacyProductRedirects = [
       "/producto/set-de-plumones-x24-doble-punta-primavera-tonos-tierra-vintage-multicolor-m",
     destination:
       "/producto/set-de-plumones-x24-doble-punta-primavera-tonos-tierra",
-  },
-  {
-    source: "/producto/set-de-sellos-x10-clasico-pastel-m",
-    destination: "/producto/set-de-sellos-x10",
   },
   {
     source: "/producto/set-de-sticker-room-fairy-tale-kingdom-magico-azul-l",
@@ -4191,10 +3857,6 @@ export const legacyProductRedirects = [
     destination: "/producto/squishy-osito",
   },
   {
-    source: "/producto/sticker-de-marcos-girly-girly-rosado-s",
-    destination: "/producto/sticker-de-marcos-girly",
-  },
-  {
     source: "/producto/sticker-el-principito-el-principito-azul-s",
     destination: "/producto/sticker-el-principito",
   },
@@ -4242,14 +3904,6 @@ export const legacyProductRedirects = [
     destination: "/producto/sticker-metalizado-girly",
   },
   {
-    source: "/producto/sticker-room-el-principito-azul-l",
-    destination: "/producto/sticker-room-el-principito-azul",
-  },
-  {
-    source: "/producto/sticker-room-el-principito-el-principito-azul-l",
-    destination: "/producto/sticker-room-el-principito-azul",
-  },
-  {
     source: "/producto/stickers-3d-comida-rapida-blanco-m",
     destination: "/producto/stickers-3d-comida-rapida",
   },
@@ -4272,17 +3926,6 @@ export const legacyProductRedirects = [
   {
     source: "/producto/stickers-3d-viajes-viajes-blanco-m",
     destination: "/producto/stickers-3d-viajes",
-  },
-  {
-    source:
-      "/producto/stickers-alicia-en-el-pais-de-las-maravillas-alicia-en-el-pais-de-las-maravillas-amarillo-l",
-    destination:
-      "/producto/stickers-alicia-en-el-pais-de-las-maravillas-amarillo",
-  },
-  {
-    source: "/producto/stickers-alicia-en-el-pais-de-las-maravillas-amarillo-l",
-    destination:
-      "/producto/stickers-alicia-en-el-pais-de-las-maravillas-amarillo",
   },
   {
     source: "/producto/stickers-animalitos-fishing-diary-amarillo-m",
@@ -4338,16 +3981,8 @@ export const legacyProductRedirects = [
     destination: "/producto/stickers-flores-elegant-flowers",
   },
   {
-    source: "/producto/stickers-flores-flores-multicolor-xs",
-    destination: "/producto/stickers-flores",
-  },
-  {
     source: "/producto/stickers-flores-green-wildflower-vintage-verde-m",
     destination: "/producto/stickers-flores-green-wildflower",
-  },
-  {
-    source: "/producto/stickers-flores-multicolor-xs",
-    destination: "/producto/stickers-flores",
   },
   {
     source: "/producto/stickers-flores-purple-silk-whisper-vintage-lila-m",
@@ -4357,14 +3992,6 @@ export const legacyProductRedirects = [
     source:
       "/producto/stickers-flores-twilight-story-vintage-amarillo-pastel-m",
     destination: "/producto/stickers-flores-twilight-story",
-  },
-  {
-    source: "/producto/stickers-girly-girly-multicolor-xs",
-    destination: "/producto/stickers-girly",
-  },
-  {
-    source: "/producto/stickers-girly-multicolor-xs",
-    destination: "/producto/stickers-girly",
   },
   {
     source: "/producto/stickers-kawaii-1-kawaii-verde-s",
@@ -4391,12 +4018,36 @@ export const legacyProductRedirects = [
     destination: "/producto/stickers-kawaii-3-rosado",
   },
   {
+    source: "/producto/stickers-nostalgia-95-years",
+    destination: "/producto/stickers-nostalgia-95-years-2",
+  },
+  {
+    source: "/producto/stickers-nostalgia-95-years-vintage",
+    destination: "/producto/stickers-nostalgia-95-years-2",
+  },
+  {
     source: "/producto/stickers-nostalgia-95-years-vintage-negro-s",
-    destination: "/producto/stickers-nostalgia-95-years",
+    destination: "/producto/stickers-nostalgia-95-years-2",
+  },
+  {
+    source: "/producto/stickers-nostalgia-cafe",
+    destination: "/producto/stickers-nostalgia-cafe-2",
+  },
+  {
+    source: "/producto/stickers-nostalgia-cafe-vintage",
+    destination: "/producto/stickers-nostalgia-cafe-2",
+  },
+  {
+    source: "/producto/stickers-nostalgia-cafe-vintage-negro-s",
+    destination: "/producto/stickers-nostalgia-cafe-2",
   },
   {
     source: "/producto/stickers-nostalgia-december-vintage-negro-s",
     destination: "/producto/stickers-nostalgia-december",
+  },
+  {
+    source: "/producto/stickers-nostalgia-one-year-vintage-negro-s",
+    destination: "/producto/stickers-nostalgia-one-year",
   },
   {
     source: "/producto/stickers-vintage-flores-rosadas-rosado-s",
@@ -4447,49 +4098,6 @@ export const legacyProductRedirects = [
     destination: "/producto/tablero-borrable-semanal",
   },
   {
-    source: "/producto/tajalapiz-2-pastel-clasico-pastel-xs",
-    destination: "/producto/tajalapiz-2-pastel",
-  },
-  {
-    source:
-      "/producto/tajalapiz-con-deposito-azul-pastel-clasico-azul-pastel-xs",
-    destination: "/producto/tajalapiz-con-deposito-azul-pastel",
-  },
-  {
-    source: "/producto/tajalapiz-con-deposito-azul-pastel-clasico-xs",
-    destination: "/producto/tajalapiz-con-deposito-azul-pastel",
-  },
-  {
-    source: "/producto/tajalapiz-con-deposito-lila-clasico-lila-xs",
-    destination: "/producto/tajalapiz-con-deposito-lila",
-  },
-  {
-    source: "/producto/tajalapiz-con-deposito-lila-clasico-xs",
-    destination: "/producto/tajalapiz-con-deposito-lila",
-  },
-  {
-    source:
-      "/producto/tajalapiz-con-deposito-rosa-pastel-clasico-rosa-pastel-xs",
-    destination: "/producto/tajalapiz-con-deposito-rosa-pastel",
-  },
-  {
-    source: "/producto/tajalapiz-con-deposito-rosa-pastel-clasico-xs",
-    destination: "/producto/tajalapiz-con-deposito-rosa-pastel",
-  },
-  {
-    source:
-      "/producto/tajalapiz-con-deposito-verde-pastel-clasico-verde-pastel-xs",
-    destination: "/producto/tajalapiz-con-deposito-verde-pastel",
-  },
-  {
-    source: "/producto/tajalapiz-con-deposito-verde-pastel-clasico-xs",
-    destination: "/producto/tajalapiz-con-deposito-verde-pastel",
-  },
-  {
-    source: "/producto/tajalapiz-gaseosa-osos-escandalosos-multicolor-s",
-    destination: "/producto/tajalapiz-gaseosa",
-  },
-  {
     source:
       "/producto/tajalapiz-kores-amarillo-pastel-aesthetic-amarillo-pastel-xs",
     destination: "/producto/tajalapiz-kores-amarillo-pastel",
@@ -4523,44 +4131,12 @@ export const legacyProductRedirects = [
     destination: "/producto/tajalapiz-kores-verde-pastel",
   },
   {
-    source: "/producto/tajalapiz-pastel-3-huecos-aesthetic-pastel-xs",
-    destination: "/producto/tajalapiz-pastel-3-huecos",
-  },
-  {
-    source: "/producto/tajalapiz-perrito-perrito-multicolor-xs",
-    destination: "/producto/tajalapiz-perrito",
-  },
-  {
-    source: "/producto/tajalapiz-zootopia-animados-multicolor-s",
-    destination: "/producto/tajalapiz-zootopia",
-  },
-  {
     source: "/producto/tapete-de-corte-mini-kawaii-pastel-s",
     destination: "/producto/tapete-de-corte-mini",
   },
   {
     source: "/producto/tazon-hermetico-snoopy-snoopy-rosa-pastel-xs",
     destination: "/producto/tazon-hermetico-snoopy",
-  },
-  {
-    source: "/producto/termo-owala-lila-aesthetic-morado-l",
-    destination: "/producto/termo-owala-lila-morado",
-  },
-  {
-    source: "/producto/termo-owala-negro-aesthetic-l",
-    destination: "/producto/termo-owala-negro",
-  },
-  {
-    source: "/producto/termo-owala-negro-aesthetic-negro-l",
-    destination: "/producto/termo-owala-negro",
-  },
-  {
-    source: "/producto/termo-owala-rojo-aesthetic-l",
-    destination: "/producto/termo-owala-rojo",
-  },
-  {
-    source: "/producto/termo-owala-rojo-aesthetic-rojo-l",
-    destination: "/producto/termo-owala-rojo",
   },
   {
     source: "/producto/tijera-con-corte-zig-zag-x4-clasico-multicolor-s",

@@ -1,9 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { format } from "prettier";
 
-import { buildProductSlugRedirects } from "../lib/product-slug-redirects";
+import { collapseProductRedirects } from "../lib/product-slug-redirects";
 
 const prismadb = new PrismaClient();
 const storeIdArgument = process.argv.find((argument) =>
@@ -18,7 +18,7 @@ const outputPath = fileURLToPath(
 );
 
 async function buildModuleSource(
-  redirects: ReturnType<typeof buildProductSlugRedirects>,
+  redirects: Array<{ source: string; destination: string }>,
 ) {
   const entries = redirects
     .map(
@@ -39,26 +39,27 @@ async function main() {
     throw new Error("Provide the public store with --store-id=<store-id>.");
   }
 
+  // Solo lectura: alias y productos (vivos y archivados) del catálogo actual.
   const [aliases, products] = await Promise.all([
     prismadb.productSlugAlias.findMany({
-      where: {
-        storeId,
-        product: { isArchived: false },
-      },
-      select: {
-        slug: true,
-        product: { select: { slug: true } },
-      },
+      where: { storeId },
+      select: { slug: true, productId: true },
     }),
     prismadb.product.findMany({
       where: { storeId },
-      select: { slug: true },
+      select: { id: true, slug: true, isArchived: true },
     }),
   ]);
-  const redirects = buildProductSlugRedirects(
-    aliases,
-    products.map((product) => product.slug),
-  );
+  // El mapa vigente es entrada: sus orígenes (URL que Google aún conoce) se
+  // conservan y su destino se recalcula hasta el producto vivo final.
+  let legacy: Array<{ source: string; destination: string }> = [];
+  try {
+    legacy = (await import(pathToFileURL(outputPath).href)).legacyProductRedirects;
+  } catch {
+    legacy = [];
+  }
+  const report = collapseProductRedirects({ legacy, aliases, products });
+  const redirects = report.redirects;
   const nextContents = await buildModuleSource(redirects);
 
   let previousContents: string | null = null;
@@ -77,7 +78,13 @@ async function main() {
       {
         storeId,
         aliasesRead: aliases.length,
+        legacyRead: legacy.length,
         redirectsWritten: redirects.length,
+        kept: report.kept,
+        collapsed: report.collapsed.length,
+        dropped: report.dropped.length,
+        droppedBecauseSourceIsLive: report.dropped.filter((entry) => entry.reason === "origen-es-producto-vivo").length,
+        added: report.added,
         changed: previousContents !== nextContents,
         outputPath,
       },
