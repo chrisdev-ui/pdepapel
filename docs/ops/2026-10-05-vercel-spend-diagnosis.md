@@ -85,3 +85,36 @@ El `ignoreCommand` actual compila si cambió cualquier archivo de la carpeta del
 - Después de aplicar 1–3, se espera $0–3 bajo demanda por ciclo: dejar el presupuesto en **$15** con las mismas alertas.
 
 Capturas: Usage por producto y por proyecto, Billing (presupuesto y complementos), Upcoming Invoice, Observability (funciones y CDN por bot) del 2026-10-05, en las capturas de la sesión.
+
+## Decisiones aplicadas (2026-10-05)
+
+Christian aprobó solo los puntos 1, 2, 3, 5 y 6 y el presupuesto de $15. Lo demás queda igual.
+
+**En el panel (antes del push):**
+
+| Ajuste | Antes | Después |
+|---|---|---|
+| Máquina de build, admin y tienda | Elastic, concurrencia elástica («Run all builds immediately») | **Standard fija (4 vCPU)**, concurrencia elástica apagada (`buildMachineSelection: fixed`) |
+| Presupuesto bajo demanda | $10 | **$15**, alertas 50/75/100 % por correo, **pausa apagada**, sin webhook ni SMS |
+| Speed Insights Plus (tienda) | Encendido ($10 al mes + eventos) | **Apagado** |
+| Observability Plus | Encendido ($1,20 por millón de eventos) | **Apagado** |
+
+**En el código (un solo push):**
+
+- `robots.txt` bloquea `meta-externalagent` y `PetalBot`. Siguen permitidos `facebookexternalhit`, `meta-externalfetcher`, Googlebot, Google-InspectionTool, Storebot-Google, AdsBot-Google y Bingbot. El feed de Meta vive en el host del admin (`/api/[storeId]/meta-catalog/feed`), que no tiene este robots.txt, y `meta-externalagent` no aparece entre los bots del admin. Por eso no hace falta un `Allow`. Prueba: `tests/unit/app/robots.test.ts`.
+- `ops/vercel-ignore-build.sh` reemplaza el `ignoreCommand` de los dos `vercel.json`. No compila si en la carpeta del proyecto solo cambió `docs/`, `ops/`, `scripts/`, `tests/`, `e2e/`, `.github/`, `*.md` o `*.log`. Ante cualquier otra cosa compila. Se probó con los últimos 40 despliegues de cada proyecto:
+  - Admin: 27 → 22 builds.
+  - Tienda: 19 → 15 builds.
+  - Solo cambian los builds desperdiciados de (c): `ec716364`, `5270cd09`, `4d18e9ee`, `3421ecfb`, `52a83b8e` en el admin; `7d3f301a`, `a46de60e`, `9a521c1f`, `3b1e0db1` en la tienda.
+  - Ninguno pasa de «no compilar» a «compilar».
+- Se quitó `@vercel/speed-insights` (`<SpeedInsights />` del layout, dependencia y lockfile). Web Analytics sigue.
+- Regla «Deployment budget» en los tres `AGENTS.md`.
+
+**Lo que NO se cambió, a propósito:**
+
+- **Retención de despliegues:** sigue en 365 días para producción y 180 para previews. Ahorra ~$0,9 por ciclo y quitaría la opción de volver a despliegues viejos. No se aprobó.
+- **`revalidate` de `/producto/[slug]`:** sigue en 300 s. Primero hay que medir cuánto baja el tráfico sin caché ahora que los dos rastreadores están bloqueados. Solo después se decide si vale la pena que un precio u oferta vencida tarde hasta 1 h en verse.
+- **Máquina Basic (2 vCPU):** no se probó. Primero se miden 3–4 builds en Standard.
+- **Pausa de producción:** nunca. Pone en 503 todos los proyectos.
+
+**Qué revisar:** el 8 de octubre, en Usage, comparar los minutos de CPU de build por día con el 5 de octubre. En Commerce Manager, confirmar que el catálogo sigue leyendo el feed.

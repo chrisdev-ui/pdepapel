@@ -134,6 +134,7 @@ npx prisma studio
 These apply everywhere in the repository. Each one exists because it already went wrong or would be unrecoverable. Full detail and the app-specific rules live in each application's `AGENTS.md`.
 
 - **Never `git push` without explicit user approval.** A push to `main` auto-deploys both Vercel projects. Work local-first, validate, then hand off. Commit and push are separate gates; never chain them in one command.
+- **Deployment budget:** batch commits and push once per work block; never push a docs-only or ops-only commit on its own unless it is needed now. The Ignored Build Step is `ops/vercel-ignore-build.sh` (`ignoreCommand` in both `vercel.json`). Never enable Vercel Spend Management «Pause production deployments». Detail: the app `AGENTS.md` files and `docs/ops/2026-10-05-vercel-spend-diagnosis.md`.
 - **Never stage `.env*` files, scratch output, or local agent-instruction files** (`CLAUDE.md`) unless the user explicitly asks.
 - **Secrets never enter Git, this repository's docs, terminal history, screenshots, email or chat.** Ask in chat before reading a production secret, even read-only. A Mercado Libre client secret was leaked previously and must be treated as compromised: rotate it, update Vercel, redeploy, then reconnect from the admin UI.
 - **Never `NEXT_PUBLIC_`-prefix a secret.** Client-visible values are public by design.

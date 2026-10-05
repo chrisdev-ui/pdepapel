@@ -70,7 +70,7 @@ CI (`.github/workflows/quality.yml`) runs `type-check` and `test:coverage`. `pub
 ## Code style and conventions
 
 - Next.js 14 App Router with heavy **RSC + ISR**, React 18, TypeScript strict, Tailwind 3, Radix + shadcn-style components, react-hook-form + Zod.
-- Store-specific stack: TanStack Query, **nuqs** for URL state, Zustand, vaul drawers, `schema-dts` JSON-LD, `app/sitemap.ts` / `app/robots.ts`, per-route `opengraph-image` / `twitter-image`, Vercel Analytics and Speed Insights.
+- Store-specific stack: TanStack Query, **nuqs** for URL state, Zustand, vaul drawers, `schema-dts` JSON-LD, `app/sitemap.ts` / `app/robots.ts`, per-route `opengraph-image` / `twitter-image`, Vercel Analytics (Speed Insights was removed on 2026-10-05 to cut Vercel spend; do not re-add it without approval).
 - `next/image` optimization is **on** here (AVIF/WebP, long-cache headers), unlike the admin.
 - Directory shape:
 
@@ -95,6 +95,7 @@ Everything in this section is a guardrail. Each one exists because it already we
 ### Deployment and Git
 
 - **Never `git push` without explicit user approval.** A push to `main` auto-deploys both Vercel projects, which is a production deployment action. Work local-first, validate, then hand off. Commit and push are separate gates.
+- **Deployment budget (2026-10-05, `docs/ops/2026-10-05-vercel-spend-diagnosis.md`).** Every push to `main` builds each project whose folder changed, and build CPU minutes were the largest Vercel cost. Batch commits locally and push **once per work block**; never push a docs-only or ops-only commit on its own unless it is needed now. The Ignored Build Step lives in `ops/vercel-ignore-build.sh` (called by `ignoreCommand` in both `vercel.json`): it skips a build when the project folder changed only in `docs/`, `ops/`, `scripts/`, `tests/`, `e2e/`, `.github/`, `*.md` or `*.log`, and builds on any doubt. Widen that list only with a replay against recent deployments. Build machines are fixed **Standard**; the on-demand budget is $15 with 50/75/100 % alerts. **Never enable Spend Management «Pause production deployments»**: it answers 503 for every project.
 - **Never stage `.env*` files, scratch output, or local agent-instruction files** (`CLAUDE.md`) unless the user explicitly asks. The three `AGENTS.md` files are tracked and are updated in the same commit as the change they describe.
 - **Never run `vercel env rm` / `vercel env add` or edit variables in the dashboard without explicit per-variable approval.** `vercel env rm NAME` with no environment argument deletes the variable from **all** environments, and deleted values are unrecoverable, and a deleted analytics or feature key does not fail anything — the feature just goes dark until someone notices. To scope a variable, re-add it for the environment you want; never delete first.
 - **Secrets never enter Git, this repository's docs, terminal history, screenshots, email or chat.** Ask in chat before reading a production secret, even read-only. Client-visible `NEXT_PUBLIC_*` values are public by design; **never `NEXT_PUBLIC_`-prefix a secret**.
