@@ -4,11 +4,16 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  BUSINESS_DAYS,
   HANDLING_DAYS,
   MERCHANT_RETURN_DAYS,
+  ORDER_CUTOFF_TIME,
   RETURN_WINDOW_DAYS,
-  buildFreeShippingDetails,
+  STANDARD_SHIPPING_RATE,
+  TRANSIT_DAYS,
   buildMerchantReturnPolicy,
+  buildOrganizationShippingService,
+  buildShippingDetails,
 } from "@/lib/commerce-policies";
 import { buildProductJsonLd, buildProductSchema } from "@/lib/product-schema";
 import type { Product } from "@/types";
@@ -142,11 +147,22 @@ describe("commerce policies match the published policy pages", () => {
     expect(HANDLING_DAYS).toEqual({ min: 0, max: 1 });
   });
 
-  it("only promises a shipping rate the shipping page publishes", () => {
-    const shipping = page("envios");
-    // No hay tarifa fija: la calcula la transportadora; solo el umbral es gratis.
-    expect(shipping).toMatch(/costo lo calcula la transportadora/);
-    expect(shipping).toContain("freeShippingThreshold");
+  /**
+   * Desde el 2026-10-05 la tarifa y el tránsito del marcado salen de la
+   * política de envío de Merchant Center (§9.13.2), que manda sobre el
+   * marcado. La página de envíos todavía dice que la transportadora calcula
+   * el costo: el texto nuevo espera a Paula (ola 3, fase 2A). Cuando cambie,
+   * este test debe pasar a comparar la página con estas constantes.
+   */
+  it("declares the Merchant Center shipping policy and the store threshold", () => {
+    expect(STANDARD_SHIPPING_RATE).toBe(13000);
+    expect(HANDLING_DAYS).toEqual({ min: 0, max: 1 });
+    expect(TRANSIT_DAYS).toEqual({ min: 2, max: 5 });
+    expect(ORDER_CUTOFF_TIME).toBe("12:00:00-05:00");
+    expect(BUSINESS_DAYS.map((day) => day.replace("https://schema.org/", ""))).toEqual(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+    // El umbral sigue siendo el de la tienda, no un número escrito a mano.
+    expect(page("envios")).toContain("freeShippingThreshold");
+    expect(page("envios")).toMatch(/costo lo calcula la transportadora/);
   });
 });
 
@@ -167,29 +183,84 @@ describe("buildMerchantReturnPolicy", () => {
   });
 });
 
-describe("buildFreeShippingDetails", () => {
-  it("is free from the threshold up and absent below it or without a threshold", () => {
-    expect(buildFreeShippingDetails(249999, 250000)).toBeNull();
-    expect(buildFreeShippingDetails(300000, null)).toBeNull();
-    expect(buildFreeShippingDetails(250000, 250000)).toEqual({
+describe("buildShippingDetails", () => {
+  const delivery = {
+    "@type": "ShippingDeliveryTime",
+    handlingTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 1, unitCode: "DAY" },
+    transitTime: { "@type": "QuantitativeValue", minValue: 2, maxValue: 5, unitCode: "DAY" },
+  };
+
+  it("charges the standard rate below the threshold and nothing from it", () => {
+    expect(buildShippingDetails(249999, 250000)).toEqual({
       "@type": "OfferShippingDetails",
-      shippingRate: { "@type": "MonetaryAmount", value: 0, currency: "COP" },
+      shippingRate: { "@type": "MonetaryAmount", value: 13000, currency: "COP" },
       shippingDestination: { "@type": "DefinedRegion", addressCountry: "CO" },
-      deliveryTime: {
-        "@type": "ShippingDeliveryTime",
-        handlingTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 1, unitCode: "DAY" },
+      deliveryTime: delivery,
+    });
+    // La tienda da envío gratis desde 250.000 inclusive.
+    expect(buildShippingDetails(250000, 250000).shippingRate.value).toBe(0);
+    expect(buildShippingDetails(300000, 250000).shippingRate.value).toBe(0);
+  });
+
+  it("falls back to the standard rate when the store has no threshold", () => {
+    expect(buildShippingDetails(900000, null).shippingRate.value).toBe(13000);
+    expect(buildShippingDetails(900000, 0).shippingRate.value).toBe(13000);
+  });
+});
+
+describe("buildOrganizationShippingService", () => {
+  it("expresses free shipping by order value with the cutoff and business days", () => {
+    const service = buildOrganizationShippingService(250000);
+    expect(service).toMatchObject({
+      "@type": "ShippingService",
+      fulfillmentType: "https://schema.org/FulfillmentTypeDelivery",
+      handlingTime: {
+        "@type": "ServicePeriod",
+        duration: { minValue: 0, maxValue: 1, unitCode: "DAY" },
+        cutoffTime: "12:00:00-05:00",
       },
     });
-    // Sin tránsito: depende de la transportadora y no hay un dato publicado.
-    expect(buildFreeShippingDetails(250000, 250000)?.deliveryTime).not.toHaveProperty("transitTime");
+    expect(service.handlingTime.businessDays).toHaveLength(5);
+    expect(service.shippingConditions).toEqual([
+      expect.objectContaining({
+        orderValue: { "@type": "MonetaryAmount", currency: "COP", minValue: 0, maxValue: 249999 },
+        shippingRate: { "@type": "MonetaryAmount", value: 13000, currency: "COP" },
+      }),
+      expect.objectContaining({
+        orderValue: { "@type": "MonetaryAmount", currency: "COP", minValue: 250000 },
+        shippingRate: { "@type": "MonetaryAmount", value: 0, currency: "COP" },
+      }),
+    ]);
+    for (const condition of service.shippingConditions) {
+      expect(condition.shippingDestination).toEqual({ "@type": "DefinedRegion", addressCountry: "CO" });
+      expect(condition.transitTime).toMatchObject({ "@type": "ServicePeriod", duration: { minValue: 2, maxValue: 5, unitCode: "DAY" } });
+    }
+  });
+
+  it("declares only the standard rate without a threshold", () => {
+    const service = buildOrganizationShippingService(null);
+    expect(service.shippingConditions).toHaveLength(1);
+    expect(service.shippingConditions[0]).not.toHaveProperty("orderValue");
+    expect(service.shippingConditions[0].shippingRate.value).toBe(13000);
+  });
+});
+
+describe("home organization node", () => {
+  /** La política por valor del pedido sale del umbral de la tienda, no de un número fijo. */
+  it("builds the shipping service from Store.freeShippingThreshold", () => {
+    const home = source("app/(routes)/page.tsx");
+    expect(home).toContain("hasShippingService: buildOrganizationShippingService(freeShippingThreshold)");
+    expect(home).toContain("hasMerchantReturnPolicy: buildMerchantReturnPolicy()");
+    expect(home).toContain("buildHomeJsonLd(settings.freeShippingThreshold)");
   });
 });
 
 describe("product offers carry the policies", () => {
-  it("adds the return policy to every offer and free shipping only above the threshold", () => {
+  it("adds the return policy and the shipping rate to every offer", () => {
     const cheap = buildProductSchema(base, true, { freeShippingThreshold: 250000 }) as Record<string, any>;
     expect(cheap.offers.hasMerchantReturnPolicy.merchantReturnDays).toBe(7);
-    expect(cheap.offers.shippingDetails).toBeUndefined();
+    expect(cheap.offers.shippingDetails.shippingRate.value).toBe(13000);
+    expect(cheap.offers.shippingDetails.deliveryTime.transitTime).toMatchObject({ minValue: 2, maxValue: 5 });
 
     const expensive = buildProductSchema({ ...base, price: "260000" } as Product, true, { freeShippingThreshold: 250000 }) as Record<string, any>;
     expect(expensive.offers.shippingDetails.shippingRate.value).toBe(0);
@@ -200,5 +271,6 @@ describe("product offers carry the policies", () => {
     const azul = { ...base, id: "b", productGroupId: "g", color: { id: "c2", name: "Azul", value: "#00f" } } as Product;
     const group = buildProductJsonLd(rosa, [rosa, azul], { freeShippingThreshold: 250000 }) as Record<string, any>;
     expect(group.hasVariant.every((v: any) => v.offers.hasMerchantReturnPolicy?.merchantReturnDays === 7)).toBe(true);
+    expect(group.hasVariant.every((v: any) => v.offers.shippingDetails?.shippingRate.value === 13000)).toBe(true);
   });
 });

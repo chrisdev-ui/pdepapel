@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
-import { Organization, WebSite } from "schema-dts";
+import { WebSite } from "schema-dts";
 
 import { getCategories } from "@/actions/get-categories";
 import { getHomeContent } from "@/actions/get-home-content";
@@ -17,27 +17,36 @@ import { ProductRowSkeleton, RailSkeleton } from "@/components/home/skeletons";
 import { Newsletter } from "@/components/newsletter";
 import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
+import { buildMerchantReturnPolicy, buildOrganizationShippingService } from "@/lib/commerce-policies";
 import { getCurrentSeason } from "@/lib/date-utils";
 import { organizationSchema } from "@/lib/organization-schema";
 
 export const revalidate = 300;
 
-const jsonLd: {
-  "@context": "https://schema.org";
-  "@graph": (Organization | WebSite)[];
-} = {
-  "@context": "https://schema.org",
-  "@graph": [
-    organizationSchema,
-    // Sin SearchAction: Google retiró el cuadro de búsqueda de sitelinks y el
-    // destino (/tienda?search=) está bloqueado en robots.txt.
-    {
-      "@type": "WebSite",
-      name: "Papelería P de Papel",
-      url: BASE_URL,
-    },
-  ],
-};
+/**
+ * La organización del inicio lleva además la política de envío por valor del
+ * pedido y la de devoluciones (el mismo `@id` que en nosotros y contacto;
+ * Google une los nodos). El umbral sale de `Store.freeShippingThreshold`.
+ */
+function buildHomeJsonLd(freeShippingThreshold: number | null | undefined) {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        ...organizationSchema,
+        hasShippingService: buildOrganizationShippingService(freeShippingThreshold),
+        hasMerchantReturnPolicy: buildMerchantReturnPolicy(),
+      },
+      // Sin SearchAction: Google retiró el cuadro de búsqueda de sitelinks y el
+      // destino (/tienda?search=) está bloqueado en robots.txt.
+      {
+        "@type": "WebSite",
+        name: "Papelería P de Papel",
+        url: BASE_URL,
+      } satisfies WebSite,
+    ],
+  };
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
@@ -151,7 +160,7 @@ export default async function HomePage() {
       <Newsletter source="portada-pie" />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildHomeJsonLd(settings.freeShippingThreshold)) }}
       />
     </>
   );

@@ -3,7 +3,7 @@ import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-lo
 
 import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { BASE_URL } from "@/constants";
-import { buildFreeShippingDetails, buildMerchantReturnPolicy } from "@/lib/commerce-policies";
+import { buildMerchantReturnPolicy, buildShippingDetails } from "@/lib/commerce-policies";
 import { getAverageRating, isComingSoon } from "@/lib/product-card";
 import { getStructuredProductSize } from "@/lib/product-options";
 import { createRichTextExcerpt } from "@/lib/rich-text";
@@ -58,7 +58,7 @@ export function buildProductSchema(
   const brand = product.brand || product.productGroup?.brand;
   const size = getStructuredProductSize(product);
   const price = Number(product.price);
-  const shippingDetails = buildFreeShippingDetails(price, options.freeShippingThreshold);
+  const shippingDetails = buildShippingDetails(price, options.freeShippingThreshold);
 
   return {
     "@type": "Product",
@@ -103,7 +103,7 @@ export function buildProductSchema(
         : isComingSoon(product) && product.availableAt
           ? { availabilityStarts: product.availableAt }
           : {}),
-      ...(shippingDetails ? { shippingDetails } : {}),
+      shippingDetails,
       hasMerchantReturnPolicy: buildMerchantReturnPolicy(),
     },
   };
