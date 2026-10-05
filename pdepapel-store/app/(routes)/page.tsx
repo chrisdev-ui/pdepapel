@@ -18,6 +18,7 @@ import { Newsletter } from "@/components/newsletter";
 import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { getCurrentSeason } from "@/lib/date-utils";
+import { organizationSchema } from "@/lib/organization-schema";
 
 export const revalidate = 300;
 
@@ -27,23 +28,7 @@ const jsonLd: {
 } = {
   "@context": "https://schema.org",
   "@graph": [
-    {
-      "@type": "Organization",
-      name: "Papelería P de Papel",
-      url: BASE_URL,
-      logo: `${BASE_URL}/images/no-text-lightpink-bg.webp`,
-      contactPoint: {
-        "@type": "ContactPoint",
-        telephone: "+57-313-258-2293",
-        contactType: "customer service",
-        areaServed: "CO",
-        availableLanguage: "es",
-      },
-      sameAs: [
-        "https://instagram.com/papeleria.pdepapel",
-        "https://tiktok.com/@papeleria.pdepapel",
-      ],
-    },
+    organizationSchema,
     // Sin SearchAction: Google retiró el cuadro de búsqueda de sitelinks y el
     // destino (/tienda?search=) está bloqueado en robots.txt.
     {

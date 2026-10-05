@@ -24,6 +24,7 @@ import { FACEBOOK_PAGE_URL, BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import SocialMedia from "./components/social-media";
+import { organizationSchema } from "@/lib/organization-schema";
 
 export const revalidate = 60;
 
@@ -35,23 +36,7 @@ const TIKTOK_URL =
 const jsonLd: WithContext<AboutPageSchema> = {
   "@context": "https://schema.org",
   "@type": "AboutPage",
-  mainEntity: {
-    "@type": "Organization",
-    name: "Papelería P de Papel",
-    url: BASE_URL,
-    logo: `${BASE_URL}/images/no-text-lightpink-bg.webp`,
-    contactPoint: {
-      "@type": "ContactPoint",
-      telephone: "+57-313-258-2293",
-      contactType: "customer service",
-      areaServed: "CO",
-      availableLanguage: "es",
-    },
-    sameAs: [
-      "https://instagram.com/papeleria.pdepapel",
-      "https://tiktok.com/@papeleria.pdepapel",
-    ],
-  },
+  mainEntity: organizationSchema,
   name: "Nuestra Historia | P de Papel",
   description:
     "Descubre la historia de pasión kawaii detrás de P de Papel. Tu tienda online de papelería en Colombia.",

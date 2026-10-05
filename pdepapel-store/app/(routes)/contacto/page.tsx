@@ -19,6 +19,7 @@ import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { ContactForm } from "./components/contact-form";
+import { organizationSchema } from "@/lib/organization-schema";
 
 export const metadata: Metadata = {
   title: "Contáctanos",
@@ -214,24 +215,7 @@ export default function ContactPage() {
     "@type": "ContactPage",
     name: "Contáctanos | Papelería P de Papel",
     description: "Ponte en contacto con nosotros para cualquier duda o pedido.",
-    mainEntity: {
-      "@type": "Organization",
-      name: "Papelería P de Papel",
-      url: BASE_URL,
-      contactPoint: {
-        "@type": "ContactPoint",
-        telephone: "+57-313-258-2293",
-        contactType: "customer service",
-        areaServed: "CO",
-        availableLanguage: "es",
-      },
-      address: {
-        "@type": "PostalAddress",
-        addressLocality: "Medellín",
-        addressRegion: "Antioquia",
-        addressCountry: "CO",
-      },
-    },
+    mainEntity: organizationSchema,
   };
 
   return (

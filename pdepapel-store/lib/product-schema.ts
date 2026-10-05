@@ -132,6 +132,12 @@ export function getVariesBy(variants: VariantSchema[]) {
   });
 }
 
+function sharedBrand(variants: VariantSchema[]) {
+  const brands = new Set(variants.map((variant) => ("brand" in variant ? variant.brand?.name : undefined)));
+  if (brands.size !== 1) return null;
+  return Array.from(brands)[0] ?? null;
+}
+
 /**
  * Grupo con variantes cuando el grupo varía por algún atributo y cada
  * variante tiene una combinación distinta de esos atributos; si no, el
@@ -170,6 +176,9 @@ export function buildProductJsonLd(
       `Descubre ${product.name} en Papelería P de Papel.`,
     ),
     productGroupID: product.productGroupId,
+    // Marca del grupo solo si todas las variantes la comparten; sin URL propia
+    // porque el grupo no tiene página (cada variante tiene su canónica).
+    ...(sharedBrand(variants) ? { brand: { "@type": "Brand", name: sharedBrand(variants) } } : {}),
     variesBy: variesBy.map(([, url]) => url),
     hasVariant: variants,
   };
