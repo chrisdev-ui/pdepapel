@@ -91,7 +91,8 @@ test("redirige un producto archivado a lo más parecido que siga a la venta", as
 
   const destination = await page.goto(location, { waitUntil: "domcontentloaded" });
   expect(destination?.status()).toBe(200);
-  await expect(page.getByText("Ese producto ya no está disponible")).toBeVisible();
+  // El aviso sale tras hidratar; el primer render en frío de producción tarda.
+  await expect(page.getByText("Ese producto ya no está disponible")).toBeVisible({ timeout: 15_000 });
 });
 
 /**
