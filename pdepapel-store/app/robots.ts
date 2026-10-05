@@ -1,28 +1,33 @@
 import { MetadataRoute } from "next";
 
+/**
+ * Sin barra final: las rutas reales no la llevan, y `Disallow: /carrito/` no
+ * cubre `/carrito`. Como prefijo, `/carrito` cubre la página y lo que cuelga
+ * de ella (`/pedido` cubre `/pedido/<id>`).
+ */
 const PRIVATE_PATHS = [
-  "/order/",
-  "/orders/",
-  "/checkout/",
-  "/cart/",
-  "/account/",
-  "/wishlist/",
-  "/my-orders/",
-  "/sign-in/",
-  "/sign-up/",
-  "/api/",
-  "/private/",
-  "/quote/",
-  "/cotizacion/",
-  "/pedido/",
-  "/finalizar-compra/",
-  "/carrito/",
-  "/favoritos/",
-  "/mi-cuenta/",
-  "/mis-pedidos/",
-  "/mis-busquedas/",
-  "/iniciar-sesion/",
-  "/crear-cuenta/",
+  "/order",
+  "/orders",
+  "/checkout",
+  "/cart",
+  "/account",
+  "/wishlist",
+  "/my-orders",
+  "/sign-in",
+  "/sign-up",
+  "/api",
+  "/private",
+  "/quote",
+  "/cotizacion",
+  "/pedido",
+  "/finalizar-compra",
+  "/carrito",
+  "/favoritos",
+  "/mi-cuenta",
+  "/mis-pedidos",
+  "/mis-busquedas",
+  "/iniciar-sesion",
+  "/crear-cuenta",
 ];
 
 /**

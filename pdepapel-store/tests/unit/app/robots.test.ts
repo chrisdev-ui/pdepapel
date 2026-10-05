@@ -18,10 +18,10 @@ describe("storefront robots policy", () => {
           "/_next/image",
         ]),
         disallow: expect.arrayContaining([
-          "/api/",
-          "/pedido/",
-          "/finalizar-compra/",
-          "/mis-pedidos/",
+          "/api",
+          "/pedido",
+          "/finalizar-compra",
+          "/mis-pedidos",
         ]),
       }),
     );
@@ -36,10 +36,10 @@ describe("storefront robots policy", () => {
     expect(publicRule?.disallow).toEqual(
       expect.arrayContaining([
         "/_next/",
-        "/api/",
-        "/carrito/",
-        "/pedido/",
-        "/crear-cuenta/",
+        "/api",
+        "/carrito",
+        "/pedido",
+        "/crear-cuenta",
       ]),
     );
   });
@@ -68,7 +68,23 @@ describe("storefront robots policy", () => {
     expect(publicRule?.allow).toEqual(["/", "/_next/static/", "/_next/image"]);
     expect(publicRule?.disallow).toContain("/_next/");
     expect(publicRule?.disallow).toEqual(
-      expect.arrayContaining(["/tienda?", "/categoria/*?", "/shop?", "/api/", "/carrito/"]),
+      expect.arrayContaining(["/tienda?", "/categoria/*?", "/shop?", "/api", "/carrito"]),
     );
+  });
+
+  /** `Disallow: /carrito/` no bloqueaba `/carrito`: las rutas reales no llevan barra final. */
+  it("blocks the private routes as they really are, without a trailing slash", () => {
+    const policy = robots();
+    const rules = Array.isArray(policy.rules) ? policy.rules : [policy.rules];
+    const publicRule = rules.find((rule) => rule.userAgent === "*");
+    const disallowed = ([] as string[]).concat(publicRule?.disallow ?? []);
+    const privatePaths = disallowed.filter((path) => !path.includes("?") && path !== "/_next/");
+
+    expect(privatePaths.filter((path) => path.endsWith("/"))).toEqual([]);
+    expect(disallowed).toEqual(expect.arrayContaining(["/carrito", "/finalizar-compra", "/favoritos", "/mi-cuenta", "/pedido"]));
+    // Las rutas públicas no quedan atrapadas por un prefijo privado.
+    for (const publicPath of ["/producto/agenda", "/tienda", "/categoria/agendas", "/contacto"]) {
+      expect(privatePaths.some((path) => publicPath.startsWith(path))).toBe(false);
+    }
   });
 });
