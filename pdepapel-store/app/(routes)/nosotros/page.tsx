@@ -58,9 +58,10 @@ const jsonLd: WithContext<AboutPageSchema> = {
 };
 
 export const metadata: Metadata = {
-  title: "Nuestra Historia | Papelería P de Papel",
+  // La plantilla del layout añade « | Papelería P de Papel».
+  title: "Nuestra historia",
   description:
-    "¿Quiénes somos? En Papelería P de Papel somos amantes de lo kawaii. Descubre nuestra historia, nuestra misión y por qué somos tu tienda de papelería online favorita en Colombia para útiles escolares y de oficina.",
+    "Somos amantes de lo kawaii. Conoce la historia y la misión de Papelería P de Papel, tu papelería en línea en Colombia para útiles escolares y de oficina.",
   keywords: [
     "quienes somos",
     "historia p de papel",
@@ -85,7 +86,7 @@ export const metadata: Metadata = {
     canonical: STOREFRONT_ROUTES.about,
   },
   openGraph: {
-    title: "Nuestra Historia | Papelería P de Papel",
+    title: "Nuestra historia | Papelería P de Papel",
     description:
       "Conoce la magia detrás de P de Papel. Somos más que una papelería, somos una comunidad apasionada por lo kawaii y la creatividad.",
     url: STOREFRONT_ROUTES.about,
@@ -109,7 +110,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Nuestra Historia | Papelería P de Papel",
+    title: "Nuestra historia | Papelería P de Papel",
     description:
       "Conoce la magia detrás de P de Papel. Amantes de lo kawaii en Colombia.",
     images: ["/images/about-us.webp"],

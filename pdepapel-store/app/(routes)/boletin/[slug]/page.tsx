@@ -19,7 +19,8 @@ export async function generateMetadata({
   if (!issue) return { title: "Boletín" };
 
   return {
-    title: `${issue.title} | Boletín P de Papel`,
+    // La plantilla del layout añade « | Papelería P de Papel».
+    title: `${issue.title} | Boletín`,
     description:
       issue.intro ?? "El boletín de P de Papel: novedades, ideas y papelería.",
     alternates: { canonical: `${BASE_URL}/boletin/${issue.slug}` },

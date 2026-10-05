@@ -12,10 +12,9 @@ import { SingleProductPage } from "@/components/single-product-page";
 import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
-import { buildProductMetaTitle } from "@/lib/product-metadata";
+import { buildProductMetaDescription, buildProductMetaTitle } from "@/lib/product-metadata";
 import { withSanitizedDescription } from "@/lib/product-description";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
-import { createRichTextExcerpt } from "@/lib/rich-text";
 import { categoryPath, productPath } from "@/lib/routes";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 
@@ -26,6 +25,10 @@ interface ProductPageProps {
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const product = await getProduct(params.slug);
   if (!product) notFound();
+  const [siblingsResponse, storefrontSettings] = await Promise.all([
+    product.productGroupId ? getProducts({ productGroupId: product.productGroupId }) : Promise.resolve({ products: [] }),
+    getStorefrontSettings(),
+  ]);
 
   const canonicalPath = productPath(product.slug || product.id);
   // Vista previa social: la copia de 1600 px que ya existe para la galería, no el
@@ -34,11 +37,11 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     url: getCloudinaryImageUrl(image.url, CLOUDINARY_MAX_WIDTH),
     alt: index === 0 ? product.name : `${product.name}, vista ${index + 1}`,
   }));
-  const title = buildProductMetaTitle(product);
-  const description = createRichTextExcerpt(
-    product.description,
-    `Descubre ${product.name} en Papelería P de Papel. Papelería kawaii y de oficina con envío a toda Colombia.`,
-  );
+  const title = buildProductMetaTitle(product, siblingsResponse.products);
+  const description = buildProductMetaDescription(product, {
+    siblings: siblingsResponse.products,
+    freeShippingThreshold: storefrontSettings.freeShippingThreshold,
+  });
 
   return {
     title: { absolute: title },

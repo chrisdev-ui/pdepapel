@@ -31,7 +31,7 @@ const HEADER_IMAGES = 3;
 export async function generateMetadata({ searchParams }: ShopPageProps): Promise<Metadata> {
   const { typeId, categoryId, search, minPrice, maxPrice } = searchParams;
   const hasActiveFilters = Object.values(searchParams).some((value) => value !== undefined && value !== "");
-  let title = "Tienda";
+  let title = "Tienda en línea";
   let description =
     "Explora nuestra tienda online en Papelería P de Papel. Un mundo de artículos bonitos, suministros de oficina y papelería general te espera.";
 
@@ -55,13 +55,14 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
 
   const images = [DEFAULT_SHARE_IMAGE];
   const keywords = ["papelería", "útiles escolares", "papelería bonita", "oficina", "regalos", "arte"];
-  if (title !== "Tienda") keywords.unshift(title.toLowerCase());
+  if (title !== "Tienda en línea") keywords.unshift(title.toLowerCase());
   if (search) keywords.push(search);
 
   const canonicalUrl = `${BASE_URL}${STOREFRONT_ROUTES.shop}`;
 
   return {
-    title: `${title} | P de Papel`,
+    // La plantilla del layout añade « | Papelería P de Papel».
+    title,
     description,
     keywords,
     robots: {
@@ -70,8 +71,8 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
       googleBot: { index: !hasActiveFilters, follow: true, "max-video-preview": -1, "max-image-preview": "large", "max-snippet": -1 },
     },
     alternates: { canonical: canonicalUrl },
-    openGraph: { title: `${title} | P de Papel`, description, type: "website", locale: "es_CO", siteName: "Papelería P de Papel", images, url: canonicalUrl },
-    twitter: { card: "summary_large_image", title: `${title} | P de Papel`, description, images },
+    openGraph: { title: `${title} | Papelería P de Papel`, description, type: "website", locale: "es_CO", siteName: "Papelería P de Papel", images, url: canonicalUrl },
+    twitter: { card: "summary_large_image", title: `${title} | Papelería P de Papel`, description, images },
   };
 }
 

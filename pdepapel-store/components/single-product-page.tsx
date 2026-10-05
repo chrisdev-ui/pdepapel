@@ -40,6 +40,9 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
   const ctaRef = useRef<HTMLDivElement>(null);
 
   const variants = useMemo(() => getStableProductVariants(product, siblings), [product, siblings]);
+  // El título de la variante depende de qué atributos cambian entre hermanas.
+  const variantsRef = useRef(variants);
+  variantsRef.current = variants;
 
   useEffect(() => {
     variantRequestRef.current += 1;
@@ -67,7 +70,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
       selectedProductRef.current = nextProduct;
       setSelectedProduct(nextProduct);
       setQuantity(1);
-      syncProductDocumentMetadata(nextProduct);
+      syncProductDocumentMetadata(nextProduct, variantsRef.current as unknown as Product[]);
       if (updateHistory) window.history.pushState(null, "", productPath(nextProduct.slug || nextProduct.id));
     } catch {
       if (requestId === variantRequestRef.current) toast({ description: "No pudimos cargar esta opción. Inténtalo de nuevo.", variant: "destructive" });
