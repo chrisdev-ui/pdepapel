@@ -18,7 +18,6 @@ import { Newsletter } from "@/components/newsletter";
 import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { getCurrentSeason } from "@/lib/date-utils";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const revalidate = 300;
 
@@ -45,18 +44,12 @@ const jsonLd: {
         "https://tiktok.com/@papeleria.pdepapel",
       ],
     },
+    // Sin SearchAction: Google retiró el cuadro de búsqueda de sitelinks y el
+    // destino (/tienda?search=) está bloqueado en robots.txt.
     {
       "@type": "WebSite",
       name: "Papelería P de Papel",
       url: BASE_URL,
-      potentialAction: {
-        "@type": "SearchAction",
-        target: {
-          "@type": "EntryPoint",
-          urlTemplate: `${BASE_URL}${STOREFRONT_ROUTES.shop}?search={search_term_string}`,
-        },
-        "query-input": "required name=search_term_string",
-      } as any,
     },
   ],
 };
