@@ -62,8 +62,16 @@ describe("CouponForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.patch.mockResolvedValue({ data: {} });
+    // El cupón de prueba vale del 1 al 30 de septiembre de 2026. Con el reloj
+    // real el test caducó el 2026-10-01 y dejó de mostrarse «Desactivar». Solo
+    // se fija Date, para que waitFor siga usando temporizadores reales.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-15T15:00:00.000Z"));
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it("shows the real usage, the reservations, the recent orders and blocks deleting a referenced coupon", () => {
     render(<CouponForm initialData={coupon} activeWelcomeCode={null} />);
