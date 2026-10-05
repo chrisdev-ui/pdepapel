@@ -440,3 +440,28 @@ Fecha base = día del despliegue (D). Si se despliega el 2026-10-05: **+7 = 2026
 | `og:image` de inicio y `/tienda` (curl) | 404 | 200 | 200 |
 | Cuota de impresiones con URL `/product/` (GSC › Páginas) | 40 % | — | comparar (sin cambio esperado por este lote) |
 | Cuota de impresiones que terminan en 404 (barrido) | 22 % | — | comparar (P0-4 no aprobado) |
+
+### 7.6 Resultado tras el despliegue (2026-10-05)
+
+Push de `62a70b22..5270cd09` a `main`. CI «Quality checks» en verde (tienda y administración) y ambos despliegues de producción **Ready**. `seo/p0-3-en-espera` sigue solo en local.
+
+**Producción (solo lectura):**
+
+- `robots.txt`: la única diferencia con el del audit son las dos líneas nuevas, `Allow: /_next/static/` y `Allow: /_next/image`.
+- JSON-LD de los 5 productos de muestra: igual que la tabla de §7, con 0 variantes incompletas.
+- La primera `og:image` de `/` y de `/tienda` es `/images/og-p-de-papel-1200x630.jpg`: 200, `image/jpeg`, 38.544 B.
+- Caché de 3 fichas: sigue en `private, no-store` y MISS, como se esperaba con P0-3 detenido.
+- Search Console, prueba en tiempo real de `/producto/tapete-de-corte-mini`: **4 de 88 recursos sin cargar (antes 49 de 61)**. Tres son peticiones de datos bloqueadas a propósito (`/api/catalog?…`, `/tienda?…`, `/categoria/troqueles?…`); la cuarta es un error de redirección del script de Clerk en `clerk.papeleriapdepapel.com`. El total subió a 88 porque Google ya puede bajar los JS, que piden más recursos.
+
+**P0-3 en una vista previa de Vercel** (despliegue con la CLI, sin metadatos de git; responde con `x-robots-tag: noindex` y está protegida por Vercel Authentication). Tres peticiones seguidas a cada URL:
+
+| URL | 1ª | 2ª y 3ª |
+|---|---|---|
+| alias `carpeta-plastica-oficio-lila` | 308 MISS, `Location` correcta | **308 HIT con `Location`** |
+| UUID `e9d20ea4-…` | 308 MISS → `lapicero-halloween-2` | **308 HIT con `Location`** |
+| `no-existe-jamas-e2e` | 404 MISS | 404 HIT |
+| `block-iris-x35-hojas` | 200 MISS | 200 HIT |
+
+**Diferencia con `next start`:** la caché ISR de Vercel guarda la respuesta completa, con estado y cabeceras, y sirve al navegador con `cache-control: public, max-age=0, must-revalidate`. La caché de archivos de `next start` (Next 14.2 autoalojado) pierde `Location` en la 308 cacheada. Producción corre en Vercel, así que la opción 1 de §7.2 resuelve P0-3 sin cambiar la arquitectura. No se probó el caso «Próximamente» con cookie porque hoy no hay productos en `/proximamente`; lo cubre el test que renderiza el HTML del servidor con la cookie puesta.
+
+**Incidente durante la prueba:** el primer intento de vista previa usó los metadatos de git, cuyos commits estaban firmados con `christian.gabriel.torres@depalmastudios.com`, un correo que ya no existe. Vercel lo bloqueó y envió un aviso de «no es miembro del equipo». Desde entonces el repositorio firma con `121559192+chrisdev-ui@users.noreply.github.com` (solo `git config` del repo; el global queda igual y no se reescribió historia). Ese despliegue bloqueado quedó en estado `UNKNOWN` y no se borró.
