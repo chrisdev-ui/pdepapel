@@ -17,17 +17,25 @@ const PaginationItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li"
 ));
 PaginationItem.displayName = "PaginationItem";
 
-type PaginationLinkProps = { isActive?: boolean } & React.ComponentProps<"button">;
+type PaginationLinkProps = { isActive?: boolean; disabled?: boolean } & React.ComponentProps<"a">;
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2";
 
-const PaginationLink = ({ className, isActive, ...props }: PaginationLinkProps) => (
+/**
+ * Un enlace de verdad (`<a href="?page=N">`) para que Google llegue a todas
+ * las páginas del listado. Sin `href` y con `aria-disabled` en los extremos
+ * (anterior en la primera, siguiente en la última): un enlace no se puede
+ * deshabilitar como un botón.
+ */
+const PaginationLink = ({ className, isActive, disabled, href, onClick, ...props }: PaginationLinkProps) => (
   <PaginationItem>
-    <button
-      type="button"
+    <a
+      href={disabled ? undefined : href}
       aria-current={isActive ? "page" : undefined}
+      aria-disabled={disabled || undefined}
+      onClick={disabled ? undefined : onClick}
       className={cn(
-        "inline-flex h-10 w-10 touch-manipulation items-center justify-center rounded-full font-sans text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-40",
+        "inline-flex h-10 w-10 touch-manipulation items-center justify-center rounded-full font-sans text-sm font-semibold transition-colors aria-disabled:pointer-events-none aria-disabled:opacity-40",
         isActive ? "bg-blue-yankees text-white" : "text-blue-yankees hover:bg-kawaii-lavender-light",
         focusRing,
         className,
@@ -55,11 +63,14 @@ const PaginationNext = ({ className, ...props }: React.ComponentProps<typeof Pag
   </PaginationLink>
 );
 
+// Dentro de un <li>: un <span> suelto en el <ul> no es HTML válido.
 const PaginationEllipsis = ({ className, ...props }: React.ComponentProps<"span">) => (
-  <span aria-hidden className={cn("flex h-10 w-8 items-center justify-center text-muted-foreground", className)} {...props}>
-    <MoreHorizontal className="h-4 w-4" />
-    <span className="sr-only">Más páginas</span>
-  </span>
+  <PaginationItem aria-hidden="true">
+    <span className={cn("flex h-10 w-8 items-center justify-center text-muted-foreground", className)} {...props}>
+      <MoreHorizontal className="h-4 w-4" />
+      <span className="sr-only">Más páginas</span>
+    </span>
+  </PaginationItem>
 );
 
 export { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious };

@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RefObject, useEffect, useMemo, useState } from "react";
+import { MouseEvent, RefObject, useEffect, useMemo, useState } from "react";
 
 import { ProductDetailsAccordion } from "@/components/product-details-accordion";
 import { PriceTierLadder } from "@/components/price-tier-ladder";
@@ -30,6 +30,7 @@ import {
 import { getProductAvailability } from "@/lib/product-availability";
 import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
+import { isModifiedClick } from "@/lib/link-click";
 import { isCustomerFacingLegacySize } from "@/lib/product-options";
 import { getStableProductVariants } from "@/lib/product-variants";
 import { STOREFRONT_ROUTES, productPath } from "@/lib/routes";
@@ -56,6 +57,10 @@ interface ProductInfoProps {
 
 const CTA_CLASS =
   "order-last flex min-h-[52px] basis-full items-center justify-center gap-2 whitespace-nowrap rounded-full px-5 font-sans text-base font-semibold sm:order-none sm:basis-auto sm:flex-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+type VariantOption = "design" | "color" | "size";
+/** Los enlaces no se deshabilitan: mientras carga una variante se ven y se comportan como el botón deshabilitado de antes. */
+const LINK_DISABLED = "aria-disabled:pointer-events-none aria-disabled:opacity-50";
+
 const OPTION_LABEL = "font-serif text-sm font-semibold text-blue-yankees";
 const OPTION_CHIP =
   "min-h-11 rounded-full border-2 px-4 py-2 font-sans text-sm font-medium transition-colors";
@@ -133,11 +138,10 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     return Array.from(sizes.values());
   }, [allVariants, data.design?.id, data.color?.id]);
 
-  const handleVariantChange = (
-    type: "design" | "color" | "size",
+  const resolveVariantTarget = (
+    type: VariantOption,
     id: string,
-  ) => {
-    if (isLoading) return;
+  ): Product | ProductVariant | undefined => {
     let target: Product | ProductVariant | undefined;
     if (type === "design") {
       target =
@@ -170,6 +174,12 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           v.size?.id === id,
       );
     }
+    return target;
+  };
+
+  const handleVariantChange = (type: VariantOption, id: string) => {
+    if (isLoading) return;
+    const target = resolveVariantTarget(type, id);
     if (!target) return;
     trackCustomerEvent("select_item_variant", {
       product_slug: target.slug || target.id,
@@ -177,6 +187,26 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     });
     if (onVariantChange) return onVariantChange(target);
     router.push(productPath(target.slug || target.id));
+  };
+
+  /**
+   * Cada opción es un enlace a la URL de su variante, que ya existe y ya está
+   * en el sitemap: Google la rastrea y Cmd/Ctrl+clic la abre en otra pestaña.
+   * El clic normal se intercepta y cambia la variante en la misma página,
+   * como antes.
+   */
+  const variantLinkProps = (type: VariantOption, id: string, isActive: boolean) => {
+    const target = resolveVariantTarget(type, id);
+    return {
+      href: productPath(target?.slug || target?.id || data.slug || data.id),
+      "aria-current": isActive ? ("page" as const) : undefined,
+      "aria-disabled": isLoading || undefined,
+      onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+        if (isModifiedClick(event)) return;
+        event.preventDefault();
+        handleVariantChange(type, id);
+      },
+    };
   };
 
   const availability = getProductAvailability(data, { earlyAccess });
@@ -354,24 +384,24 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                     );
                     return (
                       <Button
-                        type="button"
+                        asChild
                         key={design.id}
                         variant={isActive ? "default" : "outline"}
-                        disabled={isLoading}
-                        aria-pressed={isActive}
-                        onClick={() => handleVariantChange("design", design.id)}
                         className={cn(
                           OPTION_CHIP,
+                          LINK_DISABLED,
                           isActive
                             ? "border-blue-yankees bg-blue-yankees text-white hover:bg-blue-yankees"
                             : "border-gray-200 bg-white text-gray-900 hover:border-gray-300",
                           isOutOfStock && "line-through opacity-50",
                         )}
                       >
-                        {design.name}
-                        {isOutOfStock && (
-                          <span className="sr-only"> (agotado)</span>
-                        )}
+                        <a {...variantLinkProps("design", design.id, isActive)}>
+                          {design.name}
+                          {isOutOfStock && (
+                            <span className="sr-only"> (agotado)</span>
+                          )}
+                        </a>
                       </Button>
                     );
                   })}
@@ -396,15 +426,12 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         v.stock > 0,
                     );
                     return (
-                      <button
-                        type="button"
+                      <a
                         key={color.id}
+                        {...variantLinkProps("color", color.id, isActive)}
                         aria-label={`Seleccionar color ${color.name}${isOutOfStock ? " (agotado)" : ""}`}
-                        aria-pressed={isActive}
-                        disabled={isLoading}
-                        onClick={() => handleVariantChange("color", color.id)}
                         className={cn(
-                          "relative h-11 w-11 touch-manipulation rounded-full border-2 transition-[transform,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed motion-reduce:transform-none",
+                          "relative block h-11 w-11 touch-manipulation rounded-full border-2 transition-[transform,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 aria-disabled:cursor-not-allowed motion-reduce:transform-none",
                           isActive
                             ? "border-blue-yankees ring-2 ring-blue-yankees ring-offset-2"
                             : "border-gray-200 hover:scale-110",
@@ -421,7 +448,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                             <span className="h-0.5 w-full rotate-45 bg-red-500" />
                           </span>
                         )}
-                      </button>
+                      </a>
                     );
                   })}
                 </div>
@@ -447,24 +474,24 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                     );
                     return (
                       <Button
-                        type="button"
+                        asChild
                         key={size.id}
                         variant={isActive ? "default" : "outline"}
-                        disabled={isLoading}
-                        aria-pressed={isActive}
-                        onClick={() => handleVariantChange("size", size.id)}
                         className={cn(
                           "min-h-11 min-w-[3rem] rounded-lg border-2 px-3 py-1 font-sans text-sm font-medium transition-colors",
+                          LINK_DISABLED,
                           isActive
                             ? "border-blue-yankees bg-blue-yankees text-white hover:bg-blue-yankees"
                             : "border-gray-200 bg-white text-gray-900 hover:border-gray-300",
                           isOutOfStock && "line-through opacity-50",
                         )}
                       >
-                        {size.name}
-                        {isOutOfStock && (
-                          <span className="sr-only"> (agotado)</span>
-                        )}
+                        <a {...variantLinkProps("size", size.id, isActive)}>
+                          {size.name}
+                          {isOutOfStock && (
+                            <span className="sr-only"> (agotado)</span>
+                          )}
+                        </a>
                       </Button>
                     );
                   })}

@@ -93,7 +93,7 @@ describe("SingleProductPage", () => {
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
     expect(screen.getAllByRole("spinbutton")[0]).toHaveAttribute("aria-valuenow", "3");
 
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+    fireEvent.click(screen.getByRole("link", { name: "Seleccionar color Lila" }));
     await waitFor(() =>
       expect(screen.getAllByRole("spinbutton")[0]).toHaveAttribute("aria-valuenow", "6"),
     );
@@ -108,7 +108,7 @@ describe("SingleProductPage", () => {
     vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+    fireEvent.click(screen.getByRole("link", { name: "Seleccionar color Lila" }));
 
     await waitFor(() => expect(document.title).toBe("Cuaderno Snoopy - Lila | P de Papel"));
     expect(document.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe(
@@ -125,7 +125,7 @@ describe("SingleProductPage", () => {
     vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+    fireEvent.click(screen.getByRole("link", { name: "Seleccionar color Lila" }));
 
     await waitFor(() => expect(pushState).toHaveBeenCalled());
     // Si el título llegara tarde, el page_view de GA4 saldría con la variante vieja.
@@ -138,7 +138,7 @@ describe("SingleProductPage", () => {
     vi.mocked(fetchProductFromClient).mockResolvedValue(otherColor);
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+    fireEvent.click(screen.getByRole("link", { name: "Seleccionar color Lila" }));
     await waitFor(() => expect(document.title).toBe("Cuaderno Snoopy - Lila | P de Papel"));
 
     vi.mocked(fetchProductFromClient).mockResolvedValue(product);
@@ -156,11 +156,54 @@ describe("SingleProductPage", () => {
     render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
     expect(screen.getAllByRole("spinbutton")[0]).toHaveAttribute("aria-valuenow", "3");
 
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar color Lila" }));
+    fireEvent.click(screen.getByRole("link", { name: "Seleccionar color Lila" }));
     await waitFor(() =>
       expect(screen.getAllByRole("spinbutton")[0]).toHaveAttribute("aria-valuenow", "1"),
     );
   });
+  /**
+   * P1-5: las opciones son enlaces a la URL de cada variante (que ya existe y
+   * está en el sitemap), así que Google las rastrea. El clic normal sigue
+   * cambiando la variante en la misma página; con Cmd/Ctrl el navegador abre
+   * la URL real.
+   */
+  it("renders each variant option as a crawlable link to the variant url", () => {
+    render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
+
+    const lila = screen.getByRole("link", { name: "Seleccionar color Lila" });
+    const rosa = screen.getByRole("link", { name: "Seleccionar color Rosa" });
+    expect(lila).toHaveAttribute("href", "/producto/cuaderno-snoopy-lila");
+    expect(lila).not.toHaveAttribute("aria-current");
+    expect(rosa).toHaveAttribute("href", "/producto/cuaderno-snoopy");
+    expect(rosa).toHaveAttribute("aria-current", "page");
+    // aria-pressed no es válido en un enlace.
+    expect(lila).not.toHaveAttribute("aria-pressed");
+    expect(screen.queryByRole("button", { name: /Seleccionar color/ })).toBeNull();
+  });
+
+  it("serves the variant links in the server html", () => {
+    const html = renderToString(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
+    expect(html).toContain('href="/producto/cuaderno-snoopy-lila"');
+  });
+
+  it("lets a modified click open the variant url instead of switching in place", () => {
+    vi.mocked(fetchProductFromClient).mockClear();
+    render(<SingleProductPage product={product} siblings={[otherColor] as unknown as ProductVariant[]} />);
+    const lila = screen.getByRole("link", { name: "Seleccionar color Lila" });
+
+    for (const init of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { button: 1 }]) {
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true, ...init });
+      lila.dispatchEvent(event);
+      expect(event.defaultPrevented, JSON.stringify(init)).toBe(false);
+    }
+    expect(fetchProductFromClient).not.toHaveBeenCalled();
+
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true });
+    lila.dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(true);
+    expect(fetchProductFromClient).toHaveBeenCalledWith("cuaderno-snoopy-lila");
+  });
+
   /**
    * La ficha leía la cookie con `cookies()` y eso la sacaba de la caché. Ahora
    * el HTML del servidor siempre trae el estado público y el navegador cambia
