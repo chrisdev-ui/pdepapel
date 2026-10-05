@@ -610,7 +610,7 @@ La auditoría (§3, «`ProductGroup` sin url, imagen ni marca») pedía añadir 
 Fuente primaria: [Ley 1480 de 2011, art. 47 (Secretaría del Senado)](http://www.secretariasenado.gov.co/senado/basedoc/ley_1480_2011_pr001.html). No es asesoría legal.
 
 - **Plazo:** «El término máximo para ejercer el derecho de retracto será de cinco (5) días hábiles contados a partir de la entrega del bien». La tienda ya lo dice así (`a27ce6f5`).
-- **`merchantReturnDays`:** sigue en 5. Google lo cuenta en días desde la entrega, sin hábiles; 5 días hábiles son de 5 a 11 días calendario en 2026 (7 la mayoría de las veces). Opciones para decidir con Paula: (a) 7; (b) 11; (c) cambiar la política a un número fijo de días calendario ≥ 11; (d) fijar el plazo en la configuración de devoluciones de Merchant Center, que Google usa por encima del marcado.
+- **`merchantReturnDays`:** 7 días calendario (decisión del 2026-10-05, `28a620f7`). El texto de la política sigue diciendo cinco (5) días hábiles contados desde la entrega. **Ojo:** cerca de un festivo, cinco días hábiles pueden pasar de 7 días calendario (hasta 11 en 2026); el texto de la página es el que manda.
 - **Reembolso:** el artículo dice que «se deberá reintegrar el dinero». Para comercio electrónico (inciso modificado por la Ley 2439 de 2024) la devolución «no podrá exceder de quince (15) días calendario» desde que se ejerció el derecho, y «la suma será aplicada directamente sobre el instrumento de pago o medio de pago correspondiente o a través del medio acordado entre las partes». La política dice «Si te retractas de la compra, el valor queda como saldo a favor»: revisar con asesoría legal. No se cambió.
 - **Sábado:** los cálculos de días hábiles de esta auditoría suponen lunes a viernes sin festivos. Si el sábado cuenta como hábil, el plazo máximo baja de 11 a 9 días calendario. Revisar con asesoría legal.
 
@@ -677,3 +677,22 @@ Definiciones listas para cuando se active el complemento (4-72, [datos.gov.co ix
 | Resto de Colombia | Respaldo a nivel de país si la política lo permite; si no, `000000-049999`, `060000-109999`, `120000-999999` | Ningún otro departamento tiene códigos `05*` ni `11*`; ningún código está en dos departamentos (3.681 filas, 33 departamentos) |
 
 Reversión cuando se apliquen: borrar la política nueva, después las regiones y, si se activó solo para esto, el complemento. La política vieja vuelve a cubrir todo.
+
+
+### 9.13 Decisiones de las dueñas y lo que se aplicó (2026-10-05, tarde)
+
+Decisiones:
+- Plazo en el texto: cinco (5) días hábiles contados desde la entrega. En el marcado y en Merchant Center: 7 días.
+- Devolución por cambio de opinión: la paga la clienta. Por error nuestro o defecto: la pagamos nosotros.
+- Retracto: el dinero se devuelve al medio de pago original (o uno acordado) dentro del plazo legal; el saldo a favor solo si la clienta lo elige. Cambios ordinarios y garantía, sin cambios.
+- «Zonas cercanas» = todo Antioquia (15.000). Rionegro sigue en el área Medellín.
+- Los 8.000 son el domicilio personal de la dueña en Medellín (se acuerda por WhatsApp, costo 0 en el checkout); no se puede representar en Merchant Center, así que el área Medellín queda en 10.000 (lo que cobra EnvioClick). Los 132 pedidos sin transportadora son, muy probablemente, domicilios personales locales o pedidos viejos.
+- Colores SCRIBE x18 está bien (12 clásicos + 4 metálicos + 2 neón).
+
+Aplicado y verificado en producción (16:59 UTC):
+- `28a620f7`: `merchantReturnDays` 7; `customerRemorseReturnFees` = `ReturnFeesCustomerResponsibility` y `itemDefectReturnFees` = `FreeReturn` ([doc de Google](https://developers.google.com/search/docs/appearance/structured-data/return-policy): «The consumer needs to handle and pay for the return shipping themselves»); `ReturnByMail` igual.
+- `41d2cc8c`: el retracto se reembolsa «por el mismo medio de pago, o por el que acordemos contigo, en máximo quince (15) días calendario desde que ejerces el derecho, nos das los datos para el reembolso y nos devuelves el producto». Fuente: Ley 1480 de 2011, art. 47, inciso modificado por la Ley 2439 de 2024 (comercio electrónico). Pendiente revisión de un abogado.
+
+No aplicado:
+- **Política de devoluciones en Merchant Center:** se cargaron los valores aprobados (URL `/politicas/devoluciones`, «Solo productos nuevos», 7 días, etiqueta «Responsabilidad del cliente»), pero en el resumen el botón «Guardar» quedó deshabilitado (`disabled`) sin mensaje de error, dos veces. Se canceló; la política sigue con los valores anteriores (§9.9). Valores anteriores para revertir: URL `/policies/returns`, «Nuevos y poco usados», 5 días, método en tienda y por correo, etiqueta «Incluida en el paquete», sin tarifa de reposición, reembolso en 5 días.
+- **Complemento «Regiones»:** el permiso automático de la sesión bloqueó el clic en «Añadir»; hay que activarlo a mano (Complementos › Descubrir › Regiones › Añadir). Después se crean las regiones de §9.12 y la política de envío de §9.10.

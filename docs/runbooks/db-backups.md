@@ -37,6 +37,22 @@ En GitHub › Settings › Secrets and variables › Actions:
 
 La **llave privada** de age no vive en GitHub, ni en el repositorio, ni en Cloudflare. La guarda Christian fuera de línea (gestor de contraseñas o un medio offline). Sin ella las copias no se pueden leer, y si se pierde, las copias existentes no sirven.
 
+## Estado actual (2026-10-05)
+
+- **Bucket:** `pdepapel-db-backups` en la cuenta de Cloudflare de P de Papel. Privado: acceso público deshabilitado, sin r2.dev, sin dominio propio.
+- **Ciclo de vida:** `daily/` se borra a los 35 días (`daily-35-dias`); `monthly/` a los 400 días (`monthly-400-dias`). Además está la regla por defecto de R2 que aborta subidas a medias a los 7 días.
+- **Bloqueo:** `daily-lock-30-dias`, prefijo `daily/`, 30 días: nada en `daily/` se puede borrar ni sobrescribir antes de 30 días. Es menor que los 35 del ciclo de vida, así que no chocan.
+- **Llave de age:** la privada está en `~/pdepapel-backups/keys/pdepapel-db-backups-age.key` (0600) en el equipo de Christian. Hay que pasarla al gestor de contraseñas y a una copia fuera de línea. **Sin ella, ninguna copia se puede descifrar.** La pública está en la variable `BACKUP_AGE_RECIPIENT`.
+- **Secretos ya creados en GitHub:** `BACKUP_DB_HOST`, `BACKUP_DB_PORT`, `BACKUP_DB_USER`, `BACKUP_DB_PASSWORD`, `BACKUP_DB_NAME` (usuario de solo lectura) y `BACKUP_R2_BUCKET`.
+- **Faltan:** el token de R2 y tres secretos (`BACKUP_R2_ACCOUNT_ID`, `BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY`). Después, `BACKUP_ENABLED=true`, la primera corrida manual y la prueba de restauración.
+
+### Crear el token de R2 (lo hace Christian)
+
+1. Cloudflare › R2 › Manage API Tokens › Create Account API token.
+2. Permiso **Object Read & Write**; «Apply to specific buckets only» → solo `pdepapel-db-backups`. Sin vencimiento (lo usa una tarea programada; se rota a mano, ver abajo). Sin filtro de IP (las IP de GitHub Actions cambian).
+3. En la pantalla final, copiar cada valor directamente a GitHub (Settings › Secrets and variables › Actions): «Access Key ID» → `BACKUP_R2_ACCESS_KEY_ID`; «Secret Access Key» → `BACKUP_R2_SECRET_ACCESS_KEY`. El Account ID (R2 › Overview › Account Details) → `BACKUP_R2_ACCOUNT_ID`. La pantalla del secreto se muestra una sola vez.
+4. Avisar para encender `BACKUP_ENABLED`, correr el flujo y hacer la prueba de restauración.
+
 ## Preparación (una sola vez)
 
 1. **Bucket privado** en R2 (por ejemplo `pdepapel-db-backups`), sin acceso público ni dominio.
