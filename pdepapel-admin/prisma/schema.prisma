@@ -771,6 +771,8 @@ model Order {
   // Analytics attribution is optional and is captured only after visitor consent.
   // The client ID is cleared once the server-side purchase event is confirmed.
   analyticsClientId          String?   @db.VarChar(128)
+  /// session_id de GA4 al hacer el pedido; sin él la compra por Measurement Protocol cae en «Unassigned».
+  analyticsSessionId         String?   @db.VarChar(32)
   analyticsPurchaseTrackedAt DateTime?
   // Sólo el sí o el no, para poder medir cuántas ventas pagadas quedan fuera
   // de GA4. De quien no acepta no se guarda nada más.

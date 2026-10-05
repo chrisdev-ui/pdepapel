@@ -141,6 +141,7 @@ export const INTERNAL_ORDER_FIELDS = [
   "profitMarginPct",
   "createdBy",
   "analyticsClientId",
+  "analyticsSessionId",
   "analyticsConsent",
   "idempotencyKey",
   "giftRecipientEmail",

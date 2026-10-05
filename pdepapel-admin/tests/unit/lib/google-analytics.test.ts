@@ -21,12 +21,14 @@ vi.mock("@/lib/prismadb", () => ({
 
 import {
   buildGoogleAnalyticsPurchasePayload,
+  normalizeGoogleAnalyticsSessionId,
   normalizeGoogleAnalyticsClientId,
   recordPaidOrderInGoogleAnalytics,
 } from "@/lib/google-analytics";
 
 const paidOrder = {
   analyticsClientId: "123456789.987654321",
+  analyticsSessionId: "1791180000",
   analyticsPurchaseTrackedAt: null,
   coupon: { code: "KAWAII10" },
   id: "order-id",
@@ -67,6 +69,21 @@ describe("Google Analytics purchase tracking", () => {
     expect(normalizeGoogleAnalyticsClientId("GA1.1.123.456")).toBeNull();
     expect(normalizeGoogleAnalyticsClientId("not-a-client-id")).toBeNull();
     expect(normalizeGoogleAnalyticsClientId(null)).toBeNull();
+  });
+
+  /** Sin session_id GA4 no une la compra a la sesión y la cuenta como «Unassigned». */
+  it("accepts only numeric GA4 session IDs", () => {
+    expect(normalizeGoogleAnalyticsSessionId("1791180000")).toBe("1791180000");
+    expect(normalizeGoogleAnalyticsSessionId(1791180000)).toBe("1791180000");
+    expect(normalizeGoogleAnalyticsSessionId("GS1.1.1791180000")).toBeNull();
+    expect(normalizeGoogleAnalyticsSessionId("")).toBeNull();
+    expect(normalizeGoogleAnalyticsSessionId(null)).toBeNull();
+  });
+
+  it("adds session_id to the purchase only when there is one", () => {
+    const base = { clientId: "1.2", items: [], orderNumber: "1", total: 1000 };
+    expect(buildGoogleAnalyticsPurchasePayload({ ...base, sessionId: "1791180000" }).events[0].params.session_id).toBe("1791180000");
+    expect("session_id" in buildGoogleAnalyticsPurchasePayload(base).events[0].params).toBe(false);
   });
 
   it("builds a purchase payload without customer data", () => {
@@ -169,9 +186,13 @@ describe("Google Analytics purchase tracking", () => {
       },
       data: {
         analyticsClientId: null,
+        analyticsSessionId: null,
         analyticsPurchaseTrackedAt: expect.any(Date),
       },
     });
+    // La compra va en la sesión de GA4 en la que se hizo el pedido.
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body.events[0].params.session_id).toBe("1791180000");
   });
 
   it("does not resend a purchase that is already marked as tracked", async () => {

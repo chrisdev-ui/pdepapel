@@ -46,6 +46,7 @@ import { hasAnalyticsConsent } from "@/lib/analytics-consent";
 import {
   getAnalyticsValue,
   getGoogleAnalyticsClientId,
+  getGoogleAnalyticsSessionId,
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
@@ -1142,6 +1143,15 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
             )
           : null);
       analyticsClientIdRef.current = analyticsClientId;
+      // La sesión se lee al enviar (no al montar): puede haber cambiado
+      // mientras la persona llenaba el formulario.
+      const analyticsSessionId =
+        analyticsClientId && process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+          ? await getGoogleAnalyticsSessionId(
+              process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+              { timeoutMs: GA_CLIENT_ID_SUBMIT_WAIT_MS },
+            )
+          : null;
       // Sólo el sí o el no, para poder medir después cuántas ventas pagadas
       // quedan fuera de GA4. De quien dice que no no se manda nada más.
       const analyticsConsent = hasAnalyticsConsent();
@@ -1177,6 +1187,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         subtotal,
         total,
         analyticsClientId,
+        analyticsSessionId,
         analyticsConsent,
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,

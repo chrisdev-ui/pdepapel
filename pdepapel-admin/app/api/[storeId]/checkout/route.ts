@@ -12,7 +12,7 @@ import { env } from "@/lib/env.mjs";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
-import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
+import { normalizeGoogleAnalyticsClientId, normalizeGoogleAnalyticsSessionId } from "@/lib/google-analytics";
 import { generateBoldCheckoutData } from "@/lib/bold";
 import {
   activeCouponWhere,
@@ -247,6 +247,7 @@ async function createCheckout(
       envioClickIdRate, // ⭐ ID de tarifa de EnvioClick (top level)
       documentId, // ⭐ Cédula/NIT (opcional)
       analyticsClientId,
+      analyticsSessionId,
       analyticsConsent,
       saveAddress,
       savedAddressId,
@@ -271,6 +272,10 @@ async function createCheckout(
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
+    // La sesión solo sirve junto al client id: sin él no se guarda.
+    const normalizedAnalyticsSessionId = normalizedAnalyticsClientId
+      ? normalizeGoogleAnalyticsSessionId(analyticsSessionId)
+      : null;
     // Misma higiene que el client id: el tráfico interno no se mide. Del
     // cliente sólo se guarda si aceptó o no, nada más.
     const normalizedAnalyticsConsent =
@@ -876,6 +881,9 @@ async function createCheckout(
           couponId: coupon?.id,
           ...(normalizedAnalyticsClientId
             ? { analyticsClientId: normalizedAnalyticsClientId }
+            : {}),
+          ...(normalizedAnalyticsSessionId
+            ? { analyticsSessionId: normalizedAnalyticsSessionId }
             : {}),
           ...(normalizedAnalyticsConsent === null
             ? {}

@@ -100,7 +100,9 @@ vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
 // La invalidación de caché llega a lib/resend por la alerta de revalidación, y
 // Resend exige la clave al cargar: en CI no hay .env, así que se sustituye.
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
-vi.mock("@/lib/google-analytics", () => ({
+vi.mock("@/lib/google-analytics", async (importOriginal) => ({
+  // El normalizador de sesión es puro: se usa el real.
+  normalizeGoogleAnalyticsSessionId: (await importOriginal<typeof import("@/lib/google-analytics")>()).normalizeGoogleAnalyticsSessionId,
   normalizeGoogleAnalyticsClientId: mocks.normalizeGoogleAnalyticsClientId,
 }));
 
@@ -289,6 +291,28 @@ describe("POST /api/[storeId]/checkout", () => {
         data: expect.objectContaining({ analyticsClientId: "123.456" }),
       }),
     );
+  });
+
+  /** Sin session_id la compra por Measurement Protocol cae en «Unassigned» en GA4. */
+  it("stores the GA4 session id only alongside a valid client id, and only if numeric", async () => {
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue("123.456");
+    await POST(createCheckoutRequest({ analyticsClientId: "123.456", analyticsSessionId: "1791180000" }), {
+      params: { storeId: "store-1" },
+    });
+    expect(mocks.orderCreate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ analyticsSessionId: "1791180000" }) }),
+    );
+
+    await POST(createCheckoutRequest({ analyticsClientId: "123.456", analyticsSessionId: "<script>" }), {
+      params: { storeId: "store-1" },
+    });
+    expect(mocks.orderCreate.mock.lastCall?.[0].data).not.toHaveProperty("analyticsSessionId");
+
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue(null);
+    await POST(createCheckoutRequest({ analyticsSessionId: "1791180000" }), {
+      params: { storeId: "store-1" },
+    });
+    expect(mocks.orderCreate.mock.lastCall?.[0].data).not.toHaveProperty("analyticsSessionId");
   });
 
   it("records that the shopper accepted analytics", async () => {

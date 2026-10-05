@@ -471,6 +471,7 @@ export interface CheckoutOrder {
   shippingOptionType?: string;
   envioClickIdRate?: number;
   analyticsClientId?: string | null;
+  analyticsSessionId?: string | null;
   saveAddress?: boolean;
   savedAddressId?: string | null;
   addressLabel?: string | null;

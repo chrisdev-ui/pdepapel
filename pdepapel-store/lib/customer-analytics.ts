@@ -227,6 +227,26 @@ export function getGoogleAnalyticsClientId(
   measurementId: string,
   { timeoutMs = GA_CLIENT_ID_WAIT_MS }: { timeoutMs?: number } = {},
 ): Promise<string | null> {
+  return getGoogleAnalyticsField(measurementId, "client_id", timeoutMs);
+}
+
+/**
+ * Sesión de GA4 en la que se hace el pedido. La compra llega luego por
+ * Measurement Protocol desde el panel; sin `session_id` GA4 no la une a la
+ * sesión y la atribuye a «Unassigned» / página de destino «(not set)».
+ */
+export function getGoogleAnalyticsSessionId(
+  measurementId: string,
+  { timeoutMs = GA_CLIENT_ID_WAIT_MS }: { timeoutMs?: number } = {},
+): Promise<string | null> {
+  return getGoogleAnalyticsField(measurementId, "session_id", timeoutMs);
+}
+
+function getGoogleAnalyticsField(
+  measurementId: string,
+  field: "client_id" | "session_id",
+  timeoutMs: number,
+): Promise<string | null> {
   if (
     typeof window === "undefined" ||
     !measurementId ||
@@ -239,12 +259,12 @@ export function getGoogleAnalyticsClientId(
     let settled = false;
     let pollId: number | undefined;
 
-    const settle = (clientId: string | null) => {
+    const settle = (value: string | null) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timeoutId);
       if (pollId !== undefined) window.clearInterval(pollId);
-      resolve(clientId);
+      resolve(value);
     };
 
     const timeoutId = window.setTimeout(() => settle(null), timeoutMs);
@@ -252,8 +272,12 @@ export function getGoogleAnalyticsClientId(
     const ask = () => {
       const gtag = window.gtag;
       if (!gtag) return false;
-      gtag("get", measurementId, "client_id", (clientId: unknown) => {
-        settle(typeof clientId === "string" ? clientId : null);
+      gtag("get", measurementId, field, (value: unknown) => {
+        settle(
+          typeof value === "string" || typeof value === "number"
+            ? String(value)
+            : null,
+        );
       });
       return true;
     };

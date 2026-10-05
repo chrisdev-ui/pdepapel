@@ -22,6 +22,7 @@ export interface GoogleAnalyticsPurchasePayload {
     params: {
       currency: "COP";
       engagement_time_msec: number;
+      session_id?: string;
       items: GoogleAnalyticsPurchaseItem[];
       payment_type?: string;
       shipping: number;
@@ -41,8 +42,17 @@ export function normalizeGoogleAnalyticsClientId(
   return /^\d{1,20}\.\d{1,20}$/.test(clientId) ? clientId : null;
 }
 
+/** session_id de GA4: solo dígitos (gtag lo entrega como número). */
+export function normalizeGoogleAnalyticsSessionId(value: unknown): string | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const sessionId = String(value).trim();
+  return /^\d{1,20}$/.test(sessionId) ? sessionId : null;
+}
+
 export function buildGoogleAnalyticsPurchasePayload(input: {
   clientId: string;
+  /** Sin él GA4 no une la compra a la sesión y la cuenta como «Unassigned». */
+  sessionId?: string | null;
   couponCode?: string | null;
   orderNumber: string;
   paymentMethod?: string | null;
@@ -69,6 +79,7 @@ export function buildGoogleAnalyticsPurchasePayload(input: {
         params: {
           currency: "COP",
           engagement_time_msec: 1,
+          ...(input.sessionId ? { session_id: input.sessionId } : {}),
           items: input.items.map((item) => ({
             item_id: item.sku || item.product?.sku || item.productId || "manual",
             item_name: item.name,
@@ -100,6 +111,7 @@ export async function recordPaidOrderInGoogleAnalytics(
     where: { id: orderId },
     select: {
       analyticsClientId: true,
+      analyticsSessionId: true,
       analyticsPurchaseTrackedAt: true,
       coupon: { select: { code: true } },
       id: true,
@@ -141,6 +153,7 @@ export async function recordPaidOrderInGoogleAnalytics(
 
   const payload = buildGoogleAnalyticsPurchasePayload({
     clientId,
+    sessionId: normalizeGoogleAnalyticsSessionId(order.analyticsSessionId),
     couponCode: order.coupon?.code,
     items: order.orderItems,
     orderNumber: order.orderNumber,
@@ -175,6 +188,7 @@ export async function recordPaidOrderInGoogleAnalytics(
     },
     data: {
       analyticsClientId: null,
+      analyticsSessionId: null,
       analyticsPurchaseTrackedAt: new Date(),
     },
   });

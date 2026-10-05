@@ -13,6 +13,7 @@ import {
   disableGoogleAnalytics,
   enableGoogleAnalytics,
   getGoogleAnalyticsClientId,
+  getGoogleAnalyticsSessionId,
   toAnalyticsItem,
   trackCustomerEvent,
   trackGooglePageView,
@@ -207,6 +208,25 @@ describe("customer analytics tracking", () => {
       if (typeof callback === "function") callback(undefined);
     });
     await expect(getGoogleAnalyticsClientId("G-TEST123")).resolves.toBeNull();
+  });
+
+  /**
+   * La compra llega por Measurement Protocol; sin session_id GA4 la manda a
+   * «Unassigned». gtag devuelve la sesión como número.
+   */
+  it("resolves the GA4 session id (asked by name, returned as text) only with consent", async () => {
+    const asked: unknown[] = [];
+    window.gtag = vi.fn((...args: unknown[]) => {
+      asked.push(args[2]);
+      const callback = args[3];
+      if (typeof callback === "function") callback(1791180000);
+    });
+
+    await expect(getGoogleAnalyticsSessionId("G-TEST123")).resolves.toBeNull();
+
+    grantConsent();
+    await expect(getGoogleAnalyticsSessionId("G-TEST123")).resolves.toBe("1791180000");
+    expect(asked).toEqual(["session_id"]);
   });
 
   it("answers right away without consent, instead of waiting for the tag", async () => {
