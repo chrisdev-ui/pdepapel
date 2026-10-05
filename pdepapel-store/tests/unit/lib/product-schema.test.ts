@@ -129,6 +129,18 @@ describe("product structured data", () => {
     });
   });
 
+  /**
+   * Contrato con los feeds de Merchant y Meta (pdepapel-admin/lib/feed-pricing.ts):
+   * la API devuelve `price` = precio con la oferta vigente y `originalPrice` =
+   * precio base. El JSON-LD anuncia el efectivo; los feeds lo publican como
+   * `sale_price`. Si alguno de los dos cambia de lado, Merchant marca
+   * «precio no coincide».
+   */
+  it("publishes the effective (discounted) API price in the offer, never the original price", () => {
+    const onSale = { ...base, price: "17000", originalPrice: 20000, discountedPrice: 17000, hasDiscount: true } as unknown as Product;
+    expect((buildProductSchema(onSale) as Record<string, any>).offers.price).toBe(17000);
+  });
+
   /** Google bajaba el original completo de cada foto del JSON-LD; ahora va la copia de 1600 px de la galería. */
   it("points structured-data images at the sized gallery copy", () => {
     const product = {

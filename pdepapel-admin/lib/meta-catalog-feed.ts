@@ -1,3 +1,4 @@
+import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
 import {
   cleanFeedText,
   createCatalogFeedToken,
@@ -56,6 +57,8 @@ export const META_CATALOG_FEED_HEADERS = [
   "availability",
   "condition",
   "price",
+  "sale_price",
+  "sale_price_effective_date",
   "link",
   "image_link",
   "additional_image_link",
@@ -131,6 +134,8 @@ export function buildMetaCatalogFeed(
     generatedAt?: Date;
     /** Marca con la que salen los productos sin marca propia. */
     defaultBrand?: string;
+    /** Precio efectivo por producto (motor de descuentos), igual que la ficha. */
+    pricing?: Map<string, FeedPricingInput>;
   } = {},
 ): MetaCatalogFeed {
   const generatedAt = options.generatedAt ?? new Date();
@@ -186,6 +191,7 @@ export function buildMetaCatalogFeed(
       !groupsWithDuplicateVariants.has(product.productGroupId)
         ? product.productGroupId
         : "";
+    const pricing = getFeedPricing(product, options.pricing?.get(product.id));
 
     return [
       feedId,
@@ -197,7 +203,9 @@ export function buildMetaCatalogFeed(
       "new",
       // Número, espacio y código ISO 4217. Punto decimal y sin separador de
       // miles: "15000.00 COP".
-      `${product.price.toFixed(2)} COP`,
+      `${pricing.price.toFixed(2)} COP`,
+      pricing.salePrice === null ? "" : `${pricing.salePrice.toFixed(2)} COP`,
+      pricing.salePriceEffectiveDate ?? "",
       options.links?.get(product.id) ?? getGoogleMerchantProductLink(product),
       imageLink,
       additionalImages.join(","),
@@ -321,7 +329,8 @@ export async function refreshMetaCatalogFeed(
   const products = await prismadb.product.findMany(
     getMetaCatalogFeedProductArgs(storeId),
   );
-  const feed = buildMetaCatalogFeed(products);
+  const pricing = await getFeedPricingMap(storeId, products);
+  const feed = buildMetaCatalogFeed(products, { pricing });
   const cached = await writeCachedMetaCatalogFeed(storeId, feed);
 
   return { ...feed, cached };

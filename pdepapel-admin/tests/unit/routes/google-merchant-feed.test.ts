@@ -22,6 +22,8 @@ vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     product: { findMany: mocks.findProducts },
+    // Sin ofertas vigentes: el feed usa el precio base.
+    offer: { findMany: async () => [] },
     store: { findMany: mocks.findStores },
   },
 }));
@@ -219,7 +221,10 @@ describe("Google Merchant feed report", () => {
     expect(response.status).toBe(200);
     expect(json.report.exportedProducts).toBe(1);
     expect(json.cached).toBe(true);
-    expect(mocks.redisSet).toHaveBeenCalledTimes(2);
+    // Solo las dos claves del feed; la caché de ofertas vigentes también usa Redis.
+    expect(
+      mocks.redisSet.mock.calls.filter((call: unknown[]) => !String(call[0]).endsWith(":active-offers")),
+    ).toHaveLength(2);
   });
 });
 

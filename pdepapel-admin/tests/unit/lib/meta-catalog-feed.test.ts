@@ -159,6 +159,8 @@ describe("buildMetaCatalogFeed", () => {
       "availability",
       "condition",
       "price",
+      "sale_price",
+      "sale_price_effective_date",
       "link",
       "image_link",
       "additional_image_link",

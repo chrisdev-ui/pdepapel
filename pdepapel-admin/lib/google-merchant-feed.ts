@@ -1,4 +1,5 @@
 import { productAvailabilityWhere } from "@/lib/product-availability";
+import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
 
 import type { Prisma } from "@prisma/client";
 
@@ -44,6 +45,8 @@ export const GOOGLE_MERCHANT_FEED_HEADERS = [
   "image_link",
   "additional_image_link",
   "price",
+  "sale_price",
+  "sale_price_effective_date",
   "condition",
   "availability",
   "brand",
@@ -57,6 +60,11 @@ export const GOOGLE_MERCHANT_FEED_HEADERS = [
   "pattern",
   "excluded_destination",
 ] as const;
+
+/** COP sin decimales cuando el monto es entero; si no, dos decimales. */
+function formatFeedAmount(amount: number) {
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+}
 
 export const GOOGLE_MERCHANT_FEED_FILENAME = "google-merchant-feed.txt";
 export const GOOGLE_MERCHANT_FEED_CONTENT_TYPE =
@@ -114,7 +122,12 @@ export type GoogleMerchantFeed = {
  */
 export function buildGoogleMerchantFeed(
   products: GoogleMerchantFeedProduct[],
-  options: { links?: Map<string, string>; generatedAt?: Date } = {},
+  options: {
+    links?: Map<string, string>;
+    generatedAt?: Date;
+    /** Precio efectivo por producto (motor de descuentos), igual que la ficha. */
+    pricing?: Map<string, FeedPricingInput>;
+  } = {},
 ): GoogleMerchantFeed {
   const generatedAt = options.generatedAt ?? new Date();
   const groupsWithDuplicateVariants = findGroupsWithDuplicateVariants(products);
@@ -174,6 +187,7 @@ export function buildGoogleMerchantFeed(
       !groupsWithDuplicateVariants.has(product.productGroupId)
         ? product.productGroupId
         : "";
+    const pricing = getFeedPricing(product, options.pricing?.get(product.id));
 
     return [
       feedId,
@@ -182,7 +196,9 @@ export function buildGoogleMerchantFeed(
       options.links?.get(product.id) ?? getGoogleMerchantProductLink(product),
       imageLink,
       additionalImages.join(","),
-      `${product.price} COP`,
+      `${formatFeedAmount(pricing.price)} COP`,
+      pricing.salePrice === null ? "" : `${formatFeedAmount(pricing.salePrice)} COP`,
+      pricing.salePriceEffectiveDate ?? "",
       "new",
       availability,
       cleanFeedText(brand),
@@ -321,7 +337,8 @@ export async function refreshGoogleMerchantFeed(
   const products = await prismadb.product.findMany(
     getGoogleMerchantFeedProductArgs(storeId),
   );
-  const feed = buildGoogleMerchantFeed(products);
+  const pricing = await getFeedPricingMap(storeId, products);
+  const feed = buildGoogleMerchantFeed(products, { pricing });
   const cached = await writeCachedGoogleMerchantFeed(storeId, feed);
 
   return { ...feed, cached };

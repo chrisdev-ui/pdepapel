@@ -26,6 +26,7 @@ import {
   GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE,
   buildGoogleMerchantFeed,
 } from "../../lib/google-merchant-feed";
+import { getFeedPricingMap, type FeedPricingInput } from "../../lib/feed-pricing";
 
 const prismadb = new PrismaClient();
 const OUTPUT_DIR = process.cwd();
@@ -193,8 +194,18 @@ async function exportProductsToGoogleMerchant() {
     }
 
     // --- Rows (shared with the hosted feed) ---------------------------------
+    // Mismo precio que la ficha: el motor de descuentos, tienda por tienda.
+    const pricing = new Map<string, FeedPricingInput>();
+    for (const storeId of Array.from(new Set(products.map((product) => product.storeId)))) {
+      const storePricing = await getFeedPricingMap(
+        storeId,
+        products.filter((product) => product.storeId === storeId),
+      );
+      storePricing.forEach((value, key) => pricing.set(key, value));
+    }
     const { tsv, report } = buildGoogleMerchantFeed(products, {
       links: linkByProductId,
+      pricing,
     });
 
     if (report.groupsWithDuplicateVariants.length > 0) {

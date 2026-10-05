@@ -18,7 +18,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
 vi.mock("@/lib/prismadb", () => ({
-  default: { product: { findMany: mocks.findProducts } },
+  // Sin ofertas vigentes: el feed usa el precio base.
+  default: { product: { findMany: mocks.findProducts }, offer: { findMany: async () => [] } },
 }));
 vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => ({ get: mocks.redisGet, set: mocks.redisSet }) },
@@ -157,7 +158,7 @@ describe("hosted Meta catalog feed", () => {
 
     expect(response.status).toBe(200);
     expect(body.split("\n")[1]).toContain(
-      "CUAD-1\tCuaderno\tRayado\tin stock\tnew\t18000.00 COP\thttps://papeleriapdepapel.com/producto/cuaderno",
+      "CUAD-1\tCuaderno\tRayado\tin stock\tnew\t18000.00 COP\t\t\thttps://papeleriapdepapel.com/producto/cuaderno",
     );
     expect(mocks.findProducts).toHaveBeenCalledWith(
       expect.objectContaining({
