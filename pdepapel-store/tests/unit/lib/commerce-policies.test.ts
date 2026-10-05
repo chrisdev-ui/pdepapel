@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   HANDLING_DAYS,
+  MERCHANT_RETURN_DAYS,
   RETURN_WINDOW_DAYS,
   buildFreeShippingDetails,
   buildMerchantReturnPolicy,
@@ -46,6 +47,12 @@ describe("commerce policies match the published policy pages", () => {
     expect(returns).toContain(`${RETURN_WINDOW_DAYS} días hábiles`);
     // El cliente paga el envío cuando la devolución es por decisión suya.
     expect(returns).toMatch(/costos de envío corren por tu cuenta/);
+    // Y lo asumimos nosotros si es por un error nuestro o un defecto.
+    expect(flat(returns)).toMatch(/error nuestro .* asumimos todos los costos/);
+    // El marcado declara una semana (7 días calendario): nunca menos que los
+    // cinco días hábiles de una semana sin festivos.
+    expect(MERCHANT_RETURN_DAYS).toBe(7);
+    expect(MERCHANT_RETURN_DAYS).toBeGreaterThanOrEqual(RETURN_WINDOW_DAYS + 2);
   });
 
   /**
@@ -103,11 +110,25 @@ describe("commerce policies match the published policy pages", () => {
       const lines = readFileSync(file, "utf8").split("\n");
       lines.forEach((line, index) => {
         if (!/d[ií]as calendario/i.test(line)) return;
+        // El reembolso del retracto sí es en días calendario (art. 47).
+        if (/quince \(15\) d[ií]as calendario/i.test(line)) return;
         const around = lines.slice(Math.max(0, index - 3), index + 4).join(" ");
         if (/cambio|devoluci|retract|recib|entrega/i.test(around)) offenders.push(`${relative(join(__dirname, "../../.."), file)}:${index + 1}`);
       });
     }
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * Retracto (Ley 1480, art. 47, comercio electrónico): el dinero vuelve por
+   * el mismo medio de pago o uno acordado en máximo 15 días calendario; el
+   * saldo a favor solo si la clienta lo elige.
+   */
+  it("refunds a retraction to the payment method within fifteen calendar days", () => {
+    const text = flat(page("devoluciones"));
+    expect(text).toContain("te devolvemos el dinero por el mismo medio de pago, o por el que acordemos contigo, en máximo quince (15) días calendario");
+    expect(text).toContain("Si lo prefieres, el valor puede quedar como saldo a favor");
+    expect(text).not.toContain("el valor queda como saldo a favor para usar");
   });
 
   /** Mismo día si se paga antes de las 12:00, de lunes a viernes; si no, el siguiente día hábil. */
@@ -136,9 +157,11 @@ describe("buildMerchantReturnPolicy", () => {
       applicableCountry: "CO",
       returnPolicyCountry: "CO",
       returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
-      merchantReturnDays: 5,
+      merchantReturnDays: 7,
       returnMethod: "https://schema.org/ReturnByMail",
       returnFees: "https://schema.org/ReturnFeesCustomerResponsibility",
+      customerRemorseReturnFees: "https://schema.org/ReturnFeesCustomerResponsibility",
+      itemDefectReturnFees: "https://schema.org/FreeReturn",
       merchantReturnLink: "https://papeleriapdepapel.com/politicas/devoluciones",
     });
   });
@@ -165,7 +188,7 @@ describe("buildFreeShippingDetails", () => {
 describe("product offers carry the policies", () => {
   it("adds the return policy to every offer and free shipping only above the threshold", () => {
     const cheap = buildProductSchema(base, true, { freeShippingThreshold: 250000 }) as Record<string, any>;
-    expect(cheap.offers.hasMerchantReturnPolicy.merchantReturnDays).toBe(5);
+    expect(cheap.offers.hasMerchantReturnPolicy.merchantReturnDays).toBe(7);
     expect(cheap.offers.shippingDetails).toBeUndefined();
 
     const expensive = buildProductSchema({ ...base, price: "260000" } as Product, true, { freeShippingThreshold: 250000 }) as Record<string, any>;
@@ -176,6 +199,6 @@ describe("product offers carry the policies", () => {
     const rosa = { ...base, id: "a", productGroupId: "g", color: { id: "c1", name: "Rosa", value: "#f0f" } } as Product;
     const azul = { ...base, id: "b", productGroupId: "g", color: { id: "c2", name: "Azul", value: "#00f" } } as Product;
     const group = buildProductJsonLd(rosa, [rosa, azul], { freeShippingThreshold: 250000 }) as Record<string, any>;
-    expect(group.hasVariant.every((v: any) => v.offers.hasMerchantReturnPolicy?.merchantReturnDays === 5)).toBe(true);
+    expect(group.hasVariant.every((v: any) => v.offers.hasMerchantReturnPolicy?.merchantReturnDays === 7)).toBe(true);
   });
 });

@@ -107,8 +107,12 @@ const sections: PolicySection[] = [
           original (pago en línea o transferencia).
         </p>
         <p>
-          Si te retractas de la compra, el valor queda como saldo a favor para
-          usar en otros productos de la tienda.
+          Si te retractas de la compra, te devolvemos el dinero por el mismo
+          medio de pago, o por el que acordemos contigo, en máximo
+          quince (15) días calendario desde que ejerces el derecho, nos das los
+          datos para el reembolso y nos devuelves el producto. Si lo prefieres,
+          el valor puede quedar como saldo a favor para usar en otros productos
+          de la tienda.
         </p>
       </>
     ),
