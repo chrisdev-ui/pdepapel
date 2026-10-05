@@ -1,9 +1,9 @@
 import { Gift, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
-import type { Product as ProductSchema, WithContext } from "schema-dts";
 
 import { getGiftCardDenominations } from "@/actions/gift-cards";
 import { BASE_URL } from "@/constants";
+import { buildGiftCardJsonLd } from "@/lib/gift-card-schema";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 import { GiftCardForm } from "./components/gift-card-form";
@@ -43,21 +43,7 @@ export default async function GiftCardPage() {
   const denominations = await getGiftCardDenominations();
   const options = denominations.length > 0 ? denominations : DEFAULT_DENOMINATIONS;
 
-  const jsonLd: WithContext<ProductSchema> = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: "Tarjeta de regalo P de Papel",
-    description: metadata.description as string,
-    url: `${BASE_URL}${STOREFRONT_ROUTES.giftCard}`,
-    brand: { "@type": "Brand", name: "P de Papel" },
-    offers: options.map((amount) => ({
-      "@type": "Offer",
-      price: amount,
-      priceCurrency: "COP",
-      availability: "https://schema.org/InStock",
-      url: `${BASE_URL}${STOREFRONT_ROUTES.giftCard}`,
-    })),
-  };
+  const jsonLd = buildGiftCardJsonLd(options, metadata.description as string);
 
   return (
     <>
