@@ -847,3 +847,7 @@ Solo tienda (`pdepapel-store`), un push. No toca Merchant Center, feeds, redirec
 ### 10.3 Cómo revertir
 
 `git revert 3c73bc5b ad4b3247 a21be221` en un solo push. Los tres son independientes: se puede revertir uno solo. No hay datos ni migraciones.
+
+### 10.4 Fases 2 y 3
+
+Las propuestas de la fase 2 (textos de envíos y devoluciones, P1-6, archivados en categorías noindex, P2-8, P2-9 y unicidad de `Product.slug`) y la tabla de verificaciones de la fase 3 están en [`2026-10-05-wave-3-phase-2-proposals.md`](2026-10-05-wave-3-phase-2-proposals.md). No hay nada implementado; esperan la aprobación de Christian y de Paula (tabla «Decisiones que hacen falta» al inicio de ese documento).
