@@ -695,8 +695,53 @@ Aplicado y verificado en producción (16:59 UTC):
 
 No aplicado:
 - **Política de devoluciones en Merchant Center:** se cargaron los valores aprobados (URL `/politicas/devoluciones`, «Solo productos nuevos», 7 días, etiqueta «Responsabilidad del cliente»), pero en el resumen el botón «Guardar» quedó deshabilitado (`disabled`) sin mensaje de error, dos veces. Se canceló; la política sigue con los valores anteriores (§9.9). Valores anteriores para revertir: URL `/policies/returns`, «Nuevos y poco usados», 5 días, método en tienda y por correo, etiqueta «Incluida en el paquete», sin tarifa de reposición, reembolso en 5 días.
-- **Complemento «Regiones»:** el permiso automático de la sesión bloqueó el clic en «Añadir»; hay que activarlo a mano (Complementos › Descubrir › Regiones › Añadir). Después se crean las regiones de §9.12 y la política de envío de §9.10.
+- **Complemento «Regiones»:** el permiso automático de la sesión bloqueó el clic en «Añadir»; hay que activarlo a mano (Complementos › Descubrir › Regiones › Añadir). Después se crean las regiones de §9.12 y la política de envío de §9.10. *(Actualizado en §9.13.1: el complemento ya está activo y la pestaña «Regiones» existe; lo que falla es guardar la región.)*
 
+
+### 9.13.1 Segundo intento en Merchant Center: bloqueado (2026-10-05, ~19:50 UTC)
+
+Christian aprobó crear las cuatro regiones, una política de envío por región, una política de devoluciones **nueva** y, solo si todo quedaba limpio, retirar las viejas. **No se guardó ni se cambió nada en Merchant Center.** Productos antes y después: 867 aprobados, 0 con disponibilidad limitada, 0 no aprobados, 0 en revisión.
+
+**Línea base** (capturas de la sesión, para revertir):
+- **Envío:** «Política de envíos a toda Colombia», estado «Finaliza la configuración», Colombia, todos los productos (867). Tarifa fija 12.000 COP, sin envío gratis. Hora límite 21:00 (GMT-05:00, Bogotá). Preparación 0–2 días, lunes a domingo. Transporte 2–2 días, «Todos los destinos», lunes a sábado. Total 2–4 días hábiles. Sin orígenes de envío.
+- **Devoluciones:** «Estándar para Colombia», estado «Verificada», 867 productos. URL `https://papeleriapdepapel.com/policies/returns`. Acepta devoluciones de productos defectuosos y no defectuosos, y cambios. Productos «Nuevos y poco usados», plazo 5 días. Método en tienda y por correo; etiqueta «Incluida en el paquete, Sin coste»; sin tarifa de reposición; reembolso en 5 días.
+
+**Paso 1, regiones: bloqueado.**
+- **Lo que se probó:** Información de empresa › Regiones › Añadir región. ID `MDE`, nombre «Medellín y área metropolitana», país Colombia, «Códigos postales». Se pegaron los 11 prefijos de §9.12 y el formulario los aceptó («Se han seleccionado 11 ubicaciones»).
+- **Lo que pasó al guardar:** apareció «No podemos completar tu solicitud en estos momentos. Vuelve a cargar esta página e inténtalo de nuevo.». El tamaño de la región salió «Desconocido» y hubo un error por cada prefijo: «Los siguientes códigos postales seleccionados en esta región se solapan: 0500» (y lo mismo con 05102, 05103, 05104, 05105, 05404, 05541, 05542, 05544, 05545 y 05546). No había ninguna otra región con la que solaparse.
+- **Reintento:** se recargó y se repitió con los mismos datos. Mismo resultado, y el aviso salió ya al añadir los códigos, antes de guardar.
+- **Resultado:** la lista de regiones sigue vacía. Por la regla «si reporta solapamiento, parar», no se probó ninguna otra región ni otro formato.
+- **Hipótesis, sin probar:**
+  - (a) Merchant Center podría tratar mal el 0 inicial de los códigos colombianos: la dirección de la empresa ya aparece como «500023» y no 050023, y todos los prefijos de Medellín empiezan por 05.
+  - (b) El complemento recién activado podría seguir aprovisionándose.
+- **Pruebas posibles, a decidir:**
+  - Crear solo `Bogotá` con `11*`, que no empieza por 0. Sirve para separar las dos hipótesis.
+  - Escribir a soporte de Google con la captura.
+  - Usar listas explícitas de códigos de 6 dígitos.
+- **Paso 2, políticas de envío:** no se empezó, porque depende de las regiones. La política vieja de 12.000 sigue siendo la única.
+
+**Paso 3, política de devoluciones nueva: bloqueado.** En «Añadir política de devoluciones › Añadir más países», Colombia no aparece: buscar «Colom» solo deja «Todos los países». Merchant Center admite una sola política estándar por país, así que no se puede crear una segunda para Colombia. El único camino es editar «Estándar para Colombia», que esta tanda prohibía y cuyo «Guardar» ya se quedó deshabilitado antes (§9.13). Se canceló sin guardar.
+
+**Paso 4, la tienda frente a los valores pedidos (solo lectura):**
+
+| Tema | Tienda | Valor pedido para Merchant Center | Dónde |
+|---|---|---|---|
+| **Costo** | «El costo lo calcula la transportadora según tu ciudad y el tamaño del paquete, y lo ves en el checkout» | Tarifa fija por región: 10.000, 15.000, 15.000 y 17.000 | `pdepapel-store/app/(routes)/politicas/envios/page.tsx`; el checkout cotiza con EnvioClick |
+| **Plazo** | «2 a 4 días hábiles» en la política, la ficha del producto y el checkout | 0–1 de preparación más 1–2 / 1–6 / 2–3 / 2–5 de tránsito. Resto de Antioquia llega a 7 días y Resto de Colombia a 6 | `pdepapel-admin/lib/store-settings.ts:255` (`DEFAULT_DELIVERY_ESTIMATE`, editable en Configuración); `pdepapel-store/components/product-details-accordion.tsx:71` |
+| Medellín | «máximo de 48 horas hábiles» | 1–2 días | Coincide |
+| Envío gratis | Desde 250.000 (`subtotal >= umbral`, `pdepapel-store/lib/utils.ts:190`) | «más de 250.000» en Merchant Center | Diferencia solo en el borde: con un pedido de exactamente 250.000 la tienda da envío gratis y «más de» no |
+| Hora límite | 12:00, lunes a viernes | 12:00, lunes a viernes | Coincide |
+| Devoluciones | Sin abrir ni usar; por decisión de la clienta, ella paga el envío; reembolso por el medio original en 15 días calendario como máximo | Solo nuevos, por correo, paga la clienta, reembolso al medio original | Coincide |
+| Plazo de devolución | 5 días hábiles (`/politicas/devoluciones`, `multi-step-checkout-form.tsx:1518`, `order-help-card.tsx:27`) | 7 días | Diferencia conocida e intencional (§9.13) |
+
+Las dos primeras filas son las que Merchant Center compara en «Calidad de la tienda › Gastos de envío». Antes de publicar tarifas fijas, conviene que la página de envíos, el plazo y lo que cotiza el checkout digan lo mismo.
+
+**Pendientes (decide Christian):**
+1. Qué prueba hacer con las regiones (ver arriba).
+2. Si autoriza **editar** «Estándar para Colombia», ya que una segunda política no es posible.
+3. Si el texto de envíos de la tienda pasa a tarifas fijas o Merchant Center se queda con «calculado por la transportadora».
+4. Corregir el código postal de la dirección de la empresa («500023» → 050023), que no estaba aprobado.
+5. Mañana, revisar Diagnóstico frente a la línea base de 867.
 
 ### 9.14 Copias de seguridad de la base
 
