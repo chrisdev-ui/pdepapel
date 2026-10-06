@@ -125,15 +125,37 @@ Si algo falla, se espera y se repite cada 10 min. Nunca se empieza con una compr
 | 5 | Claude | `npm run prod:write -- scripts/db-read-only.mjs --on --expect old`. El guion confirma que es la base vieja, congela y prueba una escritura que no cambia nada: tiene que fallar con 1290. Además, un `--status --expect old` con `pdepapel_ro` tiene que mostrar `super_read_only: 1`. **Desde aquí no hay escrituras en el panel ni en los webhooks.** |
 | 6 | Claude | Corrida `cutover` de `db-region-sync`, con confirmación `SYNC-TO-US-EAST` (~2,5 min). Verde y **0 diferencias**, o «Rollback». |
 | 7 | Christian | Cambiar los secretos (instrucciones abajo). Claude solo mira nombres y fechas, nunca valores. |
-| 8 | Claude (con tu sí) | Deploy **nuevo** de producción del admin: `vercel deploy --prod` desde `pdepapel-admin`. Un redeploy no sirve, porque reutiliza el entorno anterior. Esperar READY. |
+| 8 | Claude (con tu sí) | Deploy **nuevo** de producción del admin **por git** (ver «Paso 8 en detalle»). Nunca `vercel deploy` desde la carpeta local, y nunca un redeploy, porque reutiliza el entorno anterior. |
 | 9 | Christian + Claude | Prueba de escritura: un cambio inocuo en el panel (por ejemplo, la nota interna de un pedido de prueba). Claude confirma con `pdepapel_ro` que está en la base **nueva** y no en la vieja. |
 | 10 | Claude | Smoke test: `/`, `/tienda`, una categoría, 3 fichas, `/carrito`, login del panel. Los 5 webhooks sin firma responden 4xx, no 5xx. Tabla de TTFB contra la de antes. |
 | 11 | Christian | `BACKUP_ENABLED` → `true`. Claude lanza una copia manual («Database backup», `workflow_dispatch`): tiene que salir verde con un tamaño similar (~10,7 MB cifrado). |
-| 12 | Claude | `gh workflow disable db-region-sync.yml`. Christian borra el secreto `NEW_DB_URL` (Settings › Secrets and variables › Actions › Secrets › `NEW_DB_URL` › Remove). |
+| 12 | Claude | `gh workflow disable db-region-sync.yml --repo chrisdev-ui/pdepapel` y `gh secret delete NEW_DB_URL --repo chrisdev-ui/pdepapel`. Comprobar con `gh workflow list` y `gh secret list` que quedó desactivado y sin el secreto. |
 | 13 | Claude | En la próxima corrida de «Admin scheduled tasks», crons y feeds de Merchant y Meta en verde. |
 | — | — | La base vieja queda en `super_read_only` **7 días** como respaldo para volver atrás. Ese modo no sobrevive a un reinicio, pero ya nada apunta a ella. Pasados los 7 días, Christian la apaga o se decide borrarla. |
 
 **Caída:** solo escrituras, de los pasos 5 a 9, unos 10–15 min. La tienda sigue mostrando páginas desde ISR. Los webhooks que fallen con 1290 los reintentan Bold, Wompi, Mercado Libre y Meta.
+
+### Paso 8 en detalle: deploy nuevo del admin por git
+
+Método validado el 2026-10-06:
+- Commit `d8623cb6` (`chore(admin): sello de deploy…`): el admin compiló desde git y la tienda quedó Canceled por ignore-build.
+- El deploy `dpl_Hf4nBtVuZNiNp8au7SdPtKy87bAE` quedó Ready en unos 3 min y `admin.papeleriapdepapel.com` pasó a él. `/iniciar-sesion` y `/api/<store>/public/storefront` respondieron 200. Mismo código y entorno, sin cambio funcional.
+- `pdepapel-admin/deploy-stamp.txt` está fuera de la lista que salta el ignore-build. Cambiar su única línea compila **solo el admin**, desde git, con las variables de entorno vigentes en ese momento. No se sube nada local.
+
+```bash
+cd <raíz del repo>
+printf '%s\n' "$(date -u '+%Y-%m-%d %H:%M UTC') · corte de la base a us-east4: nueva DATABASE_URL" > pdepapel-admin/deploy-stamp.txt
+git add pdepapel-admin/deploy-stamp.txt
+git commit -m "chore(admin): deploy del panel con la base en us-east4"
+git push origin main          # con tu sí en el chat
+```
+
+Después:
+1. Esperar en Vercel › pdepapel-admin › Deployments el deploy de ese commit en **Ready**, con «Production» y el dominio `admin.papeleriapdepapel.com` asignado. La tienda debe salir Canceled.
+2. Comprobar que el panel abre (`/iniciar-sesion`) y que la API responde.
+3. Hacer el paso 9 (prueba de escritura en la base nueva).
+
+**Prohibido** (incidente 2026-10-06, `docs/ops/2026-10-06-incidente-env-subidos-a-vercel.md`): `vercel deploy`, `vercel --prod` o `vercel` desde el árbol local. La CLI sube todo lo que hay en disco, incluidos `.env` y `.env.prod-write`.
 
 ### Secretos que cambias tú (paso 7)
 
@@ -153,6 +175,63 @@ Todos los valores nuevos están en Railway: proyecto «PdePapel Database» › s
 - La tienda (pdepapel-store) no tiene `DATABASE_URL` en ningún entorno.
 - **Integración Railway → Vercel:** las variables de los servicios de Railway se copian solas al proyecto **pdepapel-admin** de Vercel, en Production y Preview. Ya llegaron `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE` y `PDEPAPEL_RO_PASSWORD` de la base nueva; `MYSQL_PRIVATE_URL` existe desde hace 912 días. La app no las usa (solo `DATABASE_URL`), pero quedan replicadas, cifradas. Revisar después del corte si conviene acotar o quitar esa integración.
 
+## Después del corte (solo con el corte verificado; nada de esto antes)
+
+### a. Cortar la integración Railway → Vercel y borrar lo que copió
+
+La integración es «railway», configuración `icfg_5gxxP1bdRhFoDIa0cjLK0Yos`, alcance **solo pdepapel-admin**, con permiso de lectura y escritura sobre sus variables de entorno. `DATABASE_URL` **no** la gestiona la integración (Production y Development no tienen `configurationId`), así que no se toca.
+
+1. **[Christian] Railway:**
+   - Proyecto «PdePapel Database» › **Settings** › **Integrations** › Vercel.
+   - Anotar qué servicios y entornos sincroniza.
+   - **Disconnect / Remove** del proyecto `pdepapel-admin`.
+2. **[Christian] Vercel:**
+   - Team «christian-torres-projects» › **Settings** › **Integrations** › **Railway** › **Manage**.
+   - Si solo se usa para esto: **Uninstall / Remove Integration**.
+   - Si se quiere conservar para otro proyecto: **Manage Access** y quitar `pdepapel-admin`.
+3. **[Claude, con tu sí por variable]** Borrar de Vercel › pdepapel-admin las variables que gestionaba la integración, por nombre y entorno. Primero hay que cortar la integración, o volvería a escribirlas.
+   ```bash
+   cd pdepapel-admin
+   for name in MYSQL_DATABASE MYSQL_ROOT_PASSWORD PDEPAPEL_RO_PASSWORD MYSQL_PUBLIC_URL PDEPAPEL_RO_PUBLIC_URL MYSQL_PRIVATE_URL; do
+     vercel env rm "$name" preview --yes
+     vercel env rm "$name" production --yes
+   done
+   ```
+   - Hay que nombrar siempre el entorno: `vercel env rm NOMBRE` sin entorno borra en todos.
+   - Comprobar con la API (`/v9/projects/<id>/env?decrypt=false`, solo nombres) que no queda ninguna variable con `configurationId` y que `DATABASE_URL` (Production y Development) sigue igual.
+
+### b. `.vercelignore` en la raíz y en las dos apps
+
+- Excluir `.env*` salvo `*.example`, y las carpetas de borradores (`tmp/`, `output/`, `outputs/`, `Claude outputs/`, `_gitlock_trash/`, logs locales).
+- Comprobar que ningún `.env` quedaría incluido con un listado que aplique las mismas reglas de ignorado sobre el árbol, sin subir nada: por ejemplo, un script que recorra el árbol con esas reglas e imprima solo nombres.
+- Es un cambio de configuración; va en un commit sin código de la app.
+
+### c. Credenciales de la base vieja (subidas en el incidente)
+
+Lo que ocurra primero:
+- **Retirar la base vieja** (apagar o borrar «MySQL Database») a los 7 días del corte. Con eso las credenciales dejan de servir.
+- **Rotarlas antes**, si se quiere conservarla más tiempo. Está en `super_read_only`, que bloquea `ALTER USER` hasta para root, así que:
+  1. **[Christian]** `npm run prod:approve -- "rotar root y pdepapel_ro de la base vieja (OFF breve, ALTER USER, ON)"`, con `.env.prod-write` apuntando **a la base vieja**.
+  2. **[Claude]** En una sola corrida de prod:write:
+     - `--off --expect old`;
+     - `ALTER USER 'pdepapel_ro'@'%' IDENTIFIED BY <nueva>` y `ALTER USER 'root'@'%' IDENTIFIED BY <nueva>`, con contraseñas generadas en variables de Railway del servicio viejo por `--stdin`;
+     - `--on --expect old`.
+
+     Hace falta un guion propio (`scripts/rotate-old-db-users.mjs`), que se escribe y revisa antes; todavía no existe.
+  3. **[Christian]** Actualizar las variables del servicio viejo en Railway, que el panel muestra, si se quiere conservar el acceso.
+
+### d. Rotar la llave de Cloudinary del monitor (la haces tú)
+
+- La llave es **exclusiva del monitor**, distinta de la de la app.
+- Vive solo en `pdepapel-admin/scripts/cloudinary-monitor/.env` como `CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>`.
+
+Pasos:
+1. Cloudinary Console › **Settings** (engranaje) › **API Keys** › **Generate New API Key**.
+2. Copiar la llave y el secreto nuevos. En `scripts/cloudinary-monitor/.env`, reemplazar la línea `CLOUDINARY_URL=` con la llave y el secreto nuevos; el `cloud_name` no cambia.
+3. Probar en local: `cd pdepapel-admin && node scripts/cloudinary-monitor/usage.mjs`. Tiene que imprimir el uso del día sin errores.
+4. En **API Keys**, desactivar y luego borrar la llave vieja del monitor (la que no es la de la app). Para distinguirlas, mirar el nombre o la fecha de creación; la de la app sigue en Vercel como `CLOUDINARY_API_KEY`.
+5. La próxima corrida diaria (launchd, 08:00 local) debe quedar sin errores en `monitor-errors.log`.
+
 ## Rollback (cualquier falla desde el paso 5)
 
 **Nunca dejar la base vieja en solo lectura mientras la app siga apuntando a ella.**
@@ -162,6 +241,15 @@ Todos los valores nuevos están en Railway: proyecto «PdePapel Database» › s
 3. **[Claude]** `npm run prod:write -- scripts/db-read-only.mjs --off --expect old` (con `.env.prod-write` apuntando todavía, o otra vez, a la base vieja). El guion comprueba que es la vieja, descongela y prueba que una escritura pasa. Luego `--status --expect old` con `pdepapel_ro` tiene que mostrar 0/0.
 4. **[Christian]** Devolver los secretos `BACKUP_DB_*` y los `.env` locales, si se cambiaron, y `BACKUP_ENABLED=true`.
 5. Mientras la vieja estuvo congelada no se escribió nada en ninguna base, así que no hay datos que copiar. Si se vuelve atrás después de abrir escrituras en la nueva, hay que copiar a mano lo escrito ahí (pedidos, pagos, kardex, webhooks), por prod-write y con aprobación.
+
+## Incidente del 2026-10-06: `.env` subidos a Vercel
+
+Al validar el paso 8 con `vercel deploy --prod --skip-domain` desde `pdepapel-admin`, la CLI subió el árbol local antes de fallar por el Root Directory: `.env`, `.env.prod-write`, `scripts/cloudinary-monitor/.env` y otros.
+- El deploy (`dpl_4UsGDT3m…`, Error, nunca promovido) se borró a las **19:49:07 UTC**.
+- Alcance: solo el equipo de Vercel.
+- Remediación: la regla nueva en los `AGENTS.md`, `.vercelignore`, la rotación o el retiro de la base vieja y la rotación de la llave de Cloudinary (sección «Después del corte»).
+
+Detalle: `docs/ops/2026-10-06-incidente-env-subidos-a-vercel.md`.
 
 ## Costo de la transición (estimado)
 
