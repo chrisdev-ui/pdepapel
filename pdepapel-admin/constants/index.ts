@@ -541,3 +541,11 @@ export const POPULAR_CITY_CODES = [
   "17001000", // Manizales
   "73001000", // Ibagué
 ];
+
+/**
+ * Imagen de respaldo de un producto sin fotos. Tiene que existir en public/:
+ * `/placeholder.png` no existía, la petición caía en la ruta dinámica
+ * `[storeId]` y su layout llamaba a auth() de Clerk fuera del middleware
+ * (errores en los logs, 2026-10-06).
+ */
+export const PRODUCT_IMAGE_PLACEHOLDER = "/images/placeholder_1.png";

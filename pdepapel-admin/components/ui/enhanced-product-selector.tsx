@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn, currencyFormatter } from "@/lib/utils";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/constants";
 
 export interface ProductForItem {
   id: string;
@@ -238,7 +239,7 @@ export function EnhancedProductSelector({
                   <div className="relative aspect-square w-full overflow-hidden bg-muted">
                     <Image
                       fill
-                      src={product.images?.[0]?.url || "/placeholder.png"}
+                      src={product.images?.[0]?.url || PRODUCT_IMAGE_PLACEHOLDER}
                       alt={product.name}
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />

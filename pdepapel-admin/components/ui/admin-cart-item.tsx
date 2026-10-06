@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { currencyFormatter } from "@/lib/utils";
 import { ProductForItem } from "./product-selector";
 import { StockQuantityInput } from "./stock-quantity-input";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/constants";
 
 interface AdminCartItemProps {
   item: ProductForItem & {
@@ -29,7 +30,7 @@ export const AdminCartItem: React.FC<AdminCartItemProps> = ({
   onConvert,
   hideStockWarning,
 }) => {
-  const mainImage = item.images?.[0]?.url || "/placeholder.png";
+  const mainImage = item.images?.[0]?.url || PRODUCT_IMAGE_PLACEHOLDER;
 
   return (
     <div className="flex items-start border-b py-4">

@@ -28,6 +28,7 @@ import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { useToast } from "@/hooks/use-toast";
 import { cn, currencyFormatter } from "@/lib/utils";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/constants";
 
 // Interface matched to API response
 interface ProductForItem {
@@ -285,7 +286,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
                     <div className="relative aspect-square w-full overflow-hidden bg-muted">
                       <Image
                         fill
-                        src={product.images?.[0]?.url || "/placeholder.png"}
+                        src={product.images?.[0]?.url || PRODUCT_IMAGE_PLACEHOLDER}
                         alt={product.name}
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
                       />

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/popover";
 import { cn, currencyFormatter } from "@/lib/utils";
 import Image from "next/image";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/constants";
 
 // Define a type that matches what we get from getProducts
 export interface ProductForItem {
@@ -99,7 +100,7 @@ export function ProductSelector({
                     <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border">
                       <Image
                         fill
-                        src={product.images?.[0]?.url || "/placeholder.png"}
+                        src={product.images?.[0]?.url || PRODUCT_IMAGE_PLACEHOLDER}
                         alt={product.name}
                         className="object-cover"
                       />
