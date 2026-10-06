@@ -1948,31 +1948,31 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/lego-batman-animados-negro-xs",
-    destination: "/producto/lego-batman-negro",
+    destination: "/producto/bloques-de-construccion-batman-negro",
   },
   {
     source: "/producto/lego-calamardo-animados-azul-xs",
-    destination: "/producto/lego-calamardo-azul",
+    destination: "/producto/bloques-de-construccion-calamardo-azul",
   },
   {
     source: "/producto/lego-capitan-america-animados-azul-xs",
-    destination: "/producto/lego-capitan-america-azul",
+    destination: "/producto/bloques-de-construccion-capitan-america-azul",
   },
   {
     source: "/producto/lego-luigi-animados-verde-xs",
-    destination: "/producto/lego-luigi-verde",
+    destination: "/producto/bloques-de-construccion-luigi-verde",
   },
   {
     source: "/producto/lego-panda-osito-panda-negro-m",
-    destination: "/producto/lego-panda",
+    destination: "/producto/bloques-de-construccion-panda",
   },
   {
     source: "/producto/lego-psyduck-animados-amarillo-xs",
-    destination: "/producto/lego-psyduck",
+    destination: "/producto/bloques-de-construccion-psyduck",
   },
   {
     source: "/producto/lego-winnie-pooh-y-sus-amigos-armable-multicolor-s",
-    destination: "/producto/lego-winnie-pooh-y-sus-amigos",
+    destination: "/producto/bloques-de-construccion-winnie-pooh-y-sus-amigos",
   },
   {
     source:
