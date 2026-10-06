@@ -2,9 +2,10 @@
 
 import { CloudOff, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect } from "react";
+import { startTransition } from "react";
 
 import { ErrorState, ErrorStateAction } from "@/components/error-state";
+import { useBoundaryError } from "@/hooks/use-boundary-error";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 interface UpstreamUnavailableProps {
@@ -19,9 +20,7 @@ interface UpstreamUnavailableProps {
 export function UpstreamUnavailable({ error, reset }: UpstreamUnavailableProps) {
   const router = useRouter();
 
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
+  useBoundaryError(error, "upstream");
 
   // A plain reset() re-renders the segment with the stale server payload;
   // refreshing first re-fetches it, which is what actually recovers the page.

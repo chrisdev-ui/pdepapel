@@ -2,9 +2,10 @@
 
 import { RefreshCw, Wrench } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect } from "react";
+import { startTransition } from "react";
 
 import { ErrorState, ErrorStateAction } from "@/components/error-state";
+import { useBoundaryError } from "@/hooks/use-boundary-error";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 /** Error boundary for every routed page: the root layout (header, footer, providers) is intact here. */
@@ -17,9 +18,7 @@ export default function RouteError({
 }) {
   const router = useRouter();
 
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
+  useBoundaryError(error, "routes");
 
   // A plain reset() re-renders the segment with the stale server payload;
   // refreshing first re-fetches it, which is what actually recovers the page.

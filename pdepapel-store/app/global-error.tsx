@@ -1,9 +1,9 @@
 "use client";
 
 import { MessageCircle, RefreshCw, Wrench } from "lucide-react";
-import { useEffect } from "react";
 
 import { caudex, fredoka, quicksand } from "@/lib/fonts";
+import { useBoundaryError } from "@/hooks/use-boundary-error";
 import { getSupportWhatsAppUrl } from "@/lib/support";
 import "./globals.css";
 
@@ -21,9 +21,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
+  useBoundaryError(error, "global");
 
   const whatsappUrl = getSupportWhatsAppUrl(
     `¡Hola! La tienda me mostró un error y no pude seguir.${error.digest ? ` Código: ${error.digest}.` : ""}`,
