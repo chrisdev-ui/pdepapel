@@ -1452,6 +1452,8 @@ El CLS general del panel de Clarity es 0,31. Los navegadores: MobileSafari 36 %,
 
 ### E.2 Qué se reproduce en el laboratorio
 
+> **Corrección (seguimiento, 2026-10-05):** en la fila del inicio, el carril de categorías no crecía. El navegador recorta el rectángulo al área visible: la sección estaba en y=684 de una pantalla de 800 px, así que 116 px visibles pasaron a 144 al subir 28 px. Lo que se movía era el hero, que se **encogía** 28 px cuando la lista de las tres promesas pasaba de dos líneas a una al llegar Quicksand (`preload: false`), solo desde 1280 px. El arreglo fue en el hero (`xl:h-5`), no en el carril.
+
 Playwright contra producción (solo GET), CPU 4×, red de 1,6 Mbit/s y 150 ms, iPhone 13 y escritorio 1366 px, con un `PerformanceObserver` de `layout-shift` y sus `sources`. Guiones en el borrador: `cls-probe.mjs`, `cls-probe2.mjs` (3 repeticiones), `cls-probe3.mjs` (desplazamiento largo) y `fav-aside.mjs`.
 
 | Plantilla | CLS de laboratorio | Repetible | Elemento que se mueve | Causa |
@@ -1526,6 +1528,18 @@ Prioridad sugerida: 1 y 4 (sencillos, afectan a todas las visitas móviles), lue
 | `Product.slug` igual al `id` de otro producto | 0 |
 
 Conclusión: **hoy el índice único `(storeId, slug)` se crearía sin conflictos.** Los 2 choques con alias no son entre filas de `Product`, así que el índice no los ve. La unicidad producto-alias sigue dependiendo solo del código.
+
+**Conteos repetidos el 2026-10-05, tarde** (seguimiento de la ola 3, usuario `pdepapel_ro`, dentro del sandbox):
+
+| Comprobación | Resultado |
+|---|---|
+| Productos / tiendas | 2.066 / 1 |
+| Slug vacío o nulo | **0** |
+| Grupos de slug duplicado en la misma tienda | **0** (0 filas) |
+| `Product.slug` igual a un `ProductSlugAlias` de otro producto | **2**: `carpeta-plastica-oficio-lila` y `carpeta-van-gogh`, los dos archivados; 0 de productos vivos |
+| `Product.slug` igual a una `DeletedProductUrl` | **0** (la tabla tiene 0 filas) |
+
+**Prerrequisito de código: hecho** (commit `89162095`, seguimiento de la ola 3). La importación por lotes y la conversión a variantes ya crean cada producto con un slug único y no vacío, y `getUniqueProductSlug` y la sincronización del grupo también evitan las URL de productos borrados. Falta la sincronización de grupo «en dos fases» (F.3), que solo importa una vez exista el índice. La migración sigue sin crear ni aplicar.
 
 #### F.3 Dónde se genera y valida el slug (código)
 

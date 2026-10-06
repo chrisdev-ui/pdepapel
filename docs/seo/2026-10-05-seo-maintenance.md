@@ -851,3 +851,63 @@ Solo tienda (`pdepapel-store`), un push. No toca Merchant Center, feeds, redirec
 ### 10.4 Fases 2 y 3
 
 Las propuestas de la fase 2 (textos de envíos y devoluciones, P1-6, archivados en categorías noindex, P2-8, P2-9 y unicidad de `Product.slug`) y la tabla de verificaciones de la fase 3 están en [`2026-10-05-wave-3-phase-2-proposals.md`](2026-10-05-wave-3-phase-2-proposals.md). No hay nada implementado; esperan la aprobación de Christian y de Paula (tabla «Decisiones que hacen falta» al inicio de ese documento).
+
+## 11. Ola 3 — seguimiento (2026-10-05, noche)
+
+Christian aprobó cinco cosas de las propuestas de la fase 2 (`2026-10-05-wave-3-phase-2-proposals.md`). Todo lo demás de ese documento sigue siendo solo propuesta.
+
+### 11.1 Qué cambió
+
+| Commit | Cambio | Cómo revertir |
+|---|---|---|
+| `ce1f8e0d` | **Archivados (C):** un producto archivado o borrado solo redirige a su categoría si esa categoría tiene al menos un producto vivo: no archivado y ya disponible, la misma regla del listado (los agotados cuentan; lo «próximamente» no). Si no, la cadena sigue al tipo y después a `/tienda`. El tipo lleva a `/tienda?typeId=…`, que es `noindex` y robots.txt no deja rastrear: sirve a la persona, no a Google. El aviso `#producto-no-disponible` no cambia | `git revert ce1f8e0d` |
+| `89162095` | **Slug (F), solo código:** la importación por lotes y la conversión a variantes crean cada producto con un slug único y no vacío, calculado dentro de la transacción. `getUniqueProductSlug` y `synchronizeProductGroupSlugs` también evitan las URL de productos borrados (`DeletedProductUrl`). **Contrapartida:** un producto recreado con el mismo nombre ya no recupera la URL del borrado; recibe `-2` (la alternativa sería borrar la fila de `DeletedProductUrl` cuando un producto vivo toma el slug). El slug provisional de una opción recién creada no queda como alias. Sin índice único ni migración | `git revert 89162095` |
+| `84c85af5` | **CLS (E), las cuatro causas medidas:** (1) favoritos: el recuadro «Guarda tus favoritos» (`<SignedOut>`) pasa al final de la página; antes aparecía encima del contenido al cargar Clerk. Es un cambio de posición, no de texto. (2) Cabecera móvil: al desplazarse sube con `transform` (`max-lg:-translate-y-8`) y la franja queda `invisible`, en vez de `max-lg:hidden`, que sacaba 32 px del flujo. (3) Inicio: la lista de promesas del hero tiene alto fijo desde xl (`xl:h-5`); con la fuente de respaldo ocupaba dos líneas y con Quicksand una. Ver la corrección de §E.2 en las propuestas: no era el carril de categorías. (4) Carrito: la lista de sugerencias se pinta también mientras carga el carrito | `git revert 84c85af5` |
+| `342750a6` | **CLS de campo:** evento GA4 `web_vitals_cls` en el 10 % de las vistas, solo con consentimiento de analítica. Parámetros: `cls_value`, `cls_largest_value`, `cls_largest_target` (selector de etiqueta, id y clases; sin texto) y `cls_page` (ruta sin parámetros). Solo GA4, sin eventos de Vercel; arranca después de hidratar y envía al ocultar la página o al cambiar de ruta. Para verlos en informes hay que registrar esos cuatro parámetros como dimensiones o métricas personalizadas en GA4 (lo hace Christian); sin eso solo aparecen en DebugView y en exploraciones de eventos. La muestra es de quienes aceptan analítica | `git revert 342750a6` |
+| `38199a29` | `AGENTS.md` (los tres): nunca desactivar el sandbox, ni para leer la base; la producción se lee solo con `pdepapel_ro` y el guion documentado | `git revert 38199a29` |
+
+### 11.2 CLS antes y después
+
+**Lighthouse 12** con estrangulamiento real (`--throttling-method=devtools`). Antes: producción. Después: el build local de esta tanda con `next start`.
+
+| Página | Antes | Después |
+|---|---:|---:|
+| `/favoritos`, móvil | **0,147** | **0,000** |
+| `/carrito`, escritorio | **0,137** | **0,004** |
+| `/`, móvil / escritorio | 0,000 / 0,004 | 0,000 / 0,004 |
+| `/carrito`, móvil | 0,000 | 0,000 |
+| `/tienda`, móvil | 0,000 | 0,000 |
+
+Lighthouse no se desplaza y en el inicio las fuentes le llegan antes de la primera pintura. Por eso la cabecera y el hero se midieron también con Playwright: CPU 4×, red de 1,6 Mbit/s, máximo de las corridas.
+
+| Caso | Antes | Después |
+|---|---:|---:|
+| `/carrito` escritorio, vacío | 0,082 | 0,004 |
+| `/carrito` escritorio, 2 productos | 0,097 | 0,004 |
+| `/favoritos` móvil, sin sesión | 0,157 | 0,000 |
+| `/` escritorio 1366 px (4 corridas) | 0,118 (1 de 4) | 0,004 |
+| `/tienda` móvil desplazándose (3 corridas) | 0,011 | 0,000 |
+
+**El diseño final no cambió.** Comparado con producción: alto del hero a 1024, 1366 y 1920 px, posición de la barra al desplazarse y alto del carrito con productos son iguales. La única diferencia buscada es la posición del recuadro de cuenta en favoritos.
+
+**Queda:** en `/tienda` sigue un desplazamiento intermitente del pie de página (48 px al final del listado, 0,027, en producción y en local). No es ninguna de las cuatro causas y no se tocó. Lo medirá `web_vitals_cls`.
+
+### 11.3 Slugs en producción (solo lectura, `pdepapel_ro`, dentro del sandbox)
+
+2.066 productos en 1 tienda.
+- Slugs vacíos: **0**.
+- Duplicados por tienda: **0**.
+- Coinciden con un alias de otro producto: **2**, los dos archivados (`carpeta-plastica-oficio-lila` y `carpeta-van-gogh`); 0 productos vivos.
+- Coinciden con `DeletedProductUrl`: **0**; la tabla tiene 0 filas.
+
+La propuesta de migración (§F de las propuestas) ya tiene estos conteos. El índice único sigue sin aplicar.
+
+### 11.4 Lo que queda diferido (sin código)
+
+- **P2-8, listados cacheables:** se decide después de volver a medir el uso el 8 de octubre.
+- **Páginas de tipo:** necesitan migración y ruta nueva.
+- **Textos visibles de envíos y devoluciones:** esperan a Paula.
+- **Migración del slug único.**
+- **Paginación:** las páginas paginadas siguen `noindex, follow`.
+- **Variables de Preview:** no se tocan.
+- **Tarifa:** sigue en 13.000.
