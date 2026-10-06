@@ -911,3 +911,30 @@ La propuesta de migración (§F de las propuestas) ya tiene estos conteos. El í
 - **Paginación:** las páginas paginadas siguen `noindex, follow`.
 - **Variables de Preview:** no se tocan.
 - **Tarifa:** sigue en 13.000.
+
+### 11.5 Textos SEO de 32 categorías y `seoEnabled` en 7 (2026-10-06, 03:21 UTC)
+
+Christian aprobó en nombre de Paula los textos de §B.2.2 de `2026-10-05-wave-3-phase-2-proposals.md`. Se cargaron literalmente con `pdepapel-admin/scripts/load-category-seo-copy.mjs`: `seoTitle`, `seoDescription` y `seoIntro` en 32 filas de `Category`, por id fijo y en una transacción con condición por fila.
+
+- **Se activó `seoEnabled` en 7:** planeadores, reglas, porta-carnets, portaminas, separadores-de-paginas, pines y banderitas-adhesivas.
+- **Solo texto, siguen sin indexar:** plumones, pegante, bisturies, troqueles, cosidos, colores, blocks-de-papel, papeles y monas-pinzas.
+- **Lego:** recibe texto pero sigue sin indexar y sin renombrar, a la espera de saber si los productos son de la marca LEGO.
+- **Las 15 ya indexadas:** cambiaron sus textos y siguen indexadas.
+- No se tocó `seoFeatured`.
+- Las otras 75 categorías quedaron iguales (comparadas con la foto previa).
+- Indexables: de 16 a **23**; el sitemap lista las 23.
+
+**Verificación**, pasada la caché de 300 s:
+- Las 32 páginas responden 200 con el título, la descripción y la intro nuevos.
+- `robots` dice `index, follow` en las 22 indexadas y `noindex, follow` en las 10 que no.
+- `?page=2` y los filtros siguen con `noindex`.
+
+**Intento fallido:** la primera corrida (02:50 UTC) falló con `P2028`. Prisma cierra una transacción interactiva a los 5 s por defecto, y los 32 UPDATE contra Railway tardaron 5,1 s. La transacción se revirtió y una lectura con `pdepapel_ro` confirmó que las 32 filas seguían como en la copia. El arreglo fue `{ timeout: 60_000, maxWait: 10_000 }` en la transacción, que comparten `--apply` y `--revert`; ninguna comprobación cambió. Las dos líneas quedan en `ops/prod-writes.log`.
+
+**Copia de respaldo** (fuera del repositorio, sin secretos): `~/pdepapel-backups/2026-10-06/category-seo-copy-2026-10-06T01-34-09-060Z.json`. Tiene los 5 campos SEO de las 32 filas tal como estaban antes; sha256 empieza por `8770f630183f`.
+
+**Cómo revertir**, con una aprobación nueva: exige que las 32 filas tengan exactamente lo cargado y deja todo como en la copia.
+```
+cd pdepapel-admin && npm run prod:approve -- "revertir textos SEO de las 32 Category de la ola 3"
+npm run prod:write -- scripts/load-category-seo-copy.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/category-seo-copy-2026-10-06T01-34-09-060Z.json
+```
