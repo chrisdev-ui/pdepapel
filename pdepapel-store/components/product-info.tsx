@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MouseEvent, RefObject, useEffect, useMemo, useState } from "react";
 
+import { DesignOption } from "@/components/design-option";
 import { ProductDetailsAccordion } from "@/components/product-details-accordion";
 import { PriceTierLadder } from "@/components/price-tier-ladder";
 import { ProductSignals } from "@/components/product-signals";
@@ -32,7 +33,11 @@ import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
 import { isModifiedClick } from "@/lib/link-click";
 import { isCustomerFacingLegacySize } from "@/lib/product-options";
-import { getStableProductVariants } from "@/lib/product-variants";
+import {
+  getDesignThumbnails,
+  getStableProductVariants,
+  getVariantMainImageUrl,
+} from "@/lib/product-variants";
 import { STOREFRONT_ROUTES, productPath } from "@/lib/routes";
 import { cn, currencyFormatter, effectiveUnitPrice } from "@/lib/utils";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
@@ -62,8 +67,6 @@ type VariantOption = "design" | "color" | "size";
 const LINK_DISABLED = "aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
 const OPTION_LABEL = "font-serif text-sm font-semibold text-blue-yankees";
-const OPTION_CHIP =
-  "min-h-11 rounded-full border-2 px-4 py-2 font-sans text-sm font-medium transition-colors";
 
 export const ProductInfo: React.FC<ProductInfoProps> = ({
   data,
@@ -176,6 +179,21 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     }
     return target;
   };
+
+  // Miniatura de cada diseño: la foto de la variante a la que lleva el clic.
+  const designThumbnails = getDesignThumbnails(
+    uniqueDesigns.map((design) => design.id),
+    (designId) => {
+      const target = resolveVariantTarget("design", designId);
+      return target ? getVariantMainImageUrl(target) : null;
+    },
+  );
+  // Un solo diseño ya elegido: basta la línea «Diseño: X», sin chip que no
+  // se puede cambiar. Si aún no hay diseño elegido (ficha del grupo), el chip
+  // es la única forma de elegirlo y se queda.
+  const showDesignOptions =
+    uniqueDesigns.length > 1 ||
+    (uniqueDesigns.length === 1 && data.design?.id !== uniqueDesigns[0].id);
 
   const handleVariantChange = (type: VariantOption, id: string) => {
     if (isLoading) return;
@@ -358,8 +376,8 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           <div className="flex flex-col gap-3" aria-hidden="true">
             <div className="h-5 w-32 animate-pulse rounded bg-gray-200" />
             <div className="flex gap-2">
-              <div className="h-11 w-20 animate-pulse rounded-full bg-gray-100" />
-              <div className="h-11 w-20 animate-pulse rounded-full bg-gray-100" />
+              <div className="h-[52px] w-28 animate-pulse rounded-2xl bg-gray-100" />
+              <div className="h-[52px] w-28 animate-pulse rounded-2xl bg-gray-100" />
             </div>
           </div>
         ) : hasVariants ? (
@@ -376,36 +394,26 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                     )}
                   </span>
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {uniqueDesigns.map((design) => {
-                    const isActive = data.design?.id === design.id;
-                    const isOutOfStock = !allVariants.some(
-                      (v) => v.design?.id === design.id && v.stock > 0,
-                    );
-                    return (
-                      <Button
-                        asChild
-                        key={design.id}
-                        variant={isActive ? "default" : "outline"}
-                        className={cn(
-                          OPTION_CHIP,
-                          LINK_DISABLED,
-                          isActive
-                            ? "border-blue-yankees bg-blue-yankees text-white hover:bg-blue-yankees"
-                            : "border-gray-200 bg-white text-gray-900 hover:border-gray-300",
-                          isOutOfStock && "line-through opacity-50",
-                        )}
-                      >
-                        <a {...variantLinkProps("design", design.id, isActive)}>
-                          {design.name}
-                          {isOutOfStock && (
-                            <span className="sr-only"> (agotado)</span>
-                          )}
-                        </a>
-                      </Button>
-                    );
-                  })}
-                </div>
+                {showDesignOptions && (
+                  <div className="flex flex-wrap gap-2">
+                    {uniqueDesigns.map((design) => {
+                      const isActive = data.design?.id === design.id;
+                      const isOutOfStock = !allVariants.some(
+                        (v) => v.design?.id === design.id && v.stock > 0,
+                      );
+                      return (
+                        <DesignOption
+                          key={design.id}
+                          name={design.name}
+                          image={designThumbnails.get(design.id) ?? null}
+                          isActive={isActive}
+                          isOutOfStock={isOutOfStock}
+                          {...variantLinkProps("design", design.id, isActive)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
             {availableColors.length > 0 && (

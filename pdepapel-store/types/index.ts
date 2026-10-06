@@ -102,6 +102,8 @@ export interface ProductVariant {
   color: Color;
   design: Design;
   stock: number;
+  /** Foto principal de la variante (URL de Cloudinary): miniatura del selector de diseño. */
+  image?: string | null;
 }
 
 export interface Category {

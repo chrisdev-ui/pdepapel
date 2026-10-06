@@ -167,7 +167,9 @@ When a change touches authentication or authorization, verify that route list **
 
 ### Images
 
-One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib/cloudinary-loader.ts`, used **only** through `components/ui/cloudinary-image.tsx`. Every distinct transformation and width is a derived copy that is stored forever and billed, so **do not add loaders, `quality` values, crops or wider `deviceSizes`**. Widths snap to `CLOUDINARY_DELIVERY_WIDTHS`. Fixed thumbnails use `width`/`height`. Runbook: `../docs/imagenes-cloudinary.md`.
+One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib/cloudinary-loader.ts`, used **only** through `components/ui/cloudinary-image.tsx`. Every distinct transformation and width is a derived copy that is stored forever and billed, so **do not add loaders, `quality` values, crops or wider `deviceSizes`**. Widths snap to `CLOUDINARY_DELIVERY_WIDTHS`. Fixed thumbnails use `width`/`height`; anything up to 64 px (sticky bar 48, gallery thumbs 64, design-option thumbnails 40 in `components/design-option.tsx`) lands on the same `w_128` copy, so pick a size that keeps it there. Runbook: `../docs/imagenes-cloudinary.md`.
+
+**Design options (issue #3, 2026-10-07):** each design option on the product page shows the main photo of the variant the click leads to (`getDesignThumbnails` in `lib/product-variants.ts`; the page passes `image` in the sibling projection). A design whose target has no photo, or shares its photo with another design, keeps the text chip. A group with a single, already chosen design shows only the «Diseño: X» line.
 
 ### Accessibility, UX and performance
 

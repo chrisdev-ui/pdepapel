@@ -14,6 +14,7 @@ import { BASE_URL } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
 import { buildProductMetaDescription, buildProductMetaTitle } from "@/lib/product-metadata";
 import { withSanitizedDescription } from "@/lib/product-description";
+import { getVariantMainImageUrl } from "@/lib/product-variants";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
 import { categoryPath, productPath } from "@/lib/routes";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
@@ -96,6 +97,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
     color: variant.color,
     design: variant.design,
     stock: variant.stock,
+    // Solo la URL de la foto principal: la miniatura del selector de diseño
+    // pide la misma copia w_128 que la barra fija (docs/imagenes-cloudinary.md).
+    image: getVariantMainImageUrl(variant),
   }));
   const categoryName = product.category ? stripTaxonomyIcon(product.category.name) : null;
 
