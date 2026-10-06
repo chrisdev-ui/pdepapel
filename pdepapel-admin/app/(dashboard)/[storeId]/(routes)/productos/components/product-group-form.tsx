@@ -1782,20 +1782,33 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
                   {currentImages.map((img) => {
-                    const scope = currentMapping.find((m) => m.url === img.url)?.scope || "all";
+                    /*
+                     * Sin entrada en el reparto la foto está SIN REPARTIR y se
+                     * ve así. Antes se pintaba «Todas las variantes» por
+                     * defecto: parecía decidida, el freno al guardar la
+                     * contaba como pendiente, y elegir «Todas las variantes»
+                     * no escribía nada porque Radix Select no avisa cuando se
+                     * elige el valor que ya está puesto (#1).
+                     */
+                    const scope = currentMapping.find((m) => m.url === img.url)?.scope;
                     const isPending = pendingImageRemovals.includes(img.url);
+                    const unassigned = !scope && !isPending;
                     return (
                       <div
                         key={img.url}
-                        className={cn("flex flex-col gap-2 rounded-lg border p-2", isPending && "opacity-50")}
+                        className={cn(
+                          "flex flex-col gap-2 rounded-lg border p-2",
+                          isPending && "opacity-50",
+                          unassigned && "border-amber-400 dark:border-amber-500",
+                        )}
                       >
                         <div className="relative aspect-square overflow-hidden rounded-md border">
                           <Image src={img.url} alt="" fill sizes="(max-width: 640px) 50vw, 200px" className="object-cover" />
                         </div>
                         <Select
-                          key={`${img.url}-${scope}-${availableScopes.length}`}
+                          key={`${img.url}-${scope ?? "sin-repartir"}-${availableScopes.length}`}
                           disabled={loading || isPending}
-                          value={scope}
+                          value={scope ?? ""}
                           onValueChange={(val) => {
                             const existingIndex = currentMapping.findIndex((m) => m.url === img.url);
                             const newMapping = [...currentMapping];
@@ -1805,7 +1818,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                           }}
                         >
                           <SelectTrigger className="h-8 text-xs" aria-label="Quién recibe esta foto">
-                            <SelectValue placeholder="Alcance" />
+                            <SelectValue placeholder="Elige a quién le toca" />
                           </SelectTrigger>
                           <SelectContent>
                             {availableScopes.map((s) => (
@@ -1815,8 +1828,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                             ))}
                           </SelectContent>
                         </Select>
-                        <span className="text-[11px] text-muted-foreground">
-                          {isPending ? "Se quita al guardar" : `→ ${scopeRecipients(scope)}`}
+                        <span className={cn("text-[11px]", unassigned ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
+                          {isPending ? "Se quita al guardar" : scope ? `→ ${scopeRecipients(scope)}` : "Sin repartir"}
                         </span>
                       </div>
                     );
