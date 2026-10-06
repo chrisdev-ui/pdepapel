@@ -135,4 +135,28 @@ describe("importación masiva de productos", () => {
     expect(movement.type).toBe("INITIAL_MIGRATION");
     expect(movement.cost).toBe(2000);
   });
+
+  /**
+   * La importación creaba productos sin slug (el valor por defecto, ""): sin
+   * URL en la tienda y, con un índice único, la segunda fila de un lote
+   * fallaría. Ahora cada fila sale con un slug único, también entre filas del
+   * mismo lote y frente a URLs de productos borrados.
+   */
+  it("da a cada producto un slug único y no vacío, también con nombres repetidos en el lote", async () => {
+    const { f } = await setup();
+    await testPrisma.deletedProductUrl.create({
+      data: { storeId: f.store.id, slug: "libreta-importada", productId: randomUUID(), categoryId: f.category.id },
+    });
+    const { POST } = await batchRoute();
+
+    const response = await POST(
+      json({ products: [product("Libreta importada", 1, 1000), product("Libreta importada", 1, 1000), product("Libreta importada", 1, 1000)] }),
+      { params: { storeId: f.store.id } },
+    );
+    expect(response.status).toBe(200);
+
+    const rows = await testPrisma.product.findMany({ where: { storeId: f.store.id, name: "Libreta importada" }, select: { slug: true } });
+    expect(rows.map((row) => row.slug).sort()).toEqual(["libreta-importada-2", "libreta-importada-3", "libreta-importada-4"]);
+    await testPrisma.deletedProductUrl.deleteMany({ where: { storeId: f.store.id } });
+  });
 });

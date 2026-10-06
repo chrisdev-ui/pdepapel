@@ -218,6 +218,65 @@ describe("product conversion and ungroup with MySQL", () => {
     expect(await testPrisma.inventoryMovement.count({ where: { storeId: f.store.id, type: "MANUAL_ADJUSTMENT" } })).toBe(0);
   });
 
+  /**
+   * Antes cada opción nueva nacía con slug "" y la sincronización lo arreglaba
+   * al final. Con dos opciones nuevas eso deja dos filas con el mismo slug
+   * vacío dentro de la transacción, que un índice único rechazaría. Ahora cada
+   * una nace con su slug, y el provisional no queda como alias.
+   */
+  it("gives every new option a unique, non-empty slug and no alias for the provisional one", async () => {
+    const f = await setup();
+    const { POST } = await import("@/app/api/[storeId]/products/[productId]/convert-to-variants/review/route");
+    const s = suffix();
+    const colors = await Promise.all(
+      ["Azul", "Verde"].map((name) => testPrisma.color.create({ data: { name: `${name} ${s}`, value: `${name.toLowerCase()}-${s}`, storeId: f.store.id } })),
+    );
+    const product = await testPrisma.product.create({
+      data: {
+        name: `Libreta ${s}`,
+        slug: `libreta-${s}`,
+        description: "x",
+        stock: 6,
+        price: 9000,
+        sku: `LIB-${s}`,
+        storeId: f.store.id,
+        categoryId: f.category.id,
+        colorId: f.component.colorId,
+        sizeId: f.component.sizeId,
+        designId: f.component.designId,
+        images: { create: [{ url: photo(`${s}-1`), isMain: true }, { url: photo(`${s}-2`) }, { url: photo(`${s}-3`) }] },
+      },
+    });
+    const variant = (index: number, colorId: string, keep: boolean) => ({
+      imageUrl: photo(`${s}-${index}`),
+      keepExistingProduct: keep,
+      stock: 2,
+      color: { mode: "existing", id: colorId },
+      design: { mode: "existing", id: f.component.designId },
+      sizeId: f.component.sizeId,
+    });
+
+    const response = await POST(
+      json("POST", {
+        name: `Libreta ${s}`,
+        copyOffers: false,
+        variants: [variant(1, f.component.colorId, true), variant(2, colors[0].id, false), variant(3, colors[1].id, false)],
+      }),
+      { params: { storeId: f.store.id, productId: product.id } },
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.createdProductIds).toHaveLength(2);
+
+    const group = await testPrisma.product.findMany({ where: { productGroupId: body.productGroupId }, select: { id: true, slug: true } });
+    expect(group).toHaveLength(3);
+    expect(group.every((row) => row.slug !== "")).toBe(true);
+    expect(new Set(group.map((row) => row.slug)).size).toBe(3);
+    // Solo la URL vieja del producto existente queda como alias.
+    const aliases = await testPrisma.productSlugAlias.findMany({ where: { storeId: f.store.id }, select: { productId: true, slug: true } });
+    expect(aliases.filter((alias) => body.createdProductIds.includes(alias.productId))).toEqual([]);
+  });
+
   it("ungroups without losing anything: variants keep their data, group offers and photos pass to them", async () => {
     const f = await setup();
     const { DELETE } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");

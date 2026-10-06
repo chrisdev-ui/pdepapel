@@ -1,6 +1,8 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { getUniqueProductSlug } from "@/lib/product-slugs";
 import { allocateRestockOrderNumber } from "@/lib/restock-order-numbers";
+import { generateProductSlug } from "@/lib/slugify";
 import { landedUnitCost, transportationShare } from "@/lib/restock-orders";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
@@ -199,11 +201,19 @@ export async function POST(
             sku = `${sku}-${Date.now().toString(36)}`;
           }
 
+          // Slug único y no vacío, calculado dentro de la transacción: así ve
+          // también los productos que este mismo lote ya creó.
+          const slug = await getUniqueProductSlug(tx, {
+            storeId: params.storeId,
+            baseSlug: generateProductSlug({ name: product.name }),
+          });
+
           // Create Product
           const createdProduct = await tx.product.create({
             data: {
               storeId: params.storeId,
               name: product.name,
+              slug,
               description: product.description || "",
               price: product.price,
               acqPrice: product.acqPrice || 0,

@@ -29,6 +29,8 @@ vi.mock("@/lib/inventory", () => ({
 }));
 vi.mock("@/lib/product-slugs", () => ({
   synchronizeProductGroupSlugs: vi.fn(),
+  getUniqueProductSlug: vi.fn(async (_client: unknown, { baseSlug }: { baseSlug: string }) => `${baseSlug}-unico`),
+  getVariantSlugAttributeInclusion: vi.fn(() => ({ color: true, design: false, size: false })),
 }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
@@ -36,7 +38,10 @@ vi.mock("@/lib/prismadb", () => ({
     $transaction: mocks.transaction,
   },
 }));
-vi.mock("@/lib/slugify", () => ({ slugify: vi.fn() }));
+vi.mock("@/lib/slugify", () => ({
+  slugify: vi.fn(),
+  generateProductSlug: vi.fn(({ name, color }: { name: string; color?: { name?: string } }) => `${name}-${color?.name ?? ""}`.toLowerCase()),
+}));
 vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/variant-generator", () => ({
   generateSemanticSKU: vi.fn(),
@@ -60,6 +65,7 @@ vi.mock("@/lib/api-errors", () => ({
 
 import { POST } from "@/app/api/[storeId]/products/[productId]/convert-to-variants/review/route";
 import { createInventoryMovementBatch } from "@/lib/inventory";
+import { getUniqueProductSlug, synchronizeProductGroupSlugs } from "@/lib/product-slugs";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 
 const identifiers = {
@@ -250,6 +256,10 @@ describe("POST /api/[storeId]/products/[productId]/convert-to-variants/review", 
       offers: { createMany: { data: [{ offerId: "offer-id" }] } },
     });
     expect(created).not.toHaveProperty("gtin");
+    // Nunca nace con slug vacío: uno único con la forma de la variante.
+    expect(created.slug).toEqual(expect.stringMatching(/\S+-unico$/));
+    expect(vi.mocked(getUniqueProductSlug).mock.calls[0][1]).toMatchObject({ storeId: "store-id" });
+    expect(vi.mocked(synchronizeProductGroupSlugs)).toHaveBeenCalledWith(expect.anything(), "store-id", "group-id", { newProductIds: ["created-id"] });
 
     const movements = vi.mocked(createInventoryMovementBatch).mock.calls[0][1];
     expect(movements).toEqual([

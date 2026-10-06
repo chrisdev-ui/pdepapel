@@ -63,7 +63,7 @@ export async function getUniqueProductSlug(
   let suffix = 2;
 
   while (true) {
-    const [productWithSlug, aliasWithSlug] = await Promise.all([
+    const [productWithSlug, aliasWithSlug, deletedUrlWithSlug] = await Promise.all([
       client.product.findFirst({
         where: {
           storeId,
@@ -76,12 +76,19 @@ export async function getUniqueProductSlug(
         where: { storeId_slug: { storeId, slug } },
         select: { productId: true },
       }),
+      // La URL de un producto borrado sigue redirigiendo a su hermana o a su
+      // categoría (lib/archived-product-redirect.ts). Un producto nuevo no la
+      // toma: recibe el siguiente sufijo.
+      client.deletedProductUrl.findUnique({
+        where: { storeId_slug: { storeId, slug } },
+        select: { id: true },
+      }),
     ]);
 
     const aliasBelongsToExcludedProduct =
       aliasWithSlug?.productId === excludeProductId;
 
-    if (!productWithSlug && (!aliasWithSlug || aliasBelongsToExcludedProduct)) {
+    if (!productWithSlug && !deletedUrlWithSlug && (!aliasWithSlug || aliasBelongsToExcludedProduct)) {
       break;
     }
 
@@ -158,7 +165,13 @@ export async function synchronizeProductGroupSlugs(
   client: ProductSlugClient,
   storeId: string,
   productGroupId: string,
+  /**
+   * Productos creados en la misma operación: su slug provisional nunca se
+   * publicó, así que si cambia no se guarda como alias.
+   */
+  options: { newProductIds?: string[] } = {},
 ) {
+  const newProductIds = new Set(options.newProductIds ?? []);
   const products = await client.product.findMany({
     where: { storeId, productGroupId },
     include: {
@@ -171,7 +184,7 @@ export async function synchronizeProductGroupSlugs(
 
   if (products.length === 0) return;
 
-  const [existingSlugs, existingAliases] = await Promise.all([
+  const [existingSlugs, existingAliases, deletedUrls] = await Promise.all([
     client.product.findMany({
       where: {
         storeId,
@@ -183,9 +196,13 @@ export async function synchronizeProductGroupSlugs(
       where: { storeId },
       select: { slug: true },
     }),
+    client.deletedProductUrl.findMany({
+      where: { storeId },
+      select: { slug: true },
+    }),
   ]);
   const reservedSlugs = new Set(
-    [...existingSlugs, ...existingAliases]
+    [...existingSlugs, ...existingAliases, ...deletedUrls]
       .map((product) => product.slug)
       .filter(Boolean),
   );
@@ -208,11 +225,13 @@ export async function synchronizeProductGroupSlugs(
 
     if (slug === product.slug) continue;
 
-    await preserveProductSlugAlias(client, {
-      storeId,
-      productId: product.id,
-      slug: product.slug,
-    });
+    if (!newProductIds.has(product.id)) {
+      await preserveProductSlugAlias(client, {
+        storeId,
+        productId: product.id,
+        slug: product.slug,
+      });
+    }
     await client.product.update({
       where: { id: product.id },
       data: { slug },

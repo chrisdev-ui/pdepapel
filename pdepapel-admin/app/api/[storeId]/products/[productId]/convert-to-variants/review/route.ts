@@ -8,9 +8,13 @@ import { z } from "zod";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { createInventoryMovementBatch } from "@/lib/inventory";
-import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
+import {
+  getUniqueProductSlug,
+  getVariantSlugAttributeInclusion,
+  synchronizeProductGroupSlugs,
+} from "@/lib/product-slugs";
 import prismadb from "@/lib/prismadb";
-import { slugify } from "@/lib/slugify";
+import { generateProductSlug, slugify } from "@/lib/slugify";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { verifyStoreOwner } from "@/lib/utils";
 
@@ -334,7 +338,21 @@ export async function POST(
       const offerIds = body.copyOffers
         ? product.offers.map((offer) => offer.offerId)
         : [];
+      // Cada opción nueva nace con un slug único y no vacío, con la misma
+      // forma que le dará la sincronización del grupo al final.
+      const variantAttributes = getVariantSlugAttributeInclusion(resolvedVariants);
       for (const variant of newVariants) {
+        const slug = await getUniqueProductSlug(tx, {
+          storeId: params.storeId,
+          baseSlug: generateProductSlug({
+            name: product.name,
+            color: variant.color,
+            design: variant.design,
+            size: variant.size,
+            includeVariantAttributes: resolvedVariants.length > 1,
+            variantAttributes,
+          }),
+        });
         const sku = await getUniqueSemanticSku(tx, {
           categoryName: category.name,
           colorName: variant.color.name,
@@ -346,7 +364,7 @@ export async function POST(
             storeId: params.storeId,
             categoryId: product.categoryId,
             name: product.name,
-            slug: "",
+            slug,
             description: product.description,
             stock: 0,
             price: product.price,
@@ -408,7 +426,9 @@ export async function POST(
       ].filter((movement) => movement.quantity !== 0);
 
       await createInventoryMovementBatch(tx, inventoryMovements, true);
-      await synchronizeProductGroupSlugs(tx, params.storeId, group.id);
+      await synchronizeProductGroupSlugs(tx, params.storeId, group.id, {
+        newProductIds: createdProducts.map((createdProduct) => createdProduct.id),
+      });
 
       return { group, createdProducts, copiedOffers: offerIds.length };
     });
