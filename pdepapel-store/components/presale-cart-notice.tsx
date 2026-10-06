@@ -64,8 +64,8 @@ export function PresaleCartNotice({
       {othersWaiting > 0 ? (
         <p className="text-[13.5px] leading-relaxed text-blue-yankees/80">
           ¿Necesitas lo demás antes? <strong>Haz dos pedidos</strong>: uno con lo
-          disponible, que sale en 2 a 5 días hábiles, y otro con la preventa. Es
-          la única forma de no esperar por lo que ya tenemos.
+          disponible, que sale el mismo día hábil o el siguiente, y otro con la
+          preventa. Es la única forma de no esperar por lo que ya tenemos.
         </p>
       ) : null}
     </div>

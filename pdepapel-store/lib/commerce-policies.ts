@@ -21,9 +21,9 @@ import { STOREFRONT_ROUTES } from "@/lib/routes";
  *   `Store.freeShippingThreshold` (250.000; en Merchant Center, «más de
  *   249.999»), preparación 0–1 días hábiles y tránsito 2–5 días hábiles, de
  *   lunes a viernes, corte a las 12:00 (Bogotá). La 13.000 es el p75 de lo que
- *   cobró la transportadora en 12 meses. **Pendiente:** la página de envíos
- *   todavía dice que el costo «lo calcula la transportadora» y «2 a 4 días
- *   hábiles»; el texto nuevo espera la aprobación de Paula (ola 3, fase 2A).
+ *   cobró la transportadora en 12 meses. La página de envíos muestra la
+ *   misma tarifa como referencia y el mismo tránsito con estas constantes
+ *   (texto aprobado en la ola 3, fase 2A).
  */
 /** Días HÁBILES del texto de la política (lo que se le promete a la clienta). */
 export const RETURN_WINDOW_DAYS = 5;

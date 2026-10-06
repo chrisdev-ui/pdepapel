@@ -38,6 +38,10 @@ describe("aviso de preventa en el carrito", () => {
     expect(screen.getByText(/Todo el pedido espera/i)).toBeTruthy();
     // Y la única salida real.
     expect(screen.getByText(/Haz dos pedidos/i)).toBeTruthy();
+    // Lo disponible sale el mismo día hábil o el siguiente; no mezcla despacho y tránsito.
+    const split = screen.getByText(/Haz dos pedidos/i).closest("p")!;
+    expect(split.textContent).toContain("que sale el mismo día hábil o el siguiente");
+    expect(split.textContent).not.toContain("2 a 5 días hábiles");
   });
 
   it("sin nada más en el carrito, no ofrece partir el pedido", () => {

@@ -150,9 +150,8 @@ describe("commerce policies match the published policy pages", () => {
   /**
    * Desde el 2026-10-05 la tarifa y el tránsito del marcado salen de la
    * política de envío de Merchant Center (§9.13.2), que manda sobre el
-   * marcado. La página de envíos todavía dice que la transportadora calcula
-   * el costo: el texto nuevo espera a Paula (ola 3, fase 2A). Cuando cambie,
-   * este test debe pasar a comparar la página con estas constantes.
+   * marcado. Desde la ola 3 (fase 2A) la página de envíos pinta esas mismas
+   * constantes: tarifa de referencia y tránsito, nunca números a mano.
    */
   it("declares the Merchant Center shipping policy and the store threshold", () => {
     expect(STANDARD_SHIPPING_RATE).toBe(13000);
@@ -163,6 +162,33 @@ describe("commerce policies match the published policy pages", () => {
     // El umbral sigue siendo el de la tienda, no un número escrito a mano.
     expect(page("envios")).toContain("freeShippingThreshold");
     expect(page("envios")).toMatch(/costo lo calcula la transportadora/);
+  });
+
+  /** Texto aprobado en la ola 3, fase 2A (opción 1 del costo, opción A del plazo). */
+  it("shows the Merchant Center rate and transit on the shipping page from the shared constants", () => {
+    const shipping = page("envios");
+    const text = flat(shipping);
+    expect(shipping).toMatch(/import \{ STANDARD_SHIPPING_RATE, TRANSIT_DAYS \} from "@\/lib\/commerce-policies"/);
+    expect(shipping).toContain("currencyFormatter.format(STANDARD_SHIPPING_RATE)");
+    expect(shipping).toContain("{TRANSIT_DAYS.min} a {TRANSIT_DAYS.max} días hábiles después del");
+    expect(text).toContain("La tarifa nacional de referencia ronda los");
+    expect(text).toContain("en Medellín y el área metropolitana suele ser menor, entre $ 7.000 y $ 10.000.");
+    expect(text).toContain("Cuenta el valor de los productos antes de aplicar cupones, y el descuento se aplica solo en el checkout.");
+    // El plazo del panel se cuenta desde el pago, no desde el despacho.
+    expect(shipping).toContain('label: "desde que se confirma el pago"');
+    expect(text).toContain("Desde que se confirma el pago, el pedido llega en");
+    expect(shipping).not.toContain('label: "después del despacho"');
+    expect(text).toContain("En Medellín y el área metropolitana el pedido normalmente llega en 1 a 2 días hábiles.");
+    expect(text).not.toContain("48 horas hábiles");
+    // Nunca un número de tarifa por encima de la de Merchant Center escrito a mano.
+    expect(text).not.toMatch(/\$ ?1[4-9]\.000/);
+  });
+
+  it("refunds an accepted return to the payment method the customer used", () => {
+    const text = flat(page("devoluciones"));
+    expect(text).toContain(
+      "Si aceptamos tu devolución, te reembolsamos el valor del producto por el mismo medio de pago que usaste. El tiempo en que ves el dinero depende de ese medio (pago en línea o transferencia).",
+    );
   });
 });
 

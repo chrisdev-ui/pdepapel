@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { PolicyPage, type PolicyFact, type PolicySection } from "@/components/policy/policy-page";
 import { BASE_URL } from "@/constants";
+import { STANDARD_SHIPPING_RATE, TRANSIT_DAYS } from "@/lib/commerce-policies";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { currencyFormatter } from "@/lib/utils";
 
@@ -35,7 +36,7 @@ export default async function ShippingPolicyPage() {
             icon: Clock,
             tint: "bg-kawaii-blue-light",
             value: deliveryEstimate,
-            label: "después del despacho",
+            label: "desde que se confirma el pago",
           } satisfies PolicyFact,
         ]
       : []),
@@ -72,14 +73,13 @@ export default async function ShippingPolicyPage() {
             lunes a viernes; si no, el siguiente día hábil.{" "}
             {deliveryEstimate ? (
               <>
-                A partir de ahí, la transportadora entrega en{" "}
-                <strong>{deliveryEstimate}</strong> en la mayoría de ciudades de
-                Colombia; en municipios lejanos puede tomar un poco más.
+                Desde que se confirma el pago, el pedido llega en{" "}
+                <strong>{deliveryEstimate}</strong>, según el destino.
               </>
             ) : (
               <>
-                A partir de ahí el tiempo depende de la ciudad de destino y de
-                la transportadora.
+                A partir del despacho, el tiempo depende de la ciudad de destino
+                y de la transportadora.
               </>
             )}{" "}
             En el checkout ves el tiempo estimado de cada transportadora antes
@@ -87,8 +87,14 @@ export default async function ShippingPolicyPage() {
           </p>
           <ul>
             <li>
-              En Medellín y el Valle de Aburrá buscamos entregar en un máximo
-              de 48 horas hábiles después de la compra.
+              En Medellín y el área metropolitana el pedido normalmente llega en
+              1 a 2 días hábiles.
+            </li>
+            <li>
+              En Bogotá y el resto del país, la transportadora entrega en{" "}
+              {TRANSIT_DAYS.min} a {TRANSIT_DAYS.max} días hábiles después del
+              despacho. En algunos municipios con menos cobertura puede tardar
+              un poco más.
             </li>
             <li>
               Los pedidos pagados el fin de semana o en días festivos se
@@ -107,17 +113,24 @@ export default async function ShippingPolicyPage() {
       title: "Costo del envío",
       content: (
         <>
+          {/* La tarifa de referencia es la misma de Merchant Center y del
+              marcado (lib/commerce-policies.ts); no se escribe a mano. */}
           <p>
             El costo lo calcula la transportadora según tu ciudad y el tamaño
-            del paquete, y lo ves en el checkout antes de pagar.{" "}
+            del paquete, y lo ves en el checkout antes de pagar. La tarifa
+            nacional de referencia ronda los{" "}
+            <strong>{currencyFormatter.format(STANDARD_SHIPPING_RATE)}</strong>;
+            en Medellín y el área metropolitana suele ser menor, entre $ 7.000
+            y $ 10.000.{" "}
             <strong>Sin cargos ocultos: el envío que ves es el que pagas.</strong>
           </p>
           {freeShippingLabel ? (
             <p>
-              Cuando el valor de los productos alcanza{" "}
-              <strong>{freeShippingLabel}</strong>, el envío es gratis a
-              cualquier ciudad con cobertura. El descuento se aplica solo en
-              el checkout.
+              Cuando el valor de los productos llega a{" "}
+              <strong>{freeShippingLabel}</strong> o más, el envío es gratis a
+              cualquier ciudad con cobertura. Cuenta el valor de los productos
+              antes de aplicar cupones, y el descuento se aplica solo en el
+              checkout.
             </p>
           ) : null}
         </>

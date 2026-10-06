@@ -15,7 +15,7 @@ export const InfoCountryTooltip: React.FC<{}> = () => {
         </TooltipTrigger>
         <TooltipContent side="right">
           <p className="text-xs">
-            Por el momento sólo tenemos envíos a todo Colombia.
+            Por ahora solo enviamos dentro de Colombia.
           </p>
         </TooltipContent>
       </Tooltip>

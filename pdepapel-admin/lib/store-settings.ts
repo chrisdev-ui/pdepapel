@@ -131,7 +131,7 @@ export interface ResolvedStoreSettings {
    * contradiciéndose, y el que manda en la plata es el del checkout.
    */
   freeShippingThreshold: number | null;
-  /** Lo que se le promete a la clienta («2 a 4 días hábiles»). */
+  /** Lo que se le promete a la clienta («2 a 6 días hábiles»), desde que se confirma el pago. */
   deliveryEstimate: string | null;
   /**
    * Las formas de pago, una por campo. Vacía = no se ofrece, y el menú del bot
@@ -248,11 +248,11 @@ export async function saveStoreSettings(
 }
 
 /**
- * Lo que se promete mientras nadie diga otra cosa. No es un número inventado:
- * sobre 106 entregas reales la mediana fue 0,9 días, el 94 % llegó en 4 o
- * menos y el 100 % en 7.
+ * Solo rellena el formulario cuando el campo está vacío. Se cuenta desde que
+ * se confirma el pago y coincide con Merchant Center: 0–1 día de preparación
+ * y 2–5 de tránsito, 2 a 6 días hábiles (ola 3, fase 2A, 2026-10-06).
  */
-export const DEFAULT_DELIVERY_ESTIMATE = "2 a 4 días hábiles";
+export const DEFAULT_DELIVERY_ESTIMATE = "2 a 6 días hábiles";
 
 export const ALWAYS_OPEN_LABEL = "Todos los días, a toda hora";
 

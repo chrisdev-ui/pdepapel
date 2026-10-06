@@ -938,3 +938,27 @@ Christian aprobó en nombre de Paula los textos de §B.2.2 de `2026-10-05-wave-3
 cd pdepapel-admin && npm run prod:approve -- "revertir textos SEO de las 32 Category de la ola 3"
 npm run prod:write -- scripts/load-category-seo-copy.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/category-seo-copy-2026-10-06T01-34-09-060Z.json
 ```
+
+### 11.6 Textos visibles de envíos y devoluciones (fase 2A, 2026-10-06)
+
+Christian aprobó en nombre de Paula las opciones recomendadas de §A.2 de las propuestas: **opción 1** para el costo y **opción A** para el plazo de devolución.
+
+**Qué cambió:**
+- **`/politicas/envios`:**
+  - El dato rápido del plazo dice ahora «desde que se confirma el pago» (antes «después del despacho»).
+  - «Tiempos de entrega» queda con el texto de A.2.3: Medellín y el área metropolitana normalmente en 1 a 2 días hábiles; Bogotá y el resto del país, 2 a 5 días hábiles después del despacho, tomados de `TRANSIT_DAYS`.
+  - «Costo del envío» queda con la opción 1: tarifa nacional de referencia de 13.000 (`STANDARD_SHIPPING_RATE`, no escrita a mano) y Medellín entre 7.000 y 10.000. El envío gratis «llega a 250.000 o más» y cuenta el valor antes de cupones.
+- **`/politicas/devoluciones`:** nuevo párrafo de reembolso de una devolución aceptada, por el mismo medio de pago. El plazo sigue en «cinco (5) días hábiles contados desde la entrega», y el párrafo del retracto (15 días calendario, saldo a favor solo si la clienta lo elige) ya estaba literal y no cambió.
+- **Aviso de preventa en el carrito:** lo disponible «sale el mismo día hábil o el siguiente» (antes «2 a 5 días hábiles», que mezclaba despacho y tránsito).
+- **Ayuda del país en el checkout:** «Por ahora solo enviamos dentro de Colombia.»
+- **Panel › Configuración:** placeholder «2 a 6 días hábiles» y ayuda nueva del campo. `DEFAULT_DELIVERY_ESTIMATE` pasa a «2 a 6 días hábiles» (solo rellena formularios vacíos).
+- **Marcado y Merchant Center:** sin cambios.
+
+**No se aplicó, porque A.2 no lo recomienda o tiene una pregunta abierta:**
+- La sección opcional «Domicilio en Medellín».
+- La meta description opcional de la página de envíos.
+- La frase «no recibimos devoluciones en persona»: falta que Paula confirme el dato.
+- El plazo de 5 días para el reembolso ordinario: decisión abierta.
+- Los opcionales de `order-status.ts` y de los enlaces del checkout.
+
+**Valor en base de datos (§A.3):** `StoreSettings.deliveryEstimate` pasa de «2 a 4» a «2 a 6 días hábiles» con `pdepapel-admin/scripts/update-delivery-estimate.mjs` (ensayo de solo lectura, copia de respaldo, una fila, transacción con `timeout: 60_000`). Se aplica **después** de que el texto nuevo esté en producción. Para revertir: `npm run prod:write -- scripts/update-delivery-estimate.mjs --revert <copia.json>` con una aprobación nueva.

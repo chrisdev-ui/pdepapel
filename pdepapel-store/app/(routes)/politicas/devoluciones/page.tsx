@@ -102,6 +102,11 @@ const sections: PolicySection[] = [
     content: (
       <>
         <p>
+          Si aceptamos tu devolución, te reembolsamos el valor del producto por
+          el mismo medio de pago que usaste. El tiempo en que ves el dinero
+          depende de ese medio (pago en línea o transferencia).
+        </p>
+        <p>
           Si un producto que compraste ya no está disponible, te reembolsamos su
           valor. El tiempo en que ves el dinero depende del método de pago
           original (pago en línea o transferencia).

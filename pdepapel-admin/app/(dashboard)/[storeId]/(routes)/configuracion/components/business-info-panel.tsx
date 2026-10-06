@@ -217,15 +217,14 @@ export function BusinessInfoPanel({
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="2 a 4 días hábiles"
+                      placeholder="2 a 6 días hábiles"
                       {...field}
                     />
                   </FormControl>
                   <FormDescription>
-                    Se muestra en la ficha del producto y en la política de
-                    envíos, y es lo que contesta el bot. Sobre 106 entregas
-                    reales: la mitad llegó en menos de un día y el 94 % en
-                    cuatro o menos.
+                    Se cuenta desde que se confirma el pago. Se muestra en la
+                    ficha del producto, en la política de envíos y en el bot.
+                    Merchant Center declara 2 a 6 días hábiles.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
