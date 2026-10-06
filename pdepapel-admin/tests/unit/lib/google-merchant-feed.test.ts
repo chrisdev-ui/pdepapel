@@ -239,3 +239,20 @@ describe("Google Merchant feed access token", () => {
     });
   });
 });
+
+describe("buildGoogleMerchantFeed: aviso de marca", () => {
+  it("la descripción de los bloques de construcción sale sin el aviso", () => {
+    const { tsv } = buildGoogleMerchantFeed([
+      product({
+        id: "bloques",
+        name: "Bloques de construcción Luigi",
+        brand: null,
+        description:
+          "<p>Set de bloques de construcción para armar una figura de Luigi.</p><p>Son bloques de construcción estilo Lego. No son productos de LEGO ni están afiliados a LEGO Group.</p>",
+      }),
+    ]);
+    const [row] = rowsOf(tsv);
+    expect(row.description).toBe("Set de bloques de construcción para armar una figura de Luigi.");
+    expect(tsv).not.toMatch(/lego/i);
+  });
+});

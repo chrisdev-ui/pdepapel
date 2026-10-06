@@ -157,6 +157,9 @@ beforeAll(async () => {
   await producto("Plumones pastel x12");
   await producto("Marcadores x120");
   await producto("Minas 0.5mm");
+  // Antes se llamaban «Lego …»; la clientela sigue buscando «lego».
+  await producto("Bloques de construcción Batman");
+  await producto("Bloques de construcción Luigi");
 });
 
 afterAll(async () => {
@@ -254,6 +257,18 @@ describe("la barra de búsqueda de la tienda (/search/products)", () => {
     expect(await barra("kits")).toEqual(["Kit escolar básico", "Libreta Hello Kitty", "Lápiz Hello Kitty", "Set de pinceles pastel"]);
     expect(await barra("set")).toEqual(["Kit escolar básico", "Set de pinceles pastel"]);
     expect(await barra("kitty")).toEqual(["Libreta Hello Kitty", "Lápiz Hello Kitty"]);
+  });
+});
+
+describe("«lego» encuentra los bloques de construcción renombrados", () => {
+  it("en la barra de búsqueda", async () => {
+    expect(await barra("lego")).toEqual(["Bloques de construcción Batman", "Bloques de construcción Luigi"]);
+    expect(await barra("legos")).toEqual(["Bloques de construcción Batman", "Bloques de construcción Luigi"]);
+    expect(await barra("lego batman")).toEqual(["Bloques de construcción Batman"]);
+  });
+
+  it("en el listado de /tienda", async () => {
+    expect(await listado("lego")).toEqual(["Bloques de construcción Batman", "Bloques de construcción Luigi"]);
   });
 });
 

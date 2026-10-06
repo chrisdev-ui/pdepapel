@@ -27,6 +27,10 @@ const SYNONYM_GROUPS: string[][] = [
   // Los tote bags se piden de las cuatro formas. Sin este grupo, «bolso de
   // perrito» no encontraba ningún «Tote bag» y al revés.
   ["tote", "bag", "bolso", "bolsa"],
+  // Los bloques de construcción se llamaban «Lego» y la clientela los sigue
+  // pidiendo así. Los nombres ya no dicen «Lego» (es una marca registrada):
+  // sin este grupo «lego» no encontraba nada por nombre.
+  ["lego", "bloques"],
 ];
 
 /**

@@ -1,5 +1,6 @@
 import {
   GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS,
+  GOOGLE_MERCHANT_STRIPPED_DISCLAIMERS,
   getGoogleMerchantColor,
   getGoogleMerchantDescription,
   getGoogleMerchantPattern,
@@ -128,5 +129,64 @@ describe("Google Merchant description", () => {
     expect(
       getGoogleMerchantDescription("<p>" + "a".repeat(6000) + "</p>", "x"),
     ).toHaveLength(5000);
+  });
+});
+
+describe("los avisos de marca no llegan al feed", () => {
+  const PLURAL = "Son bloques de construcción estilo Lego. No son productos de LEGO ni están afiliados a LEGO Group.";
+  const TAJALAPIZ = "Es un tajalápiz estilo Lego. No es un producto de LEGO ni está afiliado a LEGO Group.";
+  const FIGURA = "La figura de bloques es estilo Lego. No es un producto de LEGO ni está afiliada a LEGO Group.";
+
+  it("son las tres frases exactas que usa el guion de renombrado", () => {
+    expect([...GOOGLE_MERCHANT_STRIPPED_DISCLAIMERS]).toEqual([PLURAL, TAJALAPIZ, FIGURA]);
+  });
+
+  it("quita el aviso plural de la categoría y deja el resto del texto", () => {
+    expect(
+      getGoogleMerchantDescription(
+        `<p>Set de bloques de construcción para armar una figura de Batman. Una vez armada, queda lista para exhibir en el escritorio, en la repisa o junto a tu colección.</p><p>${PLURAL}</p>`,
+        "Bloques de construcción Batman",
+      ),
+    ).toBe(
+      "Set de bloques de construcción para armar una figura de Batman. Una vez armada, queda lista para exhibir en el escritorio, en la repisa o junto a tu colección.",
+    );
+    expect(
+      getGoogleMerchantDescription(
+        `Juego de fichas en forma de Garfield. ${PLURAL}`,
+        "Bloques de construcción Garfield",
+      ),
+    ).toBe("Juego de fichas en forma de Garfield.");
+  });
+
+  it("quita las variantes en singular (tajalápiz y figura de bloques)", () => {
+    expect(
+      getGoogleMerchantDescription(
+        `Tajalápiz de bloques en forma de animalitos: Tucán y Jirafa. ${TAJALAPIZ}`,
+        "Tajalápiz de bloques",
+      ),
+    ).toBe("Tajalápiz de bloques en forma de animalitos: Tucán y Jirafa.");
+    expect(
+      getGoogleMerchantDescription(
+        `Nuestro Kit Stitch incluye:\n🧩 Figura de bloques de colección\n${FIGURA}`,
+        "Kit Stitch 3",
+      ),
+    ).toBe("Nuestro Kit Stitch incluye: 🧩 Figura de bloques de colección");
+  });
+
+  it("si la descripción es solo el aviso, el feed usa el nombre y no el aviso", () => {
+    for (const description of [PLURAL, `<p>${PLURAL}</p>`, `  ${TAJALAPIZ}  `]) {
+      const text = getGoogleMerchantDescription(description, " Bloques de construcción Nezuko ");
+      expect(text).toBe("Bloques de construcción Nezuko");
+      expect(text).not.toMatch(/lego/i);
+    }
+  });
+
+  it("una descripción sin aviso queda igual, aunque mencione la marca de otra forma", () => {
+    expect(
+      getGoogleMerchantDescription("<p>Agenda <strong>A5</strong>  con portada.</p>", "Agenda"),
+    ).toBe("Agenda A5 con portada.");
+    expect(getGoogleMerchantDescription("Compatible con piezas estilo Lego.", "x")).toBe(
+      "Compatible con piezas estilo Lego.",
+    );
   });
 });

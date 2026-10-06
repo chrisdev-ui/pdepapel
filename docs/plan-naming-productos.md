@@ -114,7 +114,8 @@ Los nombres actuales son **etiquetas de estante**, no **fichas de producto**. Fu
 **Obligatorio**
 
 - **Sentence case.** Primera palabra en mayúscula; el resto en minúscula, salvo nombres propios y licencias.
-- **Grafía oficial de licencias:** `Sanrio`, `Hello Kitty`, `Kuromi`, `Cinnamoroll`, `Pompompurin`, `Badtz-Maru`, `Stitch`, `Snoopy`, `Mafalda`, `Harry Potter`, `El Principito`, `One Piece`, `Minnie Mouse`, `Disney`, `Lego`. Marcas de fabricante: `Norma`, `Scribe`, `Gipao`, `Tesa`, `Faber-Castell`.
+- **Grafía oficial de licencias:** `Sanrio`, `Hello Kitty`, `Kuromi`, `Cinnamoroll`, `Pompompurin`, `Badtz-Maru`, `Stitch`, `Snoopy`, `Mafalda`, `Harry Potter`, `El Principito`, `One Piece`, `Minnie Mouse`, `Disney`. Marcas de fabricante: `Norma`, `Scribe`, `Gipao`, `Tesa`, `Faber-Castell`.
+- **Nunca «Lego» en un nombre, slug, título, marca ni alt** (2026-10-06): son bloques compatibles, no productos de LEGO, y «Lego» es una marca registrada. Se llaman `Bloques de construcción …`; «estilo Lego» va solo dentro del aviso final de la descripción («Son bloques de construcción estilo Lego. No son productos de LEGO ni están afiliados a LEGO Group.»). Ver `pdepapel-admin/scripts/rename-lego-to-bloques.mjs`.
 - **Términos que el cliente colombiano realmente escribe.** El catálogo ya usa `tajalápiz` (13/13) mientras la categoría dice *Sacapuntas*: mantener `tajalápiz` en el nombre y dejar `sacapuntas` en descripción/categoría cubre ambas búsquedas.
 - Cantidades siempre en formato `x12` (sin espacio, con `x` minúscula).
 - Medidas con espacio antes de la unidad: `0.7 mm`, `350 ml`, `16 × 24 cm`.
@@ -154,7 +155,7 @@ Los nombres actuales son **etiquetas de estante**, no **fichas de producto**. Fu
 | Pines · diseño Gatito · Multicolor | `Pin gato` (8) | `Pin decorativo metálico diseño Gatito kawaii multicolor` | 54 |
 | Mugs · Kawaii · Pastel · $30.000 | `Mug cute` (8) | `Mug cerámico kawaii tonos pastel diseño Gatito 350 ml` | 53 |
 | Clips · Corazones · Palo de rosa | `Clips Love` (10) | `Clips decorativos metálicos Corazones palo de rosa x12` | 53 |
-| Lego · Stitch · Azul | `Lego Stitch` (11) | `Bloques armables tipo Lego Stitch coleccionable azul` | 52 |
+| Bloques de construcción · Stitch · Azul | `Lego Stitch` (11) | `Bloques de construcción Stitch coleccionable azul` | 49 |
 | Borradores · Conejito · Lila | `Borrador aplique Conejo` (23) | `Borrador de nata con aplique Conejito lila escolar` | 49 |
 | Agendas · Cierre hermético · Rosa pastel | `Agenda A5 Simple Life` (21) | `Agenda A5 Simple Life tapa acolchada rosa pastel con cierre` | 58 |
 | Correctores · Clásico · Café | `Correctores Clásico Café S-L` (28) | `Corrector de cinta lateral café pastel 5 mm × 6 m` | 48 |
@@ -395,7 +396,7 @@ Filtros: [categoría ▾] [confianza ▾] [estado ▾] [solo con banderas ☐]  
 [ ] SKU              Actual                 Propuesto                                    Long  ML  Validación
 [x] PIN-GAT-MUL-S-L  Pin gato               Pin decorativo metálico diseño Gatito ...     54   ✅  ok
 [x] MUG-KAW-PAS-S-L  Mug cute               Mug cerámico kawaii tonos pastel ... 350 ml   53   ✅  ok
-[ ] LEG-STI-AZU-S-L  Lego Stitch            Bloques armables tipo Lego Stitch ... azul    52   ✅  ⚠️ licencia
+[ ] LEG-STI-AZU-S-L  Lego Stitch            Bloques de construcción Stitch ... azul       49   ✅  ⚠️ licencia
 [ ] BLO-CLA-MUL-S-L  Block BLOOMING AS ...  Stickers en block Blooming as Flowers ...     51   ✅  ⚠️ categoría dudosa
 
 ┌ Vista previa ────────────────────────────────────────────────────────────┐

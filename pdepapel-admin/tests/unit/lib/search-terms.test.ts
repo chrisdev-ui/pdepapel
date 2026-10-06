@@ -353,3 +353,30 @@ describe("lo que la palabra entera no debe perder", () => {
     expect(piezas.equals).toBe("toy");
   });
 });
+
+describe("«lego» sigue encontrando los bloques de construcción", () => {
+  // Los productos ya no se llaman «Lego» (marca registrada), pero la
+  // clientela los sigue buscando así.
+  const coincide = (query: string, name: string) =>
+    productNameSearchConditions(query).every((condicion) =>
+      (condicion.OR as { name?: { contains?: string } }[]).some(
+        (c) => c.name?.contains !== undefined && normalizeSearchTerm(name).includes(c.name.contains),
+      ),
+    );
+
+  it("«lego» y «legos» buscan «bloques» en el nombre", () => {
+    expect(nameForms("lego")).toEqual(["lego", "bloqu"]);
+    expect(nameForms("legos")).toEqual(["lego", "bloqu"]);
+    expect(expandSearchTerms("lego")).toEqual(["lego", "bloques"]);
+  });
+
+  it("encuentra los productos renombrados y nada más", () => {
+    for (const name of ["Bloques de construcción Batman", "Bloques de construcción Winnie Pooh y sus amigos", "Tajalápiz de bloques"]) {
+      expect(coincide("lego", name)).toBe(true);
+      expect(coincide("legos", name)).toBe(true);
+    }
+    expect(coincide("lego batman", "Bloques de construcción Batman")).toBe(true);
+    expect(coincide("lego", "Cuaderno Kuromi")).toBe(false);
+    expect(coincide("lego", "Block iris x35 hojas")).toBe(false);
+  });
+});
