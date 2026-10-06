@@ -142,6 +142,16 @@ Método validado el 2026-10-06:
 - El deploy `dpl_Hf4nBtVuZNiNp8au7SdPtKy87bAE` quedó Ready en unos 3 min y `admin.papeleriapdepapel.com` pasó a él. `/iniciar-sesion` y `/api/<store>/public/storefront` respondieron 200. Mismo código y entorno, sin cambio funcional.
 - `pdepapel-admin/deploy-stamp.txt` está fuera de la lista que salta el ignore-build. Cambiar su única línea compila **solo el admin**, desde git, con las variables de entorno vigentes en ese momento. No se sube nada local.
 
+**Antes del sello**, el push tiene que llevar solo el sello (más docs), nunca código de la app. El trabajo aprobado de esa tarde vive en la rama local `post-corte`, no en `main`:
+
+```bash
+git switch main
+git status --short                 # vacío
+git fetch origin && git log --oneline origin/main..main   # vacío (o solo commits de docs)
+```
+
+Si alguna de las dos no sale vacía, se para y se revisa antes de seguir.
+
 ```bash
 cd <raíz del repo>
 printf '%s\n' "$(date -u '+%Y-%m-%d %H:%M UTC') · corte de la base a us-east4: nueva DATABASE_URL" > pdepapel-admin/deploy-stamp.txt
