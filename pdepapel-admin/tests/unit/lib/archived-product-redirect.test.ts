@@ -7,7 +7,7 @@ import { chooseArchivedProductRedirect, findArchivedProductRedirect } from "@/li
  * parecido: hermana viva, categoría, tipo, tienda (en ese orden).
  */
 describe("chooseArchivedProductRedirect", () => {
-  const liveCategory = { slug: "termos", isArchived: false };
+  const liveCategory = { slug: "termos", isArchived: false, hasLiveProducts: true };
   const liveType = { id: "type-1", isArchived: false };
 
   it("prefers a live sibling of the same group", () => {
@@ -19,10 +19,18 @@ describe("chooseArchivedProductRedirect", () => {
 
   it("falls back to the category, then the type, then the shop", () => {
     expect(chooseArchivedProductRedirect({ sibling: null, category: liveCategory, type: liveType })).toEqual({ kind: "category", slug: "termos" });
-    expect(chooseArchivedProductRedirect({ sibling: null, category: { slug: "termos", isArchived: true }, type: liveType })).toEqual({ kind: "type", id: "type-1" });
-    expect(chooseArchivedProductRedirect({ sibling: null, category: { slug: "", isArchived: false }, type: liveType })).toEqual({ kind: "type", id: "type-1" });
+    expect(chooseArchivedProductRedirect({ sibling: null, category: { ...liveCategory, isArchived: true }, type: liveType })).toEqual({ kind: "type", id: "type-1" });
+    expect(chooseArchivedProductRedirect({ sibling: null, category: { ...liveCategory, slug: "" }, type: liveType })).toEqual({ kind: "type", id: "type-1" });
     expect(chooseArchivedProductRedirect({ sibling: null, category: null, type: null })).toEqual({ kind: "shop" });
-    expect(chooseArchivedProductRedirect({ sibling: null, category: { slug: "x", isArchived: true }, type: { id: "t", isArchived: true } })).toEqual({ kind: "shop" });
+    expect(chooseArchivedProductRedirect({ sibling: null, category: { slug: "x", isArchived: true, hasLiveProducts: true }, type: { id: "t", isArchived: true } })).toEqual({ kind: "shop" });
+  });
+
+  /** Una categoría sin productos vivos es un listado vacío: soft 404. Se salta. */
+  it("skips a category with no live products and goes on to the type, then the shop", () => {
+    const empty = { ...liveCategory, hasLiveProducts: false };
+    expect(chooseArchivedProductRedirect({ sibling: null, category: empty, type: liveType })).toEqual({ kind: "type", id: "type-1" });
+    expect(chooseArchivedProductRedirect({ sibling: null, category: empty, type: { id: "t", isArchived: true } })).toEqual({ kind: "shop" });
+    expect(chooseArchivedProductRedirect({ sibling: null, category: empty, type: null })).toEqual({ kind: "shop" });
   });
 
   it("uses the sibling id when it has no slug", () => {
@@ -37,6 +45,7 @@ describe("findArchivedProductRedirect", () => {
         .fn()
         .mockResolvedValueOnce({ id: "archivado", productGroupId: "g1", categoryId: "c1" })
         .mockResolvedValueOnce({ id: "hermana", slug: "termo-owala-negro" }),
+      count: vi.fn().mockResolvedValue(3),
     };
     return {
       product,
@@ -67,6 +76,7 @@ describe("findArchivedProductRedirect", () => {
         .fn()
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ id: "archivado", productGroupId: null, categoryId: "c1" }),
+      count: vi.fn().mockResolvedValue(3),
     };
     const client = db({ product, productSlugAlias: { findUnique: vi.fn().mockResolvedValue({ productId: "archivado" }) } });
     await expect(findArchivedProductRedirect(client as never, "store-1", "termo-owala-rojo-aesthetic-l")).resolves.toEqual({
@@ -80,7 +90,7 @@ describe("findArchivedProductRedirect", () => {
       findFirst: vi.fn().mockResolvedValue({ productId: "borrado", productGroupId: null, categoryId: "c1" }),
     };
     const client = db({
-      product: { findFirst: vi.fn().mockResolvedValue(null) },
+      product: { findFirst: vi.fn().mockResolvedValue(null), count: vi.fn().mockResolvedValue(1) },
       productSlugAlias: { findUnique: vi.fn().mockResolvedValue(null) },
       deletedProductUrl,
     });
@@ -92,6 +102,28 @@ describe("findArchivedProductRedirect", () => {
       storeId: "store-1",
       OR: [{ slug: "termo-borrado" }, { productId: "termo-borrado" }],
     });
+  });
+
+  it("only counts the category's live products when the category would be the destination", async () => {
+    const product = {
+      findFirst: vi.fn().mockResolvedValueOnce({ id: "archivado", productGroupId: null, categoryId: "c1" }),
+      count: vi.fn().mockResolvedValue(0),
+    };
+    const client = db({ product });
+    // Categoría vacía: se salta y va al tipo.
+    await expect(findArchivedProductRedirect(client as never, "store-1", "termo-unico")).resolves.toEqual({ kind: "type", id: "t1" });
+    expect(product.count.mock.calls[0][0]).toMatchObject({
+      where: { storeId: "store-1", categoryId: "c1", isArchived: false },
+      take: 1,
+    });
+    // La misma regla de disponibilidad del listado: lo «próximamente» no cuenta.
+    expect(product.count.mock.calls[0][0].where.OR).toEqual([{ availableAt: null }, { availableAt: { lte: expect.any(Date) } }]);
+  });
+
+  it("does not count products when a live sibling already answers", async () => {
+    const client = db();
+    await findArchivedProductRedirect(client as never, "store-1", "termo-owala-rojo");
+    expect(client.product.count).not.toHaveBeenCalled();
   });
 
   it("returns null for a reference that never existed: that stays a real 404", async () => {

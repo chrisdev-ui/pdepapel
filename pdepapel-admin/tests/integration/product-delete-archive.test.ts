@@ -188,13 +188,40 @@ describe("product delete guard and archive with MySQL", () => {
     expect(response.status).toBe(200);
     await expect(testPrisma.product.count({ where: { storeId } })).resolves.toBe(0);
 
+    // Con el grupo entero borrado, la categoría quedó sin productos vivos: no
+    // se manda a un listado vacío (soft 404), sino al tipo.
     const { findArchivedProductRedirect } = await import("@/lib/archived-product-redirect");
     for (const slug of [`kit-a-${storeId}`, `kit-b-${storeId}`]) {
       await expect(findArchivedProductRedirect(testPrisma, storeId, slug)).resolves.toEqual({
-        kind: "category",
-        slug: fixture.category.slug,
+        kind: "type",
+        id: fixture.category.typeId,
       });
     }
+  });
+
+  it("redirects an archived product to its category only while the category has a live product", async () => {
+    fixture = await createInventoryFixture();
+    const storeId = fixture.store.id;
+    await testPrisma.productKit.deleteMany({ where: { kitId: fixture.kit.id } });
+    await testPrisma.product.update({ where: { id: fixture.kit.id }, data: { slug: `kit-retirado-${storeId}`, isArchived: true } });
+    const { findArchivedProductRedirect } = await import("@/lib/archived-product-redirect");
+    const toCategory = { kind: "category", slug: fixture.category.slug };
+    const toType = { kind: "type", id: fixture.category.typeId };
+
+    // El componente sigue vivo en la misma categoría: va a la categoría.
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `kit-retirado-${storeId}`)).resolves.toEqual(toCategory);
+
+    // «Próximamente» no cuenta como vivo: la categoría está vacía para la tienda.
+    await testPrisma.product.update({ where: { id: fixture.component.id }, data: { availableAt: new Date(Date.now() + 86_400_000) } });
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `kit-retirado-${storeId}`)).resolves.toEqual(toType);
+
+    // Archivado también: va al tipo.
+    await testPrisma.product.update({ where: { id: fixture.component.id }, data: { availableAt: null, isArchived: true } });
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `kit-retirado-${storeId}`)).resolves.toEqual(toType);
+
+    // Agotado sí cuenta: sigue en el listado.
+    await testPrisma.product.update({ where: { id: fixture.component.id }, data: { isArchived: false, stock: 0 } });
+    await expect(findArchivedProductRedirect(testPrisma, storeId, `kit-retirado-${storeId}`)).resolves.toEqual(toCategory);
   });
 
   it("queues a pause for the active Mercado Libre listing when the product is archived, from the form and in bulk", async () => {

@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { findDeletedProductUrl } from "@/lib/deleted-product-urls";
+import { productAvailabilityWhere } from "@/lib/product-availability";
 
 /**
  * A dónde manda la tienda a quien llega a un producto archivado (cambio de
@@ -9,8 +10,13 @@ import { findDeletedProductUrl } from "@/lib/deleted-product-urls";
  * Google trata como soft 404 una redirección a algo no equivalente:
  *
  * 1. una variante hermana viva del mismo grupo (con stock antes que sin él);
- * 2. su categoría, si sigue activa;
- * 3. su tipo (la categoría padre), si sigue activo;
+ * 2. su categoría, si sigue activa **y tiene al menos un producto vivo**
+ *    (no archivado y ya disponible, la misma regla del listado de la tienda;
+ *    los agotados cuentan). Una categoría vacía detrás de una redirección es
+ *    el patrón típico de soft 404 (2026-10-05: 46 URLs caían así);
+ * 3. su tipo (la categoría padre), si sigue activo. Va a `/tienda?typeId=…`,
+ *    que es noindex y robots.txt no deja rastrear: sirve a la persona, no a
+ *    Google;
  * 4. la tienda.
  */
 export type ArchivedProductRedirect =
@@ -23,11 +29,11 @@ type Db = PrismaClient | Prisma.TransactionClient;
 
 export function chooseArchivedProductRedirect(input: {
   sibling: { id: string; slug: string | null } | null;
-  category: { slug: string | null; isArchived: boolean } | null;
+  category: { slug: string | null; isArchived: boolean; hasLiveProducts: boolean } | null;
   type: { id: string; isArchived: boolean } | null;
 }): ArchivedProductRedirect {
   if (input.sibling) return { kind: "product", slug: input.sibling.slug || input.sibling.id };
-  if (input.category && !input.category.isArchived && input.category.slug) {
+  if (input.category && !input.category.isArchived && input.category.slug && input.category.hasLiveProducts) {
     return { kind: "category", slug: input.category.slug };
   }
   if (input.type && !input.type.isArchived) return { kind: "type", id: input.type.id };
@@ -83,6 +89,18 @@ export async function findArchivedProductRedirect(
   const type = category
     ? await db.type.findFirst({ where: { id: category.typeId, storeId }, select: { id: true, isArchived: true } })
     : null;
+  // Solo se cuenta si la categoría podría ser el destino.
+  const hasLiveProducts =
+    !sibling && category && !category.isArchived && category.slug
+      ? (await db.product.count({
+          where: { storeId, categoryId: archived.categoryId, isArchived: false, ...productAvailabilityWhere("available") },
+          take: 1,
+        })) > 0
+      : false;
 
-  return chooseArchivedProductRedirect({ sibling, category, type });
+  return chooseArchivedProductRedirect({
+    sibling,
+    category: category ? { ...category, hasLiveProducts } : null,
+    type,
+  });
 }
