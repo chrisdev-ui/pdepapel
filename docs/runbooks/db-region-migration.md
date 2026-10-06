@@ -90,67 +90,78 @@ Al terminar, la base nueva quedó resincronizada:
 - La marca `migration_meta` sigue en su sitio.
 - `pdepapel_ro` conserva sus permisos después del `DROP`/`CREATE DATABASE`.
 
-## El día del corte: domingo 11 de octubre de 2026, 06:00–07:00 Bogotá (11:00–12:00 UTC)
+## El corte: martes 6 → miércoles 7 de octubre de 2026, 01:00 Bogotá (06:00 UTC)
 
-**Por qué esa hora:** en los últimos 90 días no hubo ningún pedido entre las 00:00 y las 08:59 de ningún día. Los domingos tampoco hubo ningún webhook ni mensaje entre las 04:00 y las 08:59. De 02:00 a 04:00 sí los hubo, y además corre la copia diaria (03:30, que GitHub suele correr horas tarde).
+El corte se adelantó: estaba planeado para el domingo 11-oct, 06:00–07:00.
 
-Marcas: **[Christian]** = lo haces tú (tokens, secretos, panel). **[Claude]** = lo hago yo, con tu sí en el chat cuando toca producción.
+**Por qué esa hora:** en 90 días no hubo ningún pedido entre las 00:00 y las 08:59 de ningún día, y entre la 01:00 y las 01:59 casi no hubo webhooks (1 en 90 días). La copia diaria (03:30 Bogotá, que GitHub suele correr horas tarde) se apaga durante la ventana con `BACKUP_ENABLED=false`.
 
-**Antes del domingo (pendiente):**
-- Escribir y revisar `pdepapel-admin/scripts/db-read-only.mjs` (`--on` / `--off` / `--status`). Lo ejecuta `npm run prod:write` con tu token y hace `SET GLOBAL super_read_only = ON|OFF` en la base vieja. No existe todavía.
-- Repetir un ensayo el sábado para confirmar el tiempo.
+Marcas: **[Christian]** = lo haces tú (tokens, secretos, panel). **[Claude]** = lo hago yo; lo que toca producción, solo con tu sí en el chat.
 
-| Hora (Bogotá) | Quién | Paso |
+### GO / NO-GO (00:50 y 01:00, solo lectura)
+
+```bash
+cd pdepapel-admin && node --env-file=.env scripts/backup/cutover-go-no-go.mjs
+```
+
+| Comprobación | Tiene que dar |
+|---|---|
+| Pedidos creados o pagados en los últimos 30 min | 0 |
+| Pedidos `PENDING`/`CREATED` (pago abierto) creados en los últimos 60 min | 0 |
+| Escrituras del panel en los últimos 15 min (`updatedAt` de pedidos, productos, envíos, pagos, categorías, ofertas, cupones, reposición, ajustes y `createdAt` del kardex) | 0 |
+| Webhooks y mensajes de los últimos 10 min (`MarketplaceWebhookEvent`, `PaymentWebhookEvent`, `ConversationMessage`) | 0 |
+
+Si algo falla, se espera y se repite cada 10 min. Nunca se empieza con una comprobación en falla, salvo «GO ANYWAY» de Christian.
+
+### Paso a paso
+
+| # | Quién | Paso |
 |---|---|---|
-| 05:45 | Christian | Variable de GitHub `BACKUP_ENABLED=false`. Confirmar en Actions que no hay corridas de «Database backup» ni de «Admin scheduled tasks» en curso. |
-| 05:45 | Claude | Solo lectura: «MySQL US East» arriba, marca presente, producción sana. Tabla de TTFB «antes». |
-| 05:50 | Claude | Corrida `rehearsal` del workflow (~2,5 min), para confirmar que el camino funciona ese día. |
-| 06:00 | Christian | `npm run prod:approve -- "congelar escrituras en la base vieja (super_read_only ON) para el corte a us-east4"` |
-| 06:01 | Claude | `npm run prod:write -- scripts/db-read-only.mjs --on`. Comprobar con `pdepapel_ro` que `@@super_read_only = 1`. **Desde aquí no hay escrituras en el panel ni en los webhooks.** |
-| 06:02 | Claude | Corrida `cutover` del workflow, con confirmación `SYNC-TO-US-EAST` (~2,5 min). Tiene que salir verde con **0 diferencias**. Si falla → «Rollback dentro de la ventana». |
-| 06:05 | Christian | Cambiar las conexiones, una por una, editando sin borrar primero (tabla de abajo). |
-| 06:08 | Claude (con tu sí) | Deploy **nuevo** del admin (`vercel deploy --prod` desde `pdepapel-admin`, o un commit vacío con push). Un redeploy no sirve, porque reutiliza el entorno anterior. Esperar READY (~2,5 min, más la cola si la hay). |
-| 06:12 | Christian + Claude | Prueba de escritura: tú haces un cambio inocuo en el panel (por ejemplo, una nota interna en un pedido de prueba). Yo confirmo con `pdepapel_ro` que está en la base **nueva** y no en la vieja. |
-| 06:14 | Claude | Smoke test: `/`, `/tienda`, una categoría, 3 fichas, `/carrito`, login del panel, Pedidos y Productos. Los 5 webhooks sin firma responden 401/403, no 5xx. Tabla de TTFB «después». |
-| 06:20 | Christian | `BACKUP_ENABLED=true` y una copia manual. Confirmar que sale verde y que el tamaño es similar (~10,7 MB cifrado). |
-| 06:25 | Christian o Claude (con tu sí) | Desactivar el workflow (`gh workflow disable db-region-sync.yml`) y borrar el secreto `NEW_DB_URL`. |
-| siguiente corrida | Claude | Crons de «Admin scheduled tasks» y feeds de Merchant y Meta en verde con la base nueva. |
-| +7 días | Christian | Apagar o borrar la base vieja, que sigue en `super_read_only`. Ese modo no sobrevive a un reinicio, pero ya nada apunta a ella. |
+| 0 | Christian | Decir «estoy listo». |
+| 1 | Claude | GO/NO-GO. Si sale GO, sigue. |
+| 2 | Christian | GitHub › repo › Settings › Secrets and variables › Actions › pestaña **Variables** › `BACKUP_ENABLED` › Edit › `false` › Update. Claude confirma en Actions que no hay corridas en curso de «Database backup» ni de «Admin scheduled tasks». |
+| 3 | Claude | Corrida `rehearsal` de `db-region-sync` (~2,5 min). Tiene que salir verde. |
+| 4 | Christian | En tu terminal, desde `pdepapel-admin`: `npm run prod:approve -- "congelar escrituras de la base vieja (super_read_only ON) para el corte a us-east4"` |
+| 5 | Claude | `npm run prod:write -- scripts/db-read-only.mjs --on --expect old`. El guion confirma que es la base vieja, congela y prueba una escritura que no cambia nada: tiene que fallar con 1290. Además, un `--status --expect old` con `pdepapel_ro` tiene que mostrar `super_read_only: 1`. **Desde aquí no hay escrituras en el panel ni en los webhooks.** |
+| 6 | Claude | Corrida `cutover` de `db-region-sync`, con confirmación `SYNC-TO-US-EAST` (~2,5 min). Verde y **0 diferencias**, o «Rollback». |
+| 7 | Christian | Cambiar los secretos (instrucciones abajo). Claude solo mira nombres y fechas, nunca valores. |
+| 8 | Claude (con tu sí) | Deploy **nuevo** de producción del admin: `vercel deploy --prod` desde `pdepapel-admin`. Un redeploy no sirve, porque reutiliza el entorno anterior. Esperar READY. |
+| 9 | Christian + Claude | Prueba de escritura: un cambio inocuo en el panel (por ejemplo, la nota interna de un pedido de prueba). Claude confirma con `pdepapel_ro` que está en la base **nueva** y no en la vieja. |
+| 10 | Claude | Smoke test: `/`, `/tienda`, una categoría, 3 fichas, `/carrito`, login del panel. Los 5 webhooks sin firma responden 4xx, no 5xx. Tabla de TTFB contra la de antes. |
+| 11 | Christian | `BACKUP_ENABLED` → `true`. Claude lanza una copia manual («Database backup», `workflow_dispatch`): tiene que salir verde con un tamaño similar (~10,7 MB cifrado). |
+| 12 | Claude | `gh workflow disable db-region-sync.yml`. Christian borra el secreto `NEW_DB_URL` (Settings › Secrets and variables › Actions › Secrets › `NEW_DB_URL` › Remove). |
+| 13 | Claude | En la próxima corrida de «Admin scheduled tasks», crons y feeds de Merchant y Meta en verde. |
+| — | — | La base vieja queda en `super_read_only` **7 días** como respaldo para volver atrás. Ese modo no sobrevive a un reinicio, pero ya nada apunta a ella. Pasados los 7 días, Christian la apaga o se decide borrarla. |
 
-**Conexiones que cambias tú** (los valores salen de las variables de «MySQL US East» en Railway):
+**Caída:** solo escrituras, de los pasos 5 a 9, unos 10–15 min. La tienda sigue mostrando páginas desde ISR. Los webhooks que fallen con 1290 los reintentan Bold, Wompi, Mercado Libre y Meta.
 
-| Dónde | Variable | Nuevo valor |
+### Secretos que cambias tú (paso 7)
+
+Todos los valores nuevos están en Railway: proyecto «PdePapel Database» › servicio **«MySQL US East»** › pestaña **Variables** (el ojo muestra el valor y el ícono de copiar lo copia).
+
+| Dónde | Qué | Valor que copias de «MySQL US East» |
 |---|---|---|
-| Vercel › pdepapel-admin › **Production** | `DATABASE_URL` | `mysql://root:<MYSQL_ROOT_PASSWORD>@<RAILWAY_TCP_PROXY_DOMAIN>:<RAILWAY_TCP_PROXY_PORT>/railway`, con los mismos parámetros que tenga hoy (si trae `connection_limit`, se conserva) |
-| GitHub › Actions secrets | `BACKUP_DB_HOST`, `BACKUP_DB_PORT`, `BACKUP_DB_PASSWORD` | host y puerto del proxy nuevo; contraseña `PDEPAPEL_RO_PASSWORD`. `BACKUP_DB_USER` y `BACKUP_DB_NAME` no cambian |
-| `pdepapel-admin/.env` (local) | `DATABASE_URL` | `pdepapel_ro` con host, puerto y contraseña nuevos |
-| `pdepapel-admin/.env.prod-write` (local) | URL de escritura | `root` en la base nueva |
+| Vercel › pdepapel-admin › Settings › Environment Variables › `DATABASE_URL` (**Production**) › ⋯ › Edit | Reemplazar el valor y guardar. **No borrar la variable.** | `MYSQL_PUBLIC_URL` (ya resuelta: `mysql://root:…@…:…/railway`). Si la `DATABASE_URL` actual trae parámetros después de `?` (por ejemplo `connection_limit` o `sslaccept`), agrégalos al final igual que hoy. |
+| Vercel › pdepapel-admin › `DATABASE_URL` (**Development**) | Solo si hoy apunta a producción: lo ves al editarla. Si apunta a otra base, no se toca. | igual que arriba |
+| GitHub › repo › Settings › Secrets and variables › Actions › Secrets › `BACKUP_DB_HOST` › Update | — | `RAILWAY_TCP_PROXY_DOMAIN` |
+| `BACKUP_DB_PORT` › Update | — | `RAILWAY_TCP_PROXY_PORT` |
+| `BACKUP_DB_PASSWORD` › Update | — | `PDEPAPEL_RO_PASSWORD` |
+| `pdepapel-admin/.env` (tu editor) | La línea `DATABASE_URL=` | `PDEPAPEL_RO_PUBLIC_URL` |
+| `pdepapel-admin/.env.prod-write` (tu editor) | La línea `DATABASE_URL=` | `MYSQL_PUBLIC_URL` |
 
-La tienda (pdepapel-store) no tiene `DATABASE_URL`: no se toca.
+- `BACKUP_DB_USER` (`pdepapel_ro`) y `BACKUP_DB_NAME` (`railway`) no cambian.
+- La tienda (pdepapel-store) no tiene `DATABASE_URL` en ningún entorno.
+- **Integración Railway → Vercel:** las variables de los servicios de Railway se copian solas al proyecto **pdepapel-admin** de Vercel, en Production y Preview. Ya llegaron `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE` y `PDEPAPEL_RO_PASSWORD` de la base nueva; `MYSQL_PRIVATE_URL` existe desde hace 912 días. La app no las usa (solo `DATABASE_URL`), pero quedan replicadas, cifradas. Revisar después del corte si conviene acotar o quitar esa integración.
 
-**Durante el corte:**
-- El panel y los webhooks reciben el error 1290 (solo lectura). Bold, Wompi, Mercado Libre y Meta reintentan los webhooks.
-- La tienda sigue mostrando páginas desde ISR.
-- No hay un modo de mantenimiento en el panel.
+## Rollback (cualquier falla desde el paso 5)
 
-**Cómo se congela:** `SET GLOBAL super_read_only = ON` activa también `read_only` y bloquea hasta a root.
-- Se revierte con `SET GLOBAL super_read_only = OFF; SET GLOBAL read_only = OFF;`.
-- Probado el 2026-10-06 en la base **nueva**: `root` tiene permisos globales y `partial_revokes = 0`; con `ON`, un `CREATE TABLE` de root da `ERROR 1290`, y con `OFF` escribe de nuevo.
-- **No sirve** un `REVOKE … ON railway.* FROM root`: con permisos globales y sin `partial_revokes`, un revoke por base no le quita nada.
+**Nunca dejar la base vieja en solo lectura mientras la app siga apuntando a ella.**
 
-**Caída esperada:** solo escrituras, unos **12–15 min** (de 06:01 a ~06:14). Congelar 1 min, copia y verificación ~2,5 min, conexiones ~3 min, deploy ~2,5 min más cola, prueba de escritura 1 min. La lectura de la tienda no se cae mientras haya ISR.
-
-## Rollback
-
-**Dentro de la ventana** (el workflow falla, el deploy falla o la verificación falla):
-1. **[Christian]** Si ya cambiaste `DATABASE_URL`, devolver el valor viejo en Vercel. **[Claude, con tu sí]** Deploy nuevo del admin.
-2. **[Christian]** Token, y **[Claude]** `npm run prod:write -- scripts/db-read-only.mjs --off` en la base vieja. Comprobar `@@super_read_only = 0`.
-3. **[Christian]** Devolver los secretos `BACKUP_DB_*` y los `.env` locales, si se cambiaron. Volver a poner `BACKUP_ENABLED=true`.
-4. Mientras la vieja estuvo congelada no se escribió nada en ninguna de las dos bases: no hay datos que copiar.
-
-**Después de la ventana** (si hay que volver con escrituras ya hechas en la nueva):
-- Los pasos 1–3 anteriores.
-- **[Claude, con aprobación]** Copiar a la base vieja lo escrito en la nueva después del corte (pedidos, pagos, movimientos de inventario y eventos de webhook con `createdAt` posterior). Por prod-write, una tabla a la vez.
+1. **[Christian]** Si ya cambiaste `DATABASE_URL` (Vercel, admin Production), volver a poner el valor viejo. **[Claude, con tu sí]** Deploy nuevo de producción del admin y esperar READY.
+2. **[Christian]** `npm run prod:approve -- "descongelar la base vieja (super_read_only OFF): rollback del corte a us-east4"`.
+3. **[Claude]** `npm run prod:write -- scripts/db-read-only.mjs --off --expect old` (con `.env.prod-write` apuntando todavía, o otra vez, a la base vieja). El guion comprueba que es la vieja, descongela y prueba que una escritura pasa. Luego `--status --expect old` con `pdepapel_ro` tiene que mostrar 0/0.
+4. **[Christian]** Devolver los secretos `BACKUP_DB_*` y los `.env` locales, si se cambiaron, y `BACKUP_ENABLED=true`.
+5. Mientras la vieja estuvo congelada no se escribió nada en ninguna base, así que no hay datos que copiar. Si se vuelve atrás después de abrir escrituras en la nueva, hay que copiar a mano lo escrito ahí (pedidos, pagos, kardex, webhooks), por prod-write y con aprobación.
 
 ## Costo de la transición (estimado)
 
