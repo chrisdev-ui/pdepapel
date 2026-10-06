@@ -131,6 +131,9 @@ Everything in this section is a guardrail. Each one exists because it already we
 
 The default credentials in `.env` are the read-only MySQL user `pdepapel_ro` (`SELECT`, `SHOW VIEW`), so any `--env-file=.env` script and a local dev server pointed at production can only read. The root URL lives in `.env.prod-write`, gitignored and not loaded by anything on its own.
 
+- **Production data is only read through the read-only user.** Every read of production data uses `pdepapel_ro` from `.env`: run the script from `pdepapel-admin` with `node --env-file=.env <script>` (Prisma loaded with `createRequire` from this app's `package.json`, scripts kept in the session scratchpad, output limited to counts, ids and slugs — never customer PII). Never use `.env.prod-write` for a read.
+- **Never disable the sandbox, not even for read-only database access.** Not the main agent and not a sub-agent. The documented read-only script above runs inside it; if it cannot reach Railway from the sandbox, stop and tell Christian instead of turning the sandbox off.
+
 - A write runs through `npm run prod:write -- <script> [args]`, which requires a fresh approval token, a Railway host, a script under `scripts/` or the session scratchpad, and appends a line to the tracked `pdepapel-admin/ops/prod-writes.log`. Commit that log with the change.
 - The approval token comes from `npm run prod:approve -- "<reason>"`, which **refuses to run without a TTY**, so an agent cannot mint it. One token, one use, 15 minutes.
 - The token is consumed the moment the child process starts, whatever happens next, because a script that fails halfway may already have written.

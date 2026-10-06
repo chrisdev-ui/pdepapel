@@ -100,6 +100,7 @@ Everything in this section is a guardrail. Each one exists because it already we
 - **Never run `vercel env rm` / `vercel env add` or edit variables in the dashboard without explicit per-variable approval.** `vercel env rm NAME` with no environment argument deletes the variable from **all** environments, and deleted values are unrecoverable, and a deleted analytics or feature key does not fail anything — the feature just goes dark until someone notices. To scope a variable, re-add it for the environment you want; never delete first.
 - **Secrets never enter Git, this repository's docs, terminal history, screenshots, email or chat.** Ask in chat before reading a production secret, even read-only. Client-visible `NEXT_PUBLIC_*` values are public by design; **never `NEXT_PUBLIC_`-prefix a secret**.
 - Production environment changes need a new deployment to take effect.
+- **Never disable the sandbox, not even for read-only database access** (main agent or sub-agent). This app has no database; production data is read only through the admin's read-only user `pdepapel_ro` with the documented script in `pdepapel-admin/AGENTS.md` («Production database writes»). If it cannot run inside the sandbox, stop and tell Christian.
 - `tmp/` and `outputs/` are gitignored scratch. `output/` (singular) is **tracked** and holds deliberate artifacts; do not treat it as disposable.
 
 ### Routing and SEO — the part that breaks silently
