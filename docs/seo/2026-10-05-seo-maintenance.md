@@ -1063,3 +1063,22 @@ npm run prod:write -- scripts/enable-bloques-category-seo.mjs --revert /Users/ch
 **Pendiente:**
 - Que el error boundary informe el error, por ejemplo con un evento `exception` a GA4 con mensaje y ruta, sin datos personales, para ver estos casos sin depender de Clarity.
 - Confirmar en Clarity, en los próximos días, que el error deja de aparecer junto a la pantalla de error.
+
+### 11.10 Auditoría de rendimiento: bloque «hoy» (2026-10-06)
+
+**Región (sin cambio):**
+- MySQL está en Railway **us-west2** (CLI de Railway) y las funciones de los dos proyectos en **iad1**.
+- Upstash Redis está en **us-east-1**: las 9 IP del host del `.env` local resuelven a `compute-1.amazonaws.com`, una sola región. No se verificó que producción use el mismo Redis.
+- La regla aprobada era no mover las funciones a sfo1 si Redis estaba en el este, así que siguen en iad1. La región definitiva sale de la revisión de arquitectura.
+
+**Pool de Prisma, de 3 a 6** (`pdepapel-admin/lib/prismadb.ts`):
+- El pico histórico de MySQL fue de 85 conexiones (2026-09-15, con 3 por instancia, unas 28 instancias). Con 6 ese pico sería unas 168 de 300 (56 %); con 8 serían unas 224 (75 %).
+- No se sube a 8 porque el firewall todavía no bloquea bots (Bot Protection y AI Bots en «Log») y los picos pueden volver.
+- Se revisa cuando estén la regla de bots y la invalidación de caché por slug.
+- Si la `DATABASE_URL` de Vercel trae `connection_limit`, manda ese valor.
+
+**Otros cambios:**
+- Panel: la entrada de pantalla pasa de 0,75 s a 0,15 s, sin animación con «reducir movimiento».
+- Tienda: los error boundaries mandan un evento `exception` a GA4, con consentimiento y sin datos personales. Ante un chunk que no carga, recargan una vez.
+- Admin: la idempotencia de pedidos usa una señal de aborto por comando. Antes, con una señal fija, `s.map is not a function` impedía guardar la respuesta y liberar el bloqueo.
+- Admin: la imagen de respaldo `/placeholder.png` no existía y disparaba `auth()` de Clerk fuera del middleware. Ahora es `/images/placeholder_1.png`.
