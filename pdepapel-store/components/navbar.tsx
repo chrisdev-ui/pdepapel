@@ -55,11 +55,17 @@ const Navbar: React.FC<NavbarProps> = ({
   const scrolled = scrollPosition > 80;
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50">
-      <AnnouncementBar
-        freeShippingThreshold={freeShippingThreshold}
-        className={cn("transition-[height] duration-300", scrolled && "max-lg:hidden")}
-      />
+    // Al desplazarse, en teléfonos y tabletas la franja de anuncios (h-8, 32 px)
+    // sale de la pantalla moviendo toda la cabecera hacia arriba con
+    // `transform`, no sacándola del flujo: con `display: none` la barra de abajo
+    // saltaba 32 px y cada vez contaba como desplazamiento de diseño (CLS). El
+    // resultado se ve igual y coincide con --storefront-header-scrolled-offset.
+    // Nada dentro de la cabecera usa `position: fixed` (los paneles van en un
+    // portal), así que el `transform` no les cambia la referencia.
+    <header className={cn("fixed inset-x-0 top-0 z-50", scrolled && "max-lg:-translate-y-8")}>
+      {/* `invisible` (no `hidden`): fuera del foco y del lector de pantalla
+          como antes, pero sin cambiar el alto. */}
+      <AnnouncementBar freeShippingThreshold={freeShippingThreshold} className={cn(scrolled && "max-lg:invisible")} />
 
       <nav aria-label="Principal" className="bg-blue-baby">
         {/* Phones and tablets */}

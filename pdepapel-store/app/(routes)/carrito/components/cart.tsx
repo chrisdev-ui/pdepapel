@@ -136,7 +136,27 @@ const Cart: React.FC<CartProps> = ({ suggestions = [], categories = [] }) => {
     headingRef.current?.focus();
   };
 
-  if (!isMounted) return <CartSkeleton />;
+  // La lista de sugerencias viene del servidor y no depende del carrito, así
+  // que se pinta desde el primer render: antes aparecía al montar, debajo del
+  // esqueleto, y empujaba el pie de página (CLS 0,14 en escritorio). Al montar
+  // solo cambian sus productos (sin los que ya están en el carrito) y el texto
+  // de arriba, con el mismo alto.
+  if (!isMounted) {
+    const initialSuggestions = suggestions.slice(0, MAX_SUGGESTIONS);
+    return (
+      <div className="flex flex-col gap-8 lg:gap-10">
+        <CartSkeleton />
+        {initialSuggestions.length > 0 && (
+          <ProductList
+            title="Completa tu pedido"
+            eyebrow="Lo más pedido"
+            products={initialSuggestions}
+            action={{ label: "Ver toda la tienda", href: STOREFRONT_ROUTES.shop }}
+          />
+        )}
+      </div>
+    );
+  }
 
   const isEmpty = cart.items.length === 0;
 
@@ -293,7 +313,7 @@ function EmptyCart({
 }
 
 const CartSkeleton = () => (
-  <div className="space-y-8" aria-busy="true" aria-live="polite">
+  <div className="space-y-8 lg:space-y-10" aria-busy="true" aria-live="polite">
     <span className="sr-only">Cargando carrito</span>
     <Skeleton className="h-10 w-52" />
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-12">

@@ -175,28 +175,6 @@ export function Wishlist({ suggestions = [], categories = [] }: WishlistProps) {
         </div>
       </div>
 
-      <SignedOut>
-        <aside className="flex flex-col items-start gap-3 rounded-xl border border-purple-100 bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 font-sans text-sm text-blue-yankees sm:flex-row sm:items-center">
-          <UserPlus
-            aria-hidden="true"
-            className="h-5 w-5 shrink-0 text-purple-700"
-          />
-          <p className="min-w-0 flex-1">
-            <strong>Guarda tus favoritos en tu cuenta</strong> para verlos en
-            cualquier dispositivo y no perderlos si cambias de celular.
-          </p>
-          <Link
-            href={accountAccessPath(
-              STOREFRONT_ROUTES.signUp,
-              STOREFRONT_ROUTES.wishlist,
-            )}
-            className="inline-flex h-10 items-center rounded-full border-2 border-blue-yankees px-4 font-semibold"
-          >
-            Crear cuenta gratis
-          </Link>
-        </aside>
-      </SignedOut>
-
       {items.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-blue-purple bg-kawaii-lavender-light/40 px-6 py-10 text-center">
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white">
@@ -262,6 +240,32 @@ export function Wishlist({ suggestions = [], categories = [] }: WishlistProps) {
           action={{ label: "Ver toda la tienda", href: STOREFRONT_ROUTES.shop }}
         />
       )}
+
+      {/* Al final de la página, no arriba: Clerk confirma la sesión segundos
+          después de pintar, y el recuadro, al aparecer encima, bajaba todo el
+          contenido (CLS 0,15 en móvil). Aquí solo empuja el pie de página,
+          que queda fuera de la pantalla. */}
+      <SignedOut>
+        <aside className="flex flex-col items-start gap-3 rounded-xl border border-purple-100 bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 font-sans text-sm text-blue-yankees sm:flex-row sm:items-center">
+          <UserPlus
+            aria-hidden="true"
+            className="h-5 w-5 shrink-0 text-purple-700"
+          />
+          <p className="min-w-0 flex-1">
+            <strong>Guarda tus favoritos en tu cuenta</strong> para verlos en
+            cualquier dispositivo y no perderlos si cambias de celular.
+          </p>
+          <Link
+            href={accountAccessPath(
+              STOREFRONT_ROUTES.signUp,
+              STOREFRONT_ROUTES.wishlist,
+            )}
+            className="inline-flex h-10 items-center rounded-full border-2 border-blue-yankees px-4 font-semibold"
+          >
+            Crear cuenta gratis
+          </Link>
+        </aside>
+      </SignedOut>
     </div>
   );
 }

@@ -41,6 +41,26 @@ describe("Wishlist page", () => {
     expect(useWishlist.getState().items.map((entry) => entry.id)).toEqual(["a", "c"]);
   });
 
+  /**
+   * CLS: Clerk confirma la sesión segundos después de pintar. Si el recuadro
+   * «Guarda tus favoritos» aparece encima del contenido, lo empuja todo hacia
+   * abajo (0,157 en móvil). Va al final, después de las recomendaciones.
+   */
+  it("puts the account prompt after the favorites and the empty state, never above them", () => {
+    const { container, unmount } = render(<Wishlist />);
+    const prompt = screen.getByText("Guarda tus favoritos en tu cuenta").closest("aside")!;
+    const list = screen.getByRole("list", { name: "Productos favoritos" });
+    expect(list.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.firstElementChild!.lastElementChild).toBe(prompt);
+    unmount();
+
+    useWishlist.setState({ items: [], guestItems: [] });
+    render(<Wishlist />);
+    const empty = screen.getByText("Todavía no tienes favoritos");
+    const emptyPrompt = screen.getByText("Guarda tus favoritos en tu cuenta").closest("aside")!;
+    expect(empty.compareDocumentPosition(emptyPrompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("renders an empty state with category chips", () => {
     useWishlist.setState({ items: [], guestItems: [] });
     render(<Wishlist categories={[{ id: "c1", typeId: "t", name: "🎀 Stickers", slug: "stickers" }]} />);

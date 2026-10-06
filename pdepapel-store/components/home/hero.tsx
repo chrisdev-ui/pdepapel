@@ -68,7 +68,14 @@ export function Hero({ content, freeShippingThreshold }: HeroProps) {
             </Link>
           )}
         </div>
-        <ul className="flex flex-col gap-2 font-sans text-sm font-medium text-blue-yankees/80 sm:flex-row sm:flex-wrap sm:gap-x-5 lg:flex-col xl:flex-row">
+        {/* Desde xl las tres promesas caben en una línea con Quicksand (medido
+            de 1280 a 1920 px), pero con la fuente de respaldo ocupan dos.
+            Quicksand llega tarde (preload: false) y la lista se encogía 28 px,
+            moviendo todo lo de abajo (CLS 0,12 en escritorio). `xl:h-5` fija el
+            alto final: mientras carga la fuente, la segunda línea usa el padding
+            inferior de la sección sin empujar nada. Si cambian los textos de
+            lib/trust-points.ts y ya no caben en una línea, hay que quitarlo. */}
+        <ul className="flex flex-col gap-2 font-sans text-sm font-medium text-blue-yankees/80 sm:flex-row sm:flex-wrap sm:gap-x-5 lg:flex-col xl:h-5 xl:flex-row">
           {promises.map((promise) => (
             <li key={promise} className="inline-flex items-center gap-2">
               <Check aria-hidden="true" className="h-4 w-4 text-green-600" />
