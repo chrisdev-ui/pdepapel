@@ -962,3 +962,17 @@ Christian aprobó en nombre de Paula las opciones recomendadas de §A.2 de las p
 - Los opcionales de `order-status.ts` y de los enlaces del checkout.
 
 **Valor en base de datos (§A.3):** `StoreSettings.deliveryEstimate` pasa de «2 a 4» a «2 a 6 días hábiles» con `pdepapel-admin/scripts/update-delivery-estimate.mjs` (ensayo de solo lectura, copia de respaldo, una fila, transacción con `timeout: 60_000`). Se aplica **después** de que el texto nuevo esté en producción. Para revertir: `npm run prod:write -- scripts/update-delivery-estimate.mjs --revert <copia.json>` con una aprobación nueva.
+
+### 11.7 Plazo de entrega en la base (2026-10-06, 06:06 UTC)
+
+`StoreSettings.deliveryEstimate` de la tienda pasó de «2 a 4 días hábiles» a **«2 a 6 días hábiles»**: una fila, por `npm run prod:write` (`rows=1`), con `pdepapel-admin/scripts/update-delivery-estimate.mjs`, después del deploy del texto nuevo (`4ec263e2`). El cambio no revalida la tienda por su cuenta. La API pública lo mostró a los ~3 min, y la tienda a los ~11 min, cuando se renovaron la caché de datos y la de la página.
+
+**Verificación:** `/politicas/envios` dice «2 a 6 días hábiles desde que se confirma el pago» y la ficha de producto también lo muestra. «2 a 4» ya no aparece. El JSON-LD de una ficha y del inicio quedó idéntico. El bot de WhatsApp lee la base y cambió al instante.
+
+**Copia:** `~/pdepapel-backups/2026-10-06/delivery-estimate-2026-10-06T04-58-48-474Z.json`, fuera del repositorio.
+
+**Cómo revertir**, con una aprobación nueva:
+```
+cd pdepapel-admin && npm run prod:approve -- "revertir deliveryEstimate a «2 a 4 días hábiles»"
+npm run prod:write -- scripts/update-delivery-estimate.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/delivery-estimate-2026-10-06T04-58-48-474Z.json
+```
