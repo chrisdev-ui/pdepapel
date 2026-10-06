@@ -918,7 +918,7 @@ Christian aprobó en nombre de Paula los textos de §B.2.2 de `2026-10-05-wave-3
 
 - **Se activó `seoEnabled` en 7:** planeadores, reglas, porta-carnets, portaminas, separadores-de-paginas, pines y banderitas-adhesivas.
 - **Solo texto, siguen sin indexar:** plumones, pegante, bisturies, troqueles, cosidos, colores, blocks-de-papel, papeles y monas-pinzas.
-- **Lego:** recibe texto pero sigue sin indexar y sin renombrar, a la espera de saber si los productos son de la marca LEGO.
+- **Lego:** recibe texto pero sigue sin indexar y sin renombrar, a la espera de saber si los productos son de la marca LEGO. Se renombró el 2026-10-06: ver §11.8.
 - **Las 15 ya indexadas:** cambiaron sus textos y siguen indexadas.
 - No se tocó `seoFeatured`.
 - Las otras 75 categorías quedaron iguales (comparadas con la foto previa).
@@ -975,4 +975,53 @@ Christian aprobó en nombre de Paula las opciones recomendadas de §A.2 de las p
 ```
 cd pdepapel-admin && npm run prod:approve -- "revertir deliveryEstimate a «2 a 4 días hábiles»"
 npm run prod:write -- scripts/update-delivery-estimate.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/delivery-estimate-2026-10-06T04-58-48-474Z.json
+```
+
+### 11.8 «Lego» → «Bloques de construcción» (2026-10-06, 13:57 UTC)
+
+Los productos no son de la marca LEGO: son bloques compatibles, y «Lego» es una marca registrada. Christian aprobó el plan del ensayo (nombres y textos literales) y estas reglas:
+- «Lego» no va en el nombre ni el slug de la categoría, los productos y los grupos, ni en marca, `seoTitle`, `seoDescription`, H1, alt, nombre o marca del JSON-LD, ni en los títulos de Merchant Center o Mercado Libre.
+- «estilo Lego» solo aparece dentro del aviso final: «Son bloques de construcción estilo Lego. No son productos de LEGO ni están afiliados a LEGO Group.» Va en las descripciones y como última frase del `seoIntro` de la categoría.
+
+**Qué cambió en la base**, por `npm run prod:write` con `pdepapel-admin/scripts/rename-lego-to-bloques.mjs` (`rows=82`, 29,7 s, una transacción con condición por fila):
+- **Categoría `a8729e87`:** «Lego» / `lego` → «Bloques de construcción» / `bloques-de-construccion`. El `seoIntro` termina con el aviso (404 caracteres). `CategorySlugAlias` nuevo `lego` hace que `/categoria/lego` dé 308 al canónico. `seoEnabled` no se tocó en este paso.
+- **Diseño `c2a2a452`:** «Lego» → «Bloques».
+- **6 grupos y 37 productos (7 vivos):** nombre «Bloques de construcción <tema>» (el tema no cambia). La excepción es «Tajalápiz lego» → «Tajalápiz de bloques». Kit Stitch 3 solo cambia la descripción.
+- **Slugs:** los nuevos salen del mismo algoritmo del panel (`synchronizeProductGroupSlugs`), así que una edición posterior del grupo no los vuelve a cambiar. Los 36 slugs viejos quedan como `ProductSlugAlias`.
+- **Descripciones:** las menciones pasan a palabras neutras y llevan el aviso al final. Los 5 vivos que no tenían descripción reciben un párrafo neutro delante del aviso, para que «Lego» quede fuera de los 160 caracteres de la meta description.
+- **No se tocó:** `OrderItem.name` (19 filas, histórico de pedidos), los mensajes de conversaciones (5) ni la ruta de Cloudinary de la imagen de la categoría.
+
+**Código** (`0d167257`, deploy del panel):
+- `getGoogleMerchantDescription` quita las tres frases exactas del aviso, así que no llegan a los feeds de Google ni de Meta. Si la descripción es solo el aviso, el feed usa el nombre.
+- Sinónimo `["lego", "bloques"]`: «lego» sigue encontrando los productos por nombre.
+- `e4888811` lleva las 7 redirecciones fijas de `legacy-product-redirects.mjs` directo a los slugs nuevos. Sale en un push posterior al cambio en la base: antes, sus destinos no existían.
+
+**Prueba local previa** contra `pdepapel_test`:
+- Fixtures con el mismo plan que producción.
+- `--apply`, `--revert` (idéntico a los fixtures) y otro `--apply`, los tres con 82 filas.
+- Un `--apply` repetido sobre el estado ya aplicado aborta sin escribir.
+
+**Verificación en producción** (14:11 UTC, pasada la caché):
+- `/categoria/bloques-de-construccion` da 200 con H1 «Bloques de construcción», los textos aprobados y el aviso en la intro.
+- `/categoria/lego` da 308 → canónico.
+- Los 7 vivos dan 200 con el nombre nuevo, sin «lego» en `<title>`, H1, meta description, og, alt ni JSON-LD (nombre, marca y descripción).
+- Los 7 slugs viejos llegan con una sola 308.
+- Las 7 redirecciones fijas llegan, con dos saltos hasta el push de `e4888811`.
+- Los archivados sueltos llegan a `/categoria/bloques-de-construccion`; los de grupo, a su hermana viva.
+- «lego» en `/tienda` encuentra los productos renombrados.
+- El sitemap tiene los 7 slugs nuevos y 0 URL con «lego».
+
+**Copia:** `~/pdepapel-backups/2026-10-06/rename-lego-2026-10-06T07-17-33-775Z.json` (sha256 empieza por `683a840e1fa0`), fuera del repositorio. Tiene antes y después de cada campo y los alias creados.
+
+**Cómo revertir el renombrado**, con una aprobación nueva. Borra los 37 alias creados y deja las 45 filas como en la copia; exige que sigan exactamente como quedaron.
+```
+cd pdepapel-admin && npm run prod:approve -- "revertir Lego → Bloques de construcción (82 filas de rename-lego-to-bloques)"
+npm run prod:write -- scripts/rename-lego-to-bloques.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/rename-lego-2026-10-06T07-17-33-775Z.json
+```
+Antes de revertir hay que sacar `e4888811`: sus destinos dejarían de existir.
+
+**Indexación** (paso aparte): `pdepapel-admin/scripts/enable-bloques-category-seo.mjs` pone `seoEnabled=true` en la categoría renombrada. La copia del ensayo es `~/pdepapel-backups/2026-10-06/enable-bloques-category-seo-2026-10-06T14-11-24-089Z.json` (sha256 empieza por `d82b8aada204`). Para revertirlo, con una aprobación nueva:
+```
+cd pdepapel-admin && npm run prod:approve -- "revertir seoEnabled de Bloques de construcción"
+npm run prod:write -- scripts/enable-bloques-category-seo.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/enable-bloques-category-seo-2026-10-06T14-11-24-089Z.json
 ```
