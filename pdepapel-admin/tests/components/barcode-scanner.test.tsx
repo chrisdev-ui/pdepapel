@@ -5,6 +5,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getRemoteScannerController, resetRemoteScannerControllers } from "@/hooks/use-remote-scanner";
 import { resetScanFeedback } from "@/hooks/use-scan-feedback";
 import { SCAN_REJECT_TONE, SCAN_SUCCESS_TONE } from "@/lib/scan-feedback";
 import { scanAccepted, scanRejected } from "@/lib/scan-outcome";
@@ -180,6 +181,47 @@ describe("BarcodeScanner", () => {
       await act(async () => callback({ getText: () => "PDP:p-1" }));
 
       expect(tonos).toEqual([]);
+    });
+  });
+  /**
+   * Issue #2: con varias líneas, cada una con su lector, la etiqueta larga se
+   * pintaba como texto y el sonido y el celular se repetían por línea. Estas
+   * opciones separan el nombre accesible del texto visible y reparten los
+   * botones entre una instancia por línea (`camera`) y una por pantalla
+   * (`secondary`). Sin ellas, el lector se ve igual que antes.
+   */
+  describe("iconOnly y controls", () => {
+    afterEach(() => resetRemoteScannerControllers());
+
+    it("by default keeps the camera text, the sound toggle and, with a store, the linked phone", () => {
+      render(<BarcodeScanner onDetected={() => undefined} storeId="store-1" />);
+      expect(screen.getByRole("button", { name: "Escanear" })).toHaveTextContent("Escanear");
+      expect(screen.getByRole("button", { name: /sonido al escanear/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Usar el celular como escáner" })).toBeInTheDocument();
+    });
+
+    it("iconOnly keeps the label as the accessible name and tooltip, never as visible text", () => {
+      render(<BarcodeScanner onDetected={() => undefined} label="Escanear producto de la línea 3" iconOnly compact />);
+      const button = screen.getByRole("button", { name: "Escanear producto de la línea 3" });
+      expect(button.textContent?.trim()).toBe("");
+      expect(button).toHaveAttribute("title", "Escanear producto de la línea 3");
+      expect(screen.queryByText("Escanear producto de la línea 3")).toBeNull();
+    });
+
+    it("controls=camera paints only the camera and does not take the linked phone's reads", () => {
+      render(<BarcodeScanner onDetected={() => undefined} storeId="store-1" controls="camera" />);
+      expect(screen.getByRole("button", { name: "Escanear" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /sonido al escanear/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /celular/i })).toBeNull();
+      expect(getRemoteScannerController("store-1").getState().activeTargetId).toBeNull();
+    });
+
+    it("controls=secondary paints only the sound and linked-phone toggles and receives the phone's reads", () => {
+      render(<BarcodeScanner onDetected={() => undefined} storeId="store-1" controls="secondary" />);
+      expect(screen.queryByRole("button", { name: "Escanear" })).toBeNull();
+      expect(screen.getByRole("button", { name: /sonido al escanear/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Usar el celular como escáner" })).toBeInTheDocument();
+      expect(getRemoteScannerController("store-1").getState().activeTargetId).not.toBeNull();
     });
   });
 });

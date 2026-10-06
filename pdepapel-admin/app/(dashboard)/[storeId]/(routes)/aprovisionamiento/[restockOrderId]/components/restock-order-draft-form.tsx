@@ -1,6 +1,6 @@
 "use client";
 
-import { AsyncProductSelect } from "@/components/ui/async-product-select";
+import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
 import { ProductScanButton } from "@/components/ui/product-scan-button";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
@@ -94,6 +94,28 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
   useFormValidationToast({ form });
   const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
+
+  /**
+   * Lo que lee el celular vinculado (sus botones viven una sola vez en la
+   * cabecera de «Líneas del pedido»): si el producto ya está en una línea,
+   * suma una unidad; si no, llena la primera línea vacía o abre una nueva con
+   * el costo de compra del catálogo. Así se puede escanear caja por caja.
+   */
+  const addScannedProduct = (product: AsyncProductOption) => {
+    const current = form.getValues("items") ?? [];
+    const existing = current.findIndex((item) => item.productId === product.id);
+    if (existing >= 0) {
+      form.setValue(`items.${existing}.quantity`, (Number(current[existing].quantity) || 0) + 1, { shouldDirty: true });
+      return;
+    }
+    const empty = current.findIndex((item) => !item.productId);
+    if (empty >= 0) {
+      form.setValue(`items.${empty}.productId`, product.id, { shouldDirty: true });
+      if (!current[empty].cost) form.setValue(`items.${empty}.cost`, product.acqPrice || 0, { shouldDirty: true });
+      return;
+    }
+    append({ productId: product.id, quantity: 1, cost: product.acqPrice || 0 });
+  };
 
   const items = form.watch("items");
   const shippingCost = form.watch("shippingCost") || 0;
@@ -224,10 +246,14 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
                 title="Líneas del pedido"
                 description="Producto, cantidad y costo unitario acordado con el proveedor."
                 action={
-                  <Button type="button" variant="soft" size="sm" onClick={() => append({ productId: "", quantity: 1, cost: 0 })} disabled={loading}>
-                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                    Agregar producto
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {/* Sonido y celular vinculado, una vez para todas las líneas: antes se repetían en cada fila y le quitaban el ancho al producto. */}
+                    <ProductScanButton controls="secondary" size="sm" onFound={addScannedProduct} />
+                    <Button type="button" variant="soft" size="sm" onClick={() => append({ productId: "", quantity: 1, cost: 0 })} disabled={loading}>
+                      <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      Agregar producto
+                    </Button>
+                  </div>
                 }
               >
                 {fields.length === 0 ? (
@@ -238,79 +264,83 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
                       const line = items[index];
                       const subtotal = lineSubtotal(Number(line?.quantity) || 0, Number(line?.cost) || 0);
                       return (
-                        <div key={field.id} className="grid grid-cols-1 items-end gap-3 rounded-lg border p-3 sm:grid-cols-12">
-                          <div className="sm:col-span-5">
-                            <FormField
-                              control={form.control}
-                              name={`items.${index}.productId`}
-                              render={({ field: productField }) => (
-                                <FormItem>
-                                  <FormLabel isRequired>Producto</FormLabel>
-                                  <div className="flex min-w-0 items-start gap-2">
-                                    <div className="min-w-0 flex-1">
-                                      <AsyncProductSelect
-                                        disabled={loading}
-                                        value={productField.value ?? ""}
-                                        ariaLabel={`Producto de la línea ${index + 1}`}
-                                        onChange={(value, product) => {
-                                          productField.onChange(value);
-                                          if (product && !form.getValues(`items.${index}.cost`)) {
-                                            form.setValue(`items.${index}.cost`, product.acqPrice || 0, { shouldDirty: true });
-                                          }
-                                        }}
-                                      />
-                                    </div>
-                                    <ProductScanButton
-                                      compact
-                                      label={`Escanear producto de la línea ${index + 1}`}
-                                      onFound={(product) => {
-                                        productField.onChange(product.id);
-                                        if (!form.getValues(`items.${index}.cost`)) {
+                        <div key={field.id} data-line-row={index + 1} className="flex min-w-0 flex-col gap-3 rounded-lg border p-3">
+                          {/* El producto ocupa toda la fila: el nombre y su variante son lo que distingue una línea de otra. */}
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.productId`}
+                            render={({ field: productField }) => (
+                              <FormItem>
+                                <FormLabel isRequired>Producto</FormLabel>
+                                <div className="flex min-w-0 items-start gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <AsyncProductSelect
+                                      disabled={loading}
+                                      value={productField.value ?? ""}
+                                      ariaLabel={`Producto de la línea ${index + 1}`}
+                                      details="cost"
+                                      onChange={(value, product) => {
+                                        productField.onChange(value);
+                                        if (product && !form.getValues(`items.${index}.cost`)) {
                                           form.setValue(`items.${index}.cost`, product.acqPrice || 0, { shouldDirty: true });
                                         }
                                       }}
                                     />
                                   </div>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <FormField
-                              control={form.control}
-                              name={`items.${index}.quantity`}
-                              render={({ field: quantityField }) => (
-                                <FormItem>
-                                  <FormLabel isRequired>Cantidad</FormLabel>
-                                  <FormControl>
-                                    <StockQuantityInput disabled={loading} min={1} value={quantityField.value} onChange={quantityField.onChange} ariaLabel={`Cantidad de la línea ${index + 1}`} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="sm:col-span-3">
-                            <FormField
-                              control={form.control}
-                              name={`items.${index}.cost`}
-                              render={({ field: costField }) => (
-                                <FormItem>
-                                  <FormLabel isRequired>Costo unitario</FormLabel>
-                                  <FormControl>
-                                    <CurrencyInput disabled={loading} value={costField.value} onChange={(value) => costField.onChange(value ?? 0)} aria-label={`Costo unitario de la línea ${index + 1}`} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between gap-2 sm:col-span-2 sm:justify-end">
-                            <span className="text-sm font-medium text-primary sm:text-right">{currencyFormatter(subtotal)}</span>
-                            <Button type="button" variant="ghost" size="icon-sm" onClick={() => remove(index)} disabled={loading} aria-label={`Quitar la línea ${index + 1}`} className="text-muted-foreground hover:text-destructive">
-                              <Trash2 className="h-4 w-4" aria-hidden="true" />
-                            </Button>
+                                  {/* Solo el icono: el texto «Escanear producto de la línea N» queda para el lector de pantalla. */}
+                                  <ProductScanButton
+                                    iconOnly
+                                    controls="camera"
+                                    label={`Escanear producto de la línea ${index + 1}`}
+                                    onFound={(product) => {
+                                      productField.onChange(product.id);
+                                      if (!form.getValues(`items.${index}.cost`)) {
+                                        form.setValue(`items.${index}.cost`, product.acqPrice || 0, { shouldDirty: true });
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid min-w-0 grid-cols-2 items-end gap-3 sm:grid-cols-12">
+                            <div className="min-w-0 sm:col-span-4">
+                              <FormField
+                                control={form.control}
+                                name={`items.${index}.quantity`}
+                                render={({ field: quantityField }) => (
+                                  <FormItem>
+                                    <FormLabel isRequired>Cantidad</FormLabel>
+                                    <FormControl>
+                                      <StockQuantityInput disabled={loading} min={1} value={quantityField.value} onChange={quantityField.onChange} ariaLabel={`Cantidad de la línea ${index + 1}`} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="min-w-0 sm:col-span-5">
+                              <FormField
+                                control={form.control}
+                                name={`items.${index}.cost`}
+                                render={({ field: costField }) => (
+                                  <FormItem>
+                                    <FormLabel isRequired>Costo unitario</FormLabel>
+                                    <FormControl>
+                                      <CurrencyInput disabled={loading} value={costField.value} onChange={(value) => costField.onChange(value ?? 0)} aria-label={`Costo unitario de la línea ${index + 1}`} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="col-span-2 flex min-h-10 items-center justify-between gap-2 sm:col-span-3 sm:justify-end">
+                              <span className="text-sm font-medium text-primary sm:text-right">{currencyFormatter(subtotal)}</span>
+                              <Button type="button" variant="ghost" size="icon-sm" onClick={() => remove(index)} disabled={loading} aria-label={`Quitar la línea ${index + 1}`} className="text-muted-foreground hover:text-destructive">
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );

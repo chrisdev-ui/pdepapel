@@ -41,6 +41,21 @@ type BarcodeScannerProps = {
   remoteStatusLabel?: boolean;
   /** Tienda, cuando no se puede sacar de la ruta. Por defecto, la de la ruta. */
   storeId?: string;
+  /**
+   * Solo el icono en todos los tamaños: `label` queda únicamente como nombre
+   * accesible (y `title`). Para varias líneas con su propio lector, donde el
+   * texto largo «Escanear producto de la línea N» se comía la fila.
+   */
+  iconOnly?: boolean;
+  /**
+   * Qué botones pinta esta instancia:
+   * - `all` (por defecto): cámara, sonido y celular vinculado.
+   * - `camera`: solo la cámara. No se registra como destino del celular; el
+   *   sonido y el celular los pone otra instancia `secondary` de la pantalla.
+   * - `secondary`: solo sonido y celular vinculado, una vez por pantalla. Las
+   *   lecturas del celular llegan a su `onDetected`.
+   */
+  controls?: "all" | "camera" | "secondary";
 };
 
 export function getCameraErrorMessage(cameraError: unknown) {
@@ -69,9 +84,15 @@ export function BarcodeScanner({
   size = "default",
   remoteStatusLabel = false,
   storeId: storeIdOverride,
+  iconOnly = false,
+  controls = "all",
 }: BarcodeScannerProps) {
   const params = useParams();
-  const storeId = remote ? (storeIdOverride ?? String(params?.storeId ?? "")) : "";
+  const showCamera = controls !== "secondary";
+  const showSecondary = controls !== "camera";
+  // Solo la cámara: no se registra en el celular vinculado, así las lecturas
+  // van a la instancia `secondary` de la pantalla y no a la primera línea.
+  const storeId = remote && showSecondary ? (storeIdOverride ?? String(params?.storeId ?? "")) : "";
   const [remoteOpen, setRemoteOpen] = useState(false);
   const controlsRef = useRef<IScannerControls | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -220,39 +241,45 @@ export function BarcodeScanner({
       }}
     >
       <div className={cn("flex min-w-0 items-center gap-1", className)}>
-        <Button
-          type="button"
-          variant="outline"
-          size={size === "sm" ? "sm" : "default"}
-          aria-label={label}
-          data-scan-flash={flash ?? undefined}
-          className={cn(
-            size === "sm" ? undefined : "min-h-[2.5rem]",
-            // El destello acompaña al pitido para quien trabaja en silencio o
-            // con ruido alrededor; dura lo mismo que el tono.
-            "transition-colors duration-150",
-            flash === "success" && "border-green-500 bg-green-50 text-green-800",
-            flash === "reject" && "border-rose-400 bg-rose-50 text-rose-800",
-          )}
-          onClick={() => void requestCamera()}
-        >
-          <Camera className={compact ? "h-4 w-4 sm:mr-2" : "mr-2 h-4 w-4"} aria-hidden="true" />
-          <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={muted ? "Activar el sonido al escanear" : "Silenciar el sonido al escanear"}
-          aria-pressed={muted}
-          title={muted ? "Sonido apagado · pulsa para activarlo" : "Suena al escanear · pulsa para silenciar"}
-          className="shrink-0 text-muted-foreground"
-          data-scan-mute={muted ? "on" : "off"}
-          onClick={toggleMuted}
-        >
-          {muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
-        </Button>
-        {remoteScanner.enabled && (
+        {showCamera && (
+          <Button
+            type="button"
+            variant="outline"
+            size={iconOnly ? (size === "sm" ? "icon-sm" : "icon") : size === "sm" ? "sm" : "default"}
+            aria-label={label}
+            title={iconOnly ? label : undefined}
+            data-scan-flash={flash ?? undefined}
+            className={cn(
+              size === "sm" ? undefined : "min-h-[2.5rem]",
+              iconOnly && "shrink-0",
+              // El destello acompaña al pitido para quien trabaja en silencio o
+              // con ruido alrededor; dura lo mismo que el tono.
+              "transition-colors duration-150",
+              flash === "success" && "border-green-500 bg-green-50 text-green-800",
+              flash === "reject" && "border-rose-400 bg-rose-50 text-rose-800",
+            )}
+            onClick={() => void requestCamera()}
+          >
+            <Camera className={iconOnly ? "h-4 w-4" : compact ? "h-4 w-4 sm:mr-2" : "mr-2 h-4 w-4"} aria-hidden="true" />
+            {!iconOnly && <span className={compact ? "hidden sm:inline" : undefined}>{label}</span>}
+          </Button>
+        )}
+        {showSecondary && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={muted ? "Activar el sonido al escanear" : "Silenciar el sonido al escanear"}
+            aria-pressed={muted}
+            title={muted ? "Sonido apagado · pulsa para activarlo" : "Suena al escanear · pulsa para silenciar"}
+            className="shrink-0 text-muted-foreground"
+            data-scan-mute={muted ? "on" : "off"}
+            onClick={toggleMuted}
+          >
+            {muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
+          </Button>
+        )}
+        {showSecondary && remoteScanner.enabled && (
           <Button
             type="button"
             variant="ghost"

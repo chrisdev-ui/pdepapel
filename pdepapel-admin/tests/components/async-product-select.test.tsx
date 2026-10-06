@@ -176,4 +176,15 @@ describe("AsyncProductSelect", () => {
     expect(onSelectGroup).toHaveBeenCalledWith({ id: "g1", name: "Cartuchera Wisdom", count: 2 });
     listState.rows = [];
   });
+  /** Aprovisionamiento: el disparador cerrado dice «SKU · stock · costo», no el precio de venta. */
+  it("shows SKU, stock and purchase cost in the closed trigger when asked for cost details", () => {
+    listState.rows = [{ ...selectedProduct, acqPrice: 21500 }];
+    cleanup();
+    render(<AsyncProductSelect value={selectedProduct.id} onChange={() => undefined} details="cost" modal />);
+    const trigger = screen.getByRole("combobox");
+    expect(trigger).toHaveTextContent(`SKU: ${selectedProduct.sku} · Stock: 12 · Costo: $ 21.500`);
+    expect(trigger).not.toHaveTextContent("38.500");
+    expect(trigger).not.toHaveTextContent("GTIN");
+    listState.rows = [];
+  });
 });

@@ -27,6 +27,10 @@ interface ProductScanButtonProps {
   storeId?: string;
   /** `sm` para cabeceras de sección con botones pequeños. */
   size?: "default" | "sm";
+  /** Solo el icono en todos los tamaños; `label` queda como nombre accesible. */
+  iconOnly?: boolean;
+  /** Qué botones pinta: ver `controls` en `BarcodeScanner`. */
+  controls?: "all" | "camera" | "secondary";
 }
 
 /**
@@ -45,6 +49,8 @@ export function ProductScanButton({
   notify = false,
   storeId: storeIdOverride,
   size = "default",
+  iconOnly = false,
+  controls = "all",
 }: ProductScanButtonProps) {
   const params = useParams();
   const storeId = storeIdOverride ?? String(params?.storeId ?? "");
@@ -73,5 +79,17 @@ export function ProductScanButton({
   // `storeId` también al lector: antes solo llegaba a la búsqueda y el lector
   // lo sacaba siempre de la ruta, así que fuera de una ruta con `[storeId]`
   // el celular vinculado se habría quedado sin tienda a la que preguntar.
-  return <BarcodeScanner onDetected={onDetected} description={description} label={label} compact={compact} className={className} size={size} storeId={storeId} />;
+  return (
+    <BarcodeScanner
+      onDetected={onDetected}
+      description={description}
+      label={label}
+      compact={compact}
+      className={className}
+      size={size}
+      storeId={storeId}
+      iconOnly={iconOnly}
+      controls={controls}
+    />
+  );
 }

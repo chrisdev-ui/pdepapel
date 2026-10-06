@@ -70,6 +70,14 @@ export interface AsyncProductSelectProps {
    * «todas las variantes»: elegir el grupo entero sin pasar por una variante.
    */
   onSelectGroup?: (group: AsyncProductGroupPick) => void;
+  /**
+   * Segunda línea del disparador cerrado. `sale` (por defecto): SKU, GTIN,
+   * categoría, stock y precio de venta. `cost`, para pedir al proveedor:
+   * SKU, stock y costo de compra, que es lo que importa en Aprovisionamiento
+   * (el costo solo sale si la respuesta lo trae: la búsqueda y la ficha del
+   * dueño sí, la de solo lectura no).
+   */
+  details?: "sale" | "cost";
 }
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
@@ -83,6 +91,17 @@ const getProductDetails = (product: AsyncProductOption) =>
     `Stock: ${product.stock}`,
     product.price !== undefined && product.price !== null
       ? currencyFormatter(product.price)
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+const getCostDetails = (product: AsyncProductOption) =>
+  [
+    `SKU: ${product.sku}`,
+    `Stock: ${product.stock}`,
+    product.acqPrice !== undefined && product.acqPrice !== null
+      ? `Costo: ${currencyFormatter(product.acqPrice)}`
       : null,
   ]
     .filter(Boolean)
@@ -166,8 +185,15 @@ function ProductThumbnail({ product }: { product: AsyncProductOption }) {
   );
 }
 
-function SelectedProductValue({ product }: { product: AsyncProductOption }) {
-  const details = getProductDetails(product);
+function SelectedProductValue({
+  product,
+  details: detailsKind = "sale",
+}: {
+  product: AsyncProductOption;
+  details?: "sale" | "cost";
+}) {
+  const details =
+    detailsKind === "cost" ? getCostDetails(product) : getProductDetails(product);
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
@@ -200,6 +226,7 @@ export function AsyncProductSelect({
   modal = false,
   ariaLabel,
   onSelectGroup,
+  details = "sale",
 }: AsyncProductSelectProps) {
   const params = useParams();
   const [open, setOpen] = React.useState(false);
@@ -366,7 +393,7 @@ export function AsyncProductSelect({
           )}
         >
           {selectedProduct ? (
-            <SelectedProductValue product={selectedProduct} />
+            <SelectedProductValue product={selectedProduct} details={details} />
           ) : (
             <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">
               {placeholder}
@@ -425,7 +452,7 @@ export function AsyncProductSelect({
           )}
         >
           {selectedProduct ? (
-            <SelectedProductValue product={selectedProduct} />
+            <SelectedProductValue product={selectedProduct} details={details} />
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}

@@ -435,6 +435,12 @@ La lista abre con cuatro cifras —esperando mercancía, unidades en camino,
 comprometido a costo y con retraso— y vistas por estado (Todo, Borradores, Al
 proveedor, Recibiendo, Completados, Cancelados) que quedan en la URL.
 
+- **Líneas del borrador**: el producto ocupa toda la fila y debajo van
+  cantidad, costo unitario y subtotal. El botón cerrado muestra «SKU · stock ·
+  costo» del catálogo. Cada línea tiene solo el icono de la cámara; el sonido
+  y el celular vinculado están una vez en la cabecera de «Líneas del pedido».
+  Lo que lee el celular suma una unidad si el producto ya está en el pedido,
+  llena la primera línea vacía o abre una línea nueva con el costo de compra.
 - **Cuándo llega**: la fecha del pedido más el plazo del proveedor
   (`Proveedores` → «Días de entrega»). Sin ese plazo la columna dice «Sin plazo
   del proveedor» en vez de estimar una fecha; vale la pena registrarlo.
