@@ -143,9 +143,12 @@ describe("withIdempotency", () => {
       upstash.fromEnv.mockReturnValue(fake as never);
       const handler = vi.fn(async () => NextResponse.json({ id: "o8" }));
       await withIdempotency(request("abcdefgh-8"), "store", handler);
-      const config = upstash.fromEnv.mock.calls.at(-1)?.[0] as { retry?: { retries?: number }; signal?: AbortSignal };
+      const config = upstash.fromEnv.mock.calls.at(-1)?.[0] as { retry?: { retries?: number }; signal?: () => AbortSignal };
       expect(config?.retry?.retries).toBe(1);
-      expect(config?.signal).toBeInstanceOf(AbortSignal);
+      // Una señal nueva por comando (función), no una fija creada con el cliente.
+      expect(typeof config?.signal).toBe("function");
+      expect(config?.signal?.()).toBeInstanceOf(AbortSignal);
+      expect(config?.signal?.()).not.toBe(config?.signal?.());
       expect(handler).toHaveBeenCalledTimes(1);
     });
   });

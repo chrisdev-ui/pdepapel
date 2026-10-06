@@ -51,16 +51,31 @@ interface StoredResponse {
 }
 
 let redis: Redis | null = null;
+
 /**
- * Un cliente por petición con un solo reintento corto y una señal que aborta
- * lo pendiente al agotarse el presupuesto; en pruebas se inyecta uno fijo.
+ * Opciones del cliente: un solo reintento corto y una señal NUEVA por comando
+ * (función), con el presupuesto de cada operación.
+ *
+ * Antes era una sola `AbortSignal.timeout(...)` creada con el cliente: el
+ * bloqueo se tomaba al empezar, pero guardar la respuesta y liberar el
+ * bloqueo van después del handler. Un pedido que tardaba más de 3,5 s dejaba
+ * la señal ya abortada; con una señal fija, @upstash/redis no lanza sino que
+ * responde `{ result: "Aborted" }`, y el auto-pipeline hacía `.map` sobre eso
+ * («s.map is not a function»). No se guardaba la respuesta ni se liberaba el
+ * bloqueo: un reintento recibía 409 hasta que vencía. Con la función, cada
+ * comando tiene su plazo y un abort es un error normal que `within` maneja.
  */
+export function idempotencyRedisOptions(budgetMs: number) {
+  return {
+    retry: { retries: 1, backoff: () => 200 },
+    signal: () => AbortSignal.timeout(budgetMs),
+  };
+}
+
+/** Un cliente por petición; en pruebas se inyecta uno fijo. */
 function getRedis(budgetMs: number): Redis {
   if (redis) return redis;
-  return Redis.fromEnv({
-    retry: { retries: 1, backoff: () => 200 },
-    signal: AbortSignal.timeout(budgetMs * 2 + 500),
-  });
+  return Redis.fromEnv(idempotencyRedisOptions(budgetMs));
 }
 
 /** Test hook: inject a Redis-like client. */
