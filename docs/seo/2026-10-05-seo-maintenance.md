@@ -1039,20 +1039,27 @@ npm run prod:write -- scripts/enable-bloques-category-seo.mjs --revert /Users/ch
 
 ### 11.9 Incidente: «Algo salió mal de nuestro lado» en móvil (2026-10-06)
 
-**Síntoma:** clientas entrando desde el celular (Android) veían la pantalla de error de la tienda (`app/(routes)/error.tsx`) en vez de la página.
+**Síntoma:** clientas en Android veían la pantalla de error de la tienda al abrir una ficha desde una tarjeta. El inicio y `/tienda` cargaban bien.
 
-**Causa:** el `WebVitalsReporter` (`342750a6`, CLS de campo para GA4, §11) vive en el layout de todas las rutas y llamaba a `PerformanceObserver` dentro de un `useEffect` sin protección. Si el navegador lanza una excepción ahí, el error sube al error boundary y se pierde la página entera.
+**Causa principal:**
+- El navegador integrado de Instagram/Facebook envuelve `history.pushState` y su envoltorio llama a un puente JS↔Java.
+- Cuando ese objeto ya no existe, lanza «Error invoking postMessage: Java object is gone».
+- El router de Next llama a `pushState` en cada navegación con clic. El error sube al error boundary de la raíz, que muestra «Algo salió mal de nuestro lado». Es distinto del de la ficha, que dice «Estamos actualizando la tienda».
+- Las cargas directas no pasan por `pushState` y funcionan.
 
 **Evidencia:**
-- **Reproducción con Playwright contra producción:** con `PerformanceObserver.prototype.observe` lanzando una excepción, `/`, `/tienda`, una categoría y una ficha muestran el error boundary. La traza sale del chunk del layout.
-- **Clarity (3 días):** el único error de JavaScript es «error invoking postmessage: java object is gone». Es el puente JS↔Java de los navegadores integrados de Android, como Instagram y Facebook, y el 22 % de las sesiones vienen de InstagramApp. Clarity solo ve sesiones con consentimiento, así que subestima.
-- **No hay evidencia de un error de servidor:** los Android emulados y los user agents de Instagram, WhatsApp y Samsung renderizan bien cuando la API no lanza.
+- **Clarity (3 días):** el único error de JavaScript registrado es exactamente ese mensaje. El 22 % de las sesiones vienen de InstagramApp.
+- **Playwright contra producción:** con un `pushState` que lanza ese mensaje, antes o después de llamar al nativo, el inicio y `/tienda` cargan, y un clic en cualquier tarjeta muestra «Algo salió mal de nuestro lado».
+- **Descartado:** el desfase de versiones entre deploys. Skew Protection está activa: los chunks del deploy anterior responden 200 con `?dpl=` y 404 sin él. En 24 h no hubo ningún 5xx en la tienda. 147 recorridos (cargas directas y clics desde `/` y `/tienda`, 3 escenarios) no fallaron con `pushState` normal.
 
-**Arreglo:**
-- Todo lo que el reporter hace con APIs del navegador va en `try/catch`: la detección, el constructor, `observe`, el callback, el envío al ocultar la página y el cambio de ruta.
-- Si algo falla, esa vista no se mide y la página sigue.
-- 5 pruebas nuevas en `tests/components/web-vitals-reporter.test.tsx`, cada una con una API que lanza «Java object is gone». Fallan con el código anterior y pasan con el nuevo.
+**Arreglos:**
+1. **`8c570089`:** el `WebVitalsReporter` (CLS para GA4, §11) protege con `try/catch` todo lo que toca APIs del navegador. Antes, si `PerformanceObserver.observe` lanzaba dentro de su efecto, tumbaba todas las páginas. Lleva 5 pruebas.
+2. **`lib/history-guard.ts`:** un script en línea antes de hidratar deja una guarda siempre por fuera de `pushState`/`replaceState`, mediante un getter/setter en `window.history`.
+   - Si el navegador integrado vuelve a envolver esos métodos después, su envoltorio queda adentro.
+   - Si el envoltorio lanza, la navegación se completa con el método nativo, sin entradas duplicadas.
+   - Los errores reales, como una URL de otro origen, siguen lanzando.
+   - Lleva 7 pruebas.
 
 **Pendiente:**
 - Que el error boundary informe el error, por ejemplo con un evento `exception` a GA4 con mensaje y ruta, sin datos personales, para ver estos casos sin depender de Clarity.
-- Revisar las demás integraciones del layout con el mismo criterio.
+- Confirmar en Clarity, en los próximos días, que el error deja de aparecer junto a la pantalla de error.

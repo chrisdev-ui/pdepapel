@@ -11,6 +11,7 @@ import { Footer } from "@/components/footer";
 import { ClarityPrivacyBoundary } from "@/components/clarity-privacy-boundary";
 import { Spooky } from "@/components/spooky";
 import { getCurrentSeason } from "@/lib/date-utils";
+import { HISTORY_GUARD_SCRIPT } from "@/lib/history-guard";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
 import {
   buildFeaturedByType,
@@ -146,6 +147,10 @@ export default async function RootLayout({
         <body
           className={`${beautifulEveryTime.variable} ${caudex.variable} ${fredoka.variable} ${quicksand.variable}`}
         >
+          {/* Antes de hidratar: los navegadores integrados de Android envuelven
+              history.pushState y su puente puede lanzar en cada navegación con
+              clic (incidente 2026-10-06, lib/history-guard.ts). Texto fijo. */}
+          <script dangerouslySetInnerHTML={{ __html: HISTORY_GUARD_SCRIPT }} />
           <link rel="dns-prefetch" href="https://res.cloudinary.com" />
           <link rel="preconnect" href="https://res.cloudinary.com" />
           <ReactQueryProvider>
