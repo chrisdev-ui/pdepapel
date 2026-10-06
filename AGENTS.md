@@ -172,6 +172,20 @@ Compiling locally is not done. For production-impacting work:
 7. The user has explicitly approved any push.
 8. Post-deploy webhook, OAuth, cache or smoke verification is completed or clearly handed to the owner.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `chrisdev-ui/pdepapel`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
+
 ## Where to go next
 
 1. The `AGENTS.md` of the application you are changing. That is the authoritative document.
