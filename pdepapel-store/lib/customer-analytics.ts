@@ -204,6 +204,19 @@ export function trackCustomerEvent(
   trackMicrosoftClarityEvent(eventName, parameters);
 }
 
+/**
+ * Un evento solo para GA4 (sin Vercel ni Clarity), con el mismo permiso que
+ * todo lo demás. Para medidas técnicas como `web_vitals_cls`, que no deben
+ * gastar eventos de Vercel Analytics.
+ */
+export function trackGoogleEvent(
+  eventName: string,
+  parameters: AnalyticsEventParameters = {},
+): void {
+  if (typeof window === "undefined" || !hasAnalyticsConsent()) return;
+  sendOrQueueGoogleEvent(eventName, parameters);
+}
+
 export function trackGooglePageView(path: string, title: string): void {
   if (typeof window === "undefined" || !hasAnalyticsConsent()) return;
 

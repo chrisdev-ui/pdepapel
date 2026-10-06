@@ -21,6 +21,7 @@ import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { CustomerAnalyticsProvider } from "@/providers/customer-analytics-provider";
+import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 import { CartPreviewProvider } from "@/providers/cart-preview-provider";
 import { StorefrontSettingsProvider } from "@/providers/storefront-settings-provider";
 import { Toaster } from "@/providers/toaster";
@@ -182,6 +183,7 @@ export default async function RootLayout({
               }
             />
             <Analytics />
+            <WebVitalsReporter />
           </ReactQueryProvider>
         </body>
       </html>
