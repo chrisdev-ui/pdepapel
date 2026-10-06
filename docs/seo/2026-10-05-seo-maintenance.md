@@ -1020,7 +1020,18 @@ npm run prod:write -- scripts/rename-lego-to-bloques.mjs --revert /Users/christi
 ```
 Antes de revertir hay que sacar `e4888811`: sus destinos dejarían de existir.
 
-**Indexación** (paso aparte): `pdepapel-admin/scripts/enable-bloques-category-seo.mjs` pone `seoEnabled=true` en la categoría renombrada. La copia del ensayo es `~/pdepapel-backups/2026-10-06/enable-bloques-category-seo-2026-10-06T14-11-24-089Z.json` (sha256 empieza por `d82b8aada204`). Para revertirlo, con una aprobación nueva:
+**Indexación** (2026-10-06, 14:24 UTC): `pdepapel-admin/scripts/enable-bloques-category-seo.mjs` puso `seoEnabled=true` en la categoría renombrada, con `npm run prod:write` (`rows=1`).
+
+**Verificación a las 14:36 UTC:**
+- `/categoria/bloques-de-construccion` responde 200, con robots `index, follow` y canonical propio.
+- `/categoria/lego` llega con una sola 308.
+- El sitemap lista `/categoria/bloques-de-construccion` y no tiene ninguna URL con «lego».
+- Indexables: de 23 a **24**.
+- El push de `e4888811` dejó las 7 redirecciones fijas con un solo salto. `legacy-redirect-map.spec.ts` pasó contra producción.
+
+**Feed de Merchant:** el cron diario (`admin-scheduled-tasks.yml`, programado a las 13:00 UTC; GitHub lo corre horas tarde) no se había ejecutado después del renombrado. La revisión de los 7 artículos en Merchant Center queda pendiente para después de la próxima regeneración.
+
+Copia de este paso: `~/pdepapel-backups/2026-10-06/enable-bloques-category-seo-2026-10-06T14-11-24-089Z.json` (sha256 empieza por `d82b8aada204`). Para revertirlo, con una aprobación nueva:
 ```
 cd pdepapel-admin && npm run prod:approve -- "revertir seoEnabled de Bloques de construcción"
 npm run prod:write -- scripts/enable-bloques-category-seo.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/enable-bloques-category-seo-2026-10-06T14-11-24-089Z.json
