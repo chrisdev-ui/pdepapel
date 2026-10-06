@@ -90,4 +90,102 @@ describe("WebVitalsReporter", () => {
     hide();
     expect(mocks.trackGoogleEvent).not.toHaveBeenCalled();
   });
+
 });
+
+/**
+ * Incidente 2026-10-06: el reporter corre en el layout de todas las rutas y
+ * un error en su efecto llevaba toda la tienda al error boundary («Algo salió
+ * mal de nuestro lado»). Los navegadores integrados de Android lanzan
+ * «Error invoking postMessage: Java object is gone» desde su puente JS↔Java.
+ */
+describe("WebVitalsReporter never takes the page down", () => {
+  const JAVA_GONE = "Error invoking postMessage: Java object is gone";
+  const Page = () => (
+    <>
+      <WebVitalsReporter sampleRate={1} />
+      <main>Contenido de la tienda</main>
+    </>
+  );
+  const expectPageRendered = () => {
+    let view: ReturnType<typeof render> | undefined;
+    expect(() => {
+      view = render(<Page />);
+    }).not.toThrow();
+    expect(view!.getByText("Contenido de la tienda")).toBeTruthy();
+    return view!;
+  };
+
+  it("renders when observe() throws, and measures nothing", () => {
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    vi.stubGlobal(
+      "PerformanceObserver",
+      class extends FakeObserver {
+        observe() {
+          throw new Error(JAVA_GONE);
+        }
+      },
+    );
+    expectPageRendered();
+    hide();
+    expect(mocks.trackGoogleEvent).not.toHaveBeenCalled();
+    expect(removeSpy).toHaveBeenCalledWith("pagehide", expect.any(Function));
+    removeSpy.mockRestore();
+  });
+
+  it("renders when the PerformanceObserver constructor throws", () => {
+    vi.stubGlobal(
+      "PerformanceObserver",
+      class {
+        static supportedEntryTypes = ["layout-shift"];
+        constructor() {
+          throw new TypeError(JAVA_GONE);
+        }
+      },
+    );
+    expectPageRendered();
+    hide();
+    expect(mocks.trackGoogleEvent).not.toHaveBeenCalled();
+  });
+
+  it("renders when reading supportedEntryTypes throws or PerformanceObserver is missing", () => {
+    vi.stubGlobal(
+      "PerformanceObserver",
+      class {
+        static get supportedEntryTypes(): string[] {
+          throw new Error(JAVA_GONE);
+        }
+      },
+    );
+    expectPageRendered();
+    cleanup();
+    vi.stubGlobal("PerformanceObserver", undefined);
+    expectPageRendered();
+  });
+
+  it("swallows errors inside the observer callback", () => {
+    expectPageRendered();
+    expect(() =>
+      act(() => {
+        mocks.callback?.({
+          getEntries: () => {
+            throw new Error(JAVA_GONE);
+          },
+        });
+      }),
+    ).not.toThrow();
+  });
+
+  it("keeps rendering when sending the event throws, on hide and on navigation", () => {
+    mocks.trackGoogleEvent.mockImplementation(() => {
+      throw new Error(JAVA_GONE);
+    });
+    const { rerender } = render(<Page />);
+    emit({ startTime: 100, value: 0.1 });
+    mocks.pathname = "/carrito";
+    expect(() => rerender(<Page />)).not.toThrow();
+    expect(() => hide()).not.toThrow();
+    expect(mocks.trackGoogleEvent).toHaveBeenCalled();
+  });
+});
+

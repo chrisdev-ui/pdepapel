@@ -1036,3 +1036,23 @@ Copia de este paso: `~/pdepapel-backups/2026-10-06/enable-bloques-category-seo-2
 cd pdepapel-admin && npm run prod:approve -- "revertir seoEnabled de Bloques de construcción"
 npm run prod:write -- scripts/enable-bloques-category-seo.mjs --revert /Users/christiantorres/pdepapel-backups/2026-10-06/enable-bloques-category-seo-2026-10-06T14-11-24-089Z.json
 ```
+
+### 11.9 Incidente: «Algo salió mal de nuestro lado» en móvil (2026-10-06)
+
+**Síntoma:** clientas entrando desde el celular (Android) veían la pantalla de error de la tienda (`app/(routes)/error.tsx`) en vez de la página.
+
+**Causa:** el `WebVitalsReporter` (`342750a6`, CLS de campo para GA4, §11) vive en el layout de todas las rutas y llamaba a `PerformanceObserver` dentro de un `useEffect` sin protección. Si el navegador lanza una excepción ahí, el error sube al error boundary y se pierde la página entera.
+
+**Evidencia:**
+- **Reproducción con Playwright contra producción:** con `PerformanceObserver.prototype.observe` lanzando una excepción, `/`, `/tienda`, una categoría y una ficha muestran el error boundary. La traza sale del chunk del layout.
+- **Clarity (3 días):** el único error de JavaScript es «error invoking postmessage: java object is gone». Es el puente JS↔Java de los navegadores integrados de Android, como Instagram y Facebook, y el 22 % de las sesiones vienen de InstagramApp. Clarity solo ve sesiones con consentimiento, así que subestima.
+- **No hay evidencia de un error de servidor:** los Android emulados y los user agents de Instagram, WhatsApp y Samsung renderizan bien cuando la API no lanza.
+
+**Arreglo:**
+- Todo lo que el reporter hace con APIs del navegador va en `try/catch`: la detección, el constructor, `observe`, el callback, el envío al ocultar la página y el cambio de ruta.
+- Si algo falla, esa vista no se mide y la página sigue.
+- 5 pruebas nuevas en `tests/components/web-vitals-reporter.test.tsx`, cada una con una API que lanza «Java object is gone». Fallan con el código anterior y pasan con el nuevo.
+
+**Pendiente:**
+- Que el error boundary informe el error, por ejemplo con un evento `exception` a GA4 con mensaje y ruta, sin datos personales, para ver estos casos sin depender de Clarity.
+- Revisar las demás integraciones del layout con el mismo criterio.

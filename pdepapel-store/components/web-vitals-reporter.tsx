@@ -13,6 +13,24 @@ export const WEB_VITALS_CLS_EVENT = "web_vitals_cls";
 const round = (value: number) => Math.round(value * 10_000) / 10_000;
 
 /**
+ * La medición nunca puede tumbar la página: corre en el layout de todas las
+ * rutas, y un error dentro de un efecto de React sube al error boundary
+ * («Algo salió mal de nuestro lado»). Los navegadores integrados de Android
+ * (Instagram, Facebook) inyectan un puente JS↔Java que lanza «Error invoking
+ * postMessage: Java object is gone»; si lo hace dentro de una API del
+ * navegador, cualquier llamada sin protección se lleva la tienda entera.
+ * Todo lo que toca APIs del navegador va en try/catch y, si falla, la vista
+ * simplemente no se mide.
+ */
+const safely = (run: () => void) => {
+  try {
+    run();
+  } catch {
+    // Sin medición para esta vista; la página sigue.
+  }
+};
+
+/**
  * Mide el CLS de cada vista de página en una muestra del 10 % y lo manda a
  * GA4 como `web_vitals_cls`: el valor, la ruta (sin parámetros, para no llevar
  * búsquedas) y el selector del elemento que más se movió. Nada de la persona.
@@ -29,42 +47,56 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
   const sampledRef = useRef(false);
   const sentRef = useRef(false);
 
-  const flush = () => {
-    const tracker = trackerRef.current;
-    if (!tracker || !sampledRef.current || sentRef.current) return;
-    sentRef.current = true;
-    const { value, largestValue, largestTarget } = tracker.snapshot();
-    trackGoogleEvent(WEB_VITALS_CLS_EVENT, {
-      cls_value: round(value),
-      cls_largest_value: round(largestValue),
-      cls_largest_target: largestTarget || "(ninguno)",
-      cls_page: pathRef.current ?? "",
+  const flush = () =>
+    safely(() => {
+      const tracker = trackerRef.current;
+      if (!tracker || !sampledRef.current || sentRef.current) return;
+      sentRef.current = true;
+      const { value, largestValue, largestTarget } = tracker.snapshot();
+      trackGoogleEvent(WEB_VITALS_CLS_EVENT, {
+        cls_value: round(value),
+        cls_largest_value: round(largestValue),
+        cls_largest_target: largestTarget || "(ninguno)",
+        cls_page: pathRef.current ?? "",
+      });
     });
-  };
 
   useEffect(() => {
-    if (typeof PerformanceObserver === "undefined" || !PerformanceObserver.supportedEntryTypes?.includes("layout-shift")) return;
-    // El sorteo es por vista de página; el observador corre siempre (es
-    // barato) para que una vista sorteada más adelante tenga sus datos.
-    sampledRef.current = Math.random() < sampleRate;
-
-    const tracker = createClsTracker();
-    trackerRef.current = tracker;
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) tracker.add(entry as unknown as LayoutShiftEntry);
-    });
-    observer.observe({ type: "layout-shift", buffered: true });
-
+    let observer: PerformanceObserver | null = null;
     const onHidden = () => {
       if (document.visibilityState === "hidden") flush();
     };
-    document.addEventListener("visibilitychange", onHidden);
-    window.addEventListener("pagehide", flush);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", onHidden);
-      window.removeEventListener("pagehide", flush);
-    };
+    const stop = () =>
+      safely(() => {
+        observer?.disconnect();
+        document.removeEventListener("visibilitychange", onHidden);
+        window.removeEventListener("pagehide", flush);
+      });
+
+    try {
+      if (typeof PerformanceObserver === "undefined" || !PerformanceObserver.supportedEntryTypes?.includes("layout-shift")) return;
+      // El sorteo es por vista de página; el observador corre siempre (es
+      // barato) para que una vista sorteada más adelante tenga sus datos.
+      sampledRef.current = Math.random() < sampleRate;
+
+      const tracker = createClsTracker();
+      trackerRef.current = tracker;
+      observer = new PerformanceObserver((list) =>
+        safely(() => {
+          for (const entry of list.getEntries()) tracker.add(entry as unknown as LayoutShiftEntry);
+        }),
+      );
+      observer.observe({ type: "layout-shift", buffered: true });
+
+      document.addEventListener("visibilitychange", onHidden);
+      window.addEventListener("pagehide", flush);
+    } catch {
+      // El navegador no deja observar: esta carga no se mide.
+      trackerRef.current = null;
+      stop();
+      return;
+    }
+    return stop;
     // Una sola vez por carga; las rutas siguientes las maneja el efecto de abajo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -75,7 +107,7 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
     if (pathRef.current === pathname) return;
     flush();
     pathRef.current = pathname;
-    trackerRef.current?.reset();
+    safely(() => trackerRef.current?.reset());
     sentRef.current = false;
     sampledRef.current = Math.random() < sampleRate;
     // eslint-disable-next-line react-hooks/exhaustive-deps
