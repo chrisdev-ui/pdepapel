@@ -1,0 +1,68 @@
+name: DB region sync (us-west2 → us-east4)
+
+# Copia la base de producción a «MySQL US East» desde un runner de GitHub en
+# EE. UU. (docs/runbooks/db-region-migration.md). Solo se lanza a mano y pide
+# escribir SYNC-TO-US-EAST. El origen se lee con pdepapel_ro (secretos
+# BACKUP_DB_*, solo lectura); el destino es NEW_DB_URL. Modo rehearsal: copia y
+# compara sin congelar producción. Modo cutover: exige producción en
+# super_read_only y cero diferencias de filas. Las guardas viven en
+# pdepapel-admin/scripts/backup/db-region-sync.sh.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "rehearsal (ensayo, sin congelar) o cutover (producción en super_read_only)"
+        type: choice
+        options:
+          - rehearsal
+          - cutover
+        default: rehearsal
+        required: true
+      confirm:
+        description: "Escribe SYNC-TO-US-EAST para confirmar"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-region-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync ${{ inputs.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKUP_DB_HOST: ${{ secrets.BACKUP_DB_HOST }}
+      BACKUP_DB_PORT: ${{ secrets.BACKUP_DB_PORT }}
+      BACKUP_DB_USER: ${{ secrets.BACKUP_DB_USER }}
+      BACKUP_DB_PASSWORD: ${{ secrets.BACKUP_DB_PASSWORD }}
+      BACKUP_DB_NAME: ${{ secrets.BACKUP_DB_NAME }}
+      NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
+    steps:
+      - name: Confirm
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "SYNC-TO-US-EAST" ]; then
+            echo "Confirmación incorrecta: escribe SYNC-TO-US-EAST." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: pdepapel-admin/scripts/backup
+
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client >/dev/null
+          mysqldump --version
+
+      - name: Sync and verify
+        env:
+          SYNC_MODE: ${{ inputs.mode }}
+        run: bash pdepapel-admin/scripts/backup/db-region-sync.sh
