@@ -1032,14 +1032,10 @@ async function createCheckout(
       }
       runInBackground("correo del pedido pagado (checkout)", async () => {
         try {
-          await sendOrderEmail(
-            {
-              ...(paidOrder ?? order),
-              email: email ?? user?.emailAddresses[0]?.emailAddress,
-              payment: PaymentMethod.GiftCard,
-            } as never,
-            OrderStatus.PAID,
-          );
+          await sendOrderEmail(order.id, OrderStatus.PAID, {
+            customerEmail: email ?? user?.emailAddresses[0]?.emailAddress,
+            paymentMethod: PaymentMethod.GiftCard,
+          });
         } catch (emailError) {
           console.error("Failed to send order email:", emailError);
         }
@@ -1051,14 +1047,10 @@ async function createCheckout(
     // perdía si la instancia se congelaba (incidente del 2026-10-07).
     runInBackground("correo del pedido nuevo (checkout)", async () => {
       try {
-        await sendOrderEmail(
-          {
-            ...order,
-            email: email ?? user?.emailAddresses[0]?.emailAddress,
-            payment: payment.method,
-          },
-          OrderStatus.PENDING,
-        );
+        await sendOrderEmail(order.id, OrderStatus.PENDING, {
+          customerEmail: email ?? user?.emailAddresses[0]?.emailAddress,
+          paymentMethod: payment.method,
+        });
       } catch (emailError) {
         console.error("Failed to send order email:", emailError);
       }

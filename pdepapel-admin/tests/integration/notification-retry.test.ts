@@ -81,13 +81,14 @@ describe("failed notification retry sweep with MySQL", () => {
   it("resends a pre-fix row (address in recipient) to admin and customer and resolves it", async () => {
     const order = await seedOrder();
     const row = await failure(order.id);
-    const sendOrderEmail = vi.fn(async (_order: never, _status: never, options: { roles: EmailRole[] }) => ok(options.roles));
+    const sendOrderEmail = vi.fn(async (_orderId: string, _status: never, options: { roles: EmailRole[] }) => ok(options.roles));
 
     const summary = await retryFailedNotifications({ db: testPrisma, now: NOW, sendOrderEmail });
 
     expect(sendOrderEmail).toHaveBeenCalledTimes(1);
-    const [sentOrder, sentStatus, options] = sendOrderEmail.mock.calls[0] as unknown as [{ id: string; payment: string }, string, { roles: EmailRole[]; recordFailures: boolean }];
-    expect(sentOrder).toMatchObject({ id: order.id, payment: PaymentMethod.BankTransfer });
+    const [sentOrderId, sentStatus, options] = sendOrderEmail.mock.calls[0] as unknown as [string, string, { roles: EmailRole[]; recordFailures: boolean }];
+    // Solo el id: el correo carga el pedido completo (con artículos) por su cuenta.
+    expect(sentOrderId).toBe(order.id);
     expect(sentStatus).toBe("PENDING");
     expect(options).toEqual({ roles: ["admin", "customer"], recordFailures: false });
     expect(summary.sent.map((s) => s.role).sort()).toEqual(["admin", "customer"]);
@@ -100,7 +101,7 @@ describe("failed notification retry sweep with MySQL", () => {
   it("on failure leaves a new row per role for the next sweep, and stops at the attempt limit", async () => {
     const order = await seedOrder();
     await failure(order.id, { recipient: "admin" });
-    const sendOrderEmail = vi.fn(async (_o: never, _s: never, options: { roles: EmailRole[] }) => fail(options.roles));
+    const sendOrderEmail = vi.fn(async (_o: string, _s: never, options: { roles: EmailRole[] }) => fail(options.roles));
 
     for (let run = 1; run <= MAX_EMAIL_ATTEMPTS + 2; run += 1) {
       await retryFailedNotifications({ db: testPrisma, now: new Date(NOW.getTime() + run * 60_000), sendOrderEmail });
@@ -132,7 +133,7 @@ describe("failed notification retry sweep with MySQL", () => {
   it("five concurrent sweeps send the row only once", async () => {
     const order = await seedOrder();
     await failure(order.id, { recipient: "customer" });
-    const sendOrderEmail = vi.fn(async (_o: never, _s: never, options: { roles: EmailRole[] }) => {
+    const sendOrderEmail = vi.fn(async (_o: string, _s: never, options: { roles: EmailRole[] }) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       return ok(options.roles);
     });
@@ -160,6 +161,20 @@ describe("failed notification retry sweep with MySQL", () => {
     expect(sendOrderEmail).not.toHaveBeenCalled();
     expect(summary.superseded).toBe(1);
     expect((await rowsOf(order.id))[0].resolvedAt).toEqual(NOW);
+  });
+
+  it("a customer row for an order with the placeholder address is resolved without a new failure row", async () => {
+    const order = await seedOrder(OrderStatus.PENDING, "clientesvarios@gmail.com");
+    await failure(order.id, { recipient: "customer" });
+    // lib/email.ts no arma el correo de la clienta para un correo de relleno: no hay resultado.
+    const sendOrderEmail = vi.fn(async () => ({}));
+
+    const summary = await retryFailedNotifications({ db: testPrisma, now: NOW, sendOrderEmail });
+
+    expect(summary.failed).toEqual([]);
+    const rows = await rowsOf(order.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].resolvedAt).toEqual(NOW);
   });
 
   it("never touches EnvioClick guide failures", async () => {

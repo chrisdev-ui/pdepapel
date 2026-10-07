@@ -57,3 +57,25 @@ El patrón existía desde junio de 2025 y solo falla cuando la instancia se qued
 ## Pendiente
 
 Pasar los correos de pedido y la creación de guías a QStash, una cola durable con reintentos. `waitUntil` entrega como máximo una vez: si la función se cae a mitad, el barrido lo recoge para los correos, pero no para las guías.
+
+## Segundo defecto del mismo día: «Sin artículos registrados.»
+
+El «Pago confirmado» de ORD-1791380325794-318 llegó sin artículos y sin total.
+
+**Causa.** El cambio de estado desde el panel (`PATCH /orders/[orderId]`) armaba el pedido del correo con solo seis campos: id, número, estado, pago, correo y nombre. Esa consulta viene de fe51a1c7 (2025-06-16). El texto «Sin artículos registrados.» se ve desde a4ae6796 (2026-09-21); antes la caja salía vacía.
+
+**Correos afectados.** Todo correo a la clienta por cambio de estado desde el panel: Pago confirmado, Enviado, Pendiente y Cancelada. En pedidos regalo, además, nunca se avisaba a quien recibe.
+
+**Correos sanos.** Checkout, Bold, Wompi y EnvioClick siempre llevaron los artículos.
+
+**Arreglo.**
+- `sendOrderEmail(orderId, …)` y `sendShippingEmail(orderId, …)` cargan el pedido con una sola consulta (`ORDER_EMAIL_INCLUDE`, `loadOrderForEmail`); quien llama manda solo el id.
+- El correo lleva Subtotal, Descuento, Cupón, Envío y Total.
+- `SENT` se lee «Enviado».
+- Los correos a la clienta no salen hacia direcciones de relleno (`lib/placeholder-emails.ts`): 20 de 80 pedidos en 90 días usaban `clientesvarios@`.
+- El PATCH del panel sigue sin crear `OrderAccountClaim`.
+- El DELETE ya no intenta un correo después del borrado (nunca salía).
+
+**Decisión.** No se avisó el regalo de 318 de forma retroactiva.
+
+**Prueba de regresión.** `tests/integration/order-email-items.test.ts`: el PATCH real contra MySQL. Falla con el código anterior.

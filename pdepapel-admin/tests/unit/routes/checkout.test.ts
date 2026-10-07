@@ -289,9 +289,12 @@ describe("POST /api/[storeId]/checkout", () => {
 
     expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
     await mocks.waitUntil.mock.calls[0][0];
+    // El id y lo que la base no sabe todavía (el medio de pago elegido, el
+    // correo de la sesión); los artículos los carga el correo.
     expect(mocks.sendOrderEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "order-id", payment: PaymentMethod.Bold }),
+      "order-id",
       "PENDING",
+      expect.objectContaining({ paymentMethod: PaymentMethod.Bold }),
     );
   });
 

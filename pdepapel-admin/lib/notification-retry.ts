@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import { EMAIL_ROLES, type DeliveryOutcome, type EmailRole } from "@/lib/email-delivery";
+import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -33,7 +34,7 @@ export const MAX_EMAIL_ATTEMPTS = 4;
 type Db = Pick<PrismaClient, "failedNotification" | "order" | "$executeRaw">;
 
 type SendFn = (
-  order: never,
+  orderId: string,
   status: never,
   options: { roles: EmailRole[]; recordFailures: false },
 ) => Promise<Partial<Record<EmailRole, DeliveryOutcome>> | void>;
@@ -112,9 +113,11 @@ export async function retryFailedNotifications(deps: RetryDependencies = {}): Pr
       continue;
     }
 
+    // Solo para saber si el aviso sigue aplicando: el correo carga el pedido
+    // completo por su cuenta (lib/email.ts, loadOrderForEmail).
     const order = await db.order.findUnique({
       where: { id: orderId },
-      include: { payment: true, shipping: true, orderItems: { include: { product: true } } },
+      select: { status: true, email: true, shipping: { select: { status: true } } },
     });
     const current = parsed.type === "order" ? order?.status : order?.shipping?.status;
     if (!order || current !== parsed.status) {
@@ -124,10 +127,9 @@ export async function retryFailedNotifications(deps: RetryDependencies = {}): Pr
     }
 
     const send = parsed.type === "order" ? sendOrder : sendShipping;
-    const emailOrder = { ...order, payment: order.payment?.method ?? null } as never;
     let outcomes: Partial<Record<EmailRole, DeliveryOutcome>> | void;
     try {
-      outcomes = await send(emailOrder, parsed.status as never, { roles, recordFailures: false });
+      outcomes = await send(orderId, parsed.status as never, { roles, recordFailures: false });
     } catch (error) {
       outcomes = Object.fromEntries(
         roles.map((role) => [role, { ok: false, attempts: 0, error: String(error), retryable: true }]),
@@ -135,8 +137,9 @@ export async function retryFailedNotifications(deps: RetryDependencies = {}): Pr
     }
 
     for (const role of roles) {
-      // La clienta sin correo no tiene a quién reenviarle: no cuenta como fallo.
-      if (role === "customer" && !order.email) continue;
+      // La clienta sin correo (o con uno de relleno) no tiene a quién
+      // reenviarle: no cuenta como fallo.
+      if (role === "customer" && (!order.email || isPlaceholderEmail(order.email))) continue;
       const outcome = outcomes?.[role];
       if (outcome?.ok) {
         summary.sent.push({ orderId, kind: row.kind, role });

@@ -289,16 +289,29 @@ export function getReadableStatus(status: OrderStatus | ShippingStatus) {
       return "Cancelada";
     case OrderStatus.CREATED:
       return "Creada";
+    // Sin esto el asunto decía «SENT» (correo de Enviado desde el panel).
+    case OrderStatus.SENT:
+      return "Enviado";
     case ShippingStatus.Preparing:
       return "Preparando envío";
     case ShippingStatus.Shipped:
       return "Enviado";
+    case ShippingStatus.PickedUp:
+      return "Recogido por la transportadora";
     case ShippingStatus.InTransit:
       return "En tránsito";
+    case ShippingStatus.OutForDelivery:
+      return "En reparto";
     case ShippingStatus.Delivered:
       return "Entregado";
+    case ShippingStatus.FailedDelivery:
+      return "Entrega fallida";
     case ShippingStatus.Returned:
       return "Devuelto";
+    case ShippingStatus.Cancelled:
+      return "Envío cancelado";
+    case ShippingStatus.Exception:
+      return "Novedad en el envío";
     default:
       return String(status);
   }

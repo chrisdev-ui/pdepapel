@@ -4,6 +4,7 @@ import {
   CardText,
   Cta,
   EmailLineItem,
+  EmailSummaryLine,
   Foot,
   ItemsTable,
   KeyValues,
@@ -32,6 +33,8 @@ interface OrderNotificationProps {
   total?: string;
   /** Las líneas del pedido, con cantidad y precio. */
   items?: EmailLineItem[];
+  /** Subtotal, descuentos y envío, entre las líneas y el total. */
+  summary?: EmailSummaryLine[];
   /**
    * El resumen en texto plano. Se conserva como red de seguridad para quien
    * todavía no manda `items`; se pinta como párrafo, ya no en monoespaciada.
@@ -181,6 +184,7 @@ export const OrderNotification = ({
   email,
   total,
   items = [],
+  summary = [],
   orderSummary,
   orderLink = "https://papeleriapdepapel.com",
   thanksParagraph,
@@ -237,7 +241,7 @@ export const OrderNotification = ({
         <SectionLabel tint="slate">Artículos</SectionLabel>
         <StickerCard tint="slate">
           {items.length > 0 ? (
-            <ItemsTable items={items} total={total} />
+            <ItemsTable items={items} total={total} summary={summary} />
           ) : (
             <CardText>{orderSummary || "Sin artículos registrados."}</CardText>
           )}
@@ -277,7 +281,7 @@ export const OrderNotification = ({
       <SectionLabel tint={look.tint}>Tu pedido #{orderNumber}</SectionLabel>
       <StickerCard tint={look.tint}>
         {items.length > 0 ? (
-          <ItemsTable items={items} total={total} />
+          <ItemsTable items={items} total={total} summary={summary} />
         ) : (
           <CardText>{orderSummary || "Sin artículos registrados."}</CardText>
         )}

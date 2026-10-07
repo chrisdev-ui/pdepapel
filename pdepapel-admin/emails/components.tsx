@@ -259,6 +259,12 @@ export interface EmailLineItem {
   price?: string | null;
 }
 
+export interface EmailSummaryLine {
+  label: string;
+  /** Ya formateado en pesos (o «Gratis»). */
+  value: string;
+}
+
 /**
  * La lista de compra, como filas de verdad.
  *
@@ -269,9 +275,12 @@ export interface EmailLineItem {
 export function ItemsTable({
   items,
   total,
+  summary = [],
 }: {
   items: EmailLineItem[];
   total?: string | null;
+  /** Envío, descuentos…: entre las líneas y el total, para que el total cuadre a la vista. */
+  summary?: EmailSummaryLine[];
 }) {
   if (items.length === 0) return null;
   return (
@@ -291,6 +300,20 @@ export function ItemsTable({
           ))}
         </tbody>
       </table>
+      {summary.length > 0 ? (
+        <table style={{ ...itemsTable, marginTop: "4px" }} cellPadding={0} cellSpacing={0} role="presentation">
+          <tbody>
+            {summary.map((line) => (
+              <tr key={line.label}>
+                <td style={itemCell}>
+                  <span style={itemName}>{line.label}</span>
+                </td>
+                <td style={itemPrice}>{line.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
       {total ? (
         <table
           style={{ ...itemsTable, marginTop: "4px" }}

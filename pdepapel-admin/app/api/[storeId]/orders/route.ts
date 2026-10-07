@@ -739,29 +739,7 @@ async function createOrder(
       // Sin bloquear la respuesta, con waitUntil (lib/background.ts).
       runInBackground("correo del pedido creado", async () => {
         try {
-          const orderWithDetails = await prismadb.order.findUnique({
-            where: { id: order.id },
-            include: {
-              payment: true,
-              shipping: true,
-              orderItems: {
-                include: {
-                  product: true,
-                },
-              },
-            },
-          });
-
-          if (orderWithDetails) {
-            await sendOrderEmail(
-              {
-                ...orderWithDetails,
-                email: email || "",
-                payment: orderWithDetails.payment?.method ?? null,
-              },
-              status || OrderStatus.PENDING,
-            );
-          }
+          await sendOrderEmail(order.id, status || OrderStatus.PENDING);
         } catch (emailError) {
           console.error("Failed to send order email:", emailError);
           // Consider implementing a retry mechanism or queue system
@@ -1372,29 +1350,11 @@ export async function PATCH(
       try {
         const emailPromises = result.map(async (order) => {
           if (status) {
-            await sendOrderEmail(
-              {
-                ...order,
-                payment: order.payment?.method ?? null,
-              },
-              status,
-              {
-                notifyAdmin: false,
-              },
-            );
+            await sendOrderEmail(order.id, status, { notifyAdmin: false });
           }
 
           if (shipping) {
-            await sendOrderEmail(
-              {
-                ...order,
-                payment: order.payment?.method ?? null,
-              },
-              shipping,
-              {
-                notifyAdmin: false,
-              },
-            );
+            await sendOrderEmail(order.id, shipping, { notifyAdmin: false });
           }
         });
 

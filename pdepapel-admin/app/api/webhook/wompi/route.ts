@@ -636,13 +636,7 @@ async function updateOrderData(order: any, transaction: any) {
       ) {
         createGuideInBackground({ orderId: updatedOrder.id, storeId: updatedOrder.storeId, source: "webhook de Wompi" });
       }
-      await sendOrderEmail(
-        {
-          ...updatedOrder,
-          payment: updatedOrder.payment?.method ?? undefined,
-        },
-        currentStatus,
-      );
+      await sendOrderEmail(updatedOrder.id, currentStatus);
     }
     return NextResponse.json(null, { status: 200 });
   } catch (error: any) {

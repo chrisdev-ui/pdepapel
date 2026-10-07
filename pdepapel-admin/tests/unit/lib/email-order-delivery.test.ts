@@ -11,12 +11,13 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   recordFailedNotification: vi.fn(),
   claimUpsert: vi.fn(),
+  findOrder: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: { NODE_ENV: "production" } }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: mocks.send } } }));
 vi.mock("@/lib/notification-failures", () => ({ recordFailedNotification: mocks.recordFailedNotification }));
-vi.mock("@/lib/prismadb", () => ({ default: { orderAccountClaim: { upsert: mocks.claimUpsert } } }));
+vi.mock("@/lib/prismadb", () => ({ default: { orderAccountClaim: { upsert: mocks.claimUpsert }, order: { findUnique: mocks.findOrder } } }));
 vi.mock("@/lib/utils", () => ({
   currencyFormatter: (value: number) => `$ ${value}`,
   getReadablePaymentMethod: () => "Transferencia",
@@ -26,7 +27,8 @@ vi.mock("@/lib/utils", () => ({
 import { ADMIN_EMAIL_RECIPIENTS } from "@/lib/email-delivery";
 import { sendOrderEmail, sendShippingEmail } from "@/lib/email";
 
-const order = {
+// Como sale de la base (lib/email.ts, loadOrderForEmail): el pago es una relación.
+const dbOrder = {
   id: "order-1",
   storeId: "store-1",
   orderNumber: "ORD-1",
@@ -35,13 +37,17 @@ const order = {
   phone: "+573000000018",
   address: "Calle 1",
   city: "Bogotá",
+  subtotal: 15000,
+  discount: 0,
+  couponDiscount: 0,
   total: 15000,
   userId: null,
   type: "STANDARD",
   orderItems: [{ name: "Notas", quantity: 1, price: 15000 }],
   shipping: null,
-  payment: PaymentMethod.BankTransfer,
-} as unknown as Parameters<typeof sendOrderEmail>[0];
+  payment: { method: PaymentMethod.BankTransfer },
+};
+const order = dbOrder.id;
 
 const isAdminCall = (call: unknown[]) => JSON.stringify((call[0] as { to: string[] }).to) === JSON.stringify(ADMIN_EMAIL_RECIPIENTS);
 const networkError = () => Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
@@ -57,6 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers({ toFake: ["setTimeout"] });
   mocks.claimUpsert.mockResolvedValue({ token: "t" });
+  mocks.findOrder.mockResolvedValue(dbOrder);
 });
 afterEach(() => vi.useRealTimers());
 

@@ -621,13 +621,7 @@ async function processBoldPayment(
       createGuideInBackground({ orderId: updatedOrder.id, storeId: updatedOrder.storeId, source: "webhook de Bold" });
     }
 
-    await sendOrderEmail(
-      {
-        ...updatedOrder,
-        payment: updatedOrder.payment?.method ?? undefined,
-      },
-      targetStatus,
-    );
+    await sendOrderEmail(updatedOrder.id, targetStatus);
   }
 
   return NextResponse.json(

@@ -140,6 +140,21 @@ describe("POST /api/webhook/envioclick", () => {
     expect(data.status).toBe("Delivered");
   });
 
+  it("hands the shipping email only the order id, after the update commits", async () => {
+    const tx = txClient();
+    mocks.transaction.mockImplementation(async (cb: any) => cb(tx));
+    mocks.findUpdatedOrder.mockResolvedValue({ id: "order-id", storeId: "store-id" });
+
+    await post({
+      idOrder: 132456,
+      events: [{ statusStep: "Entregado", timestamp: "2026-09-10T10:00:00Z" }],
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // El correo carga el pedido con sus artículos (lib/email.ts).
+    expect(mocks.sendShippingEmail).toHaveBeenCalledWith("order-id", "Delivered");
+  });
+
   it("moves the order to sent only within its own store", async () => {
     const tx = txClient();
     mocks.transaction.mockImplementation(async (cb: any) => cb(tx));

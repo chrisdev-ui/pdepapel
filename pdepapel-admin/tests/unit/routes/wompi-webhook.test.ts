@@ -279,6 +279,7 @@ describe("POST /api/webhook/wompi", () => {
     expect(mocks.paymentUpsert).toHaveBeenCalledTimes(1);
     expect(mocks.shippingUpsert).toHaveBeenCalledTimes(1);
     expect(mocks.sendOrderEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-id", OrderStatus.PAID);
     expect(mocks.recordPaidOrderInGoogleAnalytics).toHaveBeenCalledWith(
       "order-id",
     );

@@ -1098,48 +1098,35 @@ export async function PATCH(
     // Async email notifications
     runInBackground("correo de cambio de estado del pedido", async () => {
       try {
-        // Only fetch necessary fields for email
-        const emailOrder = await prismadb.order.findUnique({
+        // Solo los estados para decidir qué avisar: el correo carga el
+        // pedido completo por su cuenta. Aquí antes se armaba el pedido del
+        // correo con estos campos y salía sin artículos (2026-10-07).
+        const current = await prismadb.order.findUnique({
           where: { id: params.orderId },
-          select: {
-            id: true,
-            orderNumber: true,
-            status: true,
-            shipping: { select: { status: true } },
-            payment: { select: { method: true } },
-            email: true,
-            fullName: true,
-            // Add other necessary fields
-          },
+          select: { status: true, shipping: { select: { status: true } } },
         });
 
-        if (!emailOrder) return;
+        if (!current) return;
 
         // Status change notification
-        if (status && emailOrder.status !== originalStatus) {
-          await sendOrderEmail(
-            {
-              ...emailOrder,
-              payment: emailOrder.payment?.method ?? null,
-            } as any,
-            emailOrder.status,
-            { notifyAdmin: false },
-          );
+        // Sin enlace de «guardar en tu cuenta»: desde el panel nunca se creó.
+        if (status && current.status !== originalStatus) {
+          await sendOrderEmail(params.orderId, current.status, {
+            notifyAdmin: false,
+            accountClaim: false,
+          });
         }
 
         // Shipping status change
         if (
           shipping?.status &&
-          emailOrder.shipping?.status !== originalShippingStatus
+          current.shipping?.status &&
+          current.shipping.status !== originalShippingStatus
         ) {
-          await sendOrderEmail(
-            {
-              ...emailOrder,
-              payment: emailOrder.payment?.method ?? null,
-            } as any,
-            emailOrder.shipping?.status as ShippingStatus,
-            { notifyAdmin: false },
-          );
+          await sendOrderEmail(params.orderId, current.shipping.status, {
+            notifyAdmin: false,
+            accountClaim: false,
+          });
         }
       } catch (emailError) {
         console.error("Email sending failed:", emailError);
@@ -1290,34 +1277,10 @@ export async function DELETE(
     // Sin esto la tienda seguia mostrando el stock viejo tras la devolucion.
     await invalidateStoreProductsCache(params.storeId);
 
-    // Async cancellation email
-    runInBackground("correo de cancelación del pedido", async () => {
-      try {
-        const emailData = await prismadb.order.findUnique({
-          where: { id: params.orderId },
-          select: {
-            id: true,
-            orderNumber: true,
-            email: true,
-            fullName: true,
-            // Add other necessary fields
-          },
-        });
-
-        if (emailData) {
-          await sendOrderEmail(
-            {
-              ...emailData,
-              payment: null,
-            } as any,
-            OrderStatus.CANCELLED,
-            { notifyAdmin: false },
-          );
-        }
-      } catch (emailError) {
-        console.error("Cancellation email failed:", emailError);
-      }
-    });
+    // Borrar un pedido no manda correo: el pedido ya no existe para armarlo.
+    // La cancelación con aviso a la clienta es el cambio de estado a
+    // CANCELLED. (Aquí había una búsqueda después del borrado que nunca
+    // encontraba nada.)
 
     return NextResponse.json(order, {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },

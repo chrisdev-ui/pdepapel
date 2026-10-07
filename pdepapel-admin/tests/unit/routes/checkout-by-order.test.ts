@@ -63,6 +63,9 @@ describe("POST /checkout/[orderId]", () => {
       where: { id: "pay-1" },
       data: { method: PaymentMethod.Wompi },
     });
+    // El correo sale después del cambio a Wompi y carga el pedido por su id.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-1", OrderStatus.PENDING);
   });
 
   it("no toca el método cuando el pedido ya es Wompi", async () => {

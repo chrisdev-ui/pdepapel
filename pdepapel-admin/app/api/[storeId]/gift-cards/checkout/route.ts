@@ -174,10 +174,7 @@ async function createGiftCardCheckout(
 
     runInBackground("correo del pedido (tarjeta de regalo)", async () => {
       try {
-        await sendOrderEmail(
-          { ...order, payment: body.payment.method },
-          OrderStatus.PENDING,
-        );
+        await sendOrderEmail(order.id, OrderStatus.PENDING);
       } catch (emailError) {
         console.error("Failed to send gift card order email:", emailError);
       }

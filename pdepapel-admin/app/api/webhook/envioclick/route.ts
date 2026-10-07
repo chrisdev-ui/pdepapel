@@ -278,13 +278,7 @@ export async function POST(req: Request) {
       if (updatedOrder) {
         runInBackground("correo de envío (EnvioClick)", async () => {
           try {
-            await sendShippingEmail(
-              {
-                ...updatedOrder,
-                payment: updatedOrder.payment?.method ?? undefined,
-              },
-              result.newStatus,
-            );
+            await sendShippingEmail(updatedOrder.id, result.newStatus);
           } catch (emailError) {
             console.error(
               "[ENVIOCLICK_WEBHOOK] Failed to send email:",

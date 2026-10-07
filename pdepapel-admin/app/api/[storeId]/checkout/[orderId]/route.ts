@@ -114,13 +114,7 @@ export async function POST(
     // Send email notification asynchronously (same pattern as main checkout)
     runInBackground("correo del pedido (reintento de pago)", async () => {
       try {
-        await sendOrderEmail(
-          {
-            ...order,
-            payment: order.payment?.method ?? undefined,
-          },
-          OrderStatus.PENDING,
-        );
+        await sendOrderEmail(order.id, OrderStatus.PENDING);
       } catch (emailError) {
         console.error("Failed to send order email:", emailError);
       }

@@ -275,10 +275,8 @@ describe("POST /api/webhook/bold", () => {
     expect(transactionClient.paymentDetails.upsert).toHaveBeenCalledTimes(1);
     expect(transactionClient.shipping.upsert).toHaveBeenCalledTimes(1);
     expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id");
-    expect(mocks.sendOrderEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "order-id", payment: PaymentMethod.Bold }),
-      OrderStatus.PAID,
-    );
+    // Solo el id: el correo carga el pedido completo con sus artículos.
+    expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-id", OrderStatus.PAID);
     expect(mocks.recordPaidOrderInGoogleAnalytics).toHaveBeenCalledWith(
       "order-id",
     );

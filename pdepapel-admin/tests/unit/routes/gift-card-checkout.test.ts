@@ -105,7 +105,7 @@ describe("POST /api/[storeId]/gift-cards/checkout", () => {
     // La tarjeta no existe hasta que el pago se confirma.
     expect(mocks.giftCardCreate).not.toHaveBeenCalled();
     await new Promise((resolve) => setImmediate(resolve));
-    expect(mocks.sendOrderEmail).toHaveBeenCalledWith(expect.objectContaining({ id: "order-gc" }), OrderStatus.PENDING);
+    expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-gc", OrderStatus.PENDING);
   });
 
   it("keeps the message when the buyer will hand the card over herself", async () => {

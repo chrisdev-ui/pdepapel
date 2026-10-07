@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   recordFailedNotification: vi.fn(),
   claimUpsert: vi.fn(),
+  findOrder: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: { NODE_ENV: "production" } }));
@@ -20,7 +21,10 @@ vi.mock("@/lib/notification-failures", () => ({
   recordFailedNotification: mocks.recordFailedNotification,
 }));
 vi.mock("@/lib/prismadb", () => ({
-  default: { orderAccountClaim: { upsert: mocks.claimUpsert } },
+  default: {
+    orderAccountClaim: { upsert: mocks.claimUpsert },
+    order: { findUnique: mocks.findOrder },
+  },
 }));
 vi.mock("@/lib/utils", () => ({
   currencyFormatter: (value: number) => `$ ${value}`,
@@ -39,13 +43,16 @@ const baseOrder = {
   phone: "+573009999999",
   address: "Calle 1 # 2-3",
   city: "Medellín",
+  subtotal: 85900,
+  discount: 0,
+  couponDiscount: 0,
   total: 85900,
   userId: "user-1",
   type: "STANDARD",
   orderItems: [{ name: "Cuaderno cosido Osito", quantity: 2, price: 18000 }],
   shipping: { trackingCode: "GUIA123" },
-  payment: PaymentMethod.Bold,
-} as unknown as Parameters<typeof sendOrderEmail>[0];
+  payment: { method: PaymentMethod.Bold },
+};
 
 const giftOrder = {
   ...baseOrder,
@@ -54,7 +61,13 @@ const giftOrder = {
   giftRecipientEmail: "mariana@example.com",
   giftRecipientPhone: null,
   giftMessage: "¡Feliz cumpleaños!",
-} as unknown as Parameters<typeof sendOrderEmail>[0];
+};
+
+/** Lo que devuelve la base para el id que recibe el correo. */
+const stored = (order: object) => {
+  mocks.findOrder.mockResolvedValue(order);
+  return "order-1";
+};
 
 const sentTo = () =>
   mocks.send.mock.calls.map((call) => (call[0] as { to: string[] }).to.join(","));
@@ -74,7 +87,7 @@ describe("gift order emails", () => {
   });
 
   it("does not announce the gift while the order is still pending", async () => {
-    await sendOrderEmail(giftOrder, OrderStatus.PENDING);
+    await sendOrderEmail(stored(giftOrder), OrderStatus.PENDING);
 
     expect(sentTo()).toEqual([
       "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
@@ -83,7 +96,7 @@ describe("gift order emails", () => {
   });
 
   it("sends the buyer the full receipt and the recipient a spoiler-free notice on payment", async () => {
-    await sendOrderEmail(giftOrder, OrderStatus.PAID);
+    await sendOrderEmail(stored(giftOrder), OrderStatus.PAID);
 
     expect(sentTo()).toEqual([
       "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
@@ -116,7 +129,7 @@ describe("gift order emails", () => {
   });
 
   it("leaves a normal order exactly as before", async () => {
-    await sendOrderEmail(baseOrder, OrderStatus.PAID);
+    await sendOrderEmail(stored(baseOrder), OrderStatus.PAID);
 
     expect(sentTo()).toEqual([
       "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
@@ -127,7 +140,7 @@ describe("gift order emails", () => {
 
   it("does not double-mail the buyer when the recipient email is her own", async () => {
     await sendOrderEmail(
-      { ...giftOrder, giftRecipientEmail: "LUISA@example.com" } as typeof giftOrder,
+      stored({ ...giftOrder, giftRecipientEmail: "LUISA@example.com" }),
       OrderStatus.PAID,
     );
 
@@ -138,7 +151,7 @@ describe("gift order emails", () => {
   });
 
   it("keeps the recipient in the loop on shipping updates, with the guide and no prices", async () => {
-    await sendShippingEmail(giftOrder, ShippingStatus.OutForDelivery);
+    await sendShippingEmail(stored(giftOrder), ShippingStatus.OutForDelivery);
 
     expect(sentTo()).toEqual([
       "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
@@ -160,7 +173,7 @@ describe("gift order emails", () => {
       .mockResolvedValueOnce({ data: { id: "buyer" } })
       .mockRejectedValueOnce(new Error("resend down"));
 
-    await sendOrderEmail(giftOrder, OrderStatus.PAID);
+    await sendOrderEmail(stored(giftOrder), OrderStatus.PAID);
 
     expect(sentTo()).toHaveLength(3);
     expect(mocks.recordFailedNotification).toHaveBeenCalledTimes(1);
