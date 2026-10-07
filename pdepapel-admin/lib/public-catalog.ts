@@ -34,10 +34,18 @@ export const PUBLIC_PRODUCT_GROUP_SELECT = {
   description: true,
 } satisfies Prisma.ProductGroupSelect;
 
+/**
+ * `swatchType` (issue #3) dice cómo pintar la muestra en la tienda. Esta
+ * constante es la ÚNICA forma pública de un color: la usan `GET /products`,
+ * `GET /colors`, `GET /colors/[id]`, las familias y los pedidos públicos.
+ * Pide una columna que solo existe con la migración
+ * `20261007_add_color_swatch_type.sql`: aplicarla ANTES de desplegar.
+ */
 export const PUBLIC_COLOR_SELECT = {
   id: true,
   name: true,
   value: true,
+  swatchType: true,
 } satisfies Prisma.ColorSelect;
 
 export const PUBLIC_SIZE_SELECT = {
@@ -139,7 +147,7 @@ export type PublicProductDetailRecord = Prisma.ProductGetPayload<{
  * cuando cambie lo que se devuelve: las entradas viejas dejan de leerse en el
  * acto y caducan solas (máximo 15 minutos) sin ningún paso manual.
  */
-export const PUBLIC_PRODUCTS_CACHE_VERSION = "v4";
+export const PUBLIC_PRODUCTS_CACHE_VERSION = "v5";
 
 /** Campos de `Product` que nunca deben salir por una ruta pública (para pruebas). */
 export const INTERNAL_PRODUCT_FIELDS = [

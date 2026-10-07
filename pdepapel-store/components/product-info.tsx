@@ -19,6 +19,7 @@ import { ProductSignals } from "@/components/product-signals";
 import { REVIEWS_SECTION_ID } from "@/components/reviews/reviews";
 import { ShareButton } from "@/components/share-button";
 import { Button } from "@/components/ui/button";
+import { ColorSwatch } from "@/components/ui/color-swatch";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useAddProductToCart } from "@/hooks/use-add-product-to-cart";
 import { useCart } from "@/hooks/use-cart";
@@ -94,6 +95,10 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   }, []);
   const quantity =
     controlledQuantity ?? (isCartReady ? productInCart?.quantity : undefined) ?? 1;
+  // Nombre del color bajo el puntero o el foco: el encabezado «Color: …» lo
+  // muestra en vivo y vuelve al elegido al salir (sustituye al `title`, que
+  // no existe en pantallas táctiles).
+  const [previewColorName, setPreviewColorName] = useState<string | null>(null);
 
   const allVariants = useMemo(
     () => getStableProductVariants(data, siblings),
@@ -420,11 +425,14 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
               <div className="flex flex-col gap-2.5">
                 <p className={OPTION_LABEL}>
                   <span>Color:</span>{" "}
-                  <span className="font-sans font-medium">
-                    {data.color?.name}
+                  <span className="font-sans font-medium" data-testid="color-heading-name">
+                    {previewColorName ?? data.color?.name}
                   </span>
                 </p>
-                <div className="flex flex-wrap gap-2.5">
+                <div
+                  className="flex flex-wrap gap-2.5"
+                  onMouseLeave={() => setPreviewColorName(null)}
+                >
                   {availableColors.map((color) => {
                     const isActive = data.color?.id === color.id;
                     const isOutOfStock = !allVariants.some(
@@ -438,24 +446,19 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         key={color.id}
                         {...variantLinkProps("color", color.id, isActive)}
                         aria-label={`Seleccionar color ${color.name}${isOutOfStock ? " (agotado)" : ""}`}
+                        onMouseEnter={() => setPreviewColorName(color.name)}
+                        onFocus={() => setPreviewColorName(color.name)}
+                        onBlur={() => setPreviewColorName(null)}
                         className={cn(
-                          "relative block h-11 w-11 touch-manipulation rounded-full border-2 transition-[transform,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 aria-disabled:cursor-not-allowed motion-reduce:transform-none",
-                          isActive
-                            ? "border-blue-yankees ring-2 ring-blue-yankees ring-offset-2"
-                            : "border-gray-200 hover:scale-110",
-                          (isOutOfStock || isLoading) && "opacity-50",
+                          "group block touch-manipulation rounded-full focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-blue-yankees aria-disabled:cursor-not-allowed",
+                          isLoading && "opacity-50",
                         )}
-                        style={{ backgroundColor: color.value }}
-                        title={`${color.name}${isOutOfStock ? " (agotado)" : ""}`}
                       >
-                        {isOutOfStock && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute inset-0 flex items-center justify-center"
-                          >
-                            <span className="h-0.5 w-full rotate-45 bg-red-500" />
-                          </span>
-                        )}
+                        <ColorSwatch
+                          color={color}
+                          selected={isActive}
+                          soldOut={isOutOfStock}
+                        />
                       </a>
                     );
                   })}
@@ -518,11 +521,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
             {data.color && (
               <p className={cn(OPTION_LABEL, "inline-flex items-center gap-2")}>
                 <span>Color:</span>
-                <span
-                  aria-hidden="true"
-                  className="h-5 w-5 rounded-full border border-gray-400"
-                  style={{ backgroundColor: data.color.value }}
-                />
+                <ColorSwatch color={data.color} size="dot" />
                 <span className="font-sans font-medium">{data.color.name}</span>
               </p>
             )}

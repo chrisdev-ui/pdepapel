@@ -1,3 +1,4 @@
+import type { ColorSwatchType } from "@/lib/color-swatch";
 import { PaymentMethod, Social } from "@/constants";
 
 export enum Season {
@@ -147,6 +148,8 @@ export interface Color {
   id: string;
   name: string;
   value: string;
+  /** Cómo se pinta la muestra (panel → «Tipo de muestra»). Sin él, sólido con el hex. */
+  swatchType?: ColorSwatchType | null;
 }
 
 export interface Design {

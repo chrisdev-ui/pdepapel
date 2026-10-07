@@ -332,16 +332,31 @@ model ProductCatalogOptionValue {
   @@index([optionValueId])
 }
 
+/// Cómo se pinta la muestra de un color en la tienda (issue #3). El hex
+/// (`Color.value`) sigue siendo el tono base; este tipo dice si es un sólido,
+/// un surtido (MULTICOLOR, MULTICOLOR_PASTEL) o un acabado (NEON, METALLIC,
+/// TRANSPARENT, PATTERN). Migración 20261007_add_color_swatch_type.sql.
+enum ColorSwatchType {
+  SOLID
+  NEON
+  METALLIC
+  MULTICOLOR
+  MULTICOLOR_PASTEL
+  TRANSPARENT
+  PATTERN
+}
+
 model Color {
-  id         String    @id @default(uuid())
+  id         String          @id @default(uuid())
   storeId    String
   name       String
   value      String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  isArchived Boolean   @default(false)
+  swatchType ColorSwatchType @default(SOLID)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  isArchived Boolean         @default(false)
   archivedAt DateTime?
-  store      Store     @relation("StoreToColor", fields: [storeId], references: [id])
+  store      Store           @relation("StoreToColor", fields: [storeId], references: [id])
   products   Product[]
 
   @@unique([storeId, name])

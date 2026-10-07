@@ -106,6 +106,9 @@ describe("public API exposure with MySQL", () => {
       expect(product).toMatchObject({ price: 10000, stock: 6 });
       expectNoInternalFields(product!, INTERNAL_PRODUCT_FIELDS);
       expect(product!.category).not.toHaveProperty("storeId");
+      // Forma pública de un color (issue #3): el tipo de muestra y nada más.
+      expect(Object.keys(product!.color as object).sort(), query).toEqual(["id", "name", "swatchType", "value"]);
+      expect(product!.color).toMatchObject({ swatchType: "SOLID" });
     }
   });
 

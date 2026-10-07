@@ -10,6 +10,7 @@ import {
   isUniqueConstraintError,
   mapTaxonomyUniqueError,
   missingTaxonomyMessage,
+  parseColorSwatchType,
   normalizeTaxonomyName,
   requiredTaxonomyFieldMessage,
 } from "@/lib/taxonomy";
@@ -151,5 +152,21 @@ describe("names to fix and similar names", () => {
       { row: rows[0], reason: "raiz" },
     ]);
     expect(findSimilarTaxonomyNames(rows, "Azul", "3")).toEqual([]);
+  });
+});
+
+describe("parseColorSwatchType (#3)", () => {
+  it("accepts the seven swatch types and leaves an absent one undefined", () => {
+    expect(parseColorSwatchType("NEON")).toBe("NEON");
+    expect(parseColorSwatchType("MULTICOLOR_PASTEL")).toBe("MULTICOLOR_PASTEL");
+    expect(parseColorSwatchType(undefined)).toBeUndefined();
+  });
+
+  it("rejects anything else with a Spanish message listing the options", () => {
+    for (const value of ["neon", "GLITTER", null, 3, ""]) {
+      expect(() => parseColorSwatchType(value)).toThrow(
+        "Elige un tipo de muestra válido: Sólido, Neón, Metálico, Multicolor, Multicolor pastel, Transparente, Patrón.",
+      );
+    }
   });
 });

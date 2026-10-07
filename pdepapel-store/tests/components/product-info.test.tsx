@@ -10,7 +10,7 @@ vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn(), useToast: () => ({ toast: 
 
 import { ProductInfo } from "@/components/product-info";
 import { useWishlist } from "@/hooks/use-wishlist";
-import type { Product } from "@/types";
+import type { Product, ProductVariant } from "@/types";
 
 const product = {
   id: "p1",
@@ -62,5 +62,56 @@ describe("ProductInfo", () => {
     render(<ProductInfo data={{ ...product, stock: 0 }} />);
     expect(screen.getByRole("button", { name: "Avísame cuando vuelva" })).toBeInTheDocument();
     expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+});
+
+describe("ProductInfo colour swatches (#3)", () => {
+  const design = { id: "d1", name: "Halloween" };
+  const size = { id: "s1", name: "Único", value: "U" };
+  const blanco = { id: "k-bl", name: "Blanco", value: "#ffffff", swatchType: "SOLID" as const };
+  const multicolor = { id: "k-mu", name: "Multicolor", value: "#ffffff", swatchType: "MULTICOLOR" as const };
+  const negro = { id: "k-ne", name: "Negro", value: "#000000" };
+  const variant = (id: string, color: ProductVariant["color"], stock: number): ProductVariant => ({ id, slug: `lapicero-${id}`, design, size, color, stock, image: null });
+  const current = { ...product, id: "v-bl", slug: "lapicero-v-bl", design, size, color: blanco } as unknown as Product;
+  const siblings = [variant("v-bl", blanco, 3), variant("v-mu", multicolor, 2), variant("v-ne", negro, 0)];
+
+  it("keeps the accessible names and marks the current colour", () => {
+    render(<ProductInfo data={current} siblings={siblings} />);
+    expect(screen.getByRole("link", { name: "Seleccionar color Blanco" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Seleccionar color Multicolor" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Seleccionar color Negro (agotado)" })).toBeInTheDocument();
+  });
+
+  it("paints Multicolor and Blanco differently from the explicit swatchType, and a missing type as solid", () => {
+    render(<ProductInfo data={current} siblings={siblings} />);
+    const typeOf = (name: string) => screen.getByRole("link", { name }).querySelector("[data-swatch-type]")?.getAttribute("data-swatch-type");
+    expect(typeOf("Seleccionar color Blanco")).toBe("SOLID");
+    expect(typeOf("Seleccionar color Multicolor")).toBe("MULTICOLOR");
+    expect(typeOf("Seleccionar color Negro (agotado)")).toBe("SOLID");
+    expect(screen.getByRole("link", { name: "Seleccionar color Negro (agotado)" }).querySelector("[data-swatch-slash]")).not.toBeNull();
+    // El `title` ya no hace falta: el nombre sale en el encabezado.
+    expect(screen.getByRole("link", { name: "Seleccionar color Multicolor" })).not.toHaveAttribute("title");
+  });
+
+  it("shows the hovered or focused colour name in the header and goes back to the chosen one", () => {
+    render(<ProductInfo data={current} siblings={siblings} />);
+    const heading = screen.getByTestId("color-heading-name");
+    expect(heading).toHaveTextContent("Blanco");
+    const multicolorLink = screen.getByRole("link", { name: "Seleccionar color Multicolor" });
+    fireEvent.mouseEnter(multicolorLink);
+    expect(heading).toHaveTextContent("Multicolor");
+    fireEvent.mouseLeave(multicolorLink.parentElement!);
+    expect(heading).toHaveTextContent("Blanco");
+    const negroLink = screen.getByRole("link", { name: "Seleccionar color Negro (agotado)" });
+    fireEvent.focus(negroLink);
+    expect(heading).toHaveTextContent("Negro");
+    fireEvent.blur(negroLink);
+    expect(heading).toHaveTextContent("Blanco");
+  });
+
+  it("uses the swatch for the single colour dot of a product without variants", () => {
+    const { container } = render(<ProductInfo data={{ ...product, color: multicolor } as unknown as Product} />);
+    expect(screen.getByText("Multicolor")).toBeInTheDocument();
+    expect(container.querySelector("[data-swatch-type]")).toHaveAttribute("data-swatch-type", "MULTICOLOR");
   });
 });

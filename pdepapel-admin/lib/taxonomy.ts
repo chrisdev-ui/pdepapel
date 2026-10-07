@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
 
 import { AppError, ErrorFactory } from "@/lib/api-errors";
+import { COLOR_SWATCH_LABELS, COLOR_SWATCH_TYPES, type ColorSwatchType } from "@/lib/color-swatch";
 
 /**
  * Reglas compartidas de los atributos del catálogo (auditoría Grupo B, 2026-09).
@@ -114,6 +116,22 @@ export function requiredTaxonomyFieldMessage(entity: TaxonomyEntity, field: "nom
 
 /** `#RGB`, `#RRGGBB` o `#RRGGBBAA`, como lo guardan los colores existentes. */
 export const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+/**
+ * «Tipo de muestra» de un color en el cuerpo de `POST`/`PATCH /colors`
+ * (issue #3). Ausente → `undefined`: al crear queda en SOLID (valor por
+ * defecto de la columna) y al editar no se toca. Cualquier otro valor que no
+ * sea del enum → 400 legible en español (vía `handleErrorResponse`).
+ */
+export const colorSwatchTypeSchema = z.enum(COLOR_SWATCH_TYPES, {
+  errorMap: () => ({
+    message: `Elige un tipo de muestra válido: ${COLOR_SWATCH_TYPES.map((type) => COLOR_SWATCH_LABELS[type]).join(", ")}.`,
+  }),
+});
+
+export function parseColorSwatchType(value: unknown): ColorSwatchType | undefined {
+  return colorSwatchTypeSchema.optional().parse(value);
+}
 
 /**
  * Valor hexadecimal listo para guardar: sin espacios y en mayúsculas. `null`

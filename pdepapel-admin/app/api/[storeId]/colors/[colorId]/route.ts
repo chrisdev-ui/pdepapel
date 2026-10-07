@@ -8,13 +8,13 @@ import {
   mapTaxonomyUniqueError,
   normalizeHexColor,
   missingTaxonomyMessage,
+  parseColorSwatchType,
   requiredTaxonomyFieldMessage,
 } from "@/lib/taxonomy";
+import { PUBLIC_COLOR_SELECT } from "@/lib/public-catalog";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-
-const PUBLIC_COLOR_SELECT = { id: true, name: true, value: true } as const;
 
 /** Lectura pública de un color de la tienda; otra tienda o un id ajeno → 404. */
 export async function GET(
@@ -58,6 +58,8 @@ export async function PATCH(
     const name = cleanTaxonomyName(body?.name);
     // Sin espacios y en mayúsculas: «#8e44ad » se guarda como «#8E44AD».
     const value = normalizeHexColor(body?.value);
+    // Sin tipo en el cuerpo: se conserva el que tenga.
+    const swatchType = parseColorSwatchType(body?.swatchType);
 
     if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "nombre"));
     if (!value) throw ErrorFactory.InvalidRequest("Escribe un color hexadecimal válido, por ejemplo #F5A3C7");
@@ -77,7 +79,7 @@ export async function PATCH(
 
         return tx.color.update({
           where: { id: params.colorId, storeId: params.storeId },
-          data: { name, value },
+          data: { name, value, ...(swatchType ? { swatchType } : {}) },
           select: PUBLIC_COLOR_SELECT,
         });
       })

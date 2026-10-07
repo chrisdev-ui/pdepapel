@@ -4,6 +4,7 @@ import { ChevronDown, Search } from "lucide-react";
 import { ReactNode, useEffect, useId, useMemo, useState } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColorSwatch } from "@/components/ui/color-swatch";
 import { LIMIT } from "@/constants";
 import { ProductFilters } from "@/hooks/use-product-filters";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
@@ -11,6 +12,7 @@ import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { FilterListKey } from "@/lib/shop-filters";
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
+import type { ColorSwatchType } from "@/lib/color-swatch";
 import { useFilterState } from "@/providers/filter-state-provider";
 
 interface FilterSectionProps {
@@ -78,6 +80,8 @@ interface FilterItem {
   id: string;
   name: string;
   value?: string;
+  /** Solo colores: cómo se pinta la muestra (sin él, sólido con el hex). */
+  swatchType?: ColorSwatchType | null;
   count?: number;
   icon?: string | null;
   slug?: string;
@@ -165,7 +169,7 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
                 className="h-[18px] w-[18px] rounded-[5px] border-[1.5px] border-blue-baby data-[state=checked]:border-blue-yankees data-[state=checked]:bg-blue-yankees data-[state=checked]:text-white"
               />
               {valueKey === "colorId" && item.value && (
-                <span aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full border border-blue-yankees/25" style={{ backgroundColor: item.value }} />
+                <ColorSwatch color={{ value: item.value, swatchType: item.swatchType }} size="sm" />
               )}
               {valueKey === "typeId" && <TypeIcon type={item} className="h-[18px] w-[18px] shrink-0 text-muted-foreground" />}
               <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer truncate font-sans text-sm font-medium text-blue-yankees">

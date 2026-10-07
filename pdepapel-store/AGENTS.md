@@ -171,6 +171,8 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
 
 **Design options (issue #3, 2026-10-07):** each design option on the product page shows the main photo of the variant the click leads to (`getDesignThumbnails` in `lib/product-variants.ts`; the page passes `image` in the sibling projection). A design whose target has no photo, or shares its photo with another design, keeps the text chip. A group with a single, already chosen design shows only the «Diseño: X» line.
 
+**Colour swatches (issue #3, 2026-10-07):** every colour circle (product page picker, single-product dot, shop filter) goes through `components/ui/color-swatch.tsx`, which paints from `color.swatchType` (`lib/color-swatch.ts`, byte-identical to the admin copy; `tests/unit/lib/color-swatch-parity.test.ts`). A missing or unknown type paints the hex as a solid, never a type guessed from the name. Light solids (contrast < 3:1 against white) get a reinforced inner border; the hex is always declared as `backgroundColor` and the gradient separately, so a browser that rejects the gradient keeps the tone. The «Color: …» heading shows the hovered or focused colour name (the `title` tooltip is gone).
+
 ### Accessibility, UX and performance
 
 - Preserve responsive behaviour and verify at **390 / 768 / 820 / 1280 / 1440** with real device emulation, checking **both** page-level and container-level overflow. Header, menus, drawers, dialogs and tables break easily on tablet and mobile.

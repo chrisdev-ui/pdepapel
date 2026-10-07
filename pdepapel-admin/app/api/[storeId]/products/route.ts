@@ -576,7 +576,7 @@ export async function GET(
         productGroupId,
         isOnSale,
         availability,
-        v: "10",
+        v: "11",
       },
     )}`;
 

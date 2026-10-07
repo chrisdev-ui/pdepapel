@@ -79,4 +79,27 @@ describe("Filter group", () => {
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
     expect(screen.getByLabelText("Tipo L")).toBeInTheDocument();
   });
+
+  it("paints colour rows with the shared swatch, so Multicolor and Blanco no longer look alike (#3)", () => {
+    const { container } = render(
+      <Filter
+        valueKey="colorId"
+        name="Colores"
+        data={[
+          { id: "k-bl", name: "Blanco", value: "#ffffff", swatchType: "SOLID", count: 4 },
+          { id: "k-mu", name: "Multicolor", value: "#ffffff", swatchType: "MULTICOLOR", count: 9 },
+          { id: "k-az", name: "Azul", value: "#0004FF", count: 2 },
+        ]}
+      />,
+    );
+    const swatchFor = (name: string) => screen.getByText(name).parentElement!.querySelector<HTMLElement>("[data-swatch-type]")!;
+    expect(swatchFor("Blanco").dataset.swatchType).toBe("SOLID");
+    expect(swatchFor("Multicolor").dataset.swatchType).toBe("MULTICOLOR");
+    expect(container.querySelectorAll("[data-swatch-type]")).toHaveLength(3);
+    for (const swatch of Array.from(container.querySelectorAll("[data-swatch-type]"))) expect(swatch).toHaveAttribute("aria-hidden", "true");
+    // Sin `swatchType` (respuesta vieja de la API): sólido con su hex.
+    expect(swatchFor("Azul").dataset.swatchType).toBe("SOLID");
+    expect(swatchFor("Azul").style.backgroundColor).toBe("rgb(0, 4, 255)");
+    expect(screen.getByLabelText("Multicolor")).toBeInTheDocument();
+  });
 });

@@ -29,6 +29,8 @@ export interface AttributeSibling {
   name: string;
   usage: number;
   value?: string | null;
+  /** Solo colores: tipo de muestra (el aviso «Mismo tono» compara tipo y hex). */
+  swatchType?: string | null;
   parent?: string | null;
 }
 
@@ -46,8 +48,8 @@ export async function getAttributeSiblings(db: Client, kind: MergeableKind, stor
       return rows.map((row) => ({ id: row.id, name: row.name, usage: row._count.products, value: row.value }));
     }
     case "colors": {
-      const rows = await db.color.findMany({ where, orderBy, select: { id: true, name: true, value: true, _count: { select: { products: true } } } });
-      return rows.map((row) => ({ id: row.id, name: row.name, usage: row._count.products, value: row.value }));
+      const rows = await db.color.findMany({ where, orderBy, select: { id: true, name: true, value: true, swatchType: true, _count: { select: { products: true } } } });
+      return rows.map((row) => ({ id: row.id, name: row.name, usage: row._count.products, value: row.value, swatchType: row.swatchType }));
     }
     case "designs": {
       const rows = await db.design.findMany({ where, orderBy, select: { id: true, name: true, _count: { select: { products: true } } } });

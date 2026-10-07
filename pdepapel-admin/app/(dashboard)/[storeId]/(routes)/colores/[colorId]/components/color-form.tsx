@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { FormPageHeader, FormStickyFooter, UsageList } from "@/components/ui/form-page-chrome";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SectionCard } from "@/components/ui/section-card";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useFormPersist } from "@/hooks/use-form-persist";
@@ -21,7 +22,16 @@ import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
+import { cn } from "@/lib/utils";
 import type { AttributeSibling } from "@/lib/attribute-usage";
+import {
+  COLOR_SWATCH_LABELS,
+  COLOR_SWATCH_TYPES,
+  getSwatchPaint,
+  resolveSwatchType,
+  type ColorSwatchType,
+  type SwatchPaint,
+} from "@/lib/color-swatch";
 import { HEX_COLOR_PATTERN, normalizeHexColor } from "@/lib/taxonomy";
 import { AttributeNameHints } from "../../../atributos/components/attribute-form-hints";
 import { AttributeMergeCard } from "../../../atributos/components/merge-card";
@@ -36,6 +46,7 @@ const formSchema = z.object({
     .string()
     .trim()
     .regex(HEX_COLOR_PATTERN, "Escribe un color hexadecimal, por ejemplo #F5A3C7"),
+  swatchType: z.enum(COLOR_SWATCH_TYPES, { errorMap: () => ({ message: "Elige el tipo de muestra" }) }),
 });
 
 type ColorFormValues = z.infer<typeof formSchema>;
@@ -55,6 +66,43 @@ interface ColorFormProps {
 
 const plural = (count: number, singular: string, pluralForm: string) => `${count} ${count === 1 ? singular : pluralForm}`;
 
+/** Qué hace el hex con cada tipo: la ayuda bajo el selector. */
+const SWATCH_HELP: Record<ColorSwatchType, string> = {
+  SOLID: "Un solo tono: la muestra es el hex.",
+  NEON: "Tono base del hex con brillo. Con #FFFFFF se pinta como surtido fluorescente.",
+  METALLIC: "Reflejo metálico sobre el hex. Con #FFFFFF se pinta como surtido (plata, oro y oro rosa).",
+  MULTICOLOR: "Arcoíris: el hex se guarda pero no se usa.",
+  MULTICOLOR_PASTEL: "Arcoíris en tonos pastel: el hex se guarda pero no se usa.",
+  TRANSPARENT: "Cuadrícula tipo vidrio: el hex se guarda pero no se usa.",
+  PATTERN: "Rayas del hex sobre blanco.",
+};
+
+/** La misma pintura que ve la clienta en la tienda (lib/color-swatch.ts es copia exacta). */
+function paintStyle(paint: SwatchPaint): React.CSSProperties {
+  return {
+    backgroundColor: paint.backgroundColor,
+    backgroundImage: paint.backgroundImage,
+    backgroundSize: paint.backgroundSize,
+    backgroundPosition: paint.backgroundPosition,
+    boxShadow: [paint.ring, paint.glowColor ? `0 0 6px 1px ${paint.glowColor}` : null].filter(Boolean).join(", "),
+  };
+}
+
+function SwatchPreview({ type, value, className, testId }: { type: ColorSwatchType; value: string; className?: string; testId?: string }) {
+  const paint = getSwatchPaint(type, value);
+  return (
+    <span
+      aria-hidden="true"
+      data-testid={testId}
+      data-swatch-type={paint.type}
+      className={cn("flex shrink-0 items-center justify-center rounded-full text-xs font-bold text-slate-600", className)}
+      style={paintStyle(paint)}
+    >
+      {paint.unknown ? "?" : null}
+    </span>
+  );
+}
+
 /** Convierte `#RGB`/`#RRGGBBAA` al `#RRGGBB` que acepta `<input type="color">`. */
 function toPickerHex(value: string): string {
   const hex = value.trim();
@@ -73,7 +121,11 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblin
   const [loading, setLoading] = useState(false);
 
   const defaultValues = useMemo<ColorFormValues>(
-    () => ({ name: initialData?.name ?? "", value: initialData?.value ?? "" }),
+    () => ({
+      name: initialData?.name ?? "",
+      value: initialData?.value ?? "",
+      swatchType: resolveSwatchType(initialData?.swatchType),
+    }),
     [initialData],
   );
 
@@ -88,10 +140,20 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblin
 
   const name = form.watch("name");
   const value = form.watch("value");
+  const swatchType = form.watch("swatchType");
   const validHex = HEX_COLOR_PATTERN.test(value.trim());
   const productsTotal = usage.activeProducts + usage.archivedProducts;
-  // Mismo tono en otro color activo: aviso, no bloqueo («Pastel» y «Multicolor» comparten #FFFFFF a propósito).
-  const sameTone = validHex ? siblings.filter((row) => row.id !== initialData?.id && normalizeHexColor(row.value) === normalizeHexColor(value)) : [];
+  // Mismo tono en otro color activo: aviso, no bloqueo. Solo cuenta si
+  // coinciden hex y tipo de muestra («Pastel» y «Multicolor» comparten #FFFFFF
+  // pero se pintan distinto).
+  const sameTone = validHex
+    ? siblings.filter(
+        (row) =>
+          row.id !== initialData?.id &&
+          normalizeHexColor(row.value) === normalizeHexColor(value) &&
+          resolveSwatchType(row.swatchType) === swatchType,
+      )
+    : [];
   const [mergeTarget, setMergeTarget] = useState<string | null>(null);
 
   const goToHub = () => {
@@ -100,7 +162,11 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblin
   };
 
   const onSubmit = async (data: ColorFormValues) => {
-    const payload = { name: data.name, value: normalizeHexColor(data.value) ?? data.value.trim().toUpperCase() };
+    const payload = {
+      name: data.name,
+      value: normalizeHexColor(data.value) ?? data.value.trim().toUpperCase(),
+      swatchType: data.swatchType,
+    };
     try {
       setLoading(true);
       if (initialData) {
@@ -139,7 +205,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblin
 
   const canDelete = Boolean(initialData) && productsTotal === 0;
   const summary = initialData
-    ? `${initialData.name} · ${initialData.value} · ${plural(productsTotal, "producto", "productos")}`
+    ? `${initialData.name} · ${initialData.value} · ${COLOR_SWATCH_LABELS[resolveSwatchType(initialData.swatchType)]} · ${plural(productsTotal, "producto", "productos")}`
     : "Un color con su muestra, para variantes y filtros de la tienda.";
 
   return (
@@ -173,7 +239,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblin
       <div className={initialData ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]" : "grid gap-5"}>
         <Form {...form}>
           <form id="color-form" noValidate autoComplete="off" onSubmit={form.handleSubmit(onSubmit)} className="flex min-w-0 flex-col gap-5">
-            <SectionCard id="datos" title="Datos" description="Nombre visible y valor hexadecimal de la muestra.">
+            <SectionCard id="datos" title="Datos" description="Nombre visible, valor hexadecimal y cómo se pinta la muestra en la tienda.">
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -207,12 +273,7 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblin
                         <div className="flex items-center gap-3">
                           <Input disabled={loading} placeholder="#F5A3C7" maxLength={9} className="font-mono uppercase" {...field} />
                           <label className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border" title="Elegir con el selector de color">
-                            <span
-                              className="h-8 w-8 rounded-full border"
-                              style={{ backgroundColor: validHex ? value.trim() : "transparent" }}
-                              data-testid="color-swatch"
-                              aria-hidden="true"
-                            />
+                            <SwatchPreview type={swatchType} value={validHex ? value : ""} className="h-8 w-8" testId="color-swatch" />
                             <input
                               type="color"
                               aria-label="Selector de color"
@@ -231,6 +292,41 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData, usage, siblin
                           Mismo tono que {sameTone.map((row) => `«${row.name}»`).join(", ")}. Se guarda igual; es solo un aviso.
                         </p>
                       )}
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="swatchType"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel isRequired>Tipo de muestra</FormLabel>
+                      <div className="flex items-center gap-3">
+                        <Select disabled={loading} value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger className="sm:max-w-xs" aria-label="Tipo de muestra">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {COLOR_SWATCH_TYPES.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                <span className="flex items-center gap-2">
+                                  <SwatchPreview type={type} value={validHex ? value : "#FFFFFF"} className="h-4 w-4" />
+                                  {COLOR_SWATCH_LABELS[type]}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-white" title="Así se ve en la tienda">
+                          <SwatchPreview type={field.value} value={validHex ? value : ""} className="h-9 w-9" testId="swatch-type-preview" />
+                        </span>
+                      </div>
+                      <FormDescription>
+                        {SWATCH_HELP[field.value]} La vista previa es la misma muestra que ve la clienta en la ficha y en los filtros.
+                      </FormDescription>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />

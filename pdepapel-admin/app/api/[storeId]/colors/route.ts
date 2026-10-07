@@ -8,8 +8,10 @@ import {
   findDuplicateTaxonomyName,
   mapTaxonomyUniqueError,
   normalizeHexColor,
+  parseColorSwatchType,
   requiredTaxonomyFieldMessage,
 } from "@/lib/taxonomy";
+import { PUBLIC_COLOR_SELECT } from "@/lib/public-catalog";
 import {
   CACHE_HEADERS,
   parseErrorDetails,
@@ -17,8 +19,6 @@ import {
 } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-
-const PUBLIC_COLOR_SELECT = { id: true, name: true, value: true } as const;
 
 export async function POST(
   req: Request,
@@ -35,6 +35,8 @@ export async function POST(
     const name = cleanTaxonomyName(body?.name);
     // Sin espacios y en mayúsculas: «#8e44ad » se guarda como «#8E44AD».
     const value = normalizeHexColor(body?.value);
+    // Sin tipo: SOLID (valor por defecto de la columna).
+    const swatchType = parseColorSwatchType(body?.swatchType);
 
     if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "nombre"));
     if (!value) throw ErrorFactory.InvalidRequest("Escribe un color hexadecimal válido, por ejemplo #F5A3C7");
@@ -49,7 +51,7 @@ export async function POST(
 
     const color = await prismadb.color
       .create({
-        data: { name, value, storeId: params.storeId },
+        data: { name, value, ...(swatchType ? { swatchType } : {}), storeId: params.storeId },
         select: PUBLIC_COLOR_SELECT,
       })
       .catch((error) => {

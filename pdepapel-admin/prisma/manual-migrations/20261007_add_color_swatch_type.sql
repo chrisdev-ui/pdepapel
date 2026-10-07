@@ -1,0 +1,41 @@
+-- Tipo de muestra del color (issue #3, 2026-10-07).
+--
+-- Motivo: la tienda pinta cada color como un círculo con su hex, y siete
+-- colores guardan #FFFFFF (Multicolor, Pastel, Blanco, Transparente,
+-- Metalizado, Fluorescente, Neón): en la ficha se veían como el mismo
+-- círculo blanco. `swatchType` dice cómo pintar la muestra; el hex sigue
+-- siendo el tono base.
+--
+-- PURAMENTE ADITIVA: una columna con valor por defecto. Todas las filas
+-- existentes quedan en 'SOLID', que pinta exactamente lo mismo que hoy
+-- (el hex). Los 13 colores especiales se marcan después con el backfill
+-- `scripts/backfill-color-swatch-type.mjs` (vía `npm run prod:write`).
+--
+-- APLICAR EN RAILWAY ANTES DE DESPLEGAR EL CÓDIGO QUE LA LEE, y solo en la
+-- base nueva (después del corte a us-east4). Con el código nuevo y sin la
+-- columna, `PUBLIC_COLOR_SELECT` pide `swatchType` en cada `GET /products`,
+-- `GET /colors` y en las fichas de pedido, y los `findFirst` sin `select`
+-- sobre `Color` nombran todas las columnas: la API del catálogo responde 500
+-- y la tienda en línea se cae con ella, no solo el panel. El orden inverso
+-- es seguro: el cliente Prisma anterior nunca pide la columna.
+--
+-- Aplicar (aprobación de Christian, token fresco):
+--   npm run prod:migrate -- prisma/manual-migrations/20261007_add_color_swatch_type.sql --expect new
+--
+-- No es idempotente: si la columna ya existe, MySQL responde
+-- «Duplicate column name 'swatchType'» y no cambia nada. Comprobar antes con
+-- la primera consulta de verificación.
+--
+-- El ENUM es exactamente el que genera Prisma para `enum ColorSwatchType`
+-- (prisma migrate diff contra el esquema anterior), en el mismo orden.
+
+-- AlterTable
+ALTER TABLE `Color` ADD COLUMN `swatchType` ENUM('SOLID', 'NEON', 'METALLIC', 'MULTICOLOR', 'MULTICOLOR_PASTEL', 'TRANSPARENT', 'PATTERN') NOT NULL DEFAULT 'SOLID';
+
+-- Verificación:
+--   SHOW COLUMNS FROM `Color` LIKE 'swatchType';
+--     → enum('SOLID','NEON','METALLIC','MULTICOLOR','MULTICOLOR_PASTEL','TRANSPARENT','PATTERN') NO  SOLID
+--   SELECT `swatchType`, COUNT(*) FROM `Color` GROUP BY `swatchType`;
+--     → solo SOLID, con el mismo total de filas que `SELECT COUNT(*) FROM Color` (36 en la tienda al 2026-10-06)
+-- Reversión (solo después de revertir el código que la lee):
+--   ALTER TABLE `Color` DROP COLUMN `swatchType`;

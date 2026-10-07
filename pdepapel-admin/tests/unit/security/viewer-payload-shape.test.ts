@@ -5,7 +5,7 @@ import {
   scrubProductGroup,
   VIEWER_HIDDEN_CAPSULE_FIELDS,
 } from "@/lib/viewer-payloads";
-import { INTERNAL_PRODUCT_FIELDS, SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
+import { INTERNAL_PRODUCT_FIELDS, PUBLIC_COLOR_SELECT, PUBLIC_PRODUCTS_CACHE_VERSION, SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { getReconciliationRowState, summarizeReconciliation } from "@/lib/fair-phases";
 
 /**
@@ -207,5 +207,16 @@ describe("la conciliación no da por contado lo que no se contó", () => {
     expect(summary.balanced).toBe(true);
     expect(summary.returned).toBe(6);
     expect(summary.damaged + summary.lost).toBe(0);
+  });
+});
+
+describe("la forma pública de un color (#3)", () => {
+  it("lleva el tipo de muestra y nada más (sin storeId, fechas ni archivado)", () => {
+    expect(Object.keys(PUBLIC_COLOR_SELECT).sort()).toEqual(["id", "name", "swatchType", "value"]);
+  });
+
+  it("cambió la forma de GET /products, así que la caché Redis cambió de versión", () => {
+    // v4 guardaba colores sin `swatchType`: leerla serviría la forma vieja hasta 15 minutos.
+    expect(PUBLIC_PRODUCTS_CACHE_VERSION).toBe("v5");
   });
 });

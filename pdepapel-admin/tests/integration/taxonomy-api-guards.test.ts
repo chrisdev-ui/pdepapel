@@ -249,7 +249,7 @@ describe("taxonomy API guards with MySQL", () => {
 
     const own = await GET(get(), { params: { storeId: fixture.store.id, colorId: color.id } });
     expect(own.status).toBe(200);
-    expect(await own.json()).toEqual({ id: color.id, name: "Rosa", value: color.value });
+    expect(await own.json()).toEqual({ id: color.id, name: "Rosa", value: color.value, swatchType: "SOLID" });
 
     const foreign = await GET(get(), { params: { storeId: other.id, colorId: color.id } });
     expect(foreign.status).toBe(404);
@@ -264,5 +264,45 @@ describe("taxonomy API guards with MySQL", () => {
     expect(deleted.status).toBe(404);
     expect((await testPrisma.color.findUniqueOrThrow({ where: { id: color.id } })).name).toBe("Rosa");
     expect(mocks.invalidate).not.toHaveBeenCalled();
+  });
+
+  it("stores the swatch type on create and edit, keeps it when omitted and rejects an unknown one with a Spanish 400 (#3)", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const { POST, GET } = await import("@/app/api/[storeId]/colors/route");
+    const { PATCH } = await import("@/app/api/[storeId]/colors/[colorId]/route");
+    const storeId = fixture.store.id;
+
+    const plain = await POST(json("POST", { name: "Lila", value: "#b9afee" }), { params: { storeId } });
+    expect(plain.status).toBe(200);
+    expect(await plain.json()).toMatchObject({ name: "Lila", swatchType: "SOLID" });
+
+    const created = await POST(json("POST", { name: "Multicolor", value: "#ffffff", swatchType: "MULTICOLOR" }), { params: { storeId } });
+    expect(created.status).toBe(200);
+    const multicolor = await created.json();
+    expect(multicolor).toEqual({ id: expect.any(String), name: "Multicolor", value: "#FFFFFF", swatchType: "MULTICOLOR" });
+
+    const invalid = await POST(json("POST", { name: "Brillo", value: "#ffffff", swatchType: "GLITTER" }), { params: { storeId } });
+    expect(invalid.status).toBe(400);
+    expect((await invalid.json()).error).toMatch(/^Elige un tipo de muestra válido: Sólido, Neón, Metálico, Multicolor, Multicolor pastel, Transparente, Patrón\.$/);
+    expect(await testPrisma.color.count({ where: { storeId, name: "Brillo" } })).toBe(0);
+
+    // Editar sin `swatchType` no lo pisa; con uno válido lo cambia; con uno inválido, 400 y nada cambia.
+    const renamed = await PATCH(json("PATCH", { name: "Arcoíris", value: "#ffffff" }), { params: { storeId, colorId: multicolor.id } });
+    expect(await renamed.json()).toMatchObject({ name: "Arcoíris", swatchType: "MULTICOLOR" });
+    const pastel = await PATCH(json("PATCH", { name: "Arcoíris", value: "#ffffff", swatchType: "MULTICOLOR_PASTEL" }), { params: { storeId, colorId: multicolor.id } });
+    expect(await pastel.json()).toMatchObject({ swatchType: "MULTICOLOR_PASTEL" });
+    const badPatch = await PATCH(json("PATCH", { name: "Arcoíris", value: "#ffffff", swatchType: 7 }), { params: { storeId, colorId: multicolor.id } });
+    expect(badPatch.status).toBe(400);
+    expect((await testPrisma.color.findUniqueOrThrow({ where: { id: multicolor.id } })).swatchType).toBe("MULTICOLOR_PASTEL");
+
+    // La lista pública que alimenta el filtro de la tienda lleva el tipo.
+    const list = await (await GET(get(), { params: { storeId } })).json();
+    expect(list.find((row: { id: string }) => row.id === multicolor.id)).toEqual({
+      id: multicolor.id,
+      name: "Arcoíris",
+      value: "#FFFFFF",
+      swatchType: "MULTICOLOR_PASTEL",
+    });
   });
 });
