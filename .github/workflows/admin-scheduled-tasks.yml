@@ -4,9 +4,19 @@ on:
   schedule:
     - cron: "0 13 * * *"
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Run a single job (empty = all). notification-retry resends failed order emails only."
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - notification-retry
 
 jobs:
   mercado-libre-health:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
     name: Mercado Libre daily health
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -23,6 +33,7 @@ jobs:
             "$ADMIN_BASE_URL/api/cron/mercadolibre-health"
 
   google-merchant-feed:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
     name: Google Merchant feed refresh
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -43,6 +54,7 @@ jobs:
             "$ADMIN_BASE_URL/api/cron/google-merchant-feed"
 
   image-health:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
     name: Product image health
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -61,6 +73,7 @@ jobs:
             "$ADMIN_BASE_URL/api/cron/image-health"
 
   whatsapp-webhook-retention:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
     name: WhatsApp webhook event retention
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -77,6 +90,7 @@ jobs:
             "$ADMIN_BASE_URL/api/cron/whatsapp-webhook-retention"
 
   payment-webhook-retention:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
     name: Payment webhook event retention
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -95,6 +109,7 @@ jobs:
             "$ADMIN_BASE_URL/api/cron/payment-webhook-retention"
 
   notification-retry:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' || inputs.only == 'notification-retry' }}
     name: Order email retry
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -115,6 +130,7 @@ jobs:
             "$ADMIN_BASE_URL/api/cron/notification-retry"
 
   gift-card-holds:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
     name: Gift card hold release
     runs-on: ubuntu-latest
     timeout-minutes: 5
