@@ -89,6 +89,10 @@ export async function GET(
     // select público, que no trae costo de compra, transporte ni proveedor.
     const access = await getStoreAccess(params.storeId);
     const isOwner = access?.role === "owner";
+    // Con sesión del panel (dueña o solo lectura) la respuesta depende de
+    // quién pregunta: nunca en la caché pública del CDN (#6). La tienda, sin
+    // sesión, sigue con DYNAMIC.
+    const responseHeaders = access ? { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } : corsHeaders;
 
     const ownerInclude = {
       images: true,
@@ -183,7 +187,7 @@ export async function GET(
         hasDiscount: productWithDiscount.discount > 0,
       },
       {
-        headers: corsHeaders,
+        headers: responseHeaders,
       },
     );
   } catch (error) {

@@ -41,6 +41,7 @@ export async function POST(
   }
 }
 
+// Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string } },
@@ -61,7 +62,7 @@ export async function GET(
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(offers, { headers: CACHE_HEADERS.DYNAMIC });
+    return NextResponse.json(offers, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "OFFERS_GET");
   }

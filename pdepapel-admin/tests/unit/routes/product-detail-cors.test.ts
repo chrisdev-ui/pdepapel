@@ -49,7 +49,10 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 vi.mock("@/lib/utils", () => ({
-  CACHE_HEADERS: { DYNAMIC: { "Cache-Control": "public, max-age=60" } },
+  CACHE_HEADERS: {
+    DYNAMIC: { "Cache-Control": "public, max-age=60" },
+    NO_CACHE: { "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+  },
   generateRandomSKU: vi.fn(),
   getPublicIdFromCloudinaryUrl: vi.fn(),
   verifyStoreOwner: vi.fn(),
@@ -253,4 +256,30 @@ describe("public product detail CORS", () => {
     expect(query.select).toBeUndefined();
     expect(query.include).toEqual(expect.objectContaining({ supplier: true, images: true }));
   });
+
+  /**
+   * #6: la misma URL responde la ficha pública a la tienda y la ficha
+   * completa (costos, proveedor) al panel. La del panel nunca puede quedar en
+   * la caché pública del CDN.
+   */
+  describe("cache headers by viewer", () => {
+    const fetchDetail = () =>
+      GET(new Request("https://admin.example.com/api/store-id/products/resaltador-lila"), {
+        params: { storeId: "store-id", productId: "resaltador-lila" },
+      });
+
+    it("keeps the public header for the storefront (no session)", async () => {
+      const response = await fetchDetail();
+      expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
+    });
+
+    it.each(["owner", "viewer"])("never publicly caches a %s session", async (role) => {
+      mocks.getStoreAccess.mockResolvedValue({ role, userId: "user-1" });
+      const response = await fetchDetail();
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Cache-Control")).toMatch(/no-store/);
+      expect(response.headers.get("Cache-Control")).not.toMatch(/public/);
+    });
+  });
 });
+

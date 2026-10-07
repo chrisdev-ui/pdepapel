@@ -87,6 +87,7 @@ export async function OPTIONS(req: Request) {
  * las notas internas, los costos ni la utilidad. La dueña recibe la fila
  * completa.
  */
+// Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
 export async function GET(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } },
@@ -121,7 +122,7 @@ export async function GET(
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
       return NextResponse.json(access?.role === "viewer" ? scrubOrder(order) : order, {
-        headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+        headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
       });
     }
 
@@ -142,11 +143,11 @@ export async function GET(
     if (belongsToAccountCustomer && order.userId !== userId)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
     return NextResponse.json(toCustomerOrderResponse(order), {
-      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   } catch (error) {
     return handleErrorResponse(error, "ORDER_GET", {
-      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   }
 }

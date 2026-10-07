@@ -13,6 +13,7 @@ export async function OPTIONS(req: Request) {
   });
 }
 
+// Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
 export async function GET(
   req: Request,
   {
@@ -21,7 +22,7 @@ export async function GET(
 ) {
   const corsHeaders = {
     ...createCorsHeaders(req, { methods: "GET, PATCH, DELETE, OPTIONS" }),
-    ...CACHE_HEADERS.DYNAMIC,
+    ...CACHE_HEADERS.NO_CACHE,
   };
 
   try {

@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 
 // Enable Edge Runtime for faster response times
 
+// Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
 export async function GET(
   req: Request,
   { params }: { params: { storeId: string } },
@@ -106,12 +107,12 @@ export async function GET(
         },
       },
       {
-        headers: CACHE_HEADERS.DYNAMIC,
+        headers: CACHE_HEADERS.NO_CACHE,
       },
     );
   } catch (error) {
     return handleErrorResponse(error, "CATALOG_GET", {
-      headers: CACHE_HEADERS.DYNAMIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   }
 }

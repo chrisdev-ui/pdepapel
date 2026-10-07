@@ -782,6 +782,7 @@ async function createOrder(
   }
 }
 
+// Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
 export async function GET(
   req: NextRequest,
   { params }: { params: { storeId: string } },
@@ -828,11 +829,11 @@ export async function GET(
     });
 
     return NextResponse.json(access?.role === "viewer" ? scrubOrders(orders) : orders, {
-      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   } catch (error) {
     return handleErrorResponse(error, "ORDERS_GET", {
-      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   }
 }

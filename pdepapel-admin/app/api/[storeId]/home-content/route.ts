@@ -17,6 +17,7 @@ import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { assertProductsBelongToStore } from "@/lib/home-content-server";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
+// Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
 export async function GET(req: Request, { params }: { params: { storeId: string } }) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
@@ -28,7 +29,7 @@ export async function GET(req: Request, { params }: { params: { storeId: string 
         where: liveHomeContentWhere(params.storeId, now),
         select: HOME_CONTENT_ADMIN_SELECT,
       });
-      return NextResponse.json(selectLiveHomeContent(entries, now), { headers: CACHE_HEADERS.DYNAMIC });
+      return NextResponse.json(selectLiveHomeContent(entries, now), { headers: CACHE_HEADERS.NO_CACHE });
     }
 
     await requireStoreRead(params.storeId);
