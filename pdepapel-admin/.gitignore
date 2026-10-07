@@ -65,7 +65,7 @@ backup_prod_*.sql
 !prisma/manual-migrations/*.sql
 
 # producción: URL de escritura y aprobación de un solo uso (nunca al repositorio)
-.env.prod-write
+.env.prod-write*
 .prod-write-approval.json
 
 # Seguimiento de créditos de Cloudinary: credencial propia y registros locales (nunca se suben)
