@@ -222,6 +222,8 @@ Las páginas servidas desde caché (HIT), que no tocan la base, bajaron unos 270
 
 ### a. Cortar la integración Railway → Vercel y borrar lo que copió
 
+**Hecho el 2026-10-07.** Christian cortó la integración y las 12 entradas que gestionaba (6 nombres × Production y Preview) desaparecieron solas de pdepapel-admin. `vercel env ls` lo confirma y `DATABASE_URL` (Production y Development) sigue intacta. Lo de abajo queda como referencia.
+
 La integración es «railway», configuración `icfg_5gxxP1bdRhFoDIa0cjLK0Yos`, alcance **solo pdepapel-admin**, con permiso de lectura y escritura sobre sus variables de entorno. `DATABASE_URL` **no** la gestiona la integración (Production y Development no tienen `configurationId`), así que no se toca.
 
 1. **[Christian] Railway:**
@@ -314,9 +316,18 @@ El orden es obligatorio. Sin la columna, el código nuevo hace que la API del ca
 
 **Nunca dejar la base vieja en solo lectura mientras la app siga apuntando a ella.**
 
-1. **[Christian]** Si ya cambiaste `DATABASE_URL` (Vercel, admin Production), volver a poner el valor viejo. **[Claude, con tu sí]** Deploy nuevo de producción del admin y esperar READY.
+> **Desde el 2026-10-07 la base vieja no tiene acceso público.**
+> - Christian quitó el proxy TCP del servicio viejo («MySQL Database»), y comprobé ese día que su host ya no habla MySQL: el TCP abre pero nadie contesta y el cliente recibe «Server has closed the connection».
+> - Volver atrás exige **primero** recrear el proxy TCP del servicio viejo en Railway (Settings › Networking › TCP Proxy, puerto 3306). Railway asigna un **host y puerto nuevos**.
+> - Con esos valores, Christian actualiza la línea `DATABASE_URL=` de `pdepapel-admin/.env.prod-write.old-db` y la `DATABASE_URL` de Production en Vercel para el paso 1.
+> - Hasta entonces, `db-read-only.mjs --expect old` y cualquier `prod:write … --expect old` fallan al conectar, y la guarda no deja escribir en ninguna base.
+> - La base vieja sigue congelada (`super_read_only=1`). Se retira el **2026-10-14** (sección «c»).
+
+0. **[Christian]** Recrear el proxy TCP del servicio viejo y actualizar `.env.prod-write.old-db` con el host y el puerto nuevos. **[Claude]** Comprobar con `node --env-file=.env.prod-write.old-db scripts/db-read-only.mjs --status --expect old`, que tiene que decir «base vieja», `super_read_only 1`.
+
+1. **[Christian]** Si ya cambiaste `DATABASE_URL` (Vercel, admin Production), volver a poner la URL de la base vieja con el host y el puerto **nuevos** del paso 0, no los de antes del corte. **[Claude, con tu sí]** Deploy nuevo de producción del admin y esperar READY.
 2. **[Christian]** `npm run prod:approve -- "descongelar la base vieja (super_read_only OFF): rollback del corte a us-east4"`.
-3. **[Claude]** `npm run prod:write -- scripts/db-read-only.mjs --off --expect old`. Esta noche, `.env.prod-write` sigue en la vieja. Después de la sección «e», `--expect old` usa `.env.prod-write.old-db`. El guion comprueba que es la vieja, descongela y prueba que una escritura pasa. Luego `--status --expect old` con `pdepapel_ro` tiene que mostrar 0/0.
+3. **[Claude]** `npm run prod:write -- scripts/db-read-only.mjs --off --expect old`, que usa `.env.prod-write.old-db` (sección «e»). El guion comprueba que es la vieja, descongela y prueba que una escritura pasa. Luego `--status --expect old` con `pdepapel_ro` tiene que mostrar 0/0.
 4. **[Christian]** Devolver los secretos `BACKUP_DB_*` y los `.env` locales, si se cambiaron, y `BACKUP_ENABLED=true`.
 5. Mientras la vieja estuvo congelada no se escribió nada en ninguna base, así que no hay datos que copiar. Si se vuelve atrás después de abrir escrituras en la nueva, hay que copiar a mano lo escrito ahí (pedidos, pagos, kardex, webhooks), por prod-write y con aprobación.
 
