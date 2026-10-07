@@ -131,8 +131,15 @@ const variante = (id: string, colorId: string) => ({
   design: { id: "design-1", name: "Gatito" },
 });
 
-/** Un grupo guardado tal como lo carga la página: sin `imageMapping`. */
-function grupoGuardado(productos = [variante("p1", "color-1"), variante("p2", "color-2")]) {
+/** Un grupo guardado con el código anterior: sus dos fotos copiadas en cada variante, sin `scope`. */
+const conFotosDelGrupo = (v: ReturnType<typeof variante>) => ({
+  ...v,
+  images: [
+    { id: `${v.id}-a`, url: "a.jpg", isMain: true },
+    { id: `${v.id}-b`, url: "b.jpg", isMain: false },
+  ],
+});
+function grupoGuardado(productos = [conFotosDelGrupo(variante("p1", "color-1")), conFotosDelGrupo(variante("p2", "color-2"))]) {
   return {
     id: "group-1",
     name: "Cartuchera kawaii",
@@ -467,5 +474,40 @@ describe("editar un grupo: lo que envía el formulario", () => {
       "b.jpg": "all",
       "propia.jpg": "COMBO|color-1|design-1",
     });
+  });
+});
+
+describe("editar un grupo anterior: reparto sin alcance claro", () => {
+  it("una foto que solo tienen algunas variantes sin coincidir con un color queda «Sin repartir» y frena el guardado", async () => {
+    const tres = [
+      { ...variante("p1", "color-1"), images: [{ id: "x1", url: "a.jpg", isMain: true }] },
+      { ...variante("p2", "color-2"), images: [{ id: "x3", url: "a.jpg", isMain: true }, { id: "x4", url: "suelta.jpg", isMain: false }] },
+      { ...variante("p3", "color-1"), designId: "design-2", design: { id: "design-2", name: "Osito" }, images: [{ id: "x5", url: "a.jpg", isMain: true }, { id: "x6", url: "suelta.jpg", isMain: false }] },
+    ];
+    const grupo = {
+      ...(grupoGuardado() as object),
+      images: [
+        { id: "i1", url: "a.jpg", isMain: true },
+        { id: "i2", url: "suelta.jpg", isMain: false },
+      ],
+      products: tres,
+    } as never;
+    render(<ProductGroupForm {...props} initialData={grupo} />);
+    await waitFor(() => expect(selectores().length).toBe(2), { timeout: ESPERA_MS });
+
+    expect(selectores()[0].textContent).toMatch(/Todas las variantes/);
+    expect(selectores()[1].textContent).toMatch(/Sin repartir|Elige a quién le toca/);
+    elegir(0, "Todas las variantes");
+    guardarEditar();
+    await esperaFreno();
+  });
+
+  it("una foto del grupo que no tiene ninguna variante también queda «Sin repartir»", async () => {
+    const grupo = { ...(grupoGuardado([variante("p1", "color-1"), variante("p2", "color-2")]) as object) } as never;
+    render(<ProductGroupForm {...props} initialData={grupo} />);
+    await waitFor(() => expect(selectores().length).toBe(2), { timeout: ESPERA_MS });
+    for (const trigger of selectores()) {
+      expect(trigger.textContent).not.toMatch(/Todas las variantes/);
+    }
   });
 });

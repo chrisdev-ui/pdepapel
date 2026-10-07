@@ -460,10 +460,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         getImages(p).some((url: string) => url === img.url),
       );
 
-      if (variantsWithImage.length === 0) {
-        mapping.push({ url: img.url, scope: "all" }); // Default
-        return;
-      }
+      // Sin alcance claro no se adivina «todas»: ahora llegaría a cada
+      // variante. Queda «Sin repartir» y el freno pide decidir.
+      if (variantsWithImage.length === 0) return;
 
       // 1. Check if ALL variants have it
       if (variantsWithImage.length === products.length) {
@@ -547,9 +546,6 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         }
       }
       if (foundScope) return;
-
-      // Fallback
-      mapping.push({ url: img.url, scope: "all" });
     });
 
     return mapping;
