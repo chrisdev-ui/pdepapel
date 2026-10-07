@@ -79,6 +79,21 @@ vi.mock("@/components/ui/image-upload", () => ({
     </div>
   ),
 }));
+/**
+ * Lo que no participa en el reparto de fotos ni en lo que se envía al
+ * guardar se sustituye por un marcador. Montar el formulario entero (editor
+ * Tiptap, tabla y matriz de variantes, asistente de nombres, importador,
+ * escáner) en cada interacción hacía que, con la máquina cargada (la suite
+ * completa en paralelo), algunas pruebas pasaran los 5 s de límite: fallaban
+ * por tiempo, no por lógica. Los valores del formulario y el envío no
+ * dependen de estos componentes.
+ */
+vi.mock("@/components/editor/rich-text-editor", () => ({ RichTextEditor: () => <div data-testid="rich-text" /> }));
+vi.mock("@/app/(dashboard)/[storeId]/(routes)/productos/components/variant-grid", () => ({ VariantGrid: () => <div data-testid="variant-grid" /> }));
+vi.mock("@/app/(dashboard)/[storeId]/(routes)/productos/components/variant-matrix", () => ({ VariantMatrix: () => <div data-testid="variant-matrix" /> }));
+vi.mock("@/components/products/product-name-assistant", () => ({ ProductNameAssistant: () => null }));
+vi.mock("@/components/modals/product-import-modal", () => ({ ProductImportModal: () => null }));
+vi.mock("@/components/products/scan-into-group-button", () => ({ ScanIntoGroupButton: () => null }));
 vi.mock("axios", () => ({
   default: {
     post: mocks.post,
@@ -176,8 +191,16 @@ async function abrirNuevo(fotos: Foto[], colores?: string[]) {
   mocks.borrador = borradorNuevo(fotos, colores);
   render(<ProductGroupForm {...props} initialData={null as never} />);
   // El borrador se aplica en un efecto: esperar a que el reparto aparezca.
-  await waitFor(() => expect(selectores().length).toBe(fotos.length));
+  await waitFor(() => expect(selectores().length).toBe(fotos.length), { timeout: ESPERA_MS });
 }
+
+/**
+ * Tope de espera de cada `waitFor`: es una condición, no una pausa (termina en
+ * cuanto se cumple). El 1 s por defecto no alcanza con la suite completa
+ * corriendo en paralelo, porque la validación de Zod y el envío son
+ * asíncronos.
+ */
+const ESPERA_MS = 4000;
 
 const selectores = () => screen.queryAllByRole("combobox", { name: "Quién recibe esta foto" });
 
@@ -200,7 +223,7 @@ const guardarNuevo = () => fireEvent.click(screen.getByRole("button", { name: /C
 const avisos = () => mocks.toast.mock.calls.map((c) => `${c[0]?.title ?? ""} ${c[0]?.description ?? ""}`).join(" | ");
 
 async function esperaGuardado(llamada: typeof mocks.patch) {
-  await waitFor(() => expect(llamada, avisos()).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(llamada, avisos()).toHaveBeenCalledTimes(1), { timeout: ESPERA_MS });
   return llamada.mock.calls[0][1] as {
     images: Foto[];
     imageMapping: { url: string; scope: string }[];
@@ -208,7 +231,7 @@ async function esperaGuardado(llamada: typeof mocks.patch) {
 }
 
 async function esperaFreno() {
-  await waitFor(() => expect(avisos()).toMatch(/Faltan fotos por repartir/));
+  await waitFor(() => expect(avisos()).toMatch(/Faltan fotos por repartir/), { timeout: ESPERA_MS });
   expect(mocks.patch).not.toHaveBeenCalled();
   expect(mocks.post).not.toHaveBeenCalled();
 }

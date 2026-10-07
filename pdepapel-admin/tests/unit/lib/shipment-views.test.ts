@@ -35,16 +35,20 @@ function shipment(overrides: Partial<ViewableShipment> = {}): ViewableShipment {
 
 describe("shipment-views", () => {
   it("only paid or cash-on-delivery online orders are ready to dispatch", () => {
-    expect(isReadyToDispatch(shipment())).toBe(true);
+    // Con el reloj fijo: sin `now`, el envío de prueba (creado el 2026-09-07)
+    // salió de la ventana de despacho de 30 días el 2026-10-07 a las 14:00 UTC
+    // y esta prueba de estados empezó a fallar por la fecha, no por el estado.
+    const ready = (row: ViewableShipment) => isReadyToDispatch(row, NOW);
+    expect(ready(shipment())).toBe(true);
     expect(
-      isReadyToDispatch(shipment({ order: { status: OrderStatus.PENDING, type: OrderType.STANDARD, paymentMethod: PaymentMethod.COD } })),
+      ready(shipment({ order: { status: OrderStatus.PENDING, type: OrderType.STANDARD, paymentMethod: PaymentMethod.COD } })),
     ).toBe(true);
     expect(
-      isReadyToDispatch(shipment({ order: { status: OrderStatus.PENDING, type: OrderType.STANDARD, paymentMethod: PaymentMethod.BankTransfer } })),
+      ready(shipment({ order: { status: OrderStatus.PENDING, type: OrderType.STANDARD, paymentMethod: PaymentMethod.BankTransfer } })),
     ).toBe(false);
-    expect(isReadyToDispatch(shipment({ order: { status: OrderStatus.CANCELLED, type: OrderType.STANDARD } }))).toBe(false);
-    expect(isReadyToDispatch(shipment({ order: { status: OrderStatus.PAID, type: OrderType.POINT_OF_SALE } }))).toBe(false);
-    expect(isReadyToDispatch(shipment({ status: ShippingStatus.Shipped }))).toBe(false);
+    expect(ready(shipment({ order: { status: OrderStatus.CANCELLED, type: OrderType.STANDARD } }))).toBe(false);
+    expect(ready(shipment({ order: { status: OrderStatus.PAID, type: OrderType.POINT_OF_SALE } }))).toBe(false);
+    expect(ready(shipment({ status: ShippingStatus.Shipped }))).toBe(false);
   });
 
   it("leaves shipments older than the dispatch window out of the daily queue", () => {
