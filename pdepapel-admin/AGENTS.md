@@ -290,6 +290,16 @@ The newsletter has **one sender**, `lib/newsletter-campaigns.ts`. Everything tha
 
 One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`); this app uses the global `images.loaderFile`. Every distinct transformation and width is a derived copy that is stored forever and billed, so **do not add loaders, `quality` values, crops or wider `deviceSizes`**. Widths snap to `CLOUDINARY_DELIVERY_WIDTHS`. **Never purge derived copies before a width-matrix reduction is actually live** — purging first makes the catalog regenerate every copy under the old matrix, which is the overage. Runbook: `docs/imagenes-cloudinary.md`.
 
+**Group and variant photos.**
+- Each group photo stores its distribution in `Image.scope` (`all`, `COLOR|id`, `DESIGN|id`, `COMBO|color|diseño`).
+- Each variant photo stores its origin in `Image.origin`: `OWN`, `GROUP_COPY` or NULL (pre-#13 rows, treated as own).
+- On every save, the group appends the photos that apply to each variant after its own photos (`lib/variant-gallery.ts`, rule in `lib/variant-images.ts`). It only ever creates or deletes `GROUP_COPY` rows: own and NULL rows are never removed by the distribution.
+- Each variant keeps exactly one cover.
+- Galleries read in `GALLERY_ORDER` (cover, `createdAt`, `id`), so NULL and OWN sort alike. Writes keep group copies as the newest rows, which places them after the own photos.
+- A product's own page keeps the group's copies and shows them as «Del grupo».
+- A variant that leaves its group turns its copies into own photos.
+- A variant that switches to another group drops the old copies and gets the new group's distribution. If that would leave it with no photos, the old copies stay as own.
+
 ### Scheduled work and database pool
 
 - Vercel's plan allows **only two crons and both are used** (`update-coupons`, `update-offers`, daily in `vercel.json`). New scheduled jobs go into `.github/workflows/admin-scheduled-tasks.yml` with the `CRON_SECRET` bearer token. Do not add Vercel crons.

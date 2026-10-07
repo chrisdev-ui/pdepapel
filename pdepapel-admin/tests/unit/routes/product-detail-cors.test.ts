@@ -79,6 +79,7 @@ import {
   OPTIONS,
 } from "@/app/api/[storeId]/products/[productId]/route";
 import { handleErrorResponse } from "@/lib/api-errors";
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
 
 describe("public product detail CORS", () => {
   beforeEach(() => {
@@ -254,7 +255,7 @@ describe("public product detail CORS", () => {
     expect(mocks.getStoreAccess).toHaveBeenCalledWith("store-id");
     const query = mocks.findProduct.mock.calls[0][0];
     expect(query.select).toBeUndefined();
-    expect(query.include).toEqual(expect.objectContaining({ supplier: true, images: true }));
+    expect(query.include).toEqual(expect.objectContaining({ supplier: true, images: { orderBy: GALLERY_ORDER } }));
   });
 
   /**

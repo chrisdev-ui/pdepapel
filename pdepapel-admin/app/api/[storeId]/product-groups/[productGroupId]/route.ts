@@ -13,7 +13,12 @@ import {
 import { recordDeletedProductUrls } from "@/lib/deleted-product-urls";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
-import { resolveVariantImages, withVariantCover } from "@/lib/variant-images";
+import {
+  GALLERY_ORDER,
+  releaseGroupCopies,
+  syncVariantGallery,
+  writeGroupPhotos,
+} from "@/lib/variant-gallery";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -66,10 +71,10 @@ export async function GET(
         OR: [{ id: params.productGroupId }, { slug: params.productGroupId }],
       },
       include: {
-        images: true,
+        images: { orderBy: { createdAt: "asc" } },
         products: {
           include: {
-            images: true,
+            images: { orderBy: GALLERY_ORDER },
             color: true,
             size: true,
             design: true,
@@ -201,15 +206,10 @@ export async function PATCH(
         },
       });
 
-      await tx.image.deleteMany({
-        where: { productGroupId: params.productGroupId },
-      });
-      await tx.image.createMany({
-        data: images.map((image: { url: string; isMain?: boolean }) => ({
-          url: image.url,
-          isMain: image.isMain ?? false,
-          productGroupId: params.productGroupId,
-        })),
+      await writeGroupPhotos(tx, {
+        productGroupId: params.productGroupId,
+        images,
+        imageMapping,
       });
 
       // 2. Variantes actuales del grupo (de esta tienda) y productos que el
@@ -329,23 +329,13 @@ export async function PATCH(
           }
         }
 
-        const applicableImages = resolveVariantImages({
-          variantImages: variant.images,
-          groupImages: images,
+        const gallery = {
+          ownUrls: variant.images,
+          groupPhotos: images,
           imageMapping,
           colorId: ids.colorId,
           designId: ids.designId,
-        });
-        // `withVariantCover` asegura que quede exactamente una portada: si
-        // ninguna foto viene marcada, asciende la primera. Sin esto una
-        // variante podía guardarse sin portada y cada pantalla elegía una
-        // distinta.
-        const imageData = withVariantCover(
-          applicableImages.map((img: { url: string; isMain?: boolean }) => ({
-            url: img.url,
-            isMain: img.isMain || false,
-          })),
-        );
+        };
 
         if (existing) {
           // Existente o adoptada: solo cambia lo que la fila trae; su slug y
@@ -355,10 +345,7 @@ export async function PATCH(
             data: { ...data, productGroupId: params.productGroupId },
           });
           nextArchived.set(existing.id, data.isArchived);
-          await tx.image.deleteMany({ where: { productId: existing.id } });
-          await tx.image.createMany({
-            data: imageData.map((img) => ({ ...img, productId: existing.id })),
-          });
+          await syncVariantGallery(tx, { productId: existing.id, ...gallery });
         } else {
           if (!variant.sku) {
             throw ErrorFactory.InvalidRequest(
@@ -380,7 +367,8 @@ export async function PATCH(
           });
           // Una variante nueva nace con 0 unidades, como cualquier producto
           // nuevo: las existencias entran por Inventario, con su movimiento.
-          await tx.product.create({
+          const created = await tx.product.create({
+            select: { id: true },
             data: {
               ...data,
               name: variantName,
@@ -394,9 +382,9 @@ export async function PATCH(
               isFeatured: data.isFeatured ?? false,
               price: data.price ?? 0,
               description: data.description ?? sanitizedDescription,
-              images: { createMany: { data: imageData } },
             },
           });
+          await syncVariantGallery(tx, { productId: created.id, ...gallery });
         }
       }
 
@@ -548,11 +536,13 @@ export async function DELETE(
             productId: child.id,
             url: image.url,
             isMain: image.isMain,
+            origin: "OWN" as const,
           })),
         );
         if (photoRows.length > 0) {
           await tx.image.createMany({ data: photoRows });
         }
+        await releaseGroupCopies(tx, childIds);
         await tx.product.updateMany({
           where: { productGroupId: params.productGroupId, storeId: params.storeId },
           data: { productGroupId: null },

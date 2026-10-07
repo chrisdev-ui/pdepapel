@@ -33,6 +33,11 @@ vi.mock("@/lib/utils", () => ({
   generateRandomSKU: vi.fn(),
   getPublicIdFromCloudinaryUrl: (url: string) => url.split("/").pop()?.replace(/\.\w+$/, "") ?? null,
 }));
+vi.mock("@/lib/variant-gallery", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  replaceOwnPhotos: vi.fn().mockResolvedValue(undefined),
+  releaseGroupCopies: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     $transaction: mocks.transaction,

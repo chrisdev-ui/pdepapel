@@ -1,23 +1,61 @@
+// Sin Prisma: también lo usa la grilla de variantes en el navegador.
+
 export interface ImageMappingEntry {
   url: string;
   scope: string;
 }
 
+/** null = fila anterior al origen; cuenta como OWN. */
+export type ImageOriginValue = "OWN" | "GROUP_COPY";
+
+export interface GroupPhoto {
+  url: string;
+  isMain?: boolean;
+  scope?: string | null;
+}
+
+export interface GalleryPhoto {
+  url: string;
+  isMain: boolean;
+  fromGroup: boolean;
+}
+
 interface ResolveVariantImagesOptions {
-  /** Imágenes puestas a mano en la variante: mandan sobre el reparto. */
+  /** Fotos propias (OWN y sin origen), en su orden. */
   variantImages?: (string | { url: string; isMain?: boolean })[] | null;
-  /** Imágenes del grupo con su alcance (`all`, `COMBO|color|diseño`, `COLOR|id`, `DESIGN|id` o un id suelto). */
-  groupImages: { url: string; isMain?: boolean }[];
+  groupImages: GroupPhoto[];
+  /** Manda sobre el `scope` guardado en cada foto del grupo. */
   imageMapping?: ImageMappingEntry[] | null;
   colorId?: string | null;
   designId?: string | null;
+  currentCoverUrl?: string | null;
+}
+
+/** Acepta el id suelto de color o diseño además de los prefijos. */
+export function scopeAppliesTo(
+  scope: string | null | undefined,
+  colorId?: string | null,
+  designId?: string | null,
+): boolean {
+  if (!scope || scope === "all") return true;
+  if (scope.startsWith("COMBO|")) {
+    const [, cId, dId] = scope.split("|");
+    return colorId === cId && designId === dId;
+  }
+  if (scope.startsWith("COLOR|")) return colorId === scope.slice("COLOR|".length);
+  if (scope.startsWith("DESIGN|")) return designId === scope.slice("DESIGN|".length);
+  return scope === colorId || scope === designId;
+}
+
+export function scopeOf(photo: GroupPhoto, imageMapping?: ImageMappingEntry[] | null): string | null {
+  const entry = imageMapping?.find((mapping) => mapping.url === photo.url);
+  return entry ? entry.scope : (photo.scope ?? null);
 }
 
 /**
- * Qué imágenes le tocan a una variante. El formulario guarda el alcance como
- * id suelto de color o diseño y la ruta de creación sólo entendía los
- * prefijos `COLOR|`/`DESIGN|`: una foto de un solo color acababa en todas las
- * variantes. Una sola regla para crear, editar y avisar de duplicados.
+ * Propias primero, luego las del grupo que le tocan (en su orden, sin repetir
+ * dirección). Una sola portada: la actual si sigue; si no, la propia marcada;
+ * sin propias, la primera portada del grupo que le toca; si no, la primera.
  */
 export function resolveVariantImages({
   variantImages,
@@ -25,60 +63,49 @@ export function resolveVariantImages({
   imageMapping,
   colorId,
   designId,
-}: ResolveVariantImagesOptions): { url: string; isMain?: boolean }[] {
-  if (variantImages && variantImages.length > 0) {
-    // `isMain` viaja: es cuál es la portada de esa variante. Antes se perdía
-    // aquí —se devolvía solo la url— y como la rama del grupo sí la lleva, el
-    // resultado era que toda variante con fotos propias se quedaba sin
-    // portada en cada guardado del grupo, fuera cual fuera el motivo. Luego
-    // cada pantalla adivinaba una distinta y la portada «cambiaba sola».
-    return variantImages.map((image) =>
-      typeof image === "string"
-        ? { url: image }
-        : { url: image.url, isMain: image.isMain },
-    );
+  currentCoverUrl,
+}: ResolveVariantImagesOptions): GalleryPhoto[] {
+  const own: { url: string; isMain: boolean }[] = [];
+  const seen = new Set<string>();
+  for (const image of variantImages ?? []) {
+    const url = (typeof image === "string" ? image : image.url).trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    own.push({ url, isMain: typeof image === "string" ? false : Boolean(image.isMain) });
   }
-  return groupImages.filter((image) => {
-    const mapping = imageMapping?.find((entry) => entry.url === image.url);
-    if (!mapping || mapping.scope === "all") return true;
-    const scope = mapping.scope;
-    if (scope.startsWith("COMBO|")) {
-      const [, cId, dId] = scope.split("|");
-      return colorId === cId && designId === dId;
-    }
-    if (scope.startsWith("COLOR|"))
-      return colorId === scope.slice("COLOR|".length);
-    if (scope.startsWith("DESIGN|"))
-      return designId === scope.slice("DESIGN|".length);
-    return scope === colorId || scope === designId;
-  });
+
+  const copies: { url: string; isMain: boolean }[] = [];
+  for (const photo of groupImages) {
+    const url = photo.url.trim();
+    if (!url || seen.has(url)) continue;
+    if (!scopeAppliesTo(scopeOf(photo, imageMapping), colorId, designId)) continue;
+    seen.add(url);
+    copies.push({ url, isMain: Boolean(photo.isMain) });
+  }
+
+  const gallery: GalleryPhoto[] = [
+    ...own.map((image) => ({ url: image.url, isMain: false, fromGroup: false })),
+    ...copies.map((image) => ({ url: image.url, isMain: false, fromGroup: true })),
+  ];
+  if (gallery.length === 0) return gallery;
+
+  const coverUrl =
+    (currentCoverUrl && seen.has(currentCoverUrl.trim()) ? currentCoverUrl.trim() : null) ??
+    own.find((image) => image.isMain)?.url ??
+    (own.length === 0 ? copies.find((image) => image.isMain)?.url : undefined) ??
+    gallery[0].url;
+  return gallery.map((image) => ({ ...image, isMain: image.url === coverUrl }));
 }
 
-/**
- * Garantiza que una variante tenga exactamente una portada.
- *
- * Si ninguna de sus fotos viene marcada, se asciende la primera. Es la red
- * que faltaba: el formulario del producto suelto ya obliga a tener una y
- * solo una portada —su esquema de Zod lo exige—, pero el camino del grupo no
- * tenía nada equivalente, así que una variante podía quedar guardada sin
- * ninguna. Sin portada, cada pantalla elegía por su cuenta (unas por
- * `orderBy isMain desc` con desempate arbitrario, la ficha del producto por
- * el primero del arreglo) y la portada parecía cambiar sola.
- *
- * No toca nada si ya hay una marcada, y devuelve el mismo arreglo vacío si
- * la variante no tiene fotos.
- */
 export function withVariantCover<T extends { url: string; isMain?: boolean }>(
   images: T[],
 ): (T & { isMain: boolean })[] {
-  const normalizadas = images.map((image) => ({ ...image, isMain: image.isMain ?? false }));
-  if (normalizadas.length === 0) return normalizadas;
-  if (normalizadas.some((image) => image.isMain)) return normalizadas;
-  normalizadas[0] = { ...normalizadas[0], isMain: true };
-  return normalizadas;
+  const firstMain = images.findIndex((image) => image.isMain);
+  const cover = firstMain >= 0 ? firstMain : 0;
+  return images.map((image, index) => ({ ...image, isMain: images.length > 0 && index === cover }));
 }
 
-/** Conjunto de URLs, sin orden ni repetidos, para comparar dos juegos de fotos. */
+/** Clave sin orden ni repetidos para comparar juegos de fotos. */
 export function imageUrlKey(urls: string[]): string {
   return Array.from(new Set(urls.map((url) => url.trim())))
     .sort()

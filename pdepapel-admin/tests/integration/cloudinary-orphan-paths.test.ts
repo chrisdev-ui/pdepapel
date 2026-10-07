@@ -135,7 +135,7 @@ describe("Cloudinary cleanup on every hard-delete path (MySQL)", () => {
     expect(deletedIds()).toEqual(["grupo-foto", "variante-x"]);
   });
 
-  it("group PATCH deletes the replaced group photo and the removed variant's photo after the commit", async () => {
+  it("group PATCH deletes the removed variant's photo after the commit, and keeps a group photo a variant still has", async () => {
     const f = await setup();
     const { PATCH } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");
     const group = await testPrisma.productGroup.create({
@@ -183,11 +183,12 @@ describe("Cloudinary cleanup on every hard-delete path (MySQL)", () => {
       where: { OR: [{ productGroupId: group.id }, { product: { productGroupId: group.id } }] },
       select: { url: true },
     });
-    expect(new Set(remaining.map((image) => image.url))).toEqual(new Set([url("grupo-nueva")]));
-    expect(deletedIds()).toEqual(["grupo-vieja", "variante-que-se-va"]);
+    // La fila sin origen de «Se queda» cuenta como propia: el reparto no la borra.
+    expect(new Set(remaining.map((image) => image.url))).toEqual(new Set([url("grupo-vieja"), url("grupo-nueva")]));
+    expect(deletedIds()).toEqual(["variante-que-se-va"]);
   });
 
-  it("group POST deletes the old photos of an adopted standalone product", async () => {
+  it("group POST keeps the photos of an adopted standalone product as its own", async () => {
     const f = await setup();
     const { POST } = await import("@/app/api/[storeId]/product-groups/route");
     const adopted = await createProduct(f, "Cartuchera suelta", [url("suelta-vieja")]);
@@ -215,8 +216,8 @@ describe("Cloudinary cleanup on every hard-delete path (MySQL)", () => {
     );
     expect(res.status).toBe(200);
     const images = await testPrisma.image.findMany({ where: { productId: adopted.id }, select: { url: true } });
-    expect(images.map((image) => image.url)).toEqual([url("grupo-adopta")]);
-    expect(deletedIds()).toEqual(["suelta-vieja"]);
+    expect(images.map((image) => image.url).sort()).toEqual([url("grupo-adopta"), url("suelta-vieja")].sort());
+    expect(deletedIds()).toEqual([]);
   });
 
   it("convert-to-variants review keeps every photo the new group still references", async () => {

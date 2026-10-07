@@ -423,3 +423,49 @@ describe("crear un grupo: el reparto empieza vacío", () => {
     expect(avisos()).toMatch(/1 foto no tiene un destino asignado/);
   });
 });
+
+describe("editar un grupo: lo que envía el formulario", () => {
+  it("manda solo las fotos propias de cada variante y el reparto guardado", async () => {
+    const conFotos = (id: string, colorId: string, fotos: { url: string; origin: string }[]) => ({
+      ...variante(id, colorId),
+      images: fotos.map((foto, i) => ({ id: `${id}-${i}`, url: foto.url, isMain: i === 0, origin: foto.origin })),
+    });
+    const grupo = {
+      ...(grupoGuardado() as object),
+      images: [
+        { id: "i1", url: "a.jpg", isMain: true, scope: "all" },
+        { id: "i2", url: "b.jpg", isMain: false, scope: "COLOR|color-2" },
+        { id: "i3", url: "propia.jpg", isMain: false, scope: "COMBO|color-1|design-1" },
+      ],
+      products: [
+        conFotos("p1", "color-1", [
+          { url: "propia.jpg", origin: "OWN" },
+          { url: "a.jpg", origin: "GROUP_COPY" },
+        ]),
+        conFotos("p2", "color-2", [
+          { url: "a.jpg", origin: "GROUP_COPY" },
+          { url: "b.jpg", origin: "GROUP_COPY" },
+        ]),
+      ],
+    } as never;
+    render(<ProductGroupForm {...props} initialData={grupo} />);
+    await waitFor(() => expect(selectores().length).toBe(3), { timeout: ESPERA_MS });
+    elegir(1, "Todas las variantes");
+    guardarEditar();
+
+    await waitFor(() => expect(mocks.patch, avisos()).toHaveBeenCalledTimes(1), { timeout: ESPERA_MS });
+    const enviado = mocks.patch.mock.calls[0][1] as {
+      imageMapping: { url: string; scope: string }[];
+      variants: { id: string; images: string[] }[];
+    };
+    expect(enviado.variants.map((v) => [v.id, v.images])).toEqual([
+      ["p1", ["propia.jpg"]],
+      ["p2", []],
+    ]);
+    expect(Object.fromEntries(enviado.imageMapping.map((e) => [e.url, e.scope]))).toEqual({
+      "a.jpg": "all",
+      "b.jpg": "all",
+      "propia.jpg": "COMBO|color-1|design-1",
+    });
+  });
+});

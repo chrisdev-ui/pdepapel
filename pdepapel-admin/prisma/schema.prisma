@@ -754,10 +754,20 @@ model Image {
   isMain         Boolean       @default(false)
   /// Fecha en que el cron diario vio que el archivo ya no existe; null si está bien.
   brokenAt       DateTime?
+  /// Solo en fotos del grupo: `all`, `COLOR|id`, `DESIGN|id` o `COMBO|color|diseño`.
+  scope          String?       @db.VarChar(191)
+  /// Solo en fotos de una variante. NULL = fila previa, cuenta como OWN. Es enum
+  /// porque las galerías ordenan por aquí (MySQL: NULL < OWN < GROUP_COPY).
+  origin         ImageOrigin?
 
   @@index([productId])
   @@index([productGroupId])
   @@index([brokenAt])
+}
+
+enum ImageOrigin {
+  OWN
+  GROUP_COPY
 }
 
 model Order {

@@ -415,9 +415,9 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                   <FormItem>
                     <FormLabel>Imágenes Específicas</FormLabel>
                     <FormDescription>
-                      Selecciona las imágenes que corresponden a esta variante.
-                      Si no seleccionas ninguna, se usarán las reglas
-                      automáticas.
+                      Las que marques quedan como propias de esta variante. Las
+                      fotos del grupo que le tocan le llegan igual, después de
+                      las propias.
                     </FormDescription>
                     <div className="grid grid-cols-4 gap-4 pt-2">
                       {groupImages.map((image) => (

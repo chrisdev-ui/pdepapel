@@ -1,5 +1,6 @@
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { requireStoreRead } from "@/lib/store-access";
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { scrubProductGroup } from "@/lib/viewer-payloads";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
@@ -28,12 +29,12 @@ const ProductGroupPage = async ({
       storeId: params.storeId,
     },
     include: {
-      images: true,
+      images: { orderBy: { createdAt: "asc" } },
       // Solo el conteo: «Desagrupar» dice cuántas ofertas del grupo pasan a cada variante.
       offers: { select: { offerId: true } },
       products: {
         include: {
-          images: true,
+          images: { orderBy: GALLERY_ORDER },
           color: true,
           size: true,
           design: true,

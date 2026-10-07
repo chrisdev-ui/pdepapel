@@ -12,7 +12,7 @@ import {
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
-import { resolveVariantImages, withVariantCover } from "@/lib/variant-images";
+import { syncVariantGallery, writeGroupPhotos } from "@/lib/variant-gallery";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { findProductWithGtin } from "@/lib/product-identifiers";
@@ -158,16 +158,9 @@ export async function POST(
           brand: typeof brand === "string" ? brand.trim() || null : null,
           slug: slugify(name),
           description: sanitizedDescription,
-          images: {
-            createMany: {
-              data: images.map((image: { url: string; isMain?: boolean }) => ({
-                url: image.url,
-                isMain: image.isMain ?? false,
-              })),
-            },
-          },
         },
       });
+      await writeGroupPhotos(tx, { productGroupId: group.id, images, imageMapping });
 
       // 2. Variantes: adoptadas (solo cambia lo que trae la fila) y nuevas
       //    (con 0 unidades; las existencias entran por Inventario).
@@ -210,23 +203,13 @@ export async function POST(
           }
         }
 
-        const applicableImages = resolveVariantImages({
-          variantImages: variant.images,
-          groupImages: images,
+        const gallery = {
+          ownUrls: variant.images,
+          groupPhotos: images,
           imageMapping,
           colorId: ids.colorId,
           designId: ids.designId,
-        });
-        // `withVariantCover` asegura que quede exactamente una portada: si
-        // ninguna foto viene marcada, asciende la primera. Sin esto una
-        // variante podía guardarse sin portada y cada pantalla elegía una
-        // distinta.
-        const imageData = withVariantCover(
-          applicableImages.map((img: { url: string; isMain?: boolean }) => ({
-            url: img.url,
-            isMain: img.isMain || false,
-          })),
-        );
+        };
 
         if (existing) {
           await tx.product.update({
@@ -236,10 +219,7 @@ export async function POST(
           if (data.isArchived === true && !existing.isArchived) {
             archivedNow.push(existing.id);
           }
-          await tx.image.deleteMany({ where: { productId: existing.id } });
-          await tx.image.createMany({
-            data: imageData.map((img) => ({ ...img, productId: existing.id })),
-          });
+          await syncVariantGallery(tx, { productId: existing.id, ...gallery });
         } else {
           if (!variant.sku) {
             throw ErrorFactory.InvalidRequest(
@@ -259,7 +239,8 @@ export async function POST(
             storeId: params.storeId,
             baseSlug,
           });
-          await tx.product.create({
+          const created = await tx.product.create({
+            select: { id: true },
             data: {
               ...data,
               name: variantName,
@@ -273,9 +254,9 @@ export async function POST(
               isFeatured: data.isFeatured ?? false,
               price: data.price ?? 0,
               description: data.description ?? sanitizedDescription,
-              images: { createMany: { data: imageData } },
             },
           });
+          await syncVariantGallery(tx, { productId: created.id, ...gallery });
         }
       }
 

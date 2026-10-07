@@ -472,14 +472,13 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
 
   const thumbsFor = useCallback(
     (variant: FormVariant) =>
-      variant.images && variant.images.length > 0
-        ? variant.images
-        : resolveVariantImages({
-            groupImages: images,
-            imageMapping: mapping,
-            colorId: variant.color?.id,
-            designId: variant.design?.id,
-          }).map((image) => image.url),
+      resolveVariantImages({
+        variantImages: variant.images,
+        groupImages: images,
+        imageMapping: mapping,
+        colorId: variant.color?.id,
+        designId: variant.design?.id,
+      }).map((image) => image.url),
     [images, mapping],
   );
 
@@ -555,7 +554,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
         onClose={() => setEditingIndex(null)}
         onConfirm={onSaveVariant}
         initialData={
-          editingVariant ? { ...editingVariant, images: thumbsFor(editingVariant) } : null
+          editingVariant ? { ...editingVariant, images: editingVariant.images ?? [] } : null
         }
         suppliers={suppliers}
         groupImages={images}

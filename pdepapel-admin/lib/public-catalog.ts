@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
 
 import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 
@@ -18,6 +19,8 @@ export const PUBLIC_IMAGE_SELECT = {
   url: true,
   isMain: true,
 } satisfies Prisma.ImageSelect;
+
+export const PUBLIC_GALLERY = { select: PUBLIC_IMAGE_SELECT, orderBy: GALLERY_ORDER };
 
 export const PUBLIC_CATEGORY_SELECT = {
   id: true,
@@ -114,7 +117,7 @@ export const PUBLIC_PRODUCT_SELECT = {
   sizeId: true,
   designId: true,
   productGroupId: true,
-  images: { select: PUBLIC_IMAGE_SELECT },
+  images: PUBLIC_GALLERY,
   category: { select: PUBLIC_CATEGORY_SELECT },
   color: { select: PUBLIC_COLOR_SELECT },
   size: { select: PUBLIC_SIZE_SELECT },

@@ -1,3 +1,4 @@
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { productAvailabilityWhere } from "@/lib/product-availability";
 import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
 
@@ -80,9 +81,7 @@ export const GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE = {
   design: true,
   size: true,
   productGroup: true,
-  images: {
-    orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
-  },
+  images: { orderBy: GALLERY_ORDER },
 } satisfies Prisma.ProductInclude;
 
 export type GoogleMerchantFeedProduct = Prisma.ProductGetPayload<{

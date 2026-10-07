@@ -6,6 +6,14 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   productCreate: vi.fn(),
   productUpdate: vi.fn(),
+  syncVariantGallery: vi.fn(),
+  writeGroupPhotos: vi.fn(),
+}));
+
+vi.mock("@/lib/variant-gallery", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  syncVariantGallery: mocks.syncVariantGallery,
+  writeGroupPhotos: mocks.writeGroupPhotos,
 }));
 
 // La ruta ahora borra fotos en Cloudinary después de confirmar; aquí no se prueba.
@@ -207,66 +215,23 @@ describe("POST /product-groups", () => {
     });
   });
 
-  /**
-   * La portada de una variante con fotos propias.
-   *
-   * Una variante que trae sus propias fotos (adoptada con «Traer existentes»,
-   * o editada aparte) pasaba por aquí sin ninguna marcada como portada, y se
-   * guardaba así: sin portada. Luego cada pantalla elegía una distinta y a
-   * Paula le «cambiaba» la foto del producto al guardar el grupo por
-   * cualquier motivo, aunque solo hubiera entrado a ponerle stock.
-   */
-  describe("portada de la variante", () => {
-    /**
-     * Una variante nueva guarda sus fotos anidadas en `product.create`; una
-     * que ya existía las reescribe con `image.createMany`. Se miran las dos
-     * para no depender de por cuál de los dos caminos entró.
-     */
-    type Foto = { url: string; isMain: boolean };
-    const fotosGuardadas = (): Foto[][] => {
-      const deCreate = mocks.productCreate.mock.calls.map((llamada: unknown[]) => {
-        const arg = llamada[0] as { data?: { images?: { createMany?: { data?: Foto[] } } } };
-        return arg?.data?.images?.createMany?.data ?? [];
-      });
-      const deImagen = tx.image.createMany.mock.calls.map((llamada: unknown[]) => {
-        const arg = llamada[0] as { data?: Foto[] };
-        return arg?.data ?? [];
-      });
-      return [...deCreate, ...deImagen].filter((d: Foto[]) => d.length > 0);
-    };
+  it("writes the group photos with their scope and each variant's own photos through the gallery helpers", async () => {
+    mocks.findMany.mockResolvedValue([]);
 
-    it("con fotos propias sin marcar, asciende la primera", async () => {
-      await call([variant({ images: ["propia-1.jpg", "propia-2.jpg"] })]);
+    await call([variant({ images: ["propia-1.jpg"] })]);
 
-      const guardadas = fotosGuardadas().at(-1)!;
-      expect(guardadas.map((i) => i.url)).toEqual(["propia-1.jpg", "propia-2.jpg"]);
-      expect(guardadas.filter((i) => i.isMain)).toHaveLength(1);
-      expect(guardadas[0].isMain).toBe(true);
+    expect(mocks.writeGroupPhotos).toHaveBeenCalledWith(tx, {
+      productGroupId: "group-1",
+      images: [{ url: "https://res.cloudinary.com/test/c.jpg", isMain: true }],
+      imageMapping: undefined,
     });
-
-    it("si la variante ya dice cuál es su portada, se respeta", async () => {
-      await call([
-        variant({
-          images: [
-            { url: "propia-1.jpg", isMain: false },
-            { url: "propia-2.jpg", isMain: true },
-          ],
-        }),
-      ]);
-
-      const guardadas = fotosGuardadas().at(-1)!;
-      expect(guardadas.find((i) => i.isMain)?.url).toBe("propia-2.jpg");
-      expect(guardadas.filter((i) => i.isMain)).toHaveLength(1);
-    });
-
-    it("sin fotos propias, hereda las del grupo y conserva su portada", async () => {
-      await call([variant()]);
-
-      const guardadas = fotosGuardadas().at(-1)!;
-      expect(guardadas.filter((i) => i.isMain)).toHaveLength(1);
-      expect(guardadas.find((i) => i.isMain)?.url).toBe(
-        "https://res.cloudinary.com/test/c.jpg",
-      );
+    expect(mocks.syncVariantGallery).toHaveBeenCalledWith(tx, {
+      productId: "new-1",
+      ownUrls: ["propia-1.jpg"],
+      groupPhotos: [{ url: "https://res.cloudinary.com/test/c.jpg", isMain: true }],
+      imageMapping: undefined,
+      colorId: "c1",
+      designId: "d1",
     });
   });
 });

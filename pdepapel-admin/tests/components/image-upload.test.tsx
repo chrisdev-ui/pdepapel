@@ -68,3 +68,31 @@ describe("ImageUpload with deferred removal", () => {
     expect(screen.getByText("Hasta 8 fotos, JPG, PNG o WebP.")).toBeInTheDocument();
   });
 });
+
+describe("ImageUpload with group photos", () => {
+  afterEach(() => cleanup());
+
+  it("labels a group copy «Del grupo», hides its remove button and still lets it be the cover", () => {
+    const onChange = vi.fn();
+    render(
+      <ImageUpload
+        value={[
+          { url: "https://res.cloudinary.com/x/propia.jpg", isMain: true },
+          { url: "https://res.cloudinary.com/x/grupo.jpg", isMain: false },
+        ]}
+        onChange={onChange}
+        onMarkRemoval={vi.fn()}
+        lockedUrls={["https://res.cloudinary.com/x/grupo.jpg"]}
+      />,
+    );
+
+    expect(screen.getByText("Del grupo")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Quitar foto al guardar" })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Usar como foto principal" }));
+    expect(onChange).toHaveBeenCalledWith([
+      { url: "https://res.cloudinary.com/x/propia.jpg", isMain: false },
+      { url: "https://res.cloudinary.com/x/grupo.jpg", isMain: true },
+    ]);
+  });
+});

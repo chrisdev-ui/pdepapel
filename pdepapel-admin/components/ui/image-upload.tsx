@@ -27,6 +27,8 @@ interface ImageUploadProps {
   onUndoRemoval?: (url: string) => void;
   /** Tope de fotos; al alcanzarlo se oculta el botón de subir. */
   maxImages?: number;
+  /** Fotos que vienen del grupo: no se quitan aquí, sí pueden ser la principal. */
+  lockedUrls?: string[];
 }
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
@@ -38,6 +40,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   onMarkRemoval,
   onUndoRemoval,
   maxImages,
+  lockedUrls = [],
 }) => {
   const [isMounted, setIsMounted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -114,6 +117,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           {value.map((image) => {
             const isPending = pending.has(image.url);
             const isMain = image.url === mainImageUrl;
+            const isLocked = lockedUrls.includes(image.url);
             return (
               <li
                 key={image.url}
@@ -148,16 +152,25 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 ) : (
                   <>
                     <div className="absolute right-2 top-2 z-10">
-                      <Button
-                        type="button"
-                        onClick={() => handleRemove(image.url)}
-                        variant="destructive"
-                        size="icon-sm"
-                        disabled={disabled}
-                        aria-label={deferred ? "Quitar foto al guardar" : "Eliminar foto"}
-                      >
-                        <Trash className="h-4 w-4" aria-hidden="true" />
-                      </Button>
+                      {isLocked ? (
+                        <span
+                          className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-primary"
+                          title="Viene del grupo: cambia su reparto en el grupo para quitarla."
+                        >
+                          Del grupo
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          onClick={() => handleRemove(image.url)}
+                          variant="destructive"
+                          size="icon-sm"
+                          disabled={disabled}
+                          aria-label={deferred ? "Quitar foto al guardar" : "Eliminar foto"}
+                        >
+                          <Trash className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      )}
                     </div>
                     <div className="absolute left-2 top-2 z-10">
                       <Button

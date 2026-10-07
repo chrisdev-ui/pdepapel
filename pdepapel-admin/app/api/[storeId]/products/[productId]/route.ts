@@ -1,3 +1,9 @@
+import {
+  GALLERY_ORDER,
+  releaseGroupCopies,
+  replaceOwnPhotos,
+  switchVariantGroup,
+} from "@/lib/variant-gallery";
 import { movementActor } from "@/lib/movement-actor";
 import { getStoreAccess } from "@/lib/store-access";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -95,7 +101,7 @@ export async function GET(
     const responseHeaders = access ? { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } : corsHeaders;
 
     const ownerInclude = {
-      images: true,
+      images: { orderBy: GALLERY_ORDER },
       category: true,
       size: true,
       color: true,
@@ -474,17 +480,20 @@ export async function PATCH(
         }
       }
 
-      // Prisma 6: explicit image replacement for optional relations
-      await tx.image.deleteMany({
-        where: { productId: params.productId },
-      });
-      await tx.image.createMany({
-        data: images.map((image: { url: string; isMain?: boolean }) => ({
-          url: image.url,
-          isMain: image.isMain ?? false,
-          productId: params.productId,
-        })),
-      });
+      const previousGroupId = productToUpdate.productGroupId;
+      if (previousGroupId && targetProductGroupId && previousGroupId !== targetProductGroupId) {
+        const groupPhotos = await tx.image.findMany({
+          where: { productGroupId: targetProductGroupId },
+          orderBy: { createdAt: "asc" },
+          select: { url: true, isMain: true, scope: true },
+        });
+        await switchVariantGroup(tx, { productId: params.productId, images, groupPhotos, colorId, designId });
+      } else {
+        if (previousGroupId && !targetProductGroupId) {
+          await releaseGroupCopies(tx, [params.productId]);
+        }
+        await replaceOwnPhotos(tx, { productId: params.productId, images });
+      }
 
       if (parsedCatalogAttributes) {
         await syncProductCatalogAttributes(tx, {

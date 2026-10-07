@@ -26,7 +26,7 @@ import {
   PUBLIC_CATEGORY_SELECT,
   PUBLIC_COLOR_SELECT,
   PUBLIC_DESIGN_SELECT,
-  PUBLIC_IMAGE_SELECT,
+  PUBLIC_GALLERY,
   PUBLIC_PRODUCTS_CACHE_VERSION,
   PUBLIC_PRODUCT_SELECT,
   PUBLIC_SIZE_SELECT,
@@ -316,6 +316,7 @@ export async function POST(
               ...images.map((image: { url: string; isMain?: boolean }) => ({
                 url: image.url,
                 isMain: image.isMain ?? false,
+                origin: "OWN" as const,
               })),
             ],
           },
@@ -849,7 +850,7 @@ export async function GET(
             name: true,
             description: true,
             createdAt: true,
-            images: { select: PUBLIC_IMAGE_SELECT },
+            images: PUBLIC_GALLERY,
             products: {
               where: productFilters,
               select: {
@@ -862,7 +863,7 @@ export async function GET(
                 colorId: true,
                 sizeId: true,
                 designId: true,
-                images: { select: PUBLIC_IMAGE_SELECT },
+                images: PUBLIC_GALLERY,
                 color: { select: PUBLIC_COLOR_SELECT },
                 size: { select: PUBLIC_SIZE_SELECT },
                 design: { select: PUBLIC_DESIGN_SELECT },

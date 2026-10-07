@@ -23,52 +23,77 @@ const imageMapping = [
 ];
 
 describe("resolveVariantImages", () => {
-  it("hands each variant only the photos scoped to its colour, design or combo", () => {
-    const rosaKawaii = resolveVariantImages({
-      groupImages,
-      imageMapping,
-      colorId: "color-rosa",
-      designId: "design-kawaii",
-    });
-    expect(rosaKawaii.map((i) => i.url)).toEqual([
+  const urlsOf = (images: { url: string }[]) => images.map((i) => i.url);
+
+  it("hands each variant only the group photos scoped to its colour, design or combo", () => {
+    expect(urlsOf(resolveVariantImages({ groupImages, imageMapping, colorId: "color-rosa", designId: "design-kawaii" }))).toEqual([
       groupImages[0].url,
       groupImages[1].url,
       groupImages[3].url,
       groupImages[4].url,
     ]);
-
-    const lilaOtro = resolveVariantImages({
-      groupImages,
-      imageMapping,
-      colorId: "color-lila",
-      designId: "design-otro",
-    });
-    expect(lilaOtro.map((i) => i.url)).toEqual([
+    expect(urlsOf(resolveVariantImages({ groupImages, imageMapping, colorId: "color-lila", designId: "design-otro" }))).toEqual([
       groupImages[0].url,
       groupImages[2].url,
     ]);
   });
 
-  it("lets explicit variant images override the group mapping", () => {
-    const explicit = resolveVariantImages({
+  it("keeps own photos first and appends the group photos that apply", () => {
+    const result = resolveVariantImages({
       variantImages: ["https://res.cloudinary.com/x/own.jpg"],
       groupImages,
       imageMapping,
-      colorId: "color-rosa",
-      designId: "design-kawaii",
+      colorId: "color-lila",
+      designId: "design-otro",
     });
-    expect(explicit).toEqual([{ url: "https://res.cloudinary.com/x/own.jpg" }]);
+    expect(result).toEqual([
+      { url: "https://res.cloudinary.com/x/own.jpg", isMain: true, fromGroup: false },
+      { url: groupImages[0].url, isMain: false, fromGroup: true },
+      { url: groupImages[2].url, isMain: false, fromGroup: true },
+    ]);
   });
 
-  it("treats unmapped images as shared", () => {
-    expect(
-      resolveVariantImages({
-        groupImages: [{ url: "a" }],
-        imageMapping: [],
-        colorId: "c",
-        designId: "d",
-      }),
-    ).toEqual([{ url: "a" }]);
+  it("does not repeat a group photo the variant already has as its own", () => {
+    const result = resolveVariantImages({ variantImages: [groupImages[0].url], groupImages, imageMapping, colorId: "x", designId: "y" });
+    expect(result).toEqual([{ url: groupImages[0].url, isMain: true, fromGroup: false }]);
+  });
+
+  it("uses the stored scope when the mapping has no entry, and treats no scope as all", () => {
+    const photos = [
+      { url: "a", scope: "COLOR|c1" },
+      { url: "b", scope: null },
+    ];
+    expect(urlsOf(resolveVariantImages({ groupImages: photos, colorId: "c2", designId: "d" }))).toEqual(["b"]);
+    expect(urlsOf(resolveVariantImages({ groupImages: photos, colorId: "c1", designId: "d" }))).toEqual(["a", "b"]);
+  });
+});
+
+describe("the variant cover", () => {
+  const own = [
+    { url: "v-1.jpg", isMain: false },
+    { url: "v-2.jpg", isMain: true },
+  ];
+  const covers = (images: { isMain: boolean; url: string }[]) => images.filter((i) => i.isMain).map((i) => i.url);
+
+  it("keeps the own cover even when the group brings its own cover", () => {
+    expect(covers(resolveVariantImages({ variantImages: own, groupImages, imageMapping, colorId: "x", designId: "y" }))).toEqual(["v-2.jpg"]);
+  });
+
+  it("without own photos, takes the first group cover that applies, and only one", () => {
+    const photos = [{ url: "a" }, { url: "b", isMain: true }, { url: "c", isMain: true }];
+    expect(covers(resolveVariantImages({ groupImages: photos }))).toEqual(["b"]);
+  });
+
+  it("keeps the current cover while it stays in the gallery", () => {
+    expect(covers(resolveVariantImages({ variantImages: own, groupImages, imageMapping, colorId: "x", designId: "y", currentCoverUrl: groupImages[0].url }))).toEqual([groupImages[0].url]);
+  });
+
+  it("falls back to the next photo when the current cover leaves", () => {
+    expect(covers(resolveVariantImages({ groupImages: [{ url: "b" }], currentCoverUrl: "gone" }))).toEqual(["b"]);
+  });
+
+  it("with own photos and none marked, the first own photo is the cover", () => {
+    expect(covers(resolveVariantImages({ variantImages: ["p-1.jpg", "p-2.jpg"], groupImages }))).toEqual(["p-1.jpg"]);
   });
 });
 
@@ -79,50 +104,6 @@ describe("imageUrlKey", () => {
   });
 });
 
-/**
- * La portada de una variante con fotos propias.
- *
- * Paula entró a una variante solo a cargarle stock y al guardar le cambió la
- * foto de portada. La rama de fotos propias devolvía únicamente la url y se
- * dejaba el `isMain` por el camino, mientras que la rama del grupo sí lo
- * llevaba. Resultado: toda variante con fotos propias —las adoptadas con
- * «Traer existentes», y cualquiera editada aparte— perdía su portada en cada
- * guardado del grupo, por cualquier motivo. Sin portada marcada, cada
- * pantalla elegía una por su cuenta y la que se guardara después pasaba a ser
- * la buena.
- */
-describe("la portada de las fotos propias de una variante", () => {
-  const propias = [
-    { url: "https://res.cloudinary.com/x/v-1.jpg", isMain: false },
-    { url: "https://res.cloudinary.com/x/v-2.jpg", isMain: true },
-    { url: "https://res.cloudinary.com/x/v-3.jpg", isMain: false },
-  ];
-
-  it("conserva cuál es la portada", () => {
-    const resultado = resolveVariantImages({ variantImages: propias, groupImages });
-    expect(resultado).toEqual(propias);
-    expect(resultado.filter((i) => i.isMain)).toHaveLength(1);
-    expect(resultado.find((i) => i.isMain)?.url).toBe(propias[1].url);
-  });
-
-  it("una lista de urls sueltas sigue sin portada: no hay nada que conservar", () => {
-    const resultado = resolveVariantImages({
-      variantImages: ["https://res.cloudinary.com/x/v-1.jpg"],
-      groupImages,
-    });
-    expect(resultado).toEqual([{ url: "https://res.cloudinary.com/x/v-1.jpg" }]);
-  });
-
-  it("no toca la rama del grupo, que ya llevaba la portada", () => {
-    const resultado = resolveVariantImages({ groupImages, imageMapping, colorId: null, designId: null });
-    expect(resultado.some((i) => i.isMain)).toBe(true);
-  });
-});
-
-/**
- * La red que faltaba: el formulario del producto suelto exige una y solo una
- * portada, el camino del grupo no exigía ninguna.
- */
 describe("withVariantCover", () => {
   it("asciende la primera cuando ninguna está marcada", () => {
     expect(withVariantCover([{ url: "a.jpg" }, { url: "b.jpg" }])).toEqual([
@@ -150,15 +131,5 @@ describe("withVariantCover", () => {
   it("deja exactamente una portada, nunca dos", () => {
     const r = withVariantCover([{ url: "a.jpg" }, { url: "b.jpg" }, { url: "c.jpg" }]);
     expect(r.filter((i) => i.isMain)).toHaveLength(1);
-  });
-
-  /** Lo que de verdad importa: lo que sale de resolver ya va con portada. */
-  it("encadenado con el resolvedor, una variante nunca se queda sin portada", () => {
-    const sinMarcar = resolveVariantImages({
-      variantImages: [{ url: "p-1.jpg" }, { url: "p-2.jpg" }],
-      groupImages,
-    });
-    expect(sinMarcar.some((i) => i.isMain)).toBe(false);
-    expect(withVariantCover(sinMarcar).filter((i) => i.isMain)).toHaveLength(1);
   });
 });

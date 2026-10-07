@@ -323,6 +323,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const [loading, setLoading] = useState(false);
   // Fotos marcadas con la papelera: se borran de Cloudinary solo al guardar.
   const [pendingRemovals, setPendingRemovals] = useState<string[]>([]);
+  const groupCopyUrls = (initialData?.images ?? [])
+    .filter((image) => image.origin === "GROUP_COPY")
+    .map((image) => image.url);
   const [recentCategories, setRecentCategories] = useState<
     CatalogCategoryOption[]
   >([]);
@@ -1372,6 +1375,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       value={field.value}
                       disabled={loading}
                       maxImages={8}
+                      lockedUrls={groupCopyUrls}
                       onChange={(images) => {
                         field.onChange(images);
                         form.clearErrors("images");

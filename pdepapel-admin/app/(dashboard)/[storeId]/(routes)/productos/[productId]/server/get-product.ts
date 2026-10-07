@@ -1,6 +1,7 @@
 "use server";
 
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { requireStoreRead } from "@/lib/store-access";
 
 import { ProductPresaleStatus } from "@prisma/client";
@@ -27,7 +28,7 @@ export async function getProduct(id: string, storeId: string) {
             storeId,
           },
           include: {
-            images: { orderBy: [{ isMain: "desc" }, { createdAt: "asc" }] },
+            images: { orderBy: GALLERY_ORDER },
             reviews: true,
             catalogOptionValues: {
               include: { option: true, optionValue: true },

@@ -555,6 +555,21 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     return mapping;
   };
 
+  // Reparto guardado; las fotos sin `scope` (previas) se reconstruyen como antes.
+  const savedMapping = () => {
+    if (!initialData) return [];
+    const saved = initialData.images
+      .filter((img) => img.scope)
+      .map((img) => ({ url: img.url, scope: img.scope as string }));
+    const savedUrls = new Set(saved.map((entry) => entry.url));
+    return [
+      ...saved,
+      ...reconstructMapping(getAllImages(), initialData.products).filter(
+        (entry) => !savedUrls.has(entry.url),
+      ),
+    ];
+  };
+
   const getAllImages = () => {
     if (!initialData) return [];
     const groupImages = initialData.images || [];
@@ -600,9 +615,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         miscCost: INITIAL_MISC_COST,
         price: initialData.products?.[0]?.price || 0,
         defaultSupplier: initialData.products?.[0]?.supplierId || "",
-        imageMapping:
-          initialData.imageMapping ||
-          reconstructMapping(getAllImages(), initialData.products),
+        imageMapping: initialData.imageMapping || savedMapping(),
         isFeatured: initialData.products?.[0]?.isFeatured || false,
         archiveMode: deriveArchiveMode(initialData.products ?? []),
         variants:
@@ -625,7 +638,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             supplierId: p.supplierId || "",
             isFeatured: p.isFeatured,
             isArchived: p.isArchived,
-            images: p.images.map((img) => img.url),
+            // Solo las propias: las copias del grupo las recalcula el servidor.
+            images: p.images
+              .filter((img) => img.origin !== "GROUP_COPY")
+              .map((img) => img.url),
             description: p.description || "",
             gtin: p.gtin || "",
             mpn: p.mpn || "",
@@ -1777,7 +1793,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 <div>
                   <p className="text-sm font-semibold text-primary">Reparto por variante</p>
                   <p className="text-xs text-muted-foreground">
-                    Debajo de cada foto eliges quién la recibe. Una variante con fotos propias no se toca.
+                    Debajo de cada foto eliges quién la recibe. Llega también a las variantes con fotos propias, después de ellas.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
