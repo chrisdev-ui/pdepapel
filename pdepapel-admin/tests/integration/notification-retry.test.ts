@@ -143,7 +143,11 @@ describe("failed notification retry sweep with MySQL", () => {
 
     expect(sendOrderEmail).toHaveBeenCalledTimes(1);
     expect(runs.reduce((sum, run) => sum + run.sent.length, 0)).toBe(1);
-    expect(runs.reduce((sum, run) => sum + run.alreadyClaimed, 0)).toBe(4);
+    // Las demás corridas o la encontraron ya tomada o ni la vieron (leyeron
+    // cuando ya estaba resuelta): según el orden, entre 0 y 4 cuentan como
+    // «ya tomada». Lo que importa es que se mandó una sola vez.
+    expect(runs.reduce((sum, run) => sum + run.alreadyClaimed, 0)).toBeLessThanOrEqual(4);
+    expect((await rowsOf(order.id)).every((row) => row.resolvedAt !== null)).toBe(true);
   });
 
   it("does not resend a stale status: a lost «Pendiente» of an order that is now paid is resolved without sending", async () => {
