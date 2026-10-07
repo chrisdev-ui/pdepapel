@@ -1,0 +1,36 @@
+# Red de seguridad para despliegues accidentales con la CLI de Vercel
+# (incidente 2026-10-06: `vercel deploy` desde el árbol local subió `.env` y
+# `.env.prod-write`, docs/ops/2026-10-06-incidente-env-subidos-a-vercel.md).
+# Los deploys van por git; la regla sigue siendo NO usar `vercel deploy` desde
+# el árbol local. Este archivo solo lista lo que ningún build necesita.
+#
+# En un monorepo, el `.vercelignore` de la carpeta del proyecto reemplaza al
+# de la raíz (no se suman): por eso la raíz y cada app tienen la lista entera.
+# No excluir `ops/` de la raíz: el admin corre `../ops/vercel-ignore-build.sh`.
+
+# Credenciales y entornos locales (los builds leen las variables de Vercel)
+.env*
+!.env*.example
+.prod-write-approval.json
+
+# Registro de escrituras en producción, copias y volcados de base de datos
+prod-writes.log
+*.log
+backups/
+backup_prod_*
+*.age
+*.sql
+*.dump
+*.sql.gz
+
+# Borradores, capturas y salidas de auditoría locales
+.claude/
+output/
+outputs/
+tmp/
+Claude outputs/
+_gitlock_trash/
+test-results/
+playwright-report/
+screenshots/
+*.png.tmp
