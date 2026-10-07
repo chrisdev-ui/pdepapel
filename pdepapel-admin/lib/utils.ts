@@ -324,9 +324,12 @@ export function getReadablePaymentMethod(method?: PaymentMethod | null) {
 }
 
 export const CACHE_HEADERS = {
-  // For data that changes very infrequently (e.g., types, sizes, colors)
+  // Atributos públicos (tipos, tamaños, colores). Antes era s-maxage=3600 +
+  // stale-while-revalidate=86400: nada purga el CDN al editarlos, así que un
+  // color nuevo o archivado tardaba hasta una hora en llegar a los filtros de
+  // la tienda (#6). Con 60 s + 300 s el retraso queda en minutos.
   STATIC: {
-    "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+    "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
   },
   // For data that changes occasionally (e.g., categories, designs)
   SEMI_STATIC: {

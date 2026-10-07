@@ -74,12 +74,14 @@ export async function GET(req: Request) {
       throw ErrorFactory.NotFound("No tienes tiendas registradas");
     }
 
+    // Respuesta de la dueña, con sesión: nunca en la caché pública del CDN
+    // (antes iba con `public, s-maxage=3600`).
     return NextResponse.json(stores, {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
     return handleErrorResponse(error, "STORES_GET", {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   }
 }

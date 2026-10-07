@@ -86,3 +86,20 @@ describe("POST /api/stores", () => {
     expect(mocks.storeFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: OWNER } }));
   });
 });
+
+/**
+ * Las tiendas de la dueña llegan con sesión: nunca pueden quedar en la caché
+ * pública del CDN (antes salían con `public, s-maxage=3600`).
+ */
+describe("GET /api/stores cache headers", () => {
+  it("never marks the owner's stores as publicly cacheable", async () => {
+    mocks.auth.mockResolvedValue({ userId: OWNER });
+    mocks.storeFindMany.mockResolvedValue([{ id: "store-1", name: "P de Papel", userId: OWNER }]);
+    const response = await GET(new Request("https://admin.test/api/stores"));
+    expect(response.status).toBe(200);
+    const header = response.headers.get("Cache-Control") ?? "";
+    expect(header).toMatch(/no-store/);
+    expect(header).not.toMatch(/public|s-maxage/);
+  });
+});
+

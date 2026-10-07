@@ -34,12 +34,14 @@ export async function GET(
       },
     });
 
+    // Respuesta de la dueña, con sesión: nunca en la caché pública del CDN
+    // (antes iba con `public, s-maxage=3600`).
     return NextResponse.json(store, {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
     return handleErrorResponse(error, "STORE_GET", {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   }
 }
