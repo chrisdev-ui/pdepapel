@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useDebounce } from "@/hooks/use-debounce";
-import { describeVariant } from "@/lib/product-variant";
+import { describeVariantBeyondName } from "@/lib/product-variant";
 import { cn, currencyFormatter } from "@/lib/utils";
 import axios from "axios";
 
@@ -63,7 +63,12 @@ export interface AsyncProductSelectProps {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
-  modal?: boolean;
+  /**
+   * `true`: siempre en un diálogo (Etiquetas, Ferias). `"auto"`: lista
+   * desplegable desde `sm` y diálogo en teléfono (<640 px), donde la lista
+   * junto al disparador no cabe. `false` (por defecto): siempre desplegable.
+   */
+  modal?: boolean | "auto";
   ariaLabel?: string;
   /**
    * Con esto la lista añade, al final de las variantes de un grupo, la fila
@@ -107,11 +112,31 @@ const getCostDetails = (product: AsyncProductOption) =>
     .filter(Boolean)
     .join(" · ");
 
-/** Fila de la lista: «Nombre · Variante», línea mono «SKU · stock · precio» y su chip. */
+/**
+ * Fila de la lista: «Nombre · Variante», línea mono «SKU · stock · precio» y
+ * su chip. La variante no repite lo que el nombre ya dice («Carpeta … Azul
+ * pastel · Azul pastel»).
+ */
 const getRowTitle = (product: AsyncProductOption) => {
-  const variant = describeVariant(product);
+  const variant = describeVariantBeyondName(product);
   return variant ? `${product.name} · ${variant}` : product.name;
 };
+
+/** Teléfono: el mismo corte que `SaleSearch` (por debajo de `sm`). */
+const PHONE_QUERY = "(max-width: 639px)";
+
+function useIsPhone(enabled: boolean) {
+  const [isPhone, setIsPhone] = React.useState(false);
+  React.useEffect(() => {
+    if (!enabled || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(PHONE_QUERY);
+    const sync = () => setIsPhone(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, [enabled]);
+  return enabled && isPhone;
+}
 
 const getRowDetails = (product: AsyncProductOption) =>
   [
@@ -122,38 +147,46 @@ const getRowDetails = (product: AsyncProductOption) =>
     .filter(Boolean)
     .join(" · ");
 
-function ProductRow({ product, selected }: { product: AsyncProductOption; selected: boolean }) {
+/**
+ * El nombre parte en hasta dos líneas (tres en teléfono, donde la lista mide
+ * unos 330 px) en vez de cortarse en una: lo que distingue a una variante (el
+ * color, el diseño) suele ir al final. El título no lleva `block`:
+ * `display: block` anula el `-webkit-box` de `line-clamp`.
+ */
+const ProductRow = React.memo(function ProductRow({ product, selected }: { product: AsyncProductOption; selected: boolean }) {
+  const title = getRowTitle(product);
   return (
     <>
-      <Check className={cn("mr-2 h-4 w-4 shrink-0", selected ? "opacity-100" : "opacity-0")} aria-hidden="true" />
-      <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
+      <Check className={cn("mr-2 mt-2 h-4 w-4 shrink-0 self-start", selected ? "opacity-100" : "opacity-0")} aria-hidden="true" />
+      <div className="flex w-full min-w-0 items-start gap-2 overflow-hidden">
         <ProductThumbnail product={product} />
         <div className="min-w-0 flex-1">
-          <span className="block truncate font-medium" title={getRowTitle(product)}>
-            {getRowTitle(product)}
+          <span className="line-clamp-3 break-words font-medium leading-snug sm:line-clamp-2" title={title}>
+            {title}
             {product.isArchived && <span className="ml-2 text-xs text-red-500">(Archivado)</span>}
           </span>
           <span className="block truncate font-mono text-[11px] text-muted-foreground" title={getRowDetails(product)}>
             {getRowDetails(product)}
           </span>
         </div>
-        {product.productGroupId && <TintBadge tone="lavender" label="Variante" className="shrink-0" />}
+        {/* En teléfono el chip «Variante» se comía el nombre; ahí la variante ya se lee en el título. «Kit» no está en el título y se queda. */}
+        {product.productGroupId && <TintBadge tone="lavender" label="Variante" className="shrink-0 max-sm:hidden" />}
         {product.isKit && !product.productGroupId && <TintBadge tone="sky" label="Kit" className="shrink-0" />}
       </div>
     </>
   );
-}
+});
 
 function GroupRow({ group }: { group: AsyncProductGroupPick }) {
   return (
     <>
       <span className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" />
-      <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
+      <div className="flex w-full min-w-0 items-start gap-2 overflow-hidden">
         <div className="flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-md border bg-tint-lavender/40 text-[11px] font-bold text-primary">
           ×{group.count}
         </div>
         <div className="min-w-0 flex-1">
-          <span className="block truncate font-medium">{group.name} · todas las variantes</span>
+          <span className="line-clamp-3 break-words font-medium leading-snug sm:line-clamp-2">{group.name} · todas las variantes</span>
           <span className="block truncate font-mono text-[11px] text-muted-foreground">
             Una etiqueta por cada variante ({group.count})
           </span>
@@ -174,6 +207,10 @@ function ProductThumbnail({ product }: { product: AsyncProductOption }) {
           src={imageUrl}
           alt={product.name}
           fill
+          // Miniatura de 32 px: sin `sizes`, Next suponía 100vw y el
+          // navegador pedía w_1080/w_1600 por cada fila. Con 32px el loader
+          // pide w_128, un ancho que ya existe (CLOUDINARY_DELIVERY_WIDTHS).
+          sizes="32px"
           className="object-cover"
         />
       ) : (
@@ -194,16 +231,23 @@ function SelectedProductValue({
 }) {
   const details =
     detailsKind === "cost" ? getCostDetails(product) : getProductDetails(product);
+  const title = getRowTitle(product);
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
       <ProductThumbnail product={product} />
       <div className="min-w-0 flex-1">
         <span
-          className="block truncate text-sm font-medium leading-none"
-          title={product.name}
+          // Hasta tres líneas (cuatro en teléfono): el disparador de una línea de
+          // pedido mide 220–350 px y los nombres reales llegan a 69 caracteres
+          // más la variante.
+          // `whitespace-normal`: el Button trae `whitespace-nowrap` y sin
+          // esto el nombre seguía en una sola línea cortada. Sin `block`:
+          // `display: block` anula el `-webkit-box` que necesita el recorte.
+          className="line-clamp-4 whitespace-normal break-words text-sm font-medium leading-snug sm:line-clamp-3"
+          title={title}
         >
-          {product.name}
+          {title}
         </span>
         <span
           className="mt-1 block truncate text-xs text-muted-foreground"
@@ -229,6 +273,8 @@ export function AsyncProductSelect({
   details = "sale",
 }: AsyncProductSelectProps) {
   const params = useParams();
+  const isPhone = useIsPhone(modal === "auto");
+  const asDialog = modal === true || isPhone;
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const debouncedQuery = useDebounce(searchQuery, 300);
@@ -375,7 +421,7 @@ export function AsyncProductSelect({
     setOpen(false);
   };
 
-  if (modal) {
+  if (asDialog) {
     return (
       <>
         <Button
@@ -412,8 +458,10 @@ export function AsyncProductSelect({
             placeholder="Buscar por nombre, SKU o código..."
             value={searchQuery}
             onValueChange={setSearchQuery}
+            // 16 px en teléfono: con menos, iOS acerca la página al enfocar.
+            className="text-base sm:text-sm"
           />
-          <CommandList className="max-h-[300px] w-full overflow-y-auto">
+          <CommandList className="max-h-[min(560px,60dvh)] w-full overflow-y-auto">
             {!isLoading && products.length === 0 && (
               <CommandEmpty>No se encontraron productos.</CommandEmpty>
             )}
@@ -459,18 +507,25 @@ export function AsyncProductSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
+      {/*
+        La lista ya no copia el ancho del disparador (llegó a abrirse a 34 px):
+        mide al menos min(36rem, viewport − 2rem), crece con el disparador y
+        nunca se sale de la pantalla (max-w de la base + collisionPadding).
+      */}
       <PopoverContent
-        className="p-0"
+        className="w-[max(var(--radix-popover-trigger-width),min(36rem,calc(100vw-2rem)))] p-0"
         align="start"
-        style={{ width: "var(--radix-popover-trigger-width)" }}
+        collisionPadding={16}
+        data-product-select-list=""
       >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Buscar por nombre, SKU o código..."
             value={searchQuery}
             onValueChange={setSearchQuery}
+            className="text-base sm:text-sm"
           />
-          <CommandList className="max-h-[300px] overflow-y-auto">
+          <CommandList className="max-h-[min(420px,50dvh)] overflow-y-auto">
             {!isLoading && products.length === 0 && (
               <CommandEmpty>No se encontraron productos.</CommandEmpty>
             )}

@@ -279,6 +279,7 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
                                       value={productField.value ?? ""}
                                       ariaLabel={`Producto de la línea ${index + 1}`}
                                       details="cost"
+                                      modal="auto"
                                       onChange={(value, product) => {
                                         productField.onChange(value);
                                         if (product && !form.getValues(`items.${index}.cost`)) {
