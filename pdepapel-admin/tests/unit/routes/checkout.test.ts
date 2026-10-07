@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   orderFindMany: vi.fn(),
   orderCount: vi.fn(),
   sendOrderEmail: vi.fn(),
+  waitUntil: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
@@ -97,6 +98,7 @@ vi.mock("@/lib/bold", () => ({
   generateBoldCheckoutData: mocks.generateBoldCheckoutData,
 }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+vi.mock("@vercel/functions", () => ({ waitUntil: mocks.waitUntil }));
 // La invalidación de caché llega a lib/resend por la alerta de revalidación, y
 // Resend exige la clave al cargar: en CI no hay .env, así que se sustituye.
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
@@ -274,6 +276,23 @@ describe("POST /api/[storeId]/checkout", () => {
       }),
     );
     expect(mocks.generateBoldCheckoutData).toHaveBeenCalledWith(order);
+  });
+
+  /**
+   * Incidente del 2026-10-07: el correo del pedido nuevo iba en un
+   * setImmediate que Vercel no espera y se perdió. Ahora la promesa del envío
+   * se entrega a waitUntil para que la función viva hasta que termine.
+   */
+  it("hands the new-order email to waitUntil instead of a fire-and-forget setImmediate", async () => {
+    const response = await POST(createCheckoutRequest(), { params: { storeId } });
+    expect(response.status).toBe(200);
+
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
+    await mocks.waitUntil.mock.calls[0][0];
+    expect(mocks.sendOrderEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "order-id", payment: PaymentMethod.Bold }),
+      "PENDING",
+    );
   });
 
   it("stores a consented GA4 client ID without accepting arbitrary values", async () => {

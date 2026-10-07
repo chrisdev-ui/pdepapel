@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   calculateOrderFinancials: vi.fn(),
   createGuideForOrder: vi.fn(),
+  waitUntil: vi.fn(),
   createInventoryMovementBatchResilient: vi.fn().mockResolvedValue({ success: [], failed: [] }),
   eventCreate: vi.fn().mockResolvedValue({ id: "evt-1" }),
   eventUpdate: vi.fn().mockResolvedValue({}),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
 }));
 
+vi.mock("@vercel/functions", () => ({ waitUntil: mocks.waitUntil }));
 vi.mock("@/lib/bold", () => ({
   getBoldWebhookSecretKey: mocks.getWebhookSecretKey,
   verifyBoldWebhookSignature: mocks.verifyWebhookSignature,
@@ -281,6 +283,52 @@ describe("POST /api/webhook/bold", () => {
       "order-id",
     );
     expect(mocks.createGuideForOrder).not.toHaveBeenCalled();
+  });
+
+  /**
+   * La guía de EnvioClick de un pago aprobado iba en un setImmediate que
+   * Vercel no espera (incidente del 2026-10-07). Ahora va por waitUntil.
+   */
+  it("creates the EnvioClick guide through waitUntil when the order has a quoted rate", async () => {
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+    };
+    const order = {
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Bold },
+      status: OrderStatus.PENDING,
+      storeId: "store-id",
+      shippingCost: 5000,
+      total: 80000,
+      coupon: null,
+      orderItems: [{ productId: "product-id", quantity: 1, product: { acqPrice: 15000, price: 75000 } }],
+    };
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    mocks.findOrder.mockResolvedValue(order);
+    mocks.findUpdatedOrder.mockResolvedValue({
+      ...order,
+      status: OrderStatus.PAID,
+      shipping: { envioClickIdOrder: null, envioClickIdRate: "rate-1" },
+    });
+    mocks.transaction.mockImplementation(async (callback: any) => callback(transactionClient));
+    mocks.calculateOrderFinancials.mockResolvedValue({});
+    mocks.createGuideForOrder.mockResolvedValue({});
+
+    const response = await POST(
+      createWebhookRequest({
+        type: "SALE_APPROVED",
+        data: { amount: { currency: "COP", total: 80000 }, metadata: { reference: "ORD-123" }, payment_id: "bold-tx" },
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
+    await mocks.waitUntil.mock.calls[0][0];
+    expect(mocks.createGuideForOrder).toHaveBeenCalledWith("order-id", "store-id");
   });
 
   it("checks the paid amount against the total minus what a gift card covered", async () => {

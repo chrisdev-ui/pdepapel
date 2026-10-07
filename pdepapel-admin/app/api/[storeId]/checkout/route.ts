@@ -22,7 +22,6 @@ import { priceLines } from "@/lib/product-pricing";
 import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import {
-  createGuideForOrder,
   requoteCartShipping,
   type RequotedRate,
 } from "@/lib/shipping-helpers";
@@ -72,6 +71,8 @@ import {
 } from "@/lib/gift-cards";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
+import { runInBackground } from "@/lib/background";
+import { createGuideInBackground } from "@/lib/guide-background";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -1027,15 +1028,9 @@ async function createCheckout(
         console.error("[CHECKOUT] GA4 purchase tracking failed:", analyticsError);
       }
       if (paidOrder?.shipping?.envioClickIdRate && !paidOrder.shipping.envioClickIdOrder) {
-        setImmediate(async () => {
-          try {
-            await createGuideForOrder(order.id, params.storeId);
-          } catch (guideError) {
-            console.error("[CHECKOUT] Guide creation failed:", guideError);
-          }
-        });
+        createGuideInBackground({ orderId: order.id, storeId: params.storeId, source: "checkout pagado con tarjeta de regalo" });
       }
-      setImmediate(async () => {
+      runInBackground("correo del pedido pagado (checkout)", async () => {
         try {
           await sendOrderEmail(
             {
@@ -1052,8 +1047,9 @@ async function createCheckout(
       return NextResponse.json(paidOrder ?? order, { headers: corsHeaders });
     }
 
-    // Send email asynchronously
-    setImmediate(async () => {
+    // Sin retrasar la respuesta, pero con waitUntil: un setImmediate se
+    // perdía si la instancia se congelaba (incidente del 2026-10-07).
+    runInBackground("correo del pedido nuevo (checkout)", async () => {
       try {
         await sendOrderEmail(
           {

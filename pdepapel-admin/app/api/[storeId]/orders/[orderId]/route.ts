@@ -67,6 +67,7 @@ import {
 import { NextResponse } from "next/server";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
+import { runInBackground } from "@/lib/background";
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json(
@@ -1094,7 +1095,7 @@ export async function PATCH(
     }
 
     // Async email notifications
-    setImmediate(async () => {
+    runInBackground("correo de cambio de estado del pedido", async () => {
       try {
         // Only fetch necessary fields for email
         const emailOrder = await prismadb.order.findUnique({
@@ -1289,7 +1290,7 @@ export async function DELETE(
     await invalidateStoreProductsCache(params.storeId);
 
     // Async cancellation email
-    setImmediate(async () => {
+    runInBackground("correo de cancelación del pedido", async () => {
       try {
         const emailData = await prismadb.order.findUnique({
           where: { id: params.orderId },

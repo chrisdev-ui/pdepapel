@@ -22,6 +22,7 @@ import {
   generateWompiPayment,
   getLastOrderTimestamp,
 } from "@/lib/utils";
+import { runInBackground } from "@/lib/background";
 
 /**
  * Compra de una tarjeta de regalo desde la tienda.
@@ -171,7 +172,7 @@ async function createGiftCardCheckout(
       }),
     );
 
-    setImmediate(async () => {
+    runInBackground("correo del pedido (tarjeta de regalo)", async () => {
       try {
         await sendOrderEmail(
           { ...order, payment: body.payment.method },

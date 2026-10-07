@@ -14,6 +14,13 @@ import { getGiftNotificationEmail, isGiftOrder } from "@/lib/gift-orders";
 import { resend } from "@/lib/resend";
 import { recordFailedNotification } from "@/lib/notification-failures";
 import {
+  ADMIN_EMAIL_RECIPIENTS,
+  deliverEmails,
+  EMAIL_ROLES,
+  type EmailJob,
+  type EmailRole,
+} from "@/lib/email-delivery";
+import {
   currencyFormatter,
   getReadablePaymentMethod,
   getReadableStatus,
@@ -183,8 +190,15 @@ export const sendOrderEmail = async (
     orderItems?: any[];
   },
   status: OrderStatus | ShippingStatus,
-  options?: { notifyAdmin?: boolean },
+  options?: {
+    notifyAdmin?: boolean;
+    /** Solo estos destinatarios (el barrido de reintentos manda uno a la vez). */
+    roles?: EmailRole[];
+    /** false: quien llama registra los fallos (el barrido cuenta intentos). */
+    recordFailures?: boolean;
+  },
 ) => {
+  const kind = `order:${status}`;
   try {
     // SKIP email sending in development environment
     if (env.NODE_ENV === "development") {
@@ -245,11 +259,15 @@ export const sendOrderEmail = async (
         ? "¡Gracias por tu compra! Estamos procesando tu pedido y te notificaremos cuando sea enviado."
         : "Gracias por confiar en nosotros. Si tienes dudas, responde al correo papeleria.pdepapel@gmail.com o contáctanos por WhatsApp.";
 
-    // Send to admin
-    if (options?.notifyAdmin !== false) {
-      await resend.emails.send({
+    // Cada destinatario por su lado (lib/email-delivery.ts): si falla el del
+    // admin, el de la clienta sale igual, y cada fallo queda registrado.
+    const wanted = new Set<EmailRole>(options?.roles ?? EMAIL_ROLES);
+    const jobs: EmailJob[] = [];
+
+    if (options?.notifyAdmin !== false && wanted.has("admin")) {
+      jobs.push({ role: "admin", send: () => resend.emails.send({
         from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-        to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
+        to: ADMIN_EMAIL_RECIPIENTS,
         subject: subjectAdmin,
         react: OrderNotification({
           name: order.fullName,
@@ -274,14 +292,14 @@ export const sendOrderEmail = async (
           digital,
         }) as React.ReactElement,
         text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${getOrderNotificationSource(status)}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
-      });
+      }) });
     }
 
-    // Send to customer if email exists
-    if (order.email) {
-      await resend.emails.send({
+    const customerEmail = order.email;
+    if (customerEmail && wanted.has("customer")) {
+      jobs.push({ role: "customer", send: () => resend.emails.send({
         from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-        to: [order.email],
+        to: [customerEmail],
         subject: subjectCustomer,
         react: OrderNotification({
           name: order.fullName,
@@ -301,24 +319,46 @@ export const sendOrderEmail = async (
           digital,
         }) as React.ReactElement,
         text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`,
-      });
+      }) });
     }
+
+    const outcomes = await deliverEmails(jobs, {
+      storeId: order.storeId,
+      orderId: order.id,
+      kind,
+      recordFailures: options?.recordFailures,
+    });
 
     // El regalo se anuncia a quien recibe solo con el pago confirmado. Una
     // tarjeta de regalo tiene su propio correo con el código: no se avisa dos veces.
-    if (status === OrderStatus.PAID && !digital) {
+    if (status === OrderStatus.PAID && !digital && !options?.roles) {
       await sendGiftNotification(order, status);
     }
+    return outcomes;
   } catch (error) {
+    // Algo falló antes de mandar (armar el correo, leer la base): no salió
+    // ninguno de los dos.
     console.error("Error sending email:", error);
-    await recordFailedNotification({
-      storeId: order.storeId,
-      channel: "EMAIL",
-      kind: `order:${status}`,
-      recipient: order.email,
-      orderId: order.id,
-      error,
-    });
+    if (options?.recordFailures !== false) {
+      for (const role of options?.roles ?? EMAIL_ROLES) {
+        if (role === "admin" && options?.notifyAdmin === false) continue;
+        if (role === "customer" && !order.email) continue;
+        await recordFailedNotification({
+          storeId: order.storeId,
+          channel: "EMAIL",
+          kind,
+          recipient: role,
+          orderId: order.id,
+          error,
+        });
+      }
+    }
+    return Object.fromEntries(
+      (options?.roles ?? EMAIL_ROLES).map((role) => [
+        role,
+        { ok: false, attempts: 0, error: error instanceof Error ? error.message : String(error), retryable: true },
+      ]),
+    ) as Awaited<ReturnType<typeof deliverEmails>>;
   }
 };
 
@@ -333,7 +373,9 @@ export const sendShippingEmail = async (
     orderItems?: any[];
   },
   shippingStatus: ShippingStatus,
+  options?: { roles?: EmailRole[]; recordFailures?: boolean },
 ) => {
+  const kind = `shipping:${shippingStatus}`;
   try {
     // SKIP email sending in development environment
     if (env.NODE_ENV === "development") {
@@ -386,10 +428,13 @@ export const sendShippingEmail = async (
 
     const subjectAdmin = `[Admin] Pedido #${order.orderNumber} - ${readableStatus}`;
 
-    // Send to admin
-    await resend.emails.send({
+    const wanted = new Set<EmailRole>(options?.roles ?? EMAIL_ROLES);
+    const jobs: EmailJob[] = [];
+
+    if (wanted.has("admin")) {
+      jobs.push({ role: "admin", send: () => resend.emails.send({
       from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-      to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
+      to: ADMIN_EMAIL_RECIPIENTS,
       subject: subjectAdmin,
       react: OrderNotification({
         name: order.fullName,
@@ -411,13 +456,14 @@ export const sendShippingEmail = async (
         giftRecipientName: isGiftOrder(order) ? order.giftRecipientName : null,
       }) as React.ReactElement,
       text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: Actualización de envío recibida desde EnvíoClick.\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
-    });
+    }) });
+    }
 
-    // Send to customer if email exists
-    if (order.email) {
-      await resend.emails.send({
+    const customerEmail = order.email;
+    if (customerEmail && wanted.has("customer")) {
+      jobs.push({ role: "customer", send: () => resend.emails.send({
         from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-        to: [order.email],
+        to: [customerEmail],
         subject: subjectCustomer,
         react: OrderNotification({
           name: order.fullName,
@@ -435,16 +481,37 @@ export const sendShippingEmail = async (
             : null,
         }) as React.ReactElement,
         text: `${subjectCustomer}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`,
-      });
+      }) });
     }
 
+    const outcomes = await deliverEmails(jobs, {
+      storeId: order.storeId,
+      orderId: order.id,
+      kind,
+      recordFailures: options?.recordFailures,
+    });
+
     // Quien recibe el regalo sigue el paquete con el mismo aviso, sin precios.
-    await sendGiftNotification(order, shippingStatus);
+    if (!options?.roles) await sendGiftNotification(order, shippingStatus);
 
     console.log(
-      `[EMAIL] Shipping notification sent for order #${order.orderNumber} - ${shippingStatus}`,
+      `[EMAIL] Shipping notification for order #${order.orderNumber} - ${shippingStatus}: ${Object.entries(outcomes).map(([role, outcome]) => `${role}=${outcome?.ok ? "ok" : "falló"}`).join(", ")}`,
     );
+    return outcomes;
   } catch (error) {
+    // Antes solo iba a console.error y no quedaba rastro de un aviso de envío perdido.
     console.error("[EMAIL] Error sending shipping email:", error);
+    if (options?.recordFailures !== false) {
+      for (const role of options?.roles ?? EMAIL_ROLES) {
+        if (role === "customer" && !order.email) continue;
+        await recordFailedNotification({ storeId: order.storeId, channel: "EMAIL", kind, recipient: role, orderId: order.id, error });
+      }
+    }
+    return Object.fromEntries(
+      (options?.roles ?? EMAIL_ROLES).map((role) => [
+        role,
+        { ok: false, attempts: 0, error: error instanceof Error ? error.message : String(error), retryable: true },
+      ]),
+    ) as Awaited<ReturnType<typeof deliverEmails>>;
   }
 };

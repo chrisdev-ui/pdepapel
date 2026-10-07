@@ -94,6 +94,26 @@ jobs:
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/payment-webhook-retention"
 
+  notification-retry:
+    name: Order email retry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      # Resends order emails that failed in the last 48 h (FailedNotification),
+      # at most 4 attempts per order + kind + recipient, each row claimed
+      # atomically so two runs never send twice. EnvioClick guides are never
+      # retried here: they are paid when created (lib/notification-retry.ts).
+      - name: Retry failed order emails
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/notification-retry"
+
   gift-card-holds:
     name: Gift card hold release
     runs-on: ubuntu-latest

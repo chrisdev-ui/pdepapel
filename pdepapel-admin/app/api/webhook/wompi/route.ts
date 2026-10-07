@@ -9,7 +9,6 @@ import {
 } from "@/lib/gift-cards";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import {
@@ -40,6 +39,7 @@ import {
   PaymentWebhookContext,
   recordPaymentWebhookReceived,
 } from "@/lib/payment-webhook-events";
+import { createGuideInBackground } from "@/lib/guide-background";
 
 const HASH_ALGORITHM = "sha256";
 
@@ -634,9 +634,7 @@ async function updateOrderData(order: any, transaction: any) {
         !updatedOrder.shipping.envioClickIdOrder &&
         updatedOrder.shipping.envioClickIdRate
       ) {
-        setImmediate(async () => {
-          await createGuideForOrder(updatedOrder.id, updatedOrder.storeId);
-        });
+        createGuideInBackground({ orderId: updatedOrder.id, storeId: updatedOrder.storeId, source: "webhook de Wompi" });
       }
       await sendOrderEmail(
         {

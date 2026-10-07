@@ -17,7 +17,8 @@ export type JobName =
   | "storefront-revalidation"
   | "whatsapp-webhook-retention"
   | "whatsapp-webhook-volume"
-  | "payment-webhook-retention";
+  | "payment-webhook-retention"
+  | "notification-retry";
 
 export interface JobDefinition {
   name: JobName;
@@ -68,6 +69,12 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     name: "payment-webhook-retention",
     label: "Retención de eventos de pago",
+    expectedEveryHours: 24,
+    perStore: false,
+  },
+  {
+    name: "notification-retry",
+    label: "Reenvío de correos de pedidos",
     expectedEveryHours: 24,
     perStore: false,
   },

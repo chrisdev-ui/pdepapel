@@ -12,6 +12,7 @@ import {
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { BATCH_SIZE } from "@/constants";
+import { runInBackground } from "@/lib/background";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -111,7 +112,7 @@ export async function POST(
     }
 
     // Send email notification asynchronously (same pattern as main checkout)
-    setImmediate(async () => {
+    runInBackground("correo del pedido (reintento de pago)", async () => {
       try {
         await sendOrderEmail(
           {

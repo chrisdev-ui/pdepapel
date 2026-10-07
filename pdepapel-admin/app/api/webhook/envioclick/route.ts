@@ -11,6 +11,7 @@ import {
   safeSecretEquals,
 } from "@/lib/webhook-auth";
 import { NextResponse } from "next/server";
+import { runInBackground } from "@/lib/background";
 
 /**
  * EnvioClick no firma sus webhooks, así que la URL configurada en su panel
@@ -275,7 +276,7 @@ export async function POST(req: Request) {
       });
 
       if (updatedOrder) {
-        setImmediate(async () => {
+        runInBackground("correo de envío (EnvioClick)", async () => {
           try {
             await sendShippingEmail(
               {

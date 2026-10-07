@@ -8,7 +8,6 @@ import {
   type IssuedGiftCard,
 } from "@/lib/gift-cards";
 import prismadb from "@/lib/prismadb";
-import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import {
@@ -45,6 +44,7 @@ import {
   PaymentWebhookContext,
   recordPaymentWebhookReceived,
 } from "@/lib/payment-webhook-events";
+import { createGuideInBackground } from "@/lib/guide-background";
 
 /**
  * La fila se escribe antes de mirar la firma y se cierra con lo que respondió
@@ -618,9 +618,7 @@ async function processBoldPayment(
       !updatedOrder.shipping.envioClickIdOrder &&
       updatedOrder.shipping.envioClickIdRate
     ) {
-      setImmediate(async () => {
-        await createGuideForOrder(updatedOrder.id, updatedOrder.storeId);
-      });
+      createGuideInBackground({ orderId: updatedOrder.id, storeId: updatedOrder.storeId, source: "webhook de Bold" });
     }
 
     await sendOrderEmail(

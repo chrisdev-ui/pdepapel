@@ -67,6 +67,7 @@ import {
   recordInventoryIssuesForBatch,
 } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
+import { runInBackground } from "@/lib/background";
 
 type OrderData = {
   storeId: string;
@@ -735,8 +736,8 @@ async function createOrder(
 
     // Queue email sending asynchronously (don't wait for it)
     if (!isStoreOwner) {
-      // Use setImmediate or setTimeout to avoid blocking the response
-      setImmediate(async () => {
+      // Sin bloquear la respuesta, con waitUntil (lib/background.ts).
+      runInBackground("correo del pedido creado", async () => {
         try {
           const orderWithDetails = await prismadb.order.findUnique({
             where: { id: order.id },
@@ -1366,7 +1367,7 @@ export async function PATCH(
     }
 
     // Send email notifications asynchronously
-    setImmediate(async () => {
+    runInBackground("correos de la actualización masiva", async () => {
       try {
         const emailPromises = result.map(async (order) => {
           if (status) {

@@ -1,6 +1,6 @@
 import prismadb from "@/lib/prismadb";
 
-export type NotificationChannel = "EMAIL" | "WHATSAPP";
+export type NotificationChannel = "EMAIL" | "WHATSAPP" | "GUIDE";
 
 /**
  * Deja constancia de un aviso que no salió.
