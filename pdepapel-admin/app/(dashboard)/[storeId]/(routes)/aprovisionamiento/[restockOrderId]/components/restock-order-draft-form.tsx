@@ -11,6 +11,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 import { TintBadge } from "@/components/ui/tint-badge";
+import { ToastAction } from "@/components/ui/toast";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
@@ -18,7 +19,16 @@ import { useCanWrite } from "@/components/shell/viewer-access";
 import { useToast } from "@/hooks/use-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
-import { displayRestockOrderNumber, lineSubtotal, RESTOCK_STATUS_LABELS, restockOrderInputSchema, summarizeLines } from "@/lib/restock-orders";
+import {
+  displayRestockOrderNumber,
+  lineSubtotal,
+  planRestockScan,
+  planRestockScanUndo,
+  RESTOCK_STATUS_LABELS,
+  restockOrderInputSchema,
+  summarizeLines,
+  type RestockScanEffect,
+} from "@/lib/restock-orders";
 import type { RestockOrderWithRelations } from "@/lib/restock-orders-db";
 import { currencyFormatter } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -100,21 +110,42 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
    * cabecera de «Líneas del pedido»): si el producto ya está en una línea,
    * suma una unidad; si no, llena la primera línea vacía o abre una nueva con
    * el costo de compra del catálogo. Así se puede escanear caja por caja.
+   *
+   * Cada lectura avisa qué producto entró y con cuántas unidades queda, con
+   * «Deshacer» para revertir justo esa lectura: desde el celular no se ve el
+   * formulario, y una lectura doble no se notaría hasta recibir (#2).
    */
+  const undoScan = (effect: RestockScanEffect) => {
+    const plan = planRestockScanUndo(form.getValues("items") ?? [], effect);
+    if (plan.type === "decrement") form.setValue(`items.${plan.index}.quantity`, plan.quantity, { shouldDirty: true });
+    if (plan.type === "clear") {
+      form.setValue(`items.${plan.index}.productId`, "", { shouldDirty: true });
+      form.setValue(`items.${plan.index}.cost`, plan.cost, { shouldDirty: true });
+    }
+    if (plan.type === "remove") remove(plan.index);
+  };
+
   const addScannedProduct = (product: AsyncProductOption) => {
-    const current = form.getValues("items") ?? [];
-    const existing = current.findIndex((item) => item.productId === product.id);
-    if (existing >= 0) {
-      form.setValue(`items.${existing}.quantity`, (Number(current[existing].quantity) || 0) + 1, { shouldDirty: true });
-      return;
+    const plan = planRestockScan(form.getValues("items") ?? [], product);
+    if (plan.effect.kind === "increment") {
+      form.setValue(`items.${plan.index}.quantity`, plan.quantity, { shouldDirty: true });
+    } else if (plan.effect.kind === "fill") {
+      form.setValue(`items.${plan.index}.productId`, product.id, { shouldDirty: true });
+      form.setValue(`items.${plan.index}.cost`, plan.cost, { shouldDirty: true });
+    } else {
+      append({ productId: product.id, quantity: plan.quantity, cost: plan.cost });
     }
-    const empty = current.findIndex((item) => !item.productId);
-    if (empty >= 0) {
-      form.setValue(`items.${empty}.productId`, product.id, { shouldDirty: true });
-      if (!current[empty].cost) form.setValue(`items.${empty}.cost`, product.acqPrice || 0, { shouldDirty: true });
-      return;
-    }
-    append({ productId: product.id, quantity: 1, cost: product.acqPrice || 0 });
+    const { effect } = plan;
+    toast({
+      title: `+1 ${product.name} — ahora ${plan.quantity}`,
+      description: `Línea ${plan.index + 1} del pedido.`,
+      variant: "success",
+      action: (
+        <ToastAction altText={`Deshacer la lectura de ${product.name}`} onClick={() => undoScan(effect)}>
+          Deshacer
+        </ToastAction>
+      ),
+    });
   };
 
   const items = form.watch("items");

@@ -373,3 +373,83 @@ export function weightedAverageCost(input: WeightedCostInput): number {
 
   return round2((currentUnits * currentCost + incomingUnits * incomingCost) / (currentUnits + incomingUnits));
 }
+
+/** Una línea del borrador tal como la guarda el formulario. */
+export interface RestockDraftLine {
+  productId: string;
+  quantity: number;
+  cost: number;
+}
+
+/**
+ * Qué hizo una lectura del celular en el borrador (issue #2): sumar una
+ * unidad a una línea que ya tenía el producto, llenar la primera línea vacía
+ * o abrir una nueva. Se guarda para que «Deshacer» revierta esa lectura y no
+ * otra cosa.
+ */
+export type RestockScanEffect =
+  | { kind: "increment"; productId: string }
+  | { kind: "fill"; productId: string; previousCost: number }
+  | { kind: "add"; productId: string };
+
+export interface RestockScanPlan {
+  effect: RestockScanEffect;
+  /** Línea que recibe la lectura (en `add`, la que se va a abrir). */
+  index: number;
+  /** Cantidad de esa línea después de la lectura. */
+  quantity: number;
+  /** Costo de esa línea después de la lectura. */
+  cost: number;
+}
+
+export function planRestockScan(
+  lines: RestockDraftLine[],
+  product: { id: string; acqPrice?: number | null },
+): RestockScanPlan {
+  const catalogCost = product.acqPrice || 0;
+  const existing = lines.findIndex((line) => line.productId === product.id);
+  if (existing >= 0) {
+    const line = lines[existing];
+    return {
+      effect: { kind: "increment", productId: product.id },
+      index: existing,
+      quantity: (Number(line.quantity) || 0) + 1,
+      cost: Number(line.cost) || 0,
+    };
+  }
+  const empty = lines.findIndex((line) => !line.productId);
+  if (empty >= 0) {
+    const line = lines[empty];
+    const previousCost = Number(line.cost) || 0;
+    return {
+      effect: { kind: "fill", productId: product.id, previousCost },
+      index: empty,
+      quantity: Number(line.quantity) || 1,
+      cost: previousCost || catalogCost,
+    };
+  }
+  return { effect: { kind: "add", productId: product.id }, index: lines.length, quantity: 1, cost: catalogCost };
+}
+
+export type RestockScanUndo =
+  | { type: "decrement"; index: number; quantity: number }
+  | { type: "clear"; index: number; cost: number }
+  | { type: "remove"; index: number }
+  | { type: "none" };
+
+/**
+ * Cómo se deshace una lectura sobre las líneas de AHORA, no las de cuando se
+ * leyó: entre medias pudo haber otras lecturas o cambios a mano. Se busca la
+ * línea por producto; si tiene más de una unidad se quita la que puso esta
+ * lectura; si le queda una, se vuelve a como estaba antes (línea vacía con su
+ * costo de antes, o línea quitada). Si la línea ya no está, no se toca nada.
+ */
+export function planRestockScanUndo(lines: RestockDraftLine[], effect: RestockScanEffect): RestockScanUndo {
+  const index = lines.findIndex((line) => line.productId === effect.productId);
+  if (index < 0) return { type: "none" };
+  const quantity = Number(lines[index].quantity) || 0;
+  if (quantity > 1) return { type: "decrement", index, quantity: quantity - 1 };
+  if (effect.kind === "fill") return { type: "clear", index, cost: effect.previousCost };
+  if (effect.kind === "add") return { type: "remove", index };
+  return { type: "none" };
+}

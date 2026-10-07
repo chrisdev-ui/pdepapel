@@ -441,6 +441,8 @@ proveedor, Recibiendo, Completados, Cancelados) que quedan en la URL.
   y el celular vinculado están una vez en la cabecera de «Líneas del pedido».
   Lo que lee el celular suma una unidad si el producto ya está en el pedido,
   llena la primera línea vacía o abre una línea nueva con el costo de compra.
+  Cada lectura muestra un aviso («+1 Producto — ahora 3») con «Deshacer», que
+  revierte solo esa lectura.
   En el teléfono la lista de productos se abre en una ventana.
 - **Cuándo llega**: la fecha del pedido más el plazo del proveedor
   (`Proveedores` → «Días de entrega»). Sin ese plazo la columna dice «Sin plazo
