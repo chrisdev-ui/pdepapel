@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getMercadoLibreHealthSummary } from "@/lib/mercadolibre/health";
+import { annotateIssues } from "@/lib/mercadolibre/health-alerts";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -29,8 +30,10 @@ export async function GET(
       throw ErrorFactory.NotFound("Primero conecta la cuenta de Mercado Libre");
     }
 
+    const summary = await getMercadoLibreHealthSummary(connection.id);
+    // Cada alerta con su clave y si ya se marcó como revisada (#8).
     return NextResponse.json(
-      await getMercadoLibreHealthSummary(connection.id),
+      { ...summary, issues: await annotateIssues(connection.id, summary.issues) },
       {
         headers: CACHE_HEADERS.NO_CACHE,
       },

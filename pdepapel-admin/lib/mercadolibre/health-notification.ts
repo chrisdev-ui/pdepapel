@@ -6,15 +6,11 @@ import type {
   MercadoLibreHealthSummaryGroup,
   MercadoLibreHealthSummaryItem,
 } from "@/emails/mercadolibre-health-summary";
+import { ADMIN_EMAIL_RECIPIENTS, sendWithRetry } from "@/lib/email-delivery";
 import { env } from "@/lib/env.mjs";
 import { resend } from "@/lib/resend";
 
 import type { MercadoLibreHealthIssue, MercadoLibreHealthSummary as HealthSummary } from "./health";
-
-const ADMIN_NOTIFICATION_RECIPIENTS = [
-  "web.christian.dev@gmail.com",
-  "papeleria.pdepapel@gmail.com",
-];
 
 /** Keeps the email scannable; the dashboard shows everything. */
 export const MAX_ITEMS_PER_GROUP = 5;
@@ -96,7 +92,10 @@ const GROUP_META: Record<
 export type MercadoLibreHealthDigest = {
   subject: string;
   generatedAt: string;
+  /** Alertas nuevas o que cambiaron desde el último aviso: las que trae el correo. */
   totalIssues: number;
+  /** Siguen abiertas y ya se avisaron (o se marcaron como revisadas): solo se cuentan. */
+  knownIssues: number;
   dashboardUrl: string;
   metrics: {
     unansweredQuestions: number;
@@ -173,7 +172,8 @@ function buildIssueActions(
       break;
     case "inventory_exception":
       actions.push({
-        label: "Reprocesar venta",
+        // Mismo nombre que el botón de la lista de ventas.
+        label: "Re-sincronizar venta",
         href: orderUrl ?? `${dashboardUrl}#mercadolibre-orders`,
         primary: true,
       });
@@ -205,10 +205,15 @@ function buildIssueActions(
 export function buildMercadoLibreHealthDigest({
   storeId,
   summary,
+  issues = summary.issues,
+  knownIssues = 0,
   now = new Date(),
 }: {
   storeId: string;
   summary: HealthSummary;
+  /** Las alertas que van en el correo (las nuevas o que cambiaron). */
+  issues?: MercadoLibreHealthIssue[];
+  knownIssues?: number;
   now?: Date;
 }): MercadoLibreHealthDigest {
   const dashboardUrl = new URL(
@@ -217,7 +222,7 @@ export function buildMercadoLibreHealthDigest({
   ).toString();
 
   const itemsByKind = new Map<IssueKind, MercadoLibreHealthSummaryItem[]>();
-  for (const issue of summary.issues) {
+  for (const issue of issues) {
     const items = itemsByKind.get(issue.kind) ?? [];
     items.push({
       title: issue.title,
@@ -242,12 +247,13 @@ export function buildMercadoLibreHealthDigest({
       };
     });
 
-  const totalIssues = summary.issues.length;
+  const totalIssues = issues.length;
 
   return {
-    subject: `[Mercado Libre] ${totalIssues} ${totalIssues === 1 ? "revisión pendiente" : "revisiones pendientes"}`,
+    subject: `[Mercado Libre] ${totalIssues} ${totalIssues === 1 ? "aviso nuevo" : "avisos nuevos"}`,
     generatedAt: formatGeneratedAt(now),
     totalIssues,
+    knownIssues,
     dashboardUrl,
     metrics: {
       unansweredQuestions: summary.unansweredQuestions,
@@ -265,8 +271,9 @@ export function renderMercadoLibreHealthDigestText(
   digest: MercadoLibreHealthDigest,
 ) {
   const lines = [
-    `Resumen diario de Mercado Libre — ${digest.generatedAt}`,
+    `Mercado Libre: ${digest.totalIssues === 1 ? "1 aviso nuevo" : `${digest.totalIssues} avisos nuevos`} — ${digest.generatedAt}`,
     "Origen: revisión automática diaria de la conexión. No es una venta nueva.",
+    "Solo trae lo nuevo o lo que cambió desde el último aviso.",
     "",
     `Preguntas sin responder: ${digest.metrics.unansweredQuestions} · Envíos por despachar: ${digest.metrics.shipmentsToDispatch} · Reclamos por revisar: ${digest.metrics.claimsRequiringAttention}`,
     `Publicaciones activas: ${digest.metrics.activeListings} de ${digest.metrics.totalListings}`,
@@ -285,36 +292,58 @@ export function renderMercadoLibreHealthDigestText(
     }
   }
 
+  if (digest.knownIssues > 0) {
+    lines.push(
+      "",
+      digest.knownIssues === 1
+        ? "Además sigue abierta 1 alerta que ya conoces; está en el panel."
+        : `Además siguen abiertas ${digest.knownIssues} alertas que ya conoces; están en el panel.`,
+    );
+  }
   lines.push("", `Abrir Mercado Libre en Administración: ${digest.dashboardUrl}`);
 
   return lines.join("\n");
 }
 
+/**
+ * Manda el aviso con las alertas nuevas o que cambiaron. Quien decide cuáles
+ * son es health-cron.ts (con health-alerts.ts): aquí no se deduplica nada.
+ *
+ * Devuelve "skipped" en desarrollo (no se manda nada) y lanza si Resend no lo
+ * aceptó tras los reintentos, para que quien llama devuelva las alertas
+ * tomadas y la próxima corrida lo intente de nuevo.
+ *
+ * Antes se pasaba un `Idempotency-Key` dentro de `headers`, pero en el SDK
+ * 2.1.0 ese campo agrega encabezados al correo, no a la llamada a la API: no
+ * deduplicaba nada.
+ */
 export async function sendMercadoLibreHealthNotification({
   storeId,
   summary,
+  issues,
+  knownIssues = 0,
 }: {
   storeId: string;
   summary: HealthSummary;
-}) {
-  if (env.NODE_ENV === "development" || summary.issues.length === 0) return;
+  issues: MercadoLibreHealthIssue[];
+  knownIssues?: number;
+}): Promise<"sent" | "skipped"> {
+  if (env.NODE_ENV === "development" || issues.length === 0) return "skipped";
 
-  const digest = buildMercadoLibreHealthDigest({ storeId, summary });
+  const digest = buildMercadoLibreHealthDigest({ storeId, summary, issues, knownIssues });
   const { subject, ...emailProps } = digest;
 
-  const response = await resend.emails.send({
-    from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-    to: ADMIN_NOTIFICATION_RECIPIENTS,
-    subject,
-    headers: {
-      "Idempotency-Key": `mercadolibre-health-${storeId}-${new Date().toISOString().slice(0, 10)}`,
-    },
-    react: MercadoLibreHealthSummary(emailProps) as ReactElement,
-    text: renderMercadoLibreHealthDigestText(digest),
-  });
-  if (response.error) {
-    throw new Error(
-      `Resend rechazó la alerta de Mercado Libre: ${response.error.message}`,
-    );
+  const outcome = await sendWithRetry(() =>
+    resend.emails.send({
+      from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
+      to: ADMIN_EMAIL_RECIPIENTS,
+      subject,
+      react: MercadoLibreHealthSummary(emailProps) as ReactElement,
+      text: renderMercadoLibreHealthDigestText(digest),
+    }),
+  );
+  if (!outcome.ok) {
+    throw new Error(`Resend rechazó la alerta de Mercado Libre: ${outcome.error}`);
   }
+  return "sent";
 }

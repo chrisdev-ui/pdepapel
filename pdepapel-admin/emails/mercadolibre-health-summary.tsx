@@ -36,7 +36,10 @@ export type MercadoLibreHealthSummaryGroup = {
 
 export type MercadoLibreHealthSummaryProps = {
   generatedAt: string;
+  /** Alertas nuevas o que cambiaron: las que trae el correo. */
   totalIssues: number;
+  /** Siguen abiertas y ya se avisaron o se marcaron como revisadas. */
+  knownIssues?: number;
   dashboardUrl: string;
   metrics: {
     unansweredQuestions: number;
@@ -60,15 +63,14 @@ export type MercadoLibreHealthSummaryProps = {
 export function MercadoLibreHealthSummary({
   generatedAt,
   totalIssues,
+  knownIssues = 0,
   dashboardUrl,
   metrics,
   groups,
   hiddenIssues,
 }: MercadoLibreHealthSummaryProps) {
   const headline =
-    totalIssues === 1
-      ? "1 revisión pendiente"
-      : `${totalIssues} revisiones pendientes`;
+    totalIssues === 1 ? "1 aviso nuevo" : `${totalIssues} avisos nuevos`;
 
   return (
     <PanelShell
@@ -82,7 +84,8 @@ export function MercadoLibreHealthSummary({
       <StickerCard tint="yellow" filled>
         <CardText>
           <strong>No es una venta nueva.</strong> Es el chequeo automático de la
-          cuenta, una vez al día, con un acceso directo por cada caso.
+          cuenta. Solo trae lo nuevo o lo que cambió desde el último aviso, con
+          un acceso directo por cada caso.
         </CardText>
       </StickerCard>
 
@@ -144,6 +147,14 @@ export function MercadoLibreHealthSummary({
         Abrir Mercado Libre en Administración
       </Cta>
 
+      {knownIssues > 0 ? (
+        <Text style={hiddenSummary}>
+          {knownIssues === 1
+            ? "Además sigue abierta 1 alerta que ya conoces; está en el panel."
+            : `Además siguen abiertas ${knownIssues} alertas que ya conoces; están en el panel.`}
+        </Text>
+      ) : null}
+
       {hiddenIssues > 0 ? (
         <Text style={hiddenSummary}>
           Allí verás los {hiddenIssues} casos que no caben en este correo.
@@ -151,8 +162,9 @@ export function MercadoLibreHealthSummary({
       ) : null}
 
       <Foot>
-        Recibes este correo una vez al día mientras haya revisiones pendientes.
-        Si ya resolviste todo, mañana no llegará.
+        Este correo solo llega cuando hay algo nuevo. Lo que ya revisaste
+        márcalo en el panel («Marcar como revisada») y no vuelve a salir
+        mientras no cambie.
       </Foot>
     </PanelShell>
   );
@@ -162,6 +174,7 @@ export function MercadoLibreHealthSummary({
 MercadoLibreHealthSummary.PreviewProps = {
   generatedAt: "domingo, 21 de septiembre de 2026, 11:25 a. m.",
   totalIssues: 6,
+  knownIssues: 2,
   dashboardUrl: "https://admin.papeleriapdepapel.com/demo/mercadolibre",
   metrics: {
     unansweredQuestions: 4,

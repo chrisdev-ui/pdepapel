@@ -32,6 +32,7 @@ vi.mock("@/lib/prismadb", () => ({
       update: mocks.updateOrder,
       upsert: mocks.upsertOrder,
     },
+    marketplaceShipment: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     product: { findMany: mocks.findProducts },
     $transaction: async (callback: (t: typeof tx) => Promise<unknown>) => callback(tx),
   },
@@ -115,5 +116,40 @@ describe("synchronizeMercadoLibreOrder inventory path", () => {
 
     const upsert = mocks.upsertOrder.mock.calls[0][0];
     expect(upsert.update.items).toMatchObject({ deleteMany: {} });
+  });
+
+  /**
+   * #8: la venta 2000017890359944 llegó antes de importar su publicación
+   * (EXCEPTION, «Sin relación local») y Mercado Libre la canceló. Nunca
+   * descontó nada, así que no queda nada por resolver: pasa a NOT_APPLIED y
+   * deja de salir en el aviso diario.
+   */
+  it("clears the exception of a sale cancelled before any inventory was applied", async () => {
+    mocks.findOrder
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ status: "PAID", inventoryStatus: "EXCEPTION", refundedAmount: null, metadata: null });
+    mocks.upsertOrder.mockResolvedValue({ id: "mo-1", inventoryStatus: "EXCEPTION", netAmount: 80_000 });
+
+    const result = await synchronizeMercadoLibreOrder("conn-1", "store-1", { ...payload, status: "cancelled" });
+
+    expect(result).toEqual({ inventoryChanged: false, needsAttention: false });
+    expect(mocks.updateOrder).toHaveBeenCalledWith({
+      where: { id: "mo-1" },
+      data: { inventoryStatus: "NOT_APPLIED", inventoryError: null },
+    });
+    expect(mocks.txMovement).not.toHaveBeenCalled();
+  });
+
+  it("still asks for the physical return when a cancelled sale had already decremented stock", async () => {
+    mocks.findOrder
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ status: "PAID", inventoryStatus: "DECREMENTED", refundedAmount: null, metadata: null });
+    mocks.upsertOrder.mockResolvedValue({ id: "mo-1", inventoryStatus: "DECREMENTED", netAmount: 80_000 });
+
+    await synchronizeMercadoLibreOrder("conn-1", "store-1", { ...payload, status: "cancelled" });
+
+    expect(mocks.updateOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ inventoryStatus: "RESTOCK_PENDING" }) }),
+    );
   });
 });

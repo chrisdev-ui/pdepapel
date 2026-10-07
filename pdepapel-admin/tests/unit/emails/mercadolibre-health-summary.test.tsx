@@ -65,7 +65,7 @@ describe("Mercado Libre health summary email", () => {
   it("groups pending reviews with a direct action for each case", async () => {
     const html = await render(<MercadoLibreHealthSummary {...props} />);
 
-    expect(html).toContain("5 revisiones pendientes");
+    expect(html).toContain("5 avisos nuevos");
     expect(html).toContain("No es una venta nueva.");
     expect(html).toContain("Preguntas sin responder");
     expect(html).toContain("Envíos por despachar");
@@ -95,7 +95,7 @@ describe("Mercado Libre health summary email", () => {
       />,
     );
 
-    expect(html).toContain("1 revisión pendiente");
+    expect(html).toContain("1 aviso nuevo");
     expect(html).not.toContain("que no caben en este correo");
   });
 });

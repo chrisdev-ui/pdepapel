@@ -66,7 +66,7 @@ describe("buildMercadoLibreHealthDigest", () => {
       now: new Date("2026-09-06T15:57:00.000Z"),
     });
 
-    expect(digest.subject).toBe("[Mercado Libre] 4 revisiones pendientes");
+    expect(digest.subject).toBe("[Mercado Libre] 4 avisos nuevos");
     expect(digest.generatedAt).toContain("6 de septiembre de 2026");
     expect(digest.dashboardUrl).toBe("https://admin.example.com/store-1/mercadolibre");
     expect(digest.metrics).toEqual({
@@ -141,7 +141,7 @@ describe("buildMercadoLibreHealthDigest", () => {
       summary: { ...summary, issues: many },
     });
 
-    expect(digest.subject).toBe(`[Mercado Libre] ${many.length} revisiones pendientes`);
+    expect(digest.subject).toBe(`[Mercado Libre] ${many.length} avisos nuevos`);
     expect(digest.groups).toHaveLength(1);
     expect(digest.groups[0].items).toHaveLength(MAX_ITEMS_PER_GROUP);
     expect(digest.groups[0].hidden).toBe(3);
@@ -155,7 +155,7 @@ describe("buildMercadoLibreHealthDigest", () => {
     });
     const text = renderMercadoLibreHealthDigestText(digest);
 
-    expect(digest.subject).toBe("[Mercado Libre] 1 revisión pendiente");
+    expect(digest.subject).toBe("[Mercado Libre] 1 aviso nuevo");
     expect(text).toContain("No es una venta nueva.");
     expect(text).toContain("## Stock en riesgo (1)");
     expect(text).toContain("- Termo Owala Negro: Stock local 0; el colchón de seguridad es 0.");
@@ -173,37 +173,41 @@ describe("sendMercadoLibreHealthNotification", () => {
     mocks.send.mockResolvedValue({ error: null });
   });
 
-  it("sends the grouped digest once per day with an HTML and a text body", async () => {
-    await sendMercadoLibreHealthNotification({ storeId: "store-1", summary });
+  it("sends the new alerts it is given with an HTML and a text body, and counts the known ones", async () => {
+    await expect(
+      sendMercadoLibreHealthNotification({ storeId: "store-1", summary, issues: summary.issues, knownIssues: 2 }),
+    ).resolves.toBe("sent");
 
     expect(mocks.send).toHaveBeenCalledTimes(1);
     const payload = mocks.send.mock.calls[0][0];
-    expect(payload.subject).toBe("[Mercado Libre] 4 revisiones pendientes");
-    expect(payload.headers["Idempotency-Key"]).toMatch(
-      /^mercadolibre-health-store-1-\d{4}-\d{2}-\d{2}$/,
-    );
+    expect(payload.subject).toBe("[Mercado Libre] 4 avisos nuevos");
+    // El falso «Idempotency-Key» del SDK 2.1.0 ya no va: no deduplicaba (#8).
+    expect(payload.headers).toBeUndefined();
+    expect(payload.text).toContain("Solo trae lo nuevo o lo que cambió desde el último aviso.");
+    expect(payload.text).toContain("Además siguen abiertas 2 alertas que ya conoces; están en el panel.");
     expect(payload.react).toBeTruthy();
     expect(payload.text).toContain("## Envíos por despachar (1)");
     expect(payload.text).toContain("## Stock en riesgo (1)");
   });
 
-  it("stays silent when there is nothing to review or in development", async () => {
-    await sendMercadoLibreHealthNotification({
-      storeId: "store-1",
-      summary: { ...summary, issues: [] },
-    });
+  it("stays silent when there is nothing new or in development", async () => {
+    await expect(
+      sendMercadoLibreHealthNotification({ storeId: "store-1", summary, issues: [] }),
+    ).resolves.toBe("skipped");
     mocks.env.NODE_ENV = "development";
-    await sendMercadoLibreHealthNotification({ storeId: "store-1", summary });
+    await expect(
+      sendMercadoLibreHealthNotification({ storeId: "store-1", summary, issues: summary.issues }),
+    ).resolves.toBe("skipped");
 
     expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it("surfaces a Resend rejection", async () => {
-    mocks.send.mockResolvedValue({ error: { message: "quota" } });
+    mocks.send.mockResolvedValue({ error: { name: "validation_error", message: "quota" } });
 
     await expect(
-      sendMercadoLibreHealthNotification({ storeId: "store-1", summary }),
-    ).rejects.toThrow("Resend rechazó la alerta de Mercado Libre: quota");
+      sendMercadoLibreHealthNotification({ storeId: "store-1", summary, issues: summary.issues }),
+    ).rejects.toThrow("Resend rechazó la alerta de Mercado Libre: validation_error: quota");
   });
 
   it("puts inventory exceptions first and gives the new operational kinds a direct action", () => {
@@ -221,7 +225,7 @@ describe("sendMercadoLibreHealthNotification", () => {
       now: new Date("2026-09-06T15:57:00.000Z"),
     });
     expect(digest.groups.map((group) => group.kind)).toEqual(["inventory_exception", "outbox_failed", "webhook_failed", "settlement_pending"]);
-    expect(digest.groups[0].items[0].actions[0]).toMatchObject({ label: "Reprocesar venta", primary: true });
+    expect(digest.groups[0].items[0].actions[0]).toMatchObject({ label: "Re-sincronizar venta", primary: true });
     expect(digest.groups[1].items[0].actions.map((action) => action.label)).toEqual(["Ver publicación", "Recuperar cola"]);
     expect(digest.groups[2].items[0].actions[0]).toMatchObject({ label: "Recuperar cola", primary: true });
     expect(digest.groups[3].items[0].actions.map((action) => action.label)).toEqual(["Ver flujo de caja", "Ver venta"]);

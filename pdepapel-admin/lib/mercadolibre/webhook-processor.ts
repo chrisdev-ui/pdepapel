@@ -9,6 +9,7 @@ import {
   synchronizeMercadoLibreClaim,
   synchronizeMercadoLibreShipment,
 } from "./logistics";
+import { synchronizeMercadoLibreItemStatus } from "./item-sync";
 import { synchronizeMercadoLibreOrder } from "./order-sync";
 import { synchronizeMercadoLibreQuestion } from "./questions";
 import { enqueueMercadoLibreWebhookEvent } from "./queue";
@@ -42,6 +43,11 @@ function isShipmentTopic(topic: string) {
 
 function isClaimTopic(topic: string) {
   return topic === "claims" || topic === "claims_actions";
+}
+
+/** Cambios de una publicación (estado, stock). Ver item-sync.ts. */
+function isItemTopic(topic: string) {
+  return topic === "items";
 }
 
 function getSafeErrorMessage(error: unknown) {
@@ -111,7 +117,8 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
       isOrderTopic(event.topic) ||
       isQuestionTopic(event.topic) ||
       isShipmentTopic(event.topic) ||
-      isClaimTopic(event.topic);
+      isClaimTopic(event.topic) ||
+      isItemTopic(event.topic);
     const payload = isSupportedTopic
       ? await getMercadoLibreResource(event.connectionId, event.resource)
       : null;
@@ -130,6 +137,8 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
       await synchronizeMercadoLibreShipment(event.connectionId, payload);
     } else if (isClaimTopic(event.topic) && payload) {
       await synchronizeMercadoLibreClaim(event.connectionId, payload);
+    } else if (isItemTopic(event.topic) && payload) {
+      await synchronizeMercadoLibreItemStatus(event.connectionId, payload);
     }
 
     await prismadb.marketplaceWebhookEvent.update({

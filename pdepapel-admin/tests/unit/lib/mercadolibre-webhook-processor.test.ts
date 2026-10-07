@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getResource: vi.fn(),
   synchronize: vi.fn(),
   enqueue: vi.fn(),
+  syncItem: vi.fn(),
 }));
 
 vi.mock("@/lib/prismadb", () => ({
@@ -36,6 +37,9 @@ vi.mock("@/lib/mercadolibre/questions", () => ({
 }));
 vi.mock("@/lib/mercadolibre/order-sync", () => ({
   synchronizeMercadoLibreOrder: mocks.synchronize,
+}));
+vi.mock("@/lib/mercadolibre/item-sync", () => ({
+  synchronizeMercadoLibreItemStatus: mocks.syncItem,
 }));
 vi.mock("@/lib/mercadolibre/queue", () => ({
   enqueueMercadoLibreWebhookEvent: mocks.enqueue,
@@ -96,6 +100,17 @@ describe("processMercadoLibreWebhookEvent", () => {
         data: expect.objectContaining({ status: "PROCESSED" }),
       }),
     );
+  });
+
+  it("routes an `items` notice to the listing status sync (#8)", async () => {
+    mocks.findEvent.mockResolvedValue(event({ topic: "items", resource: "/items/MCO4139182068" }));
+    mocks.getResource.mockResolvedValue({ id: "MCO4139182068", status: "paused" });
+
+    await expect(processMercadoLibreWebhookEvent("event-1")).resolves.toEqual({ processed: true, reason: "processed" });
+
+    expect(mocks.getResource).toHaveBeenCalledWith("conn-1", "/items/MCO4139182068");
+    expect(mocks.syncItem).toHaveBeenCalledWith("conn-1", { id: "MCO4139182068", status: "paused" });
+    expect(mocks.synchronize).not.toHaveBeenCalled();
   });
 
   it("honours nextRetryAt: an early redelivery is answered without touching the event", async () => {

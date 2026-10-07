@@ -760,6 +760,21 @@ export async function synchronizeMercadoLibreOrder(
               : "Mercado Libre reembolsó la venta. Confirma el retorno físico antes de devolver unidades al inventario.",
         },
       });
+    } else if (
+      marketplaceOrder.inventoryStatus === MarketplaceInventoryStatus.EXCEPTION
+    ) {
+      // Nunca se descontó nada (por ejemplo, la venta llegó antes de
+      // importar su publicación) y el dinero ya volvió: no queda nada por
+      // resolver. Antes la excepción se quedaba para siempre y el aviso
+      // diario de Mercado Libre la repetía sin que el panel ofreciera cómo
+      // quitarla (#8).
+      await prismadb.marketplaceOrder.update({
+        where: { id: marketplaceOrder.id },
+        data: {
+          inventoryStatus: MarketplaceInventoryStatus.NOT_APPLIED,
+          inventoryError: null,
+        },
+      });
     }
     return { inventoryChanged: false, needsAttention: false };
   }

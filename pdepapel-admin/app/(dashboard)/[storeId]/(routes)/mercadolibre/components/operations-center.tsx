@@ -44,6 +44,10 @@ type HealthSummary = {
     kind: string;
     title: string;
     detail: string;
+    /** Clave estable de la alerta (lib/mercadolibre/health-alerts.ts). */
+    alertKey: string;
+    /** Ya se marcó como revisada y no ha cambiado desde entonces. */
+    reviewed: boolean;
   }[];
 };
 
@@ -209,6 +213,8 @@ export function MercadoLibreOperationsCenter({
     null,
   );
   const [resyncingOrderId, setResyncingOrderId] = useState<string | null>(null);
+  const [reviewingAlert, setReviewingAlert] = useState<string | null>(null);
+  const [showReviewed, setShowReviewed] = useState(false);
   const [isRefreshingShipments, setIsRefreshingShipments] = useState(false);
   const [refreshingShipmentId, setRefreshingShipmentId] = useState<
     string | null
@@ -363,6 +369,42 @@ export function MercadoLibreOperationsCenter({
     }
   };
 
+  /**
+   * Marca alertas como revisadas (o lo deshace). Quedan calladas, aquí y en
+   * el correo diario, hasta que cambien (#8).
+   */
+  const reviewAlerts = async (
+    target: { keys: string[] } | { all: true },
+    reviewed: boolean,
+    busyKey: string,
+  ) => {
+    setReviewingAlert(busyKey);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/health/alerts`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...target, reviewed }),
+        },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      await loadData();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible marcar la alerta",
+      );
+    } finally {
+      setReviewingAlert(null);
+    }
+  };
+
+  const openAlerts = health?.issues.filter((issue) => !issue.reviewed) ?? [];
+  const reviewedAlerts = health?.issues.filter((issue) => issue.reviewed) ?? [];
+
   const resyncOrder = async (externalOrderId: string) => {
     if (
       !(await requestConfirmation({
@@ -516,25 +558,112 @@ export function MercadoLibreOperationsCenter({
             </div>
           ) : null}
 
-          {!show("resumen") ? null : health?.issues.length ? (
+          {!show("resumen") ? null : openAlerts.length ? (
             <div className="rounded-md border border-tint-cream bg-tint-cream/40 p-4">
-              <p className="flex items-center gap-2 font-medium text-primary">
-                <AlertTriangle className="h-4 w-4" /> Alertas del día
-              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="flex items-center gap-2 font-medium text-primary">
+                  <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Alertas
+                  del día
+                </p>
+                {openAlerts.length > 1 ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="soft"
+                    className="w-full sm:w-auto"
+                    disabled={reviewingAlert !== null}
+                    onClick={() => void reviewAlerts({ all: true }, true, "__all__")}
+                  >
+                    {reviewingAlert === "__all__" ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <ClipboardCheck className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    Marcar todas como revisadas
+                  </Button>
+                ) : null}
+              </div>
               <ul className="mt-2 space-y-2 text-sm text-primary">
-                {health.issues.map((issue, index) => (
-                  <li key={`${issue.kind}-${issue.title}-${index}`}>
-                    <span className="font-medium">{issue.title}:</span>{" "}
-                    {issue.detail}
+                {openAlerts.map((issue) => (
+                  <li
+                    key={issue.alertKey}
+                    className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                  >
+                    <span className="min-w-0 break-words">
+                      <span className="font-medium">{issue.title}:</span>{" "}
+                      {issue.detail}
+                    </span>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      className="shrink-0 self-start"
+                      disabled={reviewingAlert !== null}
+                      onClick={() =>
+                        void reviewAlerts({ keys: [issue.alertKey] }, true, issue.alertKey)
+                      }
+                    >
+                      {reviewingAlert === issue.alertKey ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      ) : null}
+                      Marcar como revisada
+                    </Button>
                   </li>
                 ))}
               </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Una alerta revisada no vuelve a salir aquí ni en el correo
+                diario hasta que cambie.
+              </p>
             </div>
           ) : health && !isLoading ? (
             <p className="rounded-md border border-success/30 bg-success/10 p-3 text-sm text-success">
               No hay alertas pendientes. Aun así, revisa las ventas antes de
               despachar.
             </p>
+          ) : null}
+
+          {show("resumen") && reviewedAlerts.length > 0 ? (
+            <div className="rounded-md border p-3 text-sm">
+              <button
+                type="button"
+                className="text-left text-muted-foreground underline-offset-2 hover:underline"
+                aria-expanded={showReviewed}
+                onClick={() => setShowReviewed((current) => !current)}
+              >
+                {reviewedAlerts.length === 1
+                  ? "1 alerta revisada"
+                  : `${reviewedAlerts.length} alertas revisadas`}{" "}
+                · {showReviewed ? "Ocultar" : "Mostrar"}
+              </button>
+              {showReviewed ? (
+                <ul className="mt-2 space-y-2">
+                  {reviewedAlerts.map((issue) => (
+                    <li
+                      key={issue.alertKey}
+                      className="flex flex-col gap-1 text-muted-foreground sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                    >
+                      <span className="min-w-0 break-words">
+                        <span className="font-medium">{issue.title}:</span>{" "}
+                        {issue.detail}
+                      </span>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        className="shrink-0 self-start"
+                        disabled={reviewingAlert !== null}
+                        onClick={() =>
+                          void reviewAlerts({ keys: [issue.alertKey] }, false, issue.alertKey)
+                        }
+                      >
+                        Volver a mostrar
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           ) : null}
 
           {show("preguntas") && (

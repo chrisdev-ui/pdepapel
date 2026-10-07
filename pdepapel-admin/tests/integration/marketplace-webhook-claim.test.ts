@@ -18,7 +18,8 @@ let storeId = "";
 let connectionId = "";
 const eventIds: string[] = [];
 
-const crearEvento = async (topic = "items") => {
+// «items» ya se procesa (item-sync.ts, #8): un tema que sigue sin soporte.
+const crearEvento = async (topic = "payments") => {
   const event = await testPrisma.marketplaceWebhookEvent.create({
     data: {
       connectionId,
@@ -26,7 +27,7 @@ const crearEvento = async (topic = "items") => {
       eventKey: `evt-${suffix}-${eventIds.length}`,
       // Tema no soportado: se marca procesado sin llamar a Mercado Libre.
       topic,
-      resource: "/items/MCO123",
+      resource: "/collections/123",
       sellerId: "vendedor-1",
       payload: {},
     },

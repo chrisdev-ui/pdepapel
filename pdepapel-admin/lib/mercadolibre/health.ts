@@ -1,4 +1,5 @@
 import {
+  type Prisma,
   MarketplaceInventoryStatus,
   MarketplaceListingStatus,
   MarketplaceOrderStatus,
@@ -43,6 +44,10 @@ export type MercadoLibreHealthIssue = {
   permalink?: string | null;
   /** Número de venta en Mercado Libre, para las acciones que lo necesitan (reprocesar). */
   externalOrderId?: string;
+  /** Stock local de la alerta de stock: si cambia, la alerta es otra (health-alerts.ts). */
+  stock?: number;
+  /** Id de la fila de origen (pregunta, envío, reclamo, tarea de la cola) para identificar la alerta. */
+  entityId?: string;
 };
 
 /**
@@ -66,6 +71,79 @@ export type MercadoLibreHealthSummary = {
 };
 
 const MAX_HEALTH_ISSUES = 20;
+
+/**
+ * Reglas de cada alerta de publicación, aparte para probarlas sin base.
+ *
+ * El 2026-10-07 el aviso diario repetía seis alertas que Paula no podía
+ * quitar de ninguna forma (#8): cuatro «stock en riesgo» de publicaciones
+ * que Mercado Libre ya había pausado sola al llegar a cero, una «incompleta»
+ * de una publicación pausada de un producto archivado y una «venta sin
+ * inventario» de una venta que Mercado Libre canceló. Ninguna pedía nada.
+ */
+type ListingForRules = {
+  status: MarketplaceListingStatus;
+  stockSafetyBuffer: number;
+  lastSyncedStock: number | null;
+  product: { stock: number; isArchived: boolean };
+};
+
+/** Estados en los que completar o corregir la publicación sirve para algo. */
+const WORKABLE_LISTING_STATUSES: MarketplaceListingStatus[] = [
+  MarketplaceListingStatus.DRAFT,
+  MarketplaceListingStatus.ACTIVE,
+  MarketplaceListingStatus.ERROR,
+];
+
+/**
+ * Una publicación pausada, cerrada o desvinculada, o de un producto
+ * archivado (descontinuado), no se va a publicar: pedir que se complete o
+ * que se revise su margen es ruido.
+ */
+export function isWorkableListing(listing: ListingForRules): boolean {
+  return (
+    WORKABLE_LISTING_STATUSES.includes(listing.status) &&
+    !listing.product.isArchived
+  );
+}
+
+/**
+ * Stock en riesgo: solo cuando todavía hay algo que hacer.
+ * - Producto archivado: no se repone; no es riesgo.
+ * - Stock en cero que ya llegó a Mercado Libre (`lastSyncedStock` 0): allá
+ *   la publicación quedó sin unidades y Mercado Libre la pausa sola.
+ * - Sí avisa si hay unidades escondidas por el colchón (0 < stock ≤ colchón)
+ *   o si el cero todavía no se ha enviado.
+ */
+export function isStockAtRisk(listing: ListingForRules): boolean {
+  if (listing.status !== MarketplaceListingStatus.ACTIVE) return false;
+  if (listing.product.isArchived) return false;
+  if (listing.product.stock > listing.stockSafetyBuffer) return false;
+  if (listing.product.stock > 0) return true;
+  return listing.lastSyncedStock === null || listing.lastSyncedStock > 0;
+}
+
+/**
+ * Venta con el inventario por resolver. EXCEPTION solo importa si la venta
+ * cuenta como ingreso (hay que descontar unidades); RESTOCK_PENDING solo si
+ * se canceló o se reembolsó (hay que confirmar el retorno). Una venta
+ * cancelada que nunca descontó nada no tiene nada que resolver.
+ */
+export function inventoryExceptionWhere(connectionId: string) {
+  return {
+    connectionId,
+    OR: [
+      {
+        inventoryStatus: MarketplaceInventoryStatus.EXCEPTION,
+        status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
+      },
+      {
+        inventoryStatus: MarketplaceInventoryStatus.RESTOCK_PENDING,
+        status: { in: [...RETURN_MARKETPLACE_ORDER_STATUSES] },
+      },
+    ],
+  } satisfies Prisma.MarketplaceOrderWhereInput;
+}
 
 export async function getMercadoLibreHealthSummary(
   connectionId: string,
@@ -97,6 +175,7 @@ export async function getMercadoLibreHealthSummary(
           status: true,
           lastError: true,
           stockSafetyBuffer: true,
+          lastSyncedStock: true,
           productId: true,
           externalPermalink: true,
           metadata: true,
@@ -104,6 +183,7 @@ export async function getMercadoLibreHealthSummary(
             select: {
               name: true,
               stock: true,
+              isArchived: true,
               acqPrice: true,
               transportationCost: true,
               images: { select: { url: true } },
@@ -186,15 +266,7 @@ export async function getMercadoLibreHealthSummary(
           })
         : Promise.resolve([]),
       prismadb.marketplaceOrder.findMany({
-        where: {
-          connectionId,
-          inventoryStatus: {
-            in: [
-              MarketplaceInventoryStatus.EXCEPTION,
-              MarketplaceInventoryStatus.RESTOCK_PENDING,
-            ],
-          },
-        },
+        where: inventoryExceptionWhere(connectionId),
         select: {
           id: true,
           externalOrderId: true,
@@ -241,9 +313,10 @@ export async function getMercadoLibreHealthSummary(
       listing.product.images,
       listing.metadata,
     );
+    const workable = isWorkableListing(listing);
     if (
-      listing.status === MarketplaceListingStatus.ERROR ||
-      listing.lastError
+      workable &&
+      (listing.status === MarketplaceListingStatus.ERROR || listing.lastError)
     ) {
       issues.push({
         kind: "listing_error",
@@ -255,9 +328,8 @@ export async function getMercadoLibreHealthSummary(
       });
     }
     if (
-      !listing.categoryId ||
-      imageUrls.length === 0 ||
-      !listing.marketplacePrice
+      workable &&
+      (!listing.categoryId || imageUrls.length === 0 || !listing.marketplacePrice)
     ) {
       issues.push({
         kind: "listing_incomplete",
@@ -269,20 +341,22 @@ export async function getMercadoLibreHealthSummary(
         permalink: listing.externalPermalink,
       });
     }
-    if (
-      listing.status === MarketplaceListingStatus.ACTIVE &&
-      listing.product.stock <= listing.stockSafetyBuffer
-    ) {
+    if (isStockAtRisk(listing)) {
       issues.push({
         kind: "stock_risk",
         title,
-        detail: `Stock local ${listing.product.stock}; el colchón de seguridad es ${listing.stockSafetyBuffer}.`,
+        detail:
+          listing.product.stock > 0
+            ? `Quedan ${listing.product.stock} en la tienda y el colchón de seguridad es ${listing.stockSafetyBuffer}: Mercado Libre no muestra ninguna. Repón o baja el colchón.`
+            : "Se acabó en la tienda y el cero todavía no llegó a Mercado Libre. Sincroniza el stock o pausa la publicación.",
+        stock: listing.product.stock,
         listingId: listing.id,
         productId: listing.productId,
         permalink: listing.externalPermalink,
       });
     }
     if (
+      workable &&
       listing.minimumMarginAmount !== null &&
       listing.marketplacePrice !== null &&
       listing.marketplacePrice -
@@ -316,6 +390,7 @@ export async function getMercadoLibreHealthSummary(
     })),
     ...failedOutbox.map((event) => ({
       kind: "outbox_failed" as const,
+      entityId: event.id,
       title: `${event.listing?.title ?? event.product?.name ?? "Publicación"} · ${describeOutboxAction(event.action)}`,
       detail:
         event.lastError ??
@@ -346,12 +421,14 @@ export async function getMercadoLibreHealthSummary(
   issues.push(
     ...questions.map((question) => ({
       kind: "question" as const,
+      entityId: question.id,
       title: question.product?.name ?? "Pregunta de Mercado Libre",
       detail: question.question,
       listingId: question.listingId ?? undefined,
     })),
     ...shipments.map((shipment) => ({
       kind: "shipment" as const,
+      entityId: shipment.id,
       title: `Envío ${shipment.externalShipmentId}`,
       detail: shipment.marketplaceOrder
         ? `Pedido ${shipment.marketplaceOrder.externalOrderId} listo para despachar.`
@@ -360,6 +437,7 @@ export async function getMercadoLibreHealthSummary(
     })),
     ...claims.map((claim) => ({
       kind: "claim" as const,
+      entityId: claim.id,
       title: claim.title ?? "Reclamo de Mercado Libre",
       detail: `Estado: ${claim.status}. Revisa el caso en Mercado Libre antes de tomar una decisión.`,
       orderId: claim.marketplaceOrderId ?? undefined,
@@ -398,7 +476,10 @@ export async function getMercadoLibreHealthSummary(
     netSales,
     marketplaceCosts,
     netProfit,
-    issues: issues.slice(0, MAX_HEALTH_ISSUES),
+    // Sin recortar: el estado de cada alerta (health-alerts.ts) da por
+    // resuelta la que no aparece, y una lista cortada la daría por resuelta
+    // sin estarlo. Cada consulta ya trae como mucho MAX_HEALTH_ISSUES.
+    issues,
   } satisfies MercadoLibreHealthSummary;
 }
 
