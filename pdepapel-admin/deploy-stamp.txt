@@ -1,1 +1,1 @@
-2026-10-06 19:50 UTC · validación del método de deploy por git para el corte de la base a us-east4 (mismo código y entorno)
+2026-10-07 07:17 UTC · corte de la base a us-east4: nueva DATABASE_URL
