@@ -179,9 +179,9 @@ Todos los valores nuevos están en Railway: proyecto «PdePapel Database» › s
 | `BACKUP_DB_PORT` › Update | — | `RAILWAY_TCP_PROXY_PORT` |
 | `BACKUP_DB_PASSWORD` › Update | — | `PDEPAPEL_RO_PASSWORD` |
 | `pdepapel-admin/.env` (tu editor) | La línea `DATABASE_URL=` | `PDEPAPEL_RO_PUBLIC_URL` |
-| `pdepapel-admin/.env.prod-write` (tu editor) | La línea `DATABASE_URL=` | `MYSQL_PUBLIC_URL` |
 
 - `BACKUP_DB_USER` (`pdepapel_ro`) y `BACKUP_DB_NAME` (`railway`) no cambian.
+- **`pdepapel-admin/.env.prod-write` NO se cambia esta noche.** Sigue apuntando a la base vieja, porque el rollback (`db-read-only --off --expect old`) la necesita así. Se separa en dos archivos después de verificar el corte (sección «e»).
 - La tienda (pdepapel-store) no tiene `DATABASE_URL` en ningún entorno.
 - **Integración Railway → Vercel:** las variables de los servicios de Railway se copian solas al proyecto **pdepapel-admin** de Vercel, en Production y Preview. Ya llegaron `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE` y `PDEPAPEL_RO_PASSWORD` de la base nueva; `MYSQL_PRIVATE_URL` existe desde hace 912 días. La app no las usa (solo `DATABASE_URL`), pero quedan replicadas, cifradas. Revisar después del corte si conviene acotar o quitar esa integración.
 
@@ -221,7 +221,7 @@ La integración es «railway», configuración `icfg_5gxxP1bdRhFoDIa0cjLK0Yos`, 
 Lo que ocurra primero:
 - **Retirar la base vieja** (apagar o borrar «MySQL Database») a los 7 días del corte. Con eso las credenciales dejan de servir.
 - **Rotarlas antes**, si se quiere conservarla más tiempo. Está en `super_read_only`, que bloquea `ALTER USER` hasta para root, así que:
-  1. **[Christian]** `npm run prod:approve -- "rotar root y pdepapel_ro de la base vieja (OFF breve, ALTER USER, ON)"`, con `.env.prod-write` apuntando **a la base vieja**.
+  1. **[Christian]** `npm run prod:approve -- "rotar root y pdepapel_ro de la base vieja (OFF breve, ALTER USER, ON)"`. La corrida va con `--expect old`, que después de la sección «e» usa `.env.prod-write.old-db`.
   2. **[Claude]** En una sola corrida de prod:write:
      - `--off --expect old`;
      - `ALTER USER 'pdepapel_ro'@'%' IDENTIFIED BY <nueva>` y `ALTER USER 'root'@'%' IDENTIFIED BY <nueva>`, con contraseñas generadas en variables de Railway del servicio viejo por `--stdin`;
@@ -242,13 +242,48 @@ Pasos:
 4. En **API Keys**, desactivar y luego borrar la llave vieja del monitor (la que no es la de la app). Para distinguirlas, mirar el nombre o la fecha de creación; la de la app sigue en Vercel como `CLOUDINARY_API_KEY`.
 5. La próxima corrida diaria (launchd, 08:00 local) debe quedar sin errores en `monitor-errors.log`.
 
+### e. Separar `.env.prod-write` y exigir `--expect` (después de verificar el corte)
+
+Hasta aquí `.env.prod-write` sigue en la base **vieja** para el rollback. Con el corte verificado:
+
+1. **[Claude]** Tener en la copia local el commit `e21d12e6` (rama `post-corte`). Trae la guarda `--expect new|old` de `prod:write`/`prod:migrate` y la línea de `.gitignore` para `.env.prod-write.old-db`. Sin esa línea, el archivo nuevo quedaría sin ignorar.
+2. **[Christian]**, desde `pdepapel-admin`, sin imprimir nada:
+   ```bash
+   cp .env.prod-write .env.prod-write.old-db && chmod 600 .env.prod-write.old-db
+   git check-ignore -q .env.prod-write.old-db && echo ignorado   # tiene que decir «ignorado»
+   ```
+   Luego, en tu editor, la línea `DATABASE_URL=` de `.env.prod-write` pasa a ser `MYSQL_PUBLIC_URL` de «MySQL US East».
+3. **[Claude]** Comprobar sin token, solo con lecturas (el modo `--status` no escribe):
+   ```bash
+   node --env-file=.env.prod-write        scripts/db-read-only.mjs --status --expect new   # base: nueva
+   node --env-file=.env.prod-write.old-db scripts/db-read-only.mjs --status --expect old   # base: vieja, super_read_only 1
+   ```
+4. Desde aquí, toda escritura dice a qué base va:
+   - `npm run prod:write -- <guion> --expect new`;
+   - `npm run prod:migrate -- <archivo.sql> --expect new`;
+   - `--expect old` solo para el rollback, la rotación de credenciales (sección «c») o el retiro de la base vieja. Con `--expect old`, el envoltorio usa `.env.prod-write.old-db`.
+   - **Qué hace la guarda:** antes de ejecutar, pregunta a la base qué base es. La nueva tiene el esquema `migration_meta`; la vieja no. Si no coincide con `--expect`, se niega sin gastar la aprobación.
+   - `pdepapel_ro` no ve ese esquema (no tiene SELECT global), así que con ese usuario la identidad sale «unknown» y no se escribe nada.
+5. Al retirar la base vieja, borrar `.env.prod-write.old-db` (con tu sí).
+
+### f. Despliegue de `Color.swatchType` (issue #3), después de la sección «e»
+
+El orden es obligatorio. Sin la columna, el código nuevo hace que la API del catálogo responda 500 y la tienda se cae.
+
+1. **[Christian]** `npm run prod:approve -- "migración 20261007_add_color_swatch_type en la base nueva"`.
+2. **[Claude]** `npm run prod:migrate -- prisma/manual-migrations/20261007_add_color_swatch_type.sql --expect new`. Después, las consultas de verificación del propio archivo, con `pdepapel_ro` de la base nueva.
+3. **[Claude, con tu sí]** Push de la rama `color-swatch-type`, rebasada sobre `main`. Compilan los dos proyectos.
+4. **[Christian]** Aprobación nueva. **[Claude]** `npm run prod:write -- scripts/backfill-color-swatch-type.mjs --expect new`: ensayo, que solo lista los 13 colores y no escribe.
+5. **[Christian]** Aprobación nueva. **[Claude]** `npm run prod:write -- scripts/backfill-color-swatch-type.mjs --apply --expect new`.
+6. Commit de `pdepapel-admin/ops/prod-writes.log`.
+
 ## Rollback (cualquier falla desde el paso 5)
 
 **Nunca dejar la base vieja en solo lectura mientras la app siga apuntando a ella.**
 
 1. **[Christian]** Si ya cambiaste `DATABASE_URL` (Vercel, admin Production), volver a poner el valor viejo. **[Claude, con tu sí]** Deploy nuevo de producción del admin y esperar READY.
 2. **[Christian]** `npm run prod:approve -- "descongelar la base vieja (super_read_only OFF): rollback del corte a us-east4"`.
-3. **[Claude]** `npm run prod:write -- scripts/db-read-only.mjs --off --expect old` (con `.env.prod-write` apuntando todavía, o otra vez, a la base vieja). El guion comprueba que es la vieja, descongela y prueba que una escritura pasa. Luego `--status --expect old` con `pdepapel_ro` tiene que mostrar 0/0.
+3. **[Claude]** `npm run prod:write -- scripts/db-read-only.mjs --off --expect old`. Esta noche, `.env.prod-write` sigue en la vieja. Después de la sección «e», `--expect old` usa `.env.prod-write.old-db`. El guion comprueba que es la vieja, descongela y prueba que una escritura pasa. Luego `--status --expect old` con `pdepapel_ro` tiene que mostrar 0/0.
 4. **[Christian]** Devolver los secretos `BACKUP_DB_*` y los `.env` locales, si se cambiaron, y `BACKUP_ENABLED=true`.
 5. Mientras la vieja estuvo congelada no se escribió nada en ninguna base, así que no hay datos que copiar. Si se vuelve atrás después de abrir escrituras en la nueva, hay que copiar a mano lo escrito ahí (pedidos, pagos, kardex, webhooks), por prod-write y con aprobación.
 
