@@ -185,6 +185,39 @@ Todos los valores nuevos están en Railway: proyecto «PdePapel Database» › s
 - La tienda (pdepapel-store) no tiene `DATABASE_URL` en ningún entorno.
 - **Integración Railway → Vercel:** las variables de los servicios de Railway se copian solas al proyecto **pdepapel-admin** de Vercel, en Production y Preview. Ya llegaron `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE` y `PDEPAPEL_RO_PASSWORD` de la base nueva; `MYSQL_PRIVATE_URL` existe desde hace 912 días. La app no las usa (solo `DATABASE_URL`), pero quedan replicadas, cifradas. Revisar después del corte si conviene acotar o quitar esa integración.
 
+## Resultado del corte (2026-10-07, hecho y verificado)
+
+| Hora UTC | Paso | Resultado |
+|---|---|---|
+| 06:58 | GO/NO-GO | GO, las cuatro en 0 (se repitió a las 07:02: GO) |
+| 06:58 | `BACKUP_ENABLED=false` | Sin corridas en curso |
+| 06:58–07:00 | Ensayo (37584516155) | Verde: 96 tablas, 0 diferencias, 127 s |
+| 07:03 | Congelar la vieja | `super_read_only=1`, escritura de prueba bloqueada con 1290 (root y `pdepapel_ro`) |
+| 07:02–07:06 | Corte (37584953172) | Verde: 96 tablas, 0 diferencias, 170 s |
+| 07:10–07:16 | Secretos | Vercel `DATABASE_URL` (Production y Development), `BACKUP_DB_HOST/PORT/PASSWORD`, `.env` local. `.env.prod-write` sin tocar, sigue en la vieja |
+| 07:18–07:21 | Deploy del admin por git (38df2c67) | `dpl_HpPi1WiaRmb4QtU128NEcEyCX2CP` Ready con `admin.papeleriapdepapel.com`; tienda Canceled |
+| 07:29 | Prueba de escritura | Notas del proveedor «HG distribuidora» guardadas desde el panel y leídas en la base nueva; revertidas a `null` con la misma huella de antes. La vieja, congelada, no pudo recibirla |
+| 07:30–07:33 | Verificación | Tienda, carrito y login del panel en 200; 5 webhooks sin firma en 4xx; «Admin scheduled tasks» manual (37587933430) en verde, con el feed de Merchant; los feeds sin token responden 403 |
+| 07:33 | Copia manual (37588002579) | Verde desde la base nueva: 96 tablas, 11.018.899 bytes cifrados (ayer 10.905.053) |
+| 07:34 | `db-region-sync` | Desactivado y `NEW_DB_URL` borrado |
+
+**TTFB, mediana de 5 muestras** (las mismas URL y el mismo método que antes del corte; las dos mediciones son desde el mismo equipo, a horas distintas):
+
+| Ruta | Antes (ms) | Después (ms) | Caché |
+|---|---:|---:|---|
+| tienda `/` | 685 | 413 | HIT |
+| tienda `/tienda` | 958 | 588 | MISS |
+| tienda `/categoria/agendas` | 826 | 506 | MISS |
+| ficha simple | 657 | 362 | HIT |
+| ficha con variantes | 837 | 377 | HIT |
+| ficha por alias (308) | 663 | 353 | HIT |
+| API producto por slug | 2053 | 507 | MISS |
+| API lista de la tienda | 714 | 412 | MISS |
+| API categoría | 839 | 381 | MISS |
+| API tipos | 723 | 319 | HIT |
+
+Las páginas servidas desde caché (HIT), que no tocan la base, bajaron unos 270–460 ms. Eso es red y hora del día, no base. Lo atribuible a la base se ve en las rutas que sí consultan: el producto por slug bajó de 2053 a 507 ms.
+
 ## Después del corte (solo con el corte verificado; nada de esto antes)
 
 ### a. Cortar la integración Railway → Vercel y borrar lo que copió
