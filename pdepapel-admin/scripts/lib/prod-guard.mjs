@@ -13,6 +13,85 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export const APPROVAL_FILE = ".prod-write-approval.json";
 export const PROD_WRITE_ENV_FILE = ".env.prod-write";
+/**
+ * La URL de root de la base VIEJA (Railway us-west2) después del corte a
+ * us-east4: solo para volver atrás, rotar sus credenciales o retirarla. Con
+ * `--expect old` el envoltorio la usa si existe; todo lo demás va a
+ * `.env.prod-write`, que apunta a la base nueva.
+ */
+export const PROD_WRITE_OLD_DB_ENV_FILE = ".env.prod-write.old-db";
+
+/**
+ * Qué base es: la nueva («MySQL US East», us-east4) tiene el esquema
+ * `migration_meta` con la marca del corte; la vieja no lo tiene.
+ */
+export const DB_IDENTITIES = ["new", "old"];
+export const DB_IDENTITY_MARKER_SCHEMA = "migration_meta";
+
+/**
+ * Las dos consultas que deciden la identidad. Ojo: un usuario sin SELECT
+ * global (como `pdepapel_ro`, que solo tiene `railway.*`) no ve el esquema
+ * `migration_meta` aunque exista, así que para él la base nueva parece la
+ * vieja (comprobado el 2026-10-06). Por eso se mira también si el usuario
+ * tiene SELECT global: solo así la ausencia de la marca significa algo.
+ */
+export const DB_IDENTITY_MARKER_SQL =
+  "SELECT COUNT(*) AS n FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = 'migration_meta'";
+export const DB_IDENTITY_GLOBAL_SELECT_SQL =
+  "SELECT COUNT(*) AS n FROM information_schema.USER_PRIVILEGES WHERE PRIVILEGE_TYPE = 'SELECT' AND GRANTEE = CONCAT(QUOTE(SUBSTRING_INDEX(CURRENT_USER(), '@', 1)), '@', QUOTE(SUBSTRING_INDEX(CURRENT_USER(), '@', -1)))";
+
+/**
+ * `new` si se ve la marca; `old` si no se ve y el usuario podría verla
+ * (SELECT global); `unknown` si el usuario no podría verla aunque existiera.
+ */
+export function classifyDatabaseIdentity({ markerVisible, globalSelect }) {
+  if (markerVisible) return "new";
+  return globalSelect ? "old" : "unknown";
+}
+
+/**
+ * Saca `--expect new|old` (o `--expect=new`) de los argumentos, esté donde
+ * esté, y devuelve el resto tal cual. Sin `--expect`, o con un valor que no
+ * sea `new`/`old`, devuelve un problema: el envoltorio no adivina a qué base
+ * va una escritura.
+ */
+export function extractExpectArg(args) {
+  const rest = [];
+  const values = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--expect") {
+      values.push(args[i + 1]);
+      i += 1;
+    } else if (arg.startsWith("--expect=")) {
+      values.push(arg.slice("--expect=".length));
+    } else {
+      rest.push(arg);
+    }
+  }
+  if (values.length === 0) {
+    return { expect: null, rest, problem: "falta --expect new|old: di a qué base va la escritura (la nueva de us-east4 o la vieja de us-west2). Sin eso no se ejecuta nada." };
+  }
+  if (new Set(values).size > 1) return { expect: null, rest, problem: `--expect aparece con valores distintos (${values.join(", ")}).` };
+  const [expect] = values;
+  if (!DB_IDENTITIES.includes(expect)) return { expect: null, rest, problem: `--expect debe ser new u old, no «${expect ?? ""}».` };
+  return { expect, rest, problem: null };
+}
+
+/** Archivo de la URL de escritura según la base esperada. */
+export function prodWriteEnvFileFor(expect, oldDbFileExists) {
+  return expect === "old" && oldDbFileExists ? PROD_WRITE_OLD_DB_ENV_FILE : PROD_WRITE_ENV_FILE;
+}
+
+/** Problema si la base real no es la esperada; null si coinciden. */
+export function databaseIdentityProblem(expect, actual) {
+  if (actual === expect) return null;
+  if (actual === "unknown") {
+    return "este usuario no puede ver la marca `migration_meta` (le falta SELECT global), así que no se sabe qué base es. Las escrituras van con root. No se ejecutó nada y la aprobación sigue válida.";
+  }
+  const name = (identity) => (identity === "new" ? "la NUEVA (us-east4, con migration_meta)" : "la VIEJA (us-west2, sin migration_meta)");
+  return `la base de destino es ${name(actual)}, no ${name(expect)} como dice --expect ${expect}. No se ejecutó nada y la aprobación sigue válida.`;
+}
 export const PROD_WRITE_LOG = "ops/prod-writes.log";
 export const APPROVAL_TTL_MS = 15 * 60 * 1000;
 

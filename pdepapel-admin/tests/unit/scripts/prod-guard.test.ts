@@ -7,12 +7,16 @@ import { describe, expect, it } from "vitest";
 import {
   approvalProblem,
   buildApproval,
+  classifyDatabaseIdentity,
+  databaseIdentityProblem,
   describeDatabaseUrl,
+  extractExpectArg,
   formatLogLine,
   isAllowedScriptPath,
   isBlockedLedgerOperation,
   isProductionDatabaseUrl,
   markApprovalUsed,
+  prodWriteEnvFileFor,
   reasonNamesModel,
   runnerFor,
 } from "../../../scripts/lib/prod-guard.mjs";
@@ -157,17 +161,27 @@ describe("prod-write wrapper", () => {
    * fresca. Ningún guion abre conexión: sólo se comprueba qué se gasta y qué
    * queda escrito en el registro según cómo termine el hijo.
    */
-  const fakeProject = ({ linkNodeModules = true } = {}) => {
+  /**
+   * `identity` es lo que responde la base de mentira a «¿qué base eres?»: el
+   * proyecto falso lleva un `lib/db-identity.mjs` que contesta fijo, en vez
+   * del real que abre una conexión. Si la URL viene de
+   * `.env.prod-write.old-db`, la base de mentira es siempre la vieja.
+   */
+  const fakeProject = ({ linkNodeModules = true, identity = "new" as "new" | "old" | "unknown" } = {}) => {
     const root = mkdtempSync(join(tmpdir(), "prod-write-"));
     mkdirSync(join(root, "scripts", "lib"), { recursive: true });
     for (const file of ["prod-write.mjs", "lib/prod-guard.mjs"]) {
       writeFileSync(join(root, "scripts", file), readFileSync(resolve(projectRoot, "scripts", file)));
     }
+    writeFileSync(
+      join(root, "scripts", "lib", "db-identity.mjs"),
+      `export async function probeDatabaseIdentity(url) { return url.includes("vieja") ? "old" : ${JSON.stringify(identity)}; }\n`,
+    );
     writeFileSync(join(root, ".env.prod-write"), "DATABASE_URL=mysql://root:falso@prueba.proxy.rlwy.net:1/railway\n");
     writeFileSync(join(root, ".prod-write-approval.json"), JSON.stringify(buildApproval({ reason: "prueba del envoltorio en un directorio temporal", operator: "vitest" })));
     if (linkNodeModules) symlinkSync(resolve(projectRoot, "node_modules"), join(root, "node_modules"), "dir");
-    const run = (script: string) =>
-      spawnSync(process.execPath, [join(root, "scripts", "prod-write.mjs"), script], { cwd: root, encoding: "utf8", env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" } });
+    const run = (script: string, args: string[] = ["--expect", "new"]) =>
+      spawnSync(process.execPath, [join(root, "scripts", "prod-write.mjs"), script, ...args], { cwd: root, encoding: "utf8", env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" } });
     const approvalUsed = () => Boolean(JSON.parse(readFileSync(join(root, ".prod-write-approval.json"), "utf8")).usedAt);
     const log = () => (existsSync(join(root, "ops/prod-writes.log")) ? readFileSync(join(root, "ops/prod-writes.log"), "utf8") : "");
     return { root, run, approvalUsed, log };
@@ -216,5 +230,133 @@ describe("prod-write wrapper", () => {
     expect(result.stderr).toMatch(/no arrancó .*la aprobación sigue válida/);
     expect(project.approvalUsed()).toBe(false);
     expect(project.log()).toMatch(/ \| estado=sin-arrancar \| exit=- \| rows=\? \| /);
+  });
+
+  /**
+   * Después del corte a us-east4 hay dos bases de producción: la nueva (con
+   * `migration_meta`) y la vieja, de respaldo. Una migración o un backfill no
+   * pueden caer en la equivocada por una URL cambiada: el envoltorio exige
+   * `--expect new|old`, pregunta a la base cuál es y se niega antes de gastar
+   * la aprobación si no coincide.
+   */
+  describe("--expect new|old", () => {
+    it("refuses without --expect and keeps the approval", () => {
+      const project = fakeProject();
+      writeFileSync(join(project.root, "scripts/escribe.mjs"), "console.log('nunca');\n");
+      const result = project.run("scripts/escribe.mjs", []);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toMatch(/falta --expect new\|old/);
+      expect(result.stdout).not.toContain("nunca");
+      expect(project.approvalUsed()).toBe(false);
+      expect(project.log()).toBe("");
+    });
+
+    it("refuses when the database is not the expected one and keeps the approval", () => {
+      const project = fakeProject({ identity: "old" });
+      writeFileSync(join(project.root, "scripts/escribe.mjs"), "console.log('nunca');\n");
+      const result = project.run("scripts/escribe.mjs", ["--expect", "new"]);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toMatch(/la base de destino es la VIEJA .* no la NUEVA/);
+      expect(result.stdout).not.toContain("nunca");
+      expect(project.approvalUsed()).toBe(false);
+      expect(project.log()).toBe("");
+    });
+
+    it("refuses when the user cannot tell which database it is (no global SELECT)", () => {
+      const project = fakeProject({ identity: "unknown" });
+      writeFileSync(join(project.root, "scripts/escribe.mjs"), "console.log('nunca');\n");
+      const result = project.run("scripts/escribe.mjs", ["--expect", "old"]);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toMatch(/no puede ver la marca/);
+      expect(project.approvalUsed()).toBe(false);
+      expect(project.log()).toBe("");
+    });
+
+    it("refuses an invalid --expect value", () => {
+      const project = fakeProject();
+      writeFileSync(join(project.root, "scripts/escribe.mjs"), "console.log('nunca');\n");
+      const result = project.run("scripts/escribe.mjs", ["--expect", "nueva"]);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toMatch(/--expect debe ser new u old/);
+      expect(project.approvalUsed()).toBe(false);
+    });
+
+    it("runs on a match, passes the expectation in PROD_WRITE_EXPECT and not as an argument, and logs which database", () => {
+      const project = fakeProject();
+      writeFileSync(
+        join(project.root, "scripts/escribe.mjs"),
+        "console.log(`args=${JSON.stringify(process.argv.slice(2))} expect=${process.env.PROD_WRITE_EXPECT}`);\nconsole.log('PROD_WRITE_ROWS=0');\n",
+      );
+      // `--expect` puede ir antes o después del guion, como en prod:migrate.
+      const result = spawnSync(
+        process.execPath,
+        [join(project.root, "scripts", "prod-write.mjs"), "--expect", "new", "scripts/escribe.mjs", "archivo.sql"],
+        { cwd: project.root, encoding: "utf8", env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" } },
+      );
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('args=["archivo.sql"] expect=new');
+      expect(result.stdout).toContain("[base nueva]");
+      expect(project.approvalUsed()).toBe(true);
+      expect(project.log()).toMatch(/\[base nueva\] \| scripts\/escribe\.mjs@/);
+    });
+
+    it("with --expect old uses .env.prod-write.old-db when it exists", () => {
+      const project = fakeProject();
+      writeFileSync(join(project.root, ".env.prod-write.old-db"), "DATABASE_URL=mysql://root:falso@vieja.proxy.rlwy.net:1/railway\n");
+      writeFileSync(join(project.root, "scripts/escribe.mjs"), "console.log('PROD_WRITE_ROWS=0');\n");
+      const result = project.run("scripts/escribe.mjs", ["--expect", "old"]);
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("root@vieja.proxy.rlwy.net/railway [base vieja]");
+
+      // Y la nueva sigue en `.env.prod-write`.
+      const nueva = fakeProject();
+      writeFileSync(join(nueva.root, ".env.prod-write.old-db"), "DATABASE_URL=mysql://root:falso@vieja.proxy.rlwy.net:1/railway\n");
+      writeFileSync(join(nueva.root, "scripts/escribe.mjs"), "console.log('PROD_WRITE_ROWS=0');\n");
+      const enNueva = nueva.run("scripts/escribe.mjs", ["--expect", "new"]);
+      expect(enNueva.status).toBe(0);
+      expect(enNueva.stdout).toContain("root@prueba.proxy.rlwy.net/railway [base nueva]");
+    });
+  });
+});
+
+describe("extractExpectArg / prodWriteEnvFileFor / databaseIdentityProblem", () => {
+  it("takes --expect from anywhere, in both spellings, and leaves the rest untouched", () => {
+    expect(extractExpectArg(["scripts/x.mjs", "--on", "--expect", "old"])).toEqual({ expect: "old", rest: ["scripts/x.mjs", "--on"], problem: null });
+    expect(extractExpectArg(["--expect=new", "scripts/apply.mjs", "m.sql"])).toEqual({ expect: "new", rest: ["scripts/apply.mjs", "m.sql"], problem: null });
+  });
+
+  it("refuses a missing, invalid or contradictory --expect", () => {
+    expect(extractExpectArg(["scripts/x.mjs"]).problem).toMatch(/falta --expect/);
+    expect(extractExpectArg(["scripts/x.mjs", "--expect"]).problem).toMatch(/new u old/);
+    expect(extractExpectArg(["--expect", "new", "--expect", "old"]).problem).toMatch(/valores distintos/);
+    expect(extractExpectArg(["--expect", "new", "--expect=new"]).expect).toBe("new");
+  });
+
+  it("only --expect old with the old-db file present switches the env file", () => {
+    expect(prodWriteEnvFileFor("old", true)).toBe(".env.prod-write.old-db");
+    expect(prodWriteEnvFileFor("old", false)).toBe(".env.prod-write");
+    expect(prodWriteEnvFileFor("new", true)).toBe(".env.prod-write");
+  });
+
+  it("explains a mismatch and accepts a match", () => {
+    expect(databaseIdentityProblem("new", "new")).toBeNull();
+    expect(databaseIdentityProblem("old", "new")).toMatch(/es la NUEVA .* no la VIEJA/);
+  });
+
+  /**
+   * Comprobado el 2026-10-06 contra «MySQL US East»: `pdepapel_ro` (solo
+   * `railway.*`) no ve `migration_meta` aunque exista, y la base nueva le
+   * parecía la vieja. La ausencia de la marca solo cuenta para un usuario con
+   * SELECT global; para los demás la identidad es «unknown» y no se escribe.
+   */
+  it("classifies by the marker only when the user could see it", () => {
+    expect(classifyDatabaseIdentity({ markerVisible: true, globalSelect: true })).toBe("new");
+    expect(classifyDatabaseIdentity({ markerVisible: true, globalSelect: false })).toBe("new");
+    expect(classifyDatabaseIdentity({ markerVisible: false, globalSelect: true })).toBe("old");
+    expect(classifyDatabaseIdentity({ markerVisible: false, globalSelect: false })).toBe("unknown");
+    expect(databaseIdentityProblem("old", "unknown")).toMatch(/no puede ver la marca/);
+    expect(databaseIdentityProblem("new", "unknown")).toMatch(/no puede ver la marca/);
   });
 });

@@ -25,6 +25,8 @@
  */
 import { createRequire } from "node:module";
 
+import { databaseIdentityOf } from "./lib/db-identity.mjs";
+
 const args = process.argv.slice(2);
 const mode = args.includes("--on")
   ? "on"
@@ -32,8 +34,15 @@ const mode = args.includes("--on")
     ? "off"
     : "status";
 const expectIndex = args.indexOf("--expect");
-const expected = expectIndex >= 0 ? args[expectIndex + 1] : undefined;
 const viaProdWrite = process.env.PROD_WRITE_APPROVED === "1";
+// Bajo `prod:write`, el envoltorio se queda con `--expect` (ya comprobó la
+// base) y lo pasa en `PROD_WRITE_EXPECT`.
+const expected =
+  expectIndex >= 0
+    ? args[expectIndex + 1]
+    : viaProdWrite
+      ? process.env.PROD_WRITE_EXPECT
+      : undefined;
 
 const fail = (message) => {
   console.error(`db-read-only: ${message}`);
@@ -89,12 +98,15 @@ const probeWrite = async () => {
 };
 
 try {
-  const [marker] = await db.$queryRawUnsafe(
-    "SELECT COUNT(*) AS n FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = 'migration_meta'",
-  );
-  const isNew = Number(marker.n) > 0;
-  const actual = isNew ? "new" : "old";
-  if (actual !== expected)
+  // `pdepapel_ro` no ve `migration_meta` (no tiene SELECT global): para él
+  // la identidad es «unknown», no «old». Solo se acepta en --status, que no
+  // escribe; congelar o descongelar exige saber qué base es (root).
+  const actual = await databaseIdentityOf(db);
+  if (actual === "unknown" && mode !== "status")
+    fail(
+      "este usuario no puede ver la marca migration_meta, así que no se sabe qué base es. --on/--off van con root por prod:write. No se tocó nada.",
+    );
+  if (actual !== "unknown" && actual !== expected)
     fail(
       `la base es la ${actual === "new" ? "NUEVA" : "VIEJA"}, no la que esperabas (--expect ${expected}). No se tocó nada.`,
     );
@@ -105,7 +117,9 @@ try {
       base:
         actual === "new"
           ? "nueva (MySQL US East)"
-          : "vieja (producción us-west2)",
+          : actual === "old"
+            ? "vieja (producción us-west2)"
+            : `sin confirmar: este usuario no ve la marca (se esperaba la ${expected === "new" ? "nueva" : "vieja"})`,
       usuario: before.user,
       read_only: before.readOnly,
       super_read_only: before.superReadOnly,

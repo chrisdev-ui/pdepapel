@@ -4,10 +4,16 @@
  *   npm run prod:write -- scripts/mi-guion.mjs [argumentos]
  *   npm run prod:write -- /ruta/al/scratchpad/guion.mjs
  *
- * Qué exige, en orden: `.env.prod-write` con la URL de escritura (fuera de
- * `.env`, que sólo trae el usuario de lectura); una aprobación fresca y sin
- * usar de `prod-approve.mjs`; que el destino sea la base de producción de
- * Railway; y que el guion viva en `scripts/` o en el borrador de la sesión.
+ *   npm run prod:write -- scripts/mi-guion.mjs --expect new [argumentos]
+ *
+ * Qué exige, en orden: `--expect new|old` (a qué base va: la nueva de
+ * us-east4 o la vieja de us-west2); `.env.prod-write` con la URL de escritura
+ * (fuera de `.env`, que sólo trae el usuario de lectura), o
+ * `.env.prod-write.old-db` con `--expect old` si existe; una aprobación
+ * fresca y sin usar de `prod-approve.mjs`; que el destino sea la base de
+ * producción de Railway; que el guion viva en `scripts/` o en el borrador de
+ * la sesión; y que la base real sea la esperada (marca `migration_meta`).
+ * `--expect` no llega al guion como argumento: llega en `PROD_WRITE_EXPECT`.
  * Consume la aprobación en cuanto el proceso hijo arranca (un guion que falla
  * a medias ya pudo tocar la base: no se reutiliza); si el proceso ni siquiera
  * arranca, la aprobación sigue válida porque nada llegó a la base. Pasa
@@ -20,17 +26,21 @@ import { userInfo } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { probeDatabaseIdentity } from "./lib/db-identity.mjs";
 import {
   APPROVAL_FILE,
   approvalProblem,
+  databaseIdentityProblem,
   describeDatabaseUrl,
+  extractExpectArg,
   formatLogLine,
   hashFile,
   isAllowedScriptPath,
   isProductionDatabaseUrl,
   markApprovalUsed,
-  PROD_WRITE_ENV_FILE,
   PROD_WRITE_LOG,
+  PROD_WRITE_OLD_DB_ENV_FILE,
+  prodWriteEnvFileFor,
   RUN_STATUS,
   runnerFor,
 } from "./lib/prod-guard.mjs";
@@ -41,11 +51,13 @@ const fail = (message) => {
   process.exit(2);
 };
 
-const [scriptPath, ...scriptArgs] = process.argv.slice(2);
-if (!scriptPath) fail("indica el guion a ejecutar: npm run prod:write -- scripts/<guion>.mjs");
+const { expect, rest: wrapperArgs, problem: expectProblem } = extractExpectArg(process.argv.slice(2));
+const [scriptPath, ...scriptArgs] = wrapperArgs;
+if (!scriptPath) fail("indica el guion a ejecutar: npm run prod:write -- scripts/<guion>.mjs --expect new|old");
 
-const envFile = resolve(projectRoot, PROD_WRITE_ENV_FILE);
-if (!existsSync(envFile)) fail(`falta ${PROD_WRITE_ENV_FILE} (la URL de escritura vive ahí, nunca en .env).`);
+const envFileName = prodWriteEnvFileFor(expect, existsSync(resolve(projectRoot, PROD_WRITE_OLD_DB_ENV_FILE)));
+const envFile = resolve(projectRoot, envFileName);
+if (!existsSync(envFile)) fail(`falta ${envFileName} (la URL de escritura vive ahí, nunca en .env).`);
 const envText = readFileSync(envFile, "utf8");
 const writeUrl = envText
   .split("\n")
@@ -53,7 +65,7 @@ const writeUrl = envText
   .filter((line) => line.startsWith("DATABASE_URL="))
   .map((line) => line.slice("DATABASE_URL=".length).replace(/^["']|["']$/g, ""))
   .at(-1);
-if (!writeUrl) fail(`${PROD_WRITE_ENV_FILE} no trae DATABASE_URL.`);
+if (!writeUrl) fail(`${envFileName} no trae DATABASE_URL.`);
 if (!isProductionDatabaseUrl(writeUrl)) fail(`el destino no es la base de producción de Railway (${describeDatabaseUrl(writeUrl)}).`);
 
 // `PROD_WRITE_APPROVAL_FILE` existe para las pruebas, igual que
@@ -75,6 +87,9 @@ if (existsSync(approvalFile)) {
 }
 const problem = approvalProblem(approval);
 if (problem) fail(problem);
+// Después de la aprobación, para que la negativa de siempre («No hay
+// aprobación») siga siendo la primera; y antes de ejecutar nada.
+if (expectProblem) fail(expectProblem);
 
 const extraRoots = [process.env.PROD_WRITE_EXTRA_ROOT, process.env.CLAUDE_SCRATCHPAD_DIR].filter(Boolean);
 if (!isAllowedScriptPath(scriptPath, { projectRoot, extraRoots })) {
@@ -86,7 +101,19 @@ const runner = runnerFor(scriptPath, { projectRoot });
 if (!runner) fail(`no sé ejecutar ${scriptPath}: usa .mjs/.js (Node) o .ts (tsx).`);
 if (!existsSync(runner.command)) fail(`falta el ejecutor ${runner.runner} (${runner.command}); instala las dependencias.`);
 
-const target = describeDatabaseUrl(writeUrl);
+// Antes de arrancar el guion: ¿es la base que se dijo? Una migración o un
+// backfill nunca pueden caer en la base equivocada por una URL cambiada. Si
+// falla aquí, nada llegó a la base y la aprobación sigue válida.
+let identity;
+try {
+  identity = await probeDatabaseIdentity(writeUrl, projectRoot);
+} catch (error) {
+  fail(`no se pudo comprobar qué base es (${String(error?.message ?? error).split("\n").pop()}); no se ejecutó nada.`);
+}
+const identityProblem = databaseIdentityProblem(expect, identity);
+if (identityProblem) fail(identityProblem);
+
+const target = `${describeDatabaseUrl(writeUrl)} [base ${identity === "new" ? "nueva" : "vieja"}]`;
 const scriptHash = hashFile(absoluteScript);
 console.log(`prod-write: ${scriptPath}@${scriptHash} → ${target} (con ${runner.runner})`);
 console.log(`prod-write: motivo «${approval.reason}» (aprobado por ${approval.operator ?? "?"}, vence ${approval.expiresAt})`);
@@ -98,6 +125,7 @@ const result = spawnSync(runner.command, [...runner.args, absoluteScript, ...scr
     DATABASE_URL: writeUrl,
     PROD_WRITE_REASON: approval.reason,
     PROD_WRITE_APPROVED: "1",
+    PROD_WRITE_EXPECT: expect,
   },
   stdio: ["inherit", "pipe", "inherit"],
   encoding: "utf8",
