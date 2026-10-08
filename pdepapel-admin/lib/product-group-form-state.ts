@@ -179,6 +179,80 @@ export function planGeneratedVariants<V extends PlannableRow>(
   return { kept, toCreate, keptOutside, dropped };
 }
 
+/** Un producto suelto que ya tiene el nombre o las mismas fotos de una combinación nueva. */
+export interface StandaloneMatch {
+  id: string;
+  name: string;
+  reason: "name" | "images";
+}
+
+/**
+ * Quita las combinaciones que ya existen como producto suelto. Un producto que
+ * ya está en el formulario (el que se adopta con «Traer existentes») sigue
+ * suelto hasta guardar, y sus fotos pasan a ser las del grupo: sin esto cada
+ * combinación nueva «ya existía» como él y no se creaba ninguna.
+ */
+export function filterAgainstStandalone<G>(
+  toCreate: G[],
+  matches: (StandaloneMatch | null)[],
+  productIdsInForm: Set<string>,
+): { create: G[]; skipped: { combination: G; match: StandaloneMatch }[] } {
+  const create: G[] = [];
+  const skipped: { combination: G; match: StandaloneMatch }[] = [];
+  toCreate.forEach((combination, index) => {
+    const match = matches[index];
+    if (match && !productIdsInForm.has(match.id)) skipped.push({ combination, match });
+    else create.push(combination);
+  });
+  return { create, skipped };
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/** El aviso al generar combinaciones: verde solo si se crea algo. */
+export function describeGeneration({
+  requested,
+  created,
+  alreadyInGroup,
+  skippedStandalone,
+}: {
+  requested: number;
+  created: number;
+  alreadyInGroup: number;
+  skippedStandalone: number;
+}): { title: string; description: string; variant: "success" | "warning" } {
+  if (requested === 0) {
+    return {
+      title: "No hay combinaciones para crear",
+      description: "Elige al menos un color, un diseño y un tamaño en «Datos del grupo».",
+      variant: "warning",
+    };
+  }
+  const reasons = [
+    alreadyInGroup > 0 && plural(alreadyInGroup, "ya estaba en el grupo", "ya estaban en el grupo"),
+    skippedStandalone > 0 &&
+      `${plural(skippedStandalone, "ya existe como producto suelto", "ya existen como productos sueltos")} (agrégal${skippedStandalone === 1 ? "o" : "os"} con «Traer existentes»)`,
+  ].filter(Boolean) as string[];
+  if (created === 0) {
+    if (skippedStandalone === 0) {
+      return {
+        title: "Todas las combinaciones ya existen",
+        description: `${requested === 1 ? "La combinación elegida ya está" : `Las ${requested} combinaciones elegidas ya están`} en el grupo. No se creó ninguna variante.`,
+        variant: "warning",
+      };
+    }
+    return { title: "No se creó ninguna variante", description: `${reasons.join(" y ")}.`, variant: "warning" };
+  }
+  const skipped = alreadyInGroup + skippedStandalone;
+  return {
+    title: "Variantes listas para guardar",
+    description:
+      `${plural(created, "variante nueva se crea", "variantes nuevas se crean")} al guardar, con 0 unidades.` +
+      (skipped > 0 ? ` Se omitieron ${skipped}: ${reasons.join(" y ")}.` : ""),
+    variant: "success",
+  };
+}
+
 export interface OwnPhotoVariant {
   id?: string;
   name?: string;

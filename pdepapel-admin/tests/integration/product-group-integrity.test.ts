@@ -400,4 +400,44 @@ describe("product group integrity with MySQL", () => {
     expect(created.price).toBe(12000);
     expect(await testPrisma.inventoryMovement.count({ where: { productId: created.id } })).toBe(0);
   });
+
+  it("N colores × 1 diseño: adopta el producto base sin duplicarlo y crea una variante por color nuevo", async () => {
+    const f = await setup();
+    const { POST } = await import("@/app/api/[storeId]/product-groups/route");
+    const base = await createProduct(f, "Folder tarjetero prueba");
+    const colors = await Promise.all(
+      Array.from({ length: 5 }, (_, index) =>
+        testPrisma.color.create({ data: { name: `Extra color ${index} ${suffix()}`, value: `color-${index}-${suffix()}`, storeId: f.store.id } }),
+      ),
+    );
+    const response = await POST(
+      json("POST", {
+        name: "Folder tarjetero prueba",
+        categoryId: f.category.id,
+        images: [{ url: IMAGE, isMain: true }],
+        defaultPrice: 12000,
+        defaultCost: 6000,
+        variants: [
+          row({ ...base, id: base.id }),
+          ...colors.map((color, index) => ({
+            sizeId: base.sizeId,
+            colorId: color.id,
+            designId: base.designId,
+            sku: `NEW-${index}-${suffix()}`,
+            name: `Folder tarjetero prueba ${color.name}`,
+          })),
+        ],
+      }),
+      { params: { storeId: f.store.id } },
+    );
+
+    expect(response.status).toBe(200);
+    const groupId = (await response.json()).id as string;
+    const members = await testPrisma.product.findMany({ where: { productGroupId: groupId }, select: { id: true, colorId: true, stock: true } });
+    expect(members).toHaveLength(6);
+    expect(members.filter((member) => member.colorId === base.colorId).map((member) => member.id)).toEqual([base.id]);
+    expect(new Set(members.map((member) => member.colorId)).size).toBe(6);
+    expect(members.filter((member) => member.id !== base.id).every((member) => member.stock === 0)).toBe(true);
+    expect(await testPrisma.product.count({ where: { storeId: f.store.id, name: { startsWith: "Folder tarjetero prueba" }, productGroupId: null } })).toBe(0);
+  });
 });

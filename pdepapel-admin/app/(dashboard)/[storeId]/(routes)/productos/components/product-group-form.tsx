@@ -51,8 +51,11 @@ import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { Switch } from "@/components/ui/switch";
 import {
+  describeGeneration,
+  filterAgainstStandalone,
   planGeneratedVariants,
   type GeneratedCombination,
+  type StandaloneMatch,
 } from "@/lib/product-group-form-state";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
@@ -293,34 +296,35 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const highlightedVariantId = useSearchParams()?.get("variante") ?? null;
   // Un producto suelto con el mismo nombre que una variante generada: no se
   // crea el duplicado, se avisa para importarlo. Una consulta por nombre, cacheada.
-  const standaloneByName = useRef(new Map<string, boolean>());
+  const standaloneByName = useRef(new Map<string, StandaloneMatch | null>());
   const warnedStandalone = useRef(new Set<string>());
-  const isStandaloneTaken = async (variantName: string): Promise<boolean> => {
+  const isStandaloneTaken = async (variantName: string): Promise<StandaloneMatch | null> => {
     const key = variantName.trim().toLowerCase();
-    if (!key) return false;
+    if (!key) return null;
     const cached = standaloneByName.current.get(key);
     if (cached !== undefined) return cached;
-    let taken = false;
+    let taken: StandaloneMatch | null = null;
     try {
       const response = await axios.get(
         `/api/${params.storeId}/search/products/isolated`,
         { params: { query: variantName.trim(), limit: 5 } },
       );
       const rows: { id: string; name: string }[] = response.data?.data ?? [];
-      taken = rows.some((row) => row.name.trim().toLowerCase() === key);
+      const row = rows.find((candidate) => candidate.name.trim().toLowerCase() === key);
+      taken = row ? { id: row.id, name: row.name, reason: "name" } : null;
     } catch {
-      taken = false;
+      taken = null;
     }
     standaloneByName.current.set(key, taken);
     return taken;
   };
   // Mismas fotos que un producto suelto: es el mismo producto aunque el nombre
   // generado sea otro (así se duplicó «cartuchera lucky girls»).
-  const standaloneByImages = useRef(new Map<string, string | null>());
+  const standaloneByImages = useRef(new Map<string, StandaloneMatch | null>());
   const isStandaloneImagesTaken = async (
     colorId: string,
     designId: string,
-  ): Promise<string | null> => {
+  ): Promise<StandaloneMatch | null> => {
     const urls = resolveVariantImages({
       groupImages: form.getValues("images") || [],
       imageMapping: form.getValues("imageMapping") || [],
@@ -331,18 +335,18 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     const key = imageUrlKey(urls);
     const cached = standaloneByImages.current.get(key);
     if (cached !== undefined) return cached;
-    let match: string | null = null;
+    let match: StandaloneMatch | null = null;
     try {
       const response = await axios.get(
         `/api/${params.storeId}/search/products/isolated`,
         { params: { imageUrls: urls.join(","), limit: 10 } },
       );
-      const rows: { name: string; images?: { url: string }[] }[] =
+      const rows: { id: string; name: string; images?: { url: string }[] }[] =
         response.data?.data ?? [];
-      match =
-        rows.find(
-          (row) => imageUrlKey((row.images ?? []).map((i) => i.url)) === key,
-        )?.name ?? null;
+      const row = rows.find(
+        (candidate) => imageUrlKey((candidate.images ?? []).map((i) => i.url)) === key,
+      );
+      match = row ? { id: row.id, name: row.name, reason: "images" } : null;
     } catch {
       match = null;
     }
@@ -368,6 +372,24 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       description: `«${variantName}» llevaría exactamente las mismas fotos que el producto suelto «${existing}». Usa «Traer existentes» para agregarlo a este grupo en vez de crear uno nuevo.`,
       variant: "warning",
     });
+  };
+  /** El producto suelto que ya es esta combinación, por nombre o por fotos; en un grupo guardado no se busca. */
+  const findStandaloneMatch = async (gen: GeneratedCombination): Promise<StandaloneMatch | null> => {
+    if (initialData) return null;
+    const [byName, byImages] = await Promise.all([
+      isStandaloneTaken(gen.name),
+      isStandaloneImagesTaken(gen.colorId, gen.designId),
+    ]);
+    return byName ?? byImages;
+  };
+  const productIdsIn = (rows: { id?: string }[]) =>
+    new Set(rows.map((row) => row.id).filter((id): id is string => Boolean(id)));
+  const warnSkippedStandalone = (skipped: { combination: GeneratedCombination; match: StandaloneMatch }[]) => {
+    skipped.forEach(({ combination, match }) =>
+      match.reason === "name"
+        ? warnStandalone(combination.name)
+        : warnStandaloneImages(combination.name, match.name),
+    );
   };
   const router = useRouter();
   const { toast } = useToast();
@@ -810,14 +832,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       if (plan.toCreate.length === 0) return;
 
       // Las comprobaciones de «ya existe suelto» van de cinco en cinco.
-      const checks = await mapWithConcurrency(plan.toCreate, 5, async (gen) => {
-        if (initialData) return { nameTaken: false, sameImagesAs: null as string | null };
-        const [nameTaken, sameImagesAs] = await Promise.all([
-          isStandaloneTaken(gen.name),
-          isStandaloneImagesTaken(gen.colorId, gen.designId),
-        ]);
-        return { nameTaken, sameImagesAs };
-      });
+      const matches = await mapWithConcurrency(plan.toCreate, 5, findStandaloneMatch);
+      const { create, skipped } = filterAgainstStandalone(plan.toCreate, matches, productIdsIn(currentVars));
+      warnSkippedStandalone(skipped);
       const ctx: GeneratedRowContext = {
         sizes: sizesObj,
         colors: colorsObj,
@@ -826,20 +843,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         acqPrice: form.getValues("acqPrice") || 0,
         supplierId: form.getValues("defaultSupplier") || "",
       };
-      const created = plan.toCreate
-        .filter((gen, index) => {
-          if (checks[index].nameTaken) {
-            warnStandalone(gen.name);
-            return false;
-          }
-          if (checks[index].sameImagesAs) {
-            warnStandaloneImages(gen.name, checks[index].sameImagesAs);
-            return false;
-          }
-          return true;
-        })
-        .map((gen) => buildGeneratedRow(gen, ctx));
-      if (created.length === 0) return;
+      const created = create.map((gen) => buildGeneratedRow(gen, ctx));
+      if (created.length === 0) {
+        toast(describeGeneration({ requested: plan.toCreate.length, created: 0, alreadyInGroup: 0, skippedStandalone: skipped.length }));
+        return;
+      }
 
       // Aditivo: todo lo que había se queda; solo se suman las que faltan.
       form.setValue("variants", [...currentVars, ...created], {
@@ -847,10 +855,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         shouldTouch: true,
         shouldValidate: true,
       });
-      toast({
-        description: `${created.length} ${created.length === 1 ? "variante nueva se crea" : "variantes nuevas se crean"} al guardar, con 0 unidades.`,
-        variant: "success",
-      });
+      toast(describeGeneration({ requested: plan.toCreate.length, created: created.length, alreadyInGroup: 0, skippedStandalone: skipped.length }));
     }, 800);
 
     return () => clearTimeout(timer);
@@ -1218,14 +1223,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     // Las comprobaciones de «ya existe suelto» (por nombre y por fotos) iban
     // una tras otra: 5 colores × 6 diseños × 2 tamaños eran hasta 120
     // peticiones en fila. Ahora van de cinco en cinco.
-    const checks = await mapWithConcurrency(plan.toCreate, 5, async (gen) => {
-      if (initialData) return { nameTaken: false, sameImagesAs: null as string | null };
-      const [nameTaken, sameImagesAs] = await Promise.all([
-        isStandaloneTaken(gen.name),
-        isStandaloneImagesTaken(gen.colorId, gen.designId),
-      ]);
-      return { nameTaken, sameImagesAs };
-    });
+    const matches = await mapWithConcurrency(plan.toCreate, 5, findStandaloneMatch);
+    const { create, skipped } = filterAgainstStandalone(plan.toCreate, matches, productIdsIn(currentVars));
+    warnSkippedStandalone(skipped);
     const ctx: GeneratedRowContext = {
       sizes: sizesObj,
       colors,
@@ -1234,19 +1234,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       acqPrice: currentAcqPrice || 0,
       supplierId: defaultSupplier || "",
     };
-    const created = plan.toCreate
-      .filter((gen, index) => {
-        if (checks[index].nameTaken) {
-          warnStandalone(gen.name);
-          return false;
-        }
-        if (checks[index].sameImagesAs) {
-          warnStandaloneImages(gen.name, checks[index].sameImagesAs);
-          return false;
-        }
-        return true;
-      })
-      .map((gen) => buildGeneratedRow(gen, ctx));
+    const created = create.map((gen) => buildGeneratedRow(gen, ctx));
 
     const finalVariants: FormVariant[] = [...plan.kept, ...created, ...plan.keptOutside];
     if (plan.keptOutside.length > 0) {
@@ -1263,11 +1251,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       shouldTouch: true,
       shouldValidate: true,
     });
-    const createdCount = finalVariants.filter((variant) => !variant.id).length;
-    toast({
-      description: `${createdCount} ${createdCount === 1 ? "variante nueva se crea" : "variantes nuevas se crean"} al guardar, con 0 unidades.`,
-      variant: "success",
-    });
+    const requested = new Set(allGenerated.map((gen) => `${gen.sizeId}|${gen.colorId}|${gen.designId}`)).size;
+    toast(
+      describeGeneration({
+        requested,
+        created: created.length,
+        alreadyInGroup: requested - plan.toCreate.length,
+        skippedStandalone: skipped.length,
+      }),
+    );
   };
 
   interface ImportedProduct {
@@ -1727,6 +1719,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       toast({
         title: "Faltan colores o diseños",
         description: "Elige al menos un color y un diseño en «Datos del grupo».",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!form.getValues("sizeIds")?.length) {
+      form.trigger("sizeIds");
+      toast({
+        title: "Falta el tamaño",
+        description: "Elige al menos un tamaño en «Datos del grupo»: cada combinación lleva color, diseño y tamaño.",
         variant: "destructive",
       });
       return;
