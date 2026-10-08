@@ -36,6 +36,32 @@ export function parseLowStockThreshold(value: unknown): number | null {
   return units;
 }
 
+/**
+ * Margen neto objetivo en Mercado Libre (% del precio). Ausente deja el valor
+ * guardado; vacío es 0. Más de 60 % no se alcanza con la comisión y el envío
+ * de Mercado Libre, así que el asistente nunca sugeriría precio.
+ */
+export function parseMercadoLibreTargetMarginPercent(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return 0;
+  const percent = typeof value === "string" ? Number(value.replace(",", ".").trim()) : value;
+  if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 60) {
+    throw ErrorFactory.InvalidRequest("El margen objetivo de Mercado Libre debe ser un porcentaje entre 0 y 60");
+  }
+  return Math.round(percent * 10) / 10;
+}
+
+/** Ganancia neta mínima por unidad en Mercado Libre, en COP. Ausente deja el valor guardado. */
+export function parseMercadoLibreMinNetPerUnit(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return 0;
+  const amount = typeof value === "string" ? Number(value.replace(/[.\s]/g, "")) : value;
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 0 || amount > 10_000_000) {
+    throw ErrorFactory.InvalidRequest("La ganancia mínima por unidad en Mercado Libre debe ser un número entero en pesos");
+  }
+  return amount;
+}
+
 // --- Datos del negocio editables desde Configuración -----------------------
 export const WEEK_DAYS = [
   "lun",

@@ -283,7 +283,9 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
   - Never default the ML price to the store price. On this account free shipping is mandatory at every price; the seller pays about 8,100 per unit.
   - As of 2026-10-08, Clásica is 16 % with no fixed fee, and withholdings are about 1.5 % (estimated from real billing). These change; the wizard reads the live fee from `listing_prices`.
   - `lib/mercadolibre/listing-margin.ts` suggests the friendly price that keeps the target net.
-  - The store-wide target margin is not built yet: it needs a `Store` column (migration).
+  - Store targets live in `Store.mercadoLibreTargetMarginPercent` (default 20) and `Store.mercadoLibreMinNetPerUnit` (default 10,000 COP), edited in Configuración (migration `20261008_add_store_mercadolibre_pricing_targets.sql`).
+  - The suggested price is the lowest «…900» price whose net is at least the larger of the two. A per-listing «Ganancia objetivo» replaces the COP minimum.
+  - A suggestion above 1.8 × the store price shows the «vender en pack o kit» hint.
 - The wizard loads every product photo in gallery order (`…/listings/product-photos`, which keeps the cover first). It checks the copy ML downloads against 500 × 500 px. `lib/catalog-image-url.ts` is client-safe; never import `lib/google-merchant.ts` into client code (it pulls `sanitize-html`).
 
 ### Boletín: subscribers, issues and campaigns

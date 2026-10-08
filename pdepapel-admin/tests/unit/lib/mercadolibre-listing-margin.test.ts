@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMercadoLibreMarginBreakdown,
   getMercadoLibreMarginWarning,
+  isLowPriceForMercadoLibre,
   roundToFriendlyPrice,
   suggestMercadoLibrePrice,
 } from "@/lib/mercadolibre/listing-margin";
@@ -45,6 +46,27 @@ describe("Mercado Libre margin", () => {
     );
     const thin = getMercadoLibreMarginBreakdown({ price: 30_000, feeAmount: 4_800, shippingCost: 8_100, unitCost: 13_000 });
     expect(getMercadoLibreMarginWarning(thin, { breakevenPrice: 25_900 })).toBeNull();
-    expect(getMercadoLibreMarginWarning(thin, { breakevenPrice: 25_900, targetMarginRate: 0.2 })).toMatch(/por debajo del margen objetivo \(20 %\)/);
+    expect(getMercadoLibreMarginWarning(thin, { breakevenPrice: 25_900, targetMarginRate: 0.2, minNetPerUnit: 10_000 })).toBe(
+      "Te quedan $ 3.650 por unidad (12.2 %), por debajo del objetivo de la tienda: al menos 20 % o $ 10.000 por unidad.",
+    );
+  });
+
+  // Regla de Christian (2026-10-08): neto ≥ el mayor entre 20 % del precio y 10.000 COP.
+  it("suggests the lowest friendly price meeting the larger of the % target and the minimum net", () => {
+    const price = suggestMercadoLibrePrice({ unitCost: 13_000, shippingCost: 8_100, feeRate: 0.16, targetNet: 10_000, targetMarginRate: 0.2 })!;
+    const net = (p: number) => getMercadoLibreMarginBreakdown({ price: p, feeAmount: p * 0.16, shippingCost: 8_100, unitCost: 13_000 }).net!;
+    expect(net(price)).toBeGreaterThanOrEqual(Math.max(10_000, 0.2 * price));
+    expect(net(price - 1_000)).toBeLessThan(Math.max(10_000, 0.2 * (price - 1_000)));
+    // Aquí manda el mínimo de 10.000: con 20 % bastaría 33.900.
+    expect(price).toBe(37_900);
+  });
+
+  it("an impossible margin target gives no suggestion", () => {
+    expect(suggestMercadoLibrePrice({ unitCost: 13_000, shippingCost: 8_100, feeRate: 0.16, targetMarginRate: 0.9 })).toBeNull();
+  });
+
+  it("flags a product whose suggested price is far above the store price", () => {
+    expect(isLowPriceForMercadoLibre(33_900, 15_000)).toBe(true);
+    expect(isLowPriceForMercadoLibre(40_900, 25_000)).toBe(false);
   });
 });

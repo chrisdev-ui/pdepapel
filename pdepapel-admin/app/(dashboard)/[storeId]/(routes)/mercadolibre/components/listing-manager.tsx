@@ -383,9 +383,12 @@ export function MercadoLibreListingManager({
   storeId,
   canPublish,
   highlightedListingId = null,
+  pricingTargets = null,
 }: {
   storeId: string;
   canPublish: boolean;
+  /** Objetivos de precio de la tienda; sin ellos se sugiere la misma ganancia que la tienda. */
+  pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
   /** Listing id from the daily email link; scrolled into view and outlined. */
   highlightedListingId?: string | null;
 }) {
@@ -1502,7 +1505,9 @@ export function MercadoLibreListingManager({
             unitCost,
             shippingCost: MERCADOLIBRE_SHIPPING_ESTIMATE,
             feeRate: MERCADOLIBRE_FEE_RATE_ESTIMATE,
-            targetNet: Math.max(0, selected.price - unitCost),
+            ...(pricingTargets
+              ? { targetNet: pricingTargets.minNetPerUnit, targetMarginRate: pricingTargets.targetMarginPercent / 100 }
+              : { targetNet: Math.max(0, selected.price - unitCost) }),
           })
         : null;
     const initialMarketplacePrice = estimatedPrice ? String(estimatedPrice) : "";
@@ -2851,6 +2856,7 @@ export function MercadoLibreListingManager({
             onProductChange={updateSelectedProduct}
             onSearchCategories={(query) => searchCategories({ query })}
             validation={wizardValidation}
+            pricingTargets={pricingTargets}
             isValidating={isValidating}
             onValidate={validateListing}
             onCategoryChange={updateCategory}

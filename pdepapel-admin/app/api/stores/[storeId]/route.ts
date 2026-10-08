@@ -14,6 +14,8 @@ import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import {
   parseFreeShippingThreshold,
   parseLowStockThreshold,
+  parseMercadoLibreMinNetPerUnit,
+  parseMercadoLibreTargetMarginPercent,
 } from "@/lib/store-settings";
 
 export async function GET(
@@ -73,12 +75,16 @@ export async function PATCH(
       policies,
       freeShippingThreshold,
       lowStockThreshold,
+      mercadoLibreTargetMarginPercent,
+      mercadoLibreMinNetPerUnit,
     } = body;
 
     const normalizedFreeShippingThreshold = parseFreeShippingThreshold(
       freeShippingThreshold,
     );
     const normalizedLowStockThreshold = parseLowStockThreshold(lowStockThreshold);
+    const normalizedTargetMargin = parseMercadoLibreTargetMarginPercent(mercadoLibreTargetMarginPercent);
+    const normalizedMinNet = parseMercadoLibreMinNetPerUnit(mercadoLibreMinNetPerUnit);
 
     if (!name?.trim()) {
       throw ErrorFactory.InvalidRequest("El nombre de la tienda es requerido");
@@ -145,6 +151,8 @@ export async function PATCH(
         policies: policies ? JSON.stringify(policies) : {},
         freeShippingThreshold: normalizedFreeShippingThreshold,
         lowStockThreshold: normalizedLowStockThreshold,
+        ...(normalizedTargetMargin === undefined ? {} : { mercadoLibreTargetMarginPercent: normalizedTargetMargin }),
+        ...(normalizedMinNet === undefined ? {} : { mercadoLibreMinNetPerUnit: normalizedMinNet }),
       },
     });
 

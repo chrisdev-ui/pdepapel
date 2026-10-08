@@ -95,6 +95,20 @@ const formSchema = z.object({
       (value) => !value || Number(value.replace(/[.\s]/g, "")) >= 1,
       { message: "Escribe un número entero de al menos 1 unidad" },
     ),
+  mercadoLibreTargetMarginPercent: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || (/^\d{1,2}([.,]\d)?$/.test(value.trim()) && Number(value.replace(",", ".")) <= 60),
+      { message: "Escribe un porcentaje entre 0 y 60" },
+    ),
+  mercadoLibreMinNetPerUnit: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || /^\d{1,8}$/.test(value.replace(/[.\s]/g, "")),
+      { message: "Escribe solo el valor en pesos, sin decimales" },
+    ),
   policies: z
     .object({
       shipping: z.string().optional(),
@@ -142,6 +156,8 @@ export const SettingsForm: React.FC<
         initialData.lowStockThreshold != null
           ? String(initialData.lowStockThreshold)
           : "",
+      mercadoLibreTargetMarginPercent: String(initialData.mercadoLibreTargetMarginPercent ?? 20),
+      mercadoLibreMinNetPerUnit: String(initialData.mercadoLibreMinNetPerUnit ?? 10000),
       policies:
         typeof initialData.policies === "string"
           ? JSON.parse(initialData.policies)
@@ -444,6 +460,47 @@ export const SettingsForm: React.FC<
                           pero no tiene ventas suficientes para medir cobertura.
                           Déjalo vacío para usar el valor por defecto (
                           {DEFAULT_LOW_STOCK_THRESHOLD}).
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <Heading
+                  title="Precios en Mercado Libre"
+                  description="Lo mínimo que debe dejar cada venta en Mercado Libre después de la comisión, el envío obligatorio y las retenciones"
+                />
+                <div className="grid gap-8 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="mercadoLibreTargetMarginPercent"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Margen neto objetivo (%)</FormLabel>
+                        <FormControl>
+                          <Input inputMode="decimal" disabled={loading} placeholder="20" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Porcentaje del precio de Mercado Libre que debe quedar
+                          como ganancia neta por unidad.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mercadoLibreMinNetPerUnit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ganancia mínima por unidad (COP)</FormLabel>
+                        <FormControl>
+                          <Input inputMode="numeric" disabled={loading} placeholder="10000" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          El asistente de publicación sugiere el menor precio que
+                          cumpla el mayor de los dos: el margen objetivo o esta
+                          ganancia mínima. No cambia los precios ya publicados.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

@@ -55,34 +55,54 @@ export function getMercadoLibreMarginBreakdown({
 }
 
 /**
- * Menor precio «amigable» que deja `targetNet` por unidad. La comisión de
- * Mercado Libre es un porcentaje del precio (sin cargo fijo en los precios de
- * la tienda), así que basta despejar y comprobar el escalón de abajo.
+ * Menor precio «amigable» cuyo neto por unidad cumple el mayor entre
+ * `targetNet` (COP) y `targetMarginRate` × precio. La comisión de Mercado
+ * Libre es un porcentaje del precio (sin cargo fijo en los precios de la
+ * tienda): se despeja, se redondea a …900 y se ajusta un escalón. Null si el
+ * objetivo es imposible con esa comisión.
  */
 export function suggestMercadoLibrePrice({
   unitCost,
   shippingCost,
   feeRate,
-  targetNet,
+  targetNet = 0,
+  targetMarginRate = 0,
 }: {
   unitCost: number;
   shippingCost: number;
   feeRate: number;
-  targetNet: number;
+  targetNet?: number;
+  targetMarginRate?: number;
 }) {
   const keep = 1 - feeRate - MERCADOLIBRE_WITHHOLDING_ESTIMATE_RATE;
-  if (keep <= 0) return null;
-  const meets = (price: number) =>
-    (getMercadoLibreMarginBreakdown({ price, feeAmount: price * feeRate, shippingCost, unitCost }).net ?? -1) >= targetNet;
-  let price = roundToFriendlyPrice((unitCost + shippingCost + targetNet) / keep);
-  while (!meets(price)) price += 1_000;
+  if (keep - targetMarginRate <= 0) return null;
+  const meets = (price: number) => {
+    const net = getMercadoLibreMarginBreakdown({ price, feeAmount: price * feeRate, shippingCost, unitCost }).net ?? -Infinity;
+    return net >= Math.max(targetNet, targetMarginRate * price);
+  };
+  let price = roundToFriendlyPrice(
+    Math.max((unitCost + shippingCost + targetNet) / keep, (unitCost + shippingCost) / (keep - targetMarginRate)),
+  );
+  for (let step = 0; step < 50 && !meets(price); step += 1) price += 1_000;
+  if (!meets(price)) return null;
   while (price > 1_000 && meets(price - 1_000)) price -= 1_000;
   return price;
 }
 
+/** Sugerido muy por encima del precio de la tienda: el producto no aguanta los costos de Mercado Libre solo. */
+export const MERCADOLIBRE_LOW_PRICE_RATIO = 1.8;
+
+export function isLowPriceForMercadoLibre(suggestedPrice: number, storePrice: number) {
+  return storePrice > 0 && suggestedPrice > MERCADOLIBRE_LOW_PRICE_RATIO * storePrice;
+}
+
 export function getMercadoLibreMarginWarning(
   breakdown: MercadoLibreMarginBreakdown,
-  { breakevenPrice, targetMarginRate = null }: { breakevenPrice: number | null; targetMarginRate?: number | null },
+  {
+    breakevenPrice,
+    targetMarginRate = null,
+    minNetPerUnit = null,
+  }: { breakevenPrice: number | null; targetMarginRate?: number | null; minNetPerUnit?: number | null },
 ) {
   if (breakdown.net === null) return null;
   if (breakdown.net < 0) {
@@ -90,8 +110,16 @@ export function getMercadoLibreMarginWarning(
       breakevenPrice ? ` El mínimo para no perder es ${money(breakevenPrice)}.` : ""
     }`;
   }
-  if (targetMarginRate !== null && breakdown.marginRate !== null && breakdown.marginRate < targetMarginRate) {
-    return `El margen queda en ${(breakdown.marginRate * 100).toFixed(1)} %, por debajo del margen objetivo (${Math.round(targetMarginRate * 100)} %).`;
+  if (targetMarginRate === null && minNetPerUnit === null) return null;
+  const required = Math.max(minNetPerUnit ?? 0, (targetMarginRate ?? 0) * breakdown.price);
+  if (breakdown.net < required) {
+    const goal = [
+      targetMarginRate !== null ? `${Math.round(targetMarginRate * 100)} %` : null,
+      minNetPerUnit !== null ? `${money(minNetPerUnit)} por unidad` : null,
+    ]
+      .filter(Boolean)
+      .join(" o ");
+    return `Te quedan ${money(breakdown.net)} por unidad (${((breakdown.marginRate ?? 0) * 100).toFixed(1)} %), por debajo del objetivo de la tienda: al menos ${goal}.`;
   }
   return null;
 }

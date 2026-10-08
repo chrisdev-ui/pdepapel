@@ -29,6 +29,8 @@ type MarketplaceConnection = {
 } | null;
 
 type MercadoLibreClientProps = {
+  /** Objetivos de precio de la tienda (Configuración › Precios en Mercado Libre). */
+  pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
   configuration: { configured: boolean; missing: readonly string[] };
   queueConfiguration: { configured: boolean; missing: readonly string[] };
   connection: MarketplaceConnection;
@@ -61,7 +63,7 @@ const CONNECTION_BADGE: Record<NonNullable<MarketplaceConnection>["status"], { l
 
 const DATE_TIME = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" });
 
-export default function MercadoLibreClient({ configuration, queueConfiguration, connection }: MercadoLibreClientProps) {
+export default function MercadoLibreClient({ configuration, queueConfiguration, connection, pricingTargets = null }: MercadoLibreClientProps) {
   const { storeId } = useParams<{ storeId: string }>();
   const canWrite = useCanWrite();
   const pathname = usePathname() ?? "";
@@ -348,7 +350,7 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
       ) : null}
 
       {tab === "publicaciones" && (
-        <MercadoLibreListingManager storeId={storeId} highlightedListingId={searchParams.get("listing")} canPublish={canOperate} />
+        <MercadoLibreListingManager storeId={storeId} highlightedListingId={searchParams.get("listing")} canPublish={canOperate} pricingTargets={pricingTargets} />
       )}
 
       {tab === "ventas" && (

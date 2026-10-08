@@ -66,7 +66,11 @@ function WizardHarness({
   onValidate,
   initialPrice = "24000",
   noCost = false,
+  pricingTargets = null,
+  listingTargetProfit = "12000",
 }: {
+  pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
+  listingTargetProfit?: string;
   noCost?: boolean;
   initialPrice?: string;
   extraAttributes?: { id: string; name: string; required: boolean; conditionalRequired?: boolean; catalogRequired?: boolean; valueType: string; values: { id: string; name: string }[] }[];
@@ -109,7 +113,7 @@ function WizardHarness({
     categoryId: "MCO123",
     listingType: "gold_special",
     stockSafetyBuffer: "0",
-    minimumMarginAmount: "12000",
+    minimumMarginAmount: listingTargetProfit,
     syncPrice: true,
     imageUrls: images.map((image) => image.url),
     attributes: "",
@@ -263,6 +267,7 @@ function WizardHarness({
       onSearchCategories={onSearchCategories}
       validation={validation}
       onValidate={onValidate}
+      pricingTargets={pricingTargets}
       onCategoryChange={(categoryId) =>
         setForm((current) => ({ ...current, categoryId }))
       }
@@ -723,5 +728,23 @@ describe("ListingPublicationWizard", () => {
   it("says when a product has no registered cost instead of proposing a price", () => {
     render(<WizardHarness onPublish={async () => undefined} noCost />);
     expect(screen.getByText(/no tiene costo registrado, así que no se puede\s+sugerir un precio/)).toBeVisible();
+  });
+
+  // Regla de la tienda (2026-10-08): neto ≥ el mayor entre 20 % del precio y 10.000 COP.
+  describe("store pricing targets", () => {
+    const targets = { targetMarginPercent: 20, minNetPerUnit: 10_000 };
+
+    it("suggests the lowest friendly price meeting the larger target and says so", () => {
+      render(<WizardHarness onPublish={async () => undefined} initialStep={4} pricingTargets={targets} listingTargetProfit="" />);
+      const margin = document.getElementById("mercadolibre-margin")!;
+      expect(margin).toHaveTextContent("Precio sugerido: $ 31.900");
+      expect(margin).toHaveTextContent("Deja al menos 20 % neto o $ 10.000 por unidad, lo que sea mayor.");
+    });
+
+    it("warns below the store target and hints at packs for a low-price product", () => {
+      render(<WizardHarness onPublish={async () => undefined} initialStep={4} pricingTargets={targets} listingTargetProfit="" />);
+      expect(screen.getByText(/Te quedan \$ 3\.980 por unidad \(16\.6 %\), por debajo del objetivo de la tienda: al menos 20 % o \$ 10\.000 por unidad\./)).toBeVisible();
+      expect(screen.getByText("Este producto es de bajo precio; en Mercado Libre conviene venderlo en pack o kit.")).toBeVisible();
+    });
   });
 });

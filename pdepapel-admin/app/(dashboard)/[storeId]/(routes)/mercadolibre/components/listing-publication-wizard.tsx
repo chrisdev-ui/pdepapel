@@ -46,6 +46,7 @@ import {
   MERCADOLIBRE_SHIPPING_ESTIMATE,
   getMercadoLibreMarginBreakdown,
   getMercadoLibreMarginWarning,
+  isLowPriceForMercadoLibre,
   suggestMercadoLibrePrice,
 } from "@/lib/mercadolibre/listing-margin";
 import { usePictureChecks } from "./use-picture-checks";
@@ -282,6 +283,8 @@ type ListingPublicationWizardProps = {
   /** Sin consulta usa el nombre de familia; con ella busca lo que Paula escribió. */
   onSearchCategories: (query?: string) => Promise<void>;
   validation?: ListingPublicationValidation | null;
+  /** Objetivos de precio de la tienda (Configuración); sin ellos, la misma ganancia que la tienda. */
+  pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
   isValidating?: boolean;
   onValidate?: () => Promise<void>;
   onCategoryChange: (categoryId: string) => void;
@@ -409,6 +412,7 @@ export function ListingPublicationWizard({
   onSave,
   onSaveAndPublish,
   validation = null,
+  pricingTargets = null,
   isValidating = false,
   onValidate,
 }: ListingPublicationWizardProps) {
@@ -536,17 +540,34 @@ export function ListingPublicationWizard({
     : null;
   const storeProfitPerUnit =
     selectedProduct && costFloor !== null ? Math.max(0, selectedProduct.price - costFloor) : null;
-  const suggestionTarget = hasTargetProfit ? targetProfit : storeProfitPerUnit;
+  // Con objetivos de la tienda: el mayor entre el % y el mínimo en pesos (la
+  // ganancia objetivo de la publicación, si existe, reemplaza el mínimo).
+  const targetMarginRate = pricingTargets ? pricingTargets.targetMarginPercent / 100 : null;
+  const minNetPerUnit = pricingTargets
+    ? hasTargetProfit
+      ? targetProfit
+      : pricingTargets.minNetPerUnit
+    : null;
+  const suggestionTarget = pricingTargets ? minNetPerUnit : hasTargetProfit ? targetProfit : storeProfitPerUnit;
   const suggestedPrice =
     costFloor !== null && suggestionTarget !== null
-      ? suggestMercadoLibrePrice({ unitCost: costFloor, shippingCost: marginShipping, feeRate, targetNet: suggestionTarget })
+      ? suggestMercadoLibrePrice({
+          unitCost: costFloor,
+          shippingCost: marginShipping,
+          feeRate,
+          targetNet: suggestionTarget,
+          targetMarginRate: targetMarginRate ?? 0,
+        })
       : null;
+  const lowPriceProduct = Boolean(
+    suggestedPrice && selectedProduct && isLowPriceForMercadoLibre(suggestedPrice, selectedProduct.price),
+  );
   const breakevenPrice =
     costFloor !== null
       ? suggestMercadoLibrePrice({ unitCost: costFloor, shippingCost: marginShipping, feeRate, targetNet: 0 })
       : null;
   const marginWarning = marginBreakdown
-    ? getMercadoLibreMarginWarning(marginBreakdown, { breakevenPrice })
+    ? getMercadoLibreMarginWarning(marginBreakdown, { breakevenPrice, targetMarginRate, minNetPerUnit })
     : null;
 
   // En «Revisar y publicar» la comisión se vuelve a consultar sola cuando
@@ -850,9 +871,11 @@ export function ListingPublicationWizard({
                 </p>
               ) : selectedProduct ? (
                 <p>
-                  Se propone con la comisión y el envío estimados para que deje
-                  la misma ganancia por unidad que la tienda; en «Revisar y
-                  publicar» se confirma con los valores reales de Mercado Libre.
+                  {pricingTargets
+                    ? `Se propone con la comisión y el envío estimados para que deje al menos ${pricingTargets.targetMarginPercent} % neto o ${currencyFormatter.format(pricingTargets.minNetPerUnit)} por unidad (Configuración); `
+                    : "Se propone con la comisión y el envío estimados para que deje la misma ganancia por unidad que la tienda; "}
+                  en «Revisar y publicar» se confirma con los valores reales de
+                  Mercado Libre.
                 </p>
               ) : null}
               {selectedProduct && priceDifference !== null ? (
@@ -2162,15 +2185,24 @@ export function ListingPublicationWizard({
                       : "Precio sugerido: falta el costo del producto"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {suggestedPrice === null
+                    {costFloor === null
                       ? "Registra el costo de adquisición del producto para calcular la ganancia en Mercado Libre."
-                      : hasTargetProfit
+                      : suggestedPrice === null
+                        ? "Con la comisión y el envío de Mercado Libre no se alcanza el objetivo de la tienda a ningún precio razonable."
+                        : pricingTargets
+                          ? `Deja al menos ${pricingTargets.targetMarginPercent} % neto o ${currencyFormatter.format(minNetPerUnit ?? 0)} por unidad, lo que sea mayor.`
+                          : hasTargetProfit
                         ? `Deja la ganancia objetivo de ${currencyFormatter.format(targetProfit)} por unidad.`
                         : `Deja la misma ganancia por unidad que la tienda (${currencyFormatter.format(storeProfitPerUnit ?? 0)}).`}
                     {breakevenPrice !== null
                       ? ` Para no perder: desde ${currencyFormatter.format(breakevenPrice)}.`
                       : ""}
                   </p>
+                  {lowPriceProduct ? (
+                    <p className="mt-1 text-xs font-medium text-warning">
+                      Este producto es de bajo precio; en Mercado Libre conviene venderlo en pack o kit.
+                    </p>
+                  ) : null}
                 </div>
                 {suggestedPrice !== null && suggestedPrice !== marketplacePrice ? (
                   <Button
