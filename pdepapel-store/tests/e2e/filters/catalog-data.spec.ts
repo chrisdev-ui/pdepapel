@@ -58,9 +58,11 @@ test("M4: el número junto a un color es lo que se ve al elegirlo", async ({ pag
   await openListing(page, "/tienda");
   const header = sidebar(page).getByRole("button", { name: /^Colores/ });
   test.skip((await header.count()) === 0, "Sin grupo de colores.");
-  if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
   const colors = page.locator(`[id="${await header.getAttribute("aria-controls")}"]`).getByRole("checkbox");
-  await expect(colors.first()).toBeVisible();
+  await expect(async () => {
+    if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
+    await expect(colors.first()).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 45_000, intervals: [2_000] });
   const row = colors.first().locator("xpath=..");
   const expected = Number(((await row.textContent()) ?? "").match(/(\d[\d.]*)\s*$/)?.[1]?.replace(/\./g, ""));
   await clickUntilParam(page, colors.first(), ["colorId"]);
@@ -74,9 +76,13 @@ test("M6: el megamenú no ofrece subcategorías vacías", async ({ page }) => {
   const empty = new Set(categories.filter((category) => category.productCount === 0).map((category) => `/categoria/${category.slug ?? category.id}`));
 
   await openListing(page, "/tienda");
-  await page.getByRole("button", { name: "Todas las categorías" }).click();
   const menu = page.getByRole("region", { name: "Categorías de la tienda" });
   const typeLinks = menu.locator('a[href^="/tienda?typeId="]');
+  const toggle = page.getByRole("button", { name: "Todas las categorías" });
+  await expect(async () => {
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await expect(typeLinks.first()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 45_000, intervals: [3_000] });
   const offered = new Set<string>();
   for (let index = 0; index < (await typeLinks.count()); index += 1) {
     await typeLinks.nth(index).hover();
