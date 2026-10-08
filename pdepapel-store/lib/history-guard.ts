@@ -11,14 +11,15 @@ import { IN_APP_BROWSER_PATTERN } from "@/lib/in-app-browser";
  * con clic (tarjeta → ficha), el error sube al error boundary de la raíz y la
  * clienta ve «Algo salió mal de nuestro lado». Las cargas directas funcionan.
  *
- * La guarda queda siempre por fuera: es una propiedad con getter/setter en
- * `window.history`, así que si el navegador integrado vuelve a asignar
- * `history.pushState` después, su envoltorio pasa a ser el de adentro. Si el
- * de adentro lanza, se completa la navegación con el método nativo; si el
- * nativo también falla, el error original sigue su camino.
+ * Es una propiedad con getter/setter en `window.history`. Cada función que se
+ * asigna (Next, nuqs, el navegador integrado) se apila como una capa sobre la
+ * anterior, así que nadie saca a nadie de la cadena: Next sigue viendo las
+ * URL que escribe nuqs. Si una capa lanza, la navegación sigue por la capa de
+ * abajo; si ya cambió la URL antes de lanzar, no se repite. Una capa que se
+ * vuelve a llamar a sí misma pasa directo a la de abajo, sin ciclos.
  *
- * Solo se instala en esos navegadores integrados: en los demás, cualquier
- * envoltorio de `pushState` estorba al de Next y al de nuqs.
+ * Solo se instala en esos navegadores integrados: en los demás no hace falta
+ * ninguna capa extra.
  *
  * Va como script en línea antes de hidratar, en JS simple (sin depender del
  * bundler), y nunca lanza.
@@ -32,39 +33,40 @@ export const HISTORY_GUARD_SCRIPT = `(function () {
     ["pushState", "replaceState"].forEach(function (name) {
       var nativeFn = proto && proto[name];
       if (typeof nativeFn !== "function") return;
-      var inner = Object.prototype.hasOwnProperty.call(h, name) ? h[name] : null;
-      var depth = 0;
-      var guarded = function () {
-        var args = arguments;
-        // Next y los navegadores integrados guardan el método que encuentran
-        // (esta guarda) y lo llaman desde el suyo: sin esto el ciclo
-        // guarda → envoltorio → guarda se repite hasta desbordar la pila.
-        if (depth > 0) return nativeFn.apply(this, args);
-        var target = typeof inner === "function" ? inner : nativeFn;
-        depth++;
-        try {
-          return target.apply(this, args);
-        } catch (error) {
-          if (target === nativeFn) throw error;
+      var layer = function (fn, below) {
+        var active = false;
+        return function () {
+          var args = arguments;
+          if (active) return below.apply(this, args);
+          active = true;
+          var before = window.location.href;
           try {
-            var url = args.length > 2 ? args[2] : undefined;
-            var already = url != null && new URL(String(url), window.location.href).href === window.location.href;
-            // Si el envoltorio ya cambió la URL, solo se deja el estado de Next
-            // en la entrada actual; si no, se hace la navegación que faltó.
-            if (name === "pushState" && already) return proto.replaceState.apply(this, args);
-            return nativeFn.apply(this, args);
-          } catch (fallbackError) {
-            throw error;
+            return fn.apply(this, args);
+          } catch (error) {
+            if (fn === nativeFn) throw error;
+            try {
+              if (name === "pushState" && window.location.href !== before) return;
+              return below.apply(this, args);
+            } catch (fallbackError) {
+              throw error;
+            }
+          } finally {
+            active = false;
           }
-        } finally {
-          depth--;
-        }
+        };
       };
+      var top = nativeFn;
+      if (Object.prototype.hasOwnProperty.call(h, name) && typeof h[name] === "function") {
+        top = layer(h[name], nativeFn);
+      }
       Object.defineProperty(h, name, {
         configurable: true,
         enumerable: true,
-        get: function () { return guarded; },
-        set: function (value) { if (value !== guarded) inner = value; },
+        get: function () { return top; },
+        set: function (value) {
+          if (typeof value !== "function" || value === top) return;
+          top = layer(value, top);
+        },
       });
     });
     Object.defineProperty(h, "__pdpHistoryGuard", { value: true, configurable: true });

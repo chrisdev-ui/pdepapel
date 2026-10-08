@@ -140,4 +140,50 @@ describe("history guard", () => {
     expect(native).toHaveBeenCalledTimes(1);
     expect(window.history.length).toBe(length + 1);
   });
+
+  it.each(["pushState", "replaceState"] as const)(
+    "keeps Next's and nuqs's patches chained for %s (nuqs writes null state)",
+    (name) => {
+      const native = vi.spyOn(History.prototype, name);
+      install();
+      const calls: string[] = [];
+      const nextOriginal = window.history[name].bind(window.history);
+      window.history[name] = function (data: unknown, unused: string, url?: string | URL | null) {
+        calls.push("next");
+        const state = data && typeof data === "object" && "__NA" in data ? data : { ...(data as object), __NA: true };
+        return nextOriginal(state, unused, url);
+      };
+      const nuqsOriginal = window.history[name].bind(window.history);
+      window.history[name] = function (data: unknown, unused: string, url?: string | URL | null) {
+        calls.push("nuqs");
+        return nuqsOriginal(data, unused, url);
+      };
+
+      window.history[name](null, "", "/tienda?typeId=cuadernos");
+
+      expect(calls).toEqual(["nuqs", "next"]);
+      expect(native).toHaveBeenCalledTimes(1);
+      expect(window.location.search).toBe("?typeId=cuadernos");
+      expect(window.history.state).toEqual({ __NA: true });
+    },
+  );
+
+  it("falls back to the layer below when the in-app wrapper throws after Next and nuqs patched", () => {
+    const native = vi.spyOn(History.prototype, "pushState");
+    install();
+    const calls: string[] = [];
+    const nextOriginal = window.history.pushState.bind(window.history);
+    window.history.pushState = function (data: unknown, unused: string, url?: string | URL | null) {
+      calls.push("next");
+      return nextOriginal({ ...(data as object), __NA: true }, unused, url);
+    };
+    window.history.pushState = function () {
+      throw new Error(JAVA_GONE);
+    };
+
+    expect(() => window.history.pushState(null, "", "/producto/mug")).not.toThrow();
+    expect(calls).toEqual(["next"]);
+    expect(native).toHaveBeenCalledTimes(1);
+    expect(window.history.state).toEqual({ __NA: true });
+  });
 });
