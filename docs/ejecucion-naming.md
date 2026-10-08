@@ -1,4 +1,4 @@
-# Ruta corta de renombrado: el experimento de los 371
+# Ruta corta de renombrado: el experimento de los productos sin ventas
 
 > **Este documento reemplaza en la práctica al plan por fases** (`docs/plan-naming-productos.md`), que sigue siendo la referencia para la gramática (§2), las restricciones duras (§2.4) y la auditoría completa de UI (§5). Lo que cambia aquí es el **orden y el alcance**: en vez de industrializar el proceso para 898 productos, se prueba la tesis con un experimento controlado y se decide con datos.
 >
@@ -8,32 +8,19 @@
 
 ## Por qué cambió el plan
 
-Dos números salidos de `prod_dump.sql` que no tenía cuando escribí el plan largo:
+Dos hallazgos salidos de `prod_dump.sql` que no tenía cuando escribí el plan largo (cifras guardadas en local en `output/sensitive-docs/docs/ejecucion-naming.md`):
 
 ### 1. La concentración de ingresos es alta, no plana
 
-| Cohorte | % de los ingresos del catálogo activo |
-|---|---:|
-| Top 25 | 28,7 % |
-| Top 50 | 43,8 % |
-| **Top 100** | **63,4 %** |
-| Top 150 | 77,2 % |
-| Top 200 | 86,7 % |
-
-Es decir: **100 productos cargan casi dos tercios de tu facturación.** Renombrarlos primero maximiza el beneficio… y también el daño si algo sale mal. Son exactamente los productos que no quieres usar como conejillo de indias.
+Unos 100 productos cargan la mayor parte de la facturación. Renombrarlos primero maximiza el beneficio… y también el daño si algo sale mal. Son exactamente los productos que no quieres usar como conejillo de indias.
 
 ### 2. La mitad de tu catálogo activo nunca ha vendido nada
 
-De los 726 productos activos que aparecen en el dump:
+Alrededor de la mitad de los productos activos no tiene una sola unidad vendida.
 
-| | Productos |
-|---|---:|
-| Con al menos una venta registrada | 355 |
-| **Sin una sola unidad vendida** | **371 (51 %)** |
+Esos productos sin ventas son el hallazgo. **No tienen nada que perder.** Si renombras uno y el tráfico no se mueve, perdiste 3 minutos. Si el tráfico sube, tienes la prueba que necesitas para justificar tocar el resto.
 
-Esos 371 productos son el hallazgo. **No tienen nada que perder.** Si renombras uno y el tráfico no se mueve, perdiste 3 minutos. Si el tráfico sube, tienes la prueba que necesitas para justificar tocar los otros 500.
-
-> **Caveat obligatorio:** el dump es del **2026-02-22** y el feed es de julio. 172 productos activos del feed no existen en el dump (fueron creados después) y algunos de los 371 pueden haber vendido entre febrero y hoy. **La cohorte real hay que regenerarla contra producción** con la consulta de §C1 antes de arrancar. El método es correcto; la lista exacta, no.
+> **Caveat obligatorio:** el dump es del **2026-02-22** y el feed es de julio. Bastantes productos activos del feed no existen en el dump (fueron creados después) y algunos de ellos pueden haber vendido entre febrero y hoy. **La cohorte real hay que regenerarla contra producción** con la consulta de §C1 antes de arrancar. El método es correcto; la lista exacta, no.
 
 ---
 
@@ -43,7 +30,7 @@ Mi recomendación anterior — *"renombra el top 100 primero"* — era la equivo
 
 > **Experimenta con los que no venden. Aplica a los que sí venden solo cuando tengas la prueba.**
 
-Los 371 productos sin ventas te dan algo que un despliegue por oleadas nunca te da: **un grupo de control**. Renombras la mitad, dejas la otra mitad intacta, y a los 60 días comparas dos grupos que arrancaron desde el mismo punto (cero) en el mismo sitio, con la misma autoridad de dominio y el mismo periodo. Eso responde la pregunta *"¿los nombres mueven la aguja?"* de forma limpia, cosa que ningún antes/después puede hacer, porque el antes/después no separa tu cambio de la estacionalidad.
+Los productos sin ventas te dan algo que un despliegue por oleadas nunca te da: **un grupo de control**. Renombras la mitad, dejas la otra mitad intacta, y a los 60 días comparas dos grupos que arrancaron desde el mismo punto (cero) en el mismo sitio, con la misma autoridad de dominio y el mismo periodo. Eso responde la pregunta *"¿los nombres mueven la aguja?"* de forma limpia, cosa que ningún antes/después puede hacer, porque el antes/después no separa tu cambio de la estacionalidad.
 
 ---
 
@@ -55,7 +42,7 @@ Las rutas **A** y **B** son independientes del experimento y valen la pena aunqu
 |---|---|---|---|
 | **A** | Arreglar lo que ya está roto en la UI | 1–2 días | Ninguno — son bugs actuales |
 | **B** | Datos estructurados del feed | ½ día | Ninguno — no toca nombres ni UI |
-| **C** | El experimento: 371 productos, mitad y mitad | 2–3 días + ~4 h de tu criterio | Casi cero: productos con 0 ventas |
+| **C** | El experimento: los productos sin ventas, mitad y mitad | 2–3 días + ~4 h de tu criterio | Casi cero: productos con 0 ventas |
 | **D** | Decidir a los 60 días | 1 hora | — |
 
 ---
@@ -200,7 +187,7 @@ El 29,5 % del catálogo tiene un nombre que no contiene el sustantivo de su prop
 
 ### C0 · Congelar los slugs (único cambio de código que exige el experimento)
 
-Sin esto, cada renombrado regenera el slug y crea una fila en `ProductSlugAlias` — 371 redirecciones nuevas y ruido permanente en Search Console.
+Sin esto, cada renombrado regenera el slug y crea una fila en `ProductSlugAlias` — una redirección nueva por producto y ruido permanente en Search Console.
 
 En `pdepapel-admin/app/api/[storeId]/products/[productId]/route.ts` (la lógica de slug vive en `:266-273` y el alias en `:357-366`): aceptar `preserveSlug?: boolean` en el body y, cuando sea `true`, saltarse por completo `generateProductSlug`, `getUniqueProductSlug` y `preserveProductSlugAlias`, dejando `slug` como está.
 
@@ -252,7 +239,7 @@ Un script que lee el CSV, toma solo las filas con `aprobado = 1`, y para cada un
 
 1. `PATCH /api/{storeId}/products/{id}` con `{ name, preserveSlug: true }`
 2. Guarda `nombre_anterior` en un CSV de rollback antes de escribir
-3. Revalida en lotes de 25 con espera entre lotes — 371 llamadas seguidas a `/api/revalidate` no son viables
+3. Revalida en lotes de 25 con espera entre lotes — cientos de llamadas seguidas a `/api/revalidate` no son viables
 
 **El brazo de control no se toca.** Es la mitad del experimento.
 
@@ -279,7 +266,7 @@ Mide también, aunque no forme parte del experimento formal:
 - **Búsquedas internas con 0 resultados.** Es lo que se mueve más rápido y no depende de Google. Si no tienes esa telemetría, instrumentarla en `search-bar.tsx` es media hora y es la métrica de mejor relación esfuerzo/valor de todo este documento.
 - **Rechazos en Merchant Center**, que deberían bajar por la ruta B sola.
 
-**Si el resultado es positivo:** entonces sí, el top 100 (63,4 % de tus ingresos) por oleadas de 25, y después construyes la pantalla de revisión del plan largo para los ~500 restantes.
+**Si el resultado es positivo:** entonces sí, el top 100 por oleadas de 25, y después construyes la pantalla de revisión del plan largo para los ~500 restantes.
 
 **Si es negativo:** gastaste una semana en lugar de un mes, las rutas A y B te quedaron igual, y sabes que tu problema de tráfico está en otro lado.
 

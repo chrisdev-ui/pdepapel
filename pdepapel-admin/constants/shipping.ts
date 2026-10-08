@@ -112,16 +112,8 @@ export const SHIPPINGCARRIERS: ShippingCarrier[] = [
   },
 ];
 
-export const STORE_SHIPPING_INFO = {
+export const STORE_SHIPPING_ORIGIN = {
   company: "Papelería P de Papel",
-  firstName: "Paula Fernanda",
-  lastName: "Morales Rodriguez",
-  email: "papeleria.pdepapel@gmail.com",
-  phone: "3142829044",
-  address: "Calle 12 AA sur #55d-30 T1 Apto1801 villaterra",
-  suburb: null,
-  crossStreet: null,
-  reference: null,
   daneCode: "05001000",
 
   // Datos legibles

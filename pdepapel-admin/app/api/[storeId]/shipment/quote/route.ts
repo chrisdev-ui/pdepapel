@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import {
   ENVIOCLICK_DEFAULTS,
   SHIPPING_QUOTE_CACHE,
-  STORE_SHIPPING_INFO,
+  STORE_SHIPPING_ORIGIN,
   truncateField,
 } from "@/constants/shipping";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
+import { getStoreSender } from "@/lib/store-sender";
 import {
   calculatePackageDimensions,
   BoxConfiguration,
@@ -172,7 +173,7 @@ export async function POST(
 
     const cacheKey = {
       storeId: params.storeId,
-      originDaneCode: STORE_SHIPPING_INFO.daneCode,
+      originDaneCode: STORE_SHIPPING_ORIGIN.daneCode,
       destDaneCode: destination.daneCode,
       weight: packageDimensions.weight,
       declaredValue: Math.round(orderTotal / 1000) * 1000,
@@ -248,8 +249,8 @@ export async function POST(
       description: ENVIOCLICK_DEFAULTS.defaultDescription,
       contentValue: orderTotal,
       origin: {
-        daneCode: STORE_SHIPPING_INFO.daneCode,
-        address: STORE_SHIPPING_INFO.address,
+        daneCode: STORE_SHIPPING_ORIGIN.daneCode,
+        address: getStoreSender().address,
       },
       destination: {
         daneCode: destination.daneCode,

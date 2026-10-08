@@ -93,7 +93,7 @@ async function fillContact(page: Page) {
   await expect(next).toBeVisible({ timeout: 60_000 });
   await page.getByLabel(/Nombre y apellidos/).fill("Paula Andrea Restrepo");
   await page.getByLabel(/Correo electrónico/).fill("paula@ejemplo.com");
-  await page.getByRole("textbox", { name: /Teléfono/ }).fill("3024686403");
+  await page.getByRole("textbox", { name: /Teléfono/ }).fill("3025556677");
   await page.getByLabel(/Documento de identidad/).fill("1047452823");
   await next.click();
   await expect(
@@ -121,7 +121,7 @@ async function fillDeliveryWithoutCarrier(page: Page) {
   await expect(option).toBeVisible({ timeout: 30_000 });
   await option.click();
   await expect(city).toHaveValue(/MEDELL/i);
-  await page.getByLabel(/^Dirección \*/).fill("Calle 12 AA Sur #55D-30");
+  await page.getByLabel(/^Dirección \*/).fill("Calle 123 # 45-67");
 
   await formButton(page, "Continuar al pago").click();
   await expect(

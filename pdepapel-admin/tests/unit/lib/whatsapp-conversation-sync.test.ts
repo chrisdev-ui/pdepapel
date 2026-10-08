@@ -215,7 +215,7 @@ describe("extractWhatsAppEvents", () => {
                 messages: [
                   {
                     id: "wamid.tap",
-                    from: "573024686403",
+                    from: "573025556677",
                     type: "interactive",
                     timestamp: "1789377712",
                     context: { id: "wamid.menu", from: "573132582293" },
@@ -253,7 +253,7 @@ describe("extractWhatsAppEvents", () => {
                 messages: [
                   {
                     id: "wamid.tap2",
-                    from: "573024686403",
+                    from: "573025556677",
                     type: "interactive",
                     interactive: {
                       type: "button_reply",
@@ -380,10 +380,10 @@ describe("extractWhatsAppEvents", () => {
   it("captures a catalog cart, keeping the SKU that the feed publishes as the product id", () => {
     const extracted = extractWhatsAppEvents(
       metaPayload({
-        contacts: [{ profile: { name: "Christian" }, wa_id: "573024686403" }],
+        contacts: [{ profile: { name: "Christian" }, wa_id: "573025556677" }],
         messages: [
           {
-            from: "573024686403",
+            from: "573025556677",
             id: "wamid.CART",
             timestamp: "1789300000",
             type: "order",

@@ -3,11 +3,12 @@ import {
   getPickupDate,
   prepareShipmentDescription,
   splitFullName,
-  STORE_SHIPPING_INFO,
+  STORE_SHIPPING_ORIGIN,
   truncateField,
 } from "@/constants/shipping";
 import prismadb from "@/lib/prismadb";
 import { getShippingContact } from "@/lib/gift-orders";
+import { getStoreSender } from "@/lib/store-sender";
 import { ErrorFactory } from "./api-errors";
 import { envioClickClient } from "./envioclick";
 import { ShippingStatus } from "@prisma/client";
@@ -87,9 +88,8 @@ export async function createGuideForOrder(
   // quien recibe; el correo sigue siendo el de quien compra.
   const shippingContact = getShippingContact(order);
   const customerName = splitFullName(shippingContact.fullName);
-  const storeName = splitFullName(
-    `${STORE_SHIPPING_INFO.firstName} ${STORE_SHIPPING_INFO.lastName}`,
-  );
+  const sender = getStoreSender();
+  const storeName = splitFullName(`${sender.firstName} ${sender.lastName}`);
 
   // 3. Get the EXACT quote data that was used for this specific rate
   const shippingQuote = await db.shippingQuote.findFirst({
@@ -262,22 +262,22 @@ export async function createGuideForOrder(
         },
       ],
       origin: {
-        company: truncateField(STORE_SHIPPING_INFO.company, "company"),
+        company: truncateField(sender.company, "company"),
         firstName: storeName.firstName,
         lastName: storeName.lastName,
-        email: truncateField(STORE_SHIPPING_INFO.email, "email"),
-        phone: phoneToNational(STORE_SHIPPING_INFO.phone),
-        address: truncateField(STORE_SHIPPING_INFO.address, "address"),
-        suburb: truncateField(STORE_SHIPPING_INFO.suburb || "NA", "suburb"),
+        email: truncateField(sender.email, "email"),
+        phone: phoneToNational(sender.phone),
+        address: truncateField(sender.address, "address"),
+        suburb: truncateField(sender.suburb || "NA", "suburb"),
         crossStreet: truncateField(
-          STORE_SHIPPING_INFO.crossStreet || "NA",
+          sender.crossStreet || "NA",
           "crossStreet",
         ),
         reference: truncateField(
-          STORE_SHIPPING_INFO.reference || "NA",
+          sender.reference || "NA",
           "reference",
         ),
-        daneCode: STORE_SHIPPING_INFO.daneCode,
+        daneCode: sender.daneCode,
       },
       destination: {
         company: truncateField(order.company || "NA", "company"),
@@ -504,8 +504,8 @@ export async function requoteCartShipping(input: {
     description: ENVIOCLICK_DEFAULTS.defaultDescription,
     contentValue: input.contentValue,
     origin: {
-      daneCode: STORE_SHIPPING_INFO.daneCode,
-      address: STORE_SHIPPING_INFO.address,
+      daneCode: STORE_SHIPPING_ORIGIN.daneCode,
+      address: getStoreSender().address,
     },
     destination: {
       daneCode: input.destination.daneCode,

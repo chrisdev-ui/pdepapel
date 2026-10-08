@@ -333,7 +333,7 @@ Decisiones de Christian del 2026-10-08:
 | H7 | Cada sugerencia dice para qué búsqueda la propone Mercado Libre. Hay un buscador «Buscar otra categoría». En un kit, una sugerencia de belleza, piel o salud sale marcada «no parece de papelería». |
 | H12 | Nuevo «Validar con Mercado Libre» (`POST …/listings/{id}/validate` → `/items/validate`, no crea nada). «Publicar ahora» solo se habilita después de una validación correcta del estado actual del formulario. Cada error trae «Ir al campo». Las advertencias no bloquean, y la de modos de envío no se muestra. El error de título sin `cause[]` y el «[GTIN] required» de marca registrada salen en español. |
 
-| Márgenes (§13–14) | El precio de Mercado Libre ya no parte del precio de la tienda. Por defecto, el precio que deja la misma ganancia por unidad que la tienda, calculado con comisión 16 %, envío obligatorio 8.100 y retenciones 1,5 % (estimados); sin costo registrado queda vacío. En «Revisar y publicar»: precio sugerido con desglose (comisión real de `listing_prices`, envío cotizado o estimado, retenciones estimadas, costo, neto y margen frente a la tienda), botón «Usar …» y aviso en español por debajo del punto de equilibrio. La comisión se vuelve a consultar sola al cambiar el precio. Si Mercado Libre dice que el envío gratis es obligatorio (`discount.type = mandatory`), se marca y se descuenta siempre. **Pendiente de decisión:** el margen objetivo de la tienda necesita un campo nuevo en `Store` (migración); hasta entonces se avisa solo por debajo del punto de equilibrio, y la «Ganancia objetivo» por publicación sigue funcionando. |
+| Márgenes (§13–14) | El precio de Mercado Libre ya no parte del precio de la tienda. Por defecto, el precio que deja la misma ganancia por unidad que la tienda, calculado con la comisión, el envío obligatorio y las retenciones estimados; sin costo registrado queda vacío. En «Revisar y publicar»: precio sugerido con desglose (comisión real de `listing_prices`, envío cotizado o estimado, retenciones estimadas, costo, neto y margen frente a la tienda), botón «Usar …» y aviso en español por debajo del punto de equilibrio. La comisión se vuelve a consultar sola al cambiar el precio. Si Mercado Libre dice que el envío gratis es obligatorio (`discount.type = mandatory`), se marca y se descuenta siempre. **Pendiente de decisión:** el margen objetivo de la tienda necesita un campo nuevo en `Store` (migración); hasta entonces se avisa solo por debajo del punto de equilibrio, y la «Ganancia objetivo» por publicación sigue funcionando. |
 
 **Verificación:**
 - Pruebas unitarias, de componentes y de rutas nuevas.
@@ -357,40 +357,30 @@ Decisiones de Christian del 2026-10-08:
 **Fuentes:**
 - **Comisión:** `GET /sites/MCO/listing_prices` por precio, categoría y tipo.
 - **Envío que paga el vendedor:** `GET /users/{id}/shipping_options/free` por publicación.
-- **Retenciones:** estimado del 1,5 %, sacado de la facturación real de las ventas (1,35–1,70 %). Se muestra aparte de la comisión.
+- **Retenciones:** un porcentaje estimado a partir de la facturación real de las ventas. Se muestra aparte de la comisión.
 - **Costo unitario:** costo de adquisición + envío y otros gastos, desde el panel. A ningún producto revisado le falta.
 
-**Lo que cobra Mercado Libre a esta cuenta (2026-10-08):**
-- Clásica: 16 % (16,5 % en kits). Premium: 17–21,5 % según la categoría.
-- No hay cargo fijo por unidad entre 5.000 y 100.000.
-- **El envío gratis es obligatorio en todos los precios** (`discount.type = mandatory`, 50 % subsidiado). El vendedor paga 8.000–10.100 por unidad.
-
-**Resultado:**
-
-| Grupo | Revisados | Pierden | Margen neto < 10 % | Por debajo del margen de la tienda* |
-|---|---|---|---|---|
-| Publicaciones vinculadas | 21 | 0 | 1 (Alcancía de gato) | 21 |
-| Tote bags sin vincular | 5 | 0 | 0 | 5 |
-| Muestras a precio de tienda | 3 | 2 (Cuaderno NORMA, Kit Puppy) | 1 (agenda) | 3 |
-
-\* El margen de la tienda es **bruto**: no descuenta la pasarela de pago ni el envío de la tienda. La comparación le favorece; la conclusión no cambia.
+**Lo que se revisó:**
+- Las tarifas que cobra Mercado Libre a esta cuenta por tipo de publicación y categoría, el cargo fijo por unidad y si el envío gratis es obligatorio (`discount.type = mandatory`).
+- Las publicaciones vinculadas, las tote bags sin vincular y tres muestras a precio de tienda: cuántas pierden, cuántas quedan por debajo del margen de la tienda y cuántas por debajo de un margen neto bajo.
 
 **Lectura:**
-- El envío obligatorio (unos 8.200 fijos) más el 16–21,5 % de comisión hacen que **todo producto que cueste menos de unos 30.000 en la tienda pierda o quede en el filo** si se publica al mismo precio.
-- 17 de las 21 vinculadas son Premium, que cuesta 3–5,5 puntos más que Clásica.
-- Los casos más delgados en pesos son marcadores, lapiceros, la guillotina y la alcancía.
-- **Hallazgo aparte:** en 5 de las 7 ventas guardadas, `marketplaceFee` quedó en 0 y todo el descuento en `shippingCost`. El neto es correcto; el desglose no (#21).
+- El envío gratis es obligatorio en todos los precios y lo paga en parte el vendedor. Sumado a la comisión, hace que los productos baratos pierdan o queden en el filo si se publican al precio de la tienda.
+- La mayoría de las vinculadas son Premium, que cuesta más que Clásica.
+- **Hallazgo aparte:** en varias ventas guardadas, `marketplaceFee` quedó en 0 y todo el descuento en `shippingCost`. El neto es correcto; el desglose no (#21).
+
+> Cifras (tarifas, envío por unidad, umbral de pérdida, conteos por grupo) guardadas en local en `output/sensitive-docs/docs/audits/2026-10-08-mercadolibre-publicacion.md`.
 
 ## 14. Regla de precio propuesta (no aplicada)
 
 **Fórmula.** Precio = el menor precio «amigable» (que termina en 900) que cumpla:
 
-`precio − comisión(precio, categoría, tipo) − envío(precio) − 0,015 · precio − costo ≥ objetivo`
+`precio − comisión(precio, categoría, tipo) − envío(precio) − r · precio − costo ≥ objetivo`, con `r` la tasa de retención estimada.
 
 La comisión se consulta en `listing_prices` para cada candidato y se itera. Hoy es lineal (sin cargo fijo), así que se puede despejar:
 
-- **Objetivo en pesos** (opción C): `precio = (costo + envío + objetivo) / (1 − tasa − 0,015)`.
-- **Objetivo en porcentaje del precio** (opciones A y B, objetivo = m · precio): `precio = (costo + envío) / (1 − tasa − 0,015 − m)`.
+- **Objetivo en pesos** (opción C): `precio = (costo + envío + objetivo) / (1 − tasa − r)`.
+- **Objetivo en porcentaje del precio** (opciones A y B, objetivo = m · precio): `precio = (costo + envío) / (1 − tasa − r − m)`.
 
 En ambos casos se redondea hacia arriba a …900 y se baja un escalón si todavía cumple.
 
@@ -399,7 +389,7 @@ En ambos casos se redondea hacia arriba a …900 y se baja un escalón si todav�
 - **B:** el margen de la tienda + 5 puntos.
 - **C:** un mínimo de 10.000 COP netos por unidad.
 
-Con las tres muestras, A y B dan precios entre 2 y 3 veces el de la tienda, poco competitivos. C los deja entre 1,4 y 1,5 veces. Las cifras exactas están en el detalle local.
+Con las tres muestras, A y B dan precios poco competitivos frente a la tienda; C queda más cerca. Las cifras están en el detalle local.
 
 **Recomendación:** el mayor entre C y un margen neto del 20 %. Deciden Christian y Paula.
 

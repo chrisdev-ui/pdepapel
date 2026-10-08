@@ -142,7 +142,7 @@ describe("selectUnansweredMessages", () => {
 describe("redactCustomerText", () => {
   it("borra teléfonos y correos antes de que el texto salga del servidor", () => {
     expect(
-      redactCustomerText("Escríbeme a laura@correo.com o al 302 468 6403 gracias"),
+      redactCustomerText("Escríbeme a laura@correo.com o al 302 555 6677 gracias"),
     ).toBe("Escríbeme a [correo] o al [número] gracias");
   });
 

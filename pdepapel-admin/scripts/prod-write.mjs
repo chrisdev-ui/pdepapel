@@ -31,6 +31,7 @@ import {
   APPROVAL_FILE,
   approvalProblem,
   databaseIdentityProblem,
+  describeDatabaseAlias,
   describeDatabaseUrl,
   extractExpectArg,
   formatLogLine,
@@ -114,6 +115,7 @@ const identityProblem = databaseIdentityProblem(expect, identity);
 if (identityProblem) fail(identityProblem);
 
 const target = `${describeDatabaseUrl(writeUrl)} [base ${identity === "new" ? "nueva" : "vieja"}]`;
+const loggedTarget = describeDatabaseAlias(identity);
 const scriptHash = hashFile(absoluteScript);
 console.log(`prod-write: ${scriptPath}@${scriptHash} → ${target} (con ${runner.runner})`);
 console.log(`prod-write: motivo «${approval.reason}» (aprobado por ${approval.operator ?? "?"}, vence ${approval.expiresAt})`);
@@ -153,7 +155,7 @@ appendFileSync(
     reason: approval.reason,
     scriptPath,
     scriptHash,
-    target,
+    target: loggedTarget,
     status,
     exitCode: started ? (result.status ?? "signal") : "-",
     rowsAffected: rowsMatch ? Number(rowsMatch[1]) : null,

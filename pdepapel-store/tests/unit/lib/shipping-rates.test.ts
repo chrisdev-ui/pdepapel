@@ -68,7 +68,7 @@ describe("getShippingQuoteKey", () => {
   it("es estable ante el orden de los productos y mayúsculas en la dirección", () => {
     const a = getShippingQuoteKey({
       daneCode: "05001000",
-      address: "Calle 12 AA Sur #55D-30",
+      address: "Calle 123 # 45-67",
       orderTotal: 3000,
       items: [
         { productId: "b", quantity: 1 },
@@ -77,7 +77,7 @@ describe("getShippingQuoteKey", () => {
     });
     const b = getShippingQuoteKey({
       daneCode: "05001000",
-      address: "calle 12 aa sur #55d-30 ",
+      address: "  CALLE 123 # 45-67 ",
       orderTotal: 3000.4,
       items: [
         { productId: "a", quantity: 2 },

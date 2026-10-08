@@ -740,7 +740,7 @@ export const ShippingInfoStep = ({
                     className={optionalInputClass}
                     disabled={addressFieldsDisabled}
                     autoComplete="street-address"
-                    placeholder="Ej. Calle 12 AA Sur #55D-30"
+                    placeholder="Calle 123 # 45-67, Apto 101"
                     {...field}
                   />
                 </FormControl>
@@ -783,7 +783,7 @@ export const ShippingInfoStep = ({
                         className={optionalInputClass}
                         disabled={addressFieldsDisabled}
                         autoComplete="address-line2"
-                        placeholder="Ej. Torre 2, apto 1801"
+                        placeholder="Ej. Torre 2, apto 101"
                         {...field}
                       />
                     </FormControl>

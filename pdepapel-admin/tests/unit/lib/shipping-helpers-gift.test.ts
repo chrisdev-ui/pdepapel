@@ -112,4 +112,28 @@ describe("createGuideForOrder · destinatario del paquete", () => {
       phone: "3009999999",
     });
   });
+
+  it("sends the sender from the server environment, not from the code", async () => {
+    await createGuideForOrder("order-1", "store-1", order);
+
+    const origin = mocks.createShipment.mock.calls[0][0].origin;
+    expect(origin).toMatchObject({
+      firstName: "Remitente",
+      lastName: "De Prueba",
+      email: "envios@ejemplo.test",
+      phone: "3000000000",
+      address: "Calle 123 # 45-67, Apto 101",
+    });
+  });
+
+  it("refuses to create a guide when the sender variables are missing", async () => {
+    const saved = process.env.STORE_SENDER_ADDRESS;
+    delete process.env.STORE_SENDER_ADDRESS;
+    try {
+      await expect(createGuideForOrder("order-1", "store-1", order)).rejects.toThrow(/STORE_SENDER_ADDRESS/);
+      expect(mocks.createShipment).not.toHaveBeenCalled();
+    } finally {
+      process.env.STORE_SENDER_ADDRESS = saved;
+    }
+  });
 });

@@ -28,7 +28,7 @@ describe("customer-views", () => {
   });
 
   it("recognizes placeholder identities from counter and manual sales", () => {
-    expect(isPlaceholderCustomer({ fullName: "cliente nuevo", phone: "314 282 9044" })).toBe(true);
+    expect(isPlaceholderCustomer({ fullName: "cliente nuevo", phone: "300 777 8899" })).toBe(true);
     expect(isPlaceholderCustomer({ fullName: "Consumidor final", phone: "3001234567" })).toBe(true);
     expect(isPlaceholderCustomer({ fullName: "Ana Pérez", phone: "300 000 0000" })).toBe(true);
     expect(isPlaceholderCustomer({ fullName: "Ana Pérez", phone: "1111111111" })).toBe(true);

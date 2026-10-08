@@ -9,6 +9,7 @@ import {
   buildApproval,
   classifyDatabaseIdentity,
   databaseIdentityProblem,
+  describeDatabaseAlias,
   describeDatabaseUrl,
   extractExpectArg,
   formatLogLine,
@@ -54,6 +55,12 @@ describe("target and script checks", () => {
     expect(isProductionDatabaseUrl("mysql://root:secreto@evil.rlwy.net.example.com/railway")).toBe(false);
     expect(isProductionDatabaseUrl("no es una url")).toBe(false);
     expect(describeDatabaseUrl("mysql://root:secreto@monorail.proxy.rlwy.net:1234/railway")).toBe("root@monorail.proxy.rlwy.net/railway");
+  });
+
+  it("logs the database only by alias, never its host or user", () => {
+    expect(describeDatabaseAlias("new")).toBe("<user>@<db:new>/railway [base nueva]");
+    expect(describeDatabaseAlias("old")).toBe("<user>@<db:old>/railway [base vieja]");
+    expect(describeDatabaseAlias("new")).not.toMatch(/rlwy|root/);
   });
 
   it("only runs scripts under scripts/ or the session scratchpad", () => {

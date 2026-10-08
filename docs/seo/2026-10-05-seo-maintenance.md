@@ -747,17 +747,9 @@ Las dos primeras filas son las que Merchant Center compara en «Calidad de la ti
 
 Christian aprobó: probar `Bogotá` `11*` y, si fallaba, volver a una sola tarifa nacional; además, editar en su sitio «Estándar para Colombia».
 
-**Paso 0: costo real cobrado** (solo lectura, usuario `pdepapel_ro`; pedidos pagados con envío por EnvioClick, 2025-09-02 → 2026-10-01). `Shipping.cost` es lo que pagó la clienta; vale 0 cuando aplica el envío gratis. Agrupado por `Order.daneCode` (los 122 pedidos lo tienen), sin datos personales.
+**Paso 0: costo real cobrado** (solo lectura, usuario `pdepapel_ro`; pedidos pagados con envío por EnvioClick, 12 meses). `Shipping.cost` es lo que pagó la clienta; vale 0 cuando aplica el envío gratis. Agrupado por `Order.daneCode`, sin datos personales: p50, p75 y p90 por zona (Medellín metro, resto de Antioquia, Bogotá, resto de Colombia) y nacional. Medellín metro es la zona más barata; ningún pedido tuvo envío gratis por umbral (el umbral es de septiembre de 2026).
 
-| Grupo | Pedidos | Envío gratis | p50 | p75 | p90 | Propuesta | p90 > propuesta + 3.000 |
-|---|---|---|---|---|---|---|---|
-| Medellín metro (11 municipios) | 59 (1 en 0 bajo el umbral) | 0 % | 7.189 | 8.798 | 9.719 | 10.000 | No |
-| Resto de Antioquia | 3 | 0 % | 13.997 | 13.997 | 13.997 | 15.000 | No |
-| Bogotá | 23 | 0 % | 13.436 | 14.422 | 14.846 | 15.000 | No |
-| Resto de Colombia | 37 | 0 % | 13.436 | 14.846 | 15.272 | 17.000 | No |
-| **Nacional (cobrados)** | 121 | — | 11.859 | **13.436** | 14.846 | — | — |
-
-Ningún pedido tuvo envío gratis por umbral: el umbral de 250.000 es de septiembre de 2026.
+> Tabla con pedidos por zona y percentiles guardada en local en `output/sensitive-docs/docs/seo/2026-10-05-seo-maintenance.md`.
 
 **Paso 1, regiones: no se pueden usar para envíos en Colombia.**
 - Con `Bogotá` (ID `BOG`), Colombia, «Códigos postales» y `11*` solo, el formulario aceptó el código («Se ha seleccionado 1 ubicación») y mostró: «**Tipo de zona no admitido.** Las zonas de este tipo no se pueden usar como zona de entrega en este país.»
@@ -778,8 +770,8 @@ Ningún pedido tuvo envío gratis por umbral: el umbral de 250.000 es de septiem
 | Envío gratis | ninguno | **pedidos de más de 249.999 COP** (equivale a 250.000 o más, como la tienda) |
 | Tarifa | fija 12.000 COP | **fija 13.000 COP** |
 
-- **Por qué 13.000:** es el p75 nacional (13.436) redondeado al millar más cercano, dentro del rango 12.000–17.000.
-- **Lo que implica:** cubre lo que se cobró en 3 de cada 4 envíos. Medellín metro paga menos en el checkout (p90 9.719), y a Resto de Colombia y Bogotá a veces se les cobra un poco más (máximos 19.912 y 15.622).
+- **Por qué 13.000:** es el p75 nacional redondeado al millar más cercano.
+- **Lo que implica:** cubre lo que se cobró en 3 de cada 4 envíos. Medellín metro paga menos en el checkout, y a Resto de Colombia y Bogotá a veces se les cobra un poco más.
 - **Al guardar:** «Se ha añadido tu información de envío a Merchant Center». Productos 867 / 0 / 0 / 0, sin avisos nuevos en Notificaciones.
 - **Reversión:** editar la misma política y volver a los valores de la columna «Antes»: desmarcar el envío gratis, tarifa 12.000, hora 21:00, preparación 0–2 lunes a domingo, transporte 2–2 lunes a sábado.
 

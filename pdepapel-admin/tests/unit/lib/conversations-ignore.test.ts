@@ -96,7 +96,7 @@ describe("ignorar el contacto de una conversación", () => {
   });
 
   it("queda registrado quién lo hizo", async () => {
-    db.convFindFirst.mockResolvedValue({ phone: "573116164568", bsuid: null });
+    db.convFindFirst.mockResolvedValue({ phone: "573112223344", bsuid: null });
     await ignoreConversationContact(STORE, CONV, { reason: REASON, userId: "paula-123" });
     expect(db.ignCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ createdByUserId: "paula-123", reason: REASON }) }),

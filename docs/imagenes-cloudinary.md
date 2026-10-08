@@ -4,10 +4,12 @@ Cloudinary aloja todas las fotos del catálogo (subidas desde el panel con el
 widget de `components/ui/image-upload.tsx`) y las entrega directamente a los
 navegadores de la tienda y del panel. El plan gratuito da 25 créditos al mes y
 cada crédito equivale a 1 GB almacenado, 1 GB transferido **o** 1 000
-transformaciones. En septiembre de 2026 la cuenta superó el plan (29,7 créditos)
-sin que subiera el tráfico: el 91 % del almacenamiento (10,9 de 12 GB) eran
-**copias derivadas** acumuladas, unas 25 por foto, generadas por tres formas
+transformaciones. En septiembre de 2026 la cuenta superó el plan sin que
+subiera el tráfico: casi todo el almacenamiento eran **copias derivadas**
+acumuladas, unas 25 por foto, generadas por tres formas
 distintas de pedir la misma imagen y por listas de anchos demasiado largas.
+
+> Cifras de consumo y créditos guardadas en local en `output/sensitive-docs/docs/imagenes-cloudinary.md`.
 
 ## Cómo funciona el cobro
 
@@ -149,11 +151,11 @@ desde un cron.
 ## Copias de seguridad y originales grandes
 
 - La cuenta tiene activo el **backup automático** de Cloudinary para los
-  3 673 originales (≈1,15 GB duplicados, ≈1,15 créditos por ciclo). Es un
+  originales (los duplica y consume créditos cada ciclo). Es un
   ajuste de cuenta (Settings → Upload → Backup), no del preset ni de la API:
   se apaga solo desde la consola y con decisión explícita.
-- 319 originales subidos antes del tope de 2000 px pesan 346 MB; re-encodarlos
-  a 2000 px dejaría unos 94 MB. Es solo almacenamiento (la entrega ya está
+- Los originales subidos antes del tope de 2000 px pesan bastante más que
+  re-encodados a 2000 px. Es solo almacenamiento (la entrega ya está
   limitada a 1600 px), así que se hace con `explicit`/re-subida controlada y
   con lista revisada, nunca con un borrado masivo.
 

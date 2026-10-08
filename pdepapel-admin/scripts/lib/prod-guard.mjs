@@ -174,6 +174,11 @@ export function isProductionDatabaseUrl(url) {
 }
 
 /** Nunca se imprime la URL; sólo el host, para el registro. */
+/** Destino para `ops/prod-writes.log`, que se versiona: solo el alias de la base. */
+export function describeDatabaseAlias(identity) {
+  return `<user>@<db:${identity}>/railway [base ${identity === "new" ? "nueva" : "vieja"}]`;
+}
+
 export function describeDatabaseUrl(url) {
   try {
     const parsed = new URL(url);

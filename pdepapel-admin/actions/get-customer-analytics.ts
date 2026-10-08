@@ -2,13 +2,14 @@
 
 import { requireStoreOwner } from "@/lib/store-access";
 
-import { EMPLOYEE_NAMES, EMPLOYEE_PHONES } from "@/constants";
+import { getExcludedCustomers } from "@/lib/excluded-customers";
 import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export async function getCustomerAnalytics(storeId: string) {
   await requireStoreOwner(storeId);
+  const excluded = getExcludedCustomers();
   try {
     const now = getColombiaDate();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -26,10 +27,10 @@ export async function getCustomerAnalytics(storeId: string) {
         },
         phone: {
           not: "",
-          notIn: EMPLOYEE_PHONES,
+          notIn: excluded.phones,
         },
         NOT: {
-          OR: EMPLOYEE_NAMES.map((name) => ({ fullName: name })),
+          OR: excluded.names.map((name) => ({ fullName: name })),
         },
       },
       _sum: {
@@ -123,9 +124,9 @@ export async function getCustomerAnalytics(storeId: string) {
         // compras de tarjeta de regalo.
         ...revenueOrderWhere(),
         fullName: { not: "" },
-        phone: { not: "", notIn: EMPLOYEE_PHONES },
+        phone: { not: "", notIn: excluded.phones },
         NOT: {
-          OR: EMPLOYEE_NAMES.map((name) => ({ fullName: name })),
+          OR: excluded.names.map((name) => ({ fullName: name })),
         },
       };
 

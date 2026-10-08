@@ -343,5 +343,5 @@ Detalle: `docs/ops/2026-10-06-incidente-env-subidos-a-vercel.md`.
 ## Costo de la transición (estimado)
 
 - No se pudo leer el plan de Railway: la CLI no tiene comando de facturación y el panel no está disponible para el agente.
-- Con las tarifas públicas de uso de Railway (≈ $10 por GB de RAM al mes, ≈ $20 por vCPU al mes, ≈ $0,15 por GB de volumen al mes), la base nueva en reposo (~0,5–0,6 GB de RAM, CPU mínima, ~0,2 GB de volumen) cuesta **~$0,20–0,30 al día** mientras conviven las dos.
+- Con las tarifas públicas de uso de Railway, la base nueva en reposo cuesta poco al día mientras conviven las dos. La estimación está guardada en local en `output/sensitive-docs/docs/runbooks/db-region-migration.md`.
 - Vercel no cambia: las funciones siguen en iad1.

@@ -41,7 +41,7 @@ const CATALOG = [
 function conversation(overrides: Record<string, unknown> = {}) {
   return {
     id: "conversation-1",
-    phone: "573024686403",
+    phone: "573025556677",
     contactName: "Laura",
     orderId: null,
     messages: [{ id: "m2", metadata: null }, { id: "m1", metadata: CART }],
@@ -82,7 +82,7 @@ describe("createOrderFromConversationCart", () => {
       source: "WHATSAPP",
       createdBy: "user-owner",
       fullName: "Laura",
-      phone: "573024686403",
+      phone: "573025556677",
       subtotal: 2 * 13000 + 5000,
       total: 2 * 13000 + 5000,
     });

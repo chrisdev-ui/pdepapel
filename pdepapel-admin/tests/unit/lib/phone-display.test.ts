@@ -5,14 +5,14 @@ import { describePhoneNumber, getPhoneCountryLabel } from "@/lib/phone-display";
 describe("describePhoneNumber", () => {
   it("interpreta el formato que entrega WhatsApp, sin «+»", () => {
     // Este es el caso real: así llegan los 20 teléfonos de Conversaciones.
-    const result = describePhoneNumber("573024686403");
+    const result = describePhoneNumber("573025556677");
 
     expect(result).toMatchObject({
-      e164: "+573024686403",
+      e164: "+573025556677",
       country: "CO",
       countryName: "Colombia",
-      international: "+57 302 4686403",
-      national: "302 4686403",
+      international: "+57 302 5556677",
+      national: "302 5556677",
       isValid: true,
     });
   });
@@ -27,23 +27,23 @@ describe("describePhoneNumber", () => {
   });
 
   it("acepta el mismo número ya en E.164", () => {
-    expect(describePhoneNumber("+573024686403")).toMatchObject({
+    expect(describePhoneNumber("+573025556677")).toMatchObject({
       country: "CO",
-      international: "+57 302 4686403",
+      international: "+57 302 5556677",
       isValid: true,
     });
   });
 
   it("asume Colombia cuando el número viene local", () => {
-    expect(describePhoneNumber("3024686403")).toMatchObject({
-      e164: "+573024686403",
+    expect(describePhoneNumber("3025556677")).toMatchObject({
+      e164: "+573025556677",
       country: "CO",
       isValid: true,
     });
   });
 
   it("tolera espacios, guiones y paréntesis", () => {
-    expect(describePhoneNumber(" (302) 468-6403 ").e164).toBe("+573024686403");
+    expect(describePhoneNumber(" (302) 555-6677 ").e164).toBe("+573025556677");
   });
 
   it("no inventa un país cuando el número es ilegible", () => {
@@ -65,14 +65,14 @@ describe("describePhoneNumber", () => {
   });
 
   it("no confunde un local de 10 dígitos con un internacional", () => {
-    // Sin la regla de prioridad, «+3024686403» parecería un número de otro país.
-    expect(describePhoneNumber("3024686403").country).toBe("CO");
+    // Sin la regla de prioridad, «+3025556677» parecería un número de otro país.
+    expect(describePhoneNumber("3025556677").country).toBe("CO");
   });
 });
 
 describe("getPhoneCountryLabel", () => {
   it("prefiere el nombre del país y cae al código", () => {
-    expect(getPhoneCountryLabel(describePhoneNumber("573024686403"))).toBe(
+    expect(getPhoneCountryLabel(describePhoneNumber("573025556677"))).toBe(
       "Colombia",
     );
     expect(getPhoneCountryLabel(describePhoneNumber("12345"))).toBeNull();

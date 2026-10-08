@@ -279,7 +279,7 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
   });
 
   it("una clienta que no está en la lista sigue igual que siempre", async () => {
-    const response = await post(entrante("573116164568"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    const response = await post(entrante("573112223344"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
 
     await expect(response.json()).resolves.toMatchObject({ queued: true, ignored: false });
     expect(mocks.enqueue).toHaveBeenCalledTimes(1);
@@ -294,7 +294,7 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
     mocks.ignoredFindFirst.mockRejectedValue(new Error("base caída"));
     const errores = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    const response = await post(entrante("573116164568"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    const response = await post(entrante("573112223344"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
 
     await expect(response.json()).resolves.toMatchObject({ queued: true });
     expect(mocks.enqueue).toHaveBeenCalledTimes(1);
@@ -302,7 +302,7 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
   });
 
   it("la lista se consulta acotada a la tienda de la conexión", async () => {
-    await post(entrante("573116164568"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    await post(entrante("573112223344"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
     expect(mocks.ignoredFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ storeId: "store-1" }) }),
     );

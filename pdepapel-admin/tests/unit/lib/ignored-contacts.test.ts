@@ -8,7 +8,7 @@ import {
   validateIgnoreReason,
 } from "@/lib/whatsapp/ignored-contacts";
 
-const CHUCHU = { phone: "8618858869228", bsuid: "CN.1377520137782797" };
+const CHUCHU = { phone: "8610000000000", bsuid: "CN.1377520137782797" };
 
 /**
  * El emparejamiento de la lista de ignorados.
@@ -43,8 +43,8 @@ describe("a quién tapa una regla", () => {
     });
 
     it("un número que lo contiene o lo extiende", () => {
-      expect(matchesIgnoredContact(regla, { phone: "18618858869228" })).toBe(false);
-      expect(matchesIgnoredContact(regla, { phone: "86188588692280" })).toBe(false);
+      expect(matchesIgnoredContact(regla, { phone: "18610000000000" })).toBe(false);
+      expect(matchesIgnoredContact(regla, { phone: "86100000000000" })).toBe(false);
     });
 
     it("un BSUID con el mismo prefijo de país", () => {
@@ -53,7 +53,7 @@ describe("a quién tapa una regla", () => {
     });
 
     it("un número colombiano cualquiera", () => {
-      expect(matchesIgnoredContact(regla, { phone: "573116164568" })).toBe(false);
+      expect(matchesIgnoredContact(regla, { phone: "573112223344" })).toBe(false);
     });
 
     it("una identidad vacía", () => {
@@ -64,8 +64,8 @@ describe("a quién tapa una regla", () => {
 
     /** Una regla vacía taparía a todo el mundo: es la peor falla posible. */
     it("una regla sin teléfono ni BSUID no tapa a nadie", () => {
-      expect(matchesIgnoredContact([{ phone: null, bsuid: null }], { phone: "573116164568" })).toBe(false);
-      expect(matchesIgnoredContact([{ phone: "", bsuid: "" }], { phone: "573116164568" })).toBe(false);
+      expect(matchesIgnoredContact([{ phone: null, bsuid: null }], { phone: "573112223344" })).toBe(false);
+      expect(matchesIgnoredContact([{ phone: "", bsuid: "" }], { phone: "573112223344" })).toBe(false);
     });
 
     it("sin reglas no se tapa nada", () => {
@@ -75,14 +75,14 @@ describe("a quién tapa una regla", () => {
 
   it("el teléfono se compara ya normalizado, venga como venga escrito", () => {
     const regla = [{ phone: CHUCHU.phone, bsuid: null }];
-    expect(matchesIgnoredContact(regla, { phone: "+86 188 5886 9228" })).toBe(true);
-    expect(matchesIgnoredContact(regla, { phone: "+86-188-5886-9228" })).toBe(true);
+    expect(matchesIgnoredContact(regla, { phone: "+86 100 0000 0000" })).toBe(true);
+    expect(matchesIgnoredContact(regla, { phone: "+86-100-0000-0000" })).toBe(true);
   });
 });
 
 describe("normalizar identidades", () => {
   it("el teléfono se queda en dígitos", () => {
-    expect(normalizeIgnoredPhone("+57 311 616 4568")).toBe("573116164568");
+    expect(normalizeIgnoredPhone("+57 311 222 3344")).toBe("573112223344");
     expect(normalizeIgnoredPhone("   ")).toBeNull();
     expect(normalizeIgnoredPhone(null)).toBeNull();
     expect(normalizeIgnoredPhone("abc")).toBeNull();

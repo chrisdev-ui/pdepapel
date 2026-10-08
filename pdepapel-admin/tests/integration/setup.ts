@@ -38,6 +38,11 @@ const placeholders: Record<string, string> = {
   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: "/",
   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: "/",
   NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: "integration-placeholder",
+  STORE_SENDER_FIRST_NAME: "Remitente",
+  STORE_SENDER_LAST_NAME: "De Prueba",
+  STORE_SENDER_EMAIL: "envios@ejemplo.test",
+  STORE_SENDER_PHONE: "3000000000",
+  STORE_SENDER_ADDRESS: "Calle 123 # 45-67, Apto 101",
 };
 
 for (const [key, value] of Object.entries(placeholders)) {

@@ -10,7 +10,7 @@ Fuentes: API pública del admin; consultas de solo lectura con el usuario `pdepa
 |---|---|---|---|---|
 | 1 | Plazo de devolución en el texto | Christian + Paula | **A: mantener «cinco (5) días hábiles contados desde la entrega»** · B: «siete (7) días calendario» (con un festivo quedan 4 hábiles, por debajo del mínimo legal) · C: 7 calendario «y nunca menos de 5 hábiles» | A.2.2 |
 | 2 | Cómo nombrar el costo del envío | Paula | **Opción 1: «tarifa de referencia ronda los $ 13.000; en Medellín suele ser menor»** · opción 2: rangos con 15.000, por encima de lo que declara Merchant Center | A.2.1, A.2.3 |
-| 3 | Cotizaciones por encima de 13.000 (p90: Bogotá 14.846, resto 15.272) | Christian | Topar el cobro en 13.000 · subir la tarifa de Merchant Center · aceptar la diferencia. Antes, confirmar en la ayuda de Merchant Center si declarar de menos es un problema | A.2.1 |
+| 3 | Cotizaciones por encima de 13.000 (p90 de Bogotá y del resto del país) | Christian | Topar el cobro en 13.000 · subir la tarifa de Merchant Center · aceptar la diferencia. Antes, confirmar en la ayuda de Merchant Center si declarar de menos es un problema | A.2.1 |
 | 4 | Devoluciones solo por transportadora | Paula | Confirmar que nunca se reciben en persona; si sí, hay que cambiar Merchant Center | A.2.4 |
 | 5 | Plazo del reembolso ordinario (Merchant Center dice 5 días) | Christian + Paula | Escribir un plazo en la página o cambiar Merchant Center | A.2.4 |
 | 6 | `deliveryEstimate` «2 a 4» → «2 a 6 días hábiles» | Paula (panel) | Lo cambia ella en Configuración, el mismo día del deploy de la etiqueta nueva; no hace falta `prod:write` | A.3 |
@@ -48,7 +48,7 @@ Referencias de contexto: `docs/seo/2026-10-05-seo-maintenance.md` §9.13 y §9.1
 | Quién paga la devolución | «Responsabilidad del cliente» | `customerRemorseReturnFees` del cliente, `itemDefectReturnFees` gratis | Igual en el texto (`devoluciones/page.tsx:78-85`) |
 | Reembolso | Procesamiento 5 días (el formulario no deja elegir el medio) | — | Retracto: mismo medio de pago, máximo 15 días calendario (`devoluciones/page.tsx:110-115`); devolución ordinaria: no dice medio ni plazo |
 
-Costos reales cobrados (EnvioClick, pedidos pagados, 12 meses): Medellín metro p50 7.189 / p90 9.719; Bogotá p50 13.436 / p90 14.846; resto del país p50 13.436 / p90 15.272; resto de Antioquia n=3 ≈ 14.000. §9.13.2 registra máximos de 15.622 (Bogotá) y 19.912 (resto del país).
+Costos reales cobrados por EnvioClick (pedidos pagados, 12 meses): se calcularon p50 y p90 por zona (Medellín metro, Bogotá, resto de Antioquia, resto del país); Medellín metro es la zona más barata. Cifras guardadas en local en `output/sensitive-docs/docs/seo/2026-10-05-wave-3-phase-2-proposals.md`.
 
 #### A.1 Inventario de afirmaciones visibles
 
@@ -175,7 +175,7 @@ Nota: el umbral del bot sale de `StoreSettings.freeShippingThreshold` (`schema.p
 ##### A.2.1 Riesgo frente a Merchant Center y la redacción menos riesgosa
 
 - El texto «lo calcula la transportadora» por sí solo no contradice a Merchant Center: el checkout de verdad cobra la cotización de EnvioClick. Lo que sí crea una contradicción visible es **escribir en la página un número mayor que 13.000** (por ejemplo «13.000–15.000»): Google vería en la página de la política un costo más alto que el declarado.
-- El riesgo de fondo existe con cualquier texto: el checkout ya cobra más de 13.000 en parte de los pedidos (Bogotá p90 14.846, resto del país p90 15.272, máximos 15.622 y 19.912). Mi entendimiento es que Merchant Center tolera declarar de más pero no de menos frente a lo que se cobra en el checkout; **conviene confirmarlo en la ayuda de Merchant Center antes de decidir**, porque no lo verifiqué en esta tarea.
+- El riesgo de fondo existe con cualquier texto: el checkout ya cobra más de 13.000 en parte de los pedidos de Bogotá y del resto del país. Mi entendimiento es que Merchant Center tolera declarar de más pero no de menos frente a lo que se cobra en el checkout; **conviene confirmarlo en la ayuda de Merchant Center antes de decidir**, porque no lo verifiqué en esta tarea.
 - **Recomendación (opción 1):** anclar el texto en la cifra de Merchant Center y mencionar solo números menores: «tarifa de referencia de $ 13.000; en Medellín y el área metropolitana suele ser menos». Nunca escribir una cifra mayor que 13.000.
 - **Opción 2 (la del encargo):** rangos «Medellín ≈ 7.000–10.000; Bogotá y el resto del país ≈ 13.000–15.000». Es más honesta con la clienta de Bogotá, pero deja en la página una cifra mayor que la de Merchant Center.
 - **Decisión aparte (no de texto):** qué hacer cuando la cotización supera 13.000. Tres salidas: (a) topar el cobro en 13.000 y absorber la diferencia; (b) subir la tarifa de Merchant Center al p90 (≈ 15.300) y declarar de más en Medellín; (c) aceptar la diferencia. Cualquiera de las tres es una decisión de negocio, no de redacción.
