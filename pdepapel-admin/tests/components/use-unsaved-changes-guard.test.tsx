@@ -6,9 +6,17 @@ import { useForm } from "react-hook-form";
 
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 
-function Harness({ enabled = true, onLeave }: { enabled?: boolean; onLeave: (allowed: boolean) => void }) {
+function Harness({
+  enabled = true,
+  hasPendingChanges = false,
+  onLeave,
+}: {
+  enabled?: boolean;
+  hasPendingChanges?: boolean;
+  onLeave: (allowed: boolean) => void;
+}) {
   const form = useForm<{ name: string }>({ defaultValues: { name: "" } });
-  const { confirmLeave, confirmationDialog, isDirty } = useUnsavedChangesGuard(form, { enabled });
+  const { confirmLeave, confirmationDialog, isDirty } = useUnsavedChangesGuard(form, { enabled, hasPendingChanges });
   return (
     <div>
       {confirmationDialog}
@@ -62,5 +70,19 @@ describe("useUnsavedChangesGuard", () => {
     expect(remove.mock.calls.some(([type]) => type === "beforeunload")).toBe(true);
     add.mockRestore();
     remove.mockRestore();
+  });
+
+  it("treats changes kept outside the form as unsaved: asks before leaving and warns on unload", async () => {
+    const add = vi.spyOn(window, "addEventListener");
+    const onLeave = vi.fn();
+    render(<Harness hasPendingChanges onLeave={onLeave} />);
+    expect(screen.getByTestId("dirty").textContent).toBe("true");
+    expect(add.mock.calls.some(([type]) => type === "beforeunload")).toBe(true);
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Volver" })));
+    expect(await screen.findByText("¿Salir sin guardar?")).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Seguir editando" })));
+    expect(onLeave).toHaveBeenCalledWith(false);
+    add.mockRestore();
   });
 });

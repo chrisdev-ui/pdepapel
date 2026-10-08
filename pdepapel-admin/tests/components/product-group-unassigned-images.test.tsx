@@ -156,13 +156,8 @@ describe("guardar un grupo con fotos sin repartir", () => {
   });
 
   /**
-   * La portada de una variante con fotos propias sobrevive al guardado.
-   *
-   * `getAllImages()` armaba el mapa de fotos del formulario marcando como «no
-   * portada» toda foto que solo viviera en una variante, sin mirar lo
-   * guardado. Con eso, abrir el grupo ya borraba la portada de esa variante y
-   * el guardado la escribía perdida. Se comprueba por el payload porque
-   * `getAllImages` es un cierre privado del componente.
+   * La portada propia de una variante sobrevive al guardado. Viaja con la
+   * variante, no como foto del grupo.
    */
   it("la portada de una foto propia de la variante llega al guardado", async () => {
     const conPortada = {
@@ -173,7 +168,6 @@ describe("guardar un grupo con fotos sin repartir", () => {
       [
         { url: "a.jpg", scope: "all" },
         { url: "b.jpg", scope: "color-1" },
-        { url: "propia.jpg", scope: "color-1" },
       ],
       [conPortada, variante("p2", "color-2")],
     );
@@ -181,12 +175,13 @@ describe("guardar un grupo con fotos sin repartir", () => {
     fireEvent.click(screen.getByRole("button", { name: /Guardar grupo/i }));
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1));
 
-    const enviadas = mocks.patch.mock.calls[0][1].images as {
-      url: string;
-      isMain?: boolean;
-    }[];
-    const propia = enviadas.find((i) => i.url === "propia.jpg");
-    expect(propia, "la foto propia de la variante no llegó al guardado").toBeDefined();
-    expect(propia!.isMain).toBe(true);
+    const body = mocks.patch.mock.calls[0][1] as {
+      images: { url: string }[];
+      variants: { id: string; images: string[]; coverUrl?: string }[];
+    };
+    expect(body.images.map((i) => i.url)).toEqual(["a.jpg", "b.jpg"]);
+    const p1 = body.variants.find((v) => v.id === "p1")!;
+    expect(p1.images).toEqual(["propia.jpg"]);
+    expect(p1.coverUrl).toBe("propia.jpg");
   });
 });

@@ -86,6 +86,7 @@ export async function syncVariantGallery(
     imageMapping,
     colorId,
     designId,
+    coverUrl: requestedCover,
     now = new Date(),
   }: {
     productId: string;
@@ -94,6 +95,8 @@ export async function syncVariantGallery(
     imageMapping?: ImageMappingEntry[] | null;
     colorId?: string | null;
     designId?: string | null;
+    /** Elección explícita: gana sobre la portada actual si la foto sigue en la galería. */
+    coverUrl?: string | null;
     now?: Date;
   },
 ) {
@@ -129,7 +132,7 @@ export async function syncVariantGallery(
     imageMapping,
     colorId,
     designId,
-    currentCoverUrl: existing.find((row) => row.isMain)?.url ?? null,
+    currentCoverUrl: requestedCover?.trim() || existing.find((row) => row.isMain)?.url || null,
   });
   const coverUrl = plan.find((image) => image.isMain)?.url ?? null;
   const ownSet = new Set(ownList);

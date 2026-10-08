@@ -83,10 +83,10 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
   const covers = async (productId: string) => (await gallery(productId)).filter((image) => image.isMain).map((image) => image.url);
   const urls = async (productId: string) => (await gallery(productId)).map((image) => image.url);
 
-  const variantRow = (ctx: Ctx, key: keyof Ctx["ids"], images: string[] = []) => {
+  const variantRow = (ctx: Ctx, key: keyof Ctx["ids"], images: string[] = [], coverUrl?: string) => {
     const colorId = key === "vB1" ? ctx.colorB.id : ctx.colorA.id;
     const designId = key === "vA2" ? ctx.design2.id : ctx.design1.id;
-    return { id: ctx.ids[key], sizeId: ctx.f.component.sizeId, colorId, designId, images };
+    return { id: ctx.ids[key], sizeId: ctx.f.component.sizeId, colorId, designId, images, coverUrl };
   };
 
   /** g1 es portada en «Todas»; vA1 tiene `own` como propia. */
@@ -129,7 +129,13 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     return { f, colorA, colorB, design1, design2: { id: design2.id }, groupId: group.id, ids: { vA1: bySku("VA1"), vB1: bySku("VB1"), vA2: bySku("VA2") }, own, g1, g2 };
   }
 
-  async function patchGroup(ctx: Ctx, images: { url: string; isMain?: boolean }[], imageMapping: { url: string; scope: string }[], variantImages: Partial<Record<keyof Ctx["ids"], string[]>> = { vA1: [ctx.own] }) {
+  async function patchGroup(
+    ctx: Ctx,
+    images: { url: string; isMain?: boolean }[],
+    imageMapping: { url: string; scope: string }[],
+    variantImages: Partial<Record<keyof Ctx["ids"], string[]>> = { vA1: [ctx.own] },
+    variantCovers: Partial<Record<keyof Ctx["ids"], string>> = {},
+  ) {
     const { PATCH } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");
     const response = await PATCH(
       json("PATCH", {
@@ -140,7 +146,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
         imageMapping,
         preserveSlug: true,
         confirmRemovals: true,
-        variants: (["vA1", "vB1", "vA2"] as const).map((key) => variantRow(ctx, key, variantImages[key] ?? [])),
+        variants: (["vA1", "vB1", "vA2"] as const).map((key) => variantRow(ctx, key, variantImages[key] ?? [], variantCovers[key])),
       }),
       { params: { storeId: ctx.f.store.id, productGroupId: ctx.groupId } },
     );
@@ -473,5 +479,102 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
       expect(rows.every((row) => row.origin === "OWN")).toBe(true);
       expect(rows.filter((row) => row.isMain)).toHaveLength(1);
     }
+  });
+
+  describe("deletions from the group editor (#17)", () => {
+    const deletedPublicIds = async () => {
+      const cloudinary = (await import("@/lib/cloudinary")).default as unknown as { v2: { api: { delete_resources: ReturnType<typeof vi.fn> } } };
+      return cloudinary.v2.api.delete_resources.mock.calls.flatMap((call) => call[0] as string[]);
+    };
+    const publicId = (url: string) => url.split("/").pop()!.replace(/\.jpg$/, "");
+    const allMapping = (ctx: Ctx, ...extra: string[]) => [
+      { url: ctx.g1, scope: "all" },
+      ...extra.map((url) => ({ url, scope: "all" })),
+    ];
+
+    afterEach(async () => {
+      const cloudinary = (await import("@/lib/cloudinary")).default as unknown as { v2: { api: { delete_resources: ReturnType<typeof vi.fn> } } };
+      cloudinary.v2.api.delete_resources.mockClear();
+    });
+
+    it("dropping a variant's own photo removes the row and its file; the cover falls to the next photo", async () => {
+      const ctx = await setup();
+      expect(await covers(ctx.ids.vA1)).toEqual([ctx.own]);
+
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [] });
+
+      expect(await urls(ctx.ids.vA1)).toEqual([ctx.g1]);
+      expect(await covers(ctx.ids.vA1)).toEqual([ctx.g1]);
+      expect(await deletedPublicIds()).toContain(publicId(ctx.own));
+    });
+
+    it("deleting a group photo that a variant also holds as own: «yes» removes the own row and the file", async () => {
+      const ctx = await setup();
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }, { url: ctx.g2 }], allMapping(ctx, ctx.g2), { vA1: [ctx.own, ctx.g2] });
+      expect((await gallery(ctx.ids.vA1)).map((row) => [row.url, row.origin])).toEqual([
+        [ctx.own, "OWN"],
+        [ctx.g2, "OWN"],
+        [ctx.g1, "GROUP_COPY"],
+      ]);
+
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own] });
+
+      for (const id of Object.values(ctx.ids)) expect(await urls(id)).not.toContain(ctx.g2);
+      expect(await deletedPublicIds()).toContain(publicId(ctx.g2));
+    });
+
+    it("deleting a group photo that a variant also holds as own: «no» keeps the own row and the file", async () => {
+      const ctx = await setup();
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }, { url: ctx.g2 }], allMapping(ctx, ctx.g2), { vA1: [ctx.own, ctx.g2] });
+
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, ctx.g2] });
+
+      expect((await gallery(ctx.ids.vA1)).map((row) => [row.url, row.origin])).toEqual([
+        [ctx.own, "OWN"],
+        [ctx.g2, "OWN"],
+        [ctx.g1, "GROUP_COPY"],
+      ]);
+      expect(await urls(ctx.ids.vB1)).toEqual([ctx.g1]);
+      expect(await deletedPublicIds()).not.toContain(publicId(ctx.g2));
+    });
+
+    it("an explicit cover from the group editor wins over the current one; without it the cover stays", async () => {
+      const ctx = await setup();
+      const second = photo("segunda");
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, second] });
+      expect(await covers(ctx.ids.vA1)).toEqual([ctx.own]);
+
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, second] }, { vA1: second });
+      expect(await covers(ctx.ids.vA1)).toEqual([second]);
+      expect(await urls(ctx.ids.vA1)).toEqual([ctx.own, second, ctx.g1]);
+
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, second] });
+      expect(await covers(ctx.ids.vA1)).toEqual([second]);
+    });
+
+    it("«Bitácora» case: each variant's own cover, not a group photo, is really removed when the editor drops it", async () => {
+      const ctx = await setup();
+      const coverB = photo("portada-b1");
+      const coverA2 = photo("portada-a2");
+      const extra = photo("todas-2");
+      await patchGroup(
+        ctx,
+        [{ url: ctx.g1, isMain: true }, { url: extra }],
+        allMapping(ctx, extra),
+        { vA1: [ctx.own], vB1: [coverB], vA2: [coverA2] },
+        { vA1: ctx.own, vB1: coverB, vA2: coverA2 },
+      );
+      expect(await covers(ctx.ids.vB1)).toEqual([coverB]);
+
+      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }, { url: extra }], allMapping(ctx, extra), { vA1: [], vB1: [], vA2: [] });
+
+      for (const id of Object.values(ctx.ids)) {
+        expect(await urls(id)).toEqual([ctx.g1, extra]);
+        expect(await covers(id)).toEqual([ctx.g1]);
+      }
+      const groupRows = await testPrisma.image.count({ where: { productGroupId: ctx.groupId } });
+      expect(groupRows).toBe(2);
+      expect(await deletedPublicIds()).toEqual(expect.arrayContaining([publicId(ctx.own), publicId(coverB), publicId(coverA2)]));
+    });
   });
 });

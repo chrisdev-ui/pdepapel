@@ -299,6 +299,12 @@ One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`)
 - A product's own page keeps the group's copies and shows them as «Del grupo».
 - A variant that leaves its group turns its copies into own photos.
 - A variant that switches to another group drops the old copies and gets the new group's distribution. If that would leave it with no photos, the old copies stay as own.
+- The group editor keeps the two kinds of photo apart (#17):
+  - «Fotos del grupo» shows only group photos. The 8-photo cap counts only those.
+  - «Fotos propias de cada variante» shows each saved variant's own photos. The variant payload carries them in `images`, and its explicit cover choice in `coverUrl`, which wins over the current cover.
+  - Removing a photo in either section changes what is saved. Deleting a group photo that a variant also holds as own asks whether to drop those own rows too.
+  - An own photo that the group also delivers to that variant has no trash button there, because it would come back as a copy.
+  - Never merge variant photos back into the group gallery: deleting them there would do nothing, which was the bug in #17.
 
 ### Scheduled work and database pool
 

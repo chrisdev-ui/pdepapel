@@ -4,6 +4,8 @@
  * navegador y las fotos marcadas para quitar.
  */
 
+import { resolveVariantImages, scopeAppliesTo, scopeOf, type ImageMappingEntry } from "@/lib/variant-images";
+
 export type GroupArchiveMode = "per-variant" | "all-archived" | "all-published";
 
 export interface ArchiveRow {
@@ -175,4 +177,76 @@ export function planGeneratedVariants<V extends PlannableRow>(
     else dropped.push(row);
   });
   return { kept, toCreate, keptOutside, dropped };
+}
+
+export interface OwnPhotoVariant {
+  id?: string;
+  name?: string;
+  images?: string[];
+  coverUrl?: string;
+  color?: { id: string } | null;
+  design?: { id: string } | null;
+}
+
+/** Una foto propia marcada para quitar de una variante; `viaGroup` si vino de borrar esa foto del grupo. */
+export interface OwnPhotoRemoval {
+  productId: string;
+  url: string;
+  viaGroup?: string;
+}
+
+/** Variantes guardadas que tienen `url` como foto propia (mismo archivo que una foto del grupo). */
+export function ownPhotoHolders(url: string, variants: OwnPhotoVariant[]): { id: string; name: string }[] {
+  return variants
+    .filter((variant) => variant.id && (variant.images ?? []).includes(url))
+    .map((variant) => ({ id: variant.id as string, name: variant.name || "Variante sin nombre" }));
+}
+
+/** Lo que viaja al servidor: sin las fotos propias marcadas y sin una portada que ya no está. */
+export function applyOwnPhotoRemovals<T extends OwnPhotoVariant>(variants: T[], removals: OwnPhotoRemoval[]): T[] {
+  if (removals.length === 0) return variants;
+  return variants.map((variant) => {
+    const gone = new Set(removals.filter((removal) => removal.productId === variant.id).map((removal) => removal.url));
+    if (gone.size === 0) return variant;
+    return {
+      ...variant,
+      images: (variant.images ?? []).filter((url) => !gone.has(url)),
+      coverUrl: variant.coverUrl && gone.has(variant.coverUrl) ? undefined : variant.coverUrl,
+    };
+  });
+}
+
+/**
+ * Una foto propia que además le llega desde el grupo: quitarla como propia
+ * no la quita de la galería (vuelve como copia), así que no se ofrece.
+ */
+export function isAlsoDeliveredByGroup(
+  url: string,
+  variant: OwnPhotoVariant,
+  groupImages: { url: string; scope?: string | null }[],
+  mapping: ImageMappingEntry[] | undefined,
+): boolean {
+  const photo = groupImages.find((image) => image.url === url);
+  if (!photo) return false;
+  return scopeAppliesTo(scopeOf(photo, mapping), variant.color?.id, variant.design?.id);
+}
+
+/** Nombres de las variantes que quedarían sin ninguna foto tras el guardado. */
+export function variantsLeftWithoutPhotos(
+  variants: OwnPhotoVariant[],
+  groupImages: { url: string }[],
+  mapping: ImageMappingEntry[] | undefined,
+): string[] {
+  return variants
+    .filter(
+      (variant) =>
+        resolveVariantImages({
+          variantImages: variant.images ?? [],
+          groupImages,
+          imageMapping: mapping,
+          colorId: variant.color?.id,
+          designId: variant.design?.id,
+        }).length === 0,
+    )
+    .map((variant) => variant.name || "Variante sin nombre");
 }

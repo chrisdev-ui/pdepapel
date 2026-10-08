@@ -205,6 +205,7 @@ export async function POST(
 
         const gallery = {
           ownUrls: variant.images,
+          coverUrl: variant.coverUrl,
           groupPhotos: images,
           imageMapping,
           colorId: ids.colorId,

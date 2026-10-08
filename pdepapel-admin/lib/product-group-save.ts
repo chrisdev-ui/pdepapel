@@ -36,6 +36,8 @@ export interface VariantPayload {
   isArchived?: boolean;
   description?: string;
   images?: string[];
+  /** Portada elegida en el editor del grupo; sin ella se conserva la actual. */
+  coverUrl?: string | null;
   gtin?: string | null;
   mpn?: string | null;
   hasNoProductIdentifier?: boolean;

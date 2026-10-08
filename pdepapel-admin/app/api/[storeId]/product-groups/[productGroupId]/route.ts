@@ -331,6 +331,7 @@ export async function PATCH(
 
         const gallery = {
           ownUrls: variant.images,
+          coverUrl: variant.coverUrl,
           groupPhotos: images,
           imageMapping,
           colorId: ids.colorId,

@@ -8,6 +8,8 @@ import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 interface UseUnsavedChangesGuardOptions {
   /** Desactiva la guarda mientras se envía o cuando ya se guardó. */
   enabled?: boolean;
+  /** Cambios que viven fuera de react-hook-form (p. ej. fotos marcadas para quitar). */
+  hasPendingChanges?: boolean;
 }
 
 /**
@@ -18,10 +20,10 @@ interface UseUnsavedChangesGuardOptions {
  */
 export function useUnsavedChangesGuard<T extends FieldValues>(
   form: UseFormReturn<T>,
-  { enabled = true }: UseUnsavedChangesGuardOptions = {},
+  { enabled = true, hasPendingChanges = false }: UseUnsavedChangesGuardOptions = {},
 ) {
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
-  const isDirty = form.formState.isDirty;
+  const isDirty = form.formState.isDirty || hasPendingChanges;
   const active = enabled && isDirty;
 
   useEffect(() => {

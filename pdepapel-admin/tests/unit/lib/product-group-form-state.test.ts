@@ -9,6 +9,11 @@ import {
   planGeneratedVariants,
   shouldBlockForUnassignedImages,
   stripAdoptedRowsFromDraft,
+  applyOwnPhotoRemovals,
+  isAlsoDeliveredByGroup,
+  ownPhotoHolders,
+  variantsLeftWithoutPhotos,
+  type OwnPhotoVariant,
 } from "@/lib/product-group-form-state";
 
 /** La casilla «Archivado» leía products[0] y pisaba a todas las variantes al guardar. */
@@ -210,5 +215,39 @@ describe("fotos sin repartir", () => {
     expect(
       shouldBlockForUnassignedImages(sobreviven, reparto, dosVariantes),
     ).toEqual({ block: false, missing: [] });
+  });
+});
+
+describe("fotos propias de cada variante en el editor del grupo", () => {
+  const rojo = { id: "p-rojo", name: "Rojo", images: ["portada.jpg", "x.jpg"], coverUrl: "portada.jpg", color: { id: "rojo" }, design: { id: "flores" } };
+  const azul: OwnPhotoVariant = { id: "p-azul", name: "Azul", images: ["x.jpg"], color: { id: "azul" }, design: { id: "flores" } };
+  const nueva = { name: "Nueva", images: ["x.jpg"], color: { id: "verde" }, design: { id: "flores" } };
+
+  it("ownPhotoHolders lista solo variantes guardadas que la tienen como propia", () => {
+    expect(ownPhotoHolders("x.jpg", [rojo, azul, nueva])).toEqual([
+      { id: "p-rojo", name: "Rojo" },
+      { id: "p-azul", name: "Azul" },
+    ]);
+    expect(ownPhotoHolders("otra.jpg", [rojo, azul])).toEqual([]);
+  });
+
+  it("applyOwnPhotoRemovals quita la foto solo de esa variante y suelta una portada que ya no está", () => {
+    const [r, a] = applyOwnPhotoRemovals([rojo, azul], [{ productId: "p-rojo", url: "portada.jpg" }]);
+    expect(r.images).toEqual(["x.jpg"]);
+    expect(r.coverUrl).toBeUndefined();
+    expect(a).toBe(azul);
+  });
+
+  it("isAlsoDeliveredByGroup: sí si una foto del grupo con el mismo archivo le toca a la variante", () => {
+    const group = [{ url: "x.jpg" }];
+    expect(isAlsoDeliveredByGroup("x.jpg", rojo, group, [{ url: "x.jpg", scope: "COMBO|rojo|flores" }])).toBe(true);
+    expect(isAlsoDeliveredByGroup("x.jpg", azul, group, [{ url: "x.jpg", scope: "COMBO|rojo|flores" }])).toBe(false);
+    expect(isAlsoDeliveredByGroup("portada.jpg", rojo, group, [])).toBe(false);
+  });
+
+  it("variantsLeftWithoutPhotos nombra las variantes sin propias ni fotos del grupo que les toquen", () => {
+    const vacia = { ...azul, images: [] };
+    expect(variantsLeftWithoutPhotos([rojo, vacia], [{ url: "g.jpg" }], [{ url: "g.jpg", scope: "COLOR|rojo" }])).toEqual(["Azul"]);
+    expect(variantsLeftWithoutPhotos([rojo, vacia], [{ url: "g.jpg" }], [{ url: "g.jpg", scope: "all" }])).toEqual([]);
   });
 });

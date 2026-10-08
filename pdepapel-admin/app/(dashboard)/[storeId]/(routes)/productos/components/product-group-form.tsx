@@ -89,14 +89,21 @@ import {
 import axios from "axios";
 import { imageUrlKey, resolveVariantImages } from "@/lib/variant-images";
 import {
+  applyOwnPhotoRemovals,
   applyPendingImageRemovals,
   archivePayload,
   deriveArchiveMode,
   describeArchiveRows,
+  isAlsoDeliveredByGroup,
+  ownPhotoHolders,
   shouldBlockForUnassignedImages,
   stripAdoptedRowsFromDraft,
+  variantsLeftWithoutPhotos,
   type GroupArchiveMode,
+  type OwnPhotoRemoval,
 } from "@/lib/product-group-form-state";
+import { UnassignedPhotosBanner } from "./unassigned-photos-banner";
+import { VariantOwnPhotos } from "./variant-own-photos";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { cn, currencyFormatter } from "@/lib/utils";
@@ -157,6 +164,7 @@ const formSchema = z.object({
         isArchived: z.boolean().optional(),
         description: z.string().optional(),
         images: z.array(z.string()).optional(),
+        coverUrl: z.string().optional(),
         // Identificadores por variante: el grupo nunca los enviaba, asi que
         // toda variante nacia "sin identificador" para Google Merchant.
         gtin: z
@@ -560,40 +568,22 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     const savedUrls = new Set(saved.map((entry) => entry.url));
     return [
       ...saved,
-      ...reconstructMapping(getAllImages(), initialData.products).filter(
+      ...reconstructMapping(groupGallery(), initialData.products).filter(
         (entry) => !savedUrls.has(entry.url),
       ),
     ];
   };
 
-  const getAllImages = () => {
-    if (!initialData) return [];
-    const groupImages = initialData.images || [];
-    const variantImages =
-      initialData.products?.flatMap((p) => p.images || []) || [];
-
-    const map = new Map<string, { url: string; isMain: boolean }>();
-    // Group images have isMain flag - preserve it
-    groupImages.forEach((img) =>
-      map.set(img.url, { url: img.url, isMain: img.isMain ?? false }),
-    );
-    variantImages.forEach((img) => {
-      if (!map.has(img.url)) {
-        // La portada de la variante se lee de lo guardado, no se da por
-        // falsa. Forzar `isMain: false` aquí borraba la portada de toda
-        // variante con fotos propias en cuanto se abría el grupo.
-        map.set(img.url, { url: img.url, isMain: img.isMain ?? false });
-      }
-    });
-    return Array.from(map.values());
-  };
+  // Solo las fotos del grupo: las propias de cada variante van en su sección.
+  const groupGallery = () =>
+    (initialData?.images ?? []).map((img) => ({ url: img.url, isMain: img.isMain ?? false }));
 
   const defaultValues: ProductGroupFormValues = initialData
     ? {
         name: initialData.name,
         brand: initialData.brand || "",
         description: initialData.description || "",
-        images: getAllImages(),
+        images: groupGallery(),
         categoryId: initialData.products?.[0]?.categoryId || "",
         sizeIds: Array.from(
           new Set(initialData.products?.map((p) => p.sizeId) || []),
@@ -638,6 +628,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             images: p.images
               .filter((img) => img.origin !== "GROUP_COPY")
               .map((img) => img.url),
+            coverUrl: p.images.find((img) => img.isMain && img.origin !== "GROUP_COPY")?.url,
             description: p.description || "",
             gtin: p.gtin || "",
             mpn: p.mpn || "",
@@ -904,10 +895,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   });
   // Fotos del grupo marcadas con la papelera: se quitan al guardar, nunca antes.
   const [pendingImageRemovals, setPendingImageRemovals] = useState<string[]>([]);
+  const [pendingOwnRemovals, setPendingOwnRemovals] = useState<OwnPhotoRemoval[]>([]);
+  const [blockedSave, setBlockedSave] = useState(false);
 
   useFormValidationToast({ form });
   const { confirmLeave, confirmationDialog: leaveDialog } =
-    useUnsavedChangesGuard(form, { enabled: !loading });
+    useUnsavedChangesGuard(form, {
+      enabled: !loading,
+      hasPendingChanges: pendingImageRemovals.length > 0 || pendingOwnRemovals.length > 0,
+    });
 
   const onClear = async () => {
     // Diff Logic to clean up orphan images
@@ -987,20 +983,32 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         data.variants?.length ?? 0,
       );
       if (block) {
+        setBlockedSave(true);
         toast({
           title: "Faltan fotos por repartir",
           description: `${missing.length} ${missing.length === 1 ? "foto no tiene" : "fotos no tienen"} un destino asignado. Baja a «Fotos y reparto» y elige a quién le toca cada una (puede ser «Todas las variantes» si es a propósito).`,
           variant: "destructive",
         });
-        document
-          .getElementById("fotos")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        scrollToUnassigned(missing[0]);
         return;
+      }
+
+      const variants = applyOwnPhotoRemovals(data.variants ?? [], pendingOwnRemovals);
+      const emptied = variantsLeftWithoutPhotos(variants, images, mapping);
+      if (emptied.length > 0) {
+        const keep = await requestConfirmation({
+          title: emptied.length === 1 ? "Una variante queda sin fotos" : `${emptied.length} variantes quedan sin fotos`,
+          description: `${emptied.map((name) => `«${name}»`).join(", ")} no ${emptied.length === 1 ? "tendrá" : "tendrán"} ninguna foto en la tienda. Puedes guardar igual o volver y repartirles una foto del grupo.`,
+          confirmLabel: "Guardar igual",
+          cancelLabel: "Volver",
+        });
+        if (!keep) return;
       }
 
       const { archiveMode, ...rest } = data;
       const payload = {
         ...rest,
+        variants,
         images,
         imageMapping: mapping,
         // Booleano solo con «todas archivadas» / «todas a la venta»; con
@@ -1024,6 +1032,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       }
 
       setPendingImageRemovals([]);
+      setPendingOwnRemovals([]);
+      setBlockedSave(false);
       clearStorage(); // Clear storage on success
       router.push(`/${params.storeId}/productos`);
       router.refresh();
@@ -1490,7 +1500,109 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   }, [currentVariants, colors, designs]);
 
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
-  const isDirty = form.formState.isDirty || pendingImageRemovals.length > 0;
+  const isDirty =
+    form.formState.isDirty || pendingImageRemovals.length > 0 || pendingOwnRemovals.length > 0;
+
+  const liveGroupImages = applyPendingImageRemovals(currentImages ?? [], pendingImageRemovals);
+  const liveMapping = currentMapping.filter((entry) => !pendingImageRemovals.includes(entry.url));
+  const unassignedUrls = shouldBlockForUnassignedImages(
+    liveGroupImages,
+    liveMapping,
+    currentVariants?.length ?? 0,
+  ).missing;
+
+  useEffect(() => {
+    if (unassignedUrls.length === 0) setBlockedSave(false);
+  }, [unassignedUrls.length]);
+
+  function scrollToUnassigned(url?: string) {
+    const card = Array.from(document.querySelectorAll<HTMLElement>("[data-reparto-url]")).find(
+      (element) => element.dataset.repartoUrl === url,
+    );
+    (card ?? document.getElementById("fotos"))?.scrollIntoView({ behavior: "smooth", block: "center" });
+    card?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+  }
+
+  /** Una foto del grupo que alguna variante también tiene como propia: se pregunta, nunca se quita en silencio. */
+  const markGroupPhotoRemoval = useCallback(
+    async (url: string) => {
+      setPendingImageRemovals((pending) => (pending.includes(url) ? pending : [...pending, url]));
+      const holders = ownPhotoHolders(url, form.getValues("variants") ?? []);
+      if (holders.length === 0) return;
+      const one = holders.length === 1;
+      const alsoRemove = await requestConfirmation({
+        title: "¿Quitarla también de esas variantes?",
+        description: `También está como foto propia en: ${holders.map((holder) => `«${holder.name}»`).join(", ")}. Si dices que sí, también se borra de ${one ? "esa variante" : "esas variantes"} al guardar. Si dices que no, ${one ? "la conserva" : "la conservan"} como foto propia.`,
+        confirmLabel: "Sí, quitarla también",
+        cancelLabel: "No, solo del grupo",
+        destructive: true,
+      });
+      if (!alsoRemove) return;
+      setPendingOwnRemovals((pending) => [
+        ...pending.filter((removal) => removal.url !== url),
+        ...holders.map((holder) => ({ productId: holder.id, url, viaGroup: url })),
+      ]);
+    },
+    [form, requestConfirmation],
+  );
+
+  const undoGroupPhotoRemoval = useCallback((url: string) => {
+    setPendingImageRemovals((pending) => pending.filter((item) => item !== url));
+    setPendingOwnRemovals((pending) => pending.filter((removal) => removal.viaGroup !== url));
+  }, []);
+
+  const removeVariantPhoto = useCallback(
+    async (productId: string, url: string) => {
+      const variant = (form.getValues("variants") ?? []).find((row) => row.id === productId);
+      if (!variant) return;
+      const name = variant.name || "esta variante";
+      const confirmed = await requestConfirmation({
+        title: `¿Quitar esta foto de «${name}»?`,
+        description: `Se borra de esa variante al guardar. Las demás variantes y las fotos del grupo no cambian.${
+          variant.coverUrl === url ? " Es su portada: pasa a serlo la siguiente foto." : ""
+        }`,
+        confirmLabel: "Quitar de la variante",
+        destructive: true,
+      });
+      if (!confirmed) return;
+      setPendingOwnRemovals((pending) =>
+        pending.some((removal) => removal.productId === productId && removal.url === url)
+          ? pending
+          : [...pending, { productId, url }],
+      );
+    },
+    [form, requestConfirmation],
+  );
+
+  const undoVariantPhotoRemoval = useCallback((productId: string, url: string) => {
+    setPendingOwnRemovals((pending) =>
+      pending.filter((removal) => !(removal.productId === productId && removal.url === url)),
+    );
+  }, []);
+
+  const setVariantCover = useCallback(
+    (productId: string, url: string) => {
+      const variants = form.getValues("variants") ?? [];
+      form.setValue(
+        "variants",
+        variants.map((row) => (row.id === productId ? { ...row, coverUrl: url } : row)),
+        { shouldDirty: true },
+      );
+    },
+    [form],
+  );
+
+  const ownPhotoRows = (currentVariants ?? [])
+    .filter((variant) => variant.id)
+    .map((variant) => ({
+      id: variant.id as string,
+      name: variant.name || "Variante sin nombre",
+      images: variant.images ?? [],
+      coverUrl: variant.coverUrl,
+      groupDelivered: (variant.images ?? []).filter((url) =>
+        isAlsoDeliveredByGroup(url, variant, liveGroupImages, liveMapping),
+      ),
+    }));
 
   const onClearConfirmed = useCallback(async () => {
     const ok = await requestConfirmation({
@@ -1503,6 +1615,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     });
     if (ok) {
       setPendingImageRemovals([]);
+      setPendingOwnRemovals([]);
+      setBlockedSave(false);
       await onClear();
     }
   }, [isEdit, onClear, requestConfirmation]);
@@ -1530,7 +1644,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             supplierId: product.supplierId || "",
             isFeatured: product.isFeatured,
             isArchived: product.isArchived,
-            images: product.images.map((img) => img.url),
+            images: product.images.filter((img) => img.origin !== "GROUP_COPY").map((img) => img.url),
+            coverUrl: product.images.find((img) => img.isMain && img.origin !== "GROUP_COPY")?.url,
             description: product.description || "",
             gtin: product.gtin || "",
             mpn: product.mpn || "",
@@ -1628,6 +1743,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       `${pendingRemovals.length} ${pendingRemovals.length === 1 ? "se quita" : "se quitan"}`,
     pendingImageRemovals.length > 0 &&
       `${pendingImageRemovals.length} ${pendingImageRemovals.length === 1 ? "foto se quita" : "fotos se quitan"}`,
+    pendingOwnRemovals.length > 0 &&
+      `${pendingOwnRemovals.length} ${pendingOwnRemovals.length === 1 ? "foto propia se quita" : "fotos propias se quitan"}`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1754,6 +1871,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full flex-col gap-4">
+          <UnassignedPhotosBanner
+            count={unassignedUrls.length}
+            blocked={blockedSave}
+            onGoToPhotos={() => scrollToUnassigned(unassignedUrls[0])}
+          />
           <SectionCard
             id="fotos"
             step={1}
@@ -1773,10 +1895,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       maxImages={8}
                       onChange={(images) => field.onChange(images)}
                       pendingRemovals={pendingImageRemovals}
-                      onMarkRemoval={(url) =>
-                        setPendingImageRemovals((pending) => (pending.includes(url) ? pending : [...pending, url]))
-                      }
-                      onUndoRemoval={(url) => setPendingImageRemovals((pending) => pending.filter((item) => item !== url))}
+                      onMarkRemoval={(url) => void markGroupPhotoRemoval(url)}
+                      onUndoRemoval={undoGroupPhotoRemoval}
                     />
                   </FormControl>
                   <FormMessage />
@@ -1808,10 +1928,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                     return (
                       <div
                         key={img.url}
+                        data-reparto-url={img.url}
                         className={cn(
                           "flex flex-col gap-2 rounded-lg border p-2",
                           isPending && "opacity-50",
                           unassigned && "border-amber-400 dark:border-amber-500",
+                          unassigned && blockedSave && "border-destructive ring-2 ring-destructive ring-offset-2",
                         )}
                       >
                         <div className="relative aspect-square overflow-hidden rounded-md border">
@@ -1849,6 +1971,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 </div>
               </div>
             )}
+
+            <VariantOwnPhotos
+              variants={ownPhotoRows}
+              pending={pendingOwnRemovals}
+              disabled={loading}
+              onRemove={(productId, url) => void removeVariantPhoto(productId, url)}
+              onUndo={undoVariantPhotoRemoval}
+              onSetCover={setVariantCover}
+            />
           </SectionCard>
 
           <SectionCard
@@ -2315,7 +2446,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             note={
               <>
                 {isDirty && <ProductTintBadge label="Cambios sin guardar" tone="cream" className="mr-2" />}
-                {pendingSummary
+                {blockedSave && unassignedUrls.length > 0
+                  ? <span className="font-medium text-destructive">{`No se guardó: faltan ${unassignedUrls.length} ${unassignedUrls.length === 1 ? "foto" : "fotos"} por repartir.`}</span>
+                  : pendingSummary
                   ? `Al guardar: ${pendingSummary}.`
                   : isEdit
                     ? "Los cambios se aplican al guardar y la tienda se actualiza sola."
