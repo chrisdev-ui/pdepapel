@@ -1,4 +1,6 @@
 import { scrubMargins } from "@/lib/viewer-payloads";
+import { MERCADOLIBRE_MAX_LISTING_PICTURES } from "@/lib/mercadolibre/listings";
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { requireStoreRead } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import {
@@ -226,8 +228,8 @@ export async function GET(
             size: { select: { name: true } },
             images: {
               select: { url: true, isMain: true },
-              orderBy: { isMain: "desc" },
-              take: 10,
+              orderBy: GALLERY_ORDER,
+              take: MERCADOLIBRE_MAX_LISTING_PICTURES,
             },
             category: {
               select: { id: true, name: true },

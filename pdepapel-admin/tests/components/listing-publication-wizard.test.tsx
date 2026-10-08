@@ -5,6 +5,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// jsdom no descarga imágenes: cada foto mide 1200 × 1200, salvo las que una prueba pida.
+const pictureMocks = vi.hoisted(() => ({ sizes: {} as Record<string, { width: number; height: number } | "error"> }));
+vi.mock("@/app/(dashboard)/[storeId]/(routes)/mercadolibre/components/use-picture-checks", () => ({
+  usePictureChecks: (urls: readonly string[]) =>
+    Object.fromEntries(urls.map((url) => [url, pictureMocks.sizes[url] ?? { width: 1200, height: 1200 }])),
+}));
+
 vi.mock("next/image", () => ({
   default: (props: { alt: string }) => <img alt={props.alt} />,
 }));
@@ -51,7 +58,28 @@ function WizardHarness({
   suggestionsNotice = null,
   withColorList = false,
   onProductChange = () => undefined,
+  extraAttributes = [],
+  isKit = false,
+  images = product.images,
+  onSearchCategories = async () => undefined,
+  validation,
+  onValidate,
+  initialPrice = "24000",
+  noCost = false,
 }: {
+  noCost?: boolean;
+  initialPrice?: string;
+  extraAttributes?: { id: string; name: string; required: boolean; conditionalRequired?: boolean; catalogRequired?: boolean; valueType: string; values: { id: string; name: string }[] }[];
+  isKit?: boolean;
+  images?: { url: string }[];
+  onSearchCategories?: (query?: string) => Promise<void>;
+  validation?: {
+    ok: boolean;
+    current: boolean;
+    errors: { step: "producto" | "categoria" | "ficha" | "precio" | null; field: string | null; message: string }[];
+    warnings: { field: string | null; message: string }[];
+  } | null;
+  onValidate?: () => Promise<void>;
   onPublish: () => Promise<void>;
   onProductChange?: (productId: string, product?: unknown) => void;
   onSuggestPrice?: () => Promise<void>;
@@ -77,13 +105,13 @@ function WizardHarness({
   const [form, setForm] = useState({
     productId: product.id,
     familyName,
-    marketplacePrice: "24000",
+    marketplacePrice: initialPrice,
     categoryId: "MCO123",
     listingType: "gold_special",
     stockSafetyBuffer: "0",
     minimumMarginAmount: "12000",
     syncPrice: true,
-    imageUrls: [product.images[0].url],
+    imageUrls: images.map((image) => image.url),
     attributes: "",
     freeShipping: false,
     localPickUp: false,
@@ -145,7 +173,7 @@ function WizardHarness({
       form={form}
       setForm={setForm}
       error={error}
-      selectedProduct={{ ...product, hasNoProductIdentifier }}
+      selectedProduct={{ ...product, ...(noCost ? { acqPrice: null } : {}), images, hasNoProductIdentifier, isKit }}
       suggestions={suggestions}
       suggestionsNotice={suggestionsNotice}
       categoryAttributes={[
@@ -181,6 +209,7 @@ function WizardHarness({
               },
             ]
           : []),
+        ...extraAttributes,
       ]}
       verifiedCategoryId="MCO123"
       categoryTemplates={[]}
@@ -231,7 +260,9 @@ function WizardHarness({
         setForm((current) => ({ ...current, [key]: value }))
       }
       onProductChange={onProductChange}
-      onSearchCategories={async () => undefined}
+      onSearchCategories={onSearchCategories}
+      validation={validation}
+      onValidate={onValidate}
       onCategoryChange={(categoryId) =>
         setForm((current) => ({ ...current, categoryId }))
       }
@@ -473,10 +504,9 @@ describe("ListingPublicationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     const gtin = await screen.findByLabelText(/Código universal de producto/);
-    expect(gtin).toHaveAttribute(
-      "placeholder",
-      "Sin código de barras (marcado en el producto)",
-    );
+    // Editable: una marca registrada exige el código real aunque el producto esté marcado sin él.
+    expect(gtin).toHaveAttribute("placeholder", "Código de barras, si el producto lo tiene");
+    expect(gtin).not.toHaveAttribute("readonly");
     fireEvent.change(screen.getByLabelText(/Marca/), {
       target: { value: "P de Papel" },
     });
@@ -568,5 +598,130 @@ describe("ListingPublicationWizard", () => {
     render(<WizardHarness onPublish={async () => undefined} onProductChange={onProductChange} initialStep={1} />);
     fireEvent.click(await screen.findByRole("button", { name: "Escanear producto local" }));
     expect(onProductChange).toHaveBeenCalledWith("product-scan", expect.objectContaining({ id: "product-scan", sku: "TER-OWA-01" }));
+  });
+
+  // Lo que dejaba a Paula atascada (auditoría #18): fotos, categoría y ficha.
+  describe("where Paula got stuck", () => {
+    afterEach(() => {
+      pictureMocks.sizes = {};
+    });
+
+    it("photos: says exactly which photo is too small for Mercado Libre and does not continue", async () => {
+      pictureMocks.sizes = { "https://example.com/pequena.jpg": { width: 320, height: 400 } };
+      const onPersistStep = vi.fn(async () => true);
+      render(
+        <WizardHarness
+          onPublish={async () => undefined}
+          initialStep={2}
+          onPersistStep={onPersistStep}
+          images={[{ url: "https://example.com/lapicero.jpg" }, { url: "https://example.com/pequena.jpg" }]}
+        />,
+      );
+      expect(screen.getByText("Muy pequeña · 320×400")).toBeVisible();
+      fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+      expect(await screen.findByText(/La foto 2 mide 320 × 400 px; Mercado Libre pide al menos 500 × 500 px/)).toBeVisible();
+      expect(onPersistStep).not.toHaveBeenCalled();
+    });
+
+    it("category: explains each suggestion, flags a wrong one for a kit, and searches what Paula types", async () => {
+      const onSearchCategories = vi.fn(async () => undefined);
+      render(
+        <WizardHarness
+          onPublish={async () => undefined}
+          initialStep={2}
+          isKit
+          onSearchCategories={onSearchCategories}
+          suggestions={[
+            { categoryId: "MCO432665", categoryName: "Kits de Cuidado de la Piel", domainId: "MCO-SKIN_CARE_KITS", domainName: "Kits de cuidado de la piel", path: ["Belleza", "Cuidado de la Piel", "Kits"] },
+          ]}
+        />,
+      );
+      expect(screen.getByText(/no parece de papelería/)).toBeVisible();
+      fireEvent.change(screen.getByLabelText("Buscar otra categoría"), { target: { value: "kit de papelería" } });
+      fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+      expect(onSearchCategories).toHaveBeenCalledWith("kit de papelería");
+      expect(await screen.findByText(/Mercado Libre la sugiere para «kit de papelería»/)).toBeVisible();
+    });
+
+    it("ficha: every conditionally required attribute has its own field with an explanation", async () => {
+      render(
+        <WizardHarness
+          onPublish={async () => undefined}
+          initialStep={3}
+          extraAttributes={[
+            { id: "UNITS_PER_PACK", name: "Cantidad de artículos", required: false, conditionalRequired: true, valueType: "number", values: [] },
+            { id: "MODEL", name: "Modelo", required: false, catalogRequired: true, valueType: "string", values: [] },
+          ]}
+        />,
+      );
+      expect(screen.getByLabelText(/Cantidad de artículos/)).toBeVisible();
+      expect(screen.getByText("Mercado Libre puede exigirlo según el resto de la ficha.")).toBeVisible();
+      expect(screen.getByLabelText(/Modelo/)).toBeVisible();
+      expect(screen.getByText(/lo pide para su catálogo/)).toBeVisible();
+    });
+
+    it("publish waits for a passing validation of the current form", () => {
+      const onValidate = vi.fn(async () => undefined);
+      const { rerender } = render(<WizardHarness onPublish={async () => undefined} initialStep={4} onValidate={onValidate} validation={null} />);
+      expect(screen.getByRole("button", { name: "Publicar ahora" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Validar con Mercado Libre" }));
+      expect(onValidate).toHaveBeenCalled();
+
+      rerender(<WizardHarness onPublish={async () => undefined} initialStep={4} onValidate={onValidate} validation={{ ok: true, current: false, errors: [], warnings: [] }} />);
+      expect(screen.getByText(/Cambiaste algo después de validar/)).toBeVisible();
+      expect(screen.getByRole("button", { name: "Publicar ahora" })).toBeDisabled();
+
+      rerender(<WizardHarness onPublish={async () => undefined} initialStep={4} onValidate={onValidate} validation={{ ok: true, current: true, errors: [], warnings: [] }} />);
+      expect(screen.getByText(/Mercado Libre aceptó esta publicación/)).toBeVisible();
+      expect(screen.getByRole("button", { name: "Publicar ahora" })).toBeEnabled();
+    });
+
+    it("a validation error takes Paula to the exact field", async () => {
+      render(
+        <WizardHarness
+          onPublish={async () => undefined}
+          initialStep={4}
+          onValidate={async () => undefined}
+          validation={{
+            ok: false,
+            current: true,
+            errors: [{ step: "ficha", field: "BRAND", message: "Mercado Libre exige el campo «BRAND» en la ficha técnica." }],
+            warnings: [],
+          }}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Ir al campo" }));
+      const brand = await screen.findByLabelText(/Marca/);
+      expect(brand).toHaveAttribute("aria-invalid", "true");
+      expect(screen.getAllByText("Mercado Libre exige el campo «BRAND» en la ficha técnica.").length).toBeGreaterThan(0);
+    });
+  });
+
+  // Comisión real del harness (4.560), envío obligatorio estimado (8.100), retenciones 1,5 %, costo 7.000.
+  describe("margin on Mercado Libre", () => {
+    it("shows the breakdown and the suggested price for the target profit", () => {
+      render(<WizardHarness onPublish={async () => undefined} initialStep={4} />);
+      const margin = document.getElementById("mercadolibre-margin")!;
+      expect(margin).toHaveTextContent("Precio sugerido: $ 34.900");
+      expect(margin).toHaveTextContent("Deja la ganancia objetivo de $ 12.000 por unidad.");
+      expect(margin).toHaveTextContent("Retenciones (estimado 1,5 %)");
+      expect(margin).toHaveTextContent("Envío que pagas (estimado)");
+      expect(margin).toHaveTextContent("Te queda por unidad$ 3.980");
+    });
+
+    it("warns in plain Spanish below break-even and offers the suggested price", () => {
+      render(<WizardHarness onPublish={async () => undefined} initialStep={4} initialPrice="15000" />);
+      expect(screen.getByText(/Con este precio pierdes \$ 4\.885 por unidad/)).toBeVisible();
+      const use = screen.getByRole("button", { name: /^Usar \$/ });
+      const suggested = use.textContent!.replace("Usar ", "").replace(/\s/g, " ");
+      fireEvent.click(use);
+      expect(screen.queryByText(/Con este precio pierdes/)).toBeNull();
+      expect(document.getElementById("mercadolibre-margin")).toHaveTextContent(`Precio${suggested}`);
+    });
+  });
+
+  it("says when a product has no registered cost instead of proposing a price", () => {
+    render(<WizardHarness onPublish={async () => undefined} noCost />);
+    expect(screen.getByText(/no tiene costo registrado, así que no se puede\s+sugerir un precio/)).toBeVisible();
   });
 });

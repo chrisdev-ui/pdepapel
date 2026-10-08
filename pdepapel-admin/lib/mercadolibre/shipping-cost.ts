@@ -4,6 +4,8 @@ export type MercadoLibreShippingCostEstimate = {
   billableWeightGrams: number | null;
   discountRate: number | null;
   promotedAmount: number | null;
+  /** Mercado Libre exige envío gratis a este precio: el vendedor lo paga siempre. */
+  mandatory: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -36,5 +38,6 @@ export function parseMercadoLibreShippingCostEstimate(
     billableWeightGrams: getNumber(allCountry?.billable_weight),
     discountRate: getNumber(discount?.rate),
     promotedAmount: getNumber(discount?.promoted_amount),
+    mandatory: getString(discount?.type) === "mandatory",
   };
 }

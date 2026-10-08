@@ -24,6 +24,10 @@ export function getListingWizardStepLabel(step: ListingWizardStep): string {
 export type ListingWizardCategoryAttribute = {
   id: string;
   required: boolean;
+  /** Mercado Libre lo exige según el resto de la ficha (GTIN o su motivo, cantidad por pack…). */
+  conditionalRequired?: boolean;
+  /** Mercado Libre lo pide para su catálogo; sin él hay advertencia, no rechazo. */
+  catalogRequired?: boolean;
   /** Opciones cerradas de Mercado Libre, si el atributo las tiene. */
   values?: readonly { id: string; name: string }[];
 };
@@ -45,6 +49,15 @@ export type ListingWizardIssue = {
   message: string;
 };
 
+/** Tope de fotos que el panel envía; cada categoría puede pedir menos (`max_pictures_per_item`). */
+export const MERCADOLIBRE_MAX_LISTING_PICTURES = 10;
+
+/** Lado mínimo de una foto según Mercado Libre (500 × 500 px). */
+export const MERCADOLIBRE_MIN_PICTURE_SIDE = 500;
+
+/** Tamaño real de la foto que descargará Mercado Libre, o su estado de carga. */
+export type ListingWizardImageCheck = { width: number; height: number } | "pending" | "error";
+
 export type ListingWizardValidationInput = {
   step: ListingWizardStep;
   productId: string;
@@ -62,6 +75,10 @@ export type ListingWizardValidationInput = {
   belowCostReason?: string;
   /** El producto está marcado «sin identificador»: un GTIN obligatorio queda cubierto. */
   productHasNoIdentifier?: boolean;
+  /** Tamaño de cada foto elegida; sin este dato no se revisa el tamaño. */
+  imageChecks?: Readonly<Record<string, ListingWizardImageCheck>>;
+  /** Máximo de fotos de la categoría (`max_pictures_per_item`). */
+  maxPictures?: number | null;
 };
 
 function parseAttributeValues(value: string) {
@@ -101,6 +118,8 @@ export function getListingWizardStepIssue({
   transportationCost = null,
   belowCostReason = "",
   productHasNoIdentifier = false,
+  imageChecks,
+  maxPictures = null,
 }: ListingWizardValidationInput): ListingWizardIssue | null {
   const issue = (field: ListingWizardField, message: string): ListingWizardIssue => ({
     step,
@@ -130,6 +149,28 @@ export function getListingWizardStepIssue({
     }
     if (imageUrls.length === 0)
       return issue("imageUrls", "Selecciona al menos una foto para publicar");
+    if (maxPictures && imageUrls.length > maxPictures) {
+      return issue("imageUrls", `Mercado Libre acepta máximo ${maxPictures} fotos en esta categoría. Quita ${imageUrls.length - maxPictures}.`);
+    }
+    if (imageChecks) {
+      const min = MERCADOLIBRE_MIN_PICTURE_SIDE;
+      for (let index = 0; index < imageUrls.length; index += 1) {
+        const url = imageUrls[index];
+        const check = imageChecks[url] ?? "pending";
+        if (check === "pending") {
+          return issue("imageUrls", "Revisando el tamaño de las fotos; espera un momento.");
+        }
+        if (check === "error") {
+          return issue("imageUrls", `La foto ${index + 1} no se pudo cargar. Quítala o vuelve a intentarlo.`);
+        }
+        if (check.width < min || check.height < min) {
+          return issue(
+            "imageUrls",
+            `La foto ${index + 1} mide ${check.width} × ${check.height} px; Mercado Libre pide al menos ${min} × ${min} px. Quítala o reemplázala por una más grande.`,
+          );
+        }
+      }
+    }
   }
 
   if (step === 3) {
@@ -140,6 +181,20 @@ export function getListingWizardStepIssue({
         !attributeValues.get(attribute.id.toUpperCase()) &&
         !(productHasNoIdentifier && attribute.id.toUpperCase() === "GTIN"),
     );
+
+    const emptyReason = categoryAttributes.find((attribute) => attribute.id.toUpperCase() === "EMPTY_GTIN_REASON");
+    if (
+      missingAttributes.length === 0 &&
+      productHasNoIdentifier &&
+      emptyReason &&
+      !attributeValues.get("GTIN") &&
+      !attributeValues.get("EMPTY_GTIN_REASON")
+    ) {
+      return issue(
+        "attribute:EMPTY_GTIN_REASON",
+        "Escribe el código de barras (GTIN) o elige el motivo por el que el producto no lo tiene.",
+      );
+    }
 
     if (missingAttributes.length > 0) {
       const first = missingAttributes[0].id.toUpperCase();
@@ -211,6 +266,7 @@ export function getInitialListingWizardStep(input: {
 }
 
 export type ListingWizardPrefillProduct = {
+  isKit?: boolean;
   brand?: string | null;
   gtin?: string | null;
   mpn?: string | null;
@@ -230,13 +286,42 @@ function findAllowedValue(
   return match ? match.name : null;
 }
 
-function findEmptyGtinReason(attribute: ListingWizardCategoryAttribute): string | null {
+/** Ids de MCO: «El producto no tiene código registrado» y «El producto es un kit o un pack». */
+const EMPTY_GTIN_REASON_NOT_REGISTERED = "17055160";
+const EMPTY_GTIN_REASON_KIT = "17055159";
+
+function findEmptyGtinReason(attribute: ListingWizardCategoryAttribute, isKit: boolean): string | null {
   const values = attribute.values ?? [];
   if (values.length === 0) return null;
-  const preferred = values.find((value) =>
-    /sin c[oó]digo|no tiene|no posee|no cuenta|not issued|no aplica/i.test(value.name),
+  const byId = values.find((value) => value.id === (isKit ? EMPTY_GTIN_REASON_KIT : EMPTY_GTIN_REASON_NOT_REGISTERED));
+  if (byId) return byId.name;
+  const byName = values.find((value) =>
+    isKit ? /kit|pack/i.test(value.name) : /sin c[oó]digo|no tiene|no posee|no cuenta|not issued|no aplica/i.test(value.name),
   );
-  return (preferred ?? values[0]).name;
+  return (byName ?? values[0]).name;
+}
+
+/** «Genérica» solo donde la categoría la acepta: marca de texto libre o una lista que la incluye. */
+function genericBrand(attribute: ListingWizardCategoryAttribute): string | null {
+  const values = attribute.values ?? [];
+  if (values.length === 0) return "Genérica";
+  return values.find((value) => /^gen[eé]ric[ao]$/i.test(value.name.trim()))?.name ?? null;
+}
+
+/** Nombre de familia por defecto: el del grupo para una variante, si no el del producto. */
+export function defaultListingFamilyName(product: { name: string; productGroupName?: string | null }) {
+  return product.productGroupName?.trim() || product.name.trim();
+}
+
+const NON_STATIONERY_DOMAIN = /SKIN|BEAUTY|MAKEUP|COSMETIC|HAIR|NAIL|PERFUME|FRAGRANCE|BATH|SHAVING|HEALTH|SUPPLEMENT|PET_|FOOD|AUTO/i;
+
+/** Aviso para una sugerencia de categoría que no corresponde a un kit de papelería. */
+export function getCategorySuggestionWarning(
+  suggestion: { domainId: string | null; domainName: string | null },
+  product: { isKit?: boolean },
+): string | null {
+  if (!product.isKit || !suggestion.domainId || !NON_STATIONERY_DOMAIN.test(suggestion.domainId)) return null;
+  return `Revisa: esta categoría no parece de papelería (es de «${suggestion.domainName ?? suggestion.domainId}»). Busca otra con el nombre del contenido del kit.`;
 }
 
 /**
@@ -263,9 +348,15 @@ export function prefillListingAttributes(
   for (const attribute of categoryAttributes) {
     const id = attribute.id.toUpperCase();
     if (current.has(id)) continue;
-    if (id === "EMPTY_GTIN_REASON" && product.hasNoProductIdentifier) {
-      const reason = findEmptyGtinReason(attribute);
+    if (id === "EMPTY_GTIN_REASON") {
+      if (!product.hasNoProductIdentifier) continue;
+      const reason = findEmptyGtinReason(attribute, Boolean(product.isKit));
       if (reason) additions.push(`${id}=${reason}`);
+      continue;
+    }
+    if (id === "BRAND" && !product.brand?.trim()) {
+      const brand = genericBrand(attribute);
+      if (brand) additions.push(`${id}=${brand}`);
       continue;
     }
     const candidate = candidates[id];

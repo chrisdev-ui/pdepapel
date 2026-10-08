@@ -28,14 +28,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ListingPublicationWizard,
   type ListingPublicationIssue,
+  type ListingPublicationValidation,
 } from "./listing-publication-wizard";
 import {
   LISTING_WIZARD_STEPS,
+  defaultListingFamilyName,
   getInitialListingWizardStep,
   getListingWizardStepLabel,
   prefillListingAttributes,
   type ListingWizardStep,
 } from "@/lib/mercadolibre/listing-wizard";
+import type { MercadoLibreValidationResult } from "@/lib/mercadolibre/publication-error";
+import {
+  MERCADOLIBRE_FEE_RATE_ESTIMATE,
+  MERCADOLIBRE_SHIPPING_ESTIMATE,
+  suggestMercadoLibrePrice,
+} from "@/lib/mercadolibre/listing-margin";
 import type { MercadoLibreCategorySearchResponse } from "@/lib/mercadolibre/categories";
 import { ProductVideoLibrary } from "./product-video-library";
 import { ListingDetailsSheet } from "./listings/listing-details-sheet";
@@ -155,6 +163,8 @@ type CategoryAttribute = {
   id: string;
   name: string;
   required: boolean;
+  conditionalRequired?: boolean;
+  catalogRequired?: boolean;
   valueType: string;
   values: { id: string; name: string }[];
 };
@@ -462,6 +472,11 @@ export function MercadoLibreListingManager({
   const [isSaving, setIsSaving] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<SelectedProduct | null>(null);
+  const [validation, setValidation] = useState<{
+    result: MercadoLibreValidationResult;
+    signature: string;
+  } | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(
@@ -906,8 +921,11 @@ export function MercadoLibreListingManager({
       }).length
     : 0;
 
-  const searchCategories = async ({ preserveError = false } = {}) => {
-    const query = form.familyName.trim() || selectedProduct?.name || "";
+  const searchCategories = async ({
+    preserveError = false,
+    query: requestedQuery,
+  }: { preserveError?: boolean; query?: string } = {}) => {
+    const query = requestedQuery?.trim() || form.familyName.trim() || selectedProduct?.name || "";
     if (query.length < 3) {
       setError("Selecciona un producto para buscar una categoría");
       return;
@@ -1148,6 +1166,11 @@ export function MercadoLibreListingManager({
       if (!response.ok) throw new Error(await getErrorMessage(response));
       const comparison = (await response.json()) as ShippingCostComparison;
       setShippingComparison(comparison);
+      // Envío gratis obligatorio: el borrador lo ofrece y la ganancia lo descuenta.
+      // En una publicación activa no se toca: cambiarlo es «Aplicar condiciones».
+      if (comparison.mandatoryFreeShipping && !editingListing?.externalItemId) {
+        setForm((current) => (current.freeShipping ? current : { ...current, freeShipping: true }));
+      }
       return comparison;
     } catch (requestError) {
       setError(
@@ -1467,7 +1490,22 @@ export function MercadoLibreListingManager({
     product?: AsyncProductOption | null,
   ) => {
     const selected = toSelectedProduct(product);
-    const initialMarketplacePrice = String(selected?.price ?? "");
+    // Nunca el precio de la tienda tal cual: Mercado Libre cobra comisión,
+    // envío obligatorio y retenciones. Sin costo no hay sugerencia.
+    const unitCost =
+      selected?.acqPrice === null || selected?.acqPrice === undefined
+        ? null
+        : selected.acqPrice + (selected.transportationCost ?? 0);
+    const estimatedPrice =
+      selected && unitCost !== null
+        ? suggestMercadoLibrePrice({
+            unitCost,
+            shippingCost: MERCADOLIBRE_SHIPPING_ESTIMATE,
+            feeRate: MERCADOLIBRE_FEE_RATE_ESTIMATE,
+            targetNet: Math.max(0, selected.price - unitCost),
+          })
+        : null;
+    const initialMarketplacePrice = estimatedPrice ? String(estimatedPrice) : "";
     const profile = publicationProfiles.find(
       (item) => item.localCategoryId === selected?.category?.id,
     );
@@ -1496,8 +1534,107 @@ export function MercadoLibreListingManager({
       imageUrls: selected?.images.map((image) => image.url) ?? [],
       attributes: profile ? attributesToText(profile.attributes) : "",
     }));
+    setValidation(null);
     if (selected && profile) {
       void suggestPriceFromProfile(selected, profile, initialMarketplacePrice);
+    }
+    if (selected) void loadProductPhotos(selected);
+  };
+
+  /**
+   * La búsqueda trae una sola foto por producto: al elegirlo se cargan todas,
+   * en el orden de su galería, junto con su grupo (nombre de familia por
+   * defecto) y si es un kit (motivo de GTIN vacío).
+   */
+  const loadProductPhotos = async (selected: SelectedProduct) => {
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/product-photos?productId=${encodeURIComponent(selected.id)}`,
+      );
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        productId: string;
+        isKit: boolean;
+        brand: string | null;
+        productGroupName: string | null;
+        images: { url: string; isMain: boolean }[];
+      };
+      setSelectedProduct((current) =>
+        current?.id === data.productId
+          ? {
+              ...current,
+              images: data.images,
+              isKit: data.isKit,
+              brand: current.brand ?? data.brand,
+              productGroupName: data.productGroupName,
+            }
+          : current,
+      );
+      setForm((current) =>
+        current.productId === data.productId
+          ? {
+              ...current,
+              imageUrls: data.images.map((image) => image.url),
+              familyName:
+                current.familyName === selected.name
+                  ? defaultListingFamilyName({ name: selected.name, productGroupName: data.productGroupName })
+                  : current.familyName,
+            }
+          : current,
+      );
+    } catch {
+      // Sin la galería completa el asistente sigue con la foto de la búsqueda.
+    }
+  };
+
+  /** Lo que Mercado Libre revisa: cualquier cambio obliga a validar de nuevo. */
+  const validationSignature = JSON.stringify([
+    form.productId,
+    form.familyName,
+    form.marketplacePrice,
+    form.categoryId,
+    form.listingType,
+    form.stockSafetyBuffer,
+    form.imageUrls,
+    form.attributes,
+    form.freeShipping,
+    form.localPickUp,
+    form.packageHeightCm,
+    form.packageWidthCm,
+    form.packageLengthCm,
+    form.packageWeightGrams,
+  ]);
+  const wizardValidation: ListingPublicationValidation | null = validation
+    ? {
+        ok: validation.result.ok,
+        current: validation.signature === validationSignature,
+        errors: validation.result.errors,
+        warnings: validation.result.warnings,
+      }
+    : null;
+
+  /** Guarda el borrador y lo revisa con `/items/validate`, sin crear nada en Mercado Libre. */
+  const validateListing = async () => {
+    const signature = validationSignature;
+    const savedListing = await saveListing({ keepOpen: true });
+    if (!savedListing) return;
+    setIsValidating(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/${savedListing.id}/validate`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      setValidation({ result: (await response.json()) as MercadoLibreValidationResult, signature });
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible validar con Mercado Libre",
+      );
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -1637,7 +1774,8 @@ export function MercadoLibreListingManager({
     }
   };
 
-  const saveListing = async (): Promise<PublishableListing | null> => {
+  /** `keepOpen`: validar guarda el borrador sin cerrar el asistente. */
+  const saveListing = async ({ keepOpen = false }: { keepOpen?: boolean } = {}): Promise<PublishableListing | null> => {
     if (!form.productId || !form.marketplacePrice || !form.categoryId) {
       setError(
         "Producto, precio de Mercado Libre y categoría son obligatorios",
@@ -1716,6 +1854,8 @@ export function MercadoLibreListingManager({
       if (!savedListingId) {
         throw new Error("No fue posible identificar la publicación guardada");
       }
+      // Validar deja el asistente abierto: el siguiente guardado actualiza este borrador.
+      if (!editingListing?.id) setDraftId(savedListingId);
 
       const savedListing: PublishableListing = {
         id: savedListingId,
@@ -1729,7 +1869,7 @@ export function MercadoLibreListingManager({
       };
 
       setPersistedForm(JSON.stringify(form));
-      setIsDialogOpen(false);
+      if (!keepOpen) setIsDialogOpen(false);
       await loadListings();
       return savedListing;
     } catch (requestError) {
@@ -1929,6 +2069,10 @@ export function MercadoLibreListingManager({
   }, [isDialogOpen]);
 
   const saveAndPublishListing = async () => {
+    if (!wizardValidation?.ok || !wizardValidation.current) {
+      setError("Valida con Mercado Libre antes de publicar: así se revisa la publicación completa sin crear nada.");
+      return;
+    }
     if (!canPublish) {
       setError(
         "Activa primero el procesamiento seguro para evitar desajustes de inventario",
@@ -2705,7 +2849,10 @@ export function MercadoLibreListingManager({
             isSavingQuickProfile={isSavingQuickProfile}
             onFormChange={updateForm}
             onProductChange={updateSelectedProduct}
-            onSearchCategories={() => searchCategories()}
+            onSearchCategories={(query) => searchCategories({ query })}
+            validation={wizardValidation}
+            isValidating={isValidating}
+            onValidate={validateListing}
             onCategoryChange={updateCategory}
             onLoadCategoryAttributes={loadCategoryAttributes}
             onLoadPriceEstimate={loadPriceEstimate}
@@ -2721,7 +2868,7 @@ export function MercadoLibreListingManager({
             }}
             onSaveCategoryTemplate={openCategoryTemplateDialog}
             onSaveQuickProfile={saveQuickProfile}
-            onSave={saveListing}
+            onSave={() => saveListing()}
             onSaveAndPublish={saveAndPublishListing}
           />
         </DialogContent>

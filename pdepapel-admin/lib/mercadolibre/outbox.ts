@@ -17,11 +17,14 @@ import {
   MercadoLibreFinancialsPendingError,
   type MercadoLibreOrderFinancials,
 } from "./order-financials";
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
+
 import { withMercadoLibrePublicationFailure } from "./listing-metadata";
 import {
   createMercadoLibreItem,
   createMercadoLibreItemDescription,
   getMarketplaceListingStatusFromRemote,
+  MERCADOLIBRE_MAX_LISTING_PICTURES,
   MercadoLibrePublicationError,
   syncMercadoLibreListingContent,
 } from "./listings";
@@ -610,8 +613,8 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               hasNoProductIdentifier: true,
               images: {
                 select: { url: true, isMain: true },
-                orderBy: { isMain: "desc" },
-                take: 10,
+                orderBy: GALLERY_ORDER,
+                take: MERCADOLIBRE_MAX_LISTING_PICTURES,
               },
             },
           },

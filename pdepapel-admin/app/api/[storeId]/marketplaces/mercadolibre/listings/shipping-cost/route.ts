@@ -153,7 +153,7 @@ export async function GET(
         sellerOffersFree,
         currentFreeShipping: remoteConditions?.freeShipping ?? null,
         mandatoryFreeShipping:
-          remoteConditions?.mandatoryFreeShipping ?? false,
+          (remoteConditions?.mandatoryFreeShipping ?? false) || sellerOffersFree.mandatory,
         logisticType: remoteConditions?.logisticType ?? null,
       },
       { headers: CACHE_HEADERS.NO_CACHE },

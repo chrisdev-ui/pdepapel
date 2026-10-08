@@ -82,6 +82,7 @@ describe("Mercado Libre category helpers", () => {
         id: "BRAND",
         name: "Marca",
         required: true,
+        catalogRequired: true,
         valueType: "list",
         values: [{ id: "1", name: "P de Papel" }],
       },
@@ -89,6 +90,7 @@ describe("Mercado Libre category helpers", () => {
         id: "OPTIONAL",
         name: "Opcional",
         required: false,
+        catalogRequired: true,
         valueType: "string",
         values: [],
       },
@@ -99,6 +101,35 @@ describe("Mercado Libre category helpers", () => {
         valueType: "string",
         values: [],
       },
+    ]);
+  });
+
+  // EMPTY_GTIN_REASON llega oculto y condicional: si se descarta, el asistente
+  // nunca puede enviar el motivo de un producto sin código de barras.
+  it("keeps hidden attributes the seller must send (required or conditionally required)", () => {
+    expect(
+      parseMercadoLibreCategoryAttributes([
+        {
+          id: "EMPTY_GTIN_REASON",
+          name: "Motivo de GTIN vacío",
+          value_type: "list",
+          tags: { hidden: true, conditional_required: true, variation_attribute: true },
+          values: [{ id: "17055160", name: "El producto no tiene código registrado" }],
+        },
+        { id: "UNITS_PER_PACK", name: "Cantidad de artículos", value_type: "number", tags: { conditional_required: true } },
+        { id: "HIDDEN_PLAIN", name: "Oculto", tags: { hidden: true } },
+        { id: "HIDDEN_READ_ONLY", name: "Oculto y fijo", tags: { hidden: true, conditional_required: true, read_only: true } },
+      ]),
+    ).toEqual([
+      {
+        id: "EMPTY_GTIN_REASON",
+        name: "Motivo de GTIN vacío",
+        required: false,
+        conditionalRequired: true,
+        valueType: "list",
+        values: [{ id: "17055160", name: "El producto no tiene código registrado" }],
+      },
+      { id: "UNITS_PER_PACK", name: "Cantidad de artículos", required: false, conditionalRequired: true, valueType: "number", values: [] },
     ]);
   });
 

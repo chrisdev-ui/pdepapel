@@ -5,6 +5,7 @@ import {
   hasActivePresale,
 } from "@/lib/presale";
 import { toGoogleMerchantImageUrl } from "@/lib/google-merchant";
+import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { richTextToPlainText } from "@/lib/rich-text";
 
 import {
@@ -13,9 +14,12 @@ import {
 } from "./categories";
 import { inspectMercadoLibreCategory } from "./category-validation";
 import { isPriceBelowCost } from "./listing-price-guard";
+import { MERCADOLIBRE_MAX_LISTING_PICTURES } from "./listing-wizard";
 import {
   mapMercadoLibreItemError,
+  readMercadoLibreValidation,
   transientPublicationFailure,
+  type MercadoLibreValidationResult,
   type PublicationFailure,
   type PublicationFailureKind,
   type PublicationWizardStep,
@@ -29,6 +33,40 @@ import {
   getMercadoLibreListingMetadata,
   type MercadoLibreAttribute,
 } from "./listing-metadata";
+
+export { MERCADOLIBRE_MAX_LISTING_PICTURES } from "./listing-wizard";
+
+/** Lo que se lee de la base para publicar o validar un borrador. */
+export const LISTING_FOR_PUBLICATION_SELECT = {
+  id: true,
+  connectionId: true,
+  categoryId: true,
+  listingType: true,
+  marketplacePrice: true,
+  stockSafetyBuffer: true,
+  metadata: true,
+  product: {
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      stock: true,
+      sku: true,
+      brand: true,
+      gtin: true,
+      mpn: true,
+      isArchived: true,
+      acqPrice: true,
+      transportationCost: true,
+      hasNoProductIdentifier: true,
+      images: {
+        select: { url: true, isMain: true },
+        orderBy: GALLERY_ORDER,
+        take: MERCADOLIBRE_MAX_LISTING_PICTURES,
+      },
+    },
+  },
+} satisfies Prisma.MarketplaceListingSelect;
 
 export type ListingForPublication = {
   id: string;
@@ -594,6 +632,50 @@ export async function syncMercadoLibreListingContent(
  * llama debe guardar ese id ANTES de cualquier otro paso remoto: un fallo
  * posterior sin el id guardado terminaba en una segunda publicación.
  */
+/**
+ * «Validar con Mercado Libre»: la misma carga que se publicaría, enviada a
+ * `/items/validate`, que no crea nada. Antes se revisan la categoría y los
+ * obligatorios en local, que nombran el campo vacío mejor que Mercado Libre.
+ */
+export async function validateMercadoLibreItemDraft(
+  listing: ListingForPublication,
+  request: typeof fetch = mercadoLibreFetch,
+): Promise<MercadoLibreValidationResult> {
+  try {
+    await validateMercadoLibreListingForPublication(listing, request);
+  } catch (error) {
+    if (error instanceof MercadoLibrePublicationError) {
+      return { ok: false, errors: [error.toFailure()], warnings: [] };
+    }
+    throw error;
+  }
+  const accessToken = await getMercadoLibreAccessToken(listing.connectionId);
+  let response: Response;
+  try {
+    response = await request("https://api.mercadolibre.com/items/validate", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(buildItemPayload(listing)),
+      cache: "no-store",
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [
+        transientPublicationFailure(
+          `No fue posible contactar a Mercado Libre: ${error instanceof Error ? error.message : "error de red"}. Vuelve a validar en un momento.`,
+        ),
+      ],
+      warnings: [],
+    };
+  }
+  const payload = response.status === 204 ? null : await readJson(response);
+  return readMercadoLibreValidation(response.status, payload);
+}
+
 export async function createMercadoLibreItem(
   listing: ListingForPublication,
   request: typeof fetch = mercadoLibreFetch,

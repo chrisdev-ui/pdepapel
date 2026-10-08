@@ -22,7 +22,13 @@ export type PublicationFailure = {
   code: string | null;
 };
 
-type Cause = { code: string | null; message: string | null; references: string[] };
+type Cause = {
+  code: string | null;
+  message: string | null;
+  references: string[];
+  /** «error» o «warning»; sin tipo cuenta como error. */
+  type?: string | null;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -39,6 +45,7 @@ function getCauses(payload: unknown): Cause[] {
         references: Array.isArray(raw.references)
           ? raw.references.filter((value): value is string => typeof value === "string")
           : [],
+        type: typeof raw.type === "string" ? raw.type.toLowerCase() : null,
       },
     ];
   });
@@ -63,14 +70,54 @@ function extractAttributeId(cause: Cause) {
   return match ? match[1].toUpperCase() : null;
 }
 
+const isWarning = (cause: Cause) => cause.type === "warning";
+
+/** Avisos que no dependen de la ficha ni la cambian: no se le muestran a Paula. */
+const IGNORED_WARNING_CODES = new Set(["shipping.lost_me1_by_user"]);
+
+/** Nombres en español que Mercado Libre usa en sus avisos, por id de atributo. */
+const ATTRIBUTE_IDS_BY_NAME: Record<string, string> = {
+  modelo: "MODEL",
+  marca: "BRAND",
+  fabricante: "MANUFACTURER",
+  línea: "LINE",
+  linea: "LINE",
+};
+
+function attributeIdFromSpanishName(message: string | null) {
+  const match = /campo\s+["«]([^"»]+)["»]/i.exec(message ?? "");
+  return match ? (ATTRIBUTE_IDS_BY_NAME[match[1].trim().toLowerCase()] ?? null) : null;
+}
+
+/** El generador de títulos de Mercado Libre falló porque faltan atributos; llega sin `cause[]`. */
+function isTitleBuilderFailure(message: string | null) {
+  return Boolean(message && /build-title/i.test(message) && /attributes? (are|is) required/i.test(message));
+}
+
+const TITLE_BUILDER_MESSAGE =
+  "Mercado Libre no pudo armar el título porque faltan datos obligatorios de la ficha técnica (por ejemplo Marca, Fabricante o Modelo). Complétalos y vuelve a validar.";
+
 function mapCause(cause: Cause): Omit<PublicationFailure, "kind"> | null {
   const code = (cause.code ?? "").toLowerCase();
   const text = `${code} ${cause.message ?? ""} ${cause.references.join(" ")}`.toLowerCase();
 
+  if (isTitleBuilderFailure(cause.message)) {
+    return { step: "ficha", field: null, code: cause.code, message: TITLE_BUILDER_MESSAGE };
+  }
+
   // Orden deliberado: «attribute» antes que «category», porque muchos mensajes
   // de atributos nombran la categoría («…required for category MCO…»).
-  if (code.startsWith("item.attributes") || /\battributes?\b/.test(text)) {
-    const field = extractAttributeId(cause);
+  if (code.startsWith("item.attribute") || /\battributes?\b/.test(text)) {
+    const field = extractAttributeId(cause) ?? attributeIdFromSpanishName(cause.message);
+    if (field === "GTIN" && code.includes("conditional_required")) {
+      return {
+        step: "ficha",
+        field,
+        code: cause.code,
+        message:
+          "Esta marca tiene códigos de barras registrados en Mercado Libre: escribe el código de barras (GTIN) del producto en la ficha técnica. El motivo «sin código» no aplica para ella.",
+      };
+    }
     const invalid = code.includes("invalid") || /invalid|not allowed|no válido/.test(text);
     return {
       step: "ficha",
@@ -196,7 +243,8 @@ export function mapMercadoLibreItemError(status: number, payload: unknown): Publ
     };
   }
   const causes = getCauses(payload);
-  for (const cause of causes) {
+  // Una advertencia nunca es la razón del rechazo: primero los errores.
+  for (const cause of [...causes.filter((cause) => !isWarning(cause)), ...causes.filter(isWarning)]) {
     const mapped = mapCause(cause);
     if (mapped) return { kind: "review", ...mapped };
   }
@@ -216,6 +264,54 @@ export function mapMercadoLibreItemError(status: number, payload: unknown): Publ
     code: causes[0]?.code ?? null,
     message: raw || "Mercado Libre rechazó la publicación",
   };
+}
+
+export type MercadoLibreValidationWarning = {
+  field: string | null;
+  code: string | null;
+  message: string;
+};
+
+export type MercadoLibreValidationResult = {
+  ok: boolean;
+  errors: PublicationFailure[];
+  warnings: MercadoLibreValidationWarning[];
+};
+
+/**
+ * Respuesta de `POST /items/validate`: 204 es válida, y un 400 que solo trae
+ * advertencias también (Mercado Libre responde 400 aunque no haya errores).
+ */
+export function readMercadoLibreValidation(status: number, payload: unknown): MercadoLibreValidationResult {
+  if (status >= 200 && status < 300) return { ok: true, errors: [], warnings: [] };
+  const causes = getCauses(payload);
+  if (status !== 400 || causes.length === 0) {
+    return { ok: false, errors: [mapMercadoLibreItemError(status, payload)], warnings: [] };
+  }
+  const errors = causes
+    .filter((cause) => !isWarning(cause))
+    .map((cause) => {
+      const mapped = mapCause(cause);
+      if (mapped) return { kind: "review" as const, ...mapped };
+      return {
+        kind: "review" as const,
+        step: null,
+        field: null,
+        code: cause.code,
+        message: cause.message ?? "Mercado Libre rechazó la publicación",
+      };
+    });
+  const warnings = causes
+    .filter((cause) => isWarning(cause) && !IGNORED_WARNING_CODES.has(cause.code ?? ""))
+    .map((cause) => {
+      const field = extractAttributeId(cause) ?? attributeIdFromSpanishName(cause.message);
+      const message =
+        cause.code === "item.attribute.missing_catalog_required" && cause.message
+          ? `${cause.message.replace(/\.$/, "")}: Mercado Libre lo pide para su catálogo; sin él la publicación pierde visibilidad.`
+          : (cause.message ?? "Mercado Libre dejó una advertencia");
+      return { field, code: cause.code, message };
+    });
+  return { ok: errors.length === 0, errors, warnings };
 }
 
 /** Un fallo de red (fetch lanzó) o de nuestro lado antes de llegar a Mercado Libre. */

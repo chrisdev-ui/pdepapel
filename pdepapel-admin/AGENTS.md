@@ -265,6 +265,26 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - An unknown acquisition cost is **never zero**; report cost, profit and margin as unknown instead of manufacturing a 100% margin.
 - Never edit marketplace order stock or financial fields in the database to "fix" a queue issue. Fix and retry the audited workflow.
 - Reconnect from the admin UI after any scope, secret or token change.
+- The account is a **User Products seller** (`user_product_seller`).
+  - Items carry `family_name` and never `title`; ML rejects a title-only body.
+  - Variants are separate items that share one family name.
+- Publishing goes through «Validar con Mercado Libre» first.
+  - `POST …/listings/[id]/validate` sends the exact publish payload to `/items/validate`, which creates nothing.
+  - «Publicar ahora» stays disabled until a passing validation of the current form.
+  - ML answers 400 even when it only has warnings; treat warnings-only as valid (`readMercadoLibreValidation`).
+- Category attributes:
+  - Keep the `hidden` ones the seller must send, i.e. `required` or `conditional_required` (`EMPTY_GTIN_REASON`).
+  - Every required, conditional or catalog attribute gets its own wizard field.
+- Barcodes:
+  - A product without a barcode sends `EMPTY_GTIN_REASON`, «No registrado» (17055160) or «kit o pack» (17055159).
+  - Registered brands still require the real GTIN.
+  - Never invent a brand. «Genérica» is suggested only where the category accepts it.
+- Margin in the wizard:
+  - Never default the ML price to the store price. On this account free shipping is mandatory at every price; the seller pays about 8,100 per unit.
+  - As of 2026-10-08, Clásica is 16 % with no fixed fee, and withholdings are about 1.5 % (estimated from real billing). These change; the wizard reads the live fee from `listing_prices`.
+  - `lib/mercadolibre/listing-margin.ts` suggests the friendly price that keeps the target net.
+  - The store-wide target margin is not built yet: it needs a `Store` column (migration).
+- The wizard loads every product photo in gallery order (`…/listings/product-photos`, which keeps the cover first). It checks the copy ML downloads against 500 × 500 px. `lib/catalog-image-url.ts` is client-safe; never import `lib/google-merchant.ts` into client code (it pulls `sanitize-html`).
 
 ### Boletín: subscribers, issues and campaigns
 

@@ -134,7 +134,17 @@ describe("Mercado Libre listing insights", () => {
       billableWeightGrams: 1_000,
       discountRate: 10,
       promotedAmount: 7_650,
+      mandatory: false,
     });
+  });
+
+  // Así responde la cuenta (auditoría #18): envío gratis obligatorio en todos los precios.
+  it("flags mandatory free shipping from the discount type", () => {
+    expect(
+      parseMercadoLibreShippingCostEstimate({
+        coverage: { all_country: { list_cost: 8_100, currency_id: "COP", discount: { rate: 0.5, type: "mandatory", promoted_amount: 16_200 } } },
+      }),
+    ).toMatchObject({ sellerCost: 8_100, mandatory: true });
   });
 
   it("surfaces only unresolved quality actions", () => {

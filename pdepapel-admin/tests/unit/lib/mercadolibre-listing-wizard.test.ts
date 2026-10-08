@@ -4,6 +4,9 @@ import {
   getInitialListingWizardStep,
   getListingWizardStepError,
   getListingWizardStepIssue,
+  defaultListingFamilyName,
+  getCategorySuggestionWarning,
+  MERCADOLIBRE_MIN_PICTURE_SIDE,
   prefillListingAttributes,
   wizardStepFromPublicationStep,
 } from "@/lib/mercadolibre/listing-wizard";
@@ -281,5 +284,100 @@ describe("prefillListingAttributes", () => {
     expect(prefillListingAttributes("BRAND=X", [{ id: "BRAND", required: true }], product)).toBe(
       "BRAND=X",
     );
+  });
+});
+
+// Valores reales de MCO (auditoría #18): el motivo se elige por id, no por texto.
+describe("prefill for a catalog without barcodes", () => {
+  const emptyReason = {
+    id: "EMPTY_GTIN_REASON",
+    required: false,
+    conditionalRequired: true,
+    values: [
+      { id: "17055158", name: "El producto es una pieza artesanal" },
+      { id: "17055159", name: "El producto es un kit o un pack" },
+      { id: "17055160", name: "El producto no tiene código registrado" },
+      { id: "17055161", name: "Otra razón" },
+    ],
+  };
+  const noId = { hasNoProductIdentifier: true };
+
+  it("uses «No registrado» for a product without barcode and «kit o pack» for a kit", () => {
+    expect(prefillListingAttributes("", [emptyReason], noId)).toBe("EMPTY_GTIN_REASON=El producto no tiene código registrado");
+    expect(prefillListingAttributes("", [emptyReason], { ...noId, isKit: true })).toBe("EMPTY_GTIN_REASON=El producto es un kit o un pack");
+  });
+
+  it("never sends the empty reason when the product has a barcode", () => {
+    expect(prefillListingAttributes("", [emptyReason], { gtin: "7701234567890", hasNoProductIdentifier: false })).toBe("");
+  });
+
+  it("never invents a brand: uses the product brand, else suggests «Genérica» only where the category accepts it", () => {
+    const freeText = { id: "BRAND", required: true };
+    const closedWithout = { id: "BRAND", required: true, values: [{ id: "1", name: "Owala" }] };
+    const closedWith = { id: "BRAND", required: true, values: [{ id: "1", name: "Owala" }, { id: "2", name: "Genérica" }] };
+    expect(prefillListingAttributes("", [freeText], { brand: "Norma" })).toBe("BRAND=Norma");
+    expect(prefillListingAttributes("", [freeText], { brand: null })).toBe("BRAND=Genérica");
+    expect(prefillListingAttributes("", [closedWithout], { brand: null })).toBe("");
+    expect(prefillListingAttributes("", [closedWith], { brand: null })).toBe("BRAND=Genérica");
+  });
+});
+
+describe("photos step", () => {
+  const base = { ...completeDraft, step: 2 as const, imageUrls: ["a.jpg", "b.jpg"] };
+
+  it("blocks a photo under Mercado Libre's minimum and says which one and why", () => {
+    const issue = getListingWizardStepIssue({
+      ...base,
+      imageChecks: { "a.jpg": { width: 1200, height: 1600 }, "b.jpg": { width: 320, height: 400 } },
+    });
+    expect(issue).toMatchObject({ field: "imageUrls" });
+    expect(issue?.message).toContain("La foto 2 mide 320 × 400 px");
+    expect(issue?.message).toContain(`${MERCADOLIBRE_MIN_PICTURE_SIDE} × ${MERCADOLIBRE_MIN_PICTURE_SIDE}`);
+  });
+
+  it("waits for the size check and reports a photo that did not load", () => {
+    expect(getListingWizardStepIssue({ ...base, imageChecks: { "a.jpg": "pending" } })?.message).toMatch(/revisando/i);
+    expect(getListingWizardStepIssue({ ...base, imageChecks: { "a.jpg": { width: 900, height: 900 }, "b.jpg": "error" } })?.message).toContain("La foto 2 no se pudo cargar");
+  });
+
+  it("respects the category's maximum", () => {
+    const issue = getListingWizardStepIssue({ ...base, imageUrls: ["1", "2", "3"], maxPictures: 2 });
+    expect(issue?.message).toContain("máximo 2 fotos");
+  });
+
+  it("passes with valid photos", () => {
+    expect(
+      getListingWizardStepIssue({ ...base, imageChecks: { "a.jpg": { width: 500, height: 500 }, "b.jpg": { width: 1600, height: 1200 } } }),
+    ).toBeNull();
+  });
+});
+
+describe("ficha: barcode or its reason", () => {
+  const attributes = [
+    { id: "GTIN", required: false, conditionalRequired: true },
+    { id: "EMPTY_GTIN_REASON", required: false, conditionalRequired: true, values: [{ id: "17055160", name: "El producto no tiene código registrado" }] },
+  ];
+  const draft = { ...completeDraft, step: 3 as const, categoryAttributes: attributes, productHasNoIdentifier: true };
+
+  it("asks for the barcode or the reason when neither is filled", () => {
+    expect(getListingWizardStepIssue({ ...draft, attributes: "" })).toMatchObject({ field: "attribute:EMPTY_GTIN_REASON" });
+  });
+
+  it("accepts either one", () => {
+    expect(getListingWizardStepIssue({ ...draft, attributes: "GTIN=7701234567890" })).toBeNull();
+    expect(getListingWizardStepIssue({ ...draft, attributes: "EMPTY_GTIN_REASON=El producto no tiene código registrado" })).toBeNull();
+  });
+});
+
+describe("family name and category suggestions", () => {
+  it("defaults to the group name for a variant", () => {
+    expect(defaultListingFamilyName({ name: "Agendas Flores Azul", productGroupName: " Bitácora-Agenda William Morris " })).toBe("Bitácora-Agenda William Morris");
+    expect(defaultListingFamilyName({ name: "Cuaderno Norma ", productGroupName: null })).toBe("Cuaderno Norma");
+  });
+
+  it("flags a kit suggested into a beauty or skin-care domain", () => {
+    expect(getCategorySuggestionWarning({ domainId: "MCO-SKIN_CARE_KITS", domainName: "Kits de cuidado de la piel" }, { isKit: true })).toMatch(/no parece de papelería/);
+    expect(getCategorySuggestionWarning({ domainId: "MCO-NOTEBOOKS_AND_WRITING_PADS", domainName: "Cuadernos" }, { isKit: true })).toBeNull();
+    expect(getCategorySuggestionWarning({ domainId: "MCO-SKIN_CARE_KITS", domainName: "Kits de cuidado de la piel" }, { isKit: false })).toBeNull();
   });
 });

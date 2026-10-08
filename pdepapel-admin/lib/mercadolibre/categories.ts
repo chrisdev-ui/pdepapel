@@ -33,6 +33,10 @@ export type MercadoLibreCategoryAttribute = {
   id: string;
   name: string;
   required: boolean;
+  /** Mercado Libre lo exige según el resto de la ficha (p. ej. GTIN o su motivo vacío). */
+  conditionalRequired?: boolean;
+  /** Mercado Libre lo pide para el catálogo; sin él la publicación sale con advertencia. */
+  catalogRequired?: boolean;
   valueType: string;
   values: { id: string; name: string }[];
   /** La lista de valores tenía más de `MERCADOLIBRE_ATTRIBUTE_VALUES_LIMIT` entradas y se recortó. */
@@ -123,8 +127,10 @@ export function parseMercadoLibreCategoryAttributes(
     }
 
     const tags = asRecord(attribute.tags);
+    const required = tags?.required === true || tags?.new_required === true;
+    const conditionalRequired = tags?.conditional_required === true;
     if (
-      tags?.hidden === true ||
+      (tags?.hidden === true && !required && !conditionalRequired) ||
       tags?.read_only === true ||
       tags?.fixed === true ||
       tags?.inferred === true
@@ -151,7 +157,9 @@ export function parseMercadoLibreCategoryAttributes(
       {
         id: attribute.id,
         name: attribute.name,
-        required: tags?.required === true || tags?.new_required === true,
+        required,
+        ...(conditionalRequired ? { conditionalRequired: true } : {}),
+        ...(tags?.catalog_required === true ? { catalogRequired: true } : {}),
         valueType:
           typeof attribute.value_type === "string"
             ? attribute.value_type
