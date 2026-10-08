@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,5 +70,27 @@ describe("MobileFilters", () => {
     expect(screen.getByRole("button", { name: "Filtros" })).toHaveTextContent("2");
     await user.click(screen.getByRole("button", { name: "Filtros" }));
     expect(await screen.findByRole("button", { name: "Sin productos con estos filtros" })).toBeDisabled();
+  });
+
+  it("reopens showing what the URL says, not what the sheet had before", async () => {
+    const user = userEvent.setup();
+    mocks.filters = { ...EMPTY_FILTERS, typeId: ["t2"] };
+    const view = renderWithQuery(<MobileFilters types={types} categories={[]} catalogOptions={[]} colors={[]} designs={[]} />);
+
+    await user.click(screen.getByRole("button", { name: "Filtros" }));
+    expect(await screen.findByLabelText("Escritura")).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Cerrar" }));
+
+    // La clienta quita el filtro con el chip, fuera de la hoja.
+    mocks.filters = { ...EMPTY_FILTERS };
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <MobileFilters types={types} categories={[]} catalogOptions={[]} colors={[]} designs={[]} className="url-changed" />
+      </QueryClientProvider>,
+    );
+
+    // En jsdom vaul no termina la animación de cierre y deja el botón oculto a la accesibilidad.
+    fireEvent.click(screen.getByRole("button", { name: "Filtros", hidden: true }));
+    expect(await screen.findByLabelText("Escritura")).not.toBeChecked();
   });
 });

@@ -1,9 +1,10 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import ProductCard from "@/components/ui/product-card";
+import { consumeBackNavigation, ListingState, readListingState, saveListingState } from "@/lib/listing-restore";
 import { Product } from "@/types";
 
 import Paginator from "./paginator";
@@ -31,7 +32,11 @@ const REVEAL_STEP = 12;
 
 /** Cuadrícula del catálogo: 2 columnas en teléfono, 3 en tableta y portátil, 4 desde 1280 px. */
 const Products: React.FC<ProductsProps> = ({ products, totalPages, currentPage = 1, loadPage }) => {
-  const [visible, setVisible] = useState(INITIAL_VISIBLE);
+  // Solo al volver con «Atrás»: en una carga normal coincide con el servidor.
+  const [restored] = useState<ListingState | null>(() =>
+    typeof window !== "undefined" && consumeBackNavigation() ? readListingState() : null,
+  );
+  const [visible, setVisible] = useState(restored ? Math.max(INITIAL_VISIBLE, restored.visible) : INITIAL_VISIBLE);
   /**
    * Productos de las páginas siguientes que ya se trajeron.
    *
@@ -46,8 +51,11 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages, currentPage =
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  const shownFor = useRef({ products, currentPage });
   // Otra página o unos filtros nuevos vuelven a empezar por arriba.
   useEffect(() => {
+    if (shownFor.current.products === products && shownFor.current.currentPage === currentPage) return;
+    shownFor.current = { products, currentPage };
     setVisible(INITIAL_VISIBLE);
     setExtra([]);
     setLastPage(currentPage);
@@ -60,6 +68,27 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages, currentPage =
    * —encender la rueda del botón, por ejemplo— reconstruía los dos arreglos y
    * volvía a pintar todas las tarjetas.
    */
+  useLayoutEffect(() => {
+    if (restored) window.scrollTo(0, restored.scrollY);
+  }, [restored]);
+
+  useEffect(() => {
+    saveListingState({ visible, lastPage });
+  }, [visible, lastPage]);
+
+  useEffect(() => {
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => saveListingState({ scrollY: window.scrollY }));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
   const all = useMemo(
     () => (extra.length > 0 ? [...products, ...extra] : products),
     [products, extra],

@@ -20,7 +20,14 @@ const inAppWrapper = (original: History["pushState"], when: "before" | "after") 
     throw new Error(JAVA_GONE);
   };
 
+const INSTAGRAM_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 345.0.0.31.98";
+const SAFARI_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+const setUserAgent = (value: string) => Object.defineProperty(window.navigator, "userAgent", { value, configurable: true });
+
 beforeEach(() => {
+  setUserAgent(INSTAGRAM_UA);
   // jsdom comparte window entre pruebas: se quita la guarda y se vuelve a /.
   for (const name of ["pushState", "replaceState", "__pdpHistoryGuard"]) delete (window.history as unknown as Record<string, unknown>)[name];
   History.prototype.replaceState.call(window.history, null, "", "/");
@@ -39,6 +46,17 @@ const patchLikeNext = (name: "pushState" | "replaceState") => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("history guard", () => {
+  it("only installs inside Instagram and Facebook in-app browsers", () => {
+    setUserAgent(SAFARI_UA);
+    install();
+    expect(Object.prototype.hasOwnProperty.call(window.history, "pushState")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(window.history, "__pdpHistoryGuard")).toBe(false);
+
+    setUserAgent(INSTAGRAM_UA);
+    install();
+    expect(Object.prototype.hasOwnProperty.call(window.history, "__pdpHistoryGuard")).toBe(true);
+  });
+
   it("is a no-op for a normal browser", () => {
     install();
     window.history.pushState({ n: 1 }, "", "/tienda");

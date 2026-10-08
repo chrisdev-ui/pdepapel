@@ -1,3 +1,5 @@
+import { IN_APP_BROWSER_PATTERN } from "@/lib/in-app-browser";
+
 /**
  * Guarda de `history.pushState` / `history.replaceState` para los navegadores
  * integrados de Android (Instagram, Facebook).
@@ -15,11 +17,15 @@
  * de adentro lanza, se completa la navegación con el método nativo; si el
  * nativo también falla, el error original sigue su camino.
  *
+ * Solo se instala en esos navegadores integrados: en los demás, cualquier
+ * envoltorio de `pushState` estorba al de Next y al de nuqs.
+ *
  * Va como script en línea antes de hidratar, en JS simple (sin depender del
  * bundler), y nunca lanza.
  */
 export const HISTORY_GUARD_SCRIPT = `(function () {
   try {
+    if (!/${IN_APP_BROWSER_PATTERN.source}/.test(navigator.userAgent || "")) return;
     var h = window.history;
     if (!h || h.__pdpHistoryGuard) return;
     var proto = Object.getPrototypeOf(h);

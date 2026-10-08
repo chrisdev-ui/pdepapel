@@ -2,7 +2,7 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FilterGroups, FilterGroupsProps } from "@/components/shop/filter-groups";
 import { Drawer, DrawerClose, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
@@ -32,6 +32,14 @@ const MobileFiltersDrawer: React.FC<MobileFiltersDrawerProps> = ({
 }) => {
   const { filters, setFilters } = useProductFilters();
   const [pending, setPending] = useState<ProductFilters>(filters);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  // vaul no llama a `onOpenChange` cuando la hoja la abre el botón de afuera:
+  // cada apertura arranca de lo que dice la URL, no de lo que quedó pendiente.
+  useEffect(() => {
+    if (open) setPending(filtersRef.current);
+  }, [open]);
 
   const ignore = useMemo<(keyof ProductFilters)[]>(
     () => (fixedCategoryId ? [...PENDING_IGNORE, "categoryId", "typeId"] : PENDING_IGNORE),

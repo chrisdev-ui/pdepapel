@@ -26,19 +26,28 @@ const PriceFilter: React.FC<PriceFilterProps> = ({ min = PRICE_MIN, max = PRICE_
   const [maxValue, setMaxValue] = useState(filters.maxPrice ?? max);
   const [dragging, setDragging] = useState<"min" | "max" | null>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
+  /**
+   * Solo una interacción escribe en la URL. Si el filtro cambia desde fuera
+   * (chip ×, «Limpiar todo», megamenú), el valor con debounce todavía es el
+   * viejo, y compararlo con la URL lo volvía a poner.
+   */
+  const armed = useRef(false);
 
   const debouncedMin = useDebounce(minValue, 300);
   const debouncedMax = useDebounce(maxValue, 300);
 
   useEffect(() => {
+    armed.current = false;
     setMinValue(filters.minPrice ?? min);
     setMaxValue(filters.maxPrice ?? max);
   }, [filters.minPrice, filters.maxPrice, min, max]);
 
   useEffect(() => {
+    if (!armed.current) return;
     const currentMin = filters.minPrice ?? min;
     const currentMax = filters.maxPrice ?? max;
     if (debouncedMin !== currentMin || debouncedMax !== currentMax) {
+      armed.current = false;
       setFilters((previous: ProductFilters) => ({
         ...previous,
         minPrice: debouncedMin === min ? null : debouncedMin,
@@ -53,6 +62,7 @@ const PriceFilter: React.FC<PriceFilterProps> = ({ min = PRICE_MIN, max = PRICE_
   const isActive = filters.minPrice !== null || filters.maxPrice !== null;
 
   const update = (type: "min" | "max", value: number) => {
+    armed.current = true;
     if (type === "min") setMinValue(Math.max(min, Math.min(value, maxValue - step)));
     else setMaxValue(Math.min(max, Math.max(value, minValue + step)));
   };
@@ -82,6 +92,7 @@ const PriceFilter: React.FC<PriceFilterProps> = ({ min = PRICE_MIN, max = PRICE_
       const rect = sliderRef.current.getBoundingClientRect();
       const percent = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
       const value = Math.round(((percent / 100) * (max - min) + min) / step) * step;
+      armed.current = true;
       if (dragging === "min") setMinValue(Math.min(value, maxValue - step));
       else setMaxValue(Math.max(value, minValue + step));
     },
@@ -149,6 +160,7 @@ const PriceFilter: React.FC<PriceFilterProps> = ({ min = PRICE_MIN, max = PRICE_
                 type="button"
                 aria-pressed={selected}
                 onClick={() => {
+                  armed.current = true;
                   setMinValue(preset.min);
                   setMaxValue(preset.max);
                 }}

@@ -25,17 +25,25 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className, placeholder = 
   const debouncedSearch = useDebounce(searchTerm, 300);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
+  /** Solo lo que se escribe aquí llega a la URL; un cambio de fuera no se reescribe. */
+  const armed = useRef(false);
 
-  const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value), []);
+  const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    armed.current = true;
+    setSearchTerm(event.target.value);
+  }, []);
 
   useEffect(() => {
     if (document.activeElement !== inputRef.current && filters.search !== searchTerm) {
+      armed.current = false;
       setSearchTerm(filters.search || "");
     }
   }, [filters.search, searchTerm]);
 
   useEffect(() => {
+    if (!armed.current) return;
     if (debouncedSearch !== filters.search && inputRef.current && inputRef.current.offsetParent !== null) {
+      armed.current = false;
       setFilter("search", debouncedSearch || null);
       if (debouncedSearch) {
         trackCustomerEvent("catalog_search", {
@@ -69,6 +77,7 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className, placeholder = 
           type="button"
           aria-label="Borrar búsqueda"
           onClick={() => {
+            armed.current = true;
             setSearchTerm("");
             inputRef.current?.focus();
           }}
