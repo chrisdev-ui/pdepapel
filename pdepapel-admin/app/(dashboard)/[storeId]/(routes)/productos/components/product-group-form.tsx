@@ -914,7 +914,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     // vuelven a traer, así no se adopta nada que Paula no eligió hoy.
     sanitizeDraft: (draft) => {
       const { draft: clean, dropped } = stripAdoptedRowsFromDraft(draft);
-      if (dropped > 0) {
+      // Al convertir un producto suelto, ese producto se vuelve a traer solo.
+      if (dropped > 0 && !adoptOnLoad) {
         toast({
           title: "Borrador restaurado",
           description: `${dropped} ${dropped === 1 ? "producto traído no se restauró" : "productos traídos no se restauraron"}: vuelve a traerlos con «Traer productos existentes».`,
@@ -980,6 +981,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       title: "Formulario limpiado",
       description: "Los datos han sido restablecidos.",
     });
+    // Convirtiendo un producto suelto: se empieza de cero, pero con él adentro.
+    if (adoptOnLoad && !initialData) {
+      form.setValue("name", adoptOnLoad.name, { shouldDirty: true });
+      handleImport([adoptOnLoad]);
+    }
   };
 
   const onSubmit = async (data: ProductGroupFormValues) => {
