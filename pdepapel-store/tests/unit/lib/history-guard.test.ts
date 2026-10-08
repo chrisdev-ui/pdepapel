@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HISTORY_GUARD_SCRIPT } from "@/lib/history-guard";
 
@@ -25,6 +25,18 @@ beforeEach(() => {
   for (const name of ["pushState", "replaceState", "__pdpHistoryGuard"]) delete (window.history as unknown as Record<string, unknown>)[name];
   History.prototype.replaceState.call(window.history, null, "", "/");
 });
+
+/** Lo que hace el router de Next 14.2 al montar: guarda el método actual y lo reemplaza por su parche. */
+const patchLikeNext = (name: "pushState" | "replaceState") => {
+  const original = window.history[name].bind(window.history);
+  window.history[name] = function (data: unknown, unused: string, url?: string | URL | null) {
+    const state = data && typeof data === "object" && "__NA" in data ? data : { ...(data as object), __NA: true };
+    return original(state, unused, url);
+  };
+  return original;
+};
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("history guard", () => {
   it("is a no-op for a normal browser", () => {
@@ -76,5 +88,38 @@ describe("history guard", () => {
     expect(() => install()).not.toThrow();
     window.history.pushState(null, "", "/nosotros");
     expect(window.location.pathname).toBe("/nosotros");
+  });
+
+  it.each(["pushState", "replaceState"] as const)(
+    "calls the native %s once when Next patches it after the guard",
+    (name) => {
+      const native = vi.spyOn(History.prototype, name);
+      install();
+      patchLikeNext(name);
+      window.history[name](null, "", "/producto/cartuchera-azul");
+      expect(native).toHaveBeenCalledTimes(1);
+      expect(window.location.pathname).toBe("/producto/cartuchera-azul");
+      expect(window.history.state).toEqual({ __NA: true });
+    },
+  );
+
+  it("calls the native pushState once after Next restores its saved method on unmount", () => {
+    const native = vi.spyOn(History.prototype, "pushState");
+    install();
+    const saved = patchLikeNext("pushState");
+    window.history.pushState = saved;
+    window.history.pushState({ n: 1 }, "", "/tienda");
+    expect(native).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe("/tienda");
+  });
+
+  it("calls the native pushState once when the in-app wrapper wraps the guard", () => {
+    const native = vi.spyOn(History.prototype, "pushState");
+    install();
+    window.history.pushState = inAppWrapper(window.history.pushState, "after");
+    const length = window.history.length;
+    expect(() => window.history.pushState(null, "", "/producto/mug")).not.toThrow();
+    expect(native).toHaveBeenCalledTimes(1);
+    expect(window.history.length).toBe(length + 1);
   });
 });

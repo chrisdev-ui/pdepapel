@@ -27,9 +27,15 @@ export const HISTORY_GUARD_SCRIPT = `(function () {
       var nativeFn = proto && proto[name];
       if (typeof nativeFn !== "function") return;
       var inner = Object.prototype.hasOwnProperty.call(h, name) ? h[name] : null;
+      var depth = 0;
       var guarded = function () {
         var args = arguments;
+        // Next y los navegadores integrados guardan el método que encuentran
+        // (esta guarda) y lo llaman desde el suyo: sin esto el ciclo
+        // guarda → envoltorio → guarda se repite hasta desbordar la pila.
+        if (depth > 0) return nativeFn.apply(this, args);
         var target = typeof inner === "function" ? inner : nativeFn;
+        depth++;
         try {
           return target.apply(this, args);
         } catch (error) {
@@ -44,6 +50,8 @@ export const HISTORY_GUARD_SCRIPT = `(function () {
           } catch (fallbackError) {
             throw error;
           }
+        } finally {
+          depth--;
         }
       };
       Object.defineProperty(h, name, {
