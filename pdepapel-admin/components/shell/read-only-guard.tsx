@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 const MUTATING = new Set(["post", "put", "patch", "delete"]);
 
 /** `/api/...` de este mismo origen; nunca las rutas internas de Next. */
-function isPanelApi(url: string): boolean {
+export function isPanelApi(url: string): boolean {
   if (!url) return false;
   try {
     const resolved = new URL(url, window.location.origin);

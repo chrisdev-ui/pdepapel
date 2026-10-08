@@ -8,6 +8,7 @@ import type { StoreRole } from "@/lib/store-access";
 import { TopBar } from "@/components/shell/top-bar";
 import { ReadOnlyBanner } from "@/components/shell/read-only-banner";
 import { ReadOnlyGuard } from "@/components/shell/read-only-guard";
+import { VersionGuard } from "@/components/shell/version-guard";
 import { ViewerAccessProvider } from "@/components/shell/viewer-access";
 import { StoreSwitcher } from "@/components/store-switcher";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -136,6 +137,7 @@ export function AppShell({
             una zona en blanco. */}
           <main className="min-h-0 relative flex-1 overflow-y-auto pb-[88px] lg:pb-0">
             <ReadOnlyGuard />
+            <VersionGuard />
           <ReadOnlyBanner />
             <Breadcrumbs storeId={storeId} className="px-4 pt-4 sm:px-8" />
             {children}

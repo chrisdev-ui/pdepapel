@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useForm } from "react-hook-form";
 
@@ -22,6 +22,7 @@ function Harness({ orderId, storageKey }: { orderId?: string; storageKey: string
     <div>
       <span data-testid="name">{values.name}</span>
       <span data-testid="date-type">{date instanceof Date ? "date" : typeof date}</span>
+      <input aria-label="Nombre" {...form.register("name")} />
     </div>
   );
 }
@@ -72,5 +73,19 @@ describe("useFormPersist", () => {
       render(<Harness storageKey={`order-form-${STORE}-STANDARD-new`} />);
     });
     expect(screen.getByTestId("name").textContent).toBe("");
+  });
+
+  it("writes the pending draft right away when the page reloads", async () => {
+    const key = `order-form-${STORE}-STANDARD-new`;
+    await act(async () => {
+      render(<Harness storageKey={key} />);
+    });
+
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Escrito justo antes de recargar" } });
+    expect(useFormPersistenceStore.getState().forms[key]).toBeUndefined();
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(useFormPersistenceStore.getState().forms[key]).toMatchObject({ name: "Escrito justo antes de recargar" });
   });
 });

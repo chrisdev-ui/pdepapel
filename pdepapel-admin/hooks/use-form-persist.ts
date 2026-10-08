@@ -87,16 +87,19 @@ export function useFormPersist<T extends FieldValues>({
   // Save data on change
   useEffect(() => {
     if (!enabled) return;
-    const subscription = form.watch(() => {
-      if (!isLoaded.current) return;
-
+    const valuesToSave = () => {
       const dataToSave = form.getValues();
-
       if (excludeRef.current.length > 0) {
         excludeRef.current.forEach((k) => {
           delete (dataToSave as any)[k];
         });
       }
+      return dataToSave;
+    };
+    const subscription = form.watch(() => {
+      if (!isLoaded.current) return;
+
+      const dataToSave = valuesToSave();
 
       // Debounce saving to store/localstorage
       if (timeoutRef.current) {
@@ -104,12 +107,23 @@ export function useFormPersist<T extends FieldValues>({
       }
 
       timeoutRef.current = setTimeout(() => {
+        timeoutRef.current = null;
         setFormData(key, dataToSave);
       }, 1000);
     });
 
+    // Al recargar dentro del segundo de espera, lo último escrito se perdería.
+    const flushPending = () => {
+      if (!timeoutRef.current) return;
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      setFormData(key, valuesToSave());
+    };
+    window.addEventListener("pagehide", flushPending);
+
     return () => {
       subscription.unsubscribe();
+      window.removeEventListener("pagehide", flushPending);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }

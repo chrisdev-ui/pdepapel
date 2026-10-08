@@ -47,6 +47,9 @@ const newDashboardRoutePairs = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? "",
+  },
   images: {
     // El panel no usa el optimizador de Vercel: Cloudinary entrega las fotos
     // del catálogo al ancho pedido (lib/cloudinary-image-loader.ts) y cualquier
