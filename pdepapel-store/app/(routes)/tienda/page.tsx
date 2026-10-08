@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+
+import { ShopHeaderNav } from "./components/shop-header-nav";
 import { LayoutGrid } from "lucide-react";
 import { Metadata } from "next";
 import { Suspense } from "react";
@@ -8,16 +11,14 @@ import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getTypes } from "@/actions/get-types";
-import { CategoryChips } from "@/components/category-chips";
 import { Newsletter } from "@/components/newsletter";
 import { PageHeader } from "@/components/shop/page-header";
 import { ShopContent } from "@/components/shop-content";
-import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, DEFAULT_SHARE_IMAGE, LIMIT_SHOP_ITEMS } from "@/constants";
-import { buildNavigationTypes } from "@/lib/catalog-navigation";
+import { buildNavigationTypes, withProducts } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
-import { getListingIndexing, type ListingSearchParams } from "@/lib/listing-seo";
+import { getListingIndexing, outOfRangePageTarget, type ListingSearchParams } from "@/lib/listing-seo";
 import { categoryPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 
@@ -132,6 +133,9 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
     hasFilters ? getProducts({ fromShop: true, page: 1, itemsPerPage: 1, groupBy: "parents" }).then((response) => response.totalItems) : null,
   ]);
 
+  const pageTarget = outOfRangePageTarget(STOREFRONT_ROUTES.shop, searchParams as unknown as ListingSearchParams, totalPages);
+  if (pageTarget) redirect(pageTarget);
+
   const navigationTypes = buildNavigationTypes(types, categories);
   const featured = categories.filter((category) => category.seoEnabled && category.seoFeatured && category.slug);
   const headerImages = featured
@@ -140,28 +144,13 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
     .map((category) => ({ url: category.imageUrl as string, alt: stripTaxonomyIcon(category.name) }));
   const suggestions = featured.slice(0, 4).map((category) => ({ label: stripTaxonomyIcon(category.name), href: categoryPath(category.slug as string) }));
 
-  const breadcrumbItems: BreadcrumbItem[] = [{ label: "Tienda", href: STOREFRONT_ROUTES.shop, isCurrent: true }];
-  if (searchParams.categoryId) {
-    const category = categories.find((c) => c.id === searchParams.categoryId || c.slug === searchParams.categoryId);
-    if (category) {
-      breadcrumbItems[0].isCurrent = false;
-      breadcrumbItems.push({ label: stripTaxonomyIcon(category.name), isCurrent: true });
-    }
-  } else if (searchParams.typeId) {
-    const type = types.find((t) => t.id === searchParams.typeId || t.slug === searchParams.typeId);
-    if (type) {
-      breadcrumbItems[0].isCurrent = false;
-      breadcrumbItems.push({ label: stripTaxonomyIcon(type.name), isCurrent: true });
-    }
-  } else if (searchParams.search) {
-    breadcrumbItems[0].isCurrent = false;
-    breadcrumbItems.push({ label: `Resultados: ${searchParams.search}`, isCurrent: true });
-  }
-
   return (
     <>
-      <CategoryChips types={navigationTypes} className="-mx-4 sm:-mx-6" activeTypeId={types.find((t) => t.id === searchParams.typeId || t.slug === searchParams.typeId)?.id} />
-      <Breadcrumb items={breadcrumbItems} />
+      <ShopHeaderNav
+        navigationTypes={navigationTypes}
+        types={types.map(({ id, name, slug }) => ({ id, name, slug }))}
+        categories={categories.map(({ id, name, slug }) => ({ id, name, slug }))}
+      />
       <PageHeader
         title="Todos los productos"
         count={catalogTotal ?? totalItems}
@@ -178,7 +167,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
         initialFacets={facets}
         initialSearchCorrection={searchCorrection}
         types={types}
-        categories={categories}
+        categories={withProducts(categories)}
         catalogOptions={catalogOptions}
         colors={colors}
         designs={designs}

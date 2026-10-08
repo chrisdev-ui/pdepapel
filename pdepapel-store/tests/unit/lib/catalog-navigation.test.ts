@@ -153,6 +153,20 @@ describe("buildNavigationTypes", () => {
     ]);
     expect(navigation[2].subcategories).toEqual([]);
   });
+
+  it("deja fuera las subcategorías sin productos y conserva las que no traen conteo", () => {
+    const withCounts = categories.map((category, index) => ({ ...category, productCount: index === 0 ? 0 : 3 }));
+    const navigation = buildNavigationTypes(types, withCounts);
+    const names = navigation.flatMap((type) => type.subcategories.map((subcategory) => subcategory.name));
+    expect(names).not.toContain(categories[0].name);
+    expect(names).toHaveLength(categories.length - 1);
+    expect(buildNavigationTypes(types, categories).flatMap((type) => type.subcategories)).toHaveLength(categories.length);
+  });
+
+  it("las destacadas tampoco ofrecen una subcategoría vacía", () => {
+    const featured = { ...fatCategory, productCount: 0 };
+    expect(buildFeaturedSubcategories([featured])).toEqual([]);
+  });
 });
 
 describe("buildFeaturedByType", () => {

@@ -150,7 +150,7 @@ export type PublicProductDetailRecord = Prisma.ProductGetPayload<{
  * cuando cambie lo que se devuelve: las entradas viejas dejan de leerse en el
  * acto y caducan solas (máximo 15 minutos) sin ningún paso manual.
  */
-export const PUBLIC_PRODUCTS_CACHE_VERSION = "v5";
+export const PUBLIC_PRODUCTS_CACHE_VERSION = "v6";
 
 /** Campos de `Product` que nunca deben salir por una ruta pública (para pruebas). */
 export const INTERNAL_PRODUCT_FIELDS = [

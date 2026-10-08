@@ -112,6 +112,8 @@ export interface Category {
   typeId: string;
   name: string;
   slug?: string;
+  /** Productos a la venta en la subcategoría (lista pública de categorías). */
+  productCount?: number;
   seoEnabled?: boolean;
   seoFeatured?: boolean;
   seoTitle?: string | null;

@@ -604,15 +604,27 @@ describe("GET /api/[storeId]/products", () => {
   });
 
   it("returns type, option and price facets for grouped queries without a category", async () => {
-    mocks.groupProducts.mockImplementation(async ({ by }: { by: string[] }) =>
-      by[0] === "categoryId"
-        ? [
-            { categoryId: "cat-a", _count: { categoryId: 2 } },
-            { categoryId: "cat-b", _count: { categoryId: 3 } },
-          ]
-        : [],
+    const facetRow = (id: string, categoryId: string, optionValueId: string | null, price: number) => ({
+      id,
+      productGroupId: null,
+      categoryId,
+      colorId: "color",
+      sizeId: "size",
+      designId: "design",
+      price,
+      catalogOptionValues: optionValueId ? [{ optionId: "option-1", optionValueId }] : [],
+    });
+    const universe = [
+      facetRow("p1", "cat-a", "value-1", 4000),
+      facetRow("p2", "cat-b", "value-1", 12000),
+      facetRow("p3", "cat-b", null, 12000),
+    ];
+    mocks.findProducts.mockImplementation(async ({ select }: { select?: Record<string, unknown> }) =>
+      select && "catalogOptionValues" in select ? universe : [standaloneProduct],
     );
-    mocks.groupOptionValues.mockResolvedValue([{ optionValueId: "value-1", _count: { optionValueId: 4 } }]);
+    mocks.getProductsPrices.mockImplementation(async (products: { id: string; price: number }[]) =>
+      new Map(products.map((product) => [product.id, { price: product.price, discount: 0, offerLabel: null }])),
+    );
     mocks.findCategories.mockResolvedValue([
       { id: "cat-a", typeId: "type-1" },
       { id: "cat-b", typeId: "type-1" },
@@ -625,10 +637,11 @@ describe("GET /api/[storeId]/products", () => {
     );
     const body = await response.json();
 
-    expect(body.facets.types).toEqual([{ id: "type-1", count: 5 }]);
-    expect(body.facets.optionValues).toEqual([{ id: "value-1", count: 4 }]);
+    expect(body.facets.types).toEqual([{ id: "type-1", count: 3 }]);
+    expect(body.facets.optionValues).toEqual([{ id: "value-1", count: 2 }]);
     expect(body.facets.priceRanges).toHaveLength(5);
     expect(body.facets.priceRanges[0]).toEqual({ id: "[0,5000]", count: 1 });
+    expect(body.facets.priceRanges[2]).toEqual({ id: "[10000,20000]", count: 2 });
 
     // La búsqueda va en `AND` (una condición por palabra), nunca en `OR`.
     const standaloneWhere = mocks.findProducts.mock.calls[0][0].where;
@@ -647,7 +660,7 @@ describe("GET /api/[storeId]/products", () => {
     const body = await response.json();
 
     expect(body.searchCorrection).toEqual({ original: "resaltadres", corrected: "resaltadores" });
-    const standaloneWhere = mocks.findProducts.mock.calls.at(-1)?.[0].where;
+    const standaloneWhere = mocks.findProducts.mock.calls.find((call) => call[0].where.productGroupId === null)?.[0].where;
     expect(standaloneWhere.AND).toContainEqual({
       OR: expect.arrayContaining([{ name: { contains: "resaltador" } }]),
     });

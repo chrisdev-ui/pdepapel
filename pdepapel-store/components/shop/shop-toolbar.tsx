@@ -54,17 +54,16 @@ interface ShopToolbarProps {
   actionSlot?: ReactNode;
 }
 
-/** Escritorio: chips o rango a la izquierda, búsqueda de categoría y orden a la derecha. */
+/** Escritorio: rango (y chips si hay filtros) a la izquierda, búsqueda de categoría y orden a la derecha. */
 export function ShopToolbar({ chips, onRemoveChip, onClearAll, rangeText, searchSlot, actionSlot }: ShopToolbarProps) {
   return (
     <div className="hidden min-h-11 items-center justify-between gap-4 lg:flex">
-      <div className="min-w-0 flex-1">
-        {chips.length > 0 ? (
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <p className="font-sans text-sm font-medium text-muted-foreground" aria-live="polite">
+          {rangeText}
+        </p>
+        {chips.length > 0 && (
           <ActiveFilterChips chips={chips} onRemove={onRemoveChip} onClearAll={onClearAll} className="flex-wrap" />
-        ) : (
-          <p className="font-sans text-sm font-medium text-muted-foreground" aria-live="polite">
-            {rangeText}
-          </p>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2.5">

@@ -27,7 +27,8 @@ export interface ActiveFilterChip {
 }
 
 export interface FilterLookups {
-  types?: { id: string; name: string }[];
+  /** El tipo puede llegar en la URL por `slug` (enlaces viejos) además de por id. */
+  types?: { id: string; name: string; slug?: string }[];
   categories?: { id: string; name: string }[];
   colors?: { id: string; name: string }[];
   sizes?: { id: string; name: string }[];
@@ -78,7 +79,7 @@ export function buildActiveFilterChips(
     if (ignore.includes(key)) continue;
     const items = lookups[LOOKUP_BY_KEY[key]] ?? [];
     for (const value of filters[key]) {
-      const name = items.find((item) => item.id === value)?.name;
+      const name = items.find((item) => item.id === value || ("slug" in item && item.slug === value))?.name;
       if (name) chips.push({ key, value, label: stripTaxonomyIcon(name) });
     }
   }
@@ -128,8 +129,9 @@ export const EMPTY_FILTERS: ProductFilters = {
 /** «Mostrando 1–24 de 1.980 productos». */
 export function formatResultRange(page: number, perPage: number, total: number): string {
   if (total === 0) return "Sin productos";
-  const start = (page - 1) * perPage + 1;
-  const end = Math.min(page * perPage, total);
+  const lastPage = Math.max(1, Math.ceil(total / perPage));
+  const start = (Math.min(Math.max(page, 1), lastPage) - 1) * perPage + 1;
+  const end = Math.min(start - 1 + perPage, total);
   const totalLabel = total.toLocaleString("es-CO");
   return total === 1 ? "1 producto" : `Mostrando ${start}–${end} de ${totalLabel} productos`;
 }

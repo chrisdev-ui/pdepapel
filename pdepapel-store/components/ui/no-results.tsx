@@ -26,7 +26,8 @@ export interface SuggestionChip {
 const CHIP_TINTS = ["bg-kawaii-lavender-light", "bg-kawaii-pink-light/60", "bg-kawaii-mint-light", "bg-kawaii-yellow-light", "bg-kawaii-blue-light"];
 
 interface NoResultsPanelProps {
-  variant: "search" | "filters" | "error";
+  /** `empty`: no hay nada a la venta y no hay filtros que quitar. */
+  variant: "search" | "filters" | "empty" | "error";
   query?: string | null;
   suggestions?: SuggestionChip[];
   onClearFilters?: () => void;
@@ -37,12 +38,20 @@ interface NoResultsPanelProps {
 /** Vacío del catálogo con salidas: categorías sugeridas, toda la tienda y limpiar filtros. */
 export function NoResultsPanel({ variant, query, suggestions = [], onClearFilters, onRetry, className }: NoResultsPanelProps) {
   const isError = variant === "error";
-  const title = isError ? "No pudimos cargar los productos" : variant === "search" && query ? `No encontramos «${query}»` : "Nada con estos filtros";
+  const title = isError
+    ? "No pudimos cargar los productos"
+    : variant === "search" && query
+      ? `No encontramos «${query}»`
+      : variant === "empty"
+        ? "Aún no hay productos en esta categoría"
+        : "Nada con estos filtros";
   const description = isError
     ? "Inténtalo de nuevo en unos segundos. Si sigue fallando, escríbenos por WhatsApp."
     : variant === "search"
       ? "Revisa la ortografía, prueba con menos palabras o quita algún filtro. Estas categorías suelen tener lo que buscas:"
-      : "Quita alguno de los filtros o mira estas categorías:";
+      : variant === "empty"
+        ? "Pronto llegarán. Mientras tanto, mira estas categorías:"
+        : "Quita alguno de los filtros o mira estas categorías:";
 
   return (
     <div

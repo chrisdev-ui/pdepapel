@@ -30,6 +30,19 @@ describe("shop toolbar", () => {
     expect(onClearAll).toHaveBeenCalled();
   });
 
+  it("keeps the result count next to the chips when something is filtered (B1)", () => {
+    render(
+      <ShopToolbar
+        chips={[{ key: "typeId", value: "t1", label: "Escritura" }]}
+        onRemoveChip={vi.fn()}
+        onClearAll={vi.fn()}
+        rangeText="Mostrando 1–24 de 108 productos"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Quitar filtro Escritura" })).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 1–24 de 108 productos")).toBeInTheDocument();
+  });
+
   it("shows the visible range when nothing is filtered and the sort pill", () => {
     render(<ShopToolbar chips={[]} onRemoveChip={vi.fn()} onClearAll={vi.fn()} rangeText="Mostrando 1–24 de 1.980 productos" />);
     expect(screen.getByText("Mostrando 1–24 de 1.980 productos")).toBeInTheDocument();

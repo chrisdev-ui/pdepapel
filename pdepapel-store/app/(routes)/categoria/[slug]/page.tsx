@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { notFound, permanentRedirect } from "next/navigation";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 
 import { getCategory } from "@/actions/get-category";
 import { getCatalogOptions } from "@/actions/get-catalog-options";
@@ -16,9 +16,9 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
-import { buildNavigationTypes } from "@/lib/catalog-navigation";
+import { buildNavigationTypes, withProducts } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
-import { getListingIndexing } from "@/lib/listing-seo";
+import { getListingIndexing, outOfRangePageTarget } from "@/lib/listing-seo";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 
@@ -107,13 +107,16 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     hasFilters ? getProducts({ categoryId: category.id, fromShop: true, page: 1, itemsPerPage: 1, groupBy: "parents" }).then((response) => response.totalItems) : null,
   ]);
 
+  const pageTarget = outOfRangePageTarget(categoryPath(canonicalSlug), searchParams as Record<string, string | undefined>, totalPages);
+  if (pageTarget) redirect(pageTarget);
+
   const type = types.find((item) => item.id === category.typeId);
   const typeLabel = type ? stripTaxonomyIcon(type.name) : null;
   const siblings = categories
     .filter((item) => item.id !== category.id && item.typeId === category.typeId && item.slug)
     .slice(0, SIBLING_CHIPS)
     .map((item) => ({ label: stripTaxonomyIcon(item.name), href: categoryPath(item.slug as string) }));
-  const relatedCategories = categories.filter((item) => item.id !== category.id && item.seoEnabled && item.seoFeatured && item.slug);
+  const relatedCategories = withProducts(categories).filter((item) => item.id !== category.id && item.seoEnabled && item.seoFeatured && item.slug);
   const suggestions = relatedCategories.slice(0, 4).map((item) => ({ label: stripTaxonomyIcon(item.name), href: categoryPath(item.slug as string) }));
   const intro = category.seoIntro || `Descubre nuestra selección de ${name.toLocaleLowerCase("es-CO")} y encuentra opciones creativas para estudiar, crear o regalar.`;
 

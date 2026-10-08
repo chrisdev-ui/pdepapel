@@ -83,6 +83,12 @@ function priorityIndex(type: { slug?: string | null; label: string }) {
   return index === -1 ? NAVIGATION_PRIORITY.length : index;
 }
 
+/** Una subcategoría sin productos no se ofrece en el menú; sin conteo (API vieja) se conserva. */
+const hasProducts = (category: Category) => category.productCount !== 0;
+
+/** Solo las subcategorías con productos, para filtros y atajos. */
+export const withProducts = <T extends Category>(categories: T[]) => categories.filter(hasProducts);
+
 /**
  * Types with their subcategories in merchandising order (see
  * NAVIGATION_PRIORITY), ties broken alphabetically.
@@ -92,7 +98,7 @@ export function buildNavigationTypes(
   categories: Category[],
 ): NavigationType[] {
   const byType = new Map<string, Category[]>();
-  for (const category of categories) {
+  for (const category of categories.filter(hasProducts)) {
     const list = byType.get(category.typeId) ?? [];
     list.push(category);
     byType.set(category.typeId, list);
@@ -135,7 +141,7 @@ export function buildNavigationTypes(
  */
 export function buildFeaturedSubcategories(categories: Category[]): NavigationCategory[] {
   return categories
-    .filter((category) => category.seoEnabled && category.seoFeatured && category.slug)
+    .filter((category) => category.seoEnabled && category.seoFeatured && category.slug && hasProducts(category))
     .map(toNavigationCategory);
 }
 

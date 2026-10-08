@@ -266,7 +266,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
             <NoResultsPanel variant="error" onRetry={() => refetch()} />
           ) : products.length === 0 ? (
             <NoResultsPanel
-              variant={filters.search ? "search" : "filters"}
+              variant={filters.search ? "search" : activeCount > 0 ? "filters" : "empty"}
               query={filters.search}
               suggestions={suggestions}
               onClearFilters={activeCount > 0 ? clearFilters : undefined}

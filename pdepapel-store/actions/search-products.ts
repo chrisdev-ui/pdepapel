@@ -28,7 +28,7 @@ export const searchProducts = async (
       }));
     }
 
-    const res = await fetch(`${URL}?search=${query}`, { signal });
+    const res = await fetch(`${URL}?${new URLSearchParams({ search: query })}`, { signal });
     if (!res.ok) return [];
     return await res.json();
   } catch {

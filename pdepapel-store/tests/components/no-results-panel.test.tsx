@@ -35,4 +35,11 @@ describe("NoResultsPanel", () => {
     screen.getByRole("button", { name: "Intentar de nuevo" }).click();
     expect(onRetry).toHaveBeenCalled();
   });
+
+  it("a category with nothing for sale says so instead of blaming filters", () => {
+    render(<NoResultsPanel variant="empty" suggestions={suggestions} />);
+    expect(screen.getByRole("heading", { name: "Aún no hay productos en esta categoría" })).toBeInTheDocument();
+    expect(screen.queryByText(/filtros/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver toda la tienda" })).toHaveAttribute("href", "/tienda");
+  });
 });

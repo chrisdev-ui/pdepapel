@@ -40,3 +40,26 @@ export function getListingIndexing(
   const page = getPaginationOnlyPage(searchParams);
   return { canonical: page ? `${basePath}?page=${page}` : basePath, index: false };
 }
+
+/**
+ * `?page=` más allá de la última página: a dónde redirigir (la última, con los
+ * mismos filtros, o la base si solo hay una). `null` si no hace falta.
+ */
+export function outOfRangePageTarget(
+  basePath: string,
+  searchParams: ListingSearchParams,
+  totalPages: number,
+): string | null {
+  const raw = searchParams.page;
+  if (typeof raw !== "string" || !/^\d+$/.test(raw) || totalPages < 1) return null;
+  if (Number(raw) <= totalPages) return null;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  if (totalPages > 1) params.set("page", String(totalPages));
+  const entries = Array.from(params.entries()).sort(([a], [b]) => (a === "page" ? -1 : b === "page" ? 1 : 0));
+  const query = new URLSearchParams(entries).toString();
+  return query ? `${basePath}?${query}` : basePath;
+}

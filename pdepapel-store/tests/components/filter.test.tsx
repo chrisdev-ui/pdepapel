@@ -44,6 +44,27 @@ describe("Filter group", () => {
 
     await user.click(screen.getByRole("button", { name: "Ver 2 más" }));
     expect(screen.getAllByRole("checkbox")).toHaveLength(12);
+    await user.click(screen.getByRole("button", { name: "Ver menos" }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(10);
+  });
+
+  it("keeps a selected value visible even past the first ten (B4)", () => {
+    mocks.selected = ["t11"];
+    render(<Filter valueKey="typeId" name="Categorías" data={types} />);
+    expect(screen.getByLabelText("Tipo L")).toBeChecked();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(11);
+    expect(screen.getByRole("button", { name: "Ver 1 más" })).toBeInTheDocument();
+  });
+
+  it("checks a value selected by slug and removes that slug when clicked (B5)", async () => {
+    const user = userEvent.setup();
+    mocks.selected = ["tipo-b"];
+    render(<Filter valueKey="typeId" name="Categorías" data={types.slice(0, 3).map((type) => ({ ...type, slug: type.id === "t1" ? "tipo-b" : undefined }))} />);
+
+    expect(screen.getByLabelText("Tipo B")).toBeChecked();
+    expect(screen.getByRole("button", { name: /^Categorías\s?1$/ })).toBeInTheDocument();
+    await user.click(screen.getByLabelText("Tipo B"));
+    expect(mocks.toggleFilter).toHaveBeenCalledWith("typeId", "tipo-b");
   });
 
   it("toggles a value through the shared filter state and tracks it", async () => {

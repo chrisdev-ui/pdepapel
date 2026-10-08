@@ -4,6 +4,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import { getCategoryRevalidationPaths, getUniqueCategorySlug } from "@/lib/category-slugs";
 import prismadb from "@/lib/prismadb";
+import { productAvailabilityWhere } from "@/lib/product-availability";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
 import {
@@ -145,10 +146,21 @@ export async function GET(
 
     const categories = await prismadb.category.findMany({
       where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
-      select: PUBLIC_CATEGORY_SELECT,
+      select: {
+        ...PUBLIC_CATEGORY_SELECT,
+        _count: {
+          select: {
+            products: { where: { isArchived: false, ...productAvailabilityWhere("available") } },
+          },
+        },
+      },
     });
 
-    return NextResponse.json(categories, { headers: CACHE_HEADERS.DYNAMIC });
+    // `productCount`: la tienda no ofrece en el menú una subcategoría sin nada a la venta.
+    return NextResponse.json(
+      categories.map(({ _count, ...category }) => ({ ...category, productCount: _count.products })),
+      { headers: CACHE_HEADERS.DYNAMIC },
+    );
   } catch (error) {
     return handleErrorResponse(error, "CATEGORIES_GET", { headers: CACHE_HEADERS.NO_CACHE });
   }

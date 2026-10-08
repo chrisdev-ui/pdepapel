@@ -217,6 +217,6 @@ describe("la forma pública de un color (#3)", () => {
 
   it("cambió la forma de GET /products, así que la caché Redis cambió de versión", () => {
     // v4 guardaba colores sin `swatchType`: leerla serviría la forma vieja hasta 15 minutos.
-    expect(PUBLIC_PRODUCTS_CACHE_VERSION).toBe("v5");
+    expect(PUBLIC_PRODUCTS_CACHE_VERSION).toBe("v6");
   });
 });

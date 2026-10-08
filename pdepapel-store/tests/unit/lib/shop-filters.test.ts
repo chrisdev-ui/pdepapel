@@ -39,6 +39,14 @@ describe("shop filters", () => {
     ]);
   });
 
+  it("names a type that arrives by slug (B5)", () => {
+    const chips = buildActiveFilterChips(
+      { ...EMPTY_FILTERS, typeId: ["escritura"] },
+      { types: [{ id: "t9", name: "✏️ Escritura", slug: "escritura" }] },
+    );
+    expect(chips).toEqual([{ key: "typeId", value: "escritura", label: "Escritura" }]);
+  });
+
   it("hides the fixed category of a category page", () => {
     const chips = buildActiveFilterChips({ ...EMPTY_FILTERS, categoryId: ["k1"], colorId: ["c1"] }, lookups, ["categoryId"]);
     expect(chips.map((chip) => chip.label)).toEqual(["Rosa"]);

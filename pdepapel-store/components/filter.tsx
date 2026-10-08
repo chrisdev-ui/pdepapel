@@ -108,7 +108,13 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
     const values = filters[valueKey as keyof ProductFilters];
     return Array.isArray(values) ? values : [];
   }, [filters, valueKey]);
-  const visibleIds = useMemo(() => new Set(data.map((item) => item.id)), [data]);
+  const visibleIds = useMemo(
+    () => new Set(data.flatMap((item) => (item.slug ? [item.id, item.slug] : [item.id]))),
+    [data],
+  );
+  /** El valor de la URL que marca esta fila: su id o, en enlaces viejos, su slug. */
+  const selectedValueOf = (item: FilterItem) =>
+    selected.find((value) => value === item.id || (item.slug !== undefined && value === item.slug));
 
   const sorted = useMemo(() => [...data].sort((a, b) => stripTaxonomyIcon(a.name).localeCompare(stripTaxonomyIcon(b.name), "es")), [data]);
   const filtered = useMemo(() => {
@@ -116,14 +122,17 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
     const needle = searchQuery.toLocaleLowerCase("es-CO");
     return sorted.filter((item) => stripTaxonomyIcon(item.name).toLocaleLowerCase("es-CO").includes(needle));
   }, [sorted, searchQuery]);
-  const visible = showAll || searchQuery ? filtered : filtered.slice(0, LIMIT);
-  const hiddenCount = filtered.length - LIMIT;
+  // Las elegidas siempre se ven, aunque queden después de las diez primeras.
+  const collapsed = filtered.filter((item, index) => index < LIMIT || selectedValueOf(item) !== undefined);
+  const visible = showAll || searchQuery ? filtered : collapsed;
+  const hiddenCount = filtered.length - collapsed.length;
 
   const activeCount = selected.filter((id) => visibleIds.has(id)).length;
 
-  const handleToggle = (id: string) => {
-    trackCustomerEvent("catalog_filter", { filter: valueKey, action: selected.includes(id) ? "remove" : "add" });
-    toggleFilter(valueKey, id);
+  const handleToggle = (item: FilterItem) => {
+    const current = selectedValueOf(item);
+    trackCustomerEvent("catalog_filter", { filter: valueKey, action: current ? "remove" : "add" });
+    toggleFilter(valueKey, current ?? item.id);
   };
 
   const clearGroup = () => {
@@ -157,7 +166,7 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
         )}
         {visible.map((item) => {
           const inputId = `${filterInstanceId}-${valueKey}-${item.id}`;
-          const checked = selected.includes(item.id);
+          const checked = selectedValueOf(item) !== undefined;
           const label = stripTaxonomyIcon(item.name);
           const dimmed = item.count === 0 && !checked;
           return (
@@ -165,7 +174,7 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
               <Checkbox
                 id={inputId}
                 checked={checked}
-                onCheckedChange={() => handleToggle(item.id)}
+                onCheckedChange={() => handleToggle(item)}
                 className="h-[18px] w-[18px] rounded-[5px] border-[1.5px] border-blue-baby data-[state=checked]:border-blue-yankees data-[state=checked]:bg-blue-yankees data-[state=checked]:text-white"
               />
               {valueKey === "colorId" && item.value && (

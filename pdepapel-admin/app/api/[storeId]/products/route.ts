@@ -8,11 +8,12 @@ import {
 import { movementActor } from "@/lib/movement-actor";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
-  PRICE_RANGE_BUCKETS,
-  priceBucketWhere,
-  typeFacetsFromCategories,
+  computeCardFacets,
+  priceInRange,
+  type FacetRow,
   type ProductFacets,
 } from "@/lib/catalog-facets";
+import { categoryScopeWhere, resolveCategoryScope } from "@/lib/catalog-category-scope";
 import { getStoreVocabulary, suggestQuery } from "@/lib/search-suggestions";
 import {
   normalizeSearchTerm,
@@ -626,21 +627,23 @@ export async function GET(
     }
 
     // Resolve categoryId if provided (supports both UUIDs and Slugs)
+    const requestedCategoryIds = [...categoryId];
+    let selectedCategories: { id: string; typeId: string }[] = [];
     if (categoryId.length > 0) {
-      const resolvedCategories = await prismadb.category.findMany({
+      selectedCategories = await prismadb.category.findMany({
         where: {
           storeId: params.storeId,
           OR: [{ id: { in: categoryId } }, { slug: { in: categoryId } }],
         },
-        select: { id: true },
+        select: { id: true, typeId: true },
       });
-      if (resolvedCategories.length > 0) {
-        categoryId = resolvedCategories.map((c: { id: string }) => c.id);
+      if (selectedCategories.length > 0) {
+        categoryId = selectedCategories.map((c) => c.id);
       }
     }
 
     // Resolve categories from Type if needed (supports both UUIDs and Slugs)
-    let categoriesIds: string[] = [];
+    let typeCategories: { id: string; typeId: string }[] = [];
     if (typeId.length > 0) {
       const [resolvedTypes, resolvedAliases] = await Promise.all([
         prismadb.type.findMany({
@@ -661,17 +664,20 @@ export async function GET(
           ...resolvedAliases.map((alias) => alias.typeId),
         ]),
       );
-      const categoriesForType = await prismadb.category.findMany({
+      typeCategories = await prismadb.category.findMany({
         where: {
           typeId: { in: actualTypeIds },
           storeId: params.storeId,
         },
-        select: { id: true },
+        select: { id: true, typeId: true },
       });
-      categoriesIds = categoriesForType.map(
-        (category: { id: string }) => category.id,
-      );
     }
+    const categoryScope = resolveCategoryScope({
+      requestedCategoryIds,
+      selectedCategories,
+      typeRequested: typeId.length > 0,
+      typeCategories,
+    });
 
     const selectedOptionValues =
       optionValueId.length > 0
@@ -784,11 +790,7 @@ export async function GET(
       const productFilters: Prisma.ProductWhereInput = {
         storeId: params.storeId,
         categoryId:
-          categoryId.length > 0
-            ? { in: categoryId }
-            : categoriesIds.length > 0
-              ? { in: categoriesIds }
-              : undefined,
+          categoryScopeWhere(categoryScope),
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
@@ -798,7 +800,7 @@ export async function GET(
             : undefined,
         isArchived: false,
         ...availabilityFilter,
-        price: priceFilter,
+        // El precio se filtra después de aplicar ofertas: el que ve la clienta.
         NOT: {
           id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,
         },
@@ -1010,16 +1012,20 @@ export async function GET(
           );
 
           if (groupVariants.length > 0) {
-            const pricedVariants = groupVariants.map((variant) => {
-              const pricing = allPricesMap.get(variant.id);
-              return {
-                product: variant.product,
-                basePrice: variant.price,
-                effectivePrice: pricing?.price ?? variant.price,
-                hasDiscount: Boolean(pricing && pricing.discount > 0),
-                offerLabel: pricing?.offerLabel ?? null,
-              };
-            });
+            const pricedVariants = groupVariants
+              .map((variant) => {
+                const pricing = allPricesMap.get(variant.id);
+                return {
+                  product: variant.product,
+                  stock: variant.stock,
+                  basePrice: variant.price,
+                  effectivePrice: pricing?.price ?? variant.price,
+                  hasDiscount: Boolean(pricing && pricing.discount > 0),
+                  offerLabel: pricing?.offerLabel ?? null,
+                };
+              })
+              .filter((variant) => priceInRange(variant.effectivePrice, minPrice, maxPrice));
+            if (pricedVariants.length === 0) return null;
 
             const discountedVariants = pricedVariants.filter(
               (variant) => variant.hasDiscount,
@@ -1065,11 +1071,11 @@ export async function GET(
               color: representativeVariant.product?.color ?? item.color,
               size: representativeVariant.product?.size ?? item.size,
               design: representativeVariant.product?.design ?? item.design,
-              stock: groupVariants.reduce(
+              stock: pricedVariants.reduce(
                 (total, variant) => total + variant.stock,
                 0,
               ),
-              variantCount: groupVariants.length,
+              variantCount: pricedVariants.length,
               price: minP,
               originalPrice: minBaseP,
               minPrice: minP,
@@ -1083,6 +1089,7 @@ export async function GET(
           // Standalone product
           const pricing = allPricesMap.get(item.id);
           const effectivePrice = pricing?.price ?? item.price;
+          if (!priceInRange(effectivePrice, minPrice, maxPrice)) return null;
           return {
             ...item,
             price: effectivePrice,
@@ -1094,9 +1101,12 @@ export async function GET(
         }
       });
 
+      const itemsInPriceRange = pricedItems.filter(
+        (item): item is NonNullable<(typeof pricedItems)[number]> => item !== null,
+      );
       const itemsMatchingSaleFilter = isOnSale
-        ? pricedItems.filter((item) => item.hasDiscount)
-        : pricedItems;
+        ? itemsInPriceRange.filter((item) => item.hasDiscount)
+        : itemsInPriceRange;
 
       const sortedItems = [...itemsMatchingSaleFilter].sort((first, second) => {
         if (sortOption === "isOnSale") {
@@ -1142,134 +1152,80 @@ export async function GET(
           return publicItem;
         });
 
-      // Facetas siempre, también sin categoría: la barra lateral y la hoja
-      // móvil muestran conteos de tipos, opciones y rangos de precio.
-      const getFacetWhere = (
-        excludedKey:
-          | "colorId"
-          | "sizeId"
-          | "categoryId"
-          | "designId"
-          | "optionValueId"
-          | "price",
-      ): Prisma.ProductWhereInput => {
-        const conditions: Prisma.ProductWhereInput[] =
-          excludedKey === "optionValueId" ? [] : [...catalogOptionConditions];
-
-        if (search) {
-          conditions.push({
-            OR: [
-              { AND: productNameSearchConditions(search) },
-              {
-                productGroup: {
-                  is: { AND: productGroupNameSearchConditions(search) },
-                },
+      // Facetas por tarjeta (un grupo cuenta una vez), con el precio que ve la
+      // clienta y todos los demás filtros aplicados: el número junto a cada
+      // valor es lo que se ve al elegirlo.
+      const universeConditions: Prisma.ProductWhereInput[] = [];
+      if (search) {
+        universeConditions.push({
+          OR: [
+            { AND: productNameSearchConditions(search) },
+            {
+              productGroup: {
+                is: { AND: productGroupNameSearchConditions(search) },
               },
-            ],
-          });
-        }
-        if (isOnSale && onSaleFilter) {
-          conditions.push(onSaleFilter);
-        }
-
-        return {
-          ...productFilters,
-          AND: undefined,
-          colorId:
-            excludedKey === "colorId" ? undefined : productFilters.colorId,
-          sizeId: excludedKey === "sizeId" ? undefined : productFilters.sizeId,
-          categoryId:
-            excludedKey === "categoryId"
-              ? undefined
-              : productFilters.categoryId,
-          designId:
-            excludedKey === "designId" ? undefined : productFilters.designId,
-          price: excludedKey === "price" ? undefined : productFilters.price,
-          ...(conditions.length > 0 ? { AND: conditions } : {}),
-        };
-      };
-
-      const [
-        colorFacets,
-        sizeFacets,
-        categoryFacets,
-        designFacets,
-        optionValueFacets,
-        priceCounts,
-        storeCategories,
-      ] = await Promise.all([
-        prismadb.product.groupBy({
-          by: ["colorId"],
-          where: getFacetWhere("colorId"),
-          _count: { colorId: true },
-        }),
-        prismadb.product.groupBy({
-          by: ["sizeId"],
-          where: getFacetWhere("sizeId"),
-          _count: { sizeId: true },
-        }),
-        prismadb.product.groupBy({
-          by: ["categoryId"],
-          where: getFacetWhere("categoryId"),
-          _count: { categoryId: true },
-        }),
-        prismadb.product.groupBy({
-          by: ["designId"],
-          where: getFacetWhere("designId"),
-          _count: { designId: true },
-        }),
-        prismadb.productCatalogOptionValue.groupBy({
-          by: ["optionValueId"],
+            },
+          ],
+        });
+      }
+      const [universe, storeCategories] = await Promise.all([
+        prismadb.product.findMany({
           where: {
-            storeId: params.storeId,
-            product: getFacetWhere("optionValueId"),
+            ...productFilters,
+            categoryId: undefined,
+            colorId: undefined,
+            sizeId: undefined,
+            designId: undefined,
+            AND: universeConditions.length > 0 ? universeConditions : undefined,
           },
-          _count: { optionValueId: true },
+          select: {
+            id: true,
+            productGroupId: true,
+            categoryId: true,
+            colorId: true,
+            sizeId: true,
+            designId: true,
+            price: true,
+            catalogOptionValues: { select: { optionId: true, optionValueId: true } },
+          },
         }),
-        Promise.all(
-          PRICE_RANGE_BUCKETS.map((bucket) =>
-            prismadb.product.count({
-              where: {
-                ...getFacetWhere("price"),
-                price: priceBucketWhere(bucket),
-              },
-            }),
-          ),
-        ),
         prismadb.category.findMany({
           where: { storeId: params.storeId },
           select: { id: true, typeId: true },
         }),
       ]);
-
-      const categoryFacetCounts = categoryFacets.map((facet) => ({
-        id: facet.categoryId,
-        count: facet._count.categoryId,
-      }));
-      const groupFacets: ProductFacets = {
-        colors: colorFacets.map((facet) => ({
-          id: facet.colorId,
-          count: facet._count.colorId,
-        })),
-        formattedSizes: sizeFacets.map((facet) => ({
-          id: facet.sizeId,
-          count: facet._count.sizeId,
-        })),
-        categories: categoryFacetCounts,
-        designs: designFacets.map((facet) => ({
-          id: facet.designId,
-          count: facet._count.designId,
-        })),
-        types: typeFacetsFromCategories(categoryFacetCounts, storeCategories),
-        optionValues: optionValueFacets.map((facet) => ({
-          id: facet.optionValueId,
-          count: facet._count.optionValueId,
-        })),
-        priceRanges: PRICE_RANGE_BUCKETS.map((bucket, index) => ({
-          id: bucket.id,
-          count: priceCounts[index] ?? 0,
-        })),
-      };
+      const universePrices = await getProductsPrices(
+        universe.map((product) => ({ ...product, price: Number(product.price) })) as never,
+        params.storeId,
+      );
+      const facetRows: FacetRow[] = universe.map((product) => {
+        const pricing = universePrices.get(product.id);
+        return {
+          id: product.id,
+          productGroupId: product.productGroupId,
+          categoryId: product.categoryId,
+          colorId: product.colorId,
+          sizeId: product.sizeId,
+          designId: product.designId,
+          optionValues: product.catalogOptionValues ?? [],
+          effectivePrice: pricing?.price ?? Number(product.price),
+          hasDiscount: Boolean(pricing && pricing.discount > 0),
+        };
+      });
+      const groupFacets: ProductFacets = computeCardFacets(
+        facetRows,
+        {
+          categoryScope,
+          colorIds: colorId,
+          sizeIds: sizeId,
+          designIds: designId,
+          optionValuesByOption,
+          minPrice,
+          maxPrice,
+          isOnSale,
+        },
+        storeCategories,
+      );
 
       const response = {
         products: finalResponse,
@@ -1333,11 +1289,7 @@ export async function GET(
         storeId: params.storeId,
         productGroupId: productGroupId ? productGroupId : undefined,
         categoryId:
-          categoryId.length > 0
-            ? { in: categoryId }
-            : categoriesIds.length > 0
-              ? { in: categoriesIds }
-              : undefined,
+          categoryScopeWhere(categoryScope),
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
@@ -1466,11 +1418,7 @@ export async function GET(
         storeId: params.storeId,
         productGroupId: productGroupId ? productGroupId : undefined,
         categoryId:
-          categoryId.length > 0
-            ? { in: categoryId }
-            : categoriesIds.length > 0
-              ? { in: categoriesIds }
-              : undefined,
+          categoryScopeWhere(categoryScope),
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
