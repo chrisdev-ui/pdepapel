@@ -43,14 +43,14 @@ describe("ignorar el contacto de una conversación", () => {
   });
 
   it("guarda las DOS identidades cuando la conversación las tiene", async () => {
-    db.convFindFirst.mockResolvedValue({ phone: "8618858869228", bsuid: "CN.1377520137782797" });
+    db.convFindFirst.mockResolvedValue({ phone: "8613800000000", bsuid: "CN.1377520137782797" });
 
     const result = await ignoreConversationContact(STORE, CONV, { reason: REASON, userId: "user-1" });
 
-    expect(result).toEqual({ ok: true, phone: "8618858869228", bsuid: "CN.1377520137782797" });
+    expect(result).toEqual({ ok: true, phone: "8613800000000", bsuid: "CN.1377520137782797" });
     // Las dos en una sola fila: así lo tapa venga por el teléfono o por el BSUID.
     expect(db.ignCreate).toHaveBeenCalledWith({
-      data: { storeId: STORE, phone: "8618858869228", bsuid: "CN.1377520137782797", reason: REASON, createdByUserId: "user-1" },
+      data: { storeId: STORE, phone: "8613800000000", bsuid: "CN.1377520137782797", reason: REASON, createdByUserId: "user-1" },
     });
   });
 
@@ -81,7 +81,7 @@ describe("ignorar el contacto de una conversación", () => {
 
   /** Ya estaba por el teléfono y ahora además se conoce el BSUID: se completa. */
   it("completa la fila existente en vez de crear una segunda", async () => {
-    db.convFindFirst.mockResolvedValue({ phone: "8618858869228", bsuid: "CN.1377520137782797" });
+    db.convFindFirst.mockResolvedValue({ phone: "8613800000000", bsuid: "CN.1377520137782797" });
     db.ignFindFirst.mockResolvedValue({ id: "ign-viejo" });
 
     await ignoreConversationContact(STORE, CONV, { reason: REASON, userId: "user-2" });
@@ -112,7 +112,7 @@ describe("dejar de ignorar", () => {
   });
 
   it("quita la regla y dice cuánto se dejó pasar", async () => {
-    db.convFindFirst.mockResolvedValue({ phone: "8618858869228", bsuid: "CN.1377520137782797" });
+    db.convFindFirst.mockResolvedValue({ phone: "8613800000000", bsuid: "CN.1377520137782797" });
 
     const result = await unignoreConversationContact(STORE, CONV);
 
@@ -121,7 +121,7 @@ describe("dejar de ignorar", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           storeId: STORE,
-          OR: [{ phone: "8618858869228" }, { bsuid: "CN.1377520137782797" }],
+          OR: [{ phone: "8613800000000" }, { bsuid: "CN.1377520137782797" }],
         }),
       }),
     );

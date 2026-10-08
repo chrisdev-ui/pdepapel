@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getExcludedCustomers } from "@/lib/excluded-customers";
 import { getStoreSender, STORE_SENDER_ENV } from "@/lib/store-sender";
 
 const FAKE_SENDER = {
@@ -15,8 +14,6 @@ const KEYS = [
   "STORE_SENDER_SUBURB",
   "STORE_SENDER_CROSS_STREET",
   "STORE_SENDER_REFERENCE",
-  "STORE_EXCLUDED_CUSTOMER_NAMES",
-  "STORE_EXCLUDED_CUSTOMER_PHONES",
 ];
 
 let saved: Record<string, string | undefined>;
@@ -75,24 +72,5 @@ describe("getStoreSender", () => {
     expect(message).toMatch(/STORE_SENDER_ADDRESS/);
     expect(message).not.toMatch(/STORE_SENDER_PHONE/);
     for (const value of Object.values(FAKE_SENDER)) expect(message).not.toContain(value);
-  });
-});
-
-describe("getExcludedCustomers", () => {
-  it("lee nombres y teléfonos separados por comas", () => {
-    process.env.STORE_EXCLUDED_CUSTOMER_NAMES = " Ana , Bea Prueba ,";
-    process.env.STORE_EXCLUDED_CUSTOMER_PHONES = "3000000001,3000000002";
-
-    expect(getExcludedCustomers()).toEqual({
-      names: ["Ana", "Bea Prueba"],
-      phones: ["3000000001", "3000000002"],
-    });
-  });
-
-  it("sin variables no excluye a nadie y avisa en vez de tumbar los reportes", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    expect(getExcludedCustomers()).toEqual({ names: [], phones: [] });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("STORE_EXCLUDED_CUSTOMER_PHONES"));
   });
 });

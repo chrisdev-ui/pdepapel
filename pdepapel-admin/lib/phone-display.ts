@@ -13,7 +13,7 @@ import {
  * panel (y que de por sí carga la metadata «min», la liviana).
  *
  * El problema que resuelve: WhatsApp entrega los números sin «+»
- * (573024686403). `formatPhoneNumber` de react-phone-number-input exige E.164
+ * (573001234567). `formatPhoneNumber` de react-phone-number-input exige E.164
  * con «+», así que devolvía vacío y la tabla terminaba mostrando los dígitos
  * pelados. Aquí se prueban las tres formas en que un número puede llegar y se
  * usa la primera que resulte válida.
@@ -24,15 +24,15 @@ export const DEFAULT_PHONE_COUNTRY: CountryCode = "CO";
 export interface PhoneDescription {
   /** Lo que estaba guardado, sin tocar. */
   raw: string;
-  /** `+573024686403`, o null si no se pudo interpretar. */
+  /** `+573001234567`, o null si no se pudo interpretar. */
   e164: string | null;
   /** `CO`, `CN`… null si el número no dice de dónde es. */
   country: CountryCode | null;
   /** «Colombia», «China». En español; null si el navegador no sabe traducirlo. */
   countryName: string | null;
-  /** `+57 302 4686403` */
+  /** `+57 300 1234567` */
   international: string | null;
-  /** `302 4686403` */
+  /** `300 1234567` */
   national: string | null;
   isValid: boolean;
 }

@@ -33,11 +33,7 @@ const FAKE_PHONES = [
 const PUBLIC_PHONES = [
   "3132582293",
 ];
-/** Ejemplo de la documentación del panel; falta decidir si es un número real. */
-const PENDING_REVIEW_PHONES = [
-  "3024686403",
-];
-export const ALLOWED_PHONES = new Set<string>([...FAKE_PHONES, ...PUBLIC_PHONES, ...PENDING_REVIEW_PHONES]);
+export const ALLOWED_PHONES = new Set<string>([...FAKE_PHONES, ...PUBLIC_PHONES]);
 
 /** Identificadores de 11 dígitos que no son cuentas: corridas de GitHub Actions, envíos de Mercado Libre y fixtures. */
 export const ALLOWED_ACCOUNTS = new Set<string>([

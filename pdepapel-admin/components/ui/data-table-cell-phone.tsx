@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 interface DataTableCellPhoneProps extends React.HTMLAttributes<HTMLDivElement> {
   phoneNumber: string | null;
-  /** Fuerza «+57 302 4686403» aunque el número sea colombiano. */
+  /** Fuerza «+57 300 1234567» aunque el número sea colombiano. */
   international?: boolean;
   /**
    * Muestra el país debajo del número. Un número extranjero lo muestra
@@ -22,7 +22,7 @@ interface DataTableCellPhoneProps extends React.HTMLAttributes<HTMLDivElement> {
 /**
  * Teléfono dentro de una tabla.
  *
- * Los números de WhatsApp llegan sin «+» (573024686403) y así no los reconoce
+ * Los números de WhatsApp llegan sin «+» (573001234567) y así no los reconoce
  * ninguna librería de formato, por eso `describePhoneNumber` prueba las
  * distintas formas en que pueden estar guardados antes de rendirse.
  *

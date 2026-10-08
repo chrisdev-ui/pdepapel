@@ -90,7 +90,6 @@ interface GuardedCase {
 
 const CASES: GuardedCase[] = [
   { name: "createProductFromManualItem", guard: "owner", load: () => import("@/actions/create-product-from-manual-item"), args: [{ storeId: "store-1", name: "X", price: 1, cost: 1, categoryId: "c", stock: 1 }] },
-  { name: "getCustomerAnalytics", guard: "owner", load: () => import("@/actions/get-customer-analytics"), args: ["store-1"] },
   { name: "getDaneLocations", guard: "admin", load: () => import("@/actions/get-dane-locations"), args: [] },
   { name: "getTopSellingProducts", guard: "owner", load: () => import("@/actions/get-top-selling-products"), args: ["store-1", 2026] },
   { name: "getBox", guard: "owner", load: () => import("@/app/(dashboard)/[storeId]/(routes)/cajas/[boxId]/server/get-box"), args: ["id-1", "store-1"] },

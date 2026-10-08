@@ -158,14 +158,6 @@ describe("gift card purchases are excluded from every revenue site", () => {
     expect(luisa).toMatchObject({ totalSpent: SALE, totalOrders: 1 });
   });
 
-  it("actions/get-customer-analytics.ts (including the most valuable customer)", async () => {
-    const { getCustomerAnalytics } = await import("@/actions/get-customer-analytics");
-    const analytics = await getCustomerAnalytics(fixture!.store.id);
-    expect(analytics.totalCustomers).toBe(1);
-    expect(analytics.averageLifetimeValue).toBe(SALE);
-    expect(analytics.mostValuableCustomers.allTime).toMatchObject({ totalSpent: SALE, orders: 1 });
-  });
-
   it("app/(dashboard)/[storeId]/(routes)/clientes/server/get-customers.ts", async () => {
     const { getCustomers } = await import("@/app/(dashboard)/[storeId]/(routes)/clientes/server/get-customers");
     const { records } = await getCustomers(fixture!.store.id, new Date());

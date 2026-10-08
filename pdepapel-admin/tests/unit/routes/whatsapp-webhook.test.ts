@@ -238,7 +238,7 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
   it("un contacto ignorado no gasta cuota, pero su evento sí se guarda", async () => {
     mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
 
-    const response = await post(entrante("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    const response = await post(entrante("8613800000000"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ received: true, stored: true, queued: false, ignored: true });
@@ -251,7 +251,7 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
   it("también corta el eco de lo que contesta Paula en ese hilo", async () => {
     mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
 
-    const response = await post(eco("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    const response = await post(eco("8613800000000"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
 
     await expect(response.json()).resolves.toMatchObject({ queued: false, ignored: true });
     expect(mocks.enqueue).not.toHaveBeenCalled();
@@ -259,7 +259,7 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
 
   it("el evento se cierra para que ninguna recuperación lo retome", async () => {
     mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
-    await post(entrante("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    await post(entrante("8613800000000"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
 
     expect(mocks.eventUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -271,7 +271,7 @@ describe("POST /api/webhook/whatsapp · contacto ignorado", () => {
 
   it("lleva la cuenta de lo que se dejó pasar", async () => {
     mocks.ignoredFindFirst.mockResolvedValue({ id: "ign-1" });
-    await post(entrante("8618858869228"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    await post(entrante("8613800000000"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
 
     expect(mocks.ignoredUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "ign-1" }, data: expect.objectContaining({ skippedCount: { increment: 1 } }) }),
