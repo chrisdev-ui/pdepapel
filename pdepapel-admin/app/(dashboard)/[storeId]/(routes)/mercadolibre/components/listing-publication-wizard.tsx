@@ -2255,6 +2255,13 @@ export function ListingPublicationWizard({
                   >
                     {marginBreakdown.net === null ? "—" : currencyFormatter.format(marginBreakdown.net)}
                   </dd>
+                  {profitDifference !== null ? (
+                    <dd className={profitDifference >= 0 ? "text-xs text-success" : "text-xs text-warning"}>
+                      {profitDifference >= 0
+                        ? `Cumple la meta por ${formatSignedCurrency(profitDifference)}.`
+                        : `Faltan ${currencyFormatter.format(Math.abs(profitDifference))} para la meta.`}
+                    </dd>
+                  ) : null}
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Margen</dt>
@@ -2284,7 +2291,7 @@ export function ListingPublicationWizard({
             </div>
           ) : null}
           {priceEstimate ? (
-            <div className="grid gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:grid-cols-3">
               <p>
                 <span className="block text-xs text-muted-foreground">
                   Cargo base por vender
@@ -2308,53 +2315,6 @@ export function ListingPublicationWizard({
                 <span className="font-semibold">
                   {currencyFormatter.format(priceEstimate.saleFeeAmount)}
                 </span>
-              </p>
-              <p>
-                <span className="block text-xs text-muted-foreground">
-                  Envío asumido por P de Papel
-                </span>
-                <span className="font-semibold">
-                  {estimatedSellerShippingCost === null
-                    ? "Falta estimar"
-                    : currencyFormatter.format(estimatedSellerShippingCost)}
-                </span>
-              </p>
-              <p>
-                <span className="block text-xs text-muted-foreground">
-                  Neto estimado a liquidar
-                </span>
-                <span className="font-semibold">
-                  {estimatedSellerShippingCost === null
-                    ? "Falta estimar"
-                    : currencyFormatter.format(
-                        Number(form.marketplacePrice) -
-                          priceEstimate.saleFeeAmount -
-                          estimatedSellerShippingCost,
-                      )}
-                </span>
-              </p>
-              <p>
-                <span className="block text-xs text-muted-foreground">
-                  Ganancia operativa estimada
-                </span>
-                <span className="font-semibold">
-                  {estimatedProfit === null
-                    ? "Falta costo o envío"
-                    : currencyFormatter.format(estimatedProfit)}
-                </span>
-                {profitDifference !== null ? (
-                  <span
-                    className={
-                      profitDifference >= 0
-                        ? "block text-xs text-success"
-                        : "block text-xs text-warning"
-                    }
-                  >
-                    {profitDifference >= 0
-                      ? `Cumple la meta por ${formatSignedCurrency(profitDifference)}.`
-                      : `Faltan ${currencyFormatter.format(Math.abs(profitDifference))} para la meta.`}
-                  </span>
-                ) : null}
               </p>
             </div>
           ) : null}
