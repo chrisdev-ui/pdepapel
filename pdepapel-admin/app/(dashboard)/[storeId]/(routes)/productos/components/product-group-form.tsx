@@ -271,6 +271,29 @@ export type ProductGroupWithIncludes = ProductGroup & {
   offers?: { offerId: string }[];
 };
 
+export interface ImportedProduct {
+  id: string;
+  name: string;
+  category: { id: string; name: string };
+  size?: { id: string; name: string; value: string };
+  color?: { id: string; name: string; value: string };
+  design?: { id: string; name: string };
+  images: { url: string }[];
+  price: number;
+  // Optional fields (might not be typed in Modal but present in API response)
+  acqPrice?: number;
+  stock?: number;
+  supplierId?: string;
+  isFeatured?: boolean;
+  isArchived?: boolean;
+  sku?: string;
+  description?: string | null;
+  gtin?: string | null;
+  mpn?: string | null;
+  hasNoProductIdentifier?: boolean;
+  slug?: string;
+}
+
 interface ProductGroupFormProps {
   categories: Category[];
   sizes: Size[];
@@ -280,6 +303,8 @@ interface ProductGroupFormProps {
   initialData?: ProductGroupWithIncludes | null;
   /** URL pública de la tienda para los enlaces «Ver en la tienda» de cada variante. */
   storeUrl?: string | null;
+  /** Producto suelto que se convierte en grupo: llega ya traído, como con «Traer existentes». */
+  adoptOnLoad?: ImportedProduct | null;
 }
 
 export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
@@ -290,6 +315,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   suppliers,
   initialData,
   storeUrl = null,
+  adoptOnLoad = null,
 }) => {
   const params = useParams();
   // «Escanear y abrir» en Productos llega aquí con la variante leída para resaltarla.
@@ -883,7 +909,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   // Form Persistence
   const { clearStorage } = useFormPersist({
     form,
-    key: `product-group-form-${params.storeId}-${initialData?.id ?? "new"}`,
+    key: `product-group-form-${params.storeId}-${initialData?.id ?? (adoptOnLoad ? `desde-${adoptOnLoad.id}` : "new")}`,
     // El borrador nunca restaura filas traídas de productos reales: se
     // vuelven a traer, así no se adopta nada que Paula no eligió hoy.
     sanitizeDraft: (draft) => {
@@ -1262,28 +1288,6 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     );
   };
 
-  interface ImportedProduct {
-    id: string;
-    name: string;
-    category: { id: string; name: string };
-    size?: { id: string; name: string; value: string };
-    color?: { id: string; name: string; value: string };
-    design?: { id: string; name: string };
-    images: { url: string }[];
-    price: number;
-    // Optional fields (might not be typed in Modal but present in API response)
-    acqPrice?: number;
-    stock?: number;
-    supplierId?: string;
-    isFeatured?: boolean;
-    isArchived?: boolean;
-    sku?: string;
-    description?: string | null;
-    gtin?: string | null;
-    mpn?: string | null;
-    hasNoProductIdentifier?: boolean;
-    slug?: string;
-  }
 
   // Handle Import from Standalone Products
   const handleImport = (products: ImportedProduct[]) => {
@@ -1426,6 +1430,17 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       });
     }
   };
+
+  // «Convertir en variantes» desde un producto suelto: se trae una sola vez,
+  // después de restaurar el borrador (que nunca guarda filas adoptadas).
+  const adoptedOnLoad = useRef(false);
+  useEffect(() => {
+    if (!adoptOnLoad || initialData || adoptedOnLoad.current) return;
+    adoptedOnLoad.current = true;
+    if (!form.getValues("name")?.trim()) form.setValue("name", adoptOnLoad.name, { shouldDirty: true });
+    handleImport([adoptOnLoad]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adoptOnLoad, initialData]);
 
   const availableScopes = useMemo(() => {
     const scopes: { label: string; value: string; disabled?: boolean }[] = [

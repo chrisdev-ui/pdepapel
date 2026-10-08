@@ -848,14 +848,20 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         setVariantReviewAnalysis(null);
         const created = response.data.createdProductIds?.length ?? 0;
         const copied = response.data.copiedOffers ?? 0;
-        toast({
-          title: "Grupo creado",
-          description:
-            created === 0
-              ? "El producto ahora es la primera opción de su grupo. Agrega las demás desde el grupo."
-              : `${created} ${created === 1 ? "opción nueva" : "opciones nuevas"} con el inventario repartido y registrado en el kardex${copied > 0 ? `; ${copied} ${copied === 1 ? "oferta copiada" : "ofertas copiadas"}` : ""}.`,
-          variant: "success",
-        });
+        toast(
+          created === 0
+            ? {
+                title: "Grupo creado sin opciones nuevas",
+                description:
+                  "Solo quedó este producto en el grupo. Agrega los demás colores con «Generar combinaciones» en el grupo.",
+                variant: "warning",
+              }
+            : {
+                title: "Grupo creado",
+                description: `${created} ${created === 1 ? "opción nueva" : "opciones nuevas"} con el inventario repartido y registrado en el kardex${copied > 0 ? `; ${copied} ${copied === 1 ? "oferta copiada" : "ofertas copiadas"}` : ""}.`,
+                variant: "success",
+              },
+        );
         router.push(
           `/${params.storeId}/${Models.Products}/grupo/${response.data.productGroupId}`,
         );
@@ -1272,7 +1278,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   </DropdownMenuItem>
                   {!initialData.productGroupId && !initialData.isKit && (
                     <DropdownMenuItem
-                      onClick={() => requestVariantConversion()}
+                      onClick={async () => {
+                        // El editor de grupo trae este producto como primera variante y
+                        // permite generar todos los colores, diseños y tamaños que hagan falta.
+                        if (await confirmLeave())
+                          router.push(
+                            `/${params.storeId}/${Models.Products}/nuevo-grupo?producto=${initialData.id}`,
+                          );
+                      }}
                     >
                       <Package className="mr-2 h-4 w-4" aria-hidden="true" />
                       Convertir en variantes

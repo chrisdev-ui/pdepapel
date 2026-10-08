@@ -530,6 +530,12 @@ export function ConvertProductWizard({
         {step === 3 && (
           <div className="flex flex-col gap-4">
             <h3 className="text-sm font-semibold text-primary">Antes de crear el grupo «{normalizedName}»</h3>
+            {newOptions.length === 0 && (
+              <p role="status" className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+                No agregaste opciones nuevas: el grupo se crea solo con este producto. Para varios colores, usa
+                «Convertir en variantes» desde el menú «Más» del producto.
+              </p>
+            )}
             <ul className="flex flex-col gap-2 text-sm">
               {variants.map((variant, index) => (
                 <li key={index} className="flex flex-wrap items-start gap-2">

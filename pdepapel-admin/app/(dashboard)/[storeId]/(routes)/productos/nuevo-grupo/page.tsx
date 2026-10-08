@@ -4,13 +4,22 @@ import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { ProductGroupForm } from "../components/product-group-form";
+import { loadAdoptableProduct } from "./server/get-adoptable-product";
 
 export default async function ProductGroupPage({
   params,
+  searchParams,
 }: {
   params: { storeId: string };
+  searchParams?: { producto?: string };
 }) {
-  await requireStoreRead(params.storeId);
+  const access = await requireStoreRead(params.storeId);
+  // «Convertir en variantes» desde un producto suelto. Una cuenta de solo
+  // lectura no puede guardar, así que no recibe costo ni proveedor.
+  const adoptOnLoad =
+    searchParams?.producto && access.role !== "viewer"
+      ? await loadAdoptableProduct(params.storeId, searchParams.producto)
+      : null;
   const categories = await prismadb.category.findMany({
     where: {
       storeId: params.storeId,
@@ -55,6 +64,7 @@ export default async function ProductGroupPage({
           designs={designs}
           suppliers={suppliers}
           storeUrl={env.FRONTEND_STORE_URL}
+          adoptOnLoad={adoptOnLoad}
         />
       </div>
     </div>

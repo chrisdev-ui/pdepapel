@@ -102,6 +102,14 @@ afterEach(cleanup);
  * fotos y combinaciones distintas y resume qué se conserva y qué se crea.
  */
 describe("ConvertProductWizard", () => {
+  it("warns in the summary when no new option was added instead of looking like a conversion", () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("No agregaste opciones nuevas");
+  });
+
   it("walks name → options → summary, blocks «Revisar» until the stock is fully split, and sends the payload", () => {
     renderWizard();
 
