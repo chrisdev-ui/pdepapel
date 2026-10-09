@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({ verify: vi.fn(), job: vi.fn() }));
 vi.mock("@/lib/mercadolibre/queue", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/mercadolibre/queue")>()),
   verifyMercadoLibreProcessorRequest: mocks.verify,
+  getMercadoLibreHealthUrl: () => "https://admin.test/api/internal/marketplaces/mercadolibre/health",
 }));
 vi.mock("@/lib/mercadolibre/health-job", () => ({ runMercadoLibreHealthJob: mocks.job }));
 
@@ -28,5 +29,6 @@ describe("revisión diaria desde QStash", () => {
     const response = await POST(new Request("https://admin.test/api/internal/marketplaces/mercadolibre/health", { method: "POST", body: "{}" }));
     expect(response.status).toBe(200);
     expect(mocks.job).toHaveBeenCalledTimes(1);
+    expect(mocks.verify).toHaveBeenCalledWith("{}", null, "https://admin.test/api/internal/marketplaces/mercadolibre/health", null);
   });
 });
