@@ -86,3 +86,5 @@
 2026-10-08T00:20:50.963Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/backfill-image-origin.ts@5ff761c885691124 | estado=ok | exit=0 | rows=1241 | "Image: backfill origin/scope de fotos de grupo y variantes (spec #13), reintento"
 2026-10-08T14:44:20.008Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Store: campos de margen objetivo Mercado Libre (porcentaje + mínimo neto)"
 2026-10-09T01:15:11.286Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "migración riesgo de pedidos y revisión de tarjetas"
+2026-10-09T04:24:13.361Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/backfill-ml-fee-split.mjs@f6c2256297fc6025 | estado=error | exit=1 | rows=? | "backfill desglose comisión/envío ML #21"
+2026-10-09T04:29:50.778Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/backfill-ml-fee-split.mjs@f6c2256297fc6025 | estado=ok | exit=0 | rows=6 | "backfill MarketplaceOrder: desglose comisión/envío ML #21 (7 ventas)"
