@@ -11,7 +11,7 @@ type Named = { id: string; name: string; slug?: string | null };
 interface ShopHeaderNavProps {
   navigationTypes: Pick<Type, "id" | "name" | "slug" | "icon" | "iconSvg">[];
   types: Named[];
-  categories: Named[];
+  categories: (Named & { typeId?: string | null })[];
 }
 
 /**

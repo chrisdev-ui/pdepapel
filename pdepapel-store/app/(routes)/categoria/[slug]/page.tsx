@@ -12,7 +12,7 @@ import { CategoryChips } from "@/components/category-chips";
 import { CategoryRail } from "@/components/home/category-rail";
 import { PageHeader } from "@/components/shop/page-header";
 import { ShopContent } from "@/components/shop-content";
-import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
@@ -20,6 +20,7 @@ import { buildNavigationTypes, withProducts } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { getListingIndexing, outOfRangePageTarget } from "@/lib/listing-seo";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { buildCategoryBreadcrumbs } from "@/lib/shop-breadcrumbs";
 import { TypeIcon } from "@/lib/type-icons";
 
 interface CategoryPageProps {
@@ -120,10 +121,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const suggestions = relatedCategories.slice(0, 4).map((item) => ({ label: stripTaxonomyIcon(item.name), href: categoryPath(item.slug as string) }));
   const intro = category.seoIntro || `Descubre nuestra selección de ${name.toLocaleLowerCase("es-CO")} y encuentra opciones creativas para estudiar, crear o regalar.`;
 
-  const breadcrumbItems: BreadcrumbItem[] = [
-    { label: "Tienda", href: STOREFRONT_ROUTES.shop },
-    { label: name, isCurrent: true },
-  ];
+  const breadcrumbItems = buildCategoryBreadcrumbs(category, type);
   const categoryUrl = categoryPath(canonicalSlug);
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",

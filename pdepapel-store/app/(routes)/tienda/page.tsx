@@ -149,7 +149,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
       <ShopHeaderNav
         navigationTypes={navigationTypes}
         types={types.map(({ id, name, slug }) => ({ id, name, slug }))}
-        categories={categories.map(({ id, name, slug }) => ({ id, name, slug }))}
+        categories={categories.map(({ id, name, slug, typeId }) => ({ id, name, slug, typeId }))}
       />
       <PageHeader
         title="Todos los productos"
