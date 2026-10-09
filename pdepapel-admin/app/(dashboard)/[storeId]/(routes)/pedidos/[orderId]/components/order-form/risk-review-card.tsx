@@ -23,7 +23,9 @@ export function RiskReviewCard({ storeId, order, className }: RiskReviewCardProp
   const { toast } = useToast();
   const canWrite = useCanWrite();
   const [busy, setBusy] = useState(false);
-  const flagged = isFlagged(order);
+  const reasons = parseRiskReasons(order.riskReasons);
+  const flagged = isFlagged(order) || reasons.includes("pago-en-cancelado");
+  const fraudConfirmed = reasons.includes("fraude-confirmado");
   const pending = order.giftCardReview === "PENDING";
   const rejected = order.giftCardReview === "REJECTED";
   if (!flagged && !pending && !rejected) return null;
@@ -53,12 +55,12 @@ export function RiskReviewCard({ storeId, order, className }: RiskReviewCardProp
   };
 
   return (
-    <SectionCard id="revision-riesgo" title={flagged ? "⚠️ Posible bot" : "Tarjeta de regalo"} tone="care" className={className}>
+    <SectionCard id="revision-riesgo" title={fraudConfirmed ? "Cancelado como fraude o bot" : isFlagged(order) ? "⚠️ Posible bot" : flagged ? "Pago por revisar" : "Tarjeta de regalo"} tone="care" className={className}>
       {flagged && (
         <div className="flex flex-col gap-1 text-sm">
-          <p className="text-muted-foreground">Este pedido tiene señales de ser automatizado:</p>
+          <p className="text-muted-foreground">Señales de este pedido:</p>
           <ul className="list-disc pl-5">
-            {parseRiskReasons(order.riskReasons).map((reason) => (
+            {reasons.map((reason) => (
               <li key={reason}>{RISK_REASON_LABELS[reason]}</li>
             ))}
           </ul>

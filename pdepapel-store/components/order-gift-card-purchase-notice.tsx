@@ -37,7 +37,7 @@ export function OrderGiftCardPurchaseNotice({
           {delivered
             ? `El código ya salió por correo${card ? ` y termina en ${card.codeLast4}` : ""}. No aparece en esta página: guarda ese correo.`
             : order.status === "PAID" || order.status === "SENT"
-              ? "Recibimos tu pago y estamos verificando la compra. El código sale por correo en cuanto terminemos, normalmente el mismo día. No aparece en esta página."
+              ? "Recibimos tu pago. La revisamos en menos de 24 horas hábiles y te llega a tu correo. El código no aparece en esta página."
               : "El código sale por correo en cuanto el pago esté confirmado. No aparece en esta página."}
         </p>
       </div>

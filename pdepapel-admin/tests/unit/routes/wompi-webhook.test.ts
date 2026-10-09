@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   markWelcomeBenefitRedeemed: vi.fn(),
   releaseWelcomeBenefitReservation: vi.fn(),
+  flagPaymentOnCancelledOrder: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({
@@ -72,6 +73,11 @@ vi.mock("@/lib/financial", () => ({
 }));
 vi.mock("@/lib/google-analytics", () => ({
   recordPaidOrderInGoogleAnalytics: mocks.recordPaidOrderInGoogleAnalytics,
+}));
+
+vi.mock("@/lib/late-payment", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/late-payment")>()),
+  flagPaymentOnCancelledOrder: mocks.flagPaymentOnCancelledOrder,
 }));
 
 import { POST } from "@/app/api/webhook/wompi/route";
@@ -186,6 +192,65 @@ describe("POST /api/webhook/wompi", () => {
     // Una tarjeta no se empaca: no se abre envío.
     expect(transactionClient.shipping.upsert).not.toHaveBeenCalled();
     expect(mocks.deliverGiftCard).toHaveBeenCalledWith(issued, { buyerName: "Luisa Sánchez" });
+  });
+
+  describe("pago aprobado que llega tarde a un pedido cancelado", () => {
+    const approved = () =>
+      createWebhookRequest({ id: "tx-late", reference: "order-id", status: "APPROVED", amount_in_cents: 10000000, currency: "COP", customer_email: "x@example.com", payment_method_type: "CARD" });
+    const cancelled = (extra: Record<string, unknown>) => ({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      storeId: "store-id",
+      fullName: "Cliente",
+      type: "STANDARD",
+      riskReasons: null,
+      payment: { method: PaymentMethod.Wompi },
+      status: OrderStatus.CANCELLED,
+      total: 100000,
+      orderItems: [],
+      coupon: null,
+      ...extra,
+    });
+    const claimClient = (count: number) => ({
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count }) },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+      couponRedemption: { updateMany: vi.fn() },
+    });
+
+    it("una tarjeta de regalo cancelada no pasa a pagada ni emite código: se marca y se avisa", async () => {
+      const client = claimClient(0);
+      mocks.findOrder.mockResolvedValue(cancelled({ type: "GIFT_CARD" }));
+      mocks.transaction.mockImplementation(async (cb: any) => cb(client));
+
+      const response = await POST(approved());
+
+      expect(response.status).toBe(200);
+      const claimedFrom = client.order.updateMany.mock.calls[0][0].where.status.in;
+      expect(claimedFrom).not.toContain(OrderStatus.CANCELLED);
+      expect(mocks.issueGiftCardForOrder).not.toHaveBeenCalled();
+      expect(mocks.deliverGiftCard).not.toHaveBeenCalled();
+      expect(mocks.flagPaymentOnCancelledOrder).toHaveBeenCalledWith("order-id", "Wompi");
+    });
+
+    it("un pedido cancelado como fraude tampoco revive", async () => {
+      const client = claimClient(0);
+      mocks.findOrder.mockResolvedValue(cancelled({ riskReasons: "envio-rapido,fraude-confirmado" }));
+      mocks.transaction.mockImplementation(async (cb: any) => cb(client));
+      await POST(approved());
+      expect(client.order.updateMany.mock.calls[0][0].where.status.in).not.toContain(OrderStatus.CANCELLED);
+      expect(mocks.flagPaymentOnCancelledOrder).toHaveBeenCalledWith("order-id", "Wompi");
+    });
+
+    it("un pedido normal cancelado sigue reviviendo como antes con un pago tardío de Wompi", async () => {
+      const client = claimClient(0);
+      mocks.findOrder.mockResolvedValue(cancelled({}));
+      mocks.transaction.mockImplementation(async (cb: any) => cb(client));
+      await POST(approved());
+      expect(client.order.updateMany.mock.calls[0][0].where.status.in).toContain(OrderStatus.CANCELLED);
+      expect(mocks.flagPaymentOnCancelledOrder).not.toHaveBeenCalled();
+    });
   });
 
   it("processes an approved payment once and prevents duplicate stock deductions", async () => {

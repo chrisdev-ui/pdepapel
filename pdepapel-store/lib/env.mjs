@@ -33,6 +33,8 @@ export const env = createEnv({
         .regex(/^[a-z0-9]+$/i, "Debe ser un ID de proyecto válido de Clarity"),
     ),
     NEXT_PUBLIC_CLARITY_ENABLED: requiredInProduction(z.enum(["true", "false"])),
+    // Opcional: sin ella los formularios de pedido no cargan el desafío de Turnstile.
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
@@ -48,5 +50,6 @@ export const env = createEnv({
     NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
     NEXT_PUBLIC_CLARITY_PROJECT_ID: process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID,
     NEXT_PUBLIC_CLARITY_ENABLED: process.env.NEXT_PUBLIC_CLARITY_ENABLED,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
   },
 });

@@ -125,5 +125,7 @@ describe("getRiskBadges", () => {
     ]);
     expect(getRiskBadges({ riskScore: 0, giftCardReview: "REJECTED" })).toEqual([{ label: "Tarjeta rechazada", tone: "slate" }]);
     expect(getRiskBadges({ riskScore: 0, giftCardReview: "APPROVED" })).toEqual([]);
+    expect(getRiskBadges({ riskScore: 12, riskReasons: "envio-rapido,fraude-confirmado", giftCardReview: null })).toEqual([{ label: "Fraude/bot", tone: "slate" }]);
+    expect(getRiskBadges({ riskScore: 0, riskReasons: "pago-en-cancelado", giftCardReview: null })).toEqual([{ label: "Pago en pedido cancelado", tone: "pink" }]);
   });
 });

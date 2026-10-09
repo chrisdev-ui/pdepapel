@@ -25,6 +25,7 @@ export async function getOrders(storeId: string) {
       isGift: true,
       giftRecipientName: true,
       riskScore: true,
+      riskReasons: true,
       giftCardReview: true,
       total: true,
       status: true,

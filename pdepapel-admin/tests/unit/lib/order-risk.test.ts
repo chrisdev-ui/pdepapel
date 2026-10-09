@@ -23,13 +23,13 @@ describe("normalizeMobile", () => {
     ["300 123 4567", "+573001234567"],
     ["+57 300 123 4567", "+573001234567"],
     ["57 3001234567", "+573001234567"],
-    ["(315) 555-0101", "+573155550101"],
-    ["0057 3201234567", "+573201234567"],
+    ["(301) 555-0001", "+573015550001"],
+    ["0057 3001112233", "+573001112233"],
   ])("acepta el celular colombiano %s", (input, expected) => {
     expect(normalizeMobile(input)).toBe(expected);
   });
 
-  it.each(["+57 9123456789", "9123456789", "601 2345678", "300123456", "30012345678", "", "abc"])(
+  it.each(["+57 9123456789", "9123456789", "601 2345678", "300123456", "300123456789", "", "abc"])(
     "rechaza %s (fijo, empieza por 9, largo malo o vacío)",
     (input) => {
       expect(normalizeMobile(input)).toBeNull();
@@ -37,8 +37,8 @@ describe("normalizeMobile", () => {
   );
 
   it("acepta un número de otro país con indicativo, porque una tarjeta la puede comprar alguien de fuera", () => {
-    expect(normalizeMobile("+1 305 555 0101")).toBe("+13055550101");
-    expect(normalizeMobile("+34 612 345 678")).toBe("+34612345678");
+    expect(normalizeMobile("+1 415 555 2671")).toBe("+14155552671");
+    expect(normalizeMobile("+44 20 7946 0958")).toBe("+442079460958");
     expect(normalizeMobile("+1 23")).toBeNull();
   });
 });
@@ -181,5 +181,27 @@ describe("consumeOrderRateLimits", () => {
   it("si Redis falla deja pasar sin marcar", async () => {
     setRateLimitRedis({ incr: vi.fn().mockRejectedValue(new Error("caído")), expire: vi.fn() } as never);
     await expect(consumeOrderRateLimits({ scope: "checkout", storeId: "s-1", clientKey: "x", email: "a@b.co" })).resolves.toEqual({ allowed: true, repeated: false });
+  });
+});
+
+describe("fraude confirmado", () => {
+  it("cancelar como fraude suma el motivo sin borrar los anteriores y deja el pedido marcado", async () => {
+    const { withRiskReason, isFraudCancelled } = await import("@/lib/order-risk");
+    const marked = withRiskReason({ riskScore: 2, riskReasons: "envio-rapido" }, "fraude-confirmado");
+    expect(marked).toEqual({ riskScore: 12, riskReasons: "envio-rapido,fraude-confirmado" });
+    expect(isFraudCancelled(marked)).toBe(true);
+    expect(isFlagged(marked)).toBe(true);
+    expect(withRiskReason(marked, "fraude-confirmado")).toEqual(marked);
+    expect(isFraudCancelled({ riskReasons: "envio-rapido" })).toBe(false);
+  });
+
+  it("un pedido anterior cancelado como fraude con el mismo correo o celular marca el nuevo", () => {
+    const risk = assessOrderRisk({ email: "x@y.co", elapsedMs: 90_000, priorFraud: true });
+    expect(risk.reasons).toEqual(["fraude-previo"]);
+    expect(isFlagged({ riskScore: risk.score })).toBe(true);
+  });
+
+  it("un pago recibido en un pedido cancelado tiene su propio motivo legible", () => {
+    expect(parseRiskReasons("pago-en-cancelado")).toEqual(["pago-en-cancelado"]);
   });
 });

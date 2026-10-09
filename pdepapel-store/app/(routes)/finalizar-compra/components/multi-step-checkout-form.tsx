@@ -1193,7 +1193,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         analyticsClientId,
         analyticsSessionId,
         analyticsConsent,
-        ...botTrap.fields(),
+        ...(await botTrap.fields()),
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,
         addressLabel: saveAddress ? addressLabel || null : null,
@@ -1625,7 +1625,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                     data-clarity-mask="true"
                   >
                     <div className="relative min-h-[300px]">
-                      <BotTrapField inputRef={botTrap.trapRef} />
+                      <BotTrapField trap={botTrap} />
                       {currentStep === 1 && (
                         <BasicInfoStep
                           form={form}

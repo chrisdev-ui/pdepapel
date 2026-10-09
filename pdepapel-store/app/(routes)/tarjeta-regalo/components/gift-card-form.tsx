@@ -161,7 +161,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
       payment: { method: data.paymentMethod },
       userId: userId ?? null,
       guestId: userId ? null : guest,
-      ...botTrap.fields(),
+      ...(await botTrap.fields()),
     }).catch(() => undefined);
   };
 
@@ -175,7 +175,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
         onSubmit={form.handleSubmit(onSubmit)}
         className="relative flex flex-col gap-8 rounded-3xl border border-pink-shell/30 bg-white p-5 shadow-[0_4px_20px_hsl(280_30%_70%/0.15)] sm:p-8"
       >
-        <BotTrapField inputRef={botTrap.trapRef} />
+        <BotTrapField trap={botTrap} />
         <section className="space-y-4">
           <div className="space-y-1">
             <h2 className="font-serif text-2xl font-bold text-blue-yankees">¿De cuánto?</h2>

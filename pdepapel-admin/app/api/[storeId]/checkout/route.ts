@@ -352,6 +352,7 @@ async function createCheckout(
         phoneRequired: true,
         honeypot: (body as Record<string, unknown>).website,
         formStartedAt: (body as Record<string, unknown>).formStartedAt,
+        turnstileToken: (body as Record<string, unknown>).turnstileToken,
       });
       if (!screen.ok) throw new AppError(screen.error, screen.status);
       normalizedPhone = screen.phone;

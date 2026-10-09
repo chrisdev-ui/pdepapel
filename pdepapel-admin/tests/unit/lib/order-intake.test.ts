@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const limits = vi.hoisted(() => vi.fn());
+const priorFraud = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/order-rate-limit", () => ({ consumeOrderRateLimits: limits }));
+vi.mock("@/lib/prismadb", () => ({ default: { order: { count: priorFraud } } }));
+const turnstile = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/turnstile", () => ({ verifyTurnstile: turnstile }));
 
 import { screenStoreOrder } from "@/lib/order-intake";
 import { BOT_TRAP_ERROR, NAME_ERROR, PHONE_ERROR, RATE_LIMIT_ERROR } from "@/lib/order-risk";
@@ -22,6 +26,10 @@ const base = {
 beforeEach(() => {
   limits.mockReset();
   limits.mockResolvedValue({ allowed: true, repeated: false });
+  priorFraud.mockReset();
+  priorFraud.mockResolvedValue(0);
+  turnstile.mockReset();
+  turnstile.mockResolvedValue({ ok: true });
 });
 
 describe("screenStoreOrder", () => {
@@ -62,5 +70,34 @@ describe("screenStoreOrder", () => {
 
   it("un cliente sin el reloj del formulario (versión anterior de la tienda) pasa igual", async () => {
     await expect(screenStoreOrder(req, { ...base, formStartedAt: undefined, honeypot: undefined })).resolves.toMatchObject({ ok: true, risk: { riskScore: 0 } });
+  });
+
+  it("un correo o celular de un pedido cancelado como fraude marca el nuevo, sin rechazarlo", async () => {
+    priorFraud.mockResolvedValue(1);
+    await expect(screenStoreOrder(req, base)).resolves.toMatchObject({ ok: true, risk: { riskScore: 3, riskReasons: "fraude-previo" } });
+    expect(priorFraud).toHaveBeenCalledWith({
+      where: {
+        storeId: "s-1",
+        status: "CANCELLED",
+        riskReasons: { contains: "fraude-confirmado" },
+        OR: [{ email: "maria.jose@gmail.com" }, { phone: "+573001234567" }],
+      },
+    });
+  });
+
+  it("si la consulta falla no frena la venta", async () => {
+    priorFraud.mockRejectedValue(new Error("sin base"));
+    await expect(screenStoreOrder(req, base)).resolves.toMatchObject({ ok: true, risk: { riskScore: 0 } });
+  });
+
+  it("verifica el desafío de Turnstile con la IP de quien pide, y si falla rechaza antes de gastar el límite", async () => {
+    turnstile.mockResolvedValue({ ok: false, error: "No pudimos confirmar que eres una persona. Recarga la página e inténtalo de nuevo." });
+    await expect(screenStoreOrder(req, { ...base, turnstileToken: "tok" })).resolves.toEqual({
+      ok: false,
+      status: 400,
+      error: "No pudimos confirmar que eres una persona. Recarga la página e inténtalo de nuevo.",
+    });
+    expect(turnstile).toHaveBeenCalledWith("tok", "203.0.113.9");
+    expect(limits).not.toHaveBeenCalled();
   });
 });

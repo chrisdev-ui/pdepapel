@@ -7,11 +7,14 @@ import {
   Edit,
   MessageSquare,
   MoreHorizontal,
+  ShieldAlert,
   Smartphone,
   Trash,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+
+import { CancelAsFraudDialog, canCancelAsFraud, deleteWarning } from "./cancel-as-fraud";
 
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
@@ -41,6 +44,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const params = useParams();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [fraudOpen, setFraudOpen] = useState(false);
   const [copyingWompi, setCopyingWompi] = useState(false);
   const [pushingBold, setPushingBold] = useState(false);
 
@@ -182,12 +186,14 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         onConfirm={onDelete}
         loading={loading}
         title={`¿Eliminar el pedido ${data.orderNumber}?`}
-        description={
-          isClosedOrder
-            ? "No se puede deshacer. Como ya estaba pagado o enviado, el inventario vuelve con un movimiento de cancelación."
-            : "No se puede deshacer. No se toca el inventario: este pedido nunca lo descontó."
-        }
+        description={deleteWarning(isClosedOrder)}
         confirmLabel="Sí, eliminar el pedido"
+      />
+      <CancelAsFraudDialog
+        storeId={params.storeId as string}
+        order={{ id: data.id, orderNumber: data.orderNumber }}
+        open={fraudOpen}
+        onClose={() => setFraudOpen(false)}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -280,6 +286,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             <Edit className="mr-2 h-4 w-4" />
             {isPointOfSale ? "Ver detalle" : "Actualizar"}
           </DropdownMenuItem>
+          {canCancelAsFraud({ status: data.status, type: data.type, riskReasons: data.riskReasons }) && (
+            <DropdownMenuItem className="cursor-pointer" onClick={() => setFraudOpen(true)}>
+              <ShieldAlert className="mr-2 h-4 w-4" aria-hidden="true" />
+              Cancelar como fraude/bot
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="cursor-pointer"
             disabled={isPointOfSale}

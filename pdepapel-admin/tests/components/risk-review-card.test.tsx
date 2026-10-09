@@ -71,4 +71,14 @@ describe("RiskReviewCard", () => {
     expect(screen.getByText(/Rechazaste esta tarjeta/)).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  it("un pago que entró en un pedido cancelado se muestra para revisar o reembolsar", () => {
+    renderCard({ riskScore: 0, riskReasons: "pago-en-cancelado" });
+    expect(screen.getByText("Pago recibido en pedido cancelado — revisar o reembolsar")).toBeTruthy();
+  });
+
+  it("un pedido cancelado como fraude lo dice en el título", () => {
+    renderCard({ riskScore: 12, riskReasons: "envio-rapido,fraude-confirmado" });
+    expect(screen.getByText("Cancelado como fraude o bot", { selector: "h2" })).toBeTruthy();
+  });
 });

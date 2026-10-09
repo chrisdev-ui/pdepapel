@@ -52,6 +52,7 @@ const bodySchema = z.object({
   guestId: z.string().max(191).nullable().optional(),
   website: z.string().max(200).optional(),
   formStartedAt: z.number().optional(),
+  turnstileToken: z.string().max(4096).optional(),
 });
 
 const getCorsHeaders = (request: Request) => ({
@@ -107,6 +108,7 @@ async function createGiftCardCheckout(
       phoneRequired: false,
       honeypot: body.website,
       formStartedAt: body.formStartedAt,
+      turnstileToken: body.turnstileToken,
     });
     if (!screen.ok) throw new AppError(screen.error, screen.status);
 

@@ -220,6 +220,12 @@ describe("issueGiftCardForOrder", () => {
       }
     });
 
+    it("un pedido cancelado como fraude nunca emite, ni siquiera aprobado", async () => {
+      const tx = makeTx({ order: knownCustomer({ ...fromStore, giftCardReview: "APPROVED", riskReasons: "fraude-confirmado" }, 5) });
+      await expect(issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" })).resolves.toBeNull();
+      expect(tx.giftCard.create).not.toHaveBeenCalled();
+    });
+
     it("aprobada se emite", async () => {
       const tx = makeTx({ order: knownCustomer({ ...fromStore, riskScore: 4, giftCardReview: "APPROVED" }, 0) });
       tx.$queryRaw.mockResolvedValue([{ id: "card-new", balance: 0, status: GiftCardStatus.ACTIVE }]);

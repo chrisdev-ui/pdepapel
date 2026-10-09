@@ -11,6 +11,7 @@ import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { priceLines } from "@/lib/product-pricing";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { screenStoreOrder } from "@/lib/order-intake";
+import { FRAUD_REASON_CODE, withRiskReason } from "@/lib/order-risk";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeGiftFields, type GiftFields } from "@/lib/gift-orders";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
@@ -309,6 +310,7 @@ async function createOrder(
         phoneRequired: true,
         honeypot: body.website,
         formStartedAt: body.formStartedAt,
+        turnstileToken: body.turnstileToken,
       });
       if (!screen.ok) throw new AppError(screen.error, screen.status);
       normalizedPhone = screen.phone;
@@ -1053,8 +1055,10 @@ export async function PATCH(
       ids,
       status,
       shipping,
-    }: { ids: string[]; status?: OrderStatus; shipping?: ShippingStatus } =
+      fraud,
+    }: { ids: string[]; status?: OrderStatus; shipping?: ShippingStatus; fraud?: boolean } =
       body;
+    const cancelAsFraud = fraud === true && status === OrderStatus.CANCELLED;
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       throw ErrorFactory.InvalidRequest(
@@ -1341,8 +1345,14 @@ export async function PATCH(
             storeId: params.storeId,
             orderId: updated.id,
             createdBy: userId,
-            reason: "Cancelado desde la lista",
+            reason: cancelAsFraud ? "Cancelado como fraude o bot" : "Cancelado desde la lista",
           });
+        }
+
+        // «Cancelar como fraude/bot»: el pedido se queda, con el motivo que
+        // leen el límite de pedidos, la revisión de patrones y la emisión de tarjetas.
+        if (cancelAsFraud) {
+          return tx.order.update({ where: { id: updated.id }, data: withRiskReason(updated, FRAUD_REASON_CODE) });
         }
 
         return updated;
@@ -1368,7 +1378,8 @@ export async function PATCH(
     runInBackground("correos de la actualización masiva", async () => {
       try {
         const emailPromises = result.map(async (order) => {
-          if (status) {
+          // A un pedido de bot no se le escribe: el correo puede ser de otra persona.
+          if (status && !cancelAsFraud) {
             await sendOrderEmail(order.id, status, { notifyAdmin: false });
           }
 

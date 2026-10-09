@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   redeemGiftCardForOrder: vi.fn().mockResolvedValue(null),
   handleGiftCardOnOrderCancellation: vi.fn().mockResolvedValue(undefined),
   deliverGiftCard: vi.fn().mockResolvedValue(true),
+  flagPaymentOnCancelledOrder: vi.fn().mockResolvedValue(undefined),
   transaction: vi.fn(),
 }));
 
@@ -68,6 +69,11 @@ vi.mock("@/lib/financial", () => ({
 }));
 vi.mock("@/lib/google-analytics", () => ({
   recordPaidOrderInGoogleAnalytics: mocks.recordPaidOrderInGoogleAnalytics,
+}));
+
+vi.mock("@/lib/late-payment", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/late-payment")>()),
+  flagPaymentOnCancelledOrder: mocks.flagPaymentOnCancelledOrder,
 }));
 
 import { POST } from "@/app/api/webhook/bold/route";
@@ -432,6 +438,16 @@ describe("POST /api/webhook/bold", () => {
       message: "Orden ORD-123 ya fue procesada anteriormente",
     });
     expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
+    // Entró plata en un pedido cancelado: se marca para revisar o reembolsar y se avisa.
+    expect(mocks.flagPaymentOnCancelledOrder).toHaveBeenCalledWith("order-id", "Bold");
+  });
+
+  it("una aprobación repetida sobre un pedido ya pagado no marca nada", async () => {
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    mocks.findOrder.mockResolvedValue({ id: "order-id", orderNumber: "ORD-123", payment: { method: PaymentMethod.Bold }, status: OrderStatus.PAID, storeId: "store-id", total: 80000, orderItems: [] });
+    mocks.transaction.mockImplementation(async (cb: any) => cb({ order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 0 }) } }));
+    await POST(createWebhookRequest({ type: "SALE_APPROVED", data: { amount: { currency: "COP", total: 80000 }, metadata: { reference: "ORD-123" } } }));
+    expect(mocks.flagPaymentOnCancelledOrder).not.toHaveBeenCalled();
   });
 
   it("treats a void on an already paid order as a real cancellation with restock", async () => {

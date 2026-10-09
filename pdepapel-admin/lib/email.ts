@@ -169,6 +169,24 @@ export function getOrderTotalsSummary(order: EmailOrder): EmailSummaryLine[] {
   return [{ label: "Subtotal", value: currencyFormatter(order.subtotal) }, ...adjustments];
 }
 
+const PANEL_ORIGIN = "https://admin.papeleriapdepapel.com";
+
+function getPanelOrderLink(order: { storeId: string; id: string }) {
+  return `${PANEL_ORIGIN}/${order.storeId}/pedidos/${order.id}`;
+}
+
+const isGiftCardAwaitingReview = (order: Pick<EmailOrder, "type" | "giftCardReview">, status: OrderStatus | ShippingStatus) =>
+  status === OrderStatus.PAID && order.type === OrderType.GIFT_CARD && order.giftCardReview === GiftCardReview.PENDING;
+
+/** El aviso de una tarjeta que espera aprobación llega al panel aunque el pago lo haya marcado la dueña. */
+export function shouldNotifyAdmin(
+  order: Pick<EmailOrder, "type" | "giftCardReview">,
+  status: OrderStatus | ShippingStatus,
+  options: { notifyAdmin?: boolean } = {},
+) {
+  return options.notifyAdmin !== false || isGiftCardAwaitingReview(order, status);
+}
+
 function getOrderLink(orderId: string) {
   // Adjust this URL to your frontend order details page
   return `https://papeleriapdepapel.com/pedido/${orderId}`;
@@ -353,13 +371,17 @@ export function buildOrderEmails(
     ? `al correo de ${order.giftRecipientName || "quien la recibe"}`
     : "a tu correo";
   const giftCardHeld = digital && order.giftCardReview === GiftCardReview.PENDING;
+  const awaitingApproval = isGiftCardAwaitingReview(order, status);
+  const panelLink = getPanelOrderLink(order);
   const flagged = isFlagged(order);
   const riskNote = flagged
     ? parseRiskReasons(order.riskReasons).map((reason) => RISK_REASON_LABELS[reason]).join(" · ") || "Varias señales"
     : null;
   const thanksParagraph = digital
     ? status === OrderStatus.PAID && giftCardHeld
-      ? `¡Gracias! Recibimos tu pago. Estamos verificando la compra y el código sale ${giftCardTarget} en cuanto terminemos, normalmente el mismo día.`
+      ? order.giftRecipientEmail
+        ? `¡Gracias! Recibimos tu pago. La revisamos en menos de 24 horas hábiles y el código llega ${giftCardTarget}.`
+        : "¡Gracias! Recibimos tu pago. La revisamos en menos de 24 horas hábiles y te llega a tu correo."
       : status === OrderStatus.PAID
       ? `¡Gracias! El código de la tarjeta de regalo ya salió ${giftCardTarget}, en un correo aparte.`
       : "Recibimos tu compra de la tarjeta de regalo. En cuanto el pago se confirme, el código sale por correo."
@@ -368,7 +390,9 @@ export function buildOrderEmails(
       : "Gracias por confiar en nosotros. Si tienes dudas, responde al correo papeleria.pdepapel@gmail.com o contáctanos por WhatsApp.";
 
   const admin: BuiltEmail = {
-    subject: `${flagged ? "⚠️ Posible bot · " : ""}[Admin] Pedido #${order.orderNumber} - ${readableStatus}${giftCardHeld ? " · Tarjeta en revisión" : ""}`,
+    subject: awaitingApproval
+      ? `${flagged ? "⚠️ Posible bot · " : ""}🎁 Tarjeta de regalo esperando aprobación — #${order.orderNumber}`
+      : `${flagged ? "⚠️ Posible bot · " : ""}[Admin] Pedido #${order.orderNumber} - ${readableStatus}${giftCardHeld ? " · Tarjeta en revisión" : ""}`,
     react: OrderNotification({
       name: order.fullName,
       orderNumber: order.orderNumber,
@@ -386,13 +410,13 @@ export function buildOrderEmails(
       items,
       summary,
       orderSummary,
-      orderLink,
+      orderLink: awaitingApproval ? panelLink : orderLink,
       thanksParagraph,
       notificationSource,
       giftRecipientName,
       digital,
     }) as React.ReactElement,
-    text: `${riskNote ? `⚠️ Posible bot: ${riskNote}\n` : ""}${giftCardHeld ? "Tarjeta en revisión: apruébala o recházala en el pedido.\n" : ""}Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${notificationSource}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
+    text: `${riskNote ? `⚠️ Posible bot: ${riskNote}\n` : ""}${giftCardHeld ? `Tarjeta en revisión: apruébala o recházala en ${panelLink}\n` : ""}Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${notificationSource}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
   };
 
   const customer: BuiltEmail | null = order.email
@@ -491,7 +515,7 @@ export const sendOrderEmail = async (
     // admin, el de la clienta sale igual, y cada fallo queda registrado.
     const wanted = new Set<EmailRole>(roles);
     const jobs: EmailJob[] = [];
-    if (options?.notifyAdmin !== false && wanted.has("admin")) {
+    if (shouldNotifyAdmin(order, status, options) && wanted.has("admin")) {
       jobs.push({ role: "admin", send: () => resend.emails.send({ from: FROM, to: ADMIN_EMAIL_RECIPIENTS, ...built.admin }) });
     }
     const customer = built.customer;

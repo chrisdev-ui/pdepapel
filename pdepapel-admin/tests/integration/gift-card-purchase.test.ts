@@ -258,4 +258,27 @@ describe("gift card purchase and issuance with MySQL", () => {
     const stored = await testPrisma.order.findUniqueOrThrow({ where: { id: fast.id } });
     expect(stored).toMatchObject({ riskScore: 2, riskReasons: "envio-rapido", phone: "+573001234567" });
   });
+
+  it("«Cancelar como fraude/bot» conserva el pedido marcado, no se puede emitir y marca el siguiente con el mismo correo", async () => {
+    fixture = await createInventoryFixture();
+    const order = await buy(fixture.store.id);
+    session.userId = fixture.store.userId;
+
+    const { PATCH } = await import("@/app/api/[storeId]/orders/route");
+    const cancelled = await PATCH(json("PATCH", { ids: [order.id], status: OrderStatus.CANCELLED, fraud: true }), { params: { storeId: fixture.store.id } });
+    expect(cancelled.status).toBe(200);
+
+    const stored = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(stored.status).toBe(OrderStatus.CANCELLED);
+    expect(stored.riskReasons).toContain("fraude-confirmado");
+    expect(stored.riskScore).toBeGreaterThanOrEqual(10);
+
+    const issued = await testPrisma.$transaction((tx) => issueGiftCardForOrder(tx, { storeId: fixture!.store.id, orderId: order.id }));
+    expect(issued).toBeNull();
+
+    session.userId = null;
+    const next = await buy(fixture.store.id, { guestId: `guest-otro-${Date.now()}` });
+    const flagged = await testPrisma.order.findUniqueOrThrow({ where: { id: next.id } });
+    expect(flagged.riskReasons).toContain("fraude-previo");
+  });
 });

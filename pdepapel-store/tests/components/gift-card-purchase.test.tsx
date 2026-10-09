@@ -171,7 +171,7 @@ describe("OrderGiftCardPurchaseNotice", () => {
   it("pagada pero sin código todavía (en revisión): dice que se está verificando, sin prometer que ya salió", () => {
     render(<OrderGiftCardPurchaseNotice order={{ type: "GIFT_CARD", status: "PAID", giftRecipientName: null, email: "luisa@x.com", giftCardPurchase: null }} />);
     const note = screen.getByRole("note");
-    expect(note).toHaveTextContent("Recibimos tu pago y estamos verificando la compra");
+    expect(note).toHaveTextContent("Recibimos tu pago. La revisamos en menos de 24 horas hábiles y te llega a tu correo.");
     expect(note).not.toHaveTextContent("ya salió");
     expect(note).not.toHaveTextContent("en cuanto el pago esté confirmado");
   });

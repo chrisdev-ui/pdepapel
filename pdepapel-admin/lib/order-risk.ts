@@ -21,18 +21,30 @@ export const RISK_FLAG_SCORE = 2;
 /** Una primera compra de tarjeta desde este valor espera aprobación antes de emitir el código. */
 export const GIFT_CARD_REVIEW_AMOUNT = 100_000;
 
-export type RiskReason = "envio-rapido" | "correo-variante" | "pedidos-repetidos";
+export type RiskReason =
+  | "envio-rapido"
+  | "correo-variante"
+  | "pedidos-repetidos"
+  | "fraude-previo"
+  | "fraude-confirmado"
+  | "pago-en-cancelado";
 
 export const RISK_REASON_LABELS: Record<RiskReason, string> = {
   "envio-rapido": "Formulario enviado en segundos",
   "correo-variante": "Correo con puntos o «+» de más",
   "pedidos-repetidos": "Varios pedidos seguidos desde la misma conexión o correo",
+  "fraude-previo": "Mismo correo o celular que un pedido cancelado como fraude",
+  "fraude-confirmado": "Cancelado como fraude o bot",
+  "pago-en-cancelado": "Pago recibido en pedido cancelado — revisar o reembolsar",
 };
 
 const RISK_WEIGHTS: Record<RiskReason, number> = {
   "envio-rapido": 2,
   "correo-variante": 1,
   "pedidos-repetidos": 2,
+  "fraude-previo": 3,
+  "fraude-confirmado": 10,
+  "pago-en-cancelado": 0,
 };
 
 /**
@@ -105,6 +117,8 @@ export interface RiskInput {
   email?: string | null;
   elapsedMs?: number | null;
   repeated?: boolean;
+  /** El correo o el celular ya aparecen en un pedido cancelado como fraude. */
+  priorFraud?: boolean;
 }
 
 export interface RiskAssessment {
@@ -112,11 +126,12 @@ export interface RiskAssessment {
   reasons: RiskReason[];
 }
 
-export function assessOrderRisk({ email, elapsedMs, repeated }: RiskInput): RiskAssessment {
+export function assessOrderRisk({ email, elapsedMs, repeated, priorFraud }: RiskInput): RiskAssessment {
   const reasons: RiskReason[] = [];
   if (typeof elapsedMs === "number" && elapsedMs < FAST_SUBMIT_MS) reasons.push("envio-rapido");
   if (isEmailVariant(email)) reasons.push("correo-variante");
   if (repeated) reasons.push("pedidos-repetidos");
+  if (priorFraud) reasons.push("fraude-previo");
   return { score: reasons.reduce((total, reason) => total + RISK_WEIGHTS[reason], 0), reasons };
 }
 
@@ -137,3 +152,15 @@ export function riskColumns(assessment: RiskAssessment) {
 export function needsGiftCardReview(input: { riskScore?: number | null; total: number; isFirstPurchase: boolean }) {
   return isFlagged(input) || (input.isFirstPurchase && input.total >= GIFT_CARD_REVIEW_AMOUNT);
 }
+
+/** Suma un motivo a los que ya tenía el pedido (sin repetir) y su peso al puntaje. */
+export function withRiskReason(order: { riskScore?: number | null; riskReasons?: string | null }, reason: RiskReason) {
+  const current = parseRiskReasons(order.riskReasons);
+  if (current.includes(reason)) return { riskScore: order.riskScore ?? 0, riskReasons: order.riskReasons ?? null };
+  return { riskScore: (order.riskScore ?? 0) + RISK_WEIGHTS[reason], riskReasons: [...current, reason].join(",") };
+}
+
+export const isFraudCancelled = (order: { riskReasons?: string | null }) =>
+  parseRiskReasons(order.riskReasons).includes("fraude-confirmado");
+
+export const FRAUD_REASON_CODE = "fraude-confirmado";

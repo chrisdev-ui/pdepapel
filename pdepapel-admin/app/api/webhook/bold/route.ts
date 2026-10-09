@@ -1,4 +1,5 @@
 import { sendOrderEmail } from "@/lib/email";
+import { flagPaymentOnCancelledOrder } from "@/lib/late-payment";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
 import {
   getAmountDue,
@@ -441,6 +442,9 @@ async function processBoldPayment(
     });
 
     if (!paymentProcessed) {
+      if (order.status === OrderStatus.CANCELLED) {
+        await flagPaymentOnCancelledOrder(order.id, "Bold");
+      }
       return NextResponse.json(
         {
           message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,

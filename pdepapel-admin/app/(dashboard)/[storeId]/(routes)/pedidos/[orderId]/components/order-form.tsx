@@ -14,7 +14,7 @@ import {
   type Coupon,
 } from "@prisma/client";
 import axios, { isAxiosError } from "axios";
-import { RefreshCw, Trash } from "lucide-react";
+import { RefreshCw, ShieldAlert, Trash } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -61,6 +61,7 @@ import { DiscountsSection } from "./order-form/discounts-section";
 import { GiftSection } from "./order-form/gift-section";
 import { HistoryCard } from "./order-form/history-card";
 import { RiskReviewCard } from "./order-form/risk-review-card";
+import { CancelAsFraudDialog, canCancelAsFraud, deleteWarning } from "../../components/cancel-as-fraud";
 import { ItemsSection } from "./order-form/items-section";
 import { LeaveGuard } from "./order-form/leave-guard";
 import { NotesCard } from "./order-form/notes-card";
@@ -239,6 +240,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   // boton ocupado hasta que la ficha de verdad aparece.
   const [isNavigating, startNavigation] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [fraudOpen, setFraudOpen] = useState(false);
   const [conversionIndex, setConversionIndex] = useState<number | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
@@ -691,7 +693,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         onClose={() => setDeleteOpen(false)}
         onConfirm={onDelete}
         loading={loading}
+        title={initialData ? `¿Eliminar el pedido ${initialData.orderNumber}?` : undefined}
+        description={initialData ? deleteWarning(initialData.status === OrderStatus.PAID || initialData.status === OrderStatus.SENT) : undefined}
       />
+      {initialData && (
+        <CancelAsFraudDialog
+          storeId={storeId}
+          order={{ id: initialData.id, orderNumber: initialData.orderNumber }}
+          open={fraudOpen}
+          onClose={() => setFraudOpen(false)}
+        />
+      )}
       <ProductConversionModal
         isOpen={conversionIndex !== null}
         onClose={() => setConversionIndex(null)}
@@ -905,6 +917,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         ? "Este pedido tiene una guía de EnvioClick activa: cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro."
                         : "Eliminar borra el pedido de forma definitiva; si ya estaba pagado o enviado, el inventario vuelve con un movimiento."}
                     </p>
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                    {canCancelAsFraud(initialData) && (
+                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => setFraudOpen(true)} className="shrink-0">
+                        <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+                        Cancelar como fraude/bot
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
@@ -916,6 +935,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       <Trash className="h-4 w-4" aria-hidden="true" />
                       Eliminar pedido
                     </Button>
+                    </div>
                   </div>
                 </SectionCard>
               </div>

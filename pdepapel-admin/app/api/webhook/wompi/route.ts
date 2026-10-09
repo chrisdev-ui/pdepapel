@@ -1,4 +1,5 @@
 import { sendOrderEmail } from "@/lib/email";
+import { blocksLatePaymentRevival, flagPaymentOnCancelledOrder } from "@/lib/late-payment";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
 import {
   getAmountDue,
@@ -323,7 +324,7 @@ async function updateOrderData(order: any, transaction: any) {
               in: [
                 OrderStatus.CREATED,
                 OrderStatus.PENDING,
-                OrderStatus.CANCELLED,
+                ...(blocksLatePaymentRevival(order) ? [] : [OrderStatus.CANCELLED]),
               ],
             },
           },
@@ -571,6 +572,13 @@ async function updateOrderData(order: any, transaction: any) {
     });
 
     if (!result.processed) {
+      if (
+        currentStatus === OrderStatus.PAID &&
+        order.status === OrderStatus.CANCELLED &&
+        blocksLatePaymentRevival(order)
+      ) {
+        await flagPaymentOnCancelledOrder(order.id, "Wompi");
+      }
       if (
         currentStatus === OrderStatus.PAID &&
         order.status === OrderStatus.PAID

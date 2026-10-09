@@ -17,7 +17,7 @@ import {
   hashGiftCardCode,
   normalizeGiftCardCode,
 } from "@/lib/gift-card-codes";
-import { needsGiftCardReview } from "@/lib/order-risk";
+import { isFraudCancelled, needsGiftCardReview } from "@/lib/order-risk";
 import { round2 } from "@/lib/order-totals";
 import { getAmountDue } from "@/lib/gift-card-amounts";
 
@@ -225,6 +225,7 @@ export async function issueGiftCardForOrder(
       source: true,
       createdBy: true,
       riskScore: true,
+      riskReasons: true,
       giftCardReview: true,
       giftRecipientName: true,
       giftRecipientEmail: true,
@@ -237,6 +238,7 @@ export async function issueGiftCardForOrder(
   const deliverTo = (order.giftRecipientEmail || order.email || "").trim().toLowerCase() || null;
   if (existing) return { card: existing, code: null, deliverTo };
 
+  if (isFraudCancelled(order)) return null;
   if (order.giftCardReview === GiftCardReview.PENDING || order.giftCardReview === GiftCardReview.REJECTED) return null;
   if (!order.giftCardReview && order.source !== OrderSource.PANEL && !order.createdBy) {
     const priorPaid = await tx.order.count({

@@ -434,6 +434,7 @@ export interface GiftCardPurchase {
   /** Campo trampa y reloj del formulario (components/bot-trap.tsx). */
   website?: string;
   formStartedAt?: number;
+  turnstileToken?: string;
 }
 
 /** `POST /checkout/[orderId]` only ever returns the fallback gateway link. */
@@ -444,6 +445,7 @@ export interface CheckoutOrder {
   /** Campo trampa y reloj del formulario (components/bot-trap.tsx). */
   website?: string;
   formStartedAt?: number;
+  turnstileToken?: string;
   phone: string;
   email: string | null | undefined;
   address: string;

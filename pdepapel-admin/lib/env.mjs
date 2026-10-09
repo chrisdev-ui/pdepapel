@@ -81,6 +81,8 @@ export const env = createEnv({
     ),
     GA4_API_SECRET: requiredInProduction(z.string().min(1)),
     GEMINI_API_KEY: z.string().min(1).optional(),
+    // Opcional: sin ella el desafío de Turnstile en los pedidos no hace nada (lib/turnstile.ts).
+    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     OPENAI_API_KEY: z.string().min(1).optional(),
     // Signs the store-bound token in the hosted Google Merchant feed URL.
     // Optional: without it the feed route answers 404 and nothing is exposed.
