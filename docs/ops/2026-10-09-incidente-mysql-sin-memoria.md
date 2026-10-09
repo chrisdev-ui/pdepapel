@@ -80,4 +80,20 @@ Si el webhook no puede guardar un evento, sigue respondiendo 200, pero guarda el
 
 ## Después del cambio
 
-_Se completa al aplicar el cambio en MySQL, después de este despliegue del panel._
+Aplicado el 2026-10-09, después del despliegue del panel (`8f24ec46`, Ready a las 21:45 UTC).
+
+| UTC | Qué pasó |
+|---|---|
+| 21:46:19 | Primer intento. Railway no pudo bajar la imagen: Docker Hub respondió «504 Gateway Timeout» para `mysql:8.4` (paso CREATE_CONTAINER). El contenedor nuevo nunca se creó y el viejo siguió atendiendo sin reiniciarse; se volvió a dejar el comando y las variables anteriores. |
+| 21:54:02 | Segundo intento, mismo procedimiento. |
+| 21:54:13 | «ready for connections» (8.4.11), 11 s después; el despliegue `87c01018` queda activo. |
+
+**Verificado:** las 25 variables con su valor nuevo (`SHOW VARIABLES` con `pdepapel_ro`); panel y tienda en 200; 15 minutos sin errores ni avisos en los registros de Vercel de los dos proyectos. El registro `[PRISMA_POOL]` confirma que la `DATABASE_URL` de producción no trae parámetros de pool: rigen los del código.
+
+| Memoria del contenedor (Railway) | Antes | Después |
+|---|---|---|
+| Recién arrancado | ~600 MB | 345 MB (a los 33 s) |
+| A los ~20 min | ~610 MB | 440 MB (a los 16 min) |
+| A las ~2 h | 937 MB y subiendo | se mide en la revisión del 2026-10-10 |
+
+La memoria que contabiliza MySQL pasó de 598 MiB (21 min, antes) a 555 MiB (16 min, después). La prueba de fondo es la tendencia: antes subía ~200 MB por hora hasta el OOM.
