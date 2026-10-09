@@ -126,4 +126,22 @@ describe("createMercadoLibreItem valida en el servidor antes de crear", () => {
     const urls = request.mock.calls.map(([url]) => url);
     expect(urls.indexOf("https://api.mercadolibre.com/items/validate")).toBeLessThan(urls.indexOf("https://api.mercadolibre.com/items"));
   });
+
+  it("devuelve el producto de usuario y la familia que Mercado Libre asignó al ítem nuevo", async () => {
+    const { createMercadoLibreItem } = await import("@/lib/mercadolibre/listings");
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(category())
+      .mockResolvedValueOnce(attributes())
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json({ id: "MCO-NUEVO", permalink: "https://ml/x", status: "active", user_product_id: "MCOU123", family_id: 6203088615048400 }, 201));
+
+    await expect(createMercadoLibreItem(goodDraft(), request)).resolves.toEqual({
+      id: "MCO-NUEVO",
+      permalink: "https://ml/x",
+      status: "active",
+      userProductId: "MCOU123",
+      familyId: "6203088615048400",
+    });
+  });
 });

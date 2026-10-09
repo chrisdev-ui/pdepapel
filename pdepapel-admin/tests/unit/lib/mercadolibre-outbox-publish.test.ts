@@ -166,6 +166,17 @@ describe("PUBLISH_LISTING outbox event", () => {
     );
   });
 
+  it("guarda el producto de usuario y la familia del ítem creado", async () => {
+    mocks.findOutboxEvent.mockResolvedValue(publishEvent());
+    mocks.createItem.mockResolvedValue({ id: "MCO-NEW", permalink: "https://ml/x", status: "active", userProductId: "MCOU9", familyId: "777" });
+
+    await processMarketplaceOutboxEvent("publish-event");
+
+    const saved = mocks.updateListing.mock.calls.find(([arg]) => arg.data.externalItemId === "MCO-NEW")![0].data;
+    expect(saved.externalUserProductId).toBe("MCOU9");
+    expect(saved.metadata.mercadoLibreFamilyId).toBe("777");
+  });
+
   it("keeps the listing published and only records a warning when the description fails", async () => {
     mocks.findOutboxEvent.mockResolvedValue(publishEvent());
     mocks.createDescription.mockResolvedValue("La descripción no se pudo enviar a Mercado Libre: timeout. Edítala en Mercado Libre.");

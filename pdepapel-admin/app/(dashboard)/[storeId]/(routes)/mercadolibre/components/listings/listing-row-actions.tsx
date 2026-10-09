@@ -4,6 +4,7 @@ import {
   BarChart3,
   ExternalLink,
   ImageIcon,
+  Layers,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -34,6 +35,7 @@ export type ListingRowHandlers = {
   onReviewQuality: (listing: Listing) => void;
   onPause: (listing: Listing) => void;
   onActivate: (listing: Listing) => void;
+  onPublishGroup: (listing: Listing) => void;
 };
 
 /**
@@ -103,6 +105,12 @@ export function ListingRowActions({
                 <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
                 Ver en Mercado Libre
               </a>
+            </DropdownMenuItem>
+          ) : null}
+          {listing.product.productGroupId ? (
+            <DropdownMenuItem onSelect={() => handlers.onPublishGroup(listing)}>
+              <Layers className="mr-2 h-4 w-4" aria-hidden="true" />
+              Publicar grupo
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem onSelect={() => handlers.onReviewContent(listing)}>

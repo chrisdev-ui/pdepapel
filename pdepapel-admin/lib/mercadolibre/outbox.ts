@@ -31,6 +31,7 @@ import {
   MERCADOLIBRE_MAX_LISTING_PICTURES,
   MercadoLibrePublicationError,
   syncMercadoLibreListingContent,
+  type MercadoLibreCreatedItem,
 } from "./listings";
 import { findItemFromAttempt, readPublishAttempt, withPublishAttempt } from "./publish-attempt";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
@@ -856,7 +857,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         const adopted = previousAttempt
           ? await findItemFromAttempt(event.listing!.connectionId, previousAttempt)
           : null;
-        let created: { id: string; permalink: string | null; status: string | null };
+        let created: MercadoLibreCreatedItem;
         if (adopted) {
           created = adopted;
         } else {
@@ -889,6 +890,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           data: {
             externalItemId: created.id,
             externalPermalink: created.permalink,
+            ...(created.userProductId ? { externalUserProductId: created.userProductId } : {}),
             status: remote.status,
             lastSyncedStock: Math.max(
               0,
@@ -898,7 +900,10 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
             lastRemoteUpdateAt: new Date(),
             lastError: remote.note,
             metadata: withMercadoLibrePublicationFailure(
-              withPublishAttempt(event.listing!.metadata, null) as Prisma.JsonObject,
+              {
+                ...(withPublishAttempt(event.listing!.metadata, null) as Prisma.JsonObject),
+                ...(created.familyId ? { mercadoLibreFamilyId: created.familyId } : {}),
+              },
               null,
             ),
           },

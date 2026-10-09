@@ -46,6 +46,7 @@ import {
 } from "@/lib/mercadolibre/listing-margin";
 import type { MercadoLibreCategorySearchResponse } from "@/lib/mercadolibre/categories";
 import { ProductVideoLibrary } from "./product-video-library";
+import { GroupPublicationDialog } from "./listings/group-publication-dialog";
 import { ListingDetailsSheet } from "./listings/listing-details-sheet";
 import type { ListingRowHandlers } from "./listings/listing-row-actions";
 import { ListingTable } from "./listings/listing-table";
@@ -502,6 +503,8 @@ export function MercadoLibreListingManager({
   const [notice, setNotice] = useState<string | null>(null);
   /** Publicación cuyo panel de calidad y contenido está abierto. */
   const [detailsListingId, setDetailsListingId] = useState<string | null>(null);
+  /** Borrador base desde el que se abrió «Publicar grupo». */
+  const [groupListingId, setGroupListingId] = useState<string | null>(null);
   const hasLoadedListings = useRef(false);
   const [categoryTemplates, setCategoryTemplates] = useState<
     CategoryTemplate[]
@@ -2397,6 +2400,7 @@ export function MercadoLibreListingManager({
         void actionsRef.current.queueBulkAction("pause", [listing.id], { singleListing: listing }),
       onActivate: (listing) =>
         void actionsRef.current.queueBulkAction("activate", [listing.id], { singleListing: listing }),
+      onPublishGroup: (listing) => setGroupListingId(listing.id),
     }),
     [],
   );
@@ -2959,6 +2963,17 @@ export function MercadoLibreListingManager({
           ) : null}
         </DialogContent>
       </Dialog>
+      <GroupPublicationDialog
+        storeId={storeId}
+        listingId={groupListingId}
+        pricingTargets={pricingTargets}
+        onClose={() => setGroupListingId(null)}
+        onDraftsCreated={loadListings}
+        onPublish={async (listingIds) => {
+          setGroupListingId(null);
+          await queueBulkAction("publish", listingIds);
+        }}
+      />
       {confirmationDialog}
     </SectionCard>
   );

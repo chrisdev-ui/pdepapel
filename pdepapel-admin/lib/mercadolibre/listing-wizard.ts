@@ -288,6 +288,7 @@ export type ListingWizardPrefillProduct = {
   mpn?: string | null;
   colorName?: string | null;
   sizeName?: string | null;
+  designName?: string | null;
   hasNoProductIdentifier?: boolean;
 };
 
@@ -371,7 +372,7 @@ export function getCategorySuggestionWarning(
 
 /**
  * Rellena la ficha técnica con lo que el producto ya sabe: marca, GTIN, MPN,
- * color y tamaño. Solo escribe atributos vacíos, nunca pisa lo tecleado, y
+ * color, tamaño y diseño. Solo escribe atributos vacíos, nunca pisa lo tecleado, y
  * para listas cerradas solo cuando el valor del producto coincide con una
  * opción (no se adivina). Un producto sin identificador rellena
  * EMPTY_GTIN_REASON si la categoría lo ofrece.
@@ -389,6 +390,7 @@ export function prefillListingAttributes(
     MPN: product.mpn,
     COLOR: product.colorName,
     SIZE: product.sizeName,
+    DESIGN: product.designName,
   };
   for (const attribute of categoryAttributes) {
     const id = attribute.id.toUpperCase();

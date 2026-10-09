@@ -97,6 +97,22 @@ Un **perfil rápido** guarda los ajustes que normalmente se repiten en productos
 
 Un perfil rápido **no publica productos por sí solo** y tampoco modifica publicaciones que ya están activas.
 
+### Publicar todas las variantes de un grupo
+
+Mercado Libre publica cada variante (cada color o diseño) como su propio aviso y las agrupa por el **nombre de familia**. No hace falta repetir el asistente por cada una:
+
+1. Prepara el borrador de **una** variante con el asistente normal: nombre de familia, categoría, ficha, envío con medidas y precio. Ese es el **borrador base**.
+2. En la fila de ese borrador abre el menú **⋯** y elige **Publicar grupo**.
+3. La ventana revisa cada variante del grupo y dice qué pasa con ella:
+   - **Lista:** se puede crear. Escribe su precio; debajo aparece cuánto te queda por unidad y si llega al objetivo de la tienda.
+   - **Ya publicada:** ya tiene aviso. Si aparecen avisos **gemelos** (mismo SKU), comparten stock y SKU: lo que se venda en uno baja en el otro.
+   - **Ya existe en Mercado Libre:** hay un aviso con ese SKU que el panel no conoce. Vincúlalo en **Importar existentes**; no se crea otro.
+   - **Sin stock / Sin fotos / Ya tiene borrador:** no se incluye.
+4. Pulsa **Crear borradores**. Todavía no se publica nada.
+5. Revisa el resumen y pulsa **Publicar en Mercado Libre** para enviarlos. Se envían en segundo plano, como cualquier publicación.
+
+La ficha de cada variante copia lo común del borrador base (marca, material…) y toma del producto lo propio de esa variante: color, diseño y código de barras. Nunca hereda el código de barras de otra variante.
+
 ## 4. Administrar publicaciones ya creadas
 
 La tabla de publicaciones busca por nombre, SKU o código de Mercado Libre, filtra por estado y muestra 25 por página; en el celular cada publicación es una tarjeta. Cada fila trae señales de un vistazo: si Mercado Libre rechazó algo (y en qué paso), si se autorizó vender bajo costo, si el stock y el precio se actualizan desde el panel, cuántas fotos tiene, si ofrece envío gratis y si fue importada. En **Stock** ves las unidades que se publican (stock local menos reserva).

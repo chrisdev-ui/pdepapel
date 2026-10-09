@@ -103,6 +103,9 @@ export type MercadoLibreCreatedItem = {
   id: string;
   permalink: string | null;
   status: string | null;
+  /** Producto de usuario: los ítems que lo comparten comparten stock y SKU. */
+  userProductId: string | null;
+  familyId: string | null;
 };
 
 /**
@@ -759,6 +762,11 @@ export async function createMercadoLibreItem(
     id: item.id,
     permalink: typeof item.permalink === "string" ? item.permalink : null,
     status: typeof item.status === "string" ? item.status : null,
+    userProductId: typeof item.user_product_id === "string" && item.user_product_id ? item.user_product_id : null,
+    familyId:
+      typeof item.family_id === "number" || (typeof item.family_id === "string" && item.family_id)
+        ? String(item.family_id)
+        : null,
   };
 }
 

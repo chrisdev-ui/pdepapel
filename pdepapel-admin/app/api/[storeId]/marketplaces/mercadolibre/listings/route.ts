@@ -224,6 +224,7 @@ export async function GET(
             brand: true,
             mpn: true,
             hasNoProductIdentifier: true,
+            productGroupId: true,
             color: { select: { name: true } },
             size: { select: { name: true } },
             images: {

@@ -28,6 +28,7 @@ export type ProductReference = {
   isKit?: boolean;
   /** Nombre del grupo cuando el producto es una variante. */
   productGroupName?: string | null;
+  productGroupId?: string | null;
   colorName?: string | null;
   sizeName?: string | null;
   /** Forma anidada que devuelve `GET /listings` (el producto de una publicación guardada). */

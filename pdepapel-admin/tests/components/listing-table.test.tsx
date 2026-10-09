@@ -47,6 +47,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof ListingTable>> =
     onReviewQuality: vi.fn(),
     onPause: vi.fn(),
     onActivate: vi.fn(),
+    onPublishGroup: vi.fn(),
   };
   const onRunBulkAction = vi.fn();
   render(
@@ -112,5 +113,22 @@ describe("ListingTable", () => {
     expect(screen.getByText(/Máximo 20 a la vez; quita 1/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Aplicar de forma segura" })).toBeDisabled();
     expect(onRunBulkAction).not.toHaveBeenCalled();
+  });
+
+  it("ofrece «Publicar grupo» solo en variantes de un grupo", async () => {
+    const grouped = listing({ id: "g1", product: { ...listing().product, id: "pg", name: "Tote Rosa", productGroupId: "grupo-1" } });
+    const { handlers } = renderTable({ listings: [listing(), grouped] });
+    const openMenu = (name: string) => {
+      const [trigger] = screen.getAllByRole("button", { name: `Más acciones para ${name}` });
+      fireEvent.keyDown(trigger, { key: "Enter" });
+    };
+
+    openMenu("Alcancía de gato");
+    expect(screen.queryByRole("menuitem", { name: "Publicar grupo" })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    openMenu("Tote Rosa");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Publicar grupo" }));
+    expect(handlers.onPublishGroup).toHaveBeenCalledWith(expect.objectContaining({ id: "g1" }));
   });
 });

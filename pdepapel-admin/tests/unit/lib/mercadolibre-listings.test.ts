@@ -148,6 +148,8 @@ describe("Mercado Libre listing publication", () => {
       id: "MCO123",
       permalink: "https://mercadolibre.com.co/MCO123",
       status: "active",
+      userProductId: null,
+      familyId: null,
       descriptionWarning: null,
     });
 
