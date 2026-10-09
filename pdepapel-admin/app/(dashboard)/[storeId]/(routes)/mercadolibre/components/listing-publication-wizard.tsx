@@ -765,8 +765,8 @@ export function ListingPublicationWizard({
             <Label htmlFor="mercadolibre-product" required>
               Producto de P de Papel
             </Label>
-            <div className="flex min-w-0 items-start gap-2">
-              <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="min-w-0">
                 <AsyncProductSelect
                   value={form.productId ?? ""}
                   id="mercadolibre-product"
@@ -784,7 +784,7 @@ export function ListingPublicationWizard({
               </div>
               {!productLocked && (
                 <ProductScanButton
-                  compact
+                  size="sm"
                   label="Escanear producto local"
                   onFound={(product) => {
                     setIssue((current) =>
