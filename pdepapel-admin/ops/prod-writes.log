@@ -89,3 +89,4 @@
 2026-10-09T04:24:13.361Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/backfill-ml-fee-split.mjs@f6c2256297fc6025 | estado=error | exit=1 | rows=? | "backfill desglose comisión/envío ML #21"
 2026-10-09T04:29:50.778Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/backfill-ml-fee-split.mjs@f6c2256297fc6025 | estado=ok | exit=0 | rows=6 | "backfill MarketplaceOrder: desglose comisión/envío ML #21 (7 ventas)"
 2026-10-09T16:58:50.813Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "migración aditiva MarketplacePublicationProfile: perfiles aprendidos #22"
+2026-10-09T17:21:43.315Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/align-ml-listing-price.mjs@f1ed379f4ac4f1f9 | estado=ok | exit=0 | rows=2 | "MarketplaceListing: alinear precio guardado con ML (2 publicaciones)"

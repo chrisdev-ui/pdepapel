@@ -8,8 +8,12 @@ import type { MercadoLibreHealthIssue } from "./health";
 import { getSellerItemIds } from "./import-listings";
 import { synchronizeMercadoLibreItemStatus } from "./item-sync";
 import { enqueuePendingMarketplaceOutboxEvents, queueMarketplaceStockSyncEvents } from "./outbox";
+import { getUnitCostFloor } from "@/lib/product-costs";
+
+import { MERCADOLIBRE_FEE_RATE_ESTIMATE, MERCADOLIBRE_SHIPPING_ESTIMATE } from "./listing-margin";
 import {
   computeReconcile,
+  decidePriceMirror,
   describeReconcileIssue,
   isReconcileKind,
   type ReconcileListing,
@@ -32,7 +36,7 @@ export type ReconcileRun =
   | { outcome: "reauth" }
   | { outcome: "failed"; error: string };
 
-export type ReconcileApplied = { stockResync: number; statusUpdates: number; userProductBackfill: number };
+export type ReconcileApplied = { stockResync: number; statusUpdates: number; userProductBackfill: number; priceMirrored: number };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -106,14 +110,53 @@ async function readRecentPaidOrderIds(connectionId: string, sellerId: string, no
 }
 
 /**
+ * Comisión y envío reales del precio que tiene Mercado Libre, para decidir
+ * si copiarlo. Si Mercado Libre no responde, se usan los estimados del
+ * asistente (16 % y el envío de un paquete liviano).
+ */
+async function readSaleCosts(
+  connection: { id: string; sellerId: string | null },
+  itemId: string,
+  price: number,
+  categoryId: string | null,
+  listingType: string | null,
+) {
+  let feeAmount = price * MERCADOLIBRE_FEE_RATE_ESTIMATE;
+  let shippingCost = MERCADOLIBRE_SHIPPING_ESTIMATE;
+  try {
+    if (categoryId) {
+      const fee = await requestMercadoLibreJson(
+        connection.id,
+        `/sites/MCO/listing_prices?price=${price}&category_id=${encodeURIComponent(categoryId)}&listing_type_id=${encodeURIComponent(listingType || "gold_special")}`,
+      );
+      const amount = toNumber(asRecord(fee.payload)?.sale_fee_amount);
+      if (fee.ok && amount !== null) feeAmount = amount;
+    }
+    if (connection.sellerId) {
+      const shipping = await requestMercadoLibreJson(
+        connection.id,
+        `/users/${encodeURIComponent(connection.sellerId)}/shipping_options/free?item_id=${encodeURIComponent(itemId)}&item_price=${price}&listing_type_id=${encodeURIComponent(listingType || "gold_special")}&mode=me2&condition=new&free_shipping=true&verbose=true`,
+      );
+      const cost = toNumber(asRecord(asRecord(asRecord(shipping.payload)?.coverage)?.all_country)?.list_cost);
+      if (shipping.ok && cost !== null) shippingCost = cost;
+    }
+  } catch (error) {
+    if (error instanceof MercadoLibreReauthError) throw error;
+  }
+  return { feeAmount, shippingCost };
+}
+
+/**
  * Lee Mercado Libre y aplica solo los arreglos permitidos: volver a encolar
  * la sincronización de stock (camino normal, con el candado de preventa),
  * alinear el estado local con el de Mercado Libre (igual que el aviso
- * `items`) y guardar el producto de usuario que falte. Nada más se escribe,
+ * `items`), guardar el producto de usuario que falte y, con la
+ * sincronización de precio apagada, copiar el precio de Mercado Libre si
+ * cumple el margen. Nada más se escribe,
  * y en Mercado Libre nada que no sea ese stock.
  */
 export async function runMercadoLibreReconcile(
-  connection: { id: string; sellerId: string | null },
+  connection: { id: string; sellerId: string | null; storeId?: string },
   { now = new Date(), budgetMs = RECONCILE_READ_BUDGET_MS }: { now?: Date; budgetMs?: number } = {},
 ): Promise<ReconcileRun> {
   if (!connection.sellerId) return { outcome: "failed", error: "La conexión no tiene vendedor." };
@@ -131,7 +174,10 @@ export async function runMercadoLibreReconcile(
         marketplacePrice: true,
         stockSafetyBuffer: true,
         syncStock: true,
-        product: { select: { name: true, stock: true } },
+        syncPrice: true,
+        categoryId: true,
+        listingType: true,
+        product: { select: { name: true, stock: true, acqPrice: true, transportationCost: true } },
       },
     });
     const presales = await prismadb.productPresale.findMany({
@@ -150,6 +196,7 @@ export async function runMercadoLibreReconcile(
       marketplacePrice: row.marketplacePrice,
       stockSafetyBuffer: row.stockSafetyBuffer,
       syncStock: row.syncStock,
+      syncPrice: row.syncPrice,
       productStock: row.product.stock,
       inPresale: inPresale.has(row.productId),
     }));
@@ -178,6 +225,45 @@ export async function runMercadoLibreReconcile(
       knownOrderIds,
     });
 
+    const priceIssues: MercadoLibreHealthIssue[] = [];
+    let priceMirrored = 0;
+    if (result.priceMirrors.length > 0) {
+      const store = connection.storeId
+        ? await prismadb.store.findUnique({
+            where: { id: connection.storeId },
+            select: { mercadoLibreTargetMarginPercent: true, mercadoLibreMinNetPerUnit: true },
+          })
+        : null;
+      const targets = {
+        targetMarginPercent: store?.mercadoLibreTargetMarginPercent ?? 20,
+        minNetPerUnit: store?.mercadoLibreMinNetPerUnit ?? 10_000,
+      };
+      const rowById = new Map(rows.map((row) => [row.id, row]));
+      for (const mirror of result.priceMirrors) {
+        const row = rowById.get(mirror.listingId)!;
+        const { feeAmount, shippingCost } = await readSaleCosts(connection, mirror.externalItemId, mirror.to, row.categoryId, row.listingType);
+        const decision = decidePriceMirror({ price: mirror.to, unitCost: getUnitCostFloor(row.product), feeAmount, shippingCost, targets });
+        if (decision === "mirror") {
+          const written = await prismadb.marketplaceListing.updateMany({
+            where: { id: mirror.listingId, marketplacePrice: mirror.from },
+            data: { marketplacePrice: mirror.to, lastSyncedPrice: mirror.to },
+          });
+          priceMirrored += written.count;
+        } else {
+          const item = items.find((candidate) => candidate.id === mirror.externalItemId);
+          priceIssues.push({
+            kind: "ml_price_below_margin",
+            ...describeReconcileIssue("ml_price_below_margin", { productName: row.product.name }),
+            listingId: mirror.listingId,
+            productId: mirror.productId,
+            externalItemId: mirror.externalItemId,
+            permalink: item?.permalink ?? null,
+            fingerprintParts: [mirror.to],
+          });
+        }
+      }
+    }
+
     for (const update of result.statusUpdates) {
       await synchronizeMercadoLibreItemStatus(connection.id, { id: update.externalItemId, status: update.status });
     }
@@ -193,12 +279,13 @@ export async function runMercadoLibreReconcile(
     }
     return {
       outcome: "ok",
-      issues: result.issues,
+      issues: [...result.issues, ...priceIssues],
       unavailableItemIds: unavailable,
       applied: {
         stockResync: result.stockResyncProductIds.length,
         statusUpdates: result.statusUpdates.length,
         userProductBackfill: result.userProductBackfill.length,
+        priceMirrored,
       },
     };
   } catch (error) {
@@ -224,7 +311,7 @@ export async function loadOpenReconcileIssues(connectionId: string): Promise<Mer
     const entity = entityOf(row.alertKey, row.kind);
     if (!entity) return [];
     if (row.kind === "ml_twin_mismatch") return [entity.split("|")[0]];
-    return ["ml_price_mismatch", "ml_status_changed", "ml_listing_review"].includes(row.kind) ? [entity] : [];
+    return ["ml_price_mismatch", "ml_price_below_margin", "ml_status_changed", "ml_listing_review"].includes(row.kind) ? [entity] : [];
   });
   const listings = listingIds.length
     ? await prismadb.marketplaceListing.findMany({
@@ -240,7 +327,7 @@ export async function loadOpenReconcileIssues(connectionId: string): Promise<Mer
     const entity = entityOf(row.alertKey, kind);
     const [listingId, twinId] = kind === "ml_twin_mismatch" && entity ? entity.split("|") : [entity, null];
     const listing = listingId ? byId.get(listingId) : undefined;
-    const isListingKind = ["ml_price_mismatch", "ml_status_changed", "ml_listing_review", "ml_twin_mismatch"].includes(kind);
+    const isListingKind = ["ml_price_mismatch", "ml_price_below_margin", "ml_status_changed", "ml_listing_review", "ml_twin_mismatch"].includes(kind);
     if (isListingKind && !listing) return [];
     const itemId = kind === "ml_unlinked_stock" || kind === "ml_order_missing" ? entity : null;
     return [

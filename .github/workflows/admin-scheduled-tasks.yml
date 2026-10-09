@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Run a single job (empty = all). notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (it emails only new or changed alerts)."
+        description: "Run a single job (empty = all). notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts)."
         required: false
         default: ""
         type: choice
@@ -16,8 +16,12 @@ on:
           - mercado-libre-health
 
 jobs:
+  # The daily run is a QStash schedule (lib/mercadolibre/queue.ts,
+  # ensureMercadoLibreHealthSchedule): GitHub started this one hours late.
+  # This job stays for manual runs only; the run lock and alert fingerprints
+  # keep a manual run on the same day from emailing twice.
   mercado-libre-health:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' || inputs.only == 'mercado-libre-health' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.only == '' || inputs.only == 'mercado-libre-health') }}
     name: Mercado Libre daily health
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { processMercadoLibreHealthChecks } from "@/lib/mercadolibre/health-cron";
+import { runMercadoLibreHealthJob } from "@/lib/mercadolibre/health-job";
 import { env } from "@/lib/env.mjs";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { recordJobRun } from "@/lib/job-runs";
@@ -14,12 +14,7 @@ export async function GET(request: NextRequest) {
     const token = request.headers.get("authorization")?.split("Bearer ").at(1);
     if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
 
-    const result = await processMercadoLibreHealthChecks();
-    const incomplete = result.processed.filter((run) => run.reconcile === "failed" || run.reconcile === "reauth").length;
-    await recordJobRun("mercadolibre-health", {
-      ok: result.failed === 0 && incomplete === 0,
-      detail: `${result.processed.length} ${result.processed.length === 1 ? "conexión revisada" : "conexiones revisadas"}${result.failed ? `, ${result.failed} con error` : ""}${incomplete ? `, ${incomplete} sin revisar contra Mercado Libre` : ""}`,
-    });
+    const result = await runMercadoLibreHealthJob();
     return NextResponse.json(result, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     await recordJobRun("mercadolibre-health", {

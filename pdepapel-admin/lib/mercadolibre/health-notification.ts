@@ -102,6 +102,11 @@ const GROUP_META: Record<
     title: "Publicaciones que cambiaron de estado",
     description: "Mercado Libre las pausó, cerró o activó. El panel ya refleja el estado nuevo.",
   },
+  ml_price_below_margin: {
+    order: 12.5,
+    title: "Precio de Mercado Libre por debajo del margen",
+    description: "Alguien cambió el precio en Mercado Libre y ya no deja la ganancia mínima de la tienda. El panel no lo copió.",
+  },
   ml_price_mismatch: {
     order: 13,
     title: "Precios distintos",
@@ -235,6 +240,7 @@ function buildIssueActions(
       if (orderUrl) actions.push({ label: "Ver venta", href: orderUrl });
       break;
     case "ml_price_mismatch":
+    case "ml_price_below_margin":
     case "ml_status_changed":
     case "ml_listing_review":
     case "ml_twin_mismatch":

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   computeReconcile,
+  decidePriceMirror,
   type ReconcileListing,
   type ReconcileRemoteItem,
 } from "@/lib/mercadolibre/reconcile";
@@ -17,6 +18,7 @@ const listing = (overrides: Partial<ReconcileListing> = {}): ReconcileListing =>
   marketplacePrice: 39900,
   stockSafetyBuffer: 0,
   syncStock: true,
+  syncPrice: true,
   productStock: 2,
   inPresale: false,
   ...overrides,
@@ -147,5 +149,33 @@ describe("computeReconcile", () => {
     expect(kinds(result)).toEqual(["ml_unchecked"]);
     expect(result.issues[0].detail).toBe("Mercado Libre no respondió por las ventas de las últimas 48 horas; la revisión diaria lo vuelve a intentar mañana.");
     expect(run({ unavailableItemIds: ["MCO1", "MCO2"], remote: [], ordersUnchecked: true }).issues[0].detail).toContain("2 publicaciones ni por las ventas");
+  });
+
+  it("sincronización de precio apagada: el precio de Mercado Libre se propone para copiar, sin alerta", () => {
+    const result = run({ listings: [listing({ syncPrice: false })], remote: [item({ price: 45000 })] });
+    expect(result.issues).toEqual([]);
+    expect(result.priceMirrors).toEqual([{ listingId: "l1", externalItemId: "MCO1", productId: "p1", from: 39900, to: 45000 }]);
+  });
+
+  it("sincronización de precio encendida: la diferencia se avisa y no se copia", () => {
+    const result = run({ remote: [item({ price: 45000 })] });
+    expect(kinds(result)).toEqual(["ml_price_mismatch"]);
+    expect(result.priceMirrors).toEqual([]);
+  });
+});
+
+describe("decidePriceMirror", () => {
+  const targets = { targetMarginPercent: 20, minNetPerUnit: 10_000 };
+
+  it("copia el precio si deja al menos el mayor entre el 20 % y 10.000 de neto", () => {
+    expect(decidePriceMirror({ price: 60_000, unitCost: 20_000, feeAmount: 9_600, shippingCost: 8_200, targets })).toBe("mirror");
+  });
+
+  it("por debajo del piso no se copia: queda la alerta", () => {
+    expect(decidePriceMirror({ price: 32_000, unitCost: 15_000, feeAmount: 5_120, shippingCost: 8_200, targets })).toBe("below_margin");
+  });
+
+  it("sin costo registrado no hay piso que medir: se copia", () => {
+    expect(decidePriceMirror({ price: 32_000, unitCost: null, feeAmount: 5_120, shippingCost: 8_200, targets })).toBe("mirror");
   });
 });

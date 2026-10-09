@@ -38,6 +38,8 @@ vi.mock("@/lib/mercadolibre/client", async (importOriginal) => {
   const respond = (resource: string) => {
     if (resource.includes("/items/search")) return { results: ml.sellerIds, paging: { total: ml.sellerIds.length } };
     if (resource.startsWith("/orders/search")) return { results: ml.orders.map((id) => ({ id: Number(id) })) };
+    if (resource.startsWith("/sites/MCO/listing_prices")) return { sale_fee_amount: Number(new URLSearchParams(resource.split("?")[1]).get("price")) * 0.16 };
+    if (resource.includes("/shipping_options/free")) return { coverage: { all_country: { list_cost: 8200 } } };
     if (resource.startsWith("/items?ids=")) {
       const ids = decodeURIComponent(resource.slice("/items?ids=".length).split("&")[0]).split(",");
       return ml.items.filter((item) => ids.includes(String(item.id))).map((body) => ({ code: 200, body }));
@@ -109,6 +111,7 @@ describe("Revisión diaria contra Mercado Libre (MySQL)", () => {
         marketplacePrice: 39900,
         stockSafetyBuffer: 1,
         lastSyncedStock: 3,
+        syncPrice: true,
       },
     });
     ml.sellerIds = ["MCO100", "MCO200", "MCO300"];
@@ -197,5 +200,31 @@ describe("Revisión diaria contra Mercado Libre (MySQL)", () => {
     expect(resendSend).not.toHaveBeenCalled();
     expect(await openKinds()).toEqual([]);
     expect(await countOpenMercadoLibreAlerts(fixture!.store.id)).toBe(0);
+  });
+
+  it("con la sincronización de precio apagada copia el precio de Mercado Libre en silencio si cumple el margen", async () => {
+    const { listing } = await seed();
+    await testPrisma.marketplaceListing.update({ where: { id: listing.id }, data: { syncPrice: false } });
+    ml.items[0] = { ...ml.items[0], price: 60000 };
+
+    const run = await processMercadoLibreHealthChecks();
+
+    expect(run.processed[0]).toMatchObject({ applied: { priceMirrored: 1 } });
+    expect(await testPrisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } })).toMatchObject({ marketplacePrice: 60000, lastSyncedPrice: 60000 });
+    expect(await openKinds()).not.toContain("ml_price_mismatch");
+    expect(await openKinds()).not.toContain("ml_price_below_margin");
+  });
+
+  it("si ese precio queda por debajo del margen no se copia y queda la alerta", async () => {
+    const { listing } = await seed();
+    await testPrisma.marketplaceListing.update({ where: { id: listing.id }, data: { syncPrice: false } });
+    await testPrisma.product.update({ where: { id: fixture!.component.id }, data: { acqPrice: 30000 } });
+
+    const run = await processMercadoLibreHealthChecks();
+
+    expect(run.processed[0]).toMatchObject({ applied: { priceMirrored: 0 } });
+    expect((await testPrisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } })).marketplacePrice).toBe(39900);
+    expect(await openKinds()).toContain("ml_price_below_margin");
+    expect(await openKinds()).not.toContain("ml_price_mismatch");
   });
 });

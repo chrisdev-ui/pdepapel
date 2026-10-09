@@ -11,7 +11,7 @@ import {
   getMercadoLibreProfile,
 } from "@/lib/mercadolibre/oauth";
 import { consumeMercadoLibreOAuthState } from "@/lib/mercadolibre/oauth-state";
-import { ensureMercadoLibreRecoverySchedule } from "@/lib/mercadolibre/queue";
+import { ensureMercadoLibreHealthSchedule, ensureMercadoLibreRecoverySchedule } from "@/lib/mercadolibre/queue";
 import prismadb from "@/lib/prismadb";
 
 function redirectToMarketplace(
@@ -104,6 +104,7 @@ export async function GET(request: Request) {
     });
     try {
       await ensureMercadoLibreRecoverySchedule(connection.id);
+      await ensureMercadoLibreHealthSchedule();
     } catch (error) {
       console.error("Mercado Libre recovery schedule setup failed", {
         message: error instanceof Error ? error.message : "unknown",

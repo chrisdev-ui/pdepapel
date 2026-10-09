@@ -257,17 +257,19 @@ Después de reconectar Mercado Libre y activar los tópicos, abre **Ventas → M
 2. **Envíos y despachos:** revisa los envíos que Mercado Libre marca como listos. P de Papel los vincula con su venta usando los ítems que Mercado Libre reporta para cada paquete; nunca descuenta existencias al recibir este aviso. Prepara o despacha desde Mercado Libre; este panel no compra guías ni cambia la logística.
 3. **Reclamos:** abre el caso en Mercado Libre y toma la decisión allí. P de Papel no devuelve dinero ni suma stock por un reclamo o una devolución sin confirmar el retorno físico.
 4. **Ganancia real:** muestra por publicación el neto que Mercado Libre liquidó, menos el costo de compra registrado en P de Papel. Una venta sin liquidación sigue como pendiente y no se usa como ingreso real. La tabla muestra 20 publicaciones y ofrece ver el resto.
-5. Recibirás un correo diario si hay publicaciones con error, poco stock frente al colchón, preguntas, envíos por despachar, reclamos o alertas de margen. La revisión se ejecuta desde un flujo programado de GitHub, separado de los dos cron de Vercel. Además compara el panel con Mercado Libre (ver «Revisión diaria contra Mercado Libre»). Lo único que corrige solo es el stock (volviendo a encolar la sincronización), el estado local y el producto de usuario que falte; todo lo demás llega como aviso. No puede interrumpir la actualización de ofertas.
+5. Recibirás un correo diario si hay publicaciones con error, poco stock frente al colchón, preguntas, envíos por despachar, reclamos o alertas de margen. La revisión la dispara cada día a las 8:00 (hora de Colombia) una programación de QStash, que se crea al pulsar **Activar procesamiento seguro** o al reconectar la cuenta. El flujo de GitHub queda solo para correrla a mano. Además compara el panel con Mercado Libre (ver «Revisión diaria contra Mercado Libre»). Lo único que corrige solo es el stock (volviendo a encolar la sincronización), el estado local y el producto de usuario que falte; todo lo demás llega como aviso. No puede interrumpir la actualización de ofertas.
 
 ### Revisión diaria contra Mercado Libre
 
-Cada día a las 8:00 (hora de Colombia), la revisión de salud también lee Mercado Libre. Hace una búsqueda de las publicaciones de la cuenta, lee los ítems en tandas de 20 y busca las ventas pagadas de las últimas 48 horas. Luego compara todo con el panel:
+Cada día a las 8:00 (hora de Colombia, programada en QStash), la revisión de salud también lee Mercado Libre. Hace una búsqueda de las publicaciones de la cuenta, lee los ítems en tandas de 20 y busca las ventas pagadas de las últimas 48 horas. Luego compara todo con el panel:
 
 - **Stock:** si Mercado Libre no tiene «stock local − unidades de seguridad» (cero si hay preventa), vuelve a encolar la sincronización normal. No avisa; si esa sincronización falla, aparece como «Cambios que Mercado Libre no aceptó».
 - **Estado:**
   - Si Mercado Libre la pausó, cerró o activó, el panel se pone igual. Avisa una vez, salvo la pausa por falta de stock.
   - «En revisión» o un cambio pedido por Mercado Libre siempre se avisa.
-- **Precio:** se compara con el precio original, así que una promoción no cuenta. Un precio distinto solo se avisa; el panel nunca cambia precios por su cuenta.
+- **Precio:** se compara el precio guardado de la publicación (nunca el de la tienda) con el original de Mercado Libre, así que una promoción no cuenta.
+  - Con la sincronización de precio **apagada**, Mercado Libre manda: el panel copia su precio en silencio. Si ese precio deja menos de la ganancia mínima (el mayor entre el margen objetivo y el mínimo por unidad, con la comisión y el envío reales), no se copia y llega «Precio de Mercado Libre por debajo del margen».
+  - Con la sincronización **encendida**, el panel manda: una diferencia solo se avisa. Nunca se cambia el precio en Mercado Libre.
 - **Gemelas** (mismo producto de usuario): se comparan una vez por producto de usuario y se avisa si no están en el mismo estado.
 - **Sin vincular:** solo se avisan las publicaciones activas con unidades. Las pausadas o cerradas no.
 - **Ventas que no llegaron:** venta pagada en las últimas 48 horas que no está en el panel.

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
+  ensureMercadoLibreHealthSchedule,
   ensureMercadoLibreRecoverySchedule,
   getMercadoLibreQueueConfigurationStatus,
 } from "@/lib/mercadolibre/queue";
@@ -41,8 +42,9 @@ export async function POST(
     }
 
     await ensureMercadoLibreRecoverySchedule(connection.id);
+    const healthSchedule = await ensureMercadoLibreHealthSchedule();
     return NextResponse.json(
-      { success: true },
+      { success: true, healthSchedule },
       { headers: CACHE_HEADERS.NO_CACHE },
     );
   } catch (error) {

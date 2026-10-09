@@ -1,6 +1,7 @@
 import type { MarketplaceListingStatus } from "@prisma/client";
 
 import type { MercadoLibreHealthIssue } from "./health";
+import { getMercadoLibreMarginBreakdown } from "./listing-margin";
 
 /**
  * Revisión diaria contra Mercado Libre (#11). Compara cada publicación
@@ -12,6 +13,7 @@ import type { MercadoLibreHealthIssue } from "./health";
 
 export const RECONCILE_KINDS = [
   "ml_price_mismatch",
+  "ml_price_below_margin",
   "ml_status_changed",
   "ml_listing_review",
   "ml_twin_mismatch",
@@ -48,12 +50,18 @@ export type ReconcileListing = {
   marketplacePrice: number | null;
   stockSafetyBuffer: number;
   syncStock: boolean;
+  /** Apagada: Mercado Libre manda en el precio y el panel lo copia. */
+  syncPrice: boolean;
   productStock: number;
   inPresale: boolean;
 };
 
+/** Precio que Mercado Libre tiene y el panel debería copiar (sincronización apagada). */
+export type PriceMirror = { listingId: string; externalItemId: string; productId: string; from: number; to: number };
+
 export type ReconcileResult = {
   issues: MercadoLibreHealthIssue[];
+  priceMirrors: PriceMirror[];
   stockResyncProductIds: string[];
   statusUpdates: { externalItemId: string; status: string }[];
   userProductBackfill: { listingId: string; userProductId: string }[];
@@ -83,6 +91,11 @@ export function describeReconcileIssue(
   switch (kind) {
     case "ml_price_mismatch":
       return { title: name, detail: "El precio en Mercado Libre no coincide con el del panel. El panel no lo cambia: revisa cuál es el correcto." };
+    case "ml_price_below_margin":
+      return {
+        title: name,
+        detail: "El precio en Mercado Libre deja menos de la ganancia mínima de la tienda después del costo, la comisión y el envío. El panel no lo copió: revísalo.",
+      };
     case "ml_status_changed":
       return {
         title: name,
@@ -138,7 +151,7 @@ export function computeReconcile({
   /** La búsqueda de ventas no respondió. */
   ordersUnchecked?: boolean;
 }): ReconcileResult {
-  const result: ReconcileResult = { issues: [], stockResyncProductIds: [], statusUpdates: [], userProductBackfill: [] };
+  const result: ReconcileResult = { issues: [], priceMirrors: [], stockResyncProductIds: [], statusUpdates: [], userProductBackfill: [] };
   const byId = new Map(remote.map((item) => [item.id, item]));
   const linkedIds = new Set(listings.map((listing) => listing.externalItemId));
   const linkedUps = new Set<string>();
@@ -179,7 +192,15 @@ export function computeReconcile({
     }
 
     const referencePrice = item.originalPrice ?? item.price;
-    if (listing.marketplacePrice !== null && referencePrice !== null && referencePrice !== listing.marketplacePrice) {
+    if (listing.marketplacePrice !== null && referencePrice !== null && referencePrice !== listing.marketplacePrice && !listing.syncPrice) {
+      result.priceMirrors.push({
+        listingId: listing.id,
+        externalItemId: item.id,
+        productId: listing.productId,
+        from: listing.marketplacePrice,
+        to: referencePrice,
+      });
+    } else if (listing.marketplacePrice !== null && referencePrice !== null && referencePrice !== listing.marketplacePrice) {
       result.issues.push({
         kind: "ml_price_mismatch",
         ...describeReconcileIssue("ml_price_mismatch", { productName: listing.productName }),
@@ -246,4 +267,28 @@ export function computeReconcile({
 
   result.stockResyncProductIds = Array.from(new Set(result.stockResyncProductIds));
   return result;
+}
+
+/**
+ * ¿Se copia el precio de Mercado Libre al panel? Sí, salvo que deje menos
+ * del mayor entre el margen objetivo y la ganancia mínima por unidad; ahí
+ * queda una alerta. Sin costo registrado no hay piso que medir.
+ */
+export function decidePriceMirror({
+  price,
+  unitCost,
+  feeAmount,
+  shippingCost,
+  targets,
+}: {
+  price: number;
+  unitCost: number | null;
+  feeAmount: number;
+  shippingCost: number;
+  targets: { targetMarginPercent: number; minNetPerUnit: number };
+}): "mirror" | "below_margin" {
+  const { net } = getMercadoLibreMarginBreakdown({ price, feeAmount, shippingCost, unitCost });
+  if (net === null) return "mirror";
+  const required = Math.max(targets.minNetPerUnit, (targets.targetMarginPercent / 100) * price);
+  return net >= required ? "mirror" : "below_margin";
 }

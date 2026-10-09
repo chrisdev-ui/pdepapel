@@ -4,6 +4,9 @@ import {
   MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
   MERCADOLIBRE_RECOVERY_CRON,
   getMercadoLibreFailureUrl,
+  getMercadoLibreHealthScheduleConfig,
+  getMercadoLibreHealthUrl,
+  MERCADOLIBRE_HEALTH_SCHEDULE_ID,
   getMercadoLibreOutboxFlowControlKey,
   getMercadoLibreOutboxQueueLabel,
   getMercadoLibreProcessorUrl,
@@ -127,5 +130,19 @@ describe("Mercado Libre durable queue", () => {
         queueEnvironment,
       ),
     ).toBeNull();
+  });
+
+  it("programa la revisión diaria en QStash a las 8:00 de Colombia, con un id fijo para no duplicarla", () => {
+    expect(getMercadoLibreHealthUrl(queueEnvironment)).toBe(
+      "https://admin.papeleriapdepapel.com/api/internal/marketplaces/mercadolibre/health",
+    );
+    const config = getMercadoLibreHealthScheduleConfig(queueEnvironment);
+    expect(config).toMatchObject({
+      scheduleId: MERCADOLIBRE_HEALTH_SCHEDULE_ID,
+      destination: "https://admin.papeleriapdepapel.com/api/internal/marketplaces/mercadolibre/health",
+      cron: "0 13 * * *",
+      method: "POST",
+    });
+    expect(config.timeout).toBeGreaterThanOrEqual(60);
   });
 });

@@ -277,6 +277,60 @@ export function getMercadoLibreRecoveryUrl(
   );
 }
 
+export function getMercadoLibreHealthUrl(
+  environment: QueueEnvironment = process.env,
+) {
+  return getAdminEndpointUrl(
+    "/api/internal/marketplaces/mercadolibre/health",
+    environment,
+  );
+}
+
+/** Id fijo: crear la programación otra vez la actualiza en vez de duplicarla. */
+export const MERCADOLIBRE_HEALTH_SCHEDULE_ID = "pdepapel-mercadolibre-health-daily";
+/** 13:00 UTC = 8:00 en Colombia. */
+export const MERCADOLIBRE_HEALTH_CRON = "0 13 * * *";
+
+export function getMercadoLibreHealthScheduleConfig(
+  environment: QueueEnvironment = process.env,
+) {
+  return {
+    scheduleId: MERCADOLIBRE_HEALTH_SCHEDULE_ID,
+    destination: getMercadoLibreHealthUrl(environment),
+    cron: MERCADOLIBRE_HEALTH_CRON,
+    method: "POST" as const,
+    body: "{}",
+    headers: { "Content-Type": "application/json" },
+    // Un reintento no duplica el correo: la revisión tiene candado y solo
+    // avisa lo que no se avisó (health-alerts.ts).
+    retries: 2,
+    timeout: 60,
+    label: ["mercadolibre", "health"],
+  };
+}
+
+/** Programación diaria de la revisión de Mercado Libre (la dispara QStash, no GitHub). */
+export async function ensureMercadoLibreHealthSchedule(
+  environment: QueueEnvironment = process.env,
+) {
+  if (!getMercadoLibreQueueConfigurationStatus(environment).configured) {
+    return false;
+  }
+  const client = new Client({
+    token: environment.QSTASH_TOKEN,
+    enableTelemetry: false,
+  });
+  await client.schedules.create(getMercadoLibreHealthScheduleConfig(environment));
+  const schedule = (await client.schedules.get(MERCADOLIBRE_HEALTH_SCHEDULE_ID)) as unknown as Record<string, unknown>;
+  return {
+    scheduleId: MERCADOLIBRE_HEALTH_SCHEDULE_ID,
+    cron: schedule.cron ?? null,
+    isPaused: schedule.isPaused ?? null,
+    nextScheduleTime: schedule.nextScheduleTime ?? null,
+    lastScheduleTime: schedule.lastScheduleTime ?? null,
+  };
+}
+
 export function getMercadoLibreRecoveryScheduleConfig(
   connectionId: string,
   environment: QueueEnvironment = process.env,
