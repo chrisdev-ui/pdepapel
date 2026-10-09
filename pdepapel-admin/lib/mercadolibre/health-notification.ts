@@ -81,6 +81,47 @@ const GROUP_META: Record<
     description:
       "Notificaciones de Mercado Libre que no se pudieron aplicar. Ejecuta la recuperación de la cola desde el centro de operaciones.",
   },
+  ml_order_missing: {
+    order: -1,
+    title: "Ventas que no llegaron al panel",
+    description:
+      "Mercado Libre las cobró y el inventario no se descontó. Re-sincronízalas antes de que la tienda venda unidades que ya no existen.",
+  },
+  ml_reauth: {
+    order: -2,
+    title: "Conexión vencida",
+    description: "Sin conexión la revisión diaria no puede comparar nada con Mercado Libre.",
+  },
+  ml_listing_review: {
+    order: 11,
+    title: "Publicaciones en revisión",
+    description: "Mercado Libre las tiene en revisión o pide un cambio. El motivo está en la publicación allá.",
+  },
+  ml_status_changed: {
+    order: 12,
+    title: "Publicaciones que cambiaron de estado",
+    description: "Mercado Libre las pausó, cerró o activó. El panel ya refleja el estado nuevo.",
+  },
+  ml_price_mismatch: {
+    order: 13,
+    title: "Precios distintos",
+    description: "El precio en Mercado Libre no coincide con el del panel. El panel no cambia ningún precio solo.",
+  },
+  ml_twin_mismatch: {
+    order: 14,
+    title: "Gemelas en desacuerdo",
+    description: "Dos publicaciones del mismo producto de usuario comparten stock y SKU, pero no el estado.",
+  },
+  ml_unlinked_stock: {
+    order: 15,
+    title: "Publicaciones sin vincular con stock",
+    description: "Están activas con unidades que ningún producto del panel controla.",
+  },
+  ml_unchecked: {
+    order: 16,
+    title: "Revisión incompleta",
+    description: "Mercado Libre no respondió por una parte de las publicaciones; se vuelve a intentar mañana.",
+  },
   settlement_pending: {
     order: 10,
     title: "Liquidaciones pendientes",
@@ -193,6 +234,31 @@ function buildIssueActions(
       });
       if (orderUrl) actions.push({ label: "Ver venta", href: orderUrl });
       break;
+    case "ml_price_mismatch":
+    case "ml_status_changed":
+    case "ml_listing_review":
+    case "ml_twin_mismatch":
+      if (listingUrl) actions.push({ label: "Ver publicación", href: listingUrl, primary: true });
+      break;
+    case "ml_unlinked_stock":
+      actions.push({ label: "Importar existentes", href: `${dashboardUrl}?tab=publicaciones`, primary: true });
+      break;
+    case "ml_order_missing":
+      if (issue.externalOrderId) {
+        actions.push({
+          label: "Ver venta en Mercado Libre",
+          href: `https://www.mercadolibre.com.co/ventas/${encodeURIComponent(issue.externalOrderId)}/detalle`,
+          primary: true,
+        });
+      }
+      actions.push({ label: "Ventas del panel", href: `${dashboardUrl}?tab=ventas` });
+      break;
+    case "ml_reauth":
+      actions.push({ label: "Abrir Mercado Libre en el panel", href: dashboardUrl, primary: true });
+      break;
+    case "ml_unchecked":
+      actions.push({ label: "Abrir el centro de operaciones", href: `${dashboardUrl}#mercadolibre-operations`, primary: true });
+      break;
   }
 
   if (issue.permalink) {
@@ -250,7 +316,7 @@ export function buildMercadoLibreHealthDigest({
   const totalIssues = issues.length;
 
   return {
-    subject: `[Mercado Libre] ${totalIssues} ${totalIssues === 1 ? "aviso nuevo" : "avisos nuevos"}`,
+    subject: `Mercado Libre: ${totalIssues} ${totalIssues === 1 ? "cosa para revisar" : "cosas para revisar"}`,
     generatedAt: formatGeneratedAt(now),
     totalIssues,
     knownIssues,
@@ -271,7 +337,7 @@ export function renderMercadoLibreHealthDigestText(
   digest: MercadoLibreHealthDigest,
 ) {
   const lines = [
-    `Mercado Libre: ${digest.totalIssues === 1 ? "1 aviso nuevo" : `${digest.totalIssues} avisos nuevos`} — ${digest.generatedAt}`,
+    `Mercado Libre: ${digest.totalIssues === 1 ? "1 cosa para revisar" : `${digest.totalIssues} cosas para revisar`} — ${digest.generatedAt}`,
     "Origen: revisión automática diaria de la conexión. No es una venta nueva.",
     "Solo trae lo nuevo o lo que cambió desde el último aviso.",
     "",

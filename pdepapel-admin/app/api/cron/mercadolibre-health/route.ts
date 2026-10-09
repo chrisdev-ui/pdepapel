@@ -7,6 +7,7 @@ import { CACHE_HEADERS } from "@/lib/utils";
 import { recordJobRun } from "@/lib/job-runs";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,9 +15,10 @@ export async function GET(request: NextRequest) {
     if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
 
     const result = await processMercadoLibreHealthChecks();
+    const incomplete = result.processed.filter((run) => run.reconcile === "failed" || run.reconcile === "reauth").length;
     await recordJobRun("mercadolibre-health", {
-      ok: result.failed === 0,
-      detail: `${result.processed.length} ${result.processed.length === 1 ? "conexión revisada" : "conexiones revisadas"}${result.failed ? `, ${result.failed} con error` : ""}`,
+      ok: result.failed === 0 && incomplete === 0,
+      detail: `${result.processed.length} ${result.processed.length === 1 ? "conexión revisada" : "conexiones revisadas"}${result.failed ? `, ${result.failed} con error` : ""}${incomplete ? `, ${incomplete} sin revisar contra Mercado Libre` : ""}`,
     });
     return NextResponse.json(result, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

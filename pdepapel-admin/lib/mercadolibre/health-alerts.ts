@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
 
 import type { MercadoLibreHealthIssue } from "./health";
+import { isReconcileKind } from "./reconcile";
 
 /**
  * Estado de las alertas de salud de Mercado Libre (#8).
@@ -36,6 +37,7 @@ import type { MercadoLibreHealthIssue } from "./health";
  * | question            | pregunta                      | —                        |
  * | shipment            | envío                         | —                        |
  * | claim               | reclamo                       | estado del reclamo       |
+ * | ml_* (reconcile.ts) | publicación, ítem o venta     | datos de Mercado Libre   |
  */
 export type AlertIdentity = { alertKey: string; fingerprint: string };
 
@@ -57,6 +59,19 @@ export const RUN_LOCK_TTL_MS = 10 * 60 * 1000;
 const notReserved = { alertKey: { not: RUN_LOCK_KEY } };
 
 export function getAlertIdentity(issue: MercadoLibreHealthIssue): AlertIdentity {
+  if (isReconcileKind(issue.kind)) {
+    const reconcileEntity = issue.entityId ?? issue.listingId;
+    const reconcileKey = (reconcileEntity ? `${issue.kind}:${reconcileEntity}` : issue.kind).slice(0, 191);
+    return {
+      alertKey: reconcileKey,
+      fingerprint:
+        issue.fingerprint ??
+        createHash("sha256")
+          .update([issue.kind, reconcileKey, ...(issue.fingerprintParts ?? [])].join("\u0000"))
+          .digest("hex")
+          .slice(0, 32),
+    };
+  }
   const entity =
     issue.listingId ?? issue.orderId ?? issue.entityId ?? issue.title;
   let alertKey = `${issue.kind}:${entity}`;
@@ -323,4 +338,21 @@ export async function annotateIssues(
     ...issue,
     reviewed: dismissed.get(issue.alertKey) === issue.fingerprint,
   }));
+}
+
+/**
+ * Para el número de «Mercado Libre» en el menú: alertas abiertas que nadie
+ * marcó como revisadas en su huella actual, según la última revisión.
+ */
+export async function countOpenMercadoLibreAlerts(
+  storeId: string,
+  { db = prismadb as Pick<PrismaClient, "$queryRaw"> }: { db?: Pick<PrismaClient, "$queryRaw"> } = {},
+): Promise<number> {
+  const rows = await db.$queryRaw<{ total: bigint | number }[]>`SELECT COUNT(*) AS total
+    FROM \`MarketplaceAlertState\` a
+    JOIN \`MarketplaceConnection\` c ON c.\`id\` = a.\`connectionId\`
+    WHERE c.\`storeId\` = ${storeId} AND c.\`provider\` = 'MERCADOLIBRE'
+      AND a.\`resolvedAt\` IS NULL AND a.\`alertKey\` <> ${RUN_LOCK_KEY}
+      AND (a.\`dismissedFingerprint\` IS NULL OR a.\`dismissedFingerprint\` <> a.\`fingerprint\`)`;
+  return Number(rows[0]?.total ?? 0);
 }

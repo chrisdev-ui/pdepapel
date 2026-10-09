@@ -70,7 +70,7 @@ export function MercadoLibreHealthSummary({
   hiddenIssues,
 }: MercadoLibreHealthSummaryProps) {
   const headline =
-    totalIssues === 1 ? "1 aviso nuevo" : `${totalIssues} avisos nuevos`;
+    totalIssues === 1 ? "1 cosa para revisar" : `${totalIssues} cosas para revisar`;
 
   return (
     <PanelShell

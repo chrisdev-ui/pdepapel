@@ -248,7 +248,34 @@ Después de reconectar Mercado Libre y activar los tópicos, abre **Ventas → M
 2. **Envíos y despachos:** revisa los envíos que Mercado Libre marca como listos. P de Papel los vincula con su venta usando los ítems que Mercado Libre reporta para cada paquete; nunca descuenta existencias al recibir este aviso. Prepara o despacha desde Mercado Libre; este panel no compra guías ni cambia la logística.
 3. **Reclamos:** abre el caso en Mercado Libre y toma la decisión allí. P de Papel no devuelve dinero ni suma stock por un reclamo o una devolución sin confirmar el retorno físico.
 4. **Ganancia real:** muestra por publicación el neto que Mercado Libre liquidó, menos el costo de compra registrado en P de Papel. Una venta sin liquidación sigue como pendiente y no se usa como ingreso real. La tabla muestra 20 publicaciones y ofrece ver el resto.
-5. Recibirás un correo diario si hay publicaciones con error, poco stock frente al colchón, preguntas, envíos por despachar, reclamos o alertas de margen. La revisión se ejecuta desde un flujo programado de GitHub, separado de los dos cron de Vercel. Es un recordatorio para revisar; no ejecuta cambios automáticos ni puede interrumpir la actualización de ofertas.
+5. Recibirás un correo diario si hay publicaciones con error, poco stock frente al colchón, preguntas, envíos por despachar, reclamos o alertas de margen. La revisión se ejecuta desde un flujo programado de GitHub, separado de los dos cron de Vercel. Además compara el panel con Mercado Libre (ver «Revisión diaria contra Mercado Libre»). Lo único que corrige solo es el stock (volviendo a encolar la sincronización), el estado local y el producto de usuario que falte; todo lo demás llega como aviso. No puede interrumpir la actualización de ofertas.
+
+### Revisión diaria contra Mercado Libre
+
+Cada día a las 8:00 (hora de Colombia), la revisión de salud también lee Mercado Libre. Hace una búsqueda de las publicaciones de la cuenta, lee los ítems en tandas de 20 y busca las ventas pagadas de las últimas 48 horas. Luego compara todo con el panel:
+
+- **Stock:** si Mercado Libre no tiene «stock local − unidades de seguridad» (cero si hay preventa), vuelve a encolar la sincronización normal. No avisa; si esa sincronización falla, aparece como «Cambios que Mercado Libre no aceptó».
+- **Estado:**
+  - Si Mercado Libre la pausó, cerró o activó, el panel se pone igual. Avisa una vez, salvo la pausa por falta de stock.
+  - «En revisión» o un cambio pedido por Mercado Libre siempre se avisa.
+- **Precio:** se compara con el precio original, así que una promoción no cuenta. Un precio distinto solo se avisa; el panel nunca cambia precios por su cuenta.
+- **Gemelas** (mismo producto de usuario): se comparan una vez por producto de usuario y se avisa si no están en el mismo estado.
+- **Sin vincular:** solo se avisan las publicaciones activas con unidades. Las pausadas o cerradas no.
+- **Ventas que no llegaron:** venta pagada en las últimas 48 horas que no está en el panel.
+- **Producto de usuario:** el que falte en una publicación vinculada se guarda solo.
+
+Lo único que escribe en Mercado Libre es esa sincronización de stock.
+
+Si Mercado Libre no responde por una parte, la revisión no se detiene:
+- avisa «Revisión incompleta»;
+- conserva las alertas que ya estaban abiertas;
+- no arregla nada a ciegas.
+
+Si la conexión se venció, avisa «Conexión vencida».
+
+Ante un límite de consultas (429), cada llamada espera lo que pida Mercado Libre y repite hasta dos veces.
+
+El correo «Mercado Libre: N cosas para revisar» sale solo cuando algo es nuevo o cambió. El número junto a «Mercado Libre» en el menú cuenta las alertas abiertas que nadie marcó como revisadas. Marcar una como revisada la calla, pero no la cierra: solo la revisión diaria la cierra, cuando ya no aplica.
 
 ## Importar publicaciones existentes
 

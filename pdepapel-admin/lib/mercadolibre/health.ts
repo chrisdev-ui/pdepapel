@@ -15,6 +15,8 @@ import {
 } from "./order-status";
 
 import { getMercadoLibreListingImageUrls } from "./listing-metadata";
+import type { ReconcileKind } from "./reconcile";
+import { loadOpenReconcileIssues } from "./reconcile-runner";
 import { getMarketplaceOrderNetProfit } from "./reporting";
 
 export type MercadoLibreHealthIssue = {
@@ -33,7 +35,9 @@ export type MercadoLibreHealthIssue = {
     /** Aviso de Mercado Libre que no se pudo procesar tras los reintentos. */
     | "webhook_failed"
     /** Venta pagada que sigue sin liquidación pasados SETTLEMENT_PENDING_DAYS. */
-    | "settlement_pending";
+    | "settlement_pending"
+    /** Hallazgos de la revisión diaria contra Mercado Libre (reconcile.ts). */
+    | ReconcileKind;
   title: string;
   detail: string;
   listingId?: string;
@@ -48,6 +52,12 @@ export type MercadoLibreHealthIssue = {
   stock?: number;
   /** Id de la fila de origen (pregunta, envío, reclamo, tarea de la cola) para identificar la alerta. */
   entityId?: string;
+  /** Ítem de Mercado Libre de un hallazgo de la revisión diaria. */
+  externalItemId?: string;
+  /** Datos de Mercado Libre que distinguen el hallazgo (health-alerts.ts los resume en la huella). */
+  fingerprintParts?: (string | number)[];
+  /** Huella ya calculada por la revisión diaria; el panel la reutiliza sin leer Mercado Libre. */
+  fingerprint?: string;
 };
 
 /**
@@ -479,7 +489,9 @@ export async function getMercadoLibreHealthSummary(
     // Sin recortar: el estado de cada alerta (health-alerts.ts) da por
     // resuelta la que no aparece, y una lista cortada la daría por resuelta
     // sin estarlo. Cada consulta ya trae como mucho MAX_HEALTH_ISSUES.
-    issues,
+    // Las de la revisión diaria salen de la tabla de estados, sin leer
+    // Mercado Libre: solo esa revisión las abre o las cierra.
+    issues: [...issues, ...(await loadOpenReconcileIssues(connectionId))],
   } satisfies MercadoLibreHealthSummary;
 }
 

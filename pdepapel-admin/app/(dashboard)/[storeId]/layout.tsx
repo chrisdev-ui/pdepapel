@@ -4,6 +4,7 @@ import { StoreInitializer } from "@/components/store-initializer";
 import { env } from "@/lib/env.mjs";
 import { ConversationStatus } from "@prisma/client";
 
+import { countOpenMercadoLibreAlerts } from "@/lib/mercadolibre/health-alerts";
 import { overduePresaleWhere } from "@/lib/presale";
 
 import prismadb from "@/lib/prismadb";
@@ -38,7 +39,7 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
-  const [stores, pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue] =
+  const [stores, pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending] =
     await Promise.all([
     // El selector de tiendas de una cuenta de solo lectura muestra solo esta.
     access?.role === "viewer"
@@ -64,6 +65,10 @@ export default async function DashboardLayout({
     prismadb.productPresale
       .count({ where: { storeId: params.storeId, ...overduePresaleWhere() } })
       .catch(() => 0),
+    // Lo que dejó abierto la revisión diaria de Mercado Libre.
+    access?.role === "viewer"
+      ? Promise.resolve(0)
+      : countOpenMercadoLibreAlerts(params.storeId).catch(() => 0),
   ]);
 
   return (
@@ -75,7 +80,7 @@ export default async function DashboardLayout({
         canCreateStore={canCreateStore(userId)}
         role={access?.role ?? null}
         storeUrl={env.FRONTEND_STORE_URL}
-        counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue }}
+        counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending }}
       >
         {children}
       </AppShell>

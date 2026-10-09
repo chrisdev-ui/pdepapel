@@ -238,7 +238,28 @@ export const mercadoLibreFetch: typeof fetch = (input, init) =>
  * Un 401 con un token que creíamos vigente: se renueva una sola vez y se
  * repite. Si vuelve a dar 401, la cuenta hay que reconectarla.
  */
-async function withTokenRetry(connectionId: string, call: (accessToken: string) => Promise<Response>) {
+/** Esperas ante un 429: lo que pida `Retry-After` (con tope) o estas por defecto. */
+const RATE_LIMIT_DELAYS_MS = [1_000, 3_000];
+const MAX_RATE_LIMIT_WAIT_MS = 10_000;
+
+function rateLimitDelay(response: Response, attempt: number) {
+  const header = Number(response.headers.get("retry-after"));
+  const requested = Number.isFinite(header) && header > 0 ? header * 1_000 : RATE_LIMIT_DELAYS_MS[attempt];
+  return Math.min(requested, MAX_RATE_LIMIT_WAIT_MS);
+}
+
+/** Un 429 se espera y se repite dos veces; si sigue, decide quien llamó (la cola reintenta más tarde). */
+async function withRateLimitRetry(call: () => Promise<Response>) {
+  let response = await call();
+  for (let attempt = 0; attempt < RATE_LIMIT_DELAYS_MS.length && response.status === 429; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, rateLimitDelay(response, attempt)));
+    response = await call();
+  }
+  return response;
+}
+
+async function withTokenRetry(connectionId: string, callWithToken: (accessToken: string) => Promise<Response>) {
+  const call = (accessToken: string) => withRateLimitRetry(() => callWithToken(accessToken));
   const firstToken = await getMercadoLibreAccessToken(connectionId);
   const first = await call(firstToken);
   if (first.status !== 401) return first;

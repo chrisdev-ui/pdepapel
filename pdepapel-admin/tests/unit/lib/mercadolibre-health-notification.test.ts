@@ -66,7 +66,7 @@ describe("buildMercadoLibreHealthDigest", () => {
       now: new Date("2026-09-06T15:57:00.000Z"),
     });
 
-    expect(digest.subject).toBe("[Mercado Libre] 4 avisos nuevos");
+    expect(digest.subject).toBe("Mercado Libre: 4 cosas para revisar");
     expect(digest.generatedAt).toContain("6 de septiembre de 2026");
     expect(digest.dashboardUrl).toBe("https://admin.example.com/store-1/mercadolibre");
     expect(digest.metrics).toEqual({
@@ -141,7 +141,7 @@ describe("buildMercadoLibreHealthDigest", () => {
       summary: { ...summary, issues: many },
     });
 
-    expect(digest.subject).toBe(`[Mercado Libre] ${many.length} avisos nuevos`);
+    expect(digest.subject).toBe(`Mercado Libre: ${many.length} cosas para revisar`);
     expect(digest.groups).toHaveLength(1);
     expect(digest.groups[0].items).toHaveLength(MAX_ITEMS_PER_GROUP);
     expect(digest.groups[0].hidden).toBe(3);
@@ -155,7 +155,7 @@ describe("buildMercadoLibreHealthDigest", () => {
     });
     const text = renderMercadoLibreHealthDigestText(digest);
 
-    expect(digest.subject).toBe("[Mercado Libre] 1 aviso nuevo");
+    expect(digest.subject).toBe("Mercado Libre: 1 cosa para revisar");
     expect(text).toContain("No es una venta nueva.");
     expect(text).toContain("## Stock en riesgo (1)");
     expect(text).toContain("- Termo Owala Negro: Stock local 0; el colchón de seguridad es 0.");
@@ -180,7 +180,7 @@ describe("sendMercadoLibreHealthNotification", () => {
 
     expect(mocks.send).toHaveBeenCalledTimes(1);
     const payload = mocks.send.mock.calls[0][0];
-    expect(payload.subject).toBe("[Mercado Libre] 4 avisos nuevos");
+    expect(payload.subject).toBe("Mercado Libre: 4 cosas para revisar");
     // El falso «Idempotency-Key» del SDK 2.1.0 ya no va: no deduplicaba (#8).
     expect(payload.headers).toBeUndefined();
     expect(payload.text).toContain("Solo trae lo nuevo o lo que cambió desde el último aviso.");

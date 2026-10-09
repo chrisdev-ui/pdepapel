@@ -132,4 +132,36 @@ describe("token de Mercado Libre", () => {
     expect(mocks.tokenFetch).toHaveBeenCalledTimes(2);
     expect(mocks.tokenFetch.mock.calls[1][1].headers.Authorization).toBe("Bearer renovado-por-otra");
   });
+
+  it("un 429 espera lo que pide Mercado Libre y repite, sin renovar el token", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.tokenFetch
+        .mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "retry-after": "2" } }))
+        .mockResolvedValueOnce(json(200, { id: "MCO1" }));
+      const pending = getMercadoLibreJson("c1", "/items/MCO1");
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(mocks.tokenFetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toEqual({ id: "MCO1" });
+      expect(mocks.tokenFetch).toHaveBeenCalledTimes(2);
+      expect(mocks.updateMany).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tras dos esperas devuelve el 429 a quien llamó, que decide reintentar después", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.tokenFetch.mockResolvedValue(new Response("{}", { status: 429 }));
+      const pending = mutateMercadoLibreJson("c1", "/items/MCO1", { method: "PUT", body: { available_quantity: 1 } }).catch((caught: Error) => caught);
+      await vi.advanceTimersByTimeAsync(20_000);
+      const error = await pending;
+      expect(mocks.tokenFetch).toHaveBeenCalledTimes(3);
+      expect(String((error as Error).message)).toMatch(/Mercado Libre/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

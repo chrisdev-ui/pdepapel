@@ -13,6 +13,7 @@ import {
   syncAlertStates,
 } from "./health-alerts";
 import { sendMercadoLibreHealthNotification } from "./health-notification";
+import { mergeReconcileIssues, runMercadoLibreReconcile, type ReconcileApplied } from "./reconcile-runner";
 import prismadb from "@/lib/prismadb";
 
 type MercadoLibreHealthCheckResult = {
@@ -21,6 +22,9 @@ type MercadoLibreHealthCheckResult = {
   issues: number;
   /** Las que salieron en el correo (nuevas o cambiadas); 0 = no hubo correo. */
   notified: number;
+  /** Resultado de la revisión contra Mercado Libre. */
+  reconcile?: "ok" | "reauth" | "failed" | "skipped";
+  applied?: ReconcileApplied;
 };
 
 export type MercadoLibreHealthCheckRun = {
@@ -33,30 +37,46 @@ export async function processMercadoLibreHealthChecks(): Promise<MercadoLibreHea
     const connections = await prismadb.marketplaceConnection.findMany({
       where: {
         provider: MarketplaceProvider.MERCADOLIBRE,
-        status: MarketplaceConnectionStatus.CONNECTED,
+        status: {
+          in: [MarketplaceConnectionStatus.CONNECTED, MarketplaceConnectionStatus.REAUTH_REQUIRED],
+        },
       },
-      select: { id: true, storeId: true },
+      select: { id: true, storeId: true, sellerId: true, status: true },
     });
 
     const results = await Promise.allSettled(
-      connections.map(async (connection) => {
+      connections.map(async (connection): Promise<MercadoLibreHealthCheckResult> => {
         const now = new Date();
-        const summary = await getMercadoLibreHealthSummary(connection.id, {
-          includeFinancials: false,
-        });
-        // Solo lo nuevo o lo que cambió desde el último aviso, y nada de lo
-        // marcado como revisado (#8). Dos corridas el mismo día: la segunda
-        // no encuentra nada que tomar y no manda correo.
-        const issues = identifyIssues(summary.issues);
-        // Otra corrida de esta conexión está en curso: ella avisa.
+        // Otra corrida de esta conexión está en curso: ella revisa y avisa.
         if (!(await acquireRunLock(connection.id, { now }))) {
+          const summary = await getMercadoLibreHealthSummary(connection.id, { includeFinancials: false });
           return {
             connectionId: connection.id,
-            issues: issues.length,
+            issues: identifyIssues(summary.issues).length,
             notified: 0,
+            reconcile: "skipped",
           };
         }
         try {
+          const baseSummary = await getMercadoLibreHealthSummary(connection.id, {
+            includeFinancials: false,
+          });
+          const run =
+            connection.status === MarketplaceConnectionStatus.CONNECTED
+              ? await runMercadoLibreReconcile(connection, { now })
+              : ({ outcome: "reauth" } as const);
+          if (run.outcome === "failed") {
+            console.error("Mercado Libre reconcile failed:", run.error);
+          }
+          const summary = { ...baseSummary, issues: mergeReconcileIssues(baseSummary.issues, run) };
+          // Solo lo nuevo o lo que cambió desde el último aviso, y nada de lo
+          // marcado como revisado (#8). Dos corridas el mismo día: la segunda
+          // no encuentra nada que tomar y no manda correo.
+          const issues = identifyIssues(summary.issues);
+          const outcome = {
+            reconcile: run.outcome,
+            ...(run.outcome === "ok" ? { applied: run.applied } : {}),
+          };
           await syncAlertStates(connection.id, issues, { now });
           const claims = await claimAlertsToNotify(connection.id, issues, {
             now,
@@ -80,6 +100,7 @@ export async function processMercadoLibreHealthChecks(): Promise<MercadoLibreHea
                 connectionId: connection.id,
                 issues: issues.length,
                 notified: 0,
+                ...outcome,
               };
             }
           }
@@ -87,6 +108,7 @@ export async function processMercadoLibreHealthChecks(): Promise<MercadoLibreHea
             connectionId: connection.id,
             issues: issues.length,
             notified: claims.length,
+            ...outcome,
           };
         } finally {
           await releaseRunLock(connection.id, { now });

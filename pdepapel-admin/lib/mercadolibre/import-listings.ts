@@ -200,7 +200,7 @@ export function parseMercadoLibreListing(
   });
 }
 
-async function getSellerItemIds(connectionId: string, sellerId: string) {
+export async function getSellerItemIds(connectionId: string, sellerId: string) {
   const getPage = async (query: string) => {
     const payload = await getMercadoLibreJson(
       connectionId,

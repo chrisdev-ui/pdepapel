@@ -31,6 +31,16 @@ vi.mock("@/lib/env.mjs", async (importOriginal) => {
   };
 });
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: resendSend } } }));
+// La revisión contra Mercado Libre tiene su propia suite (mercadolibre-reconcile.test.ts).
+vi.mock("@/lib/mercadolibre/reconcile-runner", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mercadolibre/reconcile-runner")>()),
+  runMercadoLibreReconcile: async () => ({
+    outcome: "ok",
+    issues: [],
+    unavailableItemIds: [],
+    applied: { stockResync: 0, statusUpdates: 0, userProductBackfill: 0 },
+  }),
+}));
 
 import { processMercadoLibreHealthChecks } from "@/lib/mercadolibre/health-cron";
 
@@ -106,9 +116,9 @@ describe("Mercado Libre health alerts: dedupe and review (MySQL)", () => {
     const first = await processMercadoLibreHealthChecks();
     const second = await processMercadoLibreHealthChecks();
 
-    expect(first.processed).toEqual([{ connectionId, issues: 1, notified: 1 }]);
-    expect(second.processed).toEqual([{ connectionId, issues: 1, notified: 0 }]);
-    expect(subjects()).toEqual(["[Mercado Libre] 1 aviso nuevo"]);
+    expect(first.processed).toEqual([expect.objectContaining({ connectionId, issues: 1, notified: 1 })]);
+    expect(second.processed).toEqual([expect.objectContaining({ connectionId, issues: 1, notified: 0 })]);
+    expect(subjects()).toEqual(["Mercado Libre: 1 cosa para revisar"]);
     expect(texts()[0]).toContain("Stock en riesgo");
   });
 
@@ -119,8 +129,8 @@ describe("Mercado Libre health alerts: dedupe and review (MySQL)", () => {
 
     const run = await processMercadoLibreHealthChecks();
 
-    expect(run.processed).toEqual([{ connectionId, issues: 2, notified: 1 }]);
-    expect(subjects()).toEqual(["[Mercado Libre] 1 aviso nuevo", "[Mercado Libre] 1 aviso nuevo"]);
+    expect(run.processed).toEqual([expect.objectContaining({ connectionId, issues: 2, notified: 1 })]);
+    expect(subjects()).toEqual(["Mercado Libre: 1 cosa para revisar", "Mercado Libre: 1 cosa para revisar"]);
     expect(texts()[1]).toContain("Preguntas sin responder");
     expect(texts()[1]).not.toContain("Stock en riesgo (");
     expect(texts()[1]).toContain("Además sigue abierta 1 alerta que ya conoces");
