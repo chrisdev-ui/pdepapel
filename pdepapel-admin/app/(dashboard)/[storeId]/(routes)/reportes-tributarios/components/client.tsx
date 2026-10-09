@@ -51,6 +51,8 @@ import {
 import { useParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { TaxChannelSummary } from "./channel-summary";
+import type { summarizeTaxSalesByChannel } from "@/lib/tax-report-channels";
 import {
   buildPurchasesColumns,
   buildSalesColumns,
@@ -67,6 +69,7 @@ type TaxReport = {
   salesTotal: number;
   purchasesTotal: number;
   pendingMarketplaceSalesCount: number;
+  channels?: ReturnType<typeof summarizeTaxSalesByChannel>;
 };
 
 type PurchaseForm = {
@@ -662,6 +665,8 @@ export default function TaxReportsClient({
         />
       </div>
 
+      {!isLoading && report?.channels ? <TaxChannelSummary channels={report.channels} /> : null}
+
       {!isLoading && (report?.pendingMarketplaceSalesCount ?? 0) > 0 ? (
         <p className="rounded-lg bg-tint-cream p-3 text-sm text-primary">
           {report?.pendingMarketplaceSalesCount === 1
@@ -692,7 +697,8 @@ export default function TaxReportsClient({
               title: "Canal",
               options: [
                 { label: "Tienda en línea", value: "Tienda en línea" },
-                { label: "Venta presencial", value: "Venta presencial" },
+                { label: "Punto de venta", value: "Punto de venta" },
+                { label: "Feria", value: "Feria" },
                 { label: "Mercado Libre", value: "Mercado Libre" },
               ],
             },

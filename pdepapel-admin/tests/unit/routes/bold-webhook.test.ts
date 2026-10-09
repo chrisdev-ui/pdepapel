@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -175,6 +175,53 @@ describe("POST /api/webhook/bold", () => {
     expect(mocks.recordPaidOrderInGoogleAnalytics).toHaveBeenCalledWith(
       "order-id",
     );
+  });
+
+  it("a datáfono sale from the point of sale lands in the kardex as «Venta presencial», not as an online order", async () => {
+    const transactionClient = {
+      order: {
+        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+    };
+    const order = {
+      id: "pos-order-id",
+      orderNumber: "ORD-POS-1",
+      type: OrderType.POINT_OF_SALE,
+      payment: { method: PaymentMethod.Bold },
+      status: OrderStatus.PENDING,
+      storeId: "store-id",
+      shippingCost: 0,
+      total: 40000,
+      coupon: null,
+      orderItems: [{ productId: "product-id", quantity: 1, product: { acqPrice: 15000, price: 40000 } }],
+    };
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    mocks.findOrder.mockResolvedValue(order);
+    mocks.findUpdatedOrder.mockResolvedValue({ ...order, status: OrderStatus.PAID, shipping: null });
+    mocks.transaction.mockImplementation(async (callback: any) => callback(transactionClient));
+    mocks.calculateOrderFinancials.mockResolvedValue({ totalProductCost: 15000, gatewayFee: 0, shippingCost: 0, netProfit: 25000, profitMarginPct: 62.5 });
+
+    const response = await POST(
+      createWebhookRequest({
+        type: "SALE_APPROVED",
+        data: { amount: { currency: "COP", total: 40000 }, metadata: { reference: "ORD-POS-1" }, payment_id: "bold-pos-tx" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.createInventoryMovementBatchResilient).toHaveBeenCalledWith(transactionClient, [
+      expect.objectContaining({
+        type: "IN_PERSON_SALE",
+        quantity: -1,
+        reason: "Venta presencial (datáfono): pago confirmado bold-pos-tx",
+        referenceId: "pos-order-id",
+        createdBy: "SYSTEM_BOLD",
+      }),
+    ]);
   });
 
   it("records an approved payment once, updates stock, and notifies the customer", async () => {

@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
 import { createTaxReportWorkbook } from "@/lib/tax-report-xlsx";
+import { summarizeTaxSalesByChannel } from "@/lib/tax-reports";
 
 describe("createTaxReportWorkbook", () => {
   it("creates the requested sales and purchases worksheets", async () => {
@@ -13,6 +14,7 @@ describe("createTaxReportWorkbook", () => {
         endExclusive: new Date("2026-01-01T05:00:00.000Z"),
       },
       salesDateBasis: "saleDate",
+      channels: summarizeTaxSalesByChannel([{ channel: "Tienda en línea", totalAmount: 18500 }]),
       sales: [
         {
           orderId: "order-001",

@@ -1,6 +1,8 @@
 import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
+import { addDays, format, parseISO } from "date-fns";
 
 import { getColombiaDayBounds } from "@/lib/dashboard-today";
+import { colombiaDay, colombiaDaysRange } from "@/lib/order-list-filters";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -33,6 +35,8 @@ export interface PointOfSaleDaySummary {
   total: number;
   byMethod: Record<PointOfSaleDayMethod, PointOfSaleMethodTotal>;
   recent: PointOfSaleDaySale[];
+  /** Todas las ventas del día, la más reciente primero. */
+  all: PointOfSaleDaySale[];
   lastSaleAt: Date | null;
 }
 
@@ -96,15 +100,12 @@ export function buildPointOfSaleDaySummary(raw: PointOfSaleDayRawSale[]): PointO
     total,
     byMethod,
     recent: sales.slice(0, RECENT_SALES_LIMIT),
+    all: sales,
     lastSaleAt: sales[0]?.paidAt ?? null,
   };
 }
 
-export async function getPointOfSaleDaySummary(
-  storeId: string,
-  now = new Date(),
-): Promise<PointOfSaleDaySummary> {
-  const { start, end } = getColombiaDayBounds(now);
+async function loadPaidSales(storeId: string, start: Date, end: Date) {
   const orders = await prismadb.order.findMany({
     where: {
       storeId,
@@ -124,4 +125,40 @@ export async function getPointOfSaleDaySummary(
     orderBy: { paidAt: "desc" },
   });
   return buildPointOfSaleDaySummary(orders);
+}
+
+export async function getPointOfSaleDaySummary(
+  storeId: string,
+  now = new Date(),
+): Promise<PointOfSaleDaySummary> {
+  const { start, end } = getColombiaDayBounds(now);
+  return loadPaidSales(storeId, start, end);
+}
+
+/** Lo vendido un día cualquiera (`YYYY-MM-DD`, día de Colombia). */
+export async function getPointOfSaleDaySummaryFor(storeId: string, day: string) {
+  const { start, end } = colombiaDaysRange(day, day);
+  return loadPaidSales(storeId, start, end);
+}
+
+const shift = (day: string, days: number) => format(addDays(parseISO(day), days), "yyyy-MM-dd");
+
+/** Día pedido en la URL: por omisión ayer, nunca después de hoy. */
+export function resolvePointOfSaleDay(param: string | undefined, now = new Date()) {
+  const today = colombiaDay(now);
+  const requested = param && /^\d{4}-\d{2}-\d{2}$/.test(param) && !Number.isNaN(parseISO(param).getTime()) ? param : shift(today, -1);
+  const day = requested > today ? today : requested;
+  return { day, isToday: day === today, previous: shift(day, -1), next: day < today ? shift(day, 1) : null };
+}
+
+const DAY_NAME = new Intl.DateTimeFormat("es-CO", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+export function formatPointOfSaleDay(day: string) {
+  return DAY_NAME.format(new Date(`${day}T12:00:00Z`)).replace(/,/g, "");
 }

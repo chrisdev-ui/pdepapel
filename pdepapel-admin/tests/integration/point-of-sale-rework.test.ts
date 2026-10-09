@@ -174,7 +174,7 @@ describe("point of sale rework with MySQL", () => {
     expect(paid.paidAt).toBeInstanceOf(Date);
     await expect(testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id } })).resolves.toMatchObject({ stock: 5 });
     await expect(testPrisma.inventoryMovement.findMany({ where: { referenceId: sale.order.id } })).resolves.toEqual([
-      expect.objectContaining({ type: InventoryMovementType.ORDER_PLACED, quantity: -1, cost: 4000 }),
+      expect.objectContaining({ type: InventoryMovementType.IN_PERSON_SALE, quantity: -1, cost: 4000 }),
     ]);
 
     // Un reenvío del mismo webhook no descuenta dos veces.

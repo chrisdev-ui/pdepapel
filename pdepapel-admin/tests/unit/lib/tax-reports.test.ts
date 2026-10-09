@@ -1,6 +1,9 @@
+import { OrderType } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import {
+  summarizeTaxSalesByChannel,
+  taxSaleChannel,
   TAX_SALES_DATE_BASIS,
   createTaxReportPeriod,
   createTaxSalesDateFilter,
@@ -50,5 +53,31 @@ describe("createTaxReportPeriod", () => {
     expect(() => parseTaxSalesDateBasis("otherDate")).toThrow(
       "El criterio de fecha de ventas no es válido",
     );
+  });
+});
+
+describe("canales del reporte tributario", () => {
+  it("separa punto de venta y feria", () => {
+    expect(taxSaleChannel(OrderType.POINT_OF_SALE)).toBe("Punto de venta");
+    expect(taxSaleChannel(OrderType.FESTIVAL)).toBe("Feria");
+    expect(taxSaleChannel(OrderType.STANDARD)).toBe("Tienda en línea");
+    expect(taxSaleChannel(OrderType.CUSTOM)).toBe("Tienda en línea");
+  });
+
+  it("da una línea por canal y conserva el total presencial (punto de venta + ferias)", () => {
+    const row = (channel: "Tienda en línea" | "Punto de venta" | "Feria" | "Mercado Libre", totalAmount: number) => ({ channel, totalAmount });
+    const summary = summarizeTaxSalesByChannel([
+      row("Punto de venta", 10000),
+      row("Punto de venta", 5000),
+      row("Feria", 20000),
+      row("Tienda en línea", 30000),
+    ]);
+    expect(summary.lines).toEqual([
+      { channel: "Tienda en línea", count: 1, total: 30000 },
+      { channel: "Punto de venta", count: 2, total: 15000 },
+      { channel: "Feria", count: 1, total: 20000 },
+      { channel: "Mercado Libre", count: 0, total: 0 },
+    ]);
+    expect(summary.inPerson).toEqual({ count: 3, total: 35000 });
   });
 });

@@ -3,6 +3,7 @@ import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "@/lib/mercadolibre/order-sta
 
 import { getMarketplaceSaleDate } from "@/lib/mercadolibre/reporting";
 import prismadb from "@/lib/prismadb";
+import { summarizeTaxSalesByChannel, taxSaleChannel, type TaxSaleChannel } from "@/lib/tax-report-channels";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const COLOMBIA_UTC_OFFSET_HOURS = 5;
@@ -41,11 +42,17 @@ export type TaxSaleRow = {
   orderId: string | null;
   orderNumber: string;
   customerName: string;
-  channel: "Tienda en línea" | "Venta presencial" | "Mercado Libre";
+  channel: TaxSaleChannel;
   totalAmount: number;
   occurredAt: Date;
 };
 
+export {
+  TAX_SALE_CHANNELS,
+  summarizeTaxSalesByChannel,
+  taxSaleChannel,
+  type TaxSaleChannel,
+} from "@/lib/tax-report-channels";
 export type TaxPurchaseRow = {
   id: string;
   invoiceNumber: string;
@@ -63,6 +70,7 @@ export type TaxReport = {
   salesTotal: number;
   purchasesTotal: number;
   pendingMarketplaceSalesCount: number;
+  channels: ReturnType<typeof summarizeTaxSalesByChannel>;
 };
 
 function toColombiaStartOfDay(date: string) {
@@ -225,11 +233,7 @@ export async function getTaxReport(
       orderId: order.id,
       orderNumber: order.orderNumber,
       customerName: order.fullName.trim() || "Consumidor final",
-      channel:
-        order.type === OrderType.FESTIVAL ||
-        order.type === OrderType.POINT_OF_SALE
-          ? ("Venta presencial" as const)
-          : ("Tienda en línea" as const),
+      channel: taxSaleChannel(order.type),
       totalAmount: order.total,
       occurredAt:
         salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE
@@ -264,5 +268,6 @@ export async function getTaxReport(
       0,
     ),
     pendingMarketplaceSalesCount,
+    channels: summarizeTaxSalesByChannel(sales),
   };
 }

@@ -1,9 +1,15 @@
 import { PaymentMethod } from "@prisma/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const findMany = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/prismadb", () => ({ default: { order: { findMany } } }));
 
 import {
   buildPointOfSaleDaySummary,
+  formatPointOfSaleDay,
+  getPointOfSaleDaySummaryFor,
   methodForPayment,
+  resolvePointOfSaleDay,
   RECENT_SALES_LIMIT,
   type PointOfSaleDayRawSale,
 } from "@/lib/point-of-sale-day";
@@ -72,5 +78,34 @@ describe("point-of-sale-day", () => {
     expect(methodForPayment(PaymentMethod.BankTransfer)).toBe("transfer");
     expect(methodForPayment(PaymentMethod.Bold)).toBe("other");
     expect(methodForPayment(null)).toBe("other");
+  });
+});
+
+describe("días anteriores del punto de venta", () => {
+  const NOW = new Date("2026-10-09T20:00:00.000Z"); // 3 p. m. en Colombia
+
+  it("sin fecha muestra ayer; nunca un día futuro; una fecha inválida vuelve a ayer", () => {
+    expect(resolvePointOfSaleDay(undefined, NOW)).toEqual({ day: "2026-10-08", isToday: false, previous: "2026-10-07", next: "2026-10-09" });
+    expect(resolvePointOfSaleDay("2026-10-05", NOW)).toEqual({ day: "2026-10-05", isToday: false, previous: "2026-10-04", next: "2026-10-06" });
+    expect(resolvePointOfSaleDay("2099-01-01", NOW)).toEqual({ day: "2026-10-09", isToday: true, previous: "2026-10-08", next: null });
+    expect(resolvePointOfSaleDay("ayer", NOW).day).toBe("2026-10-08");
+  });
+
+  it("nombra el día en español", () => {
+    expect(formatPointOfSaleDay("2026-10-08")).toBe("jueves 8 de octubre de 2026");
+  });
+
+  it("trae todas las ventas pagadas de ese día de Colombia, no solo las últimas", async () => {
+    const many = Array.from({ length: RECENT_SALES_LIMIT + 3 }, (_, index) => sale({ id: String(index) }));
+    findMany.mockResolvedValueOnce(many);
+    const summary = await getPointOfSaleDaySummaryFor("store-1", "2026-10-08");
+    expect(findMany.mock.calls[0][0].where).toMatchObject({
+      storeId: "store-1",
+      type: "POINT_OF_SALE",
+      paidAt: { gte: new Date("2026-10-08T05:00:00.000Z"), lte: new Date("2026-10-09T04:59:59.999Z") },
+    });
+    expect(summary.sales).toBe(RECENT_SALES_LIMIT + 3);
+    expect(summary.all).toHaveLength(RECENT_SALES_LIMIT + 3);
+    expect(summary.recent).toHaveLength(RECENT_SALES_LIMIT);
   });
 });

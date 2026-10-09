@@ -11,6 +11,7 @@ import {
 import prismadb from "@/lib/prismadb";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
+import { saleMovementType } from "@/lib/sale-movement-type";
 import {
   releasePresaleLinesOnCancellation,
   settlePresaleLinesOnPayment,
@@ -340,9 +341,12 @@ async function processBoldPayment(
           .map((orderItem: any) => ({
             productId: orderItem.productId,
             storeId: order.storeId,
-            type: "ORDER_PLACED" as const,
+            type: saleMovementType(order.type),
             quantity: -orderItem.quantity,
-            reason: `Bold: pago confirmado ${transactionId ?? "sin referencia"}`,
+            reason:
+              order.type === OrderType.POINT_OF_SALE
+                ? `Venta presencial (datáfono): pago confirmado ${transactionId ?? "sin referencia"}`
+                : `Bold: pago confirmado ${transactionId ?? "sin referencia"}`,
             referenceId: order.id,
             cost: Number(orderItem.product.acqPrice) || 0,
             price: Number(orderItem.product.price),

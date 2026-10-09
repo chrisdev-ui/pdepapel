@@ -103,6 +103,7 @@ export const NAV_GROUPS: NavGroup[] = [
         segment: "ventas-rapidas",
         children: [
           { label: "Vender", segment: "ventas-rapidas" },
+          { label: "Días anteriores", segment: "ventas-rapidas?tab=dias" },
           { label: "Etiquetas", segment: "ventas-rapidas?tab=etiquetas" },
         ],
       },

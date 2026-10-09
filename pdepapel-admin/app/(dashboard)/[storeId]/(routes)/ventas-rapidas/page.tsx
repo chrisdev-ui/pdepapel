@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getPointOfSaleDaySummary } from "@/lib/point-of-sale-day";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { colombiaDay } from "@/lib/order-list-filters";
+import {
+  formatPointOfSaleDay,
+  getPointOfSaleDaySummary,
+  getPointOfSaleDaySummaryFor,
+  resolvePointOfSaleDay,
+} from "@/lib/point-of-sale-day";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import { cn, currencyFormatter } from "@/lib/utils";
@@ -19,13 +27,14 @@ export const metadata: Metadata = {
 
 const TABS = [
   { id: "vender", label: "Vender" },
+  { id: "dias", label: "Días anteriores" },
   { id: "etiquetas", label: "Etiquetas" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
 interface PointOfSalePageProps {
   params: { storeId: string };
-  searchParams: { tab?: string };
+  searchParams: { tab?: string; dia?: string };
 }
 
 /**
@@ -35,11 +44,14 @@ interface PointOfSalePageProps {
  */
 export default async function PointOfSalePage({ params, searchParams }: PointOfSalePageProps) {
   await requireStoreOwner(params.storeId);
-  const tab: Tab = searchParams.tab === "etiquetas" ? "etiquetas" : "vender";
+  const tab: Tab = searchParams.tab === "etiquetas" || searchParams.tab === "dias" ? searchParams.tab : "vender";
+  const pastDay = tab === "dias" ? resolvePointOfSaleDay(searchParams.dia) : null;
+  const dayHref = (day: string) => `/${params.storeId}/ventas-rapidas?tab=dias&dia=${day}`;
   const hrefFor = (id: Tab) =>
     `/${params.storeId}/ventas-rapidas${id === "vender" ? "" : `?tab=${id}`}`;
-  const [summary, store] = await Promise.all([
+  const [summary, pastSummary, store] = await Promise.all([
     tab === "vender" ? getPointOfSaleDaySummary(params.storeId) : Promise.resolve(null),
+    pastDay ? getPointOfSaleDaySummaryFor(params.storeId, pastDay.day) : Promise.resolve(null),
     prismadb.store.findUnique({ where: { id: params.storeId }, select: { name: true } }),
   ]);
   // Misma hora que en «Cierre del día»; «p. m.» ya trae punto, así que la frase no lleva otro.
@@ -80,6 +92,34 @@ export default async function PointOfSalePage({ params, searchParams }: PointOfS
       </nav>
       {tab === "vender" && summary ? (
         <SellPanel dayClose={<DayCloseCard storeId={params.storeId} summary={summary} />} storeName={store?.name ?? undefined} />
+      ) : tab === "dias" && pastDay && pastSummary ? (
+        <div className="flex max-w-2xl flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={dayHref(pastDay.previous)}>‹ Día anterior</Link>
+            </Button>
+            <form method="get" className="flex items-center gap-2">
+              <input type="hidden" name="tab" value="dias" />
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                Día
+                <Input type="date" name="dia" defaultValue={pastDay.day} max={colombiaDay()} className="h-9 w-40 bg-white" />
+              </label>
+              <Button type="submit" size="sm">
+                Ver
+              </Button>
+            </form>
+            {pastDay.next && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={dayHref(pastDay.next)}>Día siguiente ›</Link>
+              </Button>
+            )}
+          </div>
+          <DayCloseCard
+            storeId={params.storeId}
+            summary={pastSummary}
+            day={{ label: pastDay.isToday ? `hoy, ${formatPointOfSaleDay(pastDay.day)}` : formatPointOfSaleDay(pastDay.day) }}
+          />
+        </div>
       ) : (
         <LabelsPanel />
       )}

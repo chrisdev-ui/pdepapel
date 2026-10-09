@@ -225,11 +225,15 @@ export function getPaymentBadge(order: QueueableOrder, now = new Date()): Paymen
   const paid = order.status === OrderStatus.PAID || order.status === OrderStatus.SENT;
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REJECTED) return { label: "Cancelado", tone: "slate" };
   if (getOrderQueue(order, now) === "quote") return { label: "Sin pago", tone: "slate" };
+  const pointOfSale = order.type === OrderType.POINT_OF_SALE;
   if (paid) {
     if (method === PaymentMethod.CASH) return { label: "Efectivo", tone: "mint" };
+    if (pointOfSale && method === PaymentMethod.BankTransfer) return { label: "Transferencia", tone: "mint" };
+    if (pointOfSale && method === PaymentMethod.Bold) return { label: "Datáfono", tone: "mint" };
     if (method === PaymentMethod.COD) return { label: "Contra entrega · pagado", tone: "mint" };
     return { label: "Pagado", tone: "mint" };
   }
+  if (pointOfSale && method === PaymentMethod.Bold) return { label: "Datáfono pendiente", tone: "cream" };
   if (method === PaymentMethod.BankTransfer) return { label: "Por verificar", tone: "cream" };
   if (method === PaymentMethod.COD) return { label: "Contra entrega", tone: "sky" };
   if (method === PaymentMethod.CASH) return { label: "Efectivo", tone: "cream" };

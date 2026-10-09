@@ -95,11 +95,15 @@ Si un producto aparece como **Agotado** en la lista, existe pero no tiene unidad
 
 En la pestaña **Vender**, bajo el cobro, la tarjeta **Cierre del día** muestra lo vendido hoy en el punto de venta separado por **Efectivo**, **Transferencia** y **Datáfono** (esta fila solo aparece si hubo cobros con datáfono), con el total, las unidades y las últimas ventas. Arriba, junto al título, se resume «Hoy: N ventas · total · última a las …». Úsala al terminar la jornada para contrastar el efectivo en caja y las transferencias recibidas. Es una lectura: no mueve dinero ni inventario.
 
+## Días anteriores
+
+En **Punto de venta → Días anteriores** se ve lo vendido cualquier día: los mismos totales por **Efectivo**, **Transferencia** y **Datáfono** que el cierre de hoy, y la lista completa de ventas de ese día, cada una con su pedido. Abre en ayer; **‹ Día anterior** y **Día siguiente ›** avanzan de a un día, y el campo **Día** salta a una fecha.
+
 ## Dónde ver las ventas
 
-- En **Pedidos** aparecen con el tipo **Presencial**.
-- En **Movimientos de inventario** aparece **Venta presencial** con las unidades que salieron.
-- En **Reportes tributarios** aparecen como **Venta presencial** junto con las ventas en línea y de Mercado Libre.
+- En **Pedidos**, pestaña **Todos**, con **Canal: Presencial (punto de venta)**. La fecha se filtra con **Hoy**, **Ayer**, **Últimos 7 días** o **Elegir fechas** (días de Colombia). La columna **Pago** dice cómo se cobró: **Efectivo**, **Transferencia** o **Datáfono**.
+- En **Movimientos de inventario** aparece **Venta presencial** con las unidades que salieron, también en las ventas con datáfono.
+- En **Reportes tributarios** aparecen como **Punto de venta**, separadas de **Ferias**; la tarjeta **Ventas por canal** suma las dos en **Total presencial**.
 
 ## Recomendación para el día a día
 

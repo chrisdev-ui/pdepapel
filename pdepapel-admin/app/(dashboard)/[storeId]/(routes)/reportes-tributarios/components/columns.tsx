@@ -1,5 +1,7 @@
 "use client";
 
+import type { TaxSaleChannel } from "@/lib/tax-report-channels";
+
 import { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +14,7 @@ import { currencyFormatter } from "@/lib/utils";
 export type TaxSaleRow = {
   orderNumber: string;
   customerName: string;
-  channel: "Tienda en línea" | "Venta presencial" | "Mercado Libre";
+  channel: TaxSaleChannel;
   totalAmount: number;
   occurredAt: string;
   /** Sale del reporte para poder abrir el pedido; las de Mercado Libre no lo traen. */
@@ -33,7 +35,8 @@ export const formatTaxDate = (value: string) => DATE.format(new Date(value));
 
 const CHANNEL_TONE: Record<TaxSaleRow["channel"], string> = {
   "Tienda en línea": "sky",
-  "Venta presencial": "lavender",
+  "Punto de venta": "lavender",
+  Feria: "pink",
   "Mercado Libre": "cream",
 };
 

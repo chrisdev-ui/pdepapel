@@ -90,6 +90,17 @@ describe("order queues", () => {
     expect(getShippingBadge(order({ type: OrderType.POINT_OF_SALE, status: OrderStatus.PAID }))).toBeNull();
   });
 
+  it("names the real payment method of a point-of-sale sale instead of a generic «Pagado»", () => {
+    const pos = (method: PaymentMethod, status: OrderStatus = OrderStatus.PAID) =>
+      getPaymentBadge(order({ type: OrderType.POINT_OF_SALE, status, payment: { method } }));
+    expect(pos(PaymentMethod.CASH)).toEqual({ label: "Efectivo", tone: "mint" });
+    expect(pos(PaymentMethod.BankTransfer)).toEqual({ label: "Transferencia", tone: "mint" });
+    expect(pos(PaymentMethod.Bold)).toEqual({ label: "Datáfono", tone: "mint" });
+    expect(pos(PaymentMethod.Bold, OrderStatus.PENDING)).toEqual({ label: "Datáfono pendiente", tone: "cream" });
+    // Una transferencia de la tienda en línea sigue diciendo «Pagado».
+    expect(getPaymentBadge(order({ status: OrderStatus.PAID }))).toEqual({ label: "Pagado", tone: "mint" });
+  });
+
   it("keeps an order with unreconciled inventory in por-atender whatever its queue", () => {
     const paidAndShipped = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "X" }, openInventoryIssues: 2 });
     expect(getOrderQueue(paidAndShipped)).toBe("in-transit");
