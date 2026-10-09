@@ -10,6 +10,7 @@ import {
   getInventoryIssueBadge,
   getOrderQueue,
   getPaymentBadge,
+  getRiskBadges,
   getShippingBadge,
 } from "@/lib/order-queues";
 import { currencyFormatter } from "@/lib/utils";
@@ -71,6 +72,11 @@ export const buildColumns = (storeId: string): ColumnDef<OrderColumn>[] => [
             <TintBadge label="Regalo" tone="pink" /> para {row.original.giftRecipientName}
           </span>
         )}
+        {getRiskBadges(row.original).map((badge) => (
+          <span key={badge.label}>
+            <TintBadge label={badge.label} tone={badge.tone} />
+          </span>
+        ))}
       </div>
     ),
   },

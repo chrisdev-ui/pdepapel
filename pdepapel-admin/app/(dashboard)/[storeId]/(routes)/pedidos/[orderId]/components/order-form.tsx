@@ -60,6 +60,7 @@ import { CustomerCard, type CustomerOption } from "./order-form/customer-card";
 import { DiscountsSection } from "./order-form/discounts-section";
 import { GiftSection } from "./order-form/gift-section";
 import { HistoryCard } from "./order-form/history-card";
+import { RiskReviewCard } from "./order-form/risk-review-card";
 import { ItemsSection } from "./order-form/items-section";
 import { LeaveGuard } from "./order-form/leave-guard";
 import { NotesCard } from "./order-form/notes-card";
@@ -924,6 +925,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               Notas viven en la principal: son largos y dejaban la lateral sin
               poder fijarse. */}
           <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-4">
+            {initialData && <RiskReviewCard storeId={storeId} order={initialData} className="order-first lg:order-none" />}
             {/* En tableta Pago y Resumen comparten fila, justo después del envío. */}
             <div className="order-6 grid gap-4 md:grid-cols-2 lg:contents">
   <SummaryCard

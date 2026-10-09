@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   orderFindFirst: vi.fn(),
 }));
 
+vi.mock("@/lib/order-rate-limit", () => ({ consumeOrderRateLimits: async () => ({ allowed: true, repeated: false }) }));
 vi.mock("@clerk/nextjs/server", () => ({
   auth: mocks.auth,
   currentUser: mocks.currentUser,

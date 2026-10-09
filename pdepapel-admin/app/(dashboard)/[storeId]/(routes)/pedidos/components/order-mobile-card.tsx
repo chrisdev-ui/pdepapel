@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { getInventoryIssueBadge, getNextStep, getOrderChannel, getOrderQueue, getPaymentBadge, getShippingBadge } from "@/lib/order-queues";
+import { getInventoryIssueBadge, getNextStep, getOrderChannel, getOrderQueue, getPaymentBadge, getRiskBadges, getShippingBadge } from "@/lib/order-queues";
 import { currencyFormatter } from "@/lib/utils";
 import Link from "next/link";
 import { CellAction } from "./cell-action";
@@ -31,6 +31,9 @@ export function OrderMobileCard({ order, storeId }: { order: OrderColumn; storeI
         {order.isGift && order.giftRecipientName && (
           <TintBadge label={`Regalo para ${order.giftRecipientName}`} tone="pink" />
         )}
+        {getRiskBadges(order).map((badge) => (
+          <TintBadge key={badge.label} label={badge.label} tone={badge.tone} />
+        ))}
         <TintBadge label={payment.label} tone={payment.tone} />
         {shipping && <TintBadge label={shipping.label} tone={shipping.tone} />}
         {issue && <TintBadge label={issue.label} tone={issue.tone} />}

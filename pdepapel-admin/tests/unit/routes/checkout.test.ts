@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   waitUntil: vi.fn(),
 }));
 
+vi.mock("@/lib/order-rate-limit", () => ({ consumeOrderRateLimits: async () => ({ allowed: true, repeated: false }) }));
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@clerk/nextjs/server", () => ({
   auth: mocks.auth,
@@ -224,6 +225,34 @@ describe("POST /api/[storeId]/checkout", () => {
       error: "El nombre completo es obligatorio",
     });
     expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
+
+  it("rechaza el celular +57 9… y el nombre al azar del patrón de bots, con mensajes en español", async () => {
+    const badPhone = await POST(createCheckoutRequest({ phone: "+57 912 345 6789" }), { params: { storeId } });
+    expect(badPhone.status).toBe(400);
+    await expect(badPhone.json()).resolves.toMatchObject({ error: "Escribe un celular válido: 10 dígitos que empiezan por 3." });
+    const badName = await POST(createCheckoutRequest({ fullName: "xKqPzLmWvB" }), { params: { storeId } });
+    expect(badName.status).toBe(400);
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
+
+  it("la trampa del formulario rechaza sin crear el pedido", async () => {
+    const response = await POST(createCheckoutRequest({ website: "https://spam.example" }), { params: { storeId } });
+    expect(response.status).toBe(400);
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
+
+  it("guarda las señales de riesgo de un envío en segundos", async () => {
+    const response = await POST(createCheckoutRequest({ formStartedAt: Date.now() - 7_000 }), { params: { storeId } });
+    expect(response.status).toBe(200);
+    expect(mocks.orderCreate.mock.calls[0][0].data).toMatchObject({ riskScore: 2, riskReasons: "envio-rapido", phone: "+573001234567" });
+  });
+
+  it("la dueña que arma un pedido no pasa por el filtro de la tienda", async () => {
+    mocks.checkIfStoreOwner.mockResolvedValue(true);
+    mocks.auth.mockResolvedValue({ userId: "owner-1" });
+    const response = await POST(createCheckoutRequest({ website: "lleno", formStartedAt: Date.now() - 100 }), { params: { storeId } });
+    expect(response.status).not.toBe(400);
   });
 
   it("rejects manipulated totals before creating an order", async () => {

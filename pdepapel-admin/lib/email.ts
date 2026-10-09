@@ -8,6 +8,7 @@ import {
   ShippingStatus,
   OrderType,
 } from "@prisma/client";
+import { GiftCardReview } from "@prisma/client";
 import type { EmailLineItem, EmailSummaryLine } from "@/emails/components";
 import { GiftNotification } from "@/emails/gift-notification";
 import { OrderNotification } from "@/emails/order-notification";
@@ -31,6 +32,7 @@ import {
   createOrderAccountClaimToken,
   ORDER_ACCOUNT_EMAIL_CLAIM_TTL_MS,
 } from "@/lib/order-account-claims";
+import { RISK_REASON_LABELS, isFlagged, parseRiskReasons } from "@/lib/order-risk";
 import { getShippingChargeState } from "@/lib/order-totals";
 import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 import prismadb from "@/lib/prismadb";
@@ -350,8 +352,15 @@ export function buildOrderEmails(
   const giftCardTarget = order.giftRecipientEmail
     ? `al correo de ${order.giftRecipientName || "quien la recibe"}`
     : "a tu correo";
+  const giftCardHeld = digital && order.giftCardReview === GiftCardReview.PENDING;
+  const flagged = isFlagged(order);
+  const riskNote = flagged
+    ? parseRiskReasons(order.riskReasons).map((reason) => RISK_REASON_LABELS[reason]).join(" · ") || "Varias señales"
+    : null;
   const thanksParagraph = digital
-    ? status === OrderStatus.PAID
+    ? status === OrderStatus.PAID && giftCardHeld
+      ? `¡Gracias! Recibimos tu pago. Estamos verificando la compra y el código sale ${giftCardTarget} en cuanto terminemos, normalmente el mismo día.`
+      : status === OrderStatus.PAID
       ? `¡Gracias! El código de la tarjeta de regalo ya salió ${giftCardTarget}, en un correo aparte.`
       : "Recibimos tu compra de la tarjeta de regalo. En cuanto el pago se confirme, el código sale por correo."
     : status === OrderStatus.PAID
@@ -359,12 +368,14 @@ export function buildOrderEmails(
       : "Gracias por confiar en nosotros. Si tienes dudas, responde al correo papeleria.pdepapel@gmail.com o contáctanos por WhatsApp.";
 
   const admin: BuiltEmail = {
-    subject: `[Admin] Pedido #${order.orderNumber} - ${readableStatus}`,
+    subject: `${flagged ? "⚠️ Posible bot · " : ""}[Admin] Pedido #${order.orderNumber} - ${readableStatus}${giftCardHeld ? " · Tarjeta en revisión" : ""}`,
     react: OrderNotification({
       name: order.fullName,
       orderNumber: order.orderNumber,
       status,
       isAdminEmail: true,
+      riskNote,
+      giftCardHeld,
       paymentMethod: readablePayment,
       city: order.city || undefined,
       trackingInfo: order.shipping?.trackingCode ?? undefined,
@@ -381,7 +392,7 @@ export function buildOrderEmails(
       giftRecipientName,
       digital,
     }) as React.ReactElement,
-    text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${notificationSource}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
+    text: `${riskNote ? `⚠️ Posible bot: ${riskNote}\n` : ""}${giftCardHeld ? "Tarjeta en revisión: apruébala o recházala en el pedido.\n" : ""}Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${notificationSource}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
   };
 
   const customer: BuiltEmail | null = order.email

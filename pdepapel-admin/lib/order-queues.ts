@@ -1,4 +1,5 @@
 import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { isFlagged } from "@/lib/order-risk";
 
 /**
  * Colas de trabajo de Pedidos: el estado real del pedido se traduce en lo que
@@ -283,4 +284,13 @@ export function getShippingBadge(order: QueueableOrder, now = new Date()): Shipp
     default:
       return null;
   }
+}
+
+/** «Posible bot» y el estado de revisión de una tarjeta, para la lista y la ficha del pedido. */
+export function getRiskBadges(order: { riskScore?: number | null; giftCardReview?: string | null }): { label: string; tone: "pink" | "cream" | "slate" }[] {
+  const badges: { label: string; tone: "pink" | "cream" | "slate" }[] = [];
+  if (isFlagged(order)) badges.push({ label: "⚠️ Posible bot", tone: "pink" });
+  if (order.giftCardReview === "PENDING") badges.push({ label: "Tarjeta en revisión", tone: "cream" });
+  if (order.giftCardReview === "REJECTED") badges.push({ label: "Tarjeta rechazada", tone: "slate" });
+  return badges;
 }

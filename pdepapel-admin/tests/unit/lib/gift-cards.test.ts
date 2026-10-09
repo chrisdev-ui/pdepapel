@@ -27,7 +27,7 @@ function makeTx(overrides: Record<string, unknown> = {}) {
       create: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "card-new", deliveredAt: null, ...data })),
     },
     giftCardDenomination: { findMany: vi.fn().mockResolvedValue([]) },
-    order: { findFirst: vi.fn() },
+    order: { findFirst: vi.fn(), count: vi.fn().mockResolvedValue(1), update: vi.fn().mockResolvedValue({}) },
     ...overrides,
   };
 }
@@ -138,6 +138,11 @@ describe("applyGiftCardMovement", () => {
   });
 });
 
+/** Una clienta que ya compró antes: su tarjeta no espera revisión. */
+function knownCustomer(order: Record<string, unknown>, priorPaid = 1) {
+  return { findFirst: vi.fn().mockResolvedValue(order), count: vi.fn().mockResolvedValue(priorPaid), update: vi.fn().mockResolvedValue({}) };
+}
+
 describe("issueGiftCardForOrder", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -152,13 +157,13 @@ describe("issueGiftCardForOrder", () => {
   };
 
   it("ignores orders that are not a gift-card purchase", async () => {
-    const tx = makeTx({ order: { findFirst: vi.fn().mockResolvedValue({ ...giftCardOrder, type: OrderType.STANDARD }) } });
+    const tx = makeTx({ order: knownCustomer({ ...giftCardOrder, type: OrderType.STANDARD }) });
     await expect(issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" })).resolves.toBeNull();
     expect(tx.giftCard.create).not.toHaveBeenCalled();
   });
 
   it("creates the card with a hashed code, an ISSUED movement and the recipient as delivery target", async () => {
-    const tx = makeTx({ order: { findFirst: vi.fn().mockResolvedValue(giftCardOrder) } });
+    const tx = makeTx({ order: knownCustomer(giftCardOrder) });
     tx.$queryRaw.mockResolvedValue([{ id: "card-new", balance: 0, status: GiftCardStatus.ACTIVE }]);
 
     const issued = await issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" });
@@ -176,15 +181,63 @@ describe("issueGiftCardForOrder", () => {
   });
 
   it("falls back to the buyer's email when there is no recipient email", async () => {
-    const tx = makeTx({ order: { findFirst: vi.fn().mockResolvedValue({ ...giftCardOrder, giftRecipientEmail: null }) } });
+    const tx = makeTx({ order: knownCustomer({ ...giftCardOrder, giftRecipientEmail: null }) });
     tx.$queryRaw.mockResolvedValue([{ id: "card-new", balance: 0, status: GiftCardStatus.ACTIVE }]);
     const issued = await issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" });
     expect(issued?.deliverTo).toBe("luisa@example.com");
   });
 
+  describe("revisión antes de emitir", () => {
+    const fromStore = { ...giftCardOrder, source: "STORE", createdBy: null, riskScore: 0, giftCardReview: null, phone: "+573001234567" };
+
+    it("la primera compra de 100.000 o más espera aprobación: no se emite código y el pedido queda en revisión", async () => {
+      const order = knownCustomer(fromStore, 0);
+      const tx = makeTx({ order });
+      await expect(issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" })).resolves.toBeNull();
+      expect(tx.giftCard.create).not.toHaveBeenCalled();
+      expect(order.update).toHaveBeenCalledWith({ where: { id: "order-1" }, data: { giftCardReview: "PENDING" } });
+    });
+
+    it("un pedido marcado como posible bot espera aunque la clienta ya haya comprado", async () => {
+      const order = knownCustomer({ ...fromStore, total: 50000, riskScore: 2 }, 3);
+      const tx = makeTx({ order });
+      await expect(issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" })).resolves.toBeNull();
+      expect(order.update).toHaveBeenCalledWith({ where: { id: "order-1" }, data: { giftCardReview: "PENDING" } });
+    });
+
+    it("una clienta conocida sin señales recibe su código al instante", async () => {
+      const tx = makeTx({ order: knownCustomer(fromStore, 2) });
+      tx.$queryRaw.mockResolvedValue([{ id: "card-new", balance: 0, status: GiftCardStatus.ACTIVE }]);
+      const issued = await issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" });
+      expect(issued?.code).toMatch(/^PDP-/);
+    });
+
+    it("en revisión o rechazada no se emite aunque llegue otro webhook", async () => {
+      for (const giftCardReview of ["PENDING", "REJECTED"]) {
+        const tx = makeTx({ order: knownCustomer({ ...fromStore, giftCardReview }, 5) });
+        await expect(issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" })).resolves.toBeNull();
+        expect(tx.giftCard.create).not.toHaveBeenCalled();
+      }
+    });
+
+    it("aprobada se emite", async () => {
+      const tx = makeTx({ order: knownCustomer({ ...fromStore, riskScore: 4, giftCardReview: "APPROVED" }, 0) });
+      tx.$queryRaw.mockResolvedValue([{ id: "card-new", balance: 0, status: GiftCardStatus.ACTIVE }]);
+      const issued = await issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" });
+      expect(issued?.code).toMatch(/^PDP-/);
+    });
+
+    it("una tarjeta creada desde el panel no pasa por revisión", async () => {
+      const tx = makeTx({ order: knownCustomer({ ...fromStore, source: "PANEL", createdBy: "user-1" }, 0) });
+      tx.$queryRaw.mockResolvedValue([{ id: "card-new", balance: 0, status: GiftCardStatus.ACTIVE }]);
+      const issued = await issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" });
+      expect(issued?.code).toMatch(/^PDP-/);
+    });
+  });
+
   it("issues once: a replayed webhook gets the existing card and no code", async () => {
     const tx = makeTx({
-      order: { findFirst: vi.fn().mockResolvedValue(giftCardOrder) },
+      order: knownCustomer(giftCardOrder),
       giftCard: { findUnique: vi.fn().mockResolvedValue({ id: "card-1", codeLast4: "ABCD" }), create: vi.fn() },
     });
     const issued = await issueGiftCardForOrder(tx as never, { storeId: "store-1", orderId: "order-1" });

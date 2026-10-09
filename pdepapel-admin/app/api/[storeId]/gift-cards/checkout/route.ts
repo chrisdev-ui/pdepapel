@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { generateBoldCheckoutData } from "@/lib/bold";
 import { createCorsHeaders } from "@/lib/cors";
 import { sendOrderEmail } from "@/lib/email";
@@ -13,7 +13,7 @@ import {
 } from "@/lib/gift-cards";
 import { normalizeGiftFields } from "@/lib/gift-orders";
 import { withIdempotency } from "@/lib/idempotency";
-import { normalizePhone } from "@/lib/phone";
+import { screenStoreOrder } from "@/lib/order-intake";
 import prismadb from "@/lib/prismadb";
 import {
   CACHE_HEADERS,
@@ -50,6 +50,8 @@ const bodySchema = z.object({
   payment: z.object({ method: z.nativeEnum(PaymentMethod) }),
   userId: z.string().max(191).nullable().optional(),
   guestId: z.string().max(191).nullable().optional(),
+  website: z.string().max(200).optional(),
+  formStartedAt: z.number().optional(),
 });
 
 const getCorsHeaders = (request: Request) => ({
@@ -95,6 +97,18 @@ async function createGiftCardCheckout(
       );
     }
     const body = parsed.data;
+
+    const screen = await screenStoreOrder(req, {
+      scope: "gift-card",
+      storeId: params.storeId,
+      fullName: body.buyerName,
+      email: body.buyerEmail,
+      phone: body.buyerPhone,
+      phoneRequired: false,
+      honeypot: body.website,
+      formStartedAt: body.formStartedAt,
+    });
+    if (!screen.ok) throw new AppError(screen.error, screen.status);
 
     if (!ALLOWED_METHODS.includes(body.payment.method)) {
       throw ErrorFactory.InvalidRequest(
@@ -147,7 +161,8 @@ async function createGiftCardCheckout(
           source: OrderSource.STORE,
           fullName: body.buyerName,
           email: body.buyerEmail.toLowerCase(),
-          phone: body.buyerPhone ? normalizePhone(body.buyerPhone) : "",
+          phone: screen.phone,
+          ...screen.risk,
           address: "",
           ...gift,
           giftMessage,

@@ -113,3 +113,17 @@ describe("order queues", () => {
     expect(orderMatchesView("in-transit", "por-atender", fresh, now)).toBe(false);
   });
 });
+
+describe("getRiskBadges", () => {
+  it("marca el posible bot y la tarjeta en revisión, y nada en un pedido normal", async () => {
+    const { getRiskBadges } = await import("@/lib/order-queues");
+    expect(getRiskBadges({ riskScore: 0, giftCardReview: null })).toEqual([]);
+    expect(getRiskBadges({ riskScore: 1, giftCardReview: null })).toEqual([]);
+    expect(getRiskBadges({ riskScore: 2, giftCardReview: "PENDING" })).toEqual([
+      { label: "⚠️ Posible bot", tone: "pink" },
+      { label: "Tarjeta en revisión", tone: "cream" },
+    ]);
+    expect(getRiskBadges({ riskScore: 0, giftCardReview: "REJECTED" })).toEqual([{ label: "Tarjeta rechazada", tone: "slate" }]);
+    expect(getRiskBadges({ riskScore: 0, giftCardReview: "APPROVED" })).toEqual([]);
+  });
+});

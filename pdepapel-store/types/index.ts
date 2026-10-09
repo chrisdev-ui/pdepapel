@@ -431,6 +431,9 @@ export interface GiftCardPurchase {
   payment: { method: PaymentMethod };
   userId: string | null;
   guestId: string | null;
+  /** Campo trampa y reloj del formulario (components/bot-trap.tsx). */
+  website?: string;
+  formStartedAt?: number;
 }
 
 /** `POST /checkout/[orderId]` only ever returns the fallback gateway link. */
@@ -438,6 +441,9 @@ export type CheckoutByOrderResponse = WompiResponse;
 
 export interface CheckoutOrder {
   fullName: string;
+  /** Campo trampa y reloj del formulario (components/bot-trap.tsx). */
+  website?: string;
+  formStartedAt?: number;
   phone: string;
   email: string | null | undefined;
   address: string;

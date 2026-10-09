@@ -86,7 +86,9 @@ describe("tarjeta de regalo · compra", () => {
       payment: { method: "Bold" },
       userId: null,
       guestId: "guest-1",
+      website: "",
     });
+    expect(typeof payload.formStartedAt).toBe("number");
     expect(payload.recipientEmail).toBeUndefined();
     expect(typeof idempotencyKey).toBe("string");
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/pedido/order-1?autoPay=true"));
@@ -101,6 +103,35 @@ describe("tarjeta de regalo · compra", () => {
     expect(screen.queryByText(/al recibir el paquete/i)).toBeNull();
     expect(screen.queryByText(/dirección|ciudad|envío a|transportadora/i)).toBeNull();
     expect(screen.getByText(/No hay envío: la tarjeta sale por correo/)).toBeTruthy();
+  });
+
+  it("avisa antes de enviar un celular +57 9… o un nombre de letras al azar", async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Nombre y apellidos/), { target: { value: "xKqPzLmWvB" } });
+    fireEvent.change(screen.getByLabelText(/Correo electrónico/), { target: { value: "luisa@correo.com" } });
+    fireEvent.change(screen.getByLabelText(/Teléfono/), { target: { value: "+57 912 345 6789" } });
+    fireEvent.click(screen.getByRole("button", { name: /Comprar tarjeta de/ }));
+    await waitFor(() => expect(screen.getByText("Escribe un celular válido: 10 dígitos que empiezan por 3.")).toBeInTheDocument());
+    expect(screen.getByText(/Revisa tu nombre/)).toBeInTheDocument();
+    expect(mocks.checkoutGiftCard).not.toHaveBeenCalled();
+  });
+
+  it("acepta un solo nombre y un celular colombiano real", async () => {
+    mocks.checkoutGiftCard.mockResolvedValue({ order: { id: "order-1", orderNumber: "ORD-1", total: 100000 }, boldData: {} });
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Nombre y apellidos/), { target: { value: "Daniela" } });
+    fireEvent.change(screen.getByLabelText(/Correo electrónico/), { target: { value: "dani@correo.com" } });
+    fireEvent.change(screen.getByLabelText(/Teléfono/), { target: { value: "+57 300 123 4567" } });
+    fireEvent.click(screen.getByRole("button", { name: /Comprar tarjeta de/ }));
+    await waitFor(() => expect(mocks.checkoutGiftCard).toHaveBeenCalledTimes(1));
+  });
+
+  it("tiene un campo trampa que una persona no ve ni alcanza con el tabulador", () => {
+    const { container } = renderForm();
+    const trap = container.querySelector('input[name="website"]') as HTMLInputElement;
+    expect(trap).not.toBeNull();
+    expect(trap.tabIndex).toBe(-1);
+    expect(trap.closest("[aria-hidden='true']")).not.toBeNull();
   });
 
   it("refuses to submit without the buyer's name and email", async () => {
@@ -135,5 +166,13 @@ describe("OrderGiftCardPurchaseNotice", () => {
   it("says the code is on its way while the payment is pending", () => {
     render(<OrderGiftCardPurchaseNotice order={{ type: "GIFT_CARD", status: "PENDING", giftRecipientName: null, email: "luisa@x.com", giftCardPurchase: null }} />);
     expect(screen.getByRole("note")).toHaveTextContent("sale por correo en cuanto el pago esté confirmado");
+  });
+
+  it("pagada pero sin código todavía (en revisión): dice que se está verificando, sin prometer que ya salió", () => {
+    render(<OrderGiftCardPurchaseNotice order={{ type: "GIFT_CARD", status: "PAID", giftRecipientName: null, email: "luisa@x.com", giftCardPurchase: null }} />);
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent("Recibimos tu pago y estamos verificando la compra");
+    expect(note).not.toHaveTextContent("ya salió");
+    expect(note).not.toHaveTextContent("en cuanto el pago esté confirmado");
   });
 });

@@ -1,7 +1,7 @@
 import { scrubOrders } from "@/lib/viewer-payloads";
 import { getStoreAccess } from "@/lib/store-access";
 import { BATCH_SIZE } from "@/constants";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
 import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
@@ -10,6 +10,7 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { priceLines } from "@/lib/product-pricing";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
+import { screenStoreOrder } from "@/lib/order-intake";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeGiftFields, type GiftFields } from "@/lib/gift-orders";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
@@ -71,6 +72,8 @@ import { runInBackground } from "@/lib/background";
 
 type OrderData = {
   storeId: string;
+  riskScore: number;
+  riskReasons: string | null;
   userId: string | null;
   guestId: string | null;
   orderNumber: string;
@@ -182,7 +185,7 @@ async function createOrder(
       createdBy, // Optional admin user ID
       analyticsClientId,
     } = body;
-    const normalizedPhone = normalizePhone(phone);
+    let normalizedPhone = normalizePhone(phone);
     const gift = normalizeGiftFields(body as Record<string, unknown>);
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
@@ -284,6 +287,7 @@ async function createOrder(
       }
     }
 
+    let orderRisk: { riskScore: number; riskReasons: string | null } = { riskScore: 0, riskReasons: null };
     if (!isStoreOwner) {
       if (discount?.type && discount?.amount) throw ErrorFactory.Unauthorized();
 
@@ -295,6 +299,20 @@ async function createOrder(
       const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
       if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
         throw ErrorFactory.OrderLimit();
+
+      const screen = await screenStoreOrder(req, {
+        scope: "orders",
+        storeId: params.storeId,
+        fullName,
+        email,
+        phone,
+        phoneRequired: true,
+        honeypot: body.website,
+        formStartedAt: body.formStartedAt,
+      });
+      if (!screen.ok) throw new AppError(screen.error, screen.status);
+      normalizedPhone = screen.phone;
+      orderRisk = screen.risk;
     }
 
     if (
@@ -540,6 +558,7 @@ async function createOrder(
         orderNumber,
         fullName,
         phone: normalizedPhone,
+        ...orderRisk,
         status: status || OrderStatus.PENDING,
         address,
         email,

@@ -58,6 +58,7 @@ import {
   reserveWelcomeBenefit,
 } from "@/lib/customer-benefits";
 import { saveCustomerAddressFromCheckout } from "@/lib/customer-addresses";
+import { screenStoreOrder } from "@/lib/order-intake";
 import { normalizePhone } from "@/lib/phone";
 import { normalizeGiftFields } from "@/lib/gift-orders";
 import { parseGiftCardCode } from "@/lib/gift-card-codes";
@@ -266,7 +267,7 @@ async function createCheckout(
         "Ese código no tiene la forma de una tarjeta de regalo (PDP-XXXX-XXXX-XXXX)",
       );
     }
-    const normalizedPhone = normalizePhone(phone);
+    let normalizedPhone = normalizePhone(phone);
     // Regalo: quien compra sigue en `email`/`fullName`; quien recibe va en
     // los campos `gift*`. Sin la bandera, todo queda en null.
     const gift = normalizeGiftFields(body as Record<string, unknown>);
@@ -339,6 +340,23 @@ async function createCheckout(
       throw ErrorFactory.InvalidRequest(
         "El código DANE es obligatorio para el envío",
       );
+
+    let orderRisk: { riskScore: number; riskReasons: string | null } = { riskScore: 0, riskReasons: null };
+    if (!isStoreOwner) {
+      const screen = await screenStoreOrder(req, {
+        scope: "checkout",
+        storeId: params.storeId,
+        fullName,
+        email,
+        phone,
+        phoneRequired: true,
+        honeypot: (body as Record<string, unknown>).website,
+        formStartedAt: (body as Record<string, unknown>).formStartedAt,
+      });
+      if (!screen.ok) throw new AppError(screen.error, screen.status);
+      normalizedPhone = screen.phone;
+      orderRisk = screen.risk;
+    }
 
     // Validate shipping data is provided
     if (!shipping) {
@@ -863,6 +881,7 @@ async function createCheckout(
           status: fullyCovered ? OrderStatus.PAID : OrderStatus.PENDING,
           giftCardId,
           giftCardAmount,
+          ...orderRisk,
           fullName,
           phone: normalizedPhone,
           email,

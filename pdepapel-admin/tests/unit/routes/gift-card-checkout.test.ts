@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   generateWompiPayment: vi.fn(),
   sendOrderEmail: vi.fn(),
   giftCardCreate: vi.fn(),
+  screen: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
@@ -37,6 +38,7 @@ vi.mock("@/lib/utils", () => ({
 }));
 vi.mock("@/lib/bold", () => ({ generateBoldCheckoutData: mocks.generateBoldCheckoutData }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+vi.mock("@/lib/order-intake", () => ({ screenStoreOrder: mocks.screen }));
 
 import { POST } from "@/app/api/[storeId]/gift-cards/checkout/route";
 
@@ -71,6 +73,35 @@ describe("POST /api/[storeId]/gift-cards/checkout", () => {
     mocks.generateBoldCheckoutData.mockReturnValue({ orderId: "order-gc", integritySignature: "sig" });
     mocks.generateWompiPayment.mockResolvedValue("https://checkout.wompi.co/p/x");
     mocks.sendOrderEmail.mockResolvedValue(undefined);
+    mocks.screen.mockResolvedValue({ ok: true, phone: "", risk: { riskScore: 0, riskReasons: null } });
+  });
+
+  it("pasa el pedido por el filtro común con la trampa y el reloj del formulario", async () => {
+    await POST(request({ buyerPhone: "300 123 4567", website: "", formStartedAt: 123 }), { params: { storeId } });
+    expect(mocks.screen).toHaveBeenCalledWith(expect.any(Request), {
+      scope: "gift-card",
+      storeId,
+      fullName: "Luisa Sánchez",
+      email: "Luisa@Example.com",
+      phone: "300 123 4567",
+      phoneRequired: false,
+      honeypot: "",
+      formStartedAt: 123,
+    });
+  });
+
+  it("si el filtro rechaza no crea nada y devuelve su mensaje", async () => {
+    mocks.screen.mockResolvedValue({ ok: false, status: 400, error: "Escribe un celular válido: 10 dígitos que empiezan por 3." });
+    const response = await POST(request({ buyerPhone: "+57 912 345 6789" }), { params: { storeId } });
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain("Escribe un celular válido");
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
+
+  it("guarda el teléfono normalizado y las señales de riesgo con el pedido", async () => {
+    mocks.screen.mockResolvedValue({ ok: true, phone: "+573001234567", risk: { riskScore: 2, riskReasons: "envio-rapido" } });
+    await POST(request({ buyerPhone: "300 123 4567" }), { params: { storeId } });
+    expect(mocks.orderCreate.mock.calls[0][0].data).toMatchObject({ phone: "+573001234567", riskScore: 2, riskReasons: "envio-rapido" });
   });
 
   it("creates a GIFT_CARD order with one manual line, no shipping, and hands off to Bold", async () => {

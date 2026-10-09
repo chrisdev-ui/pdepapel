@@ -1,6 +1,8 @@
 import {
   GiftCardMovementType,
+  GiftCardReview,
   GiftCardStatus,
+  OrderSource,
   OrderStatus,
   OrderType,
   Prisma,
@@ -15,6 +17,7 @@ import {
   hashGiftCardCode,
   normalizeGiftCardCode,
 } from "@/lib/gift-card-codes";
+import { needsGiftCardReview } from "@/lib/order-risk";
 import { round2 } from "@/lib/order-totals";
 import { getAmountDue } from "@/lib/gift-card-amounts";
 
@@ -218,6 +221,11 @@ export async function issueGiftCardForOrder(
       type: true,
       total: true,
       email: true,
+      phone: true,
+      source: true,
+      createdBy: true,
+      riskScore: true,
+      giftCardReview: true,
       giftRecipientName: true,
       giftRecipientEmail: true,
       giftMessage: true,
@@ -228,6 +236,25 @@ export async function issueGiftCardForOrder(
   const existing = await tx.giftCard.findUnique({ where: { purchaseOrderId: order.id } });
   const deliverTo = (order.giftRecipientEmail || order.email || "").trim().toLowerCase() || null;
   if (existing) return { card: existing, code: null, deliverTo };
+
+  if (order.giftCardReview === GiftCardReview.PENDING || order.giftCardReview === GiftCardReview.REJECTED) return null;
+  if (!order.giftCardReview && order.source !== OrderSource.PANEL && !order.createdBy) {
+    const priorPaid = await tx.order.count({
+      where: {
+        storeId: input.storeId,
+        id: { not: order.id },
+        paidAt: { not: null },
+        OR: [
+          ...(order.email ? [{ email: order.email }] : []),
+          ...(order.phone ? [{ phone: order.phone }] : []),
+        ],
+      },
+    });
+    if (needsGiftCardReview({ riskScore: order.riskScore, total: Number(order.total), isFirstPurchase: priorPaid === 0 })) {
+      await tx.order.update({ where: { id: order.id }, data: { giftCardReview: GiftCardReview.PENDING } });
+      return null;
+    }
+  }
 
   const code = generateGiftCardCode();
   const canonical = normalizeGiftCardCode(code) as string;

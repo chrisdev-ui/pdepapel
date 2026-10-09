@@ -49,6 +49,10 @@ interface OrderNotificationProps {
   giftRecipientName?: string | null;
   /** Compra de tarjeta de regalo: sin empaque, sin envío, sin seguimiento. */
   digital?: boolean;
+  /** Solo en el aviso del panel: motivos por los que parece automatizado. */
+  riskNote?: string | null;
+  /** Solo en el aviso del panel: la tarjeta pagada espera aprobación. */
+  giftCardHeld?: boolean;
 }
 
 interface Look {
@@ -193,6 +197,8 @@ export const OrderNotification = ({
   accountClaimLink,
   giftRecipientName,
   digital = false,
+  riskNote = null,
+  giftCardHeld = false,
 }: OrderNotificationProps) => {
   const look = getLook(status, digital);
   const firstName = name ? name.split(" ")[0] : "";
@@ -223,6 +229,9 @@ export const OrderNotification = ({
     if (hasTracking) rows.push({ key: "Guía", value: trackingInfo as string });
     if (notificationSource)
       rows.push({ key: "Origen del aviso", value: notificationSource });
+    if (riskNote) rows.unshift({ key: "⚠️ Posible bot", value: riskNote });
+    if (giftCardHeld)
+      rows.unshift({ key: "Tarjeta en revisión", value: "Apruébala o recházala en el pedido antes de que salga el código" });
 
     return (
       <PanelShell

@@ -23,6 +23,8 @@ import {
 import { useConfetti } from "@/hooks/use-confetti";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useGuestUser } from "@/hooks/use-guest-user";
+import { BotTrapField, useBotTrap } from "@/components/bot-trap";
+import { NAME_ERROR, PHONE_ERROR, looksLikeRandomName, normalizeMobile } from "@/lib/customer-checks";
 import { useToast } from "@/hooks/use-toast";
 import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
@@ -135,14 +137,15 @@ const formSchema = z
       .string()
       .trim()
       .min(3, "Escribe tu nombre y apellidos")
-      .max(100, "El nombre debe tener menos de 100 caracteres"),
+      .max(100, "El nombre debe tener menos de 100 caracteres")
+      .refine((name) => name.length < 3 || !looksLikeRandomName(name), NAME_ERROR),
     email: z
       .string()
       .trim()
       .email("Escribe un correo válido, por ejemplo ana@gmail.com")
       .max(60, "El correo debe tener menos de 60 caracteres"),
-    telephone: z.string().refine(isValidPhoneNumber, {
-      message: "Escribe un celular válido, por ejemplo 300 123 4567",
+    telephone: z.string().refine((phone) => normalizeMobile(phone) !== null, {
+      message: PHONE_ERROR,
     }),
     address1: z
       .string()
@@ -303,6 +306,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const navigationRef = useRef<HTMLDivElement>(null);
   const [isNavigationVisible, setIsNavigationVisible] = useState(true);
   const { guestId, setGuestId, clearGuestId } = useGuestUser();
+  const botTrap = useBotTrap();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
   const [stockConflicts, setStockConflicts] = useState<StockConflictItem[]>([]);
@@ -1189,6 +1193,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         analyticsClientId,
         analyticsSessionId,
         analyticsConsent,
+        ...botTrap.fields(),
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,
         addressLabel: saveAddress ? addressLabel || null : null,
@@ -1620,6 +1625,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                     data-clarity-mask="true"
                   >
                     <div className="relative min-h-[300px]">
+                      <BotTrapField inputRef={botTrap.trapRef} />
                       {currentStep === 1 && (
                         <BasicInfoStep
                           form={form}

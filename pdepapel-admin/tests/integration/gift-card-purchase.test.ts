@@ -77,6 +77,32 @@ describe("gift card purchase and issuance with MySQL", () => {
     await testPrisma.$disconnect();
   });
 
+  /** Una compra anterior pagada con el mismo correo: la tarjeta no espera revisión. */
+  const returningCustomer = (storeId: string) =>
+    testPrisma.order.create({
+      data: {
+        storeId,
+        orderNumber: `ORD-PREVIA-${Date.now()}`,
+        fullName: "Luisa Sánchez",
+        email: "luisa@prueba.test",
+        phone: "",
+        address: "",
+        status: OrderStatus.PAID,
+        type: OrderType.CUSTOM,
+        paidAt: new Date(),
+        subtotal: 1000,
+        total: 1000,
+      },
+    });
+
+  const markPaid = async (storeId: string, orderId: string) => {
+    const { PATCH } = await import("@/app/api/[storeId]/orders/[orderId]/route");
+    return PATCH(
+      json("PATCH", { status: OrderStatus.PAID, expectedStatus: OrderStatus.PENDING, payment: { method: PaymentMethod.BankTransfer, transactionId: "REF-1234" } }),
+      { params: { storeId, orderId } },
+    );
+  };
+
   const buy = async (storeId: string, extra: Record<string, unknown> = {}) => {
     const { POST } = await import("@/app/api/[storeId]/gift-cards/checkout/route");
     const response = await POST(json("POST", purchase(extra)), { params: { storeId } });
@@ -101,6 +127,7 @@ describe("gift card purchase and issuance with MySQL", () => {
 
   it("issues the card once when the panel marks the transfer paid, mails the code, and the ledger matches the balance", async () => {
     fixture = await createInventoryFixture();
+    await returningCustomer(fixture.store.id);
     const order = await buy(fixture.store.id);
     session.userId = fixture.store.userId;
 
@@ -141,6 +168,7 @@ describe("gift card purchase and issuance with MySQL", () => {
 
   it("reissues a fresh code in one transaction and the old one stops matching", async () => {
     fixture = await createInventoryFixture();
+    await returningCustomer(fixture.store.id);
     const order = await buy(fixture.store.id, { recipientEmail: "" });
     session.userId = fixture.store.userId;
     const { PATCH } = await import("@/app/api/[storeId]/orders/[orderId]/route");
@@ -176,5 +204,58 @@ describe("gift card purchase and issuance with MySQL", () => {
     expect(standardPaid).toBe(0);
     // Ningún movimiento de inventario: no hay producto.
     expect(await testPrisma.inventoryMovement.count({ where: { referenceId: order.id } })).toBe(0);
+  });
+
+  it("una primera compra de 100.000 queda en revisión al pagarse y solo emite el código cuando la dueña la aprueba", async () => {
+    fixture = await createInventoryFixture();
+    const order = await buy(fixture.store.id);
+    session.userId = fixture.store.userId;
+    expect((await markPaid(fixture.store.id, order.id)).status).toBe(200);
+
+    const held = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { giftCardPurchase: true } });
+    expect(held.status).toBe(OrderStatus.PAID);
+    expect(held.giftCardReview).toBe("PENDING");
+    expect(held.giftCardPurchase).toBeNull();
+    expect(delivery.deliverGiftCard).not.toHaveBeenCalled();
+
+    const { POST } = await import("@/app/api/[storeId]/orders/[orderId]/gift-card-review/route");
+    const approved = await POST(json("POST", { decision: "approve" }), { params: { storeId: fixture.store.id, orderId: order.id } });
+    expect(approved.status).toBe(200);
+    const card = await testPrisma.giftCard.findUniqueOrThrow({ where: { purchaseOrderId: order.id } });
+    expect(card.balance).toBe(100000);
+    expect(delivery.deliverGiftCard).toHaveBeenCalledTimes(1);
+    expect((await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } })).giftCardReview).toBe("APPROVED");
+
+    const twice = await POST(json("POST", { decision: "approve" }), { params: { storeId: fixture.store.id, orderId: order.id } });
+    expect(twice.status).toBe(409);
+    expect(await testPrisma.giftCard.count({ where: { storeId: fixture.store.id } })).toBe(1);
+  });
+
+  it("rechazada no emite nada aunque el webhook o el panel vuelvan a pasar por la emisión", async () => {
+    fixture = await createInventoryFixture();
+    const order = await buy(fixture.store.id);
+    session.userId = fixture.store.userId;
+    await markPaid(fixture.store.id, order.id);
+    const { POST } = await import("@/app/api/[storeId]/orders/[orderId]/gift-card-review/route");
+    expect((await POST(json("POST", { decision: "reject" }), { params: { storeId: fixture.store.id, orderId: order.id } })).status).toBe(200);
+
+    const again = await testPrisma.$transaction((tx) => issueGiftCardForOrder(tx, { storeId: fixture!.store.id, orderId: order.id }));
+    expect(again).toBeNull();
+    expect(await testPrisma.giftCard.count({ where: { storeId: fixture.store.id } })).toBe(0);
+    expect(delivery.deliverGiftCard).not.toHaveBeenCalled();
+  });
+
+  it("el filtro de la tienda rechaza el patrón del bot y guarda las señales de un envío rápido", async () => {
+    fixture = await createInventoryFixture();
+    const { POST } = await import("@/app/api/[storeId]/gift-cards/checkout/route");
+    const bot = await POST(json("POST", purchase({ buyerName: "xKqPzLmWvB", buyerPhone: "+57 912 345 6789" })), { params: { storeId: fixture.store.id } });
+    expect(bot.status).toBe(400);
+    const trap = await POST(json("POST", purchase({ website: "http://spam" })), { params: { storeId: fixture.store.id } });
+    expect(trap.status).toBe(400);
+    expect(await testPrisma.order.count({ where: { storeId: fixture.store.id } })).toBe(0);
+
+    const fast = await buy(fixture.store.id, { formStartedAt: Date.now() - 7_000, buyerPhone: "300 123 4567" });
+    const stored = await testPrisma.order.findUniqueOrThrow({ where: { id: fast.id } });
+    expect(stored).toMatchObject({ riskScore: 2, riskReasons: "envio-rapido", phone: "+573001234567" });
   });
 });

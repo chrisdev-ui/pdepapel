@@ -861,6 +861,12 @@ model Order {
   giftCard         GiftCard? @relation("GiftCardRedemption", fields: [giftCardId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   /// La tarjeta que ESTE pedido compró (solo pedidos de tipo GIFT_CARD).
   giftCardPurchase GiftCard? @relation("GiftCardPurchase")
+  /// Una compra de tarjeta marcada espera aquí a que alguien la apruebe antes de emitir el código.
+  giftCardReview   GiftCardReview?
+
+  /// Señales de pedido automatizado al crearlo desde la tienda; solo códigos de motivo, nunca datos de la persona.
+  riskScore   Int     @default(0)
+  riskReasons String? @db.Text
 
   // Sender Info
   createdBy String? // Admin User ID
@@ -895,6 +901,7 @@ model Order {
   @@index([storeId, fairEventId])
   @@index([analyticsPurchaseTrackedAt])
   @@index([giftCardId])
+  @@index([storeId, giftCardReview])
 }
 
 // ---------------------------------------------------------------------------
@@ -906,6 +913,12 @@ model Order {
 // (SELECT … FOR UPDATE) y deja un movimiento; las pruebas comprueban que la
 // suma del libro coincide con la caché.
 // ---------------------------------------------------------------------------
+
+enum GiftCardReview {
+  PENDING
+  APPROVED
+  REJECTED
+}
 
 enum GiftCardStatus {
   ACTIVE

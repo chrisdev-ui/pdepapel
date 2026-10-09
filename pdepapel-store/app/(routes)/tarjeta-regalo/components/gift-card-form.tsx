@@ -8,10 +8,10 @@ import { Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
 
 import { checkoutGiftCard } from "@/actions/gift-cards";
+import { BotTrapField, useBotTrap } from "@/components/bot-trap";
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import {
@@ -32,6 +32,7 @@ import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import { createIdempotencyKey } from "@/lib/checkout-idempotency";
+import { NAME_ERROR, PHONE_ERROR, looksLikeRandomName, normalizeMobile } from "@/lib/customer-checks";
 import { orderPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { CheckoutResponse, GiftCardPurchase } from "@/types";
@@ -41,7 +42,12 @@ const GIFT_MESSAGE_MAX = 300;
 const schema = z
   .object({
     amount: z.number().int().positive("Elige un valor"),
-    buyerName: z.string().trim().min(3, "Escribe tu nombre y apellidos").max(100, "El nombre debe tener menos de 100 caracteres"),
+    buyerName: z
+      .string()
+      .trim()
+      .min(3, "Escribe tu nombre y apellidos")
+      .max(100, "El nombre debe tener menos de 100 caracteres")
+      .refine((name) => name.length < 3 || !looksLikeRandomName(name), NAME_ERROR),
     buyerEmail: z.string().trim().email("Escribe un correo válido, por ejemplo ana@gmail.com").max(60, "El correo debe tener menos de 60 caracteres"),
     buyerPhone: z.string().optional().or(z.literal("")),
     recipientName: z.string().trim().max(100, "El nombre debe tener menos de 100 caracteres").optional().or(z.literal("")),
@@ -58,8 +64,8 @@ const schema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Escribe el nombre de quien la recibe", path: ["recipientName"] });
     }
     const phone = (data.buyerPhone ?? "").trim();
-    if (phone && !isValidPhoneNumber(phone)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Escribe un celular válido, por ejemplo 300 123 4567", path: ["buyerPhone"] });
+    if (phone && !normalizeMobile(phone)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: PHONE_ERROR, path: ["buyerPhone"] });
     }
   });
 
@@ -77,6 +83,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
   const { toast } = useToast();
   const { userId, getToken } = useAuth();
   const { guestId, setGuestId } = useGuestUser();
+  const botTrap = useBotTrap();
   const setPendingOrder = useCheckoutStore((state) => state.setPendingOrder);
   const idempotencyKeyRef = useRef(createIdempotencyKey());
   const [submitted, setSubmitted] = useState(false);
@@ -154,6 +161,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
       payment: { method: data.paymentMethod },
       userId: userId ?? null,
       guestId: userId ? null : guest,
+      ...botTrap.fields(),
     }).catch(() => undefined);
   };
 
@@ -165,8 +173,9 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
         id="gift-card-form"
         noValidate
         onSubmit={form.handleSubmit(onSubmit)}
-        className="flex flex-col gap-8 rounded-3xl border border-pink-shell/30 bg-white p-5 shadow-[0_4px_20px_hsl(280_30%_70%/0.15)] sm:p-8"
+        className="relative flex flex-col gap-8 rounded-3xl border border-pink-shell/30 bg-white p-5 shadow-[0_4px_20px_hsl(280_30%_70%/0.15)] sm:p-8"
       >
+        <BotTrapField inputRef={botTrap.trapRef} />
         <section className="space-y-4">
           <div className="space-y-1">
             <h2 className="font-serif text-2xl font-bold text-blue-yankees">¿De cuánto?</h2>
