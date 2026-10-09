@@ -1,10 +1,11 @@
 "use client";
 
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 import { useEffect } from "react";
 
 import { useViewerAccess } from "@/components/shell/viewer-access";
 import { useToast } from "@/hooks/use-toast";
+import api from "@/lib/api";
 
 const MUTATING = new Set(["post", "put", "patch", "delete"]);
 
@@ -27,7 +28,7 @@ export function isPanelApi(url: string): boolean {
  * `requireStoreOwner` pase lo que pase aquí: esto solo evita que un botón que
  * se nos haya pasado por alto muestre un error críptico.
  *
- * Cubre las dos formas de escribir del panel: axios y `fetch`. El aviso de
+ * Cubre las formas de escribir del panel: axios, la instancia de `lib/api` y `fetch`. El aviso de
  * solo lectura promete que «los botones que crean, editan o borran están
  * apagados», y antes eso era mentira en Mercado Libre, Envíos y Ajustes, que
  * escriben con `fetch`. Solo se tocan las peticiones a `/api/`: las de Next
@@ -40,7 +41,7 @@ export function ReadOnlyGuard() {
 
   useEffect(() => {
     if (!isViewer) return;
-    const id = axios.interceptors.request.use((config) => {
+    const blockWrites = (config: InternalAxiosRequestConfig) => {
       const method = (config.method ?? "get").toLowerCase();
       if (!MUTATING.has(method)) return config;
       toast({
@@ -54,7 +55,10 @@ export function ReadOnlyGuard() {
           readOnlyBlocked: true,
         }),
       );
-    });
+    };
+    // Las acciones masivas de las tablas usan la instancia de lib/api, que no hereda los interceptores globales.
+    const id = axios.interceptors.request.use(blockWrites);
+    const apiId = api.interceptors.request.use(blockWrites);
     const originalFetch = window.fetch;
     window.fetch = async (input, init) => {
       const method = (
@@ -87,6 +91,7 @@ export function ReadOnlyGuard() {
 
     return () => {
       axios.interceptors.request.eject(id);
+      api.interceptors.request.eject(apiId);
       window.fetch = originalFetch;
     };
   }, [isViewer, toast]);

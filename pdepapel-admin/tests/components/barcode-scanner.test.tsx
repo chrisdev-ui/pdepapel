@@ -88,6 +88,24 @@ describe("BarcodeScanner", () => {
     expect(stopTrack).toHaveBeenCalled();
   });
 
+  it("cancels the delayed close when the scanner unmounts right after a read", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<BarcodeScanner onDetected={() => undefined} />);
+
+    await user.click(screen.getByRole("button", { name: "Escanear" }));
+    await waitFor(() => expect(mocks.decodeFromStream).toHaveBeenCalled());
+    const onResult = mocks.decodeFromStream.mock.calls[0][2] as (result: { getText: () => string }) => void;
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+    const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
+
+    act(() => onResult({ getText: () => "PDP:product-1" }));
+    const closeTimer = setTimeoutSpy.mock.results.find((_, index) => setTimeoutSpy.mock.calls[index][1] === 350)?.value;
+    expect(closeTimer).toBeDefined();
+    unmount();
+
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(closeTimer);
+  });
+
   it("shows a clear permission error instead of an empty scanner", async () => {
     const user = userEvent.setup();
     getUserMedia.mockRejectedValue(

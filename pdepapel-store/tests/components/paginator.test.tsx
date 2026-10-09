@@ -35,9 +35,9 @@ describe("Paginator", () => {
     expect(screen.getByText("Página 2 de 83 · 24 productos por página")).toBeInTheDocument();
 
     await user.click(screen.getByRole("link", { name: "Ir a la página siguiente" }));
-    expect(mocks.setPage).toHaveBeenCalledWith(3);
+    expect(mocks.setPage).toHaveBeenCalledWith(3, { history: "push" });
     await user.click(screen.getByRole("link", { name: "1" }));
-    expect(mocks.setPage).toHaveBeenCalledWith(null);
+    expect(mocks.setPage).toHaveBeenCalledWith(null, { history: "push" });
   });
 
   /** P1-5: cada página es un enlace rastreable; la 1 es la URL base. */
@@ -80,7 +80,7 @@ describe("Paginator", () => {
     const plain = new MouseEvent("click", { bubbles: true, cancelable: true });
     three.dispatchEvent(plain);
     expect(plain.defaultPrevented).toBe(true);
-    expect(mocks.setPage).toHaveBeenCalledWith(3);
+    expect(mocks.setPage).toHaveBeenCalledWith(3, { history: "push" });
   });
 
   it("keeps the ellipsis inside a list item", () => {

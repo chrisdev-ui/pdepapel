@@ -95,6 +95,7 @@ export function BarcodeScanner({
   const storeId = remote && showSecondary ? (storeIdOverride ?? String(params?.storeId ?? "")) : "";
   const [remoteOpen, setRemoteOpen] = useState(false);
   const controlsRef = useRef<IScannerControls | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectedRef = useRef(false);
   const onDetectedRef = useRef(onDetected);
@@ -201,7 +202,7 @@ export function BarcodeScanner({
         stopScanner();
         void handleCodeRef.current(code);
         // Deja ver «Código leído» un instante antes de cerrar.
-        window.setTimeout(() => setOpen(false), 350);
+        closeTimerRef.current = window.setTimeout(() => setOpen(false), 350);
       })
       .then((controls) => {
         controlsRef.current = controls;
@@ -223,6 +224,7 @@ export function BarcodeScanner({
 
   useEffect(
     () => () => {
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
       controlsRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     },

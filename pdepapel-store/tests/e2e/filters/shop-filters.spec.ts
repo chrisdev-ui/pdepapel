@@ -66,7 +66,8 @@ test.beforeEach(async ({ page }) => {
   await skipPrivacyBanner(page);
 });
 
-test("A1: filtro → ficha → «Atrás» vuelve al listado", async ({ page }) => {
+test("A1: filtro → ficha → «Atrás» vuelve al listado, y otro «Atrás» sale de la tienda sin deshacer filtros", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await openListing(page);
   const listingTitle = (await page.locator("h1").first().textContent())?.trim();
   await turnSaleOn(page);
@@ -82,6 +83,10 @@ test("A1: filtro → ficha → «Atrás» vuelve al listado", async ({ page }) =
   await page.waitForURL(/\/tienda/);
   await expect(page.locator("h1").first()).toHaveText(listingTitle ?? "", { timeout: 10_000 });
   await expect(grid(page).first()).toBeVisible({ timeout: 10_000 });
+
+  // Los dos clics de «Solo ofertas» reemplazaron la entrada: «Atrás» va a la página anterior.
+  await page.goBack();
+  await page.waitForURL((url) => url.pathname === "/", { timeout: 15_000 });
 });
 
 test("A2: el megamenú cambia los productos después de un filtro", async ({ page }) => {
@@ -133,6 +138,15 @@ test("A3: paginar y ordenar conservan el filtro", async ({ page }) => {
     await expect.poll(() => param(page, "sortOption")).not.toBeNull();
     expect(param(page, "typeId")).toBe(typeId);
   }
+
+  // Ordenar reemplaza; paginar y elegir el tipo apilan: «Atrás» deshace la página y luego el tipo.
+  await page.goBack();
+  await expect.poll(() => param(page, "page")).toBeNull();
+  expect(param(page, "typeId")).toBe(typeId);
+  expect(param(page, "sortOption")).toBeNull();
+  await page.goBack();
+  await expect.poll(() => param(page, "typeId") ?? param(page, "categoryId")).toBeNull();
+  expect(new URL(page.url()).pathname).toBe("/tienda");
 });
 
 test("A4: quitar el precio con el chip no lo vuelve a poner", async ({ page }) => {

@@ -39,7 +39,7 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages, scrollTargetId = "cat
   if (totalPages <= 1) return null;
 
   const pagesToShow = getPaginationPages(currentPage, totalPages);
-  const goToPage = (next: number) => setPage(next === 1 ? null : next);
+  const goToPage = (next: number) => setPage(next === 1 ? null : next, { history: "push" });
   /** La misma URL con los demás filtros; la página 1 no lleva `page`. */
   const pageHref = (next: number) => {
     const params = new URLSearchParams(searchParams?.toString());

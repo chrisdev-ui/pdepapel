@@ -6,6 +6,8 @@ import {
   useQueryStates,
 } from "nuqs";
 
+import { filterHistoryMode } from "@/lib/filter-history";
+
 const filterParsers = {
   typeId: parseAsArrayOf(parseAsString).withDefault([]),
   categoryId: parseAsArrayOf(parseAsString).withDefault([]),
@@ -40,9 +42,16 @@ export interface ProductFilters {
 }
 
 export function useProductFilters() {
-  const [filters, setFilters] = useQueryStates(filterParsers, {
+  const [filters, setRawFilters] = useQueryStates(filterParsers, {
     shallow: true,
   });
+
+  type Update = Partial<ProductFilters> | ((previous: ProductFilters) => Partial<ProductFilters>);
+  const setFilters = (update: Update) => {
+    const current = filters as ProductFilters;
+    const next = typeof update === "function" ? update(current) : update;
+    return setRawFilters(update as never, { history: filterHistoryMode(current, next) });
+  };
 
   const setFilter = (key: keyof typeof filters, value: any) => {
     setFilters((prev) => ({
