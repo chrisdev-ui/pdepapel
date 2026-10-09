@@ -56,6 +56,14 @@ vi.mock("@/lib/prismadb", () => ({
 }));
 vi.mock("@/lib/mercadolibre/client", () => ({
   getMercadoLibreAccessToken: mocks.accessToken,
+  markMercadoLibreReauthRequired: vi.fn(),
+  MercadoLibreReauthError: class extends Error {},
+  // El cliente seguro termina en fetch: la prueba sigue mirando el PUT real.
+  mutateMercadoLibreJson: async (_connectionId: string, resource: string, { method, body }: { method: string; body: unknown }) => {
+    const response = await mocks.fetch(`https://api.mercadolibre.com${resource}`, { method, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error(`Mercado Libre rechazó la actualización (${response.status})`);
+    return {};
+  },
 }));
 vi.mock("@/lib/mercadolibre/queue", () => ({
   enqueueMercadoLibreOutboxEvent: mocks.enqueue,

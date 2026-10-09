@@ -63,16 +63,23 @@ function getAppliedTaxes(paymentInfo: unknown) {
   }, 0);
 }
 
+/**
+ * Mercado Libre pone `shipping_info` en todas las líneas de una venta con
+ * envío, también en la comisión (CV): solo sirve si no hay subtipo ni marketplace.
+ */
 function isShippingCharge(detail: UnknownRecord) {
-  if (isRecord(detail.shipping_info)) return true;
+  const chargeInfo = isRecord(detail.charge_info) ? detail.charge_info : null;
+  const subType = chargeInfo?.detail_sub_type;
+  if (subType === "CXD") return true;
+  if (subType === "CV") return false;
 
   const marketplace = isRecord(detail.marketplace_info)
     ? detail.marketplace_info.marketplace
     : null;
   if (marketplace === "SHIPPING") return true;
+  if (marketplace === "CORE") return false;
 
-  const chargeInfo = isRecord(detail.charge_info) ? detail.charge_info : null;
-  return chargeInfo?.detail_sub_type === "CXD";
+  return isRecord(detail.shipping_info);
 }
 
 function getOperationCharges(details: unknown) {

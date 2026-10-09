@@ -6,6 +6,43 @@ import {
 } from "@/lib/mercadolibre/order-financials";
 
 describe("Mercado Libre order financials", () => {
+  it("la comisión no se cuenta como envío aunque Mercado Libre le ponga shipping_info (respuesta real, 2026-10-09)", () => {
+    const line = (subType: string, marketplace: string, amount: number) => ({
+      charge_info: { debited_from_operation: "YES", detail_type: "CHARGE", detail_sub_type: subType, detail_amount: amount },
+      marketplace_info: { marketplace },
+      shipping_info: { shipping_id: "999" },
+    });
+    const financials = parseMercadoLibreOrderFinancials(
+      { results: [{ order_id: "1", payment_info: [], details: [line("CV", "CORE", 16_000), line("CXD", "SHIPPING", 8_200)] }] },
+      "1",
+      80_000,
+    );
+    expect(financials).toMatchObject({ marketplaceFee: 16_000, shippingCost: 8_200, netAmount: 55_800 });
+  });
+
+  it("una venta cancelada y reembolsada queda en neto 0: los cargos no aplican y el reembolso no es ingreso", () => {
+    const line = (type: string, subType: string, marketplace: string, amount: number) => ({
+      charge_info: { debited_from_operation: "INAPPLICABLE", detail_type: type, detail_sub_type: subType, detail_amount: amount },
+      marketplace_info: { marketplace },
+      shipping_info: { shipping_id: "999" },
+    });
+    const financials = parseMercadoLibreOrderFinancials(
+      {
+        results: [
+          {
+            order_id: "2",
+            payment_info: [],
+            details: [line("CHARGE", "CV", "CORE", 16_000), line("CHARGE", "CXD", "SHIPPING", 8_200), line("BONUS", "BV", "CORE", 16_000), line("BONUS", "BXD", "SHIPPING", 8_200)],
+          },
+        ],
+      },
+      "2",
+      80_000,
+      80_000,
+    );
+    expect(financials).toMatchObject({ marketplaceFee: 0, shippingCost: 0, netAmount: 0 });
+  });
+
   it("records only the net amount after marketplace charges, shipping, and taxes", () => {
     const financials = parseMercadoLibreOrderFinancials(
       {

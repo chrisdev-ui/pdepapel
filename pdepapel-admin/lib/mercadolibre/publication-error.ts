@@ -230,7 +230,9 @@ export function mapMercadoLibreItemError(status: number, payload: unknown): Publ
       step: null,
       field: null,
       code: null,
-      message: "Mercado Libre no autorizó la publicación. Reconecta la cuenta y vuelve a intentarlo.",
+      message: status === 401
+        ? "La conexión con Mercado Libre se venció. Pídele a Christian que la reconecte."
+        : "Mercado Libre no autorizó la publicación. Reconecta la cuenta y vuelve a intentarlo.",
     };
   }
   if (status >= 500 || status === 429 || status === 408) {

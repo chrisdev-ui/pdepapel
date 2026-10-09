@@ -91,6 +91,8 @@ describe("Mercado Libre listing publication", () => {
         ),
       )
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      // /items/validate en el servidor antes de crear: 204 es válido.
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -158,7 +160,10 @@ describe("Mercado Libre listing publication", () => {
     expect(request.mock.calls[1][0]).toBe(
       "https://api.mercadolibre.com/categories/MCO1234/attributes",
     );
-    const itemRequest = request.mock.calls[2];
+    // Primero se valida en el servidor con el mismo cuerpo; después se crea.
+    expect(request.mock.calls[2][0]).toBe("https://api.mercadolibre.com/items/validate");
+    expect(request.mock.calls[2][1].body).toBe(request.mock.calls[3][1].body);
+    const itemRequest = request.mock.calls[3];
     expect(itemRequest[0]).toBe("https://api.mercadolibre.com/items");
     expect(JSON.parse(itemRequest[1].body)).toMatchObject({
       family_name: "Agenda kawaii",
@@ -185,10 +190,10 @@ describe("Mercado Libre listing publication", () => {
       ]),
     });
     expect(JSON.parse(itemRequest[1].body)).not.toHaveProperty("title");
-    expect(request.mock.calls[3][0]).toBe(
+    expect(request.mock.calls[4][0]).toBe(
       "https://api.mercadolibre.com/items/MCO123/description",
     );
-    expect(JSON.parse(request.mock.calls[3][1].body)).toEqual({
+    expect(JSON.parse(request.mock.calls[4][1].body)).toEqual({
       plain_text: "Agenda kawaii",
     });
   });
@@ -207,6 +212,8 @@ describe("Mercado Libre listing publication", () => {
         ),
       )
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      // /items/validate en el servidor antes de crear: 204 es válido.
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({

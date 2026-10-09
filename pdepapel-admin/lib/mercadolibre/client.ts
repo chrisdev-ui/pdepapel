@@ -4,7 +4,8 @@ import { AppError } from "@/lib/api-errors";
 
 import { getMercadoLibreConfig } from "./config";
 import { decryptMercadoLibreToken, encryptMercadoLibreToken } from "./crypto";
-import { refreshMercadoLibreAccessToken } from "./oauth";
+import { MercadoLibreApiError, refreshMercadoLibreAccessToken } from "./oauth";
+import { notifyMercadoLibreReauthRequired } from "./reauth-notice";
 import prismadb from "@/lib/prismadb";
 
 const ACCESS_TOKEN_REFRESH_MARGIN_MS = 60_000;
@@ -17,6 +18,25 @@ const API_BASE_URL = "https://api.mercadolibre.com";
  * «Error interno del servidor» para un 429, un token vencido o una ficha
  * borrada por igual.
  */
+export const MERCADOLIBRE_RECONNECT_MESSAGE =
+  "La conexión con Mercado Libre se venció. Pídele a Christian que la reconecte.";
+
+/** La cuenta hay que reconectarla: no se reintenta solo, se avisa. */
+export class MercadoLibreReauthError extends AppError {
+  constructor() {
+    super(MERCADOLIBRE_RECONNECT_MESSAGE, 409, { reauthRequired: true });
+  }
+}
+
+/** Pasa la conexión a «Requiere reconexión» y avisa solo la primera vez. */
+export async function markMercadoLibreReauthRequired(connectionId: string) {
+  const flipped = await prismadb.marketplaceConnection.updateMany({
+    where: { id: connectionId, status: MarketplaceConnectionStatus.CONNECTED },
+    data: { status: MarketplaceConnectionStatus.REAUTH_REQUIRED, lastError: MERCADOLIBRE_RECONNECT_MESSAGE },
+  });
+  if (flipped.count === 1) await notifyMercadoLibreReauthRequired(connectionId);
+}
+
 export class MercadoLibreRequestError extends AppError {
   constructor(
     message: string,
@@ -114,7 +134,10 @@ function normalizeMercadoLibreResource(resource: string) {
   return url.toString();
 }
 
-export async function getMercadoLibreAccessToken(connectionId: string) {
+export async function getMercadoLibreAccessToken(
+  connectionId: string,
+  { forceRefresh = false, rejectedToken }: { forceRefresh?: boolean; rejectedToken?: string } = {},
+): Promise<string> {
   const connection = await prismadb.marketplaceConnection.findUniqueOrThrow({
     where: { id: connectionId },
     select: {
@@ -135,13 +158,17 @@ export async function getMercadoLibreAccessToken(connectionId: string) {
     );
   }
   if (connection.status !== MarketplaceConnectionStatus.CONNECTED) {
-    throw new AppError(
-      "La conexión de Mercado Libre no está activa. Reconecta la cuenta desde Resumen.",
-      409,
-    );
+    throw new MercadoLibreReauthError();
+  }
+
+  // El refresh token sirve una sola vez: si otra llamada ya renovó, se usa ese.
+  if (forceRefresh && rejectedToken) {
+    const current = decryptMercadoLibreToken(connection.encryptedAccessToken, config.tokenEncryptionKey);
+    if (current !== rejectedToken) return current;
   }
 
   const shouldRefresh =
+    forceRefresh ||
     !connection.accessTokenExpiresAt ||
     connection.accessTokenExpiresAt.getTime() <=
       Date.now() + ACCESS_TOKEN_REFRESH_MARGIN_MS;
@@ -152,13 +179,23 @@ export async function getMercadoLibreAccessToken(connectionId: string) {
     );
   }
 
-  const refreshedTokens = await refreshMercadoLibreAccessToken(
-    config,
-    decryptMercadoLibreToken(
-      connection.encryptedRefreshToken,
-      config.tokenEncryptionKey,
-    ),
-  );
+  let refreshedTokens: Awaited<ReturnType<typeof refreshMercadoLibreAccessToken>>;
+  try {
+    refreshedTokens = await refreshMercadoLibreAccessToken(
+      config,
+      decryptMercadoLibreToken(
+        connection.encryptedRefreshToken,
+        config.tokenEncryptionKey,
+      ),
+    );
+  } catch (error) {
+    // 400/401 del endpoint de token: invalid_grant, revocado o vencido.
+    if (error instanceof MercadoLibreApiError && (error.status === 400 || error.status === 401)) {
+      await markMercadoLibreReauthRequired(connection.id);
+      throw new MercadoLibreReauthError();
+    }
+    throw error;
+  }
   const expiresAt = new Date(
     Date.now() + refreshedTokens.expiresInSeconds * 1000,
   );
@@ -197,17 +234,32 @@ export const mercadoLibreFetch: typeof fetch = (input, init) =>
     signal: init?.signal ?? AbortSignal.timeout(MERCADOLIBRE_TIMEOUT_MS),
   });
 
+/**
+ * Un 401 con un token que creíamos vigente: se renueva una sola vez y se
+ * repite. Si vuelve a dar 401, la cuenta hay que reconectarla.
+ */
+async function withTokenRetry(connectionId: string, call: (accessToken: string) => Promise<Response>) {
+  const firstToken = await getMercadoLibreAccessToken(connectionId);
+  const first = await call(firstToken);
+  if (first.status !== 401) return first;
+  const second = await call(await getMercadoLibreAccessToken(connectionId, { forceRefresh: true, rejectedToken: firstToken }));
+  if (second.status !== 401) return second;
+  await markMercadoLibreReauthRequired(connectionId);
+  throw new MercadoLibreReauthError();
+}
+
 export async function requestMercadoLibreJson(
   connectionId: string,
   resource: string,
   request: typeof fetch = mercadoLibreFetch,
   headers: Record<string, string> = {},
 ) {
-  const accessToken = await getMercadoLibreAccessToken(connectionId);
-  const response = await request(normalizeMercadoLibreResource(resource), {
-    headers: { Authorization: `Bearer ${accessToken}`, ...headers },
-    cache: "no-store",
-  });
+  const response = await withTokenRetry(connectionId, (accessToken) =>
+    request(normalizeMercadoLibreResource(resource), {
+      headers: { Authorization: `Bearer ${accessToken}`, ...headers },
+      cache: "no-store",
+    }),
+  );
   const body = await response.text();
 
   let payload: unknown;
@@ -238,17 +290,18 @@ export async function mutateMercadoLibreJson(
   },
   request: typeof fetch = mercadoLibreFetch,
 ) {
-  const accessToken = await getMercadoLibreAccessToken(connectionId);
-  const response = await request(normalizeMercadoLibreResource(resource), {
-    method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(body ? { "Content-Type": "application/json; charset=utf-8" } : {}),
-      ...headers,
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-    cache: "no-store",
-  });
+  const response = await withTokenRetry(connectionId, (accessToken) =>
+    request(normalizeMercadoLibreResource(resource), {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(body ? { "Content-Type": "application/json; charset=utf-8" } : {}),
+        ...headers,
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      cache: "no-store",
+    }),
+  );
   const text = await response.text();
   let payload: unknown = null;
   try {
@@ -260,12 +313,7 @@ export async function mutateMercadoLibreJson(
   if (!response.ok) {
     await prismadb.marketplaceConnection.update({
       where: { id: connectionId },
-      data: {
-        lastError: `Mercado Libre rechazó la actualización (${response.status})`,
-        ...(response.status === 401
-          ? { status: MarketplaceConnectionStatus.REAUTH_REQUIRED }
-          : {}),
-      },
+      data: { lastError: `Mercado Libre rechazó la actualización (${response.status})` },
     });
     throw toMercadoLibreRequestError(response.status, payload, "actualización");
   }
@@ -305,12 +353,7 @@ export async function getMercadoLibreJson(
   if (!result.ok) {
     await prismadb.marketplaceConnection.update({
       where: { id: connectionId },
-      data: {
-        lastError: `Mercado Libre rechazó la consulta del recurso (${result.status})`,
-        ...(result.status === 401
-          ? { status: MarketplaceConnectionStatus.REAUTH_REQUIRED }
-          : {}),
-      },
+      data: { lastError: `Mercado Libre rechazó la consulta del recurso (${result.status})` },
     });
     throw toMercadoLibreRequestError(result.status, result.payload, "consulta");
   }

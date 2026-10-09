@@ -11,7 +11,11 @@ import { claimQueueRow } from "@/lib/atomic-claim";
 import { hasActivePresale } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 
-import { getMercadoLibreAccessToken, mutateMercadoLibreJson } from "./client";
+import {
+  MercadoLibreReauthError,
+  markMercadoLibreReauthRequired,
+  mutateMercadoLibreJson,
+} from "./client";
 import {
   getMercadoLibreOrderFinancials,
   MercadoLibreFinancialsPendingError,
@@ -28,6 +32,7 @@ import {
   MercadoLibrePublicationError,
   syncMercadoLibreListingContent,
 } from "./listings";
+import { findItemFromAttempt, readPublishAttempt, withPublishAttempt } from "./publish-attempt";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
 
@@ -42,6 +47,8 @@ const STALE_PROCESSING_EVENT_MS = 15 * 60 * 1000;
  * cada 6 h hasta que Mercado Libre la publique.
  */
 export const MAX_OUTBOX_EVENT_ATTEMPTS = 12;
+/** Con la cuenta por reconectar, un evento vuelve a mirarse cada 6 h. */
+const REAUTH_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 
 type StockSyncTransaction = Pick<
   Prisma.TransactionClient,
@@ -504,7 +511,6 @@ async function updateMercadoLibreStock(
   externalVariationId: string | null,
   targetQuantity: number,
 ) {
-  const accessToken = await getMercadoLibreAccessToken(connectionId);
   const body = externalVariationId
     ? {
         variations: [
@@ -515,23 +521,7 @@ async function updateMercadoLibreStock(
         ],
       }
     : { available_quantity: targetQuantity };
-  const response = await fetch(
-    `https://api.mercadolibre.com/items/${encodeURIComponent(externalItemId)}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    },
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Mercado Libre rechazó la sincronización de stock (${response.status})`,
-    );
-  }
+  await mutateMercadoLibreJson(connectionId, `/items/${encodeURIComponent(externalItemId)}`, { method: "PUT", body });
 }
 
 async function updateMercadoLibrePrice(
@@ -539,24 +529,7 @@ async function updateMercadoLibrePrice(
   externalItemId: string,
   targetPrice: number,
 ) {
-  const accessToken = await getMercadoLibreAccessToken(connectionId);
-  const response = await fetch(
-    `https://api.mercadolibre.com/items/${encodeURIComponent(externalItemId)}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ price: targetPrice }),
-      cache: "no-store",
-    },
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Mercado Libre rechazó la sincronización de precio (${response.status})`,
-    );
-  }
+  await mutateMercadoLibreJson(connectionId, `/items/${encodeURIComponent(externalItemId)}`, { method: "PUT", body: { price: targetPrice } });
 }
 
 async function updateMercadoLibreListingStatus(
@@ -671,6 +644,8 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   } | null = null;
   /** La publicación ya existía en Mercado Libre: el evento solo concilia. */
   let reconciledPublication = false;
+  /** Metadatos de la ficha con la marca de intento, si ya se escribió: el registro del fallo no la borra. */
+  let listingMetadata = event.listing?.metadata ?? null;
 
   try {
     let syncedQuantity: number | null = null;
@@ -875,16 +850,36 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         // anterior que guardó el id): no se vuelve a crear ni se marca error.
         reconciledPublication = true;
       } else {
-        const created = await createMercadoLibreItem({
-          id: event.listing!.id,
-          connectionId: event.listing!.connectionId,
-          categoryId: event.listing!.categoryId,
-          listingType: event.listing!.listingType,
-          marketplacePrice: event.listing!.marketplacePrice,
-          stockSafetyBuffer: event.listing!.stockSafetyBuffer,
-          metadata: event.listing!.metadata,
-          product: event.listing!.product,
-        });
+        // Un intento anterior pudo crear el ítem y cortarse antes de guardar
+        // su id: se busca por SKU antes de crear otro.
+        const previousAttempt = readPublishAttempt(event.listing!.metadata);
+        const adopted = previousAttempt
+          ? await findItemFromAttempt(event.listing!.connectionId, previousAttempt)
+          : null;
+        let created: { id: string; permalink: string | null; status: string | null };
+        if (adopted) {
+          created = adopted;
+        } else {
+          const marked = withPublishAttempt(event.listing!.metadata, {
+            startedAt: new Date().toISOString(),
+            sku: event.listing!.product.sku?.trim() || null,
+          }) as Prisma.JsonObject;
+          await prismadb.marketplaceListing.update({
+            where: { id: event.listing!.id },
+            data: { metadata: marked },
+          });
+          listingMetadata = marked;
+          created = await createMercadoLibreItem({
+            id: event.listing!.id,
+            connectionId: event.listing!.connectionId,
+            categoryId: event.listing!.categoryId,
+            listingType: event.listing!.listingType,
+            marketplacePrice: event.listing!.marketplacePrice,
+            stockSafetyBuffer: event.listing!.stockSafetyBuffer,
+            metadata: event.listing!.metadata,
+            product: event.listing!.product,
+          });
+        }
         // El id se guarda YA, antes de la descripción y de cualquier otra
         // escritura: desde este punto la publicación existe y ningún
         // reintento puede crearla dos veces.
@@ -903,7 +898,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
             lastRemoteUpdateAt: new Date(),
             lastError: remote.note,
             metadata: withMercadoLibrePublicationFailure(
-              event.listing!.metadata,
+              withPublishAttempt(event.listing!.metadata, null) as Prisma.JsonObject,
               null,
             ),
           },
@@ -1069,10 +1064,15 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     const errorMessage = getSafeErrorMessage(error);
     const publicationFailure =
       error instanceof MercadoLibrePublicationError ? error.toFailure() : null;
+    // Sin cuenta conectada no sirve reintentar cada pocos minutos: el evento
+    // espera y no gasta intentos hasta que alguien reconecte.
+    const reauthRequired =
+      error instanceof MercadoLibreReauthError || publicationFailure?.kind === "reauth";
     const publicationNeedsReview = publicationFailure?.kind === "review";
     const exhausted =
       !financialsPending &&
       !publicationNeedsReview &&
+      !reauthRequired &&
       attempts >= MAX_OUTBOX_EVENT_ATTEMPTS;
     if (
       event.action === MarketplaceOutboxAction.PUBLISH_LISTING &&
@@ -1098,7 +1098,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               : { status: MarketplaceListingStatus.ERROR }),
           lastError: errorMessage,
           metadata: withMercadoLibrePublicationFailure(
-            event.listing.metadata,
+            listingMetadata,
             publicationFailure ?? {
               kind: "unknown",
               step: null,
@@ -1110,13 +1110,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         },
       });
       if (publicationFailure?.kind === "reauth") {
-        await prismadb.marketplaceConnection.update({
-          where: { id: event.connectionId },
-          data: {
-            status: MarketplaceConnectionStatus.REAUTH_REQUIRED,
-            lastError: errorMessage,
-          },
-        });
+        await markMercadoLibreReauthRequired(event.connectionId);
       }
     }
     if (
@@ -1148,9 +1142,12 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
                 Date.now() +
                   (financialsPending
                     ? FINANCIALS_PENDING_RETRY_DELAY_MS
-                    : RETRY_DELAY_MS),
+                    : reauthRequired
+                      ? REAUTH_RETRY_DELAY_MS
+                      : RETRY_DELAY_MS),
               ),
             }),
+        ...(reauthRequired ? { attempts: Math.max(0, attempts - 1) } : {}),
         lastError: exhausted
           ? `Se agotaron los ${MAX_OUTBOX_EVENT_ATTEMPTS} intentos. Último error: ${errorMessage}`
           : errorMessage,

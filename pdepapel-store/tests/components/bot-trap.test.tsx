@@ -68,4 +68,47 @@ describe("trampa y desafío del formulario", () => {
     expect(widget.reset).toHaveBeenCalledWith("widget-1");
     expect(again.turnstileToken).toBe("tok-2");
   });
+
+  it("si el desafío pide confirmar la casilla, espera (con un aviso) en vez de fallar a los 15 s", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result, container } = await harness("site-key");
+    await act(async () => {});
+    const widget = { render: vi.fn(), reset: vi.fn() };
+    let options: Record<string, (token?: string) => void> = {};
+    widget.render.mockImplementation((_el: unknown, opts: typeof options) => {
+      options = opts;
+      queueMicrotask(() => options["before-interactive-callback"]?.());
+      return "widget-1";
+    });
+    (window as { turnstile?: unknown }).turnstile = widget;
+
+    let settled: { turnstileToken?: string } | null = null;
+    const pending = result.fields!().then((fields) => (settled = fields));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(settled).toBeNull();
+    expect(container.textContent).toContain("Confirma la casilla para continuar");
+
+    await act(async () => {
+      options.callback?.("tok-humano");
+      await pending;
+    });
+    expect(settled).toMatchObject({ turnstileToken: "tok-humano" });
+    expect(container.textContent).not.toContain("Confirma la casilla para continuar");
+    vi.useRealTimers();
+  });
+
+  it("si el widget falla, deja de esperar enseguida", async () => {
+    const { result } = await harness("site-key");
+    await act(async () => {});
+    const widget = { render: vi.fn(), reset: vi.fn() };
+    widget.render.mockImplementation((_el: unknown, opts: Record<string, () => void>) => {
+      queueMicrotask(() => opts["error-callback"]?.());
+      return "widget-1";
+    });
+    (window as { turnstile?: unknown }).turnstile = widget;
+    const fields = await result.fields!();
+    expect(fields.turnstileToken).toBeUndefined();
+  });
 });

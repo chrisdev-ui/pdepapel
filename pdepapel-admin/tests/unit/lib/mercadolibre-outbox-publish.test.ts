@@ -6,6 +6,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  markReauth: vi.fn(),
   claimRow: vi.fn(),
   findOutboxEvent: vi.fn(),
   claim: vi.fn(),
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   createDescription: vi.fn(),
   enqueue: vi.fn(),
   transaction: vi.fn(),
+  findItemFromAttempt: vi.fn(),
 }));
 
 vi.mock("@/lib/atomic-claim", () => ({ claimQueueRow: mocks.claimRow }));
@@ -53,8 +55,17 @@ vi.mock("@/lib/mercadolibre/listings", async () => {
     createMercadoLibreItemDescription: mocks.createDescription,
   };
 });
-vi.mock("@/lib/mercadolibre/client", () => ({ getMercadoLibreAccessToken: vi.fn() }));
+vi.mock("@/lib/mercadolibre/client", () => ({
+  getMercadoLibreAccessToken: vi.fn(),
+  mutateMercadoLibreJson: vi.fn(),
+  markMercadoLibreReauthRequired: mocks.markReauth,
+  MercadoLibreReauthError: class extends Error {},
+}));
 vi.mock("@/lib/mercadolibre/queue", () => ({ enqueueMercadoLibreOutboxEvent: mocks.enqueue }));
+vi.mock("@/lib/mercadolibre/publish-attempt", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/mercadolibre/publish-attempt")>("@/lib/mercadolibre/publish-attempt")),
+  findItemFromAttempt: mocks.findItemFromAttempt,
+}));
 
 import { processMarketplaceOutboxEvent } from "@/lib/mercadolibre/outbox";
 
@@ -179,9 +190,9 @@ describe("PUBLISH_LISTING outbox event", () => {
       reason: "retry_scheduled",
     });
 
-    // El id ya quedó guardado y el estado no se toca: el reintento concilia.
-    expect(mocks.updateListing).toHaveBeenCalledTimes(1);
-    expect(mocks.updateListing.mock.calls[0][0].data.externalItemId).toBe("MCO-NEW");
+    // La marca de intento y después el id: el estado no se toca y el reintento concilia.
+    expect(mocks.updateListing).toHaveBeenCalledTimes(2);
+    expect(mocks.updateListing.mock.calls.at(-1)![0].data.externalItemId).toBe("MCO-NEW");
     expect(mocks.updateListing).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: MarketplaceListingStatus.ERROR }) }),
     );
@@ -240,7 +251,7 @@ describe("PUBLISH_LISTING outbox event", () => {
       processed: false,
       reason: "retry_scheduled",
     });
-    const update = mocks.updateListing.mock.calls[0][0];
+    const update = mocks.updateListing.mock.calls.at(-1)![0];
     expect(update.data.status).toBeUndefined();
     expect(update.data.lastError).toContain("503");
     expect(update.data.metadata.publicationError).toMatchObject({ kind: "transient", step: null });
@@ -248,6 +259,48 @@ describe("PUBLISH_LISTING outbox event", () => {
       expect.objectContaining({ data: expect.objectContaining({ status: MarketplaceOutboxStatus.RETRY }) }),
     );
     expect(mocks.flagConnection).not.toHaveBeenCalled();
+  });
+
+  it("guarda la marca de intento ANTES de crear el ítem en Mercado Libre", async () => {
+    mocks.findOutboxEvent.mockResolvedValue(publishEvent());
+    const order: string[] = [];
+    mocks.updateListing.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      if ((data.metadata as Record<string, unknown> | undefined)?.publishAttempt) order.push("marca");
+      return {};
+    });
+    mocks.createItem.mockImplementation(async () => {
+      order.push("crear");
+      return { id: "MCO-1", permalink: "https://ml/1", status: "active" };
+    });
+    await processMarketplaceOutboxEvent("publish-event");
+    expect(order.slice(0, 2)).toEqual(["marca", "crear"]);
+    const saved = mocks.updateListing.mock.calls.find(([arg]) => arg.data.externalItemId === "MCO-1")![0].data;
+    expect(saved.metadata.publishAttempt).toBeUndefined();
+  });
+
+  it("si un intento anterior se cortó después de que Mercado Libre creó el ítem, lo adopta y no crea un segundo", async () => {
+    mocks.findOutboxEvent.mockResolvedValue(
+      publishEvent({
+        listing: { ...publishEvent().listing, metadata: { publishAttempt: { startedAt: "2026-10-09T15:00:00.000Z", sku: "AGE-1" } } },
+      }),
+    );
+    mocks.findItemFromAttempt.mockResolvedValue({ id: "MCO-YA-CREADO", permalink: "https://ml/ya", status: "active" });
+
+    await processMarketplaceOutboxEvent("publish-event");
+
+    expect(mocks.findItemFromAttempt).toHaveBeenCalledWith("conn-1", { startedAt: "2026-10-09T15:00:00.000Z", sku: "AGE-1" });
+    expect(mocks.createItem).not.toHaveBeenCalled();
+    expect(mocks.updateListing).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ externalItemId: "MCO-YA-CREADO" }) }));
+  });
+
+  it("si el intento anterior no alcanzó a crear nada en Mercado Libre, crea el ítem normalmente", async () => {
+    mocks.findOutboxEvent.mockResolvedValue(
+      publishEvent({ listing: { ...publishEvent().listing, metadata: { publishAttempt: { startedAt: "2026-10-09T15:00:00.000Z", sku: "AGE-1" } } } }),
+    );
+    mocks.findItemFromAttempt.mockResolvedValue(null);
+    mocks.createItem.mockResolvedValue({ id: "MCO-2", permalink: "https://ml/2", status: "active" });
+    await processMarketplaceOutboxEvent("publish-event");
+    expect(mocks.createItem).toHaveBeenCalledTimes(1);
   });
 
   it("flags the connection for reauthentication instead of blaming the draft", async () => {
@@ -258,10 +311,12 @@ describe("PUBLISH_LISTING outbox event", () => {
     );
 
     await expect(processMarketplaceOutboxEvent("publish-event")).resolves.toMatchObject({ reason: "retry_scheduled" });
-    expect(mocks.updateListing.mock.calls[0][0].data.status).toBeUndefined();
-    expect(mocks.flagConnection).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "REAUTH_REQUIRED" }) }),
-    );
+    expect(mocks.updateListing.mock.calls.at(-1)![0].data.status).toBeUndefined();
+    expect(mocks.markReauth).toHaveBeenCalledWith(expect.any(String));
+    // Sin cuenta conectada no se reintenta cada pocos minutos ni se gastan los doce intentos.
+    const parked = mocks.updateOutboxEvent.mock.calls.at(-1)![0].data;
+    expect(parked.status).toBe(MarketplaceOutboxStatus.RETRY);
+    expect(parked.availableAt.getTime() - Date.now()).toBeGreaterThan(5 * 60 * 60 * 1000);
   });
 
   it("records step and field of a rejection so the wizard can reopen on the right place", async () => {
@@ -277,7 +332,7 @@ describe("PUBLISH_LISTING outbox event", () => {
     );
 
     await expect(processMarketplaceOutboxEvent("publish-event")).resolves.toMatchObject({ reason: "listing_requires_review" });
-    const update = mocks.updateListing.mock.calls[0][0];
+    const update = mocks.updateListing.mock.calls.at(-1)![0];
     expect(update.data.status).toBe(MarketplaceListingStatus.DRAFT);
     expect(update.data.metadata.publicationError).toMatchObject({ kind: "review", step: "ficha", field: "BRAND" });
   });

@@ -311,6 +311,27 @@ describe("prefill for a catalog without barcodes", () => {
     expect(prefillListingAttributes("", [emptyReason], { gtin: "7701234567890", hasNoProductIdentifier: false })).toBe("");
   });
 
+  it("sin código de barras y con marca genérica o propia, usa «no tiene identificador» por defecto aunque falte la bandera", () => {
+    expect(prefillListingAttributes("", [emptyReason], { gtin: null, brand: null })).toBe("EMPTY_GTIN_REASON=El producto no tiene código registrado");
+    expect(prefillListingAttributes("", [emptyReason], { gtin: "", brand: "Genérica" })).toBe("EMPTY_GTIN_REASON=El producto no tiene código registrado");
+    expect(prefillListingAttributes("", [emptyReason], { gtin: null, brand: "P de Papel" })).toBe("EMPTY_GTIN_REASON=El producto no tiene código registrado");
+  });
+
+  it("una marca conocida sin código sigue pidiendo el código real (caso NORMA)", () => {
+    expect(prefillListingAttributes("", [emptyReason], { gtin: null, brand: "Norma" })).toBe("");
+  });
+
+  it("explica en una línea qué pasa con el código de barras", async () => {
+    const { getGtinGuidance } = await import("@/lib/mercadolibre/listing-wizard");
+    expect(getGtinGuidance({ gtin: "7701234567890", brand: "Norma" })).toBeNull();
+    expect(getGtinGuidance({ gtin: null, brand: null })).toBe(
+      "Sin código de barras: se publica como «El producto no tiene código registrado», porque la marca es genérica o propia.",
+    );
+    expect(getGtinGuidance({ gtin: null, brand: "Norma" })).toBe(
+      "«Norma» es una marca conocida: Mercado Libre pide su código de barras real (GTIN). Agrégalo en el producto antes de publicar.",
+    );
+  });
+
   it("never invents a brand: uses the product brand, else suggests «Genérica» only where the category accepts it", () => {
     const freeText = { id: "BRAND", required: true };
     const closedWithout = { id: "BRAND", required: true, values: [{ id: "1", name: "Owala" }] };

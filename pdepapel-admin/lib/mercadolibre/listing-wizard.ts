@@ -301,6 +301,27 @@ function findEmptyGtinReason(attribute: ListingWizardCategoryAttribute, isKit: b
   return (byName ?? values[0]).name;
 }
 
+const GENERIC_OR_OWN_BRAND = /^(gen[eé]ric[ao]|sin marca|p de papel|papeler[ií]a p de papel)$/i;
+
+/**
+ * Sin código de barras, una marca genérica o la propia se publica con el
+ * motivo «no tiene código registrado». Una marca conocida (Norma, por
+ * ejemplo) tiene código: Mercado Libre lo exige y no se inventa un motivo.
+ */
+export function shouldUseEmptyGtinReason(product: { gtin?: string | null; brand?: string | null; hasNoProductIdentifier?: boolean }) {
+  if (product.hasNoProductIdentifier) return true;
+  if (product.gtin?.trim()) return false;
+  return !product.brand?.trim() || GENERIC_OR_OWN_BRAND.test(product.brand.trim());
+}
+
+export function getGtinGuidance(product: { gtin?: string | null; brand?: string | null; hasNoProductIdentifier?: boolean }): string | null {
+  if (product.gtin?.trim() && !product.hasNoProductIdentifier) return null;
+  if (shouldUseEmptyGtinReason(product)) {
+    return "Sin código de barras: se publica como «El producto no tiene código registrado», porque la marca es genérica o propia.";
+  }
+  return `«${product.brand?.trim()}» es una marca conocida: Mercado Libre pide su código de barras real (GTIN). Agrégalo en el producto antes de publicar.`;
+}
+
 /** «Genérica» solo donde la categoría la acepta: marca de texto libre o una lista que la incluye. */
 function genericBrand(attribute: ListingWizardCategoryAttribute): string | null {
   const values = attribute.values ?? [];
@@ -340,7 +361,7 @@ export function prefillListingAttributes(
   const additions: string[] = [];
   const candidates: Record<string, string | null | undefined> = {
     BRAND: product.brand,
-    GTIN: product.hasNoProductIdentifier ? null : product.gtin,
+    GTIN: shouldUseEmptyGtinReason(product) ? null : product.gtin,
     MPN: product.mpn,
     COLOR: product.colorName,
     SIZE: product.sizeName,
@@ -349,7 +370,7 @@ export function prefillListingAttributes(
     const id = attribute.id.toUpperCase();
     if (current.has(id)) continue;
     if (id === "EMPTY_GTIN_REASON") {
-      if (!product.hasNoProductIdentifier) continue;
+      if (!shouldUseEmptyGtinReason(product)) continue;
       const reason = findEmptyGtinReason(attribute, Boolean(product.isKit));
       if (reason) additions.push(`${id}=${reason}`);
       continue;

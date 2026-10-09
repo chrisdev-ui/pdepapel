@@ -94,3 +94,36 @@ describe("validateMercadoLibreItemDraft", () => {
     expect(result.errors[0]).toMatchObject({ field: "GTIN", step: "ficha" });
   });
 });
+
+describe("createMercadoLibreItem valida en el servidor antes de crear", () => {
+  const goodDraft = () => draft([{ id: "MANUFACTURER", value_name: "Genérica" }, { id: "MODEL", value_name: "Flores" }]);
+
+  it("si /items/validate trae un error, no crea nada y devuelve el motivo", async () => {
+    const { createMercadoLibreItem, MercadoLibrePublicationError } = await import("@/lib/mercadolibre/listings");
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(category())
+      .mockResolvedValueOnce(attributes())
+      .mockResolvedValueOnce(json({ message: "Validation error", status: 400, cause: [{ type: "error", code: "item.price.invalid", message: "Price is too low" }] }, 400));
+
+    const error = await createMercadoLibreItem(goodDraft(), request).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(MercadoLibrePublicationError);
+    expect(request.mock.calls.map(([url]) => url)).toContain("https://api.mercadolibre.com/items/validate");
+    expect(request).not.toHaveBeenCalledWith("https://api.mercadolibre.com/items", expect.anything());
+  });
+
+  it("con solo advertencias, valida y después crea", async () => {
+    const { createMercadoLibreItem } = await import("@/lib/mercadolibre/listings");
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(category())
+      .mockResolvedValueOnce(attributes())
+      .mockResolvedValueOnce(json({ message: "Validation error", status: 400, cause: [{ type: "warning", code: "shipping.lost_me1_by_user", message: "warning" }] }, 400))
+      .mockResolvedValueOnce(json({ id: "MCO-NUEVO", permalink: "https://ml/x", status: "active" }, 201));
+
+    await expect(createMercadoLibreItem(goodDraft(), request)).resolves.toMatchObject({ id: "MCO-NUEVO" });
+    const urls = request.mock.calls.map(([url]) => url);
+    expect(urls.indexOf("https://api.mercadolibre.com/items/validate")).toBeLessThan(urls.indexOf("https://api.mercadolibre.com/items"));
+  });
+});

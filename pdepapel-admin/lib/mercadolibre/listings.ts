@@ -24,7 +24,10 @@ import {
   type PublicationFailureKind,
   type PublicationWizardStep,
 } from "./publication-error";
-import { getMercadoLibreAccessToken,
+import {
+  MERCADOLIBRE_RECONNECT_MESSAGE,
+  MercadoLibreReauthError,
+  getMercadoLibreAccessToken,
   mercadoLibreFetch,
 } from "./client";
 import {
@@ -436,6 +439,9 @@ export async function validateMercadoLibreListingForPublication(
       },
     );
   } catch (error) {
+    if (error instanceof MercadoLibreReauthError) {
+      throw new MercadoLibrePublicationError(MERCADOLIBRE_RECONNECT_MESSAGE, { kind: "reauth", step: null, field: null, code: null });
+    }
     // La red o el token fallaron antes de saber nada de la categoría: no es
     // culpa del borrador, se reintenta.
     throw MercadoLibrePublicationError.fromFailure(
@@ -676,6 +682,31 @@ export async function validateMercadoLibreItemDraft(
   return readMercadoLibreValidation(response.status, payload);
 }
 
+async function assertMercadoLibreValidates(
+  listing: ListingForPublication,
+  accessToken: string,
+  request: typeof fetch,
+) {
+  let response: Response;
+  try {
+    response = await request("https://api.mercadolibre.com/items/validate", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(buildItemPayload(listing)),
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw MercadoLibrePublicationError.fromFailure(
+      transientPublicationFailure(
+        `No fue posible validar con Mercado Libre: ${error instanceof Error ? error.message : "error de red"}. Se reintentará automáticamente.`,
+      ),
+    );
+  }
+  const payload = response.status === 204 ? null : await readJson(response);
+  const validation = readMercadoLibreValidation(response.status, payload);
+  if (!validation.ok) throw MercadoLibrePublicationError.fromFailure(validation.errors[0]);
+}
+
 export async function createMercadoLibreItem(
   listing: ListingForPublication,
   request: typeof fetch = mercadoLibreFetch,
@@ -684,6 +715,9 @@ export async function createMercadoLibreItem(
 
   await assertNotInPresale(listing.product.id);
   const accessToken = await getMercadoLibreAccessToken(listing.connectionId);
+  // El servidor valida con Mercado Libre aunque la pantalla ya lo haya hecho:
+  // un error real detiene la publicación; las advertencias solas no.
+  await assertMercadoLibreValidates(listing, accessToken, request);
   let response: Response;
   try {
     response = await request("https://api.mercadolibre.com/items", {

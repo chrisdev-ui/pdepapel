@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { HONEYPOT_FIELD } from "@/lib/customer-checks";
 
@@ -12,6 +12,9 @@ import { HONEYPOT_FIELD } from "@/lib/customer-checks";
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 const SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 const TOKEN_TIMEOUT_MS = 15_000;
+/** Cuando el desafío pide confirmar la casilla, la persona tiene tiempo de hacerlo. */
+const INTERACTIVE_TIMEOUT_MS = 120_000;
+export const CHALLENGE_HINT = "Confirma la casilla para continuar.";
 
 interface TurnstileApi {
   render: (element: HTMLElement, options: Record<string, unknown>) => string;
@@ -46,6 +49,8 @@ export function useBotTrap() {
   const startedAtRef = useRef<number | null>(null);
   const widgetRef = useRef<{ api: TurnstileApi; id: string } | null>(null);
   const resolveRef = useRef<((token: string | undefined) => void) | null>(null);
+  const extendRef = useRef<(() => void) | null>(null);
+  const [needsClick, setNeedsClick] = useState(false);
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -61,10 +66,17 @@ export function useBotTrap() {
       const finish = (token: string | undefined) => {
         if (timer) clearTimeout(timer);
         resolveRef.current = null;
+        extendRef.current = null;
+        setNeedsClick(false);
         resolve(token);
       };
       timer = setTimeout(() => finish(undefined), TOKEN_TIMEOUT_MS);
       resolveRef.current = finish;
+      extendRef.current = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => finish(undefined), INTERACTIVE_TIMEOUT_MS);
+        setNeedsClick(true);
+      };
       if (widgetRef.current) {
         widgetRef.current.api.reset(widgetRef.current.id);
         return;
@@ -74,6 +86,7 @@ export function useBotTrap() {
         callback: (token: string) => resolveRef.current?.(token),
         "error-callback": () => resolveRef.current?.(undefined),
         "expired-callback": () => resolveRef.current?.(undefined),
+        "before-interactive-callback": () => extendRef.current?.(),
       });
       widgetRef.current = { api, id };
     });
@@ -85,7 +98,7 @@ export function useBotTrap() {
     return { ...base, turnstileToken: await challengeToken() };
   };
 
-  return { trapRef, challengeRef, fields };
+  return { trapRef, challengeRef, fields, needsClick };
 }
 
 export function BotTrapField({ trap }: { trap: ReturnType<typeof useBotTrap> }) {
@@ -101,5 +114,15 @@ export function BotTrapField({ trap }: { trap: ReturnType<typeof useBotTrap> }) 
 
 /** Donde aparece el desafío al enviar: junto al botón, para que se vea si pide un clic. */
 export function BotChallengeSlot({ trap }: { trap: ReturnType<typeof useBotTrap> }) {
-  return SITE_KEY ? <div ref={trap.challengeRef} className="empty:hidden" /> : null;
+  if (!SITE_KEY) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <div ref={trap.challengeRef} className="empty:hidden" />
+      {trap.needsClick ? (
+        <p role="status" className="text-sm font-medium text-blue-yankees">
+          {CHALLENGE_HINT}
+        </p>
+      ) : null}
+    </div>
+  );
 }

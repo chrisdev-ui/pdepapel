@@ -35,8 +35,10 @@ import {
   MERCADOLIBRE_MAX_LISTING_PICTURES,
   MERCADOLIBRE_MIN_PICTURE_SIDE,
   getCategorySuggestionWarning,
+  getGtinGuidance,
   getListingWizardStepIssue,
   getListingWizardStepLabel,
+  shouldUseEmptyGtinReason,
   wizardStepFromPublicationStep,
   type ListingWizardField,
   type ListingWizardStep,
@@ -101,6 +103,8 @@ export type ListingPublicationProduct = {
   category?: { id: string; name: string } | null;
   /** Sin GTIN legítimo: la ficha no exige el código de barras. */
   hasNoProductIdentifier?: boolean;
+  brand?: string | null;
+  gtin?: string | null;
   isKit?: boolean;
   /** Nombre del grupo cuando el producto es una variante. */
   productGroupName?: string | null;
@@ -432,9 +436,8 @@ export function ListingPublicationWizard({
   useEffect(() => {
     onStepChange?.(step);
   }, [step, onStepChange]);
-  const productHasNoIdentifier = Boolean(
-    selectedProduct?.hasNoProductIdentifier,
-  );
+  const productHasNoIdentifier = selectedProduct ? shouldUseEmptyGtinReason(selectedProduct) : false;
+  const gtinGuidance = selectedProduct ? getGtinGuidance(selectedProduct) : null;
   // Cada atributo que Mercado Libre exige, aunque sea según el caso, tiene su campo.
   const requiredAttributes = categoryAttributes.filter(
     (attribute) =>
@@ -1407,6 +1410,7 @@ export function ListingPublicationWizard({
           ) : null}
           {requiredAttributes.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
+              {gtinGuidance ? <p className="text-xs text-muted-foreground">{gtinGuidance}</p> : null}
               {requiredAttributes.map((attribute) => {
                 const currentValue =
                   getAttributeValues(form.attributes).get(attribute.id) ?? "";
@@ -1622,6 +1626,7 @@ export function ListingPublicationWizard({
                 los tiene; si no tiene marca, se sugiere «Genérica» donde la
                 categoría la acepta. Puedes cambiarla.
               </p>
+
             </div>
           </details>
           </SectionCard>
