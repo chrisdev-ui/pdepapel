@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import type { ContainerMemoryReading } from "@/lib/railway-metrics";
 
 /**
  * Revisión diaria de MySQL. Cuenta la memoria que MySQL lleva (no la del
@@ -13,6 +14,10 @@ const MB = 1024 * 1024;
 const WARN_RATIO = 0.7;
 const DEFAULT_MEMORY_LIMIT_MB = 8192;
 const RECENT_RESTART_SECONDS = 24 * 3600;
+/** Con la configuración actual ronda 0,5 GB: pasar de 2 GB o crecer 300 MB en un día es que algo vuelve a acumularse. */
+const CONTAINER_ALERT_MB = 2048;
+const CONTAINER_GROWTH_ALERT_MB = 300;
+const GB_TO_MB = 1024;
 
 export interface DbHealthReading {
   trackedBytes: number;
@@ -59,11 +64,34 @@ function describeUptime(seconds: number) {
   return `${Math.floor(hours / 24)} días`;
 }
 
+function judgeContainer(container: ContainerMemoryReading | undefined) {
+  if (!container) return { warnings: [] as string[], summary: "" };
+  if (!container.ok) return { warnings: [] as string[], summary: ` Contenedor: ${container.reason}.` };
+  const currentMb = Math.round(container.currentGb * GB_TO_MB);
+  const growthMb = container.growthGb === null ? null : Math.round(container.growthGb * GB_TO_MB);
+  const warnings: string[] = [];
+  if (currentMb > CONTAINER_ALERT_MB) {
+    warnings.push(`El contenedor de MySQL usa ${currentMb} MB, más de los ${CONTAINER_ALERT_MB} MB que se esperan.`);
+  }
+  if (growthMb !== null && growthMb > CONTAINER_GROWTH_ALERT_MB && container.dayAgoGb !== null) {
+    warnings.push(
+      `El contenedor de MySQL creció ${growthMb} MB en 24 h (de ${Math.round(container.dayAgoGb * GB_TO_MB)} MB a ${currentMb} MB).`,
+    );
+  }
+  const growth = growthMb === null ? "" : ` (${growthMb >= 0 ? "+" : ""}${growthMb} MB en 24 h)`;
+  return { warnings, summary: ` Contenedor en Railway: ${currentMb} MB${growth}.` };
+}
+
 export function judgeDbHealth(
-  input: DbHealthReading & { limitMb: number; pendingWhatsAppReplays: number },
+  input: DbHealthReading & {
+    limitMb: number;
+    pendingWhatsAppReplays: number;
+    container?: ContainerMemoryReading;
+  },
 ) {
   const memoryMb = Math.round(input.trackedBytes / MB);
-  const warnings: string[] = [];
+  const container = judgeContainer(input.container);
+  const warnings: string[] = [...container.warnings];
 
   if (input.trackedBytes >= input.limitMb * MB * WARN_RATIO) {
     warnings.push(
@@ -87,9 +115,12 @@ export function judgeDbHealth(
     );
   }
 
-  const summary = `Memoria contada por MySQL: ${memoryMb} MB de ${input.limitMb} MB (${percent(memoryMb, input.limitMb)} %). Conexiones: ${input.threadsConnected} de ${input.maxConnections} (pico ${input.maxUsedConnections}). Encendida hace ${describeUptime(input.uptimeSeconds)}.`;
+  const summary = `Memoria contada por MySQL: ${memoryMb} MB de ${input.limitMb} MB (${percent(memoryMb, input.limitMb)} %).${container.summary} Conexiones: ${input.threadsConnected} de ${input.maxConnections} (pico ${input.maxUsedConnections}). Encendida hace ${describeUptime(input.uptimeSeconds)}.`;
   return {
     alert: warnings.length > 0,
+    /** Solo el contenedor manda correo: lo demás ya se ve en «Sistemas». */
+    containerAlert: container.warnings.length > 0,
+    containerWarnings: container.warnings,
     warnings,
     detail: warnings.length > 0 ? `${warnings.join(" ")} ${summary}` : summary,
   };

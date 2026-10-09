@@ -163,7 +163,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
             ))}
           </SelectContent>
         </Select>
-        <div role="radiogroup" aria-label="Fecha del pedido" className="flex max-w-full gap-1 overflow-x-auto rounded-full border bg-white p-1">
+        <div role="radiogroup" aria-label="Fecha del pedido" className="flex max-w-full flex-wrap gap-1 rounded-2xl border bg-white p-1 lg:rounded-full">
           {ORDER_DATE_FILTERS.map((option) => {
             const active = filters.date.kind === option.kind;
             return (

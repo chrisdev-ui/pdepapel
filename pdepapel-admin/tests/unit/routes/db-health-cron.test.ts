@@ -4,12 +4,16 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   pending: vi.fn(),
   record: vi.fn(),
+  container: vi.fn(),
+  alert: vi.fn(),
   env: { CRON_SECRET: "cron-secret" },
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
 vi.mock("@/lib/job-runs", () => ({ recordJobRun: mocks.record }));
 vi.mock("@/lib/whatsapp/webhook-replay", () => ({ countPendingWhatsAppReplays: mocks.pending }));
+vi.mock("@/lib/railway-metrics", () => ({ readMysqlContainerMemory: mocks.container }));
+vi.mock("@/lib/db-health-alert", () => ({ sendDbHealthAlert: mocks.alert }));
 vi.mock("@/lib/db-health", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/db-health")>()),
   readDbHealth: mocks.read,
@@ -24,6 +28,8 @@ describe("GET /api/cron/db-health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.pending.mockResolvedValue(0);
+    mocks.container.mockResolvedValue({ ok: true, currentGb: 0.5, limitGb: 8, dayAgoGb: 0.48, growthGb: 0.02, at: new Date() });
+    mocks.alert.mockResolvedValue("sent");
     mocks.read.mockResolvedValue({ trackedBytes: 600 * 1024 * 1024, uptimeSeconds: 3 * 86400, threadsConnected: 33, maxUsedConnections: 48, maxConnections: 200 });
   });
 
@@ -52,5 +58,27 @@ describe("GET /api/cron/db-health", () => {
     mocks.read.mockRejectedValue(new Error("Can't reach database server"));
     await call("cron-secret");
     expect(mocks.record).toHaveBeenCalledWith("db-health", { ok: false, detail: "Can't reach database server" });
+  });
+
+  it("con el contenedor sobre 2 GB queda en rojo y manda el correo", async () => {
+    mocks.container.mockResolvedValue({ ok: true, currentGb: 2.3, limitGb: 8, dayAgoGb: 2.2, growthGb: 0.1, at: new Date() });
+    const response = await call("cron-secret");
+    expect(response.status).toBe(200);
+    expect(mocks.record).toHaveBeenCalledWith("db-health", { ok: false, detail: expect.stringContaining("El contenedor de MySQL usa 2355 MB") });
+    expect(mocks.alert).toHaveBeenCalledWith([expect.stringContaining("2355 MB")], expect.stringContaining("Contenedor en Railway: 2355 MB"));
+  });
+
+  it("sin lectura de Railway sigue en verde, lo dice en «Sistemas» y no manda correo", async () => {
+    mocks.container.mockResolvedValue({ ok: false, reason: "sin lectura de Railway (falta RAILWAY_METRICS_TOKEN)" });
+    await call("cron-secret");
+    expect(mocks.record).toHaveBeenCalledWith("db-health", { ok: true, detail: expect.stringContaining("sin lectura de Railway") });
+    expect(mocks.alert).not.toHaveBeenCalled();
+  });
+
+  it("un reinicio sin problema de memoria queda en rojo pero no manda correo", async () => {
+    mocks.read.mockResolvedValue({ trackedBytes: 600 * 1024 * 1024, uptimeSeconds: 3600, threadsConnected: 10, maxUsedConnections: 10, maxConnections: 200 });
+    await call("cron-secret");
+    expect(mocks.record).toHaveBeenCalledWith("db-health", { ok: false, detail: expect.any(String) });
+    expect(mocks.alert).not.toHaveBeenCalled();
   });
 });

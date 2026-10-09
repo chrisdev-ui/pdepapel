@@ -74,6 +74,8 @@ docker-entrypoint.sh mysqld --innodb-use-native-aio=0 --disable-log-bin --max-co
 
 La revisión diaria avisa si la memoria que contabiliza MySQL pasa del 70 % del límite, si las conexiones pasan del 70 % de `max_connections`, o si MySQL lleva menos de 24 h encendido sin un reinicio planeado (así un OOM nocturno se ve a la mañana siguiente).
 
+La memoria del contenedor (la que tumbaba el servicio) no la ve MySQL: la revisión diaria la lee de las métricas de Railway con un token de proyecto (`RAILWAY_METRICS_TOKEN`) y manda un correo, como mucho uno cada 20 h, si pasa de 2 GB o crece más de 300 MB en 24 h. Los monitores de Railway piden el plan Pro.
+
 ### 4. WhatsApp
 
 Si el webhook no puede guardar un evento, sigue respondiendo 200, pero guarda el cuerpo verificado en Upstash Redis (no depende de MySQL) y lo reintenta por QStash hasta guardarlo una sola vez.

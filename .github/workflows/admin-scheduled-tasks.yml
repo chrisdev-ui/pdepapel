@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Run a single job (empty = all). notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts)."
+        description: "Run a single job (empty = all). db-health runs only the MySQL review; notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts)."
         required: false
         default: ""
         type: choice
@@ -14,6 +14,7 @@ on:
           - ""
           - notification-retry
           - mercado-libre-health
+          - db-health
 
 jobs:
   # The daily run is a QStash schedule (lib/mercadolibre/queue.ts,
@@ -139,7 +140,7 @@ jobs:
             "$ADMIN_BASE_URL/api/cron/notification-retry"
 
   db-health:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' || inputs.only == 'db-health' }}
     name: MySQL health
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -150,8 +151,10 @@ jobs:
       - name: Verify protected secret
         run: test -n "$ADMIN_CRON_SECRET"
       # Flags memory or connections above 70 %, a MySQL restart in the last
-      # 24 h (how an overnight OOM shows up) and WhatsApp webhooks still
-      # waiting to be saved. A warning turns «Sistemas» red (lib/db-health.ts).
+      # 24 h (how an overnight OOM shows up), WhatsApp webhooks still waiting
+      # to be saved and, with RAILWAY_METRICS_TOKEN in Vercel, the container
+      # above 2 GB or growing 300 MB in a day (that one also emails). A warning
+      # turns «Sistemas» red (lib/db-health.ts).
       - name: Review MySQL memory and connections
         run: |
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
