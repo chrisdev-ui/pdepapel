@@ -268,6 +268,15 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - The account is a **User Products seller** (`user_product_seller`).
   - Items carry `family_name` and never `title`; ML rejects a title-only body.
   - Variants are separate items that share one family name.
+  - ML links them through a numeric `family_id`. Publishing stores it in `metadata.mercadoLibreFamilyId`, together with `externalUserProductId`, both taken from the create response.
+  - **User Product twins:** several items under one User Product (UP) share stock and SKU. Pausing one carried over to its twin; activating did not, so each twin is activated on its own. Never write UI copy that claims twins share status.
+- «Publicar grupo» (`lib/mercadolibre/group-publication*.ts`, `…/listings/group`):
+  - Paula configures one variant's draft in the normal wizard (the base draft). The dialog then creates **one draft per variant**, all with the same `familyName`, category, listing type, buffer and sale conditions, marked with `metadata.familyBatchId` and `metadata.productGroupId`.
+  - Each variant keeps its own price, photos and attributes. COLOR, DESIGN, SIZE, GTIN and MPN are never copied from another variant. COLOR is free text (`valueType: "string"`) taken from the variant's own product, even when ML's suggestion list lacks it.
+  - **Duplicate guard:** a variant with a linked listing, a draft, or any ML item under its SKU (paused included, found through `findSellerItemsBySku`) is never created again. A failed lookup leaves the variant unselectable.
+  - Creating drafts never publishes. Each draft goes through «Validar con Mercado Libre», then the existing bulk publish.
+  - **Margin rule per variant:** the net after cost must be at least the larger of the store's target percentage of the price and its COP minimum. Check every variant, not just the base.
+  - ML first returns new items paused with `picture_download_pending`. They turn active within minutes, and the panel follows.
 - Publishing goes through «Validar con Mercado Libre» first.
   - `POST …/listings/[id]/validate` sends the exact publish payload to `/items/validate`, which creates nothing.
   - «Publicar ahora» stays disabled until a passing validation of the current form.

@@ -1,5 +1,9 @@
 import type { Listing } from "./listing-types";
 
+export function countPublications(count: number) {
+  return `${count} ${count === 1 ? "publicación" : "publicaciones"}`;
+}
+
 /** Tono de la insignia de estado: mismo vocabulario que Pedidos y Ventas. */
 export const LISTING_STATUS_TONE: Record<string, string> = {
   DRAFT: "slate",

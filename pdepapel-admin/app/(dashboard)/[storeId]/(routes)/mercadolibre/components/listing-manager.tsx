@@ -47,6 +47,7 @@ import {
 import type { MercadoLibreCategorySearchResponse } from "@/lib/mercadolibre/categories";
 import { ProductVideoLibrary } from "./product-video-library";
 import { GroupPublicationDialog } from "./listings/group-publication-dialog";
+import { countPublications } from "./listings/listing-signals";
 import { ListingDetailsSheet } from "./listings/listing-details-sheet";
 import type { ListingRowHandlers } from "./listings/listing-row-actions";
 import { ListingTable } from "./listings/listing-table";
@@ -878,7 +879,7 @@ export function MercadoLibreListingManager({
     if (
       !(await requestConfirmation({
         title: "¿Vincular publicaciones?",
-        description: `Se vincularán ${selections.length} publicación${selections.length === 1 ? "" : "es"} y se sincronizará su stock con P de Papel.`,
+        description: `Se vincularán ${countPublications(selections.length)} y se sincronizará su stock con P de Papel.`,
         confirmLabel: "Vincular y sincronizar",
       }))
     ) {
@@ -2145,7 +2146,7 @@ export function MercadoLibreListingManager({
           : `¿${actionLabel}?`,
         description: singleListing
           ? `El cambio se envía a Mercado Libre en segundo plano y la fila se actualiza cuando termine.`
-          : `Se aplicará «${actionLabel}» a ${listingIds.length} publicación${listingIds.length === 1 ? "" : "es"}, en segundo plano y con reintentos. Las que no cumplan la condición se omiten y se indica el motivo en su fila.`,
+          : `Se aplicará «${actionLabel}» a ${countPublications(listingIds.length)}, en segundo plano y con reintentos. Las que no cumplan la condición se omiten y se indica el motivo en su fila.`,
         confirmLabel: singleListing
           ? action === "pause"
             ? "Pausar"
@@ -2503,8 +2504,7 @@ export function MercadoLibreListingManager({
           >
             <div>
               <p className="font-medium">
-                Se vincularon {importResult.importedCount} publicación
-                {importResult.importedCount === 1 ? "" : "es"} y su stock quedó
+                Se vincularon {countPublications(importResult.importedCount)} y su stock quedó
                 programado para sincronizarse.
               </p>
               <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
@@ -2539,8 +2539,7 @@ export function MercadoLibreListingManager({
                 {importPreview.partial ? (
                   <p className="mt-1 text-sm text-warning" role="status">
                     Mercado Libre no respondió por{" "}
-                    {importPreview.summary.unavailable} publicación
-                    {importPreview.summary.unavailable === 1 ? "" : "es"}; la
+                    {countPublications(importPreview.summary.unavailable)}; la
                     lista está incompleta. Vuelve a revisar en unos minutos
                     para verlas.
                   </p>

@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import {
   buildVariantAttributes,
@@ -320,14 +320,14 @@ export function GroupPublicationDialog({
                     {ready ? (
                       <div className="w-full space-y-1 sm:w-44">
                         <Label htmlFor={inputId}>Precio en Mercado Libre</Label>
-                        <Input
+                        <CurrencyInput
                           id={inputId}
                           inputMode="numeric"
-                          value={prices[variant.productId] ?? ""}
-                          onChange={(event) =>
+                          value={prices[variant.productId] ? Number(prices[variant.productId]) : undefined}
+                          onChange={(value) =>
                             setPrices((current) => ({
                               ...current,
-                              [variant.productId]: event.target.value.replace(/\D/g, ""),
+                              [variant.productId]: value === undefined ? "" : String(value),
                             }))
                           }
                         />

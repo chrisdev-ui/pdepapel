@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GroupPublicationDialog } from "@/app/(dashboard)/[storeId]/(routes)/mercadolibre/components/listings/group-publication-dialog";
@@ -117,6 +118,12 @@ describe("GroupPublicationDialog", () => {
     );
     await screen.findByText("Tote Lila");
     fireEvent.click(screen.getByRole("checkbox", { name: "Incluir Tote Lila" }));
+    const price = screen.getAllByLabelText("Precio en Mercado Libre")[0] as HTMLInputElement;
+    const shown = () => price.value.replace(/\s/g, " ");
+    await waitFor(() => expect(shown()).toBe("$ 60.000"));
+    await userEvent.clear(price);
+    await userEvent.type(price, "62000");
+    expect(shown()).toBe("$ 62.000");
     await waitFor(() => expect(screen.getByRole("button", { name: "Crear 1 borrador" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Crear 1 borrador" }));
 
@@ -127,7 +134,7 @@ describe("GroupPublicationDialog", () => {
       variants: [
         {
           productId: "p-celeste",
-          marketplacePrice: 60000,
+          marketplacePrice: 62000,
           attributes: [
             { id: "BRAND", value_name: "Genérica" },
             { id: "COLOR", value_name: "Celeste" },
