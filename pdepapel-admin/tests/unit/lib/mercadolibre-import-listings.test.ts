@@ -177,6 +177,37 @@ describe("Mercado Libre listing import", () => {
     });
   });
 
+  describe("preview: filas por revisar primero, con instrucción", () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it("pone primero las que piden elegir el producto a mano y les dice dónde", async () => {
+      mocks.getJson.mockResolvedValue({ results: ["MCO1", "MCO2", "MCO3", "MCO4"], paging: { total: 4 } });
+      mocks.requestJson.mockResolvedValue({
+        ok: true,
+        status: 200,
+        payload: [
+          { body: { id: "MCO1", title: "Lista", status: "active", price: 10, seller_custom_field: "SKU-OK", currency_id: "COP" } },
+          { body: { id: "MCO2", title: "Sin SKU", status: "active", price: 10, currency_id: "COP" } },
+          { body: { id: "MCO3", title: "Duplicada A", status: "active", price: 10, seller_custom_field: "SKU-DUP", currency_id: "COP" } },
+          { body: { id: "MCO4", title: "Duplicada B", status: "active", price: 10, seller_custom_field: "SKU-DUP", currency_id: "COP" } },
+        ],
+      });
+      mocks.findListings.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      mocks.findProducts.mockResolvedValue([
+        { id: "p-ok", name: "Ok", sku: "SKU-OK", stock: 1 },
+        { id: "p-dup", name: "Dup", sku: "SKU-DUP", stock: 1 },
+      ]);
+
+      const preview = await previewMercadoLibreListingImport("conn", "store", "seller");
+      const order = preview.listings.map((listing) => listing.externalItemId);
+      expect(order.indexOf("MCO1")).toBe(order.length - 1);
+      const sinSku = preview.listings.find((listing) => listing.externalItemId === "MCO2")!;
+      expect(sinSku.issue).toBe("La publicación no tiene SKU de vendedor. Elige el producto a mano en «Producto local».");
+      const duplicada = preview.listings.find((listing) => listing.externalItemId === "MCO3")!;
+      expect(duplicada.issue).toBe("Este mismo SKU aparece en varias publicaciones. Elige a mano en «Producto local» el producto de cada una.");
+    });
+  });
+
   describe("import", () => {
     beforeEach(() => {
       vi.clearAllMocks();

@@ -75,6 +75,8 @@ export type ListingWizardValidationInput = {
   belowCostReason?: string;
   /** El producto está marcado «sin identificador»: un GTIN obligatorio queda cubierto. */
   productHasNoIdentifier?: boolean;
+  /** Marca registrada sin GTIN en el producto: la ficha exige el código antes de validar. */
+  brandRequiringGtin?: string | null;
   /** Tamaño de cada foto elegida; sin este dato no se revisa el tamaño. */
   imageChecks?: Readonly<Record<string, ListingWizardImageCheck>>;
   /** Máximo de fotos de la categoría (`max_pictures_per_item`). */
@@ -118,6 +120,7 @@ export function getListingWizardStepIssue({
   transportationCost = null,
   belowCostReason = "",
   productHasNoIdentifier = false,
+  brandRequiringGtin = null,
   imageChecks,
   maxPictures = null,
 }: ListingWizardValidationInput): ListingWizardIssue | null {
@@ -181,6 +184,19 @@ export function getListingWizardStepIssue({
         !attributeValues.get(attribute.id.toUpperCase()) &&
         !(productHasNoIdentifier && attribute.id.toUpperCase() === "GTIN"),
     );
+
+    const gtinAttribute = categoryAttributes.find((attribute) => attribute.id.toUpperCase() === "GTIN");
+    if (
+      brandRequiringGtin &&
+      gtinAttribute &&
+      (gtinAttribute.required || gtinAttribute.conditionalRequired) &&
+      !attributeValues.get("GTIN")
+    ) {
+      return issue(
+        "attribute:GTIN",
+        `«${brandRequiringGtin}» es una marca registrada: Mercado Libre exige su código de barras real (GTIN). Escríbelo aquí o agrégalo en el producto.`,
+      );
+    }
 
     const emptyReason = categoryAttributes.find((attribute) => attribute.id.toUpperCase() === "EMPTY_GTIN_REASON");
     if (
@@ -309,9 +325,14 @@ const GENERIC_OR_OWN_BRAND = /^(gen[eé]ric[ao]|sin marca|p de papel|papeler[ií
  * ejemplo) tiene código: Mercado Libre lo exige y no se inventa un motivo.
  */
 export function shouldUseEmptyGtinReason(product: { gtin?: string | null; brand?: string | null; hasNoProductIdentifier?: boolean }) {
-  if (product.hasNoProductIdentifier) return true;
-  if (product.gtin?.trim()) return false;
-  return !product.brand?.trim() || GENERIC_OR_OWN_BRAND.test(product.brand.trim());
+  // Con un GTIN guardado manda la bandera: «sin identificador» dice que ese código no es legítimo.
+  if (product.gtin?.trim()) return Boolean(product.hasNoProductIdentifier);
+  // Sin GTIN, una marca conocida tiene código aunque la ficha diga «sin identificador».
+  return !isKnownBrand(product.brand);
+}
+
+export function isKnownBrand(brand: string | null | undefined) {
+  return Boolean(brand?.trim()) && !GENERIC_OR_OWN_BRAND.test(String(brand).trim());
 }
 
 export function getGtinGuidance(product: { gtin?: string | null; brand?: string | null; hasNoProductIdentifier?: boolean }): string | null {
@@ -319,7 +340,10 @@ export function getGtinGuidance(product: { gtin?: string | null; brand?: string 
   if (shouldUseEmptyGtinReason(product)) {
     return "Sin código de barras: se publica como «El producto no tiene código registrado», porque la marca es genérica o propia.";
   }
-  return `«${product.brand?.trim()}» es una marca conocida: Mercado Libre pide su código de barras real (GTIN). Agrégalo en el producto antes de publicar.`;
+  const brand = product.brand?.trim();
+  return product.hasNoProductIdentifier
+    ? `El producto está marcado «sin identificador», pero «${brand}» es una marca registrada: Mercado Libre exige su código de barras real (GTIN). Agrégalo en el producto antes de publicar.`
+    : `«${brand}» es una marca conocida: Mercado Libre pide su código de barras real (GTIN). Agrégalo en el producto antes de publicar.`;
 }
 
 /** «Genérica» solo donde la categoría la acepta: marca de texto libre o una lista que la incluye. */

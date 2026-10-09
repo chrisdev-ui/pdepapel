@@ -332,6 +332,26 @@ describe("prefill for a catalog without barcodes", () => {
     );
   });
 
+  it("una marca conocida gana sobre una bandera «sin identificador» equivocada: no usa el motivo y pide el código", async () => {
+    const { getGtinGuidance, shouldUseEmptyGtinReason } = await import("@/lib/mercadolibre/listing-wizard");
+    const norma = { brand: "Norma", gtin: null, hasNoProductIdentifier: true };
+    expect(shouldUseEmptyGtinReason(norma)).toBe(false);
+    expect(prefillListingAttributes("", [emptyReason], norma)).toBe("");
+    expect(getGtinGuidance(norma)).toBe(
+      "El producto está marcado «sin identificador», pero «Norma» es una marca registrada: Mercado Libre exige su código de barras real (GTIN). Agrégalo en el producto antes de publicar.",
+    );
+    expect(shouldUseEmptyGtinReason({ brand: null, gtin: null, hasNoProductIdentifier: true })).toBe(true);
+  });
+
+  it("la ficha técnica pide el GTIN de una marca registrada antes de validar, si la categoría lo exige", async () => {
+    const { getListingWizardStepIssue } = await import("@/lib/mercadolibre/listing-wizard");
+    const gtin = { id: "GTIN", required: false, conditionalRequired: true };
+    const base = { ...completeDraft, step: 3 as const, categoryAttributes: [gtin, emptyReason], attributes: "EMPTY_GTIN_REASON=El producto no tiene código registrado" };
+    expect(getListingWizardStepIssue({ ...base, brandRequiringGtin: "Norma" })).toMatchObject({ step: 3, field: "attribute:GTIN", message: expect.stringContaining("«Norma» es una marca registrada") });
+    expect(getListingWizardStepIssue({ ...base, brandRequiringGtin: "Norma", attributes: "GTIN=7702111234567" })).toBeNull();
+    expect(getListingWizardStepIssue({ ...base, brandRequiringGtin: null })).toBeNull();
+  });
+
   it("never invents a brand: uses the product brand, else suggests «Genérica» only where the category accepts it", () => {
     const freeText = { id: "BRAND", required: true };
     const closedWithout = { id: "BRAND", required: true, values: [{ id: "1", name: "Owala" }] };

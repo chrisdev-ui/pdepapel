@@ -14,7 +14,7 @@ import {
 } from "./categories";
 import { inspectMercadoLibreCategory } from "./category-validation";
 import { isPriceBelowCost } from "./listing-price-guard";
-import { MERCADOLIBRE_MAX_LISTING_PICTURES } from "./listing-wizard";
+import { MERCADOLIBRE_MAX_LISTING_PICTURES, shouldUseEmptyGtinReason } from "./listing-wizard";
 import {
   mapMercadoLibreItemError,
   readMercadoLibreValidation,
@@ -480,7 +480,7 @@ export async function validateMercadoLibreListingForPublication(
   const missingAttributes = requiredAttributeIds.filter(
     (attributeId) =>
       !configuredAttributeIds.has(attributeId) &&
-      !(listing.product.hasNoProductIdentifier && attributeId === "GTIN"),
+      !(shouldUseEmptyGtinReason(listing.product) && attributeId === "GTIN"),
   );
   if (missingAttributes.length > 0) {
     throw new MercadoLibrePublicationError(

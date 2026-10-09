@@ -438,6 +438,8 @@ export function ListingPublicationWizard({
   }, [step, onStepChange]);
   const productHasNoIdentifier = selectedProduct ? shouldUseEmptyGtinReason(selectedProduct) : false;
   const gtinGuidance = selectedProduct ? getGtinGuidance(selectedProduct) : null;
+  const brandRequiringGtin =
+    selectedProduct && !productHasNoIdentifier && !selectedProduct.gtin?.trim() ? selectedProduct.brand?.trim() || null : null;
   // Cada atributo que Mercado Libre exige, aunque sea según el caso, tiene su campo.
   const requiredAttributes = categoryAttributes.filter(
     (attribute) =>
@@ -616,6 +618,7 @@ export function ListingPublicationWizard({
       transportationCost: selectedProduct?.transportationCost ?? null,
       belowCostReason: form.belowCostReason,
       productHasNoIdentifier,
+      brandRequiringGtin,
       imageChecks: pictureChecks,
       maxPictures: MERCADOLIBRE_MAX_LISTING_PICTURES,
     });

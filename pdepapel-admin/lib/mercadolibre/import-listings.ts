@@ -451,13 +451,13 @@ async function getImportCandidates(
         issue: existingListing
           ? null
           : !listing.sellerSku
-            ? "La publicación no tiene SKU de vendedor"
+            ? "La publicación no tiene SKU de vendedor. Elige el producto a mano en «Producto local»."
             : !suggestedProduct
-              ? "No existe un producto local con este SKU"
+              ? "No existe un producto local con este SKU. Elige el producto a mano en «Producto local» o créalo en el panel."
               : hasDifferentLocalLink
-                ? "El producto local ya está vinculado a otra publicación o variación"
+                ? "El producto local ya está vinculado a otra publicación o variación. Elige otro en «Producto local»."
                 : hasDuplicateSuggestedProduct
-                  ? "Este mismo SKU aparece en varias publicaciones o variaciones. Revisa manualmente cuál corresponde a cada producto local."
+                  ? "Este mismo SKU aparece en varias publicaciones. Elige a mano en «Producto local» el producto de cada una."
                   : null,
       };
     },
@@ -470,8 +470,12 @@ export async function previewMercadoLibreListingImport(
   storeId: string,
   sellerId: string,
 ): Promise<MercadoLibreListingImportPreview> {
-  const { candidates: listings, unavailableItemIds } =
+  const { candidates, unavailableItemIds } =
     await getImportCandidates(connectionId, storeId, sellerId);
+  // Primero lo que necesita que alguien elija el producto; al final lo ya vinculado.
+  const rank = (listing: (typeof candidates)[number]) =>
+    listing.existingListingId ? 2 : listing.issue ? 0 : 1;
+  const listings = [...candidates].sort((a, b) => rank(a) - rank(b));
   return {
     listings,
     summary: {
