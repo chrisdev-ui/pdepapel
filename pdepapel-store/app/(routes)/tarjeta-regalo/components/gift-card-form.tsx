@@ -11,7 +11,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { checkoutGiftCard } from "@/actions/gift-cards";
-import { BotTrapField, useBotTrap } from "@/components/bot-trap";
+import { BotChallengeSlot, BotTrapField, useBotTrap } from "@/components/bot-trap";
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import {
@@ -338,6 +338,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
           />
         </section>
 
+        <BotChallengeSlot trap={botTrap} />
         <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5 text-success" aria-hidden="true" />

@@ -15,7 +15,6 @@ const TOKEN_TIMEOUT_MS = 15_000;
 
 interface TurnstileApi {
   render: (element: HTMLElement, options: Record<string, unknown>) => string;
-  execute: (widgetId: string) => void;
   reset: (widgetId: string) => void;
 }
 
@@ -50,42 +49,33 @@ export function useBotTrap() {
 
   useEffect(() => {
     startedAtRef.current = Date.now();
-    if (!SITE_KEY) return;
-    let cancelled = false;
-    loadTurnstile().then((api) => {
-      const element = challengeRef.current;
-      if (cancelled || !api || !element) return;
-      const settle = (token: string | undefined) => {
-        resolveRef.current?.(token);
-        resolveRef.current = null;
-      };
-      const id = api.render(element, {
-        sitekey: SITE_KEY,
-        execution: "execute",
-        appearance: "interaction-only",
-        callback: (token: string) => settle(token),
-        "error-callback": () => settle(undefined),
-        "expired-callback": () => settle(undefined),
-      });
-      widgetRef.current = { api, id };
-    });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  /** El token se pide al enviar: dura 300 s y sirve una sola vez. */
-  const challengeToken = (): Promise<string | undefined> => {
-    const widget = widgetRef.current;
-    if (!widget) return Promise.resolve(undefined);
+  /** El script y el desafío se cargan al enviar: el token dura 300 s y sirve una sola vez. */
+  const challengeToken = async (): Promise<string | undefined> => {
+    const api = await loadTurnstile();
+    const element = challengeRef.current;
+    if (!api || !element) return undefined;
     return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(undefined), TOKEN_TIMEOUT_MS);
-      resolveRef.current = (token) => {
-        clearTimeout(timer);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const finish = (token: string | undefined) => {
+        if (timer) clearTimeout(timer);
+        resolveRef.current = null;
         resolve(token);
       };
-      widget.api.reset(widget.id);
-      widget.api.execute(widget.id);
+      timer = setTimeout(() => finish(undefined), TOKEN_TIMEOUT_MS);
+      resolveRef.current = finish;
+      if (widgetRef.current) {
+        widgetRef.current.api.reset(widgetRef.current.id);
+        return;
+      }
+      const id = api.render(element, {
+        sitekey: SITE_KEY,
+        callback: (token: string) => resolveRef.current?.(token),
+        "error-callback": () => resolveRef.current?.(undefined),
+        "expired-callback": () => resolveRef.current?.(undefined),
+      });
+      widgetRef.current = { api, id };
     });
   };
 
@@ -100,14 +90,16 @@ export function useBotTrap() {
 
 export function BotTrapField({ trap }: { trap: ReturnType<typeof useBotTrap> }) {
   return (
-    <>
-      <div aria-hidden="true" className="pointer-events-none absolute -left-[9999px] h-0 w-0 overflow-hidden opacity-0">
-        <label>
-          Sitio web
-          <input ref={trap.trapRef} type="text" name={HONEYPOT_FIELD} tabIndex={-1} autoComplete="off" defaultValue="" />
-        </label>
-      </div>
-      {SITE_KEY ? <div ref={trap.challengeRef} /> : null}
-    </>
+    <div aria-hidden="true" className="pointer-events-none absolute -left-[9999px] h-0 w-0 overflow-hidden opacity-0">
+      <label>
+        Sitio web
+        <input ref={trap.trapRef} type="text" name={HONEYPOT_FIELD} tabIndex={-1} autoComplete="off" defaultValue="" />
+      </label>
+    </div>
   );
+}
+
+/** Donde aparece el desafío al enviar: junto al botón, para que se vea si pide un clic. */
+export function BotChallengeSlot({ trap }: { trap: ReturnType<typeof useBotTrap> }) {
+  return SITE_KEY ? <div ref={trap.challengeRef} className="empty:hidden" /> : null;
 }

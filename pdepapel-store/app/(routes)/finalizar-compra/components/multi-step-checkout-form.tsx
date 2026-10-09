@@ -23,7 +23,7 @@ import {
 import { useConfetti } from "@/hooks/use-confetti";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useGuestUser } from "@/hooks/use-guest-user";
-import { BotTrapField, useBotTrap } from "@/components/bot-trap";
+import { BotChallengeSlot, BotTrapField, useBotTrap } from "@/components/bot-trap";
 import { NAME_ERROR, PHONE_ERROR, looksLikeRandomName, normalizeMobile } from "@/lib/customer-checks";
 import { useToast } from "@/hooks/use-toast";
 import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
@@ -1679,6 +1679,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                       )}
                     </div>
 
+                    <BotChallengeSlot trap={botTrap} />
                     <StepNavigation
                       ref={navigationRef}
                       currentStep={currentStep}
