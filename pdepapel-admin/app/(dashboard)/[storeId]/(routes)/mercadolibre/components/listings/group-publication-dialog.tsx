@@ -239,9 +239,10 @@ export function GroupPublicationDialog({
             Publicar grupo{plan ? `: ${plan.group.name}` : ""}
           </DialogTitle>
           <DialogDescription>
-            Cada variante se publica como su propio ítem con el nombre de familia
-            {plan?.master.familyName ? ` «${plan.master.familyName}»` : ""}; Mercado Libre las
-            agrupa por ese nombre. Categoría, ficha común y envío salen del borrador base.
+            {plan?.master.familyName
+              ? `Cada variante se publica como su propio ítem con el nombre de familia «${plan.master.familyName}»; Mercado Libre las agrupa por ese nombre.`
+              : "Cada variante se publica como su propio ítem y Mercado Libre las agrupa por el nombre de familia del borrador base."}{" "}
+            Categoría, ficha común y envío salen del borrador base.
           </DialogDescription>
         </DialogHeader>
 
@@ -307,7 +308,9 @@ export function GroupPublicationDialog({
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="break-words font-medium">{variant.name}</span>
                         <Badge variant={badge.variant}>{badge.label}</Badge>
-                        {variant.isMaster ? <Badge variant="outline">Borrador base</Badge> : null}
+                        {variant.isMaster ? (
+                          <Badge variant="outline">{variant.state.kind === "listed" ? "Publicación base" : "Borrador base"}</Badge>
+                        ) : null}
                       </div>
                       <p className="break-all text-xs text-muted-foreground">
                         {variant.sku} · {variant.stock} en inventario

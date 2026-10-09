@@ -280,6 +280,16 @@ describe("prefillListingAttributes", () => {
     expect(result).toContain("EMPTY_GTIN_REASON=El producto no tiene código de barras");
   });
 
+  it("un atributo de texto libre con sugerencias usa el color del producto aunque no esté en la lista", () => {
+    const suggested = [
+      { id: "COLOR", required: false, valueType: "string", values: [{ id: "1", name: "Rosa" }, { id: "2", name: "Lila" }] },
+    ];
+    expect(prefillListingAttributes("", suggested, { colorName: "Rosa pastel" })).toBe("COLOR=Rosa pastel");
+    expect(prefillListingAttributes("", suggested, { colorName: "lila" })).toBe("COLOR=Lila");
+    const closed = [{ ...suggested[0], valueType: "list" }];
+    expect(prefillListingAttributes("", closed, { colorName: "Rosa pastel" })).toBe("");
+  });
+
   it("returns the text untouched when there is nothing to add", () => {
     expect(prefillListingAttributes("BRAND=X", [{ id: "BRAND", required: true }], product)).toBe(
       "BRAND=X",

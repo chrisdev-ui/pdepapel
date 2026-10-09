@@ -28,8 +28,9 @@ export type ListingWizardCategoryAttribute = {
   conditionalRequired?: boolean;
   /** Mercado Libre lo pide para su catálogo; sin él hay advertencia, no rechazo. */
   catalogRequired?: boolean;
-  /** Opciones cerradas de Mercado Libre, si el atributo las tiene. */
+  /** Opciones de Mercado Libre: cerradas si `valueType` es "list", sugerencias si es "string". */
   values?: readonly { id: string; name: string }[];
+  valueType?: string;
 };
 
 /** Campos del asistente a los que puede apuntar un error. */
@@ -300,7 +301,8 @@ function findAllowedValue(
   if (values.length === 0) return candidate;
   const normalized = candidate.trim().toLowerCase();
   const match = values.find((value) => value.name.trim().toLowerCase() === normalized);
-  return match ? match.name : null;
+  if (match) return match.name;
+  return attribute.valueType === "string" && candidate.trim() ? candidate.trim() : null;
 }
 
 /** Ids de MCO: «El producto no tiene código registrado» y «El producto es un kit o un pack». */

@@ -46,6 +46,12 @@ describe("buildVariantAttributes", () => {
     ]);
   });
 
+  it("un color fuera de las sugerencias se envía tal cual cuando Mercado Libre acepta texto libre", () => {
+    const freeColor = categoryAttributes.map((attribute) => (attribute.id === "COLOR" ? { ...attribute, valueType: "string" } : attribute));
+    const attributes = buildVariantAttributes(master, freeColor, { brand: "Genérica", colorName: "Azul pastel" });
+    expect(attributes).toContainEqual({ id: "COLOR", value_name: "Azul pastel" });
+  });
+
   it("nunca hereda el GTIN ni el color de otra variante", () => {
     const attributes = buildVariantAttributes(master, categoryAttributes, { brand: "Genérica", colorName: "Morado" });
     expect(attributes.find((attribute) => attribute.id === "GTIN")).toBeUndefined();

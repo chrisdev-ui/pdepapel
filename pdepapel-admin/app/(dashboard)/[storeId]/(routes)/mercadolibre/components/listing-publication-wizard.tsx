@@ -344,8 +344,9 @@ function getAttributeValues(value: string) {
     if (separatorIndex <= 0) continue;
 
     const id = line.slice(0, separatorIndex).trim().toUpperCase();
-    const attributeValue = line.slice(separatorIndex + 1).trim();
-    if (id && attributeValue) values.set(id, attributeValue);
+    // Sin recortar el final: el espacio recién tecleado entre dos palabras se perdía.
+    const attributeValue = line.slice(separatorIndex + 1).trimStart();
+    if (id && attributeValue.trim()) values.set(id, attributeValue);
   }
 
   return values;
@@ -358,7 +359,7 @@ function updateAttributeValue(
 ) {
   const values = getAttributeValues(value);
   if (attributeValue.trim()) {
-    values.set(attributeId, attributeValue.trim());
+    values.set(attributeId, attributeValue.trimStart());
   } else {
     values.delete(attributeId);
   }

@@ -140,4 +140,31 @@ describe("GroupPublicationDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publicar 2 en Mercado Libre" }));
     expect(onPublish).toHaveBeenCalledWith(["nuevo", "base"]);
   });
+
+  it("sin nombre de familia y con la base ya publicada, el texto y la etiqueta lo dicen bien", async () => {
+    const published = {
+      ...plan,
+      master: { ...plan.master, familyName: null },
+      variants: plan.variants.map((variant) =>
+        variant.isMaster ? { ...variant, state: { kind: "listed", itemId: "MCO9", twins: [] } } : variant,
+      ),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+        if (url.includes("/listings/group")) return json(published);
+        if (url.includes("/attributes")) return json([]);
+        if (url.includes("/pricing")) return json({ saleFeeAmount: 9000 });
+        return json({ buyerPays: null, sellerOffersFree: { sellerCost: 9000 } });
+      }),
+    );
+    render(
+      <GroupPublicationDialog storeId="s" listingId="base" pricingTargets={null} onClose={() => undefined} onDraftsCreated={() => undefined} onPublish={() => undefined} />,
+    );
+    expect(await screen.findByText("Publicación base")).toBeInTheDocument();
+    expect(screen.queryByText("Borrador base")).not.toBeInTheDocument();
+    expect(screen.getByText(/Mercado Libre las agrupa por el nombre de familia del borrador base/)).toBeInTheDocument();
+    expect(screen.queryByText(/nombre de familia;/)).not.toBeInTheDocument();
+  });
 });

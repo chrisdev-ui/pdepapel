@@ -587,6 +587,15 @@ describe("ListingPublicationWizard", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Completa «COLOR»");
   });
 
+  it("keeps the space while typing a value of several words", () => {
+    render(<WizardHarness onPublish={async () => undefined} initialStep={3} />);
+    const brand = screen.getByLabelText(/^Marca/);
+    fireEvent.change(brand, { target: { value: "P de " } });
+    expect(brand).toHaveValue("P de ");
+    fireEvent.change(brand, { target: { value: "P de Papel" } });
+    expect(brand).toHaveValue("P de Papel");
+  });
+
   it("names the current step at phone width and marks required fields", () => {
     render(<WizardHarness onPublish={async () => undefined} />);
 
