@@ -156,9 +156,13 @@ export async function POST(
           localCategoryId,
         },
       },
+      // Guardarlo a mano lo vuelve manual y aceptado: se aplica solo. Las
+      // categorías aprendidas se conservan como opciones.
       update: {
         categoryId,
         name,
+        origin: "MANUAL",
+        state: "ACCEPTED",
         attributes: parseAttributes(body.attributes) as Prisma.InputJsonValue,
         stockSafetyBuffer: parseStockSafetyBuffer(body.stockSafetyBuffer),
         minimumMarginAmount: parseOptionalTargetProfit(

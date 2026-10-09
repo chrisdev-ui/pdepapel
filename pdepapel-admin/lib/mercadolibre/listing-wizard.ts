@@ -290,6 +290,8 @@ export type ListingWizardPrefillProduct = {
   colorName?: string | null;
   sizeName?: string | null;
   designName?: string | null;
+  /** Modelo sugerido con datos del catálogo (category-profiles.ts). */
+  modelName?: string | null;
   hasNoProductIdentifier?: boolean;
 };
 
@@ -393,6 +395,9 @@ export function prefillListingAttributes(
     COLOR: product.colorName,
     SIZE: product.sizeName,
     DESIGN: product.designName,
+    MODEL: product.modelName,
+    // Una unidad suelta; un kit dice cuántas piezas trae, eso no se adivina.
+    UNITS_PER_PACK: product.isKit ? null : "1",
   };
   for (const attribute of categoryAttributes) {
     const id = attribute.id.toUpperCase();

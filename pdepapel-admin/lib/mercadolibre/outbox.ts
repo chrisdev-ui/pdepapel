@@ -33,6 +33,7 @@ import {
   syncMercadoLibreListingContent,
   type MercadoLibreCreatedItem,
 } from "./listings";
+import { learnFromPublishedListing } from "./category-learning";
 import { findItemFromAttempt, readPublishAttempt, withPublishAttempt } from "./publish-attempt";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
@@ -920,6 +921,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
             event.listing!.product.description,
           ),
         };
+        await learnFromPublishedListing(event.listing!.id);
       }
     } else {
       throw new Error(

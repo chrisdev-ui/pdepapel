@@ -2303,6 +2303,12 @@ model MarketplacePublicationProfile {
   attributes          Json
   stockSafetyBuffer   Int      @default(1)
   minimumMarginAmount Float?
+  /// MANUAL (guardado por Paula) o LEARNED (aprendido de una publicación).
+  origin              String   @default("MANUAL") @db.VarChar(16)
+  /// SUGGESTED: se propone y espera un «Usar esta». ACCEPTED: se aplica solo.
+  state               String   @default("ACCEPTED") @db.VarChar(16)
+  /// Categorías de Mercado Libre usadas en esta subcategoría, por uso (lib/mercadolibre/category-profiles.ts).
+  candidates          Json?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

@@ -21,7 +21,8 @@ export const MAX_CONCURRENT_CATEGORY_INSPECTIONS = 3;
 
 /** Respuesta de `GET /marketplaces/mercadolibre/categories`. */
 export type MercadoLibreCategorySearchResponse = {
-  suggestions: MercadoLibreCategorySuggestion[];
+  /** `otherTrade`: de otro rubro (ferretería, bebé, belleza…); va al final con su etiqueta. */
+  suggestions: (MercadoLibreCategorySuggestion & { otherTrade?: boolean })[];
   /** Sugerencias que no se pudieron verificar porque Mercado Libre no respondió. */
   unavailableCount: number;
 };

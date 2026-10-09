@@ -46,6 +46,11 @@ import {
 } from "@/lib/mercadolibre/listing-margin";
 import type { MercadoLibreCategorySearchResponse } from "@/lib/mercadolibre/categories";
 import { ProductVideoLibrary } from "./product-video-library";
+import {
+  shouldAutoApplyProfile,
+  suggestModelName,
+  type CategoryCandidate,
+} from "@/lib/mercadolibre/category-profiles";
 import { GroupPublicationDialog } from "./listings/group-publication-dialog";
 import { countPublications } from "./listings/listing-signals";
 import { ListingDetailsSheet } from "./listings/listing-details-sheet";
@@ -189,6 +194,10 @@ type PublicationProfile = {
   stockSafetyBuffer: number;
   minimumMarginAmount: number | null;
   localCategory: { id: string; name: string };
+  /** SUGGESTED: aprendido de publicaciones anteriores y todavía sin aceptar. */
+  state?: string;
+  origin?: string;
+  candidates?: CategoryCandidate[] | null;
 };
 
 type PriceEstimate = {
@@ -645,6 +654,51 @@ export function MercadoLibreListingManager({
     setQuickProfile(null);
   };
 
+  /** «Usar esta»: aplica la categoría del perfil de la subcategoría y lo acepta. */
+  const applyProfileCategory = async (categoryId: string) => {
+    const profile = quickProfile;
+    if (!profile) return;
+    const normalizedCategoryId = categoryId.trim().toUpperCase();
+    const sameCategory = normalizedCategoryId === profile.categoryId.toUpperCase();
+    setError(null);
+    setForm((current) => ({
+      ...current,
+      categoryId: normalizedCategoryId,
+      // La ficha del perfil es de su categoría principal; con otra categoría
+      // se rellena después desde el producto.
+      attributes: sameCategory ? attributesToText(profile.attributes) : "",
+      stockSafetyBuffer: String(profile.stockSafetyBuffer),
+      minimumMarginAmount:
+        profile.minimumMarginAmount === null ? current.minimumMarginAmount : String(profile.minimumMarginAmount),
+    }));
+    setCategoryAttributes([]);
+    setVerifiedCategoryId(null);
+    setPriceEstimate(null);
+    setPriceOptions([]);
+    setShippingComparison(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/profiles/${encodeURIComponent(profile.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ categoryId: normalizedCategoryId }),
+        },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const updated = (await response.json()) as PublicationProfile;
+      setPublicationProfiles((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setQuickProfile(updated);
+    } catch (requestError) {
+      setQuickProfile({ ...profile, categoryId: normalizedCategoryId });
+      setError(
+        requestError instanceof Error
+          ? `La categoría quedó elegida, pero no se pudo guardar como la de esta subcategoría: ${requestError.message}`
+          : "La categoría quedó elegida, pero no se pudo guardar como la de esta subcategoría",
+      );
+    }
+  };
+
   const openNewListingRef = useRef<() => void>(() => undefined);
   const openNewListing = () => {
     saleConditionsRequestId.current += 1;
@@ -1007,7 +1061,15 @@ export function MercadoLibreListingManager({
       // Marca, GTIN, MPN, color y tamaño salen del producto; solo se llenan
       // los vacíos y nunca se adivina un valor de lista cerrada.
       if (selectedProduct) {
-        const product = selectedProduct;
+        const product = {
+          ...selectedProduct,
+          modelName: suggestModelName({
+            name: selectedProduct.name,
+            productGroupName: selectedProduct.productGroupName,
+            colorName: selectedProduct.colorName,
+            sizeName: selectedProduct.sizeName,
+          }),
+        };
         setForm((current) => ({
           ...current,
           attributes: prefillListingAttributes(current.attributes, attributes, product),
@@ -1515,11 +1577,15 @@ export function MercadoLibreListingManager({
           })
         : null;
     const initialMarketplacePrice = estimatedPrice ? String(estimatedPrice) : "";
-    const profile = publicationProfiles.find(
+    const matchingProfile = publicationProfiles.find(
       (item) => item.localCategoryId === selected?.category?.id,
     );
+    // Un perfil aprendido y sugerido se ofrece en la categoría («Usar esta»),
+    // pero no llena nada hasta que Paula lo acepta una vez.
+    const profile =
+      matchingProfile && shouldAutoApplyProfile(matchingProfile) ? matchingProfile : undefined;
     setSelectedProduct(selected);
-    setQuickProfile(profile ?? null);
+    setQuickProfile(matchingProfile ?? null);
     setSuggestions([]);
     setSuggestionsNotice(null);
     setCategoryAttributes([]);
@@ -2863,6 +2929,7 @@ export function MercadoLibreListingManager({
             isValidating={isValidating}
             onValidate={validateListing}
             onCategoryChange={updateCategory}
+            onUseProfileCategory={(categoryId) => void applyProfileCategory(categoryId)}
             onLoadCategoryAttributes={loadCategoryAttributes}
             onLoadPriceEstimate={loadPriceEstimate}
             onLoadShippingComparison={loadShippingComparison}

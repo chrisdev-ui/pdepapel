@@ -3,6 +3,7 @@ import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { rankCategorySuggestions } from "@/lib/mercadolibre/category-profiles";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import {
   MAX_CONCURRENT_CATEGORY_INSPECTIONS,
@@ -81,7 +82,8 @@ export async function GET(
     }
 
     const body: MercadoLibreCategorySearchResponse = {
-      suggestions,
+      // Las de otro rubro (ferretería, bebé, belleza…) bajan al final con su etiqueta.
+      suggestions: rankCategorySuggestions(suggestions),
       unavailableCount: unavailable.length,
     };
     return NextResponse.json(body, { headers: CACHE_HEADERS.NO_CACHE });

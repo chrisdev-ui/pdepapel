@@ -159,6 +159,8 @@ export type ListingPublicationCategorySuggestion = {
   domainName: string | null;
   /** Ruta desde la raíz (nombres) que Mercado Libre reporta para la categoría. */
   path: string[];
+  /** De otro rubro (ferretería, bebé, belleza…): va al final con su etiqueta. */
+  otherTrade?: boolean;
 };
 
 export type ListingPublicationCategoryAttribute = {
@@ -188,6 +190,10 @@ export type ListingPublicationQuickProfile = {
   stockSafetyBuffer: number;
   minimumMarginAmount: number | null;
   localCategory: { id: string; name: string };
+  /** SUGGESTED: aprendido y todavía sin aceptar; se propone, no se aplica. */
+  state?: string;
+  origin?: string;
+  candidates?: { categoryId: string; categoryName: string | null; uses: number }[] | null;
 };
 
 export type ListingPublicationPriceEstimate = {
@@ -292,6 +298,8 @@ type ListingPublicationWizardProps = {
   isValidating?: boolean;
   onValidate?: () => Promise<void>;
   onCategoryChange: (categoryId: string) => void;
+  /** «Usar esta»: aplica la categoría (y la ficha) del perfil de la subcategoría y lo acepta. */
+  onUseProfileCategory?: (categoryId: string) => void;
   onLoadCategoryAttributes: () => Promise<boolean>;
   onLoadPriceEstimate: () => Promise<boolean>;
   onLoadShippingComparison: () => Promise<unknown>;
@@ -405,6 +413,7 @@ export function ListingPublicationWizard({
   onProductChange,
   onSearchCategories,
   onCategoryChange,
+  onUseProfileCategory,
   onLoadCategoryAttributes,
   onLoadPriceEstimate,
   onLoadShippingComparison,
@@ -604,6 +613,12 @@ export function ListingPublicationWizard({
     priceOptions.length > 0
       ? Math.min(...priceOptions.map((option) => option.saleFeeAmount))
       : null;
+
+  const profileCandidates = quickProfile
+    ? quickProfile.candidates?.length
+      ? quickProfile.candidates
+      : [{ categoryId: quickProfile.categoryId, categoryName: null, uses: 0 }]
+    : [];
 
   const goToNextStep = async () => {
     const validationIssue = getListingWizardStepIssue({
@@ -828,7 +843,18 @@ export function ListingPublicationWizard({
                 final de la publicación.
               </p>
             </div>
-            {quickProfile ? (
+            {quickProfile && quickProfile.state === "SUGGESTED" ? (
+              <div className="rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm">
+                <p className="font-medium">
+                  Hay una categoría sugerida para {quickProfile.localCategory.name}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sale de publicaciones anteriores de esta subcategoría. En el
+                  paso de categoría, «Usar esta» la aplica con su ficha; desde
+                  ahí se aplica sola.
+                </p>
+              </div>
+            ) : quickProfile ? (
               <div className="rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm">
                 <p className="font-medium">
                   Perfil rápido aplicado: {quickProfile.name}
@@ -1074,6 +1100,44 @@ export function ListingPublicationWizard({
                 Buscar
               </Button>
             </div>
+            {profileCandidates.length > 0 && onUseProfileCategory ? (
+              <section
+                aria-label={`Usadas antes en ${quickProfile?.localCategory.name ?? "esta subcategoría"}`}
+                className="space-y-1 rounded-md border border-primary/20 bg-primary/[0.03] p-2"
+              >
+                <p className="px-1 text-xs font-medium">
+                  Usadas antes en {quickProfile?.localCategory.name ?? "esta subcategoría"}
+                </p>
+                <ul className="grid gap-1">
+                  {profileCandidates.map((candidate) => {
+                    const chosen = form.categoryId.trim().toUpperCase() === candidate.categoryId.toUpperCase();
+                    return (
+                      <li key={candidate.categoryId} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-background px-2 py-1.5 text-sm">
+                        <span className="min-w-0">
+                          <span className="block font-medium">{candidate.categoryName ?? candidate.categoryId}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {candidate.categoryId}
+                            {candidate.uses > 0 ? ` · ${candidate.uses} ${candidate.uses === 1 ? "publicación" : "publicaciones"}` : ""}
+                          </span>
+                        </span>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant={chosen ? "secondary" : "default"}
+                          aria-label={`Usar esta: ${candidate.categoryName ?? candidate.categoryId}`}
+                          onClick={() => {
+                            setIssue((current) => (current?.field === "categoryId" ? null : current));
+                            onUseProfileCategory(candidate.categoryId);
+                          }}
+                        >
+                          {chosen ? "En uso" : "Usar esta"}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
             {suggestions.length > 0 ? (
               <ul
                 className="grid gap-1 rounded-md border p-1"
@@ -1117,6 +1181,11 @@ export function ListingPublicationWizard({
                         <span className="min-w-0">
                           <span className="block font-medium">
                             {suggestion.categoryName}
+                            {suggestion.otherTrade ? (
+                              <span className="ml-2 rounded-full bg-tint-cream px-2 py-0.5 text-[11px] font-medium text-foreground">
+                                Otro rubro
+                              </span>
+                            ) : null}
                           </span>
                           {path ? (
                             <span className="block truncate text-xs text-muted-foreground">

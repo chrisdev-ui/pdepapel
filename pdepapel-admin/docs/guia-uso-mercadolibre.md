@@ -97,6 +97,17 @@ Un **perfil rápido** guarda los ajustes que normalmente se repiten en productos
 
 Un perfil rápido **no publica productos por sí solo** y tampoco modifica publicaciones que ya están activas.
 
+### Categorías sugeridas por publicaciones anteriores
+
+Cada vez que se publica algo, el panel recuerda la categoría de Mercado Libre que se usó para la subcategoría del producto.
+
+1. La próxima vez que publiques un producto de esa subcategoría, en el paso **Categoría y fotos** aparece **Usadas antes en …** con esas categorías, la más usada primero.
+2. Pulsa **Usar esta**: se elige la categoría con la ficha común y queda aceptada. Desde ahí se aplica sola, como un perfil rápido.
+3. Las sugerencias de Mercado Libre de otro rubro (ferretería, bebé, belleza…) salen al final con la etiqueta **Otro rubro**.
+4. En la ficha, **Modelo** se propone con el nombre del grupo o del producto sin su color, y **Cantidad de paquetes** con 1 si no es un kit. Solo se llenan si el campo está vacío; revísalos antes de seguir.
+
+En **Ajustes → Envíos y empaques → Categorías de Mercado Libre por subcategoría** ves todas, puedes aceptar otra o quitar una.
+
 ### Publicar todas las variantes de un grupo
 
 Mercado Libre publica cada variante (cada color o diseño) como su propio aviso y las agrupa por el **nombre de familia**. No hace falta repetir el asistente por cada una:

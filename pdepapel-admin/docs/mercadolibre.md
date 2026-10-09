@@ -217,6 +217,15 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 5. La **utilidad objetivo** es una guía. El cálculo usa el costo de compra, la comisión estimada actual y el envío estimado cuando P de Papel decidió pagarlo; no sustituye la liquidación real de una venta. Si falta peso o dimensiones, Administración no sugiere un precio que pudiera ocultar el costo del envío.
 6. En la fila de la publicación, pulsa **Revisar contenido** para recibir una lista de verificación. No cambia el producto ni publica nada; corrige lo necesario desde **Editar**.
 
+### Categorías aprendidas por subcategoría
+
+Al publicar, el panel anota la categoría de Mercado Libre en el perfil rápido de la subcategoría del producto. Si no hay perfil, crea uno aprendido y **sugerido**, con la ficha común; nunca guarda color, código ni medidas.
+
+- Un perfil sugerido se propone en el paso de categoría («Usar esta») y no llena nada hasta aceptarlo una vez.
+- Uno aceptado o guardado a mano se aplica solo. Aprender después solo suma opciones; no cambia la categoría elegida.
+- Se editan en **Ajustes → Envíos y empaques**.
+- La siembra desde lo ya publicado (`…/profiles/learn`) muestra primero la lista. Escribe solo las subcategorías aprobadas y deja fuera las que usan más de una categoría.
+
 ### Acciones masivas de publicaciones
 
 1. Marca las publicaciones en la tabla (la casilla de cada fila o la del encabezado). Aparece la barra de selección con la acción y **Aplicar de forma segura**; el tope es 20 por tanda y la barra lo avisa antes de confirmar.

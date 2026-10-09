@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { ListingPublicationWizard } from "@/app/(dashboard)/[storeId]/(routes)/mercadolibre/components/listing-publication-wizard";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -68,7 +68,11 @@ function WizardHarness({
   noCost = false,
   pricingTargets = null,
   listingTargetProfit = "12000",
+  quickProfileOverride,
+  onUseProfileCategory,
 }: {
+  quickProfileOverride?: Record<string, unknown>;
+  onUseProfileCategory?: (categoryId: string) => void;
   pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
   listingTargetProfit?: string;
   noCost?: boolean;
@@ -224,7 +228,9 @@ function WizardHarness({
         stockSafetyBuffer: 0,
         minimumMarginAmount: 12000,
         localCategory: product.category,
+        ...quickProfileOverride,
       }}
+      onUseProfileCategory={onUseProfileCategory}
       priceEstimate={priceEstimate}
       priceOptions={[priceEstimate, premiumPriceEstimate]}
       shippingComparison={
@@ -594,6 +600,45 @@ describe("ListingPublicationWizard", () => {
     expect(brand).toHaveValue("P de ");
     fireEvent.change(brand, { target: { value: "P de Papel" } });
     expect(brand).toHaveValue("P de Papel");
+  });
+
+  it("un perfil sugerido no dice «aplicado» y en la categoría ofrece «Usar esta» con lo usado antes", () => {
+    const onUseProfileCategory = vi.fn();
+    const suggested = {
+      state: "SUGGESTED",
+      origin: "LEARNED",
+      candidates: [
+        { categoryId: "MCO441855", categoryName: "Cartucheras", uses: 3, lastUsedAt: "2026-10-09T00:00:00Z" },
+        { categoryId: "MCO999", categoryName: "Estuches", uses: 1, lastUsedAt: "2026-10-01T00:00:00Z" },
+      ],
+    };
+    const { unmount } = render(<WizardHarness onPublish={async () => undefined} quickProfileOverride={suggested} />);
+    expect(screen.queryByText(/Perfil rápido aplicado/)).not.toBeInTheDocument();
+    expect(screen.getByText(/categoría sugerida/i)).toBeInTheDocument();
+    unmount();
+
+    render(<WizardHarness onPublish={async () => undefined} initialStep={2} quickProfileOverride={suggested} onUseProfileCategory={onUseProfileCategory} />);
+    const box = screen.getByRole("region", { name: /Usadas antes/ });
+    expect(within(box).getByText("Cartucheras")).toBeInTheDocument();
+    expect(within(box).getByText(/3 publicaciones/)).toBeInTheDocument();
+    fireEvent.click(within(box).getAllByRole("button", { name: /Usar esta/ })[1]);
+    expect(onUseProfileCategory).toHaveBeenCalledWith("MCO999");
+  });
+
+  it("una sugerencia de otro rubro lleva su etiqueta", () => {
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        initialStep={2}
+        suggestions={[
+          { categoryId: "MCO1", categoryName: "Perforadoras", domainId: "MCO-PAPER_PUNCHES", domainName: "Perforadoras", path: [] },
+          { categoryId: "MCO2", categoryName: "Dados de tarrajas", domainId: "MCO-DIE_NUTS", domainName: "Dados", path: [], otherTrade: true } as never,
+        ]}
+      />,
+    );
+    const items = within(screen.getByRole("list", { name: "Categorías sugeridas por Mercado Libre" })).getAllByRole("listitem");
+    expect(within(items[1]).getByText("Otro rubro")).toBeInTheDocument();
+    expect(within(items[0]).queryByText("Otro rubro")).not.toBeInTheDocument();
   });
 
   it("names the current step at phone width and marks required fields", () => {

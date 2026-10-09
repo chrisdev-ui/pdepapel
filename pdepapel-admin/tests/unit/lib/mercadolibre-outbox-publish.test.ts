@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),
   transaction: vi.fn(),
   findItemFromAttempt: vi.fn(),
+  learn: vi.fn(),
 }));
 
 vi.mock("@/lib/atomic-claim", () => ({ claimQueueRow: mocks.claimRow }));
@@ -62,6 +63,7 @@ vi.mock("@/lib/mercadolibre/client", () => ({
   MercadoLibreReauthError: class extends Error {},
 }));
 vi.mock("@/lib/mercadolibre/queue", () => ({ enqueueMercadoLibreOutboxEvent: mocks.enqueue }));
+vi.mock("@/lib/mercadolibre/category-learning", () => ({ learnFromPublishedListing: mocks.learn }));
 vi.mock("@/lib/mercadolibre/publish-attempt", async () => ({
   ...(await vi.importActual<typeof import("@/lib/mercadolibre/publish-attempt")>("@/lib/mercadolibre/publish-attempt")),
   findItemFromAttempt: mocks.findItemFromAttempt,
@@ -175,6 +177,17 @@ describe("PUBLISH_LISTING outbox event", () => {
     const saved = mocks.updateListing.mock.calls.find(([arg]) => arg.data.externalItemId === "MCO-NEW")![0].data;
     expect(saved.externalUserProductId).toBe("MCOU9");
     expect(saved.metadata.mercadoLibreFamilyId).toBe("777");
+  });
+
+  it("aprende la categoría de la subcategoría al publicar, y no al conciliar una ya publicada", async () => {
+    mocks.findOutboxEvent.mockResolvedValue(publishEvent());
+    await processMarketplaceOutboxEvent("publish-event");
+    expect(mocks.learn).toHaveBeenCalledWith("listing-1");
+
+    mocks.learn.mockClear();
+    mocks.findOutboxEvent.mockResolvedValue(publishEvent({ listing: { ...publishEvent().listing, externalItemId: "MCO-OLD" } }));
+    await processMarketplaceOutboxEvent("publish-event");
+    expect(mocks.learn).not.toHaveBeenCalled();
   });
 
   it("keeps the listing published and only records a warning when the description fails", async () => {

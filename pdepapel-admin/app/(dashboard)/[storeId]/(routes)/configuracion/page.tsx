@@ -12,6 +12,7 @@ import { CacheManagement } from "../envios/components/cache-management";
 import { BoxesPanel } from "./components/boxes-panel";
 import { BusinessInfoPanel } from "./components/business-info-panel";
 import { IntegrationsPanel } from "./components/integrations-panel";
+import { MercadoLibreProfilesPanel } from "./components/mercadolibre-profiles-panel";
 import { PaymentsPanel } from "./components/payments-panel";
 import { SettingsForm } from "./components/settings-form";
 
@@ -100,6 +101,7 @@ export default async function SettingsPage({
       {tab === "envios" && (
         <div className="flex flex-col gap-8">
           <SettingsForm initialData={store} section="envios" />
+          <MercadoLibreProfilesPanel storeId={params.storeId} />
           <BoxesPanel
             data={(await getBoxes(params.storeId)).map((box) => ({
               ...box,
