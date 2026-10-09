@@ -15,11 +15,13 @@ const mocks = vi.hoisted(() => ({
   storeFindFirst: vi.fn(),
   convFindUnique: vi.fn(),
   convUpdateMany: vi.fn(),
+  stash: vi.fn(),
   env: { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789", WHATSAPP_APP_SECRET: undefined as string | undefined },
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
 vi.mock("@/lib/whatsapp/queue", () => ({ enqueueWhatsAppWebhookEvent: mocks.enqueue }));
+vi.mock("@/lib/whatsapp/webhook-replay", () => ({ stashFailedWhatsAppWebhook: mocks.stash }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     marketplaceConnection: { findFirst: mocks.findFirst },
@@ -86,6 +88,7 @@ describe("POST /api/webhook/whatsapp", () => {
     mocks.ignoredUpdate.mockResolvedValue({});
     mocks.eventUpdate.mockResolvedValue({});
     mocks.storeFindFirst.mockResolvedValue({ id: "store-1" });
+    mocks.stash.mockResolvedValue({ stashed: true, queued: true });
   });
 
   it("rejects a request without the shared secret before touching the database", async () => {
@@ -194,9 +197,11 @@ describe("POST /api/webhook/whatsapp", () => {
     mocks.findUniqueOrThrow.mockRejectedValue(new Error("db down"));
     const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ received: true, stored: false, topic: "messages" });
+    await expect(response.json()).resolves.toEqual({ received: true, stored: false, topic: "messages", retryQueued: true });
     expect(error).toHaveBeenCalled();
     expect(mocks.enqueue).not.toHaveBeenCalled();
+    // El cuerpo verificado se guarda aparte para reintentarlo: Meta no reenvía.
+    expect(mocks.stash).toHaveBeenCalledWith({ eventKey: "wamid.ABC", body: metaBody });
     error.mockRestore();
   });
 });
@@ -403,5 +408,21 @@ describe("POST /api/webhook/whatsapp — eco de Paula", () => {
     await post(echoBody(), { headers: { "x-webhook-token": VERIFY_TOKEN } });
     expect(mocks.convUpdateMany).not.toHaveBeenCalled();
     expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("if even the retry copy cannot be saved, still answers 200 and says so", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.upsert.mockRejectedValue(new Error("db down"));
+    mocks.stash.mockRejectedValue(new Error("redis down"));
+    const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ received: true, stored: false, topic: "messages", retryQueued: false });
+    error.mockRestore();
+  });
+
+  it("does not keep a copy of a request that failed authentication", async () => {
+    const response = await post(metaBody);
+    expect(response.status).toBe(401);
+    expect(mocks.stash).not.toHaveBeenCalled();
   });
 });

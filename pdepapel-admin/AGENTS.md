@@ -341,7 +341,10 @@ One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`)
 
 - Vercel's plan allows **only two crons and both are used** (`update-coupons`, `update-offers`, daily in `vercel.json`). New scheduled jobs go into `.github/workflows/admin-scheduled-tasks.yml` with the `CRON_SECRET` bearer token. Do not add Vercel crons.
 - Long external work goes through QStash and Upstash Redis, never a synchronous handler. API handlers have a 60-second ceiling.
-- Each Vercel instance holds its own Prisma pool, capped in code at `connection_limit=3` (`lib/prismadb.ts`). Do not raise it without recomputing instances × limit against Railway's `max_connections`.
+- Each Vercel instance holds its own Prisma pool, set in code (`lib/prismadb.ts`): `connection_limit=6`, `pool_timeout=20`, `max_idle_connection_lifetime=60`, `max_connection_lifetime=900`. Values already in `DATABASE_URL` win, and the effective pool is logged once per cold start as `[PRISMA_POOL]` (the URL is a Vercel Secret and cannot be read back). Do not raise `connection_limit` without recomputing instances × limit against MySQL's `max_connections` (200).
+- MySQL («MySQL US East» on Railway) runs with an explicit start command and `MALLOC_ARENA_MAX=2`, so memory follows the container instead of the host. Stock MySQL sized TempTable and performance_schema from host RAM and was OOM-killed twice (`docs/ops/2026-10-09-incidente-mysql-sin-memoria.md`, which also holds the rollback). Change those flags only through the Railway service by its id: the CLI is linked to the old US West database.
+- `db-health` (daily, in the scheduled-tasks workflow) turns «Sistemas» red when MySQL memory or connections pass 70 %, when MySQL restarted in the last 24 h, or when WhatsApp webhooks are waiting to be saved.
+- When the WhatsApp webhook cannot save an event it still answers 200, keeps the verified body in Redis (`whatsapp:webhook:replay:*`, 7 days) and QStash replays it through `/api/internal/marketplaces/whatsapp/replay` until it is stored once (`lib/whatsapp/webhook-replay.ts`).
 
 ### Accessibility, UX and responsiveness
 

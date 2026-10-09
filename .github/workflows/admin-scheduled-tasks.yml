@@ -138,6 +138,26 @@ jobs:
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/notification-retry"
 
+  db-health:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
+    name: MySQL health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      # Flags memory or connections above 70 %, a MySQL restart in the last
+      # 24 h (how an overnight OOM shows up) and WhatsApp webhooks still
+      # waiting to be saved. A warning turns «Sistemas» red (lib/db-health.ts).
+      - name: Review MySQL memory and connections
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/db-health"
+
   gift-card-holds:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == '' }}
     name: Gift card hold release

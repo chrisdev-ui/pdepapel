@@ -32,8 +32,22 @@ export function getPrismaLogLevels(
  */
 export const POOL_CONNECTION_LIMIT = 6;
 export const POOL_TIMEOUT_SECONDS = 20;
+/**
+ * Una instancia de Vercel que se congela deja sus conexiones abiertas en
+ * MySQL con sus sentencias preparadas. Las vivas cierran las ociosas en un
+ * minuto y renuevan las largas; las huérfanas las corta `wait_timeout`.
+ */
+export const POOL_MAX_IDLE_SECONDS = 60;
+export const POOL_MAX_LIFETIME_SECONDS = 900;
 
-/** Añade `connection_limit` y `pool_timeout` a la URL salvo que ya vengan en ella. */
+const POOL_PARAM_NAMES = [
+  "connection_limit",
+  "pool_timeout",
+  "max_idle_connection_lifetime",
+  "max_connection_lifetime",
+] as const;
+
+/** Completa los parámetros del pool que la URL no trae; los de la URL mandan. */
 export function withConnectionPoolParams(
   url: string | undefined,
   { connectionLimit = POOL_CONNECTION_LIMIT, poolTimeout = POOL_TIMEOUT_SECONDS } = {},
@@ -45,16 +59,33 @@ export function withConnectionPoolParams(
   } catch {
     return url;
   }
-  if (!parsed.searchParams.has("connection_limit")) {
-    parsed.searchParams.set("connection_limit", String(connectionLimit));
-  }
-  if (!parsed.searchParams.has("pool_timeout")) {
-    parsed.searchParams.set("pool_timeout", String(poolTimeout));
+  const defaults: Record<(typeof POOL_PARAM_NAMES)[number], number> = {
+    connection_limit: connectionLimit,
+    pool_timeout: poolTimeout,
+    max_idle_connection_lifetime: POOL_MAX_IDLE_SECONDS,
+    max_connection_lifetime: POOL_MAX_LIFETIME_SECONDS,
+  };
+  for (const name of POOL_PARAM_NAMES) {
+    if (!parsed.searchParams.has(name)) parsed.searchParams.set(name, String(defaults[name]));
   }
   return parsed.toString();
 }
 
+/** Pool efectivo para el registro: solo los parámetros, nunca host ni credenciales. */
+export function describeConnectionPool(url: string | undefined) {
+  if (!url || !URL.canParse(url)) return null;
+  const original = new URL(url).searchParams;
+  const params = new URL(withConnectionPoolParams(url) as string).searchParams;
+  return {
+    ...Object.fromEntries(POOL_PARAM_NAMES.map((name) => [name, params.get(name)])),
+    fromUrl: POOL_PARAM_NAMES.filter((name) => original.has(name)),
+  };
+}
+
 const datasourceUrl = withConnectionPoolParams(process.env.DATABASE_URL);
+if (process.env.NODE_ENV === "production" && !globalThis.prisma) {
+  console.info("[PRISMA_POOL]", describeConnectionPool(process.env.DATABASE_URL));
+}
 
 const prismadb =
   globalThis.prisma ||
