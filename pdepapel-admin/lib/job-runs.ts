@@ -20,11 +20,11 @@ export type JobName =
   | "payment-webhook-retention"
   | "notification-retry"
   | "db-health"
-  // Apagados hasta que se aprueben (lib/scheduled-jobs.ts); entran a
-  // JOB_DEFINITIONS al encenderlos, si no «Sistemas» los marcaría atrasados.
   | "abc-classification"
-  | "customer-reactivation"
-  | "bank-transfer-review";
+  | "bank-transfer-review"
+  // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
+  // si no «Sistemas» lo marcaría atrasado.
+  | "customer-reactivation";
 
 export interface JobDefinition {
   name: JobName;
@@ -87,6 +87,18 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     name: "db-health",
     label: "Salud de la base de datos",
+    expectedEveryHours: 24,
+    perStore: false,
+  },
+  {
+    name: "abc-classification",
+    label: "Clasificación ABC de productos",
+    expectedEveryHours: 24,
+    perStore: false,
+  },
+  {
+    name: "bank-transfer-review",
+    label: "Revisión de transferencias sin pagar",
     expectedEveryHours: 24,
     perStore: false,
   },

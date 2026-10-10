@@ -1,6 +1,6 @@
 import prismadb from "@/lib/prismadb";
 import { findReactivationCandidatesForSystemJob } from "@/actions/get-customer-intelligence";
-import { DiscountType, ReactivationStatus } from "@prisma/client";
+import { DiscountType, NewsletterSubscriberStatus, ReactivationStatus } from "@prisma/client";
 import { addDays } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
@@ -8,7 +8,27 @@ import { resend } from "@/lib/resend";
 import { ReactivationEmailTemplate } from "@/emails/reactivation-email";
 import { render } from "@react-email/render";
 import { env } from "@/lib/env.mjs";
+import { normalizeNewsletterEmail } from "@/lib/newsletter-tokens";
 import { currencyFormatter } from "@/lib/utils";
+
+/** Clientas con el boletín activo (confirmado y sin baja) en esta tienda. */
+export async function keepCustomersWithMarketingConsent<T extends { email: string }>(
+  storeId: string,
+  customers: T[],
+): Promise<T[]> {
+  if (customers.length === 0) return [];
+  const consented = await prismadb.newsletterSubscriber.findMany({
+    where: {
+      storeId,
+      status: NewsletterSubscriberStatus.ACTIVE,
+      unsubscribedAt: null,
+      emailNormalized: { in: customers.map((customer) => normalizeNewsletterEmail(customer.email)) },
+    },
+    select: { emailNormalized: true },
+  });
+  const allowed = new Set(consented.map((row) => row.emailNormalized));
+  return customers.filter((customer) => allowed.has(normalizeNewsletterEmail(customer.email)));
+}
 
 /**
  * Core engine for automated customer reactivation.
@@ -23,12 +43,16 @@ export async function processAutomaticReactivations(
   );
 
   // 1. Find eligible customers (exactly 90 days inactive)
-  const eligibleCustomers = await findReactivationCandidatesForSystemJob(
+  const inactiveCustomers = await findReactivationCandidatesForSystemJob(
     storeId,
     90,
   );
+  // Ley 1581: solo quien aceptó recibir correos de la tienda (boletín
+  // confirmado y sin baja). Sin ese registro no se escribe.
+  const eligibleCustomers = await keepCustomersWithMarketingConsent(storeId, inactiveCustomers);
+  const withoutConsent = inactiveCustomers.length - eligibleCustomers.length;
   console.log(
-    `[REACTIVATION] Found ${eligibleCustomers.length} eligible customers`,
+    `[REACTIVATION] Found ${eligibleCustomers.length} eligible customers (${withoutConsent} without consent)`,
   );
 
   if (eligibleCustomers.length === 0) {
@@ -37,7 +61,9 @@ export async function processAutomaticReactivations(
       processed: 0,
       message: "No eligible customers found today",
       errors: [] as { error: string }[],
-      ...(options.dryRun ? { dryRun: true, eligible: 0, recentlyContacted: 0, wouldSend: 0 } : {}),
+      ...(options.dryRun
+        ? { dryRun: true, inactive: inactiveCustomers.length, withoutConsent, eligible: 0, recentlyContacted: 0, wouldSend: 0 }
+        : {}),
     };
   }
 
@@ -223,6 +249,8 @@ export async function processAutomaticReactivations(
     ...(options.dryRun
       ? {
           dryRun: true,
+          inactive: inactiveCustomers.length,
+          withoutConsent,
           eligible: eligibleCustomers.length,
           recentlyContacted,
           wouldSend: eligibleCustomers.length - recentlyContacted,

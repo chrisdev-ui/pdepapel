@@ -20,13 +20,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: { NODE_ENV: "production" } }));
+vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: async () => ["avisos@prueba.test"] }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: mocks.send } } }));
 vi.mock("@/lib/notification-failures", () => ({ recordFailedNotification: mocks.recordFailedNotification }));
 vi.mock("@/lib/prismadb", () => ({
   default: { orderAccountClaim: { upsert: mocks.claimUpsert }, order: { findUnique: mocks.findOrder } },
 }));
 
-import { ADMIN_EMAIL_RECIPIENTS } from "@/lib/email-delivery";
+const ADMIN_EMAIL_RECIPIENTS = ["avisos@prueba.test"];
 import { ORDER_EMAIL_INCLUDE, sendOrderEmail, sendShippingEmail } from "@/lib/email";
 import { currencyFormatter } from "@/lib/utils";
 

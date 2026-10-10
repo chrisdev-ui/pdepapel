@@ -1,8 +1,5 @@
 import { recordFailedNotification } from "@/lib/notification-failures";
 
-/** Las dos casillas que reciben los avisos de pedidos. */
-export const ADMIN_EMAIL_RECIPIENTS = ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"];
-
 /**
  * A quién va un correo de pedido. Se guarda así en
  * `FailedNotification.recipient`: el rol, nunca la dirección.

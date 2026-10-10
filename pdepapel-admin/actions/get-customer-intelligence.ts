@@ -1,4 +1,5 @@
 import { requireStoreOwner } from "@/lib/store-access";
+import { getExcludedCustomerEmails } from "@/lib/store-email-settings";
 import { getOrderNetProfit } from "@/lib/financial";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
@@ -61,11 +62,8 @@ export async function loadCustomerProfilesForSystemJob(
 
   const customerMap = new Map<string, any>();
 
-  const IGNORED_EMAILS = [
-    "paufermr@gmail.com",
-    "clientesvarios@gmail.com",
-    "papeleria.pdepapel@gmail.com",
-  ];
+  // El equipo, la tienda y el de relleno no son clientas (Configuración).
+  const excludedEmails = await getExcludedCustomerEmails(storeId);
 
   for (const order of orders) {
     let email =
@@ -78,7 +76,7 @@ export async function loadCustomerProfilesForSystemJob(
       email = email.replace(".comufl", ".com");
     }
 
-    if (!email || IGNORED_EMAILS.includes(email)) continue;
+    if (!email || excludedEmails.has(email)) continue;
 
     const existing = customerMap.get(email) || {
       name: order.fullName,

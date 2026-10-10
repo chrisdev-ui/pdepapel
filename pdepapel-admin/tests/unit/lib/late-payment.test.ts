@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ update: vi.fn(), findUnique: vi.fn(), deliver: vi.fn(), send: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({ default: { order: { update: mocks.update, findUnique: mocks.findUnique } } }));
-vi.mock("@/lib/email-delivery", () => ({ ADMIN_EMAIL_RECIPIENTS: ["panel@example.com"], deliverEmails: mocks.deliver }));
+vi.mock("@/lib/email-delivery", () => ({ deliverEmails: mocks.deliver }));
+vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: async () => ["panel@example.com"] }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: mocks.send } } }));
 
 import { blocksLatePaymentRevival, flagPaymentOnCancelledOrder } from "@/lib/late-payment";

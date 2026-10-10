@@ -6,6 +6,30 @@ import { z } from "zod";
 
 const resend = new Resend(env.RESEND_API_KEY);
 
+/**
+ * Los destinatarios los decide la dueña en el panel (Configuración › Tienda).
+ * Se piden servidor a servidor con el secreto de la revalidación: esas
+ * direcciones no van en la configuración pública de la tienda.
+ */
+async function getContactRecipients(): Promise<string[]> {
+  const secret = process.env.REVALIDATION_SECRET?.trim();
+  if (!secret) return [];
+  try {
+    const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/notification-recipients`, {
+      headers: { "x-revalidate-secret": secret },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return [];
+    const data = await response.json().catch(() => null);
+    return Array.isArray(data?.recipients)
+      ? data.recipients.filter((value: unknown): value is string => typeof value === "string" && value.includes("@"))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Lo mismo que valida el formulario, aplicado también aquí: la ruta es
  *  pública y el correo sale desde el dominio de la tienda. */
 const contactSchema = z.object({
@@ -28,20 +52,25 @@ export async function POST(req: Request) {
     }
     const { name, email, subject, message, mobile } = parsed.data;
 
-    // Honeypot check: If mobile field is present, it's a bot
+    // Honeypot: un humano no llena este campo. Se responde éxito para no
+    // darle pistas al bot, y no se registra nada de lo que escribió.
     if (mobile) {
-      console.log("Spam attempt detected (honeypot caught):", {
-        name,
-        email,
-        mobile,
-      });
-      // Return success to fool the bot
+      console.log("Spam attempt detected (honeypot caught)");
       return NextResponse.json({ success: true });
+    }
+
+    const to = await getContactRecipients();
+    if (to.length === 0) {
+      console.error("[CONTACT] Sin destinatarios desde el panel; el mensaje no se envió.");
+      return NextResponse.json(
+        { error: "No pudimos enviar tu mensaje. Escríbenos por WhatsApp, por favor." },
+        { status: 503 },
+      );
     }
 
     const { data, error } = await resend.emails.send({
       from: "Contact <admin@papeleriapdepapel.com>",
-      to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
+      to,
       subject: `Nueva solicitud de contacto - ${name}`,
       react: ContactFormEmail({
         name,

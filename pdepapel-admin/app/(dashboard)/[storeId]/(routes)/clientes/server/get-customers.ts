@@ -1,3 +1,4 @@
+import { getExcludedCustomerEmails } from "@/lib/store-email-settings";
 import { OrderStatus, OrderType, Prisma } from "@prisma/client";
 
 import { customerIdFromPhone, isCustomerId } from "@/lib/customer-identity";
@@ -135,12 +136,13 @@ function groupOrders(
   storeId: string,
   orders: OrderRow[],
   now: Date,
+  excludedEmails: ReadonlySet<string>,
 ): CustomerRecord[] {
   const drafts = new Map<string, Draft>();
 
   for (const order of orders) {
     const phone = normalizePhone(order.phone);
-    if (!phone || isPlaceholderCustomer(order)) continue;
+    if (!phone || isPlaceholderCustomer(order, excludedEmails)) continue;
     const email = order.email?.trim() ? order.email.trim().toLowerCase() : null;
     const city = order.city?.trim() ? order.city.trim() : null;
     let draft = drafts.get(phone);
@@ -293,16 +295,18 @@ async function customerRecords(
   depth: Depth,
   now?: Date,
 ): Promise<CustomerRecords> {
+  const excludedEmails = await getExcludedCustomerEmails(storeId);
   // Con un `now` explícito (pruebas) no se memoriza: los segmentos dependen de él.
   if (now) {
     const orders = await loadOrders(storeId, depth);
     return {
-      records: groupOrders(storeId, orders, now),
+      records: groupOrders(storeId, orders, now, excludedEmails),
       truncated: orders.length >= CUSTOMERS_ORDER_TAKE,
     };
   }
 
-  const watermark = await ordersWatermark(storeId);
+  // Editar los correos del equipo en Configuración también invalida la memoria.
+  const watermark = `${await ordersWatermark(storeId)}|${Array.from(excludedEmails).sort().join(",")}`;
   // Lo completo sirve también para quien pidió el agregado; al revés no.
   const reusable =
     depth === "agregado" ? ["completo", "agregado"] : ["completo"];
@@ -313,7 +317,7 @@ async function customerRecords(
 
   const orders = await loadOrders(storeId, depth);
   const built: CustomerRecords = {
-    records: groupOrders(storeId, orders, new Date()),
+    records: groupOrders(storeId, orders, new Date(), excludedEmails),
     truncated: orders.length >= CUSTOMERS_ORDER_TAKE,
   };
   if (memos.size >= MEMO_MAX_ENTRIES) memos.clear();

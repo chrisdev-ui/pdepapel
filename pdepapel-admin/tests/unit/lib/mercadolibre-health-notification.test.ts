@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   env: { ADMIN_WEB_URL: "https://admin.example.com", NODE_ENV: "production" },
   send: vi.fn(),
+  recipients: ["avisos@prueba.test"] as string[],
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
+vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: async () => mocks.recipients }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: mocks.send } } }));
 
 import type { MercadoLibreHealthSummary } from "@/lib/mercadolibre/health";
@@ -171,6 +173,17 @@ describe("sendMercadoLibreHealthNotification", () => {
     vi.clearAllMocks();
     mocks.env.NODE_ENV = "production";
     mocks.send.mockResolvedValue({ error: null });
+    mocks.recipients = ["avisos@prueba.test"];
+  });
+
+  it("without anyone to tell it skips, so the alerts stay pending for the next run", async () => {
+    mocks.recipients = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(
+      sendMercadoLibreHealthNotification({ storeId: "store-1", summary, issues: summary.issues }),
+    ).resolves.toBe("skipped");
+    expect(mocks.send).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("sends the new alerts it is given with an HTML and a text body, and counts the known ones", async () => {
@@ -180,6 +193,7 @@ describe("sendMercadoLibreHealthNotification", () => {
 
     expect(mocks.send).toHaveBeenCalledTimes(1);
     const payload = mocks.send.mock.calls[0][0];
+    expect(payload.to).toEqual(["avisos@prueba.test"]);
     expect(payload.subject).toBe("Mercado Libre: 4 cosas para revisar");
     // El falso «Idempotency-Key» del SDK 2.1.0 ya no va: no deduplicaba (#8).
     expect(payload.headers).toBeUndefined();

@@ -6,7 +6,8 @@ import type {
   MercadoLibreHealthSummaryGroup,
   MercadoLibreHealthSummaryItem,
 } from "@/emails/mercadolibre-health-summary";
-import { ADMIN_EMAIL_RECIPIENTS, sendWithRetry } from "@/lib/email-delivery";
+import { sendWithRetry } from "@/lib/email-delivery";
+import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { env } from "@/lib/env.mjs";
 import { resend } from "@/lib/resend";
 
@@ -402,13 +403,20 @@ export async function sendMercadoLibreHealthNotification({
 }): Promise<"sent" | "skipped"> {
   if (env.NODE_ENV === "development" || issues.length === 0) return "skipped";
 
+  // Sin destinatarios no se tumba la revisión: las alertas vuelven a quedar
+  // pendientes y salen en la primera corrida con a quién mandarlas.
+  const to = await getAdminNotificationRecipients(storeId);
+  if (to.length === 0) {
+    console.warn("[MERCADOLIBRE] Sin correos para avisos en Configuración ni correo de la tienda; las alertas quedan pendientes.");
+    return "skipped";
+  }
   const digest = buildMercadoLibreHealthDigest({ storeId, summary, issues, knownIssues });
   const { subject, ...emailProps } = digest;
 
   const outcome = await sendWithRetry(() =>
     resend.emails.send({
       from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-      to: ADMIN_EMAIL_RECIPIENTS,
+      to,
       subject,
       react: MercadoLibreHealthSummary(emailProps) as ReactElement,
       text: renderMercadoLibreHealthDigestText(digest),

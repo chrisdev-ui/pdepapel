@@ -30,7 +30,13 @@ export async function GET(request: NextRequest) {
         processed: result.processed,
         failed: result.errors?.length ?? 0,
         ...("wouldSend" in result
-          ? { eligible: result.eligible, recentlyContacted: result.recentlyContacted, wouldSend: result.wouldSend }
+          ? {
+              inactive: result.inactive,
+              withoutConsent: result.withoutConsent,
+              eligible: result.eligible,
+              recentlyContacted: result.recentlyContacted,
+              wouldSend: result.wouldSend,
+            }
           : {}),
       });
     }

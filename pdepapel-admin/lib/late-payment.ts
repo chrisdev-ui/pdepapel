@@ -1,6 +1,7 @@
 import { OrderType } from "@prisma/client";
 
-import { ADMIN_EMAIL_RECIPIENTS, deliverEmails } from "@/lib/email-delivery";
+import { deliverEmails } from "@/lib/email-delivery";
+import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { isFraudCancelled, parseRiskReasons, withRiskReason } from "@/lib/order-risk";
 import prismadb from "@/lib/prismadb";
 
@@ -30,6 +31,11 @@ export async function flagPaymentOnCancelledOrder(orderId: string, provider: "Bo
   await prismadb.order.update({ where: { id: order.id }, data: withRiskReason(order, "pago-en-cancelado") });
 
   const link = `${PANEL_ORIGIN}/${order.storeId}/pedidos/${order.id}`;
+  const to = await getAdminNotificationRecipients(order.storeId);
+  if (to.length === 0) {
+    console.warn("[LATE_PAYMENT] Sin correos para avisos en Configuración ni correo de la tienda; no se avisa.");
+    return;
+  }
   const { resend } = await import("@/lib/resend");
   await deliverEmails(
     [
@@ -38,7 +44,7 @@ export async function flagPaymentOnCancelledOrder(orderId: string, provider: "Bo
         send: () =>
           resend.emails.send({
             from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-            to: ADMIN_EMAIL_RECIPIENTS,
+            to,
             subject: `⚠️ Pago recibido en pedido cancelado — #${order.orderNumber}`,
             text: `${provider} aprobó un pago del pedido #${order.orderNumber}, que estaba cancelado. No se reactivó ni se emitió nada. Revisa el pedido y reembolsa si corresponde: ${link}`,
           }),

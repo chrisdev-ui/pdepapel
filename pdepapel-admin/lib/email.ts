@@ -14,9 +14,9 @@ import { GiftNotification } from "@/emails/gift-notification";
 import { OrderNotification } from "@/emails/order-notification";
 import { getGiftNotificationEmail, isGiftOrder } from "@/lib/gift-orders";
 import { resend } from "@/lib/resend";
+import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { recordFailedNotification } from "@/lib/notification-failures";
 import {
-  ADMIN_EMAIL_RECIPIENTS,
   deliverEmails,
   EMAIL_ROLES,
   type EmailJob,
@@ -516,7 +516,12 @@ export const sendOrderEmail = async (
     const wanted = new Set<EmailRole>(roles);
     const jobs: EmailJob[] = [];
     if (shouldNotifyAdmin(order, status, options) && wanted.has("admin")) {
-      jobs.push({ role: "admin", send: () => resend.emails.send({ from: FROM, to: ADMIN_EMAIL_RECIPIENTS, ...built.admin }) });
+      const adminTo = await getAdminNotificationRecipients(order.storeId);
+      if (adminTo.length > 0) {
+        jobs.push({ role: "admin", send: () => resend.emails.send({ from: FROM, to: adminTo, ...built.admin }) });
+      } else {
+        console.warn("[EMAIL] Sin correos para avisos en Configuración ni correo de la tienda; no sale el aviso al admin.");
+      }
     }
     const customer = built.customer;
     const to = wanted.has("customer") ? customerRecipient(order, kind) : null;
@@ -684,7 +689,12 @@ export const sendShippingEmail = async (
     const wanted = new Set<EmailRole>(roles);
     const jobs: EmailJob[] = [];
     if (wanted.has("admin")) {
-      jobs.push({ role: "admin", send: () => resend.emails.send({ from: FROM, to: ADMIN_EMAIL_RECIPIENTS, ...built.admin }) });
+      const adminTo = await getAdminNotificationRecipients(order.storeId);
+      if (adminTo.length > 0) {
+        jobs.push({ role: "admin", send: () => resend.emails.send({ from: FROM, to: adminTo, ...built.admin }) });
+      } else {
+        console.warn("[EMAIL] Sin correos para avisos en Configuración ni correo de la tienda; no sale el aviso al admin.");
+      }
     }
     const customer = built.customer;
     const to = wanted.has("customer") ? customerRecipient(order, kind) : null;

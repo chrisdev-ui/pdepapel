@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: { NODE_ENV: "production" } }));
+vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: async () => ["avisos@prueba.test"] }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: mocks.send } } }));
 vi.mock("@/lib/notification-failures", () => ({
   recordFailedNotification: mocks.recordFailedNotification,
@@ -90,7 +91,7 @@ describe("gift order emails", () => {
     await sendOrderEmail(stored(giftOrder), OrderStatus.PENDING);
 
     expect(sentTo()).toEqual([
-      "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
+      "avisos@prueba.test",
       "luisa@example.com",
     ]);
   });
@@ -99,7 +100,7 @@ describe("gift order emails", () => {
     await sendOrderEmail(stored(giftOrder), OrderStatus.PAID);
 
     expect(sentTo()).toEqual([
-      "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
+      "avisos@prueba.test",
       "luisa@example.com",
       "mariana@example.com",
     ]);
@@ -132,7 +133,7 @@ describe("gift order emails", () => {
     await sendOrderEmail(stored(baseOrder), OrderStatus.PAID);
 
     expect(sentTo()).toEqual([
-      "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
+      "avisos@prueba.test",
       "luisa@example.com",
     ]);
     expect(await htmlOf(1)).not.toContain("Es un regalo");
@@ -145,7 +146,7 @@ describe("gift order emails", () => {
     );
 
     expect(sentTo()).toEqual([
-      "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
+      "avisos@prueba.test",
       "luisa@example.com",
     ]);
   });
@@ -154,7 +155,7 @@ describe("gift order emails", () => {
     await sendShippingEmail(stored(giftOrder), ShippingStatus.OutForDelivery);
 
     expect(sentTo()).toEqual([
-      "web.christian.dev@gmail.com,papeleria.pdepapel@gmail.com",
+      "avisos@prueba.test",
       "luisa@example.com",
       "mariana@example.com",
     ]);

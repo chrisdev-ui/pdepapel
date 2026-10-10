@@ -141,6 +141,7 @@ When a change touches authentication or authorization, verify that route list **
 ### Cache and revalidation
 
 - After catalog mutations the admin calls this app's `POST /api/revalidate` to refresh ISR. It requires `REVALIDATION_SECRET` to be an **identical single printable line** in both Vercel projects: no quotes, spaces or embedded newlines; the store rejects a header that carries one, and revalidation then fails silently from the panel's point of view.
+- The same secret authenticates the other direction once: the contact form (`app/api/send`) asks the admin `GET /notification-recipients` with `x-revalidate-secret` for the addresses the owner set in Configuración. Those addresses never go in `/public/storefront`, and no address is written in this app's code; without the secret or an answer, the form replies 503 and sends nothing.
 - **A successful admin database write with a stale public page is still a customer-visible defect — verify both.**
 - **Vercel Firewall on this project must not challenge `/api/revalidate`.** The admin calls it server to server, and Bot Protection set to «Challenge» answers 429 with `x-vercel-mitigated: challenge` before the route runs, so this app's logs show nothing and the catalog stays stale. Keep a Bypass custom rule for that path, or set Bot Protection to «Log». The same applies to any other non-browser client (Playwright in `public-health.yml`, uptime monitors).
 - Public catalog fetches use a five-minute fallback cache. Do not shrink that window without measuring the extra server work.

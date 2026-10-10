@@ -45,6 +45,9 @@ export async function createInventoryFixture() {
     data: {
       name: `Tienda de pruebas ${suffix}`,
       userId: `test-user-${suffix}`,
+      // Como la tienda real: los avisos del panel van a este correo mientras
+      // Configuración no tenga una lista propia.
+      email: "avisos@prueba.test",
     },
   });
   const type = await testPrisma.type.create({

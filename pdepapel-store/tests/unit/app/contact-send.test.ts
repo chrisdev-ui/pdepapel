@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ send: vi.fn() }));
+const mocks = vi.hoisted(() => ({ send: vi.fn(), fetch: vi.fn() }));
 
-vi.mock("@/lib/env.mjs", () => ({ env: { RESEND_API_KEY: "re_test" } }));
+vi.mock("@/lib/env.mjs", () => ({
+  env: { RESEND_API_KEY: "re_test", NEXT_PUBLIC_API_URL: "https://admin.test/api/store-1" },
+}));
 vi.mock("resend", () => ({
   Resend: class {
     emails = { send: mocks.send };
@@ -32,13 +34,39 @@ describe("POST /api/send", () => {
   beforeEach(() => {
     mocks.send.mockReset();
     mocks.send.mockResolvedValue({ data: { id: "email-1" }, error: null });
+    mocks.fetch.mockReset();
+    mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ recipients: ["avisos@prueba.test"] })));
+    vi.stubGlobal("fetch", mocks.fetch);
+    process.env.REVALIDATION_SECRET = "secreto-de-prueba";
   });
 
-  it("envía un mensaje bien formado", async () => {
+  it("envía un mensaje bien formado a quien dice el panel", async () => {
     const response = await call(valido);
 
     expect(response.status).toBe(200);
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://admin.test/api/store-1/notification-recipients",
+      expect.objectContaining({ headers: { "x-revalidate-secret": "secreto-de-prueba" } }),
+    );
     expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send.mock.calls[0][0].to).toEqual(["avisos@prueba.test"]);
+  });
+
+  it("sin destinatarios desde el panel no envía y lo dice", async () => {
+    mocks.fetch.mockResolvedValue(new Response("{}", { status: 403 }));
+    const response = await call(valido);
+
+    expect(response.status).toBe(503);
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  it("sin el secreto no pregunta al panel ni envía", async () => {
+    delete process.env.REVALIDATION_SECRET;
+    const response = await call(valido);
+
+    expect(response.status).toBe(503);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it("no manda correo con datos inválidos", async () => {
@@ -56,11 +84,14 @@ describe("POST /api/send", () => {
     expect(mocks.send).not.toHaveBeenCalled();
   });
 
-  it("el señuelo sigue devolviendo éxito sin enviar nada", async () => {
+  it("el señuelo sigue devolviendo éxito sin enviar ni registrar lo escrito", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const response = await call({ ...valido, mobile: "3001234567" });
 
     expect(response.status).toBe(200);
     expect(mocks.send).not.toHaveBeenCalled();
+    expect(JSON.stringify(log.mock.calls)).not.toContain("laura@example.com");
+    log.mockRestore();
   });
 
   it("un cuerpo que no es JSON no rompe la ruta", async () => {

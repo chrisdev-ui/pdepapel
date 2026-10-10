@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import prismadb from "@/lib/prismadb";
+import { getStoreEmailSettings } from "@/lib/store-email-settings";
 import { getStoreSettings } from "@/lib/store-settings";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ import { getBoxes } from "../cajas/server/get-boxes";
 import { CacheManagement } from "../envios/components/cache-management";
 import { BoxesPanel } from "./components/boxes-panel";
 import { BusinessInfoPanel } from "./components/business-info-panel";
+import { EmailListsPanel } from "./components/email-lists-panel";
 import { IntegrationsPanel } from "./components/integrations-panel";
 import { MercadoLibreProfilesPanel } from "./components/mercadolibre-profiles-panel";
 import { PaymentsPanel } from "./components/payments-panel";
@@ -94,6 +96,13 @@ export default async function SettingsPage({
           <SettingsForm initialData={store} section="tienda" />
           <BusinessInfoPanel
             settings={await getStoreSettings(params.storeId)}
+          />
+          <EmailListsPanel
+            {...await getStoreEmailSettings(params.storeId).then((emails) => ({
+              excludedCustomerEmails: emails.excludedCustomerEmails,
+              adminNotificationEmails: emails.adminNotificationEmails,
+              hasStoreEmail: Boolean(emails.storeEmail),
+            }))}
           />
         </div>
       )}

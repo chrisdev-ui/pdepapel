@@ -1663,6 +1663,12 @@ model StoreSettings {
   botCasualApprovedAt DateTime?
   botCasualApprovedBy String?
   botCasualVersion    String?
+  /// Correos del equipo que no cuentan como clientas (uno por línea). Se
+  /// suman al correo de la tienda y al de relleno (lib/store-email-settings.ts).
+  excludedCustomerEmails  String? @db.Text
+  /// Quién recibe los avisos del panel (uno por línea); vacía usa Store.email.
+  /// Nunca sale por una ruta pública.
+  adminNotificationEmails String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

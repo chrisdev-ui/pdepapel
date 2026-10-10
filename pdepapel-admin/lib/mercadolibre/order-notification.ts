@@ -1,12 +1,9 @@
 import { MercadoLibreOrderNotification } from "@/emails/mercadolibre-order-notification";
 import { env } from "@/lib/env.mjs";
 import { resend } from "@/lib/resend";
+import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { currencyFormatter } from "@/lib/utils";
 
-const ADMIN_NOTIFICATION_RECIPIENTS = [
-  "web.christian.dev@gmail.com",
-  "papeleria.pdepapel@gmail.com",
-];
 
 function formatPaidAt(paidAt: Date | null) {
   if (!paidAt) return null;
@@ -51,10 +48,14 @@ export async function sendMercadoLibreOrderNotification({
   orderUrl.searchParams.set("order", marketplaceOrderId);
   orderUrl.hash = "mercadolibre-orders";
   const paidAtLabel = formatPaidAt(paidAt);
+  const to = await getAdminNotificationRecipients(storeId);
+  if (to.length === 0) {
+    throw new Error("Sin correos para avisos en Configuración ni correo de la tienda");
+  }
 
   const response = await resend.emails.send({
     from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-    to: ADMIN_NOTIFICATION_RECIPIENTS,
+    to,
     subject: `[Mercado Libre] Venta pagada y registrada #${orderNumber}`,
     headers: {
       "Idempotency-Key": `mercadolibre-order-${marketplaceOrderId}`,

@@ -3,13 +3,10 @@ import { Redis } from "@upstash/redis";
 import { RevalidationAlert } from "@/emails/revalidation-alert";
 import { env } from "@/lib/env.mjs";
 import { resend } from "@/lib/resend";
+import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 
 const ALERT_KEY = "monitor:storefront-revalidation:alert";
 const ALERT_COOLDOWN_SECONDS = 60 * 60;
-const RECIPIENTS = [
-  "web.christian.dev@gmail.com",
-  "papeleria.pdepapel@gmail.com",
-];
 
 interface RevalidationFailureAlert {
   endpoints: string[];
@@ -30,6 +27,11 @@ export async function sendRevalidationFailureAlert({
     });
 
     if (cooldownResult !== "OK") return;
+    const to = await getAdminNotificationRecipients();
+    if (to.length === 0) {
+      console.warn("[REVALIDATION_ALERT] Sin correos para avisos en Configuración ni correo de la tienda; no se avisa.");
+      return;
+    }
 
     const now = new Intl.DateTimeFormat("es-CO", {
       dateStyle: "full",
@@ -43,7 +45,7 @@ export async function sendRevalidationFailureAlert({
 
     await resend.emails.send({
       from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-      to: RECIPIENTS,
+      to,
       subject: "[Alerta] Falló la actualización de la tienda en línea",
       react: RevalidationAlert({
         generatedAt: now,

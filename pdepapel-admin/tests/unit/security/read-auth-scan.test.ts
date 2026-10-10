@@ -64,6 +64,8 @@ const SENSITIVE_FIELDS = [
   "trackingCode",
   "adminNotes",
   "internalNotes",
+  "excludedCustomerEmails",
+  "adminNotificationEmails",
 ];
 
 /**

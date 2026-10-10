@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Run a single job (all = every daily job). db-health runs only the MySQL review; notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts). abc-classification, customer-reactivation and bank-transfer-review are switched off: manual dry runs only, they report counts and change nothing."
+        description: "Run a single job (all = every daily job). db-health runs only the MySQL review; notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts). abc-classification and bank-transfer-review run daily; customer-reactivation is switched off (manual dry runs only)."
         required: false
         default: all
         type: choice
@@ -18,6 +18,14 @@ on:
           - abc-classification
           - customer-reactivation
           - bank-transfer-review
+      mode:
+        description: "abc-classification and bank-transfer-review only: dry-run reports counts and changes nothing; apply writes. Scheduled runs always apply. customer-reactivation is switched off and only accepts dry-run."
+        required: false
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
 
 jobs:
   # The daily run is a QStash schedule (lib/mercadolibre/queue.ts,
@@ -185,30 +193,51 @@ jobs:
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/gift-card-holds"
 
-  # Switched off in lib/scheduled-jobs.ts (SCHEDULED_JOBS) until Christian
-  # approves it: manual only, and the route refuses mode=apply while off.
-  # The response carries counts only, never emails or order numbers.
+  # Writes only the abcClassification column of the products whose class
+  # changes, without touching updatedAt (lib/scheduled-jobs.ts): no store
+  # revalidation, feed or Mercado Libre sync depends on it.
   abc-classification:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.only == 'abc-classification' }}
-    name: ABC classification (dry run)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == 'abc-classification' }}
+    name: ABC classification
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
       ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}
     steps:
       - name: Verify protected secret
         run: test -n "$ADMIN_CRON_SECRET"
-      # Counts how many products would change ABC class (last 180 days of profit).
-      - name: Dry run
+      - name: Classify products by profit (last 180 days)
         run: |
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
-            "$ADMIN_BASE_URL/api/cron/abc-classification?mode=dry-run"
+            "$ADMIN_BASE_URL/api/cron/abc-classification?mode=$MODE"
 
-  # Switched off in lib/scheduled-jobs.ts (SCHEDULED_JOBS) until Christian
-  # approves it: manual only, and the route refuses mode=apply while off.
-  # The response carries counts only, never emails or order numbers.
+  # Appends a dated «[Automático]» note to unpaid bank-transfer orders between
+  # 48 h and 30 days old; never overwrites the existing notes and never
+  # writes to the customer. Counts only in the response.
+  bank-transfer-review:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == 'bank-transfer-review' }}
+    name: Bank transfer review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      - name: Flag unpaid bank transfers for review
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/bank-transfer-review?mode=$MODE"
+
+  # Switched off in lib/scheduled-jobs.ts until Christian approves it: manual
+  # dry runs only, and the route refuses mode=apply while off. Only customers
+  # with an active newsletter subscription count (Ley 1581). Counts only.
   customer-reactivation:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.only == 'customer-reactivation' }}
     name: Customer reactivation (dry run)
@@ -220,30 +249,8 @@ jobs:
     steps:
       - name: Verify protected secret
         run: test -n "$ADMIN_CRON_SECRET"
-      # Counts the customers at 90 days without buying who would get the reactivation email and coupon.
-      - name: Dry run
+      - name: Count who would get the reactivation email
         run: |
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/customer-reactivation?mode=dry-run"
-
-  # Switched off in lib/scheduled-jobs.ts (SCHEDULED_JOBS) until Christian
-  # approves it: manual only, and the route refuses mode=apply while off.
-  # The response carries counts only, never emails or order numbers.
-  bank-transfer-review:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.only == 'bank-transfer-review' }}
-    name: Bank transfer review (dry run)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
-      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
-    steps:
-      - name: Verify protected secret
-        run: test -n "$ADMIN_CRON_SECRET"
-      # Counts unpaid bank-transfer orders older than 48 h that would get the review note.
-      - name: Dry run
-        run: |
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
-            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
-            "$ADMIN_BASE_URL/api/cron/bank-transfer-review?mode=dry-run"

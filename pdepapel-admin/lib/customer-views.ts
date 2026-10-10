@@ -1,3 +1,4 @@
+import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 /**
  * Segmentos y vistas de Clientes (rediseño 2026-09).
  *
@@ -43,21 +44,23 @@ export interface SegmentableCustomer {
 }
 
 const PLACEHOLDER_NAMES = /^(cliente\s*nuevo|consumidor\s*final|clientes?\s*varios|sin\s*nombre|n\/a|na|-+)$/i;
-// Misma lista que actions/get-customer-intelligence.ts: identidades internas de la tienda.
-const PLACEHOLDER_EMAILS = new Set(["clientesvarios@gmail.com", "papeleria.pdepapel@gmail.com", "paufermr@gmail.com"]);
 
 /**
  * Identidades de relleno usadas en ventas de mostrador o pedidos manuales
  * («cliente nuevo», «consumidor final», teléfono 300 000 0000, correo
- * clientesvarios@…). No son personas: quedan fuera de la lista y de los
- * segmentos para no inflar los VIP.
+ * clientesvarios@…), y los correos del equipo y de la tienda que llegan en
+ * `excludedEmails` (Configuración, lib/store-email-settings.ts). No son
+ * clientas: quedan fuera de la lista y de los segmentos para no inflar los VIP.
  */
-export function isPlaceholderCustomer(input: { fullName: string; phone: string; email?: string | null }): boolean {
+export function isPlaceholderCustomer(
+  input: { fullName: string; phone: string; email?: string | null },
+  excludedEmails: ReadonlySet<string> = new Set(),
+): boolean {
   if (PLACEHOLDER_NAMES.test(input.fullName.trim())) return true;
   const digits = normalizePhone(input.phone).replace(/^57/, "");
   if (digits.length < 7 || /^(\d)\1+$/.test(digits) || /^3?0{7,}$/.test(digits)) return true;
   const email = input.email?.trim().toLowerCase();
-  return Boolean(email && PLACEHOLDER_EMAILS.has(email));
+  return Boolean(email && (isPlaceholderEmail(email) || excludedEmails.has(email)));
 }
 
 /** Teléfono a solo dígitos con indicativo de Colombia, para agrupar y para WhatsApp. */

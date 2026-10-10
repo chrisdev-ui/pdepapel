@@ -145,6 +145,7 @@ describe("Mercado Libre health alerts: dedupe and review (MySQL)", () => {
 
     expect(run.processed[0].notified).toBe(1);
     expect(resendSend).toHaveBeenCalledTimes(2);
+    expect(resendSend.mock.calls[1][0]).toMatchObject({ to: ["avisos@prueba.test"] });
   });
 
   it("an alert marked as reviewed (API, owner) stays silent, and alerts again once it changes", async () => {
