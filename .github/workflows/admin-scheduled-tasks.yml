@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Run a single job (all = every daily job). db-health runs only the MySQL review; notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts). abc-classification and bank-transfer-review run daily; customer-reactivation is switched off (manual dry runs only)."
+        description: "Run a single job (all = every daily job). db-health runs only the MySQL review; notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts). abc-classification, bank-transfer-review and copilot-retention run daily; customer-reactivation is switched off (manual dry runs only)."
         required: false
         default: all
         type: choice
@@ -18,8 +18,9 @@ on:
           - abc-classification
           - customer-reactivation
           - bank-transfer-review
+          - copilot-retention
       mode:
-        description: "abc-classification and bank-transfer-review only: dry-run reports counts and changes nothing; apply writes. Scheduled runs always apply. customer-reactivation is switched off and only accepts dry-run."
+        description: "abc-classification, bank-transfer-review and copilot-retention only: dry-run reports counts and changes nothing; apply writes. Scheduled runs always apply. customer-reactivation is switched off and only accepts dry-run."
         required: false
         default: dry-run
         type: choice
@@ -234,6 +235,27 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/bank-transfer-review?mode=$MODE"
+
+  # Deletes the copiloto's own conversations (and their messages) with no
+  # activity for 180 days. Never touches the knowledge notes. Counts only in
+  # the response (lib/copiloto/retention.ts).
+  copilot-retention:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == 'copilot-retention' }}
+    name: Copilot conversation retention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      - name: Delete copilot conversations idle for 180 days
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/copilot-retention?mode=$MODE"
 
   # Switched off in lib/scheduled-jobs.ts until Christian approves it: manual
   # dry runs only, and the route refuses mode=apply while off. Only customers

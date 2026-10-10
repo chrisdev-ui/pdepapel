@@ -529,9 +529,9 @@ model ProductNamingChange {
 
   store Store @relation(fields: [storeId], references: [id])
 
-  @@index([storeId, batchId])
-  @@index([storeId, entityType, entityId, createdAt])
-  @@index([storeId, revertedAt])
+  @@index([storeId, batchId], map: "ProductNamingChange_store_batch_idx")
+  @@index([storeId, entityType, entityId, createdAt], map: "ProductNamingChange_store_entity_created_idx")
+  @@index([storeId, revertedAt], map: "ProductNamingChange_store_reverted_idx")
 }
 
 model ProductSlugAlias {
@@ -1653,14 +1653,14 @@ model StoreSettings {
   /// igual que editar una respuesta borra su `approvedAt`.
   botFactsApprovedAt DateTime?
   botFactsApprovedBy String?
-  botFactsVersion    String?
+  botFactsVersion    String?   @db.VarChar(64)
 
   /// Lo mismo, pero para las respuestas sobre productos. Va aparte del visto
   /// bueno de los datos del negocio a propósito: si compartieran versión,
   /// añadir respuestas nuevas retiraría sin querer la aprobación de las viejas.
   botProductsApprovedAt DateTime?
   botProductsApprovedBy String?
-  botProductsVersion    String?
+  botProductsVersion    String?   @db.VarChar(64)
   /// Visto bueno de Paula a las respuestas de cortesía (`lib/whatsapp/bot-casual.ts`).
   botCasualApprovedAt DateTime?
   botCasualApprovedBy String?

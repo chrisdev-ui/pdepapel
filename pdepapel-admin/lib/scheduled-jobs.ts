@@ -12,12 +12,14 @@ import prismadb from "@/lib/prismadb";
  * simula y devuelve cifras, sin escribir nada. Encender uno es cambiar esta
  * constante, su paso en `admin-scheduled-tasks.yml` y `JOB_DEFINITIONS`.
  * La reactivación escribe a clientas: sigue apagada hasta que Christian vea
- * cuántas tienen consentimiento.
+ * cuántas tienen consentimiento. La retención del copiloto usa el mismo
+ * interruptor y la misma simulación.
  */
 export const SCHEDULED_JOBS = {
   "abc-classification": { enabled: true },
   "customer-reactivation": { enabled: false },
   "bank-transfer-review": { enabled: true },
+  "copilot-retention": { enabled: true },
 } as const satisfies Record<string, { enabled: boolean }>;
 
 export type ScheduledJobName = keyof typeof SCHEDULED_JOBS;

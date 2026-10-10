@@ -476,7 +476,7 @@ Respondidas el 2026-10-10; las respuestas están en §13.1 y en los ajustes del 
 - `copilot_ro` tiene solo `SELECT` y `MAX_USER_CONNECTIONS 2`. En las tablas con datos de contacto (`Order`, `Store`, `Supplier`, `PaymentDetails`, `Shipping`, `TaxPurchase`, tablas de Mercado Libre) el permiso es por columna y excluye nombres, teléfonos, correos y direcciones.
 - Por eso las herramientas piden columnas explícitas en cada consulta y no reutilizan los loaders del panel. Una cifra del copiloto puede diferir del panel cuando el loader del panel usa columnas que el copiloto no ve; la respuesta siempre dice la fuente y el rango.
 - Cada herramienta corre en una transacción con `max_execution_time` de 3 s. Un error de permisos, de tiempo o de conexiones ocupadas se devuelve como dato al modelo, no como excepción.
-- Conversaciones, mensajes, valoraciones y notas aprobadas se guardan con la conexión normal en `AssistantConversation`, `AssistantMessage` y `AssistantKnowledgeNote` (migración `20261010_add_copilot_tables.sql`). La retención automática de conversaciones no está implementada.
+- Conversaciones, mensajes, valoraciones y notas aprobadas se guardan con la conexión normal en `AssistantConversation`, `AssistantMessage` y `AssistantKnowledgeNote` (migración `20261010_add_copilot_tables.sql`). Un trabajo diario (`copilot-retention`) borra las conversaciones con más de 180 días sin actividad, con sus mensajes; las notas de conocimiento no se tocan.
 
 ### 13.3 Pruebas
 

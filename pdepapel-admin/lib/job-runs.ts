@@ -31,6 +31,7 @@ export type JobName =
   | "db-health"
   | "abc-classification"
   | "bank-transfer-review"
+  | "copilot-retention"
   // Cifras, no tareas: ver `measureWhatsAppBotRatio` y `measureCopilotSpend`.
   | "whatsapp-bot-ratio"
   | "copilot-spend"
@@ -111,6 +112,12 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     name: "bank-transfer-review",
     label: "Revisión de transferencias sin pagar",
+    expectedEveryHours: 24,
+    perStore: false,
+  },
+  {
+    name: "copilot-retention",
+    label: "Retención de conversaciones del copiloto",
     expectedEveryHours: 24,
     perStore: false,
   },

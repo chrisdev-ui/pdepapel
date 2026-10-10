@@ -73,6 +73,7 @@ vi.mock("@/lib/prismadb", () => ({
 
 import { GET as abc } from "@/app/api/cron/abc-classification/route";
 import { GET as bankTransfers } from "@/app/api/cron/bank-transfer-review/route";
+import { GET as copilotRetention } from "@/app/api/cron/copilot-retention/route";
 import { GET as reactivation } from "@/app/api/cron/customer-reactivation/route";
 import {
   BANK_TRANSFER_REVIEW_MARKER,
@@ -87,6 +88,7 @@ const routes = [
   { name: "abc-classification", handler: abc },
   { name: "bank-transfer-review", handler: bankTransfers },
   { name: "customer-reactivation", handler: reactivation },
+  { name: "copilot-retention", handler: copilotRetention },
 ] as const;
 
 const call = (handler: (request: never) => Promise<Response>, name: string, token?: string, query = "") =>
@@ -114,6 +116,7 @@ describe("los trabajos heredados del programador", () => {
     expect(SCHEDULED_JOBS["abc-classification"].enabled).toBe(true);
     expect(SCHEDULED_JOBS["bank-transfer-review"].enabled).toBe(true);
     expect(SCHEDULED_JOBS["customer-reactivation"].enabled).toBe(false);
+    expect(SCHEDULED_JOBS["copilot-retention"].enabled).toBe(true);
   });
 
   it.each(routes)("$name pide el secreto del cron, aunque falte la variable", async ({ name, handler }) => {
@@ -138,6 +141,12 @@ describe("los trabajos heredados del programador", () => {
     expect(await response.json()).toMatchObject({ mode: "dry-run" });
     expect(mocks.writes).toEqual([]);
     expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it("la retención del copiloto en simulación devuelve cuántas conversaciones y mensajes borraría", async () => {
+    const response = await call(copilotRetention, "copilot-retention", "cron-secret", "?mode=dry-run");
+    expect(await response.json()).toMatchObject({ mode: "dry-run", conversations: 0, messages: 0, olderThanDays: 180 });
+    expect(mocks.writes).toEqual([]);
   });
 
   it("un modo desconocido es un error de la solicitud", () => {
