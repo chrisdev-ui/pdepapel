@@ -25,7 +25,7 @@ import {
   Users,
   Warehouse,
   Gift,
-  Sparkles,
+  Brain,
 } from "lucide-react";
 
 /**
@@ -88,7 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         id: "copiloto",
         label: "Copiloto",
-        icon: Sparkles,
+        icon: Brain,
         segment: "copiloto",
         ownerOnly: true,
         requiresCopilot: true,

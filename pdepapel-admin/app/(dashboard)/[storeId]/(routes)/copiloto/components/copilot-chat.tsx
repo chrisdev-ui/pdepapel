@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import axios from "axios";
-import { Loader2, MessageSquarePlus, RotateCcw, Send, Sparkles, Square, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Brain, Loader2, MessageSquarePlus, RotateCcw, Send, Square, ThumbsDown, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
@@ -183,7 +183,7 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
       <section className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-primary">
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            <Brain className="h-4 w-4" aria-hidden="true" />
             Copiloto
           </p>
           <div role="radiogroup" aria-label="Tipo de respuesta" className="flex rounded-full border p-0.5 text-xs">

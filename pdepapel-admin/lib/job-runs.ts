@@ -253,25 +253,40 @@ async function loadSystemsStatus(
     .catch(() => []);
   const rows = buildSystemsStatus(runs, storeId, now);
   const ratio = await measureWhatsAppBotRatio(storeId, now).catch(() => null);
-  const copilot = isCopilotConfigured() ? await measureCopilotSpend(getAiRoutingStore() as unknown as CopilotBudgetStore | null, now) : null;
+  const copilot = isCopilotConfigured() ? await measureCopilotSpend(storeId, getAiRoutingStore() as unknown as CopilotBudgetStore | null, now) : null;
   return [...rows, ...(ratio ? [ratio] : []), ...(copilot ? [copilot] : [])];
 }
 
-const usd = (value: number) => `USD ${value.toFixed(2).replace(".", ",")}`;
+/** Por debajo de un centavo, dos decimales dirían «USD 0,00» aunque haya gasto. */
+const usd = (value: number) => `USD ${value.toFixed(value > 0 && value < 0.01 ? 4 : 2).replace(".", ",")}`;
+const answers = (count: number | null) => (count === null ? "" : ` (${count} ${count === 1 ? "respuesta" : "respuestas"})`);
+
+/** Respuestas del copiloto desde `since`, con los mismos cortes UTC que las claves del gasto. */
+async function countCopilotAnswers(storeId: string, since: Date): Promise<number | null> {
+  return prismadb.assistantMessage
+    .count({ where: { role: "assistant", createdAt: { gte: since }, conversation: { storeId } } })
+    .catch(() => null);
+}
 
 /** Gasto del copiloto hoy y en el mes, contra sus topes; en rojo al llegar a uno. */
-export async function measureCopilotSpend(store: CopilotBudgetStore | null, now: Date): Promise<SystemStatusRow> {
+export async function measureCopilotSpend(storeId: string, store: CopilotBudgetStore | null, now: Date): Promise<SystemStatusRow> {
   const base = { name: "copilot-spend" as const, label: "Copiloto: gasto en IA", ranAt: now, overdue: false, metric: true };
   if (!store) return { ...base, ok: null, detail: "Sin lectura del gasto (Redis no disponible)", attention: false };
   try {
-    const spend = await readCopilotSpend(store, now);
+    const dayStart = new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const monthStart = new Date(`${now.toISOString().slice(0, 7)}-01T00:00:00.000Z`);
+    const [spend, today, month] = await Promise.all([
+      readCopilotSpend(store, now),
+      countCopilotAnswers(storeId, dayStart),
+      countCopilotAnswers(storeId, monthStart),
+    ]);
     const atCap = spend.today >= COPILOT_DAILY_SPEND_CAP_USD || spend.month >= COPILOT_MONTHLY_SPEND_CAP_USD;
     const deepOff = spend.month >= COPILOT_MONTHLY_SPEND_CAP_USD * COPILOT_DEEP_MODE_CUTOFF;
     return {
       ...base,
       ok: !atCap,
       attention: atCap,
-      detail: `Hoy ${usd(spend.today)} de ${usd(COPILOT_DAILY_SPEND_CAP_USD)} · mes ${usd(spend.month)} de ${usd(COPILOT_MONTHLY_SPEND_CAP_USD)}${deepOff ? " · «a fondo» apagado este mes" : ""}`,
+      detail: `Hoy ${usd(spend.today)} de ${usd(COPILOT_DAILY_SPEND_CAP_USD)}${answers(today)} · mes ${usd(spend.month)} de ${usd(COPILOT_MONTHLY_SPEND_CAP_USD)}${answers(month)}${deepOff ? " · «a fondo» apagado este mes" : ""}`,
     };
   } catch {
     return { ...base, ok: null, detail: "Sin lectura del gasto", attention: false };

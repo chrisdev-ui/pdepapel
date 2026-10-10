@@ -1,16 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /** «Sistemas» en Inicio: mensajes del bot por cada mensaje de clienta en 24 h. */
-const mocks = vi.hoisted(() => ({ count: vi.fn() }));
+const mocks = vi.hoisted(() => ({ count: vi.fn(), answers: vi.fn() }));
 
-vi.mock("@/lib/prismadb", () => ({ default: { conversationMessage: { count: mocks.count } } }));
+vi.mock("@/lib/prismadb", () => ({
+  default: { conversationMessage: { count: mocks.count }, assistantMessage: { count: mocks.answers } },
+}));
 
 import { measureWhatsAppBotRatio, WHATSAPP_BOT_RATIO_LIMIT } from "@/lib/job-runs";
 
 const now = new Date("2026-10-10T19:00:00.000Z");
 const counts = (inbound: number, bot: number) => mocks.count.mockResolvedValueOnce(inbound).mockResolvedValueOnce(bot);
 
-beforeEach(() => mocks.count.mockReset());
+beforeEach(() => {
+  mocks.count.mockReset();
+  mocks.answers.mockReset();
+});
 
 describe("measureWhatsAppBotRatio", () => {
   it("cuenta las últimas 24 h de esta tienda: entrantes de clientas y salientes del bot", async () => {
@@ -63,25 +68,58 @@ describe("measureCopilotSpend", () => {
     incrbyfloat: async () => 0,
     expire: async () => 1,
   });
+  const answered = (today: number, month: number) => mocks.answers.mockResolvedValueOnce(today).mockResolvedValueOnce(month);
 
-  it("enseña el gasto del día y del mes contra sus topes", async () => {
+  it("por debajo de un centavo muestra 4 decimales y cuenta las respuestas del día y del mes", async () => {
+    answered(2, 2);
     const { measureCopilotSpend } = await import("@/lib/job-runs");
-    await expect(measureCopilotSpend(store(0.12, 3.4), now)).resolves.toMatchObject({
+    await expect(measureCopilotSpend("store-1", store(0.00026907, 0.00026907), now)).resolves.toMatchObject({
       name: "copilot-spend",
       metric: true,
       attention: false,
-      detail: "Hoy USD 0,12 de USD 1,00 · mes USD 3,40 de USD 15,00",
+      detail: "Hoy USD 0,0003 de USD 1,00 (2 respuestas) · mes USD 0,0003 de USD 15,00 (2 respuestas)",
+    });
+  });
+
+  it("desde un centavo vuelve a 2 decimales; sin gasto dice 0,00", async () => {
+    answered(1, 40);
+    const { measureCopilotSpend } = await import("@/lib/job-runs");
+    await expect(measureCopilotSpend("store-1", store(0.12, 3.4), now)).resolves.toMatchObject({
+      detail: "Hoy USD 0,12 de USD 1,00 (1 respuesta) · mes USD 3,40 de USD 15,00 (40 respuestas)",
+    });
+    answered(0, 0);
+    await expect(measureCopilotSpend("store-1", store(0, 0), now)).resolves.toMatchObject({
+      detail: "Hoy USD 0,00 de USD 1,00 (0 respuestas) · mes USD 0,00 de USD 15,00 (0 respuestas)",
+    });
+  });
+
+  it("cuenta con los mismos cortes UTC que las claves del gasto y solo de esta tienda", async () => {
+    answered(0, 0);
+    const { measureCopilotSpend } = await import("@/lib/job-runs");
+    await measureCopilotSpend("store-1", store(0, 0), now);
+    const [day, month] = mocks.answers.mock.calls.map((call) => call[0].where);
+    expect(day).toEqual({ role: "assistant", createdAt: { gte: new Date("2026-10-10T00:00:00.000Z") }, conversation: { storeId: "store-1" } });
+    expect(month.createdAt.gte).toEqual(new Date("2026-10-01T00:00:00.000Z"));
+  });
+
+  it("si el conteo falla, muestra el gasto sin conteo", async () => {
+    mocks.answers.mockRejectedValue(new Error("caída"));
+    const { measureCopilotSpend } = await import("@/lib/job-runs");
+    await expect(measureCopilotSpend("store-1", store(0.2, 3), now)).resolves.toMatchObject({
+      ok: true,
+      detail: "Hoy USD 0,20 de USD 1,00 · mes USD 3,00 de USD 15,00",
     });
   });
 
   it("avisa cuando «a fondo» se apagó y se pone en rojo al llegar a un tope", async () => {
+    mocks.answers.mockResolvedValue(3);
     const { measureCopilotSpend } = await import("@/lib/job-runs");
-    await expect(measureCopilotSpend(store(0.2, 11), now)).resolves.toMatchObject({ attention: false, detail: expect.stringContaining("«a fondo» apagado") });
-    await expect(measureCopilotSpend(store(1, 11), now)).resolves.toMatchObject({ attention: true });
+    await expect(measureCopilotSpend("store-1", store(0.2, 11), now)).resolves.toMatchObject({ attention: false, detail: expect.stringContaining("«a fondo» apagado") });
+    await expect(measureCopilotSpend("store-1", store(1, 11), now)).resolves.toMatchObject({ attention: true });
   });
 
   it("sin Redis lo dice, sin ponerse en rojo", async () => {
     const { measureCopilotSpend } = await import("@/lib/job-runs");
-    await expect(measureCopilotSpend(null, now)).resolves.toMatchObject({ ok: null, attention: false });
+    await expect(measureCopilotSpend("store-1", null, now)).resolves.toMatchObject({ ok: null, attention: false });
   });
 });

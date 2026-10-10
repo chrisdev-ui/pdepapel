@@ -1,3 +1,4 @@
+import { Brain } from "lucide-react";
 import { describe, expect, it } from "vitest";
 
 import { FOOTER_ITEMS, NAV_GROUPS, footerItemsFor, navGroupsFor } from "@/lib/admin-navigation";
@@ -95,5 +96,10 @@ describe("copiloto en el menú", () => {
       navGroupsFor({ canWrite, ownerAllowlisted: canWrite, copilot: true }).flatMap((group) => group.items.map((item) => item.id));
     expect(ids(true)).toContain("copiloto");
     expect(ids(false)).not.toContain("copiloto");
+  });
+
+  it("usa el ícono Brain de lucide", () => {
+    const item = navGroupsFor(visibility(true)).flatMap((group) => group.items).find((entry) => entry.id === "copiloto");
+    expect(item?.icon).toBe(Brain);
   });
 });

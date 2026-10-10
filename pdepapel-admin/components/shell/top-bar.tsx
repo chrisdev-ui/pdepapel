@@ -4,7 +4,7 @@ import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { dashboardHref } from "@/lib/admin-navigation";
 import { UserButton } from "@clerk/nextjs";
-import { ExternalLink, Menu, PanelLeftClose, PanelLeftOpen, Plus, Search, Sparkles } from "lucide-react";
+import { Brain, ExternalLink, Menu, PanelLeftClose, PanelLeftOpen, Plus, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -71,7 +71,7 @@ export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMe
         {copilot && canWrite && !screen.startsWith("copiloto") && (
           <Button asChild variant="ghost" size="sm">
             <Link href={`${dashboardHref(storeId, "copiloto")}?desde=${encodeURIComponent(screen)}`} aria-label="Abrir el copiloto">
-              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              <Brain className="h-4 w-4" aria-hidden="true" />
               <span className="hidden lg:inline">Copiloto</span>
             </Link>
           </Button>
