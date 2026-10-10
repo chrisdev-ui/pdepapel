@@ -362,16 +362,10 @@ const MATCH_SELECT = {
  * El orden importa: ampliar solo puede añadir productos, nunca quitarlos, así
  * que se hace cuando falta algo, no cuando sobra.
  */
-/** Filtros de la búsqueda por intención: solo lo que hay y, si lo dijo, hasta su presupuesto. */
-export interface SearchFilters {
-  inStockOnly?: boolean;
-  maxPrice?: number | null;
-}
-
 async function runSearch(
   storeId: string,
   query: string,
-  options: { withDescription?: boolean; filters?: SearchFilters } = {},
+  options: { withDescription?: boolean } = {},
 ) {
   const porNombre = productNameTokenSearchWhere(query);
   if (porNombre.length === 0) return null;
@@ -386,17 +380,9 @@ async function runSearch(
 async function buscarCon(
   storeId: string,
   tokens: ReturnType<typeof productTokenSearchWhere>,
-  options: { withDescription?: boolean; filters?: SearchFilters },
+  options: { withDescription?: boolean },
 ) {
-  const where = {
-    storeId,
-    isArchived: false,
-    AND: tokens,
-    ...(options.filters?.inStockOnly ? { stock: { gt: 0 } } : {}),
-    ...(options.filters?.maxPrice
-      ? { price: { lte: options.filters.maxPrice } }
-      : {}),
-  };
+  const where = { storeId, isArchived: false, AND: tokens };
   const [rows, total] = (await Promise.all([
     prismadb.product.findMany({
       where,
@@ -458,11 +444,8 @@ export function pickPhoto(
 export async function resolveProductSearch(
   storeId: string,
   classification: ProductClassification,
-  filters?: SearchFilters,
 ): Promise<FactValue<SearchResult<ProductMatch>>> {
-  const found = await runSearch(storeId, buildSearchQuery(classification), {
-    filters,
-  });
+  const found = await runSearch(storeId, buildSearchQuery(classification));
   // Sin nada que buscar no se sabe. Cero resultados SÍ se sabe: es «no lo tengo».
   if (!found) return { known: false };
   return {
@@ -544,11 +527,10 @@ export async function resolveAvailability(
 export async function resolveProductPrice(
   storeId: string,
   classification: ProductClassification,
-  filters?: SearchFilters,
 ): Promise<FactValue<SearchResult<ProductMatch>>> {
   // Mismo resultado que la búsqueda: para el precio hace falta lo mismo, y la
   // lista de desambiguación ya lleva los precios, así que sirve de respuesta.
-  return resolveProductSearch(storeId, classification, filters);
+  return resolveProductSearch(storeId, classification);
 }
 
 export interface FeaturesMatch {
@@ -1266,22 +1248,11 @@ async function clasificarAvisandoSiTarda(
 export async function answerProductQuestion(
   storeId: string,
   body: string,
-  options: {
-    onSlow?: () => Promise<void>;
-    /**
-     * Ya clasificada por `classifyMessageIntent` (con el contexto de los
-     * mensajes anteriores): no se vuelve a llamar al modelo ni se mira si
-     * «parece» pregunta de producto, que con errores de ortografía fallaba.
-     */
-    classification?: ProductClassification;
-    filters?: SearchFilters;
-  } = {},
+  options: { onSlow?: () => Promise<void> } = {},
 ): Promise<ProductAnswer | null> {
-  if (!options.classification && !looksLikeProductQuestion(body)) return null;
+  if (!looksLikeProductQuestion(body)) return null;
 
-  const classified: ClassifyOutcome = options.classification
-    ? { ok: true, value: options.classification }
-    : await clasificarAvisandoSiTarda(body, options.onSlow);
+  const classified = await clasificarAvisandoSiTarda(body, options.onSlow);
   if (!classified.ok) {
     // Sin cuota es lo esperable en horas punta, no una avería: se anota flojito
     // y el mensaje sigue. Lo demás sí merece mirarse.
@@ -1344,12 +1315,7 @@ export async function answerProductQuestion(
     outcome: "match",
   };
 
-  const resuelto = await resolverSegunIntencion(
-    storeId,
-    intent,
-    buscar,
-    options.filters,
-  );
+  const resuelto = await resolverSegunIntencion(storeId, intent, buscar);
   if (!resuelto) return null;
   const { value, text, rows } = resuelto;
   decision.total = value.total;
@@ -1375,16 +1341,12 @@ export async function answerProductQuestion(
   // es lo único que se sabe con certeza.
   const soloTipo = tipoSolo(c, consulta);
   if (soloTipo) {
-    const fact = await resolveProductSearch(
-      storeId,
-      {
-        ...c,
-        productType: soloTipo.tipo,
-        character: null,
-        descriptor: null,
-      },
-      options.filters,
-    );
+    const fact = await resolveProductSearch(storeId, {
+      ...c,
+      productType: soloTipo.tipo,
+      character: null,
+      descriptor: null,
+    });
     if (fact.known) {
       decision.retry = { query: soloTipo.tipo, total: fact.value.total };
       if (fact.value.total > 0) {
@@ -1430,7 +1392,6 @@ async function resolverSegunIntencion(
   storeId: string,
   intent: ProductIntent,
   buscar: ProductClassification,
-  filters?: SearchFilters,
 ): Promise<{
   value: SearchResult<ProductMatch | AvailabilityMatch | FeaturesMatch>;
   text: string;
@@ -1459,8 +1420,8 @@ async function resolverSegunIntencion(
   }
   const fact =
     intent === "product.price"
-      ? await resolveProductPrice(storeId, buscar, filters)
-      : await resolveProductSearch(storeId, buscar, filters);
+      ? await resolveProductPrice(storeId, buscar)
+      : await resolveProductSearch(storeId, buscar);
   if (!fact.known) return null;
   const text =
     intent === "product.price"

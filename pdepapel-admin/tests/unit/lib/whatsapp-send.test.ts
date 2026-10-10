@@ -6,7 +6,6 @@ import {
   buildRecipientFields,
   WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
   WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH,
-  sendWhatsAppCtaUrlMessage,
   sendWhatsAppListMessage,
   sendWhatsAppTextMessage,
 } from "@/lib/whatsapp/send";
@@ -321,65 +320,5 @@ describe("buildRecipientFields", () => {
 
   it("no confunde con un BSUID un número raro", () => {
     expect(buildRecipientFields("CO.123")).toEqual({ to: "CO.123" });
-  });
-});
-
-describe("sendWhatsAppCtaUrlMessage", () => {
-  const fetchMock = vi.fn();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("manda un interactivo cta_url con un solo botón de enlace", async () => {
-    fetchMock.mockResolvedValue(response({ _data: { whatsappMessageId: "wamid.CTA1" } }));
-    const url =
-      "https://tienda.example/tienda?utm_source=whatsapp&utm_medium=bot&utm_campaign=ver_catalogo";
-
-    await expect(
-      sendWhatsAppCtaUrlMessage(
-        "573001234567",
-        "Aquí puedes ver todo nuestro catálogo 👇",
-        { text: "Ver catálogo", url },
-        configured,
-      ),
-    ).resolves.toEqual({ ok: true, externalId: "wamid.CTA1" });
-
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      messaging_product: "whatsapp",
-      to: "573001234567",
-      type: "interactive",
-      interactive: {
-        type: "cta_url",
-        body: { text: "Aquí puedes ver todo nuestro catálogo 👇" },
-        action: {
-          name: "cta_url",
-          parameters: { display_text: "Ver catálogo", url },
-        },
-      },
-    });
-  });
-
-  it("recorta el texto del botón a los 20 caracteres de Meta y no manda sin enlace", async () => {
-    fetchMock.mockResolvedValue(response({ _data: { whatsappMessageId: "wamid.CTA2" } }));
-    await sendWhatsAppCtaUrlMessage(
-      "573001234567",
-      "Mira",
-      { text: "Ver todo el catálogo completo", url: "https://tienda.example" },
-      configured,
-    );
-    const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(enviado.interactive.action.parameters.display_text).toHaveLength(20);
-
-    fetchMock.mockClear();
-    await expect(
-      sendWhatsAppCtaUrlMessage("573001234567", "Mira", { text: "Ver", url: " " }, configured),
-    ).resolves.toEqual({ ok: false, error: "destinatario, mensaje o enlace vacío" });
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

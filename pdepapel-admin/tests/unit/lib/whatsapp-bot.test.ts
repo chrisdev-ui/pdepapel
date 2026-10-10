@@ -1,7 +1,4 @@
 import { MinimumOrderRule } from "@prisma/client";
-
-const CATALOG_URL =
-  "https://tienda.example/tienda?utm_source=whatsapp&utm_medium=bot&utm_campaign=ver_catalogo";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -22,18 +19,9 @@ const mocks = vi.hoisted(() => ({
   sendImage: vi.fn(),
   sendList: vi.fn(),
   sendText: vi.fn(),
-  sendCta: vi.fn(),
-  messageCount: vi.fn(),
-  classifyIntent: vi.fn(),
 }));
 
-vi.mock("@/lib/env.mjs", () => ({
-  env: { FRONTEND_STORE_URL: "https://tienda.example" },
-}));
-vi.mock("@/lib/whatsapp/bot-intent", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/whatsapp/bot-intent")>()),
-  classifyMessageIntent: mocks.classifyIntent,
-}));
+vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     conversation: {
@@ -44,7 +32,6 @@ vi.mock("@/lib/prismadb", () => ({
       findFirst: mocks.messageFindFirst,
       create: mocks.messageCreate,
       findMany: mocks.messageFindMany,
-      count: mocks.messageCount,
     },
     product: { findFirst: mocks.productFindFirst },
   },
@@ -69,7 +56,6 @@ vi.mock("@/lib/whatsapp/send", async (importOriginal) => ({
   // Los dos acuses que cierran una escalada salen sin botones, y un
   // interactivo sin botones no existe: van por aquí, como texto normal.
   sendWhatsAppTextMessage: mocks.sendText,
-  sendWhatsAppCtaUrlMessage: mocks.sendCta,
   sendWhatsAppTypingIndicator: mocks.typing,
 }));
 // Los ayudantes puros (ids de botón, constantes) se dejan reales: son la
@@ -98,12 +84,6 @@ import {
   runWhatsAppBot,
 } from "@/lib/whatsapp/bot";
 import type { ResolvedStoreSettings } from "@/lib/store-settings";
-import {
-  CASUAL_TEMPLATES,
-  CASUAL_TEMPLATES_VERSION,
-  CATALOG_MESSAGE_BODY,
-  SEARCH_LINK_BODY,
-} from "@/lib/whatsapp/bot-casual";
 import { BUSINESS_FACT_TEMPLATES_VERSION } from "@/lib/whatsapp/bot-facts";
 import {
   PRODUCT_TEMPLATES,
@@ -187,8 +167,6 @@ const ajustesBase: ResolvedStoreSettings = {
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
   botProductsApprovedAt: null,
   botProductsVersion: null,
-  botCasualApprovedAt: null,
-  botCasualVersion: null,
 };
 
 describe("keyword matching", () => {
@@ -252,11 +230,6 @@ describe("runWhatsAppBot", () => {
     // que hace en la vida real cuando no hay lista delante.
     mocks.resolveReference.mockResolvedValue({ outcome: "none" });
     mocks.shownIntent.mockResolvedValue("product.search");
-    // Por defecto el clasificador no está: así se prueba el camino de antes.
-    mocks.classifyIntent.mockResolvedValue({ ok: false, reason: "not_configured" });
-    mocks.messageFindMany.mockResolvedValue([]);
-    mocks.messageCount.mockResolvedValue(0);
-    mocks.sendCta.mockResolvedValue({ ok: true, externalId: "wamid.CTA" });
   });
 
   it("answers a keyword match with the automatic marker and files it as BOT", async () => {
@@ -1213,13 +1186,7 @@ describe("botón «Hablar con Paula»", () => {
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
     expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
-    // Detrás va solo el enlace al catálogo, con su botón «Ver catálogo».
     expect(mocks.sendText).not.toHaveBeenCalled();
-    expect(mocks.sendCta).toHaveBeenCalledWith(
-      "573001234567",
-      CATALOG_MESSAGE_BODY,
-      { text: "Ver catálogo", url: CATALOG_URL },
-    );
   });
 
   it("confirma y deja la conversación para Paula", async () => {
@@ -2348,22 +2315,15 @@ describe("ritmo humano", () => {
       });
       // El texto ya dice que Paula escribe: sin botón de «Hablar con Paula».
       expect(mocks.send).not.toHaveBeenCalled();
-      // El «déjame confirmar» y, detrás, el catálogo para que no se quede sin nada.
       expect(mocks.sendText).toHaveBeenCalledOnce();
       expect(mocks.sendText.mock.calls[0][1]).toContain("Paula");
-      expect(mocks.sendCta.mock.calls[0].slice(1)).toEqual([
-        CATALOG_MESSAGE_BODY,
-        { text: "Ver catálogo", url: CATALOG_URL },
-      ]);
       // Primero se marca, después se manda.
       const marcado = mocks.conversationUpdate.mock.invocationCallOrder[0];
       const enviado = mocks.sendText.mock.invocationCallOrder[0];
       expect(marcado).toBeLessThan(enviado);
       // Y la decisión queda archivada aunque no haya nada que enseñar.
       expect(mocks.messageCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          metadata: { decision: cautela, escalation: "no_match" },
-        }),
+        data: expect.objectContaining({ metadata: { decision: cautela } }),
       });
     });
 
@@ -2386,364 +2346,5 @@ describe("ritmo humano", () => {
         }),
       });
     });
-  });
-});
-
-describe("conversación con intención (clasificador de OpenAI)", () => {
-  const SEARCH = (query: string) =>
-    `https://tienda.example/tienda?search=${encodeURIComponent(query).replace(/%20/g, "+")}&utm_source=whatsapp&utm_medium=bot&utm_campaign=busqueda`;
-  const intencion = (value: Record<string, unknown>) =>
-    mocks.classifyIntent.mockResolvedValueOnce({
-      ok: true,
-      value: {
-        productIntent: null,
-        query: null,
-        filters: { theme: null, category: null, recipient: null, budget: null },
-        ...value,
-      },
-    });
-  const conProductos: ResolvedStoreSettings = {
-    ...ajustesBase,
-    botProductsApprovedAt: new Date("2026-09-20T00:00:00.000Z"),
-    botProductsVersion: PRODUCT_TEMPLATES_VERSION,
-  };
-  const conCortesia: ResolvedStoreSettings = {
-    ...conProductos,
-    botCasualApprovedAt: new Date("2026-10-10T00:00:00.000Z"),
-    botCasualVersion: CASUAL_TEMPLATES_VERSION,
-  };
-  const conversacion = (extra: Record<string, unknown> = {}) =>
-    mocks.conversationFindUnique.mockResolvedValue({
-      id: "conversation-1",
-      status: "OPEN",
-      storeId: "store-1",
-      lastOwnerAt: null,
-      ...extra,
-    });
-  const harryPotter = {
-    intent: "product.search",
-    text: "Sí 💛 Tengo 2 que te pueden servir. Míralos y escoge el que quieras.",
-    shownIds: ["p1", "p2"],
-    list: {
-      body: "Sí 💛 Tengo 2 que te pueden servir. Míralos y escoge el que quieras.",
-      rows: [
-        { id: "product:p1", title: "Libreta Harry Potter", description: "Libreta Harry Potter — $ 18.000" },
-        { id: "product:p2", title: "Separador Harry Potter", description: "Separador Harry Potter — $ 6.000" },
-      ],
-    },
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.spyOn(console, "info").mockImplementation(() => undefined);
-    conversacion();
-    mocks.activeKeywords.mockResolvedValue(keywords);
-    mocks.conversationUpdate.mockResolvedValue({});
-    mocks.messageFindFirst.mockResolvedValue(null);
-    mocks.messageCreate.mockResolvedValue({});
-    mocks.sendableReply.mockResolvedValue(null);
-    mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
-    mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.BOTTXT" });
-    mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.LISTA" });
-    mocks.sendCta.mockResolvedValue({ ok: true, externalId: "wamid.CTA" });
-    mocks.typing.mockResolvedValue({ ok: true });
-    mocks.resolveReference.mockResolvedValue({ outcome: "none" });
-    mocks.shownIntent.mockResolvedValue("product.search");
-    mocks.classifyIntent.mockReset();
-    mocks.messageCount.mockReset();
-    mocks.classifyIntent.mockResolvedValue({ ok: false, reason: "not_configured" });
-    mocks.messageFindMany.mockResolvedValue([]);
-    mocks.messageCount.mockResolvedValue(0);
-    mocks.answerProduct.mockResolvedValue(null);
-  });
-
-  describe("la conversación 449d6f5e, con textos inventados", () => {
-    it("1. un saludo largo desde la página abre el menú de bienvenida y después el catálogo", async () => {
-      intencion({ intent: "greeting" });
-      await expect(
-        runWhatsAppBot({
-          ...input,
-          body: "Hola! Los encontré en la página web y quería preguntarles algo",
-          settings: conProductos,
-        }),
-      ).resolves.toEqual({ outcome: "replied_business_fact", trigger: "welcome" });
-      expect(mocks.sendList).toHaveBeenCalledOnce();
-      expect(mocks.sendCta).toHaveBeenCalledOnce();
-      expect(mocks.sendCta.mock.calls[0].slice(1)).toEqual([CATALOG_MESSAGE_BODY, { text: "Ver catálogo", url: CATALOG_URL }]);
-      // El «Saludo» de Paula no sale: ganó el menú.
-      expect(mocks.send).not.toHaveBeenCalled();
-    });
-
-    it("2. pide ideas de regalo con errores de ortografía: se busca igual, solo lo que hay", async () => {
-      intencion({ intent: "product", productIntent: "search", query: "regalo anime", filters: { theme: "anime", category: null, recipient: "pareja", budget: null } });
-      mocks.answerProduct.mockResolvedValue({ ...harryPotter, shownIds: ["p3"] });
-      await runWhatsAppBot({
-        ...input,
-        body: "Cualkes son los productos q me recomiendas para mi novia q le gusta elanime",
-        settings: conProductos,
-      });
-      const [, , opciones] = mocks.answerProduct.mock.calls[0];
-      expect(opciones.classification).toMatchObject({ intent: "product.search", productType: "regalo anime" });
-      expect(opciones.filters).toEqual({ inStockOnly: true, maxPrice: null });
-    });
-
-    it("3. tras su propio «Esa no me la sé», «quiero harry potter» se sigue contestando con productos", async () => {
-      conversacion({ status: "NEEDS_OWNER" });
-      mocks.messageFindMany.mockImplementation(async (args: { where: { direction?: string } }) =>
-        args.where.direction === "OUTBOUND"
-          ? [{ metadata: { escalation: "no_match" } }]
-          : [{ body: "Cualkes son los productos q me recomiendas para mi novia q le gusta elanime" }],
-      );
-      intencion({ intent: "product", productIntent: "search", query: "harry potter" });
-      mocks.answerProduct.mockResolvedValue(harryPotter);
-
-      await expect(
-        runWhatsAppBot({ ...input, body: "yo quiero harry potter", settings: conProductos }),
-      ).resolves.toEqual({ outcome: "replied_product", trigger: "product.search" });
-
-      expect(mocks.classifyIntent).toHaveBeenCalledWith("yo quiero harry potter", [
-        "Cualkes son los productos q me recomiendas para mi novia q le gusta elanime",
-      ]);
-      expect(mocks.sendList).toHaveBeenCalledOnce();
-      expect(mocks.sendCta).toHaveBeenCalledOnce();
-      expect(mocks.sendCta.mock.calls[0].slice(1)).toEqual([
-        SEARCH_LINK_BODY,
-        { text: "Ver en la tienda", url: SEARCH("harry potter") },
-      ]);
-      // Sigue en la cola de Paula: no se la quita nadie.
-      expect(mocks.conversationUpdate).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: "OPEN" } }),
-      );
-    });
-  });
-
-  describe("cuándo el bot se queda callado", () => {
-    it.each([
-      ["la clienta pidió a Paula", { status: "NEEDS_OWNER" }, "owner_requested"],
-      ["se quejó", { status: "NEEDS_OWNER" }, "escalate"],
-      ["Paula ya escribió (hace días)", { status: "NEEDS_OWNER", lastOwnerAt: new Date("2026-01-01T00:00:00.000Z") }, "no_match"],
-    ])("%s: una pregunta de producto no despierta al bot", async (_caso, estado, causa) => {
-      conversacion(estado);
-      mocks.messageFindMany.mockResolvedValue([{ metadata: { escalation: causa } }]);
-      intencion({ intent: "product", productIntent: "search", query: "harry potter" });
-      await expect(
-        runWhatsAppBot({ ...input, body: "quiero harry potter", settings: conProductos }),
-      ).resolves.toEqual({ outcome: "skipped_needs_owner" });
-      expect(mocks.answerProduct).not.toHaveBeenCalled();
-      expect(mocks.send).not.toHaveBeenCalled();
-      expect(mocks.sendText).not.toHaveBeenCalled();
-    });
-
-    it("tras «Esa no me la sé», lo que no es de productos se deja para Paula en silencio", async () => {
-      conversacion({ status: "NEEDS_OWNER" });
-      mocks.messageFindMany.mockResolvedValue([{ metadata: { escalation: "no_match" } }]);
-      intencion({ intent: "thanks" });
-      await expect(
-        runWhatsAppBot({ ...input, body: "gracias", settings: conCortesia }),
-      ).resolves.toEqual({ outcome: "skipped_needs_owner" });
-      expect(mocks.send).not.toHaveBeenCalled();
-    });
-
-    it("un «ok» o «listo» no recibe respuesta", async () => {
-      intencion({ intent: "acknowledgement" });
-      await expect(
-        runWhatsAppBot({ ...input, body: "listo", settings: conCortesia }),
-      ).resolves.toEqual({ outcome: "skipped_acknowledgement" });
-      expect(mocks.send).not.toHaveBeenCalled();
-      expect(mocks.sendText).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("stickers y emojis", () => {
-    it("un sticker que abre la conversación recibe la bienvenida", async () => {
-      mocks.messageCount.mockResolvedValue(0);
-      await expect(
-        runWhatsAppBot({ ...input, body: "", sticker: true, inboundAt: new Date(), settings: conProductos }),
-      ).resolves.toEqual({ outcome: "replied_business_fact", trigger: "welcome" });
-      expect(mocks.classifyIntent).not.toHaveBeenCalled();
-    });
-
-    it("un sticker a mitad de conversación no se contesta ni va a Paula", async () => {
-      mocks.messageCount.mockResolvedValue(4);
-      await expect(
-        runWhatsAppBot({ ...input, body: "", sticker: true, inboundAt: new Date(), settings: conProductos }),
-      ).resolves.toEqual({ outcome: "skipped_acknowledgement" });
-      expect(mocks.conversationUpdate).not.toHaveBeenCalled();
-      expect(mocks.send).not.toHaveBeenCalled();
-    });
-
-    it("solo emojis: bienvenida si es lo primero, silencio si no", async () => {
-      mocks.messageCount.mockResolvedValueOnce(0);
-      await expect(
-        runWhatsAppBot({ ...input, body: "👍🏽", inboundAt: new Date(), settings: conProductos }),
-      ).resolves.toEqual({ outcome: "replied_business_fact", trigger: "welcome" });
-      mocks.messageCount.mockResolvedValueOnce(3);
-      await expect(
-        runWhatsAppBot({ ...input, body: "😍😍", inboundAt: new Date(), settings: conProductos }),
-      ).resolves.toEqual({ outcome: "skipped_acknowledgement" });
-      expect(mocks.classifyIntent).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("cortesía con textos fijos", () => {
-    it.each([
-      ["thanks", "mil gracias!!"],
-      ["goodbye", "chao, buen día"],
-      ["bot_identity", "eres un robot?"],
-    ] as const)("%s aprobado: sale el texto fijo con el botón de Paula", async (intent, body) => {
-      intencion({ intent });
-      await expect(
-        runWhatsAppBot({ ...input, body, settings: conCortesia }),
-      ).resolves.toEqual({ outcome: "replied_casual", trigger: intent });
-      expect(mocks.send).toHaveBeenCalledOnce();
-      expect(mocks.send.mock.calls[0][1]).toBe(CASUAL_TEMPLATES[intent]());
-      expect(mocks.send.mock.calls[0][2]).toEqual([{ id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE }]);
-    });
-
-    it("«¿eres un robot?» nombra el botón real de Paula", () => {
-      expect(CASUAL_TEMPLATES.bot_identity()).toContain(`"${TALK_TO_OWNER_BUTTON_TITLE}"`);
-    });
-
-    it("«¿qué venden?» aprobado: el texto y después el catálogo", async () => {
-      intencion({ intent: "catalog_question" });
-      await expect(
-        runWhatsAppBot({ ...input, body: "que venden?", settings: conCortesia }),
-      ).resolves.toEqual({ outcome: "replied_casual", trigger: "catalog_question" });
-      expect(mocks.send.mock.calls[0][1]).toBe(CASUAL_TEMPLATES.catalog_question());
-      expect(mocks.sendCta.mock.calls[0].slice(1)).toEqual([CATALOG_MESSAGE_BODY, { text: "Ver catálogo", url: CATALOG_URL }]);
-    });
-
-    it("sin aprobar, cae a lo de hoy: la palabra clave de Paula o «Esa no me la sé»", async () => {
-      intencion({ intent: "thanks" });
-      await expect(
-        runWhatsAppBot({ ...input, body: "¿venden bicicletas?", settings: conProductos }),
-      ).resolves.toMatchObject({ outcome: "escalated_no_match" });
-      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
-    });
-  });
-
-  describe("lo que pasa a Paula", () => {
-    it("una queja o un problema con un pedido: acuse de Paula, sin improvisar", async () => {
-      intencion({ intent: "escalate" });
-      await expect(
-        runWhatsAppBot({ ...input, body: "mi pedido llegó roto y nadie me responde", settings: conCortesia }),
-      ).resolves.toEqual({ outcome: "escalated_complaint" });
-      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
-        where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
-      });
-      expect(mocks.sendText.mock.calls[0][1]).toBe(TALK_TO_OWNER_ACKNOWLEDGEMENT);
-      expect(mocks.messageCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({ metadata: { escalation: "escalate" } }),
-      });
-      expect(mocks.answerProduct).not.toHaveBeenCalled();
-    });
-
-    it("producto sin nada que buscar (consulta vacía): «Esa no me la sé» y el catálogo", async () => {
-      intencion({ intent: "product", productIntent: "search", query: null });
-      await expect(
-        runWhatsAppBot({ ...input, body: "qué me recomiendas?", settings: conProductos }),
-      ).resolves.toEqual({ outcome: "escalated_no_match" });
-      expect(mocks.answerProduct).not.toHaveBeenCalled();
-      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
-      expect(mocks.sendCta.mock.calls[0].slice(1)).toEqual([CATALOG_MESSAGE_BODY, { text: "Ver catálogo", url: CATALOG_URL }]);
-      expect(mocks.messageCreate.mock.calls[0][0].data.metadata).toEqual({ escalation: "no_match" });
-    });
-
-    it("con presupuesto, la búsqueda lo usa y el enlace también", async () => {
-      intencion({ intent: "product", productIntent: "search", query: "regalo niña", filters: { theme: null, category: null, recipient: "niña", budget: 30000 } });
-      mocks.answerProduct.mockResolvedValue(harryPotter);
-      await runWhatsAppBot({ ...input, body: "algo para una niña de 8 años, hasta 30 mil", settings: conProductos });
-      expect(mocks.answerProduct.mock.calls[0][2].filters).toEqual({ inStockOnly: true, maxPrice: 30000 });
-      expect(mocks.sendCta.mock.calls[0][2].url).toContain("maxPrice=30000");
-    });
-  });
-
-  it("si el clasificador falla, todo sigue por el camino de antes", async () => {
-    mocks.classifyIntent.mockResolvedValueOnce({ ok: false, reason: "timeout" });
-    await expect(
-      runWhatsAppBot({ ...input, body: "¿venden bicicletas?", settings: conProductos }),
-    ).resolves.toMatchObject({ outcome: "escalated_no_match" });
-    const [, , opciones] = mocks.answerProduct.mock.calls[0] ?? [null, null, {}];
-    expect(opciones?.classification).toBeUndefined();
-  });
-});
-
-describe("producto antes que las palabras clave cuando el mensaje es de productos", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    mocks.classifyIntent.mockReset();
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1", lastOwnerAt: null });
-    mocks.activeKeywords.mockResolvedValue([
-      { id: "gracias", answer: "¡Con gusto! 💛", triggers: ["gracias"], buttons: [] },
-    ]);
-    mocks.conversationUpdate.mockResolvedValue({});
-    mocks.messageFindFirst.mockResolvedValue(null);
-    mocks.messageFindMany.mockResolvedValue([]);
-    mocks.messageCount.mockResolvedValue(3);
-    mocks.messageCreate.mockResolvedValue({});
-    mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
-    mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.TXT" });
-    mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.LISTA" });
-    mocks.typing.mockResolvedValue({ ok: true });
-    mocks.resolveReference.mockResolvedValue({ outcome: "none" });
-  });
-
-  const productos: ResolvedStoreSettings = {
-    ...ajustesBase,
-    botProductsApprovedAt: new Date("2026-09-20T00:00:00.000Z"),
-    botProductsVersion: PRODUCT_TEMPLATES_VERSION,
-  };
-
-  it("«gracias! y tienen agendas de kuromi?»: busca la agenda en vez de contestar «Cortesía»", async () => {
-    mocks.classifyIntent.mockResolvedValue({
-      ok: true,
-      value: { intent: "product", productIntent: "search", query: "agenda kuromi", filters: { theme: null, category: null, recipient: null, budget: null } },
-    });
-    mocks.answerProduct.mockResolvedValue({ intent: "product.search", text: "Sí 💛 Tengo Agenda Kuromi en $ 25.000. ¿Te la aparto?", shownIds: ["p1"] });
-    await expect(
-      runWhatsAppBot({ ...input, body: "gracias! y tienen agendas de kuromi?", keywords: undefined, settings: productos }),
-    ).resolves.toEqual({ outcome: "replied_product", trigger: "product.search" });
-  });
-
-  it("si la búsqueda no tiene nada que decir, la palabra clave de Paula sigue contestando", async () => {
-    mocks.classifyIntent.mockResolvedValue({
-      ok: true,
-      value: { intent: "product", productIntent: "search", query: "x", filters: { theme: null, category: null, recipient: null, budget: null } },
-    });
-    mocks.answerProduct.mockResolvedValue(null);
-    await expect(
-      runWhatsAppBot({ ...input, body: "gracias, y tienen x?", keywords: undefined, settings: productos }),
-    ).resolves.toMatchObject({ outcome: "replied" });
-  });
-});
-
-describe("«escribiendo…» desde antes de pensar", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.classifyIntent.mockReset();
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1", lastOwnerAt: null });
-    mocks.activeKeywords.mockResolvedValue(keywords);
-    mocks.conversationUpdate.mockResolvedValue({});
-    mocks.messageFindFirst.mockResolvedValue(null);
-    mocks.messageFindMany.mockResolvedValue([]);
-    mocks.messageCount.mockResolvedValue(2);
-    mocks.messageCreate.mockResolvedValue({});
-    mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
-    mocks.sendText.mockResolvedValue({ ok: true, externalId: "wamid.TXT" });
-    mocks.typing.mockResolvedValue({ ok: true });
-    mocks.resolveReference.mockResolvedValue({ outcome: "none" });
-  });
-
-  it("se muestra antes de la llamada al clasificador, que puede tardar unos segundos", async () => {
-    mocks.classifyIntent.mockResolvedValue({ ok: false, reason: "timeout" });
-    await runWhatsAppBot({ ...input, body: "¿venden bicicletas?", inboundMessageId: "wamid.IN1" });
-    expect(mocks.typing).toHaveBeenCalledWith("wamid.IN1");
-    expect(mocks.typing.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.classifyIntent.mock.invocationCallOrder[0],
-    );
   });
 });

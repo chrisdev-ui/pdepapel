@@ -350,46 +350,6 @@ export async function sendWhatsAppButtonMessage(
 }
 
 /**
- * Mensaje con un botón que abre un enlace («Ver catálogo»). Meta lo llama
- * `cta_url`: lleva un solo botón y no admite botones de respuesta, por eso va
- * en un mensaje aparte del que trae «Hablar con Paula».
- *
- * Que Chakra lo reenvíe sin tocarlo, como los otros interactivos, está por
- * confirmar con un envío controlado: hasta entonces el bot manda el enlace
- * escrito (`CATALOG_LINK_MODE` en `bot-casual.ts`).
- */
-export async function sendWhatsAppCtaUrlMessage(
-  to: string,
-  body: string,
-  button: { text: string; url: string },
-  environment: SendEnvironment = env,
-): Promise<WhatsAppSendResult> {
-  if (!to.trim() || !body.trim() || !button.text.trim() || !button.url.trim()) {
-    return { ok: false, error: "destinatario, mensaje o enlace vacío" };
-  }
-  return postToChakra(
-    to,
-    {
-      type: "interactive",
-      interactive: {
-        type: "cta_url",
-        body: { text: body.slice(0, WHATSAPP_INTERACTIVE_BODY_MAX_LENGTH) },
-        action: {
-          name: "cta_url",
-          parameters: {
-            display_text: button.text
-              .trim()
-              .slice(0, WHATSAPP_BUTTON_TITLE_MAX_LENGTH),
-            url: button.url.trim(),
-          },
-        },
-      },
-    },
-    environment,
-  );
-}
-
-/**
  * Lo mismo, pero con una foto encima del texto.
  *
  * Confirmado contra la API el 2026-09-15: Chakra reenvía la cabecera de imagen

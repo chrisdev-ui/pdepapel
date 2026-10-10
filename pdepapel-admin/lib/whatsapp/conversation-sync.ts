@@ -812,7 +812,6 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       interactiveReplyId: string | null;
       inboundMessageId: string | null;
       mediaForOwner?: boolean;
-      sticker?: boolean;
       inboundAt?: Date | null;
     }> = [];
 
@@ -824,10 +823,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       // respuesta. Antes esto ni llegaba aquí y la clienta se quedaba mirando
       // el chat sin saber si su foto había llegado.
       const paraPaula = isMediaForOwner(message.mediaType);
-      // Un sticker no va a Paula, pero el bot sí lo ve: si abre la
-      // conversación, saluda; a mitad de ella, no contesta.
-      const sticker = !message.body && message.mediaType === "sticker";
-      if (!message.body && !paraPaula && !sticker) continue;
+      if (!message.body && !paraPaula) continue;
       // Sin teléfono se contesta al BSUID; `fileInboundMessage` ya garantizó
       // que al menos uno de los dos existe.
       const recipient = message.phone ?? message.bsuid;
@@ -842,7 +838,6 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
         // Para saber, al decidir, si ya llegó otro mensaje después de este.
         inboundAt: message.sentAt ?? null,
         ...(paraPaula ? { mediaForOwner: true } : {}),
-        ...(sticker ? { sticker: true } : {}),
       });
     }
 
