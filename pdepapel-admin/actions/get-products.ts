@@ -1,7 +1,9 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
 import prismadb from "@/lib/prismadb";
 
 export async function getProducts(storeId: string) {
+  await requireStoreOwner(storeId);
   return await prismadb.product.findMany({
     where: {
       storeId: storeId,

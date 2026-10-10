@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import prismadb from "@/lib/prismadb";
 import { compareAsc, endOfYear, format, parseISO, startOfYear } from "date-fns";
 import {
@@ -19,6 +20,7 @@ interface SalesByDate {
 }
 
 export async function getSalesData(storeId: string, year: number) {
+  await requireStoreRead(storeId);
   const yearDate = new Date(year, 0, 1);
   const startDate = startOfYear(yearDate);
   const endDate = endOfYear(yearDate);

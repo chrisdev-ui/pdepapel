@@ -45,7 +45,7 @@ export default async function DashboardPage({
   // una cuenta de solo lectura. El resto de la pantalla (ventas, pendientes)
   // sí se muestra, que es justo lo que una agencia necesita ver.
   const access = await getStoreAccess(params.storeId);
-  const canSeeCosts = access?.role !== "viewer";
+  const canSeeCosts = access?.role === "owner";
   const year = searchParams.year
     ? parseInt(searchParams.year)
     : new Date().getFullYear();

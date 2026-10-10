@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import { getOrderNetProfit } from "@/lib/financial";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
@@ -17,10 +18,20 @@ export interface CustomerProfile {
   segment: CustomerSegment;
 }
 
-/**
- * Builds customer intelligence profiles by grouping historical orders.
- */
+/** Perfiles de clientas para el panel: solo la dueña (llevan nombre, correo y teléfono). */
 export async function getCustomerIntelligence(
+  storeId: string,
+): Promise<CustomerProfile[]> {
+  await requireStoreOwner(storeId);
+  return loadCustomerProfilesForSystemJob(storeId);
+}
+
+/**
+ * Sin guardia: para trabajos del sistema que corren sin sesión (la
+ * reactivación). Nunca se importa desde el panel; lo vigila
+ * `tests/unit/security/bi-loaders-auth.test.ts`.
+ */
+export async function loadCustomerProfilesForSystemJob(
   storeId: string,
 ): Promise<CustomerProfile[]> {
   // Fetch all paid orders for the store
@@ -40,8 +51,8 @@ export async function getCustomerIntelligence(
           },
         },
       },
-      payment: true,
-      shipping: true,
+      payment: { select: { method: true } },
+      shipping: { select: { cost: true } },
     },
     orderBy: {
       createdAt: "desc",
@@ -153,7 +164,16 @@ export async function getInactiveCustomersEligibleForReactivation(
   storeId: string,
   targetDaysInactive: number = 90,
 ): Promise<CustomerProfile[]> {
-  const allCustomers = await getCustomerIntelligence(storeId);
+  await requireStoreOwner(storeId);
+  return findReactivationCandidatesForSystemJob(storeId, targetDaysInactive);
+}
+
+/** Sin guardia, igual que `loadCustomerProfilesForSystemJob`. */
+export async function findReactivationCandidatesForSystemJob(
+  storeId: string,
+  targetDaysInactive: number = 90,
+): Promise<CustomerProfile[]> {
+  const allCustomers = await loadCustomerProfilesForSystemJob(storeId);
 
   // Find customers inactive for exactly targetDaysInactive (+/- 2 days tolerance for cron drift)
   const minDays = targetDaysInactive - 2;

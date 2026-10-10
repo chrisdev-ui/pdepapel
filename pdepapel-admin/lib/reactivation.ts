@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { getInactiveCustomersEligibleForReactivation } from "@/actions/get-customer-intelligence";
+import { findReactivationCandidatesForSystemJob } from "@/actions/get-customer-intelligence";
 import { DiscountType, ReactivationStatus } from "@prisma/client";
 import { addDays } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
@@ -14,13 +14,16 @@ import { currencyFormatter } from "@/lib/utils";
  * Core engine for automated customer reactivation.
  * Should be triggered daily by a cron job (e.g. GitHub Actions).
  */
-export async function processAutomaticReactivations(storeId: string) {
+export async function processAutomaticReactivations(
+  storeId: string,
+  options: { dryRun?: boolean } = {},
+) {
   console.log(
     `[REACTIVATION] Starting automatic reactivation for store ${storeId}`,
   );
 
   // 1. Find eligible customers (exactly 90 days inactive)
-  const eligibleCustomers = await getInactiveCustomersEligibleForReactivation(
+  const eligibleCustomers = await findReactivationCandidatesForSystemJob(
     storeId,
     90,
   );
@@ -33,6 +36,8 @@ export async function processAutomaticReactivations(storeId: string) {
       success: true,
       processed: 0,
       message: "No eligible customers found today",
+      errors: [] as { error: string }[],
+      ...(options.dryRun ? { dryRun: true, eligible: 0, recentlyContacted: 0, wouldSend: 0 } : {}),
     };
   }
 
@@ -40,7 +45,8 @@ export async function processAutomaticReactivations(storeId: string) {
   if (!store) throw new Error("Store not found");
 
   let processedCount = 0;
-  const errors = [];
+  let recentlyContacted = 0;
+  const errors: { error: string }[] = [];
 
   for (const customer of eligibleCustomers) {
     try {
@@ -58,11 +64,11 @@ export async function processAutomaticReactivations(storeId: string) {
       });
 
       if (existingMails > 0) {
-        console.log(
-          `[REACTIVATION] Skipping ${customer.email} - already contacted recently.`,
-        );
+        recentlyContacted += 1;
         continue;
       }
+      // Simulación: se cuenta a quién se escribiría, sin cupón ni correo.
+      if (options.dryRun) continue;
 
       // 3. Find Product Recommendations
       // Look up their last order to see what categories they bought
@@ -184,15 +190,10 @@ export async function processAutomaticReactivations(storeId: string) {
       });
 
       processedCount++;
-      console.log(
-        `[REACTIVATION] Successfully sent to ${customer.email} (Coupon: ${code})`,
-      );
     } catch (err: any) {
-      console.error(
-        `[REACTIVATION] Failed to process customer ${customer.email}:`,
-        err,
-      );
-      errors.push({ email: customer.email, error: err.message });
+      console.error("[REACTIVATION] Failed to process a customer:", err?.message);
+      errors.push({ error: err.message });
+      if (options.dryRun) continue;
 
       // Still log the failure
       await prismadb.customerReactivation.create({
@@ -219,5 +220,13 @@ export async function processAutomaticReactivations(storeId: string) {
     success: true,
     processed: processedCount,
     errors,
+    ...(options.dryRun
+      ? {
+          dryRun: true,
+          eligible: eligibleCustomers.length,
+          recentlyContacted,
+          wouldSend: eligibleCustomers.length - recentlyContacted,
+        }
+      : {}),
   };
 }

@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import { endOfMonth, startOfMonth } from "date-fns";
 
 import { getMonthlyFinancialSummary } from "@/actions/get-financial-analytics";
@@ -120,6 +121,7 @@ export async function getBusinessGrowthOverview(
   storeId: string,
   referenceDate = getColombiaDate(),
 ): Promise<BusinessGrowthOverview> {
+  await requireStoreOwner(storeId);
   const currentDate = getColombiaDate();
   const start = startOfMonth(referenceDate);
   const end = endOfMonth(referenceDate);

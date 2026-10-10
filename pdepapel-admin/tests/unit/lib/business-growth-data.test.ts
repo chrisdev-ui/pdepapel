@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   getSeason: vi.fn(),
   productCount: vi.fn(),
   recommendCampaigns: vi.fn(),
+  requireStoreOwner: vi.fn(async () => "user_owner"),
 }));
+
+vi.mock("@/lib/store-access", () => ({ requireStoreOwner: mocks.requireStoreOwner }));
 
 vi.mock("@/actions/get-financial-analytics", () => ({
   getMonthlyFinancialSummary: mocks.getMonthlyFinancialSummary,

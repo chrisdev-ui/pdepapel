@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { subDays } from "date-fns";
@@ -25,6 +26,7 @@ export interface InventoryRiskItem {
 export async function getInventoryRisk(
   storeId: string,
 ): Promise<InventoryRiskItem[]> {
+  await requireStoreOwner(storeId);
   const thirtyDaysAgo = subDays(new Date(), 30);
 
   // Get active products with stock <= 20 (rough filter for risk to limit processing)

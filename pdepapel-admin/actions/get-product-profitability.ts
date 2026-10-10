@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import { getOrderNetProfit } from "@/lib/financial";
 import {
   createSettledMarketplaceSalesWhere,
@@ -42,10 +43,28 @@ export async function getProductProfitRanking(
   month?: number,
   limit: number = 50,
 ): Promise<ProductProfitRanking[]> {
+  await requireStoreOwner(storeId);
+  return rankProductProfitForSystemJob(storeId, year, month, limit);
+}
+
+/**
+ * Sin guardia: para la clasificación ABC, que corre sin sesión. Nunca se
+ * importa desde el panel; lo vigila `tests/unit/security/bi-loaders-auth.test.ts`.
+ */
+export async function rankProductProfitForSystemJob(
+  storeId: string,
+  year?: number,
+  month?: number,
+  limit: number = 50,
+  range?: { start: Date; end: Date },
+): Promise<ProductProfitRanking[]> {
   let startDate: Date;
   let endDate: Date;
 
-  if (year && month) {
+  if (range) {
+    startDate = range.start;
+    endDate = range.end;
+  } else if (year && month) {
     const targetDate = new Date(year, month - 1, 1);
     startDate = startOfMonth(targetDate);
     endDate = endOfMonth(targetDate);
@@ -180,6 +199,7 @@ export async function getDeadInventory(
   storeId: string,
   daysInactive: number = 90,
 ): Promise<DeadInventoryProduct[]> {
+  await requireStoreOwner(storeId);
   const cutoffDate = subDays(new Date(), daysInactive);
 
   // Find all products that have stock > 0

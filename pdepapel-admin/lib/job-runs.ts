@@ -19,7 +19,12 @@ export type JobName =
   | "whatsapp-webhook-volume"
   | "payment-webhook-retention"
   | "notification-retry"
-  | "db-health";
+  | "db-health"
+  // Apagados hasta que se aprueben (lib/scheduled-jobs.ts); entran a
+  // JOB_DEFINITIONS al encenderlos, si no «Sistemas» los marcaría atrasados.
+  | "abc-classification"
+  | "customer-reactivation"
+  | "bank-transfer-review";
 
 export interface JobDefinition {
   name: JobName;

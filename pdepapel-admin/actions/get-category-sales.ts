@@ -1,3 +1,4 @@
+import { requireStoreRead } from "@/lib/store-access";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, startOfYear } from "date-fns";
@@ -14,6 +15,7 @@ interface CategoryStats {
 }
 
 export async function getCategorySales(storeId: string, year: number) {
+  await requireStoreRead(storeId);
   const yearDate = new Date(year, 0, 1);
   const startDate = startOfYear(yearDate);
   const endDate = endOfYear(yearDate);

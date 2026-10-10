@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, startOfYear } from "date-fns";
@@ -8,6 +9,7 @@ import {
 import { revenueOrderWhere } from "@/lib/revenue-orders";
 
 export const getTotalRevenue = async (storeId: string, year: number) => {
+  await requireStoreOwner(storeId);
   const yearDate = new Date(year, 0, 1);
   const firstDayOfYear = startOfYear(yearDate);
   const lastDayOfYear = endOfYear(yearDate);

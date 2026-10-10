@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import prisma from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, startOfYear } from "date-fns";
@@ -11,6 +12,7 @@ export const getAverageOrderValue = async (
   storeId: string,
   year: number,
 ): Promise<number> => {
+  await requireStoreOwner(storeId);
   const yearDate = new Date(year, 0, 1);
   const firstDayOfYear = startOfYear(yearDate);
   const lastDayOfYear = endOfYear(yearDate);

@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import { getOrderNetProfit } from "@/lib/financial";
 import {
   createSettledMarketplaceSalesWhere,
@@ -89,6 +90,7 @@ export async function getMonthlyFinancialSummary(
   year: number,
   month: number, // 1-indexed (1=Jan, 12=Dec)
 ): Promise<MonthlySummary> {
+  await requireStoreOwner(storeId);
   // Use Colombia timezone aware dates
   const targetDate = new Date(year, month - 1, 1);
   const start = startOfMonth(targetDate);
@@ -125,8 +127,8 @@ export async function getMonthlyFinancialSummary(
             },
           },
         },
-        payment: true,
-        shipping: true,
+        payment: { select: { method: true } },
+        shipping: { select: { cost: true } },
       },
     }),
     prismadb.marketplaceOrder.findMany({
@@ -211,6 +213,7 @@ export async function getDailyFinancialBreakdown(
   year: number,
   month: number,
 ): Promise<DailyBreakdown[]> {
+  await requireStoreOwner(storeId);
   const targetDate = new Date(year, month - 1, 1);
   const start = startOfMonth(targetDate);
   const end = endOfMonth(targetDate);
@@ -246,8 +249,8 @@ export async function getDailyFinancialBreakdown(
             },
           },
         },
-        payment: true,
-        shipping: true,
+        payment: { select: { method: true } },
+        shipping: { select: { cost: true } },
       },
     }),
     prismadb.marketplaceOrder.findMany({
@@ -313,6 +316,7 @@ export async function getMonthOverMonthComparison(
   year: number,
   month: number,
 ): Promise<MonthOverMonth> {
+  await requireStoreOwner(storeId);
   const currentMonthDate = new Date(year, month - 1, 1);
   const previousMonthDate = subMonths(currentMonthDate, 1);
 

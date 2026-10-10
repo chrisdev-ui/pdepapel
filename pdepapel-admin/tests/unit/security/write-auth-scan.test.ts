@@ -26,10 +26,6 @@ const ALLOWED_WITHOUT_OWNER_GUARD: Record<string, string> = {
   "customers/reactivation/route.ts": "comprueba la propiedad de la tienda en línea",
   "orders/[orderId]/shipping/clear-rate/route.ts": "comprueba la propiedad de la tienda en línea",
   "orders/[orderId]/shipping/create-guide/route.ts": "comprueba la propiedad de la tienda en línea",
-  "products/abc-classification/route.ts": "cron con SCHEDULER_SECRET o propiedad comprobada en línea",
-  // Tareas programadas: autenticadas con el secreto del cron, sin sesión de Clerk.
-  "scheduler/auto-reactivation/route.ts": "cron autenticado con SCHEDULER_SECRET",
-  "scheduler/bank-transfers/route.ts": "cron autenticado con SCHEDULER_SECRET",
   // Tienda en línea: las usa la clienta, no el panel. Su autorización es la sesión de la clienta o el token del pedido.
   "account/addresses/[addressId]/route.ts": "cuenta de la clienta en la tienda",
   "account/saved-searches/route.ts": "cuenta de la clienta en la tienda",

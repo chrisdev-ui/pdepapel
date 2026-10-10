@@ -1,3 +1,4 @@
+import { requireStoreOwner } from "@/lib/store-access";
 import { MarketplaceOrderStatus, OrderStatus, OrderType } from "@prisma/client";
 import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "@/lib/mercadolibre/order-status";
 
@@ -152,6 +153,7 @@ export async function getTaxReport(
   period: TaxReportPeriod,
   salesDateBasis: TaxSalesDateBasis = TAX_SALES_DATE_BASIS.SALE_DATE,
 ): Promise<TaxReport> {
+  await requireStoreOwner(storeId);
   const marketplaceDateFilter =
     salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE
       ? { paidAt: { gte: period.start, lt: period.endExclusive } }
