@@ -92,6 +92,14 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "marketplaces/mercadolibre/listings/[listingId]/quality", methods: ["GET"], params: { listingId: "x" } },
   { path: "marketplaces/mercadolibre/listings/[listingId]/quality/video-reminder", methods: ["POST", "DELETE"], params: { listingId: "x" } },
   { path: "marketplaces/mercadolibre/listings/[listingId]/sale-conditions", methods: ["GET", "PATCH"], params: { listingId: "x" } },
+  // Correos del equipo y de avisos (Configuración, 2026-10-10).
+  { path: "settings/emails", methods: ["GET", "PATCH"] },
+  // Copiloto (2026-10-10): solo la dueña.
+  { path: "copiloto/chat", methods: ["POST"] },
+  { path: "copiloto/conversaciones", methods: ["GET"] },
+  { path: "copiloto/conversaciones/[conversationId]", methods: ["GET"], params: { conversationId: "x" } },
+  { path: "copiloto/mensajes/[messageId]/valoracion", methods: ["POST"], params: { messageId: "x" } },
+  { path: "copiloto/conocimiento/[noteId]", methods: ["PUT", "POST", "DELETE"], params: { noteId: "adhesivos" } },
 ];
 // Bulk handlers (products PATCH, orders PATCH/DELETE, coupons PATCH/DELETE)
 // validate the id list before authorizing, so an empty body answers 400

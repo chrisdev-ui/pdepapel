@@ -30,6 +30,7 @@ interface SidebarNavProps {
   counts?: NavCounts;
   /** Sesión en `ADMIN_ALLOWED_USER_IDS`: ve además las entradas reservadas. */
   ownerAllowlisted?: boolean;
+  copilot?: boolean;
   /** Solo iconos. */
   collapsed?: boolean;
   onNavigate?: () => void;
@@ -166,7 +167,7 @@ function ItemLink({
   );
 }
 
-export function SidebarNav({ storeId, counts, collapsed = false, onNavigate, ownerAllowlisted = false }: SidebarNavProps) {
+export function SidebarNav({ storeId, counts, collapsed = false, onNavigate, ownerAllowlisted = false, copilot = false }: SidebarNavProps) {
   const canWrite = useCanWrite();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -177,7 +178,7 @@ export function SidebarNav({ storeId, counts, collapsed = false, onNavigate, own
         aria-label="Secciones del panel"
         className={cn("flex flex-1 flex-col gap-1 overflow-y-auto", collapsed ? "items-center px-2 py-2" : "px-3 py-2")}
       >
-        {navGroupsFor({ canWrite, ownerAllowlisted }).map((group) => (
+        {navGroupsFor({ canWrite, ownerAllowlisted, copilot }).map((group) => (
           <div key={group.id} className={cn("flex flex-col gap-0.5", collapsed && "items-center")}>
             {group.label &&
               (collapsed ? (

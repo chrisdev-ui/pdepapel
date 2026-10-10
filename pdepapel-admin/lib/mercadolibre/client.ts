@@ -80,9 +80,13 @@ export function toMercadoLibreRequestError(
   status: number,
   payload: unknown,
   operation: "consulta" | "actualización" = "consulta",
+  extra: { retryAfterSeconds?: number } = {},
 ): MercadoLibreRequestError {
   const upstreamMessage = getUpstreamMessage(payload);
-  const details = upstreamMessage ? { upstreamMessage } : undefined;
+  const details =
+    upstreamMessage || extra.retryAfterSeconds
+      ? { ...(upstreamMessage ? { upstreamMessage } : {}), ...(extra.retryAfterSeconds ? { retryAfterSeconds: extra.retryAfterSeconds } : {}) }
+      : undefined;
   if (status === 401 || status === 403) {
     return new MercadoLibreRequestError(
       "Mercado Libre no autorizó la operación. Reconecta la cuenta de Mercado Libre y vuelve a intentarlo.",
@@ -290,10 +294,12 @@ export async function requestMercadoLibreJson(
     payload = null;
   }
 
+  const retryAfter = Number(response.headers?.get?.("retry-after"));
   return {
     ok: response.ok && payload !== null,
     status: response.status,
     payload,
+    ...(response.status === 429 && Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
   };
 }
 
@@ -376,7 +382,9 @@ export async function getMercadoLibreJson(
       where: { id: connectionId },
       data: { lastError: `Mercado Libre rechazó la consulta del recurso (${result.status})` },
     });
-    throw toMercadoLibreRequestError(result.status, result.payload, "consulta");
+    throw toMercadoLibreRequestError(result.status, result.payload, "consulta", {
+      retryAfterSeconds: "retryAfterSeconds" in result ? result.retryAfterSeconds : undefined,
+    });
   }
 
   return result.payload;

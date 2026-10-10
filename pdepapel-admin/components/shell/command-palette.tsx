@@ -37,6 +37,7 @@ interface CommandPaletteProps {
   onOpenChange: (open: boolean) => void;
   /** Sesión en `ADMIN_ALLOWED_USER_IDS`: ve además las entradas reservadas. */
   ownerAllowlisted?: boolean;
+  copilot?: boolean;
   /** Permite inyectar la búsqueda en pruebas. */
   searchProducts?: (query: string) => Promise<ProductHit[]>;
 }
@@ -63,6 +64,7 @@ export function CommandPalette({
   onOpenChange,
   searchProducts,
   ownerAllowlisted = false,
+  copilot = false,
 }: CommandPaletteProps) {
   const canWrite = useCanWrite();
   const router = useRouter();
@@ -112,7 +114,7 @@ export function CommandPalette({
 
   const destinations = useMemo(() => {
     const items: { label: string; segment: string; group: string }[] = [];
-    for (const group of navGroupsFor({ canWrite, ownerAllowlisted })) {
+    for (const group of navGroupsFor({ canWrite, ownerAllowlisted, copilot })) {
       for (const item of group.items) {
         items.push({ label: item.label, segment: item.segment, group: group.label ?? "Inicio" });
         for (const child of item.children ?? []) {
@@ -129,7 +131,7 @@ export function CommandPalette({
       }
     }
     return items;
-  }, [canWrite, ownerAllowlisted]);
+  }, [canWrite, ownerAllowlisted, copilot]);
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>

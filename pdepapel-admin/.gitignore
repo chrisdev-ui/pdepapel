@@ -56,6 +56,8 @@ google_merchant_*
 !docs/conciliar-inventario-feria-anterior.md
 !docs/mercadolibre.md
 !docs/guia-uso-mercadolibre.md
+# Notas de conocimiento del copiloto (lib/copiloto/knowledge.ts).
+!content/copiloto/conocimiento/*.md
 backup_prod_*.sql
 /scripts/backup-prod.ts
 /scripts/restore-db.ts

@@ -56,3 +56,32 @@ describe("measureWhatsAppBotRatio", () => {
     });
   });
 });
+
+describe("measureCopilotSpend", () => {
+  const store = (today: number, month: number) => ({
+    get: async (key: string) => (key.length > "ai:copiloto:spend:2026-10".length ? today : month),
+    incrbyfloat: async () => 0,
+    expire: async () => 1,
+  });
+
+  it("enseña el gasto del día y del mes contra sus topes", async () => {
+    const { measureCopilotSpend } = await import("@/lib/job-runs");
+    await expect(measureCopilotSpend(store(0.12, 3.4), now)).resolves.toMatchObject({
+      name: "copilot-spend",
+      metric: true,
+      attention: false,
+      detail: "Hoy USD 0,12 de USD 1,00 · mes USD 3,40 de USD 15,00",
+    });
+  });
+
+  it("avisa cuando «a fondo» se apagó y se pone en rojo al llegar a un tope", async () => {
+    const { measureCopilotSpend } = await import("@/lib/job-runs");
+    await expect(measureCopilotSpend(store(0.2, 11), now)).resolves.toMatchObject({ attention: false, detail: expect.stringContaining("«a fondo» apagado") });
+    await expect(measureCopilotSpend(store(1, 11), now)).resolves.toMatchObject({ attention: true });
+  });
+
+  it("sin Redis lo dice, sin ponerse en rojo", async () => {
+    const { measureCopilotSpend } = await import("@/lib/job-runs");
+    await expect(measureCopilotSpend(null, now)).resolves.toMatchObject({ ok: null, attention: false });
+  });
+});

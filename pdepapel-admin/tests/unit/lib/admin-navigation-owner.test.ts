@@ -8,14 +8,14 @@ import { FOOTER_ITEMS, NAV_GROUPS, footerItemsFor, navGroupsFor } from "@/lib/ad
  * dueña ve exactamente el menú de siempre.
  */
 /** «Ajustes» vive en el pie de la barra, así que el menú son los dos. */
-const visibility = (allowed: boolean) => ({ canWrite: true, ownerAllowlisted: allowed });
+const visibility = (allowed: boolean) => ({ canWrite: true, ownerAllowlisted: allowed, copilot: true });
 const childLabels = (allowed: boolean) => [
   ...navGroupsFor(visibility(allowed)).flatMap((group) => group.items.flatMap((item) => (item.children ?? []).map((child) => child.label))),
   ...footerItemsFor(visibility(allowed)).flatMap((item) => (item.children ?? []).map((child) => child.label)),
 ];
 /** Pantallas de primer nivel que ve esta sesión. */
 const screenIds = (canWrite: boolean) =>
-  navGroupsFor({ canWrite, ownerAllowlisted: canWrite }).flatMap((group) => group.items.map((item) => item.id));
+  navGroupsFor({ canWrite, ownerAllowlisted: canWrite, copilot: true }).flatMap((group) => group.items.map((item) => item.id));
 const allChildLabels = () => [
   ...NAV_GROUPS.flatMap((group) => group.items.flatMap((item) => (item.children ?? []).map((child) => child.label))),
   ...FOOTER_ITEMS.flatMap((item) => (item.children ?? []).map((child) => child.label)),
@@ -81,5 +81,19 @@ describe("pantallas reservadas a la dueña", () => {
     expect(footerItemsFor({ canWrite: true, ownerAllowlisted: true }).map((item) => item.id)).toEqual(
       FOOTER_ITEMS.map((item) => item.id),
     );
+  });
+});
+
+describe("copiloto en el menú", () => {
+  it("sin su conexión de solo lectura no aparece, ni para la dueña", () => {
+    const ids = navGroupsFor({ canWrite: true, ownerAllowlisted: true }).flatMap((group) => group.items.map((item) => item.id));
+    expect(ids).not.toContain("copiloto");
+  });
+
+  it("configurado, lo ve la dueña y no la cuenta de solo lectura", () => {
+    const ids = (canWrite: boolean) =>
+      navGroupsFor({ canWrite, ownerAllowlisted: canWrite, copilot: true }).flatMap((group) => group.items.map((item) => item.id));
+    expect(ids(true)).toContain("copiloto");
+    expect(ids(false)).not.toContain("copiloto");
   });
 });

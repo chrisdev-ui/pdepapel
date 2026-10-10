@@ -9,6 +9,7 @@ import { overduePresaleWhere } from "@/lib/presale";
 
 import prismadb from "@/lib/prismadb";
 import { getStoreAccess } from "@/lib/store-access";
+import { isCopilotConfigured } from "@/lib/copiloto/config";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
@@ -81,6 +82,7 @@ export default async function DashboardLayout({
         role={access?.role ?? null}
         storeUrl={env.FRONTEND_STORE_URL}
         counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending }}
+        copilot={isCopilotConfigured()}
       >
         {children}
       </AppShell>

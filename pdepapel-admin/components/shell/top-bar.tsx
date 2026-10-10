@@ -4,7 +4,8 @@ import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { dashboardHref } from "@/lib/admin-navigation";
 import { UserButton } from "@clerk/nextjs";
-import { ExternalLink, Menu, PanelLeftClose, PanelLeftOpen, Plus, Search } from "lucide-react";
+import { ExternalLink, Menu, PanelLeftClose, PanelLeftOpen, Plus, Search, Sparkles } from "lucide-react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 interface TopBarProps {
@@ -14,10 +15,14 @@ interface TopBarProps {
   onToggleSidebar: () => void;
   onOpenMenu: () => void;
   onOpenCommand: () => void;
+  /** El copiloto está configurado: botón que lo abre con la pantalla actual. */
+  copilot?: boolean;
 }
 
-export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMenu, onOpenCommand }: TopBarProps) {
+export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMenu, onOpenCommand, copilot = false }: TopBarProps) {
   const canWrite = useCanWrite();
+  const pathname = usePathname();
+  const screen = pathname.split("/").slice(2).join("/") || "inicio";
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-white px-3 sm:px-4 lg:px-6">
       <Button
@@ -63,6 +68,14 @@ export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMe
       </div>
 
       <div className="flex items-center gap-1">
+        {copilot && canWrite && !screen.startsWith("copiloto") && (
+          <Button asChild variant="ghost" size="sm">
+            <Link href={`${dashboardHref(storeId, "copiloto")}?desde=${encodeURIComponent(screen)}`} aria-label="Abrir el copiloto">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden lg:inline">Copiloto</span>
+            </Link>
+          </Button>
+        )}
         {storeUrl && (
           <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
             <a href={storeUrl} target="_blank" rel="noreferrer">

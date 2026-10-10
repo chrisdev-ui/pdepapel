@@ -1,3 +1,11 @@
+import { getAiRoutingStore } from "@/lib/ai-model-providers";
+import { readCopilotSpend, type CopilotBudgetStore } from "@/lib/copiloto/budget";
+import {
+  COPILOT_DAILY_SPEND_CAP_USD,
+  COPILOT_DEEP_MODE_CUTOFF,
+  COPILOT_MONTHLY_SPEND_CAP_USD,
+  isCopilotConfigured,
+} from "@/lib/copiloto/config";
 import { ConversationMessageDirection, ConversationMessageSentBy } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
 import { shortMemo } from "@/lib/short-memo";
@@ -23,8 +31,9 @@ export type JobName =
   | "db-health"
   | "abc-classification"
   | "bank-transfer-review"
-  // Cifra, no tarea: ver `measureWhatsAppBotRatio`.
+  // Cifras, no tareas: ver `measureWhatsAppBotRatio` y `measureCopilotSpend`.
   | "whatsapp-bot-ratio"
+  | "copilot-spend"
   // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
   // si no «Sistemas» lo marcaría atrasado.
   | "customer-reactivation";
@@ -244,7 +253,29 @@ async function loadSystemsStatus(
     .catch(() => []);
   const rows = buildSystemsStatus(runs, storeId, now);
   const ratio = await measureWhatsAppBotRatio(storeId, now).catch(() => null);
-  return ratio ? [...rows, ratio] : rows;
+  const copilot = isCopilotConfigured() ? await measureCopilotSpend(getAiRoutingStore() as unknown as CopilotBudgetStore | null, now) : null;
+  return [...rows, ...(ratio ? [ratio] : []), ...(copilot ? [copilot] : [])];
+}
+
+const usd = (value: number) => `USD ${value.toFixed(2).replace(".", ",")}`;
+
+/** Gasto del copiloto hoy y en el mes, contra sus topes; en rojo al llegar a uno. */
+export async function measureCopilotSpend(store: CopilotBudgetStore | null, now: Date): Promise<SystemStatusRow> {
+  const base = { name: "copilot-spend" as const, label: "Copiloto: gasto en IA", ranAt: now, overdue: false, metric: true };
+  if (!store) return { ...base, ok: null, detail: "Sin lectura del gasto (Redis no disponible)", attention: false };
+  try {
+    const spend = await readCopilotSpend(store, now);
+    const atCap = spend.today >= COPILOT_DAILY_SPEND_CAP_USD || spend.month >= COPILOT_MONTHLY_SPEND_CAP_USD;
+    const deepOff = spend.month >= COPILOT_MONTHLY_SPEND_CAP_USD * COPILOT_DEEP_MODE_CUTOFF;
+    return {
+      ...base,
+      ok: !atCap,
+      attention: atCap,
+      detail: `Hoy ${usd(spend.today)} de ${usd(COPILOT_DAILY_SPEND_CAP_USD)} · mes ${usd(spend.month)} de ${usd(COPILOT_MONTHLY_SPEND_CAP_USD)}${deepOff ? " · «a fondo» apagado este mes" : ""}`,
+    };
+  } catch {
+    return { ...base, ok: null, detail: "Sin lectura del gasto", attention: false };
+  }
 }
 
 /** Más mensajes del bot que esto por cada mensaje de clienta, en 24 h, es rojo. */

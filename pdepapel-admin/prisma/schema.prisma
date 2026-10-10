@@ -84,6 +84,8 @@ model Store {
   newsletterSubscribers          NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
   conversations                  Conversation[]                  @relation("StoreToConversation")
   ignoredContacts                IgnoredContact[]
+  assistantConversations         AssistantConversation[]
+  assistantKnowledgeNotes        AssistantKnowledgeNote[]
   whatsAppBotReplies             WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
   productPresales                ProductPresale[]                @relation("StoreToProductPresale")
   newsletterIssues               NewsletterIssue[]               @relation("StoreToNewsletterIssue")
@@ -3053,4 +3055,66 @@ enum MarketplaceCampaignActionStatus {
   PENDING
   SUCCEEDED
   FAILED
+}
+
+/// Conversación con el copiloto (docs/design/asistente-experto-paula.md).
+/// Cada persona ve solo las suyas.
+model AssistantConversation {
+  id            String             @id @default(uuid())
+  storeId       String
+  userId        String             @db.VarChar(191)
+  title         String             @db.VarChar(120)
+  lastMessageAt DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  store         Store              @relation(fields: [storeId], references: [id])
+  messages      AssistantMessage[]
+
+  @@index([storeId, userId, lastMessageAt])
+  @@index([storeId])
+}
+
+/// Un mensaje del copiloto, con sus partes tal como las arma el AI SDK. El
+/// uso (modelo, tokens, costo, herramientas) va en las respuestas; nunca se
+/// registra el texto en los logs.
+model AssistantMessage {
+  id                String                @id @db.VarChar(64)
+  conversationId    String
+  role              String                @db.VarChar(16)
+  parts             Json
+  model             String?               @db.VarChar(64)
+  inputTokens       Int?
+  cachedInputTokens Int?
+  outputTokens      Int?
+  costUsd           Decimal?              @db.Decimal(10, 6)
+  latencyMs         Int?
+  toolCalls         Json?
+  /// "up" o "down", con un comentario opcional.
+  feedback          String?               @db.VarChar(8)
+  feedbackNote      String?               @db.Text
+  createdAt         DateTime              @default(now())
+  conversation      AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+/// Lo que Paula corrige y aprueba de una nota de conocimiento. El borrador
+/// vive en content/copiloto/conocimiento/<noteId>.md; si ella lo edita, su
+/// texto manda. La aprobación va atada a la huella del texto vigente: editar
+/// la retira.
+model AssistantKnowledgeNote {
+  id           String    @id @default(uuid())
+  storeId      String
+  noteId       String    @db.VarChar(120)
+  body         String?   @db.Text
+  updatedBy    String?   @db.VarChar(191)
+  approvedHash String?   @db.VarChar(64)
+  approvedBy   String?   @db.VarChar(191)
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  store        Store     @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, noteId])
+  @@index([storeId])
 }

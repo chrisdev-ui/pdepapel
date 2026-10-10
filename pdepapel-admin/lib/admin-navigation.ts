@@ -25,6 +25,7 @@ import {
   Users,
   Warehouse,
   Gift,
+  Sparkles,
 } from "lucide-react";
 
 /**
@@ -62,6 +63,8 @@ export interface NavItem {
    * la ve en el menú (si entrara por la URL, el cargador la rechaza).
    */
   ownerOnly?: boolean;
+  /** Solo con el copiloto configurado (`COPILOT_DATABASE_URL`). */
+  requiresCopilot?: boolean;
   /** Segmento tras `/[storeId]/`. Vacío = inicio. */
   segment: string;
   exact?: boolean;
@@ -80,7 +83,21 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     id: "main",
-    items: [{ id: "inicio", label: "Inicio", icon: Home, segment: "", exact: true }],
+    items: [
+      { id: "inicio", label: "Inicio", icon: Home, segment: "", exact: true },
+      {
+        id: "copiloto",
+        label: "Copiloto",
+        icon: Sparkles,
+        segment: "copiloto",
+        ownerOnly: true,
+        requiresCopilot: true,
+        children: [
+          { label: "Preguntar", segment: "copiloto" },
+          { label: "Conocimiento", segment: "copiloto/conocimiento" },
+        ],
+      },
+    ],
   },
   {
     id: "ventas",
@@ -464,6 +481,8 @@ export interface NavVisibility {
   canWrite?: boolean;
   /** Sesión en la lista explícita del dueño. */
   ownerAllowlisted?: boolean;
+  /** El copiloto tiene su conexión de solo lectura. */
+  copilot?: boolean;
 }
 
 function visibleItems(items: NavItem[], visibility: NavVisibility): NavItem[] {
@@ -471,6 +490,7 @@ function visibleItems(items: NavItem[], visibility: NavVisibility): NavItem[] {
   const allowlisted = visibility.ownerAllowlisted ?? false;
   return items
     .filter((item) => canWrite || !item.ownerOnly)
+    .filter((item) => visibility.copilot || !item.requiresCopilot)
     .map((item) =>
       item.children
         ? { ...item, children: item.children.filter((child) => allowlisted || !child.ownerOnly) }

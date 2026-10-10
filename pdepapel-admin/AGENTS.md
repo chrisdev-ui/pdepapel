@@ -176,6 +176,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - **Never run `vercel env rm` / `vercel env add` or edit variables in the dashboard without explicit per-variable approval.** `vercel env rm NAME` with no environment argument deletes the variable from **all** environments, and deleted values are unrecoverable, and a deleted analytics or feature key does not fail anything — the feature just goes dark until someone notices. To scope a variable, re-add it for the environment you want; never delete first.
 - Add mandatory new variables to `lib/env.mjs` or the build fails. **Never `NEXT_PUBLIC_`-prefix a secret.**
 - `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY` and `CLOUDFLARE_R2_BUCKET_NAME` (admin project only) point at the **private** bucket that holds payment-proof photos. All four are optional on purpose: without them the fair sale hides «Adjuntar comprobante» and the proof routes answer 503; nothing else changes. The R2 API token should be scoped to that single bucket with object read/write only.
+- `COPILOT_DATABASE_URL` (admin, **Production only, Sensitive**) is the `copilot_ro` read-only connection for the copiloto; the code adds `connection_limit=1` and `pool_timeout=5` when the URL lacks them. Optional on purpose: without it the copiloto is hidden (menu, page and routes). Never point it at the root user.
 - `MERCADOLIBRE_TOKEN_ENCRYPTION_KEY` must stay stable: changing it makes every stored token unreadable.
 - `REVALIDATION_SECRET` must be an **identical single printable line** in both Vercel projects: no quotes, spaces or embedded newlines.
 - Mercado Libre and QStash variables belong **only** to the admin Vercel project, never the storefront's.
@@ -310,6 +311,22 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - The review only pre-checks fields that are empty in the form; a typed value is replaced only when the admin ticks it. It never proposes prices, costs, stock or SKU.
 - Measurement: `docs/audits/2026-10-09-asistente-ia-productos.md` §11 (20 real products, both providers). Re-run it before changing prompts, models or the name post-processing.
 
+### Copiloto (assistant for Paula)
+
+Design: `docs/design/asistente-experto-paula.md` (§13 is what v1 built) and `docs/adr/0001-asistente-experto-router-y-datos.md`.
+- **Guard:** `isCopilotConfigured()` (`lib/copiloto/config.ts`) is true only when `COPILOT_DATABASE_URL` exists. Without it the page is a 404, the routes answer 404/503 after the owner check, the nav entry and the top-bar button are hidden, and the Sistemas row is absent. There is **no fallback to the root connection**; `getCopilotDb()` throws instead.
+- **Who sees it:** owners only (`ownerOnly` + `requiresCopilot` in `lib/admin-navigation.ts`). Agency read-only accounts never see it.
+- **Database user `copilot_ro`:** created by Christian in the Railway console from `prisma/manual-migrations/20261010_create_copilot_ro_user.sql` with his own password (the file holds a placeholder; never generate, read or print it). `SELECT` only, `MAX_USER_CONNECTIONS 2`, column grants that leave out every customer/supplier contact column. Consequences:
+  - every copiloto query uses an explicit `select`; a whole-row read (or reusing a panel loader) fails with error 1143. Adding a column to a tool means adding the grant to that SQL file, to `tests/integration/copilot-ro-grants.test.ts`, and applying the `GRANT` in Railway;
+  - each tool runs through `withCopilotQuery` (a transaction with `max_execution_time` 3000); 1226/P2024 → «ocupado», 3024 → «lento», 1142/1143 → «sin_permiso», returned to the model as data.
+- **Tools** (`lib/copiloto/tools.ts`, 11, read-only): each calls `requireStoreOwner` and returns `{fuente, rango, actualizadoEl, datos, truncado}`. Tool output is untrusted data in the prompt. No contact data, no writes in v1.
+- **Model and budget:** OpenAI only (`gpt-6-luna`; `gpt-6.1-sol` for «a fondo»), Responses API with `store: false`, no Gemini fallback; it honours the router's OpenAI skip key. Own caps in `lib/copiloto/config.ts`: US$1 a day, US$15 a month, «a fondo» off at 70 % of the month, separate from the shared US$1 cap. Redis down → the copiloto refuses (it cannot count spend). Rate limit 30/hour and 150/day per user. Spend shows on Inicio → Sistemas («Copiloto: gasto en IA»).
+- **Knowledge:** drafts in `content/copiloto/conocimiento/*.md` (tracked through a `.gitignore` exception; bundled into the chat/conocimiento routes via `outputFileTracingIncludes`). Paula's edits and approvals live in `AssistantKnowledgeNote`; a note reaches the prompt only when its approved hash matches the current text. `estado: pendiente-de-paula` notes (brands) cannot be approved empty.
+- **Storage:** `AssistantConversation`, `AssistantMessage` (parts, usage, cost, thumbs), `AssistantKnowledgeNote` (migration `20261010_add_copilot_tables.sql`), written with the normal connection. Conversation retention is **not implemented** yet.
+- **Tests:** unit (`copiloto-core`, `copiloto-chat` with `MockLanguageModelV4`), components (`copiloto-ui`), integration (`copilot-ro-grants`, `api-authorization`), and E2E at 390/1440 with the model stubbed:
+  `npm run test:e2e:seed-admin` then `COPILOT_DATABASE_URL=mysql://copilot_ro:x@127.0.0.1:3307/pdepapel_test node scripts/with-e2e-env.mjs npx playwright test tests/e2e/copilot-viewports.spec.ts`.
+- **Eval (real OpenAI, local DB only):** `node scripts/with-test-env.mjs npx vitest run --config scripts/copilot-eval/vitest.config.mts`. Bar: 18 of 20 with all 5 safety questions; Paula's 10 slots raise it to 27 of 30. Re-run before changing the prompt, the models or a tool. Results land in `tmp/copilot-eval/` (ignored).
+
 ### WhatsApp bot
 
 - **Reverted 2026-10-10.** The intent classifier, context search, casual replies, sticker/emoji rules, catalog and «Ver en la tienda» link messages and after-handoff product answers from `edb9541a` were taken out after repetitive replies and sends without a new customer message in production. The bot is back to its `4b6cab6d` behavior. The `botCasual*` columns of `StoreSettings` stay in the schema, unused (additive and nullable; migration `20261010_add_bot_casual_approval.sql`). 
@@ -333,6 +350,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - An unknown acquisition cost is **never zero**; report cost, profit and margin as unknown instead of manufacturing a 100% margin.
 - Never edit marketplace order stock or financial fields in the database to "fix" a queue issue. Fix and retry the audited workflow.
 - Reconnect from the admin UI after any scope, secret or token change.
+- The reconcile step (`runMercadoLibreReconcile` in `lib/mercadolibre/reconcile-runner.ts`) retries **once** on a 429 (ML's own or our local rate limit): it waits `Retry-After` when ML sends it, else 4 s, capped at 10 s, and only if at least 5 s of the run's budget remain. A second 429 fails the run as before.
 - The account is a **User Products seller** (`user_product_seller`).
   - Items carry `family_name` and never `title`; ML rejects a title-only body.
   - Variants are separate items that share one family name.

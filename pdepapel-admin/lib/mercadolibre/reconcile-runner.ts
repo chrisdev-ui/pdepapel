@@ -3,7 +3,7 @@ import { ProductPresaleStatus } from "@prisma/client";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import prismadb from "@/lib/prismadb";
 
-import { MercadoLibreReauthError, requestMercadoLibreJson } from "./client";
+import { MercadoLibreReauthError, MercadoLibreRequestError, requestMercadoLibreJson } from "./client";
 import type { MercadoLibreHealthIssue } from "./health";
 import { getSellerItemIds } from "./import-listings";
 import { synchronizeMercadoLibreItemStatus } from "./item-sync";
@@ -155,10 +155,52 @@ async function readSaleCosts(
  * cumple el margen. Nada más se escribe,
  * y en Mercado Libre nada que no sea ese stock.
  */
+/** Espera antes del único reintento por un 429, si Mercado Libre no dice cuánto. */
+export const RECONCILE_RATE_LIMIT_BACKOFF_MS = 4_000;
+/** Tope de esa espera: un `Retry-After` largo no se cumple, la revisión sigue mañana. */
+const RECONCILE_RATE_LIMIT_MAX_WAIT_MS = 10_000;
+
+function rateLimitWaitMs(error: unknown): number | null {
+  const upstream = error instanceof MercadoLibreRequestError ? error.upstreamStatus : null;
+  const text = error instanceof Error ? error.message : String(error);
+  if (upstream !== 429 && !/local_rate_limited|too many requests|limitó las consultas/i.test(text)) return null;
+  const retryAfter = Number((error as { details?: { retryAfterSeconds?: unknown } })?.details?.retryAfterSeconds);
+  const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : RECONCILE_RATE_LIMIT_BACKOFF_MS;
+  return Math.min(wait, RECONCILE_RATE_LIMIT_MAX_WAIT_MS);
+}
+
+/**
+ * La revisión diaria con un solo reintento si Mercado Libre la frena con un
+ * 429 (lo que pida `Retry-After`, o una espera corta), dentro del mismo
+ * presupuesto de lectura. Un segundo 429 la deja como fallida, como antes.
+ */
 export async function runMercadoLibreReconcile(
   connection: { id: string; sellerId: string | null; storeId?: string },
-  { now = new Date(), budgetMs = RECONCILE_READ_BUDGET_MS }: { now?: Date; budgetMs?: number } = {},
+  options: { now?: Date; budgetMs?: number; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<ReconcileRun> {
+  const startedAt = Date.now();
+  const budgetMs = options.budgetMs ?? RECONCILE_READ_BUDGET_MS;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const first = await runReconcileOnce(connection, { now: options.now, budgetMs });
+  if (first.outcome !== "failed" || first.rateLimitWaitMs === undefined) return stripRetryHint(first);
+  const remaining = budgetMs - (Date.now() - startedAt) - first.rateLimitWaitMs;
+  if (remaining < 5_000) return stripRetryHint(first);
+  console.warn("[MERCADOLIBRE] La revisión diaria chocó con un 429; un reintento", { waitMs: first.rateLimitWaitMs });
+  await sleep(first.rateLimitWaitMs);
+  return stripRetryHint(await runReconcileOnce(connection, { now: options.now, budgetMs: remaining }));
+}
+
+type ReconcileAttempt = Exclude<ReconcileRun, { outcome: "failed" }> | { outcome: "failed"; error: string; rateLimitWaitMs?: number };
+
+function stripRetryHint(run: ReconcileAttempt): ReconcileRun {
+  if (run.outcome === "failed") return { outcome: "failed", error: run.error };
+  return run;
+}
+
+async function runReconcileOnce(
+  connection: { id: string; sellerId: string | null; storeId?: string },
+  { now = new Date(), budgetMs = RECONCILE_READ_BUDGET_MS }: { now?: Date; budgetMs?: number } = {},
+): Promise<ReconcileAttempt> {
   if (!connection.sellerId) return { outcome: "failed", error: "La conexión no tiene vendedor." };
   const deadline = Date.now() + budgetMs;
   try {
@@ -290,7 +332,12 @@ export async function runMercadoLibreReconcile(
     };
   } catch (error) {
     if (error instanceof MercadoLibreReauthError) return { outcome: "reauth" };
-    return { outcome: "failed", error: error instanceof Error ? error.message : String(error) };
+    const wait = rateLimitWaitMs(error);
+    return {
+      outcome: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      ...(wait !== null ? { rateLimitWaitMs: wait } : {}),
+    };
   }
 }
 

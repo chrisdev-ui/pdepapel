@@ -84,6 +84,11 @@ export const env = createEnv({
     // Opcional: sin ella el desafío de Turnstile en los pedidos no hace nada (lib/turnstile.ts).
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     OPENAI_API_KEY: z.string().min(1).optional(),
+    // Conexión de solo lectura del copiloto (usuario `copilot_ro`, ver
+    // prisma/manual-migrations/20261010_create_copilot_ro_user.sql). Opcional:
+    // sin ella el copiloto no aparece y su ruta responde 503. Nunca cae a
+    // DATABASE_URL.
+    COPILOT_DATABASE_URL: z.string().min(1).optional(),
     // Signs the store-bound token in the hosted Google Merchant feed URL.
     // Optional: without it the feed route answers 404 and nothing is exposed.
     GOOGLE_MERCHANT_FEED_SECRET: z.string().min(16).optional(),

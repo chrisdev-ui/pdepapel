@@ -85,6 +85,11 @@ const nextConfig = {
     outputFileTracingIncludes: {
       "/manual": ["./content/manual/manual.html"],
       "/manual/img/[name]": ["./content/manual/img/*.jpg"],
+      // El copiloto lee sus notas de conocimiento en tiempo de ejecución
+      // (lib/copiloto/knowledge.ts).
+      "/api/[storeId]/copiloto/chat": ["./content/copiloto/conocimiento/*.md"],
+      "/api/[storeId]/copiloto/conocimiento/[noteId]": ["./content/copiloto/conocimiento/*.md"],
+      "/[storeId]/copiloto/conocimiento": ["./content/copiloto/conocimiento/*.md"],
     },
   },
   async redirects() {

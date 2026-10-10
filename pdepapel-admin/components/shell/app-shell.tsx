@@ -30,6 +30,8 @@ interface AppShellProps {
   role?: StoreRole | null;
   storeUrl?: string;
   counts?: NavCounts;
+  /** El copiloto tiene su conexión de solo lectura configurada. */
+  copilot?: boolean;
   children: React.ReactNode;
 }
 
@@ -45,6 +47,7 @@ export function AppShell({
   role = null,
   storeUrl,
   counts,
+  copilot = false,
   children,
 }: AppShellProps) {
   const { collapsed, toggle } = useSidebarStore();
@@ -99,6 +102,7 @@ export function AppShell({
             counts={counts}
             collapsed={collapsed}
             ownerAllowlisted={canCreateStore}
+            copilot={copilot}
           />
         </aside>
 
@@ -114,6 +118,7 @@ export function AppShell({
             </div>
             <SidebarNav
               ownerAllowlisted={canCreateStore}
+              copilot={copilot}
               storeId={storeId}
               counts={counts}
               onNavigate={() => setMenuOpen(false)}
@@ -129,6 +134,7 @@ export function AppShell({
             onToggleSidebar={toggle}
             onOpenMenu={() => setMenuOpen(true)}
             onOpenCommand={() => setCommandOpen(true)}
+            copilot={copilot}
           />
           {/* `relative`: los inputs ocultos de Radix (checkbox, radio) y los
             textos `sr-only` son `position: absolute`; sin un ancestro
@@ -148,6 +154,7 @@ export function AppShell({
         <CommandPalette
           storeId={storeId}
           ownerAllowlisted={canCreateStore}
+          copilot={copilot}
           open={commandOpen}
           onOpenChange={setCommandOpen}
         />
