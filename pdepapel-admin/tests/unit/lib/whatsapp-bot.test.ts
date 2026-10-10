@@ -167,6 +167,8 @@ const ajustesBase: ResolvedStoreSettings = {
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
   botProductsApprovedAt: null,
   botProductsVersion: null,
+  botCasualApprovedAt: null,
+  botCasualVersion: null,
 };
 
 describe("keyword matching", () => {
