@@ -11,6 +11,13 @@ import {
   describeBotPause,
 } from "@/lib/conversation-bot-pause";
 import prismadb from "@/lib/prismadb";
+import {
+  exceededBotCap,
+  findPendingCustomerActivity,
+  isBotEnabled,
+  welcomeSentRecently,
+  type BotCap,
+} from "@/lib/whatsapp/bot-guards";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
 import {
   BUSINESS_FACT_TEMPLATES,
@@ -129,6 +136,10 @@ export type WhatsAppBotOutcome =
   | "escalated_unprocessable_media"
   /** Ya llegó otro mensaje después: contesta ese, no este. */
   | "skipped_superseded"
+  /** «Bot de WhatsApp activo» está apagado: no se manda nada, va a Paula. */
+  | "skipped_bot_disabled"
+  /** Volvió a saludar y el menú ya salió en las últimas 24 h: silencio. */
+  | "skipped_welcome_repeat"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -285,7 +296,8 @@ async function hasNewerInbound(
 async function shouldStayQuiet(
   conversationId: string,
   pace: Pacing,
-): Promise<"owner_active" | "superseded" | null> {
+): Promise<"bot_disabled" | "owner_active" | "superseded" | "pending_owner" | BotCap | null> {
+  if (pace.storeId && !(await isBotEnabled(pace.storeId))) return "bot_disabled";
   const actual = await prismadb.conversation.findUnique({
     where: { id: conversationId },
     select: { lastOwnerAt: true },
@@ -294,7 +306,19 @@ async function shouldStayQuiet(
   if (pace.supersedable && (await hasNewerInbound(conversationId, pace.inboundAt))) {
     return "superseded";
   }
-  return null;
+  // Lo que ya llegó al webhook y espera en la fila de esta clienta: su
+  // mensaje siguiente, su toque de «Hablar con Paula» o un mensaje de Paula.
+  if (pace.eventId && pace.eventCreatedAt) {
+    const pending = await findPendingCustomerActivity({
+      eventId: pace.eventId,
+      eventCreatedAt: pace.eventCreatedAt,
+      phone: pace.customerPhone,
+      bsuid: pace.customerBsuid,
+    });
+    if (pending === "owner_message") return "pending_owner";
+    if (pending === "customer_message") return "superseded";
+  }
+  return exceededBotCap(conversationId, pace.inboundAt);
 }
 
 /** Corta a propósito: si vuelve a preguntar lo mismo, merece respuesta. */
@@ -352,12 +376,34 @@ export async function runWhatsAppBot(input: {
   keywords?: WhatsAppBotKeyword[];
   /** Solo para pruebas: si no se pasa, se leen los datos de la tienda. */
   settings?: ResolvedStoreSettings;
+  /**
+   * El evento del webhook que trajo este mensaje y cuándo lo guardó el
+   * servidor: con eso se ve, antes de enviar, si de esta clienta ya llegó
+   * algo más que todavía espera en la fila.
+   */
+  eventId?: string | null;
+  eventCreatedAt?: Date | null;
+  customerPhone?: string | null;
+  customerBsuid?: string | null;
+  /** Lo pone esta función; no se pasa desde fuera. */
+  storeId?: string;
 }): Promise<WhatsAppBotResult> {
   const conversation = await prismadb.conversation.findUnique({
     where: { id: input.conversationId },
     select: { id: true, status: true, storeId: true, lastOwnerAt: true },
   });
   if (!conversation) return { outcome: "skipped_needs_owner" };
+  input = { ...input, storeId: conversation.storeId };
+
+  // Interruptor de Configuración, leído en cada mensaje. Apagado, el bot no
+  // manda nada —ni «escribiendo…»— y la conversación queda en la fila de
+  // Paula: el mensaje ya quedó guardado y ella lo ve en el panel.
+  if (!(await isBotEnabled(conversation.storeId))) {
+    if (conversation.status !== ConversationStatus.NEEDS_OWNER) {
+      await escalate(conversation.id);
+    }
+    return { outcome: "skipped_bot_disabled" };
+  }
 
   // 0. Paula está en la conversación: a la clienta no le llega nada, ni
   //    siquiera si tocó «Hablar con Paula» (ella ya está ahí). Por dentro sí
@@ -739,6 +785,11 @@ export async function runWhatsAppBot(input: {
       input.settings ?? (await readSettings(conversation.storeId));
     if (welcomeSettings && areBusinessFactsApproved(welcomeSettings)) {
       const cuerpo = BUSINESS_FACT_TEMPLATES["welcome.body"]();
+      // Una vez por conversación cada 24 h: un segundo «hola» o un «¿cómo
+      // estás?» no vuelve a mandar el menú, ni otra cosa en su lugar.
+      if (await welcomeSentRecently(conversation.id, cuerpo)) {
+        return { outcome: "skipped_welcome_repeat" };
+      }
       const filas = buildWelcomeMenuRows(welcomeSettings);
       const sent = await deliver(
         conversation.id,
@@ -748,13 +799,14 @@ export async function runWhatsAppBot(input: {
         pacing(input),
         filas.length > 0
           ? {
+              kind: "welcome",
               list: {
                 body: cuerpo,
                 rows: filas,
                 section: BUSINESS_FACT_TEMPLATES["welcome.section"](),
               },
             }
-          : {},
+          : { kind: "welcome" },
       );
       if (sent.aborted) return { outcome: "skipped_owner_active" };
       if (sent.ok) {
@@ -899,10 +951,17 @@ interface Pacing {
   /** Cuándo llegó el mensaje que se está contestando. */
   inboundAt: Date | null;
   /**
-   * Si una ráfaga posterior puede dejar esta respuesta obsoleta. Los toques de
-   * botón no: cada toque es una elección suya y se contesta siempre.
+   * Si un mensaje posterior puede dejar esta respuesta obsoleta. Desde el
+   * 2026-10-10 también los toques: un toque seguido de otro mensaje o de
+   * Paula se contesta en esa corrida, no en esta.
    */
   supersedable: boolean;
+  /** Para mirar justo antes de enviar; ver `shouldStayQuiet`. */
+  storeId: string | null;
+  eventId: string | null;
+  eventCreatedAt: Date | null;
+  customerPhone: string | null;
+  customerBsuid: string | null;
 }
 
 function pacing(input: {
@@ -910,12 +969,22 @@ function pacing(input: {
   skipHumanPause?: boolean;
   inboundAt?: Date | null;
   interactiveReplyId?: string | null;
+  storeId?: string;
+  eventId?: string | null;
+  eventCreatedAt?: Date | null;
+  customerPhone?: string | null;
+  customerBsuid?: string | null;
 }): Pacing {
   return {
     inboundMessageId: input.inboundMessageId?.trim() || null,
     skip: Boolean(input.skipHumanPause),
     inboundAt: input.inboundAt ?? null,
-    supersedable: !input.interactiveReplyId?.trim(),
+    supersedable: true,
+    storeId: input.storeId ?? null,
+    eventId: input.eventId ?? null,
+    eventCreatedAt: input.eventCreatedAt ?? null,
+    customerPhone: input.customerPhone ?? null,
+    customerBsuid: input.customerBsuid ?? null,
   };
 }
 
@@ -989,12 +1058,15 @@ async function deliver(
      * con el mensaje para poder revisarlo después; nunca se enseña.
      */
     decision?: ProductDecision | null;
+    /** Qué tipo de mensaje es, para reconocerlo después (p. ej. el menú de bienvenida). */
+    kind?: "welcome";
   } = {},
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
-  const { photo, shown, list, omitOwnerButton, decision } = extras;
+  const { photo, shown, list, omitOwnerButton, decision, kind } = extras;
   const metadata = {
     ...(shown && shown.ids.length > 0 ? { shown } : {}),
     ...(decision ? { decision } : {}),
+    ...(kind ? { kind } : {}),
   };
   const conMetadata =
     Object.keys(metadata).length > 0
@@ -1031,10 +1103,11 @@ async function deliver(
   // como ella la quiere y pelearse con él sería volver al problema anterior.
   const frenada = await shouldStayQuiet(conversationId, pace);
   if (frenada) {
-    console.info("[WHATSAPP_BOT] Se calla: la conversación cambió durante la pausa", {
-      conversationId,
-      motivo: frenada,
-    });
+    const tope = frenada === "per_inbound" || frenada === "per_window";
+    console[tope ? "warn" : "info"](
+      tope ? "[WHATSAPP_BOT] Envío descartado por tope" : "[WHATSAPP_BOT] Se calla: la conversación cambió durante la pausa",
+      { conversationId, motivo: frenada },
+    );
     return { ok: true, aborted: true };
   }
 
@@ -1081,6 +1154,7 @@ async function deliver(
         conversationId,
         error: sent.error,
       });
+      if (await shouldStayQuiet(conversationId, pace)) return { ok: true, aborted: true };
       sent = await enviarTexto();
     }
   } else {
@@ -1098,6 +1172,7 @@ async function deliver(
       conversationId,
       error: sent.error,
     });
+    if (await shouldStayQuiet(conversationId, pace)) return { ok: true, aborted: true };
     salioConFoto = false;
     sent = await enviarTexto();
   }

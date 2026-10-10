@@ -558,8 +558,9 @@ export function BusinessInfoPanel({
                   />
                 </FormControl>
                 <FormDescription>
-                  Todavía no apaga nada: se conecta cuando el bot aprenda a
-                  responder preguntas.
+                  Apagado, el bot no contesta nada en WhatsApp. Los mensajes
+                  siguen llegando y quedan en Conversaciones, esperando a
+                  Paula. El cambio aplica desde el siguiente mensaje.
                 </FormDescription>
               </FormItem>
             )}

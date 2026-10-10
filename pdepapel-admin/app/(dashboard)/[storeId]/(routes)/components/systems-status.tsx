@@ -60,11 +60,17 @@ export function SystemsStatus({ rows }: { rows: SystemStatusRow[] }) {
                 className="truncate text-xs text-muted-foreground"
                 title={row.detail ?? undefined}
               >
-                {row.ranAt
-                  ? `${row.ok ? "Corrió" : "Falló"} ${fmt(row.ranAt)}`
-                  : "Sin corridas registradas"}
-                {row.overdue && row.ranAt ? " · atrasada" : ""}
-                {!row.ok && row.detail ? ` · ${row.detail}` : ""}
+                {row.metric ? (
+                  row.detail
+                ) : (
+                  <>
+                    {row.ranAt
+                      ? `${row.ok ? "Corrió" : "Falló"} ${fmt(row.ranAt)}`
+                      : "Sin corridas registradas"}
+                    {row.overdue && row.ranAt ? " · atrasada" : ""}
+                    {!row.ok && row.detail ? ` · ${row.detail}` : ""}
+                  </>
+                )}
               </span>
             </div>
           </li>

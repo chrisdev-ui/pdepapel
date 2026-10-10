@@ -1,3 +1,4 @@
+import { ConversationMessageDirection, ConversationMessageSentBy } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
 import { shortMemo } from "@/lib/short-memo";
 import { requireStoreRead } from "@/lib/store-access";
@@ -22,6 +23,8 @@ export type JobName =
   | "db-health"
   | "abc-classification"
   | "bank-transfer-review"
+  // Cifra, no tarea: ver `measureWhatsAppBotRatio`.
+  | "whatsapp-bot-ratio"
   // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
   // si no «Sistemas» lo marcaría atrasado.
   | "customer-reactivation";
@@ -163,6 +166,8 @@ export interface SystemStatusRow {
   overdue: boolean;
   /** Falló la última vez o está atrasada. */
   attention: boolean;
+  /** Una cifra medida ahora, no una tarea: se enseña `detail` en vez de «Corrió…». */
+  metric?: boolean;
 }
 
 /** Estado de cada tarea para una tienda (puro sobre filas ya cargadas, testeable). */
@@ -237,5 +242,41 @@ async function loadSystemsStatus(
       },
     })
     .catch(() => []);
-  return buildSystemsStatus(runs, storeId, now);
+  const rows = buildSystemsStatus(runs, storeId, now);
+  const ratio = await measureWhatsAppBotRatio(storeId, now).catch(() => null);
+  return ratio ? [...rows, ratio] : rows;
+}
+
+/** Más mensajes del bot que esto por cada mensaje de clienta, en 24 h, es rojo. */
+export const WHATSAPP_BOT_RATIO_LIMIT = 0.5;
+
+/**
+ * Mensajes del bot por cada mensaje de clienta en las últimas 24 h (incidente
+ * del 2026-10-10: pasó de 0,08 a 1,08). Con pocos mensajes la cifra salta:
+ * una clienta y una respuesta ya es 1,0.
+ */
+export async function measureWhatsAppBotRatio(storeId: string, now: Date): Promise<SystemStatusRow> {
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const base = { conversation: { storeId }, createdAt: { gte: since } };
+  const [inbound, bot] = await Promise.all([
+    prismadb.conversationMessage.count({
+      where: { ...base, direction: ConversationMessageDirection.INBOUND, sentBy: ConversationMessageSentBy.CUSTOMER },
+    }),
+    prismadb.conversationMessage.count({
+      where: { ...base, direction: ConversationMessageDirection.OUTBOUND, sentBy: ConversationMessageSentBy.BOT },
+    }),
+  ]);
+  const ratio = inbound > 0 ? bot / inbound : bot > 0 ? Infinity : 0;
+  const high = ratio > WHATSAPP_BOT_RATIO_LIMIT;
+  const shown = Number.isFinite(ratio) ? ratio.toFixed(2).replace(".", ",") : "sin mensajes de clientas";
+  return {
+    name: "whatsapp-bot-ratio",
+    label: "Bot de WhatsApp: mensajes por mensaje de clienta (24 h)",
+    ranAt: now,
+    ok: !high,
+    detail: `${shown} · ${bot} del bot, ${inbound} de clientas${high ? ` · más de ${String(WHATSAPP_BOT_RATIO_LIMIT).replace(".", ",")}` : ""}`,
+    overdue: false,
+    attention: high,
+    metric: true,
+  };
 }

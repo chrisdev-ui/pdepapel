@@ -763,6 +763,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       attempts: true,
       nextRetryAt: true,
       payload: true,
+      createdAt: true,
       connection: { select: { storeId: true } },
     },
   });
@@ -813,6 +814,10 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       inboundMessageId: string | null;
       mediaForOwner?: boolean;
       inboundAt?: Date | null;
+      eventId: string;
+      eventCreatedAt: Date;
+      customerPhone: string | null;
+      customerBsuid: string | null;
     }> = [];
 
     for (const message of extracted.messages) {
@@ -837,6 +842,12 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
         inboundMessageId: message.externalId,
         // Para saber, al decidir, si ya llegó otro mensaje después de este.
         inboundAt: message.sentAt ?? null,
+        // Y, justo antes de enviar, si de ella o de Paula ya llegó algo que
+        // espera en la fila (lib/whatsapp/bot-guards.ts).
+        eventId: event.id,
+        eventCreatedAt: event.createdAt,
+        customerPhone: message.phone,
+        customerBsuid: message.bsuid,
         ...(paraPaula ? { mediaForOwner: true } : {}),
       });
     }

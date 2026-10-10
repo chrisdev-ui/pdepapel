@@ -124,6 +124,7 @@ function event(overrides: Record<string, unknown> = {}) {
     attempts: 0,
     nextRetryAt: null,
     payload: batchedPayload,
+    createdAt: new Date("2026-10-10T14:08:30.000Z"),
     connection: { storeId: "store-1" },
     ...overrides,
   };
@@ -1031,6 +1032,23 @@ describe("processWhatsAppWebhookEvent", () => {
       // Escrito a mano: no viene de ningún botón.
       interactiveReplyId: null,
       inboundMessageId: "wamid.1",
+      // Para mirar, justo antes de enviar, lo que de ella o de Paula espera en la fila.
+      eventId: "event-1",
+      eventCreatedAt: new Date("2026-10-10T14:08:30.000Z"),
+      customerPhone: "573001234567",
+      customerBsuid: null,
+    });
+  });
+
+  it("con el bot apagado el mensaje igual queda archivado y el evento procesado", async () => {
+    mocks.findEvent.mockResolvedValue(event());
+    mocks.runBot.mockResolvedValue({ outcome: "skipped_bot_disabled" });
+
+    await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject({
+      processed: true,
+      reason: "processed",
+      messages: 3,
+      botOutcomes: ["skipped_bot_disabled", "skipped_bot_disabled", "skipped_bot_disabled"],
     });
   });
 
