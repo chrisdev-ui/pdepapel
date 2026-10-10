@@ -12,7 +12,7 @@
 --   4. Deploy nuevo por git (cambiar la línea de pdepapel-admin/deploy-stamp.txt);
 --      un redeploy no toma la variable nueva.
 --
--- Qué puede leer: solo las columnas que usan las 11 herramientas. Nada de
+-- Qué puede leer: solo las columnas que usan las 12 herramientas. Nada de
 -- nombres, teléfonos, correos, direcciones ni documentos de clientas; nada de
 -- tokens, notas internas, guías ni conversaciones. Dos conexiones como mucho,
 -- para que el copiloto nunca le quite conexiones al panel.
@@ -50,6 +50,12 @@ GRANT SELECT (`id`, `connectionId`, `kind`, `resolvedAt`, `dismissedAt`) ON `rai
 GRANT SELECT (`id`, `connectionId`, `status`, `netAmount`, `paidAt`, `createdAt`) ON `railway`.`MarketplaceOrder` TO 'copilot_ro'@'%';
 GRANT SELECT (`id`, `marketplaceOrderId`, `productId`, `quantity`, `unitPrice`, `acqPrice`)
   ON `railway`.`MarketplaceOrderItem` TO 'copilot_ro'@'%';
+
+-- Para «productosParaPromocionar»: cuántas fotos tiene cada producto y los tres
+-- umbrales de campaña de Crecimiento; nada de las reservas de caja.
+GRANT SELECT (`id`, `productId`) ON `railway`.`Image` TO 'copilot_ro'@'%';
+GRANT SELECT (`id`, `storeId`, `minimumCampaignMarginPct`, `minimumCampaignStock`, `minimumCampaignDaysCover`)
+  ON `railway`.`BusinessCashPolicy` TO 'copilot_ro'@'%';
 
 -- VERIFICACIÓN (debe listar solo las líneas de arriba):
 --   SHOW GRANTS FOR 'copilot_ro'@'%';

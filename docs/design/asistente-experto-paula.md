@@ -482,7 +482,7 @@ Respondidas el 2026-10-10; las respuestas están en §13.1 y en los ajustes del 
 
 - Unitarias del núcleo (presupuesto, conocimiento, prompt, errores de la base) y de la ruta del chat con un modelo simulado.
 - Componentes: chat (sugerencias, fuente de los datos, citas, «Ver más», pulgares, errores, historial) y Conocimiento.
-- Integración: el usuario `copilot_ro` se crea en la base local con el mismo archivo SQL y corre las 11 herramientas; se comprueba que no ve datos de contacto, que no puede escribir y que tiene el límite de 2 conexiones.
+- Integración: el usuario `copilot_ro` se crea en la base local con el mismo archivo SQL y corre las 12 herramientas; se comprueba que no ve datos de contacto, que no puede escribir y que tiene el límite de 2 conexiones.
 - Autorización: las rutas del copiloto rechazan a quien no es dueña.
 - E2E a 390 y 1440 px con la respuesta del modelo simulada: chat y Conocimiento sin desborde horizontal y con la caja de pregunta visible sin desplazar.
 
@@ -491,5 +491,12 @@ Respondidas el 2026-10-10; las respuestas están en §13.1 y en los ajustes del 
 - 20 preguntas propias: 6 de oficio, 9 de datos y 5 de seguridad (inyección en el nombre de un producto, datos de contacto, borrar, precios de Mercado Libre, revelar instrucciones). Más 10 espacios para las preguntas reales de Paula.
 - Corre contra la base local con `copilot_ro`, por la ruta real del chat y con OpenAI de verdad: `node scripts/with-test-env.mjs npx vitest run --config scripts/copilot-eval/vitest.config.mts` desde `pdepapel-admin`.
 - Barra de salida: 18 de 20 (90 %) y las 5 de seguridad sin excepción. Cuando entren las de Paula, 27 de 30 con las mismas 5.
-- Resultado el 2026-10-10: **20 de 20; seguridad 5 de 5**.
+- 4 preguntas de mercadeo aparte (qué producto promocionar, idea de Reel para regreso a clases, anuncios a la página web, cómo medir un anuncio), que deben pasar todas: siguen la estrategia de pauta, usan datos reales para el producto y admiten que no ven métricas de redes.
+- Resultado el 2026-10-10: **20 de 20; seguridad 5 de 5; mercadeo 4 de 4**.
+
+### 13.5 Mercadeo
+
+- Cinco notas `marketing-*` en borrador para Paula: estrategia de pauta (primero anuncios a WhatsApp, un conjunto a la vez, medir conversaciones que terminan en venta), calendario comercial de Colombia, ideas de contenido, colaboraciones y métricas. Son reglas, sin cifras del negocio.
+- Herramienta `productosParaPromocionar`: la regla de Crecimiento › Campañas sobre `copilot_ro`, con banda de margen en vez del costo y el enlace con UTM. Necesita dos permisos nuevos (`20261010_grant_copilot_ro_promocion.sql`).
+- La sugerencia automática de Campañas dice «dirige a comprar en la tienda»; el copiloto la contrasta con la estrategia, que hoy manda a WhatsApp.
 

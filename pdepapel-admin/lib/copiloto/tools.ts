@@ -5,11 +5,18 @@ import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
 import { z } from "zod";
 
 import { TRESHOLD_LOW_STOCK } from "@/constants";
+import {
+  DEFAULT_BUSINESS_CASH_POLICY,
+  recommendSocialCampaigns,
+  type CampaignCandidate,
+  type CampaignRecommendationState,
+} from "@/lib/business-growth";
 import { withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import { channelForOrderType } from "@/lib/dashboard-today";
 import { getOrderNetProfit } from "@/lib/financial";
 import {
   createSettledMarketplaceSalesWhere,
+  getMarketplaceItemNetRevenue,
   getMarketplaceNetRevenue,
   getMarketplaceOrderNetProfit,
 } from "@/lib/mercadolibre/reporting";
@@ -163,6 +170,202 @@ async function coverRows(db: CopilotDb, storeId: string, supplierId?: string | n
       proveedor: product.supplier?.name ?? null,
     };
   });
+}
+
+/** Unidades vendidas por producto en un rango (tienda y Mercado Libre). */
+async function unitsSold(db: CopilotDb, storeId: string, productIds: string[], start: Date, end: Date) {
+  const [shop, marketplace] = await Promise.all([
+    db.orderItem.groupBy({
+      by: ["productId"],
+      where: { productId: { in: productIds }, order: { storeId, ...revenueOrderWhere(), ...paidInRange(start, end) } },
+      _sum: { quantity: true },
+    }),
+    db.marketplaceOrderItem.groupBy({
+      by: ["productId"],
+      where: { productId: { in: productIds }, marketplaceOrder: createSettledMarketplaceSalesWhere(storeId, { start, end }) },
+      _sum: { quantity: true },
+    }),
+  ]);
+  const sold = new Map<string, number>();
+  for (const row of [...shop, ...marketplace]) {
+    if (row.productId) sold.set(row.productId, (sold.get(row.productId) ?? 0) + (row._sum.quantity ?? 0));
+  }
+  return sold;
+}
+
+/** Utilidad y unidades de 30 días por producto, repartiendo la utilidad del pedido por ingreso (como «Crecimiento»). */
+async function profit30(db: CopilotDb, storeId: string, start: Date, end: Date) {
+  const [orders, marketplace] = await Promise.all([
+    db.order.findMany({
+      where: { storeId, ...revenueOrderWhere(), ...paidInRange(start, end) },
+      select: {
+        ...ORDER_MONEY_SELECT,
+        orderItems: { select: { productId: true, quantity: true, price: true, product: { select: { acqPrice: true } } } },
+      },
+    }),
+    db.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, { start, end }),
+      select: {
+        netAmount: true,
+        items: { select: { productId: true, quantity: true, unitPrice: true, product: { select: { acqPrice: true } } } },
+      },
+    }),
+  ]);
+  const stats = new Map<string, { units: number; revenue: number; profit: number }>();
+  const add = (productId: string, units: number, revenue: number, profit: number) => {
+    const row = stats.get(productId) ?? { units: 0, revenue: 0, profit: 0 };
+    row.units += units;
+    row.revenue += revenue;
+    row.profit += profit;
+    stats.set(productId, row);
+  };
+  for (const order of orders) {
+    if (!order.total || order.total <= 0) continue;
+    const net = getOrderNetProfit(order);
+    for (const item of order.orderItems) {
+      if (!item.productId) continue;
+      const revenue = item.price * item.quantity;
+      add(item.productId, item.quantity, revenue, net * (revenue / order.total));
+    }
+  }
+  for (const order of marketplace) {
+    for (const item of order.items) {
+      if (!item.productId || !item.product) continue;
+      const revenue = getMarketplaceItemNetRevenue(order, item);
+      add(item.productId, item.quantity, revenue, revenue - Number(item.product.acqPrice ?? 0) * item.quantity);
+    }
+  }
+  return stats;
+}
+
+/** Bandas en vez del margen exacto: el costo de compra no sale del panel. */
+function marginBand(pct: number | null) {
+  if (pct === null) return "sin ventas en 30 días";
+  if (pct < 20) return "menos de 20 %";
+  if (pct < 35) return "de 20 a 35 %";
+  if (pct < 50) return "de 35 a 50 %";
+  return "50 % o más";
+}
+
+function salesTrend(last: number, previous: number) {
+  if (last === 0 && previous === 0) return "sin ventas";
+  if (previous === 0) return "empezó a venderse";
+  const change = (last - previous) / previous;
+  if (change >= 0.2) return "sube";
+  if (change <= -0.2) return "baja";
+  return "estable";
+}
+
+const PROMOTION_STATE: Record<CampaignRecommendationState, string> = {
+  READY_TO_TEST: "Listo para prueba",
+  ORGANIC_FIRST: "Primero orgánico",
+  HOLD: "En espera",
+};
+
+/**
+ * Los mismos 100 candidatos y la misma regla (`recommendSocialCampaigns`) que
+ * Crecimiento › Campañas, con consultas propias sobre `copilot_ro`. Ventas por
+ * fecha de pago, como el resto del copiloto: puede diferir un poco del panel.
+ */
+async function promotionRows(db: CopilotDb, storeId: string, limit: number, now = new Date()) {
+  const last30 = subDays(now, 30);
+  const previous30 = subDays(now, 60);
+  const deadCutoff = subDays(now, 60);
+  const [policyRecord, products] = await Promise.all([
+    db.businessCashPolicy.findUnique({
+      where: { storeId },
+      select: { minimumCampaignMarginPct: true, minimumCampaignStock: true, minimumCampaignDaysCover: true },
+    }),
+    db.product.findMany({
+      where: { storeId, isArchived: false },
+      select: { id: true, name: true, slug: true, stock: true, acqPrice: true, description: true, createdAt: true },
+      orderBy: [{ stock: "desc" }, { updatedAt: "desc" }],
+      take: 100,
+    }),
+  ]);
+  const policy = {
+    ...DEFAULT_BUSINESS_CASH_POLICY,
+    ...(policyRecord && {
+      minimumCampaignMarginPct: Number(policyRecord.minimumCampaignMarginPct),
+      minimumCampaignStock: policyRecord.minimumCampaignStock,
+      minimumCampaignDaysCover: policyRecord.minimumCampaignDaysCover,
+    }),
+  };
+  const ids = products.map((product) => product.id);
+  const [images, stats, previous, lastShopSale, lastPlaced] = await Promise.all([
+    db.image.groupBy({ by: ["productId"], where: { productId: { in: ids } }, _count: { _all: true } }),
+    profit30(db, storeId, last30, now),
+    unitsSold(db, storeId, ids, previous30, last30),
+    db.orderItem.groupBy({
+      by: ["productId"],
+      where: { productId: { in: ids }, order: { storeId, ...revenueOrderWhere() } },
+      _max: { createdAt: true },
+    }),
+    db.inventoryMovement.groupBy({
+      by: ["productId"],
+      where: { storeId, productId: { in: ids }, type: "ORDER_PLACED" },
+      _max: { createdAt: true },
+    }),
+  ]);
+  const imageCount = new Map(images.map((row) => [row.productId, row._count._all]));
+  const lastSale = new Map<string, Date>();
+  for (const row of [...lastShopSale, ...lastPlaced]) {
+    const at = row._max.createdAt;
+    if (row.productId && at && (!lastSale.has(row.productId) || at > lastSale.get(row.productId)!)) lastSale.set(row.productId, at);
+  }
+
+  const byId = new Map(products.map((product) => [product.id, product]));
+  const candidates: CampaignCandidate[] = products.map((product) => {
+    const stat = stats.get(product.id);
+    const perDay = (stat?.units ?? 0) / 30;
+    const days = perDay > 0 ? Math.floor(product.stock / perDay) : product.stock === 0 ? 0 : null;
+    const riskState = days === null ? "NO_DATA" : days <= 7 ? "CRITICAL" : days <= 14 ? "WARNING" : "SAFE";
+    const atRisk = riskState === "CRITICAL" || riskState === "WARNING";
+    const sold = lastSale.get(product.id);
+    return {
+      productId: product.id,
+      productName: product.name,
+      slug: product.slug,
+      stock: product.stock,
+      acquisitionCost: product.acqPrice === null ? null : Number(product.acqPrice),
+      imageCount: imageCount.get(product.id) ?? 0,
+      descriptionLength: product.description.trim().length,
+      totalQuantitySold: stat?.units ?? 0,
+      totalProfit: stat?.profit ?? 0,
+      profitMarginPct: stat && stat.revenue > 0 ? (stat.profit / stat.revenue) * 100 : null,
+      riskState: atRisk ? riskState : "NO_DATA",
+      daysUntilStockout: atRisk ? days : null,
+      isDeadStock: product.stock > 0 && product.createdAt < deadCutoff && (!sold || sold < deadCutoff),
+    };
+  });
+  const candidateById = new Map(candidates.map((candidate) => [candidate.productId, candidate]));
+  const rows = recommendSocialCampaigns({ candidates, policy, testBudget: 0, limit }).map((recommendation) => {
+    const candidate = candidateById.get(recommendation.productId)!;
+    const last = candidate.totalQuantitySold;
+    const before = previous.get(recommendation.productId) ?? 0;
+    return {
+      productId: recommendation.productId,
+      nombre: recommendation.productName,
+      estado: PROMOTION_STATE[recommendation.state],
+      motivo: recommendation.reason,
+      sugerencia: recommendation.brief,
+      stock: byId.get(recommendation.productId)?.stock ?? 0,
+      bandaDeMargen: marginBand(candidate.profitMarginPct),
+      cumpleMargenMinimo: candidate.profitMarginPct !== null && candidate.profitMarginPct >= policy.minimumCampaignMarginPct,
+      unidades30Dias: last,
+      unidades30DiasAnteriores: before,
+      tendencia: salesTrend(last, before),
+      enlaceConUtm: `https://papeleriapdepapel.com${recommendation.landingPath}`,
+    };
+  });
+  return {
+    criterios: {
+      margenMinimoPct: policy.minimumCampaignMarginPct,
+      stockMinimo: policy.minimumCampaignStock,
+      diasDeCoberturaMinimos: policy.minimumCampaignDaysCover,
+    },
+    productos: rows,
+  };
 }
 
 const monthInput = z.object({
@@ -484,6 +687,14 @@ export function buildCopilotTools(storeId: string) {
           });
         }),
     }),
+
+    productosParaPromocionar: tool({
+      description:
+        "Productos para promocionar con la regla de Crecimiento › Campañas (margen, stock, cobertura, ficha y ventas): estado («Listo para prueba», «Primero orgánico», «En espera»), banda de margen, stock, tendencia de 30 días y el enlace con UTM. Sin costos ni presupuesto.",
+      inputSchema: z.object({ limite: z.number().int().min(1).max(8).optional() }),
+      execute: async ({ limite }) =>
+        run(async (db) => envelope("productosParaPromocionar", "ventas de los últimos 30 días frente a los 30 anteriores", await promotionRows(db, storeId, limite ?? 5))),
+    }),
   };
 }
 
@@ -500,4 +711,5 @@ export const COPILOT_TOOL_NAMES = [
   "riesgoInventario",
   "reporteTributario",
   "saludMercadoLibre",
+  "productosParaPromocionar",
 ] as const;

@@ -33,4 +33,5 @@ export const TOOL_LABELS: Record<string, string> = {
   riesgoInventario: "Revisando el inventario en riesgo",
   reporteTributario: "Sumando ventas y compras del periodo",
   saludMercadoLibre: "Revisando Mercado Libre",
+  productosParaPromocionar: "Buscando qué promocionar",
 };

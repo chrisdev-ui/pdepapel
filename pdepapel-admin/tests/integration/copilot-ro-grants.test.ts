@@ -9,7 +9,7 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
 
 /**
  * El usuario `copilot_ro` se crea en la base local con el MISMO archivo que
- * Christian corre en Railway, y las 11 herramientas corren con él. Si a las
+ * Christian corre en Railway, y las 12 herramientas corren con él. Si a las
  * concesiones les falta una columna, falla aquí y no en producción; y se
  * comprueba que no puede leer datos de clientas ni escribir.
  */
@@ -122,7 +122,7 @@ afterAll(async () => {
   await testPrisma.$disconnect();
 });
 
-describe("copilot_ro: las concesiones alcanzan para las 11 herramientas y nada más", () => {
+describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada más", () => {
   it("cada herramienta corre con el usuario de solo lectura", async () => {
     const { buildCopilotTools, COPILOT_TOOL_NAMES } = await import("@/lib/copiloto/tools");
     const tools = buildCopilotTools(fixture!.store.id);
@@ -139,17 +139,26 @@ describe("copilot_ro: las concesiones alcanzan para las 11 herramientas y nada m
       riesgoInventario: { limite: 5 },
       reporteTributario: { anio: now.getFullYear(), mes: now.getMonth() + 1 },
       saludMercadoLibre: {},
+      productosParaPromocionar: { limite: 8 },
     };
     const results: Record<string, unknown> = {};
     for (const name of COPILOT_TOOL_NAMES) {
       const tool = tools[name] as unknown as { execute: (input: unknown, options: unknown) => Promise<unknown> };
       results[name] = await tool.execute(inputs[name], { toolCallId: name, messages: [] });
     }
-    expect(Object.keys(results)).toHaveLength(11);
+    expect(Object.keys(results)).toHaveLength(12);
     expect(JSON.stringify(results)).not.toMatch(/Clienta Ficticia|ficticia@prueba\.test|3000000000|Calle Falsa|Comprador ficticio|texto libre|Proveedor ficticio/);
     expect((results.resumenDeHoy as { datos: { porCanal: Record<string, { ventas: number }> } }).datos.porCanal.tienda.ventas).toBe(30000);
     expect((results.buscarProductos as { datos: unknown[] }).datos.length).toBeGreaterThan(0);
     expect((results.saludMercadoLibre as { datos: { conectado: boolean } }).datos.conectado).toBe(true);
+    const promotion = (results.productosParaPromocionar as {
+      datos: { criterios: { margenMinimoPct: number }; productos: { productId: string; unidades30Dias: number; enlaceConUtm: string; bandaDeMargen: string }[] };
+    }).datos;
+    expect(promotion.criterios.margenMinimoPct).toBe(35);
+    const component = promotion.productos.find((row) => row.productId === fixture!.component.id);
+    expect(component?.unidades30Dias).toBe(4);
+    expect(component?.enlaceConUtm).toMatch(/^https:\/\/papeleriapdepapel\.com\/producto\/.+utm_source=social&utm_medium=paid_social&utm_campaign=producto-/);
+    expect(JSON.stringify(promotion)).not.toMatch(/acqPrice|acquisitionCost|suggestedBudget/);
   });
 
   it("no puede leer los datos de la clienta", async () => {
