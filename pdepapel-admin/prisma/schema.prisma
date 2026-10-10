@@ -1659,6 +1659,10 @@ model StoreSettings {
   botProductsApprovedAt DateTime?
   botProductsApprovedBy String?
   botProductsVersion    String?
+  /// Visto bueno de Paula a las respuestas de cortesía (`lib/whatsapp/bot-casual.ts`).
+  botCasualApprovedAt DateTime?
+  botCasualApprovedBy String?
+  botCasualVersion    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

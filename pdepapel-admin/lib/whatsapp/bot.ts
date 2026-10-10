@@ -10,8 +10,12 @@ import {
   OWNER_TAKEOVER_WINDOW_HOURS,
   describeBotPause,
 } from "@/lib/conversation-bot-pause";
+import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
+import {
+  getStoreSettings,
+  type ResolvedStoreSettings,
+} from "@/lib/store-settings";
 import {
   BUSINESS_FACT_TEMPLATES,
   type BusinessFactIntent,
@@ -24,6 +28,24 @@ import {
   renderBusinessFact,
   renderPaymentOption,
 } from "@/lib/whatsapp/bot-facts";
+import {
+  CASUAL_TEMPLATES,
+  CATALOG_BUTTON_TEXT,
+  CATALOG_LINK_MODE,
+  CATALOG_MESSAGE_BODY,
+  SEARCH_BUTTON_TEXT,
+  SEARCH_LINK_BODY,
+  areCasualRepliesApproved,
+  buildCatalogUrl,
+  buildSearchUrl,
+  isCasualIntent,
+} from "@/lib/whatsapp/bot-casual";
+import {
+  classifyMessageIntent,
+  isEmojiOnly,
+  toProductClassification,
+  type IntentOutcome,
+} from "@/lib/whatsapp/bot-intent";
 import {
   PRODUCT_TEMPLATES,
   areProductAnswersApproved,
@@ -58,6 +80,7 @@ import {
 } from "@/lib/whatsapp/bot-replies";
 import {
   sendWhatsAppButtonMessage,
+  sendWhatsAppCtaUrlMessage,
   sendWhatsAppImageButtonMessage,
   sendWhatsAppListMessage,
   sendWhatsAppTextMessage,
@@ -129,6 +152,12 @@ export type WhatsAppBotOutcome =
   | "escalated_unprocessable_media"
   /** Ya llegó otro mensaje después: contesta ese, no este. */
   | "skipped_superseded"
+  /** Un «ok», un emoji o un sticker a mitad de conversación: no pide respuesta. */
+  | "skipped_acknowledgement"
+  /** Gracias, despedida, «¿eres un robot?» o «¿qué venden?», con el texto aprobado. */
+  | "replied_casual"
+  /** Queja, problema con un pedido o un pago: pasa a Paula sin improvisar. */
+  | "escalated_complaint"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -178,8 +207,7 @@ export const NO_MATCH_ACKNOWLEDGEMENT =
   "Esa no me la sé 💛 Le paso tu mensaje a Paula y ella te escribe apenas pueda.";
 
 /** Para que 20 s de espera no se lean como que el mensaje no llegó. */
-export const SLOW_ANSWER_ACKNOWLEDGEMENT =
-  "Dame un segundito que lo busco 💛";
+export const SLOW_ANSWER_ACKNOWLEDGEMENT = "Dame un segundito que lo busco 💛";
 
 /** «Lo que me enviaste» y no «tu foto»: por aquí pasan audios y documentos. */
 export const UNREADABLE_MEDIA_ACKNOWLEDGEMENT =
@@ -249,7 +277,9 @@ async function readSettings(
   }
 }
 
-function buttonIdOf(input: { interactiveReplyId?: string | null }): string | null {
+function buttonIdOf(input: {
+  interactiveReplyId?: string | null;
+}): string | null {
   return input.interactiveReplyId?.trim() || null;
 }
 
@@ -291,7 +321,10 @@ async function shouldStayQuiet(
     select: { lastOwnerAt: true },
   });
   if (isOwnerActive(actual?.lastOwnerAt, new Date())) return "owner_active";
-  if (pace.supersedable && (await hasNewerInbound(conversationId, pace.inboundAt))) {
+  if (
+    pace.supersedable &&
+    (await hasNewerInbound(conversationId, pace.inboundAt))
+  ) {
     return "superseded";
   }
   return null;
@@ -300,7 +333,10 @@ async function shouldStayQuiet(
 /** Corta a propósito: si vuelve a preguntar lo mismo, merece respuesta. */
 export const REPEAT_WINDOW_MS = 60 * 1000;
 
-async function justSaid(conversationId: string, reply: string): Promise<boolean> {
+async function justSaid(
+  conversationId: string,
+  reply: string,
+): Promise<boolean> {
   const ultimo = await prismadb.conversationMessage.findFirst({
     where: {
       conversationId,
@@ -311,6 +347,76 @@ async function justSaid(conversationId: string, reply: string): Promise<boolean>
     select: { body: true },
   });
   return ultimo?.body === reply;
+}
+
+/**
+ * Por qué el bot dejó la conversación para Paula. Se guarda en el acuse para
+ * que el paso 2 sepa si puede seguir contestando productos: solo cuando fue
+ * su propio «Esa no me la sé», nunca si la clienta pidió a Paula o se quejó.
+ */
+export type EscalationCause =
+  | "no_match"
+  | "owner_requested"
+  | "escalate"
+  | "media"
+  | "button_unavailable";
+
+async function lastEscalationCause(
+  conversationId: string,
+): Promise<EscalationCause | null> {
+  const recientes = await prismadb.conversationMessage.findMany({
+    where: {
+      conversationId,
+      direction: ConversationMessageDirection.OUTBOUND,
+      sentBy: ConversationMessageSentBy.BOT,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { metadata: true },
+    take: 20,
+  });
+  for (const mensaje of recientes) {
+    const causa = (mensaje.metadata as { escalation?: EscalationCause } | null)
+      ?.escalation;
+    if (causa) return causa;
+  }
+  return null;
+}
+
+/** ¿Es lo primero que escribe en esta conversación? */
+async function isFirstMessage(
+  conversationId: string,
+  inboundAt: Date | null | undefined,
+): Promise<boolean> {
+  const antes = await prismadb.conversationMessage.count({
+    where: {
+      conversationId,
+      ...(inboundAt ? { createdAt: { lt: inboundAt } } : {}),
+    },
+  });
+  return antes <= (inboundAt ? 0 : 1);
+}
+
+/** Lo que la clienta escribió antes de este mensaje, del más viejo al más nuevo. */
+async function previousCustomerTexts(
+  conversationId: string,
+  inboundAt: Date | null | undefined,
+): Promise<string[]> {
+  const anteriores = await prismadb.conversationMessage.findMany({
+    where: {
+      conversationId,
+      direction: ConversationMessageDirection.INBOUND,
+      sentBy: ConversationMessageSentBy.CUSTOMER,
+      body: { not: null },
+      ...(inboundAt ? { createdAt: { lt: inboundAt } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    select: { body: true },
+    take: 3,
+  });
+  return anteriores
+    .map((mensaje) => mensaje.body ?? "")
+    .filter(Boolean)
+    .reverse();
 }
 
 async function escalate(conversationId: string) {
@@ -338,6 +444,8 @@ export async function runWhatsAppBot(input: {
   interactiveReplyId?: string | null;
   /** Una foto, un audio, un video o un documento: lo mira Paula. */
   mediaForOwner?: boolean;
+  /** Un sticker: un gesto, no una pregunta. */
+  sticker?: boolean;
   /** Cuándo llegó este mensaje, para saber si ya llegó otro después. */
   inboundAt?: Date | null;
   /** `wamid` del mensaje entrante: hace falta para «escribiendo…». */
@@ -371,7 +479,10 @@ export async function runWhatsAppBot(input: {
 
   // 0 bis. Una ráfaga se contesta una vez, al último mensaje. Los toques de
   //    botón no entran: cada toque es una elección suya.
-  if (!buttonIdOf(input) && (await hasNewerInbound(conversation.id, input.inboundAt))) {
+  if (
+    !buttonIdOf(input) &&
+    (await hasNewerInbound(conversation.id, input.inboundAt))
+  ) {
     return { outcome: "skipped_superseded" };
   }
 
@@ -388,7 +499,7 @@ export async function runWhatsAppBot(input: {
       pacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
-      { omitOwnerButton: true },
+      { omitOwnerButton: true, escalation: "owner_requested" },
     );
     await escalate(conversation.id);
     if (sent.aborted) return { outcome: "skipped_owner_active" };
@@ -425,6 +536,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { escalation: "button_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -476,6 +588,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { escalation: "button_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -495,7 +608,10 @@ export async function runWhatsAppBot(input: {
     );
     if (sent.aborted) return { outcome: "skipped_owner_active" };
     if (sent.ok) {
-      return { outcome: "replied_business_fact", trigger: `payment.${paymentTarget}` };
+      return {
+        outcome: "replied_business_fact",
+        trigger: `payment.${paymentTarget}`,
+      };
     }
     await escalate(conversation.id);
     return {
@@ -525,6 +641,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { escalation: "button_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -557,8 +674,21 @@ export async function runWhatsAppBot(input: {
 
   // 2. Detenido: la conversación ya espera a una persona. Un mensaje escrito
   //    no la despierta; tocar un botón sí, porque es la clienta eligiendo.
+  //    Una excepción: si la dejó así el propio «Esa no me la sé» del bot y
+  //    Paula no ha escrito nunca, una pregunta clara de producto se sigue
+  //    contestando (la conversación queda en la cola de Paula igual). Si la
+  //    clienta pidió a Paula, se quejó o Paula ya escribió, silencio.
+  let soloProductos = false;
   if (conversation.status === ConversationStatus.NEEDS_OWNER && !buttonTarget) {
-    return { outcome: "skipped_needs_owner" };
+    if (
+      conversation.lastOwnerAt ||
+      input.mediaForOwner ||
+      input.sticker ||
+      (await lastEscalationCause(conversation.id)) !== "no_match"
+    ) {
+      return { outcome: "skipped_needs_owner" };
+    }
+    soloProductos = true;
   }
 
   // 2 bis. Una foto o un audio: lo que importa está dentro y el bot no lo ve.
@@ -575,12 +705,83 @@ export async function runWhatsAppBot(input: {
       pacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
-      { omitOwnerButton: true },
+      { omitOwnerButton: true, escalation: "media" },
     );
     if (sent.aborted) return { outcome: "skipped_owner_active" };
     return sent.ok
       ? { outcome: "escalated_unprocessable_media" }
       : { outcome: "escalated_unprocessable_media", error: sent.error };
+  }
+
+  const enviarEnlace = (cuerpo: string, url: string, button: string) =>
+    deliver(
+      conversation.id,
+      input.recipient,
+      cuerpo,
+      [],
+      { ...pacing(input), skip: true },
+      { link: { url, button } },
+    );
+  const enviarCatalogo = async () => {
+    const enviado = await enviarEnlace(
+      CATALOG_MESSAGE_BODY,
+      buildCatalogUrl(env.FRONTEND_STORE_URL),
+      CATALOG_BUTTON_TEXT,
+    );
+    if (!enviado.ok && !enviado.aborted) {
+      console.warn("[WHATSAPP_BOT] No salió el enlace al catálogo", {
+        conversationId: conversation.id,
+        error: enviado.error,
+      });
+    }
+  };
+
+  /** El menú de bienvenida y el catálogo; `null` si Paula aún no aprobó los datos. */
+  const darBienvenida = async (): Promise<WhatsAppBotResult | null> => {
+    const welcomeSettings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    if (!welcomeSettings || !areBusinessFactsApproved(welcomeSettings)) {
+      return null;
+    }
+    const cuerpo = BUSINESS_FACT_TEMPLATES["welcome.body"]();
+    const filas = buildWelcomeMenuRows(welcomeSettings);
+    const sent = await deliver(
+      conversation.id,
+      input.recipient,
+      cuerpo,
+      [],
+      pacing(input),
+      filas.length > 0
+        ? {
+            list: {
+              body: cuerpo,
+              rows: filas,
+              section: BUSINESS_FACT_TEMPLATES["welcome.section"](),
+            },
+          }
+        : {},
+    );
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.ok) {
+      await enviarCatalogo();
+      return { outcome: "replied_business_fact", trigger: "welcome" };
+    }
+    await escalate(conversation.id);
+    return {
+      outcome: "escalated_send_failed",
+      trigger: "welcome",
+      error: sent.error,
+    };
+  };
+
+  // 2 ter. Un sticker es un gesto: si abre la conversación se saluda; a mitad
+  //    de ella no se contesta. Ya no va a Paula como adjunto.
+  if (input.sticker) {
+    if (await isFirstMessage(conversation.id, input.inboundAt)) {
+      const bienvenida = await darBienvenida();
+      if (bienvenida) return bienvenida;
+    }
+    return { outcome: "skipped_acknowledgement" };
   }
 
   // 3. Por botón se sirve la respuesta exacta a la que apunta, sin pasar por
@@ -600,6 +801,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { escalation: "button_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -616,7 +818,7 @@ export async function runWhatsAppBot(input: {
   //    cuánto tarda. La respuesta se arma con el dato guardado, nunca con uno
   //    inventado: si el campo está vacío, esto no contesta y el mensaje sigue
   //    su camino hasta quedar para Paula.
-  const factIntent = classifyBusinessFact(input.body);
+  const factIntent = soloProductos ? null : classifyBusinessFact(input.body);
   if (factIntent) {
     const settings =
       input.settings ?? (await readSettings(conversation.storeId));
@@ -628,7 +830,9 @@ export async function runWhatsAppBot(input: {
         // «Cómo se paga» no es un texto sino un menú: tres formas de pago más
         // la salida a Paula son cuatro opciones, y de botones solo caben tres.
         const filas =
-          factIntent === "payment.methods" ? buildPaymentMenuRows(settings) : [];
+          factIntent === "payment.methods"
+            ? buildPaymentMenuRows(settings)
+            : [];
         const sent = await deliver(
           conversation.id,
           input.recipient,
@@ -640,7 +844,7 @@ export async function runWhatsAppBot(input: {
           filas.length > 0 ? { list: { body: answer, rows: filas } } : {},
         );
         if (sent.aborted) return { outcome: "skipped_owner_active" };
-    if (sent.ok) {
+        if (sent.ok) {
           return { outcome: "replied_business_fact", trigger: factIntent };
         }
         // Si no salió, se trata como cualquier envío fallido: pasa a Paula.
@@ -693,7 +897,7 @@ export async function runWhatsAppBot(input: {
             },
           );
           if (sent.aborted) return { outcome: "skipped_owner_active" };
-    if (sent.ok) {
+          if (sent.ok) {
             return {
               outcome: "replied_product_reference",
               trigger: answer.intent,
@@ -726,75 +930,152 @@ export async function runWhatsAppBot(input: {
     }
   }
 
-  // 4 ter. Saludó. Antes esto lo contestaba una respuesta escrita de Paula con
-  //    un texto suelto y ninguna opción; ahora el saludo abre el menú de lo que
-  //    más le preguntan. Va ANTES del paso 5 porque si no, su «Saludo» ganaría
-  //    y el menú no saldría nunca.
-  //
-  //    Se reconoce con `matchWhatsAppKeyword` —palabras enteras—, no con el
-  //    `includes` de `classifyBusinessFact`: aquí hay disparadores de tres
-  //    letras y con `includes` volverían a colarse dentro de «escolares».
-  if (isWelcomeGreeting(input.body)) {
-    const welcomeSettings =
-      input.settings ?? (await readSettings(conversation.storeId));
-    if (welcomeSettings && areBusinessFactsApproved(welcomeSettings)) {
-      const cuerpo = BUSINESS_FACT_TEMPLATES["welcome.body"]();
-      const filas = buildWelcomeMenuRows(welcomeSettings);
+  const responderPalabraClave = async (): Promise<WhatsAppBotResult | null> => {
+    const keywords =
+      input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
+    const match = matchWhatsAppKeyword(input.body, keywords);
+    return match
+      ? respond(
+          conversation.id,
+          input.recipient,
+          match.keyword,
+          match.trigger,
+          pacing(input),
+        )
+      : null;
+  };
+
+  // 4 ter. Solo emojis: si abre la conversación se saluda; si no, no hay
+  //    pregunta que contestar.
+  if (isEmojiOnly(input.body)) {
+    if (
+      !soloProductos &&
+      (await isFirstMessage(conversation.id, input.inboundAt))
+    ) {
+      const bienvenida = await darBienvenida();
+      if (bienvenida) return bienvenida;
+    }
+    return soloProductos
+      ? { outcome: "skipped_needs_owner" }
+      : { outcome: "skipped_acknowledgement" };
+  }
+
+  // 4 quater. Una sola llamada a OpenAI decide de qué va el mensaje y, si es
+  //    de productos, qué buscar con lo que dijo antes. Si falla, todo sigue
+  //    como antes: palabras clave, la búsqueda de siempre y, si nada, Paula.
+  // «Escribiendo…» ya, antes de pensar: la llamada puede tardar unos segundos
+  // y sin el indicador la clienta mira un chat quieto.
+  if (input.inboundMessageId) {
+    const typing = await sendWhatsAppTypingIndicator(input.inboundMessageId);
+    if (!typing.ok) {
+      console.warn("[WHATSAPP_BOT] No se pudo mostrar «escribiendo…»", {
+        error: typing.error,
+      });
+    }
+  }
+  const intencion: IntentOutcome = await classifyMessageIntent(
+    input.body,
+    await previousCustomerTexts(conversation.id, input.inboundAt),
+  );
+  const entendido = intencion.ok ? intencion.value : null;
+  if (!intencion.ok && intencion.reason !== "not_configured") {
+    console.warn("[WHATSAPP_BOT] No se pudo clasificar el mensaje", {
+      conversationId: conversation.id,
+      reason: intencion.reason,
+    });
+  }
+
+  if (!soloProductos) {
+    // Saludó, aunque sea con un párrafo («Hola, los encontré en la página…»):
+    // menú de bienvenida. Sin el visto bueno de Paula, sigue a sus palabras
+    // clave como hasta ahora.
+    if (isWelcomeGreeting(input.body) || entendido?.intent === "greeting") {
+      const bienvenida = await darBienvenida();
+      if (bienvenida) return bienvenida;
+    }
+
+    if (entendido?.intent === "acknowledgement") {
+      return { outcome: "skipped_acknowledgement" };
+    }
+
+    // Queja, problema con un pedido o un pago: a Paula, sin improvisar nada.
+    if (entendido?.intent === "escalate") {
+      await escalate(conversation.id);
       const sent = await deliver(
         conversation.id,
         input.recipient,
-        cuerpo,
+        TALK_TO_OWNER_ACKNOWLEDGEMENT,
         [],
         pacing(input),
-        filas.length > 0
-          ? {
-              list: {
-                body: cuerpo,
-                rows: filas,
-                section: BUSINESS_FACT_TEMPLATES["welcome.section"](),
-              },
-            }
-          : {},
+        { omitOwnerButton: true, escalation: "escalate" },
       );
       if (sent.aborted) return { outcome: "skipped_owner_active" };
-      if (sent.ok) {
-        return { outcome: "replied_business_fact", trigger: "welcome" };
-      }
-      await escalate(conversation.id);
-      return {
-        outcome: "escalated_send_failed",
-        trigger: "welcome",
-        error: sent.error,
-      };
+      return sent.ok
+        ? { outcome: "escalated_complaint" }
+        : { outcome: "escalated_complaint", error: sent.error };
     }
-    // Sin el visto bueno de Paula esto no sale; sigue de largo y contesta lo
-    // que ella tenga escrito, como hasta ahora.
+
+    // Gracias, despedida, «¿eres un robot?», «¿qué venden?»: texto fijo y
+    // aprobado. Sin aprobación, sigue de largo como hasta ahora.
+    if (entendido && isCasualIntent(entendido.intent)) {
+      const casualSettings =
+        input.settings ?? (await readSettings(conversation.storeId));
+      if (casualSettings && areCasualRepliesApproved(casualSettings)) {
+        const sent = await deliver(
+          conversation.id,
+          input.recipient,
+          CASUAL_TEMPLATES[entendido.intent](),
+          [],
+          pacing(input),
+        );
+        if (sent.aborted) return { outcome: "skipped_owner_active" };
+        if (sent.ok) {
+          if (entendido.intent === "catalog_question") await enviarCatalogo();
+          return { outcome: "replied_casual", trigger: entendido.intent };
+        }
+        await escalate(conversation.id);
+        return {
+          outcome: "escalated_send_failed",
+          trigger: entendido.intent,
+          error: sent.error,
+        };
+      }
+    }
+
+    // 5. Lo que Paula escribió gana al catálogo: va antes que la búsqueda,
+    //    salvo cuando el mensaje es claramente de productos («gracias! ¿y
+    //    tienen agendas?» no es un «gracias»); entonces va después.
+    if (entendido?.intent !== "product") {
+      const respuesta = await responderPalabraClave();
+      if (respuesta) return respuesta;
+    }
   }
 
-  // 5. Lo que Paula escribió gana al catálogo: va antes que la búsqueda.
-  const keywords =
-    input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
-  const match = matchWhatsAppKeyword(input.body, keywords);
-  if (match) {
-    return respond(
-      conversation.id,
-      input.recipient,
-      match.keyword,
-      match.trigger,
-      pacing(input),
-    );
-  }
-
-  // 6. Productos: si tienen algo y si queda. A diferencia del paso 4, aquí
-  //    hace falta un modelo para entender la pregunta, así que TODO lo que
-  //    pueda salir mal —sin clave, sin cuota, lento, o una respuesta que no
-  //    cuadra— acaba igual: sin contestar aquí y siguiendo al paso 6.
-  if (looksLikeProductQuestion(input.body)) {
+  // 6. Productos. Con el clasificador, la búsqueda usa lo que entendió con el
+  //    contexto (y solo lo que hay en existencia); sin él, el camino de antes,
+  //    que primero mira si «parece» pregunta de producto.
+  const clasificacion = entendido ? toProductClassification(entendido) : null;
+  const esProducto = entendido
+    ? entendido.intent === "product"
+    : looksLikeProductQuestion(input.body);
+  if (esProducto) {
     const productSettings =
       input.settings ?? (await readSettings(conversation.storeId));
+    const aprobados = Boolean(
+      productSettings && areProductAnswersApproved(productSettings),
+    );
     const answer =
-      productSettings && areProductAnswersApproved(productSettings)
+      aprobados && (!entendido || clasificacion)
         ? await answerProductQuestion(conversation.storeId, input.body, {
+            ...(clasificacion
+              ? {
+                  classification: clasificacion,
+                  filters: {
+                    inStockOnly: true,
+                    maxPrice: entendido?.filters.budget ?? null,
+                  },
+                }
+              : {}),
             // Sale solo si la clasificación se hace larga. Sin lista y sin
             // pausa humana: ya se ha esperado bastante, y `deliver` no le
             // pone `shown`, así que no estorba a «el primero» —la etapa de
@@ -836,12 +1117,33 @@ export async function runWhatsAppBot(input: {
           list: answer.list,
           decision: answer.decision,
           omitOwnerButton: Boolean(answer.handoff),
+          ...(answer.handoff ? { escalation: "no_match" as const } : {}),
         },
       );
       if (sent.aborted) return { outcome: "skipped_owner_active" };
       if (sent.ok) {
+        if (answer.handoff) {
+          await enviarCatalogo();
+        } else if (clasificacion?.productType) {
+          const enlace = await enviarEnlace(
+            SEARCH_LINK_BODY,
+            buildSearchUrl(env.FRONTEND_STORE_URL, {
+              query: clasificacion.productType,
+              budget: entendido?.filters.budget ?? null,
+            }),
+            SEARCH_BUTTON_TEXT,
+          );
+          if (!enlace.ok && !enlace.aborted) {
+            console.warn("[WHATSAPP_BOT] No salió el enlace de la búsqueda", {
+              conversationId: conversation.id,
+              error: enlace.error,
+            });
+          }
+        }
         return {
-          outcome: answer.handoff ? "replied_product_unsure" : "replied_product",
+          outcome: answer.handoff
+            ? "replied_product_unsure"
+            : "replied_product",
           trigger: answer.intent,
         };
       }
@@ -854,12 +1156,26 @@ export async function runWhatsAppBot(input: {
     }
   }
 
+  // Esperando a Paula por un «Esa no me la sé» del bot: lo que no es una
+  // pregunta de producto con respuesta se deja para ella, en silencio.
+  if (soloProductos) return { outcome: "skipped_needs_owner" };
+
+  // Era de productos y la búsqueda no tuvo qué decir: las palabras clave de
+  // Paula todavía pueden contestar.
+  if (entendido?.intent === "product") {
+    const respuesta = await responderPalabraClave();
+    if (respuesta) return respuesta;
+  }
+
   // 6 bis. Escribió a mano lo que dice el botón. Hoy no pasa —los 23 «Hablar
   //    con Paula» de septiembre fueron toques— pero si pasara caería en el
   //    paso 7 y se le contestaría «Esa no me la sé» a alguien que está pidiendo
   //    una persona, que es lo contrario de lo que necesita oír. Va después de
   //    las palabras clave para que una respuesta de Paula siga mandando.
-  if (normalizeBotText(input.body) === normalizeBotText(TALK_TO_OWNER_BUTTON_TITLE)) {
+  if (
+    normalizeBotText(input.body) ===
+    normalizeBotText(TALK_TO_OWNER_BUTTON_TITLE)
+  ) {
     const sent = await deliver(
       conversation.id,
       input.recipient,
@@ -868,7 +1184,7 @@ export async function runWhatsAppBot(input: {
       pacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
-      { omitOwnerButton: true },
+      { omitOwnerButton: true, escalation: "owner_requested" },
     );
     if (sent.aborted) return { outcome: "skipped_owner_active" };
     await escalate(conversation.id);
@@ -877,19 +1193,22 @@ export async function runWhatsAppBot(input: {
       : { outcome: "escalated_owner_requested", error: sent.error };
   }
 
-  // 7. Nada encajó: no se inventa una respuesta, se le pasa a Paula.
+  // 7. Nada encajó: no se inventa una respuesta, se le pasa a Paula, y se le
+  //    deja el catálogo para que no se quede sin nada mientras tanto.
   //
   //    El orden importa: se marca primero. La pausa humana de `deliver` dura
   //    segundos y en ese rato puede entrar otro mensaje; con la conversación
   //    ya marcada, ese segundo mensaje se salta y no se avisa dos veces.
   await escalate(conversation.id);
-  await deliver(
+  const avisado = await deliver(
     conversation.id,
     input.recipient,
     NO_MATCH_ACKNOWLEDGEMENT,
     [],
     pacing(input),
+    { escalation: "no_match" },
   );
+  if (avisado.ok && !avisado.aborted) await enviarCatalogo();
   return { outcome: "escalated_no_match" };
 }
 
@@ -989,12 +1308,23 @@ async function deliver(
      * con el mensaje para poder revisarlo después; nunca se enseña.
      */
     decision?: ProductDecision | null;
+    /** Por qué este acuse deja la conversación para Paula; ver `lastEscalationCause`. */
+    escalation?: EscalationCause;
+    /**
+     * Un enlace en vez de una respuesta: va como botón que lo abre o como
+     * texto, según `CATALOG_LINK_MODE`, y sin el botón de Paula, porque sale
+     * justo después de un mensaje que ya lo trae.
+     */
+    link?: { url: string; button: string };
   } = {},
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
-  const { photo, shown, list, omitOwnerButton, decision } = extras;
+  const { photo, shown, list, omitOwnerButton, decision, escalation, link } =
+    extras;
   const metadata = {
     ...(shown && shown.ids.length > 0 ? { shown } : {}),
     ...(decision ? { decision } : {}),
+    ...(escalation ? { escalation } : {}),
+    ...(link ? { link: link.url } : {}),
   };
   const conMetadata =
     Object.keys(metadata).length > 0
@@ -1004,7 +1334,9 @@ async function deliver(
 
   // Red contra un envío doble; las ráfagas se resuelven antes.
   if (await justSaid(conversationId, reply)) {
-    console.info("[WHATSAPP_BOT] Se evita repetir lo mismo", { conversationId });
+    console.info("[WHATSAPP_BOT] Se evita repetir lo mismo", {
+      conversationId,
+    });
     return { ok: true };
   }
 
@@ -1031,14 +1363,19 @@ async function deliver(
   // como ella la quiere y pelearse con él sería volver al problema anterior.
   const frenada = await shouldStayQuiet(conversationId, pace);
   if (frenada) {
-    console.info("[WHATSAPP_BOT] Se calla: la conversación cambió durante la pausa", {
-      conversationId,
-      motivo: frenada,
-    });
+    console.info(
+      "[WHATSAPP_BOT] Se calla: la conversación cambió durante la pausa",
+      {
+        conversationId,
+        motivo: frenada,
+      },
+    );
     return { ok: true, aborted: true };
   }
 
-  const conBotones = buildReplyButtons(buttons, { includeOwnerButton: !omitOwnerButton });
+  const conBotones = buildReplyButtons(buttons, {
+    includeOwnerButton: !omitOwnerButton,
+  });
 
   /**
    * El texto por el camino que corresponda: interactivo si hay botones, y
@@ -1051,15 +1388,22 @@ async function deliver(
    * el problema que se quería arreglar.
    */
   const enviarTexto = () =>
-    conBotones.length > 0
-      ? sendWhatsAppButtonMessage(phone, reply, conBotones)
-      : sendWhatsAppTextMessage(phone, reply);
+    link
+      ? CATALOG_LINK_MODE === "cta_url"
+        ? sendWhatsAppCtaUrlMessage(phone, reply, {
+            text: link.button,
+            url: link.url,
+          })
+        : sendWhatsAppTextMessage(phone, `${reply}\n${link.url}`)
+      : conBotones.length > 0
+        ? sendWhatsAppButtonMessage(phone, reply, conBotones)
+        : sendWhatsAppTextMessage(phone, reply);
 
   let salioConFoto = Boolean(photo);
 
   // La lista manda cuando la hay: una lista no admite ni foto ni botones, así
   // que la salida hacia Paula viaja como una fila más, la última.
-  let archivado = reply;
+  let archivado = link ? `${reply}\n${link.url}` : reply;
   let sent;
   if (list && list.rows.length > 0) {
     salioConFoto = false;
@@ -1072,7 +1416,10 @@ async function deliver(
     });
     if (sent.ok) {
       // En el panel tiene que verse lo que se le ofreció, no solo la frase.
-      archivado = [cuerpo, ...list.rows.map((r) => `• ${r.description ?? r.title}`)].join("\n");
+      archivado = [
+        cuerpo,
+        ...list.rows.map((r) => `• ${r.description ?? r.title}`),
+      ].join("\n");
     } else {
       // Si Meta la rechaza se manda la versión escrita de siempre, que lleva
       // las mismas opciones y el botón de Paula. Perder la lista es un
@@ -1113,7 +1460,9 @@ async function deliver(
         body: archivado,
         // La decisión también aquí: si el envío falló, saber qué se quiso
         // decir y por qué es justo lo que hace falta para revisarlo.
-        ...(decision ? { metadata: { decision } as unknown as Prisma.InputJsonValue } : {}),
+        ...(decision
+          ? { metadata: { decision } as unknown as Prisma.InputJsonValue }
+          : {}),
         status: ConversationMessageStatus.FAILED,
       },
     });

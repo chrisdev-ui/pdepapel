@@ -390,6 +390,12 @@ const spaceUnits = (value: string) =>
     (_match, digit: string, unit: string) => `${digit} ${unit.toLowerCase()}`,
   );
 
+const wordForms = (word: string) => [
+  word,
+  ...(word.endsWith("s") ? [word.slice(0, -1)] : []),
+  ...(word.endsWith("es") ? [word.slice(0, -2)] : []),
+];
+
 /** Lo que más fotos coinciden en leer para un campo; «14cm» y «14 cm aprox.» votan juntas. */
 function consensus(values: (string | null)[]) {
   const counts = new Map<string, { value: string; count: number }>();
@@ -509,10 +515,18 @@ export function enrichShortName(
   )
     before += 1;
   let after = tailStart;
-  const has = (text: string) =>
-    toNamingKey(current.join(" ")).includes(
-      toNamingKey(text.replace(/^(de|punta|diseño|base) /i, "")),
+  // Ya está si cada palabra aparece, en singular o en plural (viaje/Viajes, flor/Flores).
+  const has = (text: string) => {
+    const words = toNamingKey(text.replace(/^(de|punta|diseño|base) /i, ""))
+      .split(" ")
+      .filter(Boolean);
+    const present = new Set(
+      toNamingKey(current.join(" ")).split(" ").flatMap(wordForms),
     );
+    return words.every((word) =>
+      wordForms(word).some((form) => present.has(form)),
+    );
+  };
   const tryInsert = (text: string | null, at: "head" | "tail") => {
     if (!text || current.join(" ").length >= TARGET_MIN_LENGTH || has(text))
       return;

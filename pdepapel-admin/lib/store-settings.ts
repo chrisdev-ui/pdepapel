@@ -175,6 +175,8 @@ export interface ResolvedStoreSettings {
   /** Visto bueno aparte, para lo que contesta sobre productos. */
   botProductsApprovedAt: Date | null;
   botProductsVersion: string | null;
+  botCasualApprovedAt: Date | null;
+  botCasualVersion: string | null;
 }
 
 /** Lo que ve quien pregunta, con los valores por defecto cuando no hay fila. */
@@ -221,6 +223,8 @@ export async function getStoreSettings(
     botFactsVersion: settings?.botFactsVersion ?? null,
     botProductsApprovedAt: settings?.botProductsApprovedAt ?? null,
     botProductsVersion: settings?.botProductsVersion ?? null,
+    botCasualApprovedAt: settings?.botCasualApprovedAt ?? null,
+    botCasualVersion: settings?.botCasualVersion ?? null,
   };
 }
 

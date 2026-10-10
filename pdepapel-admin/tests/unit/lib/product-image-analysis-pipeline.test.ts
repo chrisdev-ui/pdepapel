@@ -519,6 +519,20 @@ describe("nombres cortos: solo descriptores que se leyeron", () => {
     );
   });
 
+  it.each([
+    ["Sello decorativo con diseño de viaje", "Viajes"],
+    ["Libreta de flor prensada", "Flores"],
+    ["Cartuchera de gato kawaii", "Gatos"],
+  ])("«%s» ya nombra el diseño %s (singular y plural): no se repite", (name, design) => {
+    expect(enrichShortName(name, { facts: [fact()], designName: design })).toBe(name);
+  });
+
+  it("un diseño que no está en el nombre sí se agrega", () => {
+    expect(enrichShortName("Libreta de flor prensada", { facts: [fact()], designName: "Gatos" })).toBe(
+      "Libreta de flor prensada diseño Gatos",
+    );
+  });
+
   it("sin hechos que agregar, el nombre corto queda igual", () => {
     expect(enrichShortName("Kit de lectura Morfil", { facts: [fact()], designName: null })).toBe("Kit de lectura Morfil");
   });

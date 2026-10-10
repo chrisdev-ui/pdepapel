@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { getBotReplies } from "./server/get-bot-replies";
 import { getBusinessFacts } from "./server/get-business-facts";
+import { getCasualReplies } from "./server/get-casual-replies";
 import { getProductAnswers } from "./server/get-product-answers";
 
 const BotRepliesClient = dynamic(() => import("./components/client"), {
@@ -11,6 +12,13 @@ const ProductAnswersCard = dynamic(
   () =>
     import("./components/product-answers-card").then(
       (mod) => mod.ProductAnswersCard,
+    ),
+  { ssr: false },
+);
+const CasualRepliesCard = dynamic(
+  () =>
+    import("./components/casual-replies-card").then(
+      (mod) => mod.CasualRepliesCard,
     ),
   { ssr: false },
 );
@@ -34,10 +42,11 @@ export default async function BotRepliesPage({
 }: {
   params: { storeId: string };
 }) {
-  const [data, facts, products] = await Promise.all([
+  const [data, facts, products, casual] = await Promise.all([
     getBotReplies(params.storeId),
     getBusinessFacts(params.storeId),
     getProductAnswers(params.storeId),
+    getCasualReplies(params.storeId),
   ]);
 
   return (
@@ -45,6 +54,7 @@ export default async function BotRepliesPage({
       <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
         <BusinessFactsCard data={facts} />
         <ProductAnswersCard data={products} />
+        <CasualRepliesCard data={casual} />
         <BotRepliesClient data={data} />
       </div>
     </div>

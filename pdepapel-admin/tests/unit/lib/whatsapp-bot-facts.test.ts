@@ -61,6 +61,8 @@ const completa: ResolvedStoreSettings = {
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
   botProductsApprovedAt: null,
   botProductsVersion: null,
+  botCasualApprovedAt: null,
+  botCasualVersion: null,
 };
 
 const con = (cambios: Partial<ResolvedStoreSettings>): ResolvedStoreSettings => ({

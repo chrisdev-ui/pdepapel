@@ -274,7 +274,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
   | Product assistant (photos, naming pass, subcategory) | OpenAI `gpt-6-luna` | Gemini `gemini-3.5-flash-lite` | Catalog photos and product text only |
   | Type icon suggestions | OpenAI | Gemini | Admin's own short description |
   | Respuestas assistant (`bot-replies/assistant`) | OpenAI | none (busy message) | Reads real customer WhatsApp messages |
-  | WhatsApp bot product classification | OpenAI | none: the existing keyword matcher | Customer messages |
+  | WhatsApp bot message intent and product search query (`lib/whatsapp/bot-intent.ts`) | OpenAI | none: the bot's previous path (keywords, old product check, handoff) | Customer messages |
 
   - **Customer text never goes to a free-tier provider.** OpenAI API data is not used for training unless the organization opts in, and is kept up to 30 days for abuse monitoring. Source: developers.openai.com/api/docs/guides/your-data, read 2026-10-10. Every OpenAI call sends `store: false`. Gemini's free tier is not used for customer text.
   - **Without `OPENAI_API_KEY`** (Preview has none; Production has it): the product assistant and icons run Gemini-only, the classifier reports `not_configured` (keywords only), and Respuestas answers 503.
@@ -307,6 +307,31 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - The Redis cache key (version 9) covers every usable photo URL in order, the current name, the chosen subcategory and the taxonomy. The value stores `{ output, photosRead, skipped, analyzedWith }`. Bump the key version when the output shape changes.
 - The review only pre-checks fields that are empty in the form; a typed value is replaced only when the admin ticks it. It never proposes prices, costs, stock or SKU.
 - Measurement: `docs/audits/2026-10-09-asistente-ia-productos.md` §11 (20 real products, both providers). Re-run it before changing prompts, models or the name post-processing.
+
+### WhatsApp bot
+
+`lib/whatsapp/bot.ts` answers each new inbound message once. It is processed inside the QStash-signed processor (`/api/internal/marketplaces/whatsapp/process`: 60 s function, QStash timeout 50 s with retries; a retry never answers twice because the bot only runs for newly filed messages).
+- Order of decisions:
+  1. Paula active in the last 24 h: silence.
+  2. Button taps: «Hablar con Paula», product rows, payment rows, menu rows.
+  3. Waiting for Paula (`NEEDS_OWNER`): silence, with one exception (below).
+  4. Photos, audio, video and documents: handoff.
+  5. Stickers: welcome if it is the first message, otherwise silence; they no longer go to Paula.
+  6. Business facts by keyword: approved templates.
+  7. «el primero» references.
+  8. Emoji-only messages: welcome if first, otherwise silence.
+  9. **One OpenAI call** classifies the message (`classifyMessageIntent`), using the last 3 customer messages as context, into greeting, acknowledgement, thanks, goodbye, bot identity, «what do you sell», product, fact, escalate or other. For products it also returns a search query of at most 60 characters plus filters (theme, category, recipient, budget). Customer text goes in as quoted JSON data, and the output is a validated enum: it can only pick a route, never write a reply. Each attempt has a 6 s timeout, plus one retry for a hung or unreadable call; if both fail, the bot follows the path it had before this classifier existed.
+  10. Greeting (even a long website opener): welcome menu. Acknowledgement: silence. Escalate (complaint, order or payment problem): the existing handoff acknowledgement.
+  11. Thanks, goodbye, «¿eres un robot?», «¿qué venden?»: fixed texts in `lib/whatsapp/bot-casual.ts`, sent only with Paula's approval in Respuestas.
+  12. Paula's keyword replies, then the product search with the classifier's query (in stock only, budget as a maximum price). A product message searches first, and her keywords answer only if the search has nothing to say.
+  13. «Esa no me la sé»: handoff.
+- **Silence after a handoff.** Each handoff acknowledgement stores its cause in the message metadata (`escalation`: `no_match`, `owner_requested`, `escalate`, `media`, `button_unavailable`). While the chat waits for Paula, the bot still answers clear product questions only if the latest cause is its own `no_match` and Paula has never written in the chat. The conversation stays in her queue either way.
+- **Links** go in a separate message, so the approved welcome text is not edited, and a link button cannot share a message with «Hablar con Paula»:
+  - the catalog link (`FRONTEND_STORE_URL/tienda` with `utm_campaign=ver_catalogo`) after the welcome menu, after «Esa no me la sé» and «¿qué venden?», and when a search finds nothing;
+  - the search link (`/tienda?search=…` with `utm_campaign=busqueda`) after a product list.
+  `CATALOG_LINK_MODE = "cta_url"` sends a link button: «Ver catálogo» for the catalog, «Ver en la tienda» for a search. Chakra forwards `cta_url` to Meta; this was confirmed by one controlled send on 2026-10-10, which was delivered and read and showed the button on the phone. `"text"` falls back to the written link.
+- **Approval:** every text group has its own version hash and approval: facts (`botFacts*`), products (`botProducts*`), casual (`botCasual*`, migration `20261010_add_bot_casual_approval.sql`). Editing a text in code retires only its own group. Nobody approves on Paula's behalf. `getStoreSettings` reads the whole row, so **that migration must be applied before the code that knows the columns is deployed**.
+- Simulation: `tmp/sim/bot.sim.ts` (ignored) replays synthetic conversations through the real bot with real OpenAI, in-memory conversations and read-only catalog access. Re-run it before changing the classifier prompt, the order of decisions or the texts.
 
 ### Mercado Libre
 
