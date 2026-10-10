@@ -10,9 +10,12 @@ import {
 } from "@prisma/client";
 
 import { claimQueueRow } from "@/lib/atomic-claim";
+import { runInBackground } from "@/lib/background";
 import { normalizePhone } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
-import { runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
+import { NO_MATCH_ACKNOWLEDGEMENT, runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
+import { isShadowCandidate } from "@/lib/whatsapp/shadow/candidate";
+import { runWhatsAppBotShadow } from "@/lib/whatsapp/shadow/run";
 import { bumpLastOwnerAt } from "@/lib/whatsapp/owner-activity";
 
 /**
@@ -878,7 +881,16 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
     // archivo: si algo revienta al contestar, el evento ya quedó guardado.
     for (const candidate of botCandidates) {
       try {
-        botResults.push(await runWhatsAppBot(candidate));
+        const result = await runWhatsAppBot(candidate);
+        botResults.push(result);
+        // Modo sombra: después de la respuesta real y en segundo plano, para
+        // no demorar a la clienta ni a su siguiente mensaje en la fila.
+        if (isShadowCandidate(candidate)) {
+          const finishedAt = new Date();
+          runInBackground("whatsapp-shadow", () =>
+            runWhatsAppBotShadow(candidate, result.outcome, finishedAt, { noMatchText: NO_MATCH_ACKNOWLEDGEMENT }),
+          );
+        }
       } catch (error) {
         console.error("[WHATSAPP_SYNC] El bot falló al responder", {
           eventId: event.id,

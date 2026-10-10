@@ -3118,3 +3118,34 @@ model AssistantKnowledgeNote {
   @@unique([storeId, noteId])
   @@index([storeId])
 }
+
+/// Bot de WhatsApp en modo sombra: qué habría mandado el bot nuevo (clasificador
+/// de intención y búsqueda con contexto) frente a lo que mandó el de verdad, por
+/// cada mensaje escrito. Solo conteos y tipos: nunca el texto de la clienta, la
+/// búsqueda que se armó, nombres ni teléfonos. `inboundMessageId` es
+/// `ConversationMessage.id`, nunca el `wamid` (lleva el teléfono).
+model WhatsAppBotShadowRun {
+  id               String   @id @default(uuid())
+  storeId          String
+  conversationId   String
+  inboundMessageId String   @unique
+  /// Intención del clasificador, o null si no corrió (frenos) o falló.
+  intent           String?  @db.VarChar(32)
+  /// Tipos que habría mandado, en orden: welcome, product_list, catalog_link, casual_text, fact, keyword, handoff; vacío = silencio.
+  plannedTypes     Json
+  plannedCount     Int
+  /// Si hubo búsqueda: ¿encontró productos en existencia?
+  productsFound    Boolean?
+  searchRan        Boolean  @default(false)
+  realOutcome      String   @db.VarChar(48)
+  realTypes        Json
+  realCount        Int
+  /// ok, not_configured, timeout, quota, invalid, error, skipped.
+  classifierStatus String   @db.VarChar(16)
+  /// Por qué el plan es silencio o se recortó (bot_disabled, owner_active, superseded…).
+  skipReason       String?  @db.VarChar(32)
+  createdAt        DateTime @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([conversationId, createdAt])
+}

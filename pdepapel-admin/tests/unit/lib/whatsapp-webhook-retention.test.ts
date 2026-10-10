@@ -2,15 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   deleteMany: vi.fn(),
+  shadowDeleteMany: vi.fn(),
+  shadowCount: vi.fn(),
 }));
 
 vi.mock("@/lib/prismadb", () => ({
-  default: { marketplaceWebhookEvent: { deleteMany: mocks.deleteMany } },
+  default: {
+    marketplaceWebhookEvent: { deleteMany: mocks.deleteMany },
+    whatsAppBotShadowRun: { deleteMany: mocks.shadowDeleteMany, count: mocks.shadowCount },
+  },
 }));
 
 import {
+  WHATSAPP_BOT_SHADOW_RETENTION_DAYS,
   WHATSAPP_WEBHOOK_EVENT_RETENTION_DAYS,
   pruneProcessedWhatsAppWebhookEvents,
+  pruneWhatsAppBotShadowRuns,
 } from "@/lib/whatsapp/webhook-retention";
 
 const NOW = new Date("2026-09-14T02:00:00.000Z");
@@ -91,5 +98,26 @@ describe("pruneProcessedWhatsAppWebhookEvents", () => {
     await expect(pruneProcessedWhatsAppWebhookEvents({ now: NOW })).resolves.toMatchObject({
       deleted: 0,
     });
+  });
+});
+
+describe("pruneWhatsAppBotShadowRuns", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.shadowDeleteMany.mockResolvedValue({ count: 4 });
+    mocks.shadowCount.mockResolvedValue(4);
+  });
+
+  it("borra las filas del modo sombra con más de 30 días", async () => {
+    await expect(pruneWhatsAppBotShadowRuns({ now: NOW })).resolves.toMatchObject({ deleted: 4, olderThanDays: 30, dryRun: false });
+    expect(WHATSAPP_BOT_SHADOW_RETENTION_DAYS).toBe(30);
+    expect(mocks.shadowDeleteMany).toHaveBeenCalledWith({ where: { createdAt: { lt: new Date(NOW.getTime() - 30 * DAY) } } });
+    expect(mocks.shadowCount).not.toHaveBeenCalled();
+  });
+
+  it("en simulación solo cuenta", async () => {
+    await expect(pruneWhatsAppBotShadowRuns({ now: NOW, dryRun: true })).resolves.toMatchObject({ deleted: 4, dryRun: true });
+    expect(mocks.shadowCount).toHaveBeenCalledWith({ where: { createdAt: { lt: new Date(NOW.getTime() - 30 * DAY) } } });
+    expect(mocks.shadowDeleteMany).not.toHaveBeenCalled();
   });
 });

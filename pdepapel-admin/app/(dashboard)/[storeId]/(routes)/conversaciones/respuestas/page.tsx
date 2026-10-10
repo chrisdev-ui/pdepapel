@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { getBotReplies } from "./server/get-bot-replies";
 import { getBusinessFacts } from "./server/get-business-facts";
+import { ShadowReportCard } from "./components/shadow-report-card";
 import { getProductAnswers } from "./server/get-product-answers";
+import { getShadowReport } from "./server/get-shadow-report";
 
 const BotRepliesClient = dynamic(() => import("./components/client"), {
   ssr: false,
@@ -34,10 +36,11 @@ export default async function BotRepliesPage({
 }: {
   params: { storeId: string };
 }) {
-  const [data, facts, products] = await Promise.all([
+  const [data, facts, products, shadow] = await Promise.all([
     getBotReplies(params.storeId),
     getBusinessFacts(params.storeId),
     getProductAnswers(params.storeId),
+    getShadowReport(params.storeId),
   ]);
 
   return (
@@ -46,6 +49,7 @@ export default async function BotRepliesPage({
         <BusinessFactsCard data={facts} />
         <ProductAnswersCard data={products} />
         <BotRepliesClient data={data} />
+        <ShadowReportCard data={shadow} />
       </div>
     </div>
   );

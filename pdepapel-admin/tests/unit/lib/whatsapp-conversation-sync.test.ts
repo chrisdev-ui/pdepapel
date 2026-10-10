@@ -22,9 +22,13 @@ const mocks = vi.hoisted(() => ({
   messageFindUnique: vi.fn(),
   messageUpdateMany: vi.fn(),
   runBot: vi.fn(),
+  shadow: vi.fn(),
+  order: [] as string[],
 }));
 
-vi.mock("@/lib/whatsapp/bot", () => ({ runWhatsAppBot: mocks.runBot }));
+vi.mock("@/lib/whatsapp/bot", () => ({ runWhatsAppBot: mocks.runBot, NO_MATCH_ACKNOWLEDGEMENT: "Esa no me la sé" }));
+vi.mock("@/lib/whatsapp/shadow/run", () => ({ runWhatsAppBotShadow: mocks.shadow }));
+vi.mock("@/lib/background", () => ({ runInBackground: (_label: string, task: () => Promise<unknown>) => void task() }));
 
 vi.mock("@/lib/atomic-claim", () => ({ claimQueueRow: mocks.claimRow }));
 vi.mock("@/lib/prismadb", () => ({
@@ -1038,6 +1042,30 @@ describe("processWhatsAppWebhookEvent", () => {
       customerPhone: "573001234567",
       customerBsuid: null,
     });
+  });
+
+  it("el modo sombra corre después del bot real y solo con mensajes escritos", async () => {
+    mocks.findEvent.mockResolvedValue(event());
+    mocks.order.length = 0;
+    mocks.runBot.mockImplementation(async () => {
+      mocks.order.push("bot");
+      return { outcome: "replied" };
+    });
+    mocks.shadow.mockImplementation(async () => {
+      mocks.order.push("sombra");
+    });
+
+    await processWhatsAppWebhookEvent("event-1");
+
+    // Un mensaje escrito, una imagen y un toque de botón: solo el escrito pasa por la sombra.
+    expect(mocks.order).toEqual(["bot", "sombra", "bot", "bot"]);
+    expect(mocks.shadow).toHaveBeenCalledTimes(1);
+    expect(mocks.shadow).toHaveBeenCalledWith(
+      expect.objectContaining({ body: "Hola, ¿tienen stickers?", inboundMessageId: "wamid.1" }),
+      "replied",
+      expect.any(Date),
+      { noMatchText: "Esa no me la sé" },
+    );
   });
 
   it("con el bot apagado el mensaje igual queda archivado y el evento procesado", async () => {

@@ -340,6 +340,16 @@ Design: `docs/design/asistente-experto-paula.md` (§13 is what v1 built) and `do
   - **Welcome menu** at most once per conversation per 24 h (`metadata.kind = "welcome"`, or older rows by their opening); a repeat greeting gets silence (`skipped_welcome_repeat`).
   - **Metric:** «Sistemas» on Inicio shows bot messages per customer message over the last 24 h, red above 0.5 (`measureWhatsAppBotRatio`). Before the incident it was about 0.08; with very few messages it jumps (one customer and one reply is 1.0).
 
+- **Shadow mode (2026-10-10).** The reverted logic of `edb9541a` (intent classifier with the customer's last 3 messages, in-stock search with budget, casual intents, catalog link) runs only as a shadow in `lib/whatsapp/shadow/`, to measure it before deciding anything:
+  - `conversation-sync.ts` calls `runWhatsAppBotShadow` **after** `runWhatsAppBot` returns, through `runInBackground` (`waitUntil`), for typed messages only (no taps, no media). The real bot (`bot.ts`, `send.ts`, `bot-products.ts`) is unchanged.
+  - The shadow never sends and never writes to the conversation: it reads, and writes one `WhatsAppBotShadowRun` row per typed inbound (migration `20261010_add_whatsapp_bot_shadow_runs.sql`). Rows hold intent, planned and real message types and counts, whether the search found in-stock products, the classifier status and the skip reason. Never the customer's text, the search query, names, phones or the wamid (`inboundMessageId` is `ConversationMessage.id`). A test fails if a shadow file imports `send`, `bot` or `conversation-sync`, and another asserts zero calls to every `send` export.
+  - The plan (`lib/whatsapp/shadow/plan.ts`, pure) follows the rules a re-ship would need: guards first (kill switch, Paula active, newer customer message or anything pending in the queue, waiting for Paula), so a guarded message costs no OpenAI call; at most 2 messages per inbound and 4 per 10 minutes; welcome once per 24 h (real or shadow); the catalog link only when asked «¿qué venden?», once per conversation, never after a welcome, a product list or «Esa no me la sé». It assumes Paula approved the four casual texts.
+  - Approximations: «waiting for Paula» comes from the real outcome `skipped_needs_owner`; «after its own Esa no me la sé» from the last bot message before the inbound (its text or a product decision `unsure`). The guards are evaluated when the shadow runs, a few seconds after the real reply.
+  - Cost: one `gpt-6-luna` call per unguarded typed message (`feature: "whatsapp.shadow-intent"`, about US$0.0001), inside the shared US$1 daily AI cap. Search is DB-only.
+  - Owner-only report: Conversaciones › Respuestas › «Bot en modo sombra» (last 7 days: real vs shadow messages per inbound, intents, silences, and how often the shadow found products when the real bot said «Esa no me la sé»).
+  - Off switch: `WHATSAPP_BOT_SHADOW_ENABLED` in `lib/whatsapp/shadow/candidate.ts`.
+  - Retention: the daily `whatsapp-webhook-retention` job also deletes shadow rows older than 30 days (`pruneWhatsAppBotShadowRuns`); `?mode=dry-run` only counts them.
+
 ### Mercado Libre
 
 - Marketplace price and shop price are **deliberately decoupled**. Never auto-overwrite one from the other.

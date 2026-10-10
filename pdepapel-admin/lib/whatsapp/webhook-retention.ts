@@ -29,3 +29,22 @@ export async function pruneProcessedWhatsAppWebhookEvents(
 
   return { deleted: count, olderThanDays, cutoff };
 }
+
+/**
+ * Las filas del modo sombra del bot (`WhatsAppBotShadowRun`) solo sirven para
+ * el informe de 7 días: se borran a los 30. `dryRun` solo cuenta.
+ */
+export const WHATSAPP_BOT_SHADOW_RETENTION_DAYS = 30;
+
+export async function pruneWhatsAppBotShadowRuns(
+  options: { olderThanDays?: number; now?: Date; dryRun?: boolean } = {},
+): Promise<{ deleted: number; olderThanDays: number; cutoff: Date; dryRun: boolean }> {
+  const olderThanDays = options.olderThanDays ?? WHATSAPP_BOT_SHADOW_RETENTION_DAYS;
+  const now = options.now ?? new Date();
+  const cutoff = new Date(now.getTime() - olderThanDays * 24 * 60 * 60 * 1000);
+  const where = { createdAt: { lt: cutoff } };
+  const deleted = options.dryRun
+    ? await prismadb.whatsAppBotShadowRun.count({ where })
+    : (await prismadb.whatsAppBotShadowRun.deleteMany({ where })).count;
+  return { deleted, olderThanDays, cutoff, dryRun: Boolean(options.dryRun) };
+}
