@@ -1422,6 +1422,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <div className="col-span-full">
                   <ProductNameAssistant
                     currentName={watchedName}
+                    currentDescription={form.watch("description")}
                     categoryName={
                       availableCategories.find(
                         (category) => category.id === watchedCategoryId,

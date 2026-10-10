@@ -8,6 +8,7 @@ import type {
   ProductImageAnalysis,
   ProductImageVariantCandidate,
 } from "@/lib/product-image-analysis";
+import { MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES } from "@/constants/product-naming";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ export type ProductVariantReviewPayload = {
 
 type VariantDraft = ProductVariantReviewPayload["variants"][number];
 
-export const MAX_CONVERSION_OPTIONS = 3;
+export const MAX_CONVERSION_OPTIONS = MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES;
 
 export interface ConversionSourceProduct {
   name: string;

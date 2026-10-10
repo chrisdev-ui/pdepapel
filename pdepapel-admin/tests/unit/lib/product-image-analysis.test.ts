@@ -3,7 +3,6 @@ import {
   PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS,
   PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT,
   PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX,
-  buildProductImageAnalysisPrompt,
   getProductImageAnalysisCacheKey,
   getProductImageAnalysisDay,
   getProductImageAnalysisRateLimitKey,
@@ -51,6 +50,13 @@ function createOutput(
     catalogAttributes: [],
     observations: [],
     limitations: [],
+    quantity: null,
+    material: null,
+    tip: null,
+    measurements: null,
+    model: null,
+    keywords: [],
+    fieldEvidence: {},
     ...overrides,
   };
 }
@@ -78,7 +84,7 @@ describe("product image analysis helpers", () => {
       "store:store-id:product-image-analysis:2026-08-21",
     );
     expect(PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT).toBe(20);
-    expect(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES).toBe(3);
+    expect(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES).toBe(10);
     expect(PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS).toBe(60 * 60 * 24);
     expect(PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX).toBe(3);
   });
@@ -94,9 +100,19 @@ describe("product image analysis helpers", () => {
     };
 
     expect(getProductImageAnalysisCacheKey("store-id", input)).toBe(
+      getProductImageAnalysisCacheKey("store-id", { ...input, imageUrls: [...input.imageUrls] }),
+    );
+    // La evidencia nombra fotos por su número: otro orden es otra propuesta.
+    expect(getProductImageAnalysisCacheKey("store-id", input)).not.toBe(
       getProductImageAnalysisCacheKey("store-id", {
         ...input,
         imageUrls: [...input.imageUrls].reverse(),
+      }),
+    );
+    expect(getProductImageAnalysisCacheKey("store-id", input)).not.toBe(
+      getProductImageAnalysisCacheKey("store-id", {
+        ...input,
+        imageUrls: [...input.imageUrls, "https://res.cloudinary.com/pdepapel/image/upload/v1/tercera.webp"],
       }),
     );
     expect(
@@ -259,7 +275,7 @@ describe("product image analysis helpers", () => {
     ]);
   });
 
-  it("offers close existing taxonomy options before creating a new one", () => {
+  it("recognizes the canonical noun of a category and offers close designs before creating a new one", () => {
     const analysis = sanitizeProductImageAnalysis(
       createOutput({
         categoryName: "Troquel",
@@ -280,14 +296,8 @@ describe("product image analysis helpers", () => {
       },
     );
 
-    expect(analysis.categoryId).toBeNull();
-    expect(analysis.categoryAlternatives).toEqual([
-      {
-        id: "category-dies",
-        name: "Troqueles",
-        typeName: "Journal / Scrap",
-      },
-    ]);
+    expect(analysis.categoryId).toBe("category-dies");
+    expect(analysis.categoryName).toBe("Troqueles");
     expect(analysis.designId).toBeNull();
     expect(analysis.designAlternatives).toEqual([
       { id: "design-floral", name: "Floral" },
@@ -489,26 +499,201 @@ describe("product image analysis helpers", () => {
       evidence: null,
     });
   });
+});
 
-  it("requires visual evidence and current catalog options in its model instructions", () => {
-    const prompt = buildProductImageAnalysisPrompt({
-      categoryName: "Troqueles",
-      categories: ["Cuadernos (Útiles)"],
-      sizes: ["A5"],
-      colors: ["Rosa"],
-      designs: ["Floral"],
-    });
+describe("reglas de la ficha propuesta", () => {
+  it("nombres dentro de la gramática: ≤60 por palabra, sin barras, marca en Title Case", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        suggestedBaseName: "Cuaderno argollado NORMA 5 materias cuadriculado grande Let's Fly Away",
+        suggestedNameOptions: ["Sketchbook / Bitácora William Morris diseño Van Gogh"],
+      }),
+      taxonomy,
+    );
+    expect(analysis.suggestedNameOptions).toEqual([
+      "Cuaderno argollado Norma 5 materias cuadriculado grande",
+      "Sketchbook William Morris diseño Van Gogh",
+    ]);
+    expect(analysis.suggestedNameOptions.every((name) => name.length <= 60)).toBe(true);
+  });
 
-    expect(prompt).toContain("Nunca adivines");
-    expect(prompt).toContain("No incluyas marca, color, diseño");
-    expect(prompt).toContain("Cuadernos (Útiles)");
-    expect(prompt).toContain("A5");
-    expect(prompt).toContain("checksum GS1");
-    expect(prompt).toContain("variantRecommendation");
-    expect(prompt).toContain("mouse pad");
-    expect(prompt).toContain("suggestedNameOptions");
-    expect(prompt).toContain("HTML semántico");
-    expect(prompt).toContain("<ul>");
-    expect(prompt).toContain("puede proponer un nombre de subcategoría nuevo");
+  it("una licencia nunca queda como marca: pasa a diseño; la marca real va en Title Case", () => {
+    const licence = sanitizeProductImageAnalysis(createOutput({ brand: "Sanrio" }), taxonomy);
+    expect(licence.brand).toBeNull();
+    expect(licence.designName).toBe("Sanrio");
+    expect(licence.designSource).toBe("new");
+    const maker = sanitizeProductImageAnalysis(createOutput({ brand: "GIPAO" }), taxonomy);
+    expect(maker.brand).toBe("Gipao");
+  });
+
+  it("la descripción no abre con adjetivos de venta", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({ suggestedDescription: "<p>Lindo set de notas adhesivas. Hermoso empaque en caja.</p>" }),
+      taxonomy,
+    );
+    expect(analysis.suggestedDescription).toBe("<p>Set de notas adhesivas. Empaque en caja.</p>");
+  });
+
+  it("cantidad, material, punta, medidas y modelo llegan como características con su formato", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        quantity: { value: 12, mixed: "colores" },
+        material: "Plástico",
+        tip: "Pincel",
+        measurements: "14 × 1 cm",
+        model: "Profesional",
+      }),
+      taxonomy,
+    );
+    expect(analysis.catalogAttributes.map((attribute) => [attribute.name, attribute.value])).toEqual([
+      ["Cantidad", "12 colores"],
+      ["Material", "Plástico"],
+      ["Punta", "Pincel"],
+      ["Medidas", "14 × 1 cm"],
+      ["Modelo", "Profesional"],
+    ]);
+    const identical = sanitizeProductImageAnalysis(createOutput({ quantity: { value: 10, mixed: null } }), taxonomy);
+    expect(identical.catalogAttributes[0]).toMatchObject({ name: "Cantidad", value: "x10" });
+  });
+
+  it("confianza y fotos de evidencia por campo, sin números de foto inventados", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        brand: "Scribe",
+        fieldEvidence: { brand: { confidence: "alta", photos: [0, 4, 12] } },
+        keywords: ["plumones", "marcadores", "plumones"],
+      }),
+      { ...taxonomy, photoCount: 7 },
+    );
+    expect(analysis.fieldEvidence.brand).toEqual({ confidence: "alta", photos: [0, 4] });
+    expect(analysis.keywords).toEqual(["plumones", "marcadores"]);
+  });
+
+  it("variantes con fotos de la 0 a la 9", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        variantRecommendation: { shouldCreateVariants: true, axes: ["DESIGN"], evidence: "Cuatro diseños" },
+        variantCandidates: [8, 9].map((imageIndex) => ({
+          imageIndex,
+          colorName: null,
+          colorHex: null,
+          colorIsDeterministic: false,
+          designName: imageIndex === 8 ? "Perrito" : "Conejito",
+          designIsDeterministic: true,
+          sizeName: null,
+          sizeIsDeterministic: false,
+          evidence: null,
+        })),
+      }),
+      taxonomy,
+    );
+    expect(analysis.variantCandidates.map((candidate) => candidate.imageIndex)).toEqual([8, 9]);
+  });
+});
+
+describe("subcategoría: nombre exacto, nunca el sustantivo", () => {
+  const catalog = {
+    ...taxonomy,
+    categories: [
+      { id: "cat-cartucheras", name: "Cartucheras", typeName: "Organización" },
+      { id: "cat-bisturies", name: "Bisturíes", typeName: "Oficina" },
+      { id: "cat-libretas", name: "Libretas", typeName: "Papelería" },
+      { id: "cat-colorear", name: "Libros de colorear", typeName: "Arte" },
+      { id: "cat-planeadores", name: "Planeadores", typeName: "Papelería" },
+      { id: "cat-lapiceros", name: "Bolígrafos / Lapiceros", typeName: "Escritura" },
+    ],
+  };
+  const withCategory = (categoryName: string, name = "Cartuchera transparente") =>
+    sanitizeProductImageAnalysis(
+      createOutput({ categoryName, categoryIsDeterministic: true, suggestedBaseName: name, suggestedNameOptions: [name] }),
+      catalog,
+    );
+
+  it.each([
+    ["Cartuchera", "cat-cartucheras", "Cartucheras"],
+    ["Bisturí", "cat-bisturies", "Bisturíes"],
+    ["Libreta", "cat-libretas", "Libretas"],
+    ["Libro para colorear", "cat-colorear", "Libros de colorear"],
+  ])("«%s» se reconoce como la subcategoría existente", (answer, id, name) => {
+    const analysis = withCategory(answer);
+    expect(analysis.categoryId).toBe(id);
+    expect(analysis.categoryName).toBe(name);
+    expect(analysis.categorySource).toBe("existing");
+  });
+
+  it("una subcategoría desconocida sigue siendo propuesta nueva", () => {
+    expect(withCategory("Globos").categoryId).toBeNull();
+  });
+
+  it("corrige un error de una letra en el sustantivo inicial y deja lo demás", () => {
+    expect(withCategory("Libros de colorear", "Libre para colorear Formas Futuro").suggestedBaseName).toBe("Libro para colorear Formas Futuro");
+    expect(withCategory("Bisturíes", "Bisturi mini retráctil").suggestedBaseName).toBe("Bisturí mini retráctil");
+    expect(withCategory("Bisturíes", "Mini impresora térmica").suggestedBaseName).toBe("Mini impresora térmica");
+  });
+
+  it("un sinónimo del sustantivo pasa al canónico de la subcategoría", () => {
+    expect(withCategory("Planeadores", "Planificador diario diseño Stitch").suggestedBaseName).toBe("Planeador diario diseño Stitch");
+    expect(withCategory("Bolígrafos / Lapiceros", "Set de bolígrafos de gel 10 colores").suggestedBaseName).toBe("Set de lapiceros de gel 10 colores");
+    expect(withCategory("Planeadores", "Libreta diaria").suggestedBaseName).toBe("Libreta diaria");
+  });
+});
+
+describe("caché y nombre actual", () => {
+  it("el nombre actual del producto cambia la llave: respalda la cantidad propuesta", () => {
+    const base = { imageUrls: ["https://res.cloudinary.com/demo/image/upload/v1/a.jpg"], ...taxonomy };
+    expect(getProductImageAnalysisCacheKey("store", { ...base, currentName: "Set x12" })).not.toBe(
+      getProductImageAnalysisCacheKey("store", { ...base, currentName: "Set 24 colores" }),
+    );
+  });
+});
+
+describe("aviso cuando la IA propone otro tipo de producto", () => {
+  const catalog = {
+    ...taxonomy,
+    categories: [
+      { id: "cat-oficina", name: "Herramientas de oficina", typeName: "Oficina" },
+      { id: "cat-lamparas", name: "Lámparas", typeName: "Hogar" },
+      { id: "cat-lapiceros", name: "Bolígrafos / Lapiceros", typeName: "Escritura" },
+      { id: "cat-colorear", name: "Libros de colorear", typeName: "Arte" },
+    ],
+  };
+  const analyze = (name: string, categoryName: string, current: { name?: string; categoryName?: string }) =>
+    sanitizeProductImageAnalysis(
+      createOutput({ suggestedBaseName: name, suggestedNameOptions: [name], categoryName, categoryIsDeterministic: true }),
+      { ...catalog, current },
+    );
+
+  it("Impresora → Lámpara: avisa y no lo cambia en silencio", () => {
+    const analysis = analyze("Lámpara kawaii", "Lámparas", { name: "Impresora térmica mini", categoryName: "Herramientas de oficina" });
+    expect(analysis.typeWarning).toBe("La IA sugiere otro tipo de producto: revisa antes de aplicar.");
+  });
+
+  it("Bolígrafo → Lapicero es un sinónimo: sin aviso", () => {
+    expect(analyze("Lapicero semi gel azul", "Bolígrafos / Lapiceros", { name: "Bolígrafo azul de gel" }).typeWarning).toBeNull();
+    expect(analyze("Lapicero semi gel azul", "Bolígrafos / Lapiceros", { name: "Bolígrafo azul", categoryName: "Bolígrafos / Lapiceros" }).typeWarning).toBeNull();
+  });
+
+  it("Libre → Libro es un error de letra corregido: sin aviso", () => {
+    const analysis = analyze("Libre para colorear Formas Futuro", "Libros de colorear", { name: "Cuaderno para colorear «Colorear para crecer»", categoryName: "Libros de colorear" });
+    expect(analysis.suggestedBaseName).toBe("Libro para colorear Formas Futuro");
+    expect(analysis.typeWarning).toBeNull();
+  });
+
+  it("sustantivo desconocido y sin subcategoría reconocible: avisa (Washi → «Set de tizas»)", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({ suggestedBaseName: "Set de tizas de colores x6", suggestedNameOptions: ["Set de tizas de colores x6"] }),
+      { ...catalog, categories: [...catalog.categories, { id: "cat-washi", name: "Washi tape", typeName: "Decoración" }], current: { name: "Washi pastel x6", categoryName: "Washi tape" } },
+    );
+    expect(analysis.typeWarning).toBe("La IA sugiere otro tipo de producto: revisa antes de aplicar.");
+  });
+
+  it("sustantivo desconocido pero la subcategoría propuesta es la actual: sin aviso (Mini impresora)", () => {
+    expect(
+      analyze("Mini impresora térmica Kawaii", "Herramientas de oficina", { name: "Impresora térmica mini", categoryName: "Herramientas de oficina" }).typeWarning,
+    ).toBeNull();
+  });
+
+  it("un producto nuevo, sin nombre ni subcategoría, no se compara con nada", () => {
+    expect(analyze("Lámpara kawaii", "Lámparas", {}).typeWarning).toBeNull();
   });
 });

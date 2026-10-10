@@ -1,0 +1,349 @@
+{
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "recordedAt": "2026-10-10",
+  "product": {
+    "currentName": "Set de plumones SCRIBE punta delgada 24 colores más sello doble punta",
+    "categoryName": "Plumones",
+    "photos": 7
+  },
+  "calls": [
+    {
+      "kind": "facts",
+      "photos": [
+        4,
+        5,
+        6
+      ],
+      "output": {
+        "photos": [
+          {
+            "photo": 4,
+            "productType": "Marcadores",
+            "readableText": "Scribe",
+            "brandText": "Scribe",
+            "licence": null,
+            "designName": null,
+            "colorNames": [
+              "Multicolor"
+            ],
+            "showsSingleOption": false,
+            "quantity": 24,
+            "quantityMixed": "colores",
+            "tip": null,
+            "measurements": null,
+            "material": null,
+            "inkBase": null,
+            "sheetCount": null
+          },
+          {
+            "photo": 5,
+            "productType": "Marcadores",
+            "readableText": "Scribe",
+            "brandText": "Scribe",
+            "licence": null,
+            "designName": null,
+            "colorNames": [
+              "Multicolor"
+            ],
+            "showsSingleOption": false,
+            "quantity": null,
+            "quantityMixed": null,
+            "tip": null,
+            "measurements": null,
+            "material": null,
+            "inkBase": null,
+            "sheetCount": null
+          },
+          {
+            "photo": 6,
+            "productType": "Marcadores",
+            "readableText": "Scribe",
+            "brandText": "Scribe",
+            "licence": null,
+            "designName": null,
+            "colorNames": [
+              "Multicolor"
+            ],
+            "showsSingleOption": false,
+            "quantity": null,
+            "quantityMixed": null,
+            "tip": null,
+            "measurements": null,
+            "material": null,
+            "inkBase": null,
+            "sheetCount": null
+          }
+        ]
+      }
+    },
+    {
+      "kind": "facts",
+      "photos": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "output": {
+        "photos": [
+          {
+            "photo": 0,
+            "productType": "Marcadores",
+            "readableText": "TONOS VIBRANTES; 24 PIEZAS; Scribe; MARCADORES; CONTIENE 1 MARCADOR CON 2 SELLOS; PLUMONES; PUNTA DELGADA; ALTA DURACIÓN 500 MTS; LAVABLE NO MANCHA; 2,3 MM",
+            "brandText": "Scribe",
+            "licence": null,
+            "designName": null,
+            "colorNames": [
+              "Multicolor"
+            ],
+            "showsSingleOption": true,
+            "quantity": 24,
+            "quantityMixed": null,
+            "tip": "Punta delgada",
+            "measurements": "2,3 mm",
+            "material": null,
+            "inkBase": null,
+            "sheetCount": null
+          },
+          {
+            "photo": 1,
+            "productType": "Marcadores",
+            "readableText": "CONTIENE 1 MARCADOR CON 2 SELLOS; ALTA DURACIÓN 500 MTS; Scribe; PLUMONES; PUNTA DELGADA",
+            "brandText": "Scribe",
+            "licence": null,
+            "designName": null,
+            "colorNames": [
+              "Multicolor"
+            ],
+            "showsSingleOption": true,
+            "quantity": 24,
+            "quantityMixed": null,
+            "tip": "Punta delgada",
+            "measurements": null,
+            "material": null,
+            "inkBase": null,
+            "sheetCount": null
+          },
+          {
+            "photo": 2,
+            "productType": "Marcadores",
+            "readableText": "LAVABLE NO MANCHA; Scribe",
+            "brandText": "Scribe",
+            "licence": null,
+            "designName": null,
+            "colorNames": [
+              "Multicolor"
+            ],
+            "showsSingleOption": true,
+            "quantity": 24,
+            "quantityMixed": null,
+            "tip": null,
+            "measurements": null,
+            "material": null,
+            "inkBase": null,
+            "sheetCount": null
+          },
+          {
+            "photo": 3,
+            "productType": "Marcadores",
+            "readableText": "@SCRIBECOLOMBIA; WWW.SCRIBE.COM.CO; Distribuido Por Scribe Colombia S.A.S Pereira Risaralda - Colombia. Scribe® Es Marca Registrada. Hecho en China; Duración de la tinta en metros lineales al rayar sobre papel bond de 75 grs/m2; NO TÓXICO; PP; EN71-1-2-3-9 BS7272; ISO 9001 - ISO 14001; OHSAS18001; ASTM D-4236; ASTM F963-96A",
+            "brandText": "Scribe",
+            "licence": null,
+            "designName": null,
+            "colorNames": [
+              "Multicolor"
+            ],
+            "showsSingleOption": true,
+            "quantity": 24,
+            "quantityMixed": null,
+            "tip": null,
+            "measurements": null,
+            "material": "PP",
+            "inkBase": null,
+            "sheetCount": null
+          }
+        ]
+      }
+    },
+    {
+      "kind": "synthesis",
+      "photos": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "output": {
+        "suggestedBaseName": "Set de plumones Scribe punta delgada 24 colores",
+        "suggestedNameOptions": [
+          "Set de marcadores Scribe punta delgada 24 colores",
+          "Set de plumones Scribe con marcador de sellos 24 colores"
+        ],
+        "suggestedDescription": "<p>Set Scribe de 24 plumones en tonos vibrantes y punta delgada de 2,3 mm. Incluye un marcador con dos sellos; la tinta es lavable y no mancha.</p><p>El empaque indica una duración de 500 metros y material PP.</p>",
+        "brand": "Scribe",
+        "categoryName": "Marcadores",
+        "categoryIsDeterministic": true,
+        "sizeName": null,
+        "sizeIsDeterministic": false,
+        "colorName": "Multicolor",
+        "colorHex": null,
+        "colorIsDeterministic": true,
+        "designName": null,
+        "designIsDeterministic": false,
+        "gtin": null,
+        "mpn": null,
+        "variantRecommendation": {
+          "shouldCreateVariants": false,
+          "axes": [],
+          "evidence": null
+        },
+        "variantCandidates": [],
+        "catalogAttributes": [
+          {
+            "optionName": "Punta",
+            "valueName": "Delgada",
+            "evidence": "Foto 0: el empaque indica «PUNTA DELGADA»."
+          },
+          {
+            "optionName": "Lavable",
+            "valueName": "Sí",
+            "evidence": "Foto 0: el empaque indica «LAVABLE»."
+          },
+          {
+            "optionName": "No mancha",
+            "valueName": "Sí",
+            "evidence": "Foto 0: el empaque indica «NO MANCHA»."
+          },
+          {
+            "optionName": "Duración de tinta",
+            "valueName": "500 metros",
+            "evidence": "Fotos 0 y 1: el empaque indica «ALTA DURACIÓN 500 MTS»."
+          }
+        ],
+        "observations": [
+          "El empaque indica 24 piezas y tonos vibrantes.",
+          "Incluye un marcador con dos sellos."
+        ],
+        "limitations": [],
+        "quantity": {
+          "value": 24,
+          "mixed": "colores"
+        },
+        "material": "PP",
+        "tip": "Punta delgada",
+        "measurements": "2,3 mm",
+        "model": null,
+        "keywords": [
+          "plumones",
+          "marcadores",
+          "Scribe",
+          "punta delgada",
+          "24 colores",
+          "lavables",
+          "marcadores escolares"
+        ],
+        "fieldEvidence": {
+          "name": {
+            "confidence": "alta",
+            "photos": [
+              0,
+              1
+            ]
+          },
+          "category": {
+            "confidence": "alta",
+            "photos": [
+              0,
+              1
+            ]
+          },
+          "brand": {
+            "confidence": "alta",
+            "photos": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "color": {
+            "confidence": "alta",
+            "photos": [
+              0,
+              1,
+              4
+            ]
+          },
+          "design": {
+            "confidence": "baja",
+            "photos": []
+          },
+          "size": {
+            "confidence": "baja",
+            "photos": []
+          },
+          "quantity": {
+            "confidence": "alta",
+            "photos": [
+              0,
+              1
+            ]
+          },
+          "material": {
+            "confidence": "alta",
+            "photos": [
+              3
+            ]
+          },
+          "tip": {
+            "confidence": "alta",
+            "photos": [
+              0,
+              1
+            ]
+          },
+          "measurements": {
+            "confidence": "alta",
+            "photos": [
+              0
+            ]
+          },
+          "model": {
+            "confidence": "baja",
+            "photos": []
+          },
+          "description": {
+            "confidence": "alta",
+            "photos": [
+              0,
+              1,
+              3
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "category",
+      "photos": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "output": {
+        "categoryName": "Marcadores"
+      }
+    }
+  ]
+}

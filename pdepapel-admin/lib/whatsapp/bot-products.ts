@@ -1,6 +1,3 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { Output, generateText } from "ai";
-
 import { logModelUsage } from "@/lib/ai-usage";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -24,6 +21,8 @@ import {
   WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH,
   type WhatsAppListRow,
 } from "@/lib/whatsapp/send";
+import { createAiProviders, getAiRoutingStore } from "@/lib/ai-model-providers";
+import { classifyModelError, runStructured } from "@/lib/ai-provider";
 
 /**
  * Preguntas sobre productos por WhatsApp: si tienen algo y si queda.
@@ -85,15 +84,30 @@ export const productClassificationSchema = z.object({
   // `nullish` y no `nullable`: si el modelo se deja una ranura sin poner, se
   // trata como vacía en vez de tirar una clasificación que por lo demás era
   // buena. Perder un matiz es mucho mejor que perder la respuesta entera.
-  productType: z.string().trim().max(40).nullish().transform((v) => v ?? null),
-  character: z.string().trim().max(40).nullish().transform((v) => v ?? null),
+  productType: z
+    .string()
+    .trim()
+    .max(40)
+    .nullish()
+    .transform((v) => v ?? null),
+  character: z
+    .string()
+    .trim()
+    .max(40)
+    .nullish()
+    .transform((v) => v ?? null),
   /**
    * Lo que distingue a un producto de otro igual: color, tamaño, material,
    * estampado. Sin esta ranura, «muéstrame el morado pastel» se quedaba sin
    * NADA que buscar —ni tipo ni personaje— y la compra moría ahí, aunque
    * «morado pastel» encuentre ese cuaderno y solo ese.
    */
-  descriptor: z.string().trim().max(40).nullish().transform((v) => v ?? null),
+  descriptor: z
+    .string()
+    .trim()
+    .max(40)
+    .nullish()
+    .transform((v) => v ?? null),
 });
 
 export type ProductClassification = z.infer<typeof productClassificationSchema>;
@@ -123,10 +137,14 @@ Si dudas, responde "other".`;
 /** Qué pasó al clasificar; el motivo importa para saber por qué no se contestó. */
 export type ClassifyOutcome =
   | { ok: true; value: ProductClassification }
-  | { ok: false; reason: "not_configured" | "timeout" | "quota" | "invalid" | "error" };
+  | {
+      ok: false;
+      reason: "not_configured" | "timeout" | "quota" | "invalid" | "error";
+    };
 
-/** La cuota agotada es un caso normal aquí, no una avería: se mira aparte. */
+/** La cuota agotada (o el tope de gasto) es un caso normal aquí, no una avería: se mira aparte. */
 function isQuotaError(error: unknown): boolean {
+  if (error instanceof Error && error.name === "AiBusyError") return true;
   const message = error instanceof Error ? error.message : String(error);
   return /quota|rate.?limit|RESOURCE_EXHAUSTED|429/i.test(message);
 }
@@ -136,32 +154,36 @@ function isAbortError(error: unknown): boolean {
   return /abort|timeout|timed out/i.test(message);
 }
 
+/**
+ * Los mensajes de clientas van solo a OpenAI (de pago, no entrena con datos de
+ * la API): nunca a un proveedor gratuito. Si OpenAI falla, el bot sigue con
+ * las palabras clave.
+ */
 export async function classifyProductQuestion(
   body: string,
 ): Promise<ClassifyOutcome> {
-  if (!env.GEMINI_API_KEY) return { ok: false, reason: "not_configured" };
+  const { openai } = createAiProviders({ openai: env.OPENAI_API_KEY });
+  if (!openai) return { ok: false, reason: "not_configured" };
 
   try {
-    const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY });
-    const result = await generateText({
-      model: google("gemini-3.5-flash-lite"),
-      output: Output.object({ schema: productClassificationSchema }),
+    const result = await runStructured({
+      feature: "whatsapp.classifier",
+      schema: productClassificationSchema,
       system: PRODUCT_CLASSIFIER_SYSTEM,
       prompt: body,
-      // Reintentar dentro de dos segundos y medio no sirve, y con la cuota
-      // apretada cada intento cuenta: se prueba una vez y si no, se sigue.
-      maxRetries: 0,
-      abortSignal: AbortSignal.timeout(PRODUCT_CLASSIFIER_TIMEOUT_MS),
+      primary: openai,
+      fallback: null,
+      store: getAiRoutingStore(),
+      timeoutMs: PRODUCT_CLASSIFIER_TIMEOUT_MS,
     });
-
     logModelUsage("whatsapp.classifier", result.usage);
-
-    const parsed = productClassificationSchema.safeParse(result.output);
-    if (!parsed.success) return { ok: false, reason: "invalid" };
-    return { ok: true, value: parsed.data };
+    return { ok: true, value: result.output };
   } catch (error) {
+    if (error instanceof z.ZodError) return { ok: false, reason: "invalid" };
     if (isQuotaError(error)) return { ok: false, reason: "quota" };
-    if (isAbortError(error)) return { ok: false, reason: "timeout" };
+    if (isAbortError(error) || classifyModelError(error).kind === "timeout") {
+      return { ok: false, reason: "timeout" };
+    }
     return { ok: false, reason: "error" };
   }
 }
@@ -179,20 +201,64 @@ export async function classifyProductQuestion(
  */
 const PRODUCT_SIGNALS = [
   // Si hay / si queda.
-  "tiene", "tienen", "tienes", "maneja", "manejan", "hay ", "queda", "quedan",
-  "disponible", "busco", "buscaba", "necesito", "quiero", "vende", "venden",
-  "consigo", "algo de", "algun", "alguna", "cuentan con", "les queda",
+  "tiene",
+  "tienen",
+  "tienes",
+  "maneja",
+  "manejan",
+  "hay ",
+  "queda",
+  "quedan",
+  "disponible",
+  "busco",
+  "buscaba",
+  "necesito",
+  "quiero",
+  "vende",
+  "venden",
+  "consigo",
+  "algo de",
+  "algun",
+  "alguna",
+  "cuentan con",
+  "les queda",
   // Cuánto vale.
-  "cuanto", "precio", "vale", "cuesta", "valen", "cuestan",
+  "cuanto",
+  "precio",
+  "vale",
+  "cuesta",
+  "valen",
+  "cuestan",
   // Cómo es.
-  "material", "tamano", "medida", "que trae", "que incluye", "de que esta",
-  "cuantas hojas", "cuantos", "como es", "caracteristica",
+  "material",
+  "tamano",
+  "medida",
+  "que trae",
+  "que incluye",
+  "de que esta",
+  "cuantas hojas",
+  "cuantos",
+  "como es",
+  "caracteristica",
   // Enséñamelo.
-  "foto", "fotos", "imagen", "imagenes", "como se ve", "ver el", "ver la",
+  "foto",
+  "fotos",
+  "imagen",
+  "imagenes",
+  "como se ve",
+  "ver el",
+  "ver la",
   // El plural no estaba y «¿puedo ver los acrílicos?» se caía aquí, antes de
   // llegar a nada: el portero solo conocía «ver el» y «ver la».
-  "ver los", "ver las", "dejas ver", "dejame ver", "puedo ver",
-  "muestrame", "mandame", "manda una", "enviame",
+  "ver los",
+  "ver las",
+  "dejas ver",
+  "dejame ver",
+  "puedo ver",
+  "muestrame",
+  "mandame",
+  "manda una",
+  "enviame",
 ];
 
 export function looksLikeProductQuestion(body: string): boolean {
@@ -366,7 +432,9 @@ export const PHOTO_WIDTH = 1600;
  * Pasa por la transformación de siempre, que además de no crear copias nuevas
  * en Cloudinary devuelve JPEG, lo único —con PNG— que Meta acepta.
  */
-export function pickPhoto(images: { url: string }[] | undefined): string | null {
+export function pickPhoto(
+  images: { url: string }[] | undefined,
+): string | null {
   const url = images?.[0]?.url;
   if (!url) return null;
   const listo = getCloudinaryImageUrl(url, PHOTO_WIDTH);
@@ -405,23 +473,25 @@ export async function resolveProductSearch(
  */
 export function cleanDescription(html: string | null | undefined): string {
   if (!html) return "";
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|h[1-6]|div)>/gi, "\n\n")
-    .replace(/<li[^>]*>/gi, "• ")
-    .replace(/<\/li>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    // Por si el editor llegara a emitir entidades algún día; hoy no hay ninguna.
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return (
+    html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|h[1-6]|div)>/gi, "\n\n")
+      .replace(/<li[^>]*>/gi, "• ")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      // Por si el editor llegara a emitir entidades algún día; hoy no hay ninguna.
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/[ \t]+/g, " ")
+      .replace(/ *\n */g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }
 
 /** Lo que cabe cómodo en un mensaje sin que parezca un volcado. */
@@ -471,7 +541,9 @@ export interface FeaturesMatch {
 export async function resolveProductFeatures(
   storeId: string,
   classification: ProductClassification,
-): Promise<FactValue<SearchResult<FeaturesMatch> | SearchResult<ProductMatch>>> {
+): Promise<
+  FactValue<SearchResult<FeaturesMatch> | SearchResult<ProductMatch>>
+> {
   const found = await runSearch(storeId, buildSearchQuery(classification), {
     withDescription: true,
   });
@@ -496,7 +568,8 @@ export async function resolveProductFeatures(
   const description = cleanDescription(only.description);
   // Una descripción de dos palabras se lee peor que un «déjame preguntarle a
   // Paula»: no se manda, se escala. Son ~168 de los 845 productos activos.
-  if (description.length < MIN_USEFUL_DESCRIPTION_LENGTH) return { known: false };
+  if (description.length < MIN_USEFUL_DESCRIPTION_LENGTH)
+    return { known: false };
 
   return {
     known: true,
@@ -538,11 +611,21 @@ export const PRODUCT_TEMPLATES = {
    * tote bags sí. Se dice lo que falta y se enseña lo que hay, sin fingir
    * que era lo que pedía.
    */
-  "search.partial.one": (faltante: string, tipo: string, name: string, price: string) =>
+  "search.partial.one": (
+    faltante: string,
+    tipo: string,
+    name: string,
+    price: string,
+  ) =>
     `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} tengo ${name} en ${price}. ¿Te sirve?`,
   "search.partial.few": (faltante: string, tipo: string, lineas: string) =>
     `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} sí, mira:\n${lineas}\n¿Te sirve alguno?`,
-  "search.partial.many": (faltante: string, tipo: string, lineas: string, resto: number) =>
+  "search.partial.many": (
+    faltante: string,
+    tipo: string,
+    lineas: string,
+    resto: number,
+  ) =>
     `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} sí, mira:\n${lineas}\n…y ${resto} más. Dime cuál te interesa.`,
   "search.one": (name: string, price: string) =>
     `Sí 💛 Tengo ${name} en ${price}. ¿Te lo aparto?`,
@@ -560,8 +643,7 @@ export const PRODUCT_TEMPLATES = {
     `Tengo varios 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa.`,
   "price.one": (name: string, price: string) =>
     `${name} está en ${price} 💛 ¿Te lo aparto?`,
-  "price.few": (lineas: string) =>
-    `Mira 💛\n${lineas}\n¿Cuál te interesa?`,
+  "price.few": (lineas: string) => `Mira 💛\n${lineas}\n¿Cuál te interesa?`,
   "price.many": (lineas: string, resto: number) =>
     `Tengo varios 💛\n${lineas}\n…y ${resto} más. Dime cuál y te paso el precio.`,
   "features.one": (name: string, description: string) =>
@@ -588,7 +670,12 @@ export const PRODUCT_TEMPLATES = {
   // a «¿tienen tote bag de dinosaurio?» la respuesta es que no.
   "list.body.partial": (faltante: string, tipo: string, cuantos: number) =>
     `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} tengo ${cuantos}. Míralos y escoge el que quieras.`,
-  "list.body.partial.many": (faltante: string, tipo: string, cuantos: number, resto: number) =>
+  "list.body.partial.many": (
+    faltante: string,
+    tipo: string,
+    cuantos: number,
+    resto: number,
+  ) =>
     `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} tengo varios: aquí van ${cuantos} y me quedan ${resto} más. Toca el que te guste.`,
   "list.button": () => `Ver opciones`,
   "list.section": () => `Elige uno`,
@@ -633,8 +720,16 @@ export function previewProductTemplates(): { label: string; text: string }[] {
     total: 3,
     hasMore: false,
   };
-  const muchos: SearchResult<ProductMatch> = { ...varios, total: 6, hasMore: true };
-  const sinNada: SearchResult<ProductMatch> = { matches: [], total: 0, hasMore: false };
+  const muchos: SearchResult<ProductMatch> = {
+    ...varios,
+    total: 6,
+    hasMore: true,
+  };
+  const sinNada: SearchResult<ProductMatch> = {
+    matches: [],
+    total: 0,
+    hasMore: false,
+  };
 
   const dispUno = (inStock: boolean): SearchResult<AvailabilityMatch> => ({
     matches: [{ name: "Cartuchera Capibara", inStock }],
@@ -655,7 +750,8 @@ export function previewProductTemplates(): { label: string; text: string }[] {
     { label: "Busca algo y hay varios", text: renderProductSearch(varios) },
     { label: "Busca algo y hay muchos", text: renderProductSearch(muchos) },
     {
-      label: "Busca algo que no aparece, pero el tipo sí (p. ej. tote bag de dinosaurio)",
+      label:
+        "Busca algo que no aparece, pero el tipo sí (p. ej. tote bag de dinosaurio)",
       text: renderPartialSearch("dinosaurio", "tote bag", {
         matches: [
           { name: 'Tote bag "Un día a la Vez"', price: 35000 },
@@ -665,12 +761,27 @@ export function previewProductTemplates(): { label: string; text: string }[] {
         hasMore: false,
       }),
     },
-    { label: "Busca algo que no aparece por ningún lado", text: renderProductSearch(sinNada) },
-    { label: "Pregunta si queda y sí", text: renderAvailability(dispUno(true)) },
-    { label: "Pregunta si queda y se agotó", text: renderAvailability(dispUno(false)) },
-    { label: "Pregunta si queda y hay varios", text: renderAvailability(dispVarios) },
+    {
+      label: "Busca algo que no aparece por ningún lado",
+      text: renderProductSearch(sinNada),
+    },
+    {
+      label: "Pregunta si queda y sí",
+      text: renderAvailability(dispUno(true)),
+    },
+    {
+      label: "Pregunta si queda y se agotó",
+      text: renderAvailability(dispUno(false)),
+    },
+    {
+      label: "Pregunta si queda y hay varios",
+      text: renderAvailability(dispVarios),
+    },
     { label: "Pregunta el precio de uno solo", text: renderProductPrice(uno) },
-    { label: "Pregunta el precio y hay varios", text: renderProductPrice(varios) },
+    {
+      label: "Pregunta el precio y hay varios",
+      text: renderProductPrice(varios),
+    },
     {
       label: "Pregunta cómo es un producto",
       text: renderProductFeatures({
@@ -755,7 +866,10 @@ export function renderProductPrice(result: SearchResult<ProductMatch>): string {
   const t = PRODUCT_TEMPLATES;
   if (result.total === 0) return t["search.unsure"]();
   if (result.total === 1) {
-    return t["price.one"](result.matches[0].name, formatCOP(result.matches[0].price));
+    return t["price.one"](
+      result.matches[0].name,
+      formatCOP(result.matches[0].price),
+    );
   }
   // La lista ya lleva los precios, así que con dos o tres la pregunta queda
   // contestada en el mismo mensaje aunque nadie diga después cuál era.
@@ -804,11 +918,16 @@ export function renderProductPhoto(result: SearchResult<ProductMatch>): string {
     : t["price.few"](lineas);
 }
 
-export function renderProductSearch(result: SearchResult<ProductMatch>): string {
+export function renderProductSearch(
+  result: SearchResult<ProductMatch>,
+): string {
   const t = PRODUCT_TEMPLATES;
   if (result.total === 0) return t["search.unsure"]();
   if (result.total === 1) {
-    return t["search.one"](result.matches[0].name, formatCOP(result.matches[0].price));
+    return t["search.one"](
+      result.matches[0].name,
+      formatCOP(result.matches[0].price),
+    );
   }
   const lineas = result.matches
     .map((m) => linea(m.name, formatCOP(m.price)))
@@ -830,13 +949,23 @@ export function renderPartialSearch(
   const t = PRODUCT_TEMPLATES;
   if (result.total === 1) {
     const only = result.matches[0];
-    return t["search.partial.one"](faltante, tipo, only.name, formatCOP(only.price));
+    return t["search.partial.one"](
+      faltante,
+      tipo,
+      only.name,
+      formatCOP(only.price),
+    );
   }
   const lineas = result.matches
     .map((m) => linea(m.name, formatCOP(m.price)))
     .join("\n");
   return result.hasMore
-    ? t["search.partial.many"](faltante, tipo, lineas, result.total - result.matches.length)
+    ? t["search.partial.many"](
+        faltante,
+        tipo,
+        lineas,
+        result.total - result.matches.length,
+      )
     : t["search.partial.few"](faltante, tipo, lineas);
 }
 
@@ -847,7 +976,12 @@ export function buildPartialListBody(
   total: number,
 ): string {
   return total > mostrados
-    ? PRODUCT_TEMPLATES["list.body.partial.many"](faltante, tipo, mostrados, total - mostrados)
+    ? PRODUCT_TEMPLATES["list.body.partial.many"](
+        faltante,
+        tipo,
+        mostrados,
+        total - mostrados,
+      )
     : PRODUCT_TEMPLATES["list.body.partial"](faltante, tipo, mostrados);
 }
 
@@ -921,7 +1055,9 @@ export function buildRowTitles(nombres: string[]): string[] {
     return resto || n;
   });
 
-  const titulos = base.map((n) => recortar(n, WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH));
+  const titulos = base.map((n) =>
+    recortar(n, WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH),
+  );
 
   // Segunda pasada: a los repetidos se les mira la cola.
   const cuenta = new Map<string, number>();
@@ -1083,7 +1219,10 @@ async function clasificarAvisandoSiTarda(
 
   let temporizador: ReturnType<typeof setTimeout> | undefined;
   const aviso = new Promise<typeof MARCA_LENTA>((resolve) => {
-    temporizador = setTimeout(() => resolve(MARCA_LENTA), PRODUCT_CLASSIFIER_SLOW_NOTICE_MS);
+    temporizador = setTimeout(
+      () => resolve(MARCA_LENTA),
+      PRODUCT_CLASSIFIER_SLOW_NOTICE_MS,
+    );
   });
 
   try {
@@ -1094,7 +1233,9 @@ async function clasificarAvisandoSiTarda(
       try {
         await onSlow();
       } catch (error) {
-        console.warn("[WHATSAPP_BOT] No se pudo avisar de que iba lento", { error });
+        console.warn("[WHATSAPP_BOT] No se pudo avisar de que iba lento", {
+          error,
+        });
       }
     }
   } finally {
@@ -1133,7 +1274,8 @@ export async function answerProductQuestion(
     consulta = fallbackQueryFromMessage(body);
     if (consulta) {
       console.info("[WHATSAPP_BOT] Sin ranuras; se busca el mensaje en crudo", {
-        storeId, consulta,
+        storeId,
+        consulta,
       });
     }
   }
@@ -1147,7 +1289,8 @@ export async function answerProductQuestion(
   if (searchTokens(consulta).length < MIN_SEARCH_TOKENS) {
     if (searchTokens(consulta).length > 0) {
       console.info("[WHATSAPP_BOT] Pregunta demasiado vaga; no se adivina", {
-        storeId, consulta,
+        storeId,
+        consulta,
       });
     }
     return null;
@@ -1162,7 +1305,11 @@ export async function answerProductQuestion(
   const intent = c.intent;
   const decision: ProductDecision = {
     intent,
-    slots: { productType: c.productType, character: c.character, descriptor: c.descriptor },
+    slots: {
+      productType: c.productType,
+      character: c.character,
+      descriptor: c.descriptor,
+    },
     query: consulta,
     total: 0,
     outcome: "match",
@@ -1213,7 +1360,12 @@ export async function answerProductQuestion(
           list:
             v.total >= 2 && filas.length >= 2
               ? {
-                  body: buildPartialListBody(soloTipo.faltante, soloTipo.tipo, filas.length, v.total),
+                  body: buildPartialListBody(
+                    soloTipo.faltante,
+                    soloTipo.tipo,
+                    filas.length,
+                    v.total,
+                  ),
                   rows: filas,
                 }
               : undefined,
@@ -1260,7 +1412,10 @@ async function resolverSegunIntencion(
     return {
       value: fact.value,
       text: renderProductFeatures(fact.value),
-      rows: buildProductRows(fact.value.matches as ProductMatch[], fact.value.ids ?? []),
+      rows: buildProductRows(
+        fact.value.matches as ProductMatch[],
+        fact.value.ids ?? [],
+      ),
     };
   }
   const fact =
@@ -1371,7 +1526,9 @@ export async function answerAboutProduct(
       ...comun,
       text: renderProductFeatures({
         ...base,
-        matches: [{ name: producto.name, description: trimForWhatsApp(descripcion) }],
+        matches: [
+          { name: producto.name, description: trimForWhatsApp(descripcion) },
+        ],
       }),
     };
   }
@@ -1380,7 +1537,9 @@ export async function answerAboutProduct(
     ...base,
     matches: [{ name: producto.name, price: producto.price }],
   };
-  if (intent === "product.price") return { ...comun, text: renderProductPrice(uno) };
-  if (intent === "product.photo") return { ...comun, text: renderProductPhoto(uno) };
+  if (intent === "product.price")
+    return { ...comun, text: renderProductPrice(uno) };
+  if (intent === "product.photo")
+    return { ...comun, text: renderProductPhoto(uno) };
   return { ...comun, text: renderProductSearch(uno) };
 }

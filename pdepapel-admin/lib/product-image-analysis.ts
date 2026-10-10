@@ -1,7 +1,21 @@
 import { isValidGtin } from "@/lib/product-identifiers";
 import { createHash } from "node:crypto";
 
-import { normalizeProductNamePart } from "@/lib/product-naming";
+import {
+  formatProductQuantity,
+  getCanonicalHeadNoun,
+  isProductTypeChange,
+  toNamingKey,
+  isLicenceName,
+  normalizeBrandName,
+  normalizeProductNamePart,
+  normalizeSuggestedProductName,
+} from "@/lib/product-naming";
+import {
+  HEAD_NOUN_SYNONYMS,
+  MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES,
+  SALES_ADJECTIVES,
+} from "@/constants/product-naming";
 import { normalizeCatalogOptionKey } from "@/lib/catalog-options";
 import {
   createPlainTextRichTextHtml,
@@ -10,12 +24,38 @@ import {
 } from "@/lib/rich-text";
 import { z } from "zod";
 
-export const MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES = 3;
+export { MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES };
 export const PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT = 20;
 export const PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 export const PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX = 3;
+export const PRODUCT_TYPE_CHANGE_WARNING =
+  "La IA sugiere otro tipo de producto: revisa antes de aplicar.";
 
 const CLOUDINARY_IMAGE_HOST = "res.cloudinary.com";
+
+export const EVIDENCE_FIELDS = [
+  "name",
+  "category",
+  "brand",
+  "color",
+  "design",
+  "size",
+  "quantity",
+  "material",
+  "tip",
+  "measurements",
+  "model",
+  "description",
+] as const;
+export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
+export type FieldConfidence = "alta" | "media" | "baja";
+
+const fieldEvidenceSchema = z.object({
+  confidence: z.enum(["alta", "media", "baja"]),
+  photos: z
+    .array(z.number().int().min(0))
+    .max(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES),
+});
 
 export const productImageAnalysisRequestSchema = z.object({
   imageUrls: z
@@ -26,6 +66,8 @@ export const productImageAnalysisRequestSchema = z.object({
       `Puedes analizar hasta ${MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES} imágenes a la vez.`,
     ),
   categoryName: z.string().trim().max(120).optional(),
+  /** Nombre que ya tiene el producto: respalda la cantidad del nombre propuesto. */
+  currentName: z.string().trim().max(191).optional(),
 });
 
 export const productImageAnalysisOutputSchema = z.object({
@@ -100,6 +142,25 @@ export const productImageAnalysisOutputSchema = z.object({
     .default([]),
   observations: z.array(z.string().max(180)).max(4),
   limitations: z.array(z.string().max(180)).max(3),
+  quantity: z
+    .object({
+      value: z.number().int().positive(),
+      mixed: z.enum(["colores", "diseños"]).nullable(),
+    })
+    .nullable()
+    .default(null),
+  material: z.string().max(80).nullable().default(null),
+  tip: z.string().max(80).nullable().default(null),
+  measurements: z.string().max(80).nullable().default(null),
+  model: z.string().max(80).nullable().default(null),
+  keywords: z.array(z.string().max(60)).max(12).default([]),
+  fieldEvidence: z
+    .object(
+      Object.fromEntries(
+        EVIDENCE_FIELDS.map((field) => [field, fieldEvidenceSchema.optional()]),
+      ) as Record<EvidenceField, z.ZodOptional<typeof fieldEvidenceSchema>>,
+    )
+    .default({}),
 });
 
 export type ProductImageAnalysisOutput = z.infer<
@@ -136,8 +197,19 @@ export type ProductTaxonomyAlternative = {
 
 export type ProductImageAnalysis = Omit<
   ProductImageAnalysisOutput,
-  "catalogAttributes" | "variantCandidates"
+  | "catalogAttributes"
+  | "variantCandidates"
+  | "fieldEvidence"
+  | "quantity"
+  | "material"
+  | "tip"
+  | "measurements"
+  | "model"
 > & {
+  /** Confianza y números de foto (desde 0) que prueban cada campo. */
+  fieldEvidence: Partial<
+    Record<EvidenceField, { confidence: FieldConfidence; photos: number[] }>
+  >;
   categoryId: string | null;
   categorySource: "existing" | "not_detected";
   sizeId: string | null;
@@ -152,6 +224,8 @@ export type ProductImageAnalysis = Omit<
   designAlternatives?: ProductTaxonomyAlternative[];
   variantCandidates: ProductImageVariantCandidate[];
   catalogAttributes: ProductCatalogAttribute[];
+  /** La IA propone otro tipo de producto que el nombre o la subcategoría actuales. */
+  typeWarning: string | null;
 };
 
 type TaxonomyOption = {
@@ -182,7 +256,11 @@ function cleanSuggestedName(value?: string | null) {
   const normalized = cleanOptionalText(value);
   if (!normalized) return null;
 
-  return normalized.replace(/\bpad\s+mouse\b/gi, "Mouse pad");
+  return (
+    normalizeSuggestedProductName(
+      normalized.replace(/\bpad\s+mouse\b/gi, "Mouse pad"),
+    ) || null
+  );
 }
 
 function getSuggestedNameOptions(output: ProductImageAnalysisOutput) {
@@ -201,6 +279,20 @@ function getSuggestedNameOptions(output: ProductImageAnalysisOutput) {
     .slice(0, PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX);
 }
 
+const SALES_ADJECTIVE_PATTERN = new RegExp(
+  `(^|<[^>]+>|[.!?]\\s+)(?:${SALES_ADJECTIVES.join("|")})\\s+(\\p{L})`,
+  "giu",
+);
+
+/** Las frases no abren con adjetivos de venta (plan §2.3). */
+function removeSalesAdjectives(html: string) {
+  return html.replace(
+    SALES_ADJECTIVE_PATTERN,
+    (_match, prefix: string, letter: string) =>
+      `${prefix}${letter.toLocaleUpperCase("es-CO")}`,
+  );
+}
+
 function cleanDescription(value?: string | null) {
   if (typeof value !== "string") return null;
 
@@ -213,7 +305,7 @@ function cleanDescription(value?: string | null) {
   const plainText = richTextToPlainText(html);
 
   return plainText && plainText.length <= 1800 && html.length <= 3000
-    ? html
+    ? removeSalesAdjectives(html)
     : null;
 }
 
@@ -258,6 +350,7 @@ export function getProductImageAnalysisCacheKey(
   input: {
     imageUrls: string[];
     categoryName?: string;
+    currentName?: string;
     categories: CategoryTaxonomyOption[];
     sizes: TaxonomyOption[];
     colors: TaxonomyOption[];
@@ -265,9 +358,11 @@ export function getProductImageAnalysisCacheKey(
   },
 ) {
   const normalizedInput = {
-    version: 7,
-    imageUrls: [...input.imageUrls].sort(),
+    version: 9,
+    // En orden: la evidencia nombra fotos por su número.
+    imageUrls: [...input.imageUrls],
     categoryName: normalizeForMatching(input.categoryName),
+    currentName: normalizeForMatching(input.currentName),
     categories: [...input.categories]
       .map((category) => ({
         id: category.id,
@@ -312,6 +407,78 @@ function findExactTaxonomyMatch(
   );
 
   return matches.length === 1 ? matches[0] : null;
+}
+
+/**
+ * El modelo a veces contesta con el sustantivo del nombre («Cartuchera») en
+ * vez de la subcategoría («Cartucheras»): si ese sustantivo es de una sola
+ * subcategoría, es esa, antes de proponer una nueva.
+ */
+function findCategoryMatch(
+  value: string | null,
+  categories: CategoryTaxonomyOption[],
+) {
+  const exact = findExactTaxonomyMatch(value, categories);
+  if (exact) return exact;
+  const key = normalizeForMatching(value);
+  if (!key) return null;
+  const byNoun = categories.filter((category) => {
+    const noun = getCanonicalHeadNoun(category.name);
+    return (
+      noun !== null &&
+      [noun.singular, noun.plural].some(
+        (form) => normalizeForMatching(form) === key,
+      )
+    );
+  });
+  return byNoun.length === 1 ? byNoun[0] : null;
+}
+
+/** Un sinónimo conocido al inicio («Planificador») pasa al sustantivo canónico de la subcategoría, en el mismo número. */
+function replaceSynonymNoun(name: string, categoryName: string) {
+  const noun = getCanonicalHeadNoun(categoryName);
+  if (!noun) return name;
+  const key = toNamingKey(categoryName);
+  const set = name.match(/^sets? de /i)?.[0] ?? "";
+  const words = name.slice(set.length).split(" ");
+  for (const synonym of HEAD_NOUN_SYNONYMS.filter(
+    (entry) => entry.categoryKey === key,
+  )) {
+    for (const [form, plural] of [
+      [synonym.plural, true],
+      [synonym.singular, false],
+    ] as const) {
+      const size = form.split(" ").length;
+      if (toNamingKey(words.slice(0, size).join(" ")) !== toNamingKey(form))
+        continue;
+      const usePlural =
+        Boolean(set) || (plural && synonym.plural !== synonym.singular);
+      const canonical = usePlural ? noun.plural : noun.singular;
+      const head = set ? canonical.toLocaleLowerCase("es-CO") : canonical;
+      return `${set}${[head, ...words.slice(size)].join(" ")}`;
+    }
+  }
+  return name;
+}
+
+/** Corrige el sustantivo inicial si difiere en una letra o en tildes del canónico de la subcategoría. */
+function fixLeadingNoun(name: string, categoryName: string | null) {
+  if (categoryName) name = replaceSynonymNoun(name, categoryName);
+  const noun = getCanonicalHeadNoun(categoryName);
+  if (!noun || /^set de /i.test(name)) return name;
+  const words = name.split(" ");
+  for (const form of [noun.singular, noun.plural]) {
+    const size = form.split(" ").length;
+    const head = words.slice(0, size).join(" ");
+    if (head === form) return name;
+    const distance = getLevenshteinDistance(
+      normalizeForMatching(head),
+      normalizeForMatching(form),
+    );
+    if (distance <= 1 && words.length >= size)
+      return [form, ...words.slice(size)].join(" ");
+  }
+  return name;
 }
 
 function getLevenshteinDistance(left: string, right: string) {
@@ -502,6 +669,73 @@ function cleanMpn(value: string) {
     : null;
 }
 
+const EXTRA_ATTRIBUTE_NAMES = {
+  quantity: "Cantidad",
+  material: "Material",
+  tip: "Punta",
+  measurements: "Medidas",
+  model: "Modelo",
+} as const;
+
+function describeEvidencePhotos(photos?: number[]) {
+  return photos?.length
+    ? `Foto${photos.length === 1 ? "" : "s"} ${photos.map((photo) => photo + 1).join(", ")}`
+    : "Leído en las fotos";
+}
+
+function sanitizeFieldEvidence(
+  evidence: ProductImageAnalysisOutput["fieldEvidence"] | undefined,
+  photoCount: number,
+): ProductImageAnalysis["fieldEvidence"] {
+  return Object.fromEntries(
+    Object.entries(evidence ?? {}).flatMap(([field, value]) =>
+      value
+        ? [
+            [
+              field,
+              {
+                confidence: value.confidence,
+                photos: Array.from(new Set(value.photos)).filter(
+                  (photo) => photo >= 0 && photo < photoCount,
+                ),
+              },
+            ],
+          ]
+        : [],
+    ),
+  );
+}
+
+function getExtraCatalogAttributes(
+  output: ProductImageAnalysisOutput,
+  fieldEvidence: ProductImageAnalysis["fieldEvidence"],
+): ProductCatalogAttribute[] {
+  const values: [keyof typeof EXTRA_ATTRIBUTE_NAMES, string | null][] = [
+    [
+      "quantity",
+      output.quantity
+        ? formatProductQuantity(output.quantity.value, output.quantity.mixed)
+        : null,
+    ],
+    ["material", cleanOptionalText(output.material ?? null, 80)],
+    ["tip", cleanOptionalText(output.tip ?? null, 80)],
+    ["measurements", cleanOptionalText(output.measurements ?? null, 80)],
+    ["model", cleanOptionalText(output.model ?? null, 80)],
+  ];
+  return values.flatMap(([field, value]) => {
+    if (!value) return [];
+    const name = EXTRA_ATTRIBUTE_NAMES[field];
+    return [
+      {
+        key: normalizeCatalogOptionKey(name),
+        name,
+        value,
+        evidence: describeEvidencePhotos(fieldEvidence[field]?.photos),
+      },
+    ];
+  });
+}
+
 export function sanitizeProductImageAnalysis(
   output: ProductImageAnalysisOutput,
   options: {
@@ -509,8 +743,20 @@ export function sanitizeProductImageAnalysis(
     sizes: TaxonomyOption[];
     colors: TaxonomyOption[];
     designs: TaxonomyOption[];
+    /** Fotos enviadas: la evidencia no puede nombrar una que no existe. */
+    photoCount?: number;
+    /** Lo que el producto ya tiene, para avisar si la IA cambia el tipo. */
+    current?: { name?: string | null; categoryName?: string | null };
   },
 ): ProductImageAnalysis {
+  const photoCount = options.photoCount ?? MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES;
+  const fieldEvidence = sanitizeFieldEvidence(output.fieldEvidence, photoCount);
+  // Una licencia (Sanrio, Stitch…) es un diseño, nunca la marca.
+  const rawBrand = cleanOptionalText(output.brand);
+  const brandIsLicence = isLicenceName(rawBrand);
+  if (brandIsLicence && !output.designName) {
+    output = { ...output, designName: rawBrand, designIsDeterministic: true };
+  }
   const suggestedNameOptions = getSuggestedNameOptions(output);
   const suggestedCategoryName = output.categoryIsDeterministic
     ? cleanOptionalText(output.categoryName, 120)
@@ -524,9 +770,9 @@ export function sanitizeProductImageAnalysis(
   const suggestedDesignName = output.designIsDeterministic
     ? cleanOptionalText(output.designName, 80)
     : null;
-  const category = findExactTaxonomyMatch(
-    suggestedCategoryName,
-    options.categories,
+  const category = findCategoryMatch(suggestedCategoryName, options.categories);
+  const fixedNameOptions = suggestedNameOptions.map((name) =>
+    fixLeadingNoun(name, category?.name ?? suggestedCategoryName),
   );
   const size = findExactTaxonomyMatch(suggestedSizeName, options.sizes);
   const color = findExactTaxonomyMatch(suggestedColorName, options.colors);
@@ -540,11 +786,21 @@ export function sanitizeProductImageAnalysis(
     : [];
   const canReviewVariantCandidates = variantCandidates.length >= 2;
 
+  const typeWarning = isProductTypeChange({
+    suggestedName: fixedNameOptions[0],
+    suggestedCategoryName: category?.name ?? suggestedCategoryName,
+    currentName: options.current?.name,
+    currentCategoryName: options.current?.categoryName,
+  })
+    ? PRODUCT_TYPE_CHANGE_WARNING
+    : null;
+
   return {
-    suggestedBaseName: suggestedNameOptions[0] ?? null,
-    suggestedNameOptions,
+    typeWarning,
+    suggestedBaseName: fixedNameOptions[0] ?? null,
+    suggestedNameOptions: fixedNameOptions,
     suggestedDescription: cleanDescription(output.suggestedDescription),
-    brand: cleanOptionalText(output.brand),
+    brand: brandIsLicence ? null : normalizeBrandName(rawBrand),
     categoryName: category?.name ?? suggestedCategoryName,
     categoryIsDeterministic: Boolean(suggestedCategoryName),
     categoryId: category?.id ?? null,
@@ -596,16 +852,31 @@ export function sanitizeProductImageAnalysis(
         : null,
     },
     variantCandidates,
-    catalogAttributes: output.catalogAttributes.flatMap((attribute) => {
-      const name = cleanOptionalText(attribute.optionName, 80);
-      const value = cleanOptionalText(attribute.valueName, 100);
-      const evidence = cleanOptionalText(attribute.evidence, 180);
-      const key = name ? normalizeCatalogOptionKey(name) : "";
+    catalogAttributes: (() => {
+      const extras = getExtraCatalogAttributes(output, fieldEvidence);
+      const extraKeys = new Set(extras.map((attribute) => attribute.key));
+      const fromModel = output.catalogAttributes.flatMap((attribute) => {
+        const name = cleanOptionalText(attribute.optionName, 80);
+        const value = cleanOptionalText(attribute.valueName, 100);
+        const evidence = cleanOptionalText(attribute.evidence, 180);
+        const key = name ? normalizeCatalogOptionKey(name) : "";
 
-      return key && name && value && evidence
-        ? [{ key, name, value, evidence }]
-        : [];
-    }),
+        return key && name && value && evidence && !extraKeys.has(key)
+          ? [{ key, name, value, evidence }]
+          : [];
+      });
+      return [...extras, ...fromModel];
+    })(),
+    fieldEvidence,
+    keywords: Array.from(
+      new Set(
+        (output.keywords ?? [])
+          .map((keyword) =>
+            cleanOptionalText(keyword, 60)?.toLocaleLowerCase("es-CO"),
+          )
+          .filter((keyword): keyword is string => Boolean(keyword)),
+      ),
+    ).slice(0, 8),
     observations: output.observations
       .map((observation) => cleanOptionalText(observation, 180))
       .filter((observation): observation is string => Boolean(observation)),
@@ -613,47 +884,4 @@ export function sanitizeProductImageAnalysis(
       .map((limitation) => cleanOptionalText(limitation, 180))
       .filter((limitation): limitation is string => Boolean(limitation)),
   };
-}
-
-export function buildProductImageAnalysisPrompt(input: {
-  categoryName?: string;
-  categories: string[];
-  sizes: string[];
-  colors: string[];
-  designs: string[];
-}) {
-  const categories = input.categories.join(", ") || "Sin opciones configuradas";
-  const sizes = input.sizes.join(", ") || "Sin opciones configuradas";
-  const colors = input.colors.join(", ") || "Sin opciones configuradas";
-  const designs = input.designs.join(", ") || "Sin opciones configuradas";
-
-  return `Analiza las fotos públicas de un producto de papelería para ayudar a una administradora a completar su catálogo en español de Colombia.
-
-Categoría elegida por la administradora: ${input.categoryName || "Sin categoría"}.
-Categorías disponibles en el catálogo: ${categories}.
-Tamaños disponibles en el catálogo: ${sizes}.
-Colores disponibles en el catálogo: ${colors}.
-Diseños disponibles en el catálogo: ${designs}.
-
-Reglas obligatorias:
-- Describe únicamente elementos, texto y marca que puedas confirmar visualmente. Nunca adivines marca, cantidad, medida, licencia, material o compatibilidad.
-- suggestedBaseName debe ser el primer elemento de suggestedNameOptions: el nombre base recomendado. suggestedNameOptions debe contener de una a tres opciones distintas, breves (máximo 65 caracteres), profesionales y útiles para búsqueda en una tienda colombiana.
-- Prioriza el término comercial natural que buscaría una clienta en Colombia, con el tipo de producto al inicio y los detalles visibles después. Usa préstamos establecidos en su orden natural, por ejemplo "mouse pad" y nunca "pad mouse". No hagas traducciones palabra por palabra ni listes palabras clave separadas por barras.
-- Las opciones pueden variar solo en redacción; todas deben describir exactamente el mismo producto visible. Incluye descriptores generales que sí se vean y apliquen a todas las unidades, como "de personajes" o "diseños surtidos", pero no una marca, color, diseño particular, medida ni código cuando no sea determinístico para la unidad.
-- No incluyas marca, color, diseño de variante ni códigos internos en suggestedBaseName o suggestedNameOptions; deja esos datos en sus campos separados cuando correspondan.
-  - suggestedDescription debe ser HTML semántico, seguro y fácil de escanear. Puede tener hasta 1.800 caracteres de texto y usar únicamente <p>, <h3>, <strong>, <ul>, <ol> y <li>. Empieza con un párrafo claro que explique qué es el producto y luego organiza los detalles visibles en una lista cuando ayude. No uses estilos, enlaces, emojis ni etiquetas distintas. No inventes beneficios, usos, materiales, medidas o contenido que las fotos no confirmen. Si las fotos no bastan para una descripción útil, usa null.
-- brand debe ser null si no se lee claramente en empaque o producto.
-- categoryName debe usar una categoría disponible cuando exista una coincidencia adecuada. Si ninguna describe correctamente el producto, puede proponer un nombre de subcategoría nuevo, breve, reutilizable y específico; nunca propongas un tipo padre nuevo. Devuelve únicamente el nombre antes de los paréntesis. categoryIsDeterministic debe ser true únicamente cuando el producto encaja de forma clara.
-- sizeName solo puede ser un tamaño de la lista disponible y sizeIsDeterministic debe ser true únicamente cuando la medida o formato se lee claramente. Nunca uses códigos internos ni inventes tamaños.
-- colorName puede coincidir exactamente con un color disponible o proponer un nuevo nombre corto en español. Úsalo solo cuando la foto representa de forma determinística una variante de un único color. Si propones un color nuevo, colorHex debe ser su tono dominante en formato #RRGGBB. Si es multicolor, pastel, una foto de familia o no estás segura, usa null, colorHex null y colorIsDeterministic false.
-- designName puede coincidir exactamente con un diseño disponible o proponer un nuevo nombre corto en español. Úsalo solo cuando identifica de forma clara y determinística el producto. Si el diseño es genérico, de inventario o no visible, usa null y designIsDeterministic false.
-- Nunca inventes una taxonomía: una propuesta nueva debe describir una característica visible, diferenciable y reutilizable en futuros productos.
-- gtin solo puede contener el número completo cuando los dígitos se leen directamente junto al código de barras y el checksum GS1 es válido. No lo deduzcas de las barras, del nombre, ni de otra fuente. Incluye en evidence dónde se ve; de lo contrario usa null.
-- mpn solo puede contener una referencia del fabricante copiada exactamente cuando se lee completa en el empaque o producto. Incluye en evidence dónde se ve; de lo contrario usa null.
-- variantRecommendation solo debe indicar shouldCreateVariants true cuando las fotos demuestran opciones comprables distintas de color, diseño o tamaño. No confundas un set multicolor, un empaque decorado ni una foto de familia con variantes. axes puede usar solamente COLOR, DESIGN o SIZE y evidence debe explicar la evidencia.
-- variantCandidates se usa únicamente cuando variantRecommendation.shouldCreateVariants es true. Incluye una fila por foto que muestre una opción individual y comprable; imageIndex empieza en 0 y respeta el orden de las fotos. Para cada fila confirma solo color, diseño o tamaño visibles que distingan esa opción. Si una foto muestra varias opciones, un surtido, una familia o no identifica una variante individual, no incluyas esa foto. Nunca repitas imageIndex ni inventes atributos. Deben existir al menos dos filas distintas para recomendar variantes.
-- catalogAttributes contiene características comerciales visibles y útiles para elegir o filtrar el producto, por ejemplo Formato=A5, Capacidad=500 ml, Medida=15 cm, Punta=Fina o Cantidad=12 colores. No uses códigos internos de empaque como S, S+, M-P o L-L. No repitas color, diseño, categoría, marca, GTIN, MPN, precio, stock ni texto meramente decorativo. Incluye evidence con el texto o detalle visual que confirma cada valor. Si una medida o cantidad no se puede leer con certeza, no la incluyas.
-- observations debe explicar de forma corta la evidencia visual útil. limitations debe mencionar qué no se puede confirmar.
-- Nunca sugieras SKU, precios, costos, stock, proveedor, descuentos ni atributos no visibles.
-- Esto es una propuesta para revisión humana: no hay ningún cambio automático.`;
 }

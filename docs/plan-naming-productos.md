@@ -107,17 +107,17 @@ Los nombres actuales son **etiquetas de estante**, no **fichas de producto**. Fu
 | 2 | **Formato / Material / Descriptor** | Opcional pero muy recomendado. Es la ranura que aporta la cola larga: material, formato, mecanismo, uso. | `decorativo metálico`, `argollado cuadriculado`, `retráctil de gel` |
 | 3 | **Diseño o Licencia** | Obligatorio si `design` no es un centinela (`Clásico`, `S-D`, `Sin Diseño`). Licencias con su grafía oficial. | `Stitch`, `Sanrio`, `Harry Potter`, `Capibara` |
 | 4 | **Color** | Obligatorio **solo si el producto pertenece a un `ProductGroup` con más de un miembro** y el color es lo que los distingue. Se omite si `color` es `Multicolor` y el diseño ya lo implica. | `rosa pastel`, `lila` |
-| 5 | **Medida o Cantidad** | Obligatorio si existe. Cantidad `x12`; medidas `0.7 mm`, `350 ml`, `80 hojas`, `A5`. | `x24`, `80 hojas`, `0.5 mm` |
+| 5 | **Medida o Cantidad** | Obligatorio si existe. Cantidad: `N colores` o `N diseños` si las unidades del empaque son distintas entre sí; `xN` si son iguales (decisión 2026-10-09). Medidas `0.7 mm`, `350 ml`, `80 hojas`, `A5`. | `12 colores`, `6 diseños`, `x10`, `80 hojas`, `0.5 mm` |
 
 ### 2.3 Reglas de estilo
 
 **Obligatorio**
 
 - **Sentence case.** Primera palabra en mayúscula; el resto en minúscula, salvo nombres propios y licencias.
-- **Grafía oficial de licencias:** `Sanrio`, `Hello Kitty`, `Kuromi`, `Cinnamoroll`, `Pompompurin`, `Badtz-Maru`, `Stitch`, `Snoopy`, `Mafalda`, `Harry Potter`, `El Principito`, `One Piece`, `Minnie Mouse`, `Disney`. Marcas de fabricante: `Norma`, `Scribe`, `Gipao`, `Tesa`, `Faber-Castell`.
+- **Grafía oficial de licencias:** `Sanrio`, `Hello Kitty`, `Kuromi`, `Cinnamoroll`, `Pompompurin`, `Badtz-Maru`, `Stitch`, `Snoopy`, `Mafalda`, `Harry Potter`, `El Principito`, `One Piece`, `Minnie Mouse`, `Disney`. Marcas de fabricante en Title Case, nunca en mayúscula sostenida: `Norma`, `Scribe`, `Gipao`, `Tesa`, `Offi-Esco`, `Faber-Castell`. Una licencia nunca es la marca: va en diseño.
 - **Nunca «Lego» en un nombre, slug, título, marca ni alt** (2026-10-06): son bloques compatibles, no productos de LEGO, y «Lego» es una marca registrada. Se llaman `Bloques de construcción …`; «estilo Lego» va solo dentro del aviso final de la descripción («Son bloques de construcción estilo Lego. No son productos de LEGO ni están afiliados a LEGO Group.»). Ver `pdepapel-admin/scripts/rename-lego-to-bloques.mjs`.
 - **Términos que el cliente colombiano realmente escribe.** El catálogo ya usa `tajalápiz` (13/13) mientras la categoría dice *Sacapuntas*: mantener `tajalápiz` en el nombre y dejar `sacapuntas` en descripción/categoría cubre ambas búsquedas.
-- Cantidades siempre en formato `x12` (sin espacio, con `x` minúscula).
+- Cantidad de un empaque surtido: `12 colores` o `6 diseños`. Cantidad de unidades iguales: `x12` (sin espacio, con `x` minúscula). Un set surtido no lleva color en el nombre.
 - Medidas con espacio antes de la unidad: `0.7 mm`, `350 ml`, `16 × 24 cm`.
 
 **Prohibido**
@@ -159,6 +159,10 @@ Los nombres actuales son **etiquetas de estante**, no **fichas de producto**. Fu
 | Borradores · Conejito · Lila | `Borrador aplique Conejo` (23) | `Borrador de nata con aplique Conejito lila escolar` | 49 |
 | Agendas · Cierre hermético · Rosa pastel | `Agenda A5 Simple Life` (21) | `Agenda A5 Simple Life tapa acolchada rosa pastel con cierre` | 58 |
 | Correctores · Clásico · Café | `Correctores Clásico Café S-L` (28) | `Corrector de cinta lateral café pastel 5 mm × 6 m` | 48 |
+| Marcadores · surtido | `Set en caja de marcadores acrílicos GIPAO punta pincel profesional 12 colores` (77) | `Set de marcadores acrílicos Gipao punta pincel 12 colores` | 57 |
+| Bolígrafos / Lapiceros · unidades iguales | `Lapiceros Offi-Esco semi gel x10 con aroma` (42) | `Lapicero semi gel Offi-Esco con aroma x10` | 41 |
+
+Los ejemplos que ve el asistente de IA viven en `pdepapel-admin/constants/product-naming.ts` (`PRODUCT_NAME_EXAMPLES`), junto con el sustantivo canónico por subcategoría y la lista de licencias; si cambia una regla de esta sección, se cambian ahí en el mismo commit.
 
 ---
 

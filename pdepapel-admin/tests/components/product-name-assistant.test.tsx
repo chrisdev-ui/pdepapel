@@ -4,7 +4,7 @@ import { ProductNameAssistant } from "@/components/products/product-name-assista
 import type { ProductImageAnalysis } from "@/lib/product-image-analysis";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(() => {
   Object.defineProperties(HTMLElement.prototype, {
@@ -54,19 +54,33 @@ function createVisualAnalysis(
     catalogAttributes: [],
     observations: ["La portada muestra flores."],
     limitations: [],
+    keywords: [],
+    fieldEvidence: {},
+    typeWarning: null,
     ...overrides,
   };
 }
 
 function createAnalysisResponse(
   analysis: ProductImageAnalysis,
-  options: { remainingAnalysesToday?: number; reusedAnalysis?: boolean } = {},
+  options: {
+    remainingAnalysesToday?: number;
+    reusedAnalysis?: boolean;
+    photoCount?: number;
+    photosRead?: number[];
+    skipped?: { photo: number; reason: string }[];
+    analyzedWith?: string[];
+  } = {},
 ) {
   return new Response(
     JSON.stringify({
       analysis,
+      photoCount: options.photoCount ?? 1,
+      photosRead: options.photosRead ?? [0],
+      skipped: options.skipped ?? [],
       remainingAnalysesToday: options.remainingAnalysesToday ?? 11,
       reusedAnalysis: options.reusedAnalysis ?? false,
+      analyzedWith: options.analyzedWith ?? ["gemini"],
     }),
     { status: 200, headers: { "Content-Type": "application/json" } },
   );
@@ -122,7 +136,7 @@ describe("ProductNameAssistant visual analysis", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Aplicar 5 campos seleccionados",
+        name: "Aplicar 4 campos seleccionados",
       }),
     );
 
@@ -131,7 +145,7 @@ describe("ProductNameAssistant visual analysis", () => {
       expect.objectContaining({
         suggestedBaseName: "Cuaderno argollado A5",
         brand: "Sanrio",
-        categoryId: "category-notebooks",
+        categoryId: null,
         sizeId: "size-a5",
         colorId: "color-rosa",
       }),
@@ -141,7 +155,7 @@ describe("ProductNameAssistant visual analysis", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "5 campos aplicados al formulario. Aún debes guardar el producto.",
+        "4 campos aplicados al formulario. Aún debes guardar el producto.",
       ),
     ).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -733,22 +747,228 @@ describe("ProductNameAssistant visual analysis", () => {
 describe("ProductNameAssistant before → after", () => {
   it("shows the current value struck through next to the proposal", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(createAnalysisResponse(createVisualAnalysis())));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(createAnalysisResponse(createVisualAnalysis())),
+    );
     render(
       <ProductNameAssistant
         currentName="Cuaderno viejo"
         categoryName="Agendas"
         brand="Genérica"
         storeId="store-id"
-        imageUrls={["https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp"]}
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
         onApply={vi.fn()}
         onApplyVisualAnalysis={vi.fn()}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
-    expect(await screen.findByRole("heading", { name: "Revisa la propuesta de IA" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Revisa la propuesta de IA" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Genérica")).toHaveClass("line-through");
     expect(screen.getByText("Agendas")).toHaveClass("line-through");
     expect(screen.getByText("Cuaderno viejo")).toBeInTheDocument();
+  });
+});
+
+describe("ProductNameAssistant con todas las fotos", () => {
+  beforeEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("lee hasta 10 fotos, avisa cuáles no pudo leer y muestra de qué foto sale cada dato", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue(
+      createAnalysisResponse(
+        createVisualAnalysis({
+          fieldEvidence: { brand: { confidence: "alta", photos: [2] } },
+        }),
+        {
+          photoCount: 10,
+          photosRead: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+          skipped: [{ photo: 9, reason: "Imagen rota" }],
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const urls = Array.from(
+      { length: 12 },
+      (_, index) =>
+        `https://res.cloudinary.com/pdepapel/image/upload/v1/foto-${index}.webp`,
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={urls}
+        onApply={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+
+    expect(await screen.findByText("Leí 9 de 10 fotos.")).toBeInTheDocument();
+    expect(screen.getByText(/Foto 10: Imagen rota/)).toBeInTheDocument();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).imageUrls).toHaveLength(
+      10,
+    );
+    expect(screen.getByText("Seguridad alta")).toBeInTheDocument();
+    expect(screen.getByText("Foto 3")).toBeInTheDocument();
+    expect(screen.getByAltText("Foto 3")).toHaveAttribute(
+      "src",
+      expect.stringContaining("/f_auto,q_auto,c_limit,w_128/"),
+    );
+  });
+
+  it("nunca marca sola un campo que ya tiene valor, y «Aplicar todo lo vacío» solo llena lo vacío", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    const onApplyVisualAnalysis = vi.fn();
+    const onApplyDescription = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          createAnalysisResponse(
+            createVisualAnalysis({
+              suggestedDescription: "<p>Cuaderno argollado.</p>",
+            }),
+          ),
+        ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName="Cuaderno de Paula"
+        brand="Norma"
+        currentDescription="<p>Texto que escribió Paula.</p>"
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={onApply}
+        onApplyVisualAnalysis={onApplyVisualAnalysis}
+        onApplyDescription={onApplyDescription}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    await screen.findByRole("heading", { name: "Revisa la propuesta de IA" });
+
+    expect(
+      screen.getByRole("checkbox", { name: "Nombre del producto" }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Marca o fabricante" }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Descripción enriquecida" }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Subcategoría" }),
+    ).toBeChecked();
+
+    await user.click(
+      screen.getByRole("button", { name: "Aplicar todo lo vacío" }),
+    );
+
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onApplyDescription).not.toHaveBeenCalled();
+    expect(onApplyVisualAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        brand: null,
+        categoryId: "category-notebooks",
+        sizeId: "size-a5",
+        colorId: "color-rosa",
+      }),
+    );
+  });
+
+  it("si Paula marca un campo escrito, lo reemplaza solo porque ella lo eligió", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          createAnalysisResponse(createVisualAnalysis({ brand: null })),
+        ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName="Cuaderno de Paula"
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={onApply}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Nombre del producto" }),
+    );
+    for (const label of ["Subcategoría", "Tamaño o formato", "Color"]) {
+      await user.click(screen.getByRole("checkbox", { name: label }));
+    }
+    await user.click(
+      screen.getByRole("button", { name: /^Aplicar 1 campo seleccionado$/ }),
+    );
+
+    expect(onApply).toHaveBeenCalledWith("Cuaderno argollado A5");
+  });
+
+  it("si la IA propone otro tipo de producto, avisa y deja el nombre actual elegido", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            suggestedBaseName: "Lámpara kawaii",
+            suggestedNameOptions: ["Lámpara kawaii"],
+            typeWarning:
+              "La IA sugiere otro tipo de producto: revisa antes de aplicar.",
+          }),
+          { analyzedWith: ["openai"] },
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName="Impresora térmica mini"
+        categoryName="Herramientas de oficina"
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/impresora.webp",
+        ]}
+        onApply={onApply}
+        onApplyVisualAnalysis={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "La IA sugiere otro tipo de producto: revisa antes de aplicar.",
+    );
+    expect(
+      screen.getByRole("checkbox", { name: "Nombre del producto" }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: /Lámpara kawaii/ })).not.toBeChecked();
+    expect(screen.getByLabelText("Nombre elegido")).toHaveValue(
+      "Impresora térmica mini",
+    );
+    expect(screen.getByText("Se mantiene el nombre actual.")).toBeInTheDocument();
+    expect(screen.getByText("Analizado con: OpenAI")).toBeInTheDocument();
   });
 });

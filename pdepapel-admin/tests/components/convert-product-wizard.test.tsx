@@ -165,6 +165,28 @@ describe("ConvertProductWizard", () => {
     });
   });
 
+  it("trae todas las opciones que la IA vio en las fotos, no solo 3", () => {
+    const imageUrls = Array.from({ length: 6 }, (_, index) => `https://example.com/foto-${index}.jpg`);
+    const [first] = (analysis as unknown as { variantCandidates: Record<string, unknown>[] }).variantCandidates;
+    const candidates = imageUrls.map((_, index) => ({
+      ...first,
+      imageIndex: index,
+      colorId: null,
+      colorName: `Tono ${index}`,
+      colorHex: "#A0C8F0",
+      colorSource: "new",
+      evidence: `Opción ${index}.`,
+    }));
+    renderWizard({
+      product: { ...product, imageUrls },
+      analysis: { variantCandidates: candidates } as unknown as ProductImageAnalysis,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(screen.getByText("La foto muestra: Opción 5.")).toBeInTheDocument();
+    expect(units(6)).toBeInTheDocument();
+  });
+
   /** En producción el asistente volvía al paso 1 al pulsar «Crear grupo»: el padre re-renderizaba con un objeto `product` nuevo. */
   it("keeps its step when the parent re-renders with an equal product object", () => {
     const onConfirm = vi.fn();

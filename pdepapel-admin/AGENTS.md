@@ -252,6 +252,62 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 
 `sku` (internal, scannable), `gtin` (a real GS1 barcode) and `mpn` (a real manufacturer code) are three different things. **Never invent a GTIN.** If a product has no legitimate one, set the "no product identifier" flag so Google Merchant still accepts it. A barcode scanner can read an internal SKU label; the GTIN field is not a generic barcode-label field.
 
+### Product AI assistant
+
+«Analizar fotos» (`components/products/product-name-assistant.tsx` → `POST /api/[storeId]/products/image-analysis`) proposes name, taxonomy, description and identifiers for human review; nothing saves on its own.
+- It reads up to 10 photos (`MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES` in `constants/product-naming.ts`). Photos marked `Image.brokenAt` are skipped and reported as «Imagen rota». The pipeline downloads each photo itself as the panel's frozen 1080 copy with a browser `Accept` header (`fetchAnalysisImage`); a fetch without it makes Cloudinary `f_auto` serve JPEG, which is a new billed derived copy.
+- `lib/product-image-analysis-pipeline.ts` runs three steps:
+  - parallel batches of ≤4 photos that only record what each photo shows (30 s each, one retry if time remains);
+  - one text-only naming pass (up to 20 s, never past the remaining budget);
+  - one subcategory choice from a closed list of the store's subcategories plus «Ninguna de la lista», asked 3 times in parallel (8 s, skipped when time is short) with a majority vote. A 1-1-1 tie goes to the subcategory of the suggested name's canonical noun, then the current subcategory, then «Ninguna». «Ninguna» falls back to the naming pass's free-text proposal.
+  Everything fits a 55 s budget; the route has `maxDuration = 60`.
+- After the model, code owns the name:
+  - `reconcileNameCounts` keeps «N colores / N diseños / xN / N materias / N hojas» only with evidence (the current name or what all photos read);
+  - `enrichShortName` lengthens a name under 50 only with facts read (material, tip and ink base for writing instruments, design, measure, sheets);
+  - `fixLeadingNoun` turns a one-letter typo or a known synonym into the subcategory's canonical noun;
+  - `normalizeSuggestedProductName` restores brand and licence spelling, and `fitProductName` cuts to 60 at a word boundary without a dangling connector or label.
+- Type guard: `isProductTypeChange` (`lib/product-naming.ts`) compares the suggestion's leading noun with the current name and subcategory (synonyms and same-family nouns such as two «Cuaderno …» don't count). It also warns when the current type is known and the suggestion's noun is unrecognized without a recognized subcategory to back it (Washi → «Set de tizas»). On a warning the response carries `typeWarning` and the panel shows «La IA sugiere otro tipo de producto…» with the current name kept and the name box unticked.
+- Providers (`lib/ai-provider.ts`, `lib/ai-model-providers.ts`), order per feature:
+
+  | Feature | Primary | Fallback | Why |
+  |---|---|---|---|
+  | Product assistant (photos, naming pass, subcategory) | OpenAI `gpt-6-luna` | Gemini `gemini-3.5-flash-lite` | Catalog photos and product text only |
+  | Type icon suggestions | OpenAI | Gemini | Admin's own short description |
+  | Respuestas assistant (`bot-replies/assistant`) | OpenAI | none (busy message) | Reads real customer WhatsApp messages |
+  | WhatsApp bot product classification | OpenAI | none: the existing keyword matcher | Customer messages |
+
+  - **Customer text never goes to a free-tier provider.** OpenAI API data is not used for training unless the organization opts in, and is kept up to 30 days for abuse monitoring. Source: developers.openai.com/api/docs/guides/your-data, read 2026-10-10. Every OpenAI call sends `store: false`. Gemini's free tier is not used for customer text.
+  - **Without `OPENAI_API_KEY`** (Preview has none; Production has it): the product assistant and icons run Gemini-only, the classifier reports `not_configured` (keywords only), and Respuestas answers 503.
+  - **OpenAI settings:**
+    - `gpt-6-luna` costs US$0.10 / US$0.50 per 1M input/output tokens (developers.openai.com/api/docs/pricing, read 2026-10-10).
+    - Reasoning effort is `none` on every step (`OPENAI_STEP_EFFORT`; `low` was not more accurate and was less stable).
+    - The naming pass uses strict structured outputs (`OPENAI_STRICT_STEPS`, `openAiStrictOutputSchema`): every property required, optional ones nullable, no extra keys. Before zod, `fitToSchema` turns nulls back into defaults and applies what strict mode can't enforce (string lengths, list caps, patterns, integers). Free mode had returned unreadable JSON in 3 of 22 calls.
+    - The other steps run non-strict; zod validates every reply.
+    - GPT-6 rejects `temperature`, so the SDK drops it.
+    - A reply that can't be read logs `[AI_PARSE_FAILURE]` with provider, step, finish reason, length and the zod issue paths, never the content.
+  - **Gemini settings:** temperature 0 for the naming pass and subcategory. Since `@ai-sdk/google` 4.0.5x sends raw JSON Schema, and Gemini rejects the large naming schema with «invalid argument», every Gemini call goes through `geminiOutputSchema` / `toGeminiSchema`: the model gets the shape only, and the full zod schema validates the reply.
+  - **Failover:**
+    - A 429, 5xx or timeout on the primary moves the step to the fallback. A schema mismatch retries the same provider.
+    - Skip marks in Redis (`ai:<provider>:skip`) avoid paying a failed call per request:
+      - Gemini daily quota: until the next midnight in `America/Los_Angeles`.
+      - OpenAI `insufficient_quota`: 1 h.
+      - Per-minute limits: 60 s.
+  - **Spend cap:** `OPENAI_DAILY_SPEND_CAP_USD = 1`, shared by all four features, summed in `ai:openai:spend:<UTC day>`. At the cap the product assistant and icons move to Gemini, Respuestas answers «La IA está ocupada, intenta más tarde.», and the bot falls back to keywords. Sizing:
+    - The product assistant is already limited to 20 analyses per store per day (≈ US$0.002 each, measured), and cached analyses cost nothing.
+    - A classifier call is ≈ 470 tokens (≈ US$0.00006).
+    - Realistic use is well under US$0.20 a day, so US$1 leaves ~5× headroom and bounds a runaway loop at ≈ US$30 a month.
+    - A message storm can starve the assistant; that is accepted.
+  - **Measured on the same 20 products (audit §11):**
+    - OpenAI, final run 2026-10-10 with the 3-vote subcategory: subcategory 45 %, stability 90 %, ≈ US$0.0024 per product, p95 13 s, 0 unreadable replies.
+    - Gemini, 2026-10-10: subcategory 50 %, stability 100 %, ≈ US$0.007 per product, p95 29 s.
+    - Re-measure (`tmp/ai-audit/eval-r3.ts`, `PROVIDER=openai|gemini` to force one) before changing models, prompts or the order.
+  - **Local and dev runs must use keys from a different project than Production**, for Google and for OpenAI. The Gemini free quota is per project, per model and per day: an eval can block production until midnight Pacific.
+  - Every call logs `[AI_MODEL_CALL]` with feature, step, provider, model, tokens, ms and estimated USD (no prompt, photo or customer content). The assistant's response carries `analyzedWith`, shown as «Analizado con: OpenAI / Gemini».
+  - xAI Grok was evaluated as a third tier and not adopted (audit §11).
+- The Redis cache key (version 9) covers every usable photo URL in order, the current name, the chosen subcategory and the taxonomy. The value stores `{ output, photosRead, skipped, analyzedWith }`. Bump the key version when the output shape changes.
+- The review only pre-checks fields that are empty in the form; a typed value is replaced only when the admin ticks it. It never proposes prices, costs, stock or SKU.
+- Measurement: `docs/audits/2026-10-09-asistente-ia-productos.md` §11 (20 real products, both providers). Re-run it before changing prompts, models or the name post-processing.
+
 ### Mercado Libre
 
 - Marketplace price and shop price are **deliberately decoupled**. Never auto-overwrite one from the other.

@@ -24,20 +24,26 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  PRODUCT_NAME_HARD_MAX_LENGTH,
   PRODUCT_NAME_MAX_LENGTH,
   PRODUCT_NAME_RECOMMENDED_MAX_LENGTH,
   buildProductNameSuggestion,
+  fitProductName,
 } from "@/lib/product-naming";
 import type {
+  EvidenceField,
   ProductImageAnalysis,
   ProductTaxonomyAlternative,
 } from "@/lib/product-image-analysis";
+import { MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES } from "@/constants/product-naming";
 import { DIMENSIONS, WEIGHTS } from "@/constants/sizes";
+import { getCloudinaryImageUrl } from "@/lib/cloudinary-image-loader";
 import { cn } from "@/lib/utils";
 import {
   Barcode,
   Check,
   CircleAlert,
+  Copy,
   FileText,
   Lightbulb,
   ListChecks,
@@ -48,8 +54,10 @@ import {
   Sparkles,
   Tags,
   TextCursorInput,
+  Wand2,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { AiProviderName } from "@/lib/ai-provider";
 
 type VisualAttributeType = "color" | "design";
 type IdentifierType = "gtin" | "mpn";
@@ -108,6 +116,8 @@ type ProductNameAssistantProps = {
   colorName?: string | null;
   sizeName?: string | null;
   sizeValue?: string | null;
+  /** Descripción actual (HTML); si ya tiene texto, la propuesta no la marca sola. */
+  currentDescription?: string | null;
   includeVariantAttributes?: boolean;
   disabled?: boolean;
   storeId?: string | string[];
@@ -163,20 +173,104 @@ function getCatalogAttributeId(
   return `${attribute.key}:${attribute.value}:${index}`;
 }
 
+const AI_PROVIDER_LABELS: Record<AiProviderName, string> = {
+  gemini: "Gemini",
+  openai: "OpenAI",
+};
+
+type CurrentFormValues = Record<ReviewFieldKey, string | null | undefined>;
+
+const isEmptyValue = (value: string | null | undefined) =>
+  !value || !value.replace(/<[^>]*>/g, "").trim();
+
+/** Solo se marcan los campos que el formulario tiene vacíos: nunca pisa lo escrito. */
 function getInitialReviewSelection(
   analysis: ProductImageAnalysis,
   availability: Required<ProductImageReviewAvailability>,
   canApplyDescription: boolean,
+  current: CurrentFormValues,
 ): ReviewSelection {
   return {
-    name: Boolean(analysis.suggestedBaseName),
-    brand: availability.brand && Boolean(analysis.brand),
-    category: availability.category && Boolean(analysis.categoryId),
-    size: availability.size && Boolean(analysis.sizeId),
-    color: availability.color && Boolean(analysis.colorId),
-    design: availability.design && Boolean(analysis.designId),
-    description: canApplyDescription && Boolean(analysis.suggestedDescription),
+    name:
+      Boolean(analysis.suggestedBaseName) &&
+      !analysis.typeWarning &&
+      isEmptyValue(current.name),
+    brand:
+      availability.brand &&
+      Boolean(analysis.brand) &&
+      isEmptyValue(current.brand),
+    category:
+      availability.category &&
+      Boolean(analysis.categoryId) &&
+      isEmptyValue(current.category),
+    size:
+      availability.size &&
+      Boolean(analysis.sizeId) &&
+      isEmptyValue(current.size),
+    color:
+      availability.color &&
+      Boolean(analysis.colorId) &&
+      isEmptyValue(current.color),
+    design:
+      availability.design &&
+      Boolean(analysis.designId) &&
+      isEmptyValue(current.design),
+    description:
+      canApplyDescription &&
+      Boolean(analysis.suggestedDescription) &&
+      isEmptyValue(current.description),
   };
+}
+
+const CONFIDENCE_LABELS = {
+  alta: "Seguridad alta",
+  media: "Seguridad media",
+  baja: "Seguridad baja",
+} as const;
+
+function FieldEvidence({
+  evidence,
+  photoUrls,
+}: {
+  evidence: ProductImageAnalysis["fieldEvidence"][EvidenceField];
+  photoUrls: string[];
+}) {
+  if (!evidence) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <Badge
+        variant="outline"
+        className={cn(
+          evidence.confidence === "alta" &&
+            "border-emerald-300 text-emerald-800",
+          evidence.confidence === "media" && "border-amber-300 text-amber-800",
+          evidence.confidence === "baja" && "border-red-300 text-red-800",
+        )}
+      >
+        {CONFIDENCE_LABELS[evidence.confidence]}
+      </Badge>
+      {evidence.photos.length > 0 && (
+        <span className="text-muted-foreground">
+          {evidence.photos.length === 1 ? "Foto" : "Fotos"}{" "}
+          {evidence.photos.map((photo) => photo + 1).join(", ")}
+        </span>
+      )}
+      {evidence.photos.map((photo) =>
+        photoUrls[photo] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={photo}
+            src={photoUrls[photo]}
+            alt={`Foto ${photo + 1}`}
+            width={28}
+            height={28}
+            loading="lazy"
+            className="h-7 w-7 rounded border object-cover"
+          />
+        ) : null,
+      )}
+    </div>
+  );
 }
 
 function ReviewFieldCard({
@@ -189,6 +283,7 @@ function ReviewFieldCard({
   checked,
   canApply,
   disabled,
+  evidence,
   children,
   onCheckedChange,
 }: {
@@ -202,6 +297,7 @@ function ReviewFieldCard({
   checked: boolean;
   canApply: boolean;
   disabled: boolean;
+  evidence?: ReactNode;
   children?: ReactNode;
   onCheckedChange: (checked: boolean) => void;
 }) {
@@ -263,6 +359,7 @@ function ReviewFieldCard({
           {helper && (
             <p className="mt-1 text-pretty text-muted-foreground">{helper}</p>
           )}
+          {evidence}
           {children}
         </div>
       </div>
@@ -314,6 +411,7 @@ export function ProductNameAssistant({
   colorName,
   sizeName,
   sizeValue,
+  currentDescription,
   includeVariantAttributes = true,
   disabled = false,
   storeId,
@@ -355,6 +453,13 @@ export function ProductNameAssistant({
     number | null
   >(null);
   const [reusedVisualAnalysis, setReusedVisualAnalysis] = useState(false);
+  const [photoReading, setPhotoReading] = useState<{
+    photoCount: number;
+    photosRead: number[];
+    skipped: { photo: number; reason: string }[];
+    analyzedWith: AiProviderName[];
+  } | null>(null);
+  const [copiedKeywords, setCopiedKeywords] = useState(false);
   const [pendingVisualAttribute, setPendingVisualAttribute] =
     useState<PendingVisualAttribute | null>(null);
   const [isCreatingVisualAttribute, setIsCreatingVisualAttribute] =
@@ -384,9 +489,26 @@ export function ProductNameAssistant({
   }, [currentName]);
 
   const visualImageUrls = useMemo(
-    () => Array.from(new Set(imageUrls.filter(Boolean))).slice(0, 3),
+    () =>
+      Array.from(new Set(imageUrls.filter(Boolean))).slice(
+        0,
+        MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES,
+      ),
     [imageUrls],
   );
+  const evidenceThumbnails = useMemo(
+    () => visualImageUrls.map((url) => getCloudinaryImageUrl(url, 128)),
+    [visualImageUrls],
+  );
+  const currentFormValues: CurrentFormValues = {
+    name: currentName,
+    brand,
+    category: categoryName,
+    size: sizeName,
+    color: colorName,
+    design: designName,
+    description: currentDescription,
+  };
   const normalizedStoreId = Array.isArray(storeId) ? storeId[0] : storeId;
   const canAnalyzeImages = Boolean(
     normalizedStoreId && visualImageUrls.length > 0,
@@ -492,6 +614,7 @@ export function ProductNameAssistant({
     setIsAnalyzingImages(true);
     setVisualAnalysisError(null);
     setAppliedReviewCount(null);
+    setPhotoReading(null);
 
     try {
       const response = await fetch(
@@ -502,6 +625,7 @@ export function ProductNameAssistant({
           body: JSON.stringify({
             imageUrls: visualImageUrls,
             categoryName,
+            currentName: currentName?.trim() || undefined,
           }),
         },
       );
@@ -514,16 +638,35 @@ export function ProductNameAssistant({
       }
 
       const analysis = payload.analysis as ProductImageAnalysis;
+      const keepCurrentName = Boolean(
+        analysis.typeWarning && currentName?.trim(),
+      );
       setVisualAnalysis(analysis);
-      setBaseName(analysis.suggestedBaseName || currentName || "");
-      setSelectedNameOption(analysis.suggestedBaseName);
+      setBaseName(
+        keepCurrentName
+          ? currentName!.trim()
+          : analysis.suggestedBaseName || currentName || "",
+      );
+      setSelectedNameOption(
+        keepCurrentName ? null : analysis.suggestedBaseName,
+      );
       setReviewSelection(
         getInitialReviewSelection(
           analysis,
           fieldAvailability,
           Boolean(onApplyDescription),
+          currentFormValues,
         ),
       );
+      setPhotoReading({
+        photoCount: payload.photoCount ?? visualImageUrls.length,
+        photosRead: payload.photosRead ?? [],
+        skipped: payload.skipped ?? [],
+        analyzedWith: Array.isArray(payload.analyzedWith)
+          ? payload.analyzedWith
+          : [],
+      });
+      setCopiedKeywords(false);
       setSelectedCatalogAttributeIds(
         fieldAvailability.catalogAttributes
           ? analysis.catalogAttributes.map(getCatalogAttributeId)
@@ -549,73 +692,118 @@ export function ProductNameAssistant({
     setAppliedReviewCount(null);
   };
 
-  const applyReviewedProposal = () => {
-    if (!visualAnalysis || selectedReviewCount === 0) return;
+  const applyReviewedProposal = (
+    selection: ReviewSelection = reviewSelection,
+    attributes: ProductImageAnalysis["catalogAttributes"] = selectedCatalogAttributes,
+  ) => {
+    const selectedCount =
+      Object.values(selection).filter(Boolean).length + attributes.length;
+    if (!visualAnalysis || selectedCount === 0) return;
 
-    if (
-      reviewSelection.name &&
-      suggestion.name &&
-      suggestion.length <= PRODUCT_NAME_MAX_LENGTH
-    ) {
-      onApply(suggestion.name);
+    const reviewedName = fitProductName(
+      buildProductNameSuggestion({
+        baseName,
+        categoryName: selection.category
+          ? visualAnalysis.categoryName
+          : categoryName,
+        brand: selection.brand ? visualAnalysis.brand : brand,
+        designName: selection.design ? visualAnalysis.designName : designName,
+        colorName: selection.color ? visualAnalysis.colorName : colorName,
+        sizeName: selection.size ? visualAnalysis.sizeName : sizeName,
+        sizeValue,
+        includeVariantAttributes,
+        includeColorInName,
+        includeDesignInName,
+      }).name,
+      PRODUCT_NAME_HARD_MAX_LENGTH,
+    );
+    if (selection.name && reviewedName) {
+      onApply(reviewedName);
     }
 
     const hasStructuredFields =
-      reviewSelection.brand ||
-      reviewSelection.category ||
-      reviewSelection.size ||
-      reviewSelection.color ||
-      reviewSelection.design ||
-      selectedCatalogAttributes.length > 0;
+      selection.brand ||
+      selection.category ||
+      selection.size ||
+      selection.color ||
+      selection.design ||
+      attributes.length > 0;
 
     if (hasStructuredFields && onApplyVisualAnalysis) {
       onApplyVisualAnalysis({
         ...visualAnalysis,
-        brand: reviewSelection.brand ? visualAnalysis.brand : null,
-        categoryName: reviewSelection.category
-          ? visualAnalysis.categoryName
-          : null,
+        brand: selection.brand ? visualAnalysis.brand : null,
+        categoryName: selection.category ? visualAnalysis.categoryName : null,
         categoryIsDeterministic:
-          reviewSelection.category && visualAnalysis.categoryIsDeterministic,
-        categoryId: reviewSelection.category ? visualAnalysis.categoryId : null,
-        categorySource: reviewSelection.category
+          selection.category && visualAnalysis.categoryIsDeterministic,
+        categoryId: selection.category ? visualAnalysis.categoryId : null,
+        categorySource: selection.category
           ? visualAnalysis.categorySource
           : "not_detected",
-        sizeName: reviewSelection.size ? visualAnalysis.sizeName : null,
+        sizeName: selection.size ? visualAnalysis.sizeName : null,
         sizeIsDeterministic:
-          reviewSelection.size && visualAnalysis.sizeIsDeterministic,
-        sizeId: reviewSelection.size ? visualAnalysis.sizeId : null,
-        sizeSource: reviewSelection.size
-          ? visualAnalysis.sizeSource
-          : "not_detected",
-        colorName: reviewSelection.color ? visualAnalysis.colorName : null,
-        colorHex: reviewSelection.color ? visualAnalysis.colorHex : null,
+          selection.size && visualAnalysis.sizeIsDeterministic,
+        sizeId: selection.size ? visualAnalysis.sizeId : null,
+        sizeSource: selection.size ? visualAnalysis.sizeSource : "not_detected",
+        colorName: selection.color ? visualAnalysis.colorName : null,
+        colorHex: selection.color ? visualAnalysis.colorHex : null,
         colorIsDeterministic:
-          reviewSelection.color && visualAnalysis.colorIsDeterministic,
-        colorId: reviewSelection.color ? visualAnalysis.colorId : null,
-        colorSource: reviewSelection.color
+          selection.color && visualAnalysis.colorIsDeterministic,
+        colorId: selection.color ? visualAnalysis.colorId : null,
+        colorSource: selection.color
           ? visualAnalysis.colorSource
           : "not_detected",
-        designName: reviewSelection.design ? visualAnalysis.designName : null,
+        designName: selection.design ? visualAnalysis.designName : null,
         designIsDeterministic:
-          reviewSelection.design && visualAnalysis.designIsDeterministic,
-        designId: reviewSelection.design ? visualAnalysis.designId : null,
-        designSource: reviewSelection.design
+          selection.design && visualAnalysis.designIsDeterministic,
+        designId: selection.design ? visualAnalysis.designId : null,
+        designSource: selection.design
           ? visualAnalysis.designSource
           : "not_detected",
-        catalogAttributes: selectedCatalogAttributes,
+        catalogAttributes: attributes,
       });
     }
 
     if (
-      reviewSelection.description &&
+      selection.description &&
       visualAnalysis.suggestedDescription &&
       onApplyDescription
     ) {
       onApplyDescription(visualAnalysis.suggestedDescription);
     }
 
-    setAppliedReviewCount(selectedReviewCount);
+    setReviewSelection(selection);
+    setAppliedReviewCount(selectedCount);
+  };
+
+  const applyAllEmptyFields = () => {
+    if (!visualAnalysis) return;
+    setSelectedCatalogAttributeIds(
+      fieldAvailability.catalogAttributes
+        ? visualAnalysis.catalogAttributes.map(getCatalogAttributeId)
+        : [],
+    );
+    applyReviewedProposal(
+      getInitialReviewSelection(
+        visualAnalysis,
+        fieldAvailability,
+        Boolean(onApplyDescription),
+        currentFormValues,
+      ),
+      fieldAvailability.catalogAttributes
+        ? visualAnalysis.catalogAttributes
+        : [],
+    );
+  };
+
+  const copyKeywords = async () => {
+    if (!visualAnalysis?.keywords.length) return;
+    try {
+      await navigator.clipboard.writeText(visualAnalysis.keywords.join(", "));
+      setCopiedKeywords(true);
+    } catch {
+      setCopiedKeywords(false);
+    }
   };
 
   const createVisualAttribute = async () => {
@@ -952,8 +1140,9 @@ export function ProductNameAssistant({
             <div>
               <h4 className="text-xs font-medium">Analizar fotos con IA</h4>
               <p className="mt-1 text-pretty text-xs text-muted-foreground">
-                Revisa hasta 3 fotos y presenta cada hallazgo antes de
-                aplicarlo. No guarda el producto automáticamente.
+                Lee hasta {MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES} fotos y presenta
+                cada hallazgo antes de aplicarlo. No guarda el producto
+                automáticamente.
               </p>
             </div>
           </div>
@@ -1006,6 +1195,43 @@ export function ProductNameAssistant({
               </Badge>
             </div>
 
+            {photoReading && (
+              <div
+                className={cn(
+                  "rounded-md border p-3",
+                  photoReading.skipped.length > 0
+                    ? "border-amber-200 bg-amber-50 text-amber-900"
+                    : "bg-muted/30",
+                )}
+              >
+                <p className="font-medium tabular-nums">
+                  Leí {photoReading.photosRead.length} de{" "}
+                  {photoReading.photoCount} foto
+                  {photoReading.photoCount === 1 ? "" : "s"}.
+                </p>
+                {photoReading.analyzedWith.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Analizado con:{" "}
+                    {photoReading.analyzedWith
+                      .map((provider) => AI_PROVIDER_LABELS[provider])
+                      .join(" y ")}
+                  </p>
+                )}
+                {photoReading.skipped.length > 0 && (
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {photoReading.skipped.map((entry) => (
+                      <li key={entry.photo}>
+                        Foto {entry.photo + 1}: {entry.reason}
+                        {entry.reason === "Imagen rota"
+                          ? ". Vuelve a subirla para que cuente."
+                          : ". Puedes analizar de nuevo más tarde."}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
             {visualAnalysis.suggestedNameOptions.length > 0 && (
               <div
                 className={cn(
@@ -1030,6 +1256,18 @@ export function ProductNameAssistant({
                     >
                       Nombre del producto
                     </label>
+                    <FieldEvidence
+                      evidence={visualAnalysis.fieldEvidence.name}
+                      photoUrls={evidenceThumbnails}
+                    />
+                    {visualAnalysis.typeWarning && (
+                      <p
+                        role="alert"
+                        className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 font-medium text-amber-900"
+                      >
+                        {visualAnalysis.typeWarning}
+                      </p>
+                    )}
                     <p className="mt-1 text-muted-foreground">
                       Elige 1 opción. La selección marcada se aplicará al campo
                       Nombre.
@@ -1097,7 +1335,7 @@ export function ProductNameAssistant({
                     id="ai-selected-name"
                     value={baseName}
                     disabled={disabled || !reviewSelection.name}
-                    maxLength={PRODUCT_NAME_MAX_LENGTH}
+                    maxLength={PRODUCT_NAME_HARD_MAX_LENGTH}
                     autoComplete="off"
                     onChange={(event) => {
                       setBaseName(event.target.value);
@@ -1109,10 +1347,12 @@ export function ProductNameAssistant({
                     <p className="text-muted-foreground">
                       {selectedNameOption
                         ? "Opción seleccionada de la propuesta."
-                        : "Editado manualmente después del análisis."}
+                        : baseName === currentName?.trim()
+                          ? "Se mantiene el nombre actual."
+                          : "Editado manualmente después del análisis."}
                     </p>
                     <span className="tabular-nums text-muted-foreground">
-                      {suggestion.length}/{PRODUCT_NAME_RECOMMENDED_MAX_LENGTH}
+                      {baseName.length}/{PRODUCT_NAME_HARD_MAX_LENGTH}
                     </span>
                   </div>
                 </div>
@@ -1122,7 +1362,12 @@ export function ProductNameAssistant({
                     <span className="text-muted-foreground">
                       Resultado que se aplicará:{" "}
                     </span>
-                    <span className="font-medium">{suggestion.name}</span>
+                    <span className="font-medium">
+                      {fitProductName(
+                        suggestion.name,
+                        PRODUCT_NAME_HARD_MAX_LENGTH,
+                      )}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1145,6 +1390,12 @@ export function ProductNameAssistant({
                 {visualAnalysis.brand && (
                   <ReviewFieldCard
                     id="apply-ai-brand"
+                    evidence={
+                      <FieldEvidence
+                        evidence={visualAnalysis.fieldEvidence.brand}
+                        photoUrls={evidenceThumbnails}
+                      />
+                    }
                     label="Marca o fabricante"
                     value={visualAnalysis.brand}
                     current={brand}
@@ -1165,6 +1416,12 @@ export function ProductNameAssistant({
                 {visualAnalysis.categoryName && (
                   <ReviewFieldCard
                     id="apply-ai-category"
+                    evidence={
+                      <FieldEvidence
+                        evidence={visualAnalysis.fieldEvidence.category}
+                        photoUrls={evidenceThumbnails}
+                      />
+                    }
                     label="Subcategoría"
                     value={visualAnalysis.categoryName}
                     current={categoryName}
@@ -1223,6 +1480,12 @@ export function ProductNameAssistant({
                 {visualAnalysis.sizeName && (
                   <ReviewFieldCard
                     id="apply-ai-size"
+                    evidence={
+                      <FieldEvidence
+                        evidence={visualAnalysis.fieldEvidence.size}
+                        photoUrls={evidenceThumbnails}
+                      />
+                    }
                     label="Tamaño o formato"
                     value={visualAnalysis.sizeName}
                     current={sizeName}
@@ -1275,6 +1538,12 @@ export function ProductNameAssistant({
                 {visualAnalysis.colorName && (
                   <ReviewFieldCard
                     id="apply-ai-color"
+                    evidence={
+                      <FieldEvidence
+                        evidence={visualAnalysis.fieldEvidence.color}
+                        photoUrls={evidenceThumbnails}
+                      />
+                    }
                     label="Color"
                     value={visualAnalysis.colorName}
                     current={colorName}
@@ -1332,6 +1601,12 @@ export function ProductNameAssistant({
                 {visualAnalysis.designName && (
                   <ReviewFieldCard
                     id="apply-ai-design"
+                    evidence={
+                      <FieldEvidence
+                        evidence={visualAnalysis.fieldEvidence.design}
+                        photoUrls={evidenceThumbnails}
+                      />
+                    }
                     label="Diseño"
                     value={visualAnalysis.designName}
                     current={designName}
@@ -1426,7 +1701,13 @@ export function ProductNameAssistant({
                     <p className="mt-1 text-muted-foreground">
                       Se conservarán títulos, negritas y listas en el editor del
                       producto.
+                      {!isEmptyValue(currentDescription) &&
+                        " El producto ya tiene descripción: solo se reemplaza si marcas esta casilla."}
                     </p>
+                    <FieldEvidence
+                      evidence={visualAnalysis.fieldEvidence.description}
+                      photoUrls={evidenceThumbnails}
+                    />
                     <div className="mt-3 rounded-md border bg-background p-3">
                       <RichTextDisplay
                         content={visualAnalysis.suggestedDescription}
@@ -1557,6 +1838,41 @@ export function ProductNameAssistant({
               </div>
             )}
 
+            {visualAnalysis.keywords.length > 0 && (
+              <div className="rounded-md border border-dashed p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <h5 className="font-medium">Palabras de búsqueda</h5>
+                    <p className="mt-1 text-pretty text-muted-foreground">
+                      Cópialas a la descripción o a la publicación si sirven. No
+                      se guardan solas.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={copyKeywords}
+                  >
+                    {copiedKeywords ? (
+                      <Check aria-hidden="true" className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Copy aria-hidden="true" className="mr-2 h-4 w-4" />
+                    )}
+                    {copiedKeywords ? "Copiadas" : "Copiar"}
+                  </Button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {visualAnalysis.keywords.map((keyword) => (
+                    <Badge key={keyword} variant="secondary">
+                      {keyword}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {visualAnalysis.variantRecommendation.shouldCreateVariants && (
               <div className="rounded-md border border-dashed p-3">
                 <div className="flex gap-2">
@@ -1650,20 +1966,32 @@ export function ProductNameAssistant({
                   <span>Selecciona al menos 1 campo para continuar.</span>
                 )}
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={
-                  disabled || selectedReviewCount === 0 || !reviewedNameIsValid
-                }
-                onClick={applyReviewedProposal}
-                className="shrink-0"
-              >
-                <Check aria-hidden="true" className="mr-2 h-4 w-4" />
-                Aplicar {selectedReviewCount} campo
-                {selectedReviewCount === 1 ? "" : "s"} seleccionado
-                {selectedReviewCount === 1 ? "" : "s"}
-              </Button>
+              <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled}
+                  onClick={applyAllEmptyFields}
+                >
+                  <Wand2 aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Aplicar todo lo vacío
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={
+                    disabled ||
+                    selectedReviewCount === 0 ||
+                    !reviewedNameIsValid
+                  }
+                  onClick={() => applyReviewedProposal()}
+                >
+                  <Check aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Aplicar {selectedReviewCount} campo
+                  {selectedReviewCount === 1 ? "" : "s"} seleccionado
+                  {selectedReviewCount === 1 ? "" : "s"}
+                </Button>
+              </div>
             </div>
           </div>
         )}

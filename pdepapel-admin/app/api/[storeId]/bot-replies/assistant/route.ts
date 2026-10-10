@@ -1,10 +1,8 @@
 import { createHash } from "node:crypto";
 
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { auth } from "@clerk/nextjs/server";
 import { Redis } from "@upstash/redis";
 import { ConversationMessageDirection } from "@prisma/client";
-import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
 
 import { logModelUsage } from "@/lib/ai-usage";
@@ -26,6 +24,8 @@ import {
   sanitizeBotReplyProposals,
   selectUnansweredMessages,
 } from "@/lib/whatsapp/bot-reply-assistant";
+import { createAiProviders } from "@/lib/ai-model-providers";
+import { AiBusyError, runStructured } from "@/lib/ai-provider";
 
 /**
  * Propone respuestas automáticas a partir de lo que las clientas preguntaron
@@ -37,13 +37,19 @@ const RATE_LIMIT_EXPIRY_SECONDS = 60 * 60 * 48;
 /** Solo se miran conversaciones recientes: el año pasado ya no representa. */
 const LOOKBACK_DAYS = 180;
 const MAX_CONVERSATIONS = 500;
+const BOT_REPLY_ASSISTANT_TIMEOUT_MS = 50_000;
 
 function getModelError(error: unknown) {
+  if (error instanceof AiBusyError) return error;
   const message = error instanceof Error ? error.message : "";
 
   // El modelo contestó algo que no encaja en el esquema. Es un fallo nuestro o
   // suyo, no de quien está usando el panel: se dice en cristiano y con 422.
-  if (/No object generated|did not match schema|AI_NoObjectGenerated/i.test(message)) {
+  if (
+    /No object generated|did not match schema|AI_NoObjectGenerated/i.test(
+      message,
+    )
+  ) {
     return new AppError(
       "El asistente devolvió una respuesta que no se pudo leer. Vuelve a intentarlo.",
       422,
@@ -83,8 +89,7 @@ async function getRemainingDailyRuns(redis: Redis, storeId: string) {
 
   return Math.max(
     0,
-    BOT_REPLY_ASSISTANT_DAILY_LIMIT -
-      (typeof count === "number" ? count : 0),
+    BOT_REPLY_ASSISTANT_DAILY_LIMIT - (typeof count === "number" ? count : 0),
   );
 }
 
@@ -98,9 +103,11 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!env.GEMINI_API_KEY) {
+    // Lee mensajes reales de clientas: solo OpenAI, nunca un proveedor gratuito.
+    const { openai } = createAiProviders({ openai: env.OPENAI_API_KEY });
+    if (!openai) {
       throw new AppError(
-        "El asistente aún no está configurado. Agrega GEMINI_API_KEY antes de usarlo.",
+        "El asistente aún no está configurado. Falta la clave de OpenAI en Vercel.",
         503,
       );
     }
@@ -160,7 +167,10 @@ export async function POST(
             .filter((message): message is { body: string; createdAt: Date } =>
               Boolean(message.body?.trim()),
             )
-            .map((message) => ({ body: message.body, createdAt: message.createdAt })),
+            .map((message) => ({
+              body: message.body,
+              createdAt: message.createdAt,
+            })),
           activeReplies,
         );
       }
@@ -216,12 +226,15 @@ export async function POST(
 
     const remainingToday = await reserveDailyRun(redis, params.storeId);
 
-    const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY });
     let result;
     try {
-      result = await generateText({
-        model: google("gemini-3.5-flash-lite"),
-        output: Output.object({ schema: botReplyAssistantOutputSchema }),
+      result = await runStructured({
+        feature: "bot-replies.assistant",
+        schema: botReplyAssistantOutputSchema,
+        primary: openai,
+        fallback: null,
+        store: redis,
+        timeoutMs: BOT_REPLY_ASSISTANT_TIMEOUT_MS,
         prompt: buildBotReplyAssistantPrompt({
           mode: payload.mode,
           topic: payload.topic,
