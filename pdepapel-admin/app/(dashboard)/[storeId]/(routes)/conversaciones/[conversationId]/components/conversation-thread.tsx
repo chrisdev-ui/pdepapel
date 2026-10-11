@@ -108,6 +108,9 @@ function OrderRequestCard({
           </li>
         ))}
       </ul>
+      <p className="mt-1 text-xs font-semibold">
+        Total {currencyFormatter(record.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0))} sin envío
+      </p>
       <p className="mt-1 text-[11px] text-muted-foreground">Sin apartar ni cobrar: confírmale envío y pago.</p>
       {pending && onDismiss ? (
         <Button type="button" size="xs" variant="ghost" className="mt-1" disabled={busy} onClick={onDismiss}>

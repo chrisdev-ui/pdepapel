@@ -5,9 +5,11 @@ import {
   ORDER_TEMPLATES,
   ORDER_TEMPLATES_VERSION,
   areOrderRepliesApproved,
+  formatOrderLine,
   isOfferFresh,
   isShippingCostQuestion,
   offeredProductId,
+  orderTotal,
   parseAppendRequest,
   parseOrderReply,
 } from "@/lib/whatsapp/bot-order-request";
@@ -101,5 +103,29 @@ describe("aprobación del grupo de pedidos", () => {
     expect(ORDER_TEMPLATES["shipping.quote"]("", "")).toBe(
       "El valor del envío depende de tu ciudad y lo cotiza la transportadora 💛 Paula te confirma el valor exacto.",
     );
+  });
+});
+
+describe("el pedido dice el total, no el precio de una unidad", () => {
+  const money = (value: number) => `$${value.toLocaleString("es-CO")}`;
+  const items = [
+    { productId: "a", name: "Tote bag Italia", quantity: 2, unitPrice: 35000, stockConfirmed: true },
+    { productId: "b", name: "Lapicero", quantity: 3, unitPrice: 3500, stockConfirmed: true },
+  ];
+
+  it("cada línea con su subtotal y la suma de todas", () => {
+    expect(formatOrderLine(items[0], money)).toBe("• Tote bag Italia × 2: $70.000");
+    expect(orderTotal(items)).toBe(80500);
+  });
+
+  it("los textos llevan el total y aclaran que es sin envío", () => {
+    expect(ORDER_TEMPLATES["order.requested.one"]("Tote bag Italia", 2, money(70000))).toBe(
+      "¡Listo! 💛 Le paso tu pedido a Paula: Tote bag Italia × 2, total $70.000 (sin envío). Ella te escribe para confirmar envío y pago.",
+    );
+    const lines = items.map((item) => formatOrderLine(item, money)).join("\n");
+    expect(ORDER_TEMPLATES["order.requested.many"](lines, money(orderTotal(items)))).toBe(
+      "¡Listo! 💛 Le paso tu pedido a Paula:\n• Tote bag Italia × 2: $70.000\n• Lapicero × 3: $10.500\nTotal: $80.500 (sin envío)\nElla te escribe para confirmar envío y pago.",
+    );
+    expect(ORDER_TEMPLATES["order.appended"](lines, money(orderTotal(items)))).toContain("\nTotal: $80.500 (sin envío)\nPaula te escribe");
   });
 });

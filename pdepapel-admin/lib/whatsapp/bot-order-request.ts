@@ -25,13 +25,14 @@ const OFFER_CLOSINGS = ["¿Lo quieres?", "¿Te lo aparto?"];
  * `botCasual*`): sin ese visto bueno nada de esto se envía.
  */
 export const ORDER_TEMPLATES = {
-  "order.requested.one": (producto: string, cantidad: number, precio: string) =>
-    `¡Listo! 💛 Le paso tu pedido a Paula: ${producto} × ${cantidad} (${precio}). Ella te escribe para confirmar envío y pago.`,
-  "order.requested.many": (lineas: string) =>
-    `¡Listo! 💛 Le paso tu pedido a Paula:\n${lineas}\nElla te escribe para confirmar envío y pago.`,
+  "order.requested.one": (producto: string, cantidad: number, total: string) =>
+    `¡Listo! 💛 Le paso tu pedido a Paula: ${producto} × ${cantidad}, total ${total} (sin envío). Ella te escribe para confirmar envío y pago.`,
+  "order.requested.many": (lineas: string, total: string) =>
+    `¡Listo! 💛 Le paso tu pedido a Paula:\n${lineas}\nTotal: ${total} (sin envío)\nElla te escribe para confirmar envío y pago.`,
   "order.check_stock": (producto: string, cantidad: number) =>
     `Le paso tu pedido a Paula 💛 ${producto} × ${cantidad}. Ella te confirma si tenemos esa cantidad, el envío y el pago.`,
-  "order.appended": (lineas: string) => `Lo sumo a tu pedido 💛 Va así:\n${lineas}\nPaula te escribe para confirmar envío y pago.`,
+  "order.appended": (lineas: string, total: string) =>
+    `Lo sumo a tu pedido 💛 Va así:\n${lineas}\nTotal: ${total} (sin envío)\nPaula te escribe para confirmar envío y pago.`,
   /** Escribió desde un botón de la tienda web (lib/whatsapp/web-origin.ts). Cuenta como la bienvenida del día. */
   "web.greeting": () => "¡Hola! 💛 Qué bueno que nos escribes desde la web.",
   "web.cart": () => "¡Hola! 💛 Vi que vienes de tu carrito. ¿Cuál es tu duda? Te ayudo con envío, formas de pago o disponibilidad.",
@@ -83,8 +84,11 @@ export interface OrderRequestRecord {
   dismissedBy?: string;
 }
 
+/** Cada línea con su subtotal: «× 2 ($35.000)» se leía como el precio de las dos. */
 export const formatOrderLine = (item: OrderItem, money: (value: number) => string) =>
-  `• ${item.name} × ${item.quantity} (${money(item.unitPrice)})`;
+  `• ${item.name} × ${item.quantity}: ${money(item.unitPrice * item.quantity)}`;
+
+export const orderTotal = (items: OrderItem[]) => items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
 /** Lo que el bot ofreció con «¿Lo quieres?»: un solo producto, en ese mensaje. */
 export function offeredProductId(message: { body: string | null; metadata: unknown } | null): string | null {
@@ -175,10 +179,10 @@ export function previewOrderTemplates(money: (value: number) => string): { label
     { productId: "b", name: "Lapicero gel negro", quantity: 2, unitPrice: 3500, stockConfirmed: true },
   ];
   return [
-    { label: "Dice que sí a un producto", text: t["order.requested.one"](items[0].name, 1, money(items[0].unitPrice)) },
-    { label: "Dice que sí y pide algo más en el mismo mensaje", text: t["order.requested.many"](items.map((i) => formatOrderLine(i, money)).join("\n")) },
+    { label: "Dice que sí a un producto (2 unidades)", text: t["order.requested.one"](items[0].name, 2, money(items[0].unitPrice * 2)) },
+    { label: "Dice que sí y pide algo más en el mismo mensaje", text: t["order.requested.many"](items.map((i) => formatOrderLine(i, money)).join("\n"), money(orderTotal(items))) },
     { label: "Pide más de lo que hay (no se promete)", text: t["order.check_stock"](items[0].name, 30) },
-    { label: "Ya pasado a Paula, suma otro producto", text: t["order.appended"](items.map((i) => formatOrderLine(i, money)).join("\n")) },
+    { label: "Ya pasado a Paula, suma otro producto", text: t["order.appended"](items.map((i) => formatOrderLine(i, money)).join("\n"), money(orderTotal(items))) },
     { label: "Escribe desde un producto de la tienda web (saludo + la respuesta de producto de siempre)", text: `${t["web.greeting"]()}\n\nSí 💛 Tengo ${items[0].name} en ${money(items[0].unitPrice)}. ¿Lo quieres?` },
     { label: "Escribe desde el carrito de la tienda web", text: t["web.cart"]() },
     { label: "Escribe desde la página de un pedido (pasa a Paula; nunca da el estado)", text: t["web.order"]("ORD-0000000000000-000") },

@@ -25,6 +25,7 @@ import {
   ORDER_TEMPLATES,
   areOrderRepliesApproved,
   formatOrderLine,
+  orderTotal,
   isOfferFresh,
   isShippingCostQuestion,
   offeredProductId,
@@ -1047,7 +1048,8 @@ function orderItem(product: { id: string; name: string; price: number; stock: nu
     productId: product.id,
     name: product.name,
     quantity,
-    unitPrice: product.price,
+    // El mismo peso entero que enseñó la oferta (`formatCOP` redondea); así cada subtotal es cantidad × ese precio.
+    unitPrice: Math.round(product.price),
     stockConfirmed: quantity <= MAX_ORDER_QUANTITY && quantity <= product.stock,
   };
 }
@@ -1143,8 +1145,8 @@ async function handOffOrderRequest(
   const text = !first.stockConfirmed
     ? ORDER_TEMPLATES["order.check_stock"](product.name, reply.quantity)
     : items.length === 1
-      ? ORDER_TEMPLATES["order.requested.one"](product.name, first.quantity, formatCOP(first.unitPrice))
-      : ORDER_TEMPLATES["order.requested.many"](items.map((item) => formatOrderLine(item, formatCOP)).join("\n"));
+      ? ORDER_TEMPLATES["order.requested.one"](product.name, first.quantity, formatCOP(orderTotal(items)))
+      : ORDER_TEMPLATES["order.requested.many"](items.map((item) => formatOrderLine(item, formatCOP)).join("\n"), formatCOP(orderTotal(items)));
 
   // Como en el paso 7: se marca antes de la pausa humana, para que un segundo
   // «sí» durante la espera no vuelva a contestar.
@@ -1187,7 +1189,7 @@ async function appendToOrderRequest(
   const sent = await deliver(
     conversation.id,
     input.recipient,
-    ORDER_TEMPLATES["order.appended"](items.map((existing) => formatOrderLine(existing, formatCOP)).join("\n")),
+    ORDER_TEMPLATES["order.appended"](items.map((existing) => formatOrderLine(existing, formatCOP)).join("\n"), formatCOP(orderTotal(items))),
     [],
     pacing(input),
     { omitOwnerButton: true, orderRequest: updated },

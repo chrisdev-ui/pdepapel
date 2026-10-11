@@ -195,7 +195,7 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
     const id = await withOffer();
     expect((await answer(id, await inbound(id, "sí"))).outcome).toBe("replied_order_request");
     expect(sent.messages).toEqual([
-      "¡Listo! 💛 Le paso tu pedido a Paula: Cuaderno Argollado Norma 5 Materias × 1 ($33.000). Ella te escribe para confirmar envío y pago.",
+      "¡Listo! 💛 Le paso tu pedido a Paula: Cuaderno Argollado Norma 5 Materias × 1, total $33.000 (sin envío). Ella te escribe para confirmar envío y pago.",
     ]);
     expect(await state(id)).toEqual({
       status: "NEEDS_OWNER",
@@ -208,7 +208,7 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
   it("«sí, 2» lleva la cantidad", async () => {
     const id = await withOffer();
     await answer(id, await inbound(id, "sí, 2"));
-    expect(sent.messages[0]).toContain("× 2 ($33.000)");
+    expect(sent.messages[0]).toContain("× 2, total $66.000 (sin envío)");
     expect((await state(id)).lastItems[0]).toMatchObject({ quantity: 2, stockConfirmed: true });
   });
 
@@ -223,7 +223,7 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
     const id = await withOffer();
     await answer(id, await inbound(id, "sí, y también quiero 2 lapiceros"));
     expect(sent.messages).toHaveLength(1);
-    expect(sent.messages[0]).toContain("• Cuaderno Argollado Norma 5 Materias × 1 ($33.000)\n• Lapicero gel negro Prueba × 2 ($3.500)");
+    expect(sent.messages[0]).toContain("• Cuaderno Argollado Norma 5 Materias × 1: $33.000\n• Lapicero gel negro Prueba × 2: $7.000\nTotal: $40.000 (sin envío)");
     expect((await state(id)).lastItems.map((item) => item.name)).toEqual(["Cuaderno Argollado Norma 5 Materias", "Lapicero gel negro Prueba"]);
   });
 
@@ -232,7 +232,7 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
     await answer(id, await inbound(id, "sí"));
     sent.messages.length = 0;
     expect((await answer(id, await inbound(id, "y también 2 lapiceros"))).outcome).toBe("replied_order_appended");
-    expect(sent.messages).toEqual(["Lo sumo a tu pedido 💛 Va así:\n• Cuaderno Argollado Norma 5 Materias × 1 ($33.000)\n• Lapicero gel negro Prueba × 2 ($3.500)\nPaula te escribe para confirmar envío y pago."]);
+    expect(sent.messages).toEqual(["Lo sumo a tu pedido 💛 Va así:\n• Cuaderno Argollado Norma 5 Materias × 1: $33.000\n• Lapicero gel negro Prueba × 2: $7.000\nTotal: $40.000 (sin envío)\nPaula te escribe para confirmar envío y pago."]);
     sent.messages.length = 0;
     expect((await answer(id, await inbound(id, "también un cuaderno"))).outcome).toBe("skipped_needs_owner");
     expect(sent.messages).toEqual([]);
@@ -387,5 +387,20 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
     await answer(id, await inbound(id, "sí, la pistola"));
     expect(sent.messages).toHaveLength(1);
     expect(sent.messages[0]).toContain("Pistola de silicona Prueba");
+  });
+
+  it("precio con centavos: el subtotal es la cantidad por el precio que enseñó la oferta", async () => {
+    const store = fixture.store.id;
+    const attributes = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture.component.id }, select: { colorId: true, sizeId: true, designId: true } });
+    const borrador = await testPrisma.product.create({
+      data: { storeId: store, categoryId: fixture.category.id, ...attributes, name: "Borrador nata Prueba", description: "Sintético", slug: `prueba-${randomUUID().slice(0, 8)}`, price: 3499.6, stock: 9, sku: `SIM-${randomUUID().slice(0, 6)}` } as never,
+    });
+    const { answerAboutProduct } = await import("@/lib/whatsapp/bot-products");
+    const offer = (await answerAboutProduct(store, borrador.id, "product.search"))!.text;
+    expect(offer).toBe("Sí 💛 Tengo Borrador nata Prueba en $3.500. ¿Lo quieres?");
+    const id = await withOffer({ offer, ids: [borrador.id] });
+    await answer(id, await inbound(id, "sí, 3"));
+    expect(sent.messages).toEqual(["¡Listo! 💛 Le paso tu pedido a Paula: Borrador nata Prueba × 3, total $10.500 (sin envío). Ella te escribe para confirmar envío y pago."]);
+    expect((await state(id)).lastItems).toEqual([expect.objectContaining({ unitPrice: 3500, quantity: 3 })]);
   });
 });
