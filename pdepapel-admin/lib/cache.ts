@@ -112,6 +112,16 @@ async function purgeRedisProductKeys(
   }
 }
 
+/** El feed del catálogo de Meta lleva precio, oferta y existencias: se borra para que la próxima descarga lo rehaga. */
+async function purgeMetaCatalogFeed(storeId: string) {
+  try {
+    const { invalidateMetaCatalogFeedCache } = await import("./meta-catalog-feed");
+    await invalidateMetaCatalogFeedCache(storeId);
+  } catch (error) {
+    console.warn(`Meta catalog feed purge skipped for store ${storeId}:`, error instanceof Error ? error.message : error);
+  }
+}
+
 /**
  * Invalidates store products cache across layers:
  * 1. Edge CDN (Storefront On-Demand Revalidation)
@@ -137,14 +147,15 @@ export async function invalidateStoreProductsCache(
       triggerStorefrontRevalidation({ productId }),
       purgeRedisProductKeys(storeId, purgeBudgetMs),
       enqueuePendingMarketplaceOutboxEventsForStore(storeId),
+      purgeMetaCatalogFeed(storeId),
     ]),
   );
 }
 
 /**
  * Invalida lo que depende de las promociones: la lista de ofertas activas en
- * Redis, las consultas de productos cacheadas (llevan precio con descuento) y
- * las páginas ISR de la tienda. Se llama al crear, editar, borrar o apagar una
+ * Redis, las consultas de productos cacheadas (llevan precio con descuento),
+ * las páginas ISR de la tienda y el feed del catálogo de Meta (`sale_price`). Se llama al crear, editar, borrar o apagar una
  * oferta y desde el cron diario cuando alguna vigencia cambia.
  */
 export async function invalidateStorePromotionsCache(
@@ -167,6 +178,7 @@ export async function invalidateStorePromotionsCache(
       purgeActiveOffers(),
       purgeRedisProductKeys(storeId),
       triggerStorefrontRevalidation(),
+      purgeMetaCatalogFeed(storeId),
     ]),
   );
 }

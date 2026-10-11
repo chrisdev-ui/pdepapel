@@ -274,6 +274,26 @@ export function getMetaCatalogFeedCacheKeys(storeId: string) {
   };
 }
 
+/**
+ * Borra el feed guardado: la próxima descarga de Meta lo reconstruye con los
+ * precios y ofertas de ahora. Solo toca nuestra caché, nunca llama a Meta, y
+ * nunca lanza: quien guarda una oferta o un producto no debe fallar por esto.
+ * Borrar es idempotente y la reconstrucción espera a la descarga de Meta, así
+ * que varias invalidaciones seguidas cuestan una sola reconstrucción.
+ */
+export async function invalidateMetaCatalogFeedCache(storeId: string): Promise<boolean> {
+  const redis = getFeedRedis();
+  if (!redis) return false;
+  try {
+    const keys = getMetaCatalogFeedCacheKeys(storeId);
+    await redis.del(keys.feed, keys.report);
+    return true;
+  } catch (error) {
+    console.warn(`Meta catalog feed cache invalidation failed for ${storeId}:`, error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+
 export async function readCachedMetaCatalogFeed(
   storeId: string,
 ): Promise<MetaCatalogFeed | null> {

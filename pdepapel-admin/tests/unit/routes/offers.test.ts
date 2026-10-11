@@ -149,4 +149,30 @@ describe("offer routes", () => {
     expect(mocks.offerUpdateMany.mock.calls[0][0]).toEqual({ where: { id: { in: ["a", "b"] }, storeId: "store-1", isActive: true }, data: { isActive: false } });
     expect(mocks.invalidate).toHaveBeenCalledTimes(1);
   });
+
+  it("each offer action invalidates the promotions (and the Meta feed) exactly once", async () => {
+    mocks.offerCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "o1", ...data }));
+    mocks.offerFindFirst.mockResolvedValue({ id: "o1", isActive: true });
+    mocks.offerUpdate.mockResolvedValue({ id: "o1" });
+    mocks.offerDelete.mockResolvedValue({ id: "o1" });
+    mocks.offerCount.mockResolvedValue(2);
+    mocks.offerDeleteMany.mockResolvedValue({ count: 2 });
+    mocks.offerUpdateMany.mockResolvedValue({ count: 2 });
+    const actions: [string, () => Promise<Response>][] = [
+      ["create", () => POST(json("POST", valid), { params })],
+      ["edit", () => PATCH(json("PATCH", valid), { params: itemParams })],
+      ["end", () => PUT(json("PUT"), { params: itemParams })],
+      ["delete", () => DELETE(json("DELETE"), { params: itemParams })],
+      ["bulk delete", () => bulkDelete(json("DELETE", { ids: ["a", "b"] }), { params })],
+      ["bulk end", () => bulkEnd(json("PATCH", { ids: ["a", "b"] }), { params })],
+      ["update validity", () => updateValidity(json("POST"), { params })],
+    ];
+    for (const [label, run] of actions) {
+      mocks.invalidate.mockClear();
+      mocks.offerFindFirst.mockResolvedValue({ id: "o1", isActive: true });
+      const response = await run();
+      expect(response.status, label).toBe(200);
+      expect(mocks.invalidate, label).toHaveBeenCalledTimes(1);
+    }
+  });
 });

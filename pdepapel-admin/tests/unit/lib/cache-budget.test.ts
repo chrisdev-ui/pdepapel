@@ -11,7 +11,7 @@ vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: redis.fromEnv } }));
 vi.mock("@/lib/revalidate-store", () => ({ triggerStorefrontRevalidation: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/mercadolibre/outbox", () => ({ enqueuePendingMarketplaceOutboxEventsForStore: vi.fn().mockResolvedValue(0) }));
 
-import { invalidateStoreProductsCache, withTimeBudget } from "@/lib/cache";
+import { invalidateStoreProductsCache, invalidateStorePromotionsCache, withTimeBudget } from "@/lib/cache";
 
 describe("cache invalidation never holds the request", () => {
   beforeEach(() => {
@@ -67,5 +67,30 @@ describe("cache invalidation never holds the request", () => {
     await expect(withTimeBudget("rápido", 200, Promise.resolve(42))).resolves.toBe(42);
     await expect(withTimeBudget("lento", 30, new Promise(() => {}))).resolves.toBeUndefined();
     await expect(withTimeBudget("roto", 200, Promise.reject(new Error("x")))).resolves.toBeUndefined();
+  });
+
+  it("offer changes also drop the cached Meta catalog feed, once", async () => {
+    redis.scan.mockResolvedValue([0, []]);
+    await invalidateStorePromotionsCache("s1");
+    const metaCalls = redis.del.mock.calls.filter((args) => args.includes("store:s1:meta-catalog:feed"));
+    expect(metaCalls).toEqual([["store:s1:meta-catalog:feed", "store:s1:meta-catalog:report"]]);
+    expect(redis.del).toHaveBeenCalledWith("store:s1:active-offers");
+  });
+
+  it("product saves drop the cached Meta catalog feed too (price and stock are in it)", async () => {
+    redis.scan.mockResolvedValue([0, []]);
+    await invalidateStoreProductsCache("s1");
+    expect(redis.del).toHaveBeenCalledWith("store:s1:meta-catalog:feed", "store:s1:meta-catalog:report");
+  });
+
+  it("a failing Meta feed purge never breaks the save nor the other purges", async () => {
+    redis.scan.mockResolvedValue([0, []]);
+    redis.del.mockImplementation(async (...keys: string[]) => {
+      if (keys.includes("store:s1:meta-catalog:feed")) throw new Error("redis caído");
+      return 1;
+    });
+    await expect(invalidateStorePromotionsCache("s1")).resolves.toBeUndefined();
+    expect(redis.del).toHaveBeenCalledWith("store:s1:active-offers");
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Meta catalog feed cache invalidation failed"), "redis caído");
   });
 });
