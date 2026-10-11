@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { priceLines } from "@/lib/product-pricing";
 import { getCloudinaryImageUrl } from "@/lib/cloudinary-image-loader";
 import {
   productNameTokenSearchWhere,
@@ -346,13 +347,43 @@ export function fallbackQueryFromMessage(body: string): string {
 /**
  * `select` cerrado a propósito. `stock` entra aquí y no sale: lo que se
  * devuelve es un booleano. Ninguna plantilla, ni quien llame, ve el número.
+ * Categoría y grupo solo sirven para encontrar las ofertas vigentes.
  */
 const MATCH_SELECT = {
   id: true,
   name: true,
   price: true,
   stock: true,
+  categoryId: true,
+  productGroupId: true,
 } as const;
+
+interface PricedRow {
+  id: string;
+  price: number;
+  categoryId: string;
+  productGroupId: string | null;
+}
+
+/**
+ * Lo que cobra la tienda por unidad a esa cantidad: precio de lista, la mejor
+ * oferta vigente o la escalera por cantidad, con el mismo cálculo del checkout
+ * (`priceLines`), y al peso, como lo escribe `formatCOP`. Si el cálculo falla
+ * se cotiza el precio de lista antes que dejar a la clienta sin respuesta.
+ */
+export async function effectiveUnitPrices(storeId: string, rows: PricedRow[], quantity = 1): Promise<Map<string, number>> {
+  const result = new Map(rows.map((row) => [row.id, Math.round(row.price)]));
+  if (rows.length === 0) return result;
+  try {
+    const priced = await priceLines(storeId, rows.map((row) => ({ productId: row.id, quantity })), rows);
+    priced.forEach((line, id) => result.set(id, Math.round(line.unitPrice)));
+  } catch (error) {
+    console.warn("[WHATSAPP_BOT] No se pudo calcular el precio con ofertas; se usa el de lista", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return result;
+}
 
 /**
  * Primero por nombre; a la descripción solo si el nombre no da nada.
@@ -417,12 +448,15 @@ async function buscarCon(
       name: string;
       price: number;
       stock: number;
+      categoryId: string;
+      productGroupId: string | null;
       description?: string | null;
       images: { url: string }[];
     }[],
     number,
   ];
-  return { rows, total };
+  const prices = await effectiveUnitPrices(storeId, rows);
+  return { rows: rows.map((row) => ({ ...row, price: prices.get(row.id) ?? row.price })), total };
 }
 
 /** El ancho que ya usan la tienda y el panel; pedir otro crearía copias nuevas. */
@@ -1175,6 +1209,12 @@ export interface ProductDecision {
   outcome: "match" | "partial" | "unsure";
 }
 
+/** Los precios que dice el texto, cuando todos los productos llevan uno (búsqueda, precio, foto). */
+function quotedPrices(matches: readonly unknown[]): number[] | undefined {
+  const prices = matches.map((match) => (match as { price?: unknown }).price);
+  return prices.length > 0 && prices.every((price): price is number => typeof price === "number") ? (prices as number[]) : undefined;
+}
+
 export interface ProductAnswer {
   intent: ProductIntent;
   text: string;
@@ -1193,6 +1233,8 @@ export interface ProductAnswer {
    * el mensaje para que «el primero» tenga a qué referirse.
    */
   shownIds?: string[];
+  /** El precio por unidad que dice el texto, en el orden de `shownIds`; solo si lo dice. */
+  shownPrices?: number[];
   /**
    * Cuando hay varios, se manda como lista tocable en vez de como texto.
    * `text` sigue siendo la versión escrita, que es a la que se cae si Meta
@@ -1331,6 +1373,7 @@ export async function answerProductQuestion(
       text,
       photo: value.photo,
       shownIds: value.ids,
+      shownPrices: quotedPrices(value.matches),
       list: listaSiHayVarios(value, rows),
       decision,
     };
@@ -1362,6 +1405,7 @@ export async function answerProductQuestion(
           text: renderPartialSearch(soloTipo.faltante, soloTipo.tipo, v),
           photo: v.photo,
           shownIds: v.ids,
+          shownPrices: quotedPrices(v.matches),
           list:
             v.total >= 2 && filas.length >= 2
               ? {
@@ -1504,10 +1548,13 @@ export async function answerAboutProduct(
     name: string;
     price: number;
     stock: number;
+    categoryId: string;
+    productGroupId: string | null;
     description: string | null;
     images: { url: string }[];
   } | null;
   if (!producto) return null;
+  const precio = (await effectiveUnitPrices(storeId, [producto])).get(producto.id) ?? producto.price;
 
   const foto = pickPhoto(producto.images);
   const base = { total: 1, hasMore: false, ids: [producto.id], photo: foto };
@@ -1540,11 +1587,12 @@ export async function answerAboutProduct(
 
   const uno: SearchResult<ProductMatch> = {
     ...base,
-    matches: [{ name: producto.name, price: producto.price }],
+    matches: [{ name: producto.name, price: precio }],
   };
+  const conPrecio = { ...comun, shownPrices: [precio] };
   if (intent === "product.price")
-    return { ...comun, text: renderProductPrice(uno) };
+    return { ...conPrecio, text: renderProductPrice(uno) };
   if (intent === "product.photo")
-    return { ...comun, text: renderProductPhoto(uno) };
-  return { ...comun, text: renderProductSearch(uno) };
+    return { ...conPrecio, text: renderProductPhoto(uno) };
+  return { ...conPrecio, text: renderProductSearch(uno) };
 }

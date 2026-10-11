@@ -16,6 +16,8 @@ export const REFERENCE_TTL_MS = 10 * 60 * 1000;
 export interface ShownProducts {
   ids: string[];
   intent: ProductIntent;
+  /** El precio por unidad que dijo el mensaje, en el orden de `ids`; solo si lo dijo. */
+  prices?: number[];
 }
 
 export type ProductReference =
@@ -144,7 +146,12 @@ export function parseShownProducts(metadata: unknown): ShownProducts | null {
   if (!Array.isArray(ids) || ids.length === 0) return null;
   const limpios = ids.filter((id): id is string => typeof id === "string" && id.length > 0);
   if (!limpios.length || typeof intent !== "string") return null;
-  return { ids: limpios, intent: intent as ProductIntent };
+  const prices = (shown as { prices?: unknown }).prices;
+  const precios =
+    limpios.length === ids.length && Array.isArray(prices) && prices.length === ids.length && prices.every((p) => typeof p === "number" && Number.isFinite(p))
+      ? (prices as number[])
+      : null;
+  return { ids: limpios, intent: intent as ProductIntent, ...(precios ? { prices: precios } : {}) };
 }
 
 /**

@@ -53,6 +53,7 @@ import {
   answerAboutProduct,
   answerProductQuestion,
   buildOwnerRow,
+  effectiveUnitPrices,
   formatCOP,
   looksLikeProductQuestion,
   resolveProductSearch,
@@ -60,6 +61,7 @@ import {
 } from "@/lib/whatsapp/bot-products";
 import {
   detectProductReference,
+  parseShownProducts,
   readShownIntentForProduct,
   resolveProductReference,
   type ShownProducts,
@@ -512,7 +514,7 @@ export async function runWhatsAppBot(input: {
         photo: answer.photo,
         // Abre ventana nueva: si después escribe «ese», eso es lo que señala.
         shown: answer.shownIds
-          ? { ids: answer.shownIds, intent: answer.intent }
+          ? { ids: answer.shownIds, intent: answer.intent, ...(answer.shownPrices ? { prices: answer.shownPrices } : {}) }
           : null,
       },
     );
@@ -800,7 +802,7 @@ export async function runWhatsAppBot(input: {
             {
               photo: answer.photo,
               shown: answer.shownIds
-                ? { ids: answer.shownIds, intent: answer.intent }
+                ? { ids: answer.shownIds, intent: answer.intent, ...(answer.shownPrices ? { prices: answer.shownPrices } : {}) }
                 : null,
               list: answer.list,
             },
@@ -950,7 +952,7 @@ export async function runWhatsAppBot(input: {
         {
           photo: answer.photo,
           shown: answer.shownIds
-            ? { ids: answer.shownIds, intent: answer.intent }
+            ? { ids: answer.shownIds, intent: answer.intent, ...(answer.shownPrices ? { prices: answer.shownPrices } : {}) }
             : null,
           list: answer.list,
           decision: answer.decision,
@@ -1031,8 +1033,20 @@ async function lastBotMessageBefore(conversationId: string, before: Date) {
 async function orderProduct(storeId: string, productId: string) {
   return prismadb.product.findFirst({
     where: { id: productId, storeId, isArchived: false },
-    select: { id: true, name: true, price: true, stock: true },
+    select: { id: true, name: true, price: true, stock: true, categoryId: true, productGroupId: true },
   });
+}
+
+type OrderProduct = NonNullable<Awaited<ReturnType<typeof orderProduct>>>;
+
+/**
+ * Lo que cobraría la tienda por unidad a esa cantidad, sin pasar de lo ya
+ * cotizado: si la oferta terminó entre el mensaje y el «sí» se respeta lo que
+ * se le dijo, y si a esa cantidad la tienda cobra menos (escalera) va lo menor.
+ */
+async function orderUnitPrice(storeId: string, product: OrderProduct, quantity: number, quoted?: number | null) {
+  const now = (await effectiveUnitPrices(storeId, [product], quantity)).get(product.id) ?? Math.round(product.price);
+  return typeof quoted === "number" ? Math.min(quoted, now) : now;
 }
 
 /** Un producto en existencia que la búsqueda reconoce sin dudas, o nada. */
@@ -1043,13 +1057,12 @@ async function uniqueProductFor(storeId: string, query: string) {
   return product && product.stock > 0 ? product : null;
 }
 
-function orderItem(product: { id: string; name: string; price: number; stock: number }, quantity: number): OrderItem {
+function orderItem(product: { id: string; name: string; stock: number }, quantity: number, unitPrice: number): OrderItem {
   return {
     productId: product.id,
     name: product.name,
     quantity,
-    // El mismo peso entero que enseñó la oferta (`formatCOP` redondea); así cada subtotal es cantidad × ese precio.
-    unitPrice: Math.round(product.price),
+    unitPrice,
     stockConfirmed: quantity <= MAX_ORDER_QUANTITY && quantity <= product.stock,
   };
 }
@@ -1095,7 +1108,7 @@ async function answerWebOrigin(
         pacing(input),
         {
           photo: answer.photo,
-          shown: answer.shownIds ? { ids: answer.shownIds, intent: answer.intent } : null,
+          shown: answer.shownIds ? { ids: answer.shownIds, intent: answer.intent, ...(answer.shownPrices ? { prices: answer.shownPrices } : {}) } : null,
           ...(greeted ? {} : { kind: "welcome" as const }),
         },
       );
@@ -1132,13 +1145,14 @@ async function handOffOrderRequest(
   const product = await orderProduct(conversation.storeId, productId);
   if (!product) return null;
 
-  const first = orderItem(product, reply.quantity);
+  const quoted = parseShownProducts(offer.metadata)?.prices?.[0];
+  const first = orderItem(product, reply.quantity, await orderUnitPrice(conversation.storeId, product, reply.quantity, quoted));
   const items = [first];
   // Lo que pidió además en el mismo mensaje entra solo si se reconoce sin dudas.
   if (first.stockConfirmed && reply.extra) {
     const extra = await uniqueProductFor(conversation.storeId, reply.extra.query);
     if (extra && extra.id !== product.id) {
-      const item = orderItem(extra, reply.extra.quantity);
+      const item = orderItem(extra, reply.extra.quantity, await orderUnitPrice(conversation.storeId, extra, reply.extra.quantity));
       if (item.stockConfirmed) items.push(item);
     }
   }
@@ -1178,12 +1192,14 @@ async function appendToOrderRequest(
   if (conversation.lastOwnerAt && conversation.lastOwnerAt >= last.createdAt) return null;
   const product = await uniqueProductFor(conversation.storeId, wanted.query);
   if (!product) return null;
-  const item = orderItem(product, wanted.quantity);
+  const item = orderItem(product, wanted.quantity, await orderUnitPrice(conversation.storeId, product, wanted.quantity));
   if (!item.stockConfirmed) return null;
 
-  const items = record.items.some((existing) => existing.productId === item.productId)
-    ? record.items.map((existing) => (existing.productId === item.productId ? orderItem(product, existing.quantity + item.quantity) : existing))
-    : [...record.items, item];
+  const same = record.items.find((existing) => existing.productId === item.productId);
+  const merged = same
+    ? orderItem(product, same.quantity + item.quantity, await orderUnitPrice(conversation.storeId, product, same.quantity + item.quantity, same.unitPrice))
+    : null;
+  const items = merged ? record.items.map((existing) => (existing.productId === merged.productId ? merged : existing)) : [...record.items, item];
   if (items.some((existing) => !existing.stockConfirmed)) return null;
   const updated: OrderRequestRecord = { status: "pending", items, createdAt: new Date().toISOString() };
   const sent = await deliver(

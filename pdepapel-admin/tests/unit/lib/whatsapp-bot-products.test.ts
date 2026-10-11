@@ -34,6 +34,8 @@ vi.mock("@upstash/redis", () => ({
     },
   },
 }));
+// Las ofertas se prueban contra la base en tests/integration/whatsapp-promo-prices.test.ts.
+vi.mock("@/lib/product-pricing", () => ({ priceLines: vi.fn(async () => new Map()) }));
 vi.mock("@/lib/env.mjs", () => ({
   env: { GEMINI_API_KEY: "clave-de-prueba", OPENAI_API_KEY: "clave-de-prueba" },
 }));
@@ -235,12 +237,15 @@ describe("resolvedores", () => {
     mocks.count.mockResolvedValue(0);
     await resolveAvailability("store-1", clasificacion);
     const args = mocks.findMany.mock.calls[0][0];
-    // Lo de siempre, más la foto; nada más. `stock` entra aquí y sale booleano.
+    // Lo de siempre, más la foto; nada más. `stock` entra aquí y sale booleano;
+    // categoría y grupo solo sirven para buscar las ofertas vigentes.
     expect(Object.keys(args.select).sort()).toEqual([
+      "categoryId",
       "id",
       "images",
       "name",
       "price",
+      "productGroupId",
       "stock",
     ]);
     expect(args.select.images).toEqual({
