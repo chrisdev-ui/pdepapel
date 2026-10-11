@@ -1,10 +1,11 @@
 import { OrderSource, OrderStatus, OrderType } from "@prisma/client";
 
 import { ErrorFactory } from "@/lib/api-errors";
-import { parseCartMetadata, resolveCart, type ConversationCart } from "@/lib/conversations";
+import { parseCartMetadata, resolveCart, type ConversationCart, type ConversationCartItemInput } from "@/lib/conversations";
 import { calculateOrderTotals } from "@/lib/order-totals";
 import prismadb from "@/lib/prismadb";
-import { generateOrderNumber } from "@/lib/utils";
+import { priceLines } from "@/lib/product-pricing";
+import { currencyFormatter, generateOrderNumber } from "@/lib/utils";
 
 /**
  * Convierte el carrito que una clienta armó desde el catálogo de WhatsApp en
@@ -16,9 +17,94 @@ import { generateOrderNumber } from "@/lib/utils";
  * convertido en algo real sin ensuciar Pedidos con ventas a medias ni mover
  * existencias antes de tiempo.
  *
- * Los precios son los de HOY, no los que la clienta vio: el panel ya le avisa
- * a la dueña cuáles cambiaron antes de que confirme nada.
+ * Cada renglón cobra el menor entre lo que la clienta vio en Meta y lo que
+ * cobra hoy la tienda (oferta y escalera incluidas). Si difieren, o si un SKU
+ * ya no existe, queda anotado en las notas internas del pedido para Paula.
  */
+
+/** Lo que el carrito necesita leer de cada producto; categoría y grupo, para las ofertas. */
+export const CART_PRODUCT_SELECT = {
+  id: true,
+  name: true,
+  sku: true,
+  price: true,
+  stock: true,
+  isArchived: true,
+  categoryId: true,
+  productGroupId: true,
+} as const;
+
+type CartProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  stock: number;
+  isArchived: boolean;
+  categoryId: string;
+  productGroupId: string | null;
+};
+
+/**
+ * Los productos del carrito con `price` = lo que cobra la tienda por unidad a
+ * esas cantidades (el cálculo del checkout, `priceLines`), al peso. Si el
+ * cálculo falla queda el precio de lista: nunca se inventa uno.
+ */
+export async function priceCartProducts<T extends CartProduct>(
+  storeId: string,
+  items: ConversationCartItemInput[],
+  products: T[],
+): Promise<T[]> {
+  const bySku = new Map(products.map((product) => [product.sku, product]));
+  const lines = items.flatMap((item) => {
+    const product = bySku.get(item.sku);
+    return product ? [{ productId: product.id, quantity: item.quantity }] : [];
+  });
+  const prices = new Map(products.map((product) => [product.id, Math.round(product.price)]));
+  if (lines.length > 0) {
+    try {
+      const priced = await priceLines(storeId, lines, products);
+      priced.forEach((line, id) => prices.set(id, Math.round(line.unitPrice)));
+    } catch (error) {
+      console.warn("[WHATSAPP_CART] No se pudo calcular el precio con ofertas; se usa el de lista", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return products.map((product) => ({ ...product, price: prices.get(product.id) ?? product.price }));
+}
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+
+/** Para las notas internas: precios de Meta distintos y SKU que no se encontraron. Vacío si no hay nada. */
+export function cartPriceNotes(cart: ConversationCart): string {
+  const differing = cart.lines.filter((line) => line.product && line.quotedPrice !== null && line.quotedPrice !== line.product.price);
+  const missing = cart.lines.filter((line) => !line.product);
+  const parts: string[] = [];
+  if (differing.length > 0) {
+    parts.push(
+      "<p>Carrito de WhatsApp: el precio de Meta no coincide con el de la tienda. Se cobra el menor.</p><ul>" +
+        differing
+          .map(
+            (line) =>
+              `<li>${escapeHtml(line.product!.name)} (${escapeHtml(line.sku)}): Meta ${currencyFormatter(line.quotedPrice!)}, tienda ${currencyFormatter(line.product!.price)}; se cobra ${currencyFormatter(line.unitPrice!)}</li>`,
+          )
+          .join("") +
+        "</ul>",
+    );
+  }
+  if (missing.length > 0) {
+    parts.push(
+      "<p>Carrito de WhatsApp: estos productos no se encontraron en el catálogo y no entraron al pedido.</p><ul>" +
+        missing
+          .map((line) => `<li>${escapeHtml(line.sku)} × ${line.quantity}${line.quotedPrice !== null ? ` (Meta ${currencyFormatter(line.quotedPrice)})` : ""}</li>`)
+          .join("") +
+        "</ul>",
+    );
+  }
+  return parts.join("");
+}
 
 export interface CartOrderResult {
   orderId: string;
@@ -74,9 +160,9 @@ export async function createOrderFromConversationCart(input: {
 
   const products = await prismadb.product.findMany({
     where: { storeId: input.storeId, sku: { in: items.map((item) => item.sku) } },
-    select: { id: true, name: true, sku: true, price: true, stock: true, isArchived: true },
+    select: CART_PRODUCT_SELECT,
   });
-  const cart = resolveCart(items, products);
+  const cart = resolveCart(items, await priceCartProducts(input.storeId, items, products));
   const usable = cart.lines.filter((line) => line.product !== null);
   if (usable.length === 0) {
     throw ErrorFactory.InvalidRequest(
@@ -96,7 +182,7 @@ export async function createOrderFromConversationCart(input: {
   }
 
   const totals = calculateOrderTotals(
-    usable.map((line) => ({ product: { price: line.product!.price }, quantity: line.quantity })),
+    usable.map((line) => ({ product: { price: line.unitPrice! }, quantity: line.quantity })),
   );
 
   const order = await prismadb.$transaction(async (tx) => {
@@ -118,13 +204,14 @@ export async function createOrderFromConversationCart(input: {
         phone: conversation.phone ?? "",
         subtotal: totals.subtotal,
         total: totals.total,
+        internalNotes: cartPriceNotes(cart) || undefined,
         orderItems: {
           create: usable.map((line) => ({
             productId: line.product!.id,
             quantity: line.quantity,
             name: line.product!.name,
             sku: line.sku,
-            price: line.product!.price,
+            price: line.unitPrice!,
             imageUrl: mainImage.get(line.product!.id) ?? "",
           })),
         },

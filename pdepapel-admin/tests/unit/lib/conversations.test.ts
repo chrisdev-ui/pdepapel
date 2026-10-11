@@ -52,13 +52,34 @@ describe("resolveCart", () => {
     expect(cart.insufficientStock).toBe(0);
   });
 
-  it("flags a price that changed since the customer built the cart", () => {
-    // Vio 11000, hoy vale 13000: la dueña tiene que saberlo antes de cotizar.
+  it("flags a price that differs from Meta's and charges the lower one", () => {
+    // Vio 11000 en Meta, la tienda cobra 13000: nunca paga más de lo que vio.
     const cart = resolveCart([{ sku: "AGE-CLS-AZU-XS-L-2868", quantity: 1, unitPrice: 11000, currency: "COP" }], catalog);
 
     expect(cart.priceChanged).toBe(1);
-    expect(cart.total).toBe(13000);
-    expect(cart.lines[0].quotedPrice).toBe(11000);
+    expect(cart.total).toBe(11000);
+    expect(cart.lines[0]).toMatchObject({ quotedPrice: 11000, unitPrice: 11000 });
+  });
+
+  it("charges the store price when Meta showed more", () => {
+    const cart = resolveCart([{ sku: "AGE-CLS-AZU-XS-L-2868", quantity: 2, unitPrice: 15000, currency: "COP" }], catalog);
+
+    expect(cart.priceChanged).toBe(1);
+    expect(cart.lines[0]).toMatchObject({ quotedPrice: 15000, unitPrice: 13000 });
+    expect(cart.total).toBe(26000);
+  });
+
+  it("ignores a Meta price in another currency or not a real number", () => {
+    const cart = resolveCart(
+      [
+        { sku: "AGE-CLS-AZU-XS-L-2868", quantity: 1, unitPrice: 4, currency: "USD" },
+        { sku: "STI-KAW-001", quantity: 1, unitPrice: 0, currency: "COP" },
+      ],
+      catalog,
+    );
+
+    expect(cart.priceChanged).toBe(0);
+    expect(cart.lines.map((line) => [line.quotedPrice, line.unitPrice])).toEqual([[null, 13000], [null, 5000]]);
   });
 
   it("flags a line with not enough stock left", () => {

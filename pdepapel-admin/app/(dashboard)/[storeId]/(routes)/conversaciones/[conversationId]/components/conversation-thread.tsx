@@ -146,9 +146,9 @@ function CartCard({ cart }: { cart: ConversationCart }) {
                 </span>
               ) : null}
             </span>
-            {line.product ? (
+            {line.product && line.unitPrice !== null ? (
               <span className="shrink-0 tabular-nums">
-                {currencyFormatter(line.product.price * line.quantity)}
+                {currencyFormatter(line.unitPrice * line.quantity)}
               </span>
             ) : null}
           </li>
@@ -156,7 +156,7 @@ function CartCard({ cart }: { cart: ConversationCart }) {
       </ul>
       <Separator />
       <p className="flex justify-between text-sm font-medium">
-        <span>Total con precios de hoy</span>
+        <span>Total (el menor entre Meta y la tienda)</span>
         <span className="tabular-nums">{currencyFormatter(cart.total)}</span>
       </p>
       {cart.priceChanged > 0 || cart.unresolved > 0 || cart.insufficientStock > 0 ? (

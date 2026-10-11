@@ -1,5 +1,6 @@
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
+import { CART_PRODUCT_SELECT, priceCartProducts } from "@/lib/whatsapp/cart-orders";
 import {
   parseCartMetadata,
   parseOrderRequestMetadata,
@@ -60,9 +61,11 @@ export async function getConversation(
   const products = skus.length
     ? await prismadb.product.findMany({
         where: { storeId, sku: { in: skus } },
-        select: { id: true, name: true, sku: true, price: true, stock: true, isArchived: true },
+        select: CART_PRODUCT_SELECT,
       })
     : [];
+  // Cada carrito con el precio de la tienda a SUS cantidades (oferta y escalera), como el pedido que se crearía.
+  const pricedCarts = await Promise.all(carts.map((cart) => (cart ? priceCartProducts(storeId, cart, products) : Promise.resolve(null))));
 
   // Contexto de la tienda web: los SKU y el pedido se buscan en esta tienda; un
   // pedido que no existe no se enseña.
@@ -100,7 +103,7 @@ export async function getConversation(
     skippedCount: ignorado?.skippedCount ?? 0,
     messages: messages.map(({ metadata, ...message }, index) => ({
       ...message,
-      cart: carts[index] ? resolveCart(carts[index]!, products) : null,
+      cart: carts[index] ? resolveCart(carts[index]!, pricedCarts[index]!) : null,
       tappedOptionId: parseTapMetadata(metadata),
       orderRequest: parseOrderRequestMetadata(metadata),
       webOrigin: origins[index]

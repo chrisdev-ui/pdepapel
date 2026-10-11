@@ -115,8 +115,10 @@ export function parseTapMetadata(metadata: unknown): string | null {
 export interface ConversationCartLine {
   sku: string;
   quantity: number;
-  /** Precio que la clienta vio en el catálogo. */
+  /** Precio que la clienta vio en el catálogo de Meta (en pesos; `null` si no vino o no es COP). */
   quotedPrice: number | null;
+  /** El que se cobra: el menor entre el de Meta y el de la tienda hoy; `null` sin producto. */
+  unitPrice: number | null;
   /** `null` cuando el SKU ya no existe en el catálogo. */
   product: {
     id: string;
@@ -129,7 +131,7 @@ export interface ConversationCartLine {
 
 export interface ConversationCart {
   lines: ConversationCartLine[];
-  /** Suma con el precio de hoy, solo de los renglones que se pudieron resolver. */
+  /** Suma con `unitPrice`, solo de los renglones que se pudieron resolver. */
   total: number;
   /** Renglones cuyo SKU ya no está en el catálogo. */
   unresolved: number;
@@ -148,9 +150,20 @@ type CatalogProduct = {
   isArchived: boolean;
 };
 
+/** El precio de Meta solo cuenta si viene en pesos y es un número de verdad. */
+function metaPrice(item: ConversationCartItemInput): number | null {
+  const price = item.unitPrice;
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return null;
+  const currency = item.currency?.trim().toUpperCase();
+  return !currency || currency === "COP" ? price : null;
+}
+
 /**
  * Cruza los SKU del carrito con el catálogo. El feed de Meta publica el SKU
  * como id del producto, así que `product_retailer_id` entra directo aquí.
+ * `products[].price` llega ya resuelto con ofertas y escalera para estas
+ * cantidades (`priceCartProducts` en `lib/whatsapp/cart-orders.ts`): la
+ * clienta nunca paga más de lo que vio en Meta ni de lo que cobra la tienda.
  */
 export function resolveCart(
   items: ConversationCartItemInput[],
@@ -164,19 +177,20 @@ export function resolveCart(
 
   const lines = items.map((item) => {
     const found = bySku.get(item.sku) ?? null;
+    const quoted = metaPrice(item);
     if (!found) {
       unresolved += 1;
-      return { sku: item.sku, quantity: item.quantity, quotedPrice: item.unitPrice ?? null, product: null };
+      return { sku: item.sku, quantity: item.quantity, quotedPrice: quoted, unitPrice: null, product: null };
     }
-    total += found.price * item.quantity;
-    if (item.unitPrice !== null && item.unitPrice !== undefined && item.unitPrice !== found.price) {
-      priceChanged += 1;
-    }
+    const unitPrice = quoted !== null ? Math.min(quoted, found.price) : found.price;
+    total += unitPrice * item.quantity;
+    if (quoted !== null && quoted !== found.price) priceChanged += 1;
     if (found.stock < item.quantity) insufficientStock += 1;
     return {
       sku: item.sku,
       quantity: item.quantity,
-      quotedPrice: item.unitPrice ?? null,
+      quotedPrice: quoted,
+      unitPrice,
       product: {
         id: found.id,
         name: found.name,

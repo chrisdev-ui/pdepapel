@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
 
 // `lib/utils` (de donde sale el número de pedido) carga el esquema de entorno.
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
+// Sin ofertas aquí: el precio con ofertas y escalera se prueba contra la base en
+// tests/integration/whatsapp-cart-prices.test.ts.
+vi.mock("@/lib/product-pricing", () => ({ priceLines: vi.fn(async () => new Map()) }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     conversation: { findFirst: mocks.conversationFindFirst },
@@ -34,8 +37,8 @@ const CART = {
 };
 
 const CATALOG = [
-  { id: "p1", name: "Agenda Mini Azul aguamarina", sku: "AGE-CLS-AZU-XS-L-2868", price: 13000, stock: 5, isArchived: false },
-  { id: "p2", name: "Sticker kawaii", sku: "STI-KAW-001", price: 5000, stock: 3, isArchived: false },
+  { id: "p1", name: "Agenda Mini Azul aguamarina", sku: "AGE-CLS-AZU-XS-L-2868", price: 13000, stock: 5, isArchived: false, categoryId: "c1", productGroupId: null },
+  { id: "p2", name: "Sticker kawaii", sku: "STI-KAW-001", price: 5000, stock: 3, isArchived: false, categoryId: "c1", productGroupId: null },
 ];
 
 function conversation(overrides: Record<string, unknown> = {}) {
