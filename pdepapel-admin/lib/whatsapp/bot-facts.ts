@@ -7,6 +7,7 @@ import {
   normalizeBotText,
   type WhatsAppBotKeyword,
   comparableWords,
+  containsWholePhrase,
 } from "@/lib/whatsapp/bot-matching";
 import {
   TALK_TO_OWNER_BUTTON_TITLE,
@@ -107,7 +108,7 @@ export function classifyBusinessFact(body: string): BusinessFactIntent | null {
   let best: { intent: BusinessFactIntent; length: number } | null = null;
   for (const [intent, phrases] of Object.entries(PATTERNS)) {
     for (const phrase of phrases) {
-      if (text.includes(phrase) && (!best || phrase.length > best.length)) {
+      if (containsWholePhrase(text, phrase) && (!best || phrase.length > best.length)) {
         best = { intent: intent as BusinessFactIntent, length: phrase.length };
       }
     }

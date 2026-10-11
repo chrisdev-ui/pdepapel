@@ -278,13 +278,18 @@ export function looksLikeProductQuestion(body: string): boolean {
  * termina una palabra lo arregla sin tocar la lista.
  */
 function matchesSignal(text: string, signal: string): boolean {
-  const i = text.indexOf(signal);
-  if (i === -1) return false;
-  // Algunas señales ya traen su propio final, como «hay »: ahí no hay nada
-  // que comprobar, el espacio ya hizo de frontera.
-  if (!/[a-z0-9]$/.test(signal)) return true;
-  const siguiente = text[i + signal.length];
-  return siguiente === undefined || !/[a-z0-9]/.test(siguiente);
+  // Algunas señales ya traen su propio final, como «hay »: ahí el espacio ya
+  // hizo de frontera. El comienzo también cuenta: «tienen» no vale dentro de «mantienen».
+  const checkStart = /^[a-z0-9]/.test(signal);
+  const checkEnd = /[a-z0-9]$/.test(signal);
+  for (let i = text.indexOf(signal); i !== -1; i = text.indexOf(signal, i + 1)) {
+    const anterior = text[i - 1];
+    const siguiente = text[i + signal.length];
+    const startOk = !checkStart || anterior === undefined || !/[a-z0-9]/.test(anterior);
+    const endOk = !checkEnd || siguiente === undefined || !/[a-z0-9]/.test(siguiente);
+    if (startOk && endOk) return true;
+  }
+  return false;
 }
 
 // --- 2. Buscar de verdad ---------------------------------------------------

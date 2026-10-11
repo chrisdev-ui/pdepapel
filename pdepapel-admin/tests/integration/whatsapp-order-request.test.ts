@@ -28,6 +28,12 @@ vi.mock("@/lib/whatsapp/send", async () => {
   return stubs;
 });
 
+const session = vi.hoisted(() => ({ userId: null as string | null }));
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: () => ({ userId: session.userId }),
+  clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
+}));
+
 const KEYWORDS = [
   { id: "kw-saludo", label: "Saludo", triggers: ["hola", "buenas"], answer: "¡Hola! 💛 ¿En qué te ayudo?" },
   { id: "kw-gracias", label: "Cortesía", triggers: ["gracias"], answer: "¡Con gusto! 💛" },
@@ -38,6 +44,7 @@ const MINUTE = 60_000;
 let fixture: InventoryFixture;
 let cuadernoId = "";
 let lapiceroId = "";
+let siliconaIds: string[] = [];
 
 async function setApprovals(orders: boolean, extra: Record<string, unknown> = {}, freeShippingThreshold: number | null = 250000) {
   // El umbral de envío gratis sale de la tienda, el mismo que usa el checkout.
@@ -109,14 +116,15 @@ async function state(conversationId: string) {
   const [conversation, orders] = await Promise.all([
     testPrisma.conversation.findUniqueOrThrow({ where: { id: conversationId }, select: { status: true } }),
     testPrisma.conversationMessage.findMany({
-      where: { conversationId, sentBy: "BOT", metadata: { path: "$.orderRequest.status", equals: "pending" } },
+      where: { conversationId, metadata: { path: "$.orderRequest.status", equals: "pending" } },
       orderBy: { createdAt: "asc" },
-      select: { metadata: true },
+      select: { metadata: true, sentBy: true, body: true },
     }),
   ]);
   return {
     status: conversation.status,
     orders: orders.length,
+    cardsOn: orders.map((order) => `${order.sentBy}:${order.body}`),
     lastItems: (orders.at(-1)?.metadata as { orderRequest?: { items: { name: string; quantity: number; unitPrice: number; stockConfirmed: boolean }[] } } | null)?.orderRequest?.items ?? [],
   };
 }
@@ -132,6 +140,11 @@ beforeAll(async () => {
   cuadernoId = (await product("Cuaderno Argollado Norma 5 Materias", 33000, 5)).id;
   lapiceroId = (await product("Lapicero gel negro Prueba", 3500, 40)).id;
   await product("Cuaderno cuadriculado Prueba", 9000, 10);
+  siliconaIds = [
+    (await product("Silicona líquida Prueba", 6000, 8)).id,
+    (await product("Pistola de silicona Prueba", 18000, 3)).id,
+    (await product("Simón dice Prueba", 25000, 2)).id,
+  ];
   await testPrisma.storeSettings.upsert({ where: { storeId: store }, create: { storeId: store }, update: {} });
 });
 
@@ -187,6 +200,7 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
     expect(await state(id)).toEqual({
       status: "NEEDS_OWNER",
       orders: 1,
+      cardsOn: [expect.stringMatching(/^BOT:¡Listo! 💛 Le paso tu pedido a Paula/)],
       lastItems: [expect.objectContaining({ name: "Cuaderno Argollado Norma 5 Materias", quantity: 1, unitPrice: 33000, stockConfirmed: true })],
     });
   });
@@ -250,10 +264,64 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
       sent.onTyping = null;
       await inbound(id, "Hablar con Paula", new Date(Date.now() + 500));
     };
-    expect((await answer(id, await inbound(id, "sí"))).outcome).toBe("skipped_owner_active");
+    const yes = await inbound(id, "sí");
+    expect((await answer(id, yes)).outcome).toBe("skipped_owner_active");
     expect(sent.messages).toEqual([]);
-    // El pedido no queda anotado (no hubo mensaje), pero la conversación ya es de Paula.
-    expect(await state(id)).toMatchObject({ status: "NEEDS_OWNER", orders: 0 });
+    // La respuesta no salió, pero el pedido queda en el mensaje de la clienta y la conversación es de Paula.
+    expect(await state(id)).toMatchObject({ status: "NEEDS_OWNER", orders: 1, cardsOn: ["CUSTOMER:sí"] });
+    expect((await state(id)).lastItems).toEqual([{ productId: cuadernoId, name: "Cuaderno Argollado Norma 5 Materias", quantity: 1, unitPrice: 33000, stockConfirmed: true }]);
+  });
+
+  it("después de un envío cortado: reintento, otro «sí» o el bot devuelto no duplican la tarjeta", async () => {
+    const id = await withOffer();
+    sent.onTyping = async () => {
+      sent.onTyping = null;
+      await inbound(id, "Hablar con Paula", new Date(Date.now() + 500));
+    };
+    const yes = await inbound(id, "sí");
+    await answer(id, yes);
+    await answer(id, yes);
+    await answer(id, await inbound(id, "sí", new Date(Date.now() + 1000)));
+    expect(sent.messages).toEqual([]);
+    expect(await state(id)).toMatchObject({ status: "NEEDS_OWNER", orders: 1, cardsOn: ["CUSTOMER:sí"] });
+    // Paula la devuelve al bot y la clienta repite el «sí» a la misma oferta.
+    await testPrisma.conversation.update({ where: { id }, data: { status: "OPEN" } });
+    expect((await answer(id, await inbound(id, "sí", new Date(Date.now() + 2000)))).outcome).not.toBe("replied_order_request");
+    expect((await state(id)).orders).toBe(1);
+  });
+
+  it("agregar cortado por un toque: queda la tarjeta con todo y no sale nada; repetirlo no la duplica", async () => {
+    const id = await withOffer();
+    await answer(id, await inbound(id, "sí"));
+    sent.messages.length = 0;
+    sent.onTyping = async () => {
+      sent.onTyping = null;
+      await inbound(id, "Hablar con Paula", new Date(Date.now() + 500));
+    };
+    expect((await answer(id, await inbound(id, "y también 2 lapiceros"))).outcome).toBe("skipped_owner_active");
+    expect(sent.messages).toEqual([]);
+    const after = await state(id);
+    expect(after.cardsOn.at(-1)).toBe("CUSTOMER:y también 2 lapiceros");
+    expect(after.lastItems.map((item) => `${item.name} × ${item.quantity}`)).toEqual(["Cuaderno Argollado Norma 5 Materias × 1", "Lapicero gel negro Prueba × 2"]);
+    await answer(id, await inbound(id, "y también 2 lapiceros", new Date(Date.now() + 1000)));
+    expect(sent.messages).toEqual([]);
+    expect((await state(id)).orders).toBe(after.orders);
+  });
+
+  it("«Descartar» apaga también la tarjeta guardada en el mensaje de la clienta", async () => {
+    const id = await withOffer();
+    sent.onTyping = async () => {
+      sent.onTyping = null;
+      await inbound(id, "Hablar con Paula", new Date(Date.now() + 500));
+    };
+    await answer(id, await inbound(id, "sí"));
+    expect((await state(id)).orders).toBe(1);
+    session.userId = fixture.store.userId;
+    const { DELETE } = await import("@/app/api/[storeId]/conversations/[conversationId]/order-request/route");
+    const response = await DELETE(new Request("http://test.local"), { params: { storeId: fixture.store.id, conversationId: id } });
+    session.userId = null;
+    expect(await response.json()).toEqual({ dismissed: 1 });
+    expect((await state(id)).orders).toBe(0);
   });
 
   it("con Paula activa en la conversación o en su pausa: silencio", async () => {
@@ -305,5 +373,19 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
     const other = await withOffer();
     await answer(other, await inbound(other, "cuánto cuesta el domicilio?"));
     expect(sent.messages).toEqual(["El valor del envío depende de tu ciudad y lo cotiza la transportadora 💛 Paula te confirma el valor exacto."]);
+  });
+
+  it("«sí» o «si porfa» ante una lista con siliconas no contesta de la silicona; «sí, la pistola» sí", async () => {
+    const list = "Mira 💛 Tengo estos:\n• Silicona líquida Prueba\n• Pistola de silicona Prueba\n• Simón dice Prueba\n¿Cuál te interesa?";
+    for (const body of ["sí", "si porfa"]) {
+      const id = await withOffer({ offer: list, ids: siliconaIds });
+      await answer(id, await inbound(id, body));
+    }
+    expect(sent.messages.some((text) => /Silicona|Pistola|Simón/.test(text))).toBe(false);
+    sent.messages.length = 0;
+    const id = await withOffer({ offer: list, ids: siliconaIds });
+    await answer(id, await inbound(id, "sí, la pistola"));
+    expect(sent.messages).toHaveLength(1);
+    expect(sent.messages[0]).toContain("Pistola de silicona Prueba");
   });
 });

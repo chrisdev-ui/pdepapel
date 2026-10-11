@@ -21,6 +21,7 @@ import { matchWhatsAppKeyword } from "@/lib/whatsapp/bot-matching";
 import {
   REFERENCE_TTL_MS,
   detectProductReference,
+  encajaEnNombre,
   parseShownProducts,
   resolveProductReference,
 } from "@/lib/whatsapp/bot-references";
@@ -425,5 +426,60 @@ describe("nombrar el producto en vez de señalarlo", () => {
       // Y no llegó a preguntar por los productos: se cayó antes, como siempre.
       expect(mocks.productFindMany).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("«sí» no es la «Silicona»: palabras enteras, sin tildes", () => {
+  it.each(["sí", "Sí!", "si porfa", "sí por favor", "dale", "ok", "listo", "no", "siii"])("«%s» no nombra ningún producto", (texto) => {
+    expect(detectProductReference(texto)).toBeNull();
+  });
+
+  it("«sí, la silicona» nombra solo la silicona", () => {
+    expect(detectProductReference("sí, la silicona")).toEqual({ kind: "named", tokens: ["silicona"] });
+  });
+
+  it.each([
+    [["si"], "Silicona líquida", false],
+    [["si"], "Pistola de silicona", false],
+    [["sim"], "Simón dice Prueba", false],
+    [["sil"], "Silicona líquida", false],
+    [["silicona"], "Silicona líquida", true],
+    [["silicona"], "Pistola de silicona", true],
+    [["siliconas"], "Pistola de silicona", true],
+    [["acrilico"], "Lapiceros acrílicos gel pen x8", true],
+    [["liquida"], "Silicona LÍQUIDA", true],
+    [["x8"], "Lapiceros acrílicos gel pen x8", true],
+    [["offi-esco"], "Caja de Lapiceros Offi-Esco Pocket Gel x4", true],
+  ] as const)("%j contra «%s» → %s", (tokens, nombre, encaja) => {
+    expect(encajaEnNombre([...tokens], nombre)).toBe(encaja);
+  });
+
+  it("con dos siliconas enseñadas, «sí, la silicona» no adivina; nombrada entera, sí", async () => {
+    mocks.messageFindMany.mockResolvedValue([mensajeCon(["s1", "s2", "s3"], 1)]);
+    mocks.productFindMany.mockResolvedValue([
+      { id: "s1", name: "Silicona líquida" },
+      { id: "s2", name: "Pistola de silicona" },
+      { id: "s3", name: "Simón dice Prueba" },
+    ]);
+    const silicona = detectProductReference("sí, la silicona")!;
+    await expect(resolveProductReference({ conversationId: "c1", storeId: "s1", reference: silicona, now: AHORA })).resolves.toEqual({ outcome: "none" });
+    const pistola = detectProductReference("sí, la pistola")!;
+    await expect(resolveProductReference({ conversationId: "c1", storeId: "s1", reference: pistola, now: AHORA })).resolves.toMatchObject({ outcome: "resolved", productId: "s2" });
+  });
+});
+
+describe("las frases de los datos del negocio también van por palabras enteras", () => {
+  it.each([
+    ["¿cuál es el horario?", "business.hours"],
+    ["¿qué horarios tienen?", "business.hours"],
+    ["¿tienen locales?", "business.physical_store"],
+    ["¿cuánto tardan en llegar?", "shipping.delivery_days"],
+    ["aceptan nequi?", "payment.methods"],
+  ])("«%s» → %s", (texto, intent) => {
+    expect(classifyBusinessFact(texto)).toBe(intent);
+  });
+
+  it.each(["¿cuándo llegaste?", "puedo ir ahorita a pagarte", "mi cuenta en nequiz"])("«%s» no es un dato del negocio", (texto) => {
+    expect(classifyBusinessFact(texto)).toBeNull();
   });
 });

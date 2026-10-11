@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { ConversationMessageSentBy, type Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -27,7 +27,6 @@ export async function DELETE(_req: Request, { params }: { params: { storeId: str
     const pending = await prismadb.conversationMessage.findMany({
       where: {
         conversationId: conversation.id,
-        sentBy: ConversationMessageSentBy.BOT,
         metadata: { path: "$.orderRequest.status", equals: "pending" },
       },
       select: { id: true, metadata: true },

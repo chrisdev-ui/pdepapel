@@ -20,6 +20,7 @@ import {
 } from "@/lib/whatsapp/shadow/plan";
 import { isShadowCandidate, type ShadowCandidate, type ShadowDeps } from "@/lib/whatsapp/shadow/candidate";
 import { countInStockMatches } from "@/lib/whatsapp/shadow/search";
+import { latestOrderRequest } from "@/lib/whatsapp/order-request-store";
 
 type RealType = ShadowMessageType | "wait_notice" | "text";
 
@@ -91,7 +92,7 @@ async function loadContext(
     prismadb.conversationMessage.findFirst({
       where: { conversationId, sentBy: ConversationMessageSentBy.BOT, createdAt: before },
       orderBy: { createdAt: "desc" },
-      select: { body: true, metadata: true, createdAt: true },
+      select: { id: true, body: true, metadata: true, createdAt: true },
     }),
     prismadb.conversationMessage.findMany({
       where: {
@@ -136,7 +137,8 @@ async function loadContext(
       offerFresh &&
       (await prismadb.product.count({ where: { id: offerId, storeId, isArchived: false } })) > 0,
   );
-  const pendingOrder = (lastBot?.metadata as { orderRequest?: { status?: string } } | null)?.orderRequest?.status === "pending";
+  const latestOrder = await latestOrderRequest(conversationId, inbound.createdAt);
+  const pendingOrder = Boolean(latestOrder?.fromBot && latestOrder.id === lastBot?.id && latestOrder.record.status === "pending");
   const append = parseAppendRequest(candidate.body);
   const orderAppend = Boolean(
     append &&

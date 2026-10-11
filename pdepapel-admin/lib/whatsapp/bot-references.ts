@@ -1,6 +1,7 @@
 import { ConversationMessageSentBy } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import { comparableWords, sameWordOrPlural } from "@/lib/whatsapp/bot-matching";
 import type { ProductIntent } from "@/lib/whatsapp/bot-products";
 
 /**
@@ -56,6 +57,11 @@ const CIERRES = new Set([
   "entonces", "ese", "esa", "eso", "plis",
 ]);
 
+/** Contestar, no nombrar: «sí» no es la «Silicona». */
+const RESPUESTAS_CORTAS = new Set(["si", "sip", "no", "ok", "okay", "oki", "dale", "listo", "claro", "perfecto", "genial"]);
+
+const esRespuestaCorta = (palabra: string) => RESPUESTAS_CORTAS.has(palabra.replace(/([aeiou])\1+/g, "$1"));
+
 /**
  * Lo que se cae al nombrar un producto. A propósito NO están los verbos de
  * pedir —«quiero», «dame»—: sin ellos una frase de verdad deja demasiadas
@@ -104,7 +110,8 @@ export function detectProductReference(body: string): ProductReference | null {
   // es lo que mide una respuesta corta a una lista; de ahí para arriba ya es
   // una frase y la contesta el clasificador, no esto.
   const tokens = referenceTokens(texto);
-  if (tokens.length > 0 && tokens.length <= 3) return { kind: "named", tokens };
+  const nombradas = tokens.filter((t) => !esRespuestaCorta(t));
+  if (nombradas.length > 0 && tokens.length <= 3) return { kind: "named", tokens: nombradas };
 
   return null;
 }
@@ -117,19 +124,16 @@ export type ReferenceResolution =
   /** Nada a lo que señalar, o «ese» con varios: el mensaje sigue su camino. */
   | { outcome: "none" };
 
-function normalizarNombre(nombre: string): string {
-  return nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
-
 /**
  * Deliberadamente simple: esto solo corre contra el puñado de productos que
- * se acaban de enseñar, nunca contra el catálogo, así que no hace falta nada
- * más listo que pedir que todas las palabras estén en el nombre.
+ * se acaban de enseñar, nunca contra el catálogo. Cada palabra tiene que estar
+ * entera en el nombre (o en singular/plural), nunca dentro de otra.
  */
-function encajaEnNombre(tokens: string[], nombre: string): boolean {
-  if (tokens.length === 0) return false;
-  const objetivo = normalizarNombre(nombre);
-  return tokens.every((t) => objetivo.includes(t));
+export function encajaEnNombre(tokens: string[], nombre: string): boolean {
+  const buscadas = tokens.flatMap((token) => comparableWords(token));
+  if (buscadas.length === 0) return false;
+  const palabras = comparableWords(nombre);
+  return buscadas.every((t) => palabras.some((p) => sameWordOrPlural(p, t) || sameWordOrPlural(t, p)));
 }
 
 /** Lee lo guardado en un mensaje del bot, si trae algo utilizable. */

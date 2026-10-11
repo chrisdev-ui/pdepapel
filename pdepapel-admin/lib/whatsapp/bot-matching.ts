@@ -84,6 +84,25 @@ export function comparableWords(value: string): string[] {
   return comparable(normalizeBotText(value));
 }
 
+/** La misma palabra o su plural: «horario» y «horarios», «local» y «locales». */
+export function sameWordOrPlural(word: string, base: string): boolean {
+  return word === base || word === `${base}s` || word === `${base}es`;
+}
+
+/**
+ * ¿Aparece la frase en el texto, por palabras enteras y seguidas? Cada palabra
+ * del texto puede ir en plural. Así «si» no se encuentra dentro de «silicona».
+ */
+export function containsWholePhrase(text: string, phrase: string): boolean {
+  const haystack = comparableWords(text);
+  const needle = comparableWords(phrase);
+  if (needle.length === 0 || needle.length > haystack.length) return false;
+  for (let start = 0; start <= haystack.length - needle.length; start += 1) {
+    if (needle.every((word, offset) => sameWordOrPlural(haystack[start + offset], word))) return true;
+  }
+  return false;
+}
+
 /** ¿Están estas palabras, seguidas y enteras, dentro de aquellas? */
 function containsPhrase(haystack: string[], needle: string[]): boolean {
   if (needle.length === 0 || needle.length > haystack.length) return false;

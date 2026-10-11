@@ -41,13 +41,13 @@ export async function getConversations(storeId: string): Promise<ConversationRow
     where: { storeId },
     select: { phone: true, bsuid: true, skippedCount: true },
   });
-  // Pedidos que el bot pasó y siguen sin descartar: una consulta para toda la lista.
+  // Pedidos que el bot pasó y siguen sin descartar (en su respuesta o, si no
+  // salió, en el mensaje de la clienta): una consulta para toda la lista.
   const conPedido = new Set(
     (
       await prismadb.conversationMessage.findMany({
         where: {
           conversation: { storeId },
-          sentBy: ConversationMessageSentBy.BOT,
           metadata: { path: "$.orderRequest.status", equals: "pending" },
         },
         select: { conversationId: true },

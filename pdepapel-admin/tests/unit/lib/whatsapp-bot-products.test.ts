@@ -155,6 +155,12 @@ describe("el portero que ahorra cuota", () => {
     expect(looksLikeProductQuestion("hola buenas")).toBe(false);
   });
 
+  it("la señal tiene que empezar y terminar en palabra entera", () => {
+    expect(looksLikeProductQuestion("se mantienen abiertos el domingo?")).toBe(false);
+    expect(looksLikeProductQuestion("chay de todo")).toBe(false);
+    expect(looksLikeProductQuestion("¿se mantienen? ¿tienen colores pastel?")).toBe(true);
+  });
+
   // El portero conocía «ver el» y «ver la» pero no el plural, así que
   // «¿puedo ver los acrílicos?» —de una conversación real— no llegaba ni al
   // clasificador: se caía aquí, antes de empezar.

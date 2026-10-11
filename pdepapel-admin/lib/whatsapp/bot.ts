@@ -33,6 +33,7 @@ import {
   type OrderItem,
   type OrderRequestRecord,
 } from "@/lib/whatsapp/bot-order-request";
+import { keepOrderRequestOnInbound, latestOrderRequest } from "@/lib/whatsapp/order-request-store";
 import {
   BUSINESS_FACT_TEMPLATES,
   type BusinessFactIntent,
@@ -1021,7 +1022,7 @@ async function lastBotMessageBefore(conversationId: string, before: Date) {
       createdAt: { lt: before },
     },
     orderBy: { createdAt: "desc" },
-    select: { body: true, metadata: true, createdAt: true },
+    select: { id: true, body: true, metadata: true, createdAt: true },
   });
 }
 
@@ -1123,6 +1124,9 @@ async function handOffOrderRequest(
   const offer = await lastBotMessageBefore(conversation.id, at);
   const productId = offeredProductId(offer);
   if (!offer || !productId || !isOfferFresh(offer.createdAt, at)) return null;
+  // Un pedido por oferta: si ya se anotó uno después de ella, no se crea otro.
+  const previous = await latestOrderRequest(conversation.id, at);
+  if (previous && previous.createdAt > offer.createdAt) return null;
   const product = await orderProduct(conversation.storeId, productId);
   if (!product) return null;
 
@@ -1145,11 +1149,12 @@ async function handOffOrderRequest(
   // Como en el paso 7: se marca antes de la pausa humana, para que un segundo
   // «sí» durante la espera no vuelva a contestar.
   await escalate(conversation.id);
-  const sent = await deliver(conversation.id, input.recipient, text, [], pacing(input), {
-    omitOwnerButton: true,
-    orderRequest: { status: "pending", items, createdAt: new Date().toISOString() },
-  });
-  if (sent.aborted) return { outcome: "skipped_owner_active" };
+  const record: OrderRequestRecord = { status: "pending", items, createdAt: new Date().toISOString() };
+  const sent = await deliver(conversation.id, input.recipient, text, [], pacing(input), { omitOwnerButton: true, orderRequest: record });
+  if (sent.aborted) {
+    await keepOrderRequestOnInbound(conversation.id, { externalId: input.inboundMessageId ?? null, at }, record);
+    return { outcome: "skipped_owner_active" };
+  }
   return sent.ok ? { outcome: "replied_order_request" } : { outcome: "escalated_send_failed", error: sent.error };
 }
 
@@ -1162,9 +1167,11 @@ async function appendToOrderRequest(
   const settings = input.settings ?? (await readSettings(conversation.storeId));
   if (!settings || !areOrderRepliesApproved(settings)) return null;
   const at = input.inboundAt ?? new Date();
-  const last = await lastBotMessageBefore(conversation.id, at);
-  const record = (last?.metadata as { orderRequest?: OrderRequestRecord } | null)?.orderRequest;
-  if (!last || !record || record.status !== "pending" || !isOfferFresh(last.createdAt, at)) return null;
+  // Solo sobre un pedido que el bot sí le alcanzó a confirmar, y sin que el bot haya dicho otra cosa después.
+  const [latest, last] = await Promise.all([latestOrderRequest(conversation.id, at), lastBotMessageBefore(conversation.id, at)]);
+  if (!latest?.fromBot || !last || last.id !== latest.id) return null;
+  const record = latest.record;
+  if (record.status !== "pending" || !isOfferFresh(last.createdAt, at)) return null;
   // Si Paula ya escribió después del pedido, la conversación es de ella.
   if (conversation.lastOwnerAt && conversation.lastOwnerAt >= last.createdAt) return null;
   const product = await uniqueProductFor(conversation.storeId, wanted.query);
@@ -1176,15 +1183,19 @@ async function appendToOrderRequest(
     ? record.items.map((existing) => (existing.productId === item.productId ? orderItem(product, existing.quantity + item.quantity) : existing))
     : [...record.items, item];
   if (items.some((existing) => !existing.stockConfirmed)) return null;
+  const updated: OrderRequestRecord = { status: "pending", items, createdAt: new Date().toISOString() };
   const sent = await deliver(
     conversation.id,
     input.recipient,
     ORDER_TEMPLATES["order.appended"](items.map((existing) => formatOrderLine(existing, formatCOP)).join("\n")),
     [],
     pacing(input),
-    { omitOwnerButton: true, orderRequest: { status: "pending", items, createdAt: new Date().toISOString() } },
+    { omitOwnerButton: true, orderRequest: updated },
   );
-  if (sent.aborted) return { outcome: "skipped_owner_active" };
+  if (sent.aborted) {
+    await keepOrderRequestOnInbound(conversation.id, { externalId: input.inboundMessageId ?? null, at }, updated);
+    return { outcome: "skipped_owner_active" };
+  }
   return sent.ok ? { outcome: "replied_order_appended" } : { outcome: "escalated_send_failed", error: sent.error };
 }
 
