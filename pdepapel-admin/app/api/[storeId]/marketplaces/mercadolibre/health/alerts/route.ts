@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getMercadoLibreHealthSummary } from "@/lib/mercadolibre/health";
-import { identifyIssues, setAlertsReviewed } from "@/lib/mercadolibre/health-alerts";
+import { countOpenMercadoLibreAlerts, identifyIssues, setAlertsReviewed } from "@/lib/mercadolibre/health-alerts";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -13,6 +13,18 @@ const bodySchema = z.union([
   z.object({ keys: z.array(z.string().min(1).max(191)).min(1).max(200), reviewed: z.boolean().default(true) }),
   z.object({ all: z.literal(true), reviewed: z.boolean().default(true) }),
 ]);
+
+/** Cuántas alertas cuenta el menú, para avisar desde cualquier pestaña de Mercado Libre. */
+export async function GET(_request: Request, { params }: { params: { storeId: string } }) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
+    return NextResponse.json({ open: await countOpenMercadoLibreAlerts(params.storeId) }, { headers: CACHE_HEADERS.NO_CACHE });
+  } catch (error) {
+    return handleErrorResponse(error, "MERCADOLIBRE_HEALTH_ALERTS_GET", { headers: CACHE_HEADERS.NO_CACHE });
+  }
+}
 
 /**
  * Marca alertas de salud de Mercado Libre como revisadas, o lo deshace (#8).

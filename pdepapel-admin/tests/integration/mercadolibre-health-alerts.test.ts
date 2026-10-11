@@ -177,6 +177,20 @@ describe("Mercado Libre health alerts: dedupe and review (MySQL)", () => {
     expect(await undo.json()).toEqual({ updated: 1 });
   });
 
+  it("el número del menú no cuenta «Revisión incompleta», que solo informa", async () => {
+    await seed();
+    const { countOpenMercadoLibreAlerts } = await import("@/lib/mercadolibre/health-alerts");
+    const now = new Date();
+    await testPrisma.marketplaceAlertState.create({
+      data: { connectionId, alertKey: "ml_unchecked", kind: "ml_unchecked", fingerprint: "f-1", firstSeenAt: now, lastSeenAt: now },
+    });
+    expect(await countOpenMercadoLibreAlerts(fixture!.store.id)).toBe(0);
+    await testPrisma.marketplaceAlertState.create({
+      data: { connectionId, alertKey: "question:q-1", kind: "question", fingerprint: "f-2", firstSeenAt: now, lastSeenAt: now },
+    });
+    expect(await countOpenMercadoLibreAlerts(fixture!.store.id)).toBe(1);
+  });
+
   it("the review API is owner-only", async () => {
     await seed();
     const { POST } = await import("@/app/api/[storeId]/marketplaces/mercadolibre/health/alerts/route");

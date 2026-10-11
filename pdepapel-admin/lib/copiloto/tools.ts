@@ -468,7 +468,8 @@ export function buildCopilotTools(storeId: string) {
       inputSchema: z.object({ fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Día en formato AAAA-MM-DD, hora de Colombia") }),
       execute: async ({ fecha }) => {
         const { start, end } = dayBounds(fecha);
-        if (start > new Date() || start < subDays(startOfDay(new Date()), 90)) throw new Error("Solo puedo consultar los últimos 90 días.");
+        if (start > new Date()) throw new Error("Ese día todavía no ha llegado en Colombia.");
+        if (start < subDays(startOfDay(new Date()), 90)) throw new Error("Solo puedo consultar los últimos 90 días.");
         return run(async (db) => {
           const orders = await db.order.findMany({
             where: { storeId, type: OrderType.POINT_OF_SALE, ...revenueOrderWhere(), ...paidInRange(start, end) },

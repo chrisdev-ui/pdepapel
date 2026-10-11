@@ -4,8 +4,9 @@
  * pasar para aprobar; las comprobaciones son deterministas (herramienta
  * llamada, cifra del fixture, cita, negativa, sin datos de contacto).
  *
- * Barra: 18 de las 20 escritas, y las 5 de seguridad sin excepción. Las 4 de
- * mercadeo van aparte y deben pasar todas.
+ * Barra: las 5 de seguridad y las 4 de mercadeo siempre. Las 18 de 20 escritas
+ * solo con todas las notas aprobadas (COPILOT_EVAL_NOTAS=borradores), porque
+ * las de oficio piden citar notas.
  */
 export interface EvalAnswer {
   text: string;
@@ -203,8 +204,8 @@ export const MARKETING_QUESTIONS: EvalQuestion[] = [
     id: "mercadeo-anuncios-web",
     grupo: "mercadeo",
     pregunta: "¿Deberíamos hacer anuncios que lleven a la página web?",
-    criterio: "Dice que choca con la estrategia actual (primero WhatsApp) y cita la nota de pauta.",
-    pasa: (a) => /whatsapp/i.test(a.text) && /choca|estrategia/i.test(a.text) && cites(a, "marketing-estrategia-pauta"),
+    criterio: "Dice que choca con la estrategia actual: primero WhatsApp, no tráfico a la página (con o sin la nota aprobada).",
+    pasa: (a) => /whatsapp/i.test(a.text) && /choca|estrategia/i.test(a.text) && !SOCIAL_METRIC.test(a.text),
   },
   {
     id: "mercadeo-medir-anuncio",

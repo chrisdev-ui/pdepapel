@@ -23,7 +23,11 @@ const baseHealth = {
 const stock = { kind: "stock_risk", title: "Termo Owala Negro", detail: "Se acabó en la tienda.", alertKey: "stock_risk:l-1", reviewed: false };
 const question = { kind: "question", title: "Agenda", detail: "¿Hay rojo?", alertKey: "question:q-1", reviewed: false };
 
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+
 let health: unknown;
+let openCount = 0;
 const fetchMock = vi.fn();
 
 const json = (body: unknown) =>
@@ -32,7 +36,7 @@ const json = (body: unknown) =>
 beforeEach(() => {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url.endsWith("/health")) return json(health);
-    if (url.endsWith("/health/alerts")) return json({ updated: 1, body: init?.body });
+    if (url.endsWith("/health/alerts")) return init?.method === "POST" ? json({ updated: 1, body: init?.body }) : json({ open: openCount });
     if (url.endsWith("/claims")) return json([]);
     return json([]);
   });
@@ -42,6 +46,8 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   fetchMock.mockReset();
+  router.refresh.mockReset();
+  openCount = 0;
 });
 
 const postedBodies = () =>
@@ -61,6 +67,8 @@ describe("Alertas del día", () => {
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/health")).length).toBe(2),
     );
+    // El número del menú se pinta en el servidor: hay que refrescarlo.
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1));
   });
 
   it("marks all of them as reviewed at once", async () => {
@@ -91,5 +99,40 @@ describe("Alertas del día", () => {
 
     expect(await screen.findByRole("button", { name: "Marcar como revisada" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Marcar todas como revisadas" })).toBeNull();
+  });
+
+  it("cada alerta lleva a la pestaña donde se resuelve", async () => {
+    health = { ...baseHealth, issues: [stock, question] };
+    render(<MercadoLibreOperationsCenter storeId="store-1" sections={["resumen"]} />);
+
+    const stockItem = (await screen.findByText("Termo Owala Negro:")).closest("li")!;
+    expect(within(stockItem).getByRole("link", { name: "Ver publicaciones" })).toHaveAttribute("href", "/store-1/mercadolibre?tab=publicaciones");
+    const questionItem = screen.getByText("Agenda:").closest("li")!;
+    expect(within(questionItem).getByRole("link", { name: "Responder preguntas" })).toHaveAttribute("href", "/store-1/mercadolibre?tab=preguntas");
+  });
+
+  it("«Revisión incompleta» solo informa: sin botones, aparte, y no cuenta como pendiente", async () => {
+    const unchecked = { kind: "ml_unchecked", title: "Revisión incompleta", detail: "Mercado Libre no respondió.", alertKey: "ml_unchecked", reviewed: false };
+    health = { ...baseHealth, issues: [unchecked] };
+    render(<MercadoLibreOperationsCenter storeId="store-1" sections={["resumen"]} />);
+
+    expect(await screen.findByText(/No hay alertas pendientes/)).toBeTruthy();
+    const note = screen.getByText("Revisión incompleta:").closest("li")!;
+    expect(note.textContent).toMatch(/se resuelve sola en la próxima revisión/);
+    expect(within(note).queryByRole("button")).toBeNull();
+  });
+
+  it("en las demás pestañas avisa cuántas alertas hay y lleva a Resumen", async () => {
+    openCount = 2;
+    render(<MercadoLibreOperationsCenter storeId="store-1" sections={["preguntas"]} />);
+
+    expect(await screen.findByText("Hay 2 alertas por revisar.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ver alertas en Resumen" })).toHaveAttribute("href", "/store-1/mercadolibre");
+  });
+
+  it("sin alertas en el menú no muestra el aviso", async () => {
+    render(<MercadoLibreOperationsCenter storeId="store-1" sections={["preguntas"]} />);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/health/alerts"))).toBe(true));
+    expect(screen.queryByText(/alertas? por revisar/)).toBeNull();
   });
 });

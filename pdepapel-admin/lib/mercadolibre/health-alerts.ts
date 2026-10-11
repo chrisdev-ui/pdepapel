@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 
+import { INFORMATIONAL_ALERT_KINDS } from "./alert-kinds";
 import type { MercadoLibreHealthIssue } from "./health";
 import { isReconcileKind } from "./reconcile";
 
@@ -342,7 +343,8 @@ export async function annotateIssues(
 
 /**
  * Para el número de «Mercado Libre» en el menú: alertas abiertas que nadie
- * marcó como revisadas en su huella actual, según la última revisión.
+ * marcó como revisadas en su huella actual, según la última revisión, sin las
+ * que solo informan.
  */
 export async function countOpenMercadoLibreAlerts(
   storeId: string,
@@ -353,6 +355,7 @@ export async function countOpenMercadoLibreAlerts(
     JOIN \`MarketplaceConnection\` c ON c.\`id\` = a.\`connectionId\`
     WHERE c.\`storeId\` = ${storeId} AND c.\`provider\` = 'MERCADOLIBRE'
       AND a.\`resolvedAt\` IS NULL AND a.\`alertKey\` <> ${RUN_LOCK_KEY}
+      AND a.\`kind\` NOT IN (${Prisma.join([...INFORMATIONAL_ALERT_KINDS])})
       AND (a.\`dismissedFingerprint\` IS NULL OR a.\`dismissedFingerprint\` <> a.\`fingerprint\`)`;
   return Number(rows[0]?.total ?? 0);
 }

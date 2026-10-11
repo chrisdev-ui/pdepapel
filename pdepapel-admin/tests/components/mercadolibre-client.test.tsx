@@ -8,6 +8,7 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ storeId: "store-id" }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/store-id/mercadolibre",
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }));
 
 vi.mock("@/components/mercadolibre-logo", () => ({

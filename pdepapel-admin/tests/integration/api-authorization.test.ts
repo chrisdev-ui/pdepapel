@@ -81,6 +81,7 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "posts", methods: ["POST"] },
   { path: "posts/[postId]", methods: ["PATCH", "DELETE"], params: { postId: "x" } },
   // Gestión de publicaciones de Mercado Libre (auditoría 2026-09-11).
+  { path: "marketplaces/mercadolibre/health/alerts", methods: ["GET", "POST"] },
   { path: "marketplaces/mercadolibre/listings", methods: ["GET", "POST"] },
   { path: "marketplaces/mercadolibre/listings/bulk", methods: ["POST"] },
   { path: "marketplaces/mercadolibre/listings/import", methods: ["POST"] },
@@ -97,7 +98,7 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   // Copiloto (2026-10-10): solo la dueña.
   { path: "copiloto/chat", methods: ["POST"] },
   { path: "copiloto/conversaciones", methods: ["GET"] },
-  { path: "copiloto/conversaciones/[conversationId]", methods: ["GET"], params: { conversationId: "x" } },
+  { path: "copiloto/conversaciones/[conversationId]", methods: ["GET", "DELETE"], params: { conversationId: "x" } },
   { path: "copiloto/mensajes/[messageId]/valoracion", methods: ["POST"], params: { messageId: "x" } },
   { path: "copiloto/conocimiento/[noteId]", methods: ["PUT", "POST", "DELETE"], params: { noteId: "adhesivos" } },
 ];

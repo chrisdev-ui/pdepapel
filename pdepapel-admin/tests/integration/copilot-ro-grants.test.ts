@@ -131,7 +131,8 @@ describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada m
       resumenDeHoy: {},
       resumenFinancieroMes: { anio: now.getFullYear(), mes: now.getMonth() + 1 },
       compararMeses: { anio: now.getFullYear(), mes: now.getMonth() + 1 },
-      ventasDelDiaPuntoDeVenta: { fecha: now.toISOString().slice(0, 10) },
+      // El día de Colombia, no el de UTC: entre las 7 p. m. y la medianoche ya son días distintos.
+      ventasDelDiaPuntoDeVenta: { fecha: now.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) },
       buscarProductos: { texto: "componente" },
       detalleProducto: { productId: fixture!.component.id },
       kardexProducto: { productId: fixture!.component.id, dias: 30 },

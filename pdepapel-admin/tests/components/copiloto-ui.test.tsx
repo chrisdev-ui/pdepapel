@@ -12,13 +12,18 @@ const mocks = vi.hoisted(() => ({
     sendMessage: vi.fn(),
     stop: vi.fn(),
     regenerate: vi.fn(),
-    setMessages: vi.fn(),
   },
+  chatOptions: [] as { id: string; messages: unknown[] }[],
   axios: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
   toast: vi.fn(),
 }));
 
-vi.mock("@ai-sdk/react", () => ({ useChat: () => mocks.chat }));
+vi.mock("@ai-sdk/react", () => ({
+  useChat: (options: { id: string; messages: unknown[] }) => {
+    mocks.chatOptions.push(options);
+    return mocks.chat;
+  },
+}));
 vi.mock("axios", () => ({ default: { ...mocks.axios, isAxiosError: () => false } }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }), useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast: mocks.toast }));
@@ -32,6 +37,7 @@ beforeEach(() => {
   mocks.chat.messages = [];
   mocks.chat.status = "ready";
   mocks.chat.error = undefined;
+  mocks.chatOptions.length = 0;
   Object.values(mocks.axios).forEach((fn) => fn.mockReset());
   mocks.axios.post.mockResolvedValue({ data: {} });
 });
@@ -90,12 +96,49 @@ describe("CopilotChat", () => {
     await waitFor(() => expect(mocks.axios.post).toHaveBeenCalledWith("/api/store-1/copiloto/mensajes/cop-1/valoracion", { value: "down" }));
   });
 
-  it("abre una conversación anterior", async () => {
+  const history = [{ id: "conv-1", title: "Ventas de ayer", lastMessageAt: "2026-10-09T00:00:00Z" }];
+  const lastChat = () => mocks.chatOptions[mocks.chatOptions.length - 1];
+
+  it("abre una conversación anterior con un solo clic, con sus mensajes", async () => {
     mocks.axios.get.mockResolvedValue({ data: { messages: [answer] } });
-    render(<CopilotChat storeId="store-1" screen={null} conversations={[{ id: "conv-1", title: "Ventas de ayer", lastMessageAt: "2026-10-09T00:00:00Z" }]} />);
+    render(<CopilotChat storeId="store-1" screen={null} conversations={history} />);
     fireEvent.click(screen.getAllByText("Ventas de ayer").find((el) => el.tagName === "BUTTON")!);
-    await waitFor(() => expect(mocks.chat.setMessages).toHaveBeenCalled());
+    // El chat nuevo nace con el id y los mensajes juntos: sin segundo clic.
+    await waitFor(() => expect(lastChat()).toMatchObject({ id: "conv-1", messages: [{ id: "cop-1", role: "assistant" }] }));
+    expect(mocks.axios.get).toHaveBeenCalledTimes(1);
     expect(mocks.axios.get).toHaveBeenCalledWith("/api/store-1/copiloto/conversaciones/conv-1");
+  });
+
+  it("en el teléfono la abre al elegirla en la lista", async () => {
+    mocks.axios.get.mockResolvedValue({ data: { messages: [answer] } });
+    render(<CopilotChat storeId="store-1" screen={null} conversations={history} />);
+    fireEvent.change(screen.getByLabelText("Conversaciones anteriores"), { target: { value: "conv-1" } });
+    await waitFor(() => expect(lastChat()).toMatchObject({ id: "conv-1", messages: [{ id: "cop-1" }] }));
+  });
+
+  it("elimina una conversación tras confirmar y, si estaba abierta, vuelve a un chat vacío", async () => {
+    mocks.axios.get.mockResolvedValue({ data: { messages: [answer] } });
+    mocks.axios.delete.mockResolvedValue({ data: { deleted: true } });
+    render(<CopilotChat storeId="store-1" screen={null} conversations={history} />);
+    fireEvent.click(screen.getAllByText("Ventas de ayer").find((el) => el.tagName === "BUTTON")!);
+    await waitFor(() => expect(lastChat().id).toBe("conv-1"));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Eliminar la conversación «Ventas de ayer»" })[0]);
+    expect(await screen.findByText("¿Eliminar esta conversación?")).toBeInTheDocument();
+    expect(screen.getByText(/No se puede deshacer/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+
+    await waitFor(() => expect(mocks.axios.delete).toHaveBeenCalledWith("/api/store-1/copiloto/conversaciones/conv-1"));
+    await waitFor(() => expect(lastChat()).toMatchObject({ messages: [] }));
+    expect(lastChat().id).not.toBe("conv-1");
+    expect(screen.queryAllByText("Ventas de ayer").filter((el) => el.tagName === "BUTTON")).toHaveLength(0);
+  });
+
+  it("sin confirmar no borra nada", async () => {
+    render(<CopilotChat storeId="store-1" screen={null} conversations={history} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Eliminar la conversación «Ventas de ayer»" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
+    expect(mocks.axios.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -116,6 +159,15 @@ describe("KnowledgeList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar texto" }));
     await waitFor(() => expect(mocks.axios.put).toHaveBeenCalledWith("/api/store-1/copiloto/conocimiento/adhesivos", { body: "Texto nuevo" }));
     await waitFor(() => expect(screen.getByText("Sin aprobar")).toBeInTheDocument());
+  });
+
+  it("acepta notas largas, hasta 10.000 caracteres, y muestra cuánto lleva", () => {
+    render(<KnowledgeList storeId="store-1" notes={[note]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+    const box = screen.getByLabelText("Texto de la nota");
+    expect(box).toHaveAttribute("maxLength", "10000");
+    fireEvent.change(box, { target: { value: "a".repeat(4781) } });
+    expect(screen.getByText("4.781 de 10.000 caracteres")).toBeInTheDocument();
   });
 
   it("una marca pendiente abre el editor y no se puede aprobar vacía", () => {

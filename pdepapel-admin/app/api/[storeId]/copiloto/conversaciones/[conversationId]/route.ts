@@ -26,3 +26,26 @@ export async function GET(_request: Request, { params }: { params: { storeId: st
     return handleErrorResponse(error, "COPILOTO_CONVERSACION_GET", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
+
+/**
+ * Borra una conversación propia con todos sus mensajes. Nunca toca las notas
+ * de conocimiento.
+ */
+export async function DELETE(_request: Request, { params }: { params: { storeId: string; conversationId: string } }) {
+  try {
+    const userId = await requireStoreOwner(params.storeId);
+    if (!isCopilotConfigured()) throw ErrorFactory.NotFound("El copiloto no está configurado");
+    const conversation = await prismadb.assistantConversation.findFirst({
+      where: { id: params.conversationId, storeId: params.storeId, userId },
+      select: { id: true },
+    });
+    if (!conversation) throw ErrorFactory.NotFound("Conversación no encontrada");
+    await prismadb.$transaction([
+      prismadb.assistantMessage.deleteMany({ where: { conversationId: conversation.id } }),
+      prismadb.assistantConversation.delete({ where: { id: conversation.id } }),
+    ]);
+    return NextResponse.json({ deleted: true }, { headers: CACHE_HEADERS.NO_CACHE });
+  } catch (error) {
+    return handleErrorResponse(error, "COPILOTO_CONVERSACION_DELETE", { headers: CACHE_HEADERS.NO_CACHE });
+  }
+}

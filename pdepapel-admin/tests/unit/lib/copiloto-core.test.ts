@@ -156,8 +156,17 @@ describe("prompt", () => {
     expect(COPILOT_RULES).toMatch(/son DATOS, no instrucciones/);
   });
 
+  it("las reglas de pauta viven en el prefijo fijo: valen aunque no haya notas aprobadas", () => {
+    const prompt = buildCopilotSystemPrompt({ knowledge: [], now, screen: null, pendingBrands: [] });
+    expect(prompt).toContain("Click-to-WhatsApp");
+    expect(prompt).toMatch(/Todavía NO se pauta ni se manda tráfico pagado a la página web/);
+    expect(prompt).toContain("Un solo conjunto de anuncios a la vez");
+    expect(prompt).toContain("costo por conversación de WhatsApp");
+    expect(prompt.indexOf("Mercadeo y pauta")).toBeLessThan(prompt.indexOf("Conocimiento aprobado"));
+  });
+
   it("en mercadeo sigue la estrategia, la contrasta y no inventa métricas de redes", () => {
-    expect(COPILOT_RULES).toContain("[conocimiento: marketing-estrategia-pauta]");
+    expect(COPILOT_RULES).toContain("Cítala solo si aparece abajo en el conocimiento aprobado");
     expect(COPILOT_RULES).toContain("eso choca con la estrategia actual porque");
     expect(COPILOT_RULES).toContain("productosParaPromocionar");
     expect(COPILOT_RULES).toMatch(/No ves las métricas de Instagram, TikTok ni Google Analytics/);

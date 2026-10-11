@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { KNOWLEDGE_NOTE_MAX_CHARS } from "@/lib/copiloto/limits";
 import { cn } from "@/lib/utils";
 
 import { BoldText } from "../../components/bold-text";
@@ -67,7 +68,18 @@ function NoteCard({ storeId, initial }: { storeId: string; initial: KnowledgeNot
           <label htmlFor={`texto-${note.id}`} className="text-sm font-medium">
             Texto de la nota
           </label>
-          <Textarea id={`texto-${note.id}`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={8} maxLength={4000} disabled={saving} />
+          <Textarea
+            id={`texto-${note.id}`}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            rows={14}
+            maxLength={KNOWLEDGE_NOTE_MAX_CHARS}
+            disabled={saving}
+            aria-describedby={`largo-${note.id}`}
+          />
+          <p id={`largo-${note.id}`} className="text-right text-xs text-muted-foreground">
+            {draft.length.toLocaleString("es-CO")} de {KNOWLEDGE_NOTE_MAX_CHARS.toLocaleString("es-CO")} caracteres
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={saving || !draft.trim()} onClick={() => call(() => axios.put(url, { body: draft }), "Texto guardado; falta aprobarlo")}>
               Guardar texto

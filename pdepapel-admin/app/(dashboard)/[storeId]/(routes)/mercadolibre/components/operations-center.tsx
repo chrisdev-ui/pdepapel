@@ -28,7 +28,11 @@ import {
   ShieldAlert,
   Truck,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+
+import { alertAction, isInformationalAlert } from "@/lib/mercadolibre/alert-kinds";
 
 type HealthSummary = {
   totalListings: number;
@@ -220,6 +224,9 @@ export function MercadoLibreOperationsCenter({
     string | null
   >(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const router = useRouter();
+  /** En las pestañas que no son Resumen: cuántas alertas cuenta el menú. */
+  const [pendingAlerts, setPendingAlerts] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Cada pestaña pide solo lo que pinta: la de Ventas no debe caerse porque
@@ -284,6 +291,18 @@ export function MercadoLibreOperationsCenter({
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (needsHealth) return;
+    let active = true;
+    fetch(`/api/${storeId}/marketplaces/mercadolibre/health/alerts`)
+      .then((response) => (response.ok ? response.json() : { open: 0 }))
+      .then((data: { open?: number }) => active && setPendingAlerts(data.open ?? 0))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [needsHealth, storeId]);
 
   const refreshQuestions = async () => {
     setIsRefreshingQuestions(true);
@@ -391,6 +410,8 @@ export function MercadoLibreOperationsCenter({
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
       await loadData();
+      // El número del menú se pinta en el servidor: sin esto seguía en «1».
+      router.refresh();
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -402,8 +423,9 @@ export function MercadoLibreOperationsCenter({
     }
   };
 
-  const openAlerts = health?.issues.filter((issue) => !issue.reviewed) ?? [];
-  const reviewedAlerts = health?.issues.filter((issue) => issue.reviewed) ?? [];
+  const openAlerts = health?.issues.filter((issue) => !issue.reviewed && !isInformationalAlert(issue.kind)) ?? [];
+  const reviewedAlerts = health?.issues.filter((issue) => issue.reviewed && !isInformationalAlert(issue.kind)) ?? [];
+  const infoAlerts = health?.issues.filter((issue) => isInformationalAlert(issue.kind)) ?? [];
 
   const resyncOrder = async (externalOrderId: string) => {
     if (
@@ -533,6 +555,17 @@ export function MercadoLibreOperationsCenter({
               {notice}
             </p>
           ) : null}
+          {!needsHealth && pendingAlerts > 0 ? (
+            <p className="flex flex-col gap-2 rounded-md border border-tint-cream bg-tint-cream/40 p-3 text-sm text-primary sm:flex-row sm:items-center sm:justify-between">
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {pendingAlerts === 1 ? "Hay 1 alerta por revisar." : `Hay ${pendingAlerts} alertas por revisar.`}
+              </span>
+              <Button asChild size="xs" variant="soft" className="w-full sm:w-auto">
+                <Link href={`/${storeId}/mercadolibre`}>Ver alertas en Resumen</Link>
+              </Button>
+            </p>
+          ) : null}
           {show("resumen") && health ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <SummaryCard
@@ -593,11 +626,18 @@ export function MercadoLibreOperationsCenter({
                       <span className="font-medium">{issue.title}:</span>{" "}
                       {issue.detail}
                     </span>
+                    <span className="flex shrink-0 flex-wrap gap-1 self-start">
+                    {alertAction(issue.kind) ? (
+                      <Button asChild size="xs" variant="soft">
+                        <Link href={`/${storeId}/mercadolibre?tab=${alertAction(issue.kind)!.tab}`}>
+                          {alertAction(issue.kind)!.label}
+                        </Link>
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       size="xs"
                       variant="ghost"
-                      className="shrink-0 self-start"
                       disabled={reviewingAlert !== null}
                       onClick={() =>
                         void reviewAlerts({ keys: [issue.alertKey] }, true, issue.alertKey)
@@ -608,6 +648,7 @@ export function MercadoLibreOperationsCenter({
                       ) : null}
                       Marcar como revisada
                     </Button>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -621,6 +662,17 @@ export function MercadoLibreOperationsCenter({
               No hay alertas pendientes. Aun así, revisa las ventas antes de
               despachar.
             </p>
+          ) : null}
+
+          {show("resumen") && infoAlerts.length > 0 ? (
+            <ul className="space-y-1 rounded-md border p-3 text-sm text-muted-foreground">
+              {infoAlerts.map((issue) => (
+                <li key={issue.alertKey} className="break-words">
+                  <span className="font-medium">{issue.title}:</span> {issue.detail} No hace falta hacer nada: se resuelve
+                  sola en la próxima revisión y no cuenta en el menú.
+                </li>
+              ))}
+            </ul>
           ) : null}
 
           {show("resumen") && reviewedAlerts.length > 0 ? (

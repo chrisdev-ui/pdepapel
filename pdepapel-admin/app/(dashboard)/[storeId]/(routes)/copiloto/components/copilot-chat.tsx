@@ -3,11 +3,13 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import axios from "axios";
-import { Brain, Loader2, MessageSquarePlus, RotateCcw, Send, Square, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Brain, Loader2, MessageSquarePlus, RotateCcw, Send, Square, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +74,10 @@ function ToolLine({ part }: { part: ToolPart }) {
 
 export function CopilotChat({ storeId, screen, conversations: initialConversations }: CopilotChatProps) {
   const [conversationId, setConversationId] = useState<string>(newId);
+  // Los mensajes con que arranca cada conversación: `useChat` crea un chat
+  // nuevo al cambiar el id, así que hay que dárselos junto con el id.
+  const [seed, setSeed] = useState<UIMessage[]>([]);
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [conversations, setConversations] = useState(initialConversations);
   const [mode, setMode] = useState<Mode>("rapido");
   const [input, setInput] = useState("");
@@ -90,7 +96,7 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
       }),
     [storeId],
   );
-  const { messages, sendMessage, status, stop, regenerate, error, setMessages } = useChat({ id: conversationId, transport });
+  const { messages, sendMessage, status, stop, regenerate, error } = useChat({ id: conversationId, messages: seed, transport });
   const busy = status === "submitted" || status === "streaming";
 
   useEffect(() => {
@@ -107,12 +113,37 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
     }
   };
 
-  const open = async (id: string) => {
-    if (busy) return;
-    const { data } = await axios.get(`/api/${storeId}/copiloto/conversaciones/${id}`);
-    setConversationId(id);
-    setMessages((data.messages as UIMessage[]).map((message) => ({ id: message.id, role: message.role, parts: message.parts })));
+  const startNew = () => {
+    setSeed([]);
+    setConversationId(newId());
   };
+
+  const open = async (id: string) => {
+    if (busy || id === conversationId) return;
+    const { data } = await axios.get(`/api/${storeId}/copiloto/conversaciones/${id}`);
+    setSeed((data.messages as UIMessage[]).map((message) => ({ id: message.id, role: message.role, parts: message.parts })));
+    setConversationId(id);
+  };
+
+  const remove = async (conversation: ConversationSummary) => {
+    if (busy) return;
+    const confirmed = await requestConfirmation({
+      title: "¿Eliminar esta conversación?",
+      description: `«${conversation.title}» se borra con todos sus mensajes. No se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await axios.delete(`/api/${storeId}/copiloto/conversaciones/${conversation.id}`);
+      setConversations((current) => current.filter((item) => item.id !== conversation.id));
+      if (conversation.id === conversationId) startNew();
+    } catch {
+      toast({ description: "No se pudo eliminar la conversación", variant: "destructive" });
+    }
+  };
+
+  const openConversation = conversations.find((conversation) => conversation.id === conversationId);
 
   const rate = async (messageId: string, value: "up" | "down") => {
     setRated((current) => ({ ...current, [messageId]: value }));
@@ -126,14 +157,14 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
     // teléfono, también la barra inferior. Así la caja de la pregunta siempre
     // se ve sin desplazar la página.
     <div className="flex h-[calc(100dvh-17rem)] min-h-[340px] flex-col gap-2 lg:h-[calc(100dvh-14.5rem)] lg:flex-row lg:gap-3">
+      {confirmationDialog}
       <aside className="flex shrink-0 flex-row gap-2 lg:w-60 lg:flex-col">
         <Button
           type="button"
           variant="outline"
           onClick={() => {
             if (busy) return;
-            setConversationId(newId());
-            setMessages([]);
+            startNew();
           }}
           className="shrink-0 justify-start"
           aria-label="Nueva conversación"
@@ -151,7 +182,7 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
               id="copiloto-historial"
               className="h-10 min-w-0 flex-1 rounded-md border bg-white px-2 text-sm lg:hidden"
               value={conversations.some((c) => c.id === conversationId) ? conversationId : ""}
-              onChange={(event) => event.target.value && open(event.target.value)}
+              onChange={(event) => (event.target.value ? open(event.target.value) : startNew())}
             >
               <option value="">Conversaciones anteriores</option>
               {conversations.map((conversation) => (
@@ -160,18 +191,39 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
                 </option>
               ))}
             </select>
+            {openConversation && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0 lg:hidden"
+                onClick={() => remove(openConversation)}
+                aria-label={`Eliminar la conversación «${openConversation.title}»`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
             <ul className="hidden min-h-0 flex-1 flex-col gap-1 overflow-y-auto lg:flex">
               {conversations.map((conversation) => (
-                <li key={conversation.id}>
+                <li key={conversation.id} className="group flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => open(conversation.id)}
+                    aria-current={conversation.id === conversationId ? "true" : undefined}
                     className={cn(
-                      "w-full truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent",
+                      "min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent",
                       conversation.id === conversationId && "bg-accent font-medium",
                     )}
                   >
                     {conversation.title}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(conversation)}
+                    aria-label={`Eliminar la conversación «${conversation.title}»`}
+                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </li>
               ))}

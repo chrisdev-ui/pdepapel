@@ -11,7 +11,7 @@ import prismadb from "@/lib/prismadb";
  * aprobado, y la aprobación va atada a la huella de ese texto.
  */
 export const KNOWLEDGE_DIR = path.join(process.cwd(), "content", "copiloto", "conocimiento");
-export const KNOWLEDGE_NOTE_MAX_CHARS = 4000;
+export { KNOWLEDGE_NOTE_MAX_CHARS } from "@/lib/copiloto/limits";
 
 export interface KnowledgeDraft {
   id: string;
