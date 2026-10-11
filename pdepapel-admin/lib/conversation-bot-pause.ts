@@ -62,12 +62,14 @@ export function formatBotPause(pause: BotPause): string | null {
 }
 
 /**
- * ¿Tiene sentido ofrecer «Reanudar»? Solo si hay algo que reanudar: sin freno
- * puesto, el botón no haría nada y de todas formas se mostraba encendido.
+ * ¿Tiene sentido ofrecer «Devolver al bot»? Sí con la pausa de Paula puesta, y
+ * también con la conversación esperándola (`NEEDS_OWNER`) aunque la pausa ya
+ * venció: ahí el bot no contesta mensajes escritos hasta que alguien la
+ * devuelva, y sin el botón no había cómo.
  */
 export function canHandBackToBot(
-  lastOwnerAt: Date | string | null | undefined,
+  conversation: { lastOwnerAt: Date | string | null | undefined; status?: string | null },
   now: Date = new Date(),
 ): boolean {
-  return describeBotPause(lastOwnerAt, now).paused;
+  return conversation.status === "NEEDS_OWNER" || describeBotPause(conversation.lastOwnerAt, now).paused;
 }

@@ -61,7 +61,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     }
   };
 
-  const puedeDevolver = canHandBackToBot(data.lastOwnerAt);
+  const puedeDevolver = canHandBackToBot(data);
 
   /** Le devuelve la conversación al bot. No le manda nada a la clienta. */
   const handBack = async () => {

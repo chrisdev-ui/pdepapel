@@ -272,7 +272,7 @@ export function ConversationThread({
     }
   };
 
-  const puedeDevolver = canHandBackToBot(conversation.lastOwnerAt);
+  const puedeDevolver = canHandBackToBot(conversation);
   const pausaDelBot = formatBotPause(describeBotPause(conversation.lastOwnerAt));
 
   return (
@@ -346,7 +346,7 @@ export function ConversationThread({
             onClick={handBack}
             title={
               puedeDevolver
-                ? "Quita la pausa y deja que el bot vuelva a contestar."
+                ? "Le devuelve la conversación al bot: vuelve a contestar los mensajes escritos."
                 : "El bot ya está contestando: no hay pausa que quitar."
             }
           >

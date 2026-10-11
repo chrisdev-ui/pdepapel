@@ -22,14 +22,14 @@ describe("la pausa del bot que ve Paula", () => {
   it("sin nada de Paula, el bot contesta", () => {
     expect(describeBotPause(null, AHORA)).toEqual({ paused: false, remainingMs: 0 });
     expect(formatBotPause(describeBotPause(null, AHORA))).toBeNull();
-    expect(canHandBackToBot(null, AHORA)).toBe(false);
+    expect(canHandBackToBot({ lastOwnerAt: null, status: "OPEN" }, AHORA)).toBe(false);
   });
 
   it("recién escrito por ella, el bot queda callado casi un día", () => {
     const pausa = describeBotPause(haceHoras(1), AHORA);
     expect(pausa.paused).toBe(true);
     expect(formatBotPause(pausa)).toBe("Bot en pausa · vuelve en 23 h");
-    expect(canHandBackToBot(haceHoras(1), AHORA)).toBe(true);
+    expect(canHandBackToBot({ lastOwnerAt: haceHoras(1), status: "OPEN" }, AHORA)).toBe(true);
   });
 
   it("en el último tramo lo dice en minutos, que «en 0 h» parece un error", () => {
@@ -44,7 +44,16 @@ describe("la pausa del bot que ve Paula", () => {
     const viejo = haceHoras(OWNER_TAKEOVER_WINDOW_HOURS + 1);
     expect(describeBotPause(viejo, AHORA).paused).toBe(false);
     expect(formatBotPause(describeBotPause(viejo, AHORA))).toBeNull();
-    expect(canHandBackToBot(viejo, AHORA)).toBe(false);
+    expect(canHandBackToBot({ lastOwnerAt: viejo, status: "OPEN" }, AHORA)).toBe(false);
+  });
+
+  it("esperando a Paula se puede devolver al bot aunque la pausa ya venció", () => {
+    // Un mensaje que llegó con la pausa puesta deja la conversación esperándola;
+    // vencida la pausa, el bot sigue sin contestar mensajes escritos.
+    const viejo = haceHoras(OWNER_TAKEOVER_WINDOW_HOURS + 10);
+    expect(canHandBackToBot({ lastOwnerAt: viejo, status: "NEEDS_OWNER" }, AHORA)).toBe(true);
+    expect(canHandBackToBot({ lastOwnerAt: null, status: "NEEDS_OWNER" }, AHORA)).toBe(true);
+    expect(canHandBackToBot({ lastOwnerAt: viejo, status: "RESOLVED" }, AHORA)).toBe(false);
   });
 
   it("aguanta una fecha que llegue como texto, que es como viaja por la API", () => {
