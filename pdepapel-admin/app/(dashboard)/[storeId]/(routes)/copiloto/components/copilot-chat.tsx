@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import axios from "axios";
-import { Brain, Loader2, MessageSquarePlus, RotateCcw, Send, Square, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { Brain, Loader2, Megaphone, MessageSquarePlus, RotateCcw, Send, Square, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { BoldText } from "./bold-text";
-import { suggestionsFor, TOOL_LABELS } from "./suggestions";
+import { MARKETING_SUGGESTIONS, suggestionsFor, TOOL_LABELS } from "./suggestions";
 
 export interface ConversationSummary {
   id: string;
@@ -82,8 +82,9 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
   const [mode, setMode] = useState<Mode>("rapido");
   const [input, setInput] = useState("");
   const [rated, setRated] = useState<Record<string, "up" | "down">>({});
-  const settings = useRef({ mode, screen });
-  settings.current = { mode, screen };
+  const [marketing, setMarketing] = useState(false);
+  const settings = useRef({ mode, screen, marketing });
+  settings.current = { mode, screen, marketing };
   const bottom = useRef<HTMLDivElement>(null);
 
   const transport = useMemo(
@@ -91,7 +92,13 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
       new DefaultChatTransport({
         api: `/api/${storeId}/copiloto/chat`,
         prepareSendMessagesRequest: ({ messages, id }) => ({
-          body: { id, message: messages[messages.length - 1], mode: settings.current.mode, screen: settings.current.screen },
+          body: {
+            id,
+            message: messages[messages.length - 1],
+            mode: settings.current.mode,
+            screen: settings.current.screen,
+            marketing: settings.current.marketing,
+          },
         }),
       }),
     [storeId],
@@ -238,19 +245,33 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
             <Brain className="h-4 w-4" aria-hidden="true" />
             Copiloto
           </p>
-          <div role="radiogroup" aria-label="Tipo de respuesta" className="flex rounded-full border p-0.5 text-xs">
-            {(["rapido", "a_fondo"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={mode === value}
-                onClick={() => setMode(value)}
-                className={cn("rounded-full px-3 py-1", mode === value ? "bg-primary text-primary-foreground" : "text-primary")}
-              >
-                {value === "rapido" ? "Rápido" : "Análisis a fondo"}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={marketing}
+              onClick={() => setMarketing((current) => !current)}
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-3 py-1 text-xs",
+                marketing ? "border-primary bg-tint-lavender font-medium text-primary" : "text-primary",
+              )}
+            >
+              <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+              Modo Marketing
+            </button>
+            <div role="radiogroup" aria-label="Tipo de respuesta" className="flex rounded-full border p-0.5 text-xs">
+              {(["rapido", "a_fondo"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === value}
+                  onClick={() => setMode(value)}
+                  className={cn("rounded-full px-3 py-1", mode === value ? "bg-primary text-primary-foreground" : "text-primary")}
+                >
+                  {value === "rapido" ? "Rápido" : "Análisis a fondo"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -262,7 +283,7 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
                 salen los datos.
               </p>
               <div className="flex flex-wrap gap-2">
-                {suggestionsFor(screen).map((suggestion) => (
+                {(marketing ? MARKETING_SUGGESTIONS : suggestionsFor(screen)).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"

@@ -143,6 +143,29 @@ describe("handleCopilotChat", () => {
     expect(used).toEqual(["gpt-6-luna"]);
   });
 
+  it("«Modo Marketing» agrega la persona después del prefijo fijo y solo cuando está encendido", async () => {
+    const systems: string[] = [];
+    const run = async (marketing: boolean) => {
+      const used = model();
+      const response = await handleCopilotChat(request({ ...body("Dame una idea de Reel"), marketing }), "store-1", {
+        budgetStore: budgetStore(),
+        languageModel: () => used,
+      });
+      await response.text();
+      const system = used.doStreamCalls[0].prompt.find((message) => message.role === "system");
+      systems.push(String(system?.content ?? ""));
+    };
+    await run(false);
+    await run(true);
+    const [off, on] = systems;
+    expect(off).not.toContain("Modo Marketing (encendido por Paula)");
+    expect(on).toContain("Modo Marketing (encendido por Paula)");
+    // El prefijo que se cachea (reglas y conocimiento) es el mismo con el modo encendido o apagado.
+    const prefix = off.slice(0, off.indexOf("Hoy es"));
+    expect(on.startsWith(prefix)).toBe(true);
+    expect(on.indexOf("Modo Marketing (encendido por Paula)")).toBeLessThan(on.indexOf("Hoy es"));
+  });
+
   it("responde en streaming, guarda la pregunta y la respuesta con su costo, y anota el gasto", async () => {
     const store = budgetStore();
     const response = await handleCopilotChat(request(body()), "store-1", { budgetStore: store, languageModel: model });

@@ -56,6 +56,16 @@ const answer = {
 };
 
 describe("CopilotChat", () => {
+  it("«Modo Marketing» se enciende junto a Rápido y A fondo y cambia las sugerencias", () => {
+    render(<CopilotChat storeId="store-1" screen={null} conversations={[]} />);
+    const toggle = screen.getByRole("button", { name: "Modo Marketing" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Dame 3 ideas de Reel para esta semana" }));
+    expect(mocks.chat.sendMessage).toHaveBeenCalledWith({ text: "Dame 3 ideas de Reel para esta semana" });
+  });
+
   it("sin mensajes muestra las sugerencias de la pantalla y las manda al tocarlas", () => {
     render(<CopilotChat storeId="store-1" screen="mercadolibre" conversations={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "¿Hay alertas en Mercado Libre?" }));

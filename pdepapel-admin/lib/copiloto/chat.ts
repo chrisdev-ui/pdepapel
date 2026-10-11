@@ -40,6 +40,7 @@ export const copilotChatRequestSchema = z.object({
   message: z.object({ id: z.string().min(1).max(64), role: z.literal("user"), parts: z.array(z.any()).min(1).max(20) }).passthrough(),
   screen: z.string().max(200).nullish(),
   mode: z.enum(["rapido", "a_fondo"]).default("rapido"),
+  marketing: z.boolean().default(false),
 });
 
 /** Cuántos mensajes anteriores viajan al modelo: acota el costo de una conversación larga. */
@@ -75,7 +76,7 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
 
   const parsed = copilotChatRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json(400, "Mensaje inválido.");
-  const { id: conversationId, message, screen, mode } = parsed.data;
+  const { id: conversationId, message, screen, mode, marketing } = parsed.data;
   const question = textOf(message);
   if (!question || question.length > 2000) return json(400, "Escribe una pregunta de hasta 2.000 caracteres.");
 
@@ -149,6 +150,7 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
     now,
     screen: screen ?? null,
     pendingBrands: notes.filter((note) => note.tema === "marcas" && !note.approved).map((note) => note.titulo),
+    marketing,
   });
 
   const languageModel = deps.languageModel?.(model) ?? createOpenAI({ apiKey: openaiKey })(model);
@@ -183,7 +185,7 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
       const usage = step.usage;
       console.info("[AI_MODEL_CALL]", {
         step: "copiloto",
-        feature: "copiloto.chat",
+        feature: marketing ? "copiloto.chat.marketing" : "copiloto.chat",
         provider: "openai",
         model,
         inputTokens: usage.inputTokens ?? 0,
@@ -223,7 +225,7 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
       originalMessages: messages,
       sendReasoning: false,
       generateMessageId: createIdGenerator({ prefix: "cop", size: 24 }),
-      messageMetadata: ({ part }) => (part.type === "finish" ? { model, mode: model === COPILOT_DEEP_MODEL ? "a_fondo" : "rapido" } : undefined),
+      messageMetadata: ({ part }) => (part.type === "finish" ? { model, mode: model === COPILOT_DEEP_MODEL ? "a_fondo" : "rapido", marketing } : undefined),
       onError: () => "No pude terminar la respuesta. Intenta de nuevo.",
       onEnd: async ({ messages: finalMessages }) => {
         const answer = finalMessages[finalMessages.length - 1];

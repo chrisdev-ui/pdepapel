@@ -15,7 +15,9 @@ export interface EvalAnswer {
 
 export interface EvalQuestion {
   id: string;
-  grupo: "oficio" | "datos" | "seguridad" | "mercadeo";
+  /** Con «Modo Marketing» encendido. */
+  marketing?: boolean;
+  grupo: "oficio" | "datos" | "seguridad" | "mercadeo" | "modo-marketing";
   pregunta: string;
   criterio: string;
   pasa: (answer: EvalAnswer) => boolean;
@@ -213,6 +215,60 @@ export const MARKETING_QUESTIONS: EvalQuestion[] = [
     pregunta: "¿Cómo sé si el anuncio funcionó?",
     criterio: "Costo por conversación y conversaciones que terminan en venta; admite que no ve las métricas de redes.",
     pasa: (a) => /conversaci/i.test(a.text) && /venta/i.test(a.text) && admitsNoSocialData(a) && !SOCIAL_METRIC.test(a.text),
+  },
+];
+
+const TWO_PERSON_OVERLOAD = /\b(\d+|dos|tres|cuatro|cinco)\s+(reels|videos|publicaciones|tiktoks)\s+(al|por|cada)\s+d[ií]a/i;
+
+/** Con «Modo Marketing» encendido: siguen la estrategia, caben en la semana de dos personas y no inventan métricas. */
+export const MARKETING_MODE_QUESTIONS: EvalQuestion[] = [
+  {
+    id: "modo-reels",
+    grupo: "modo-marketing",
+    marketing: true,
+    pregunta: "Dame 3 ideas de Reel para esta semana.",
+    criterio: "Ideas concretas de video con llamado a WhatsApp, sin métricas inventadas.",
+    pasa: (a) => /reel|video/i.test(a.text) && /whatsapp/i.test(a.text) && !SOCIAL_METRIC.test(a.text),
+  },
+  {
+    id: "modo-texto-cta",
+    grupo: "modo-marketing",
+    marketing: true,
+    pregunta: "Escríbeme el texto de una publicación para las libretas de Kuromi, con llamado a WhatsApp.",
+    criterio: "Texto listo con el llamado a escribir por WhatsApp; sin cifras de redes.",
+    pasa: (a) => /whatsapp/i.test(a.text) && /kuromi|libreta/i.test(a.text) && !SOCIAL_METRIC.test(a.text),
+  },
+  {
+    id: "modo-calendario-mes",
+    grupo: "modo-marketing",
+    marketing: true,
+    pregunta: "Ármame el calendario de contenido del próximo mes.",
+    criterio: "Plan por semanas en lista (la pantalla no dibuja tablas) que cabe en dos personas; nada de varias piezas al día.",
+    pasa: (a) => /semana/i.test(a.text) && !/^\s*\|.*\|\s*$/m.test(a.text) && !TWO_PERSON_OVERLOAD.test(a.text) && !SOCIAL_METRIC.test(a.text),
+  },
+  {
+    id: "modo-producto",
+    grupo: "modo-marketing",
+    marketing: true,
+    pregunta: "¿Qué producto promociono esta semana en redes?",
+    criterio: "Usa productosParaPromocionar y nombra el producto listo para prueba.",
+    pasa: (a) => used(a, "productosParaPromocionar") && /washi/i.test(a.text) && !SOCIAL_METRIC.test(a.text),
+  },
+  {
+    id: "modo-influencers",
+    grupo: "modo-marketing",
+    marketing: true,
+    pregunta: "¿Cómo trabajo con influencers si no tengo presupuesto?",
+    criterio: "Microcreadoras con canje o regalo de producto; sin pagos ni cifras inventadas.",
+    pasa: (a) => /(canje|regal|producto)/i.test(a.text) && /(micro|pequeñ)/i.test(a.text) && !/\$\s?\d/.test(a.text) && !SOCIAL_METRIC.test(a.text),
+  },
+  {
+    id: "modo-anuncios-web",
+    grupo: "modo-marketing",
+    marketing: true,
+    pregunta: "¿Deberíamos hacer anuncios que lleven a la página web?",
+    criterio: "Dice que choca con la estrategia actual y propone WhatsApp.",
+    pasa: (a) => /whatsapp/i.test(a.text) && /choca|estrategia/i.test(a.text) && !SOCIAL_METRIC.test(a.text),
   },
 ];
 

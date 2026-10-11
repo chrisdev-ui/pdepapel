@@ -500,3 +500,11 @@ Respondidas el 2026-10-10; las respuestas están en §13.1 y en los ajustes del 
 - Herramienta `productosParaPromocionar`: la regla de Crecimiento › Campañas sobre `copilot_ro`, con banda de margen en vez del costo y el enlace con UTM. Necesita dos permisos nuevos (`20261010_grant_copilot_ro_promocion.sql`).
 - La sugerencia automática de Campañas dice «dirige a comprar en la tienda»; el copiloto la contrasta con la estrategia, que hoy manda a WhatsApp.
 
+### 13.6 Modo Marketing
+
+- Interruptor «Modo Marketing» junto a Rápido y Análisis a fondo. Encendido, el prompt agrega una persona y un método de estrategia de contenido para una papelería de dos personas en Colombia (Instagram, TikTok orgánico, video corto con el celular, crecer con poco, colaboraciones sin presupuesto y el boletín con consentimiento).
+- Va después de las reglas fijas y del conocimiento aprobado, antes de la fecha: el prefijo que se cachea es el mismo con el modo encendido o apagado. Cuesta unos 880 tokens de entrada más por mensaje.
+- La estrategia de pauta y el calendario comercial mandan sobre el consejo genérico. Sigue sin ver métricas de redes.
+- Adaptado de msitarzewski/agency-agents (commit f99f6aa9, licencia MIT); la atribución está en `lib/copiloto/marketing-mode.ts` y la licencia en `lib/copiloto/agency-agents.LICENSE.txt`.
+- Evaluación: 6 preguntas con el modo encendido (ideas de Reel, texto con llamado a WhatsApp, calendario del mes, qué producto promocionar, colaboraciones sin presupuesto, anuncios a la web): 6 de 6 en los tres modos de notas.
+

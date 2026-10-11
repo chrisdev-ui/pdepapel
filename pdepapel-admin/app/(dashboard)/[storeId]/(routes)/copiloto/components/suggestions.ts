@@ -21,6 +21,14 @@ export function suggestionsFor(screen: string | null | undefined): string[] {
 }
 
 /** Lo que se ve mientras corre cada herramienta. */
+/** Con «Modo Marketing» encendido. */
+export const MARKETING_SUGGESTIONS = [
+  "Dame 3 ideas de Reel para esta semana",
+  "Escríbeme el texto de una publicación con llamado a WhatsApp",
+  "Ármame el calendario de contenido del mes",
+  "¿Qué producto promociono?",
+];
+
 export const TOOL_LABELS: Record<string, string> = {
   resumenDeHoy: "Consultando el resumen de hoy",
   resumenFinancieroMes: "Consultando las finanzas del mes",

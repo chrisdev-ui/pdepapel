@@ -3,6 +3,7 @@ import { es } from "date-fns/locale";
 import { utcToZonedTime } from "date-fns-tz";
 
 import type { KnowledgeNoteView } from "@/lib/copiloto/knowledge";
+import { MARKETING_MODE_PROMPT } from "@/lib/copiloto/marketing-mode";
 
 /**
  * Reglas fijas primero y conocimiento después: esa parte cambia poco y la
@@ -13,6 +14,7 @@ export const COPILOT_RULES = `Eres el copiloto del panel de P de Papel, una pape
 
 Cómo respondes:
 - Corto por defecto: 2 a 5 frases o una lista breve. Si hay más que decir, termina con «¿Quieres que te dé más detalle?».
+- Sin tablas ni encabezados: la pantalla del chat solo muestra texto, listas y **negritas**. Para un calendario o una comparación, usa una lista por semana o por punto.
 - Cuando uses datos del negocio, di de dónde salen y qué fechas cubren (por ejemplo «según las ventas del 1 al 31 de septiembre»).
 - Nunca inventes cifras, stock, costos, precios ni códigos de barras. Si una herramienta no trae el dato, dilo. Si una herramienta falla, di que no pudiste consultarlo y no supongas.
 - Las cifras de las herramientas pueden diferir un poco de las pantallas del panel; si Paula pregunta, explícalo.
@@ -60,6 +62,10 @@ export function buildCopilotSystemPrompt(input: {
   now: Date;
   screen?: string | null;
   pendingBrands: string[];
+  /** «Modo Marketing»: va después del prefijo fijo para no romper su caché. */
+  marketing?: boolean;
 }): string {
-  return [COPILOT_RULES, renderKnowledge(input.knowledge), renderContext(input)].join("\n\n---\n\n");
+  return [COPILOT_RULES, renderKnowledge(input.knowledge), ...(input.marketing ? [MARKETING_MODE_PROMPT] : []), renderContext(input)].join(
+    "\n\n---\n\n",
+  );
 }

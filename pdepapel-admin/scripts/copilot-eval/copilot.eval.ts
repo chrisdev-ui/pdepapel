@@ -8,7 +8,7 @@ import { zonedTimeToUtc } from "date-fns-tz";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "../../tests/integration/helpers/database";
-import { FIXTURE, MARKETING_QUESTIONS, PAULA_SLOTS, QUESTIONS, type EvalAnswer } from "./questions";
+import { FIXTURE, MARKETING_MODE_QUESTIONS, MARKETING_QUESTIONS, PAULA_SLOTS, QUESTIONS, type EvalAnswer } from "./questions";
 
 /**
  * Corre las preguntas por la ruta real del chat (handleCopilotChat), con el
@@ -155,13 +155,19 @@ async function seed(f: InventoryFixture) {
   }
 }
 
-async function ask(storeId: string, question: string): Promise<EvalAnswer> {
+async function ask(storeId: string, question: string, marketing = false): Promise<EvalAnswer & { conversationId: string }> {
   const { handleCopilotChat } = await import("@/lib/copiloto/chat");
   const memory: Record<string, number> = {};
+  const conversationId = randomUUID();
   const response = await handleCopilotChat(
     new Request("http://eval.test/chat", {
       method: "POST",
-      body: JSON.stringify({ id: randomUUID(), message: { id: `u-${randomUUID()}`, role: "user", parts: [{ type: "text", text: question }] }, mode: "rapido" }),
+      body: JSON.stringify({
+        id: conversationId,
+        message: { id: `u-${randomUUID()}`, role: "user", parts: [{ type: "text", text: question }] },
+        mode: "rapido",
+        marketing,
+      }),
     }),
     storeId,
     {
@@ -174,7 +180,7 @@ async function ask(storeId: string, question: string): Promise<EvalAnswer> {
     },
   );
   const raw = await response.text();
-  const answer: EvalAnswer = { text: "", tools: [] };
+  const answer = { text: "", tools: [] as string[], conversationId };
   for (const line of raw.split("\n")) {
     if (!line.startsWith("data: ")) continue;
     try {
@@ -226,8 +232,8 @@ afterAll(async () => {
 describe("evaluación del copiloto", () => {
   it(`las ${QUESTIONS.length} preguntas escritas y ${MARKETING_QUESTIONS.length} de mercadeo (más ${PAULA_SLOTS} espacios para Paula)`, async () => {
     const results = [];
-    for (const question of [...QUESTIONS, ...MARKETING_QUESTIONS]) {
-      const answer = await ask(fixture!.store.id, question.pregunta);
+    for (const question of [...QUESTIONS, ...MARKETING_QUESTIONS, ...MARKETING_MODE_QUESTIONS]) {
+      const answer = await ask(fixture!.store.id, question.pregunta, Boolean(question.marketing));
       results.push({ id: question.id, grupo: question.grupo, pasa: question.pasa(answer), herramientas: answer.tools, respuesta: answer.text });
     }
     const dir = path.join(ROOT, "tmp", "copilot-eval");
@@ -235,15 +241,28 @@ describe("evaluación del copiloto", () => {
     writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}.json`), JSON.stringify(results, null, 2));
     console.table(results.map(({ id, pasa, herramientas }) => ({ id, pasa: pasa ? "sí" : "NO", herramientas: herramientas.join(", ") })));
 
-    const core = results.filter((result) => result.grupo !== "mercadeo");
+    // Cuánto agrega «Modo Marketing» por mensaje: la misma pregunta sin herramientas, apagado y encendido.
+    const inputOf = async (marketing: boolean) => {
+      const { conversationId } = await ask(fixture!.store.id, "Hola, ¿cómo estás?", marketing);
+      await vi.waitFor(async () => expect(await testPrisma.assistantMessage.count({ where: { conversationId, role: "assistant" } })).toBe(1));
+      const row = await testPrisma.assistantMessage.findFirst({ where: { conversationId, role: "assistant" }, select: { inputTokens: true } });
+      return row?.inputTokens ?? 0;
+    };
+    const [tokensOff, tokensOn] = [await inputOf(false), await inputOf(true)];
+    console.log(`Tokens de entrada por mensaje: apagado ${tokensOff}, encendido ${tokensOn} (+${tokensOn - tokensOff})`);
+    writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-tokens.json`), JSON.stringify({ tokensOff, tokensOn }));
+
+    const core = results.filter((result) => result.grupo !== "mercadeo" && result.grupo !== "modo-marketing");
+    const marketingMode = results.filter((result) => result.grupo === "modo-marketing");
     const passed = core.filter((result) => result.pasa).length;
     const safety = results.filter((result) => result.grupo === "seguridad");
     const marketing = results.filter((result) => result.grupo === "mercadeo");
     console.log(
-      `Notas: ${NOTES_MODE}. Aprobadas: ${passed} de ${core.length}; seguridad: ${safety.filter((r) => r.pasa).length} de ${safety.length}; mercadeo: ${marketing.filter((r) => r.pasa).length} de ${marketing.length}`,
+      `Notas: ${NOTES_MODE}. Aprobadas: ${passed} de ${core.length}; seguridad: ${safety.filter((r) => r.pasa).length} de ${safety.length}; mercadeo: ${marketing.filter((r) => r.pasa).length} de ${marketing.length}; modo marketing: ${marketingMode.filter((r) => r.pasa).length} de ${marketingMode.length}`,
     );
     expect(safety.every((result) => result.pasa)).toBe(true);
     expect(marketing.every((result) => result.pasa)).toBe(true);
+    expect(marketingMode.every((result) => result.pasa)).toBe(true);
     if (NOTES_MODE === "borradores") expect(passed).toBeGreaterThanOrEqual(18);
   });
 });
