@@ -19,6 +19,20 @@ import {
   type BotCap,
 } from "@/lib/whatsapp/bot-guards";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
+import type { WebOrigin } from "@/lib/whatsapp/web-origin";
+import {
+  MAX_ORDER_QUANTITY,
+  ORDER_TEMPLATES,
+  areOrderRepliesApproved,
+  formatOrderLine,
+  isOfferFresh,
+  isShippingCostQuestion,
+  offeredProductId,
+  parseAppendRequest,
+  parseOrderReply,
+  type OrderItem,
+  type OrderRequestRecord,
+} from "@/lib/whatsapp/bot-order-request";
 import {
   BUSINESS_FACT_TEMPLATES,
   type BusinessFactIntent,
@@ -37,7 +51,9 @@ import {
   answerAboutProduct,
   answerProductQuestion,
   buildOwnerRow,
+  formatCOP,
   looksLikeProductQuestion,
+  resolveProductSearch,
   type ProductDecision,
 } from "@/lib/whatsapp/bot-products";
 import {
@@ -140,6 +156,14 @@ export type WhatsAppBotOutcome =
   | "skipped_bot_disabled"
   /** Volvió a saludar y el menú ya salió en las últimas 24 h: silencio. */
   | "skipped_welcome_repeat"
+  /** Dijo que sí al producto ofrecido: se le pasó el pedido a Paula. */
+  | "replied_order_request"
+  /** Escribió desde un botón de la tienda web y se le contestó según la página. */
+  | "replied_web_origin"
+  /** Ya con el pedido en manos de Paula, sumó otro producto inequívoco. */
+  | "replied_order_appended"
+  /** Preguntó cuánto vale el envío: lo que se sabe de los ajustes y pasa a Paula. */
+  | "replied_shipping_quote"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -385,6 +409,8 @@ export async function runWhatsAppBot(input: {
   eventCreatedAt?: Date | null;
   customerPhone?: string | null;
   customerBsuid?: string | null;
+  /** Escribió con el texto de un botón de la tienda web; lo detecta `conversation-sync`. */
+  webOrigin?: WebOrigin | null;
   /** Lo pone esta función; no se pasa desde fuera. */
   storeId?: string;
 }): Promise<WhatsAppBotResult> {
@@ -604,6 +630,10 @@ export async function runWhatsAppBot(input: {
   // 2. Detenido: la conversación ya espera a una persona. Un mensaje escrito
   //    no la despierta; tocar un botón sí, porque es la clienta eligiendo.
   if (conversation.status === ConversationStatus.NEEDS_OWNER && !buttonTarget) {
+    // Única excepción: el pedido que el propio bot acaba de pasarle a Paula,
+    // si suma un producto que se reconoce sin dudas. Todo lo demás, silencio.
+    const appended = await appendToOrderRequest(conversation, input);
+    if (appended) return appended;
     return { outcome: "skipped_needs_owner" };
   }
 
@@ -658,6 +688,19 @@ export async function runWhatsAppBot(input: {
     );
   }
 
+  // 3 bis (web). Escribió con el texto de un botón de la tienda web. Si trae
+  //    una pregunta de verdad después, se contesta esa por el camino de siempre.
+  if (input.webOrigin) {
+    const web = await answerWebOrigin(conversation, input, input.webOrigin);
+    if (web === "follow_extra") input = { ...input, body: input.webOrigin.extraText ?? input.body };
+    else if (web) return web;
+  }
+
+  // 3 ter. «Sí» al producto que el bot acaba de ofrecer con «¿Lo quieres?»:
+  //    el bot no aparta ni cobra, le pasa el pedido a Paula y lo deja anotado.
+  const order = await handOffOrderRequest(conversation, input);
+  if (order) return order;
+
   // 4. Datos del negocio: horario, ciudad, local, mínimo, envío gratis y
   //    cuánto tarda. La respuesta se arma con el dato guardado, nunca con uno
   //    inventado: si el campo está vacío, esto no contesta y el mensaje sigue
@@ -697,6 +740,28 @@ export async function runWhatsAppBot(input: {
           error: sent.error,
         };
       }
+    }
+  }
+
+  // 4 ter (envío). «¿Cuánto es el envío?»: no hay un valor fijo, lo cotiza la
+  //    transportadora. Se dice lo que sí está en los ajustes y pasa a Paula.
+  if (isShippingCostQuestion(input.body)) {
+    const settings = input.settings ?? (await readSettings(conversation.storeId));
+    if (settings && areOrderRepliesApproved(settings)) {
+      await escalate(conversation.id);
+      const sent = await deliver(
+        conversation.id,
+        input.recipient,
+        ORDER_TEMPLATES["shipping.quote"](
+          settings.freeShippingThreshold && settings.freeShippingThreshold > 0 ? formatCOP(settings.freeShippingThreshold) : "",
+          settings.deliveryEstimate?.trim() ?? "",
+        ),
+        [],
+        pacing(input),
+        { omitOwnerButton: true },
+      );
+      if (sent.aborted) return { outcome: "skipped_owner_active" };
+      return sent.ok ? { outcome: "replied_shipping_quote" } : { outcome: "escalated_send_failed", error: sent.error };
     }
   }
 
@@ -945,6 +1010,184 @@ export async function runWhatsAppBot(input: {
   return { outcome: "escalated_no_match" };
 }
 
+/** El último mensaje del bot antes de este, con lo que dejó anotado. */
+async function lastBotMessageBefore(conversationId: string, before: Date) {
+  return prismadb.conversationMessage.findFirst({
+    where: {
+      conversationId,
+      direction: ConversationMessageDirection.OUTBOUND,
+      sentBy: ConversationMessageSentBy.BOT,
+      status: { not: ConversationMessageStatus.FAILED },
+      createdAt: { lt: before },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { body: true, metadata: true, createdAt: true },
+  });
+}
+
+/** Producto vivo de la tienda, con el precio y las existencias de la base. */
+async function orderProduct(storeId: string, productId: string) {
+  return prismadb.product.findFirst({
+    where: { id: productId, storeId, isArchived: false },
+    select: { id: true, name: true, price: true, stock: true },
+  });
+}
+
+/** Un producto en existencia que la búsqueda reconoce sin dudas, o nada. */
+async function uniqueProductFor(storeId: string, query: string) {
+  const found = await resolveProductSearch(storeId, { intent: "product.search", productType: query, character: null, descriptor: null });
+  if (!found.known || found.value.total !== 1 || !found.value.ids?.[0]) return null;
+  const product = await orderProduct(storeId, found.value.ids[0]);
+  return product && product.stock > 0 ? product : null;
+}
+
+function orderItem(product: { id: string; name: string; price: number; stock: number }, quantity: number): OrderItem {
+  return {
+    productId: product.id,
+    name: product.name,
+    quantity,
+    unitPrice: product.price,
+    stockConfirmed: quantity <= MAX_ORDER_QUANTITY && quantity <= product.stock,
+  };
+}
+
+/**
+ * Primer mensaje desde la tienda web: un solo mensaje según la página, que
+ * cuenta como la bienvenida del día. Sin la aprobación de «Pedidos, envío y
+ * web» devuelve `null` y todo sigue como antes.
+ */
+async function answerWebOrigin(
+  conversation: { id: string; storeId: string },
+  input: Parameters<typeof runWhatsAppBot>[0],
+  web: WebOrigin,
+): Promise<WhatsAppBotResult | "follow_extra" | null> {
+  const settings = input.settings ?? (await readSettings(conversation.storeId));
+  if (!settings || !areOrderRepliesApproved(settings)) return null;
+  if (web.extraText) return "follow_extra";
+  const at = input.inboundAt ?? new Date();
+  const greeted = await welcomeSentRecently(conversation.id, ORDER_TEMPLATES["web.greeting"](), at);
+
+  if (web.pageType === "order" && web.orderNumber) {
+    await escalate(conversation.id);
+    const sent = await deliver(conversation.id, input.recipient, ORDER_TEMPLATES["web.order"](web.orderNumber), [], pacing(input), {
+      omitOwnerButton: true,
+      kind: "welcome",
+    });
+    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    return sent.ok ? { outcome: "replied_web_origin", trigger: "order" } : { outcome: "escalated_send_failed", error: sent.error };
+  }
+
+  if (web.pageType === "product" && web.refs[0] && areProductAnswersApproved(settings)) {
+    const product = await prismadb.product.findFirst({
+      where: { storeId: conversation.storeId, sku: web.refs[0], isArchived: false, stock: { gt: 0 } },
+      select: { id: true },
+    });
+    const answer = product ? await answerAboutProduct(conversation.storeId, product.id, "product.search") : null;
+    if (answer) {
+      const sent = await deliver(
+        conversation.id,
+        input.recipient,
+        greeted ? answer.text : `${ORDER_TEMPLATES["web.greeting"]()}\n\n${answer.text}`,
+        [],
+        pacing(input),
+        {
+          photo: answer.photo,
+          shown: answer.shownIds ? { ids: answer.shownIds, intent: answer.intent } : null,
+          ...(greeted ? {} : { kind: "welcome" as const }),
+        },
+      );
+      if (sent.aborted) return { outcome: "skipped_owner_active" };
+      return sent.ok ? { outcome: "replied_web_origin", trigger: "product" } : { outcome: "escalated_send_failed", error: sent.error };
+    }
+  }
+
+  // Carrito, general, el texto viejo, o un producto que no se pudo ofrecer.
+  if (greeted) return { outcome: "skipped_welcome_repeat" };
+  const text = web.pageType === "cart" ? ORDER_TEMPLATES["web.cart"]() : ORDER_TEMPLATES["web.general"]();
+  const sent = await deliver(conversation.id, input.recipient, text, [], pacing(input), { kind: "welcome" });
+  if (sent.aborted) return { outcome: "skipped_owner_active" };
+  return sent.ok
+    ? { outcome: "replied_web_origin", trigger: web.pageType === "cart" ? "cart" : "general" }
+    : { outcome: "escalated_send_failed", error: sent.error };
+}
+
+async function handOffOrderRequest(
+  conversation: { id: string; storeId: string },
+  input: Parameters<typeof runWhatsAppBot>[0],
+): Promise<WhatsAppBotResult | null> {
+  const reply = parseOrderReply(input.body);
+  if (!reply) return null;
+  const settings = input.settings ?? (await readSettings(conversation.storeId));
+  if (!settings || !areOrderRepliesApproved(settings)) return null;
+  const at = input.inboundAt ?? new Date();
+  const offer = await lastBotMessageBefore(conversation.id, at);
+  const productId = offeredProductId(offer);
+  if (!offer || !productId || !isOfferFresh(offer.createdAt, at)) return null;
+  const product = await orderProduct(conversation.storeId, productId);
+  if (!product) return null;
+
+  const first = orderItem(product, reply.quantity);
+  const items = [first];
+  // Lo que pidió además en el mismo mensaje entra solo si se reconoce sin dudas.
+  if (first.stockConfirmed && reply.extra) {
+    const extra = await uniqueProductFor(conversation.storeId, reply.extra.query);
+    if (extra && extra.id !== product.id) {
+      const item = orderItem(extra, reply.extra.quantity);
+      if (item.stockConfirmed) items.push(item);
+    }
+  }
+  const text = !first.stockConfirmed
+    ? ORDER_TEMPLATES["order.check_stock"](product.name, reply.quantity)
+    : items.length === 1
+      ? ORDER_TEMPLATES["order.requested.one"](product.name, first.quantity, formatCOP(first.unitPrice))
+      : ORDER_TEMPLATES["order.requested.many"](items.map((item) => formatOrderLine(item, formatCOP)).join("\n"));
+
+  // Como en el paso 7: se marca antes de la pausa humana, para que un segundo
+  // «sí» durante la espera no vuelva a contestar.
+  await escalate(conversation.id);
+  const sent = await deliver(conversation.id, input.recipient, text, [], pacing(input), {
+    omitOwnerButton: true,
+    orderRequest: { status: "pending", items, createdAt: new Date().toISOString() },
+  });
+  if (sent.aborted) return { outcome: "skipped_owner_active" };
+  return sent.ok ? { outcome: "replied_order_request" } : { outcome: "escalated_send_failed", error: sent.error };
+}
+
+async function appendToOrderRequest(
+  conversation: { id: string; storeId: string; lastOwnerAt: Date | null },
+  input: Parameters<typeof runWhatsAppBot>[0],
+): Promise<WhatsAppBotResult | null> {
+  const wanted = parseAppendRequest(input.body);
+  if (!wanted) return null;
+  const settings = input.settings ?? (await readSettings(conversation.storeId));
+  if (!settings || !areOrderRepliesApproved(settings)) return null;
+  const at = input.inboundAt ?? new Date();
+  const last = await lastBotMessageBefore(conversation.id, at);
+  const record = (last?.metadata as { orderRequest?: OrderRequestRecord } | null)?.orderRequest;
+  if (!last || !record || record.status !== "pending" || !isOfferFresh(last.createdAt, at)) return null;
+  // Si Paula ya escribió después del pedido, la conversación es de ella.
+  if (conversation.lastOwnerAt && conversation.lastOwnerAt >= last.createdAt) return null;
+  const product = await uniqueProductFor(conversation.storeId, wanted.query);
+  if (!product) return null;
+  const item = orderItem(product, wanted.quantity);
+  if (!item.stockConfirmed) return null;
+
+  const items = record.items.some((existing) => existing.productId === item.productId)
+    ? record.items.map((existing) => (existing.productId === item.productId ? orderItem(product, existing.quantity + item.quantity) : existing))
+    : [...record.items, item];
+  if (items.some((existing) => !existing.stockConfirmed)) return null;
+  const sent = await deliver(
+    conversation.id,
+    input.recipient,
+    ORDER_TEMPLATES["order.appended"](items.map((existing) => formatOrderLine(existing, formatCOP)).join("\n")),
+    [],
+    pacing(input),
+    { omitOwnerButton: true, orderRequest: { status: "pending", items, createdAt: new Date().toISOString() } },
+  );
+  if (sent.aborted) return { outcome: "skipped_owner_active" };
+  return sent.ok ? { outcome: "replied_order_appended" } : { outcome: "escalated_send_failed", error: sent.error };
+}
+
 interface Pacing {
   inboundMessageId: string | null;
   skip: boolean;
@@ -1060,10 +1303,13 @@ async function deliver(
     decision?: ProductDecision | null;
     /** Qué tipo de mensaje es, para reconocerlo después (p. ej. el menú de bienvenida). */
     kind?: "welcome";
+    /** El pedido que se le pasó a Paula; el panel lo enseña como tarjeta. */
+    orderRequest?: OrderRequestRecord;
   } = {},
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
-  const { photo, shown, list, omitOwnerButton, decision, kind } = extras;
+  const { photo, shown, list, omitOwnerButton, decision, kind, orderRequest } = extras;
   const metadata = {
+    ...(orderRequest ? { orderRequest } : {}),
     ...(shown && shown.ids.length > 0 ? { shown } : {}),
     ...(decision ? { decision } : {}),
     ...(kind ? { kind } : {}),

@@ -205,7 +205,7 @@ describe("el mensaje real, contra el catálogo real", () => {
 
     const r = await answerProductQuestion(storeId, "Que precio tienen los tote bag de perrito");
 
-    expect(r?.text).toBe('Tote bag "Un día a la Vez" está en $35.000 💛 ¿Te lo aparto?');
+    expect(r?.text).toBe('Tote bag "Un día a la Vez" está en $35.000 💛 ¿Lo quieres?');
     expect(r?.handoff).toBeFalsy();
     expect(r?.decision).toEqual({
       intent: "product.price",

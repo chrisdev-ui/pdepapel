@@ -2,7 +2,9 @@ import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import {
   parseCartMetadata,
+  parseOrderRequestMetadata,
   parseTapMetadata,
+  parseWebOriginMetadata,
   resolveCart,
   type ConversationDetail,
 } from "@/lib/conversations";
@@ -62,6 +64,20 @@ export async function getConversation(
       })
     : [];
 
+  // Contexto de la tienda web: los SKU y el pedido se buscan en esta tienda; un
+  // pedido que no existe no se enseña.
+  const origins = conversation.messages.map((message) => parseWebOriginMetadata(message.metadata));
+  const webSkus = Array.from(new Set(origins.flatMap((origin) => origin?.refs ?? [])));
+  const webOrderNumbers = Array.from(new Set(origins.flatMap((origin) => (origin?.orderNumber ? [origin.orderNumber] : []))));
+  const [webProducts, webOrders] = await Promise.all([
+    webSkus.length
+      ? prismadb.product.findMany({ where: { storeId, sku: { in: webSkus } }, select: { id: true, sku: true, name: true } })
+      : Promise.resolve([]),
+    webOrderNumbers.length
+      ? prismadb.order.findMany({ where: { storeId, orderNumber: { in: webOrderNumbers } }, select: { id: true, orderNumber: true } })
+      : Promise.resolve([]),
+  ]);
+
   // Exacto por teléfono o por BSUID; nunca por parecido.
   const ignorado =
     conversation.phone || conversation.bsuid
@@ -86,6 +102,18 @@ export async function getConversation(
       ...message,
       cart: carts[index] ? resolveCart(carts[index]!, products) : null,
       tappedOptionId: parseTapMetadata(metadata),
+      orderRequest: parseOrderRequestMetadata(metadata),
+      webOrigin: origins[index]
+        ? {
+            pageType: origins[index]!.pageType,
+            legacy: origins[index]!.legacy,
+            products: origins[index]!.refs.map((sku) => {
+              const product = webProducts.find((row) => row.sku === sku);
+              return { sku, name: product?.name ?? null, productId: product?.id ?? null };
+            }),
+            order: webOrders.find((row) => row.orderNumber === origins[index]!.orderNumber) ?? null,
+          }
+        : null,
     })),
   };
 }

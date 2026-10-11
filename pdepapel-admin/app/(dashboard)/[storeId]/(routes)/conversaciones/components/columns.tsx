@@ -104,6 +104,16 @@ export const columns: ColumnDef<ConversationColumn>[] = [
           <Badge variant={STATUS_VARIANT[row.original.status]} className="w-fit">
             {CONVERSATION_STATUS_LABELS[row.original.status]}
           </Badge>
+          {row.original.fromWeb ? (
+            <Badge variant="outline" className="w-fit">
+              Desde la web
+            </Badge>
+          ) : null}
+          {row.original.pendingOrder ? (
+            <Badge variant="warning" className="w-fit">
+              Pedido solicitado
+            </Badge>
+          ) : null}
           {pausa ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <BotOff className="h-3 w-3 shrink-0" aria-hidden="true" />

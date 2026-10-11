@@ -207,6 +207,16 @@ describe("extractWhatsAppEvents", () => {
     ]);
   });
 
+  it("marca el texto prellenado de la tienda web, pero no el de un anuncio", () => {
+    const text = "¡Hola! 👋 Vengo de la tienda web y quiero hacer una consulta.";
+    const payload = (extra: Record<string, unknown>) =>
+      metaPayload({ messages: [{ from: "573001234567", id: "wamid.web", type: "text", text: { body: text }, ...extra }] });
+    expect(extractWhatsAppEvents(payload({})).messages[0].metadata).toEqual({
+      webOrigin: expect.objectContaining({ source: "web", pageType: "general" }),
+    });
+    expect(extractWhatsAppEvents(payload({ referral: { source_type: "ad", source_id: "1" } })).messages[0].metadata).toBeNull();
+  });
+
   it("lee el id del botón que tocó la clienta, no solo su texto", () => {
     // Payload real capturado el 2026-09-14 tocando una lista enviada de prueba.
     // El id es la llave estable: Paula puede renombrar el botón sin romper el
@@ -1041,6 +1051,7 @@ describe("processWhatsAppWebhookEvent", () => {
       eventCreatedAt: new Date("2026-10-10T14:08:30.000Z"),
       customerPhone: "573001234567",
       customerBsuid: null,
+      webOrigin: null,
     });
   });
 

@@ -5,6 +5,8 @@ import {
   ConversationStatus,
 } from "@prisma/client";
 import { z } from "zod";
+import type { OrderRequestRecord } from "@/lib/whatsapp/bot-order-request";
+import type { WebOrigin } from "@/lib/whatsapp/web-origin";
 
 import prismadb from "@/lib/prismadb";
 import {
@@ -217,6 +219,34 @@ export interface ConversationRow {
   ignored: boolean;
   /** Eventos que se dejaron pasar desde que se ignoró (0 si no lo está). */
   skippedCount: number;
+  /** El bot le pasó un pedido a Paula y nadie lo ha descartado. */
+  pendingOrder: boolean;
+  /** Algún mensaje suyo llegó desde un botón de la tienda web. */
+  fromWeb: boolean;
+}
+
+/** El pedido que el bot le pasó a Paula (`metadata.orderRequest`), o `null`. */
+export function parseOrderRequestMetadata(metadata: unknown): OrderRequestRecord | null {
+  const record = (metadata as { orderRequest?: Partial<OrderRequestRecord> } | null)?.orderRequest;
+  if (!record || !Array.isArray(record.items) || record.items.length === 0) return null;
+  if (record.status !== "pending" && record.status !== "dismissed") return null;
+  return record as OrderRequestRecord;
+}
+
+/** De qué página de la tienda web escribió (`metadata.webOrigin`), o `null`. */
+export function parseWebOriginMetadata(metadata: unknown): WebOrigin | null {
+  const origin = (metadata as { webOrigin?: Partial<WebOrigin> } | null)?.webOrigin;
+  if (!origin || origin.source !== "web" || !origin.pageType) return null;
+  return { refs: [], orderNumber: null, legacy: false, extraText: null, ...origin } as WebOrigin;
+}
+
+/** El contexto de la tienda web ya resuelto contra la base, para el panel. */
+export interface WebOriginContext {
+  pageType: WebOrigin["pageType"];
+  legacy: boolean;
+  products: { sku: string; name: string | null; productId: string | null }[];
+  /** Solo si el pedido existe en esta tienda. */
+  order: { id: string; orderNumber: string } | null;
 }
 
 export interface ConversationThreadMessage {
@@ -230,6 +260,10 @@ export interface ConversationThreadMessage {
   cart: ConversationCart | null;
   /** Id de lo tocado, o `null` si lo escribió a mano. */
   tappedOptionId: string | null;
+  /** «Pedido solicitado» que el bot dejó en este mensaje. */
+  orderRequest: OrderRequestRecord | null;
+  /** Escribió desde un botón de la tienda web. */
+  webOrigin: WebOriginContext | null;
 }
 
 export interface ConversationDetail {

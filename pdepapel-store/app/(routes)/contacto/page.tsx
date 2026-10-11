@@ -9,6 +9,7 @@ import {
   Phone,
   Truck,
 } from "lucide-react";
+import { buildWhatsAppUrl } from "@/lib/whatsapp-prefill";
 import { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -46,7 +47,7 @@ export const revalidate = 60;
 
 const PHONE_DISPLAY = "(+57) 313 258 2293";
 const WHATSAPP_URL =
-  "https://api.whatsapp.com/send/?phone=%2B573132582293&text&type=phone_number&app_absent=0";
+  buildWhatsAppUrl({ pageType: "general" });
 const PHONE_URL = "tel:+573132582293";
 const EMAIL = "papeleria.pdepapel@gmail.com";
 

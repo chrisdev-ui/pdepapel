@@ -6,10 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountPrompt } from "@/components/account-prompt";
 import { WhatsappIcon } from "@/components/icons";
-import {
-  trackWhatsAppClick,
-  WHATSAPP_URL,
-} from "@/components/whatsapp-floating-button";
+import { trackWhatsAppClick } from "@/components/whatsapp-floating-button";
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
@@ -18,6 +15,7 @@ import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import { toast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
 import type { CartSurface } from "@/lib/checkout-analytics";
+import { buildWhatsAppUrl, type WhatsAppPrefill } from "@/lib/whatsapp-prefill";
 import {
   getAnalyticsValue,
   toAnalyticsItem,
@@ -44,6 +42,7 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
   const router = useRouter();
   const pathname = usePathname();
   const items = useCart((state) => state.items);
+  const whatsAppPrefill: WhatsAppPrefill = { pageType: "cart", productRefs: items.map((item) => item.sku) };
   const { freeShippingThreshold } = useStorefrontSettings();
   const couponState = useCheckoutStore((state) => state.couponState);
   const setCouponState = useCheckoutStore((state) => state.setCouponState);
@@ -233,12 +232,12 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
             <span className="truncate">Finalizar compra</span>
           </Button>
           <a
-            href={WHATSAPP_URL}
+            href={buildWhatsAppUrl(whatsAppPrefill)}
             target="_blank"
             rel="noopener noreferrer"
             tabIndex={stickyVisible ? 0 : -1}
             aria-label="Chatear con Papelería P de Papel por WhatsApp"
-            onClick={() => trackWhatsAppClick("cart_sticky_bar", pathname)}
+            onClick={() => trackWhatsAppClick("cart_sticky_bar", pathname, whatsAppPrefill)}
             className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-[#25D366] text-white transition hover:bg-[#20bd5a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128C7E] focus-visible:ring-offset-2"
           >
             <WhatsappIcon aria-hidden="true" className="h-5 w-5" />

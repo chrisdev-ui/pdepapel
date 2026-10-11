@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { getBotReplies } from "./server/get-bot-replies";
 import { getBusinessFacts } from "./server/get-business-facts";
 import { ShadowReportCard } from "./components/shadow-report-card";
+import { getOrderAnswers } from "./server/get-order-answers";
 import { getProductAnswers } from "./server/get-product-answers";
 import { getShadowReport } from "./server/get-shadow-report";
 
@@ -14,6 +15,10 @@ const ProductAnswersCard = dynamic(
     import("./components/product-answers-card").then(
       (mod) => mod.ProductAnswersCard,
     ),
+  { ssr: false },
+);
+const OrderAnswersCard = dynamic(
+  () => import("./components/order-answers-card").then((mod) => mod.OrderAnswersCard),
   { ssr: false },
 );
 const BusinessFactsCard = dynamic(
@@ -36,10 +41,11 @@ export default async function BotRepliesPage({
 }: {
   params: { storeId: string };
 }) {
-  const [data, facts, products, shadow] = await Promise.all([
+  const [data, facts, products, orders, shadow] = await Promise.all([
     getBotReplies(params.storeId),
     getBusinessFacts(params.storeId),
     getProductAnswers(params.storeId),
+    getOrderAnswers(params.storeId),
     getShadowReport(params.storeId),
   ]);
 
@@ -48,6 +54,7 @@ export default async function BotRepliesPage({
       <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
         <BusinessFactsCard data={facts} />
         <ProductAnswersCard data={products} />
+        <OrderAnswersCard data={orders} />
         <BotRepliesClient data={data} />
         <ShadowReportCard data={shadow} />
       </div>

@@ -628,13 +628,13 @@ export const PRODUCT_TEMPLATES = {
   ) =>
     `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} sí, mira:\n${lineas}\n…y ${resto} más. Dime cuál te interesa.`,
   "search.one": (name: string, price: string) =>
-    `Sí 💛 Tengo ${name} en ${price}. ¿Te lo aparto?`,
+    `Sí 💛 Tengo ${name} en ${price}. ¿Lo quieres?`,
   "search.few": (lineas: string) =>
     `Sí, mira 💛 Tengo estos:\n${lineas}\n¿Cuál te interesa?`,
   "search.many": (lineas: string, resto: number) =>
     `Sí, tengo varios 💛 Estos son los que más salen:\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
   "availability.one.yes": (name: string) =>
-    `¡Sí! Tengo ${name} disponible 💛 ¿Te lo aparto?`,
+    `¡Sí! Tengo ${name} disponible 💛 ¿Lo quieres?`,
   "availability.one.no": (name: string) =>
     `${name} se me agotó por ahora 💛 Si quieres te aviso apenas vuelva a entrar.`,
   "availability.few": (lineas: string) =>
@@ -642,7 +642,7 @@ export const PRODUCT_TEMPLATES = {
   "availability.many": (lineas: string, resto: number) =>
     `Tengo varios 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa.`,
   "price.one": (name: string, price: string) =>
-    `${name} está en ${price} 💛 ¿Te lo aparto?`,
+    `${name} está en ${price} 💛 ¿Lo quieres?`,
   "price.few": (lineas: string) => `Mira 💛\n${lineas}\n¿Cuál te interesa?`,
   "price.many": (lineas: string, resto: number) =>
     `Tengo varios 💛\n${lineas}\n…y ${resto} más. Dime cuál y te paso el precio.`,
@@ -651,7 +651,7 @@ export const PRODUCT_TEMPLATES = {
   "features.which": (lineas: string) =>
     `¿Cuál de estos? 💛\n${lineas}\nDime cuál y te cuento cómo es.`,
   "photo.one": (name: string, price: string) =>
-    `Mira 💛 ${name} — ${price}. ¿Te lo aparto?`,
+    `Mira 💛 ${name} — ${price}. ¿Lo quieres?`,
   "photo.none.usable": (name: string, price: string) =>
     `${name} está en ${price} 💛 No tengo foto de ese a la mano, pero le digo a Paula que te la mande.`,
   "features.which.many": (lineas: string, resto: number) =>

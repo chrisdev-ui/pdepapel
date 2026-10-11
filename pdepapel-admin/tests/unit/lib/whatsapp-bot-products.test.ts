@@ -1685,7 +1685,7 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
       "Que precio tienen los tote bag de perrito",
     );
     expect(r?.text).toBe(
-      'Tote bag "Un día a la Vez" está en $35.000 💛 ¿Te lo aparto?',
+      'Tote bag "Un día a la Vez" está en $35.000 💛 ¿Lo quieres?',
     );
     expect(r?.handoff).toBeFalsy();
     expect(r?.decision).toEqual({

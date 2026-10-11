@@ -120,6 +120,11 @@ const ctx = (overrides: Partial<ShadowContext> = {}): ShadowContext => ({
   keywordMatch: false,
   looksLikeProduct: false,
   recentPlannedMessages: 0,
+  orderReply: false,
+  orderAppend: false,
+  shippingQuestion: false,
+  webOrigin: null,
+  webProductAvailable: false,
   ...overrides,
 });
 const noSearch = { ran: false } as const;
@@ -159,6 +164,39 @@ describe("plan de la sombra: los tres incidentes, reescritos sin datos reales", 
       atMostTwo(plan);
       expect(plan.types).not.toContain("catalog_link");
     }
+  });
+});
+
+describe("plan de la sombra: pedidos y envío", () => {
+  it("un «sí» fresco a un producto ofrecido planea el pedido, sin clasificador", () => {
+    expect(planShadowReply(ctx({ orderReply: true }), { intent: null, search: noSearch })).toEqual({ types: ["order_request"], skipReason: null });
+  });
+
+  it("esperando a Paula por el pedido del bot, solo suma un producto inequívoco", () => {
+    expect(planShadowReply(ctx({ waitingForPaula: true, orderAppend: true }), { intent: null, search: noSearch }).types).toEqual(["order_append"]);
+    expect(planShadowReply(ctx({ waitingForPaula: true, orderReply: true }), { intent: null, search: noSearch }).skipReason).toBe("needs_owner");
+  });
+
+  it("los frenos van antes: con el interruptor apagado o Paula activa, silencio", () => {
+    expect(planShadowReply(ctx({ orderReply: true, botEnabled: false }), { intent: null, search: noSearch }).skipReason).toBe("bot_disabled");
+    expect(planShadowReply(ctx({ orderAppend: true, ownerActive: true }), { intent: null, search: noSearch }).skipReason).toBe("owner_active");
+  });
+
+  it("la pregunta por el envío planea la respuesta de envío", () => {
+    expect(planShadowReply(ctx({ shippingQuestion: true }), { intent: "product", search: noSearch }).types).toEqual(["shipping_quote"]);
+  });
+});
+
+describe("plan de la sombra: tienda web", () => {
+  it("un mensaje según la página; el producto disponible va con su respuesta", () => {
+    expect(planShadowReply(ctx({ webOrigin: "product", webProductAvailable: true }), { intent: null, search: noSearch }).types).toEqual(["web_product"]);
+    expect(planShadowReply(ctx({ webOrigin: "product" }), { intent: null, search: noSearch }).types).toEqual(["web_welcome"]);
+    expect(planShadowReply(ctx({ webOrigin: "cart" }), { intent: null, search: noSearch }).types).toEqual(["web_welcome"]);
+    expect(planShadowReply(ctx({ webOrigin: "order" }), { intent: null, search: noSearch }).types).toEqual(["web_welcome"]);
+  });
+
+  it("la bienvenida web cuenta como la del día: la segunda vez, silencio", () => {
+    expect(planShadowReply(ctx({ webOrigin: "general", welcomeRecently: true }), { intent: null, search: noSearch }).skipReason).toBe("welcome_repeat");
   });
 });
 
@@ -308,6 +346,9 @@ describe("qué mandó el bot real", () => {
     expect(realTypesFrom([{ body: "No lo tengo", metadata: { decision: { outcome: "unsure" } } }], "replied_product_unsure")).toEqual(["handoff"]);
     expect(realTypesFrom([{ body: "Esa no me la sé", metadata: null }], "escalated_no_match")).toEqual(["handoff"]);
     expect(realTypesFrom([{ body: "Abrimos de 9 a 6", metadata: null }], "replied_business_fact")).toEqual(["fact"]);
+    expect(realTypesFrom([{ body: "¡Listo!", metadata: { orderRequest: { status: "pending", items: [] } } }], "replied_order_request")).toEqual(["order_request"]);
+    expect(realTypesFrom([{ body: "Lo sumo", metadata: { orderRequest: { status: "pending", items: [] } } }], "replied_order_appended")).toEqual(["order_append"]);
+    expect(realTypesFrom([{ body: "El valor del envío…", metadata: null }], "replied_shipping_quote")).toEqual(["shipping_quote"]);
   });
 });
 

@@ -1,5 +1,7 @@
 import { requireStoreOwner } from "@/lib/store-access";
 
+import { ConversationMessageSentBy } from "@prisma/client";
+
 import prismadb from "@/lib/prismadb";
 import { parseCartMetadata, previewMessage, type ConversationRow } from "@/lib/conversations";
 
@@ -39,6 +41,32 @@ export async function getConversations(storeId: string): Promise<ConversationRow
     where: { storeId },
     select: { phone: true, bsuid: true, skippedCount: true },
   });
+  // Pedidos que el bot pasó y siguen sin descartar: una consulta para toda la lista.
+  const conPedido = new Set(
+    (
+      await prismadb.conversationMessage.findMany({
+        where: {
+          conversation: { storeId },
+          sentBy: ConversationMessageSentBy.BOT,
+          metadata: { path: "$.orderRequest.status", equals: "pending" },
+        },
+        select: { conversationId: true },
+      })
+    ).map((message) => message.conversationId),
+  );
+  const desdeLaWeb = new Set(
+    (
+      await prismadb.conversationMessage.findMany({
+        where: {
+          conversation: { storeId },
+          sentBy: ConversationMessageSentBy.CUSTOMER,
+          metadata: { path: "$.webOrigin.source", equals: "web" },
+        },
+        select: { conversationId: true },
+        distinct: ["conversationId"],
+      })
+    ).map((message) => message.conversationId),
+  );
   const porTelefono = new Map(ignorados.filter((i) => i.phone).map((i) => [i.phone as string, i]));
   const porBsuid = new Map(ignorados.filter((i) => i.bsuid).map((i) => [i.bsuid as string, i]));
 
@@ -56,6 +84,8 @@ export async function getConversations(storeId: string): Promise<ConversationRow
       hasCart: Boolean(last && parseCartMetadata(last.metadata)),
       ignored: Boolean(ignorado),
       skippedCount: ignorado?.skippedCount ?? 0,
+      pendingOrder: conPedido.has(fields.id),
+      fromWeb: desdeLaWeb.has(fields.id),
     };
   });
 }

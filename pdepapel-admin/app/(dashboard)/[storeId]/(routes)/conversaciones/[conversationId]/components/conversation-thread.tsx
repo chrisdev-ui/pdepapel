@@ -7,7 +7,8 @@ import {
   describeBotPause,
   formatBotPause,
 } from "@/lib/conversation-bot-pause";
-import { AlertTriangle, ArrowLeft, BellOff, Bot, BotOff, CheckCircle2, MousePointerClick, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BellOff, Bot, BotOff, CheckCircle2, ClipboardList, Globe, MousePointerClick, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -43,6 +44,80 @@ const dateFormatter = new Intl.DateTimeFormat("es-CO", {
 });
 
 /** El carrito que armó la clienta, ya cruzado con el catálogo de hoy. */
+const WEB_PAGE_LABELS = { product: "un producto", cart: "su carrito", order: "un pedido", general: "la tienda" } as const;
+
+/** Escribió desde un botón de la tienda web: de qué página y con qué producto o pedido. */
+function WebOriginCard({ origin, storeId }: { origin: NonNullable<ConversationThreadMessage["webOrigin"]>; storeId: string }) {
+  return (
+    <div className="mt-2 rounded-md border border-tint-lavender bg-tint-lavender/40 p-2 text-primary">
+      <p className="flex items-center gap-1.5 text-xs font-semibold">
+        <Globe className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Desde la web · {origin.legacy ? "botón de la tienda" : WEB_PAGE_LABELS[origin.pageType]}
+      </p>
+      {origin.products.length > 0 ? (
+        <ul className="mt-1 space-y-0.5 text-xs">
+          {origin.products.map((product) =>
+            product.productId ? (
+              <li key={product.sku}>
+                <Link href={`/${storeId}/productos/${product.productId}`} className="underline-offset-2 hover:underline">
+                  {product.name}
+                </Link>{" "}
+                <span className="text-muted-foreground">· {product.sku}</span>
+              </li>
+            ) : (
+              <li key={product.sku} className="text-muted-foreground">
+                {product.sku} · no está en el catálogo
+              </li>
+            ),
+          )}
+        </ul>
+      ) : null}
+      {origin.order ? (
+        <p className="mt-1 text-xs">
+          <Link href={`/${storeId}/pedidos/${origin.order.id}`} className="underline-offset-2 hover:underline">
+            Pedido {origin.order.orderNumber}
+          </Link>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Lo que el bot le pasó a Paula al decir la clienta que sí. Nada aquí se cobró ni se apartó. */
+function OrderRequestCard({
+  record,
+  onDismiss,
+  busy,
+}: {
+  record: NonNullable<ConversationThreadMessage["orderRequest"]>;
+  onDismiss?: () => void;
+  busy?: boolean;
+}) {
+  const pending = record.status === "pending";
+  return (
+    <div className="mt-2 rounded-md border border-tint-cream bg-tint-cream/40 p-2 text-primary">
+      <p className="flex items-center gap-1.5 text-xs font-semibold">
+        <ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Pedido solicitado{pending ? "" : " · descartado"}
+      </p>
+      <ul className="mt-1 space-y-0.5 text-xs">
+        {record.items.map((item) => (
+          <li key={item.productId} className="break-words">
+            {item.name} × {item.quantity} — {currencyFormatter(item.unitPrice)} c/u
+            {item.stockConfirmed ? "" : " · confirmar cantidad"}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1 text-[11px] text-muted-foreground">Sin apartar ni cobrar: confírmale envío y pago.</p>
+      {pending && onDismiss ? (
+        <Button type="button" size="xs" variant="ghost" className="mt-1" disabled={busy} onClick={onDismiss}>
+          Descartar
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function CartCard({ cart }: { cart: ConversationCart }) {
   return (
     <div className="mt-2 space-y-2 rounded-md border bg-background/60 p-3">
@@ -100,7 +175,17 @@ function CartCard({ cart }: { cart: ConversationCart }) {
   );
 }
 
-function MessageBubble({ message }: { message: ConversationThreadMessage }) {
+function MessageBubble({
+  message,
+  storeId,
+  onDismissOrder,
+  busy,
+}: {
+  message: ConversationThreadMessage;
+  storeId: string;
+  onDismissOrder?: () => void;
+  busy?: boolean;
+}) {
   const fromCustomer = message.direction === ConversationMessageDirection.INBOUND;
   const fromBot = message.sentBy === ConversationMessageSentBy.BOT;
   const media = describeMedia(message.mediaType);
@@ -127,6 +212,8 @@ function MessageBubble({ message }: { message: ConversationThreadMessage }) {
             <p className="mt-1 text-xs opacity-70">{media}</p>
           ) : null}
           {message.cart ? <CartCard cart={message.cart} /> : null}
+          {message.orderRequest ? <OrderRequestCard record={message.orderRequest} onDismiss={onDismissOrder} busy={busy} /> : null}
+          {message.webOrigin ? <WebOriginCard origin={message.webOrigin} storeId={storeId} /> : null}
         </div>
         <p
           className={[
@@ -204,6 +291,19 @@ export function ConversationThread({
    * «Ya terminé, sigue tú». Quita la parada de 24 horas que deja Paula al
    * contestar desde el celular; no le manda nada a la clienta.
    */
+  const dismissOrder = async () => {
+    try {
+      setLoading(true);
+      await axios.delete(`/api/${storeId}/conversations/${conversation.id}/order-request`);
+      router.refresh();
+      toast({ title: "Pedido descartado", description: "No se le envió nada a la clienta.", variant: "success" });
+    } catch (error) {
+      toast({ title: "No se pudo descartar", description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handBack = async () => {
     try {
       setLoading(true);
@@ -389,7 +489,7 @@ export function ConversationThread({
           ) : (
             <ul className="space-y-4">
               {conversation.messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
+                <MessageBubble key={message.id} message={message} storeId={storeId} onDismissOrder={dismissOrder} busy={loading} />
               ))}
             </ul>
           )}

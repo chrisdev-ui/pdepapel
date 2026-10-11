@@ -1,4 +1,5 @@
 import { InstagramIcon, TiktokIcon, WhatsappIcon } from "@/components/icons";
+import { buildWhatsAppUrl } from "@/lib/whatsapp-prefill";
 import { PrivacyPreferencesButton } from "@/components/privacy-preferences-button";
 import { SEASON_CONFIG } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -81,7 +82,7 @@ export const Footer: React.FC<FooterProps> = ({
             <ul className="mt-3 space-y-1">
               <li>
                 <Link
-                  href="https://api.whatsapp.com/send/?phone=%2B573132582293&text&type=phone_number&app_absent=0"
+                  href={buildWhatsAppUrl({ pageType: "general" })}
                   className={footerLinkClassName}
                 >
                   <WhatsappIcon

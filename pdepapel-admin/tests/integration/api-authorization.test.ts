@@ -97,6 +97,8 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "settings/emails", methods: ["GET", "PATCH"] },
   // Copiloto (2026-10-10): solo la dueña.
   { path: "copiloto/chat", methods: ["POST"] },
+  { path: "bot-orders/approve", methods: ["POST", "DELETE"] },
+  { path: "conversations/[conversationId]/order-request", methods: ["DELETE"], params: { conversationId: "x" } },
   { path: "copiloto/conversaciones", methods: ["GET"] },
   { path: "copiloto/conversaciones/[conversationId]", methods: ["GET", "DELETE"], params: { conversationId: "x" } },
   { path: "copiloto/mensajes/[messageId]/valoracion", methods: ["POST"], params: { messageId: "x" } },

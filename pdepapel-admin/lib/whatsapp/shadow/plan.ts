@@ -11,7 +11,9 @@ import type { BotIntent } from "@/lib/whatsapp/shadow/intent";
  * - la bienvenida, una vez cada 24 h;
  * - como mucho 2 mensajes por mensaje de la clienta y 4 cada 10 minutos;
  * - los frenos de seguridad (interruptor, Paula activa, algo más nuevo de la
- *   clienta o de Paula) se miran antes de clasificar.
+ *   clienta o de Paula) se miran antes de clasificar;
+ * - el «sí» a un producto ofrecido, lo que suma al pedido ya pasado y la
+ *   pregunta por el envío se deciden con reglas fijas, antes del clasificador.
  */
 export const SHADOW_MESSAGE_TYPES = [
   "welcome",
@@ -21,6 +23,11 @@ export const SHADOW_MESSAGE_TYPES = [
   "fact",
   "keyword",
   "handoff",
+  "order_request",
+  "order_append",
+  "shipping_quote",
+  "web_welcome",
+  "web_product",
 ] as const;
 export type ShadowMessageType = (typeof SHADOW_MESSAGE_TYPES)[number];
 
@@ -61,6 +68,16 @@ export interface ShadowContext {
   looksLikeProduct: boolean;
   /** Mensajes que la sombra ya planeó en esta conversación en los últimos 10 minutos. */
   recentPlannedMessages: number;
+  /** «Sí» fresco a un producto que el bot ofreció con «¿Lo quieres?». */
+  orderReply: boolean;
+  /** Con el pedido ya en manos de Paula, suma un producto que se reconoce sin dudas. */
+  orderAppend: boolean;
+  /** Pregunta cuánto vale el envío. */
+  shippingQuestion: boolean;
+  /** Escribió con el texto de un botón de la tienda web y no agregó una pregunta. */
+  webOrigin: "product" | "cart" | "order" | "general" | null;
+  /** El producto de la referencia existe y tiene existencias. */
+  webProductAvailable: boolean;
 }
 
 export interface ShadowSignals {
@@ -79,7 +96,7 @@ export function shadowGuard(ctx: ShadowContext): ShadowSkipReason | null {
   if (ctx.ownerActive) return "owner_active";
   if (ctx.pending === "owner_message") return "pending_owner";
   if (ctx.newerInbound || ctx.pending === "customer_message") return "superseded";
-  if (ctx.waitingForPaula && (ctx.ownerEverWrote || !ctx.lastBotWasNoMatch)) return "needs_owner";
+  if (ctx.waitingForPaula && !ctx.orderAppend && (ctx.ownerEverWrote || !ctx.lastBotWasNoMatch)) return "needs_owner";
   return null;
 }
 
@@ -110,6 +127,17 @@ export function planShadowReply(ctx: ShadowContext, signals: ShadowSignals): Sha
   const onlyProducts = ctx.waitingForPaula;
   const { intent } = signals;
 
+  // Tienda web (lib/whatsapp/web-origin.ts): un solo mensaje según la página.
+  if (ctx.webOrigin && !onlyProducts) {
+    if (ctx.webOrigin === "order") return send(["web_welcome"]);
+    if (ctx.webOrigin === "product" && ctx.webProductAvailable) return send(["web_product"]);
+    return ctx.welcomeRecently ? silence("welcome_repeat") : send(["web_welcome"]);
+  }
+
+  // Pedidos y envío (lib/whatsapp/bot-order-request.ts): reglas fijas, sin IA.
+  if (ctx.orderAppend) return send(["order_append"]);
+  if (ctx.orderReply && !onlyProducts) return send(["order_request"]);
+
   if (ctx.emojiOnly) {
     if (!onlyProducts && ctx.firstMessage) return welcome() ?? silence("acknowledgement");
     return silence(onlyProducts ? "needs_owner" : "acknowledgement");
@@ -117,6 +145,7 @@ export function planShadowReply(ctx: ShadowContext, signals: ShadowSignals): Sha
 
   if (!onlyProducts) {
     if (ctx.businessFact) return send(["fact"]);
+    if (ctx.shippingQuestion) return send(["shipping_quote"]);
     if (ctx.welcomeGreeting || intent === "greeting") {
       const plan = welcome();
       if (plan) return plan;

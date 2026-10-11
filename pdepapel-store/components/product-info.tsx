@@ -23,6 +23,7 @@ import { ColorSwatch } from "@/components/ui/color-swatch";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useAddProductToCart } from "@/hooks/use-add-product-to-cart";
 import { useCart } from "@/hooks/use-cart";
+import { useWhatsAppContext } from "@/hooks/use-whatsapp-context";
 import { useWishlist } from "@/hooks/use-wishlist";
 import {
   getAnalyticsValue,
@@ -93,6 +94,14 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   useEffect(() => {
     setIsCartReady(true);
   }, []);
+
+  // El botón flotante de WhatsApp arma su texto con este producto.
+  const setWhatsAppProduct = useWhatsAppContext((state) => state.setProduct);
+  useEffect(() => {
+    if (!data.sku) return;
+    setWhatsAppProduct({ name: data.name, ref: data.sku });
+    return () => setWhatsAppProduct(null);
+  }, [data.name, data.sku, setWhatsAppProduct]);
   const quantity =
     controlledQuantity ?? (isCartReady ? productInCart?.quantity : undefined) ?? 1;
   // Nombre del color bajo el puntero o el foco: el encabezado «Color: …» lo

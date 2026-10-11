@@ -12,6 +12,8 @@ export interface ShadowCandidate {
   eventCreatedAt: Date;
   customerPhone: string | null;
   customerBsuid: string | null;
+  /** Lo detecta `conversation-sync` (lib/whatsapp/web-origin.ts). */
+  webOrigin?: { pageType: "product" | "cart" | "order" | "general"; refs: string[]; extraText: string | null } | null;
 }
 
 export interface ShadowDeps {

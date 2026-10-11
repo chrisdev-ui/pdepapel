@@ -16,6 +16,7 @@ import prismadb from "@/lib/prismadb";
 import { NO_MATCH_ACKNOWLEDGEMENT, runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
 import { isShadowCandidate } from "@/lib/whatsapp/shadow/candidate";
 import { runWhatsAppBotShadow } from "@/lib/whatsapp/shadow/run";
+import { detectWebOrigin, type WebOrigin } from "@/lib/whatsapp/web-origin";
 import { bumpLastOwnerAt } from "@/lib/whatsapp/owner-activity";
 
 /**
@@ -98,6 +99,8 @@ export interface WhatsAppCartItem {
 }
 
 export interface WhatsAppMessageMetadata {
+  /** Escribió con el texto prellenado de un botón de la tienda web (lib/whatsapp/web-origin.ts). */
+  webOrigin?: WebOrigin;
   order?: {
     catalogId: string | null;
     /** Nota que la clienta escribe junto al carrito, si la hay. */
@@ -350,7 +353,10 @@ export function extractWhatsAppEvents(
             continue;
           }
           const type = asString(message.type);
-          const metadata = getCartMetadata(message);
+          const cart = getCartMetadata(message);
+          // Un anuncio de clic a WhatsApp trae `referral`: eso no es la tienda web.
+          const webOrigin = message.referral ? null : detectWebOrigin(getMessageBody(message));
+          const metadata = webOrigin ? { ...(cart ?? {}), webOrigin } : cart;
           result.messages.push({
             externalId: asString(message.id),
             phone,
@@ -821,6 +827,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       eventCreatedAt: Date;
       customerPhone: string | null;
       customerBsuid: string | null;
+      webOrigin?: WebOrigin | null;
     }> = [];
 
     for (const message of extracted.messages) {
@@ -851,6 +858,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
         eventCreatedAt: event.createdAt,
         customerPhone: message.phone,
         customerBsuid: message.bsuid,
+        webOrigin: message.metadata?.webOrigin ?? null,
         ...(paraPaula ? { mediaForOwner: true } : {}),
       });
     }

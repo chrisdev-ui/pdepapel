@@ -7,6 +7,7 @@ import { BUSINESS_FACT_TEMPLATES, areBusinessFactsApproved, classifyBusinessFact
 import { BOT_MESSAGE_WINDOW_MS, WELCOME_REPEAT_WINDOW_MS, findPendingCustomerActivity, isBotEnabled } from "@/lib/whatsapp/bot-guards";
 import { formatBotReply, matchWhatsAppKeyword } from "@/lib/whatsapp/bot-matching";
 import { areProductAnswersApproved, fallbackQueryFromMessage, looksLikeProductQuestion } from "@/lib/whatsapp/bot-products";
+import { isOfferFresh, isShippingCostQuestion, offeredProductId, parseAppendRequest, parseOrderReply } from "@/lib/whatsapp/bot-order-request";
 import { getActiveBotKeywords } from "@/lib/whatsapp/bot-replies";
 import { BOT_INTENT_HISTORY, classifyMessageIntent, isEmojiOnly, type BotIntentResult } from "@/lib/whatsapp/shadow/intent";
 import {
@@ -28,6 +29,8 @@ const OUTCOME_TYPE: Record<string, RealType> = {
   replied_product: "product_list",
   replied_product_reference: "product_list",
   replied_product_unsure: "handoff",
+  replied_shipping_quote: "shipping_quote",
+  replied_web_origin: "web_welcome",
 };
 
 /**
@@ -46,6 +49,7 @@ export function realTypesFrom(
   return rows.map((row) => {
     const meta = row.metadata as { kind?: string; shown?: unknown; decision?: { outcome?: string } } | null;
     if (meta?.kind === "welcome") return "welcome";
+    if ((row.metadata as { orderRequest?: unknown } | null)?.orderRequest) return outcome === "replied_order_appended" ? "order_append" : "order_request";
     if (meta?.decision?.outcome === "unsure") return "handoff";
     if (meta?.shown || meta?.decision) return "product_list";
     if (hasProduct) return "wait_notice";
@@ -87,7 +91,7 @@ async function loadContext(
     prismadb.conversationMessage.findFirst({
       where: { conversationId, sentBy: ConversationMessageSentBy.BOT, createdAt: before },
       orderBy: { createdAt: "desc" },
-      select: { body: true, metadata: true },
+      select: { body: true, metadata: true, createdAt: true },
     }),
     prismadb.conversationMessage.findMany({
       where: {
@@ -124,6 +128,32 @@ async function loadContext(
   const lastBotMeta = lastBot?.metadata as { decision?: { outcome?: string } } | null;
   const windowStart = now.getTime() - BOT_MESSAGE_WINDOW_MS;
 
+  const offerId = offeredProductId(lastBot);
+  const offerFresh = Boolean(lastBot && isOfferFresh(lastBot.createdAt, inbound.createdAt));
+  const orderReply = Boolean(
+    parseOrderReply(candidate.body) &&
+      offerId &&
+      offerFresh &&
+      (await prismadb.product.count({ where: { id: offerId, storeId, isArchived: false } })) > 0,
+  );
+  const pendingOrder = (lastBot?.metadata as { orderRequest?: { status?: string } } | null)?.orderRequest?.status === "pending";
+  const append = parseAppendRequest(candidate.body);
+  const orderAppend = Boolean(
+    append &&
+      pendingOrder &&
+      offerFresh &&
+      realOutcome === "skipped_needs_owner" &&
+      !(conversation.lastOwnerAt && lastBot && conversation.lastOwnerAt >= lastBot.createdAt) &&
+      (await countInStockMatches(storeId, append.query, null, { minTokens: 1 }).catch(() => null)) === 1,
+  );
+
+  const web = candidate.webOrigin && !candidate.webOrigin.extraText ? candidate.webOrigin : null;
+  const webProductAvailable = Boolean(
+    web?.pageType === "product" &&
+      web.refs[0] &&
+      (await prismadb.product.count({ where: { storeId, sku: web.refs[0], isArchived: false, stock: { gt: 0 } } })) > 0,
+  );
+
   const ctx: ShadowContext = {
     botEnabled: enabled,
     ownerActive: describeBotPause(conversation.lastOwnerAt, now).paused,
@@ -147,6 +177,11 @@ async function loadContext(
     welcomeGreeting: isWelcomeGreeting(candidate.body),
     keywordMatch: matchWhatsAppKeyword(candidate.body, keywords) !== null,
     looksLikeProduct: looksLikeProductQuestion(candidate.body),
+    orderReply,
+    orderAppend,
+    shippingQuestion: isShippingCostQuestion(candidate.body),
+    webOrigin: web?.pageType ?? null,
+    webProductAvailable,
     recentPlannedMessages: shadowRows
       .filter((row) => row.createdAt.getTime() >= windowStart)
       .reduce((sum, row) => sum + row.plannedCount, 0),
@@ -185,7 +220,16 @@ export async function runWhatsAppBotShadow(
     let understood: BotIntentResult | null = null;
     let search: ShadowSignals["search"] = { ran: false };
 
-    if (!shadowGuard(ctx)) {
+    const ruleIntent = ctx.webOrigin
+      ? `web_${ctx.webOrigin}`
+      : ctx.orderAppend
+        ? "order_append"
+        : ctx.orderReply
+          ? "order_request"
+          : ctx.shippingQuestion
+            ? "shipping_quote"
+            : null;
+    if (!shadowGuard(ctx) && !ruleIntent) {
       stage = "classify";
       const outcome = await classifyMessageIntent(candidate.body, previousTexts);
       classifierStatus = outcome.ok ? "ok" : outcome.reason;
@@ -220,7 +264,7 @@ export async function runWhatsAppBotShadow(
         storeId: conversation.storeId,
         conversationId: candidate.conversationId,
         inboundMessageId: inbound.id,
-        intent: understood?.intent ?? null,
+        intent: (!shadowGuard(ctx) && ruleIntent) || understood?.intent || null,
         plannedTypes: plan.types,
         plannedCount: plan.types.length,
         productsFound: search.ran ? search.found : null,

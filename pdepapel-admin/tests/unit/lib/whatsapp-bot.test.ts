@@ -826,7 +826,7 @@ describe("runWhatsAppBot", () => {
     beforeEach(() => {
       mocks.answerProduct.mockResolvedValue({
         intent: "product.search",
-        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Lo quieres?",
         photo: null,
       });
       mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
@@ -934,7 +934,7 @@ describe("runWhatsAppBot", () => {
     const conFoto = (photo: string | null) =>
       mocks.answerProduct.mockResolvedValue({
         intent: "product.search",
-        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Lo quieres?",
         photo,
       });
 
@@ -1823,7 +1823,7 @@ describe("ritmo humano", () => {
     it("sale el aviso y después la respuesta de verdad", async () => {
       conAviso({
         intent: "product.search",
-        text: "Sí 💛 Tengo Lapicero gel en $5.500. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Lapicero gel en $5.500. ¿Lo quieres?",
         photo: null,
         shownIds: ["p1"],
       });
@@ -1863,7 +1863,7 @@ describe("ritmo humano", () => {
       mocks.send.mockResolvedValueOnce({ ok: false, error: "Meta dijo que no" });
       conAviso({
         intent: "product.search",
-        text: "Sí 💛 Tengo Lapicero gel en $5.500. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Lapicero gel en $5.500. ¿Lo quieres?",
         photo: null,
         shownIds: ["p1"],
       });
@@ -1960,7 +1960,7 @@ describe("ritmo humano", () => {
     it("con UNO solo no hay lista: va la respuesta de siempre con su foto", async () => {
       mocks.answerProduct.mockResolvedValue({
         intent: "product.search",
-        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Lo quieres?",
         photo: "https://…/foto.jpg",
         shownIds: ["p1"],
       });
@@ -1992,7 +1992,7 @@ describe("ritmo humano", () => {
       mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
       mocks.answerAboutProduct.mockResolvedValue({
         intent: "product.search",
-        text: "Sí 💛 Tengo Carpeta plástica oficio rosada en $8.000. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Carpeta plástica oficio rosada en $8.000. ¿Lo quieres?",
         photo: "https://…/rosada.jpg",
         shownIds: ["p2"],
       });
@@ -2132,7 +2132,7 @@ describe("ritmo humano", () => {
       });
       mocks.answerAboutProduct.mockResolvedValue({
         intent: "product.price",
-        text: "Cuaderno Stitch está en $18.000 💛 ¿Te lo aparto?",
+        text: "Cuaderno Stitch está en $18.000 💛 ¿Lo quieres?",
         photo: null,
         shownIds: ["p2"],
       });
@@ -2157,7 +2157,7 @@ describe("ritmo humano", () => {
       });
       mocks.answerAboutProduct.mockResolvedValue({
         intent: "product.search",
-        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Lo quieres?",
         photo: null,
         shownIds: ["p1"],
       });
@@ -2228,7 +2228,7 @@ describe("ritmo humano", () => {
       // antes: la etapa no se traga preguntas nuevas.
       mocks.answerProduct.mockResolvedValue({
         intent: "product.search",
-        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Lo quieres?",
         photo: null,
         shownIds: ["p1"],
       });
@@ -2296,7 +2296,7 @@ describe("ritmo humano", () => {
     it("guarda la decisión junto a lo que enseñó", async () => {
       mocks.answerProduct.mockResolvedValue({
         intent: "product.price",
-        text: 'Tote bag "Un día a la Vez" está en $35.000 💛 ¿Te lo aparto?',
+        text: 'Tote bag "Un día a la Vez" está en $35.000 💛 ¿Lo quieres?',
         photo: null,
         shownIds: ["tote-1"],
         decision,

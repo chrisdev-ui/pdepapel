@@ -166,6 +166,12 @@ When a change touches authentication or authorization, verify that route list **
 - Production analytics IDs must not be configured in Preview or Development.
 - The newsletter uses explicit consent and double opt-in. **Never infer marketing consent** from an order, account, checkout or import. Confirmation links expire after 48 hours and every confirmed recipient keeps a no-login unsubscribe path. Current copy promises at most two messages a month; do not exceed that without new consent and a policy update.
 
+### WhatsApp buttons
+
+- Every WhatsApp link goes through `lib/whatsapp-prefill.ts` (`buildWhatsAppUrl`): product (name + SKU, from `hooks/use-whatsapp-context.ts`, set by `ProductInfo`), cart (up to 5 SKUs, then «y más»), order (`getOrderSupportWhatsAppUrl`), and general (footer, Contacto, every other page). Under 200 characters, `encodeURIComponent`, never names, emails, phones, addresses or totals. The policy, bank-transfer and error pages keep their own specific texts.
+- **The admin bot parses these exact texts** (`pdepapel-admin/lib/whatsapp/web-origin.ts`) to greet by page. Changing a text here means changing that parser in the same deploy; the parser also accepts the legacy texts.
+- GA4/Vercel `whatsapp_cta_clicked` carries `page_path`, `placement`, `page_type` and `product_ref` (SKU) only.
+
 ### Images
 
 One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib/cloudinary-loader.ts`, used **only** through `components/ui/cloudinary-image.tsx`. Every distinct transformation and width is a derived copy that is stored forever and billed, so **do not add loaders, `quality` values, crops or wider `deviceSizes`**. Widths snap to `CLOUDINARY_DELIVERY_WIDTHS`. Fixed thumbnails use `width`/`height`; anything up to 64 px (sticky bar 48, gallery thumbs 64, design-option thumbnails 40 in `components/design-option.tsx`) lands on the same `w_128` copy, so pick a size that keeps it there. Runbook: `../docs/imagenes-cloudinary.md`.

@@ -1,4 +1,5 @@
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@/constants";
+import { buildWhatsAppUrl } from "@/lib/whatsapp-prefill";
 import type { Order, Shipping } from "@/types";
 
 /**
@@ -371,12 +372,9 @@ export function getPaymentMethodLabel(method: string | null | undefined) {
   return PAYMENT_METHOD_LABELS[method] ?? "Pago en línea";
 }
 
-const SUPPORT_WHATSAPP_NUMBER = "573132582293";
-
-/** WhatsApp chat with the order number already in the first message. */
+/** WhatsApp con el número de pedido en el primer mensaje (el bot lo reconoce como de la tienda web). */
 export function getOrderSupportWhatsAppUrl(orderNumber: string): string {
-  const text = `¡Hola! Tengo una duda sobre mi pedido ${orderNumber}.`;
-  return `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
+  return buildWhatsAppUrl({ pageType: "order", orderNumber });
 }
 
 /** Count of units across the order, for "3 productos" style summaries. */
