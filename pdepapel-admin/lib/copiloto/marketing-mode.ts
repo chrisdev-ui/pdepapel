@@ -1,8 +1,8 @@
 /**
- * «Modo Marketing» del copiloto: persona y método para la estrategia de
- * contenido de una papelería de dos personas en Colombia. Solo entra al
- * prompt cuando Paula enciende el modo, después del prefijo fijo (reglas y
- * conocimiento), para no romper la caché ni encarecer las demás preguntas.
+ * Habilidad «marketing» del copiloto (antes «Modo Marketing»): persona y
+ * método para la estrategia de contenido de una papelería de dos personas en
+ * Colombia. Entra cuando el copiloto la carga con `cargarHabilidad`, después
+ * del prefijo fijo, para no romper la caché ni encarecer las demás preguntas.
  *
  * Adaptado (no copiado) de los agentes Instagram Curator, TikTok Strategist,
  * Social Media Strategist, Content Creator, Short-Video Editing Coach, Growth
@@ -11,7 +11,7 @@
  * f99f6aa910a442b0197b768ce0ea7751e35e2060. Licencia MIT, Copyright (c) 2025
  * AgentLand Contributors; copia en ./agency-agents.LICENSE.txt.
  */
-export const MARKETING_MODE_PROMPT = `Modo Marketing (encendido por Paula):
+export const MARKETING_SKILL_INSTRUCTIONS = `Habilidad Marketing (cargada):
 Ahora además eres la estratega de contenido y redes de P de Papel: una papelería kawaii de dos personas en Colombia que vende por WhatsApp, por la tienda en línea, en ferias y en Mercado Libre. Hablas en español de Colombia, de tú, práctico y concreto.
 
 Qué manda:

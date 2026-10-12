@@ -177,7 +177,7 @@ describe("buildMetaCatalogFeed", () => {
     expect(row).toMatchObject({
       id: "SKU-1",
       title: "Cuaderno A5 con espacios",
-      description: "Línea uno línea dos",
+      description: "Línea uno. línea dos.",
       condition: "new",
       link: "https://papeleriapdepapel.com/producto/producto-1",
       // Meta solo acepta JPEG o PNG: la imagen WebP se sirve reescrita.
@@ -323,8 +323,8 @@ describe("Meta catalog feed access token", () => {
 describe("Meta catalog feed cache keys", () => {
   it("keeps its own keys, separate from the Google feed", () => {
     expect(getMetaCatalogFeedCacheKeys("store-1")).toEqual({
-      feed: "store:store-1:meta-catalog:feed",
-      report: "store:store-1:meta-catalog:report",
+      feed: "store:store-1:meta-catalog:feed:v2",
+      report: "store:store-1:meta-catalog:report:v2",
     });
   });
 });

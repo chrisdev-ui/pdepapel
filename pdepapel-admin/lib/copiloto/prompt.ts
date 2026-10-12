@@ -3,12 +3,12 @@ import { es } from "date-fns/locale";
 import { utcToZonedTime } from "date-fns-tz";
 
 import type { KnowledgeNoteView } from "@/lib/copiloto/knowledge";
-import { MARKETING_MODE_PROMPT } from "@/lib/copiloto/marketing-mode";
+import { COPILOT_SKILLS, renderSkillBlock, renderSkillIndex } from "@/lib/copiloto/skills";
 
 /**
- * Reglas fijas primero y conocimiento después: esa parte cambia poco y la
- * caché de OpenAI la reutiliza entre mensajes. Lo que cambia (fecha, pantalla)
- * va al final.
+ * Reglas fijas, índice de habilidades y conocimiento general: idénticos en
+ * cada mensaje para que la caché de OpenAI los reutilice. Lo que cambia
+ * (habilidades cargadas, fecha, pantalla) va aparte, en `buildCopilotContext`.
  */
 export const COPILOT_RULES = `Eres el copiloto del panel de P de Papel, una papelería colombiana (artículos kawaii, regalos, arte y manualidades). Le hablas a Paula, la dueña, en español sencillo y cálido, sin tecnicismos.
 
@@ -30,7 +30,7 @@ Mercadeo y pauta (decisión vigente del negocio; vale aunque no haya notas aprob
 - Se mide el costo por conversación de WhatsApp iniciada y cuántas conversaciones terminan en venta; no el alcance ni las impresiones.
 - Si una herramienta sugiere «dirigir a la tienda» o «a comprar en la página», adáptalo: el llamado es a escribir por WhatsApp.
 - Si Paula propone algo que choca con esto, dilo claro: «eso choca con la estrategia actual porque…».
-- Los detalles están en la nota marketing-estrategia-pauta. Cítala solo si aparece abajo en el conocimiento aprobado; si no aparece, no la cites.
+- Los detalles están en la nota marketing-estrategia-pauta, que llega con la habilidad marketing. Cítala solo si la tienes aprobada; si no, no la cites.
 - Para «qué producto promociono» usa la herramienta productosParaPromocionar y nombra productos de ahí; no los inventes ni los elijas solo por intuición.
 - No ves las métricas de Instagram, TikTok ni Google Analytics (alcance, seguidores, clics, visitas, resultados de anuncios). Cada vez que la pregunta sea sobre cómo le fue a un anuncio, a una publicación o a las redes, dilo en la respuesta («yo no veo esas cifras; míralas en el administrador de anuncios») y pide a Paula el dato. Nunca inventes métricas de redes ni resultados de anuncios.
 
@@ -57,15 +57,36 @@ export function renderContext(input: { now: Date; screen?: string | null; pendin
     .join("\n");
 }
 
-export function buildCopilotSystemPrompt(input: {
-  knowledge: Pick<KnowledgeNoteView, "id" | "titulo" | "body">[];
+type PromptNote = Pick<KnowledgeNoteView, "id" | "titulo" | "body"> & { habilidad?: string | null };
+
+/** El prefijo fijo: no depende de la hora, la pantalla ni las habilidades cargadas. */
+export function buildCopilotSystemPrompt(input: { knowledge: PromptNote[] }): string {
+  return [COPILOT_RULES, renderSkillIndex(), renderKnowledge(input.knowledge.filter((note) => !note.habilidad))].join("\n\n---\n\n");
+}
+
+/**
+ * Lo variable, como un segundo mensaje de sistema justo antes de la pregunta:
+ * las habilidades ya cargadas (instrucciones y sus notas aprobadas), y la
+ * fecha y la pantalla.
+ */
+export function buildCopilotContext(input: {
+  knowledge: PromptNote[];
+  loadedSkills: string[];
+  /** Las que Paula quitó en esta conversación: no se cargan aunque el tema coincida. */
+  blockedSkills?: string[];
   now: Date;
   screen?: string | null;
   pendingBrands: string[];
-  /** «Modo Marketing»: va después del prefijo fijo para no romper su caché. */
-  marketing?: boolean;
 }): string {
-  return [COPILOT_RULES, renderKnowledge(input.knowledge), ...(input.marketing ? [MARKETING_MODE_PROMPT] : []), renderContext(input)].join(
-    "\n\n---\n\n",
-  );
+  const loaded = COPILOT_SKILLS.filter((skill) => input.loadedSkills.includes(skill.id));
+  return [
+    ...loaded.map((skill) => renderSkillBlock(skill, input.knowledge.filter((note) => note.habilidad === skill.id))),
+    loaded.length ? `Habilidades ya cargadas en esta conversación: ${loaded.map((skill) => skill.id).join(", ")}. No las vuelvas a cargar.` : null,
+    input.blockedSkills?.length
+      ? `Paula desactivó en esta conversación: ${input.blockedSkills.join(", ")}. No las cargues; responde sin ellas.`
+      : null,
+    renderContext(input),
+  ]
+    .filter(Boolean)
+    .join("\n\n---\n\n");
 }

@@ -17,6 +17,12 @@ export interface KnowledgeDraft {
   id: string;
   titulo: string;
   tema: string;
+  /**
+   * Habilidad a la que pertenece (`habilidad:` en el encabezado). Una nota con
+   * habilidad solo entra al prompt cuando esa habilidad está cargada; sin
+   * habilidad, entra siempre que esté aprobada.
+   */
+  habilidad: string | null;
   /** `pendiente-de-paula`: no se puede aprobar hasta que ella escriba el texto. */
   estado: "borrador" | "pendiente-de-paula";
   body: string;
@@ -37,6 +43,7 @@ export function parseKnowledgeNote(raw: string): KnowledgeDraft | null {
     id: meta.id,
     titulo: meta.titulo,
     tema: meta.tema ?? "general",
+    habilidad: meta.habilidad || null,
     estado: meta.estado === "pendiente-de-paula" ? "pendiente-de-paula" : "borrador",
     body: match[2].trim(),
   };

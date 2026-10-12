@@ -3,6 +3,7 @@ id: marketing-colaboraciones
 titulo: Colaboraciones y contenido de clientas
 tema: marketing
 estado: borrador
+habilidad: marketing
 ---
 
 - **Microcreadoras de lettering y journaling:** cuentas pequeñas con público que de verdad usa papelería. Mejor varias pequeñas que una grande.

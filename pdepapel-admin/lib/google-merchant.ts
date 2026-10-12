@@ -2,7 +2,7 @@ import {
   getCustomerFacingAttributeName,
   getCustomerFacingSizeName,
 } from "@/lib/product-naming";
-import { richTextToPlainText } from "@/lib/rich-text";
+import { richTextToFeedText } from "@/lib/rich-text";
 
 export {
   GOOGLE_MERCHANT_IMAGE_TRANSFORMATION,
@@ -43,15 +43,21 @@ function stripDisclaimers(text: string) {
  * the product name when there is no description (or when the description is
  * only a brand disclaimer).
  */
+// Los símbolos ©, ® y ™ también son «pictográficos», pero pueden ser parte de una marca.
+const FEED_EMOJI = new RegExp("(?![\\u00A9\\u00AE\\u2122])\\p{Extended_Pictographic}|\\uFE0F|\\u200D", "gu");
+
 export function getGoogleMerchantDescription(
   description: string | null | undefined,
   fallback: string,
+  /** Solo Google: sus políticas piden texto sin emoji. Meta, la tienda y WhatsApp los conservan. */
+  options: { stripEmoji?: boolean } = {},
 ) {
+  const flat = richTextToFeedText(description);
   const text =
     stripDisclaimers(
       // Tags are replaced by spaces upstream; drop the space left before
       // punctuation ("<strong>A5</strong>," -> "A5,").
-      richTextToPlainText(description).replace(/\s+([,.;:!?)\]])/g, "$1"),
+      (options.stripEmoji ? flat.replace(FEED_EMOJI, " ") : flat).replace(/\s+/g, " ").replace(/\s+([,.;:!?)\]])/g, "$1").trim(),
     ) || fallback.trim();
 
   return text.length > GOOGLE_MERCHANT_DESCRIPTION_MAX_LENGTH

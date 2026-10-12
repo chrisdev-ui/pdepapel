@@ -162,22 +162,45 @@ export function sanitizeRichTextHtml(content?: string | null) {
   return secureAnchors(sanitized).trim();
 }
 
+const decodeBasicEntities = (text: string) =>
+  text.replace(/&(nbsp|amp|quot|#39);/gi, (entity) => {
+    const entities: Record<string, string> = {
+      "&nbsp;": " ",
+      "&amp;": "&",
+      "&quot;": '"',
+      "&#39;": "'",
+    };
+    return entities[entity.toLowerCase()] ?? " ";
+  });
+
 export function richTextToPlainText(content?: string | null) {
-  return sanitizeRichTextHtml(content)
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<\/(?:p|h[2-4]|li|blockquote|pre)>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&(nbsp|amp|quot|#39);/gi, (entity) => {
-      const entities: Record<string, string> = {
-        "&nbsp;": " ",
-        "&amp;": "&",
-        "&quot;": '"',
-        "&#39;": "'",
-      };
-      return entities[entity.toLowerCase()] ?? " ";
-    })
+  return decodeBasicEntities(
+    sanitizeRichTextHtml(content)
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/(?:p|h[2-4]|li|blockquote|pre)>/gi, " ")
+      .replace(/<[^>]+>/g, " "),
+  )
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const FEED_BLOCK_END = /<\/(?:p|h[2-4]|li|blockquote|pre)>|<br\s*\/?>/gi;
+// Con `new RegExp`: el literal con la bandera `u` no compila con el target de este proyecto.
+const TRAILING_EMOJI = new RegExp("(?:\\p{Extended_Pictographic}|\\uFE0F|\\u200D|\\s)+$", "u");
+
+/**
+ * Texto de una línea para los feeds de Google y Meta, que no admiten HTML ni
+ * saltos de línea. Cada bloque (párrafo, título, viñeta, salto) queda como su
+ * propia frase: si no termina en puntuación se le pone punto, para que
+ * «Marca: X» y «Cantidad: Y» no se lean pegados.
+ */
+export function richTextToFeedText(content?: string | null) {
+  return sanitizeRichTextHtml(content)
+    .split(FEED_BLOCK_END)
+    .map((block) => decodeBasicEntities(block.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map((block) => (/[.!?:;…]$/.test(block.replace(TRAILING_EMOJI, "")) ? block : `${block}.`))
+    .join(" ");
 }
 
 export function createRichTextExcerpt(

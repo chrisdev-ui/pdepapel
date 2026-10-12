@@ -77,7 +77,7 @@ describe("buildGoogleMerchantFeed", () => {
     expect(first).toMatchObject({
       id: "SKU-1",
       title: "Producto 1",
-      description: "Cuaderno A5, tapa dura",
+      description: "Cuaderno A5, tapa dura.",
       link: "https://papeleriapdepapel.com/producto/producto-1",
       image_link: "https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/a.png",
       additional_image_link: "https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/b.jpg",
@@ -234,8 +234,8 @@ describe("Google Merchant feed access token", () => {
       createGoogleMerchantFeedToken("store-1", secret),
     );
     expect(getGoogleMerchantFeedCacheKeys("store-1")).toEqual({
-      feed: "store:store-1:google-merchant:feed",
-      report: "store:store-1:google-merchant:report",
+      feed: "store:store-1:google-merchant:feed:v2",
+      report: "store:store-1:google-merchant:report:v2",
     });
   });
 });

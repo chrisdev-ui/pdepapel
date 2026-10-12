@@ -269,8 +269,9 @@ export function getMetaCatalogFeedUrl(
 
 export function getMetaCatalogFeedCacheKeys(storeId: string) {
   return {
-    feed: `store:${storeId}:meta-catalog:feed`,
-    report: `store:${storeId}:meta-catalog:report`,
+    // `v2`: el texto de la descripción cambió de formato; la versión nueva no lee lo guardado antes.
+    feed: `store:${storeId}:meta-catalog:feed:v2`,
+    report: `store:${storeId}:meta-catalog:report:v2`,
   };
 }
 

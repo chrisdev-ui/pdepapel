@@ -56,14 +56,51 @@ const answer = {
 };
 
 describe("CopilotChat", () => {
-  it("«Modo Marketing» se enciende junto a Rápido y A fondo y cambia las sugerencias", () => {
+  it("sin botón de «Modo Marketing»: las habilidades se ven como chips y se pueden quitar", async () => {
+    mocks.chat.messages = [
+      { id: "u-1", role: "user", parts: [{ type: "text", text: "Mejora la ficha" }] },
+      {
+        id: "cop-1",
+        role: "assistant",
+        parts: [
+          { type: "tool-cargarHabilidad", state: "output-available", output: { ok: true, id: "descripciones" } },
+          { type: "text", text: "Listo." },
+        ],
+      },
+    ];
+    mocks.axios.post.mockResolvedValue({ data: { loaded: [], pinned: [], blocked: ["descripciones"], modelChosen: ["descripciones"] } });
     render(<CopilotChat storeId="store-1" screen={null} conversations={[]} />);
-    const toggle = screen.getByRole("button", { name: "Modo Marketing" });
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Dame 3 ideas de Reel para esta semana" }));
-    expect(mocks.chat.sendMessage).toHaveBeenCalledWith({ text: "Dame 3 ideas de Reel para esta semana" });
+    expect(screen.queryByRole("button", { name: "Modo Marketing" })).toBeNull();
+    expect(screen.getByText("Usando: Descripciones")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dejar de usar Descripciones en esta conversación" }));
+    await waitFor(() => expect(screen.queryByText("Usando: Descripciones")).toBeNull());
+    expect(mocks.axios.post).toHaveBeenCalledWith(expect.stringMatching(/\/copiloto\/conversaciones\/.+\/habilidades$/), { action: "remove", skillId: "descripciones" });
+    // Nunca vuelve a responder solo: lo ofrece.
+    expect(mocks.chat.regenerate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Responder de nuevo con estas habilidades" }));
+    expect(mocks.chat.regenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it("«Copiar para la ficha» copia el HTML de la plantilla y el texto plano", async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { write, writeText: vi.fn() } });
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {
+      constructor(readonly items: Record<string, Blob>) {}
+    };
+    mocks.chat.messages = [
+      {
+        id: "cop-2",
+        role: "assistant",
+        parts: [{ type: "text", text: "**Nombre sugerido:** Set\n\n**Descripción para la ficha**\n¡Hola!\n- **Marca:** X.\n\n**SEO (solo referencia)**\n- Título: Set" }],
+      },
+    ];
+    render(<CopilotChat storeId="store-1" screen={null} conversations={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copiar para la ficha" }));
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    const item = write.mock.calls[0][0][0] as { items: Record<string, Blob> };
+    expect(await item.items["text/html"].text()).toBe("<h3>¡Hola!</h3><ul><li><strong>Marca:</strong> X.</li></ul>");
+    expect(await item.items["text/plain"].text()).toBe("¡Hola!\n• Marca: X.");
   });
 
   it("sin mensajes muestra las sugerencias de la pantalla y las manda al tocarlas", () => {

@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   updateConversation: vi.fn(),
   messages: vi.fn(),
   upsertMessage: vi.fn(),
+  createMessage: vi.fn(),
+  findMessage: vi.fn(),
+  deleteMessages: vi.fn(),
   rate: vi.fn(),
   knowledge: vi.fn(),
 }));
@@ -30,7 +33,13 @@ vi.mock("@/lib/prismadb", () => ({
   default: {
     store: { findFirst: async ({ where }: { where: { id: string; userId: string } }) => (where.userId === mocks.storeOwner ? { id: where.id } : null) },
     assistantConversation: { findUnique: mocks.conversation, create: mocks.createConversation, update: mocks.updateConversation },
-    assistantMessage: { findMany: mocks.messages, upsert: mocks.upsertMessage },
+    assistantMessage: {
+      findMany: mocks.messages,
+      upsert: mocks.upsertMessage,
+      create: mocks.createMessage,
+      findFirst: mocks.findMessage,
+      deleteMany: mocks.deleteMessages,
+    },
   },
 }));
 
@@ -83,6 +92,9 @@ beforeEach(() => {
   mocks.rate.mockResolvedValue({ allowed: true, remaining: 10, retryAfterSeconds: 0 });
   mocks.conversation.mockResolvedValue(null);
   mocks.messages.mockResolvedValue([]);
+  mocks.createMessage.mockResolvedValue({});
+  mocks.findMessage.mockResolvedValue(null);
+  mocks.deleteMessages.mockResolvedValue({ count: 0 });
   mocks.knowledge.mockResolvedValue([]);
   mocks.upsertMessage.mockResolvedValue({});
   mocks.createConversation.mockResolvedValue({});
@@ -143,27 +155,58 @@ describe("handleCopilotChat", () => {
     expect(used).toEqual(["gpt-6-luna"]);
   });
 
-  it("«Modo Marketing» agrega la persona después del prefijo fijo y solo cuando está encendido", async () => {
-    const systems: string[] = [];
-    const run = async (marketing: boolean) => {
-      const used = model();
-      const response = await handleCopilotChat(request({ ...body("Dame una idea de Reel"), marketing }), "store-1", {
-        budgetStore: budgetStore(),
-        languageModel: () => used,
-      });
-      await response.text();
-      const system = used.doStreamCalls[0].prompt.find((message) => message.role === "system");
-      systems.push(String(system?.content ?? ""));
+  it("habilidades: prefijo fijo idéntico, contexto justo antes de la pregunta y herramientas solo con la habilidad cargada", async () => {
+    mocks.knowledge.mockResolvedValue([
+      { id: "acuarela-basicos", titulo: "Acuarela", body: "Papel grueso", tema: "tecnicas", habilidad: null, approved: true },
+      { id: "plantilla-descripciones", titulo: "Plantilla", body: "Preferencias de Paula", tema: "catalogo", habilidad: "descripciones", approved: true },
+    ]);
+    const loadedPart = {
+      type: "tool-cargarHabilidad",
+      toolCallId: "call-1",
+      state: "output-available",
+      input: { id: "descripciones" },
+      output: { ok: true, id: "descripciones", nombre: "Descripciones", instrucciones: "TEXTO LARGO DE LA HABILIDAD", herramientas: ["productoParaDescripcion"] },
     };
-    await run(false);
-    await run(true);
-    const [off, on] = systems;
-    expect(off).not.toContain("Modo Marketing (encendido por Paula)");
-    expect(on).toContain("Modo Marketing (encendido por Paula)");
-    // El prefijo que se cachea (reglas y conocimiento) es el mismo con el modo encendido o apagado.
-    const prefix = off.slice(0, off.indexOf("Hoy es"));
-    expect(on.startsWith(prefix)).toBe(true);
-    expect(on.indexOf("Modo Marketing (encendido por Paula)")).toBeLessThan(on.indexOf("Hoy es"));
+    const calls: { prompt: { role: string; content: unknown }[]; tools: { name: string }[] }[] = [];
+    const run = async (history: unknown[]) => {
+      mocks.messages.mockResolvedValue(history);
+      const used = model();
+      const response = await handleCopilotChat(request(body("Mejora la descripción del set Workpal")), "store-1", { budgetStore: budgetStore(), languageModel: () => used });
+      await response.text();
+      calls.push(used.doStreamCalls[0] as never);
+    };
+    await run([]);
+    await run([{ id: "a1", role: "assistant", parts: [{ type: "step-start" }, loadedPart, { type: "text", text: "Listo." }] }]);
+    const [fresh, loaded] = calls;
+
+    const systemOf = (call: (typeof calls)[number]) => call.prompt.filter((message) => message.role === "system").map((message) => String(message.content));
+    expect(systemOf(fresh)[0]).toBe(systemOf(loaded)[0]);
+    expect(systemOf(fresh)[0]).not.toContain("Hoy es");
+    expect(systemOf(fresh)[0]).not.toContain("Preferencias de Paula");
+    // El contexto (y la habilidad cargada con su nota) va justo antes de la pregunta.
+    for (const call of calls) {
+      const index = call.prompt.findIndex((message, position) => position > 0 && message.role === "system");
+      expect(index).toBe(call.prompt.length - 2);
+      expect(call.prompt[call.prompt.length - 1].role).toBe("user");
+    }
+    expect(systemOf(loaded)[1]).toContain("Habilidad Descripciones (cargada)");
+    expect(systemOf(loaded)[1]).toContain("Preferencias de Paula");
+    expect(systemOf(fresh)[1]).not.toContain("Habilidad Descripciones (cargada)");
+    // El texto de la habilidad no viaja dos veces: en el historial queda «cargada».
+    expect(JSON.stringify(loaded.prompt)).not.toContain("TEXTO LARGO DE LA HABILIDAD");
+
+    const toolNames = (call: (typeof calls)[number]) => call.tools.map((entry) => entry.name);
+    expect(toolNames(fresh)).toContain("cargarHabilidad");
+    expect(toolNames(fresh)).not.toContain("productoParaDescripcion");
+    expect(toolNames(loaded)).toContain("productoParaDescripcion");
+    expect(toolNames(fresh).slice(0, 12)).toEqual(toolNames(loaded).slice(0, 12));
+  });
+
+  it("ya no acepta el viejo «Modo Marketing»: el campo se ignora", async () => {
+    const used = model();
+    const response = await handleCopilotChat(request({ ...body("Dame una idea de Reel"), marketing: true }), "store-1", { budgetStore: budgetStore(), languageModel: () => used });
+    await response.text();
+    expect(JSON.stringify(used.doStreamCalls[0].prompt)).not.toContain("Habilidad Marketing (cargada)");
   });
 
   it("responde en streaming, guarda la pregunta y la respuesta con su costo, y anota el gasto", async () => {
@@ -182,5 +225,93 @@ describe("handleCopilotChat", () => {
     expect(answer).toMatchObject({ role: "assistant", model: "gpt-6-luna", inputTokens: 1000, cachedInputTokens: 800, outputTokens: 50 });
     expect(Number(answer.costUsd)).toBeGreaterThan(0);
     expect(store.incrbyfloat).toHaveBeenCalledWith(expect.stringMatching(/^ai:copiloto:spend:/), expect.any(Number));
+  });
+});
+
+describe("correcciones de Paula a las habilidades", () => {
+  type Row = { id: string; role: string; parts: unknown; createdAt: Date };
+  let rows: Row[];
+  const matches = (row: Row, where: { role?: unknown; createdAt?: { gte?: Date } }) => {
+    const role = where.role as string | { in: string[] } | undefined;
+    if (typeof role === "string" && row.role !== role) return false;
+    if (role && typeof role === "object" && !role.in.includes(row.role)) return false;
+    if (where.createdAt?.gte && row.createdAt < where.createdAt.gte) return false;
+    return true;
+  };
+  const loadedPart = (id: string) => ({ type: "tool-cargarHabilidad", toolCallId: `c-${id}`, state: "output-available", input: { id }, output: { ok: true, id } });
+  const event = (action: string, skillId: string | null) => ({ action, skillId, modelChosenSkills: [], messageId: null });
+
+  beforeEach(() => {
+    rows = [];
+    mocks.messages.mockImplementation(async ({ where, orderBy }: { where: Record<string, unknown>; orderBy: { createdAt: "asc" | "desc" } }) => {
+      const found = rows.filter((row) => matches(row, where as never));
+      return orderBy?.createdAt === "desc" ? [...found].reverse() : found;
+    });
+    mocks.createMessage.mockImplementation(async ({ data }: { data: Row }) => {
+      rows.push({ ...data, createdAt: data.createdAt ?? new Date() });
+      return data;
+    });
+    mocks.deleteMessages.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => {
+      const before = rows.length;
+      rows = rows.filter((row) => !where.id.in.includes(row.id));
+      return { count: before - rows.length };
+    });
+    mocks.findMessage.mockImplementation(async ({ where }: { where: { id: string } }) => rows.find((row) => row.id === where.id) ?? null);
+  });
+
+  const ask = async (payload: Record<string, unknown>) => {
+    const used = model();
+    const response = await handleCopilotChat(request(payload), "store-1", { budgetStore: budgetStore(), languageModel: () => used });
+    const text = await response.text();
+    return { used, text };
+  };
+  const eventsOf = () => rows.filter((row) => row.role === "skill-event").map((row) => (row.parts as { action: string; skillId: string | null }));
+
+  it("una habilidad que Paula quitó no manda ni sus instrucciones ni sus herramientas, aunque el copiloto la haya cargado", async () => {
+    mocks.conversation.mockResolvedValue({ storeId: "store-1", userId: "user_owner" });
+    rows.push({ id: "a1", role: "assistant", parts: [loadedPart("descripciones")], createdAt: new Date("2026-10-12T10:00:00Z") });
+    rows.push({ id: "e1", role: "skill-event", parts: event("removed", "descripciones"), createdAt: new Date("2026-10-12T10:01:00Z") });
+    const { used } = await ask(body("Mejora la descripción del set Workpal"));
+    const call = used.doStreamCalls[0] as unknown as { prompt: { role: string; content: unknown }[]; tools: { name: string }[] };
+    expect(call.tools.map((tool) => tool.name)).not.toContain("productoParaDescripcion");
+    const context = String(call.prompt.filter((message) => message.role === "system")[1]?.content);
+    expect(context).not.toContain("Habilidad Descripciones (cargada)");
+    expect(context).toContain("Paula desactivó en esta conversación: descripciones");
+    // Las filas de corrección nunca viajan al modelo.
+    expect(JSON.stringify(call.prompt)).not.toContain("modelChosenSkills");
+  });
+
+  it("«no uses marketing» se resuelve sin el modelo: anota la corrección y responde fijo", async () => {
+    const { used, text } = await ask(body("No uses Marketing, por favor"));
+    expect(used.doStreamCalls).toHaveLength(0);
+    expect(text).toContain("dejo de usar Marketing en esta conversación");
+    expect(eventsOf()).toEqual([expect.objectContaining({ action: "removed", skillId: "marketing" })]);
+    expect(rows.filter((row) => row.role === "assistant")).toHaveLength(1);
+  });
+
+  it("una pregunta que solo se parece a la orden va al modelo", async () => {
+    const { used } = await ask(body("¿Tienen el Marketing planner?"));
+    expect(used.doStreamCalls).toHaveLength(1);
+    expect(eventsOf()).toEqual([]);
+  });
+
+  it("«Responder de nuevo» borra solo la última respuesta y anota la corrección", async () => {
+    mocks.conversation.mockResolvedValue({ storeId: "store-1", userId: "user_owner" });
+    rows.push({ id: "u1", role: "user", parts: [{ type: "text", text: "uno" }], createdAt: new Date("2026-10-12T10:00:00Z") });
+    rows.push({ id: "a1", role: "assistant", parts: [{ type: "text", text: "respuesta uno" }], createdAt: new Date("2026-10-12T10:00:05Z") });
+    rows.push({ id: "msg-user-1", role: "user", parts: [{ type: "text", text: "dos" }], createdAt: new Date("2026-10-12T10:01:00Z") });
+    rows.push({ id: "a2", role: "assistant", parts: [loadedPart("marketing")], createdAt: new Date("2026-10-12T10:01:05Z") });
+    await ask({ ...body("dos"), regenerar: true });
+    expect(rows.map((row) => row.id)).toContain("a1");
+    expect(rows.map((row) => row.id)).not.toContain("a2");
+    expect(eventsOf()).toEqual([expect.objectContaining({ action: "regenerated", skillId: null })]);
+    expect((rows.find((row) => row.role === "skill-event")!.parts as { modelChosenSkills: string[] }).modelChosenSkills).toEqual(["marketing"]);
+  });
+
+  it("las fijadas antes de la primera pregunta se anotan al crear la conversación", async () => {
+    const { used } = await ask({ ...body("Escribe la descripción del set Workpal"), habilidades: ["descripciones", "inventada"] });
+    expect(eventsOf()).toEqual([expect.objectContaining({ action: "added", skillId: "descripciones" })]);
+    const tools = (used.doStreamCalls[0] as unknown as { tools: { name: string }[] }).tools.map((tool) => tool.name);
+    expect(tools).toContain("productoParaDescripcion");
   });
 });

@@ -72,21 +72,21 @@ describe("cache invalidation never holds the request", () => {
   it("offer changes also drop the cached Meta catalog feed, once", async () => {
     redis.scan.mockResolvedValue([0, []]);
     await invalidateStorePromotionsCache("s1");
-    const metaCalls = redis.del.mock.calls.filter((args) => args.includes("store:s1:meta-catalog:feed"));
-    expect(metaCalls).toEqual([["store:s1:meta-catalog:feed", "store:s1:meta-catalog:report"]]);
+    const metaCalls = redis.del.mock.calls.filter((args) => args.includes("store:s1:meta-catalog:feed:v2"));
+    expect(metaCalls).toEqual([["store:s1:meta-catalog:feed:v2", "store:s1:meta-catalog:report:v2"]]);
     expect(redis.del).toHaveBeenCalledWith("store:s1:active-offers");
   });
 
   it("product saves drop the cached Meta catalog feed too (price and stock are in it)", async () => {
     redis.scan.mockResolvedValue([0, []]);
     await invalidateStoreProductsCache("s1");
-    expect(redis.del).toHaveBeenCalledWith("store:s1:meta-catalog:feed", "store:s1:meta-catalog:report");
+    expect(redis.del).toHaveBeenCalledWith("store:s1:meta-catalog:feed:v2", "store:s1:meta-catalog:report:v2");
   });
 
   it("a failing Meta feed purge never breaks the save nor the other purges", async () => {
     redis.scan.mockResolvedValue([0, []]);
     redis.del.mockImplementation(async (...keys: string[]) => {
-      if (keys.includes("store:s1:meta-catalog:feed")) throw new Error("redis caído");
+      if (keys.includes("store:s1:meta-catalog:feed:v2")) throw new Error("redis caído");
       return 1;
     });
     await expect(invalidateStorePromotionsCache("s1")).resolves.toBeUndefined();

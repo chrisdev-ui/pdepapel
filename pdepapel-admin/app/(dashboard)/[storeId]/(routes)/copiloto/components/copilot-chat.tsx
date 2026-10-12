@@ -3,18 +3,21 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import axios from "axios";
-import { Brain, Loader2, Megaphone, MessageSquarePlus, RotateCcw, Send, Square, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
+import { Brain, ClipboardCopy, Loader2, MessageSquarePlus, Plus, RotateCcw, Send, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { toast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { descriptionBlockToHtml, descriptionBlockToPlainText, extractDescriptionBlock } from "@/lib/copiloto/description-html";
+import { COPILOT_SKILL_CATALOG, COPILOT_SKILL_NAMES } from "@/lib/copiloto/skills/names";
 import { cn } from "@/lib/utils";
 
 import { BoldText } from "./bold-text";
-import { MARKETING_SUGGESTIONS, suggestionsFor, TOOL_LABELS } from "./suggestions";
+import { suggestionsFor, TOOL_LABELS } from "./suggestions";
 
 export interface ConversationSummary {
   id: string;
@@ -23,6 +26,12 @@ export interface ConversationSummary {
 }
 
 type Mode = "rapido" | "a_fondo";
+
+interface SkillState {
+  loaded: string[];
+  pinned: string[];
+  blocked: string[];
+}
 
 interface CopilotChatProps {
   storeId: string;
@@ -56,8 +65,44 @@ function TextWithCitations({ text, storeId }: { text: string; storeId: string })
 
 type ToolPart = { type: string; state?: string; output?: { fuente?: string; rango?: string | null; actualizadoEl?: string } };
 
+/** Las habilidades que el copiloto cargó en esta conversación, en el orden en que las cargó. */
+function loadedSkills(messages: UIMessage[]): string[] {
+  const ids: string[] = [];
+  for (const message of messages) {
+    for (const part of message.parts) {
+      const value = part as { type: string; state?: string; output?: { ok?: boolean; id?: string } };
+      if (value.type === "tool-cargarHabilidad" && value.state === "output-available" && value.output?.ok && value.output.id && !ids.includes(value.output.id)) {
+        ids.push(value.output.id);
+      }
+    }
+  }
+  return ids;
+}
+
+/** HTML de la plantilla para pegar en la ficha, con el texto plano de respaldo. */
+async function copyForProductPage(text: string): Promise<boolean> {
+  const block = extractDescriptionBlock(text);
+  if (!block) return false;
+  const html = descriptionBlockToHtml(block);
+  const plain = descriptionBlockToPlainText(block);
+  try {
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([plain], { type: "text/plain" }) }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(plain);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function ToolLine({ part }: { part: ToolPart }) {
   const name = part.type.replace(/^tool-/, "");
+  // Las habilidades cargadas se ven como chips arriba, no como una línea más.
+  if (name === "cargarHabilidad" && part.state === "output-available") return null;
   const label = TOOL_LABELS[name] ?? "Consultando";
   if (part.state === "output-available") {
     const range = part.output?.rango ? ` · ${part.output.rango}` : "";
@@ -82,22 +127,26 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
   const [mode, setMode] = useState<Mode>("rapido");
   const [input, setInput] = useState("");
   const [rated, setRated] = useState<Record<string, "up" | "down">>({});
-  const [marketing, setMarketing] = useState(false);
-  const settings = useRef({ mode, screen, marketing });
-  settings.current = { mode, screen, marketing };
+  // Lo que dice el servidor de las habilidades de esta conversación, y las que Paula fija antes de la primera pregunta.
+  const [skillState, setSkillState] = useState<SkillState | null>(null);
+  const [pendingPins, setPendingPins] = useState<string[]>([]);
+  const [skillsChanged, setSkillsChanged] = useState(false);
+  const settings = useRef({ mode, screen, pendingPins });
+  settings.current = { mode, screen, pendingPins };
   const bottom = useRef<HTMLDivElement>(null);
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: `/api/${storeId}/copiloto/chat`,
-        prepareSendMessagesRequest: ({ messages, id }) => ({
+        prepareSendMessagesRequest: ({ messages, id, trigger }) => ({
           body: {
             id,
             message: messages[messages.length - 1],
             mode: settings.current.mode,
             screen: settings.current.screen,
-            marketing: settings.current.marketing,
+            regenerar: trigger === "regenerate-message",
+            habilidades: messages.length === 1 ? settings.current.pendingPins : [],
           },
         }),
       }),
@@ -105,6 +154,35 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
   );
   const { messages, sendMessage, status, stop, regenerate, error } = useChat({ id: conversationId, messages: seed, transport });
   const busy = status === "submitted" || status === "streaming";
+  const lastMetadataSkills = useMemo(() => {
+    const last = [...messages].reverse().find((message) => message.role === "assistant");
+    return (last?.metadata as { habilidades?: SkillState } | undefined)?.habilidades ?? null;
+  }, [messages]);
+  useEffect(() => {
+    if (lastMetadataSkills) setSkillState(lastMetadataSkills);
+  }, [lastMetadataSkills]);
+  const conversationStarted = messages.length > 0;
+  const skills = skillState
+    ? skillState.loaded
+    : Array.from(new Set([...pendingPins, ...(conversationStarted ? loadedSkills(messages) : [])]));
+
+  const changeSkill = async (action: "add" | "remove", skillId: string) => {
+    if (busy) return;
+    if (!conversationStarted) {
+      setPendingPins((current) => (action === "add" ? Array.from(new Set([...current, skillId])) : current.filter((id) => id !== skillId)));
+      return;
+    }
+    try {
+      const { data } = await axios.post<SkillState & { modelChosen: string[] }>(`/api/${storeId}/copiloto/conversaciones/${conversationId}/habilidades`, {
+        action,
+        skillId,
+      });
+      setSkillState({ loaded: data.loaded, pinned: data.pinned, blocked: data.blocked });
+      setSkillsChanged(true);
+    } catch {
+      toast({ description: "No se pudo cambiar la habilidad", variant: "destructive" });
+    }
+  };
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -115,6 +193,7 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
     if (!value || busy) return;
     sendMessage({ text: value });
     setInput("");
+    setSkillsChanged(false);
     if (!conversations.some((conversation) => conversation.id === conversationId)) {
       setConversations((current) => [{ id: conversationId, title: value.slice(0, 120), lastMessageAt: new Date().toISOString() }, ...current]);
     }
@@ -123,6 +202,9 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
   const startNew = () => {
     setSeed([]);
     setConversationId(newId());
+    setSkillState(null);
+    setPendingPins([]);
+    setSkillsChanged(false);
   };
 
   const open = async (id: string) => {
@@ -130,6 +212,9 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
     const { data } = await axios.get(`/api/${storeId}/copiloto/conversaciones/${id}`);
     setSeed((data.messages as UIMessage[]).map((message) => ({ id: message.id, role: message.role, parts: message.parts })));
     setConversationId(id);
+    setSkillState(data.habilidades ?? null);
+    setPendingPins([]);
+    setSkillsChanged(false);
   };
 
   const remove = async (conversation: ConversationSummary) => {
@@ -246,18 +331,43 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
             Copiloto
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={marketing}
-              onClick={() => setMarketing((current) => !current)}
-              className={cn(
-                "flex items-center gap-1 rounded-full border px-3 py-1 text-xs",
-                marketing ? "border-primary bg-tint-lavender font-medium text-primary" : "text-primary",
-              )}
-            >
-              <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
-              Modo Marketing
-            </button>
+            {skills.map((id) => (
+              <span key={id} className="flex items-center gap-1 rounded-full bg-tint-lavender py-0.5 pl-2.5 pr-1 text-xs font-medium text-primary">
+                <Sparkles className="h-3 w-3" aria-hidden="true" />
+                Usando: {COPILOT_SKILL_NAMES[id] ?? id}
+                <button
+                  type="button"
+                  onClick={() => changeSkill("remove", id)}
+                  disabled={busy}
+                  className="rounded-full p-0.5 hover:bg-white/70 disabled:opacity-50"
+                  aria-label={`Dejar de usar ${COPILOT_SKILL_NAMES[id] ?? id} en esta conversación`}
+                >
+                  <X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" disabled={busy} className="flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-primary hover:bg-accent disabled:opacity-50">
+                  <Plus className="h-3 w-3" aria-hidden="true" />
+                  Habilidad
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Úsala en esta conversación aunque el copiloto no la elija</DropdownMenuLabel>
+                {COPILOT_SKILL_CATALOG.map((skill) => (
+                  <DropdownMenuItem
+                    key={skill.id}
+                    disabled={skills.includes(skill.id)}
+                    onSelect={() => changeSkill("add", skill.id)}
+                    className="flex flex-col items-start gap-0.5"
+                  >
+                    <span className="text-sm font-medium">{skill.nombre}</span>
+                    <span className="text-xs text-muted-foreground">{skill.resumen}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <div role="radiogroup" aria-label="Tipo de respuesta" className="flex rounded-full border p-0.5 text-xs">
               {(["rapido", "a_fondo"] as const).map((value) => (
                 <button
@@ -283,7 +393,7 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
                 salen los datos.
               </p>
               <div className="flex flex-wrap gap-2">
-                {(marketing ? MARKETING_SUGGESTIONS : suggestionsFor(screen)).map((suggestion) => (
+                {suggestionsFor(screen).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
@@ -316,8 +426,40 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
                 if (part.type.startsWith("tool-")) return <ToolLine key={index} part={part as ToolPart} />;
                 return null;
               })}
+              {message.role === "assistant" && !busy && extractDescriptionBlock(textOfMessage(message)) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={async () => {
+                    const copied = await copyForProductPage(textOfMessage(message));
+                    toast(
+                      copied
+                        ? { title: "Descripción copiada", description: "Pégala en la descripción del producto y revísala antes de guardar." }
+                        : { title: "No se pudo copiar", description: "Selecciona el texto y cópialo a mano.", variant: "destructive" },
+                    );
+                  }}
+                >
+                  <ClipboardCopy className="h-3.5 w-3.5" aria-hidden="true" />
+                  Copiar para la ficha
+                </Button>
+              )}
               {message.role === "assistant" && message.id === lastAssistant?.id && !busy && (
                 <div className="mt-2 flex flex-wrap items-center gap-1">
+                  {skillsChanged && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSkillsChanged(false);
+                        regenerate();
+                      }}
+                      className="flex items-center gap-1 rounded-full border border-primary bg-tint-lavender px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-accent"
+                    >
+                      <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                      Responder de nuevo con estas habilidades
+                    </button>
+                  )}
                   <button type="button" onClick={() => send("Ver más")} className="rounded-full border px-2.5 py-0.5 text-xs text-primary hover:bg-accent">
                     Ver más
                   </button>
@@ -401,6 +543,10 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
       </section>
     </div>
   );
+}
+
+function textOfMessage(message: UIMessage): string {
+  return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("\n");
 }
 
 function readableError(error: Error): string {

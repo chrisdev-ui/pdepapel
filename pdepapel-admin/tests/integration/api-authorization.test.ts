@@ -101,6 +101,7 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "conversations/[conversationId]/order-request", methods: ["DELETE"], params: { conversationId: "x" } },
   { path: "copiloto/conversaciones", methods: ["GET"] },
   { path: "copiloto/conversaciones/[conversationId]", methods: ["GET", "DELETE"], params: { conversationId: "x" } },
+  { path: "copiloto/conversaciones/[conversationId]/habilidades", methods: ["GET", "POST"], params: { conversationId: "x" } },
   { path: "copiloto/mensajes/[messageId]/valoracion", methods: ["POST"], params: { messageId: "x" } },
   { path: "copiloto/conocimiento/[noteId]", methods: ["PUT", "POST", "DELETE"], params: { noteId: "adhesivos" } },
 ];

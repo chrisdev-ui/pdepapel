@@ -233,6 +233,8 @@ xAI Grok queda fuera del copiloto. Solo podría entrar en el módulo opcional de
 
 ### 7.2 Costo estimado
 
+**Medido el 2026-10-12 (§13.7):** con las 41 notas aprobadas, el prefijo fijo pesa ≈ 27.500 tokens (las notas son ≈ 119.000 caracteres) y cada llamada ronda los 30.000 tokens de entrada, no los 11.000 supuestos abajo. En caché sale igual de barato (≈ USD 0,0003 por llamada en luna); sin caché, unas 10 veces más. Los supuestos originales quedan como referencia.
+
 Supuestos (se miden con el registro de uso en las primeras dos semanas):
 
 - prefijo fijo de 11.000 tokens (reglas 2.000, conocimiento 8.000, herramientas 1.000), en caché después del primer mensaje;
@@ -502,9 +504,18 @@ Respondidas el 2026-10-10; las respuestas están en §13.1 y en los ajustes del 
 
 ### 13.6 Modo Marketing
 
+> Reemplazado el 2026-10-12 por la habilidad `marketing` (§13.7): mismo contenido, sin botón.
+
 - Interruptor «Modo Marketing» junto a Rápido y Análisis a fondo. Encendido, el prompt agrega una persona y un método de estrategia de contenido para una papelería de dos personas en Colombia (Instagram, TikTok orgánico, video corto con el celular, crecer con poco, colaboraciones sin presupuesto y el boletín con consentimiento).
 - Va después de las reglas fijas y del conocimiento aprobado, antes de la fecha: el prefijo que se cachea es el mismo con el modo encendido o apagado. Cuesta unos 880 tokens de entrada más por mensaje.
 - La estrategia de pauta y el calendario comercial mandan sobre el consejo genérico. Sigue sin ver métricas de redes.
 - Adaptado de msitarzewski/agency-agents (commit f99f6aa9, licencia MIT); la atribución está en `lib/copiloto/marketing-mode.ts` y la licencia en `lib/copiloto/agency-agents.LICENSE.txt`.
 - Evaluación: 6 preguntas con el modo encendido (ideas de Reel, texto con llamado a WhatsApp, calendario del mes, qué producto promocionar, colaboraciones sin presupuesto, anuncios a la web): 6 de 6 en los tres modos de notas.
 
+### 13.7 Habilidades en vez de modos (2026-10-12)
+
+- «Modo Marketing» dejó de ser un botón. El prompt fijo lleva un índice de habilidades (una línea cada una) y la regla de cargarlas con `cargarHabilidad` antes de responder en su tema; la habilidad devuelve sus instrucciones y sus notas, y sus herramientas quedan activas desde el paso siguiente. Habilidades: `descripciones` (con `productoParaDescripcion`) y `marketing`.
+- Paula corrige la elección: chips «Usando: …» con ×, menú «+ Habilidad», órdenes escritas («no uses marketing») y «Responder de nuevo con estas habilidades». Las correcciones son filas `skill-event` de `AssistantMessage`, sin texto libre; el servidor decide qué instrucciones y herramientas viajan.
+- Caché: el mensaje de sistema (reglas, índice y notas sin habilidad) es idéntico en cada mensaje; lo variable (habilidades cargadas, fecha, pantalla) va en un segundo mensaje de sistema justo antes de la pregunta. La sonda (`scripts/copilot-eval/cache-probe.eval.ts`) mostró que OpenAI reutiliza el prefijo aunque cambie la cola, se agregue un segundo mensaje de sistema o una herramienta; el fallo de caché que vio Paula fue del proveedor, no del prompt.
+- Costo de cargar una habilidad: un viaje más al modelo (la llamada a `cargarHabilidad`) en el turno en que se carga, con el prefijo en caché; después, su texto viaja en cada mensaje mientras esté cargada (cifras de la evaluación en el informe del bloque). Con el botón anterior el texto viajaba solo con el modo encendido, sin el viaje extra.
+- Siguiente palanca de costo: recuperar notas por tema en vez de mandar las 41 aprobadas en cada mensaje.

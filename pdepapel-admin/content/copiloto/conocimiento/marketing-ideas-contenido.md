@@ -3,6 +3,7 @@ id: marketing-ideas-contenido
 titulo: Ideas de contenido para Instagram y TikTok
 tema: marketing
 estado: borrador
+habilidad: marketing
 ---
 
 - **Formatos que funcionan en papelería:** muestras de color y prueba de esferos y marcadores; «qué hay en mi cartuchera»; haul y unboxing de lo que llegó; escritura con sonido (ASMR); tutoriales cortos de lettering o journaling; página antes y después; «3 formas de usar» un producto; mostrar un kit o combo armado.

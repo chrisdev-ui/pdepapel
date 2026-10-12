@@ -3,6 +3,7 @@ id: marketing-calendario-colombia
 titulo: Calendario comercial de papelería en Colombia
 tema: marketing
 estado: borrador
+habilidad: marketing
 ---
 
 Empezar el contenido de cada fecha unas 3 o 4 semanas antes.

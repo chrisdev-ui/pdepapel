@@ -1,5 +1,6 @@
 import { getAiRoutingStore } from "@/lib/ai-model-providers";
 import { readCopilotSpend, type CopilotBudgetStore } from "@/lib/copiloto/budget";
+import { SKILL_EVENT_ROLE, parseSkillEvent } from "@/lib/copiloto/skill-state";
 import {
   COPILOT_DAILY_SPEND_CAP_USD,
   COPILOT_DEEP_MODE_CUTOFF,
@@ -35,6 +36,7 @@ export type JobName =
   // Cifras, no tareas: ver `measureWhatsAppBotRatio` y `measureCopilotSpend`.
   | "whatsapp-bot-ratio"
   | "copilot-spend"
+  | "copilot-skill-overrides"
   // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
   // si no «Sistemas» lo marcaría atrasado.
   | "customer-reactivation";
@@ -261,7 +263,8 @@ async function loadSystemsStatus(
   const rows = buildSystemsStatus(runs, storeId, now);
   const ratio = await measureWhatsAppBotRatio(storeId, now).catch(() => null);
   const copilot = isCopilotConfigured() ? await measureCopilotSpend(storeId, getAiRoutingStore() as unknown as CopilotBudgetStore | null, now) : null;
-  return [...rows, ...(ratio ? [ratio] : []), ...(copilot ? [copilot] : [])];
+  const overrides = isCopilotConfigured() ? await measureCopilotSkillOverrides(storeId, now).catch(() => null) : null;
+  return [...rows, ...(ratio ? [ratio] : []), ...(copilot ? [copilot] : []), ...(overrides ? [overrides] : [])];
 }
 
 /** Por debajo de un centavo, dos decimales dirían «USD 0,00» aunque haya gasto. */
@@ -298,6 +301,50 @@ export async function measureCopilotSpend(storeId: string, store: CopilotBudgetS
   } catch {
     return { ...base, ok: null, detail: "Sin lectura del gasto", attention: false };
   }
+}
+
+export const COPILOT_SKILL_OVERRIDE_WINDOW_DAYS = 30;
+
+/**
+ * Cuántas veces Paula corrigió las habilidades que eligió el copiloto en los
+ * últimos 30 días, por habilidad: si una se quita seguido, su descripción en
+ * el índice está mal escrita. Las filas viven con la conversación (se borran
+ * con la regla de 180 días sin actividad).
+ */
+export async function measureCopilotSkillOverrides(storeId: string, now: Date): Promise<SystemStatusRow> {
+  const since = new Date(now.getTime() - COPILOT_SKILL_OVERRIDE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const rows = await prismadb.assistantMessage.findMany({
+    where: { role: SKILL_EVENT_ROLE, createdAt: { gte: since }, conversation: { storeId } },
+    select: { parts: true },
+    take: 5000,
+  });
+  const bySkill = new Map<string, { removed: number; added: number }>();
+  let regenerated = 0;
+  for (const row of rows) {
+    const event = parseSkillEvent(row.parts);
+    if (!event) continue;
+    if (event.action === "regenerated") {
+      regenerated += 1;
+      continue;
+    }
+    if (!event.skillId) continue;
+    const entry = bySkill.get(event.skillId) ?? { removed: 0, added: 0 };
+    entry[event.action] += 1;
+    bySkill.set(event.skillId, entry);
+  }
+  const parts = Array.from(bySkill.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([skill, count]) => `${skill}: ${count.removed} quitada${count.removed === 1 ? "" : "s"}, ${count.added} agregada${count.added === 1 ? "" : "s"}`);
+  return {
+    name: "copilot-skill-overrides",
+    label: "Copiloto: correcciones de habilidades (30 días)",
+    ranAt: now,
+    overdue: false,
+    metric: true,
+    ok: true,
+    attention: false,
+    detail: parts.length || regenerated ? `${parts.join(" · ") || "sin cambios de habilidad"} · ${regenerated} respuesta${regenerated === 1 ? "" : "s"} de nuevo` : "Sin correcciones",
+  };
 }
 
 /** Más mensajes del bot que esto por cada mensaje de clienta, en 24 h, es rojo. */

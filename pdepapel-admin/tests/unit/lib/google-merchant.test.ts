@@ -110,6 +110,36 @@ describe("Google Merchant feed links and images", () => {
   });
 });
 
+describe("feed description text: block by block, emoji only off for Google", () => {
+  const SPECS =
+    "<h3><strong>📌 Especificaciones Técnicas</strong></h3><ul><li><p><strong>Marca:</strong> Primavera</p></li><li><p><strong>Cantidad:</strong> Set de 3 lapiceros</p></li></ul><p>⚡ ¡Agrégalo a tu carrito hoy mismo! 🛒🖊️</p>";
+
+  it("each heading, bullet and paragraph becomes its own sentence (no «Marca: X Cantidad: Y»)", () => {
+    expect(getGoogleMerchantDescription(SPECS, "x")).toBe(
+      "📌 Especificaciones Técnicas. Marca: Primavera. Cantidad: Set de 3 lapiceros. ⚡ ¡Agrégalo a tu carrito hoy mismo! 🛒🖊️",
+    );
+  });
+
+  it("keeps a closing question, exclamation or colon as is, even before an emoji", () => {
+    expect(getGoogleMerchantDescription("<h3>🔥 ¿Por qué te van a encantar?</h3><p><strong>Características:</strong></p><ul><li>Punta fina</li></ul>", "x")).toBe(
+      "🔥 ¿Por qué te van a encantar? Características: Punta fina.",
+    );
+  });
+
+  it("Google drops the emoji (and keeps ©, ® and ™); Meta keeps them", () => {
+    expect(getGoogleMerchantDescription(SPECS, "x", { stripEmoji: true })).toBe(
+      "Especificaciones Técnicas. Marca: Primavera. Cantidad: Set de 3 lapiceros. ¡Agrégalo a tu carrito hoy mismo!",
+    );
+    expect(getGoogleMerchantDescription("<p>Colores Crayola® ✨ suaves</p>", "x", { stripEmoji: true })).toBe("Colores Crayola® suaves.");
+  });
+
+  it("line breaks inside a paragraph also separate sentences", () => {
+    expect(getGoogleMerchantDescription("<p>📦 <strong>Contenido:</strong> 50 hojas<br>📏 <strong>Tamaño:</strong> 7,6 cm</p>", "x", { stripEmoji: true })).toBe(
+      "Contenido: 50 hojas. Tamaño: 7,6 cm.",
+    );
+  });
+});
+
 describe("Google Merchant description", () => {
   it("flattens the stored rich-text HTML into plain text", () => {
     expect(
@@ -118,7 +148,7 @@ describe("Google Merchant description", () => {
         "Agenda A5",
       ),
     ).toBe(
-      "Agenda A5 con portada acolchada. Hojas decoradas Cinta & separador",
+      "Agenda A5 con portada acolchada. Hojas decoradas. Cinta & separador.",
     );
   });
 

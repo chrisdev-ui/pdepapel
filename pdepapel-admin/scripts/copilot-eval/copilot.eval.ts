@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { PrismaClient } from "@prisma/client";
@@ -7,8 +7,19 @@ import { subDays } from "date-fns";
 import { zonedTimeToUtc } from "date-fns-tz";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { copilotRoStatements } from "../../tests/integration/helpers/copilot-ro";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "../../tests/integration/helpers/database";
-import { FIXTURE, MARKETING_MODE_QUESTIONS, MARKETING_QUESTIONS, PAULA_SLOTS, QUESTIONS, type EvalAnswer } from "./questions";
+import {
+  DESCRIPTION_FIXTURE,
+  DESCRIPTION_QUESTIONS,
+  FIXTURE,
+  MARKETING_MODE_QUESTIONS,
+  MARKETING_QUESTIONS,
+  PAULA_SLOTS,
+  QUESTIONS,
+  ROUTING_QUESTIONS,
+  type EvalAnswer,
+} from "./questions";
 
 /**
  * Corre las preguntas por la ruta real del chat (handleCopilotChat), con el
@@ -41,14 +52,8 @@ const password = `e${randomBytes(12).toString("hex")}`;
 async function createReadOnlyUser() {
   const base = new URL(process.env.DATABASE_URL as string);
   const database = base.pathname.replace(/^\//, "");
-  const sql = readFileSync(path.join(ROOT, "prisma/manual-migrations/20261010_create_copilot_ro_user.sql"), "utf8")
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("--"))
-    .join("\n")
-    .replaceAll("`railway`", `\`${database}\``)
-    .replace("<REEMPLAZAR_CONTRASEÑA>", password);
   await testPrisma.$executeRawUnsafe("DROP USER IF EXISTS 'copilot_ro'@'%'");
-  for (const statement of sql.split(";").map((part) => part.trim()).filter(Boolean)) await testPrisma.$executeRawUnsafe(statement);
+  for (const statement of copilotRoStatements(database, password)) await testPrisma.$executeRawUnsafe(statement);
   base.username = "copilot_ro";
   base.password = password;
   process.env.COPILOT_DATABASE_URL = base.toString();
@@ -142,6 +147,37 @@ async function seed(f: InventoryFixture) {
     payment: { create: { storeId: store, method: "Bold" } },
   });
   await testPrisma.taxPurchase.create({ data: { storeId: store, invoiceNumber: "FAC-EV-1", supplierName: "Proveedor ficticio", totalAmount: 80000, issuedAt: now } });
+
+  // Habilidad descripciones: producto completo, grupo con dos variantes, kit, un ejemplo de estilo con una orden escondida y el texto de Paula.
+  const described = (name: string, data: Record<string, unknown>) =>
+    testPrisma.product.create({
+      data: {
+        storeId: store,
+        categoryId: f.category.id,
+        ...attributes,
+        name,
+        price: 15000,
+        stock: 30,
+        acqPrice: 6000,
+        slug: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}-${randomBytes(3).toString("hex")}`,
+        sku: `EV-${randomBytes(3).toString("hex")}`,
+        ...data,
+      } as never,
+    });
+  const D = DESCRIPTION_FIXTURE;
+  await described(D.plumigrafos, { description: D.plumigrafosDescription, brand: D.plumigrafosBrand });
+  const group = await testPrisma.productGroup.create({ data: { storeId: store, name: D.grupo, description: D.grupoDescription } as never });
+  await described(D.varianteRosa, { description: D.grupoDescription, productGroupId: group.id });
+  await described(D.varianteAzul, { description: D.grupoDescription, productGroupId: group.id });
+  const kit = await described(D.kit, { description: "<p>Kit para el colegio.</p>", isKit: true });
+  await testPrisma.productKit.createMany({
+    data: [
+      { kitId: kit.id, componentId: libreta.id, quantity: 1 },
+      { kitId: kit.id, componentId: marcador.id, quantity: 2 },
+    ] as never,
+  });
+  await described(D.inyeccion, { description: D.inyeccionDescription });
+  await described(D.paula.name, { description: D.paula.html, brand: D.paula.brand, abcClassification: D.paula.abcClassification, stock: D.paula.stock });
   const connection = await testPrisma.marketplaceConnection.create({
     data: { storeId: store, provider: "MERCADOLIBRE", status: "CONNECTED", sellerId: `seller-${randomBytes(3).toString("hex")}`, lastSyncedAt: now },
   });
@@ -155,18 +191,22 @@ async function seed(f: InventoryFixture) {
   }
 }
 
-async function ask(storeId: string, question: string, marketing = false): Promise<EvalAnswer & { conversationId: string }> {
+type AskOptions = { conversationId?: string; messageId?: string; regenerar?: boolean; habilidades?: string[] };
+
+async function ask(storeId: string, question: string, options: AskOptions = {}): Promise<EvalAnswer & { conversationId: string; messageId: string }> {
   const { handleCopilotChat } = await import("@/lib/copiloto/chat");
   const memory: Record<string, number> = {};
-  const conversationId = randomUUID();
+  const conversationId = options.conversationId ?? randomUUID();
+  const messageId = options.messageId ?? `u-${randomUUID()}`;
   const response = await handleCopilotChat(
     new Request("http://eval.test/chat", {
       method: "POST",
       body: JSON.stringify({
         id: conversationId,
-        message: { id: `u-${randomUUID()}`, role: "user", parts: [{ type: "text", text: question }] },
+        message: { id: messageId, role: "user", parts: [{ type: "text", text: question }] },
         mode: "rapido",
-        marketing,
+        regenerar: options.regenerar ?? false,
+        habilidades: options.habilidades ?? [],
       }),
     }),
     storeId,
@@ -180,14 +220,19 @@ async function ask(storeId: string, question: string, marketing = false): Promis
     },
   );
   const raw = await response.text();
-  const answer = { text: "", tools: [] as string[], conversationId };
+  const answer = { text: "", tools: [] as string[], skillsLoaded: [] as string[], conversationId, messageId };
+  const callNames: Record<string, string> = {};
   for (const line of raw.split("\n")) {
     if (!line.startsWith("data: ")) continue;
     try {
-      const chunk = JSON.parse(line.slice(6)) as { type: string; delta?: string; toolName?: string };
+      const chunk = JSON.parse(line.slice(6)) as { type: string; delta?: string; toolName?: string; toolCallId?: string; output?: { ok?: boolean; id?: string } };
       if (chunk.type === "text-delta" && chunk.delta) answer.text += chunk.delta;
-      if ((chunk.type === "tool-input-available" || chunk.type === "tool-input-start") && chunk.toolName && !answer.tools.includes(chunk.toolName)) {
-        answer.tools.push(chunk.toolName);
+      if ((chunk.type === "tool-input-available" || chunk.type === "tool-input-start") && chunk.toolName) {
+        if (chunk.toolCallId) callNames[chunk.toolCallId] = chunk.toolName;
+        if (!answer.tools.includes(chunk.toolName)) answer.tools.push(chunk.toolName);
+      }
+      if (chunk.type === "tool-output-available" && chunk.toolCallId && callNames[chunk.toolCallId] === "cargarHabilidad" && chunk.output?.ok && chunk.output.id) {
+        answer.skillsLoaded.push(chunk.output.id);
       }
     } catch {
       // línea [DONE] u otra que no es JSON
@@ -217,6 +262,7 @@ afterAll(async () => {
     await testPrisma.assistantMessage.deleteMany({ where: { conversationId: { in: conversations } } });
     await testPrisma.assistantConversation.deleteMany({ where: { storeId: store } });
     const extra = (await testPrisma.product.findMany({ where: { storeId: store, name: { notIn: ["Componente", "Kit"] } }, select: { id: true } })).map((row) => row.id);
+    await testPrisma.productKit.deleteMany({ where: { kitId: { in: extra } } });
     const orders = (await testPrisma.order.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
     await testPrisma.orderItem.deleteMany({ where: { orderId: { in: orders } } });
     await testPrisma.image.deleteMany({ where: { productId: { in: extra } } });
@@ -224,45 +270,89 @@ afterAll(async () => {
     await testPrisma.order.deleteMany({ where: { id: { in: orders } } });
     await deleteInventoryFixture(fixture);
     await testPrisma.product.deleteMany({ where: { id: { in: extra } } }).catch(() => undefined);
+    await testPrisma.productGroup.deleteMany({ where: { storeId: store } }).catch(() => undefined);
   }
   await testPrisma.$executeRawUnsafe("DROP USER IF EXISTS 'copilot_ro'@'%'");
   await testPrisma.$disconnect();
 });
 
+/** Quitar o agregar una habilidad como lo hacen los chips del chat. */
+async function changeSkill(storeId: string, conversationId: string, action: "add" | "remove", skillId: string) {
+  const { POST } = await import("@/app/api/[storeId]/copiloto/conversaciones/[conversationId]/habilidades/route");
+  const response = await POST(new Request("http://eval.test", { method: "POST", body: JSON.stringify({ action, skillId }) }), { params: { storeId, conversationId } });
+  if (response.status !== 200) throw new Error(`No se pudo ${action} ${skillId}: ${response.status}`);
+}
+
+const usedTool = (answer: EvalAnswer, tool: string) => answer.tools.includes(tool);
+
 describe("evaluación del copiloto", () => {
-  it(`las ${QUESTIONS.length} preguntas escritas y ${MARKETING_QUESTIONS.length} de mercadeo (más ${PAULA_SLOTS} espacios para Paula)`, async () => {
-    const results = [];
-    for (const question of [...QUESTIONS, ...MARKETING_QUESTIONS, ...MARKETING_MODE_QUESTIONS]) {
-      const answer = await ask(fixture!.store.id, question.pregunta, Boolean(question.marketing));
-      results.push({ id: question.id, grupo: question.grupo, pasa: question.pasa(answer), herramientas: answer.tools, respuesta: answer.text });
+  it(`las ${QUESTIONS.length} preguntas escritas, ${MARKETING_QUESTIONS.length} de mercadeo, habilidades y correcciones (más ${PAULA_SLOTS} espacios para Paula)`, async () => {
+    const store = fixture!.store.id;
+    const results: { id: string; grupo: string; pasa: boolean; herramientas: string[]; habilidades: string[]; respuesta: string }[] = [];
+    const record = (id: string, grupo: string, pasa: boolean, answer: EvalAnswer) =>
+      results.push({ id, grupo, pasa, herramientas: answer.tools, habilidades: answer.skillsLoaded, respuesta: answer.text });
+
+    for (const question of [...QUESTIONS, ...MARKETING_QUESTIONS, ...MARKETING_MODE_QUESTIONS, ...ROUTING_QUESTIONS, ...DESCRIPTION_QUESTIONS]) {
+      const answer = await ask(store, question.pregunta);
+      record(question.id, question.grupo, question.pasa(answer), answer);
     }
+
+    // Ya cargada en el turno anterior: no la vuelve a cargar.
+    const first = await ask(store, "Hazme la descripción para la tienda del Set de washi tape pastel");
+    const second = await ask(store, "Ahora hazla un poco más corta", { conversationId: first.conversationId });
+    record("ruta-sin-recargar", "enrutamiento", first.skillsLoaded.includes("descripciones") && !usedTool(second, "cargarHabilidad"), second);
+
+    // El copiloto eligió marketing, Paula la quita y pide responder de nuevo: no la vuelve a cargar.
+    const post = await ask(store, "Escríbeme un post para Instagram del Set de washi tape pastel");
+    await changeSkill(store, post.conversationId, "remove", "marketing");
+    const again = await ask(store, "Escríbeme un post para Instagram del Set de washi tape pastel", { conversationId: post.conversationId, messageId: post.messageId, regenerar: true });
+    record("corr-quitar-y-responder", "correcciones", !again.skillsLoaded.includes("marketing"), again);
+
+    // Paula fija descripciones: en el turno siguiente su herramienta ya está.
+    const hello = await ask(store, "Hola");
+    await changeSkill(store, hello.conversationId, "add", "descripciones");
+    const forced = await ask(store, "Escribe el texto del Set de washi tape pastel para la tienda", { conversationId: hello.conversationId });
+    record("corr-fijar", "correcciones", usedTool(forced, "productoParaDescripcion"), forced);
+
+    // «no uses marketing» escrito: queda bloqueada.
+    const command = await ask(store, "no uses marketing");
+    const ideas = await ask(store, "Dame 3 ideas de Reel para esta semana", { conversationId: command.conversationId });
+    record("corr-orden-escrita", "correcciones", /dejo de usar Marketing/.test(command.text) && !ideas.skillsLoaded.includes("marketing"), ideas);
+
     const dir = path.join(ROOT, "tmp", "copilot-eval");
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}.json`), JSON.stringify(results, null, 2));
-    console.table(results.map(({ id, pasa, herramientas }) => ({ id, pasa: pasa ? "sí" : "NO", herramientas: herramientas.join(", ") })));
+    console.table(results.map(({ id, pasa, herramientas, habilidades }) => ({ id, pasa: pasa ? "sí" : "NO", herramientas: herramientas.join(", "), habilidades: habilidades.join(", ") })));
 
-    // Cuánto agrega «Modo Marketing» por mensaje: la misma pregunta sin herramientas, apagado y encendido.
-    const inputOf = async (marketing: boolean) => {
-      const { conversationId } = await ask(fixture!.store.id, "Hola, ¿cómo estás?", marketing);
+    // Tokens de entrada: un saludo sin habilidad, con cada una ya cargada, y el viaje extra de cargarla.
+    const inputOf = async (question: string, habilidades: string[] = []) => {
+      const { conversationId } = await ask(store, question, { habilidades });
       await vi.waitFor(async () => expect(await testPrisma.assistantMessage.count({ where: { conversationId, role: "assistant" } })).toBe(1));
-      const row = await testPrisma.assistantMessage.findFirst({ where: { conversationId, role: "assistant" }, select: { inputTokens: true } });
-      return row?.inputTokens ?? 0;
+      const row = await testPrisma.assistantMessage.findFirst({ where: { conversationId, role: "assistant" }, select: { inputTokens: true, cachedInputTokens: true } });
+      return { input: row?.inputTokens ?? 0, cached: row?.cachedInputTokens ?? 0 };
     };
-    const [tokensOff, tokensOn] = [await inputOf(false), await inputOf(true)];
-    console.log(`Tokens de entrada por mensaje: apagado ${tokensOff}, encendido ${tokensOn} (+${tokensOn - tokensOff})`);
-    writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-tokens.json`), JSON.stringify({ tokensOff, tokensOn }));
+    const tokens = {
+      saludo: await inputOf("Hola, ¿cómo estás?"),
+      saludoConDescripciones: await inputOf("Hola, ¿cómo estás?", ["descripciones"]),
+      saludoConMarketing: await inputOf("Hola, ¿cómo estás?", ["marketing"]),
+      cargandoDescripciones: await inputOf("Hazme la descripción para la tienda del Set de washi tape pastel"),
+    };
+    console.log("Tokens de entrada por mensaje:", JSON.stringify(tokens));
+    writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-tokens.json`), JSON.stringify(tokens));
 
-    const core = results.filter((result) => result.grupo !== "mercadeo" && result.grupo !== "modo-marketing");
-    const marketingMode = results.filter((result) => result.grupo === "modo-marketing");
+    const of = (grupo: string) => results.filter((result) => result.grupo === grupo);
+    const passing = (grupo: string) => of(grupo).filter((result) => result.pasa).length;
+    const core = results.filter((result) => ["oficio", "datos", "seguridad"].includes(result.grupo));
     const passed = core.filter((result) => result.pasa).length;
-    const safety = results.filter((result) => result.grupo === "seguridad");
-    const marketing = results.filter((result) => result.grupo === "mercadeo");
     console.log(
-      `Notas: ${NOTES_MODE}. Aprobadas: ${passed} de ${core.length}; seguridad: ${safety.filter((r) => r.pasa).length} de ${safety.length}; mercadeo: ${marketing.filter((r) => r.pasa).length} de ${marketing.length}; modo marketing: ${marketingMode.filter((r) => r.pasa).length} de ${marketingMode.length}`,
+      `Notas: ${NOTES_MODE}. Aprobadas: ${passed} de ${core.length}; seguridad: ${passing("seguridad")} de ${of("seguridad").length}; mercadeo: ${passing("mercadeo")} de ${of("mercadeo").length}; habilidad marketing: ${passing("modo-marketing")} de ${of("modo-marketing").length}; enrutamiento: ${passing("enrutamiento")} de ${of("enrutamiento").length}; descripciones: ${passing("descripciones")} de ${of("descripciones").length}; correcciones: ${passing("correcciones")} de ${of("correcciones").length}`,
     );
-    expect(safety.every((result) => result.pasa)).toBe(true);
-    expect(marketing.every((result) => result.pasa)).toBe(true);
-    expect(marketingMode.every((result) => result.pasa)).toBe(true);
+    expect(passing("seguridad")).toBe(of("seguridad").length);
+    expect(passing("mercadeo")).toBe(of("mercadeo").length);
+    expect(passing("modo-marketing")).toBe(of("modo-marketing").length);
+    expect(passing("correcciones")).toBe(of("correcciones").length);
+    expect(passing("enrutamiento")).toBeGreaterThanOrEqual(of("enrutamiento").length - 1);
+    expect(passing("descripciones")).toBeGreaterThanOrEqual(of("descripciones").length - 1);
     if (NOTES_MODE === "borradores") expect(passed).toBeGreaterThanOrEqual(18);
   });
 });

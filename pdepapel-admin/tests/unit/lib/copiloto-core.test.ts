@@ -17,7 +17,7 @@ import {
 } from "@/lib/copiloto/config";
 import { copilotDatabaseUrl } from "@/lib/copiloto/db";
 import { getKnowledgeNotes, knowledgeHash, parseKnowledgeNote, readKnowledgeDrafts } from "@/lib/copiloto/knowledge";
-import { buildCopilotSystemPrompt, COPILOT_RULES } from "@/lib/copiloto/prompt";
+import { buildCopilotContext, buildCopilotSystemPrompt, COPILOT_RULES } from "@/lib/copiloto/prompt";
 
 const now = new Date("2026-10-10T19:00:00.000Z");
 
@@ -96,9 +96,11 @@ describe("conocimiento", () => {
       id: "a",
       titulo: "Uno",
       tema: "t",
+      habilidad: null,
       estado: "borrador",
       body: "Texto",
     });
+    expect(parseKnowledgeNote("---\nid: b\ntitulo: Dos\nhabilidad: descripciones\n---\nTexto")?.habilidad).toBe("descripciones");
     expect(parseKnowledgeNote("sin cabecera")).toBeNull();
   });
 
@@ -138,22 +140,21 @@ describe("conocimiento", () => {
 });
 
 describe("prompt", () => {
-  it("reglas fijas primero, conocimiento después y lo que cambia al final", () => {
-    const prompt = buildCopilotSystemPrompt({
-      knowledge: [{ id: "acuarela-basicos", titulo: "Acuarela", body: "Papel grueso" }],
-      now,
-      screen: "productos",
-      pendingBrands: ["Marca Kiut"],
-    });
+  it("reglas fijas primero, índice de habilidades y conocimiento general; la fecha y la pantalla van aparte", () => {
+    const knowledge = [{ id: "acuarela-basicos", titulo: "Acuarela", body: "Papel grueso" }];
+    const prompt = buildCopilotSystemPrompt({ knowledge });
     expect(prompt.startsWith(COPILOT_RULES)).toBe(true);
-    expect(prompt.indexOf("[conocimiento: acuarela-basicos]")).toBeGreaterThan(prompt.indexOf("Seguridad:"));
-    expect(prompt.indexOf("Hoy es")).toBeGreaterThan(prompt.indexOf("[conocimiento: acuarela-basicos]"));
-    expect(prompt).toContain("productos");
-    expect(prompt).toContain("Marca Kiut");
+    expect(prompt.indexOf("Habilidades (se cargan bajo demanda)")).toBeGreaterThan(prompt.indexOf("Seguridad:"));
+    expect(prompt.indexOf("[conocimiento: acuarela-basicos]")).toBeGreaterThan(prompt.indexOf("Habilidades (se cargan bajo demanda)"));
+    expect(prompt).not.toContain("Hoy es");
+    const context = buildCopilotContext({ knowledge, loadedSkills: [], now, screen: "productos", pendingBrands: ["Marca Kiut"] });
+    expect(context).toContain("Hoy es");
+    expect(context).toContain("productos");
+    expect(context).toContain("Marca Kiut");
   });
 
-  it("«Modo Marketing» lleva la atribución MIT y no trae cifras", async () => {
-    const { MARKETING_MODE_PROMPT } = await import("@/lib/copiloto/marketing-mode");
+  it("la habilidad marketing lleva la atribución MIT y no trae cifras", async () => {
+    const { MARKETING_SKILL_INSTRUCTIONS: MARKETING_MODE_PROMPT } = await import("@/lib/copiloto/marketing-mode");
     const { readFileSync } = await import("node:fs");
     const source = readFileSync(path.resolve(__dirname, "../../../lib/copiloto/marketing-mode.ts"), "utf8");
     expect(source).toContain("f99f6aa910a442b0197b768ce0ea7751e35e2060");
@@ -169,7 +170,7 @@ describe("prompt", () => {
   });
 
   it("las reglas de pauta viven en el prefijo fijo: valen aunque no haya notas aprobadas", () => {
-    const prompt = buildCopilotSystemPrompt({ knowledge: [], now, screen: null, pendingBrands: [] });
+    const prompt = buildCopilotSystemPrompt({ knowledge: [] });
     expect(prompt).toContain("Click-to-WhatsApp");
     expect(prompt).toMatch(/Todavía NO se pauta ni se manda tráfico pagado a la página web/);
     expect(prompt).toContain("Un solo conjunto de anuncios a la vez");
@@ -178,7 +179,7 @@ describe("prompt", () => {
   });
 
   it("en mercadeo sigue la estrategia, la contrasta y no inventa métricas de redes", () => {
-    expect(COPILOT_RULES).toContain("Cítala solo si aparece abajo en el conocimiento aprobado");
+    expect(COPILOT_RULES).toContain("que llega con la habilidad marketing. Cítala solo si la tienes aprobada");
     expect(COPILOT_RULES).toContain("eso choca con la estrategia actual porque");
     expect(COPILOT_RULES).toContain("productosParaPromocionar");
     expect(COPILOT_RULES).toMatch(/No ves las métricas de Instagram, TikTok ni Google Analytics/);
@@ -191,7 +192,7 @@ describe("notas de mercadeo", () => {
   it("son borradores para que Paula las apruebe", () => {
     const drafts = readKnowledgeDrafts().filter((note) => ids.includes(note.id));
     expect(drafts.map((note) => note.id).sort()).toEqual([...ids].sort());
-    expect(drafts.every((note) => note.estado === "borrador" && note.tema === "marketing")).toBe(true);
+    expect(drafts.every((note) => note.estado === "borrador" && note.tema === "marketing" && note.habilidad === "marketing")).toBe(true);
   });
 
   it("dicen reglas, no cifras del negocio", () => {

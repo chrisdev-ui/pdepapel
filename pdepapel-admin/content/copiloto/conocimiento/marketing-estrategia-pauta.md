@@ -3,6 +3,7 @@ id: marketing-estrategia-pauta
 titulo: Estrategia de pauta de P de Papel
 tema: marketing
 estado: borrador
+habilidad: marketing
 ---
 
 Decisión vigente. Si una idea la contradice, decirlo y explicar por qué.

@@ -117,7 +117,7 @@ describe("hosted Google Merchant feed", () => {
 
   it("serves the cached scheduled build without querying the database", async () => {
     mocks.redisGet.mockImplementation(async (key: string) =>
-      key.endsWith(":feed")
+      key.endsWith(":feed:v2")
         ? "id\ttitle\nCUAD-1\tCuaderno\n"
         : { generatedAt: "2026-09-07T06:00:00.000Z", exportedProducts: 1 },
     );
@@ -152,7 +152,7 @@ describe("hosted Google Merchant feed", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body.split("\n")[1]).toContain("CUAD-1\tCuaderno\tRayado\thttps://papeleriapdepapel.com/producto/cuaderno");
+    expect(body.split("\n")[1]).toContain("CUAD-1\tCuaderno\tRayado.\thttps://papeleriapdepapel.com/producto/cuaderno");
     expect(body).toContain("\tin_stock\t");
     expect(mocks.findProducts).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -160,7 +160,7 @@ describe("hosted Google Merchant feed", () => {
       }),
     );
     expect(mocks.redisSet).toHaveBeenCalledWith(
-      `store:${storeId}:google-merchant:feed`,
+      `store:${storeId}:google-merchant:feed:v2`,
       body,
       { ex: 60 * 60 * 24 * 7 },
     );
@@ -195,7 +195,7 @@ describe("Google Merchant feed report", () => {
   it("exposes the feed URL, schedule and last report to the owner only", async () => {
     mocks.auth.mockReturnValue({ userId: "user-1" });
     mocks.redisGet.mockImplementation(async (key: string) =>
-      key.endsWith(":report") ? JSON.stringify({ exportedProducts: 4 }) : "feed",
+      key.endsWith(":report:v2") ? JSON.stringify({ exportedProducts: 4 }) : "feed",
     );
 
     const response = await getReport(new Request("https://admin.example.com/x"), params);

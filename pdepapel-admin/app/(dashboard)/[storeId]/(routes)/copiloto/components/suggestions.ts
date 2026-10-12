@@ -10,7 +10,8 @@ const BY_SCREEN: Record<string, string[]> = {
 const GENERAL = [
   "¿Cómo voy hoy?",
   "¿Qué marcador sirve para pintar sobre tela?",
-  "¿Cuál fue mi margen del mes pasado?",
+  "Escríbeme la descripción de un producto",
+  "Dame 3 ideas de Reel para esta semana",
   "¿Qué tengo que reponer esta semana?",
 ];
 
@@ -21,14 +22,6 @@ export function suggestionsFor(screen: string | null | undefined): string[] {
 }
 
 /** Lo que se ve mientras corre cada herramienta. */
-/** Con «Modo Marketing» encendido. */
-export const MARKETING_SUGGESTIONS = [
-  "Dame 3 ideas de Reel para esta semana",
-  "Escríbeme el texto de una publicación con llamado a WhatsApp",
-  "Ármame el calendario de contenido del mes",
-  "¿Qué producto promociono?",
-];
-
 export const TOOL_LABELS: Record<string, string> = {
   resumenDeHoy: "Consultando el resumen de hoy",
   resumenFinancieroMes: "Consultando las finanzas del mes",
@@ -42,4 +35,6 @@ export const TOOL_LABELS: Record<string, string> = {
   reporteTributario: "Sumando ventas y compras del periodo",
   saludMercadoLibre: "Revisando Mercado Libre",
   productosParaPromocionar: "Buscando qué promocionar",
+  cargarHabilidad: "Preparando la habilidad",
+  productoParaDescripcion: "Leyendo la ficha del producto",
 };

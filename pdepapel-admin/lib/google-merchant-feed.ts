@@ -191,7 +191,7 @@ export function buildGoogleMerchantFeed(
     return [
       feedId,
       cleanFeedText(product.name),
-      cleanFeedText(getGoogleMerchantDescription(product.description, product.name)),
+      cleanFeedText(getGoogleMerchantDescription(product.description, product.name, { stripEmoji: true })),
       options.links?.get(product.id) ?? getGoogleMerchantProductLink(product),
       imageLink,
       additionalImages.join(","),
@@ -276,8 +276,9 @@ export function getGoogleMerchantFeedUrl(
 
 export function getGoogleMerchantFeedCacheKeys(storeId: string) {
   return {
-    feed: `store:${storeId}:google-merchant:feed`,
-    report: `store:${storeId}:google-merchant:report`,
+    // `v2`: el texto de la descripción cambió de formato; la versión nueva no lee lo guardado antes.
+    feed: `store:${storeId}:google-merchant:feed:v2`,
+    report: `store:${storeId}:google-merchant:report:v2`,
   };
 }
 

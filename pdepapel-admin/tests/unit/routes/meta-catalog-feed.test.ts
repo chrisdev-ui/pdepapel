@@ -122,7 +122,7 @@ describe("hosted Meta catalog feed", () => {
 
   it("serves the cached build over basic auth without querying the database", async () => {
     mocks.redisGet.mockImplementation(async (key: string) =>
-      key.endsWith(":feed")
+      key.endsWith(":feed:v2")
         ? "id\ttitle\nCUAD-1\tCuaderno\n"
         : { generatedAt: "2026-09-13T06:00:00.000Z", exportedProducts: 1 },
     );
@@ -158,7 +158,7 @@ describe("hosted Meta catalog feed", () => {
 
     expect(response.status).toBe(200);
     expect(body.split("\n")[1]).toContain(
-      "CUAD-1\tCuaderno\tRayado\tin stock\tnew\t18000.00 COP\t\t\thttps://papeleriapdepapel.com/producto/cuaderno",
+      "CUAD-1\tCuaderno\tRayado.\tin stock\tnew\t18000.00 COP\t\t\thttps://papeleriapdepapel.com/producto/cuaderno",
     );
     expect(mocks.findProducts).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -166,7 +166,7 @@ describe("hosted Meta catalog feed", () => {
       }),
     );
     expect(mocks.redisSet).toHaveBeenCalledWith(
-      `store:${storeId}:meta-catalog:feed`,
+      `store:${storeId}:meta-catalog:feed:v2`,
       body,
       { ex: META_CATALOG_FEED_CACHE_TTL_SECONDS },
     );
@@ -213,7 +213,7 @@ describe("Meta catalog feed report", () => {
   it("exposes the feed URL and the last report to the owner only", async () => {
     mocks.auth.mockReturnValue({ userId: "user-1" });
     mocks.redisGet.mockImplementation(async (key: string) =>
-      key.endsWith(":report") ? JSON.stringify({ exportedProducts: 4 }) : "feed",
+      key.endsWith(":report:v2") ? JSON.stringify({ exportedProducts: 4 }) : "feed",
     );
 
     const response = await getReport(new Request(reportUrl), params);
@@ -246,7 +246,7 @@ describe("Meta catalog feed report", () => {
     expect(mocks.findProducts).toHaveBeenCalledTimes(1);
     expect(json.report).toMatchObject({ activeProducts: 1, exportedProducts: 1 });
     expect(mocks.redisSet).toHaveBeenCalledWith(
-      `store:${storeId}:meta-catalog:feed`,
+      `store:${storeId}:meta-catalog:feed:v2`,
       expect.stringContaining("in stock"),
       { ex: META_CATALOG_FEED_CACHE_TTL_SECONDS },
     );
