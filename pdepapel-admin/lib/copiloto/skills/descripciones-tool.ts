@@ -4,6 +4,8 @@ import { z } from "zod";
 import { CopilotQueryFailure, withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import { getCustomerFacingSizeName } from "@/lib/product-naming";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
+import { MIN_FACTS_TO_WRITE, countConcreteFacts, decideProduct, matchTokens } from "@/lib/copiloto/skills/product-match";
+import { buildSpecs } from "@/lib/copiloto/skills/specs";
 import { requireStoreOwner } from "@/lib/store-access";
 
 /**
@@ -14,6 +16,8 @@ import { requireStoreOwner } from "@/lib/store-access";
  * Railway, la herramienta responde igual con lo demás y lo avisa.
  */
 const EXAMPLE_MAX_CHARS = 1200;
+/** Diseños del panel que no le dicen nada a una clienta. */
+const GENERIC_DESIGNS = /^(cl[aá]sico|original|b[aá]sico|liso|sin dise[nñ]o|est[aá]ndar)$/i;
 const DESCRIPTION_MAX_CHARS = 2500;
 
 const ENTITIES: Record<string, string> = { "&amp;": "&", "&nbsp;": " ", "&quot;": '"', "&#39;": "'", "&lt;": "<", "&gt;": ">" };
@@ -46,21 +50,97 @@ const PRODUCT_SELECT = {
   category: { select: { name: true } },
 } as const;
 
-async function findProduct(db: CopilotDb, storeId: string, input: { sku?: string; nombre?: string }) {
-  if (input.sku) {
-    const bySku = await db.product.findFirst({ where: { storeId, isArchived: false, sku: input.sku }, select: PRODUCT_SELECT });
-    if (bySku) return { product: bySku, candidates: [] };
+interface FoundProduct {
+  id: string;
+  name: string;
+  sku: string;
+  brand: string | null;
+  description: string;
+  isKit: boolean;
+  productGroupId: string | null;
+  categoryId: string;
+  abcClassification: string | null;
+  stock: number;
+  category: { name: string } | null;
+}
+
+/**
+ * Por SKU exacto, o por palabras: cada palabra (sin tildes, en singular, con
+ * «x50» como «50») se busca en nombre, SKU, categoría y grupo, y gana el que
+ * coincide en más palabras (ver product-match.ts).
+ */
+/** Grupos cuyo nombre coincide; aparte porque necesita un permiso que puede faltar. */
+async function findGroups(storeId: string, query: string): Promise<{ id: string; name: string }[]> {
+  const stems = matchTokens(query).filter((token) => !/^\d+$/.test(token) && token.length >= 3);
+  if (!stems.length) return [];
+  try {
+    return await withCopilotQuery((db) =>
+      db.productGroup.findMany({ where: { storeId, OR: stems.map((token) => ({ name: { contains: token } })) }, select: { id: true, name: true }, take: 100 }),
+    );
+  } catch (error) {
+    if (error instanceof CopilotQueryFailure) return [];
+    throw error;
   }
-  const name = input.nombre ?? input.sku ?? "";
-  const matches = await db.product.findMany({
-    where: { storeId, isArchived: false, name: { contains: name } },
-    select: PRODUCT_SELECT,
-    orderBy: { soldCount: "desc" },
-    take: 6,
+}
+
+type Estado = "activo" | "desactivado";
+
+async function searchProducts(db: CopilotDb, storeId: string, query: string, groups: { id: string; name: string }[], archived: boolean) {
+  const stems = matchTokens(query).filter((token) => !/^\d+$/.test(token) && token.length >= 3);
+  if (!stems.length) return null;
+  const groupName = new Map(groups.map((group) => [group.id, group.name]));
+  const rows = await db.product.findMany({
+    where: {
+      storeId,
+      isArchived: archived,
+      OR: [
+        ...stems.flatMap((token) => [{ name: { contains: token } }, { sku: { contains: token } }, { category: { name: { contains: token } } }]),
+        ...(groups.length ? [{ productGroupId: { in: groups.map((group) => group.id) } }] : []),
+      ],
+    },
+    select: { ...PRODUCT_SELECT, soldCount: true },
+    take: 300,
   });
-  const exact = matches.find((product) => product.name.trim().toLowerCase() === name.trim().toLowerCase());
-  if (exact || matches.length === 1) return { product: exact ?? matches[0], candidates: [] };
-  return { product: null, candidates: matches.map((product) => ({ nombre: product.name.trim(), sku: product.sku })) };
+  return decideProduct(
+    query,
+    rows.map((row) => ({ id: row.id, name: row.name, sku: row.sku, category: row.category?.name ?? null, group: row.productGroupId ? groupName.get(row.productGroupId) ?? null : null, soldCount: row.soldCount, row })),
+  );
+}
+
+const view = (candidate: { name: string; sku: string | null; category: string | null }, estado: Estado): CandidateView => ({
+  nombre: candidate.name.trim(),
+  sku: candidate.sku,
+  categoria: candidate.category,
+  estado,
+});
+
+/**
+ * Primero entre los productos activos. Si ninguno coincide, entre los
+ * desactivados (archivados): se devuelven como candidatos con su estado, para
+ * preguntar «¿es este?», nunca para tratarlos como un producto nuevo.
+ */
+async function findProduct(db: CopilotDb, storeId: string, input: { sku?: string; nombre?: string }, groups: { id: string; name: string }[]) {
+  if (input.sku) {
+    const bySku = await db.product.findFirst({ where: { storeId, sku: input.sku.trim() }, select: { ...PRODUCT_SELECT, isArchived: true } });
+    if (bySku && !bySku.isArchived) return { kind: "match" as const, product: bySku as FoundProduct };
+    if (bySku) return { kind: "inactive" as const, candidates: [view({ name: bySku.name, sku: bySku.sku, category: bySku.category?.name ?? null }, "desactivado")] };
+  }
+  const query = input.nombre ?? input.sku ?? "";
+  const active = await searchProducts(db, storeId, query, groups, false);
+  if (active?.kind === "match") return { kind: "match" as const, product: active.product.row as FoundProduct };
+  if (active?.kind === "ambiguous") return { kind: "ambiguous" as const, candidates: active.candidates.map((row) => view(row, "activo")) };
+  const archived = await searchProducts(db, storeId, query, groups, true);
+  if (archived?.kind === "match") return { kind: "inactive" as const, candidates: [view(archived.product, "desactivado")] };
+  if (archived?.kind === "ambiguous") return { kind: "inactive" as const, candidates: archived.candidates.map((row) => view(row, "desactivado")) };
+  const closest = active?.kind === "none" ? active.closest.map((row) => view(row, "activo")) : [];
+  return { kind: "none" as const, closest };
+}
+
+interface CandidateView {
+  nombre: string;
+  sku: string | null;
+  categoria: string | null;
+  estado: Estado;
 }
 
 async function readAttributes(db: CopilotDb, storeId: string, productId: string, productGroupId: string | null) {
@@ -95,9 +175,10 @@ export function productoParaDescripcionTool(storeId: string) {
       .refine((value) => Boolean(value.sku || value.nombre), "Pasa el SKU o el nombre"),
     execute: async ({ sku, nombre }) => {
       await requireStoreOwner(storeId);
+      const groups = await findGroups(storeId, nombre ?? sku ?? "");
       const base = await withCopilotQuery(async (db) => {
-        const found = await findProduct(db, storeId, { sku, nombre });
-        if (!found.product) return { found };
+        const found = await findProduct(db, storeId, { sku, nombre }, groups);
+        if (found.kind !== "match") return { found };
         const product = found.product;
         const [store, examples] = await Promise.all([
           db.store.findUnique({ where: { id: storeId }, select: { lowStockThreshold: true } }),
@@ -111,14 +192,33 @@ export function productoParaDescripcionTool(storeId: string) {
         return { found, product, store, examples };
       });
 
-      if (!base.product) {
+      if (!("product" in base) || !base.product) {
+        const found = base.found;
+        if (found.kind === "inactive") {
+          return {
+            fuente: "productoParaDescripcion",
+            encontrado: false,
+            desactivado: true,
+            candidatos: found.candidates,
+            mensaje:
+              "Lo encontré, pero está desactivado (archivado) en el catálogo. Dile a Paula «Lo encontré pero está desactivado: {nombre} (SKU …). ¿Es este?». No es un producto prospecto y todavía no escribas la descripción.",
+          };
+        }
+        if (found.kind === "ambiguous") {
+          return {
+            fuente: "productoParaDescripcion",
+            encontrado: false,
+            ambiguo: true,
+            candidatos: found.candidates,
+            mensaje: "Varios productos coinciden. Muéstraselos a Paula (nombre y SKU) y pregúntale cuál es antes de escribir.",
+          };
+        }
         return {
           fuente: "productoParaDescripcion",
           encontrado: false,
-          candidatos: base.found.candidates,
-          mensaje: base.found.candidates.length
-            ? "Hay varios productos con ese nombre: pregúntale a Paula cuál."
-            : "No está en el catálogo. Si es un producto prospecto, escribe solo con los datos que Paula te dé.",
+          candidatos: found.kind === "none" ? found.closest : [],
+          mensaje:
+            "No encontré ese producto en el catálogo. Muéstrale a Paula los más parecidos y pregúntale cuál es. No escribas la descripción todavía, y no la marques como producto prospecto a menos que ella diga que es un producto nuevo.",
         };
       }
 
@@ -143,9 +243,32 @@ export function productoParaDescripcionTool(storeId: string) {
         .sort((a, b) => b.texto.length - a.texto.length)
         .slice(0, 3);
 
+      const size = row ? getCustomerFacingSizeName({ categoryName: product.category?.name, sizeName: row.size?.name }) || null : null;
+      const design = row?.design?.name && !GENERIC_DESIGNS.test(row.design.name) ? row.design.name : null;
+      const { specs, conflicts } = buildSpecs({
+        description: product.description,
+        fields: [
+          { clave: "Marca", valor: product.brand ?? row?.productGroup?.brand ?? null },
+          { clave: "Color", valor: row?.color?.name ?? null },
+          { clave: "Tamaño", valor: size },
+          { clave: "Diseño", valor: design },
+          { clave: "Línea", valor: row?.productGroup?.name ?? null },
+          {
+            clave: "Incluye",
+            valor: row?.kitComponents.length ? row.kitComponents.map((piece) => `${piece.component.name.trim()} x${piece.quantity}`).join(", ") : null,
+          },
+        ],
+      });
+      const facts = countConcreteFacts({
+        texts: [product.name, product.description, row?.productGroup?.description, row?.color?.name],
+        brand: product.brand ?? row?.productGroup?.brand ?? null,
+        kitPieces: row?.kitComponents.length ?? 0,
+      });
       return {
         fuente: "productoParaDescripcion",
         encontrado: true,
+        datosConcretos: facts,
+        recomendacion: facts >= MIN_FACTS_TO_WRITE ? "escribir" : "preguntar",
         datos: {
           nombre: product.name.trim(),
           sku: product.sku,
@@ -168,6 +291,8 @@ export function productoParaDescripcionTool(storeId: string) {
             : null,
           variantesHermanas:
             attributes?.siblings.map((sibling) => ({ nombre: sibling.name.trim(), color: sibling.color?.name ?? null, talla: sibling.size?.name ?? null, diseno: sibling.design?.name ?? null })) ?? [],
+          especificaciones: specs,
+          especificacionesPorConfirmar: conflicts,
           descripcionActual: {
             nota: "La escribió Paula: sus datos (medidas, punta, tinta, material, contenido) son confirmados y se conservan; sus frases de escasez o popularidad, no.",
             texto: descriptionToLines(product.description),

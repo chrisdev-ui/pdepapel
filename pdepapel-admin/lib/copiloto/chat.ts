@@ -38,6 +38,7 @@ import {
   type SkillState,
 } from "@/lib/copiloto/skill-state";
 import { activeToolNames, getCopilotSkill } from "@/lib/copiloto/skills";
+import { specCheckTransform } from "@/lib/copiloto/skills/specs";
 import { buildSkillTools } from "@/lib/copiloto/skills/tools";
 import { COPILOT_TOOL_NAMES, buildCopilotTools } from "@/lib/copiloto/tools";
 import { env } from "@/lib/env.mjs";
@@ -291,6 +292,8 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
       }
       return { activeTools: activeToolNames(COPILOT_TOOL_NAMES, loaded) as (keyof typeof tools)[] };
     },
+    // Si escribió una descripción sin alguna especificación de la ficha, se avisa al final (sin otra llamada).
+    experimental_transform: specCheckTransform(),
     stopWhen: isStepCount(COPILOT_MAX_STEPS),
     abortSignal: AbortSignal.timeout(COPILOT_TIMEOUT_MS),
     maxRetries: 0,

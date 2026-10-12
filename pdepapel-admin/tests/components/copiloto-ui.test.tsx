@@ -82,6 +82,16 @@ describe("CopilotChat", () => {
     expect(mocks.chat.regenerate).toHaveBeenCalledTimes(1);
   });
 
+  it("la fuente dice «la ficha del producto» solo si lo encontró", () => {
+    mocks.chat.messages = [
+      { id: "cop-3", role: "assistant", parts: [{ type: "tool-productoParaDescripcion", state: "output-available", output: { encontrado: true, datos: { sku: "MAR-1" } } }] },
+      { id: "cop-4", role: "assistant", parts: [{ type: "tool-productoParaDescripcion", state: "output-available", output: { encontrado: false, candidatos: [] } }] },
+    ];
+    render(<CopilotChat storeId="store-1" screen={null} conversations={[]} />);
+    expect(screen.getByText("Datos: la ficha del producto (SKU MAR-1)")).toBeInTheDocument();
+    expect(screen.getByText("Datos: lo que me diste")).toBeInTheDocument();
+  });
+
   it("«Copiar para la ficha» copia el HTML de la plantilla y el texto plano", async () => {
     const write = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { write, writeText: vi.fn() } });

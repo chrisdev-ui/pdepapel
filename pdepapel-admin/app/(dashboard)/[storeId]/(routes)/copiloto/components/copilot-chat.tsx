@@ -63,7 +63,11 @@ function TextWithCitations({ text, storeId }: { text: string; storeId: string })
   );
 }
 
-type ToolPart = { type: string; state?: string; output?: { fuente?: string; rango?: string | null; actualizadoEl?: string } };
+type ToolPart = {
+  type: string;
+  state?: string;
+  output?: { fuente?: string; rango?: string | null; actualizadoEl?: string; encontrado?: boolean; datos?: { sku?: string | null } };
+};
 
 /** Las habilidades que el copiloto cargó en esta conversación, en el orden en que las cargó. */
 function loadedSkills(messages: UIMessage[]): string[] {
@@ -103,6 +107,11 @@ function ToolLine({ part }: { part: ToolPart }) {
   const name = part.type.replace(/^tool-/, "");
   // Las habilidades cargadas se ven como chips arriba, no como una línea más.
   if (name === "cargarHabilidad" && part.state === "output-available") return null;
+  // La fuente es la ficha solo si de verdad encontró el producto.
+  if (name === "productoParaDescripcion" && part.state === "output-available") {
+    const sku = part.output?.encontrado ? part.output.datos?.sku : null;
+    return <p className="text-xs text-muted-foreground">{sku ? `Datos: la ficha del producto (SKU ${sku})` : "Datos: lo que me diste"}</p>;
+  }
   const label = TOOL_LABELS[name] ?? "Consultando";
   if (part.state === "output-available") {
     const range = part.output?.rango ? ` · ${part.output.rango}` : "";

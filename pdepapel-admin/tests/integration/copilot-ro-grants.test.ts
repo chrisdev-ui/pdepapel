@@ -238,6 +238,12 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
       escasezPermitida: true,
       avisoPermisos: null,
     });
+    expect(result.datos.especificaciones).toEqual(
+      expect.arrayContaining([
+        { clave: "Marca", valor: "Marca Grupo", fuente: "ficha" },
+        { clave: "Línea", valor: "Libretas Prueba", fuente: "ficha" },
+      ]),
+    );
     expect(keysOf(result).filter((key) => /acq|cost|transport|margin|margen|profit|price|precio|stock/i.test(key))).toEqual([]);
     expect(JSON.stringify(result)).not.toMatch(/4000|9000/);
 
@@ -245,6 +251,22 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
     expect(kit.datos.esKit).toBe(true);
     expect(kit.datos.kitIncluye).toEqual([expect.objectContaining({ cantidad: 2 })]);
     expect(await run({ nombre: "Producto que no existe" })).toMatchObject({ encontrado: false });
+  });
+
+  it("busca como habla Paula, y si solo existe desactivado lo ofrece como «¿es este?»", async () => {
+    const store = fixture!.store.id;
+    const attributes = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id }, select: { colorId: true, sizeId: true, designId: true, categoryId: true } });
+    await testPrisma.product.create({
+      data: { storeId: store, ...attributes, name: "Set Marcadores Estuche 50 Colores", description: "<p>SINTETICO-DESC</p>", slug: `prueba-${randomBytes(4).toString("hex")}`, sku: `DES-${randomBytes(3).toString("hex").toUpperCase()}`, price: 9000, stock: 3 } as never,
+    });
+    await testPrisma.product.create({
+      data: { storeId: store, ...attributes, name: "Marcadores acrílicos punta pincel x60", description: "<p>SINTETICO-DESC</p>", isArchived: true, slug: `prueba-${randomBytes(4).toString("hex")}`, sku: `DES-${randomBytes(3).toString("hex").toUpperCase()}`, price: 9000, stock: 0 } as never,
+    });
+    const found = (await run({ nombre: "marcadores en estuche cuadrado x50" })) as { encontrado: boolean; datos: { nombre: string } };
+    expect(found).toMatchObject({ encontrado: true, datos: { nombre: "Set Marcadores Estuche 50 Colores" } });
+    const archived = await run({ nombre: "marcadores acrílicos pincel x60" });
+    expect(archived).toMatchObject({ encontrado: false, desactivado: true, candidatos: [{ nombre: "Marcadores acrílicos punta pincel x60", estado: "desactivado" }] });
+    expect(String(archived.mensaje)).toContain("No es un producto prospecto");
   });
 
   it("sin las concesiones nuevas responde igual con lo básico y avisa qué falta, sin romperse", async () => {

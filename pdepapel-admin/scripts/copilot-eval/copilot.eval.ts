@@ -178,6 +178,8 @@ async function seed(f: InventoryFixture) {
   });
   await described(D.inyeccion, { description: D.inyeccionDescription });
   await described(D.paula.name, { description: D.paula.html, brand: D.paula.brand, abcClassification: D.paula.abcClassification, stock: D.paula.stock });
+  await described(D.marcadores50, { description: D.marcadores50Description, brand: D.marcadores50Brand });
+  await described(D.pocosDatos, { description: D.pocosDatosDescription });
   const connection = await testPrisma.marketplaceConnection.create({
     data: { storeId: store, provider: "MERCADOLIBRE", status: "CONNECTED", sellerId: `seller-${randomBytes(3).toString("hex")}`, lastSyncedAt: now },
   });
@@ -220,12 +222,21 @@ async function ask(storeId: string, question: string, options: AskOptions = {}):
     },
   );
   const raw = await response.text();
-  const answer = { text: "", tools: [] as string[], skillsLoaded: [] as string[], conversationId, messageId };
+  const answer = { text: "", tools: [] as string[], skillsLoaded: [] as string[], found: [] as string[], conversationId, messageId };
   const callNames: Record<string, string> = {};
   for (const line of raw.split("\n")) {
     if (!line.startsWith("data: ")) continue;
     try {
-      const chunk = JSON.parse(line.slice(6)) as { type: string; delta?: string; toolName?: string; toolCallId?: string; output?: { ok?: boolean; id?: string } };
+      const chunk = JSON.parse(line.slice(6)) as {
+        type: string;
+        delta?: string;
+        toolName?: string;
+        toolCallId?: string;
+        output?: { ok?: boolean; id?: string; encontrado?: boolean; datos?: { nombre?: string } };
+      };
+      if (chunk.type === "tool-output-available" && chunk.toolCallId && callNames[chunk.toolCallId] === "productoParaDescripcion" && chunk.output?.encontrado && chunk.output.datos?.nombre) {
+        answer.found.push(chunk.output.datos.nombre);
+      }
       if (chunk.type === "text-delta" && chunk.delta) answer.text += chunk.delta;
       if ((chunk.type === "tool-input-available" || chunk.type === "tool-input-start") && chunk.toolName) {
         if (chunk.toolCallId) callNames[chunk.toolCallId] = chunk.toolName;
