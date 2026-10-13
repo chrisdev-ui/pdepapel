@@ -4,7 +4,7 @@ import { z } from "zod";
 import { CopilotQueryFailure, withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import { getCustomerFacingSizeName } from "@/lib/product-naming";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
-import { MIN_FACTS_TO_WRITE, countConcreteFacts, decideProduct, matchTokens, skuLikeTokens } from "@/lib/copiloto/skills/product-match";
+import { MIN_FACTS_TO_WRITE, countConcreteFacts, decideProduct, foldText, matchTokens, skuLikeTokens } from "@/lib/copiloto/skills/product-match";
 import { buildSpecs } from "@/lib/copiloto/skills/specs";
 import { requireStoreOwner } from "@/lib/store-access";
 
@@ -83,6 +83,8 @@ async function findGroups(storeId: string, query: string): Promise<{ id: string;
 
 type Estado = "activo" | "desactivado";
 
+export const LOOKUP_CAP = 400;
+
 const view = (candidate: { name: string; sku: string | null; category: string | null }, estado: Estado): CandidateView => ({
   nombre: candidate.name.trim(),
   sku: candidate.sku,
@@ -106,17 +108,26 @@ async function findProduct(db: CopilotDb, storeId: string, input: { sku?: string
   const stems = matchTokens(query).filter((token) => !/^\d+$/.test(token) && token.length >= 3);
   if (!stems.length) return { kind: "none" as const, closest: [] as CandidateView[] };
   const groupName = new Map(groups.map((group) => [group.id, group.name]));
-  const rows = await db.product.findMany({
-    where: {
-      storeId,
-      OR: [
-        ...stems.flatMap((token) => [{ name: { contains: token } }, { sku: { contains: token } }, { category: { name: { contains: token } } }]),
-        ...(groups.length ? [{ productGroupId: { in: groups.map((group) => group.id) } }] : []),
-      ],
-    },
-    select: { ...PRODUCT_SELECT, soldCount: true, isArchived: true },
-    take: 400,
-  });
+  const matchesStem = (token: string) => {
+    const groupIds = groups.filter((group) => foldText(group.name).includes(token)).map((group) => group.id);
+    return [
+      { name: { contains: token } },
+      { sku: { contains: token } },
+      { category: { name: { contains: token } } },
+      ...(groupIds.length ? [{ productGroupId: { in: groupIds } }] : []),
+    ];
+  };
+  // Con todas las palabras primero: una palabra suelta («kit», «lapicero») trae
+  // cientos de productos y el tope dejaría por fuera el que es.
+  const search = (where: object) =>
+    db.product.findMany({
+      where: { storeId, ...where },
+      select: { ...PRODUCT_SELECT, soldCount: true, isArchived: true },
+      orderBy: [{ soldCount: "desc" }, { id: "asc" }],
+      take: LOOKUP_CAP,
+    });
+  let rows = await search({ AND: stems.map((token) => ({ OR: matchesStem(token) })) });
+  if (!rows.length) rows = await search({ OR: stems.flatMap(matchesStem) });
   const decision = decideProduct(
     query,
     rows.map((row) => ({

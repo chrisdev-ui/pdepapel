@@ -282,6 +282,28 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
     expect(await run({ nombre: `hazme la descripción de ${archivedSku}` })).toMatchObject({ desactivado: true, candidatos: [{ sku: archivedSku, estado: "desactivado" }] });
   });
 
+  it("con más productos que el tope por palabra suelta, encuentra el que tiene todas las palabras", async () => {
+    const { LOOKUP_CAP } = await import("@/lib/copiloto/skills/descripciones-tool");
+    const store = fixture!.store.id;
+    const attributes = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id }, select: { colorId: true, sizeId: true, designId: true, categoryId: true } });
+    const decoys = Array.from({ length: LOOKUP_CAP + 60 }, (_, index) => ({
+      storeId: store,
+      ...attributes,
+      name: index % 2 ? `Kit señuelo ${index}` : `Lapicero señuelo ${index}`,
+      description: "<p>SINTETICO-DESC</p>",
+      slug: `senuelo-${index}-${randomBytes(3).toString("hex")}`,
+      sku: `SEN-${index}-${randomBytes(2).toString("hex").toUpperCase()}`,
+      price: 1000,
+      stock: 5,
+      soldCount: 50,
+    }));
+    await testPrisma.product.createMany({ data: decoys as never });
+    await testPrisma.product.create({
+      data: { storeId: store, ...attributes, name: "Kit de lapiceros kawaii Eval", description: "<p>SINTETICO-DESC</p>", slug: `prueba-${randomBytes(4).toString("hex")}`, sku: `DES-${randomBytes(3).toString("hex").toUpperCase()}`, price: 9000, stock: 3, soldCount: 0 } as never,
+    });
+    expect(await run({ nombre: "kit de lapiceros kawaii" })).toMatchObject({ encontrado: true, datos: { nombre: "Kit de lapiceros kawaii Eval" } });
+  });
+
   it("sin las concesiones nuevas responde igual con lo básico y avisa qué falta, sin romperse", async () => {
     for (const statement of DESCRIPTION_GRANTS()) await testPrisma.$executeRawUnsafe(statement.replace(/^GRANT SELECT/, "REVOKE SELECT").replace(/ TO 'copilot_ro'/, " FROM 'copilot_ro'"));
     try {
