@@ -41,6 +41,8 @@ const Christmas = dynamic(
 
 import Navbar from "@/components/navbar";
 
+const CLERK_JS_VERSION = "5.128.0";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://papeleriapdepapel.com"),
   title: {
@@ -137,6 +139,9 @@ export default async function RootLayout({
 
   return (
     <ClerkProvider
+      // Sin versión fija, el CDN de Clerk sirve la última 5.x y cada
+      // publicación suya cambia lo que descarga cada página.
+      clerkJSVersion={CLERK_JS_VERSION}
       localization={esES}
       signInUrl={STOREFRONT_ROUTES.signIn}
       signUpUrl={STOREFRONT_ROUTES.signUp}
