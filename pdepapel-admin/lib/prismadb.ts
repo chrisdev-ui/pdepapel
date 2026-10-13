@@ -5,10 +5,12 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
+/** `PRISMA_LOG=quiet` calla las consultas fuera de producción (guiones que solo imprimen su resumen). */
 export function getPrismaLogLevels(
   environment = process.env.NODE_ENV,
+  quiet = process.env.PRISMA_LOG === "quiet",
 ): Prisma.LogLevel[] {
-  return environment === "production"
+  return environment === "production" || quiet
     ? ["warn", "error"]
     : ["query", "info", "warn", "error"];
 }

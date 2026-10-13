@@ -256,9 +256,31 @@ describe("atraso viejo (guion de recuperación)", () => {
     expect(await recoverWhatsAppBacklog({ apply: false })).toEqual({
       mode: "dry-run",
       plan: { events: 5, ignored: 1, empty: 1, statusesOnly: 1, withMessagesOrEchoes: 2, customerMessages: 1, ownerEchoes: 1 },
+      expected: {
+        conversationsCreated: 2,
+        neverSeenContactsShownAsRecuperado: 1,
+        newConversationsWithOnlyPaulaEchoes: 1,
+        existingConversationsTouched: 0,
+        conversationsMovedToWaiting: 0,
+        lastInboundAtMovedBackwards: 0,
+        botRunsOrSends: 0,
+        finalStatus: { PROCESSED: 4, FAILED: 1 },
+      },
     });
     const applied = await recoverWhatsAppBacklog({ apply: true });
-    expect(applied).toMatchObject({ mode: "apply", done: { ignored: 1, empty: 1, processed: 3, notProcessed: 0 }, botMessagesSent: 0 });
+    expect(applied).toMatchObject({
+      mode: "apply",
+      measured: {
+        done: { ignored: 1, empty: 1, processed: 3, notProcessed: 0 },
+        conversationsCreated: 2,
+        neverSeenContactsShownAsRecuperado: 1,
+        conversationsMovedToWaiting: 0,
+        lastInboundAtMovedBackwards: 0,
+        lastOutboundAtMovedBackwards: 0,
+        botRunsOrSends: 0,
+        finalStatus: { PROCESSED: 4, FAILED: 1 },
+      },
+    });
     expect(sent.messages).toHaveLength(0);
 
     const conversation = await conversationOf(message.phone);
@@ -270,6 +292,16 @@ describe("atraso viejo (guion de recuperación)", () => {
     expect(await statusOf(empty.id)).toEqual({ status: "FAILED", lastError: BACKLOG_EMPTY_NOTE });
     expect((await statusOf(status.id)).status).toBe("PROCESSED");
     expect((await statusOf(echo.id)).status).toBe("PROCESSED");
+    // Una conversación que ya existía con actividad más nueva no se mueve ni pasa a Paula.
+    const phone = newPhone();
+    const recent = new Date(Date.now() - MINUTE);
+    await testPrisma.conversation.create({ data: { storeId: fixture.store.id, phone, status: "OPEN", lastInboundAt: recent, lastOutboundAt: recent } });
+    await storedEvent({ ageMs: age, phone });
+    expect(await recoverWhatsAppBacklog({ apply: true })).toMatchObject({
+      expected: { existingConversationsTouched: 1, conversationsCreated: 0 },
+      measured: { conversationsMovedToWaiting: 0, lastInboundAtMovedBackwards: 0, botRunsOrSends: 0, finalStatus: { PROCESSED: 1 } },
+    });
+    expect(await conversationOf(phone)).toMatchObject({ status: "OPEN", lastInboundAt: recent });
     // Correrlo de nuevo no hace nada.
     expect(await recoverWhatsAppBacklog({ apply: true })).toMatchObject({ plan: { events: 0 } });
   });

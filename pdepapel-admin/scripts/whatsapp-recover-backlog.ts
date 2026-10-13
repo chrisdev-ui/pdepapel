@@ -3,21 +3,25 @@
  * de QStash del 21-sep), con `recoverWhatsAppBacklog`
  * (lib/whatsapp/recovery-backlog.ts): historial viejo, sin bot ni sombra, sin
  * pasar a Paula; los mensajes quedan marcados «Recuperado» en el panel. Solo
- * conteos en la salida: ni teléfonos ni texto.
+ * imprime el resumen en JSON (conteos): ni teléfonos ni texto, ni consultas.
  *
  * Uso:
  *   npx tsx --env-file=.env scripts/whatsapp-recover-backlog.ts                                  # ensayo
  *   npm run prod:write -- scripts/whatsapp-recover-backlog.ts --expect new --apply             # escribe
  */
-import { recoverWhatsAppBacklog } from "@/lib/whatsapp/recovery-backlog";
+process.env.PRISMA_LOG = "quiet";
 
-recoverWhatsAppBacklog({ apply: process.argv.includes("--apply") })
-  .then((result) => console.log(JSON.stringify(result)))
-  .catch((error: unknown) => {
-    console.error("Falló la recuperación del atraso:", error instanceof Error ? error.message : "desconocido");
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    const { default: prismadb } = await import("@/lib/prismadb");
+async function main() {
+  const { recoverWhatsAppBacklog } = await import("@/lib/whatsapp/recovery-backlog");
+  const { default: prismadb } = await import("@/lib/prismadb");
+  try {
+    console.log(JSON.stringify(await recoverWhatsAppBacklog({ apply: process.argv.includes("--apply") })));
+  } finally {
     await prismadb.$disconnect();
-  });
+  }
+}
+
+main().catch((error: unknown) => {
+  console.error("Falló la recuperación del atraso:", error instanceof Error ? error.message : "desconocido");
+  process.exitCode = 1;
+});

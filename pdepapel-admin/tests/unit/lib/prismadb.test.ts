@@ -7,8 +7,12 @@ describe("Prisma production logging", () => {
     expect(getPrismaLogLevels("production")).toEqual(["warn", "error"]);
   });
 
+  it("un guion puede callar las consultas fuera de producción", () => {
+    expect(getPrismaLogLevels("development", true)).toEqual(["warn", "error"]);
+  });
+
   it("keeps detailed logs available during local development", () => {
-    expect(getPrismaLogLevels("development")).toEqual([
+    expect(getPrismaLogLevels("development", false)).toEqual([
       "query",
       "info",
       "warn",
