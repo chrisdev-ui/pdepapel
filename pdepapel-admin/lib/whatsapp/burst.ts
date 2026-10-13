@@ -91,6 +91,9 @@ export function assembleBurst(rows: BurstRow[], currentId: string): BurstMessage
 export type BurstIntent = "order" | "product" | "fact" | "web" | "greeting" | "filler" | "other";
 
 const PRIORITY: BurstIntent[] = ["order", "product", "fact", "web", "greeting", "other", "filler"];
+
+/** Orden de prioridad del modo ráfaga: 0 es lo más importante. */
+export const burstIntentRank = (intent: BurstIntent) => PRIORITY.indexOf(intent);
 const FILLER =
   /^(gracias|muchas gracias|mil gracias|ok|okey|okay|vale|listo|dale|bueno|perfecto|super|genial|si|bien|claro|ah ok|ya|es para mi \w+|es para un regalo|es un regalo|porfa|por favor|quedo atenta|quedo atento)$/;
 

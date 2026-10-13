@@ -25,3 +25,5 @@ main().catch((error: unknown) => {
   console.error("Falló la recuperación del atraso:", error instanceof Error ? error.message : "desconocido");
   process.exitCode = 1;
 });
+
+export {};
