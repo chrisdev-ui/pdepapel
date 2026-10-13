@@ -295,7 +295,7 @@ export function productoParaDescripcionTool(storeId: string) {
           atributosInternos: row
             ? {
                 color: doubted.has("Color") ? null : row.color?.name ?? null,
-                talla: size,
+                talla: doubted.has("Tamaño") ? null : size,
                 diseno: doubted.has("Diseño") ? null : row.design?.name ?? null,
               }
             : null,

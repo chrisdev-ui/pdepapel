@@ -162,7 +162,7 @@ async function loadContext(
     newerInbound: newer !== null,
     pending,
     // Un mensaje escrito solo se salta así si la conversación ya esperaba a Paula.
-    waitingForPaula: realOutcome === "skipped_needs_owner",
+    waitingForPaula: realOutcome === "skipped_needs_owner" || realOutcome === "escalated_owed_notice",
     ownerEverWrote: conversation.lastOwnerAt !== null,
     lastBotWasNoMatch: Boolean(lastBot?.body?.startsWith(formatBotReply(deps.noMatchText)) || lastBotMeta?.decision?.outcome === "unsure"),
     firstMessage: earlierCount === 0,

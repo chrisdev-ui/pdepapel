@@ -81,6 +81,45 @@ describe("especificaciones de la descripción", () => {
     expect(fieldDoubt("Color", color, name)).toBeNull();
   });
 
+  it("un solo color que el nombre o la descripción contradicen queda por confirmar con los dos valores", () => {
+    const { specs, conflicts } = buildSpecs({
+      name: "Borrador Eval",
+      description: "<p>Borrador blanco.</p>",
+      fields: [{ clave: "Color", valor: "Rosa" }],
+    });
+    expect(specs).toEqual([]);
+    expect(conflicts).toEqual([{ clave: "Color", ficha: "Rosa", motivo: "la ficha dice Rosa, pero el nombre o la descripción dicen blanco" }]);
+  });
+
+  it.each([
+    ["Lapicero negro, tinta azul", "Negro"],
+    ["Cartuchera Eval Rosa", "Rosa"],
+    ["Libreta rosada con hojas blancas", "Rosa"],
+    ["Lapicero retráctil, tinta negra", "Rosa"],
+    ["Color de Tinta: Negra", "Azul"],
+    ["Set pastel de notas adhesivas", "Rosa"],
+    ["Regla de 30 cm", "Rosa"],
+    ["Washi tape neón", "Verde"],
+  ])("«%s» con color %s: no se contradice", (text, color) => {
+    expect(fieldDoubt("Color", color, text)).toBeNull();
+  });
+
+  it.each([
+    ["Cartuchera Eval Azul", "Rosa", "azul"],
+    ["Lapicero negro, tinta azul", "Rojo", "negro"],
+    ["Agenda dorada", "Plateado", "dorada"],
+  ])("«%s» con color %s: por confirmar, dice %s", (text, color, said) => {
+    expect(fieldDoubt("Color", color, text)).toBe(`la ficha dice ${color}, pero el nombre o la descripción dicen ${said}`);
+  });
+
+  it("una talla que el texto contradice queda por confirmar; una medida no es una talla", () => {
+    expect(fieldDoubt("Tamaño", "Pequeño", "Libreta tamaño A5")).toBe("la ficha dice Pequeño, pero el nombre o la descripción dicen a5");
+    expect(fieldDoubt("Tamaño", "A5", "Cuaderno grande tamaño carta")).toBe("la ficha dice A5, pero el nombre o la descripción dicen grande, carta");
+    expect(fieldDoubt("Tamaño", "Pequeño", "Cartuchera pequeña de 20 x 8 cm")).toBeNull();
+    expect(fieldDoubt("Tamaño", "Pequeño", "Cartuchera de 20 x 8 cm")).toBeNull();
+    expect(fieldDoubt("Tamaño", "Mediano", "Agenda tamaño mediano")).toBeNull();
+  });
+
   it("un diseño genérico del panel queda por confirmar; uno que describe, no", () => {
     for (const design of ["Elegante", "clásico", "Estándar", "Original"]) {
       expect(fieldDoubt("Diseño", design, "Agenda")).toBe(`«${design}» es un valor genérico del panel, no describe el diseño`);

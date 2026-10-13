@@ -156,6 +156,8 @@ export type WhatsAppBotOutcome =
   | "escalated_unprocessable_media"
   /** Ya llegó otro mensaje después: contesta ese, no este. */
   | "skipped_superseded"
+  /** Ya era de Paula y se le debía el aviso (se canceló en la ráfaga): se mandó ahora. */
+  | "escalated_owed_notice"
   /** «Bot de WhatsApp activo» está apagado: no se manda nada, va a Paula. */
   | "skipped_bot_disabled"
   /** Volvió a saludar y el menú ya salió en las últimas 24 h: silencio. */
@@ -227,6 +229,16 @@ export const UNREADABLE_MEDIA_ACKNOWLEDGEMENT =
 /** Cuando el botón apunta a una respuesta que ya no está disponible. */
 export const UNAVAILABLE_OPTION_ACKNOWLEDGEMENT =
   "Esa opción ya no está disponible 💛 Le aviso a Paula para que te ayude.";
+
+/** Los avisos que cierran una escalada: «Paula te escribe». */
+export type HandoffNotice = "no_match" | "media" | "owner_requested" | "option_unavailable";
+
+const HANDOFF_NOTICES: Record<HandoffNotice, { text: string; omitOwnerButton: boolean }> = {
+  no_match: { text: NO_MATCH_ACKNOWLEDGEMENT, omitOwnerButton: false },
+  media: { text: UNREADABLE_MEDIA_ACKNOWLEDGEMENT, omitOwnerButton: true },
+  owner_requested: { text: TALK_TO_OWNER_ACKNOWLEDGEMENT, omitOwnerButton: true },
+  option_unavailable: { text: UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, omitOwnerButton: false },
+};
 
 /**
  * Botones de un mensaje del bot. El de «Hablar con Paula» se añade **siempre**
@@ -321,10 +333,12 @@ async function hasNewerInbound(
  * - **La clienta siguió escribiendo.** Ya se miraba al entrar; mirarlo otra
  *   vez aquí cubre la ráfaga que llega DURANTE la pausa.
  */
+type QuietReason = "bot_disabled" | "owner_active" | "superseded" | "pending_owner" | BotCap;
+
 async function shouldStayQuiet(
   conversationId: string,
   pace: Pacing,
-): Promise<"bot_disabled" | "owner_active" | "superseded" | "pending_owner" | BotCap | null> {
+): Promise<QuietReason | null> {
   if (pace.storeId && !(await isBotEnabled(pace.storeId))) return "bot_disabled";
   const actual = await prismadb.conversation.findUnique({
     where: { id: conversationId },
@@ -464,7 +478,7 @@ export async function runWhatsAppBot(input: {
       pacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
-      { omitOwnerButton: true },
+      { omitOwnerButton: true, handoff: "owner_requested" },
     );
     await escalate(conversation.id);
     if (sent.aborted) return { outcome: "skipped_owner_active" };
@@ -501,6 +515,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { handoff: "option_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -552,6 +567,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { handoff: "option_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -601,6 +617,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { handoff: "option_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -638,6 +655,7 @@ export async function runWhatsAppBot(input: {
     // si suma un producto que se reconoce sin dudas. Todo lo demás, silencio.
     const appended = await appendToOrderRequest(conversation, input);
     if (appended) return appended;
+    if (await sendOwedHandoff(conversation, input)) return { outcome: "escalated_owed_notice" };
     return { outcome: "skipped_needs_owner" };
   }
 
@@ -655,7 +673,7 @@ export async function runWhatsAppBot(input: {
       pacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
-      { omitOwnerButton: true },
+      { omitOwnerButton: true, handoff: "media" },
     );
     if (sent.aborted) return { outcome: "skipped_owner_active" };
     return sent.ok
@@ -680,6 +698,7 @@ export async function runWhatsAppBot(input: {
         UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
         [],
         pacing(input),
+        { handoff: "option_unavailable" },
       );
       return { outcome: "escalated_button_unavailable" };
     }
@@ -989,7 +1008,7 @@ export async function runWhatsAppBot(input: {
       pacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
-      { omitOwnerButton: true },
+      { omitOwnerButton: true, handoff: "owner_requested" },
     );
     if (sent.aborted) return { outcome: "skipped_owner_active" };
     await escalate(conversation.id);
@@ -1010,6 +1029,7 @@ export async function runWhatsAppBot(input: {
     NO_MATCH_ACKNOWLEDGEMENT,
     [],
     pacing(input),
+    { handoff: "no_match" },
   );
   return { outcome: "escalated_no_match" };
 }
@@ -1260,6 +1280,107 @@ function pacing(input: {
   };
 }
 
+/**
+ * Aviso de escalada debido. La conversación pasa a Paula ANTES del aviso (ver
+ * el paso 7); si la clienta sigue escribiendo durante la pausa, el aviso se
+ * cancela y sus mensajes siguientes caen en «ya es de Paula»: nadie le dice
+ * nada. Se anota en la metadata del mensaje que lo causó y se manda una vez,
+ * con el mismo texto, al siguiente mensaje, salvo que alguien haya escrito ya.
+ */
+export const OWED_HANDOFF_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+interface OwedHandoff {
+  notice: HandoffNotice;
+  state: "owed" | "sending" | "sent" | "dropped" | "failed";
+  at: string;
+}
+
+const asRecord = (value: Prisma.JsonValue | null): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+function readOwedHandoff(metadata: Prisma.JsonValue | null): OwedHandoff | null {
+  const owed = asRecord(metadata).handoffOwed as Partial<OwedHandoff> | undefined;
+  if (!owed || typeof owed.at !== "string" || typeof owed.state !== "string" || !owed.notice || !(owed.notice in HANDOFF_NOTICES)) return null;
+  return owed as OwedHandoff;
+}
+
+async function recordOwedHandoff(conversationId: string, pace: Pacing, notice: HandoffNotice) {
+  const select = { id: true, metadata: true } as const;
+  const row =
+    (pace.inboundMessageId
+      ? await prismadb.conversationMessage.findFirst({ where: { conversationId, externalId: pace.inboundMessageId }, select })
+      : null) ??
+    (await prismadb.conversationMessage.findFirst({
+      where: { conversationId, direction: ConversationMessageDirection.INBOUND },
+      orderBy: { createdAt: "desc" },
+      select,
+    }));
+  if (!row) return;
+  const owed: OwedHandoff = { notice, state: "owed", at: new Date().toISOString() };
+  await prismadb.conversationMessage.update({
+    where: { id: row.id },
+    data: { metadata: { ...asRecord(row.metadata), handoffOwed: owed } as unknown as Prisma.InputJsonValue },
+  });
+}
+
+/**
+ * Cambia el estado solo si sigue en `from`, en una sola sentencia: un
+ * `updateMany` con guarda se compila en SELECT + UPDATE y dos corridas a la
+ * vez se quedarían las dos con el aviso (ver lib/atomic-claim.ts).
+ */
+async function moveOwedHandoff(id: string, from: OwedHandoff["state"], to: OwedHandoff["state"]): Promise<boolean> {
+  const affected = await prismadb.$executeRaw`
+    UPDATE \`ConversationMessage\`
+       SET \`metadata\` = JSON_SET(\`metadata\`, '$.handoffOwed.state', ${to})
+     WHERE \`id\` = ${id}
+       AND JSON_UNQUOTE(JSON_EXTRACT(\`metadata\`, '$.handoffOwed.state')) = ${from}`;
+  return affected === 1;
+}
+
+async function sendOwedHandoff(
+  conversation: { id: string; lastOwnerAt: Date | null },
+  input: Parameters<typeof pacing>[0] & { recipient: string },
+): Promise<boolean> {
+  const now = Date.now();
+  const recent = await prismadb.conversationMessage.findMany({
+    where: {
+      conversationId: conversation.id,
+      direction: ConversationMessageDirection.INBOUND,
+      createdAt: { gte: new Date(now - OWED_HANDOFF_MAX_AGE_MS) },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: { id: true, metadata: true },
+  });
+  // Solo cuenta el último anotado: uno más viejo ya quedó atrás.
+  const row = recent.find((message) => readOwedHandoff(message.metadata));
+  const owed = row ? readOwedHandoff(row.metadata) : null;
+  if (!row || !owed || owed.state !== "owed") return false;
+
+  const at = new Date(owed.at);
+  const answered =
+    (conversation.lastOwnerAt !== null && conversation.lastOwnerAt > at) ||
+    (await prismadb.conversationMessage.count({
+      where: { conversationId: conversation.id, direction: ConversationMessageDirection.OUTBOUND, createdAt: { gt: at } },
+    })) > 0;
+  if (answered || now - at.getTime() > OWED_HANDOFF_MAX_AGE_MS) {
+    await moveOwedHandoff(row.id, "owed", "dropped");
+    return false;
+  }
+  if (!(await moveOwedHandoff(row.id, "owed", "sending"))) return false;
+
+  const notice = HANDOFF_NOTICES[owed.notice];
+  const sent = await deliver(conversation.id, input.recipient, notice.text, [], pacing(input), {
+    omitOwnerButton: notice.omitOwnerButton,
+  });
+  if (sent.aborted) {
+    await moveOwedHandoff(row.id, "sending", sent.reason === "superseded" ? "owed" : "dropped");
+    return false;
+  }
+  await moveOwedHandoff(row.id, "sending", sent.ok ? "sent" : "failed");
+  return sent.ok;
+}
+
 /** Manda la respuesta y la deja archivada; escala si el envío falla. */
 async function respond(
   conversationId: string,
@@ -1334,9 +1455,11 @@ async function deliver(
     kind?: "welcome";
     /** El pedido que se le pasó a Paula; el panel lo enseña como tarjeta. */
     orderRequest?: OrderRequestRecord;
+    /** Es el aviso de que Paula escribe: si se cancela por la ráfaga, queda debido. */
+    handoff?: HandoffNotice;
   } = {},
-): Promise<{ ok: boolean; error?: string; aborted?: boolean }> {
-  const { photo, shown, list, omitOwnerButton, decision, kind, orderRequest } = extras;
+): Promise<{ ok: boolean; error?: string; aborted?: boolean; reason?: QuietReason }> {
+  const { photo, shown, list, omitOwnerButton, decision, kind, orderRequest, handoff } = extras;
   const metadata = {
     ...(orderRequest ? { orderRequest } : {}),
     ...(shown && shown.ids.length > 0 ? { shown } : {}),
@@ -1383,7 +1506,8 @@ async function deliver(
       tope ? "[WHATSAPP_BOT] Envío descartado por tope" : "[WHATSAPP_BOT] Se calla: la conversación cambió durante la pausa",
       { conversationId, motivo: frenada },
     );
-    return { ok: true, aborted: true };
+    if (handoff && frenada === "superseded") await recordOwedHandoff(conversationId, pace, handoff);
+    return { ok: true, aborted: true, reason: frenada };
   }
 
   const conBotones = buildReplyButtons(buttons, { includeOwnerButton: !omitOwnerButton });

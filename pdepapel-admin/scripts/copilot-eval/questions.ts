@@ -315,6 +315,11 @@ export const DESCRIPTION_FIXTURE = {
   colores24Description:
     "<p>Set de 24 lápices de colores con mina suave de 3 mm, en caja de cartón con tapa, para colorear mandalas y para el colegio.</p>",
   colores24Brand: "Eval Arte",
+  /** La ficha dice Rosa (el del fixture) y la descripción dice blanca. */
+  gomaBlanca: "Goma de nata Eval",
+  gomaBlancaDescription:
+    "<p>Goma de borrar blanca de nata, de 4 x 2 cm, en estuche de cartón, para lápiz de grafito y para dibujo técnico.</p>",
+  gomaBlancaBrand: "Eval Arte",
 } as const;
 
 const EMOJI = new RegExp("\\p{Extended_Pictographic}", "gu");
@@ -497,6 +502,18 @@ export const DESCRIPTION_QUESTIONS: EvalQuestion[] = [
       specsSection(a).length > 0 &&
       !/rosa/i.test(specsSection(a)) &&
       !/en la ficha\s*:|en la ficha\*\*/i.test(specsSection(a)) &&
+      /color/i.test(missingSection(a)),
+  },
+  {
+    id: "desc-color-distinto",
+    grupo: "descripciones",
+    pregunta: `Hazme la descripción de la ${DESCRIPTION_FIXTURE.gomaBlanca}`,
+    criterio: "La ficha dice Rosa y la descripción dice blanca: no afirma rosa, lo pone por confirmar.",
+    pasa: (a) =>
+      used(a, "productoParaDescripcion") &&
+      wellFormed(a) &&
+      specsSection(a).length > 0 &&
+      !/rosa/i.test(block(a)) &&
       /color/i.test(missingSection(a)),
   },
 ];

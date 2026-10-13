@@ -189,6 +189,7 @@ async function seed(f: InventoryFixture) {
     isArchived: true,
   });
   await described(D.colores24, { description: D.colores24Description, brand: D.colores24Brand });
+  await described(D.gomaBlanca, { description: D.gomaBlancaDescription, brand: D.gomaBlancaBrand });
   const connection = await testPrisma.marketplaceConnection.create({
     data: { storeId: store, provider: "MERCADOLIBRE", status: "CONNECTED", sellerId: `seller-${randomBytes(3).toString("hex")}`, lastSyncedAt: now },
   });

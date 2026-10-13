@@ -91,9 +91,44 @@ export const GENERIC_DESIGNS = /^(cl[aá]sico|original|b[aá]sico|liso|sin dise[
 const MANY_COLORS = /\b\d+\s*(?:colores|tonos)\b|\bmulticolor\w*|\bsurtid\w*|\bvarios colores\b/;
 const SET_OF_N = /\bset\s+(?:de\s+|x\s?)?\d+\b|\bx\s?\d+\b(?!\s?(?:x|mm|cm|ml|m|g|gr|kg)\b)/;
 
+// Colores de cuerpo, por raíz. «Pastel», «neón» o «metalizado» no son un color.
+const COLOR_WORD =
+  /\b(rosad?[oa]?s?|azul(?:es)?|verdes?|amarill[oa]s?|negr[oa]s?|blanc[oa]s?|roj[oa]s?|morad[oa]s?|lilas?|naranjas?|gris(?:es)?|cafe|marron(?:es)?|dorad[oa]s?|platead[oa]s?|beige|fucsias?|turquesas?|celestes?|violetas?)\b/g;
+// «Tinta negra» habla de la tinta, no del color del producto.
+const INK_COLOR = /\btinta\s*:?\s*(?:de\s+)?(?:color\s+)?[a-z]+/g;
+const SIZE_WORD = /\b(a[3-6]|carta|oficio|tabloide|mini|jumbo|grandes?|median[oa]s?|peque(?:n|ñ)[oa]s?)\b/g;
+
+function colorRoot(word: string): string {
+  if (word.startsWith("rosa") || word.startsWith("rosad")) return "rosa";
+  for (const root of ["azul", "verde", "amarill", "negr", "blanc", "roj", "morad", "lila", "naranja", "gris", "cafe", "marron", "dorad", "platead", "beige", "fucsia", "turquesa", "celeste", "violeta"]) {
+    if (word.startsWith(root)) return root;
+  }
+  return word;
+}
+
+function sizeRoot(word: string): string {
+  if (/^peque/.test(word)) return "pequeno";
+  if (/^median/.test(word)) return "mediano";
+  if (/^grande/.test(word)) return "grande";
+  return word;
+}
+
+const rootsIn = (text: string, pattern: RegExp, root: (word: string) => string) => new Set(Array.from(text.matchAll(pattern), (match) => root(match[1])));
+
+/** El valor de la ficha no aparece y el texto nombra otro: no se puede afirmar. */
+function namesAnother(value: string, text: string, pattern: RegExp, root: (word: string) => string): string[] | null {
+  const own = rootsIn(value, pattern, root);
+  if (own.size !== 1) return null;
+  const said = rootsIn(text, pattern, root);
+  const [mine] = Array.from(own);
+  if (!said.size || said.has(mine)) return null;
+  return Array.from(text.matchAll(pattern), (match) => match[1]).filter((word, index, all) => all.indexOf(word) === index);
+}
+
 /**
  * Un campo de la ficha que no se puede afirmar tal cual: un solo color cuando
- * el nombre o la descripción hablan de varios, o un diseño genérico del panel.
+ * el nombre o la descripción hablan de varios o nombran otro, una talla que
+ * contradice la del texto, o un diseño genérico del panel.
  */
 export function fieldDoubt(clave: string, valor: string, context: string): string | null {
   const key = normalizeSpecKey(clave);
@@ -102,6 +137,12 @@ export function fieldDoubt(clave: string, valor: string, context: string): strin
   if (key === "color" && !MANY_COLORS.test(value)) {
     if (MANY_COLORS.test(text)) return `la ficha dice un solo color (${valor}), pero el nombre o la descripción hablan de varios colores`;
     if (SET_OF_N.test(text) && !text.includes(value)) return `la ficha dice un solo color (${valor}) para un set de varias unidades`;
+    const other = namesAnother(value, text.replace(INK_COLOR, "tinta"), COLOR_WORD, colorRoot);
+    if (other) return `la ficha dice ${valor}, pero el nombre o la descripción dicen ${other.join(", ")}`;
+  }
+  if (key === "tamano") {
+    const other = namesAnother(value, text, SIZE_WORD, sizeRoot);
+    if (other) return `la ficha dice ${valor}, pero el nombre o la descripción dicen ${other.join(", ")}`;
   }
   if ((key === "diseno" || key === "diseño") && GENERIC_DESIGNS.test(valor.trim())) {
     return `«${valor}» es un valor genérico del panel, no describe el diseño`;
