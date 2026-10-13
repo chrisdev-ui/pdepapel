@@ -56,3 +56,43 @@ export function summarizeShadowRuns(rows: ShadowRunRow[]): ShadowReport {
     classifierFailures,
   };
 }
+
+export interface BurstReport {
+  /** Filas con decisión de ráfaga. */
+  evaluated: number;
+  /** De ellas, mensajes que llegaron en ráfaga (2 o más seguidos). */
+  bursts: number;
+  /** Ráfagas en las que el modo ráfaga contestaría otra cosa que el último mensaje. */
+  differs: number;
+  /** Por lo que elegiría el modo ráfaga, con lo que hizo el bot real con el último mensaje. */
+  byChosenIntent: { intent: string; count: number; realOutcomes: { outcome: string; count: number }[] }[];
+}
+
+/** Ráfagas en las que el modo ráfaga y el bot actual deciden distinto, solo conteos. */
+export function summarizeBurstDecisions(rows: { burstDecision: unknown; realOutcome: string }[]): BurstReport {
+  const groups = new Map<string, Map<string, number>>();
+  let evaluated = 0;
+  let bursts = 0;
+  let differs = 0;
+  for (const row of rows) {
+    const decision = row.burstDecision as { size?: number; differs?: boolean; chosenIntent?: string | null } | null;
+    if (!decision || typeof decision.size !== "number") continue;
+    evaluated += 1;
+    if (decision.size < 2) continue;
+    bursts += 1;
+    if (!decision.differs) continue;
+    differs += 1;
+    const intent = decision.chosenIntent ?? "sin elección";
+    const outcomes = groups.get(intent) ?? new Map<string, number>();
+    outcomes.set(row.realOutcome, (outcomes.get(row.realOutcome) ?? 0) + 1);
+    groups.set(intent, outcomes);
+  }
+  const byChosenIntent = Array.from(groups.entries())
+    .map(([intent, outcomes]) => ({
+      intent,
+      count: Array.from(outcomes.values()).reduce((sum, count) => sum + count, 0),
+      realOutcomes: ranked(outcomes).map(({ key, count }) => ({ outcome: key, count })),
+    }))
+    .sort((a, b) => b.count - a.count);
+  return { evaluated, bursts, differs, byChosenIntent };
+}

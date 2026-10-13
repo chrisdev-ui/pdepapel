@@ -21,6 +21,7 @@ import {
 import { isShadowCandidate, type ShadowCandidate, type ShadowDeps } from "@/lib/whatsapp/shadow/candidate";
 import { countInStockMatches } from "@/lib/whatsapp/shadow/search";
 import { latestOrderRequest } from "@/lib/whatsapp/order-request-store";
+import { assembleBurst, chooseFromBurst, describeBurst, loadBurstContext, loadBurstRows } from "@/lib/whatsapp/burst";
 
 type RealType = ShadowMessageType | "wait_notice" | "text";
 
@@ -57,6 +58,21 @@ export function realTypesFrom(
     if (outcome.startsWith("escalated")) return "handoff";
     return OUTCOME_TYPE[outcome] ?? "text";
   });
+}
+
+/**
+ * Qué haría el modo ráfaga con este mensaje. Se mide como estaba al llegar:
+ * la respuesta real ya salió y no debe cortar la ráfaga.
+ */
+async function shadowBurstDecision(conversationId: string, storeId: string, inbound: { id: string; createdAt: Date }) {
+  const messages = assembleBurst(await loadBurstRows(conversationId, inbound.createdAt), inbound.id);
+  if (!messages.length) return null;
+  const [settings, keywords] = await Promise.all([
+    prismadb.storeSettings.findUnique({ where: { storeId }, select: { botReadBursts: true } }),
+    getActiveBotKeywords(storeId),
+  ]);
+  const choice = chooseFromBurst(messages, await loadBurstContext(conversationId, messages[0].at, inbound.createdAt, keywords));
+  return describeBurst(messages, choice, settings?.botReadBursts ? "applied" : "shadow");
 }
 
 async function loadContext(
@@ -260,6 +276,10 @@ export async function runWhatsAppBotShadow(
     const realTypes = realTypesFrom(realRows, realOutcome);
     const plan = planShadowReply(ctx, { intent: understood?.intent ?? null, search });
 
+    stage = "burst";
+    // Sin decisión de ráfaga la fila se guarda igual: es una columna más, no la medida principal.
+    const burstDecision = await shadowBurstDecision(candidate.conversationId, conversation.storeId, inbound).catch(() => null);
+
     stage = "record";
     await prismadb.whatsAppBotShadowRun.create({
       data: {
@@ -276,6 +296,7 @@ export async function runWhatsAppBotShadow(
         realCount: realTypes.length,
         classifierStatus,
         skipReason: plan.skipReason,
+        burstDecision: burstDecision ?? Prisma.DbNull,
       },
     });
   } catch (error) {

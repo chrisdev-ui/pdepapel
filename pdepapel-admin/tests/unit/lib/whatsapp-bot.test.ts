@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   pendingActivity: vi.fn(),
   botCap: vi.fn(),
   welcomeRecently: vi.fn(),
+  burstMode: vi.fn(async () => false),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
@@ -52,6 +53,7 @@ vi.mock("@/lib/whatsapp/bot-guards", async (importOriginal) => ({
   findPendingCustomerActivity: mocks.pendingActivity,
   exceededBotCap: mocks.botCap,
   welcomeSentRecently: mocks.welcomeRecently,
+  isBurstModeOn: mocks.burstMode,
 }));
 vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/whatsapp/bot-products")>()),
@@ -180,6 +182,7 @@ const ajustesBase: ResolvedStoreSettings = {
   paymentDaviplataNumber: "3000000001",
   paymentCardInfo: "Recibimos todas las tarjetas.",
   botEnabled: true,
+  botReadBursts: false,
   botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
   botProductsApprovedAt: null,

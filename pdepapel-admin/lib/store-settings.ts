@@ -120,6 +120,7 @@ export const storeSettingsInputSchema = z
     paymentDaviplataNumber: z.string().trim().max(300).nullable().optional(),
     paymentCardInfo: z.string().trim().max(300).nullable().optional(),
     botEnabled: z.boolean().optional(),
+    botReadBursts: z.boolean().optional(),
   })
   .refine(
     (input) =>
@@ -169,6 +170,8 @@ export interface ResolvedStoreSettings {
   paymentDaviplataNumber: string | null;
   paymentCardInfo: string | null;
   botEnabled: boolean;
+  /** Leer los mensajes seguidos de una clienta como uno solo. */
+  botReadBursts: boolean;
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
   botFactsVersion: string | null;
@@ -219,6 +222,7 @@ export async function getStoreSettings(
     // lo diera por encendido— es como se enciende solo el día que alguien
     // conecte esta bandera.
     botEnabled: settings?.botEnabled ?? false,
+    botReadBursts: settings?.botReadBursts ?? false,
     botFactsApprovedAt: settings?.botFactsApprovedAt ?? null,
     botFactsVersion: settings?.botFactsVersion ?? null,
     botProductsApprovedAt: settings?.botProductsApprovedAt ?? null,
@@ -248,6 +252,7 @@ export async function saveStoreSettings(
     // Igual que al leer: si el formulario no manda la bandera, el bot NO se
     // enciende solo por guardar los datos del negocio.
     botEnabled: input.botEnabled ?? false,
+    botReadBursts: input.botReadBursts ?? false,
     // Un campo que no venga se deja como estaba, en vez de borrarlo.
     ...(input.deliveryEstimate === undefined
       ? {}

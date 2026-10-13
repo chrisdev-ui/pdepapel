@@ -57,6 +57,7 @@ const completa: ResolvedStoreSettings = {
   deliveryEstimate: "2 a 4 días hábiles",
   ...PAGOS_DE_MENTIRA,
   botEnabled: true,
+  botReadBursts: false,
   botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
   botProductsApprovedAt: null,

@@ -1,0 +1,389 @@
+import { randomUUID } from "node:crypto";
+import { writeFileSync } from "node:fs";
+
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
+
+/**
+ * Modo ráfaga del bot (lib/whatsapp/burst.ts) con el bot real, la base local,
+ * el envío a WhatsApp simulado y el clasificador de productos doblado (se
+ * anota qué texto le llegó). Cada caso corre con el interruptor encendido y
+ * apagado, y cuenta exactamente los mensajes que salieron. Datos sintéticos.
+ */
+const sent = vi.hoisted(() => ({ messages: [] as string[], classified: [] as string[] }));
+vi.mock("@/lib/whatsapp/send", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>("@/lib/whatsapp/send");
+  const stubs: Record<string, unknown> = { ...actual };
+  for (const [name, value] of Object.entries(actual)) {
+    if (typeof value !== "function" || !name.startsWith("sendWhatsApp")) continue;
+    stubs[name] = async (_to: unknown, body: unknown) => {
+      if (name !== "sendWhatsAppTypingIndicator") sent.messages.push(typeof body === "string" ? body : JSON.stringify(body));
+      return { ok: true, messageId: `wamid.sim-${randomUUID()}` };
+    };
+  }
+  return stubs;
+});
+vi.mock("@/lib/ai-model-providers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai-model-providers")>()),
+  createAiProviders: () => ({ openai: { name: "openai" }, gemini: null }),
+  getAiRoutingStore: () => null,
+}));
+vi.mock("@/lib/ai-provider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai-provider")>()),
+  runStructured: async (input: { feature: string; prompt: string }) => {
+    if (input.feature !== "whatsapp.classifier") throw new Error("solo el clasificador de productos");
+    sent.classified.push(input.prompt);
+    const slots = /cuaderno/i.test(input.prompt)
+      ? { productType: "cuaderno", character: "Norma", descriptor: null }
+      : /lapicero/i.test(input.prompt)
+        ? { productType: "lapicero", character: null, descriptor: "gel" }
+        : { productType: "agenda", character: null, descriptor: "2027" };
+    return { output: { intent: "product.availability", ...slots }, provider: "openai", usage: undefined };
+  },
+}));
+
+const WABA = "1449676032671804";
+const SECOND = 1000;
+let fixture: InventoryFixture;
+let connectionId = "";
+let cuadernoId = "";
+
+async function setSettings(readBursts: boolean, extra: Record<string, unknown> = {}) {
+  const { BUSINESS_FACT_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-facts");
+  const { PRODUCT_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-products");
+  const { ORDER_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-order-request");
+  const data = {
+    botEnabled: true,
+    botReadBursts: readBursts,
+    botFactsApprovedAt: new Date(),
+    botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
+    botProductsApprovedAt: new Date(),
+    botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    botCasualApprovedAt: new Date(),
+    botCasualVersion: ORDER_TEMPLATES_VERSION,
+    ...extra,
+  };
+  await testPrisma.storeSettings.upsert({ where: { storeId: fixture.store.id }, create: { storeId: fixture.store.id, ...data }, update: data });
+}
+
+async function conversation(extra: Record<string, unknown> = {}) {
+  const phone = `57302${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`;
+  const row = await testPrisma.conversation.create({ data: { storeId: fixture.store.id, phone, status: "OPEN", lastInboundAt: new Date(), ...extra } });
+  return { id: row.id, phone };
+}
+
+type Line = { body: string; at: Date; externalId: string; id: string };
+
+/** Lo que la clienta escribió seguido, `gap` segundos entre uno y otro, terminando ahora. */
+async function burst(conversationId: string, lines: string[], gap = 4) {
+  const start = Date.now() - (lines.length - 1) * gap * SECOND;
+  const rows: Line[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const body = lines[index];
+    const at = new Date(start + index * gap * SECOND);
+    const externalId = `wamid.in-${randomUUID()}`;
+    const row = await testPrisma.conversationMessage.create({ data: { conversationId, direction: "INBOUND", sentBy: "CUSTOMER", body, createdAt: at, externalId } });
+    rows.push({ body, at, externalId, id: row.id });
+  }
+  return rows;
+}
+
+async function answer(chat: { id: string; phone: string }, line: Line, extra: Record<string, unknown> = {}) {
+  const { runWhatsAppBot } = await import("@/lib/whatsapp/bot");
+  return runWhatsAppBot({
+    conversationId: chat.id,
+    recipient: chat.phone,
+    body: line.body,
+    inboundAt: line.at,
+    inboundMessageId: line.externalId,
+    skipHumanPause: true,
+    keywords: [],
+    ...extra,
+  });
+}
+
+/** Como en producción: el bot corre con cada mensaje, en orden. */
+async function answerAll(chat: { id: string; phone: string }, lines: Line[]) {
+  const outcomes: string[] = [];
+  for (const line of lines) outcomes.push((await answer(chat, line)).outcome);
+  return outcomes;
+}
+
+async function botBodies(conversationId: string) {
+  const rows = await testPrisma.conversationMessage.findMany({ where: { conversationId, sentBy: "BOT" }, orderBy: { createdAt: "asc" }, select: { body: true } });
+  return rows.map((row) => row.body ?? "");
+}
+
+/** La oferta «¿Lo quieres?» del bot, un minuto antes. */
+async function withOffer(conversationId: string) {
+  await testPrisma.conversationMessage.create({
+    data: {
+      conversationId,
+      direction: "OUTBOUND",
+      sentBy: "BOT",
+      status: "SENT",
+      body: "Sí 💛 Tengo Cuaderno Norma Ráfaga 100 hojas en $12.000. ¿Lo quieres?",
+      createdAt: new Date(Date.now() - 60 * SECOND),
+      externalId: `wamid.out-${randomUUID()}`,
+      metadata: { shown: { ids: [cuadernoId], intent: "product.search" } } as never,
+    },
+  });
+}
+
+async function queuedEvent(phone: string, body: string, processed = false) {
+  return testPrisma.marketplaceWebhookEvent.create({
+    data: {
+      connectionId,
+      provider: "WHATSAPP",
+      eventKey: `evt-${randomUUID()}`,
+      topic: "messages",
+      resource: "621067881095773",
+      sellerId: WABA,
+      payload: {
+        entry: [
+          {
+            id: WABA,
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { display_phone_number: "570000000000", phone_number_id: "621067881095773" },
+                  contacts: [{ wa_id: phone, profile: { name: "Clienta Sintética" } }],
+                  messages: [{ from: phone, id: `wamid.q-${randomUUID()}`, timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body } }],
+                },
+              },
+            ],
+          },
+        ],
+      } as never,
+      status: processed ? "PROCESSED" : "PENDING",
+      processedAt: processed ? new Date() : null,
+    },
+    select: { id: true, createdAt: true },
+  });
+}
+
+const NO_MATCH = "Esa no me la sé 💛 Le paso tu mensaje a Paula y ella te escribe apenas pueda.";
+const results: { escenario: string; modo: string; enviados: number; resultado: string }[] = [];
+const record = (escenario: string, on: boolean, enviados: number, resultado: string) => results.push({ escenario, modo: on ? "ráfaga" : "actual", enviados, resultado });
+
+beforeAll(async () => {
+  fixture = await createInventoryFixture();
+  const store = fixture.store.id;
+  const attributes = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture.component.id }, select: { colorId: true, sizeId: true, designId: true } });
+  const product = (name: string, price: number, stock: number) =>
+    testPrisma.product.create({
+      data: { storeId: store, categoryId: fixture.category.id, ...attributes, name, description: "Sintético", slug: `rafaga-${randomUUID().slice(0, 8)}`, price, stock, sku: `RAF-${randomUUID().slice(0, 6)}` } as never,
+    });
+  cuadernoId = (await product("Cuaderno Norma Ráfaga 100 hojas", 12000, 5)).id;
+  await product("Lapicero gel Ráfaga", 3500, 40);
+  await product("Agenda Ráfaga 2027", 30000, 4);
+  const connection = await testPrisma.marketplaceConnection.create({ data: { storeId: store, provider: "WHATSAPP", status: "CONNECTED", sellerId: WABA } as never });
+  connectionId = connection.id;
+});
+
+afterAll(async () => {
+  writeFileSync(process.env.BURST_TABLE ?? "/dev/null", JSON.stringify(results));
+  const store = fixture.store.id;
+  const conversations = (await testPrisma.conversation.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
+  await testPrisma.whatsAppBotShadowRun.deleteMany({ where: { storeId: store } });
+  await testPrisma.conversationMessage.deleteMany({ where: { conversationId: { in: conversations } } });
+  await testPrisma.conversation.deleteMany({ where: { storeId: store } });
+  await testPrisma.storeSettings.deleteMany({ where: { storeId: store } });
+  await testPrisma.marketplaceWebhookEvent.deleteMany({ where: { connectionId } });
+  await testPrisma.marketplaceConnection.deleteMany({ where: { id: connectionId } });
+  await testPrisma.product.deleteMany({ where: { storeId: store, description: "Sintético" } });
+  await deleteInventoryFixture(fixture);
+});
+
+beforeEach(() => {
+  sent.messages = [];
+  sent.classified = [];
+});
+
+describe.each([true, false])("modo ráfaga %s", (on) => {
+  beforeEach(async () => {
+    await setSettings(on);
+  });
+
+  it("saludo + pregunta: contesta la pregunta, una vez", async () => {
+    const chat = await conversation();
+    const outcomes = await answerAll(chat, await burst(chat.id, ["Hola", "Cómo estás?", "Tienes el cuaderno Norma?"]));
+    expect(outcomes.slice(0, 2)).toEqual(["skipped_superseded", "skipped_superseded"]);
+    expect(outcomes[2]).toMatch(/^replied_product/);
+    expect(sent.messages).toHaveLength(1);
+    expect(sent.classified).toEqual(["Tienes el cuaderno Norma?"]);
+    record("saludo + pregunta", on, sent.messages.length, outcomes[2]);
+  });
+
+  it("pregunta + relleno: ráfaga contesta la pregunta; el actual se la pasa a Paula", async () => {
+    const chat = await conversation();
+    const outcomes = await answerAll(chat, await burst(chat.id, ["Tienes el cuaderno Norma?", "es para mi hija"]));
+    expect(sent.messages).toHaveLength(1);
+    if (on) {
+      expect(outcomes[1]).toMatch(/^replied_product/);
+      expect(sent.classified).toEqual(["Tienes el cuaderno Norma?"]);
+    } else {
+      expect(outcomes[1]).toBe("escalated_no_match");
+      expect(sent.messages).toEqual([NO_MATCH]);
+    }
+    record("pregunta + relleno", on, sent.messages.length, outcomes[1]);
+  });
+
+  it("dos productos en dos líneas: ráfaga los pregunta juntos", async () => {
+    const chat = await conversation();
+    const outcomes = await answerAll(chat, await burst(chat.id, ["Tienes cuaderno Norma?", "y tienes lapiceros de gel?"]));
+    expect(sent.messages).toHaveLength(1);
+    expect(outcomes[1]).toMatch(/^replied_product/);
+    expect(sent.classified).toEqual([on ? "Tienes cuaderno Norma? y tienes lapiceros de gel?" : "y tienes lapiceros de gel?"]);
+    record("dos productos en dos líneas", on, sent.messages.length, outcomes[1]);
+  });
+
+  it("«sí» + «y también 2 lapiceros»: ráfaga arma un pedido con los dos", async () => {
+    const chat = await conversation();
+    await withOffer(chat.id);
+    const outcomes = await answerAll(chat, await burst(chat.id, ["sí", "y también 2 lapiceros"]));
+    expect(sent.messages).toHaveLength(1);
+    const orders = await testPrisma.conversationMessage.findMany({ where: { conversationId: chat.id, metadata: { path: "$.orderRequest.status", equals: "pending" } }, select: { metadata: true } });
+    if (on) {
+      expect(outcomes[1]).toBe("replied_order_request");
+      expect((orders[0].metadata as { orderRequest: { items: unknown[] } }).orderRequest.items).toHaveLength(2);
+    } else {
+      expect(orders).toHaveLength(0);
+    }
+    record("«sí» + «y también 2 lapiceros»", on, sent.messages.length, outcomes[1]);
+  });
+
+  it("ráfaga con otro mensaje esperando en la fila: no sale nada hasta el último", async () => {
+    const chat = await conversation();
+    const lines = await burst(chat.id, ["Hola", "Tienes el cuaderno Norma?"]);
+    const own = await queuedEvent(chat.phone, "Tienes el cuaderno Norma?", true);
+    const event = await queuedEvent(chat.phone, "es para mi hija");
+    const first = await answer(chat, lines[1], { eventId: own.id, eventCreatedAt: own.createdAt, customerPhone: chat.phone });
+    expect(sent.messages).toHaveLength(0);
+    await testPrisma.marketplaceWebhookEvent.update({ where: { id: event.id }, data: { processedAt: new Date(), status: "PROCESSED" } });
+    const [last] = await burst(chat.id, ["es para mi hija"]);
+    const second = await answer(chat, last);
+    expect(sent.messages).toHaveLength(1);
+    expect(second.outcome).toBe(on ? "replied_product" : "escalated_no_match");
+    record("con un mensaje en la fila", on, sent.messages.length, `${first.outcome} → ${second.outcome}`);
+  });
+
+  it("ráfaga con Paula en la conversación: nada", async () => {
+    const chat = await conversation({ lastOwnerAt: new Date(Date.now() - 60 * SECOND) });
+    const outcomes = await answerAll(chat, await burst(chat.id, ["Hola", "Tienes el cuaderno Norma?"]));
+    expect(sent.messages).toHaveLength(0);
+    expect(outcomes.at(-1)).toBe("skipped_owner_active");
+    record("Paula en la conversación", on, 0, outcomes.at(-1)!);
+  });
+
+  it("ráfaga después de pasar a Paula: nada", async () => {
+    const chat = await conversation({ status: "NEEDS_OWNER" });
+    const outcomes = await answerAll(chat, await burst(chat.id, ["Hola", "Tienes el cuaderno Norma?", "gracias"]));
+    expect(sent.messages).toHaveLength(0);
+    expect(outcomes.at(-1)).toBe("skipped_needs_owner");
+    record("ya era de Paula", on, 0, outcomes.at(-1)!);
+  });
+
+  it("7 mensajes: se leen los 6 últimos", async () => {
+    const chat = await conversation();
+    const outcomes = await answerAll(chat, await burst(chat.id, ["Tienes agendas?", "Tienes el cuaderno Norma?", "ok", "listo", "bueno", "dale", "gracias"]));
+    expect(sent.messages).toHaveLength(1);
+    if (on) expect(sent.classified).toEqual(["Tienes el cuaderno Norma?"]);
+    else expect(sent.messages).toEqual([NO_MATCH]);
+    record("7 mensajes (tope 6)", on, sent.messages.length, outcomes.at(-1)!);
+  });
+
+  it("mensaje editado en medio de la ráfaga: se lee el texto nuevo", async () => {
+    const chat = await conversation();
+    const [question] = await burst(chat.id, ["Tienes el cuaderno Nroma?"]);
+    await testPrisma.conversationMessage.create({
+      data: { conversationId: chat.id, direction: "INBOUND", sentBy: "CUSTOMER", body: null, mediaType: "edit", createdAt: new Date(Date.now() + 2 * SECOND), externalId: `wamid.ed-${randomUUID()}`, metadata: { edit: { of: question.externalId, text: "Tienes el cuaderno Norma?" } } as never },
+    });
+    const [thanks] = await burst(chat.id, ["gracias"]);
+    const late = { ...thanks, at: new Date(Date.now() + 4 * SECOND) };
+    await testPrisma.conversationMessage.update({ where: { id: thanks.id }, data: { createdAt: late.at } });
+    const outcomes = [(await answer(chat, question)).outcome, (await answer(chat, late)).outcome];
+    expect(outcomes[0]).toBe("skipped_superseded");
+    expect(sent.messages).toHaveLength(1);
+    if (on) expect(sent.classified).toEqual(["Tienes el cuaderno Norma?"]);
+    else expect(sent.messages).toEqual([NO_MATCH]);
+    record("editado en medio", on, sent.messages.length, outcomes[1]);
+  });
+
+  it("pregunta y luego solo su edición: ráfaga contesta la edición; el actual se queda callado", async () => {
+    const chat = await conversation();
+    const [question] = await burst(chat.id, ["Tienes el cuaderno Nroma?"]);
+    const editAt = new Date(Date.now() + 2 * SECOND);
+    const editId = `wamid.ed-${randomUUID()}`;
+    await testPrisma.conversationMessage.create({
+      data: { conversationId: chat.id, direction: "INBOUND", sentBy: "CUSTOMER", body: null, mediaType: "edit", createdAt: editAt, externalId: editId, metadata: { edit: { of: question.externalId, text: "Tienes el cuaderno Norma?" } } as never },
+    });
+    const first = await answer(chat, question);
+    // conversation-sync solo le pasa la edición al bot con el modo ráfaga encendido.
+    const second = on ? await answer(chat, { body: "Tienes el cuaderno Norma?", at: editAt, externalId: editId, id: "" }, { burstEdit: true }) : null;
+    expect(first.outcome).toBe("skipped_superseded");
+    expect(sent.messages).toHaveLength(on ? 1 : 0);
+    if (on) expect(sent.classified).toEqual(["Tienes el cuaderno Norma?"]);
+    record("solo la edición", on, sent.messages.length, second?.outcome ?? "(la edición no llega al bot)");
+  });
+
+  it("interruptor del bot apagado: nada", async () => {
+    await setSettings(on, { botEnabled: false });
+    const chat = await conversation();
+    const outcomes = await answerAll(chat, await burst(chat.id, ["Hola", "Tienes el cuaderno Norma?"]));
+    expect(sent.messages).toHaveLength(0);
+    expect(outcomes.at(-1)).toBe("skipped_bot_disabled");
+    record("bot apagado", on, 0, outcomes.at(-1)!);
+  });
+
+  it("dos corridas a la vez con el último mensaje: un solo envío", async ({ skip }) => {
+    // Sin el modo ráfaga no hay reclamo: en producción la fila de QStash de cada clienta corre un trabajo a la vez.
+    if (!on) skip();
+    const chat = await conversation();
+    const lines = await burst(chat.id, ["Hola", "Tienes el cuaderno Norma?"]);
+    const outcomes = await Promise.all([answer(chat, lines[1]), answer(chat, lines[1])]);
+    expect(sent.messages).toHaveLength(1);
+    record("dos corridas a la vez", on, sent.messages.length, outcomes.map((result) => result.outcome).sort().join(" + "));
+  });
+
+  it("el modo sombra guarda la decisión de ráfaga, sin texto", async () => {
+    const chat = await conversation();
+    const lines = await burst(chat.id, ["Tienes el cuaderno Norma?", "es para mi hija"]);
+    const outcomes = await answerAll(chat, lines);
+    const { runWhatsAppBotShadow } = await import("@/lib/whatsapp/shadow/run");
+    await runWhatsAppBotShadow(
+      { conversationId: chat.id, body: lines[1].body, interactiveReplyId: null, inboundMessageId: lines[1].externalId, eventId: "evt", eventCreatedAt: new Date(), customerPhone: chat.phone, customerBsuid: null },
+      outcomes[1],
+      new Date(),
+      { noMatchText: NO_MATCH },
+    );
+    const row = await testPrisma.whatsAppBotShadowRun.findFirstOrThrow({ where: { conversationId: chat.id }, select: { burstDecision: true } });
+    expect(row.burstDecision).toEqual({
+      mode: on ? "applied" : "shadow",
+      size: 2,
+      chars: 40,
+      chosenIntent: "product",
+      chosenPosition: 1,
+      lastIntent: "filler",
+      intents: ["product", "filler"],
+      differs: true,
+    });
+    expect(JSON.stringify(row.burstDecision)).not.toMatch(/cuaderno|hija/i);
+  });
+});
+
+describe("textos aprobados", () => {
+  it("las huellas de los textos del bot no cambian", async () => {
+    const { BUSINESS_FACT_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-facts");
+    const { PRODUCT_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-products");
+    const { ORDER_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-order-request");
+    expect([BUSINESS_FACT_TEMPLATES_VERSION, PRODUCT_TEMPLATES_VERSION, ORDER_TEMPLATES_VERSION]).toEqual([
+      "493534d795d3db094db50c6717bd37d8",
+      "5e9eba30e3824418709032e7c5b4be86",
+      "8898b8057694e3cd3ef9685f8606c997",
+    ]);
+  });
+});

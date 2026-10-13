@@ -1646,6 +1646,9 @@ model StoreSettings {
   /// Apaga el bot sin borrar sus respuestas. Apagado por defecto a propósito:
   /// se enciende cuando alguien lo decide, no por crear la fila.
   botEnabled                Boolean          @default(false)
+  /// Lee los mensajes seguidos de una clienta como uno solo y contesta lo que
+  /// sí entiende de la ráfaga (`lib/whatsapp/burst.ts`). Apagado por defecto.
+  botReadBursts             Boolean          @default(false)
 
   /// Visto bueno de Paula a los textos con los que el bot contesta los datos
   /// del negocio. `botFactsVersion` guarda la versión aprobada: si se edita
@@ -3144,6 +3147,9 @@ model WhatsAppBotShadowRun {
   classifierStatus String   @db.VarChar(16)
   /// Por qué el plan es silencio o se recortó (bot_disabled, owner_active, superseded…).
   skipReason       String?  @db.VarChar(32)
+  /// Qué haría el modo ráfaga con este mensaje: tamaños, posición e
+  /// intenciones; nunca texto.
+  burstDecision    Json?
   createdAt        DateTime @default(now())
 
   @@index([storeId, createdAt])

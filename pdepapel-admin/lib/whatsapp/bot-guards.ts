@@ -35,6 +35,15 @@ export async function isBotEnabled(storeId: string): Promise<boolean> {
   return settings?.botEnabled ?? false;
 }
 
+/** «Leer mensajes seguidos como uno solo». Sin fila, apagado. */
+export async function isBurstModeOn(storeId: string): Promise<boolean> {
+  const settings = await prismadb.storeSettings.findUnique({
+    where: { storeId },
+    select: { botReadBursts: true },
+  });
+  return settings?.botReadBursts ?? false;
+}
+
 export interface PendingActivityQuery {
   /** El evento que se está procesando; los posteriores son los que importan. */
   eventId: string;

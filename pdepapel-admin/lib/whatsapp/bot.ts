@@ -15,9 +15,11 @@ import {
   exceededBotCap,
   findPendingCustomerActivity,
   isBotEnabled,
+  isBurstModeOn,
   welcomeSentRecently,
   type BotCap,
 } from "@/lib/whatsapp/bot-guards";
+import { assembleBurst, chooseFromBurst, claimBurst, loadBurstContext, loadBurstRows, type BurstChoice } from "@/lib/whatsapp/burst";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
 import type { WebOrigin } from "@/lib/whatsapp/web-origin";
 import {
@@ -304,6 +306,32 @@ function buttonIdOf(input: { interactiveReplyId?: string | null }): string | nul
   return input.interactiveReplyId?.trim() || null;
 }
 
+/**
+ * La ráfaga que termina en este mensaje y qué contestar de ella. `null` si no
+ * queda nada que leer (una edición de algo ya contestado) o si otra corrida ya
+ * se quedó con la ráfaga.
+ */
+async function readBurst(
+  conversationId: string,
+  input: { inboundMessageId?: string | null; inboundAt?: Date | null },
+  keywords: WhatsAppBotKeyword[],
+): Promise<BurstChoice | null> {
+  const current = await prismadb.conversationMessage.findFirst({
+    where: input.inboundMessageId
+      ? { conversationId, externalId: input.inboundMessageId }
+      : { conversationId, direction: ConversationMessageDirection.INBOUND, sentBy: ConversationMessageSentBy.CUSTOMER },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, createdAt: true },
+  });
+  if (!current) return null;
+  const messages = assembleBurst(await loadBurstRows(conversationId, current.createdAt), current.id);
+  if (!messages.length) return null;
+  const at = input.inboundAt ?? current.createdAt;
+  const choice = chooseFromBurst(messages, await loadBurstContext(conversationId, messages[0].at, at, keywords));
+  if (!choice || !(await claimBurst(current.id, `${Date.now()}`))) return null;
+  return choice;
+}
+
 /** Se mira al decidir, no al recibir: la ráfaga llega durante la pausa humana. */
 async function hasNewerInbound(
   conversationId: string,
@@ -416,6 +444,8 @@ export async function runWhatsAppBot(input: {
   skipHumanPause?: boolean;
   /** Solo para pruebas: si no se pasa, se leen las respuestas de la tienda. */
   keywords?: WhatsAppBotKeyword[];
+  /** Es la edición de un mensaje anterior; solo llega con el modo ráfaga encendido. */
+  burstEdit?: boolean;
   /** Solo para pruebas: si no se pasa, se leen los datos de la tienda. */
   settings?: ResolvedStoreSettings;
   /**
@@ -462,6 +492,17 @@ export async function runWhatsAppBot(input: {
   // 0 bis. Una ráfaga se contesta una vez, al último mensaje. Los toques de
   //    botón no entran: cada toque es una elección suya.
   if (!buttonIdOf(input) && (await hasNewerInbound(conversation.id, input.inboundAt))) {
+    return { outcome: "skipped_superseded" };
+  }
+
+  // 0 ter. Modo ráfaga: con lo que escribió seguido se elige qué contestar, y
+  //    todo lo de abajo sigue igual con ese texto.
+  if (!buttonIdOf(input) && !input.mediaForOwner && (await isBurstModeOn(conversation.storeId))) {
+    const keywords = input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
+    const choice = await readBurst(conversation.id, input, keywords);
+    if (!choice) return { outcome: "skipped_superseded" };
+    input = { ...input, body: choice.text, webOrigin: choice.webOrigin, keywords };
+  } else if (input.burstEdit) {
     return { outcome: "skipped_superseded" };
   }
 

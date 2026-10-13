@@ -14,6 +14,7 @@ import { runInBackground } from "@/lib/background";
 import { normalizePhone } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
 import { NO_MATCH_ACKNOWLEDGEMENT, runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
+import { isBurstModeOn } from "@/lib/whatsapp/bot-guards";
 import { isShadowCandidate } from "@/lib/whatsapp/shadow/candidate";
 import { runWhatsAppBotShadow } from "@/lib/whatsapp/shadow/run";
 import { detectWebOrigin, type WebOrigin } from "@/lib/whatsapp/web-origin";
@@ -101,6 +102,8 @@ export interface WhatsAppCartItem {
 export interface WhatsAppMessageMetadata {
   /** Escribió con el texto prellenado de un botón de la tienda web (lib/whatsapp/web-origin.ts). */
   webOrigin?: WebOrigin;
+  /** Editó un mensaje anterior: el `wamid` original y el texto nuevo. El cuerpo queda vacío. */
+  edit?: { of: string; text: string };
   order?: {
     catalogId: string | null;
     /** Nota que la clienta escribe junto al carrito, si la hay. */
@@ -222,6 +225,14 @@ function getInteractiveReplyId(message: JsonRecord): string | null {
     (listReply && asString(listReply.id)) ??
     null
   );
+}
+
+/** Edición de una clienta: Meta manda el `wamid` original y el mensaje nuevo. */
+function getCustomerEdit(message: JsonRecord): { of: string; text: string } | null {
+  const edit = isRecord(message.edit) ? message.edit : null;
+  const of = edit ? asString(edit.original_message_id) : null;
+  const text = edit && isRecord(edit.message) ? getMessageBody(edit.message) : null;
+  return of && text ? { of, text } : null;
 }
 
 /**
@@ -356,7 +367,8 @@ export function extractWhatsAppEvents(
           const cart = getCartMetadata(message);
           // Un anuncio de clic a WhatsApp trae `referral`: eso no es la tienda web.
           const webOrigin = message.referral ? null : detectWebOrigin(getMessageBody(message));
-          const metadata = webOrigin ? { ...(cart ?? {}), webOrigin } : cart;
+          const edit = type === "edit" ? getCustomerEdit(message) : null;
+          const metadata = webOrigin || edit ? { ...(cart ?? {}), ...(webOrigin ? { webOrigin } : {}), ...(edit ? { edit } : {}) } : cart;
           result.messages.push({
             externalId: asString(message.id),
             phone,
@@ -828,6 +840,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       customerPhone: string | null;
       customerBsuid: string | null;
       webOrigin?: WebOrigin | null;
+      burstEdit?: boolean;
     }> = [];
 
     for (const message of extracted.messages) {
@@ -838,7 +851,10 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       // respuesta. Antes esto ni llegaba aquí y la clienta se quedaba mirando
       // el chat sin saber si su foto había llegado.
       const paraPaula = isMediaForOwner(message.mediaType);
-      if (!message.body && !paraPaula) continue;
+      // Una edición solo se lee con el modo ráfaga: sin él no trae cuerpo y no se contesta.
+      const edit = message.metadata?.edit;
+      const burstEdit = Boolean(edit && (await isBurstModeOn(storeId)));
+      if (!message.body && !paraPaula && !burstEdit) continue;
       // Sin teléfono se contesta al BSUID; `fileInboundMessage` ya garantizó
       // que al menos uno de los dos existe.
       const recipient = message.phone ?? message.bsuid;
@@ -846,7 +862,8 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       botCandidates.push({
         conversationId: filed.conversationId,
         recipient,
-        body: message.body ?? "",
+        body: message.body ?? (burstEdit ? edit!.text : ""),
+        ...(burstEdit ? { burstEdit: true } : {}),
         interactiveReplyId: message.interactiveReplyId,
         // Hace falta para mostrar «escribiendo…» y marcar como leído.
         inboundMessageId: message.externalId,

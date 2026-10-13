@@ -217,6 +217,21 @@ describe("extractWhatsAppEvents", () => {
     expect(extractWhatsAppEvents(payload({ referral: { source_type: "ad", source_id: "1" } })).messages[0].metadata).toBeNull();
   });
 
+  it("una edición de la clienta guarda el mensaje original y el texto nuevo, sin cuerpo", () => {
+    const extracted = extractWhatsAppEvents(
+      metaPayload({
+        messages: [
+          { from: "573001234567", id: "wamid.ed", type: "edit", edit: { original_message_id: "wamid.orig", message: { type: "text", text: { body: "Tienes el cuaderno Norma?" } } } },
+          { from: "573001234567", id: "wamid.ed2", type: "edit", edit: { original_message_id: "wamid.orig" } },
+        ],
+      }),
+    );
+    expect(extracted.messages.map((message) => ({ body: message.body, mediaType: message.mediaType, metadata: message.metadata }))).toEqual([
+      { body: null, mediaType: "edit", metadata: { edit: { of: "wamid.orig", text: "Tienes el cuaderno Norma?" } } },
+      { body: null, mediaType: "edit", metadata: null },
+    ]);
+  });
+
   it("lee el id del botón que tocó la clienta, no solo su texto", () => {
     // Payload real capturado el 2026-09-14 tocando una lista enviada de prueba.
     // El id es la llave estable: Paula puede renombrar el botón sin romper el

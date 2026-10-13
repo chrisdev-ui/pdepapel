@@ -54,6 +54,7 @@ const formSchema = z.object({
   minOrderAmount: z.string().trim(),
   alwaysOpen: z.boolean(),
   botEnabled: z.boolean(),
+  botReadBursts: z.boolean(),
   days: z.record(
     z.enum(WEEK_DAYS),
     z.object({
@@ -93,6 +94,7 @@ export function BusinessInfoPanel({
         : "",
       alwaysOpen: settings.alwaysOpen,
       botEnabled: settings.botEnabled,
+      botReadBursts: settings.botReadBursts,
       days: Object.fromEntries(
         WEEK_DAYS.map((day) => {
           const saved = settings.openingHours?.[day];
@@ -152,6 +154,7 @@ export function BusinessInfoPanel({
           : null,
         alwaysOpen: values.alwaysOpen,
         botEnabled: values.botEnabled,
+        botReadBursts: values.botReadBursts,
         openingHours: Object.fromEntries(
           WEEK_DAYS.map((day) => [
             day,
@@ -561,6 +564,29 @@ export function BusinessInfoPanel({
                   Apagado, el bot no contesta nada en WhatsApp. Los mensajes
                   siguen llegando y quedan en Conversaciones, esperando a
                   Paula. El cambio aplica desde el siguiente mensaje.
+                </FormDescription>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="botReadBursts"
+            render={({ field }) => (
+              <FormItem className="flex flex-col gap-2">
+                <FormLabel>Leer mensajes seguidos como uno solo</FormLabel>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Cuando una clienta escribe varios mensajes seguidos («Hola»,
+                  «¿tienes el cuaderno Norma?», «es para mi hija»), el bot
+                  contesta lo que sí entiende de todos, no solo el último. Si
+                  no entiende nada, se lo pasa a Paula como siempre.
                 </FormDescription>
               </FormItem>
             )}
