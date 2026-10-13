@@ -19,8 +19,11 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className }) => {
     <nav aria-label="Breadcrumb" className={cn("flex", className)}>
       <ol className="flex flex-wrap items-center space-x-2 text-sm text-gray-500">
         <li className="flex items-center">
+          {/* Sin prefetch: la miga está en la primera pantalla y traería páginas
+              estáticas completas mientras baja la foto principal. */}
           <Link
             href="/"
+            prefetch={false}
             className="flex items-center transition-colors hover:text-black hover:underline"
           >
             <Home className="h-4 w-4" />
@@ -39,6 +42,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className }) => {
             ) : item.href ? (
               <Link
                 href={item.href}
+                prefetch={false}
                 className="transition-colors hover:text-black hover:underline"
               >
                 {item.label}

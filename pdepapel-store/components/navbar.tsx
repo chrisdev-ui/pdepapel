@@ -83,6 +83,7 @@ const Navbar: React.FC<NavbarProps> = ({
               quitaba ancho de banda al CSS y a la imagen que sí es la LCP. */}
           <Link
             href="/"
+            prefetch={false}
             aria-label="Papelería P de Papel, inicio"
             className="flex h-11 w-[7.5rem] shrink-0 items-center"
           >
@@ -108,6 +109,7 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="hidden h-[84px] items-center gap-10 px-8 lg:flex xl:px-12">
           <Link
             href="/"
+            prefetch={false}
             aria-label="Papelería P de Papel, inicio"
             className="relative flex h-14 w-40 shrink-0 items-center"
           >
