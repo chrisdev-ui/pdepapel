@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({}) }));
 vi.mock("@/lib/env.mjs", () => ({ env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store" } }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 
 import { mergeAccountProducts } from "@/components/wishlist-sync-provider";
 import type { Product } from "@/types";

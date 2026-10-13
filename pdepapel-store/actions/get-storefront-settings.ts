@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { StorefrontSettings } from "@/types";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/public/storefront`;

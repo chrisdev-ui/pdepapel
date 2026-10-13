@@ -1,4 +1,4 @@
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
 
 export type SitemapProduct = {

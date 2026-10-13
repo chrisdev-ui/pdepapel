@@ -1,6 +1,6 @@
 "use server";
 
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { getPurchasableUnits } from "@/lib/purchasable-units";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;

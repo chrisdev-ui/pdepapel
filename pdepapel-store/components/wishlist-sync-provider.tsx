@@ -9,7 +9,7 @@ import {
   getAccountWishlist,
   syncAccountWishlist,
 } from "@/actions/account-wishlist";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import {
   refreshWishlistItems,
   useWishlist,

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/env.mjs", () => ({
   env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store-id" },
 }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   return { ...actual, cache: <T,>(callback: T) => callback };

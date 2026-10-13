@@ -1,4 +1,4 @@
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { Coupon } from "@/types";
 import axios, { AxiosResponse } from "axios";
 

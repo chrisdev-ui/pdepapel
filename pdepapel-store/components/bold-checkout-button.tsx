@@ -9,7 +9,7 @@ import { PaymentMethod } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { BoldCheckoutPayload, toBoldCheckoutConfig } from "@/lib/bold";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { resolvePaymentGateway } from "@/lib/payment-router";
 
 interface BoldCheckoutButtonProps {

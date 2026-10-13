@@ -7,7 +7,7 @@ import {
   UNAVAILABLE_RESPONSE,
   type CatalogQuery,
 } from "@/lib/catalog-params";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { ProductsResponse } from "@/types";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;

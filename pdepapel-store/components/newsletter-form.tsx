@@ -1,9 +1,7 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
+import { useForm, type FieldErrors, type Resolver } from "react-hook-form";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -22,15 +20,24 @@ import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
-const formSchema = z.object({
-  email: z.string().email("Ingresa un correo electrónico válido"),
-  consent: z.boolean().refine(Boolean, {
-    message: "Autoriza el envío de novedades para continuar",
-  }),
-  company: z.string().max(0).optional(),
-});
+/** La misma expresión que `z.string().email()` (zod 3.25): el formulario va en el pie de cada página y zod pesaba 13 KB. */
+const EMAIL_PATTERN = /^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
 
-type NewsletterFormValues = z.infer<typeof formSchema>;
+type NewsletterFormValues = { email: string; consent: boolean; company?: string };
+
+export const newsletterFormResolver: Resolver<NewsletterFormValues> = async (values) => {
+  const errors: FieldErrors<NewsletterFormValues> = {};
+  if (!EMAIL_PATTERN.test(values.email ?? "")) {
+    errors.email = { type: "pattern", message: "Ingresa un correo electrónico válido" };
+  }
+  if (values.consent !== true) {
+    errors.consent = { type: "required", message: "Autoriza el envío de novedades para continuar" };
+  }
+  if (values.company) {
+    errors.company = { type: "maxLength", message: "String must contain at most 0 character(s)" };
+  }
+  return Object.keys(errors).length > 0 ? { values: {}, errors } : { values, errors: {} };
+};
 
 interface NewsletterFormProps {
   source?: string;
@@ -44,7 +51,7 @@ export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) 
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const form = useForm<NewsletterFormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: newsletterFormResolver,
     defaultValues: {
       email: "",
       consent: false,

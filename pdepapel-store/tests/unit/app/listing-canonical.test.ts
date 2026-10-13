@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store" } }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 vi.mock("@/actions/get-category", () => ({ getCategory: mocks.getCategory }));
 vi.mock("@/actions/get-categories", () => ({ getCategories: mocks.getCategories }));
 vi.mock("@/actions/get-types", () => ({ getTypes: mocks.getTypes }));

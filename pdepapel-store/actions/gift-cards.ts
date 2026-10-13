@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import { buildOrderRequestHeaders, CHECKOUT_REQUEST_TIMEOUT_MS } from "@/actions/checkout-order";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import type { CheckoutResponse, GiftCardPurchase } from "@/types";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/gift-cards`;

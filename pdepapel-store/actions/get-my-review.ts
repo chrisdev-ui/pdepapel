@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { Review } from "@/types";
 
 /**

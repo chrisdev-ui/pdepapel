@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({ send: vi.fn(), fetch: vi.fn() }));
 vi.mock("@/lib/env.mjs", () => ({
   env: { RESEND_API_KEY: "re_test", NEXT_PUBLIC_API_URL: "https://admin.test/api/store-1" },
 }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 vi.mock("resend", () => ({
   Resend: class {
     emails = { send: mocks.send };

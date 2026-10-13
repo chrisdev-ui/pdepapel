@@ -1,4 +1,4 @@
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { ShippingQuoteRequest, ShippingQuoteResponse } from "@/types";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/shipment/quote`;

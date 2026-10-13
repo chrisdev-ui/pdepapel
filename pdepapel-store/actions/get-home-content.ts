@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { LiveHomeContent } from "@/types";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/home-content?live=1`;

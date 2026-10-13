@@ -1,4 +1,4 @@
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { Order } from "@/types";
 import axios from "axios";
 

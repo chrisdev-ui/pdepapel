@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 
 export async function POST(request: Request) {
   try {

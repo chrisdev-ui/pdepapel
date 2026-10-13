@@ -11,7 +11,7 @@ import { StarRating } from "@/components/ui/star-rating";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getMyReview } from "@/actions/get-my-review";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Review } from "@/types";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";

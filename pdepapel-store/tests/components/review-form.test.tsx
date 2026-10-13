@@ -14,6 +14,7 @@ vi.mock("@clerk/nextjs", () => ({
 vi.mock("next/navigation", () => ({ usePathname: () => "/producto/x", useRouter: () => ({ refresh }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 vi.mock("@/lib/env.mjs", () => ({ env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store" } }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 
 import { ReviewForm } from "@/components/reviews/review-form";
 

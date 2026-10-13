@@ -2,7 +2,7 @@ import {
   buildOrderRequestHeaders,
   CHECKOUT_REQUEST_TIMEOUT_MS,
 } from "@/actions/checkout-order";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { CheckoutOrder, Order } from "@/types";
 import axios, { AxiosResponse } from "axios";
 

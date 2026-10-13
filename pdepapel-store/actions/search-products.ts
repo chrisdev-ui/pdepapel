@@ -1,5 +1,5 @@
 import { fetchCatalogFromClient } from "@/lib/catalog-client";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { SearchResponse } from "@/types";
 
 const URL = `${env.NEXT_PUBLIC_API_URL}/search/products`;

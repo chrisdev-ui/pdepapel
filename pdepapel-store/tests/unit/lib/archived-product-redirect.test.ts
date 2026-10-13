@@ -5,6 +5,7 @@ vi.mock("react", async (importOriginal) => ({
   cache: <T,>(fn: T) => fn,
 }));
 vi.mock("@/lib/env.mjs", () => ({ env: { NEXT_PUBLIC_API_URL: "https://admin.test/api/store" } }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 
 import { getProductRoute } from "@/actions/get-product";
 import { archivedProductRedirectPath, UNAVAILABLE_PRODUCT_HASH } from "@/lib/archived-product-redirect";

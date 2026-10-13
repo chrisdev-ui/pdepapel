@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/env.mjs", () => ({
   env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store-id" },
 }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 
 import { getProducts } from "@/actions/get-products";
 import { SORT_OPTIONS } from "@/constants";

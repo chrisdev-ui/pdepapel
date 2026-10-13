@@ -14,6 +14,7 @@ vi.mock("@/components/product-list", () => ({
   ),
 }));
 vi.mock("@/lib/env.mjs", () => ({ env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store" } }));
+vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 vi.mock("@/lib/catalog-client", () => ({ fetchCatalogFromClient: vi.fn() }));
 vi.mock("@/providers/storefront-settings-provider", () => ({ useStorefrontSettings: () => ({ freeShippingThreshold: 250000 }) }));
 

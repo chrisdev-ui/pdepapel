@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Container } from "@/components/ui/container";
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {

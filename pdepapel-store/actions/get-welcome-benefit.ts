@@ -1,4 +1,4 @@
-import { env } from "@/lib/env.mjs";
+import { publicEnv as env } from "@/lib/public-env";
 import axios from "axios";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/account/welcome-benefit`;
