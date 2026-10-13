@@ -2,8 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useMemo } from "react";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 interface NavigationLinkProps {
   href: string;
@@ -14,7 +14,7 @@ export const NavigationLink: React.FC<NavigationLinkProps> = ({
   href,
   children,
 }) => {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const active = useMemo(() => pathname === href, [pathname, href]);
   return (
     <Link

@@ -2,7 +2,6 @@
 
 import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useCart } from "@/hooks/use-cart";
@@ -10,6 +9,7 @@ import { useCartSheet } from "@/hooks/use-cart-sheet";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 /** En la ficha de producto manda la barra del propio producto. */
 const HIDDEN_ON = [STOREFRONT_ROUTES.cart, STOREFRONT_ROUTES.checkout, "/producto/"];
@@ -19,7 +19,7 @@ const HIDDEN_ON = [STOREFRONT_ROUTES.cart, STOREFRONT_ROUTES.checkout, "/product
  * oculta al desplazarse y el carrito tiene productos.
  */
 export function MobileCartBar() {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const items = useCart((state) => state.items);
   const openSheet = useCartSheet((state) => state.open);
   const scrollPosition = useScrollPosition(8);

@@ -5,7 +5,7 @@ import { useWhatsAppContext } from "@/hooks/use-whatsapp-context";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { buildWhatsAppUrl, whatsAppAnalyticsParams, type WhatsAppPrefill } from "@/lib/whatsapp-prefill";
-import { usePathname } from "next/navigation";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 /**
  * Rutas donde el botón flotante estorba más de lo que ayuda: en ambas hay una
@@ -27,7 +27,7 @@ export function trackWhatsAppClick(placement: string, pagePath: string, prefill:
 }
 
 export function WhatsAppFloatingButton() {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const product = useWhatsAppContext((state) => state.product);
 
   if (HIDDEN_ON.includes(pathname)) return null;

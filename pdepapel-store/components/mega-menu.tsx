@@ -3,7 +3,6 @@
 import { ArrowRight, ChevronDown, ChevronRight, Menu } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Currency } from "@/components/ui/currency";
@@ -13,6 +12,7 @@ import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { categoryPath, productPath, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 interface MegaMenuProps {
   types: NavigationType[];
@@ -29,7 +29,7 @@ interface MegaMenuProps {
  * its subcategories and a featured product appear on the right.
  */
 export function MegaMenu({ types, featuredByType, featuredSubcategories }: MegaMenuProps) {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);

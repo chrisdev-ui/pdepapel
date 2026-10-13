@@ -1,15 +1,15 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 
 import { shouldMaskClarityPage } from "@/lib/microsoft-clarity";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 export function ClarityPrivacyBoundary({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const shouldMask = shouldMaskClarityPage(pathname);
 
   return (

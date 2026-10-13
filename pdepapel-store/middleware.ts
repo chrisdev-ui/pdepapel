@@ -2,7 +2,30 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 
 import { legacyProductRedirects } from "./lib/legacy-product-redirects.mjs";
-import { accountAccessPath, STOREFRONT_ROUTES } from "./lib/routes";
+import {
+  accountAccessPath,
+  cachedListingPath,
+  publicListingPath,
+  STOREFRONT_ROUTES,
+} from "./lib/routes";
+
+/** Los parámetros que cambian lo que muestra un listado; los demás (utm, fbclid) no. */
+const CATALOG_PARAMS = new Set([
+  "typeId",
+  "categoryId",
+  "colorId",
+  "sizeId",
+  "optionValueId",
+  "designId",
+  "sortOption",
+  "isOnSale",
+  "minPrice",
+  "maxPrice",
+  "page",
+  "itemsPerPage",
+  "search",
+  "exact",
+]);
 
 const legacyProductRedirectByPath = new Map(
   legacyProductRedirects.map(({ source, destination }) => [
@@ -78,6 +101,24 @@ export default function middleware(
     const destinationUrl = request.nextUrl.clone();
     destinationUrl.pathname = destinationPath;
     return NextResponse.redirect(destinationUrl, 308);
+  }
+
+  const publicPath = publicListingPath(request.nextUrl.pathname);
+  if (publicPath) {
+    const publicUrl = request.nextUrl.clone();
+    publicUrl.pathname = publicPath;
+    return NextResponse.redirect(publicUrl, 308);
+  }
+
+  const cachedPath = cachedListingPath(request.nextUrl.pathname);
+  if (
+    cachedPath &&
+    !Array.from(request.nextUrl.searchParams.keys()).some((key) => CATALOG_PARAMS.has(key))
+  ) {
+    const cachedUrl = request.nextUrl.clone();
+    cachedUrl.pathname = cachedPath;
+    cachedUrl.search = "";
+    return NextResponse.rewrite(cachedUrl);
   }
 
   if (!requiresServerAuth(request)) {

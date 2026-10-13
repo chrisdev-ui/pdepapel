@@ -4,7 +4,6 @@ import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Bookmark, PackageOpen, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { CategoryDrawer } from "@/components/category-drawer";
@@ -21,6 +20,7 @@ import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import { accountAccessPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Season } from "@/types";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 interface NavbarProps {
   season?: Season;
@@ -50,7 +50,7 @@ const Navbar: React.FC<NavbarProps> = ({
   freeShippingThreshold,
 }) => {
   const scrollPosition = useScrollPosition(8);
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const seasonConfig = SEASON_CONFIG[season];
   const scrolled = scrollPosition > 80;
 

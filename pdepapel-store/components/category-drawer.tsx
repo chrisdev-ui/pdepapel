@@ -4,7 +4,6 @@ import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { ArrowRight, Bookmark, Heart, LayoutGrid, Mail, Menu, PackageOpen, Store, Tag, User, X, Gift } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -32,6 +31,7 @@ import {
 } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 interface CategoryDrawerProps {
   types: NavigationType[];
@@ -52,7 +52,7 @@ const rowClass =
  * account shortcuts. Replaces the old five-link dropdown.
  */
 export function CategoryDrawer({ types, featuredSubcategories, logoSrc }: CategoryDrawerProps) {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const [open, setOpen] = useState(false);
 
   // Navigating anywhere closes the drawer.

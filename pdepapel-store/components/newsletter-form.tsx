@@ -5,7 +5,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 const formSchema = z.object({
   email: z.string().email("Ingresa un correo electrónico válido"),
@@ -39,7 +39,7 @@ interface NewsletterFormProps {
 
 export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) {
   const { toast } = useToast();
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const signupSource = source ?? pathname;
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);

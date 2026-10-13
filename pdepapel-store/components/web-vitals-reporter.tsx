@@ -1,10 +1,10 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { createClsTracker, type LayoutShiftEntry } from "@/lib/cls-metric";
 import { trackGoogleEvent } from "@/lib/customer-analytics";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 /** Una de cada diez vistas de página manda su CLS. */
 export const WEB_VITALS_SAMPLE_RATE = 0.1;
@@ -41,7 +41,7 @@ const safely = (run: () => void) => {
  * cambiar de ruta.
  */
 export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sampleRate?: number }) {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const pathRef = useRef(pathname);
   const trackerRef = useRef<ReturnType<typeof createClsTracker> | null>(null);
   const sampledRef = useRef(false);

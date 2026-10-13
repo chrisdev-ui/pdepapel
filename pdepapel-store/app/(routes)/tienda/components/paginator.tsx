@@ -1,13 +1,15 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { parseAsInteger, useQueryState } from "nuqs";
-import { MouseEvent, useEffect, useRef } from "react";
+import { MouseEvent, useEffect, useRef, useState } from "react";
 
+import { useIsStaticUrlState } from "@/components/shop/static-url-state";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { DOTS, LIMIT_SHOP_ITEMS } from "@/constants";
 import { isModifiedClick } from "@/lib/link-click";
 import { getPaginationPages } from "@/lib/pagination";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 interface PaginatorProps {
   totalPages: number;
@@ -16,10 +18,27 @@ interface PaginatorProps {
 }
 
 /** Páginas numeradas: la página va en la URL, se comparte y el «atrás» vuelve al mismo sitio. */
-const Paginator: React.FC<PaginatorProps> = ({ totalPages, scrollTargetId = "catalog-results" }) => {
-  const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
-  const pathname = usePathname();
+const Paginator: React.FC<PaginatorProps> = (props) =>
+  useIsStaticUrlState() ? <StaticSearchPaginator {...props} /> : <RouterSearchPaginator {...props} />;
+
+const RouterSearchPaginator: React.FC<PaginatorProps> = (props) => {
   const searchParams = useSearchParams();
+  return <PaginatorBody {...props} search={searchParams?.toString() ?? ""} />;
+};
+
+/** En la copia en caché la URL llega vacía al servidor; la del navegador se lee al montar. */
+const StaticSearchPaginator: React.FC<PaginatorProps> = (props) => {
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const current = window.location.search.replace(/^\?/, "");
+    if (current !== search) setSearch(current);
+  });
+  return <PaginatorBody {...props} search={search} />;
+};
+
+const PaginatorBody: React.FC<PaginatorProps & { search: string }> = ({ totalPages, scrollTargetId = "catalog-results", search }) => {
+  const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
+  const pathname = useStorefrontPathname();
   const currentPage = page ?? 1;
   const previousPageRef = useRef(currentPage);
 
@@ -42,7 +61,7 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages, scrollTargetId = "cat
   const goToPage = (next: number) => setPage(next === 1 ? null : next, { history: "push" });
   /** La misma URL con los demás filtros; la página 1 no lleva `page`. */
   const pageHref = (next: number) => {
-    const params = new URLSearchParams(searchParams?.toString());
+    const params = new URLSearchParams(search);
     if (next === 1) params.delete("page");
     else params.set("page", String(next));
     const query = params.toString();

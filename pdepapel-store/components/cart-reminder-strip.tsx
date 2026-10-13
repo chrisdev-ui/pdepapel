@@ -2,7 +2,6 @@
 
 import { ShoppingBag, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useCart } from "@/hooks/use-cart";
@@ -10,10 +9,11 @@ import { CART_REMINDER_DISMISSED_KEY, CART_TOUCHED_KEY, readSessionFlag, writeSe
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { calculateTotals, currencyFormatter } from "@/lib/utils";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 /** Al volver con productos guardados de otra visita, una franja lo recuerda una vez por sesión. */
 export function CartReminderStrip() {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const items = useCart((state) => state.items);
   const [visible, setVisible] = useState(false);
 

@@ -95,6 +95,11 @@ export function cachedListingPath(pathname: string): string | null {
   return CACHED_LISTING_PATTERN.test(pathname) ? `${CACHED_LISTING_PREFIX}${pathname}` : null;
 }
 
+/** La ruta tal como la ve quien visita: sin el prefijo de la copia en caché. */
+export function publicPathname(pathname: string): string {
+  return pathname.startsWith(`${CACHED_LISTING_PREFIX}/`) ? pathname.slice(CACHED_LISTING_PREFIX.length) : pathname;
+}
+
 /** La URL pública que corresponde a una ruta del prefijo en caché, o null. */
 export function publicListingPath(pathname: string): string | null {
   if (!pathname.startsWith(`${CACHED_LISTING_PREFIX}/`)) return null;

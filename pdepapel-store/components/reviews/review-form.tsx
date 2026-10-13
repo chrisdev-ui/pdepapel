@@ -3,7 +3,7 @@
 import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { getMyReview } from "@/actions/get-my-review";
 import { env } from "@/lib/env.mjs";
 import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Review } from "@/types";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 interface ReviewFormProps {
   productId: string;
@@ -22,7 +23,7 @@ interface ReviewFormProps {
 /** Publica o actualiza la reseña de la clienta con sesión; pasa por moderación. */
 export function ReviewForm({ productId }: ReviewFormProps) {
   const { userId, getToken } = useAuth();
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const router = useRouter();
   const { toast } = useToast();
   const [rating, setRating] = useState(0);

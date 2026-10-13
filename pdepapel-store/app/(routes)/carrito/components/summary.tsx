@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CreditCard, MapPin, ShieldCheck, TicketPercent, X } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountPrompt } from "@/components/account-prompt";
@@ -25,6 +25,7 @@ import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { NATIONWIDE_SHIPPING_COPY } from "@/lib/trust-points";
 import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 interface SummaryProps {
   /** Motivo por el que no se puede continuar; null cuando todo está bien. */
@@ -40,7 +41,7 @@ const ROW = "flex items-center justify-between gap-3 font-sans text-sm text-blue
  */
 export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const items = useCart((state) => state.items);
   const whatsAppPrefill: WhatsAppPrefill = { pageType: "cart", productRefs: items.map((item) => item.sku) };
   const { freeShippingThreshold } = useStorefrontSettings();

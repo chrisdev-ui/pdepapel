@@ -118,3 +118,31 @@ describe("storefront middleware", () => {
     expect(clerk.handlerCalls).toBe(0);
   });
 });
+
+describe("cached listings", () => {
+  const rewriteOf = async (path: string) => (await run(path))?.headers.get("x-middleware-rewrite") ?? null;
+
+  it("serves /tienda and a category without catalog params from the cached copy, dropping the query", async () => {
+    expect(await rewriteOf("/tienda")).toBe("https://papeleriapdepapel.com/catalogo-cache/tienda");
+    expect(await rewriteOf("/categoria/stickers")).toBe("https://papeleriapdepapel.com/catalogo-cache/categoria/stickers");
+    expect(await rewriteOf("/tienda?utm_source=instagram&fbclid=abc")).toBe("https://papeleriapdepapel.com/catalogo-cache/tienda");
+  });
+
+  it("keeps filtered, searched, sorted and paginated listings dynamic", async () => {
+    for (const path of ["/tienda?colorId=c1", "/tienda?search=agenda", "/tienda?page=2", "/tienda?typeId=t1", "/categoria/stickers?sortOption=priceAsc", "/categoria/stickers?isOnSale=true"]) {
+      expect(await rewriteOf(path), path).toBeNull();
+    }
+  });
+
+  it("does not touch other routes", async () => {
+    expect(await rewriteOf("/producto/agenda")).toBeNull();
+    expect(await rewriteOf("/categoria/stickers/otra")).toBeNull();
+  });
+
+  it("sends a direct visit to the cached copy back to the public URL", async () => {
+    const response = await run("/catalogo-cache/categoria/stickers?utm_source=x");
+    expect(response?.status).toBe(308);
+    expect(response?.headers.get("location")).toBe("https://papeleriapdepapel.com/categoria/stickers?utm_source=x");
+    expect((await run("/catalogo-cache/otra-cosa"))?.headers.get("location")).toBe("https://papeleriapdepapel.com/tienda");
+  });
+});
