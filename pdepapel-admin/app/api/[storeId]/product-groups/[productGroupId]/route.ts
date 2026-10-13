@@ -24,7 +24,7 @@ import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { findProductWithGtin } from "@/lib/product-identifiers";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
-import { invalidateStoreProductsCache } from "@/lib/cache";
+import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { pauseMarketplaceListingsForProducts } from "@/lib/product-archive";
 import { getProductDeleteCheck } from "@/lib/product-deletion";
 import {
@@ -186,6 +186,7 @@ export async function PATCH(
     let appliedRemovals: Awaited<ReturnType<typeof resolveVariantRemovals>> =
       [];
 
+    const scopeBefore = await storefrontScopeOf(params.storeId, { productGroupIds: [params.productGroupId] });
     const updatedGroup = await prismadb.$transaction(async (tx) => {
       const existingGroup = await tx.productGroup.findFirst({
         where: { id: params.productGroupId, storeId: params.storeId },
@@ -409,7 +410,7 @@ export async function PATCH(
     });
 
     await deleteCloudinaryImages(previousImageUrls, "PRODUCT_GROUP_PATCH");
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, { productGroupIds: [params.productGroupId], previous: scopeBefore });
 
     return NextResponse.json(
       { ...updatedGroup, removals: appliedRemovals, pausedListings },
@@ -444,6 +445,7 @@ export async function DELETE(
       offersCarried: number;
       photosCopiedTo: number;
     } | null = null;
+    const groupScopeBefore = await storefrontScopeOf(params.storeId, { productGroupIds: [params.productGroupId] });
     const deletedGroup = await prismadb.$transaction(async (tx) => {
       // Todo filtrado por tienda: el grupo, sus variantes y sus fotos.
       const group = await tx.productGroup.findFirst({
@@ -559,7 +561,7 @@ export async function DELETE(
     });
 
     await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCT_GROUP_DELETE");
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, { previous: groupScopeBefore });
 
     return NextResponse.json({ ...deletedGroup, ungrouped }, { headers: corsHeaders });
   } catch (error) {

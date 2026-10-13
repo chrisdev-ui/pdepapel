@@ -80,7 +80,7 @@ describe("synchronizeMercadoLibreOrder inventory path", () => {
 
     const result = await synchronizeMercadoLibreOrder("conn-1", "store-1", payload);
 
-    expect(result).toEqual({ inventoryChanged: true, needsAttention: false });
+    expect(result).toEqual({ inventoryChanged: true, needsAttention: false, productIds: ["p1"] });
     expect(mocks.queueNotification).toHaveBeenCalledWith(tx, {
       connectionId: "conn-1",
       externalOrderId: "2000017813937484",

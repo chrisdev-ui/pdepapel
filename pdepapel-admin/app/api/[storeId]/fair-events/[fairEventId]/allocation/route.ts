@@ -23,7 +23,9 @@ export async function POST(
       allocations,
       userId,
     });
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, {
+      productIds: allocations.map((allocation) => allocation.productId),
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

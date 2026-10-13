@@ -84,6 +84,7 @@ vi.mock("@/lib/prismadb", () => ({
       count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    orderItem: { findMany: vi.fn().mockResolvedValue([{ productId: "product-before" }]) },
     coupon: {
       findFirst: mocks.findCoupon,
       fields: { maxUses: "maxUses-field-reference" },
@@ -360,5 +361,7 @@ describe("PATCH order coupon", () => {
 
     expect(response.status).toBe(200);
     expect(sequence).toEqual(["commit", "purge"]);
+    // Lo que tenía el pedido antes de editarlo también cambió de stock.
+    expect(invalidateStoreProductsCache).toHaveBeenCalledWith("store-1", { orderIds: ["order-1"], productIds: ["product-before"] });
   });
 });

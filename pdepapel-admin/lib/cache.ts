@@ -1,7 +1,15 @@
 import { Redis } from "@upstash/redis";
 import { enqueuePendingMarketplaceOutboxEventsForStore } from "./mercadolibre/outbox";
+import prismadb from "./prismadb";
 import { productCacheKeyPatterns } from "./product-cache-keys";
 import { triggerStorefrontRevalidation } from "./revalidate-store";
+import {
+  fitsScopedPurge,
+  mergeScopes,
+  resolveProductStorefrontScope,
+  type StorefrontScope,
+  type StorefrontTarget,
+} from "./storefront-cache-scope";
 
 export { productCacheKeyPatterns };
 
@@ -130,9 +138,55 @@ async function purgeMetaCatalogFeed(storeId: string) {
  *
  * Runs concurrently with Promise.allSettled to minimize API response latency.
  */
+/**
+ * Purga en la tienda solo lo que tocan estos productos o pedidos. Sin
+ * objetivo, o si no se puede resolver el alcance, purga todo: el fallo nunca
+ * deja una página vieja, a lo sumo purga de más.
+ */
+export async function revalidateStorefrontFor(
+  storeId: string,
+  target?: string | StorefrontTarget,
+): Promise<void> {
+  if (!target) return triggerStorefrontRevalidation();
+  const normalized: StorefrontTarget =
+    typeof target === "string" ? { productIds: [target] } : target;
+  let scope;
+  try {
+    scope = mergeScopes(
+      await resolveProductStorefrontScope(prismadb, storeId, normalized),
+      normalized.previous,
+      normalized.extra,
+    );
+  } catch (error) {
+    console.warn(`[storefront] alcance de la purga sin resolver para ${storeId}; se purga todo:`, error);
+    return triggerStorefrontRevalidation();
+  }
+  if (scope.tags.length === 0 || !fitsScopedPurge(scope)) {
+    return triggerStorefrontRevalidation();
+  }
+  return triggerStorefrontRevalidation({ scope });
+}
+
+/**
+ * El alcance de unos productos ANTES de un cambio que los mueve de categoría o
+ * grupo, los deja de destacar o los borra. null si no se pudo resolver: la
+ * purga de después cae entonces a la completa.
+ */
+export async function storefrontScopeOf(
+  storeId: string,
+  target: Pick<StorefrontTarget, "productIds" | "orderIds" | "productGroupIds">,
+): Promise<StorefrontScope | null> {
+  try {
+    return await resolveProductStorefrontScope(prismadb, storeId, target);
+  } catch (error) {
+    console.warn(`[storefront] alcance previo sin resolver para ${storeId}:`, error);
+    return null;
+  }
+}
+
 export async function invalidateStoreProductsCache(
   storeId: string,
-  productId?: string,
+  target?: string | StorefrontTarget,
   options: { budgetMs?: number; purgeBudgetMs?: number } = {},
 ): Promise<void> {
   const budgetMs = options.budgetMs ?? INVALIDATION_BUDGET_MS;
@@ -144,7 +198,7 @@ export async function invalidateStoreProductsCache(
     `Cache invalidation for store ${storeId}`,
     budgetMs,
     Promise.allSettled([
-      triggerStorefrontRevalidation({ productId }),
+      revalidateStorefrontFor(storeId, target),
       purgeRedisProductKeys(storeId, purgeBudgetMs),
       enqueuePendingMarketplaceOutboxEventsForStore(storeId),
       purgeMetaCatalogFeed(storeId),

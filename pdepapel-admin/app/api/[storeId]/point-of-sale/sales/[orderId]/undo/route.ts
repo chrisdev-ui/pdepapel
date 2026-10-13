@@ -21,7 +21,7 @@ export async function POST(_req: Request, { params }: { params: { storeId: strin
     await verifyStoreOwner(userId, params.storeId);
 
     const result = await undoPointOfSaleSale({ storeId: params.storeId, orderId: params.orderId, userId });
-    if (result.restocked) await invalidateStoreProductsCache(params.storeId);
+    if (result.restocked) await invalidateStoreProductsCache(params.storeId, { orderIds: [params.orderId] });
 
     return NextResponse.json(
       {

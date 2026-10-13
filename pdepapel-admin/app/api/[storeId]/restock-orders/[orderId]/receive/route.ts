@@ -154,13 +154,14 @@ currentCost: hasCostHistory ? (before?.transportationCost ?? 0) : null,
         await tx.restockOrder.update({ where: { id: order.id }, data: { status } });
       }
 
-      return { receipt, status, progress: getRestockProgress(fresh) };
+      return { receipt, status, progress: getRestockProgress(fresh), productIds: plan.lines.map((line) => line.productId) };
     });
 
     // El stock cambió: la tienda y Redis deben verlo.
-    await invalidateStoreProductsCache(params.storeId);
+    const { productIds: receivedProductIds, ...received } = result;
+    await invalidateStoreProductsCache(params.storeId, { productIds: receivedProductIds });
 
-    return NextResponse.json(result, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
+    return NextResponse.json(received, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
   } catch (error) {
     if (isDuplicateReceipt(error)) {
       return handleErrorResponse(

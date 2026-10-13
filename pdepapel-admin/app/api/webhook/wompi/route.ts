@@ -602,7 +602,7 @@ async function updateOrderData(order: any, transaction: any) {
     }
 
     if (result.shouldInvalidateCache) {
-      await invalidateStoreProductsCache(order.storeId);
+      await invalidateStoreProductsCache(order.storeId, { orderIds: [order.id] });
     }
 
     if (issuedGiftCard) {

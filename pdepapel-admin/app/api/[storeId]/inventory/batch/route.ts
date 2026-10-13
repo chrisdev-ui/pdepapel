@@ -98,7 +98,9 @@ export async function POST(
       );
       await createInventoryMovementBatch(tx, movementParams, false);
     });
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, {
+      productIds: movementParams.map((movement) => movement.productId),
+    });
 
     return NextResponse.json(
       {

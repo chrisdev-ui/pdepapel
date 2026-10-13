@@ -68,7 +68,7 @@ export async function confirmMercadoLibreOrderReturn({
   });
   if (!order) throw ErrorFactory.NotFound("La venta de Mercado Libre no existe");
   if (order.inventoryStatus === MarketplaceInventoryStatus.RESTOCKED) {
-    return { marketplaceOrderId: order.id, returned: 0, issues: 0, alreadyRestocked: true };
+    return { marketplaceOrderId: order.id, returned: 0, issues: 0, alreadyRestocked: true, productIds: [] as string[] };
   }
   if (order.inventoryStatus !== MarketplaceInventoryStatus.RESTOCK_PENDING) {
     throw ErrorFactory.Conflict(
@@ -147,6 +147,7 @@ export async function confirmMercadoLibreOrderReturn({
       returned: result.success.reduce((total, line) => total + line.quantity, 0),
       issues,
       alreadyRestocked: false,
+      productIds,
     };
   }).then(async (summary) => {
     try {

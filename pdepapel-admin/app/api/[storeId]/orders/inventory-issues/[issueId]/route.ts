@@ -48,7 +48,7 @@ export async function POST(
             resolvedBy: userId,
           }),
     );
-    if (action === "retry") await invalidateStoreProductsCache(params.storeId);
+    if (action === "retry") await invalidateStoreProductsCache(params.storeId, issue ? { productIds: [issue.productId] } : undefined);
 
     return NextResponse.json(
       { success: true, issue: issue ?? null },

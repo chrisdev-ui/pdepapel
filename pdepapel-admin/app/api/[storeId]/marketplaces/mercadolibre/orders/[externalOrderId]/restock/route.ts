@@ -31,11 +31,12 @@ export async function POST(
       externalOrderId,
       userId,
     });
+    const { productIds: returnedProductIds, ...returnSummary } = summary;
     if (summary.returned > 0) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, { productIds: returnedProductIds });
     }
     return NextResponse.json(
-      { externalOrderId, ...summary },
+      { externalOrderId, ...returnSummary },
       { headers: CACHE_HEADERS.NO_CACHE },
     );
   } catch (error) {

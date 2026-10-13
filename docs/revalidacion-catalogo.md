@@ -2,6 +2,27 @@
 
 El panel administrativo actualiza el catálogo público por medio de `POST /api/revalidate` después de modificar productos, categorías o inventario.
 
+## Purgas acotadas (desde 2026-10-13)
+
+Cada cambio purga solo lo que toca. El panel resuelve los productos afectados (`lib/storefront-cache-scope.ts`) y manda `{ version: 2, tags, paths }`; la tienda purga exactamente eso (`app/api/revalidate/route.ts`, con lista blanca de etiquetas y topes de 200 etiquetas / 50 rutas).
+
+| Etiqueta | La lleva | Se purga cuando |
+|---|---|---|
+| `product:<slug, id o alias>` | la ficha (`actions/get-product.ts`) | cambia ese producto, una pieza de su kit o un kit que lo contiene |
+| `products:group:<id>` | las variantes hermanas en la ficha | cambia una variante del grupo |
+| `products:category:<id o slug>` | `/categoria/<slug>` y los sugeridos de cada ficha | cambia un producto de esa categoría |
+| `products:type:<id o slug>` | `/tienda?typeId=` | cambia un producto de ese tipo |
+| `products:featured` | el encabezado (todas las páginas) y la sección de favoritos del inicio | cambia un producto destacado |
+| `products:list` | `/tienda`, rieles del inicio, carrito, próximamente, mapa del sitio | cambia cualquier producto |
+| `products` | todas las anteriores | solo en purgas completas |
+| `catalog` | árbol de tipos y categorías del encabezado | cambian categorías, tipos o atributos |
+
+- Pedidos, pagos (Bold, Wompi), punto de venta, ferias, inventario, recepciones y Mercado Libre purgan los productos de sus líneas, incluidos los kits que los contienen.
+- Guardar, mover o borrar un producto o grupo purga también el alcance que tenía antes (categoría, grupo o destacado anteriores).
+- Siguen siendo purgas completas, a propósito: ofertas, categorías, tipos, colores, tallas, diseños, atributos, portadas de categoría, migración del catálogo y ajustes de la tienda. `tests/unit/security/storefront-purge-scope-scan.test.ts` falla si aparece otra llamada sin alcance fuera de esa lista.
+- Si el alcance no se puede resolver (error, nada resuelto o más de los topes), el panel manda la purga completa: nunca se queda una página vieja, a lo sumo se purga de más.
+- Una petición sin `version` sigue haciendo la purga completa de antes, para que un panel y una tienda de despliegues distintos convivan.
+
 ## Configuración de producción
 
 Configura `REVALIDATION_SECRET` con exactamente el mismo valor, de una sola línea, en ambos proyectos de Vercel:

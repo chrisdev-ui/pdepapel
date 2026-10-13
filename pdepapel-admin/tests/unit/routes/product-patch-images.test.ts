@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: mocks.invalidate }));
+vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: mocks.invalidate, storefrontScopeOf: async () => ({ tags: ["product:before"], paths: [] }) }));
 vi.mock("@/lib/cloudinary", () => ({ default: { v2: { api: { delete_resources: mocks.deleteResources } } } }));
 vi.mock("@/lib/catalog-migration", () => ({
   syncProductCatalogAttributes: vi.fn(),

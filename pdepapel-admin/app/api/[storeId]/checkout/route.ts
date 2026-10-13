@@ -1039,7 +1039,7 @@ async function createCheckout(
 
     if (fullyCovered) {
       // Lo que un webhook haría al confirmar el pago, sin pasarela de por medio.
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, { orderIds: [order.id] });
       const paidOrder = await prismadb.order.findUnique({
         where: { id: order.id },
         include: { payment: true, shipping: true, orderItems: { include: { product: true } } },

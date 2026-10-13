@@ -23,6 +23,7 @@ vi.mock("@/lib/cloudinary-cleanup", () => ({
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/cache", () => ({
   invalidateStoreProductsCache: vi.fn(),
+  storefrontScopeOf: async () => ({ tags: ["product:before"], paths: [] }),
 }));
 vi.mock("@/lib/inventory", () => ({
   createInventoryMovementBatch: vi.fn(),

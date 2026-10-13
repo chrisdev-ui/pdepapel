@@ -823,7 +823,11 @@ export async function synchronizeMercadoLibreOrder(
       shouldSendNotification,
       refundChanged && marketplaceOrder.netAmount !== null,
     );
-    return { inventoryChanged, needsAttention: false };
+    return {
+      inventoryChanged,
+      needsAttention: false,
+      productIds: resolvedItems.flatMap((item) => (item.productId ? [item.productId] : [])),
+    };
   } catch (error) {
     if (error instanceof MarketplaceStockException) {
       await prismadb.marketplaceOrder.update({

@@ -221,7 +221,7 @@ export const HOME_CONTENT_ADMIN_SELECT = {
   },
 } satisfies Prisma.HomeContentSelect;
 
-export const HOME_CONTENT_REVALIDATION = { paths: ["/"], tags: ["home-content"] };
+export const HOME_CONTENT_REVALIDATION = { scope: { paths: ["/"], tags: ["home-content"] } };
 
 export function toPublicHomeContent(entry: Prisma.HomeContentGetPayload<{ select: typeof HOME_CONTENT_ADMIN_SELECT }>) {
   return {

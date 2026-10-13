@@ -71,8 +71,7 @@ export async function POST(
     });
 
     await triggerStorefrontRevalidation({
-      paths: [...POSTS_REVALIDATION.paths],
-      tags: [...POSTS_REVALIDATION.tags],
+      scope: { paths: [...POSTS_REVALIDATION.paths], tags: [...POSTS_REVALIDATION.tags] },
     });
 
     return NextResponse.json(post, {

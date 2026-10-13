@@ -268,7 +268,7 @@ export async function POST(
     });
 
     await deleteCloudinaryImages(previousImageUrls, "PRODUCT_GROUPS_POST");
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, { productGroupIds: [productGroup.id] });
 
     return NextResponse.json(
       { ...productGroup, pausedListings },

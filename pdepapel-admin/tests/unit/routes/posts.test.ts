@@ -84,8 +84,7 @@ describe("posts API", () => {
         }),
       );
       expect(mocks.triggerStorefrontRevalidation).toHaveBeenCalledWith({
-        paths: ["/nosotros"],
-        tags: ["posts"],
+        scope: { paths: ["/nosotros"], tags: ["posts"] },
       });
     });
 
@@ -260,8 +259,7 @@ describe("posts API", () => {
         }),
       );
       expect(mocks.triggerStorefrontRevalidation).toHaveBeenCalledWith({
-        paths: ["/nosotros"],
-        tags: ["posts"],
+        scope: { paths: ["/nosotros"], tags: ["posts"] },
       });
     });
   });
@@ -294,8 +292,7 @@ describe("posts API", () => {
         where: { id: "post-1", storeId },
       });
       expect(mocks.triggerStorefrontRevalidation).toHaveBeenCalledWith({
-        paths: ["/nosotros"],
-        tags: ["posts"],
+        scope: { paths: ["/nosotros"], tags: ["posts"] },
       });
     });
   });

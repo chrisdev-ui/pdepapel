@@ -21,8 +21,7 @@ const PUBLIC_POST_SELECT = {
 
 const revalidatePostsOnStorefront = () =>
   triggerStorefrontRevalidation({
-    paths: [...POSTS_REVALIDATION.paths],
-    tags: [...POSTS_REVALIDATION.tags],
+    scope: { paths: [...POSTS_REVALIDATION.paths], tags: [...POSTS_REVALIDATION.tags] },
   });
 
 export async function GET(

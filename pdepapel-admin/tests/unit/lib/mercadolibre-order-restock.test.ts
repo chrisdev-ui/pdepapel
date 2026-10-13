@@ -113,7 +113,7 @@ describe("confirmMercadoLibreOrderReturn", () => {
     );
     expect(queueSync).toHaveBeenCalledWith(prisma, ["p1", "p2"]);
     expect(dispatch).toHaveBeenCalledWith("conn-1");
-    expect(result).toEqual({ marketplaceOrderId: "mo-1", returned: 2, issues: 1, alreadyRestocked: false });
+    expect(result).toEqual({ marketplaceOrderId: "mo-1", returned: 2, issues: 1, alreadyRestocked: false, productIds: ["p1", "p2"] });
   });
 
   it("does not release the claim to a second caller", async () => {

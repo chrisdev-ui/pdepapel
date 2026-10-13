@@ -168,6 +168,7 @@ export async function POST(
       );
     }
 
+    let touchedProductIds: string[] = [];
     const appliedPreview = await prismadb.$transaction(async (tx) => {
       const freshPreview = await getValidatedPreview(
         tx,
@@ -260,11 +261,12 @@ export async function POST(
         kitIds,
       );
       await queueMarketplaceStockSyncEvents(tx, [...productIds, ...kitIds]);
+      touchedProductIds = [...productIds, ...kitIds];
 
       return freshPreview;
     });
 
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, { productIds: touchedProductIds });
 
     return NextResponse.json(
       {

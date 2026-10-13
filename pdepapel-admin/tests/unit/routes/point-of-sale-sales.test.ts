@@ -48,7 +48,7 @@ describe("POST /point-of-sale/sales", () => {
     const response = await sale({ items: [{ productId: "p", quantity: 1 }], paymentMethod: "BankTransfer", idempotencyKey: "k".repeat(12), transactionId: "REF-9" });
     expect(response.status).toBe(201);
     expect(mocks.createSale).toHaveBeenCalledWith(expect.objectContaining({ paymentMethod: "BankTransfer", transactionId: "REF-9", userId: "owner" }));
-    expect(mocks.invalidate).toHaveBeenCalledWith("store-1");
+    expect(mocks.invalidate).toHaveBeenCalledWith("store-1", { orderIds: ["o-1"] });
     expect(mocks.charge).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({ pending: false, terminal: null });
   });
@@ -92,7 +92,7 @@ describe("POST /point-of-sale/sales/[orderId]/undo", () => {
     const response = await undo();
     expect(response.status).toBe(200);
     expect(mocks.undo).toHaveBeenCalledWith({ storeId: "store-1", orderId: "o-1", userId: "owner" });
-    expect(mocks.invalidate).toHaveBeenCalledWith("store-1");
+    expect(mocks.invalidate).toHaveBeenCalledWith("store-1", { orderIds: ["o-1"] });
     await expect(response.json()).resolves.toMatchObject({ message: "Venta V-1 deshecha: el inventario volvió.", restocked: true });
   });
 

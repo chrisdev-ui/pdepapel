@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { invalidateStoreProductsCache } from "@/lib/cache";
+import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { createInventoryMovementBatch } from "@/lib/inventory";
 import {
   getUniqueProductSlug,
@@ -234,6 +234,7 @@ export async function POST(
     }
     const droppedImageUrls: string[] = [];
 
+    const scopeBefore = await storefrontScopeOf(params.storeId, { productIds: [params.productId] });
     const result = await prismadb.$transaction(async (tx) => {
       const category = await tx.category.findFirst({
         where: { id: product.categoryId, storeId: params.storeId },
@@ -434,7 +435,11 @@ export async function POST(
     });
 
     await deleteCloudinaryImages(droppedImageUrls, "PRODUCT_CONVERT_REVIEW");
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, {
+      productIds: [params.productId, ...result.createdProducts.map((product) => product.id)],
+      productGroupIds: [result.group.id],
+      previous: scopeBefore,
+    });
     return NextResponse.json({
       productGroupId: result.group.id,
       createdProductIds: result.createdProducts.map((product) => product.id),

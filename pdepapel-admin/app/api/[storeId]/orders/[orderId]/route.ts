@@ -475,6 +475,9 @@ export async function PATCH(
     // La caché se purga DESPUÉS del commit: dentro de la transacción esperaba a
     // Redis, a la tienda y a QStash con los bloqueos de inventario tomados, y
     // el 2026-09-29 eso colgó «Marcar como pagado» hasta los 60 s de Vercel.
+    const productIdsBefore = (
+      await prismadb.orderItem.findMany({ where: { orderId: params.orderId }, select: { productId: true } })
+    ).flatMap((item) => (item.productId ? [item.productId] : []));
     let purgeCacheAfterCommit = false;
     const updatedOrder = await prismadb.$transaction(async (tx) => {
       // Batch process products for better performance
@@ -1074,7 +1077,7 @@ export async function PATCH(
     });
 
     if (purgeCacheAfterCommit) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, { orderIds: [params.orderId], productIds: productIdsBefore });
     }
 
     if (issuedGiftCard) {
@@ -1162,6 +1165,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
+    let deletedProductIds: string[] = [];
     const order = await prismadb.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: params.orderId },
@@ -1174,6 +1178,7 @@ export async function DELETE(
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+      deletedProductIds = order.orderItems.flatMap((item) => (item.productId ? [item.productId] : []));
       const deleteGuard = getInPersonOrderGuard(order.type, "delete");
       if (deleteGuard) throw ErrorFactory.Conflict(deleteGuard);
 
@@ -1275,7 +1280,7 @@ export async function DELETE(
     });
 
     // Sin esto la tienda seguia mostrando el stock viejo tras la devolucion.
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, { productIds: deletedProductIds });
 
     // Borrar un pedido no manda correo: el pedido ya no existe para armarlo.
     // La cancelación con aviso a la clienta es el cambio de estado a

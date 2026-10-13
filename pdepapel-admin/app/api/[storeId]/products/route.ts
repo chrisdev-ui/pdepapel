@@ -65,7 +65,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 
-import { invalidateStoreProductsCache } from "@/lib/cache";
+import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import {
   syncProductCatalogAttributes,
   visualCatalogAttributesSchema,
@@ -381,7 +381,7 @@ export async function POST(
     }
 
     // Invalidate all product cache entries for this store
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, product.id);
 
     return NextResponse.json(product, {
       headers: {
@@ -1604,6 +1604,7 @@ export async function DELETE(
         "Se requieren IDs de productos válidos en formato de arreglo",
       );
 
+    const scopeBefore = await storefrontScopeOf(params.storeId, { productIds: ids });
     const imageUrlsToDelete: string[] = [];
     await prismadb.$transaction(async (tx: any) => {
       const products = await tx.product.findMany({
@@ -1679,7 +1680,7 @@ export async function DELETE(
     await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCTS_DELETE");
 
     // Invalidate all product cache entries for this store
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, { previous: scopeBefore });
 
     return NextResponse.json(
       "Los productos han sido eliminados correctamente",

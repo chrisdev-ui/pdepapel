@@ -11,7 +11,7 @@ import {
   syncProductCatalogAttributes,
   visualCatalogAttributesSchema,
 } from "@/lib/catalog-migration";
-import { invalidateStoreProductsCache } from "@/lib/cache";
+import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { createCorsHeaders } from "@/lib/cors";
 import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
@@ -222,6 +222,7 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
 
     await verifyStoreOwner(userId, params.storeId);
+    const scopeBefore = await storefrontScopeOf(params.storeId, { productIds: [params.productId] });
 
     const body = await req.json();
     const {
@@ -539,7 +540,7 @@ export async function PATCH(
     await deleteCloudinaryImages(imagesToDelete, "PRODUCT_PATCH");
 
     // Invalidate product cache & trigger instant storefront revalidation
-    await invalidateStoreProductsCache(params.storeId, params.productId);
+    await invalidateStoreProductsCache(params.storeId, { productIds: [params.productId], previous: scopeBefore });
 
     return NextResponse.json(
       { ...result, pausedListings },
@@ -566,6 +567,7 @@ export async function DELETE(
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
 
     await verifyStoreOwner(userId, params.storeId);
+    const scopeBefore = await storefrontScopeOf(params.storeId, { productIds: [params.productId] });
 
     const imageUrlsToDelete: string[] = [];
     await prismadb.$transaction(async (tx) => {
@@ -640,7 +642,7 @@ export async function DELETE(
     await deleteCloudinaryImages(imageUrlsToDelete, "PRODUCT_DELETE");
 
     // Invalidate product cache & trigger instant storefront revalidation
-    await invalidateStoreProductsCache(params.storeId, params.productId);
+    await invalidateStoreProductsCache(params.storeId, { previous: scopeBefore });
 
     return NextResponse.json("El producto ha sido eliminado correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,

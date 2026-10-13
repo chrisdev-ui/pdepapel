@@ -327,7 +327,7 @@ describe("POST /api/webhook/bold", () => {
     });
     expect(transactionClient.paymentDetails.upsert).toHaveBeenCalledTimes(1);
     expect(transactionClient.shipping.upsert).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id");
+    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id", { orderIds: ["order-id"] });
     // Solo el id: el correo carga el pedido completo con sus artículos.
     expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-id", OrderStatus.PAID);
     expect(mocks.recordPaidOrderInGoogleAnalytics).toHaveBeenCalledWith(
@@ -552,7 +552,7 @@ describe("POST /api/webhook/bold", () => {
       where: { id: "coupon-id", usedCount: { gt: 0 } },
       data: { usedCount: { decrement: 1 } },
     });
-    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id");
+    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id", { orderIds: ["order-id"] });
   });
 
   it("stores no transaction id when the provider sends none", async () => {

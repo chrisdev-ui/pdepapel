@@ -41,7 +41,7 @@ export async function POST(
       terminal = (await chargePointOfSaleOnTerminal({ storeId: params.storeId, orderId: result.order.id })).message;
     }
     if (!result.duplicate && !result.pending) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, { orderIds: [result.order.id] });
     }
 
     return NextResponse.json({ ...result, terminal }, { status: result.duplicate ? 200 : 201 });

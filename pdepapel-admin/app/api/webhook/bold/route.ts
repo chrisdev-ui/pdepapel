@@ -457,7 +457,7 @@ async function processBoldPayment(
       );
     }
 
-    await invalidateStoreProductsCache(order.storeId);
+    await invalidateStoreProductsCache(order.storeId, { orderIds: [order.id] });
 
     if (issuedGiftCard) {
       await deliverGiftCard(issuedGiftCard, { buyerName: order.fullName });
@@ -592,7 +592,7 @@ async function processBoldPayment(
       );
     }
 
-    await invalidateStoreProductsCache(order.storeId);
+    await invalidateStoreProductsCache(order.storeId, { orderIds: [order.id] });
   }
 
   const updatedOrder = await prismadb.order.findUnique({

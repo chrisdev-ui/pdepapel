@@ -2,6 +2,7 @@ import axios, { isAxiosError } from "axios";
 
 import { sendRevalidationFailureAlert } from "@/lib/revalidation-alert";
 import { recordJobRun } from "@/lib/job-runs";
+import { STOREFRONT_SCOPE_VERSION, type StorefrontScope } from "@/lib/storefront-cache-scope";
 
 const REVALIDATION_TIMEOUT_MS = 3000;
 const RETRY_DELAY_MS = 400;
@@ -43,6 +44,8 @@ function isTransientFailure(error: unknown): boolean {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface RevalidateParams {
+  /** Purga acotada: solo estas etiquetas y rutas. Sin ella, la purga completa. */
+  scope?: StorefrontScope;
   productId?: string;
   path?: string;
   paths?: string[];
@@ -102,13 +105,15 @@ export async function triggerStorefrontRevalidation(
     const post = (endpoint: string) =>
       axios.post(
         endpoint,
-        {
-          productId: params.productId,
-          path: params.path,
-          paths: params.paths,
-          tag: params.tag,
-          tags: params.tags || ["products"],
-        },
+        params.scope
+          ? { version: STOREFRONT_SCOPE_VERSION, tags: params.scope.tags, paths: params.scope.paths }
+          : {
+              productId: params.productId,
+              path: params.path,
+              paths: params.paths,
+              tag: params.tag,
+              tags: params.tags || ["products"],
+            },
         {
           headers: {
             "x-revalidate-secret": secret,
@@ -161,7 +166,9 @@ export async function triggerStorefrontRevalidation(
       ok: !publicFailure,
       detail: publicFailure
         ? `${publicFailure.endpoint}: ${publicFailure.detail}`
-        : `Actualizada ${(params.tags ?? [params.tag ?? "products"]).filter(Boolean).join(", ")}`,
+        : params.scope
+          ? `Actualizada (acotada) ${params.scope.tags.length} etiquetas, ${params.scope.paths.length} rutas`
+          : `Actualizada ${(params.tags ?? [params.tag ?? "products"]).filter(Boolean).join(", ")}`,
     });
   } catch (error) {
     console.error("Error triggering storefront revalidation:", error);

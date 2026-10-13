@@ -742,7 +742,7 @@ async function createOrder(
     });
 
     if (purgeCacheAfterCommit) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, { orderIds: [order.id] });
     }
 
     if (issuedGiftCard) {
@@ -887,6 +887,7 @@ export async function DELETE(
     await verifyStoreOwner(userId, params.storeId);
 
     let purgeCacheAfterCommit = false;
+    const purgeProductIds: string[] = [];
     const result = await prismadb.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -956,6 +957,8 @@ export async function DELETE(
             }
           }
         }
+
+        purgeProductIds.push(...stockMovements.map((movement) => movement.productId));
 
         if (stockMovements.length > 0) {
           // Un kit devuelve tambien sus componentes (ver explodeKitMovements).
@@ -1050,7 +1053,7 @@ export async function DELETE(
     });
 
     if (purgeCacheAfterCommit) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, { productIds: purgeProductIds });
     }
 
     return NextResponse.json(result, {
@@ -1389,7 +1392,7 @@ export async function PATCH(
     });
 
     if (purgeCacheAfterCommit) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, { orderIds: ids });
     }
 
     for (const issued of issuedGiftCards) {

@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { invalidateStoreProductsCache } from "@/lib/cache";
+import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { parseAvailableAt } from "@/lib/product-availability";
 import { pauseMarketplaceListingsForProducts } from "@/lib/product-archive";
 
@@ -140,6 +140,7 @@ export async function POST(
       );
     }
 
+    const scopeBefore = await storefrontScopeOf(params.storeId, { productIds: finalProductIds });
     const pausedListings = await prismadb.$transaction(async (tx) => {
       await tx.product.updateMany({
         where: {
@@ -162,7 +163,7 @@ export async function POST(
 
     // Tienda (ISR), Redis y cola de Mercado Libre, también al cambiar
     // subcategoría o atributos: antes esos cambios dejaban la tienda rancia.
-    await invalidateStoreProductsCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId, { productIds: finalProductIds, previous: scopeBefore });
 
     const count = finalProductIds.length;
     return NextResponse.json(

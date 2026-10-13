@@ -133,3 +133,41 @@ describe("storefront revalidation", () => {
     );
   });
 });
+
+describe("scoped storefront revalidation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.STOREFRONT_URL = "https://papeleriapdepapel.com";
+    process.env.REVALIDATION_SECRET = "shared-secret";
+  });
+  afterEach(() => {
+    if (originalSecret === undefined) delete process.env.REVALIDATION_SECRET;
+    else process.env.REVALIDATION_SECRET = originalSecret;
+  });
+
+  it("sends only the scope, versioned, so the store does not add the global catalog tags", async () => {
+    vi.mocked(axios.post).mockResolvedValue({ data: { revalidated: true } });
+
+    await triggerStorefrontRevalidation({ scope: { tags: ["product:agenda", "products:list"], paths: ["/producto/agenda"] } });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      "https://papeleriapdepapel.com/api/revalidate",
+      { version: 2, tags: ["product:agenda", "products:list"], paths: ["/producto/agenda"] },
+      expect.anything(),
+    );
+  });
+
+  it("keeps the legacy full purge body when there is no scope", async () => {
+    vi.mocked(axios.post).mockResolvedValue({ data: { revalidated: true } });
+
+    await triggerStorefrontRevalidation();
+
+    expect(vi.mocked(axios.post).mock.calls[0][1]).toEqual({
+      productId: undefined,
+      path: undefined,
+      paths: undefined,
+      tag: undefined,
+      tags: ["products"],
+    });
+  });
+});

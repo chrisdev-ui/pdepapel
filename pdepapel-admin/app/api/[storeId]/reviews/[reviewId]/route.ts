@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
+import { revalidateStorefrontFor } from "@/lib/cache";
 import {
   REVIEW_ACTION_LABELS,
   moderateReview,
@@ -38,10 +38,9 @@ export async function PATCH(
       input,
     });
 
-    await triggerStorefrontRevalidation({
-      productId: review.productId,
-      paths: reviewRevalidationPaths(review.product.slug),
-      tags: ["products"],
+    await revalidateStorefrontFor(params.storeId, {
+      productIds: [review.productId],
+      extra: { tags: ["reviews"], paths: reviewRevalidationPaths(review.product.slug) },
     });
 
     return NextResponse.json(

@@ -33,6 +33,14 @@ function uniqueTargetKey(change: z.infer<typeof namingChangeSchema>) {
   return `${change.entityType}:${change.entityId}`;
 }
 
+/** Un cambio de nombre toca un producto o todas las variantes de un grupo. */
+function namingTarget(changes: { entityType: string; entityId: string }[]) {
+  return {
+    productIds: changes.filter((change) => change.entityType === "PRODUCT").map((change) => change.entityId),
+    productGroupIds: changes.filter((change) => change.entityType !== "PRODUCT").map((change) => change.entityId),
+  };
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
@@ -150,7 +158,7 @@ export async function POST(
     });
 
     if (appliedChanges.length > 0) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, namingTarget(appliedChanges));
     }
 
     return NextResponse.json({
@@ -188,6 +196,7 @@ export async function PATCH(
       orderBy: { createdAt: "desc" },
     });
 
+    const restoredEntities: { entityType: string; entityId: string }[] = [];
     const restoredChanges = await prismadb.$transaction(async (tx) => {
       const restored: string[] = [];
       const skipped: Array<{ id: string; reason: string }> = [];
@@ -232,13 +241,14 @@ export async function PATCH(
           data: { revertedAt: new Date(), revertedBy: userId },
         });
         restored.push(change.id);
+        restoredEntities.push(change);
       }
 
       return { restored, skipped };
     });
 
     if (restoredChanges.restored.length > 0) {
-      await invalidateStoreProductsCache(params.storeId);
+      await invalidateStoreProductsCache(params.storeId, namingTarget(restoredEntities));
     }
 
     return NextResponse.json(restoredChanges);

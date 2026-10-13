@@ -129,7 +129,7 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
         payload,
       );
       if (result.inventoryChanged) {
-        await invalidateStoreProductsCache(event.connection.storeId);
+        await invalidateStoreProductsCache(event.connection.storeId, { productIds: result.productIds ?? [] });
       }
     } else if (isQuestionTopic(event.topic) && payload) {
       await synchronizeMercadoLibreQuestion(event.connectionId, payload);

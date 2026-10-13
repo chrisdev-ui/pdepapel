@@ -114,7 +114,7 @@ describe("product naming route", () => {
         }),
       }),
     );
-    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id");
+    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id", { productIds: [productId], productGroupIds: [] });
   });
 
   it("skips unchanged names without invalidating the catalog", async () => {
@@ -173,7 +173,7 @@ describe("product naming route", () => {
       where: { id: changeId },
       data: expect.objectContaining({ revertedBy: "owner-id" }),
     });
-    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id");
+    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id", { productIds: [productId], productGroupIds: [] });
   });
 
   it("rejects a duplicate product or group target in the same batch", async () => {
