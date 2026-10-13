@@ -26,7 +26,7 @@ vi.mock("@clerk/nextjs/server", () => ({
     users: { getUser: vi.fn().mockResolvedValue(null) },
   }),
 }));
-vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
+vi.mock("@/lib/cache", () => ({ storefrontScopeOf: vi.fn().mockResolvedValue(null), revalidateStorefrontFor: vi.fn().mockResolvedValue(undefined), invalidateStoreProductsCache: vi.fn() }));
 vi.mock("@/lib/cloudinary", () => ({
   default: { uploader: { destroy: vi.fn() } },
 }));

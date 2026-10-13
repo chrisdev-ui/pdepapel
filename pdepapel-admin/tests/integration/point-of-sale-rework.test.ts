@@ -13,7 +13,7 @@ vi.mock("@/lib/bold-terminal", () => ({ pushToBoldDatafono: mocks.push }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
 vi.mock("@/lib/shipping-helpers", () => ({ createGuideForOrder: vi.fn() }));
 vi.mock("@/lib/google-analytics", () => ({ recordPaidOrderInGoogleAnalytics: vi.fn() }));
-vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
+vi.mock("@/lib/cache", () => ({ storefrontScopeOf: vi.fn().mockResolvedValue(null), revalidateStorefrontFor: vi.fn().mockResolvedValue(undefined), invalidateStoreProductsCache: vi.fn() }));
 
 import { POST as boldWebhook } from "@/app/api/webhook/bold/route";
 import { recalculateKitStock } from "@/lib/inventory";

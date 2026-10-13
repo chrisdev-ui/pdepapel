@@ -15,7 +15,7 @@ vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ userId: session.userId }),
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
-vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/cache", () => ({ storefrontScopeOf: vi.fn().mockResolvedValue(null), revalidateStorefrontFor: vi.fn().mockResolvedValue(undefined), invalidateStoreProductsCache: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/cloudinary", () => ({ default: { v2: { api: { delete_resources: vi.fn() } } } }));
 vi.mock("@/lib/revalidate-store", () => ({
   triggerStorefrontRevalidation: vi.fn().mockResolvedValue(undefined),

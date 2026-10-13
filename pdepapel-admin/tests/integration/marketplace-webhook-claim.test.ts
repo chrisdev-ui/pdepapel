@@ -8,7 +8,7 @@ import { testPrisma } from "./helpers/database";
  * Mercado Libre reenvía notificaciones y la cola reintenta, así que el mismo
  * evento puede entrar varias veces a la vez.
  */
-vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
+vi.mock("@/lib/cache", () => ({ storefrontScopeOf: vi.fn().mockResolvedValue(null), revalidateStorefrontFor: vi.fn().mockResolvedValue(undefined), invalidateStoreProductsCache: vi.fn() }));
 
 import { claimQueueRow } from "@/lib/atomic-claim";
 import { processMercadoLibreWebhookEvent } from "@/lib/mercadolibre/webhook-processor";
