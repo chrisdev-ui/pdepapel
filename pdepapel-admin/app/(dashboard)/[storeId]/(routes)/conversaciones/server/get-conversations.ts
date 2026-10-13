@@ -67,6 +67,18 @@ export async function getConversations(storeId: string): Promise<ConversationRow
       })
     ).map((message) => message.conversationId),
   );
+  const recuperadas = new Set(
+    (
+      await prismadb.conversationMessage.findMany({
+        where: {
+          conversation: { storeId },
+          metadata: { path: "$.recovered", string_contains: "-" },
+        },
+        select: { conversationId: true },
+        distinct: ["conversationId"],
+      })
+    ).map((message) => message.conversationId),
+  );
   const porTelefono = new Map(ignorados.filter((i) => i.phone).map((i) => [i.phone as string, i]));
   const porBsuid = new Map(ignorados.filter((i) => i.bsuid).map((i) => [i.bsuid as string, i]));
 
@@ -86,6 +98,7 @@ export async function getConversations(storeId: string): Promise<ConversationRow
       skippedCount: ignorado?.skippedCount ?? 0,
       pendingOrder: conPedido.has(fields.id),
       fromWeb: desdeLaWeb.has(fields.id),
+      recovered: recuperadas.has(fields.id),
     };
   });
 }

@@ -27,6 +27,7 @@ export type JobName =
   | "storefront-revalidation"
   | "whatsapp-webhook-retention"
   | "whatsapp-webhook-volume"
+  | "whatsapp-recovery"
   | "payment-webhook-retention"
   | "notification-retry"
   | "db-health"
@@ -78,6 +79,12 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     name: "whatsapp-webhook-retention",
     label: "Retención de eventos de WhatsApp",
+    expectedEveryHours: 24,
+    perStore: false,
+  },
+  {
+    name: "whatsapp-recovery",
+    label: "Recuperación de mensajes de WhatsApp",
     expectedEveryHours: 24,
     perStore: false,
   },

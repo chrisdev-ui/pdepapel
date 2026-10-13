@@ -109,6 +109,11 @@ export const columns: ColumnDef<ConversationColumn>[] = [
               Desde la web
             </Badge>
           ) : null}
+          {row.original.recovered ? (
+            <Badge variant="outline" className="w-fit" title="Tiene mensajes que se quedaron sin procesar y se recuperaron después">
+              Recuperado
+            </Badge>
+          ) : null}
           {row.original.pendingOrder ? (
             <Badge variant="warning" className="w-fit">
               Pedido solicitado

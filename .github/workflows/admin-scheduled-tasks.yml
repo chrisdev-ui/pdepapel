@@ -19,6 +19,7 @@ on:
           - customer-reactivation
           - bank-transfer-review
           - copilot-retention
+          - whatsapp-recovery
       mode:
         description: "abc-classification, bank-transfer-review and copilot-retention only: dry-run reports counts and changes nothing; apply writes. Scheduled runs always apply. customer-reactivation is switched off and only accepts dry-run."
         required: false
@@ -110,6 +111,25 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/whatsapp-webhook-retention"
+
+  # Backstop of lib/whatsapp/recovery.ts: the webhook runs the sweep at most
+  # every 2 minutes while traffic flows; this daily run covers quiet days.
+  whatsapp-recovery:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'whatsapp-recovery' }}
+    name: WhatsApp event recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      - name: Re-enqueue stuck WhatsApp events through the per-customer queue
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/whatsapp-recovery"
 
   payment-webhook-retention:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == 'all' }}

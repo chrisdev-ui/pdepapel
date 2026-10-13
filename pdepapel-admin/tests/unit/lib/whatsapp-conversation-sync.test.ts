@@ -1,5 +1,5 @@
 import { MarketplaceWebhookEventStatus } from "@prisma/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   claimRow: vi.fn(),
@@ -623,7 +623,14 @@ describe("extractWhatsAppEvents", () => {
 });
 
 describe("processWhatsAppWebhookEvent", () => {
+  // Los mensajes de las pruebas son del 13-sep: con el reloj de verdad serían
+  // viejos (más de 15 min) y el bot no correría.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(1789300020 * 1000) });
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);

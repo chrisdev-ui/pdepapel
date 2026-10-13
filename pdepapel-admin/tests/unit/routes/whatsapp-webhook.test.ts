@@ -16,12 +16,14 @@ const mocks = vi.hoisted(() => ({
   convFindUnique: vi.fn(),
   convUpdateMany: vi.fn(),
   stash: vi.fn(),
+  sweep: vi.fn(),
   env: { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789", WHATSAPP_APP_SECRET: undefined as string | undefined },
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
 vi.mock("@/lib/whatsapp/queue", () => ({ enqueueWhatsAppWebhookEvent: mocks.enqueue }));
 vi.mock("@/lib/whatsapp/webhook-replay", () => ({ stashFailedWhatsAppWebhook: mocks.stash }));
+vi.mock("@/lib/whatsapp/recovery", () => ({ sweepWhatsAppEventsQuietly: mocks.sweep }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     marketplaceConnection: { findFirst: mocks.findFirst },
@@ -121,6 +123,31 @@ describe("POST /api/webhook/whatsapp", () => {
   it("enqueues the stored event behind the customer's phone lane", async () => {
     await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
     expect(mocks.enqueue).toHaveBeenCalledWith("event-id", "573001234567");
+  });
+
+  it("con el evento ya guardado, dispara la recuperación de paso", async () => {
+    mocks.sweep.mockResolvedValue(undefined);
+    await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
+    expect(mocks.sweep).toHaveBeenCalledTimes(1);
+  });
+
+  it("una recuperación que no termina no demora la respuesta", async () => {
+    mocks.sweep.mockImplementation(() => new Promise(() => {}));
+    const started = Date.now();
+    const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
+    expect(response.status).toBe(200);
+    expect(Date.now() - started).toBeLessThan(1000);
+    await expect(response.json()).resolves.toMatchObject({ stored: true, queued: true });
+  });
+
+  it("una recuperación que falla no tumba la respuesta ni el encolado", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.sweep.mockRejectedValue(new Error("boom"));
+    const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ stored: true, queued: true });
+    expect(mocks.enqueue).toHaveBeenCalledWith("event-id", "573001234567");
+    error.mockRestore();
   });
 
   it("still answers 200 with stored: true when the queue is unavailable", async () => {

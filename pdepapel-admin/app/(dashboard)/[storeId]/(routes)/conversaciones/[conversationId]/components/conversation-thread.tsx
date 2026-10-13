@@ -238,6 +238,14 @@ function MessageBubble({
               Tocó la opción
             </span>
           ) : null}
+          {message.recovered ? (
+            <span
+              className="rounded-full bg-muted px-1.5 font-medium"
+              title="Este mensaje se quedó sin procesar y se recuperó después; el bot no lo contestó."
+            >
+              Recuperado
+            </span>
+          ) : null}
           {message.status === ConversationMessageStatus.FAILED ? (
             <span className="text-destructive">
               {CONVERSATION_MESSAGE_STATUS_LABELS[message.status]}

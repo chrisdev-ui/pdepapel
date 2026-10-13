@@ -7,6 +7,8 @@ import {
   parseWhatsAppWebhookPayload,
   verifyWhatsAppWebhookSignature,
 } from "@/lib/whatsapp/webhook";
+import { runInBackground } from "@/lib/background";
+import { sweepWhatsAppEventsQuietly } from "@/lib/whatsapp/recovery";
 import { ingestWhatsAppWebhook } from "@/lib/whatsapp/webhook-intake";
 import { stashFailedWhatsAppWebhook } from "@/lib/whatsapp/webhook-replay";
 
@@ -96,7 +98,11 @@ export async function POST(request: Request) {
   );
 
   try {
-    return NextResponse.json(await ingestWhatsAppWebhook(body), {
+    const ingested = await ingestWhatsAppWebhook(body);
+    // Ya guardado: de paso se recupera lo atascado (como mucho cada 2 min),
+    // sin demorar ni tumbar esta respuesta.
+    runInBackground("whatsapp-recovery", () => sweepWhatsAppEventsQuietly());
+    return NextResponse.json(ingested, {
       status: 200,
     });
   } catch (error) {

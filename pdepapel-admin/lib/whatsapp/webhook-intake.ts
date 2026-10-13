@@ -27,7 +27,7 @@ import {
  * de más en el camino caliente de los eventos sin remitente (cambios de
  * plantilla y demás).
  */
-async function resolveFallbackStoreId(identity: {
+export async function resolveFallbackStoreId(identity: {
   phone: string | null;
   bsuid: string | null;
 }): Promise<string | null> {

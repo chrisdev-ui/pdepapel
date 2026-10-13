@@ -90,6 +90,8 @@ const messageMetadataSchema = z.object({
    * todos toques y parecían mecanografiados.
    */
   tap: z.object({ id: z.string().min(1) }).optional(),
+  /** Recuperado del atraso de la cola: fecha del evento (AAAA-MM-DD). */
+  recovered: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export type ConversationCartItemInput = z.infer<typeof cartItemSchema>;
@@ -109,6 +111,12 @@ export function parseTapMetadata(metadata: unknown): string | null {
   const parsed = messageMetadataSchema.safeParse(metadata);
   if (!parsed.success || !parsed.data.tap) return null;
   return parsed.data.tap.id;
+}
+
+/** ¿Este mensaje se archivó tarde, recuperado del atraso? Devuelve la fecha del evento. */
+export function parseRecoveredMetadata(metadata: unknown): string | null {
+  const parsed = messageMetadataSchema.safeParse(metadata);
+  return parsed.success ? (parsed.data.recovered ?? null) : null;
 }
 
 /** Un renglón del carrito ya cruzado con el catálogo. */
@@ -237,6 +245,8 @@ export interface ConversationRow {
   pendingOrder: boolean;
   /** Algún mensaje suyo llegó desde un botón de la tienda web. */
   fromWeb: boolean;
+  /** Tiene mensajes que se quedaron sin procesar y se recuperaron después. */
+  recovered: boolean;
 }
 
 /** El pedido que el bot le pasó a Paula (`metadata.orderRequest`), o `null`. */
@@ -278,6 +288,8 @@ export interface ConversationThreadMessage {
   orderRequest: OrderRequestRecord | null;
   /** Escribió desde un botón de la tienda web. */
   webOrigin: WebOriginContext | null;
+  /** Llegó tarde y se recuperó del atraso de la cola (fecha del evento). */
+  recovered: string | null;
 }
 
 export interface ConversationDetail {

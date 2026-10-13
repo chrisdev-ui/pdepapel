@@ -104,6 +104,8 @@ export interface WhatsAppMessageMetadata {
   webOrigin?: WebOrigin;
   /** Editó un mensaje anterior: el `wamid` original y el texto nuevo. El cuerpo queda vacío. */
   edit?: { of: string; text: string };
+  /** Recuperado del atraso (fecha del evento, AAAA-MM-DD): el panel lo marca. */
+  recovered?: string;
   order?: {
     catalogId: string | null;
     /** Nota que la clienta escribe junto al carrito, si la hay. */
@@ -233,6 +235,18 @@ function getCustomerEdit(message: JsonRecord): { of: string; text: string } | nu
   const of = edit ? asString(edit.original_message_id) : null;
   const text = edit && isRecord(edit.message) ? getMessageBody(edit.message) : null;
   return of && text ? { of, text } : null;
+}
+
+/** Un mensaje viejo que nadie contestó después queda esperando a Paula. */
+async function escalateIfUnanswered(conversationId: string, sentAt: Date) {
+  const answered = await prismadb.conversationMessage.count({
+    where: { conversationId, direction: ConversationMessageDirection.OUTBOUND, createdAt: { gt: sentAt } },
+  });
+  if (answered > 0) return;
+  await prismadb.conversation.updateMany({
+    where: { id: conversationId, status: { not: ConversationStatus.NEEDS_OWNER } },
+    data: { status: ConversationStatus.NEEDS_OWNER },
+  });
 }
 
 /**
@@ -572,9 +586,11 @@ async function resolveConversation(
   const update = {
     ...(seed.contactName ? { contactName: seed.contactName } : {}),
     ...(seed.username ? { username: seed.username } : {}),
+    ...(seed.lastOwnerAt ? { lastOwnerAt: seed.lastOwnerAt } : {}),
+  };
+  const moments = {
     ...(seed.lastInboundAt ? { lastInboundAt: seed.lastInboundAt } : {}),
     ...(seed.lastOutboundAt ? { lastOutboundAt: seed.lastOutboundAt } : {}),
-    ...(seed.lastOwnerAt ? { lastOwnerAt: seed.lastOwnerAt } : {}),
   };
 
   if (byBsuid) {
@@ -587,6 +603,7 @@ async function resolveConversation(
       // El teléfono se pega cuando por fin aparece; nunca se borra si ya estaba.
       data: { ...update, ...(phone && !byBsuid.phone ? { phone } : {}) },
     });
+    await moveMomentsForward(byBsuid.id, moments);
     return { id: byBsuid.id };
   }
 
@@ -595,6 +612,7 @@ async function resolveConversation(
       where: { id: byPhone.id },
       data: { ...update, ...(bsuid && !byPhone.bsuid ? { bsuid } : {}) },
     });
+    await moveMomentsForward(byPhone.id, moments);
     return { id: byPhone.id };
   }
 
@@ -608,10 +626,25 @@ async function resolveConversation(
       contactName: seed.contactName ?? null,
       status: ConversationStatus.OPEN,
       ...update,
+      ...moments,
     },
     select: { id: true },
   });
   return { id: created.id };
+}
+
+/**
+ * La última entrada y salida solo avanzan: un mensaje que se archiva tarde
+ * (recuperado, reintentado) no debe mover la conversación hacia atrás en la
+ * lista de Paula.
+ */
+async function moveMomentsForward(conversationId: string, moments: { lastInboundAt?: Date; lastOutboundAt?: Date }) {
+  for (const [field, at] of Object.entries(moments) as ["lastInboundAt" | "lastOutboundAt", Date][]) {
+    await prismadb.conversation.updateMany({
+      where: { id: conversationId, OR: [{ [field]: null }, { [field]: { lt: at } }] },
+      data: { [field]: at },
+    });
+  }
 }
 
 /**
@@ -696,6 +729,7 @@ export async function fileInboundMessage(
   storeId: string,
   message: WhatsAppInboundMessage,
   eventId: string,
+  options: { reopen?: boolean } = {},
 ): Promise<{ conversationId: string; outcome: FiledInboundOutcome }> {
   const conversation = await resolveConversation(
     storeId,
@@ -707,11 +741,14 @@ export async function fileInboundMessage(
     },
   );
   // Una conversación cerrada vuelve a abrirse con el siguiente mensaje; una
-  // que espera a la dueña sigue esperándola.
-  await prismadb.conversation.updateMany({
-    where: { id: conversation.id, status: ConversationStatus.RESOLVED },
-    data: { status: ConversationStatus.OPEN },
-  });
+  // que espera a la dueña sigue esperándola. Un mensaje recuperado del atraso
+  // no la reabre.
+  if (options.reopen !== false) {
+    await prismadb.conversation.updateMany({
+      where: { id: conversation.id, status: ConversationStatus.RESOLVED },
+      data: { status: ConversationStatus.OPEN },
+    });
+  }
 
   const data = {
     conversationId: conversation.id,
@@ -770,6 +807,7 @@ export async function fileOwnerEcho(
   storeId: string,
   echo: WhatsAppOwnerEcho,
   eventId: string,
+  options: { stale?: boolean } = {},
 ): Promise<boolean> {
   const sentAt = echo.sentAt ?? new Date();
   // `lastOwnerAt` es lo que aparta al bot 24 h: aquí es donde se sabe que
@@ -787,10 +825,14 @@ export async function fileOwnerEcho(
   );
   await bumpLastOwnerAt(conversation.id, sentAt);
 
-  await prismadb.conversation.updateMany({
-    where: { id: conversation.id, status: ConversationStatus.NEEDS_OWNER },
-    data: { status: ConversationStatus.OPEN },
-  });
+  // Un eco viejo (archivado tarde) no saca de la espera a una conversación
+  // que quizá ya espera por un mensaje posterior.
+  if (!options.stale) {
+    await prismadb.conversation.updateMany({
+      where: { id: conversation.id, status: ConversationStatus.NEEDS_OWNER },
+      data: { status: ConversationStatus.OPEN },
+    });
+  }
 
   if (!echo.externalId) {
     await prismadb.conversationMessage.create({
@@ -830,7 +872,18 @@ export async function fileOwnerEcho(
   return true;
 }
 
-export async function processWhatsAppWebhookEvent(eventId: string) {
+/** Un mensaje que llega al procesador con más de esto se archiva sin que conteste el bot. */
+export const WHATSAPP_STALE_AFTER_MS = 15 * 60 * 1000;
+/** Nota de los eventos demasiado viejos para la recuperación automática; los toma el guion del atraso. */
+export const WHATSAPP_BACKLOG_NOTE = "Más de 72 h sin procesar: queda para el guion de recuperación del atraso.";
+
+/**
+ * `backlog`: el guion de recuperación del atraso (scripts/). Acepta los
+ * eventos marcados con `WHATSAPP_BACKLOG_NOTE`, archiva todo como historial
+ * viejo (sin bot, sin sombra, sin reabrir ni pasar a Paula) y marca los
+ * mensajes como recuperados.
+ */
+export async function processWhatsAppWebhookEvent(eventId: string, options: { backlog?: boolean } = {}) {
   const jobStartedAt = new Date();
   const event = await prismadb.marketplaceWebhookEvent.findUnique({
     where: { id: eventId },
@@ -842,18 +895,20 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       nextRetryAt: true,
       payload: true,
       createdAt: true,
+      lastError: true,
       connection: { select: { storeId: true } },
     },
   });
 
   if (!event) return { processed: false, reason: "not_found" as const };
+  const backlog = Boolean(options.backlog);
   if (event.provider !== MarketplaceProvider.WHATSAPP) {
     return { processed: false, reason: "wrong_provider" as const };
   }
   if (event.status === MarketplaceWebhookEventStatus.PROCESSED) {
     return { processed: false, reason: "already_processed" as const };
   }
-  if (event.status === MarketplaceWebhookEventStatus.FAILED) {
+  if (event.status === MarketplaceWebhookEventStatus.FAILED && !(backlog && event.lastError === WHATSAPP_BACKLOG_NOTE)) {
     return { processed: false, reason: "failed" as const };
   }
   const now = new Date();
@@ -867,6 +922,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
     from: [
       MarketplaceWebhookEventStatus.PENDING,
       MarketplaceWebhookEventStatus.RETRY,
+      ...(backlog ? [MarketplaceWebhookEventStatus.FAILED] : []),
     ],
     dueColumn: "nextRetryAt",
     dueNullMeansReady: true,
@@ -902,8 +958,20 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
     }> = [];
 
     for (const message of extracted.messages) {
-      const filed = await fileInboundMessage(storeId, message, event.id);
+      const sentAt = message.sentAt ?? event.createdAt;
+      const stale = backlog || now.getTime() - sentAt.getTime() > WHATSAPP_STALE_AFTER_MS;
+      const toFile = backlog
+        ? { ...message, metadata: { ...(message.metadata ?? {}), recovered: event.createdAt.toISOString().slice(0, 10) } }
+        : message;
+      const filed = await fileInboundMessage(storeId, toFile, event.id, { reopen: !backlog });
       if (filed.outcome !== "created") continue;
+      // Llegó tarde (la cola no lo entregó a tiempo): se archiva y lo ve Paula;
+      // el bot no contesta algo viejo. En el atraso, ni siquiera pasa a Paula:
+      // queda como historial.
+      if (stale) {
+        if (!backlog) await escalateIfUnanswered(filed.conversationId, sentAt);
+        continue;
+      }
       // Una foto o un audio van a Paula lleven pie o no: el pie se guarda para
       // que ella lo lea en el panel, pero no se usa para adivinar una
       // respuesta. Antes esto ni llegaba aquí y la clienta se quedaba mirando
@@ -942,7 +1010,8 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
     // Los ecos se archivan antes de que conteste el bot: si en el mismo evento
     // viene una respuesta de Paula, el bot debe verla ya escrita.
     for (const echo of extracted.ownerEchoes) {
-      if (await fileOwnerEcho(storeId, echo, event.id)) echoesFiled += 1;
+      const stale = backlog || now.getTime() - (echo.sentAt ?? event.createdAt).getTime() > WHATSAPP_STALE_AFTER_MS;
+      if (await fileOwnerEcho(storeId, echo, event.id, { stale })) echoesFiled += 1;
     }
 
     for (const status of extracted.statuses) {
