@@ -3,8 +3,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Register } from "@/app/(routes)/(user)/crear-cuenta/[[...sign-up]]/components/register";
-import { Login } from "@/app/(routes)/(user)/iniciar-sesion/[[...sign-in]]/components/login";
+import { Register } from "@/app/(cuenta)/crear-cuenta/[[...sign-up]]/components/register";
+import { Login } from "@/app/(cuenta)/iniciar-sesion/[[...sign-in]]/components/login";
 
 const state = vi.hoisted(() => ({
   search: "",

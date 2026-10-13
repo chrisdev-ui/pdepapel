@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { getSupportWhatsAppUrl } from "@/lib/support";
 import { cn } from "@/lib/utils";
+import { StorefrontLink } from "@/components/storefront-link";
 
 export type ErrorStateTone = "not-found" | "failure" | "retry";
 
@@ -93,12 +94,12 @@ export function ErrorState({
           </Button>
         </div>
         {secondaryLink && (
-          <Link
+          <StorefrontLink
             href={secondaryLink.href}
             className="text-sm font-semibold text-blue-yankees underline underline-offset-4"
           >
             {secondaryLink.label}
-          </Link>
+          </StorefrontLink>
         )}
         {digest && (
           <p className="text-xs text-muted-foreground">

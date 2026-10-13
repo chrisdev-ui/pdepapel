@@ -8,6 +8,7 @@ import { BASE_URL } from "@/constants";
 import { STANDARD_SHIPPING_RATE, TRANSIT_DAYS } from "@/lib/commerce-policies";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { currencyFormatter } from "@/lib/utils";
+import { StorefrontLink } from "@/components/storefront-link";
 
 export const metadata: Metadata = {
   title: "Política de envíos",
@@ -145,7 +146,7 @@ export default async function ShippingPolicyPage() {
             Enviamos con transportadoras nacionales según la cobertura de tu
             ciudad. Cuando el pedido sale, generamos la guía y te la enviamos
             por correo; también puedes verla y rastrearla desde{" "}
-            <Link href={STOREFRONT_ROUTES.myOrders}>Mis pedidos</Link> o desde
+            <StorefrontLink href={STOREFRONT_ROUTES.myOrders}>Mis pedidos</StorefrontLink> o desde
             el enlace del pedido que recibiste al comprar.
           </p>
           <p>

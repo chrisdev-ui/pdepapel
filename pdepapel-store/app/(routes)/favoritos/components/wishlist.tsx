@@ -24,6 +24,7 @@ import { Category, Product } from "@/types";
 import { fetchCatalogFromClient } from "@/lib/catalog-client";
 
 import { FavoriteCard } from "./favorite-card";
+import { StorefrontLink } from "@/components/storefront-link";
 
 interface WishlistProps {
   suggestions?: Product[];
@@ -255,7 +256,7 @@ export function Wishlist({ suggestions = [], categories = [] }: WishlistProps) {
             <strong>Guarda tus favoritos en tu cuenta</strong> para verlos en
             cualquier dispositivo y no perderlos si cambias de celular.
           </p>
-          <Link
+          <StorefrontLink
             href={accountAccessPath(
               STOREFRONT_ROUTES.signUp,
               STOREFRONT_ROUTES.wishlist,
@@ -263,7 +264,7 @@ export function Wishlist({ suggestions = [], categories = [] }: WishlistProps) {
             className="inline-flex h-10 items-center rounded-full border-2 border-blue-yankees px-4 font-semibold"
           >
             Crear cuenta gratis
-          </Link>
+          </StorefrontLink>
         </aside>
       </SignedOut>
     </div>

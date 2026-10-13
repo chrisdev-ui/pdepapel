@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PolicyPage, type PolicyFact, type PolicySection } from "@/components/policy/policy-page";
 import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { StorefrontLink } from "@/components/storefront-link";
 
 export const metadata: Metadata = {
   title: "Política de cambios y devoluciones",
@@ -128,7 +129,7 @@ const sections: PolicySection[] = [
     content: (
       <p>
         Puedes ver el estado de cada pedido en{" "}
-        <Link href={STOREFRONT_ROUTES.myOrders}>Mis pedidos</Link>. Si el
+        <StorefrontLink href={STOREFRONT_ROUTES.myOrders}>Mis pedidos</StorefrontLink>. Si el
         problema es con la entrega (paquete que no llega, dañado o incompleto),
         revisa también la{" "}
         <Link href={STOREFRONT_ROUTES.shippingPolicy}>política de envíos</Link>.

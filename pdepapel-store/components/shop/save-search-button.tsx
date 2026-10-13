@@ -3,7 +3,6 @@
 import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, Loader2 } from "lucide-react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
@@ -15,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { StorefrontLink } from "@/components/storefront-link";
 
 interface SaveSearchButtonProps {
   /** Nombre sugerido a partir de los filtros activos. */
@@ -63,9 +63,9 @@ export function SaveSearchButton({ suggestedName, fixedCategoryId, className }: 
         variant: "success",
         title: duplicate ? "Ya tenías esta búsqueda guardada" : "Búsqueda guardada",
         description: (
-          <Link href={STOREFRONT_ROUTES.savedSearches} className="font-semibold underline underline-offset-4">
+          <StorefrontLink href={STOREFRONT_ROUTES.savedSearches} className="font-semibold underline underline-offset-4">
             Ver mis búsquedas
-          </Link>
+          </StorefrontLink>
         ),
       });
     } catch (error) {

@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 
 import { getSavedSearches } from "@/actions/account-saved-searches";
 import { deleteCustomerAddress, getCustomerAddresses, type CustomerAddress } from "@/actions/customer-addresses";
@@ -36,6 +36,7 @@ import { getOrderStage, isAwaitingPayment } from "@/lib/order-status";
 import { orderPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { WhatsappIcon } from "@/components/icons";
+import { MANAGE_ACCOUNT_PARAM } from "@/components/account-menu";
 
 const SUPPORT_WHATSAPP_URL =
   "https://wa.me/573132582293?text=" +
@@ -99,6 +100,16 @@ export function AccountHub() {
   const { user, isLoaded: userLoaded } = useUser();
   const { userId, isLoaded, getToken } = useAuth();
   const { openUserProfile, signOut } = useClerk();
+
+  // «Administrar cuenta» del menú de la cabecera llega con ?perfil=1: abre el perfil de Clerk aquí, donde sí está su interfaz.
+  useEffect(() => {
+    if (!userLoaded || !user) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(MANAGE_ACCOUNT_PARAM) !== "1") return;
+    url.searchParams.delete(MANAGE_ACCOUNT_PARAM);
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    openUserProfile();
+  }, [userLoaded, user, openUserProfile]);
   const wishlistItems = useWishlist((state) => state.items);
   const queryClient = useQueryClient();
   const { toast } = useToast();

@@ -1,24 +1,14 @@
-import { CartReminderStrip } from "@/components/cart-reminder-strip";
-import { DeferredWhatsAppFloatingButton } from "@/components/deferred-whatsapp-floating-button";
-import { MobileCartBar } from "@/components/mobile-cart-bar";
-import { UnavailableProductNotice } from "@/components/unavailable-product-notice";
 import { ReactNode } from "react";
 
-export default function StorefrontLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  // Block wrapper that grows inside <main>: pages keep normal document flow
-  // (centered containers stay full width) while the footer stays below the
-  // fold on short pages and loading states.
+import { HeadlessClerkGuard } from "@/components/account/headless-clerk-guard";
+import { StorefrontExtras } from "@/components/storefront-extras";
+import { StorefrontShell } from "@/components/storefront-shell";
+
+export default function StorefrontLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex-1">
-      <CartReminderStrip />
-      {children}
-      <MobileCartBar />
-      <DeferredWhatsAppFloatingButton />
-      <UnavailableProductNotice />
-    </div>
+    <StorefrontShell clerkVariant="headless">
+      <HeadlessClerkGuard />
+      <StorefrontExtras>{children}</StorefrontExtras>
+    </StorefrontShell>
   );
 }

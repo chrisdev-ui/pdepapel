@@ -13,9 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { useAuth } from "@clerk/nextjs";
 import { Gift, Lock, UserRound } from "lucide-react";
-import Link from "next/link";
 import { UseFormReturn, useWatch } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
+import { StorefrontLink } from "@/components/storefront-link";
 
 const GIFT_MESSAGE_MAX = 300;
 
@@ -52,12 +52,12 @@ export const BasicInfoStep = ({
           <UserRound className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span>
             ¿Ya tienes cuenta?{" "}
-            <Link
+            <StorefrontLink
               href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${encodeURIComponent(STOREFRONT_ROUTES.checkout)}`}
               className="font-semibold underline underline-offset-4"
             >
               Inicia sesión
-            </Link>{" "}
+            </StorefrontLink>{" "}
             y completamos tus datos y direcciones. También puedes comprar como
             invitada.
           </span>

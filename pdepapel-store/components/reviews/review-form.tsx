@@ -2,7 +2,6 @@
 
 import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import axios from "axios";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -15,6 +14,7 @@ import { publicEnv as env } from "@/lib/public-env";
 import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Review } from "@/types";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
+import { StorefrontLink } from "@/components/storefront-link";
 
 interface ReviewFormProps {
   productId: string;
@@ -108,7 +108,7 @@ export function ReviewForm({ productId }: ReviewFormProps) {
       <SignedOut>
         <p className="font-sans text-sm text-gray-600">Solo clientas con sesión pueden opinar.</p>
         <Button asChild variant="outline" className="self-start rounded-full border-2 border-blue-yankees font-sans font-semibold text-blue-yankees">
-          <Link href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}>Inicia sesión para escribir una reseña</Link>
+          <StorefrontLink href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}>Inicia sesión para escribir una reseña</StorefrontLink>
         </Button>
       </SignedOut>
     </div>

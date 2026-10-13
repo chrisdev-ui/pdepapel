@@ -1,47 +1,7 @@
-import { esES } from "@clerk/localizations";
-import { ClerkProvider } from "@clerk/nextjs";
-import { Analytics } from "@vercel/analytics/react";
 import type { Metadata } from "next";
-
-import { getCategories } from "@/actions/get-categories";
-import { getProducts } from "@/actions/get-products";
-import { getStorefrontSettings } from "@/actions/get-storefront-settings";
-import { getTypes } from "@/actions/get-types";
-import { Footer } from "@/components/footer";
-import { ClarityPrivacyBoundary } from "@/components/clarity-privacy-boundary";
-import { Spooky } from "@/components/spooky";
-import { getCurrentSeason } from "@/lib/date-utils";
 import { HISTORY_GUARD_SCRIPT } from "@/lib/history-guard";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
-import {
-  buildFeaturedByType,
-  buildFeaturedSubcategories,
-  buildNavigationTypes,
-} from "@/lib/catalog-navigation";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
-import { ModalProvider } from "@/providers/modal-provider";
-import { ReactQueryProvider } from "@/providers/query-client-provider";
-import { CustomerAnalyticsProvider } from "@/providers/customer-analytics-provider";
-import { WebVitalsReporter } from "@/components/web-vitals-reporter";
-import { CartPreviewProvider } from "@/providers/cart-preview-provider";
-import { StorefrontSettingsProvider } from "@/providers/storefront-settings-provider";
-import { Toaster } from "@/providers/toaster";
-import { WishlistSyncProvider } from "@/components/wishlist-sync-provider";
-import { Season } from "@/types";
 import "./globals.css";
-
-import dynamic from "next/dynamic";
-
-const Christmas = dynamic(
-  () => import("@/components/christmas").then((mod) => mod.Christmas),
-  {
-    ssr: false,
-  },
-);
-
-import Navbar from "@/components/navbar";
-
-const CLERK_JS_VERSION = "5.128.0";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://papeleriapdepapel.com"),
@@ -116,87 +76,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const currentSeason = getCurrentSeason();
-  // Header data: catalog tree for the drawer/mega menu, featured products for
-  // the mega menu tile, and the public store settings for the announcement bar.
-  const [types, categories, settings, featured] = await Promise.all([
-    getTypes(),
-    getCategories(),
-    getStorefrontSettings(),
-    getProducts({ isFeatured: true, limit: 60 }),
-  ]);
-  const navigationTypes = buildNavigationTypes(types, categories);
-  const featuredByType = buildFeaturedByType(featured.products);
-  // Las mismas destacadas del carrusel de la portada, ahora también como
-  // atajo fijo del menú: se resuelven aquí, de las categorías que la
-  // cabecera ya trae, sin pedir nada más.
-  const featuredSubcategories = buildFeaturedSubcategories(categories);
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider
-      // Sin versión fija, el CDN de Clerk sirve la última 5.x y cada
-      // publicación suya cambia lo que descarga cada página.
-      clerkJSVersion={CLERK_JS_VERSION}
-      localization={esES}
-      signInUrl={STOREFRONT_ROUTES.signIn}
-      signUpUrl={STOREFRONT_ROUTES.signUp}
-      signInFallbackRedirectUrl={STOREFRONT_ROUTES.home}
-      signUpFallbackRedirectUrl={STOREFRONT_ROUTES.home}
-    >
-      <html lang="es" suppressHydrationWarning>
-        <body
-          className={`${beautifulEveryTime.variable} ${caudex.variable} ${fredoka.variable} ${quicksand.variable}`}
-        >
-          {/* Antes de hidratar: los navegadores integrados de Android envuelven
-              history.pushState y su puente puede lanzar en cada navegación con
-              clic (incidente 2026-10-06, lib/history-guard.ts). Texto fijo. */}
-          <script dangerouslySetInnerHTML={{ __html: HISTORY_GUARD_SCRIPT }} />
-          <link rel="dns-prefetch" href="https://res.cloudinary.com" />
-          <link rel="preconnect" href="https://res.cloudinary.com" />
-          <ReactQueryProvider>
-            <StorefrontSettingsProvider
-              value={{
-                freeShippingThreshold: settings.freeShippingThreshold,
-                deliveryEstimate: settings.deliveryEstimate,
-              }}
-            >
-              <CartPreviewProvider>
-                <ModalProvider />
-                <WishlistSyncProvider />
-                <Navbar
-                  season={currentSeason}
-                  types={navigationTypes}
-                  featuredByType={featuredByType}
-                  featuredSubcategories={featuredSubcategories}
-                  freeShippingThreshold={settings.freeShippingThreshold}
-                />
-                <ClarityPrivacyBoundary>{children}</ClarityPrivacyBoundary>
-                <Footer
-                  season={currentSeason}
-                  openingHoursLabel={settings.openingHoursLabel}
-                />
-                {currentSeason === Season.Christmas && <Christmas />}
-                {currentSeason === Season.Spooky && <Spooky />}
-              </CartPreviewProvider>
-            </StorefrontSettingsProvider>
-            <Toaster />
-            <CustomerAnalyticsProvider
-              measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}
-              clarityProjectId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID}
-              clarityEnabled={
-                process.env.NEXT_PUBLIC_CLARITY_ENABLED === "true"
-              }
-            />
-            <Analytics />
-            <WebVitalsReporter />
-          </ReactQueryProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="es" suppressHydrationWarning>
+      <body className={`${beautifulEveryTime.variable} ${caudex.variable} ${fredoka.variable} ${quicksand.variable}`}>
+        {/* Antes de hidratar: los navegadores integrados de Android envuelven
+            history.pushState y su puente puede lanzar en cada navegación con
+            clic (incidente 2026-10-06, lib/history-guard.ts). Texto fijo. */}
+        <script dangerouslySetInnerHTML={{ __html: HISTORY_GUARD_SCRIPT }} />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+        <link rel="preconnect" href="https://res.cloudinary.com" />
+        {/* La cabecera, Clerk y los proveedores van en el layout de cada grupo
+            (components/storefront-shell.tsx): Clerk sin interfaz en las páginas
+            públicas y completo en la cuenta. */}
+        {children}
+      </body>
+    </html>
   );
 }

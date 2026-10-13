@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 
 import {
   AnalyticsConsent,
@@ -32,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
 const initialPreferences = {
   analytics: false,
@@ -66,7 +66,7 @@ export function CustomerAnalyticsProvider({
   clarityProjectId,
   clarityEnabled = false,
 }: CustomerAnalyticsProviderProps) {
-  const pathname = usePathname();
+  const pathname = useStorefrontPathname();
   const [consent, setConsent] = useState<AnalyticsConsent | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);

@@ -21,6 +21,7 @@ import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { ContactForm } from "./components/contact-form";
 import { organizationSchema } from "@/lib/organization-schema";
+import { StorefrontLink } from "@/components/storefront-link";
 
 export const metadata: Metadata = {
   title: "Contáctanos",
@@ -196,7 +197,7 @@ function ContactChannelCard({ channel }: { channel: ContactChannel }) {
   }
 
   return (
-    <Link
+    <StorefrontLink
       href={channel.href}
       target={channel.external ? "_blank" : undefined}
       rel={channel.external ? "noopener noreferrer" : undefined}
@@ -206,7 +207,7 @@ function ContactChannelCard({ channel }: { channel: ContactChannel }) {
       )}
     >
       {content}
-    </Link>
+    </StorefrontLink>
   );
 }
 

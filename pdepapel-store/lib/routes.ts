@@ -81,6 +81,20 @@ export const productPath = (slug: string) => `/producto/${slug}`;
 
 export const categoryPath = (slug: string) => `/categoria/${slug}`;
 
+const ACCOUNT_GROUP_PATHS: string[] = [
+  STOREFRONT_ROUTES.signIn,
+  STOREFRONT_ROUTES.signUp,
+  STOREFRONT_ROUTES.account,
+  STOREFRONT_ROUTES.myOrders,
+  STOREFRONT_ROUTES.savedSearches,
+];
+
+/** Las páginas con Clerk completo (`app/(cuenta)`); se entra a ellas con carga completa. */
+export function isAccountGroupPath(href: string): boolean {
+  const path = href.split(/[?#]/)[0];
+  return ACCOUNT_GROUP_PATHS.some((route) => path === route || path.startsWith(`${route}/`));
+}
+
 /**
  * Copia en caché ISR de `/tienda` y `/categoria/<slug>` sin filtros. El
  * middleware reescribe ahí las visitas sin parámetros de catálogo; quien entra

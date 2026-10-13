@@ -1,10 +1,10 @@
 "use client";
 
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { Bookmark, PackageOpen, UserRound } from "lucide-react";
+import { SignedIn, SignedOut } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
 
+import { AccountMenu } from "@/components/account-menu";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { CategoryDrawer } from "@/components/category-drawer";
 import { UserIcon } from "@/components/icons";
@@ -16,11 +16,11 @@ import { WishlistButton } from "@/components/wishlist-button";
 import { SEASON_CONFIG } from "@/constants";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { FeaturedByType, NavigationCategory, NavigationType } from "@/lib/catalog-navigation";
-import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import { accountAccessPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Season } from "@/types";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
+import { StorefrontLink } from "@/components/storefront-link";
 
 interface NavbarProps {
   season?: Season;
@@ -143,41 +143,17 @@ const Navbar: React.FC<NavbarProps> = ({
           <div className="flex shrink-0 items-center gap-5">
             <WishlistButton withLabel />
             <SignedIn>
-              <UserButton
-                afterSignOutUrl={STOREFRONT_ROUTES.home}
-                userProfileMode="modal"
-                appearance={storefrontClerkAppearance}
-              >
-                <UserButton.MenuItems>
-                  <UserButton.Link
-                    label="Mi cuenta"
-                    href={STOREFRONT_ROUTES.account}
-                    labelIcon={<UserRound className="h-4 w-4" />}
-                  />
-                  <UserButton.Link
-                    label="Mis pedidos"
-                    href={STOREFRONT_ROUTES.myOrders}
-                    labelIcon={<PackageOpen className="h-4 w-4" />}
-                  />
-                  <UserButton.Link
-                    label="Mis búsquedas"
-                    href={STOREFRONT_ROUTES.savedSearches}
-                    labelIcon={<Bookmark className="h-4 w-4" />}
-                  />
-                  <UserButton.Action label="manageAccount" />
-                  <UserButton.Action label="signOut" />
-                </UserButton.MenuItems>
-              </UserButton>
+              <AccountMenu />
             </SignedIn>
             <SignedOut>
-              <Link
+              <StorefrontLink
                 href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}
                 className="flex items-center gap-2 rounded-md font-sans font-semibold text-blue-yankees transition-opacity hover:opacity-75"
                 aria-label="Mi cuenta: iniciar sesión o crear una cuenta"
               >
                 <UserIcon className="h-6 w-6" />
                 <span className="hidden xl:inline">Mi cuenta</span>
-              </Link>
+              </StorefrontLink>
             </SignedOut>
             <NavbarCart />
           </div>

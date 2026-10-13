@@ -4,10 +4,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import NotFound from "@/app/not-found";
+import { NotFoundView as NotFound } from "@/components/not-found-view";
 import RouteError from "@/app/(routes)/error";
 import OrderNotFound from "@/app/(routes)/pedido/[orderId]/not-found";
-import RetiredQuotePage from "@/app/(public)/cotizacion/[token]/page";
+import RetiredQuotePage from "@/app/(routes)/cotizacion/[token]/page";
 import { UpstreamUnavailable } from "@/components/upstream-unavailable";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));

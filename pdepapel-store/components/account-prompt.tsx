@@ -2,12 +2,12 @@
 
 import { SignedOut } from "@clerk/nextjs";
 import { ArrowRight, LogIn, MapPinned, UserPlus } from "lucide-react";
-import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { StorefrontLink } from "@/components/storefront-link";
 
 type AccountPromptSource = "cart_drawer" | "cart_page" | "checkout";
 
@@ -86,7 +86,7 @@ export function AccountPrompt({
                   isCompact && "min-h-11 px-3",
                 )}
               >
-                <Link
+                <StorefrontLink
                   href={signUpHref}
                   onClick={() =>
                     trackCustomerEvent("account_registration_cta_clicked", {
@@ -96,9 +96,9 @@ export function AccountPrompt({
                 >
                   {isCompact ? "Crear cuenta" : "Crear cuenta gratis"}
                   <ArrowRight className="ml-1.5 h-4 w-4" />
-                </Link>
+                </StorefrontLink>
               </Button>
-              <Link
+              <StorefrontLink
                 href={signInHref}
                 className="inline-flex min-h-[44px] touch-manipulation items-center gap-1 rounded-sm px-1 text-sm font-semibold underline underline-offset-4 transition-colors hover:text-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2"
                 onClick={() =>
@@ -107,7 +107,7 @@ export function AccountPrompt({
               >
                 <LogIn aria-hidden="true" className="h-4 w-4" />
                 Iniciar sesión
-              </Link>
+              </StorefrontLink>
             </div>
           </div>
         </div>

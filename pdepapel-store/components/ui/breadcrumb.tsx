@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { ChevronRight, Home } from "lucide-react";
-import Link from "next/link";
 import React from "react";
+import { StorefrontLink } from "@/components/storefront-link";
 
 export interface BreadcrumbItem {
   label: string;
@@ -21,14 +21,14 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className }) => {
         <li className="flex items-center">
           {/* Sin prefetch: la miga está en la primera pantalla y traería páginas
               estáticas completas mientras baja la foto principal. */}
-          <Link
+          <StorefrontLink
             href="/"
             prefetch={false}
             className="flex items-center transition-colors hover:text-black hover:underline"
           >
             <Home className="h-4 w-4" />
             <span className="sr-only">Inicio</span>
-          </Link>
+          </StorefrontLink>
         </li>
 
         {items.map((item, index) => (
@@ -40,13 +40,13 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, className }) => {
                 {item.label}
               </span>
             ) : item.href ? (
-              <Link
+              <StorefrontLink
                 href={item.href}
                 prefetch={false}
                 className="transition-colors hover:text-black hover:underline"
               >
                 {item.label}
-              </Link>
+              </StorefrontLink>
             ) : (
               <span>{item.label}</span>
             )}

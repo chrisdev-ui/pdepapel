@@ -32,6 +32,7 @@ import {
 import { TypeIcon } from "@/lib/type-icons";
 import { cn } from "@/lib/utils";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
+import { StorefrontLink } from "@/components/storefront-link";
 
 interface CategoryDrawerProps {
   types: NavigationType[];
@@ -213,40 +214,40 @@ export function CategoryDrawer({ types, featuredSubcategories, logoSrc }: Catego
 
         <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-border bg-slate-50 px-3 py-2.5">
           <SignedOut>
-            <Link
+            <StorefrontLink
               href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}
               className="flex h-11 items-center justify-center gap-2 rounded-md bg-blue-yankees font-sans text-sm font-semibold text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
             >
               <User aria-hidden="true" className="h-[18px] w-[18px]" />
               Iniciar sesión
-            </Link>
+            </StorefrontLink>
           </SignedOut>
           <SignedIn>
-            <Link
+            <StorefrontLink
               href={STOREFRONT_ROUTES.account}
               className="flex h-11 items-center justify-center gap-2 rounded-md bg-blue-yankees font-sans text-sm font-semibold text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
             >
               <User aria-hidden="true" className="h-[18px] w-[18px]" />
               Mi cuenta
-            </Link>
+            </StorefrontLink>
           </SignedIn>
           <SignedIn>
-            <Link
+            <StorefrontLink
               href={STOREFRONT_ROUTES.myOrders}
               className="flex h-11 items-center justify-center gap-2 rounded-md border-[1.5px] border-blue-yankees font-sans text-sm font-semibold text-blue-yankees transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
             >
               <PackageOpen aria-hidden="true" className="h-[18px] w-[18px]" />
               Mis pedidos
-            </Link>
+            </StorefrontLink>
           </SignedIn>
           <SignedIn>
-            <Link
+            <StorefrontLink
               href={STOREFRONT_ROUTES.savedSearches}
               className="flex h-11 items-center justify-center gap-2 rounded-md border-[1.5px] border-blue-yankees font-sans text-sm font-semibold text-blue-yankees transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
             >
               <Bookmark aria-hidden="true" className="h-[18px] w-[18px]" />
               Mis búsquedas
-            </Link>
+            </StorefrontLink>
           </SignedIn>
           <Link
             href={STOREFRONT_ROUTES.wishlist}
