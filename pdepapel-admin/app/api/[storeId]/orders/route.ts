@@ -9,7 +9,7 @@ import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { priceLines } from "@/lib/product-pricing";
-import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
+import { normalizeGoogleAnalyticsClientId, normalizeGoogleAnalyticsSessionId } from "@/lib/google-analytics";
 import { screenStoreOrder } from "@/lib/order-intake";
 import { FRAUD_REASON_CODE, withRiskReason } from "@/lib/order-risk";
 import { normalizePhone } from "@/lib/phone";
@@ -62,6 +62,7 @@ import {
   ShippingProvider,
   ShippingStatus,
   OrderType,
+  OrderSource,
 } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -105,6 +106,10 @@ type OrderData = {
   internalNotes?: string | null;
   createdBy?: string | null;
   analyticsClientId?: string | null;
+  analyticsSessionId?: string | null;
+  analyticsConsent?: boolean | null;
+  /** Lo fija el servidor según quién crea el pedido; del cuerpo nunca se lee. */
+  source?: OrderSource;
   // Regalo: quien recibe (quien compra sigue en email/fullName/phone).
   isGift?: GiftFields["isGift"];
   giftRecipientName?: GiftFields["giftRecipientName"];
@@ -185,12 +190,23 @@ async function createOrder(
       internalNotes,
       createdBy, // Optional admin user ID
       analyticsClientId,
+      analyticsSessionId,
+      analyticsConsent,
     } = body;
     let normalizedPhone = normalizePhone(phone);
     const gift = normalizeGiftFields(body as Record<string, unknown>);
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
+    // Igual que /checkout: la sesión solo junto al client id, y del
+    // consentimiento solo el sí o el no; nada de la dueña.
+    const normalizedAnalyticsSessionId = normalizedAnalyticsClientId
+      ? normalizeGoogleAnalyticsSessionId(analyticsSessionId)
+      : null;
+    const normalizedAnalyticsConsent =
+      isStoreOwner || typeof analyticsConsent !== "boolean"
+        ? null
+        : analyticsConsent;
     const normalizedShippingProvider =
       shippingProvider === "CUSTOM"
         ? ShippingProvider.MANUAL
@@ -587,9 +603,16 @@ async function createOrder(
         internalNotes,
         ...gift,
         createdBy: isStoreOwner ? createdBy || authenticatedUserId : null,
+        source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
         ...(normalizedAnalyticsClientId
           ? { analyticsClientId: normalizedAnalyticsClientId }
           : {}),
+        ...(normalizedAnalyticsSessionId
+          ? { analyticsSessionId: normalizedAnalyticsSessionId }
+          : {}),
+        ...(normalizedAnalyticsConsent === null
+          ? {}
+          : { analyticsConsent: normalizedAnalyticsConsent }),
         orderItems: {
           create: itemsWithPrices.map((item: any) => ({
             quantity: item.quantity,

@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   sendOrderEmail: vi.fn(),
   giftCardCreate: vi.fn(),
   screen: vi.fn(),
+  checkIfStoreOwner: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
@@ -35,6 +36,7 @@ vi.mock("@/lib/utils", () => ({
   generateOrderNumber: () => "ORD-GC-1",
   generateWompiPayment: mocks.generateWompiPayment,
   getLastOrderTimestamp: mocks.getLastOrderTimestamp,
+  checkIfStoreOwner: mocks.checkIfStoreOwner,
 }));
 vi.mock("@/lib/bold", () => ({ generateBoldCheckoutData: mocks.generateBoldCheckoutData }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
@@ -69,6 +71,7 @@ describe("POST /api/[storeId]/gift-cards/checkout", () => {
     mocks.auth.mockResolvedValue({ userId: null });
     mocks.denominations.mockResolvedValue([]);
     mocks.getLastOrderTimestamp.mockResolvedValue(null);
+    mocks.checkIfStoreOwner.mockResolvedValue(false);
     mocks.orderCreate.mockResolvedValue(order);
     mocks.generateBoldCheckoutData.mockReturnValue({ orderId: "order-gc", integritySignature: "sig" });
     mocks.generateWompiPayment.mockResolvedValue("https://checkout.wompi.co/p/x");
@@ -184,6 +187,15 @@ describe("POST /api/[storeId]/gift-cards/checkout", () => {
     mocks.auth.mockResolvedValue({ userId: "user-1" });
     await POST(request({ userId: "someone-else", guestId: "guest-1" }), { params: { storeId } });
     expect(mocks.orderCreate.mock.calls[0][0].data).toMatchObject({ userId: "user-1", guestId: null });
+  });
+
+  it("records the store as the source, or the panel when the owner buys, whatever the body says", async () => {
+    mocks.auth.mockResolvedValue({ userId: "user-1" });
+    await POST(request({ source: "PANEL" }), { params: { storeId } });
+    expect(mocks.orderCreate.mock.calls[0][0].data).toMatchObject({ source: "STORE" });
+    mocks.checkIfStoreOwner.mockResolvedValue(true);
+    await POST(request({ source: "STORE" }), { params: { storeId } });
+    expect(mocks.orderCreate.mock.calls[1][0].data).toMatchObject({ source: "PANEL" });
   });
 
   it("rejects an invalid buyer email before creating anything", async () => {

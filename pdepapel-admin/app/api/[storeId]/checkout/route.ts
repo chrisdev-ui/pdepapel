@@ -6,6 +6,7 @@ import {
   ShippingProvider,
   ShippingStatus,
   Prisma,
+  OrderSource,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
@@ -878,6 +879,7 @@ async function createCheckout(
           userId: authenticatedUserId,
           guestId: !authenticatedUserId ? guestId : null,
           orderNumber: orderNumber,
+          source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
           // Cubierto entero por la tarjeta: nace pagado y nunca va a la pasarela.
           status: fullyCovered ? OrderStatus.PAID : OrderStatus.PENDING,
           giftCardId,

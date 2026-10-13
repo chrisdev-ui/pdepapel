@@ -1,6 +1,7 @@
 import {
   InventoryMovementType,
   OrderStatus,
+  OrderSource,
   OrderType,
   PaymentMethod,
 } from "@prisma/client";
@@ -300,6 +301,7 @@ export async function createPointOfSaleSale({
         status: pendingOnTerminal ? OrderStatus.PENDING : OrderStatus.PAID,
         paidAt: pendingOnTerminal ? null : new Date(),
         type: OrderType.POINT_OF_SALE,
+        source: OrderSource.POS,
         subtotal,
         total: subtotal,
         totalProductCost,

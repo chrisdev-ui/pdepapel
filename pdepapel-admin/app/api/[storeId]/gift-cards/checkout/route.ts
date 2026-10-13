@@ -23,6 +23,7 @@ import {
   getLastOrderTimestamp,
 } from "@/lib/utils";
 import { runInBackground } from "@/lib/background";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 /**
  * Compra de una tarjeta de regalo desde la tienda.
@@ -133,6 +134,7 @@ async function createGiftCardCheckout(
 
     // La sesión manda: un userId del cuerpo que no coincide no vale.
     const authenticatedUserId = sessionUserId ?? null;
+    const isStoreOwner = sessionUserId ? await checkIfStoreOwner(sessionUserId, params.storeId) : false;
     const guestId = authenticatedUserId ? null : body.guestId || null;
     if (!authenticatedUserId && !guestId) {
       throw ErrorFactory.InvalidRequest("Falta el identificador de la sesión de compra");
@@ -160,7 +162,7 @@ async function createGiftCardCheckout(
           orderNumber: generateOrderNumber(),
           status: OrderStatus.PENDING,
           type: OrderType.GIFT_CARD,
-          source: OrderSource.STORE,
+          source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
           fullName: body.buyerName,
           email: body.buyerEmail.toLowerCase(),
           phone: screen.phone,

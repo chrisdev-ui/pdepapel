@@ -49,7 +49,7 @@ async function cartOrder(items: { sku: string; quantity: number; unitPrice?: num
   const result = await createOrderFromConversationCart({ storeId: fixture.store.id, conversationId: conversation.id, createdBy: fixture.store.userId });
   return testPrisma.order.findUniqueOrThrow({
     where: { id: result.orderId },
-    select: { subtotal: true, total: true, internalNotes: true, status: true, orderItems: { select: { sku: true, quantity: true, price: true } } },
+    select: { subtotal: true, total: true, internalNotes: true, status: true, source: true, orderItems: { select: { sku: true, quantity: true, price: true } } },
   });
 }
 
@@ -81,6 +81,7 @@ describe("pedido desde el carrito del catálogo de WhatsApp", () => {
     });
     const order = await cartOrder([{ sku: tote.sku!, quantity: 2, unitPrice: 35000 }]);
     expect(order.status).toBe("DRAFT");
+    expect(order.source).toBe("WHATSAPP");
     expect(order.orderItems).toEqual([{ sku: tote.sku, quantity: 2, price: 28000 }]);
     expect(order.subtotal).toBe(56000);
     expect(order.internalNotes).toContain("Tote Carrito Oferta");

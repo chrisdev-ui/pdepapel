@@ -150,6 +150,7 @@ describe("fair event flow with MySQL", () => {
     expect(sale.order).toMatchObject({
       status: OrderStatus.PAID,
       type: OrderType.FESTIVAL,
+      source: "FAIR",
       paidAt: expect.any(Date),
       adminNotes: "Venta presencial · Feria de pruebas",
       payment: { method: PaymentMethod.CASH, details: "Venta presencial · Feria de pruebas" },

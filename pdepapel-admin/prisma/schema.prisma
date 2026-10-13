@@ -2817,10 +2817,19 @@ model ProductPresale {
   @@index([storeId, productId])
 }
 
+/// Por dónde nació un pedido. Lo fija el servidor según quién lo crea, nunca
+/// el cuerpo de la petición; `null` = desconocido.
 enum OrderSource {
+  /// Creado en el panel por la dueña.
   PANEL
+  /// La tienda en línea (checkout, transferencia, tarjeta de regalo).
   STORE
+  /// El carrito del catálogo de WhatsApp convertido en pedido.
   WHATSAPP
+  /// Punto de venta.
+  POS
+  /// Feria.
+  FAIR
 }
 
 /// Un hilo con una clienta en un canal: una fila por (tienda, canal, teléfono normalizado).

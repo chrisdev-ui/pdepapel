@@ -143,7 +143,7 @@ describe("point of sale rework with MySQL", () => {
     await expect(
       undoPointOfSaleSale({ storeId: fixture!.store.id, orderId: sale.order.id, userId: fixture!.store.userId, now: new Date(sale.order.paidAt!.getTime() + 31 * 60_000) }),
     ).rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining("Pasaron más de 30 minutos") });
-    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: sale.order.id } })).resolves.toMatchObject({ status: OrderStatus.PAID });
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: sale.order.id } })).resolves.toMatchObject({ status: OrderStatus.PAID, source: "POS" });
     await expect(testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id } })).resolves.toMatchObject({ stock: 5 });
     await expect(testPrisma.inventoryMovement.count({ where: { referenceId: sale.order.id } })).resolves.toBe(1);
   });
