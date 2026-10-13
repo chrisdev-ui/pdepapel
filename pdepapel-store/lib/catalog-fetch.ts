@@ -1,6 +1,6 @@
 import "server-only";
 
-import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
+import { catalogFetchCache, catalogListingTags } from "@/lib/catalog-cache";
 import {
   buildCatalogSearchParams,
   normalizeProductsResponse,
@@ -23,7 +23,7 @@ export async function fetchCatalogProducts(
   url.search = buildCatalogSearchParams(query).toString();
 
   try {
-    const response = await fetch(url, CATALOG_FETCH_CACHE);
+    const response = await fetch(url, catalogFetchCache(catalogListingTags(query)));
     if (!response.ok) return UNAVAILABLE_RESPONSE;
     return normalizeProductsResponse(await response.json());
   } catch {

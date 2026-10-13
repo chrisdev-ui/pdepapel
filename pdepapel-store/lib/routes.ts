@@ -81,6 +81,27 @@ export const productPath = (slug: string) => `/producto/${slug}`;
 
 export const categoryPath = (slug: string) => `/categoria/${slug}`;
 
+/**
+ * Copia en caché ISR de `/tienda` y `/categoria/<slug>` sin filtros. El
+ * middleware reescribe ahí las visitas sin parámetros de catálogo; quien entra
+ * directo a este prefijo vuelve a la URL pública.
+ */
+export const CACHED_LISTING_PREFIX = "/catalogo-cache";
+
+const CACHED_LISTING_PATTERN = /^\/(tienda|categoria\/[^/]+)$/;
+
+/** La ruta en caché que corresponde a una URL pública de listado, o null. */
+export function cachedListingPath(pathname: string): string | null {
+  return CACHED_LISTING_PATTERN.test(pathname) ? `${CACHED_LISTING_PREFIX}${pathname}` : null;
+}
+
+/** La URL pública que corresponde a una ruta del prefijo en caché, o null. */
+export function publicListingPath(pathname: string): string | null {
+  if (!pathname.startsWith(`${CACHED_LISTING_PREFIX}/`)) return null;
+  const publicPath = pathname.slice(CACHED_LISTING_PREFIX.length);
+  return CACHED_LISTING_PATTERN.test(publicPath) ? publicPath : STOREFRONT_ROUTES.shop;
+}
+
 /** Shop filtered by a catalog type ("Ver todo Escritura"). */
 export const typePath = (type: { id: string }) =>
   `${STOREFRONT_ROUTES.shop}?typeId=${encodeURIComponent(type.id)}`;

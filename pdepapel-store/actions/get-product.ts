@@ -1,5 +1,5 @@
 import { env } from "@/lib/env.mjs";
-import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
+import { catalogFetchCache, productTag, PRODUCTS_TAG } from "@/lib/catalog-cache";
 import { UpstreamServiceError } from "@/lib/upstream-service-error";
 import { Product } from "@/types";
 import { cache } from "react";
@@ -34,7 +34,7 @@ export const getProductRoute = cache(async (id: string): Promise<ProductRoute> =
   try {
     const response = await fetch(
       `${API_URL}/${id}?include=kitComponents&scope=storefront`,
-      CATALOG_FETCH_CACHE,
+      catalogFetchCache([PRODUCTS_TAG, productTag(id)]),
     );
     if (response.status === 404) {
       const body = (await response.json().catch(() => null)) as { redirect?: unknown } | null;

@@ -31,6 +31,12 @@ describe("getProductRoute", () => {
     await expect(getProductRoute("agenda-viva")).resolves.toEqual({ product: { id: "p1", slug: "agenda" } });
   });
 
+  it("tags the detail fetch with the key the page asked for, so the panel can purge just this product", async () => {
+    respond(200, { id: "p1", slug: "agenda" });
+    await getProductRoute("agenda-etiqueta");
+    expect(vi.mocked(fetch).mock.calls[0][1]).toEqual({ next: { revalidate: 300, tags: ["products", "product:agenda-etiqueta"] } });
+  });
+
   it("returns the redirect the admin computed for an archived product", async () => {
     respond(404, { message: "Producto no disponible", redirect: { kind: "category", slug: "termos" } });
     await expect(getProductRoute("termo-owala-rojo")).resolves.toEqual({ redirect: { kind: "category", slug: "termos" } });

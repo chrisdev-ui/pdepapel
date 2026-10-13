@@ -63,6 +63,15 @@ describe("getProducts", () => {
     expect(fetchMock.mock.calls[0][1]).toEqual(CATALOG_FETCH_CACHE);
   });
 
+  it("tags a category listing with its category, not the general list", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getProducts({ categoryId: "cat-1", excludeProducts: "p-1", limit: 4 });
+
+    expect(fetchMock.mock.calls[0][1]).toEqual({ next: { revalidate: 300, tags: ["products", "products:category:cat-1"] } });
+  });
+
   it("normalizes the bulk product array used by cart stock validation", async () => {
     const products = [{ id: "product-1", stock: 4 }];
     vi.stubGlobal(
