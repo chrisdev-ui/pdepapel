@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countConcreteFacts, decideProduct, matchTokens, normalizeQuantities, singular, type MatchCandidate } from "@/lib/copiloto/skills/product-match";
+import { countConcreteFacts, decideProduct, matchTokens, normalizeQuantities, singular, skuLikeTokens, type MatchCandidate } from "@/lib/copiloto/skills/product-match";
 
 const product = (name: string, category = "Marcadores", group: string | null = null, sku = `SKU-${name.length}`): MatchCandidate => ({
   id: name,
@@ -57,6 +57,27 @@ describe("decideProduct", () => {
   it("sin palabras en común no encuentra nada", () => {
     expect(decideProduct("agenda 2027 tapa dura", CATALOG)).toEqual({ kind: "none", closest: [] });
     expect(decideProduct("", CATALOG)).toEqual({ kind: "none", closest: [] });
+  });
+
+  it("un desactivado que empata con un activo se pregunta, con su estado", () => {
+    const active = { ...product("Set en caja de marcadores acrílicos GIPAO punta pincel profesional 12 colores"), estado: "activo" };
+    const archived = { ...product("Marcadores acrílicos punta pincel x60"), estado: "desactivado" };
+    const decision = decideProduct("marcadores acrílicos punta pincel", [active, archived]);
+    expect(decision.kind).toBe("ambiguous");
+    expect(decision.kind === "ambiguous" && decision.candidates.map((row) => row.estado).sort()).toEqual(["activo", "desactivado"]);
+  });
+
+  it("una cantidad que contradice la del producto le baja el puntaje", () => {
+    const active = { ...product("Set en caja de marcadores acrílicos GIPAO punta pincel profesional 12 colores"), estado: "activo" };
+    const archived = { ...product("Marcadores acrílicos punta pincel x60"), estado: "desactivado" };
+    expect(decideProduct("marcadores acrílicos punta pincel x60", [active, archived])).toEqual({ kind: "match", product: archived });
+    expect(decideProduct("marcadores acrílicos punta pincel 12 colores", [active, archived])).toEqual({ kind: "match", product: active });
+  });
+
+  it("reconoce lo que tiene forma de SKU", () => {
+    expect(skuLikeTokens("hazme la descripción de MAR-SIM-MUL-L-L-6315, porfa")).toEqual(["MAR-SIM-MUL-L-L-6315"]);
+    expect(skuLikeTokens("ev-a1b2c3 y lib-kaw-123")).toEqual(["LIB-KAW-123"]);
+    expect(skuLikeTokens("marcadores doble-punta x36")).toEqual([]);
   });
 
   it("también encuentra por el grupo y por el SKU", () => {

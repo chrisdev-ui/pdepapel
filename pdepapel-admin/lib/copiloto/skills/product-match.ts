@@ -23,6 +23,15 @@ export function normalizeQuantities(value: string): string {
     .replace(/\b(\d+)\s*(?:unidades|unidad|und|uds|colores|piezas|pcs)\b/g, " $1 ");
 }
 
+/** Lo que tiene forma de SKU de la tienda (p. ej. MAR-SIM-MUL-L-L-6315). */
+export function skuLikeTokens(query: string): string[] {
+  return query
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ""))
+    .filter((word) => /^[a-z0-9]{2,8}(?:-[a-z0-9]{1,8}){2,7}$/i.test(word))
+    .map((word) => word.toUpperCase());
+}
+
 /** Plural sencillo: marcadores → marcador, estuches → estuche, colores → color. */
 export function singular(word: string): string {
   if (/\d/.test(word)) return word;
@@ -56,12 +65,17 @@ const MAX_CANDIDATES = 5;
 
 export function rankCandidates<T extends MatchCandidate>(query: string, products: T[]) {
   const wanted = matchTokens(query);
+  const wantedNumbers = wanted.filter((token) => /^\d+$/.test(token));
   return products
     .map((product) => {
       const have = new Set(matchTokens([product.name, product.sku ?? "", product.category ?? "", product.group ?? ""].join(" ")));
-      return { product, score: wanted.filter((token) => have.has(token)).length, numbersOk: wanted.filter((token) => /^\d+$/.test(token)).every((token) => have.has(token)) };
+      const haveNumbers = Array.from(have).filter((token) => /^\d+$/.test(token));
+      // «x50» contra un set de 12: la cantidad lo contradice y baja.
+      const contradicts = wantedNumbers.length > 0 && haveNumbers.length > 0 && !wantedNumbers.some((token) => have.has(token));
+      const matched = wanted.filter((token) => have.has(token)).length;
+      return { product, matched, score: matched - (contradicts ? 1 : 0), numbersOk: wantedNumbers.every((token) => have.has(token)) };
     })
-    .filter((row) => row.score > 0)
+    .filter((row) => row.matched > 0)
     .sort((a, b) => b.score - a.score || (b.product.soldCount ?? 0) - (a.product.soldCount ?? 0));
 }
 

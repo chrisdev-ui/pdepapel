@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DESCRIPTION_MARKERS } from "@/lib/copiloto/skills/descripciones";
-import { buildSpecs, extractDescriptionSpecs, missingSpecs, specCheckTransform, specWarning } from "@/lib/copiloto/skills/specs";
+import { buildSpecs, extractDescriptionSpecs, fieldDoubt, missingSpecs, specCheckTransform, specWarning } from "@/lib/copiloto/skills/specs";
 
 import { PAULA_REFERENCE_PRODUCT } from "../../../scripts/copilot-eval/fixtures/paula-referencia";
 
@@ -45,9 +45,49 @@ describe("especificaciones de la descripción", () => {
       { clave: "Color de tinta", valor: "Negra", fuente: "descripcion" },
     ]);
     expect(conflicts).toEqual([
-      { clave: "Marca", ficha: "Offi-Esco", descripcion: "Primavera" },
-      { clave: "Marca", ficha: "Offi-Esco", descripcion: "otra" },
+      { clave: "Marca", ficha: "Offi-Esco", descripcion: "Primavera", motivo: "la ficha y la descripción dicen cosas distintas" },
+      { clave: "Marca", ficha: "Offi-Esco", descripcion: "otra", motivo: "la ficha y la descripción dicen cosas distintas" },
     ]);
+  });
+
+  it("un solo color en la ficha contra un set de varios colores queda por confirmar, no en especificaciones", () => {
+    const { specs, conflicts } = buildSpecs({
+      name: "Set de colores Eval 24 colores",
+      description: "<p>Lápices de colores en caja de cartón.</p>",
+      fields: [
+        { clave: "Marca", valor: "Prismacolor" },
+        { clave: "Color", valor: "Rosa" },
+      ],
+    });
+    expect(specs).toEqual([{ clave: "Marca", valor: "Prismacolor", fuente: "ficha" }]);
+    expect(conflicts).toEqual([{ clave: "Color", ficha: "Rosa", motivo: "la ficha dice un solo color (Rosa), pero el nombre o la descripción hablan de varios colores" }]);
+  });
+
+  it.each([
+    ["Marcadores acrílicos punta pincel x60", "Negro", "set de varias unidades"],
+    ["Set de 3 lapiceros", "Azul", "set de varias unidades"],
+    ["Plumones multicolor", "Rojo", "hablan de varios colores"],
+  ])("«%s» con color %s: por confirmar (%s)", (name, color, reason) => {
+    expect(fieldDoubt("Color", color, name)).toContain(reason);
+  });
+
+  it.each([
+    ["Lapiceros x3 negro", "Negro"],
+    ["Cartuchera Eval Rosa", "Rosa"],
+    ["Regla de 30 cm", "Transparente"],
+    ["Cartuchera de 20 x 8 cm", "Azul"],
+    ["Set de 24 colores", "Multicolor"],
+  ])("«%s» con color %s se puede afirmar", (name, color) => {
+    expect(fieldDoubt("Color", color, name)).toBeNull();
+  });
+
+  it("un diseño genérico del panel queda por confirmar; uno que describe, no", () => {
+    for (const design of ["Elegante", "clásico", "Estándar", "Original"]) {
+      expect(fieldDoubt("Diseño", design, "Agenda")).toBe(`«${design}» es un valor genérico del panel, no describe el diseño`);
+    }
+    const { specs, conflicts } = buildSpecs({ name: "Agenda", description: null, fields: [{ clave: "Diseño", valor: "Kawaii" }] });
+    expect(specs).toEqual([{ clave: "Diseño", valor: "Kawaii", fuente: "ficha" }]);
+    expect(conflicts).toEqual([]);
   });
 
   it("revisa los valores sin importar tildes, mayúsculas ni «0.7» contra «0,7»", () => {

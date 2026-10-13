@@ -259,14 +259,27 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
     await testPrisma.product.create({
       data: { storeId: store, ...attributes, name: "Set Marcadores Estuche 50 Colores", description: "<p>SINTETICO-DESC</p>", slug: `prueba-${randomBytes(4).toString("hex")}`, sku: `DES-${randomBytes(3).toString("hex").toUpperCase()}`, price: 9000, stock: 3 } as never,
     });
+    const archivedSku = `MAR-SIM-MUL-${randomBytes(2).toString("hex").toUpperCase()}`;
     await testPrisma.product.create({
-      data: { storeId: store, ...attributes, name: "Marcadores acrílicos punta pincel x60", description: "<p>SINTETICO-DESC</p>", isArchived: true, slug: `prueba-${randomBytes(4).toString("hex")}`, sku: `DES-${randomBytes(3).toString("hex").toUpperCase()}`, price: 9000, stock: 0 } as never,
+      data: { storeId: store, ...attributes, name: "Marcadores acrílicos punta pincel x60", description: "<p>SINTETICO-DESC</p>", isArchived: true, slug: `prueba-${randomBytes(4).toString("hex")}`, sku: archivedSku, price: 9000, stock: 0 } as never,
     });
-    const found = (await run({ nombre: "marcadores en estuche cuadrado x50" })) as { encontrado: boolean; datos: { nombre: string } };
+    await testPrisma.product.create({
+      data: { storeId: store, ...attributes, name: "Set en caja de marcadores acrílicos GIPAO punta pincel profesional 12 colores", description: "<p>SINTETICO-DESC</p>", slug: `prueba-${randomBytes(4).toString("hex")}`, sku: `DES-${randomBytes(3).toString("hex").toUpperCase()}`, price: 9000, stock: 3 } as never,
+    });
+    const found = (await run({ nombre: "marcadores en estuche cuadrado x50" })) as { encontrado: boolean; datos: { nombre: string; especificaciones: { clave: string }[]; especificacionesPorConfirmar: unknown[] } };
     expect(found).toMatchObject({ encontrado: true, datos: { nombre: "Set Marcadores Estuche 50 Colores" } });
+    expect(found.datos.especificaciones.map((spec) => spec.clave)).not.toContain("Color");
+    expect(found.datos.especificacionesPorConfirmar).toContainEqual(expect.objectContaining({ clave: "Color", motivo: expect.stringContaining("varios colores") }));
+
     const archived = await run({ nombre: "marcadores acrílicos pincel x60" });
     expect(archived).toMatchObject({ encontrado: false, desactivado: true, candidatos: [{ nombre: "Marcadores acrílicos punta pincel x60", estado: "desactivado" }] });
     expect(String(archived.mensaje)).toContain("No es un producto prospecto");
+
+    const tie = (await run({ nombre: "marcadores acrílicos punta pincel" })) as { ambiguo: boolean; candidatos: { nombre: string; estado: string }[] };
+    expect(tie.ambiguo).toBe(true);
+    expect(tie.candidatos.map((candidate) => candidate.estado).sort()).toEqual(["activo", "desactivado"]);
+
+    expect(await run({ nombre: `hazme la descripción de ${archivedSku}` })).toMatchObject({ desactivado: true, candidatos: [{ sku: archivedSku, estado: "desactivado" }] });
   });
 
   it("sin las concesiones nuevas responde igual con lo básico y avisa qué falta, sin romperse", async () => {

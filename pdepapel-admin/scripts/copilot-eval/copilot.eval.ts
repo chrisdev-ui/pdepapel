@@ -180,6 +180,15 @@ async function seed(f: InventoryFixture) {
   await described(D.paula.name, { description: D.paula.html, brand: D.paula.brand, abcClassification: D.paula.abcClassification, stock: D.paula.stock });
   await described(D.marcadores50, { description: D.marcadores50Description, brand: D.marcadores50Brand });
   await described(D.pocosDatos, { description: D.pocosDatosDescription });
+  await described(D.acrilicosActivo, {
+    description: "<p>Set de 12 marcadores acrílicos con punta pincel en caja de cartón, para pintar sobre madera, cerámica y tela.</p>",
+    brand: "GIPAO",
+  });
+  await described(D.acrilicosDesactivado, {
+    description: "<p>Set de 60 marcadores acrílicos con punta pincel en estuche plástico, para lettering y manualidades.</p>",
+    isArchived: true,
+  });
+  await described(D.colores24, { description: D.colores24Description, brand: D.colores24Brand });
   const connection = await testPrisma.marketplaceConnection.create({
     data: { storeId: store, provider: "MERCADOLIBRE", status: "CONNECTED", sellerId: `seller-${randomBytes(3).toString("hex")}`, lastSyncedAt: now },
   });

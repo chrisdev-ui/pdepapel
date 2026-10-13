@@ -4,7 +4,7 @@ import { z } from "zod";
 import { CopilotQueryFailure, withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import { getCustomerFacingSizeName } from "@/lib/product-naming";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
-import { MIN_FACTS_TO_WRITE, countConcreteFacts, decideProduct, matchTokens } from "@/lib/copiloto/skills/product-match";
+import { MIN_FACTS_TO_WRITE, countConcreteFacts, decideProduct, matchTokens, skuLikeTokens } from "@/lib/copiloto/skills/product-match";
 import { buildSpecs } from "@/lib/copiloto/skills/specs";
 import { requireStoreOwner } from "@/lib/store-access";
 
@@ -16,8 +16,6 @@ import { requireStoreOwner } from "@/lib/store-access";
  * Railway, la herramienta responde igual con lo demás y lo avisa.
  */
 const EXAMPLE_MAX_CHARS = 1200;
-/** Diseños del panel que no le dicen nada a una clienta. */
-const GENERIC_DESIGNS = /^(cl[aá]sico|original|b[aá]sico|liso|sin dise[nñ]o|est[aá]ndar)$/i;
 const DESCRIPTION_MAX_CHARS = 2500;
 
 const ENTITIES: Record<string, string> = { "&amp;": "&", "&nbsp;": " ", "&quot;": '"', "&#39;": "'", "&lt;": "<", "&gt;": ">" };
@@ -85,28 +83,6 @@ async function findGroups(storeId: string, query: string): Promise<{ id: string;
 
 type Estado = "activo" | "desactivado";
 
-async function searchProducts(db: CopilotDb, storeId: string, query: string, groups: { id: string; name: string }[], archived: boolean) {
-  const stems = matchTokens(query).filter((token) => !/^\d+$/.test(token) && token.length >= 3);
-  if (!stems.length) return null;
-  const groupName = new Map(groups.map((group) => [group.id, group.name]));
-  const rows = await db.product.findMany({
-    where: {
-      storeId,
-      isArchived: archived,
-      OR: [
-        ...stems.flatMap((token) => [{ name: { contains: token } }, { sku: { contains: token } }, { category: { name: { contains: token } } }]),
-        ...(groups.length ? [{ productGroupId: { in: groups.map((group) => group.id) } }] : []),
-      ],
-    },
-    select: { ...PRODUCT_SELECT, soldCount: true },
-    take: 300,
-  });
-  return decideProduct(
-    query,
-    rows.map((row) => ({ id: row.id, name: row.name, sku: row.sku, category: row.category?.name ?? null, group: row.productGroupId ? groupName.get(row.productGroupId) ?? null : null, soldCount: row.soldCount, row })),
-  );
-}
-
 const view = (candidate: { name: string; sku: string | null; category: string | null }, estado: Estado): CandidateView => ({
   nombre: candidate.name.trim(),
   sku: candidate.sku,
@@ -115,25 +91,52 @@ const view = (candidate: { name: string; sku: string | null; category: string | 
 });
 
 /**
- * Primero entre los productos activos. Si ninguno coincide, entre los
- * desactivados (archivados): se devuelven como candidatos con su estado, para
- * preguntar «¿es este?», nunca para tratarlos como un producto nuevo.
+ * Activos y desactivados se puntúan juntos: un desactivado que empata o le gana
+ * a un activo se ofrece con su estado para preguntar «¿es este?», nunca como un
+ * producto nuevo. Lo que tenga forma de SKU se busca primero exacto.
  */
 async function findProduct(db: CopilotDb, storeId: string, input: { sku?: string; nombre?: string }, groups: { id: string; name: string }[]) {
-  if (input.sku) {
-    const bySku = await db.product.findFirst({ where: { storeId, sku: input.sku.trim() }, select: { ...PRODUCT_SELECT, isArchived: true } });
+  const query = input.nombre ?? input.sku ?? "";
+  const skus = Array.from(new Set([...(input.sku ? [input.sku.trim().toUpperCase()] : []), ...skuLikeTokens(query)]));
+  for (const sku of skus) {
+    const bySku = await db.product.findFirst({ where: { storeId, sku }, select: { ...PRODUCT_SELECT, isArchived: true } });
     if (bySku && !bySku.isArchived) return { kind: "match" as const, product: bySku as FoundProduct };
     if (bySku) return { kind: "inactive" as const, candidates: [view({ name: bySku.name, sku: bySku.sku, category: bySku.category?.name ?? null }, "desactivado")] };
   }
-  const query = input.nombre ?? input.sku ?? "";
-  const active = await searchProducts(db, storeId, query, groups, false);
-  if (active?.kind === "match") return { kind: "match" as const, product: active.product.row as FoundProduct };
-  if (active?.kind === "ambiguous") return { kind: "ambiguous" as const, candidates: active.candidates.map((row) => view(row, "activo")) };
-  const archived = await searchProducts(db, storeId, query, groups, true);
-  if (archived?.kind === "match") return { kind: "inactive" as const, candidates: [view(archived.product, "desactivado")] };
-  if (archived?.kind === "ambiguous") return { kind: "inactive" as const, candidates: archived.candidates.map((row) => view(row, "desactivado")) };
-  const closest = active?.kind === "none" ? active.closest.map((row) => view(row, "activo")) : [];
-  return { kind: "none" as const, closest };
+  const stems = matchTokens(query).filter((token) => !/^\d+$/.test(token) && token.length >= 3);
+  if (!stems.length) return { kind: "none" as const, closest: [] as CandidateView[] };
+  const groupName = new Map(groups.map((group) => [group.id, group.name]));
+  const rows = await db.product.findMany({
+    where: {
+      storeId,
+      OR: [
+        ...stems.flatMap((token) => [{ name: { contains: token } }, { sku: { contains: token } }, { category: { name: { contains: token } } }]),
+        ...(groups.length ? [{ productGroupId: { in: groups.map((group) => group.id) } }] : []),
+      ],
+    },
+    select: { ...PRODUCT_SELECT, soldCount: true, isArchived: true },
+    take: 400,
+  });
+  const decision = decideProduct(
+    query,
+    rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      category: row.category?.name ?? null,
+      group: row.productGroupId ? groupName.get(row.productGroupId) ?? null : null,
+      soldCount: row.soldCount,
+      estado: (row.isArchived ? "desactivado" : "activo") as Estado,
+      row,
+    })),
+  );
+  if (decision.kind === "match") {
+    return decision.product.estado === "activo"
+      ? { kind: "match" as const, product: decision.product.row as FoundProduct }
+      : { kind: "inactive" as const, candidates: [view(decision.product, "desactivado")] };
+  }
+  if (decision.kind === "ambiguous") return { kind: "ambiguous" as const, candidates: decision.candidates.map((row) => view(row, row.estado)) };
+  return { kind: "none" as const, closest: decision.closest.map((row) => view(row, row.estado)) };
 }
 
 interface CandidateView {
@@ -210,7 +213,8 @@ export function productoParaDescripcionTool(storeId: string) {
             encontrado: false,
             ambiguo: true,
             candidatos: found.candidates,
-            mensaje: "Varios productos coinciden. Muéstraselos a Paula (nombre y SKU) y pregúntale cuál es antes de escribir.",
+            mensaje:
+              "Varios productos coinciden. Muéstraselos a Paula (nombre, SKU y, si alguno está desactivado, dilo) y pregúntale cuál es antes de escribir.",
           };
         }
         return {
@@ -244,14 +248,14 @@ export function productoParaDescripcionTool(storeId: string) {
         .slice(0, 3);
 
       const size = row ? getCustomerFacingSizeName({ categoryName: product.category?.name, sizeName: row.size?.name }) || null : null;
-      const design = row?.design?.name && !GENERIC_DESIGNS.test(row.design.name) ? row.design.name : null;
       const { specs, conflicts } = buildSpecs({
+        name: product.name,
         description: product.description,
         fields: [
           { clave: "Marca", valor: product.brand ?? row?.productGroup?.brand ?? null },
           { clave: "Color", valor: row?.color?.name ?? null },
           { clave: "Tamaño", valor: size },
-          { clave: "Diseño", valor: design },
+          { clave: "Diseño", valor: row?.design?.name ?? null },
           { clave: "Línea", valor: row?.productGroup?.name ?? null },
           {
             clave: "Incluye",
@@ -259,8 +263,9 @@ export function productoParaDescripcionTool(storeId: string) {
           },
         ],
       });
+      const doubted = new Set(conflicts.filter((conflict) => !conflict.descripcion).map((conflict) => conflict.clave));
       const facts = countConcreteFacts({
-        texts: [product.name, product.description, row?.productGroup?.description, row?.color?.name],
+        texts: [product.name, product.description, row?.productGroup?.description, doubted.has("Color") ? null : row?.color?.name],
         brand: product.brand ?? row?.productGroup?.brand ?? null,
         kitPieces: row?.kitComponents.length ?? 0,
       });
@@ -278,9 +283,9 @@ export function productoParaDescripcionTool(storeId: string) {
           marcaVaciaEnFicha: !product.brand?.trim(),
           atributosInternos: row
             ? {
-                color: row.color?.name ?? null,
-                talla: getCustomerFacingSizeName({ categoryName: product.category?.name, sizeName: row.size?.name }) || null,
-                diseno: row.design?.name ?? null,
+                color: doubted.has("Color") ? null : row.color?.name ?? null,
+                talla: size,
+                diseno: doubted.has("Diseño") ? null : row.design?.name ?? null,
               }
             : null,
           opcionesDeCatalogo: row?.catalogOptionValues.map((value) => ({ opcion: value.option.name, valor: value.optionValue.name })) ?? [],

@@ -19,7 +19,8 @@ export interface Spec {
 export interface SpecConflict {
   clave: string;
   ficha: string;
-  descripcion: string;
+  descripcion?: string;
+  motivo: string;
 }
 
 const ENTITIES: Record<string, string> = { "&amp;": "&", "&nbsp;": " ", "&quot;": '"', "&#39;": "'", "&lt;": "<", "&gt;": ">" };
@@ -85,14 +86,50 @@ export function extractDescriptionSpecs(description: string | null | undefined):
   return lines.map(pairOf).filter((pair): pair is { clave: string; valor: string } => Boolean(pair && pair.valor.length <= SPEC_VALUE_MAX));
 }
 
-/** Ficha primero; la descripción suma lo que no está, y si dice otra cosa queda «por confirmar». */
-export function buildSpecs(input: { description: string | null | undefined; fields: { clave: string; valor: string | null | undefined }[] }) {
+/** Diseños del panel que no le dicen nada a una clienta. */
+export const GENERIC_DESIGNS = /^(cl[aá]sico|original|b[aá]sico|liso|sin dise[nñ]o|est[aá]ndar|elegante|normal|gen[eé]rico|ninguno)$/i;
+const MANY_COLORS = /\b\d+\s*(?:colores|tonos)\b|\bmulticolor\w*|\bsurtid\w*|\bvarios colores\b/;
+const SET_OF_N = /\bset\s+(?:de\s+|x\s?)?\d+\b|\bx\s?\d+\b(?!\s?(?:x|mm|cm|ml|m|g|gr|kg)\b)/;
+
+/**
+ * Un campo de la ficha que no se puede afirmar tal cual: un solo color cuando
+ * el nombre o la descripción hablan de varios, o un diseño genérico del panel.
+ */
+export function fieldDoubt(clave: string, valor: string, context: string): string | null {
+  const key = normalizeSpecKey(clave);
+  const value = foldText(valor);
+  const text = foldText(context);
+  if (key === "color" && !MANY_COLORS.test(value)) {
+    if (MANY_COLORS.test(text)) return `la ficha dice un solo color (${valor}), pero el nombre o la descripción hablan de varios colores`;
+    if (SET_OF_N.test(text) && !text.includes(value)) return `la ficha dice un solo color (${valor}) para un set de varias unidades`;
+  }
+  if ((key === "diseno" || key === "diseño") && GENERIC_DESIGNS.test(valor.trim())) {
+    return `«${valor}» es un valor genérico del panel, no describe el diseño`;
+  }
+  return null;
+}
+
+/**
+ * Ficha primero; la descripción suma lo que no está. Queda «por confirmar» lo
+ * que la descripción contradice y el campo de la ficha que fieldDoubt rechaza.
+ */
+export function buildSpecs(input: {
+  name?: string | null;
+  description: string | null | undefined;
+  fields: { clave: string; valor: string | null | undefined }[];
+}) {
   const specs: Spec[] = [];
   const conflicts: SpecConflict[] = [];
   const byKey = new Map<string, Spec>();
+  const context = `${input.name ?? ""}\n${toLines(input.description ?? "").join("\n")}`;
   for (const field of input.fields) {
     const valor = field.valor?.trim();
     if (!valor || byKey.has(normalizeSpecKey(field.clave))) continue;
+    const doubt = fieldDoubt(field.clave, valor, context);
+    if (doubt) {
+      conflicts.push({ clave: field.clave, ficha: valor, motivo: doubt });
+      continue;
+    }
     const spec: Spec = { clave: field.clave, valor, fuente: "ficha" };
     byKey.set(normalizeSpecKey(field.clave), spec);
     specs.push(spec);
@@ -109,7 +146,7 @@ export function buildSpecs(input: { description: string | null | undefined; fiel
     const a = normalizeSpecValue(existing.valor);
     const b = normalizeSpecValue(pair.valor);
     if (existing.fuente === "ficha" && !a.includes(b) && !b.includes(a)) {
-      conflicts.push({ clave: existing.clave, ficha: existing.valor, descripcion: pair.valor });
+      conflicts.push({ clave: existing.clave, ficha: existing.valor, descripcion: pair.valor, motivo: "la ficha y la descripción dicen cosas distintas" });
     }
   }
   return { specs, conflicts };

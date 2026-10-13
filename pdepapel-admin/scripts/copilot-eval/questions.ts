@@ -307,6 +307,14 @@ export const DESCRIPTION_FIXTURE = {
   /** Dos datos: no alcanza para la plantilla. */
   pocosDatos: "Borrador Eval",
   pocosDatosDescription: "<p>Borrador blanco.</p>",
+  /** Empatan para «marcadores acrílicos eval punta pincel»: el activo y uno desactivado. */
+  acrilicosActivo: "Set en caja de marcadores acrílicos Eval punta pincel profesional 12 colores",
+  acrilicosDesactivado: "Marcadores acrílicos Eval punta pincel x60",
+  /** La ficha dice un solo color (Rosa, el del fixture) para un set de 24 colores. */
+  colores24: "Set de lápices de colores Eval 24 colores",
+  colores24Description:
+    "<p>Set de 24 lápices de colores con mina suave de 3 mm, en caja de cartón con tapa, para colorear mandalas y para el colegio.</p>",
+  colores24Brand: "Eval Arte",
 } as const;
 
 const EMOJI = new RegExp("\\p{Extended_Pictographic}", "gu");
@@ -317,6 +325,8 @@ const seoTitle = (answer: EvalAnswer) => /Título:\s*(.+)/.exec(answer.text)?.[1
 const FILLER = /presentaci[oó]n de forma definida|conserva las unidades|todo reunido|de forma definida|calidad garantizada|ideal para todo/i;
 const questions = (answer: EvalAnswer) => (answer.text.match(/\?/g) ?? []).length;
 const writesTemplate = (answer: EvalAnswer) => answer.text.includes(DESCRIPTION_MARKERS.description);
+const specsSection = (answer: EvalAnswer) => /Especificaciones T[eé]cnicas([\s\S]*?)(?:⚡|$)/.exec(block(answer))?.[1] ?? "";
+const missingSection = (answer: EvalAnswer) => answer.text.split(DESCRIPTION_MARKERS.missing)[1] ?? "";
 
 /** Lo que se puede comprobar sin juzgar el estilo: marcas, emoji, sin precio, sin relleno, título SEO y «Datos que faltan». */
 const wellFormed = (answer: EvalAnswer) => {
@@ -468,5 +478,25 @@ export const DESCRIPTION_QUESTIONS: EvalQuestion[] = [
     pregunta: "Es un producto nuevo que vamos a traer: libreta de bolsillo con 80 hojas punteadas, tapa de cartón reciclado, marca Kiut, tamaño A6. Hazme su descripción.",
     criterio: "Paula dice que es nuevo: lleva la etiqueta de prospecto y usa sus datos.",
     pasa: (a) => a.text.includes(DESCRIPTION_MARKERS.prospect) && /80/.test(a.text),
+  },
+  {
+    id: "desc-desactivado-empata",
+    grupo: "descripciones",
+    pregunta: "hazme la descripción de los marcadores acrílicos eval punta pincel",
+    criterio: "Un desactivado empata con un activo: pregunta cuál y dice que uno está desactivado, sin escribir.",
+    pasa: (a) => used(a, "productoParaDescripcion") && !writesTemplate(a) && /desactivad/i.test(a.text) && /x\s?60/i.test(a.text) && /12/.test(a.text) && questions(a) >= 1,
+  },
+  {
+    id: "desc-color-contradice",
+    grupo: "descripciones",
+    pregunta: `Hazme la descripción del ${DESCRIPTION_FIXTURE.colores24}`,
+    criterio: "La ficha dice Rosa para un set de 24 colores: no va en especificaciones, va por confirmar; ninguna clave «… en la ficha».",
+    pasa: (a) =>
+      used(a, "productoParaDescripcion") &&
+      wellFormed(a) &&
+      specsSection(a).length > 0 &&
+      !/rosa/i.test(specsSection(a)) &&
+      !/en la ficha\s*:|en la ficha\*\*/i.test(specsSection(a)) &&
+      /color/i.test(missingSection(a)),
   },
 ];
