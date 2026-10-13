@@ -1,6 +1,7 @@
 import { expect, Page, Route, test } from "../helpers/safe-test";
 
 import { gotoPublicPage, skipPrivacyBanner } from "../helpers/public-page";
+import { PHONE_ERROR } from "../../../lib/customer-checks";
 import { stubDaneLookup } from "./helpers/local-environment";
 
 /**
@@ -129,9 +130,7 @@ test.describe("checkout en tres pasos", () => {
     await expect(next).toBeVisible({ timeout: 30_000 });
     await next.click();
     await expect(page.getByText("Escribe tu nombre y apellidos")).toBeVisible();
-    await expect(
-      page.getByText("Escribe un celular válido, por ejemplo 300 123 4567"),
-    ).toBeVisible();
+    await expect(page.getByText(PHONE_ERROR)).toBeVisible();
     await expect(page.getByText("Escribe el número de tu documento")).toBeVisible();
 
     await fillContact(page);
