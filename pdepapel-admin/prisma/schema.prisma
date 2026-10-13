@@ -2849,6 +2849,10 @@ model Conversation {
   /// Último mensaje de Paula desde su propio celular (`fileOwnerEcho`). Es lo
   /// que frena al bot: `lastOutboundAt` no sirve porque lo mueven los dos.
   lastOwnerAt    DateTime?
+  /// Mientras el bot contesta, hasta cuándo es suyo el turno de envío
+  /// (`lib/whatsapp/bot-lease.ts`). El valor también identifica a la corrida
+  /// que lo tiene: solo ella lo extiende o lo suelta.
+  botLeaseUntil  DateTime? @db.DateTime(3)
   orderId        String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt

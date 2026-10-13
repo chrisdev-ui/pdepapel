@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
+    $executeRaw: vi.fn(async () => 1),
     conversation: {
       findUnique: mocks.conversationFindUnique,
       update: mocks.conversationUpdate,

@@ -23,6 +23,7 @@ vi.mock("@upstash/qstash", () => ({
 }));
 
 import {
+  enqueueWhatsAppBotRerun,
   WHATSAPP_PROCESSOR_PATH,
   enqueueWhatsAppWebhookEvent,
   getWhatsAppFlowControlKey,
@@ -85,6 +86,21 @@ describe("WhatsApp durable queue", () => {
       label: ["whatsapp", "webhook"],
       redact: { body: true },
     });
+  });
+
+  it("reprograma un mensaje por la misma fila de la clienta, con la espera en segundos", async () => {
+    const rerun = { conversationId: "conversation-1", messageId: "message-1", attempt: 1 };
+    await expect(enqueueWhatsAppBotRerun(rerun, "CO.123456789", 46.2, queueEnvironment)).resolves.toBe(true);
+    expect(mocks.publishJSON).toHaveBeenCalledWith({
+      url: "https://admin.papeleriapdepapel.com/api/internal/marketplaces/whatsapp/process",
+      body: { rerun },
+      retries: 2,
+      timeout: 50,
+      delay: "47s",
+      flowControl: { key: "whatsapp-conversation-CO.123456789", parallelism: 1 },
+      label: ["whatsapp", "bot-rerun"],
+    });
+    await expect(enqueueWhatsAppBotRerun(rerun, null, 0, {})).resolves.toBe(false);
   });
 
   it("returns false without publishing when the queue is not configured", async () => {

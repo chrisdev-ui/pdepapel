@@ -243,16 +243,17 @@ export function getWhatsAppWebhookIdentity(
  * Llave con la que se serializa la cola: una conversación a la vez, para que
  * dos mensajes de la misma persona no se procesen a la vez.
  *
- * Se prefiere el teléfono —es lo que han usado las conversaciones de siempre—
- * y se cae al BSUID. Antes, sin teléfono devolvía `null` y **todos** los
- * contactos con nombre de usuario compartían la misma fila de espera
- * (`…-unknown`), así que sus mensajes se mezclaban entre sí.
+ * Se prefiere el BSUID: llega siempre y es estable para un mismo contacto,
+ * mientras que el teléfono aparece o no según la ventana de 30 días y la
+ * libreta del negocio. Con el teléfono primero, una misma clienta podía caer
+ * en dos filas y dos mensajes suyos procesarse a la vez. Sin BSUID (cuerpos
+ * de antes de que existiera), el teléfono.
  */
 export function getWhatsAppWebhookConversationKey(
   payload: WhatsAppWebhookPayload,
 ): string | null {
   const { phone, bsuid } = getWhatsAppWebhookIdentity(payload);
-  return phone ?? bsuid;
+  return bsuid ?? phone;
 }
 
 /**

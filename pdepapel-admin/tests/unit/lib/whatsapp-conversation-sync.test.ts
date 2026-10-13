@@ -1057,6 +1057,7 @@ describe("processWhatsAppWebhookEvent", () => {
       recipient: "573001234567",
       // Cuándo llegó, para saber si ya hay otro mensaje más nuevo detrás.
       inboundAt: expect.any(Date),
+      jobStartedAt: expect.any(Date),
       body: "Hola, ¿tienen stickers?",
       // Escrito a mano: no viene de ningún botón.
       interactiveReplyId: null,

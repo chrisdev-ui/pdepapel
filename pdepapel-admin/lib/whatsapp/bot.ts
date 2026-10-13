@@ -20,6 +20,8 @@ import {
   type BotCap,
 } from "@/lib/whatsapp/bot-guards";
 import { assembleBurst, chooseFromBurst, claimBurst, loadBurstContext, loadBurstRows, type BurstChoice } from "@/lib/whatsapp/burst";
+import { acquireBotLease, claimBotLease, newBotLease, releaseBotLease, type BotLease } from "@/lib/whatsapp/bot-lease";
+import { enqueueWhatsAppBotRerun } from "@/lib/whatsapp/queue";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
 import type { WebOrigin } from "@/lib/whatsapp/web-origin";
 import {
@@ -158,6 +160,8 @@ export type WhatsAppBotOutcome =
   | "escalated_unprocessable_media"
   /** Ya llegó otro mensaje después: contesta ese, no este. */
   | "skipped_superseded"
+  /** Otra corrida tenía el turno de envío y no lo soltó a tiempo: se reprogramó. */
+  | "deferred_lease_held"
   /** Ya era de Paula y se le debía el aviso (se canceló en la ráfaga): se mandó ahora. */
   | "escalated_owed_notice"
   /** «Bot de WhatsApp activo» está apagado: no se manda nada, va a Paula. */
@@ -307,6 +311,46 @@ function buttonIdOf(input: { interactiveReplyId?: string | null }): string | nul
 }
 
 /**
+ * Reprograma este mensaje por la misma fila de la clienta para cuando venza
+ * el turno. `false` si no se pudo (cola sin configurar, falla o ya se intentó
+ * dos veces): entonces se sigue sin turno y queda en el log.
+ */
+export const MAX_BOT_RERUNS = 2;
+
+async function deferBotRun(
+  conversationId: string,
+  input: { inboundMessageId?: string | null; rerunAttempt?: number },
+  retryInMs: number,
+): Promise<boolean> {
+  const attempt = (input.rerunAttempt ?? 0) + 1;
+  try {
+    const [message, conversation] = await Promise.all([
+      input.inboundMessageId
+        ? prismadb.conversationMessage.findFirst({ where: { conversationId, externalId: input.inboundMessageId }, select: { id: true } })
+        : null,
+      prismadb.conversation.findUnique({ where: { id: conversationId }, select: { bsuid: true, phone: true } }),
+    ]);
+    if (!message || attempt > MAX_BOT_RERUNS) {
+      console.warn("[WHATSAPP_BOT] Turno tomado y sin reprogramar; se sigue sin turno", { conversationId, attempt });
+      return false;
+    }
+    const queued = await enqueueWhatsAppBotRerun(
+      { conversationId, messageId: message.id, attempt },
+      conversation?.bsuid ?? conversation?.phone ?? null,
+      retryInMs / 1000,
+    );
+    if (!queued) console.warn("[WHATSAPP_BOT] Cola sin configurar; se sigue sin turno", { conversationId });
+    return queued;
+  } catch (error) {
+    console.warn("[WHATSAPP_BOT] No se pudo reprogramar; se sigue sin turno", {
+      conversationId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return false;
+  }
+}
+
+/**
  * La ráfaga que termina en este mensaje y qué contestar de ella. `null` si no
  * queda nada que leer (una edición de algo ya contestado) o si otra corrida ya
  * se quedó con la ráfaga.
@@ -361,7 +405,7 @@ async function hasNewerInbound(
  * - **La clienta siguió escribiendo.** Ya se miraba al entrar; mirarlo otra
  *   vez aquí cubre la ráfaga que llega DURANTE la pausa.
  */
-type QuietReason = "bot_disabled" | "owner_active" | "superseded" | "pending_owner" | BotCap;
+type QuietReason = "bot_disabled" | "owner_active" | "superseded" | "pending_owner" | "lease_lost" | BotCap;
 
 async function shouldStayQuiet(
   conversationId: string,
@@ -419,7 +463,23 @@ async function escalate(conversationId: string) {
  * recién creado y con cuerpo: un webhook reenviado no vuelve a pasar por aquí,
  * así la clienta nunca recibe la misma respuesta dos veces.
  */
-export async function runWhatsAppBot(input: {
+export async function runWhatsAppBot(input: BotInput): Promise<WhatsAppBotResult> {
+  const lease = input.lease ?? newBotLease();
+  try {
+    return await decideAndAnswer({ ...input, lease, jobStartedAt: input.jobStartedAt ?? new Date() });
+  } finally {
+    await releaseBotLease(input.conversationId, lease).catch((error: unknown) => {
+      console.error("[WHATSAPP_BOT] No se pudo soltar el turno de envío", {
+        conversationId: input.conversationId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+  }
+}
+
+type BotInput = Parameters<typeof decideAndAnswer>[0];
+
+async function decideAndAnswer(input: {
   conversationId: string;
   /**
    * A quién se le contesta. Es el teléfono de siempre, o el BSUID cuando la
@@ -461,6 +521,14 @@ export async function runWhatsAppBot(input: {
   webOrigin?: WebOrigin | null;
   /** Lo pone esta función; no se pasa desde fuera. */
   storeId?: string;
+  /** Turno de envío de esta corrida (lib/whatsapp/bot-lease.ts); lo crea `runWhatsAppBot`. */
+  lease?: BotLease;
+  /** Cuándo empezó la entrega de QStash: el turno se espera dentro de su presupuesto. */
+  jobStartedAt?: Date;
+  /** Cuántas veces se reprogramó este mensaje por un turno tomado. */
+  rerunAttempt?: number;
+  /** Lo que ya se esperó por el turno; se descuenta de la pausa humana. */
+  waitedMs?: number;
 }): Promise<WhatsAppBotResult> {
   const conversation = await prismadb.conversation.findUnique({
     where: { id: input.conversationId },
@@ -493,6 +561,18 @@ export async function runWhatsAppBot(input: {
   //    botón no entran: cada toque es una elección suya.
   if (!buttonIdOf(input) && (await hasNewerInbound(conversation.id, input.inboundAt))) {
     return { outcome: "skipped_superseded" };
+  }
+
+  // 0 bis bis. Turno de envío: antes de decidir nada, para que una corrida que
+  //    tiene que esperar no haya tocado todavía el estado de la conversación.
+  if (input.lease) {
+    const turn = await acquireBotLease(conversation.id, input.lease, input.jobStartedAt ?? new Date());
+    if (!turn.ok) {
+      if (await deferBotRun(conversation.id, input, turn.retryInMs)) return { outcome: "deferred_lease_held" };
+      input.lease.bypass = true;
+    } else {
+      input = { ...input, waitedMs: turn.waitedMs };
+    }
   }
 
   // 0 ter. Modo ráfaga: con lo que escribió seguido se elige qué contestar, y
@@ -1280,6 +1360,10 @@ async function appendToOrderRequest(
 
 interface Pacing {
   inboundMessageId: string | null;
+  /** Turno de envío de la corrida; cada envío lo extiende. */
+  lease: BotLease | null;
+  /** Lo que ya se esperó por el turno; se descuenta de la pausa. */
+  waitedMs: number;
   skip: boolean;
   /** Cuándo llegó el mensaje que se está contestando. */
   inboundAt: Date | null;
@@ -1299,6 +1383,8 @@ interface Pacing {
 
 function pacing(input: {
   inboundMessageId?: string | null;
+  lease?: BotLease;
+  waitedMs?: number;
   skipHumanPause?: boolean;
   inboundAt?: Date | null;
   interactiveReplyId?: string | null;
@@ -1310,6 +1396,8 @@ function pacing(input: {
 }): Pacing {
   return {
     inboundMessageId: input.inboundMessageId?.trim() || null,
+    lease: input.lease ?? null,
+    waitedMs: input.waitedMs ?? 0,
     skip: Boolean(input.skipHumanPause),
     inboundAt: input.inboundAt ?? null,
     supersedable: true,
@@ -1519,6 +1607,12 @@ async function deliver(
     return { ok: true };
   }
 
+  // El turno es de esta corrida; si venció y lo tomó otra, esa contesta.
+  if (pace.lease && !(await claimBotLease(conversationId, pace.lease))) {
+    console.warn("[WHATSAPP_BOT] Se perdió el turno de envío", { conversationId });
+    return { ok: true, aborted: true, reason: "lease_lost" };
+  }
+
   // «Escribiendo…» primero y después la espera. Si el indicador falla no se
   // interrumpe nada: es adorno, la respuesta es lo que importa.
   if (pace.inboundMessageId) {
@@ -1529,7 +1623,7 @@ async function deliver(
       });
     }
   }
-  if (!pace.skip) await sleep(getHumanPauseMs(reply));
+  if (!pace.skip) await sleep(Math.max(0, getHumanPauseMs(reply) - pace.waitedMs));
 
   // Volver a decidir DESPUÉS de la pausa. Esta es la corrección de fondo: el
   // freno de 24 h se miraba una sola vez, al entrar, y entre esa mirada y este

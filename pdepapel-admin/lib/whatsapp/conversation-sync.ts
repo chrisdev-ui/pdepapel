@@ -236,6 +236,62 @@ function getCustomerEdit(message: JsonRecord): { of: string; text: string } | nu
 }
 
 /**
+ * Un mensaje que se reprogramó porque otra corrida tenía el turno de envío
+ * (lib/whatsapp/bot-lease.ts). Solo se contesta si sigue siendo lo último de
+ * la conversación: ni un mensaje suyo más nuevo ni nada salió después. Nunca
+ * corre el modo sombra (ya corrió con la primera vuelta).
+ */
+export async function rerunWhatsAppBot(rerun: { conversationId: string; messageId: string; attempt: number }) {
+  const jobStartedAt = new Date();
+  const message = await prismadb.conversationMessage.findUnique({
+    where: { id: rerun.messageId },
+    select: { id: true, conversationId: true, direction: true, sentBy: true, body: true, mediaType: true, metadata: true, externalId: true, rawEventId: true, createdAt: true },
+  });
+  if (!message || message.conversationId !== rerun.conversationId || message.direction !== ConversationMessageDirection.INBOUND || message.sentBy !== ConversationMessageSentBy.CUSTOMER) {
+    return { rerun: false, reason: "not_found" as const };
+  }
+  const later = await prismadb.conversationMessage.findFirst({
+    where: {
+      conversationId: message.conversationId,
+      createdAt: { gt: message.createdAt },
+      OR: [{ direction: ConversationMessageDirection.OUTBOUND }, { direction: ConversationMessageDirection.INBOUND, sentBy: ConversationMessageSentBy.CUSTOMER }],
+    },
+    select: { id: true },
+  });
+  if (later) return { rerun: false, reason: "stale" as const };
+
+  const [conversation, event] = await Promise.all([
+    prismadb.conversation.findUnique({ where: { id: message.conversationId }, select: { phone: true, bsuid: true } }),
+    message.rawEventId ? prismadb.marketplaceWebhookEvent.findUnique({ where: { id: message.rawEventId }, select: { id: true, createdAt: true } }) : null,
+  ]);
+  const recipient = conversation?.phone ?? conversation?.bsuid;
+  if (!recipient) return { rerun: false, reason: "no_recipient" as const };
+  const metadata = (message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata) ? message.metadata : {}) as {
+    webOrigin?: WebOrigin;
+    tap?: { id?: string };
+    edit?: { text?: string };
+  };
+  const result = await runWhatsAppBot({
+    conversationId: message.conversationId,
+    recipient,
+    body: message.body ?? metadata.edit?.text ?? "",
+    interactiveReplyId: metadata.tap?.id ?? null,
+    inboundMessageId: message.externalId,
+    inboundAt: message.createdAt,
+    eventId: event?.id ?? null,
+    eventCreatedAt: event?.createdAt ?? null,
+    customerPhone: conversation?.phone ?? null,
+    customerBsuid: conversation?.bsuid ?? null,
+    webOrigin: metadata.webOrigin ?? null,
+    ...(isMediaForOwner(message.mediaType) ? { mediaForOwner: true } : {}),
+    ...(!message.body && metadata.edit?.text ? { burstEdit: true } : {}),
+    rerunAttempt: rerun.attempt,
+    jobStartedAt,
+  });
+  return { rerun: true, outcome: result.outcome };
+}
+
+/**
  * Cuerpo de un eco. Además del texto, rescata el pie de una imagen y el texto
  * nuevo de una edición; de un `revoke` no hay nada que rescatar. Lo que no se
  * entienda queda como `null` y el tipo viaja en `mediaType`.
@@ -775,6 +831,7 @@ export async function fileOwnerEcho(
 }
 
 export async function processWhatsAppWebhookEvent(eventId: string) {
+  const jobStartedAt = new Date();
   const event = await prismadb.marketplaceWebhookEvent.findUnique({
     where: { id: eventId },
     select: {
@@ -841,6 +898,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       customerBsuid: string | null;
       webOrigin?: WebOrigin | null;
       burstEdit?: boolean;
+      jobStartedAt: Date;
     }> = [];
 
     for (const message of extracted.messages) {
@@ -864,6 +922,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
         recipient,
         body: message.body ?? (burstEdit ? edit!.text : ""),
         ...(burstEdit ? { burstEdit: true } : {}),
+        jobStartedAt,
         interactiveReplyId: message.interactiveReplyId,
         // Hace falta para mostrar «escribiendo…» y marcar como leído.
         inboundMessageId: message.externalId,

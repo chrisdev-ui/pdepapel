@@ -11,14 +11,26 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
  * anota qué texto le llegó). Cada caso corre con el interruptor encendido y
  * apagado, y cuenta exactamente los mensajes que salieron. Datos sintéticos.
  */
-const sent = vi.hoisted(() => ({ messages: [] as string[], classified: [] as string[] }));
+const sent = vi.hoisted(() => ({
+  messages: [] as string[],
+  classified: [] as string[],
+  onTyping: null as null | (() => Promise<void>),
+  classifierDelayMs: 0,
+  reruns: [] as { rerun: { conversationId: string; messageId: string; attempt: number }; delaySeconds: number }[],
+}));
 vi.mock("@/lib/whatsapp/send", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("@/lib/whatsapp/send");
   const stubs: Record<string, unknown> = { ...actual };
   for (const [name, value] of Object.entries(actual)) {
     if (typeof value !== "function" || !name.startsWith("sendWhatsApp")) continue;
     stubs[name] = async (_to: unknown, body: unknown) => {
-      if (name !== "sendWhatsAppTypingIndicator") sent.messages.push(typeof body === "string" ? body : JSON.stringify(body));
+      if (name === "sendWhatsAppTypingIndicator") {
+        const hook = sent.onTyping;
+        sent.onTyping = null;
+        await hook?.();
+      } else {
+        sent.messages.push(typeof body === "string" ? body : JSON.stringify(body));
+      }
       return { ok: true, messageId: `wamid.sim-${randomUUID()}` };
     };
   }
@@ -34,12 +46,21 @@ vi.mock("@/lib/ai-provider", async (importOriginal) => ({
   runStructured: async (input: { feature: string; prompt: string }) => {
     if (input.feature !== "whatsapp.classifier") throw new Error("solo el clasificador de productos");
     sent.classified.push(input.prompt);
+    if (sent.classifierDelayMs) await new Promise((resolve) => setTimeout(resolve, sent.classifierDelayMs));
     const slots = /cuaderno/i.test(input.prompt)
       ? { productType: "cuaderno", character: "Norma", descriptor: null }
       : /lapicero/i.test(input.prompt)
         ? { productType: "lapicero", character: null, descriptor: "gel" }
         : { productType: "agenda", character: null, descriptor: "2027" };
     return { output: { intent: "product.availability", ...slots }, provider: "openai", usage: undefined };
+  },
+}));
+
+vi.mock("@/lib/whatsapp/queue", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/whatsapp/queue")>()),
+  enqueueWhatsAppBotRerun: async (rerun: { conversationId: string; messageId: string; attempt: number }, _key: string | null, delaySeconds: number) => {
+    sent.reruns.push({ rerun, delaySeconds });
+    return true;
   },
 }));
 
@@ -201,6 +222,9 @@ afterAll(async () => {
 beforeEach(() => {
   sent.messages = [];
   sent.classified = [];
+  sent.onTyping = null;
+  sent.classifierDelayMs = 0;
+  sent.reruns = [];
 });
 
 describe.each([true, false])("modo ráfaga %s", (on) => {
@@ -339,14 +363,78 @@ describe.each([true, false])("modo ráfaga %s", (on) => {
     record("bot apagado", on, 0, outcomes.at(-1)!);
   });
 
-  it("dos corridas a la vez con el último mensaje: un solo envío", async ({ skip }) => {
-    // Sin el modo ráfaga no hay reclamo: en producción la fila de QStash de cada clienta corre un trabajo a la vez.
-    if (!on) skip();
+  it("dos corridas a la vez con el último mensaje: un solo envío", async () => {
     const chat = await conversation();
     const lines = await burst(chat.id, ["Hola", "Tienes el cuaderno Norma?"]);
     const outcomes = await Promise.all([answer(chat, lines[1]), answer(chat, lines[1])]);
     expect(sent.messages).toHaveLength(1);
     record("dos corridas a la vez", on, sent.messages.length, outcomes.map((result) => result.outcome).sort().join(" + "));
+  });
+
+  it("dos mensajes distintos procesados a la vez: un solo envío, y contesta el último", async () => {
+    const chat = await conversation();
+    const [first] = await burst(chat.id, ["Hola"]);
+    let second: Promise<{ outcome: string }> | null = null;
+    // Cuando la primera corrida ya tiene el turno (llegó a «escribiendo…»), entra el segundo mensaje.
+    sent.onTyping = async () => {
+      const [line] = await burst(chat.id, ["Tienes el cuaderno Norma?"]);
+      const later = { ...line, at: new Date(Date.now() + SECOND) };
+      await testPrisma.conversationMessage.update({ where: { id: line.id }, data: { createdAt: later.at } });
+      second = answer(chat, later);
+    };
+    const firstResult = await answer(chat, first);
+    const secondResult = await second!;
+    expect(sent.messages).toHaveLength(1);
+    expect(sent.classified.at(-1)).toBe("Tienes el cuaderno Norma?");
+    expect(secondResult.outcome).toBe("replied_product");
+    expect((await testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { botLeaseUntil: true } })).botLeaseUntil).toBeNull();
+    record("dos mensajes a la vez", on, sent.messages.length, `${firstResult.outcome} + ${secondResult.outcome}`);
+  });
+
+  it("la misma corrida manda sus dos mensajes («Dame un segundito» y la respuesta)", async () => {
+    const { PRODUCT_CLASSIFIER_SLOW_NOTICE_MS } = await import("@/lib/whatsapp/bot-products");
+    sent.classifierDelayMs = PRODUCT_CLASSIFIER_SLOW_NOTICE_MS + 500;
+    const chat = await conversation();
+    const [line] = await burst(chat.id, ["Tienes el cuaderno Norma?"]);
+    const result = await answer(chat, line);
+    expect(result.outcome).toBe("replied_product");
+    expect(sent.messages).toHaveLength(2);
+    expect(sent.messages[0]).toContain("Dame un segundito");
+    record("misma corrida, 2 mensajes", on, sent.messages.length, result.outcome);
+  });
+
+  it("turno de una corrida caída: se espera a que venza y se contesta", async () => {
+    const chat = await conversation();
+    await testPrisma.conversation.update({ where: { id: chat.id }, data: { botLeaseUntil: new Date(Date.now() + 3 * SECOND) } });
+    const [line] = await burst(chat.id, ["Tienes el cuaderno Norma?"]);
+    const started = Date.now();
+    const result = await answer(chat, line);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(2 * SECOND);
+    expect(result.outcome).toBe("replied_product");
+    expect(sent.messages).toHaveLength(1);
+    record("turno caído que vence pronto", on, sent.messages.length, result.outcome);
+  });
+
+  it("turno caído que no vence a tiempo: se reprograma por la fila y la segunda vuelta contesta una sola vez", async () => {
+    const chat = await conversation();
+    await testPrisma.conversation.update({ where: { id: chat.id }, data: { botLeaseUntil: new Date(Date.now() + 45 * SECOND) } });
+    const [line] = await burst(chat.id, ["Tienes el cuaderno Norma?"]);
+    // La entrega ya gastó casi todo su presupuesto: no alcanza a esperar 45 s.
+    const deferred = await answer(chat, line, { jobStartedAt: new Date(Date.now() - 37 * SECOND) });
+    expect(deferred.outcome).toBe("deferred_lease_held");
+    expect(sent.messages).toHaveLength(0);
+    expect(sent.reruns).toHaveLength(1);
+    expect(sent.reruns[0].rerun).toMatchObject({ conversationId: chat.id, messageId: line.id, attempt: 1 });
+    expect(sent.reruns[0].delaySeconds).toBeGreaterThan(44);
+    expect(await testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { status: true } })).toEqual({ status: "OPEN" });
+
+    await testPrisma.conversation.update({ where: { id: chat.id }, data: { botLeaseUntil: new Date(Date.now() - SECOND) } });
+    const { rerunWhatsAppBot } = await import("@/lib/whatsapp/conversation-sync");
+    const rerun = await rerunWhatsAppBot(sent.reruns[0].rerun);
+    expect(rerun).toEqual({ rerun: true, outcome: "replied_product" });
+    expect(await rerunWhatsAppBot(sent.reruns[0].rerun)).toEqual({ rerun: false, reason: "stale" });
+    expect(sent.messages).toHaveLength(1);
+    record("turno caído, reprogramado", on, sent.messages.length, `${deferred.outcome} → ${rerun.outcome}`);
   });
 
   it("el modo sombra guarda la decisión de ráfaga, sin texto", async () => {
@@ -372,6 +460,26 @@ describe.each([true, false])("modo ráfaga %s", (on) => {
       differs: true,
     });
     expect(JSON.stringify(row.burstDecision)).not.toMatch(/cuaderno|hija/i);
+  });
+});
+
+describe("turno de envío", () => {
+  it("solo quien lo tiene lo suelta; otra corrida no lo toca", async () => {
+    const { claimBotLease, newBotLease, releaseBotLease } = await import("@/lib/whatsapp/bot-lease");
+    const chat = await conversation();
+    const holder = newBotLease();
+    const other = newBotLease();
+    expect(await claimBotLease(chat.id, holder)).toBe(true);
+    expect(await claimBotLease(chat.id, other)).toBe(false);
+    other.token = new Date(holder.token!.getTime() + 1);
+    expect(await releaseBotLease(chat.id, other)).toBe(false);
+    const held = await testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { botLeaseUntil: true } });
+    expect(held.botLeaseUntil?.getTime()).toBe(holder.token!.getTime());
+    const first = holder.token!.getTime();
+    expect(await claimBotLease(chat.id, holder)).toBe(true);
+    expect(holder.token!.getTime()).toBeGreaterThanOrEqual(first - 1000);
+    expect(await releaseBotLease(chat.id, holder)).toBe(true);
+    expect((await testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { botLeaseUntil: true } })).botLeaseUntil).toBeNull();
   });
 });
 

@@ -190,7 +190,7 @@ describe("getWhatsAppWebhookIdentity", () => {
     });
   });
 
-  it("prefiere el teléfono cuando llegan los dos, y conserva el BSUID", () => {
+  it("con los dos, la identidad lleva ambos y la cola va por el BSUID, que no cambia", () => {
     const payload = sinTelefono({
       contacts: [{ wa_id: "573001234567", user_id: "CO.123456789" }],
       messages: [{ id: "wamid.1", from: "573001234567", from_user_id: "CO.123456789" }],
@@ -198,6 +198,26 @@ describe("getWhatsAppWebhookIdentity", () => {
     expect(getWhatsAppWebhookIdentity(payload)).toEqual({
       phone: "573001234567",
       bsuid: "CO.123456789",
+    });
+    expect(getWhatsAppWebhookConversationKey(payload)).toBe("CO.123456789");
+  });
+
+  it("la misma clienta, con teléfono o sin él, cae en la misma fila", () => {
+    const conTelefono = sinTelefono({
+      contacts: [{ wa_id: "573001234567", user_id: "CO.123456789" }],
+      messages: [{ id: "wamid.1", from: "573001234567", from_user_id: "CO.123456789" }],
+    });
+    const soloBsuid = sinTelefono({
+      contacts: [{ user_id: "CO.123456789" }],
+      messages: [{ id: "wamid.2", from_user_id: "CO.123456789" }],
+    });
+    expect(getWhatsAppWebhookConversationKey(conTelefono)).toBe(getWhatsAppWebhookConversationKey(soloBsuid));
+  });
+
+  it("sin BSUID (cuerpos de antes), el teléfono", () => {
+    const payload = sinTelefono({
+      contacts: [{ wa_id: "573001234567" }],
+      messages: [{ id: "wamid.1", from: "573001234567" }],
     });
     expect(getWhatsAppWebhookConversationKey(payload)).toBe("573001234567");
   });

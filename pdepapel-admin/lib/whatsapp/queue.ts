@@ -76,6 +76,45 @@ export async function enqueueWhatsAppWebhookEvent(
   return true;
 }
 
+export interface WhatsAppBotRerun {
+  conversationId: string;
+  messageId: string;
+  attempt: number;
+}
+
+/**
+ * Vuelve a pasar un mensaje por el bot más tarde, por la misma fila de esa
+ * clienta: el turno de envío lo tenía otra corrida que no lo soltó a tiempo.
+ * Devuelve `false` sin lanzar cuando la cola no está configurada.
+ */
+export async function enqueueWhatsAppBotRerun(
+  rerun: WhatsAppBotRerun,
+  contactKey: string | null,
+  delaySeconds: number,
+  environment: QueueEnvironment = process.env,
+) {
+  if (!getWhatsAppQueueConfigurationStatus(environment).configured) {
+    return false;
+  }
+  const client = new Client({
+    token: environment.QSTASH_TOKEN,
+    enableTelemetry: false,
+  });
+  await client.publishJSON({
+    url: getWhatsAppProcessorUrl(environment),
+    body: { rerun },
+    retries: 2,
+    timeout: 50,
+    delay: `${BigInt(Math.max(1, Math.ceil(delaySeconds)))}s`,
+    flowControl: {
+      key: getWhatsAppFlowControlKey(contactKey),
+      parallelism: 1,
+    },
+    label: ["whatsapp", "bot-rerun"],
+  });
+  return true;
+}
+
 export async function verifyWhatsAppProcessorRequest(
   body: string,
   signature: string | null,

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { processWhatsAppWebhookEvent } from "@/lib/whatsapp/conversation-sync";
+import { processWhatsAppWebhookEvent, rerunWhatsAppBot } from "@/lib/whatsapp/conversation-sync";
 import {
   getWhatsAppProcessorUrl,
   verifyWhatsAppProcessorRequest,
 } from "@/lib/whatsapp/queue";
 
-type QueueMessage = { eventId?: unknown };
+type QueueMessage = {
+  eventId?: unknown;
+  /** Un mensaje que se vuelve a pasar por el bot (lib/whatsapp/bot-lease.ts). */
+  rerun?: { conversationId?: unknown; messageId?: unknown; attempt?: unknown };
+};
 
 /** Procesador firmado por QStash: convierte un evento guardado en conversación. */
 export async function POST(request: Request) {
@@ -26,6 +30,12 @@ export async function POST(request: Request) {
     }
 
     const message = JSON.parse(body) as QueueMessage;
+    const rerun = message.rerun;
+    if (rerun && typeof rerun.conversationId === "string" && typeof rerun.messageId === "string" && typeof rerun.attempt === "number") {
+      return NextResponse.json(
+        await rerunWhatsAppBot({ conversationId: rerun.conversationId, messageId: rerun.messageId, attempt: rerun.attempt }),
+      );
+    }
     if (typeof message.eventId !== "string" || !message.eventId) {
       return NextResponse.json(
         { error: "Evento de cola inválido" },

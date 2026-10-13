@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   verify: vi.fn(),
   process: vi.fn(),
+  rerun: vi.fn(),
 }));
 
 vi.mock("@/lib/whatsapp/queue", () => ({
@@ -11,6 +12,7 @@ vi.mock("@/lib/whatsapp/queue", () => ({
 }));
 vi.mock("@/lib/whatsapp/conversation-sync", () => ({
   processWhatsAppWebhookEvent: mocks.process,
+  rerunWhatsAppBot: mocks.rerun,
 }));
 
 import { POST } from "@/app/api/internal/marketplaces/whatsapp/process/route";
@@ -45,6 +47,22 @@ describe("POST /api/internal/marketplaces/whatsapp/process", () => {
     expect((await POST(request(JSON.stringify({ eventId: 42 })))).status).toBe(400);
     expect((await POST(request(JSON.stringify({ eventId: "" })))).status).toBe(400);
     expect(mocks.process).not.toHaveBeenCalled();
+  });
+
+  it("pasa un mensaje reprogramado por el bot, firmado igual, y no lo confunde con un evento", async () => {
+    mocks.rerun.mockResolvedValue({ rerun: true, outcome: "replied_product" });
+    const rerun = { conversationId: "conversation-1", messageId: "message-1", attempt: 1 };
+    const response = await POST(request(JSON.stringify({ rerun })));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ rerun: true, outcome: "replied_product" });
+    expect(mocks.rerun).toHaveBeenCalledWith(rerun);
+    expect(mocks.process).not.toHaveBeenCalled();
+
+    mocks.verify.mockResolvedValue(false);
+    expect((await POST(request(JSON.stringify({ rerun })))).status).toBe(401);
+    mocks.verify.mockResolvedValue(true);
+    expect((await POST(request(JSON.stringify({ rerun: { conversationId: "c", messageId: 7, attempt: 1 } })))).status).toBe(400);
+    expect(mocks.rerun).toHaveBeenCalledTimes(1);
   });
 
   it("answers 500 when the body is not JSON or the processor throws", async () => {
