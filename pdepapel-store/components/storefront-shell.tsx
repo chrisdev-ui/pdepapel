@@ -57,7 +57,9 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
     <ClerkProvider
       clerkJSVersion={CLERK_JS_VERSION}
       clerkJSVariant={clerkVariant === "headless" ? "headless" : ""}
-      localization={esES}
+      // Solo la interfaz de Clerk usa los textos; en headless serían ~54 KiB
+      // más de HTML en cada página pública.
+      localization={clerkVariant === "full" ? esES : undefined}
       signInUrl={STOREFRONT_ROUTES.signIn}
       signUpUrl={STOREFRONT_ROUTES.signUp}
       signInFallbackRedirectUrl={STOREFRONT_ROUTES.home}
