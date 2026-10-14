@@ -133,6 +133,8 @@ test.describe("reservas en distintos tamaños", () => {
       await settled(confirm);
       await confirm.getByRole("button", { name: "Liberar" }).click();
       await expect(page.getByTestId("reservation-card").filter({ hasText: "Clienta E2E" })).toHaveCount(0, { timeout: 30_000 });
+      // La tarjeta se quita al instante; el aviso «Liberado» llega cuando el servidor confirmó.
+      await expect(page.getByText("Liberado", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     });
   }
 });
