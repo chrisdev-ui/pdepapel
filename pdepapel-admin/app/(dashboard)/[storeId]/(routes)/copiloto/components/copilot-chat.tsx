@@ -41,6 +41,35 @@ interface CopilotChatProps {
 
 const newId = () => crypto.randomUUID();
 
+/**
+ * La respuesta línea por línea. Una viñeta («- », con o sin sangría de a dos
+ * espacios) lleva sangría colgante: en el teléfono, cuando la línea se parte,
+ * sigue alineada bajo su viñeta y se ve dentro de la de arriba.
+ */
+export function AssistantText({ text, storeId }: { text: string; storeId: string }) {
+  return (
+    <>
+      {text.split("\n").map((line, index) => {
+        const bullet = /^( *)[-*] (.*)$/.exec(line);
+        if (!bullet) {
+          return (
+            <span key={index} className="block min-h-[1.5em]">
+              <TextWithCitations text={line} storeId={storeId} />
+            </span>
+          );
+        }
+        const depth = Math.floor(bullet[1].length / 2);
+        return (
+          <span key={index} data-bullet-depth={depth} className="block" style={{ paddingLeft: `${depth + 1.1}em`, textIndent: "-1.1em" }}>
+            <span aria-hidden="true">• </span>
+            <TextWithCitations text={bullet[2]} storeId={storeId} />
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 /** «[conocimiento: id]» se vuelve un enlace a la nota que Paula aprobó. */
 function TextWithCitations({ text, storeId }: { text: string; storeId: string }) {
   const pieces = text.split(/(\[conocimiento:\s*[a-z0-9-]+\])/gi);
@@ -428,7 +457,7 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
                 if (part.type === "text") {
                   return (
                     <p key={index} className="whitespace-pre-wrap break-words">
-                      {message.role === "assistant" ? <TextWithCitations text={part.text} storeId={storeId} /> : part.text}
+                      {message.role === "assistant" ? <AssistantText text={part.text} storeId={storeId} /> : part.text}
                     </p>
                   );
                 }

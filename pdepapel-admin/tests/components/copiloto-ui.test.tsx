@@ -28,7 +28,7 @@ vi.mock("axios", () => ({ default: { ...mocks.axios, isAxiosError: () => false }
 vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }), useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast: mocks.toast }));
 
-import { CopilotChat } from "@/app/(dashboard)/[storeId]/(routes)/copiloto/components/copilot-chat";
+import { AssistantText, CopilotChat } from "@/app/(dashboard)/[storeId]/(routes)/copiloto/components/copilot-chat";
 import { KnowledgeList } from "@/app/(dashboard)/[storeId]/(routes)/copiloto/conocimiento/components/knowledge-list";
 
 beforeEach(() => {
@@ -234,3 +234,23 @@ describe("KnowledgeList", () => {
     expect(screen.queryByRole("button", { name: "Aprobar" })).toBeNull();
   });
 });
+
+describe("respuesta del copiloto con viñetas", () => {
+  it("cada viñeta lleva su nivel por la sangría y el texto queda igual; la negrita y las notas siguen funcionando", () => {
+    const text = ["Hay 2 lentos.", "", "- **Kit escolar** — útiles", "  - Libreta (lento): $9.000", "  - Por qué:", "    - Libreta: 120 días sin venderse [conocimiento: kits]"].join("\n");
+    const { container } = render(<AssistantText text={text} storeId="store-1" />);
+    const bullets = Array.from(container.querySelectorAll("[data-bullet-depth]"));
+    expect(bullets.map((node) => [node.getAttribute("data-bullet-depth"), node.textContent])).toEqual([
+      ["0", "• Kit escolar — útiles"],
+      ["1", "• Libreta (lento): $9.000"],
+      ["1", "• Por qué:"],
+      ["2", "• Libreta: 120 días sin venderse nota: kits"],
+    ]);
+    expect((bullets[1] as HTMLElement).style.paddingLeft).toBe("2.1em");
+    expect((bullets[1] as HTMLElement).style.textIndent).toBe("-1.1em");
+    expect(container.querySelector("strong")?.textContent).toBe("Kit escolar");
+    expect(screen.getByRole("link", { name: "nota: kits" }).getAttribute("href")).toBe("/store-1/copiloto/conocimiento#kits");
+    expect(container.textContent).toContain("Hay 2 lentos.");
+  });
+});
+
