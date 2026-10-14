@@ -3,11 +3,12 @@
 import Filter from "@/components/filter";
 import { OnSaleFilter } from "@/components/on-sale-filter";
 import PriceFilter from "@/components/price-filter";
-import { CatalogOption, Category, Color, Design, Type } from "@/types";
+import type { FilterType, NavigationCategory } from "@/lib/catalog-navigation";
+import { CatalogOption, Color, Design } from "@/types";
 
 export interface FilterGroupsProps {
-  types: Type[];
-  categories: (Category & { count?: number })[];
+  types: (FilterType & { count?: number })[];
+  categories: (NavigationCategory & { count?: number })[];
   catalogOptions: CatalogOption[];
   colors: (Color & { count?: number })[];
   designs: (Design & { count?: number })[];

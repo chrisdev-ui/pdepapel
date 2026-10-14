@@ -16,7 +16,7 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
-import { buildNavigationTypes, withProducts } from "@/lib/catalog-navigation";
+import { buildNavigationTypes, toNavigationCategory, withProducts } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { getListingIndexing, outOfRangePageTarget } from "@/lib/listing-seo";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
@@ -169,7 +169,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           initialFacets={facets}
         initialSearchCorrection={searchCorrection}
           types={[]}
-          categories={[category]}
+          categories={[toNavigationCategory(category)]}
           catalogOptions={catalogOptions}
           colors={colors}
           designs={designs}

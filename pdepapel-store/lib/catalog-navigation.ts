@@ -39,6 +39,21 @@ export function toNavigationCategory(category: Category): NavigationCategory {
   };
 }
 
+/**
+ * Lo que los filtros de /tienda y /categoria leen de un tipo. Las listas
+ * cruzan al cliente enteras: el registro completo (con sus subcategorías y sus
+ * textos SEO) pesaba ~150 KB de HTML en /tienda.
+ */
+export interface FilterType {
+  id: string;
+  name: string;
+  slug?: string;
+}
+
+export function toFilterType(type: Type): FilterType {
+  return { id: type.id, name: type.name, slug: type.slug };
+}
+
 export interface FeaturedTile {
   id: string;
   slug?: string;

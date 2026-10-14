@@ -16,7 +16,8 @@ import { filtersToQuery } from "@/hooks/use-filter-count";
 import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { buildActiveFilterChips, countActiveFilters, EMPTY_FILTERS, formatResultRange, removeFilterChip } from "@/lib/shop-filters";
-import { CatalogOption, Category, Color, Design, Product, ProductsResponse, Type } from "@/types";
+import type { FilterType, NavigationCategory } from "@/lib/catalog-navigation";
+import { CatalogOption, Color, Design, Product, ProductsResponse } from "@/types";
 
 import Products from "../app/(routes)/tienda/components/products";
 import ShopSearchBar from "../app/(routes)/tienda/components/shop-search-bar";
@@ -32,8 +33,8 @@ interface ShopContentProps {
   initialTotalItems: number;
   initialFacets?: ProductsResponse["facets"];
   initialSearchCorrection?: ProductsResponse["searchCorrection"];
-  types: Type[];
-  categories: Category[];
+  types: FilterType[];
+  categories: NavigationCategory[];
   catalogOptions: CatalogOption[];
   colors: Color[];
   designs: Design[];

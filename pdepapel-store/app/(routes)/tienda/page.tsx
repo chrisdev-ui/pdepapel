@@ -16,7 +16,7 @@ import { PageHeader } from "@/components/shop/page-header";
 import { ShopContent } from "@/components/shop-content";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, DEFAULT_SHARE_IMAGE, LIMIT_SHOP_ITEMS } from "@/constants";
-import { buildNavigationTypes, withProducts } from "@/lib/catalog-navigation";
+import { buildNavigationTypes, toFilterType, toNavigationCategory, withProducts } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { getListingIndexing, outOfRangePageTarget, type ListingSearchParams } from "@/lib/listing-seo";
 import { categoryPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
@@ -148,8 +148,8 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
     <>
       <ShopHeaderNav
         navigationTypes={navigationTypes}
-        types={types.map(({ id, name, slug }) => ({ id, name, slug }))}
-        categories={categories.map(({ id, name, slug, typeId }) => ({ id, name, slug, typeId }))}
+        types={types.map(toFilterType)}
+        categories={categories.map(toNavigationCategory)}
       />
       <PageHeader
         title="Todos los productos"
@@ -166,8 +166,8 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
         initialTotalItems={totalItems}
         initialFacets={facets}
         initialSearchCorrection={searchCorrection}
-        types={types}
-        categories={withProducts(categories)}
+        types={types.map(toFilterType)}
+        categories={withProducts(categories).map(toNavigationCategory)}
         catalogOptions={catalogOptions}
         colors={colors}
         designs={designs}
