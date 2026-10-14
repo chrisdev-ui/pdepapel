@@ -1,5 +1,6 @@
 import { MARKETING_SKILL_INSTRUCTIONS } from "@/lib/copiloto/marketing-mode";
 import { DESCRIPTIONS_SKILL_INSTRUCTIONS } from "@/lib/copiloto/skills/descripciones";
+import { KITS_SKILL_INSTRUCTIONS } from "@/lib/copiloto/skills/kits";
 import { COPILOT_SKILL_CATALOG } from "@/lib/copiloto/skills/names";
 
 /**
@@ -32,6 +33,12 @@ export const COPILOT_SKILLS: readonly CopilotSkill[] = [
     ...catalog("descripciones"),
     instrucciones: DESCRIPTIONS_SKILL_INSTRUCTIONS,
     herramientas: ["productoParaDescripcion"],
+    version: 1,
+  },
+  {
+    ...catalog("kits"),
+    instrucciones: KITS_SKILL_INSTRUCTIONS,
+    herramientas: ["kitsParaRotar"],
     version: 1,
   },
   {

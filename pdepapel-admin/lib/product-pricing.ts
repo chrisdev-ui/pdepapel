@@ -1,5 +1,6 @@
 import { getProductsPrices } from "@/lib/discount-engine";
-import { resolveUnitPrice, type PriceTier, type PriceSource } from "@/lib/price-tiers";
+import { effectiveUnitPrice } from "@/lib/offer-pricing";
+import { type PriceTier, type PriceSource } from "@/lib/price-tiers";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -101,11 +102,9 @@ export async function priceLines(
   for (const product of rows) {
     const quantity = wanted.get(product.id);
     if (quantity === undefined) continue;
-    const offer = offerPrices.get(product.id);
-    const resolved = resolveUnitPrice({
-      basePrice: product.price,
-      offerPrice: offer && offer.discount > 0 ? offer.price : null,
-      offerLabel: offer?.offerLabel ?? null,
+    const resolved = effectiveUnitPrice({
+      product,
+      offer: offerPrices.get(product.id) ?? { price: product.price, originalPrice: product.price, discount: 0, offerLabel: null, matchedOfferId: null },
       tiers: tiersByProduct.get(product.id) ?? [],
       quantity,
     });

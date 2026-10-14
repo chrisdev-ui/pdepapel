@@ -22,6 +22,7 @@ import {
   getMarketplaceOrderNetProfit,
 } from "@/lib/mercadolibre/reporting";
 import { revenueOrderWhere } from "@/lib/revenue-orders";
+import { DEFAULT_SLOW_DAYS, isSlowMover, loadSalesHistory, unitCostOf } from "@/lib/sales-velocity";
 import { productNameSearchConditions } from "@/lib/search-terms";
 import { requireStoreOwner } from "@/lib/store-access";
 
@@ -175,27 +176,6 @@ async function coverRows(db: CopilotDb, storeId: string, supplierId?: string | n
   });
 }
 
-/** Unidades vendidas por producto en un rango (tienda y Mercado Libre). */
-async function unitsSold(db: CopilotDb, storeId: string, productIds: string[], start: Date, end: Date) {
-  const [shop, marketplace] = await Promise.all([
-    db.orderItem.groupBy({
-      by: ["productId"],
-      where: { productId: { in: productIds }, order: { storeId, ...revenueOrderWhere(), ...paidInRange(start, end) } },
-      _sum: { quantity: true },
-    }),
-    db.marketplaceOrderItem.groupBy({
-      by: ["productId"],
-      where: { productId: { in: productIds }, marketplaceOrder: createSettledMarketplaceSalesWhere(storeId, { start, end }) },
-      _sum: { quantity: true },
-    }),
-  ]);
-  const sold = new Map<string, number>();
-  for (const row of [...shop, ...marketplace]) {
-    if (row.productId) sold.set(row.productId, (sold.get(row.productId) ?? 0) + (row._sum.quantity ?? 0));
-  }
-  return sold;
-}
-
 /** Utilidad y unidades de 30 días por producto, repartiendo la utilidad del pedido por ingreso (como «Crecimiento»). */
 async function profit30(db: CopilotDb, storeId: string, start: Date, end: Date) {
   const [orders, marketplace] = await Promise.all([
@@ -272,8 +252,6 @@ const PROMOTION_STATE: Record<CampaignRecommendationState, string> = {
  */
 async function promotionRows(db: CopilotDb, storeId: string, limit: number, now = new Date()) {
   const last30 = subDays(now, 30);
-  const previous30 = subDays(now, 60);
-  const deadCutoff = subDays(now, 60);
   const [policyRecord, products] = await Promise.all([
     db.businessCashPolicy.findUnique({
       where: { storeId },
@@ -281,7 +259,7 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
     }),
     db.product.findMany({
       where: { storeId, isArchived: false },
-      select: { id: true, name: true, slug: true, stock: true, reservedUnits: true, acqPrice: true, description: true, createdAt: true },
+      select: { id: true, name: true, slug: true, stock: true, reservedUnits: true, acqPrice: true, transportationCost: true, isKit: true, description: true, createdAt: true },
       orderBy: [{ stock: "desc" }, { updatedAt: "desc" }],
       take: 100,
     }),
@@ -295,36 +273,21 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
     }),
   };
   const ids = products.map((product) => product.id);
-  const [images, stats, previous, lastShopSale, lastPlaced] = await Promise.all([
+  const [images, stats, history] = await Promise.all([
     db.image.groupBy({ by: ["productId"], where: { productId: { in: ids } }, _count: { _all: true } }),
     profit30(db, storeId, last30, now),
-    unitsSold(db, storeId, ids, previous30, last30),
-    db.orderItem.groupBy({
-      by: ["productId"],
-      where: { productId: { in: ids }, order: { storeId, ...revenueOrderWhere() } },
-      _max: { createdAt: true },
-    }),
-    db.inventoryMovement.groupBy({
-      by: ["productId"],
-      where: { storeId, productId: { in: ids }, type: "ORDER_PLACED" },
-      _max: { createdAt: true },
-    }),
+    loadSalesHistory(db, storeId, { days: DEFAULT_SLOW_DAYS, now }),
   ]);
   const imageCount = new Map(images.map((row) => [row.productId, row._count._all]));
-  const lastSale = new Map<string, Date>();
-  for (const row of [...lastShopSale, ...lastPlaced]) {
-    const at = row._max.createdAt;
-    if (row.productId && at && (!lastSale.has(row.productId) || at > lastSale.get(row.productId)!)) lastSale.set(row.productId, at);
-  }
 
   const candidates: CampaignCandidate[] = products.map((product) => {
     const stat = stats.get(product.id);
-    const perDay = (stat?.units ?? 0) / 30;
+    const sales = history.get(product.id);
+    const perDay = sales.sold30 / 30;
     const disponible = availableStock(product);
     const days = perDay > 0 ? Math.floor(disponible / perDay) : disponible === 0 ? 0 : null;
     const riskState = days === null ? "NO_DATA" : days <= 7 ? "CRITICAL" : days <= 14 ? "WARNING" : "SAFE";
     const atRisk = riskState === "CRITICAL" || riskState === "WARNING";
-    const sold = lastSale.get(product.id);
     return {
       productId: product.id,
       productName: product.name,
@@ -333,19 +296,19 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
       acquisitionCost: product.acqPrice === null ? null : Number(product.acqPrice),
       imageCount: imageCount.get(product.id) ?? 0,
       descriptionLength: product.description.trim().length,
-      totalQuantitySold: stat?.units ?? 0,
+      totalQuantitySold: sales.sold30,
       totalProfit: stat?.profit ?? 0,
       profitMarginPct: stat && stat.revenue > 0 ? (stat.profit / stat.revenue) * 100 : null,
       riskState: atRisk ? riskState : "NO_DATA",
       daysUntilStockout: atRisk ? days : null,
-      isDeadStock: disponible > 0 && product.createdAt < deadCutoff && (!sold || sold < deadCutoff),
+      isDeadStock: isSlowMover({ ...product, isArchived: false, unitCost: unitCostOf(product) }, sales),
     };
   });
   const candidateById = new Map(candidates.map((candidate) => [candidate.productId, candidate]));
   const rows = recommendSocialCampaigns({ candidates, policy, testBudget: 0, limit }).map((recommendation) => {
     const candidate = candidateById.get(recommendation.productId)!;
     const last = candidate.totalQuantitySold;
-    const before = previous.get(recommendation.productId) ?? 0;
+    const before = history.get(recommendation.productId).previous30;
     return {
       productId: recommendation.productId,
       nombre: recommendation.productName,

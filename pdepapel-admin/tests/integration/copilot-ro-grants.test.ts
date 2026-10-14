@@ -316,3 +316,138 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
     }
   });
 });
+
+describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
+  const ids = { slow: "", pencil: "", eraser: "", ruler: "", offer: "", conversation: "", order: "" };
+  const KITS_FILE = () => copilotRoGrantFiles().find((name) => name.endsWith("grant_copilot_ro_kits.sql"))!;
+  const kitsStatements = () => {
+    const database = new URL(process.env.DATABASE_URL as string).pathname.replace(/^\//, "");
+    return readFileSync(KITS_FILE(), "utf8")
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("--"))
+      .join("\n")
+      .replaceAll("`railway`", `\`${database}\``)
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+  };
+
+  beforeAll(async () => {
+    const store = fixture!.store.id;
+    const base = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id }, select: { categoryId: true, colorId: true, sizeId: true, designId: true } });
+    const make = (name: string, data: { stock: number; price: number; acqPrice: number; createdAt?: Date }) =>
+      testPrisma.product.create({
+        data: {
+          storeId: store,
+          ...base,
+          name,
+          slug: `${name.toLowerCase().replaceAll(" ", "-")}-${randomBytes(3).toString("hex")}`,
+          sku: `SINT-${randomBytes(4).toString("hex")}`,
+          description: "SINTETICO-DESC kits",
+          ...data,
+        },
+      });
+    const old = new Date(Date.now() - 200 * 86_400_000);
+    ids.slow = (await make("Libreta sintetica lenta", { stock: 8, price: 9000, acqPrice: 3000, createdAt: old })).id;
+    ids.pencil = (await make("Lapiz sintetico", { stock: 20, price: 5000, acqPrice: 1500 })).id;
+    ids.eraser = (await make("Borrador sintetico", { stock: 20, price: 4000, acqPrice: 1000 })).id;
+    ids.ruler = (await make("Regla sintetica", { stock: 20, price: 3000, acqPrice: 800 })).id;
+    const paidAt = new Date(Date.now() - 20 * 86_400_000);
+    ids.order = (await testPrisma.order.create({
+      data: {
+        storeId: store,
+        orderNumber: `ORD-KIT-${randomBytes(4).toString("hex")}`,
+        status: "PAID",
+        type: "POINT_OF_SALE",
+        paidAt,
+        fullName: "Clienta Ficticia Kits",
+        phone: "3000000001",
+        subtotal: 37000,
+        total: 37000,
+        orderItems: {
+          create: [
+            { productId: ids.pencil, quantity: 6, price: 5000, name: "Lapiz" },
+            { productId: ids.eraser, quantity: 1, price: 4000, name: "Borrador" },
+            { productId: ids.ruler, quantity: 1, price: 3000, name: "Regla" },
+          ],
+        },
+      },
+    })).id;
+    ids.offer = (
+      await testPrisma.offer.create({
+        data: { storeId: store, name: "Nombre interno secreto", label: "20 %", type: "PERCENTAGE", amount: 20, startDate: new Date(Date.now() - 86_400_000), endDate: new Date(Date.now() + 86_400_000), products: { create: [{ productId: ids.pencil }] } },
+      })
+    ).id;
+    ids.conversation = (await testPrisma.conversation.create({ data: { storeId: store, phone: "3000000003", contactName: "Contacto Ficticio" } })).id;
+    for (const body of ["Texto libre de la clienta 1", "Texto libre de la clienta 2"]) {
+      await testPrisma.conversationMessage.create({ data: { conversationId: ids.conversation, direction: "INBOUND", sentBy: "CUSTOMER", body } });
+      await testPrisma.conversationMessage.create({
+        data: {
+          conversationId: ids.conversation,
+          direction: "OUTBOUND",
+          sentBy: "BOT",
+          body: "Respuesta del bot",
+          metadata: { decision: { intent: "product", slots: { productType: "Cartuchera", character: null, descriptor: null }, query: "cartuchera kuromi de la clienta", total: 0, outcome: "unsure" }, shown: { ids: [ids.ruler], intent: "product" } },
+        },
+      });
+    }
+  });
+
+  afterAll(async () => {
+    await testPrisma.orderItem.deleteMany({ where: { orderId: ids.order } });
+    await testPrisma.order.deleteMany({ where: { id: ids.order } });
+    await testPrisma.conversationMessage.deleteMany({ where: { conversationId: ids.conversation } });
+    await testPrisma.conversation.deleteMany({ where: { id: ids.conversation } });
+    await testPrisma.offerProduct.deleteMany({ where: { offerId: ids.offer } });
+    await testPrisma.offer.deleteMany({ where: { id: ids.offer } });
+  });
+
+  const run = async () => {
+    const { kitsParaRotarTool } = await import("@/lib/copiloto/skills/kits-tool");
+    const tool = kitsParaRotarTool(fixture!.store.id) as unknown as { execute: (input: unknown, options: unknown) => Promise<{ datos: Record<string, unknown> }> };
+    return tool.execute({ dias: 90, kits: 3, minimoPorKit: 3, margenMinimo: 20 }, { toolCallId: "k", messages: [] });
+  };
+
+  it("corre con copilot_ro: lento, kit con precio efectivo y demanda por WhatsApp solo como cuentas", async () => {
+    const result = await run();
+    const datos = result.datos as {
+      lentos: { nombre: string }[];
+      kits: { estado: string; piezas: { productId: string; precioEfectivo: number; precioDeLista: number; oferta: string | null }[]; precioSugerido: number; sumaPreciosEfectivos: number }[];
+      señales: { whatsapp: { estado: string; terminosPedidos?: unknown[]; productosEnseñados?: unknown[] } };
+    };
+    expect(datos.lentos.map((row) => row.nombre)).toContain("Libreta sintetica lenta");
+    const kit = datos.kits.find((row) => row.piezas[0].productId === ids.slow)!;
+    expect(kit.piezas.length).toBeGreaterThanOrEqual(3);
+    expect(kit.piezas.find((piece) => piece.productId === ids.pencil)).toMatchObject({ precioEfectivo: 4000, precioDeLista: 5000, oferta: "20 %" });
+    expect(kit.estado).toBe("listo");
+    expect(kit.precioSugerido).toBeLessThanOrEqual(kit.sumaPreciosEfectivos);
+    expect(datos.señales.whatsapp).toEqual({
+      estado: "ok",
+      terminosPedidos: [{ termino: "cartuchera", veces: 2, sinResultados: 2 }],
+      productosEnseñados: [{ nombre: "Regla sintetica", veces: 2 }],
+    });
+    expect(JSON.stringify(result)).not.toMatch(/Texto libre|kuromi de la clienta|Contacto Ficticio|3000000003|Clienta Ficticia|Nombre interno secreto/);
+  });
+
+  it("lee solo las columnas concedidas: ni el nombre interno de la oferta, ni mensajes, ni conversaciones", async () => {
+    await expect(roClient.offer.findFirst({ select: { id: true, label: true, type: true, amount: true } })).resolves.toBeTruthy();
+    await expect(roClient.productPriceTier.findMany({ select: { productId: true, minQuantity: true, unitPrice: true } })).resolves.toBeDefined();
+    await expect(roClient.$queryRawUnsafe("SELECT productType, found FROM CopilotBotDemand LIMIT 1")).resolves.toBeDefined();
+    await expect(roClient.offer.findFirst({ select: { name: true } })).rejects.toThrow();
+    await expect(roClient.conversationMessage.findFirst({ select: { body: true } })).rejects.toThrow();
+    await expect(roClient.$queryRawUnsafe("SELECT metadata FROM ConversationMessage LIMIT 1")).rejects.toThrow();
+    await expect(roClient.$queryRawUnsafe("SELECT phone FROM Conversation LIMIT 1")).rejects.toThrow();
+  });
+
+  it("sin la vista, la demanda por WhatsApp dice «no disponible» y los kits salen igual", async () => {
+    await testPrisma.$executeRawUnsafe("DROP VIEW IF EXISTS CopilotBotDemand");
+    try {
+      const result = await run();
+      const datos = result.datos as { kits: unknown[]; señales: { whatsapp: { estado: string } } };
+      expect(datos.señales.whatsapp.estado).toBe("no disponible");
+      expect(datos.kits.length).toBeGreaterThan(0);
+    } finally {
+      for (const statement of kitsStatements()) await testPrisma.$executeRawUnsafe(statement);
+    }
+  });
+});

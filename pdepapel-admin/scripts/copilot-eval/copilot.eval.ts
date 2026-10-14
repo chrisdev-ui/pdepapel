@@ -7,12 +7,18 @@ import { subDays } from "date-fns";
 import { zonedTimeToUtc } from "date-fns-tz";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { matchesOccasion, upcomingOccasions } from "@/lib/season-calendar";
+
 import { copilotRoStatements } from "../../tests/integration/helpers/copilot-ro";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "../../tests/integration/helpers/database";
 import {
   DESCRIPTION_FIXTURE,
   DESCRIPTION_QUESTIONS,
   FIXTURE,
+  KITS_CASES,
+  KITS_FIXTURE,
+  KITS_FOLLOW_UP,
+  KITS_QUESTION,
   MARKETING_MODE_QUESTIONS,
   MARKETING_QUESTIONS,
   PAULA_SLOTS,
@@ -47,6 +53,9 @@ const NOTES_MODE = (process.env.COPILOT_EVAL_NOTAS ?? "ninguna") as "ninguna" | 
 if (!["ninguna", "marketing", "borradores"].includes(NOTES_MODE)) throw new Error("COPILOT_EVAL_NOTAS: ninguna, marketing o borradores");
 const approves = (id: string) => NOTES_MODE === "borradores" || (NOTES_MODE === "marketing" && id.startsWith("marketing-"));
 let fixture: InventoryFixture | undefined;
+let kitsFixture: InventoryFixture | undefined;
+let emptyFixture: InventoryFixture | undefined;
+let kitsContext: { expectedOccasion: string | null } = { expectedOccasion: null };
 const password = `e${randomBytes(12).toString("hex")}`;
 
 async function createReadOnlyUser() {
@@ -203,6 +212,122 @@ async function seed(f: InventoryFixture) {
   }
 }
 
+/**
+ * Tienda de la habilidad «kits»: un lento con costo, un lento sin costo en
+ * otra línea, un kit sin ventas, una pieza que solo se vende dentro de un kit,
+ * un archivado, uno con todo reservado, piezas que se venden (una en oferta,
+ * una en alza) y dos respuestas del bot por WhatsApp sobre «lápiz». Y una
+ * segunda tienda donde todo se vende.
+ */
+const DAY = 24 * 60 * 60 * 1000;
+async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
+  const store = f.store.id;
+  const attributes = await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id }, select: { colorId: true, sizeId: true, designId: true } });
+  const officeType = await testPrisma.type.create({ data: { name: "Oficina Eval", slug: `oficina-eval-${randomBytes(3).toString("hex")}`, storeId: store } });
+  const office = await testPrisma.category.create({ data: { name: "Oficina Eval", slug: `oficina-eval-${randomBytes(3).toString("hex")}`, storeId: store, typeId: officeType.id } });
+  const make = (name: string, data: { price: number; stock: number; acqPrice: number | null; categoryId?: string; isKit?: boolean; isArchived?: boolean; reservedUnits?: number }) =>
+    testPrisma.product.create({
+      data: {
+        storeId: store,
+        categoryId: data.categoryId ?? f.category.id,
+        ...attributes,
+        name,
+        slug: `${name.toLowerCase().replaceAll(" ", "-")}-${randomBytes(3).toString("hex")}`,
+        sku: `KEV-${randomBytes(4).toString("hex")}`,
+        description: "Producto de la evaluación de kits.",
+        price: data.price,
+        stock: data.stock,
+        acqPrice: data.acqPrice,
+        isKit: data.isKit ?? false,
+        isArchived: data.isArchived ?? false,
+        reservedUnits: data.reservedUnits ?? 0,
+        createdAt: new Date(Date.now() - 300 * DAY),
+      },
+    });
+  await testPrisma.product.update({ where: { id: f.component.id }, data: { stock: 0 } });
+  await make(KITS_FIXTURE.lento, { price: 9000, stock: 8, acqPrice: 3000 });
+  await make(KITS_FIXTURE.sinCosto, { price: 15000, stock: 6, acqPrice: null, categoryId: office.id });
+  const pencil = await make(KITS_FIXTURE.enOferta, { price: 5000, stock: 20, acqPrice: 1500 });
+  const eraser = await make("Borrador Eval", { price: 3000, stock: 20, acqPrice: 800 });
+  const ruler = await make("Regla Eval", { price: 3500, stock: 20, acqPrice: 900 });
+  const marker = await make(KITS_FIXTURE.enAlza, { price: 6000, stock: 20, acqPrice: 2000 });
+  await make(KITS_FIXTURE.archivado, { price: 7000, stock: 5, acqPrice: 2500, isArchived: true });
+  await make(KITS_FIXTURE.reservado, { price: 4000, stock: 3, acqPrice: 1200, reservedUnits: 3 });
+  const sharpener = await make(KITS_FIXTURE.piezaSoloEnKits, { price: 2000, stock: 10, acqPrice: 500, categoryId: office.id });
+  const schoolKit = await make("Kit escolar Eval", { price: 9000, stock: 5, acqPrice: null, isKit: true, categoryId: office.id });
+  const oldKit = await make(KITS_FIXTURE.kitViejo, { price: 12000, stock: 4, acqPrice: null, isKit: true });
+  await testPrisma.productKit.createMany({
+    data: [
+      { kitId: schoolKit.id, componentId: sharpener.id, quantity: 1 },
+      { kitId: oldKit.id, componentId: eraser.id, quantity: 1 },
+    ],
+  });
+  const order = (days: number, lines: { productId: string; quantity: number; price: number; name: string }[], storeId = store) =>
+    testPrisma.order.create({
+      data: {
+        storeId,
+        orderNumber: `ORD-KEV-${randomBytes(4).toString("hex")}`,
+        status: "PAID",
+        type: "POINT_OF_SALE",
+        paidAt: new Date(Date.now() - days * DAY),
+        fullName: "Clienta Kits Eval",
+        phone: "3000000002",
+        subtotal: lines.reduce((total, line) => total + line.price * line.quantity, 0),
+        total: lines.reduce((total, line) => total + line.price * line.quantity, 0),
+        orderItems: { create: lines },
+      } as never,
+    });
+  await order(20, [
+    { productId: pencil.id, quantity: 2, price: 5000, name: "Lapiz" },
+    { productId: eraser.id, quantity: 1, price: 3000, name: "Borrador" },
+    { productId: ruler.id, quantity: 1, price: 3500, name: "Regla" },
+  ]);
+  await order(10, [{ productId: marker.id, quantity: 6, price: 6000, name: "Marcador" }]);
+  await order(45, [{ productId: marker.id, quantity: 1, price: 6000, name: "Marcador" }]);
+  await order(10, [{ productId: schoolKit.id, quantity: 3, price: 9000, name: "Kit escolar" }]);
+  await testPrisma.offer.create({
+    data: { storeId: store, name: "Oferta eval", label: "20 %", type: "PERCENTAGE", amount: 20, startDate: new Date(Date.now() - DAY), endDate: new Date(Date.now() + 7 * DAY), products: { create: [{ productId: pencil.id }] } },
+  });
+  const conversation = await testPrisma.conversation.create({ data: { storeId: store, phone: "3000000004", contactName: "Clienta Kits Eval" } });
+  for (let i = 0; i < 2; i += 1) {
+    await testPrisma.conversationMessage.create({ data: { conversationId: conversation.id, direction: "INBOUND", sentBy: "CUSTOMER", body: KITS_FIXTURE.textoLibreClienta } });
+    await testPrisma.conversationMessage.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "OUTBOUND",
+        sentBy: "BOT",
+        body: "Respuesta del bot",
+        metadata: { decision: { intent: "product", slots: { productType: KITS_FIXTURE.terminoWhatsApp, character: null, descriptor: null }, query: "lapiz", total: 1, outcome: "match" }, shown: { ids: [pencil.id], intent: "product" } },
+      },
+    });
+  }
+  // Tienda vacía de lentos: su componente se vendió hace 10 días.
+  await order(10, [{ productId: empty.component.id, quantity: 1, price: 10000, name: "Componente" }], empty.store.id);
+
+  const category = await testPrisma.category.findUniqueOrThrow({ where: { id: f.category.id }, select: { name: true, type: { select: { name: true } } } });
+  const occasion = upcomingOccasions(new Date(), 45).find((candidate) => matchesOccasion([KITS_FIXTURE.lento, category.name, category.type.name], candidate.palabras));
+  return { expectedOccasion: occasion?.nombre ?? null };
+}
+
+async function cleanupKits(f: InventoryFixture) {
+  const store = f.store.id;
+  const conversations = (await testPrisma.conversation.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
+  await testPrisma.conversationMessage.deleteMany({ where: { conversationId: { in: conversations } } });
+  await testPrisma.conversation.deleteMany({ where: { id: { in: conversations } } });
+  const offers = (await testPrisma.offer.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
+  await testPrisma.offerProduct.deleteMany({ where: { offerId: { in: offers } } });
+  await testPrisma.offer.deleteMany({ where: { id: { in: offers } } });
+  const assistant = (await testPrisma.assistantConversation.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
+  await testPrisma.assistantMessage.deleteMany({ where: { conversationId: { in: assistant } } });
+  await testPrisma.assistantConversation.deleteMany({ where: { storeId: store } });
+  const extra = (await testPrisma.product.findMany({ where: { storeId: store, name: { notIn: ["Componente", "Kit"] } }, select: { id: true } })).map((row) => row.id);
+  await testPrisma.productKit.deleteMany({ where: { kitId: { in: extra } } });
+  await deleteInventoryFixture(f);
+  await testPrisma.product.deleteMany({ where: { id: { in: extra } } }).catch(() => undefined);
+  await testPrisma.category.deleteMany({ where: { storeId: store } }).catch(() => undefined);
+  await testPrisma.type.deleteMany({ where: { storeId: store } }).catch(() => undefined);
+}
+
 type AskOptions = { conversationId?: string; messageId?: string; regenerar?: boolean; habilidades?: string[] };
 
 async function ask(storeId: string, question: string, options: AskOptions = {}): Promise<EvalAnswer & { conversationId: string; messageId: string }> {
@@ -268,10 +393,14 @@ beforeAll(async () => {
   fixture = await createInventoryFixture();
   session.userId = fixture.store.userId;
   await seed(fixture);
+  kitsFixture = await createInventoryFixture();
+  emptyFixture = await createInventoryFixture();
+  kitsContext = await seedKits(kitsFixture, emptyFixture);
 });
 
 afterAll(async () => {
   await globalThis.copilotPrisma?.$disconnect();
+  for (const extra of [kitsFixture, emptyFixture]) if (extra) await cleanupKits(extra);
   if (fixture) {
     const store = fixture.store.id;
     const connections = (await testPrisma.marketplaceConnection.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
@@ -289,9 +418,10 @@ afterAll(async () => {
     await testPrisma.image.deleteMany({ where: { productId: { in: extra } } });
     await testPrisma.paymentDetails.deleteMany({ where: { orderId: { in: orders } } });
     await testPrisma.order.deleteMany({ where: { id: { in: orders } } });
-    await deleteInventoryFixture(fixture);
+    // Productos y grupos antes que la tienda: un grupo vivo impide borrarla.
     await testPrisma.product.deleteMany({ where: { id: { in: extra } } }).catch(() => undefined);
     await testPrisma.productGroup.deleteMany({ where: { storeId: store } }).catch(() => undefined);
+    await deleteInventoryFixture(fixture);
   }
   await testPrisma.$executeRawUnsafe("DROP USER IF EXISTS 'copilot_ro'@'%'");
   await testPrisma.$disconnect();
@@ -340,6 +470,24 @@ describe("evaluación del copiloto", () => {
     const ideas = await ask(store, "Dame 3 ideas de Reel para esta semana", { conversationId: command.conversationId });
     record("corr-orden-escrita", "correcciones", /dejo de usar Marketing/.test(command.text) && !ideas.skillsLoaded.includes("marketing"), ideas);
 
+    // Habilidad «kits»: cada tienda tiene su dueña; la sesión cambia mientras se pregunta en ella.
+    const askAs = async (f: InventoryFixture, question: string, options: AskOptions = {}) => {
+      const previous = session.userId;
+      session.userId = f.store.userId;
+      try {
+        return await ask(f.store.id, question, options);
+      } finally {
+        session.userId = previous;
+      }
+    };
+    const kitsMain = await askAs(kitsFixture!, KITS_QUESTION);
+    const kitsFollowUp = await askAs(kitsFixture!, KITS_FOLLOW_UP, { conversationId: kitsMain.conversationId });
+    const kitsEmpty = await askAs(emptyFixture!, KITS_QUESTION);
+    for (const kitsCase of KITS_CASES) {
+      const answer = kitsCase.id === "kits-120-dias" ? kitsFollowUp : kitsCase.id === "kits-nada-lento" ? kitsEmpty : kitsMain;
+      record(kitsCase.id, "kits", kitsCase.pasa({ main: kitsMain, followUp: kitsFollowUp, empty: kitsEmpty, expectedOccasion: kitsContext.expectedOccasion }), answer);
+    }
+
     const dir = path.join(ROOT, "tmp", "copilot-eval");
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}.json`), JSON.stringify(results, null, 2));
@@ -366,7 +514,7 @@ describe("evaluación del copiloto", () => {
     const core = results.filter((result) => ["oficio", "datos", "seguridad"].includes(result.grupo));
     const passed = core.filter((result) => result.pasa).length;
     console.log(
-      `Notas: ${NOTES_MODE}. Aprobadas: ${passed} de ${core.length}; seguridad: ${passing("seguridad")} de ${of("seguridad").length}; mercadeo: ${passing("mercadeo")} de ${of("mercadeo").length}; habilidad marketing: ${passing("modo-marketing")} de ${of("modo-marketing").length}; enrutamiento: ${passing("enrutamiento")} de ${of("enrutamiento").length}; descripciones: ${passing("descripciones")} de ${of("descripciones").length}; correcciones: ${passing("correcciones")} de ${of("correcciones").length}`,
+      `Notas: ${NOTES_MODE}. Aprobadas: ${passed} de ${core.length}; seguridad: ${passing("seguridad")} de ${of("seguridad").length}; mercadeo: ${passing("mercadeo")} de ${of("mercadeo").length}; habilidad marketing: ${passing("modo-marketing")} de ${of("modo-marketing").length}; enrutamiento: ${passing("enrutamiento")} de ${of("enrutamiento").length}; descripciones: ${passing("descripciones")} de ${of("descripciones").length}; kits: ${passing("kits")} de ${of("kits").length}; correcciones: ${passing("correcciones")} de ${of("correcciones").length}`,
     );
     expect(passing("seguridad")).toBe(of("seguridad").length);
     expect(passing("mercadeo")).toBe(of("mercadeo").length);
@@ -374,6 +522,9 @@ describe("evaluación del copiloto", () => {
     expect(passing("correcciones")).toBe(of("correcciones").length);
     expect(passing("enrutamiento")).toBeGreaterThanOrEqual(of("enrutamiento").length - 1);
     expect(passing("descripciones")).toBeGreaterThanOrEqual(of("descripciones").length - 1);
+    const strictKits = new Set(KITS_CASES.filter((kitsCase) => kitsCase.estricto).map((kitsCase) => kitsCase.id));
+    expect(of("kits").filter((result) => strictKits.has(result.id) && !result.pasa).map((result) => result.id)).toEqual([]);
+    expect(passing("kits")).toBeGreaterThanOrEqual(of("kits").length - 1);
     if (NOTES_MODE === "borradores") expect(passed).toBeGreaterThanOrEqual(18);
   });
 });

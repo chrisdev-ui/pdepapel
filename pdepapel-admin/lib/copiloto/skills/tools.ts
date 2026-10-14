@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { COPILOT_SKILL_IDS, getCopilotSkill, renderSkillBlock } from "@/lib/copiloto/skills";
 import { productoParaDescripcionTool } from "@/lib/copiloto/skills/descripciones-tool";
+import { kitsParaRotarTool } from "@/lib/copiloto/skills/kits-tool";
 import { requireStoreOwner } from "@/lib/store-access";
 
 type SkillNote = { id: string; titulo: string; body: string };
@@ -41,5 +42,6 @@ export function buildSkillTools(
       },
     }),
     productoParaDescripcion: productoParaDescripcionTool(storeId),
+    kitsParaRotar: kitsParaRotarTool(storeId),
   };
 }

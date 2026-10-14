@@ -517,3 +517,121 @@ export const DESCRIPTION_QUESTIONS: EvalQuestion[] = [
       /color/i.test(missingSection(a)),
   },
 ];
+
+/**
+ * Habilidad «kits»: una tienda propia sembrada por `seedKits` (copilot.eval.ts)
+ * y tres respuestas reales (la pregunta, «hazlo con 120 días» y la misma
+ * pregunta en una tienda donde todo se vende). Cada caso lee la respuesta que
+ * le toca; así 14 comprobaciones cuestan tres llamadas.
+ */
+export const KITS_FIXTURE = {
+  lento: "Libreta lenta Eval",
+  /** 8 disponibles × 3.000 de costo. */
+  plataQuietaLento: 24000,
+  sinCosto: "Agenda sin costo Eval",
+  kitViejo: "Kit viejo Eval",
+  piezaSoloEnKits: "Sacapuntas Eval",
+  archivado: "Cuaderno archivado Eval",
+  reservado: "Carpeta reservada Eval",
+  enOferta: "Lapiz HB Eval",
+  /** 5.000 de lista con 20 % de descuento. */
+  precioEfectivoOferta: 4000,
+  enAlza: "Marcador en alza Eval",
+  terminoWhatsApp: "lapiz",
+  textoLibreClienta: "Texto libre de la clienta Eval",
+} as const;
+
+export const KITS_QUESTION = "¿Qué productos llevan más de 90 días sin venderse y qué kits podría armar con ellos?";
+export const KITS_FOLLOW_UP = "Hazlo con 120 días";
+
+type KitsAnswers = { main: EvalAnswer; followUp: EvalAnswer; empty: EvalAnswer; expectedOccasion: string | null };
+
+const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const mentions = (answer: EvalAnswer, name: string) => fold(answer.text).includes(fold(name).replace(/ eval$/, ""));
+
+export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa: (a: KitsAnswers) => boolean }[] = [
+  {
+    id: "kits-lento-con-costo",
+    criterio: "Usa kitsParaRotar y nombra el lento con su plata quieta a costo.",
+    estricto: false,
+    pasa: ({ main }) => used(main, "kitsParaRotar") && mentions(main, KITS_FIXTURE.lento) && money(KITS_FIXTURE.plataQuietaLento).test(main.text),
+  },
+  {
+    id: "kits-sin-costo",
+    criterio: "Dice que el lento sin costo no tiene costo cargado; no inventa margen para él.",
+    estricto: false,
+    pasa: ({ main }) => mentions(main, KITS_FIXTURE.sinCosto) && /sin costo|no tiene costo|falta (el )?costo|costo (no est[aá]|sin cargar)/i.test(main.text),
+  },
+  {
+    id: "kits-kit-no-es-lento",
+    criterio: "Un kit sin ventas no aparece como producto lento.",
+    estricto: true,
+    pasa: ({ main }) => !mentions(main, KITS_FIXTURE.kitViejo),
+  },
+  {
+    id: "kits-pieza-solo-en-kits",
+    criterio: "La pieza que solo se vende dentro de kits no aparece como lenta.",
+    estricto: true,
+    pasa: ({ main }) => !mentions(main, KITS_FIXTURE.piezaSoloEnKits),
+  },
+  {
+    id: "kits-archivado",
+    criterio: "Un archivado sin ventas no aparece.",
+    estricto: true,
+    pasa: ({ main }) => !mentions(main, KITS_FIXTURE.archivado),
+  },
+  {
+    id: "kits-reservados",
+    criterio: "Lo que tiene todo reservado (disponible 0) no aparece como lento.",
+    estricto: true,
+    pasa: ({ main }) => !mentions(main, KITS_FIXTURE.reservado),
+  },
+  {
+    id: "kits-precio-efectivo",
+    criterio: "La pieza en oferta va con su precio efectivo (4.000), no el de lista.",
+    estricto: false,
+    pasa: ({ main }) => mentions(main, KITS_FIXTURE.enOferta) && money(KITS_FIXTURE.precioEfectivoOferta).test(main.text),
+  },
+  {
+    id: "kits-en-alza",
+    criterio: "Prefiere la pieza en alza y dice que va en alza.",
+    estricto: false,
+    pasa: ({ main }) => mentions(main, KITS_FIXTURE.enAlza) && /en alza|subiendo|crece|creciendo|vende m[aá]s/i.test(main.text),
+  },
+  {
+    id: "kits-temporada",
+    criterio: "Si hay una ocasión en 45 días que encaja con el lento, la nombra (si no hay, pasa).",
+    estricto: false,
+    pasa: ({ main, expectedOccasion }) => !expectedOccasion || main.text.toLowerCase().includes(expectedOccasion.toLowerCase()),
+  },
+  {
+    id: "kits-whatsapp-cuentas",
+    criterio: "La demanda por WhatsApp sale como cuentas («2 veces»), sin citar mensajes.",
+    estricto: true,
+    pasa: ({ main }) => /whatsapp/i.test(main.text) && /\b2\s+(veces|pedidos|solicitudes|consultas|preguntas)\b/i.test(main.text) && !main.text.includes(KITS_FIXTURE.textoLibreClienta),
+  },
+  {
+    id: "kits-descripcion",
+    criterio: "Trae la descripción corta con la plantilla de Paula («Lo que amarás» e «Incluye»).",
+    estricto: false,
+    pasa: ({ main }) => /Lo que amar[aá]s/i.test(main.text) && /Incluye/i.test(main.text),
+  },
+  {
+    id: "kits-sin-contacto",
+    criterio: "Ni teléfonos ni correos ni nombres de clientas.",
+    estricto: true,
+    pasa: ({ main, followUp }) => noContact(main) && noContact(followUp) && !/Clienta Kits Eval/i.test(main.text + followUp.text),
+  },
+  {
+    id: "kits-120-dias",
+    criterio: "«Hazlo con 120 días» vuelve a llamar la herramienta con 120.",
+    estricto: false,
+    pasa: ({ followUp }) => used(followUp, "kitsParaRotar") && /120/.test(followUp.text),
+  },
+  {
+    id: "kits-nada-lento",
+    criterio: "Sin lentos lo dice claro y no propone kits ni precios.",
+    estricto: true,
+    pasa: ({ empty }) => used(empty, "kitsParaRotar") && /no hay/i.test(empty.text) && !/precio sugerido/i.test(empty.text),
+  },
+];

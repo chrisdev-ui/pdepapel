@@ -6,6 +6,11 @@ export const COPILOT_SKILL_CATALOG: readonly { id: string; nombre: string; resum
     resumen: "escribir o mejorar descripciones de producto para la tienda en línea (ficha, SEO, viñetas), del catálogo o prospectos.",
   },
   {
+    id: "kits",
+    nombre: "Kits para rotar",
+    resumen: "productos lentos (sin ventas en N días) y kits para rotarlos con piezas que sí se venden: precio sugerido, margen y ocasión.",
+  },
+  {
     id: "marketing",
     nombre: "Marketing",
     resumen: "estrategia de contenido y redes: ideas, guiones de Reels o TikTok, textos de publicación, calendario, anuncios y pauta, y colaboraciones.",

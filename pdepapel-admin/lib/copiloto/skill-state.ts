@@ -108,6 +108,7 @@ const fold = (value: string) =>
 
 const ALIASES: Record<string, string[]> = {
   descripciones: ["descripciones", "descripcion", "fichas"],
+  kits: ["kits", "kits para rotar", "rotar inventario"],
   marketing: ["marketing", "mercadeo"],
 };
 const REMOVE = "(?:no uses|no use|no usar|quita|quitar|desactiva|deja de usar)";
