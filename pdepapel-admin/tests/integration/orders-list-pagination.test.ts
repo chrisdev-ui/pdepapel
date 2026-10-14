@@ -37,7 +37,7 @@ beforeAll(async () => {
       { productId: fixture.component.id, url: "https://images.test/otra-2.jpg", isMain: false },
     ],
   });
-  const make = (i: number, data: { type: OrderType; status: OrderStatus; method: PaymentMethod; daysAgo: number; name?: string; shipping?: ShippingStatus; tracking?: string }) =>
+  const make = (i: number, data: { type: OrderType; status: OrderStatus; method: PaymentMethod; daysAgo: number; name?: string; shipping?: ShippingStatus; tracking?: string; total?: number }) =>
     testPrisma.order.create({
       data: {
         storeId: store,
@@ -46,8 +46,8 @@ beforeAll(async () => {
         status: data.status,
         fullName: data.name ?? `Clienta ${i}`,
         phone: `30000000${String(i).padStart(2, "0")}`,
-        subtotal: 10000,
-        total: 10000,
+        subtotal: data.total ?? 10000,
+        total: data.total ?? 10000,
         createdAt: new Date(Date.now() - data.daysAgo * DAY),
         paidAt: data.status === OrderStatus.PAID ? new Date(Date.now() - data.daysAgo * DAY) : null,
         orderItems: { create: [{ productId: fixture!.component.id, quantity: 1, price: 10000, name: i === 7 ? "Lapicero especial" : "Componente", imageUrl: "https://images.test/linea.jpg" }] },
@@ -60,7 +60,7 @@ beforeAll(async () => {
   for (let n = 0; n < 30; n += 1) await make(i++, { type: OrderType.STANDARD, status: OrderStatus.PENDING, method: PaymentMethod.BankTransfer, daysAgo: n % 10 });
   for (let n = 0; n < 5; n += 1) await make(i++, { type: OrderType.POINT_OF_SALE, status: OrderStatus.PAID, method: PaymentMethod.CASH, daysAgo: 1 });
   for (let n = 0; n < 3; n += 1) await make(i++, { type: OrderType.STANDARD, status: OrderStatus.PAID, method: PaymentMethod.Bold, daysAgo: 3, shipping: ShippingStatus.InTransit, tracking: `G-${n}` });
-  for (let n = 0; n < 2; n += 1) await make(i++, { type: OrderType.STANDARD, status: OrderStatus.CANCELLED, method: PaymentMethod.Bold, daysAgo: 20, name: "Buscada Rara" });
+  for (let n = 0; n < 2; n += 1) await make(i++, { type: OrderType.STANDARD, status: OrderStatus.CANCELLED, method: PaymentMethod.Bold, daysAgo: 20, name: "Buscada Rara", total: n === 0 ? 45000 : 10000 });
 });
 
 afterAll(async () => {
@@ -112,6 +112,20 @@ describe("Pedidos paginado en el servidor (MySQL)", () => {
     expect((await listOrderPage(testPrisma, store, parseOrderListQuery({ vista: "todos", q: "buscada rara" }))).total).toBe(2);
     expect((await listOrderPage(testPrisma, store, parseOrderListQuery({ vista: "todos", q: "ORD-LST-001" }))).total).toBe(1);
     expect((await listOrderPage(testPrisma, store, parseOrderListQuery({ vista: "todos", q: "zzz-nada" }))).total).toBe(0);
+  });
+
+  it("un número busca también el total exacto, escrito con o sin puntos y signo de pesos", async () => {
+    const store = fixture!.store.id;
+    const search = async (q: string) => listOrderPage(testPrisma, store, parseOrderListQuery({ vista: "todos", q }));
+    for (const q of ["45000", "45.000", "$45.000", "$ 45.000"]) {
+      const found = await search(q);
+      expect(found.total, q).toBe(1);
+      const order = await testPrisma.order.findUniqueOrThrow({ where: { id: found.ids[0] }, select: { total: true } });
+      expect(order.total, q).toBe(45000);
+    }
+    expect((await search("10.000")).total).toBe(39);
+    expect((await search("4500")).total).toBe(0);
+    expect((await search("45.000 rara")).total).toBe(1);
   });
 
   it("la página trae solo sus filas, con una sola foto por producto, y la cuenta de solo lectura sin contacto", async () => {

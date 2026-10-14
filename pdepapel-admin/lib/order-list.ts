@@ -59,24 +59,35 @@ const CHANNEL_TYPES: Record<SalesChannel, OrderType[]> = {
   regalo: [OrderType.GIFT_CARD],
 };
 
+/** «45000», «45.000» o «$45.000» (el «$» se quita antes) como monto entero; si no, null. */
+export function parseAmount(word: string): number | null {
+  if (!/^(\d{1,3}(\.\d{3})+|\d+)$/.test(word)) return null;
+  const value = Number(word.replace(/\./g, ""));
+  return Number.isSafeInteger(value) ? value : null;
+}
+
 /** Canal, fecha y búsqueda van en la consulta; las pestañas se resuelven con las reglas de las colas. */
 export function orderListWhere(storeId: string, filters: OrderListFilters, search: string, now = new Date()): Prisma.OrderWhereInput {
   const where: Prisma.OrderWhereInput = { storeId };
   if (filters.channel) where.type = { in: CHANNEL_TYPES[filters.channel] };
   const range = getOrderDateRange(filters.date, now);
   if (range) where.createdAt = { gte: range.start, lte: range.end };
-  const words = search.split(/\s+/).filter(Boolean).slice(0, 5);
+  const words = search.replace(/\$\s*/g, "").split(/\s+/).filter(Boolean).slice(0, 5);
   if (words.length) {
-    where.AND = words.map((word) => ({
-      OR: [
-        { orderNumber: { contains: word } },
-        { fullName: { contains: word } },
-        { phone: { contains: word } },
-        { documentId: { contains: word } },
-        { orderItems: { some: { name: { contains: word } } } },
-        { orderItems: { some: { product: { name: { contains: word } } } } },
-      ],
-    }));
+    where.AND = words.map((word) => {
+      const amount = parseAmount(word);
+      return {
+        OR: [
+          ...(amount !== null ? [{ total: amount }, { orderNumber: { contains: String(amount) } }] : []),
+          { orderNumber: { contains: word } },
+          { fullName: { contains: word } },
+          { phone: { contains: word } },
+          { documentId: { contains: word } },
+          { orderItems: { some: { name: { contains: word } } } },
+          { orderItems: { some: { product: { name: { contains: word } } } } },
+        ],
+      };
+    });
   }
   return where;
 }
