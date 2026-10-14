@@ -522,7 +522,7 @@ export const DESCRIPTION_QUESTIONS: EvalQuestion[] = [
  * Habilidad «kits»: una tienda propia sembrada por `seedKits` (copilot.eval.ts)
  * y tres respuestas reales (la pregunta, «hazlo con 120 días» y la misma
  * pregunta en una tienda donde todo se vende). Cada caso lee la respuesta que
- * le toca; así 15 comprobaciones cuestan tres llamadas.
+ * le toca; así 18 comprobaciones cuestan tres llamadas.
  */
 export const KITS_FIXTURE = {
   lento: "Libreta lenta Eval",
@@ -541,6 +541,10 @@ export const KITS_FIXTURE = {
   textoLibreClienta: "Texto libre de la clienta Eval",
   /** Creado y con primera entrada hace 10 días, sin ventas. */
   nuevo: "Estuche nuevo Eval",
+  /** Misma línea (Escritura) que el lápiz en oferta y se compra con la libreta: nunca deben ir juntos. */
+  mismaLineaQueOferta: "Lapicero gel Eval",
+  /** Misma línea (Cuadernos) que la libreta lenta. */
+  mismaLineaQueLento: "Cuaderno espiral Eval",
 } as const;
 
 export const KITS_QUESTION = "¿Qué productos llevan más de 90 días sin venderse y qué kits podría armar con ellos?";
@@ -592,13 +596,19 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
     id: "kits-precio-efectivo",
     criterio: "La pieza en oferta va con su precio efectivo (4.000), no el de lista.",
     estricto: false,
-    pasa: ({ main }) => mentions(main, KITS_FIXTURE.enOferta) && money(KITS_FIXTURE.precioEfectivoOferta).test(main.text),
+    // El número tiene que estar solo: «$24.000» no cuenta como «$4.000».
+    pasa: ({ main }) => mentions(main, KITS_FIXTURE.enOferta) && /(?<![\d.,])4[.,]?000(?![\d])/.test(main.text),
   },
   {
     id: "kits-en-alza",
     criterio: "Prefiere la pieza en alza y dice que va en alza.",
     estricto: false,
-    pasa: ({ main }) => mentions(main, KITS_FIXTURE.enAlza) && /en alza|subiendo|crece|creciendo|vende m[aá]s/i.test(main.text),
+    // «El marcador está en alza» cuenta sin el nombre completo; el nombre del fixture («… en alza Eval») no cuenta como decirlo.
+    pasa: ({ main }) =>
+      main.text.split("\n").some((line) => {
+        const rest = fold(line).split(fold(KITS_FIXTURE.enAlza).replace(/ eval$/, "")).join(" ");
+        return /marcador/i.test(line) && /en alza|subiendo|crece|creciendo|vende mas/.test(rest);
+      }),
   },
   {
     id: "kits-temporada",
@@ -621,6 +631,27 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
         .split("\n")
         .filter((line) => fold(line).includes(fold(KITS_FIXTURE.nuevo).replace(/ eval$/, "")))
         .every((line) => /nuev|sin datos|a[uú]n no/i.test(line) && !/quietos? a costo|d[ií]as sin vend|[—-]\s*(lento|se vende)\b/i.test(line)),
+  },
+  {
+    id: "kits-descuento",
+    criterio: "Cada kit muestra su ahorro en pesos y en % («ahorro $X (Y %)»), de al menos 5 %.",
+    estricto: false,
+    pasa: ({ main }) => {
+      const found = Array.from(main.text.matchAll(/ahorro[^$\n]{0,40}\$\s?[\d.]+\s*\((\d+(?:[.,]\d+)?)\s?%\)/gi));
+      return found.length > 0 && found.every((match) => Number(match[1].replace(",", ".")) >= 5);
+    },
+  },
+  {
+    id: "kits-una-pieza-por-linea",
+    criterio: "Ningún kit junta dos piezas de la misma línea (ni el lapicero con el lápiz ni el cuaderno espiral con la libreta).",
+    estricto: true,
+    pasa: ({ main }) => !mentions(main, KITS_FIXTURE.mismaLineaQueOferta) && !mentions(main, KITS_FIXTURE.mismaLineaQueLento),
+  },
+  {
+    id: "kits-linea-nuevos",
+    criterio: "Trae la línea fija «Nuevos sin datos de venta: 1 (no se tratan como lentos)».",
+    estricto: true,
+    pasa: ({ main }) => /Nuevos sin datos de venta:\s*1\b/i.test(main.text),
   },
   {
     id: "kits-descripcion",

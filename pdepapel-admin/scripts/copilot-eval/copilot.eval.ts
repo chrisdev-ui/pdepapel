@@ -244,13 +244,22 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
         createdAt: data.createdAt ?? new Date(Date.now() - 300 * DAY),
       },
     });
+  // Una línea de producto (Type) por pieza: el kit lleva una sola pieza por línea.
+  const line = async (name: string) => {
+    const type = await testPrisma.type.create({ data: { name: `${name} Eval`, slug: `${name.toLowerCase().replace(/[^a-z]+/g, "-")}-eval-${randomBytes(3).toString("hex")}`, storeId: store } });
+    return (await testPrisma.category.create({ data: { name: `${name} Eval`, slug: `${name.toLowerCase().replace(/[^a-z]+/g, "-")}-cat-${randomBytes(3).toString("hex")}`, storeId: store, typeId: type.id } })).id;
+  };
+  const [notebooks, writing, school, colors, measuring] = [await line("Cuadernos"), await line("Escritura"), await line("Útiles"), await line("Colores"), await line("Medición")];
   await testPrisma.product.update({ where: { id: f.component.id }, data: { stock: 0 } });
-  await make(KITS_FIXTURE.lento, { price: 9000, stock: 8, acqPrice: 3000 });
+  const slow = await make(KITS_FIXTURE.lento, { price: 9000, stock: 8, acqPrice: 3000, categoryId: notebooks });
   await make(KITS_FIXTURE.sinCosto, { price: 15000, stock: 6, acqPrice: null, categoryId: office.id });
-  const pencil = await make(KITS_FIXTURE.enOferta, { price: 5000, stock: 20, acqPrice: 1500 });
-  const eraser = await make("Borrador Eval", { price: 3000, stock: 20, acqPrice: 800 });
-  const ruler = await make("Regla Eval", { price: 3500, stock: 20, acqPrice: 900 });
-  const marker = await make(KITS_FIXTURE.enAlza, { price: 6000, stock: 20, acqPrice: 2000 });
+  const pencil = await make(KITS_FIXTURE.enOferta, { price: 5000, stock: 20, acqPrice: 1500, categoryId: writing });
+  const eraser = await make("Borrador Eval", { price: 3000, stock: 20, acqPrice: 800, categoryId: school });
+  const ruler = await make("Regla Eval", { price: 3500, stock: 20, acqPrice: 900, categoryId: measuring });
+  const marker = await make(KITS_FIXTURE.enAlza, { price: 6000, stock: 20, acqPrice: 2000, categoryId: colors });
+  // Misma línea que el lápiz y que la libreta: nunca deben ir junto a ellos.
+  const gelPen = await make(KITS_FIXTURE.mismaLineaQueOferta, { price: 4500, stock: 20, acqPrice: 1200, categoryId: writing });
+  const spiral = await make(KITS_FIXTURE.mismaLineaQueLento, { price: 7000, stock: 20, acqPrice: 2500, categoryId: notebooks });
   await make(KITS_FIXTURE.archivado, { price: 7000, stock: 5, acqPrice: 2500, isArchived: true });
   await make(KITS_FIXTURE.reservado, { price: 4000, stock: 3, acqPrice: 1200, reservedUnits: 3 });
   const fresh = await make(KITS_FIXTURE.nuevo, { price: 8000, stock: 6, acqPrice: 2500, createdAt: new Date(Date.now() - 10 * DAY) });
@@ -281,6 +290,20 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
         orderItems: { create: lines },
       } as never,
     });
+  // Hace 120 días la libreta salió con todo: sigue siendo lenta a 90 días y se sabe con qué se compra.
+  await order(120, [
+    { productId: slow.id, quantity: 1, price: 9000, name: "Libreta" },
+    { productId: pencil.id, quantity: 1, price: 5000, name: "Lapiz" },
+    { productId: eraser.id, quantity: 1, price: 3000, name: "Borrador" },
+    { productId: ruler.id, quantity: 1, price: 3500, name: "Regla" },
+    { productId: marker.id, quantity: 1, price: 6000, name: "Marcador" },
+    { productId: gelPen.id, quantity: 1, price: 4500, name: "Lapicero gel" },
+    { productId: spiral.id, quantity: 1, price: 7000, name: "Cuaderno espiral" },
+  ]);
+  await order(30, [
+    { productId: gelPen.id, quantity: 1, price: 4500, name: "Lapicero gel" },
+    { productId: spiral.id, quantity: 1, price: 7000, name: "Cuaderno espiral" },
+  ]);
   await order(20, [
     { productId: pencil.id, quantity: 2, price: 5000, name: "Lapiz" },
     { productId: eraser.id, quantity: 1, price: 3000, name: "Borrador" },
@@ -308,7 +331,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
   // Tienda vacía de lentos: su componente se vendió hace 10 días.
   await order(10, [{ productId: empty.component.id, quantity: 1, price: 10000, name: "Componente" }], empty.store.id);
 
-  const category = await testPrisma.category.findUniqueOrThrow({ where: { id: f.category.id }, select: { name: true, type: { select: { name: true } } } });
+  const category = await testPrisma.category.findUniqueOrThrow({ where: { id: notebooks }, select: { name: true, type: { select: { name: true } } } });
   const occasion = upcomingOccasions(new Date(), 45).find((candidate) => matchesOccasion([KITS_FIXTURE.lento, category.name, category.type.name], candidate.palabras));
   return { expectedOccasion: occasion?.nombre ?? null };
 }

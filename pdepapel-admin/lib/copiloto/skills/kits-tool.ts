@@ -3,7 +3,18 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
-import { coPurchaseCounts, proposeKits, risingProducts, type KitProduct, type KitSignals } from "@/lib/copiloto/kits-rotation";
+import {
+  DEFAULT_TARGET_DISCOUNT_PCT,
+  MAX_TARGET_DISCOUNT_PCT,
+  MIN_TARGET_DISCOUNT_PCT,
+  coPurchaseCounts,
+  kitDetail,
+  proposeKits,
+  risingProducts,
+  typeCoPurchaseCounts,
+  type KitProduct,
+  type KitSignals,
+} from "@/lib/copiloto/kits-rotation";
 import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
 import { DEFAULT_SLOW_DAYS, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf, type SalesHistory } from "@/lib/sales-velocity";
 import { foldWords, upcomingOccasions } from "@/lib/season-calendar";
@@ -22,7 +33,16 @@ export const kitsInput = z.object({
   kits: z.number().int().min(1).max(5).default(3).describe("Cuántos kits proponer"),
   minimoPorKit: z.number().int().min(1).max(50).default(3).describe("Kits que se deben poder armar como mínimo con el disponible"),
   margenMinimo: z.number().min(0).max(80).default(20).describe("Margen mínimo sobre el costo total, en %"),
+  descuentoObjetivo: z
+    .number()
+    .min(MIN_TARGET_DISCOUNT_PCT)
+    .max(MAX_TARGET_DISCOUNT_PCT)
+    .default(DEFAULT_TARGET_DISCOUNT_PCT)
+    .describe("Descuento del kit frente a comprar las piezas sueltas, en % (8 a 20; por defecto 12)"),
 });
+
+/** La línea fija de productos nuevos; el chat la agrega al final si la respuesta no la trae. */
+export const newProductsLine = (count: number) => `Nuevos sin datos de venta: ${count} (no se tratan como lentos).`;
 
 interface DemandRow {
   productType: string | null;
@@ -177,13 +197,23 @@ export function kitsParaRotarTool(storeId: string) {
     inputSchema: kitsInput,
     execute: async (input) => {
       await requireStoreOwner(storeId);
-      const { dias, kits, minimoPorKit, margenMinimo } = kitsInput.parse(input);
+      const { dias, kits, minimoPorKit, margenMinimo, descuentoObjetivo } = kitsInput.parse(input);
       const now = new Date();
       const data = await withCopilotQuery((db) => loadKitData(db, storeId, dias, now));
       const demand = await loadDemand(storeId, now);
       const signals = buildKitSignals(data.products, data.history, demand, now);
-      const together = coPurchaseCounts(data.history.ordersSince(CO_PURCHASE_DAYS)).together;
-      const result = proposeKits({ products: data.products, history: data.history, together, signals, options: { days: dias, kits, minPerKit: minimoPorKit, minMarginPct: margenMinimo } });
+      const orders = data.history.ordersSince(CO_PURCHASE_DAYS);
+      const together = coPurchaseCounts(orders).together;
+      const typeById = new Map(data.products.map((product) => [product.id, product.typeId]));
+      const typesTogether = typeCoPurchaseCounts(orders, (id) => typeById.get(id) ?? null).together;
+      const result = proposeKits({
+        products: data.products,
+        history: data.history,
+        together,
+        typesTogether,
+        signals,
+        options: { days: dias, kits, minPerKit: minimoPorKit, minMarginPct: margenMinimo, targetDiscountPct: descuentoObjetivo },
+      });
       const byId = new Map(data.products.map((product) => [product.id, product]));
       const tiedTotal = result.lentos.reduce((total, row) => total + (row.tiedUpAtCost ?? 0), 0);
       return {
@@ -196,6 +226,8 @@ export function kitsParaRotarTool(storeId: string) {
             diasSinVenta: dias,
             minimoPorKit,
             margenMinimoPct: margenMinimo,
+            descuentoObjetivoPct: descuentoObjetivo,
+            variedad: "una pieza por línea de producto, y piezas que se compran juntas (no sustitutos)",
             precios: "efectivos: lista, oferta vigente y precio por cantidad, como en la tienda",
             costo: "compra más transporte, como en detalleProducto",
           },
@@ -214,8 +246,10 @@ export function kitsParaRotarTool(storeId: string) {
             cantidad: result.nuevos.length,
             nombres: result.nuevos.slice(0, 10).map((row) => row.nombre),
             nota: `entraron al inventario hace menos de ${dias} días: todavía no se sabe si se venden; no se proponen en kits`,
+            linea: result.nuevos.length > 0 ? newProductsLine(result.nuevos.length) : null,
           },
-          kits: result.kits,
+          kits: result.kits.map((kit) => ({ ...kit, detalle: kitDetail(kit) })),
+          pocoAtractivos: result.pocoAtractivos.slice(0, 5),
           sinKit: result.sinKit.slice(0, 5),
           señales: {
             enAlza: Array.from(signals.rising)

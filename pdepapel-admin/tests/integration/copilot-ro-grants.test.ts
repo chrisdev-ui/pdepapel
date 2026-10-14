@@ -99,6 +99,8 @@ afterAll(async () => {
     await testPrisma.productKit.deleteMany({ where: { kitId: { in: synthetic.map((row) => row.id) } } });
     await testPrisma.product.deleteMany({ where: { id: { in: synthetic.map((row) => row.id) } } });
     await testPrisma.productGroup.deleteMany({ where: { storeId: fixture.store.id } });
+    await testPrisma.category.deleteMany({ where: { storeId: fixture.store.id, id: { not: fixture.category.id } } });
+    await testPrisma.type.deleteMany({ where: { storeId: fixture.store.id, id: { not: fixture.category.typeId } } });
   }
   await roClient?.$disconnect();
   await globalThis.copilotPrisma?.$disconnect();
@@ -318,7 +320,7 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
 });
 
 describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
-  const ids = { slow: "", pencil: "", eraser: "", ruler: "", offer: "", conversation: "", order: "" };
+  const ids = { slow: "", pencil: "", eraser: "", ruler: "", offer: "", conversation: "", order: "", oldOrder: "" };
   const KITS_FILE = () => copilotRoGrantFiles().find((name) => name.endsWith("grant_copilot_ro_kits.sql"))!;
   const kitsStatements = () => {
     const database = new URL(process.env.DATABASE_URL as string).pathname.replace(/^\//, "");
@@ -335,7 +337,11 @@ describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
   beforeAll(async () => {
     const store = fixture!.store.id;
     const base = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id }, select: { categoryId: true, colorId: true, sizeId: true, designId: true } });
-    const make = (name: string, data: { stock: number; price: number; acqPrice: number; createdAt?: Date }) =>
+    const line = async (name: string) => {
+      const type = await testPrisma.type.create({ data: { name, slug: `${name.toLowerCase()}-${randomBytes(3).toString("hex")}`, storeId: store } });
+      return (await testPrisma.category.create({ data: { name, slug: `${name.toLowerCase()}-cat-${randomBytes(3).toString("hex")}`, storeId: store, typeId: type.id } })).id;
+    };
+    const make = (name: string, data: { stock: number; price: number; acqPrice: number; createdAt?: Date; categoryId?: string }) =>
       testPrisma.product.create({
         data: {
           storeId: store,
@@ -349,9 +355,9 @@ describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
       });
     const old = new Date(Date.now() - 200 * 86_400_000);
     ids.slow = (await make("Libreta sintetica lenta", { stock: 8, price: 9000, acqPrice: 3000, createdAt: old })).id;
-    ids.pencil = (await make("Lapiz sintetico", { stock: 20, price: 5000, acqPrice: 1500 })).id;
-    ids.eraser = (await make("Borrador sintetico", { stock: 20, price: 4000, acqPrice: 1000 })).id;
-    ids.ruler = (await make("Regla sintetica", { stock: 20, price: 3000, acqPrice: 800 })).id;
+    ids.pencil = (await make("Lapiz sintetico", { stock: 20, price: 5000, acqPrice: 1500, categoryId: await line("Escritura") })).id;
+    ids.eraser = (await make("Borrador sintetico", { stock: 20, price: 4000, acqPrice: 1000, categoryId: await line("Utiles") })).id;
+    ids.ruler = (await make("Regla sintetica", { stock: 20, price: 3000, acqPrice: 800, categoryId: await line("Medicion") })).id;
     const paidAt = new Date(Date.now() - 20 * 86_400_000);
     ids.order = (await testPrisma.order.create({
       data: {
@@ -373,6 +379,22 @@ describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
         },
       },
     })).id;
+    ids.oldOrder = (
+      await testPrisma.order.create({
+        data: {
+          storeId: store,
+          orderNumber: `ORD-KIT-${randomBytes(4).toString("hex")}`,
+          status: "PAID",
+          type: "POINT_OF_SALE",
+          paidAt: new Date(Date.now() - 120 * 86_400_000),
+          subtotal: 21000,
+          total: 21000,
+          orderItems: {
+            create: [ids.slow, ids.pencil, ids.eraser, ids.ruler].map((productId) => ({ productId, quantity: 1, price: 5000, name: "Linea" })),
+          },
+        },
+      })
+    ).id;
     ids.offer = (
       await testPrisma.offer.create({
         data: { storeId: store, name: "Nombre interno secreto", label: "20 %", type: "PERCENTAGE", amount: 20, startDate: new Date(Date.now() - 86_400_000), endDate: new Date(Date.now() + 86_400_000), products: { create: [{ productId: ids.pencil }] } },
@@ -394,8 +416,8 @@ describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
   });
 
   afterAll(async () => {
-    await testPrisma.orderItem.deleteMany({ where: { orderId: ids.order } });
-    await testPrisma.order.deleteMany({ where: { id: ids.order } });
+    await testPrisma.orderItem.deleteMany({ where: { orderId: { in: [ids.order, ids.oldOrder] } } });
+    await testPrisma.order.deleteMany({ where: { id: { in: [ids.order, ids.oldOrder] } } });
     await testPrisma.conversationMessage.deleteMany({ where: { conversationId: ids.conversation } });
     await testPrisma.conversation.deleteMany({ where: { id: ids.conversation } });
     await testPrisma.offerProduct.deleteMany({ where: { offerId: ids.offer } });
