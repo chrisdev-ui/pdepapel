@@ -7,20 +7,12 @@ import { Input } from "@/components/ui/input";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Models } from "@/constants";
-import {
-  DEFAULT_ORDER_VIEW,
-  ORDER_VIEWS,
-  getOrderQueue,
-  isOrderView,
-  orderMatchesView,
-  type OrderView,
-} from "@/lib/order-queues";
+import { DEFAULT_ORDER_VIEW, ORDER_VIEWS, isOrderView, type OrderView } from "@/lib/order-queues";
 import {
   ORDER_CHANNEL_FILTERS,
   ORDER_DATE_FILTERS,
   colombiaDay,
   hasActiveListFilters,
-  orderMatchesListFilters,
   parseOrderListFilters,
   writeOrderListFilters,
   type OrderListFilters,
@@ -29,17 +21,30 @@ import { cn } from "@/lib/utils";
 import { Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { OrderColumn, buildColumns } from "./columns";
 import { OrderMobileCard } from "./order-mobile-card";
 
 interface OrderClientProps {
+  /** Solo la página actual: la lista se pagina, filtra y busca en el servidor. */
   data: OrderColumn[];
+  counts: Record<OrderView, number>;
+  /** Pedidos de la pestaña actual con estos filtros. */
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  /** Todos los pedidos de la tienda, sin filtros. */
+  totalOrders: number;
+  search: string;
 }
 
 const VIEW_PARAM = "vista";
+const PAGE_PARAM = "pagina";
+const SEARCH_PARAM = "q";
+const SEARCH_DELAY_MS = 350;
 
-const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
+const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pageCount, pageSize, totalOrders, search }) => {
   const canWrite = useCanWrite();
   const router = useRouter();
   const pathname = usePathname() ?? "";
@@ -47,56 +52,79 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
   const params = useParams();
   const storeId = String(params.storeId);
 
+  const [pending, startTransition] = useTransition();
+
   const requested = searchParams.get(VIEW_PARAM);
-  // La URL manda; el estado local solo cubre el hueco hasta que Next
-  // refleja el replaceState.
-  const requestedView: OrderView = isOrderView(requested) ? requested : DEFAULT_ORDER_VIEW;
-  const [selected, setSelected] = useState<{ base: OrderView; view: OrderView } | null>(null);
-  const view = selected?.base === requestedView ? selected.view : requestedView;
-
-  const urlFilters = useMemo(() => parseOrderListFilters(new URLSearchParams(searchParams.toString())), [searchParams]);
-  const [localFilters, setLocalFilters] = useState<{ base: string; filters: OrderListFilters } | null>(null);
-  const filterKey = searchParams.toString();
-  const filters = localFilters?.base === filterKey ? localFilters.filters : urlFilters;
-  const filtered = useMemo(() => data.filter((order) => orderMatchesListFilters(order, filters)), [data, filters]);
-
-  const queued = useMemo(() => filtered.map((order) => ({ order, queue: getOrderQueue(order) })), [filtered]);
-  const counts = useMemo(() => {
-    const result = {} as Record<OrderView, number>;
-    for (const { id } of ORDER_VIEWS) {
-      result[id] = queued.filter(({ order, queue }) => orderMatchesView(queue, id, order)).length;
-    }
-    return result;
-  }, [queued]);
-  const rows = useMemo(
-    () => queued.filter(({ order, queue }) => orderMatchesView(queue, view, order)).map(({ order }) => order),
-    [queued, view],
-  );
+  const view: OrderView = isOrderView(requested) ? requested : DEFAULT_ORDER_VIEW;
+  const filters = useMemo(() => parseOrderListFilters(new URLSearchParams(searchParams.toString())), [searchParams]);
   const columns = useMemo(() => buildColumns(storeId), [storeId]);
 
-  const setView = useCallback(
-    (next: OrderView) => {
-      setSelected({ base: requestedView, view: next });
+  // Las acciones masivas solo ven las filas de la página: al cambiar de página
+  // o de lista se suelta la selección, para no dejar marcas que ya no cuentan.
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+
+  /** Todo vive en la URL: el servidor arma la página con ella, y se puede compartir. */
+  const navigate = useCallback(
+    (change: (query: URLSearchParams) => void) => {
+      setRowSelection({});
       const query = new URLSearchParams(window.location.search);
-      if (next === DEFAULT_ORDER_VIEW) query.delete(VIEW_PARAM);
-      else query.set(VIEW_PARAM, next);
+      change(query);
       const suffix = query.toString();
-      // La URL cambia al instante (sin volver a cargar la página) para que se pueda compartir o abrir desde la barra de comando.
-      window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
+      startTransition(() => router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false }));
     },
-    [pathname, requestedView],
+    [pathname, router],
+  );
+
+  const setView = useCallback(
+    (next: OrderView) =>
+      navigate((query) => {
+        if (next === DEFAULT_ORDER_VIEW) query.delete(VIEW_PARAM);
+        else query.set(VIEW_PARAM, next);
+        query.delete(PAGE_PARAM);
+      }),
+    [navigate],
   );
 
   const setFilters = useCallback(
-    (next: OrderListFilters) => {
-      setLocalFilters({ base: filterKey, filters: next });
-      const query = new URLSearchParams(window.location.search);
-      writeOrderListFilters(query, next);
-      const suffix = query.toString();
-      window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
-    },
-    [filterKey, pathname],
+    (next: OrderListFilters) =>
+      navigate((query) => {
+        writeOrderListFilters(query, next);
+        query.delete(PAGE_PARAM);
+      }),
+    [navigate],
   );
+
+  const setPage = useCallback(
+    (next: number) =>
+      navigate((query) => {
+        if (next <= 1) query.delete(PAGE_PARAM);
+        else query.set(PAGE_PARAM, String(next));
+      }),
+    [navigate],
+  );
+
+  // La búsqueda espera a que se deje de escribir para no pedir una página por letra.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
+  const setSearch = useCallback(
+    (value: string) => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = setTimeout(
+        () =>
+          navigate((query) => {
+            const text = value.trim();
+            if (text) query.set(SEARCH_PARAM, text);
+            else query.delete(SEARCH_PARAM);
+            query.delete(PAGE_PARAM);
+          }),
+        SEARCH_DELAY_MS,
+      );
+    },
+    [navigate],
+  );
+
   const today = colombiaDay();
   const filtering = hasActiveListFilters(filters);
 
@@ -108,7 +136,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-primary">Pedidos</h1>
           <p className="text-sm text-muted-foreground">
-            Tienda en línea, cotizaciones, personalizados, punto de venta y ferias en una sola lista. {data.length} en total.
+            Tienda en línea, cotizaciones, personalizados, punto de venta y ferias en una sola lista. {totalOrders} en total.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -224,8 +252,12 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
         tableKey={Models.Orders}
         searchPlaceholder="Buscar pedido, cliente, teléfono o producto…"
         columns={columns}
-        data={rows}
+        data={data}
+        isLoading={pending}
+        server={{ page, pageCount, total, pageSize, search, onSearchChange: setSearch, onPageChange: setPage }}
         getRowId={(row) => row.id}
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
         onRowClick={(row) => router.push(`/${storeId}/pedidos/${row.id}`)}
         renderMobileCard={(row) => <OrderMobileCard order={row.original} storeId={storeId} />}
         emptyState={

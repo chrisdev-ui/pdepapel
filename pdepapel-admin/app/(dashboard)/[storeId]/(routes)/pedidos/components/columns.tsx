@@ -23,7 +23,7 @@ import { CellAction } from "./cell-action";
 import { CHANNEL_TONE, TintBadge } from "./order-badges";
 import { ProductList } from "./product-list";
 
-export type OrderColumn = Awaited<ReturnType<typeof getOrders>>[number];
+export type OrderColumn = Awaited<ReturnType<typeof getOrders>>["orders"][number];
 
 export const orderProducts = (order: OrderColumn) =>
   order.orderItems.map((orderItem) => ({

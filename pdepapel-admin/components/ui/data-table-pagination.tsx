@@ -18,6 +18,10 @@ import {
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   pageSizeOptions?: number[];
+  /** Total de la lista cuando la página viene del servidor. */
+  totalRows?: number;
+  /** El servidor decide el tamaño de la página: no se ofrece cambiarlo. */
+  fixedPageSize?: boolean;
 }
 
 const formatter = new Intl.NumberFormat("es-CO");
@@ -25,9 +29,11 @@ const formatter = new Intl.NumberFormat("es-CO");
 export function DataTablePagination<TData>({
   table,
   pageSizeOptions = [10, 25, 50, 100],
+  totalRows,
+  fixedPageSize = false,
 }: DataTablePaginationProps<TData>) {
   const { pageIndex, pageSize } = table.getState().pagination;
-  const total = table.getFilteredRowModel().rows.length;
+  const total = totalRows ?? table.getFilteredRowModel().rows.length;
   const start = total === 0 ? 0 : pageIndex * pageSize + 1;
   const end = Math.min(total, (pageIndex + 1) * pageSize);
   const pageCount = Math.max(table.getPageCount(), 1);
@@ -40,6 +46,7 @@ export function DataTablePagination<TData>({
             ? "Sin registros"
             : `${formatter.format(start)}–${formatter.format(end)} de ${formatter.format(total)}`}
         </span>
+        {!fixedPageSize && (
         <Select
           value={`${pageSize}`}
           onValueChange={(value) => table.setPageSize(Number(value))}
@@ -58,6 +65,7 @@ export function DataTablePagination<TData>({
             ))}
           </SelectContent>
         </Select>
+        )}
       </div>
       <div className="flex items-center gap-1">
         <Button

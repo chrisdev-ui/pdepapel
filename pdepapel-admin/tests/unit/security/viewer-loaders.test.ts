@@ -61,6 +61,7 @@ vi.mock("@/lib/discount-engine", () => ({ getProductsPrices: async () => new Map
 
 import { getProducts } from "@/app/(dashboard)/[storeId]/(routes)/productos/server/get-products";
 import { getOrders } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/server/get-orders";
+import { parseOrderListQuery } from "@/lib/order-list";
 import { getCategories } from "@/app/(dashboard)/[storeId]/(routes)/categorias/server/get-categories";
 
 function signIn(role: "owner" | "viewer" | "stranger" | "anon") {
@@ -105,7 +106,7 @@ describe("catálogo para una cuenta de solo lectura", () => {
 describe("pedidos para una cuenta de solo lectura", () => {
   it("entrega la lista sin contacto ni utilidad, pero con la ciudad de la venta", async () => {
     signIn("viewer");
-    const rows = (await getOrders(STORE)) as Record<string, unknown>[];
+    const rows = (await getOrders(STORE, parseOrderListQuery({ vista: "todos" }))).orders as unknown as Record<string, unknown>[];
     expect(rows[0]).toMatchObject({ orderNumber: "ORD-1", status: "PAID", total: 50000 });
     for (const hidden of ["fullName", "email", "phone", "address", "documentId", "netProfit", "totalProductCost"]) {
       expect(rows[0], hidden).not.toHaveProperty(hidden);
@@ -116,7 +117,7 @@ describe("pedidos para una cuenta de solo lectura", () => {
 
   it("a la dueña le entrega el pedido completo", async () => {
     signIn("owner");
-    const rows = (await getOrders(STORE)) as Record<string, unknown>[];
+    const rows = (await getOrders(STORE, parseOrderListQuery({ vista: "todos" }))).orders as unknown as Record<string, unknown>[];
     expect(rows[0]).toMatchObject({ fullName: "Ana Pérez", phone: "300", netProfit: 20000 });
   });
 });

@@ -17,7 +17,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import type { Row, Table as ReactTable } from "@tanstack/react-table";
+import type { PaginationState, Row, Table as ReactTable, Updater } from "@tanstack/react-table";
 import { AlertTriangle, Inbox, RefreshCw, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -94,6 +94,20 @@ interface DataTableProps<TData, TValue> {
   /** Por debajo de `sm`, cada fila se pinta con esta tarjeta en vez de la tabla. */
   renderMobileCard?: (row: Row<TData>) => React.ReactNode;
   getRowId?: (row: TData, index: number) => string;
+  /**
+   * La lista viene paginada y buscada desde el servidor: la tabla pinta las
+   * filas que recibe, el buscador avisa en vez de filtrar y la paginación
+   * muestra la página y el total del servidor.
+   */
+  server?: {
+    page: number;
+    pageCount: number;
+    total: number;
+    pageSize: number;
+    search: string;
+    onSearchChange: (value: string) => void;
+    onPageChange: (page: number) => void;
+  };
 }
 
 const INTERACTIVE_SELECTOR =
@@ -119,6 +133,7 @@ export function DataTable<TData, TValue>({
   onRowClick,
   renderMobileCard,
   getRowId,
+  server,
 }: DataTableProps<TData, TValue>) {
   const canWrite = useCanWrite();
   const { tables, updateTableState } = useTableStore();
@@ -136,7 +151,11 @@ export function DataTable<TData, TValue>({
     const restorable = new Set((filters ?? []).map((filter) => filter.columnKey));
     return tableState.columnFilters.filter((filter) => restorable.has(filter.id));
   });
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [globalFilter, setGlobalFilterState] = useState(server?.search ?? "");
+  const setGlobalFilter = (value: string) => {
+    setGlobalFilterState(value);
+    server?.onSearchChange(value);
+  };
   const [sorting, setSorting] = useState<SortingState>(tableState.sorting);
   const [internalRowSelection, setInternalRowSelection] =
     useState<RowSelectionState>({});
@@ -205,7 +224,7 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
+    onGlobalFilterChange: (updater) => setGlobalFilter(typeof updater === "function" ? updater(globalFilter) : updater),
     globalFilterFn: "includesString",
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
@@ -217,12 +236,22 @@ export function DataTable<TData, TValue>({
     state: {
       sorting,
       columnFilters,
-      globalFilter,
+      globalFilter: server ? "" : globalFilter,
       columnVisibility,
       rowSelection,
-      pagination: { pageIndex, pageSize },
+      pagination: server ? { pageIndex: server.page - 1, pageSize: server.pageSize } : { pageIndex, pageSize },
     },
-    onPaginationChange: setPagination,
+    ...(server
+      ? {
+          manualPagination: true,
+          pageCount: server.pageCount,
+          onPaginationChange: (updater: Updater<PaginationState>) => {
+            const current = { pageIndex: server.page - 1, pageSize: server.pageSize };
+            const next = typeof updater === "function" ? updater(current) : updater;
+            if (next.pageIndex !== current.pageIndex) server.onPageChange(next.pageIndex + 1);
+          },
+        }
+      : { onPaginationChange: setPagination }),
   });
 
   // La página recordada puede quedar fuera de rango cuando la lista cambia de
@@ -230,10 +259,11 @@ export function DataTable<TData, TValue>({
   // «201–57 de 57». Se vuelve a la última página que sí existe.
   const pageCount = table.getPageCount();
   useEffect(() => {
+    if (server) return;
     if (pageIndex > 0 && pageIndex >= pageCount) {
       setPagination((prev) => ({ ...prev, pageIndex: Math.max(0, pageCount - 1) }));
     }
-  }, [pageIndex, pageCount]);
+  }, [pageIndex, pageCount, server]);
 
   useEffect(() => {
     updateTableState(tableKey, {
@@ -485,7 +515,7 @@ export function DataTable<TData, TValue>({
       {/* Paginación */}
       {!error && (
         <div className="py-4">
-          <DataTablePagination table={table} />
+          <DataTablePagination table={table} {...(server ? { totalRows: server.total, fixedPageSize: true } : {})} />
         </div>
       )}
 
