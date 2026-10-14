@@ -4,9 +4,10 @@ import { useEffect, useRef } from "react";
 
 import { createClsTracker, type LayoutShiftEntry } from "@/lib/cls-metric";
 import { trackGoogleEvent } from "@/lib/customer-analytics";
+import { inpEventParams, isBackForwardRestore, lcpEventParams, WEB_VITALS_INP_EVENT, WEB_VITALS_LCP_EVENT } from "@/lib/web-vitals-events";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
-/** Una de cada diez vistas de página manda su CLS. */
+/** Una de cada diez vistas de página manda su CLS (y la carga, su LCP e INP). */
 export const WEB_VITALS_SAMPLE_RATE = 0.1;
 export const WEB_VITALS_CLS_EVENT = "web_vitals_cls";
 
@@ -31,6 +32,35 @@ const safely = (run: () => void) => {
 };
 
 /**
+ * LCP e INP con su atribución (librería `web-vitals`), solo en la carga
+ * sorteada: la librería baja en un trozo aparte y nada más en esas vistas.
+ * Son eventos propios porque se cierran en otro momento que el CLS: el LCP
+ * con la primera interacción u ocultando la página, el INP al ocultarla, y
+ * los dos cubren la carga completa, no cada ruta. Por eso llevan la ruta de
+ * entrada. Como el CLS, sin consentimiento `trackGoogleEvent` no manda nada.
+ */
+function reportAttributedVitals(page: string) {
+  import("@/lib/web-vitals-attribution")
+    .then(({ onLCP, onINP }) =>
+      safely(() => {
+        onLCP((metric) =>
+          safely(() => {
+            if (!isBackForwardRestore(metric)) trackGoogleEvent(WEB_VITALS_LCP_EVENT, lcpEventParams(metric, page));
+          }),
+        );
+        onINP((metric) =>
+          safely(() => {
+            if (!isBackForwardRestore(metric)) trackGoogleEvent(WEB_VITALS_INP_EVENT, inpEventParams(metric, page));
+          }),
+        );
+      }),
+    )
+    .catch(() => {
+      // Sin la librería, esta carga no se mide.
+    });
+}
+
+/**
  * Mide el CLS de cada vista de página en una muestra del 10 % y lo manda a
  * GA4 como `web_vitals_cls`: el valor, la ruta (sin parámetros, para no llevar
  * búsquedas) y el selector del elemento que más se movió. Nada de la persona.
@@ -46,6 +76,7 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
   const trackerRef = useRef<ReturnType<typeof createClsTracker> | null>(null);
   const sampledRef = useRef(false);
   const sentRef = useRef(false);
+  const vitalsStartedRef = useRef(false);
 
   const flush = () =>
     safely(() => {
@@ -74,10 +105,14 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
       });
 
     try {
-      if (typeof PerformanceObserver === "undefined" || !PerformanceObserver.supportedEntryTypes?.includes("layout-shift")) return;
       // El sorteo es por vista de página; el observador corre siempre (es
       // barato) para que una vista sorteada más adelante tenga sus datos.
       sampledRef.current = Math.random() < sampleRate;
+      if (sampledRef.current && !vitalsStartedRef.current) {
+        vitalsStartedRef.current = true;
+        reportAttributedVitals(pathRef.current ?? "");
+      }
+      if (typeof PerformanceObserver === "undefined" || !PerformanceObserver.supportedEntryTypes?.includes("layout-shift")) return;
 
       const tracker = createClsTracker();
       trackerRef.current = tracker;
