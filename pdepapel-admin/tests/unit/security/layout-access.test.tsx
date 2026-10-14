@@ -42,6 +42,7 @@ vi.mock("@/lib/prismadb", () => ({
     product: { count: vi.fn(async () => 0) },
     conversation: { count: vi.fn(async () => 0) },
     productPresale: { count: vi.fn(async () => 0) },
+    stockReservation: { count: vi.fn(async () => 0) },
   },
 }));
 

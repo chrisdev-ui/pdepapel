@@ -100,6 +100,7 @@ export async function GET(
         sku: true,
         gtin: true,
         stock: true,
+        reservedUnits: true,
         price: true,
         acqPrice: true,
         transportationCost: true,
@@ -231,10 +232,10 @@ async function searchForSale(storeId: string, rawQuery: string, limit: number) {
   const prices = rows.length > 0 ? await getProductsPrices(rows, storeId) : new Map();
   const candidates: SaleCandidate[] = rows.map((row) => {
     const pricing = prices.get(row.id);
-    const { reservedUnits: _reserved, ...product } = row;
     return {
-      ...product,
-      // Lo apartado no se vende en caja: el buscador y el tope del carrito ven lo disponible.
+      ...row,
+      // Lo apartado no se vende en caja: el buscador y el tope del carrito ven lo
+      // disponible; `reservedUnits` va aparte para mostrar «· N apartados».
       stock: availableStock(row),
       price: Number(row.price),
       offerPrice: pricing ? Number(pricing.price) : Number(row.price),

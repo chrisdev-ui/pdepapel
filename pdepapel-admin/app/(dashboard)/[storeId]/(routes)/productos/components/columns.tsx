@@ -153,6 +153,7 @@ export const buildColumns = (
         isArchived={row.original.isArchived}
         availableAt={row.original.availableAt}
         threshold={lowStockThreshold}
+        reserved={row.original.reservedUnits}
       />
     ),
     enableGlobalFilter: false,

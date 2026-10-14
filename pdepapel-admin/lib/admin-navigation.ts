@@ -16,6 +16,7 @@ import {
   Percent,
   Plus,
   ScanLine,
+  BookmarkCheck,
   Settings,
   Shapes,
   ShoppingBag,
@@ -44,7 +45,9 @@ export type NavBadgeKey =
   /** Conversaciones de WhatsApp esperando a que conteste una persona. */
   | "conversationsNeedOwner"
   /** Preventas cuya fecha prometida ya pasó sin liberar. */
-  | "presalesOverdue";
+  | "presalesOverdue"
+  /** Apartados «sin respaldo»: una venta pagada se llevó sus unidades. */
+  | "reservationsUnbacked";
 
 export interface NavChild {
   label: string;
@@ -123,6 +126,14 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Días anteriores", segment: "ventas-rapidas?tab=dias" },
           { label: "Etiquetas", segment: "ventas-rapidas?tab=etiquetas" },
         ],
+      },
+      {
+        id: "reservas",
+        ownerOnly: true,
+        label: "Reservas",
+        icon: BookmarkCheck,
+        segment: "reservas",
+        badge: "reservationsUnbacked",
       },
       {
         id: "tarjetas-regalo",
@@ -371,6 +382,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 const SEGMENT_LABELS: Record<string, string> = {
+  reservas: "Reservas",
   preventas: "Preventas",
   conversaciones: "Conversaciones",
   respuestas: "Respuestas automáticas",

@@ -1,3 +1,4 @@
+import prismadb from "@/lib/prismadb";
 import { env } from "@/lib/env.mjs";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -38,6 +39,7 @@ export default async function ProductPage({
   } = await getProduct(params.productId, params.storeId);
 
   if (!product && params.productId !== NEW_PRODUCT_SEGMENT) notFound();
+  const store = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { reservationDefaultDays: true } });
 
   // «Duplicar» desde la lista o la ficha: siembra el formulario de creación.
   const seed =
@@ -66,6 +68,7 @@ export default async function ProductPage({
             activeOffers={activeOffers}
             seed={seed}
             storeUrl={env.FRONTEND_STORE_URL}
+            reservationDefaultDays={store?.reservationDefaultDays ?? 3}
           />
         </div>
         <ProductWorkspaceAside product={product} storeId={params.storeId} />

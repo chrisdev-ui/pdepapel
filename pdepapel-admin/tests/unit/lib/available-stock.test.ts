@@ -89,7 +89,7 @@ describe("Copiloto: el stock que responde es el disponible, con lo apartado apar
     const result = await tools.buscarProductos.execute!({ texto: "agenda", soloConStock: true, limite: 10 }, { toolCallId: "t", messages: [] } as never);
     expect(mocks.findMany.mock.calls[0][0].where).toMatchObject({ stock: { gt: "FIELD:reservedUnits" } });
     expect(JSON.stringify(result)).toContain('"stock":4');
-    expect(JSON.stringify(result)).toContain('"apartados":2');
+    expect(JSON.stringify(result)).toContain('"reservados":2');
   });
 });
 

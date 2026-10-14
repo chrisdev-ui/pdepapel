@@ -32,6 +32,7 @@ import {
   PackageCheckIcon,
   Plus,
   Trash,
+  BookmarkCheck,
 } from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
@@ -105,6 +106,8 @@ import { Color, Design, Size, Supplier, Type } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ReserveSheet } from "@/components/reservations/reserve-sheet";
+import { reservedSuffix } from "@/lib/reservation-labels";
 import { getProduct, getProductSeed } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
 import { ComponentSelector } from "./component-selector";
@@ -287,6 +290,8 @@ interface ProductFormProps {
   storeUrl?: string | null;
   /** Ofertas vigentes del producto (para el asistente de conversión). */
   activeOffers?: { id: string; name: string }[];
+  /** Días por defecto de un apartado (Configuración). */
+  reservationDefaultDays?: number;
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -309,8 +314,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   seed = null,
   storeUrl = null,
   activeOffers = [],
+  reservationDefaultDays = 3,
 }) => {
   const canWrite = useCanWrite();
+  const [reserveOpen, setReserveOpen] = useState(false);
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -1213,7 +1220,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         }
         summary={
           initialData
-            ? `${initialData.sku} · ${currencyFormatter(initialData.price)}${headerMargin !== null ? ` · margen ${headerMargin} %` : ""} · ${initialData.stock} und${!headerReadiness.complete ? ` · faltan ${headerReadiness.total - headerReadiness.done} para vender` : ""}`
+            ? `${initialData.sku} · ${currencyFormatter(initialData.price)}${headerMargin !== null ? ` · margen ${headerMargin} %` : ""} · ${initialData.stock} und${reservedSuffix(initialData.reservedUnits)}${!headerReadiness.complete ? ` · faltan ${headerReadiness.total - headerReadiness.done} para vender` : ""}`
             : seed
               ? "Se copiaron nombre, precio, costo, clasificación y descripción. Sube fotos nuevas y revisa el stock inicial; el SKU y la URL se generan al guardar."
               : "Sube la foto, completa nombre, precio y categoría; la lista te dice qué falta para venderlo."
@@ -1238,6 +1245,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   </a>
                 </Button>
               )}
+              {canWrite && !initialData.isArchived && (
+                <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => setReserveOpen(true)}>
+                  <BookmarkCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Reservar
+                </Button>
+              )}
+              <ReserveSheet
+                open={reserveOpen}
+                onOpenChange={setReserveOpen}
+                defaultDays={reservationDefaultDays}
+                product={{ id: initialData.id, name: initialData.name, stock: initialData.stock, reservedUnits: initialData.reservedUnits }}
+              />
               <Button
                 type="button"
                 variant="outline"

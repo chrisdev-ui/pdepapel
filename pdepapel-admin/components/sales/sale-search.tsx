@@ -1,5 +1,6 @@
 "use client";
 
+import { reservedSuffix } from "@/lib/reservation-labels";
 import axios from "axios";
 import { Package, Search } from "lucide-react";
 import Image from "next/image";
@@ -106,7 +107,8 @@ const SaleResultRow = memo(function SaleResultRow({
           ))}
         </span>
         <span className="truncate font-mono text-[11px] text-muted-foreground">
-          {candidate.sku} · {candidate.stock} und
+          {candidate.sku} · {candidate.stock} {candidate.reservedUnits ? "disponibles" : "und"}
+          {reservedSuffix(candidate.reservedUnits)}
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">

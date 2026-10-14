@@ -68,12 +68,12 @@ export async function notifyUnbackedReservations(reservationIds: string[], waits
     const fresh = [];
     for (const hold of holds) if (await claimAlert(`alert:reservation-unbacked:${hold.id}`)) fresh.push(hold);
     if (fresh.length === 0) return false;
-    const lines = fresh.map((hold) => `• ${hold.product.name} × ${hold.quantity} (apartado de ${hold.customerName})`).join("\n");
+    const lines = fresh.map((hold) => `• ${hold.product.name} × ${hold.quantity} (reserva de ${hold.customerName})`).join("\n");
     return send(
       fresh[0].storeId,
-      `[Revisar] ${fresh.length === 1 ? "Un apartado quedó" : `${fresh.length} apartados quedaron`} sin respaldo`,
-      `Una venta pagada se llevó las unidades que estos apartados guardaban:\n${lines}\n\n` +
-        "La venta no se deshace. Revisa en Apartados si repones, ofreces otro producto a la clienta o liberas el apartado.",
+      `[Revisar] ${fresh.length === 1 ? "Una reserva quedó" : `${fresh.length} reservas quedaron`} sin respaldo`,
+      `Una venta pagada se llevó las unidades que estas reservas guardaban:\n${lines}\n\n` +
+        "La venta no se deshace. Revisa en Reservas si repones, ofreces otro producto a la clienta o liberas la reserva.",
     );
   }
   return false;

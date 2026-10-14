@@ -209,6 +209,15 @@ export const handleErrorResponse = (
             503,
             { code: error.code, retryAfterSeconds: 3 },
           );
+        case "P2010":
+          if (String((error.meta as { code?: unknown } | undefined)?.code) === "1213") {
+            return new AppError(
+              "Otra operación tocó los mismos datos al mismo tiempo. Intenta de nuevo.",
+              409,
+              { code: "1213", retryAfterSeconds: 1 },
+            );
+          }
+          return new AppError("Error en la base de datos", 500, { code: error.code });
         case "P2034":
           // Con Serializable, dos escrituras a la vez sobre la misma fila
           // abortan una: es reintentable, no un fallo del servidor.

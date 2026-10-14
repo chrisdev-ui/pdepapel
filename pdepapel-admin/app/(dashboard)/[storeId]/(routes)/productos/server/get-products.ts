@@ -22,6 +22,7 @@ export async function getProducts(storeId: string) {
       gtin: true,
       hasNoProductIdentifier: true,
       stock: true,
+      reservedUnits: true,
       color: true,
       isArchived: true,
       isFeatured: true,

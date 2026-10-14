@@ -95,6 +95,12 @@ const formSchema = z.object({
       (value) => !value || Number(value.replace(/[.\s]/g, "")) >= 1,
       { message: "Escribe un número entero de al menos 1 unidad" },
     ),
+  reservationDefaultDays: z
+    .string()
+    .optional()
+    .refine((value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 60), {
+      message: "Escribe un número entero de días entre 1 y 60",
+    }),
   mercadoLibreTargetMarginPercent: z
     .string()
     .optional()
@@ -156,6 +162,7 @@ export const SettingsForm: React.FC<
         initialData.lowStockThreshold != null
           ? String(initialData.lowStockThreshold)
           : "",
+      reservationDefaultDays: String(initialData.reservationDefaultDays ?? 3),
       mercadoLibreTargetMarginPercent: String(initialData.mercadoLibreTargetMarginPercent ?? 20),
       mercadoLibreMinNetPerUnit: String(initialData.mercadoLibreMinNetPerUnit ?? 10000),
       policies:
@@ -460,6 +467,28 @@ export const SettingsForm: React.FC<
                           pero no tiene ventas suficientes para medir cobertura.
                           Déjalo vacío para usar el valor por defecto (
                           {DEFAULT_LOW_STOCK_THRESHOLD}).
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <Heading
+                  title="Reservas"
+                  description="Unidades que guardas para una clienta sin venderlas todavía"
+                />
+                <div className="grid gap-8 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="reservationDefaultDays"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Días de una reserva</FormLabel>
+                        <FormControl>
+                          <Input inputMode="numeric" disabled={loading} placeholder="3" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Cuántos días dura una reserva si no eliges otra fecha al reservar. Al vencer, las unidades vuelven a estar a la venta.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

@@ -585,7 +585,8 @@ export function FairEventWorkspace({
       id: product.id,
       name: product.name,
       sku: product.sku,
-      stock: product.stock,
+      // Lo reservado para clientas no sale a la feria: se compara contra lo disponible.
+      stock: Math.max(0, product.stock - (product.reservedUnits ?? 0)),
       isKit: product.isKit,
     });
   };

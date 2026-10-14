@@ -13,7 +13,10 @@ export interface SaleCandidate {
   name: string;
   sku: string;
   gtin?: string | null;
+  /** Disponible para vender (stock menos apartados). */
   stock: number;
+  /** Unidades apartadas para clientas; solo para mostrarlas. */
+  reservedUnits?: number;
   price: number;
   /** Precio con la oferta vigente; igual a `price` sin oferta. */
   offerPrice?: number | null;

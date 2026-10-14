@@ -320,3 +320,13 @@ export function formatOpeningHours(
     )
     .join(" · ");
 }
+
+/** Días por defecto de una reserva (Reservas). Ausente deja el valor guardado. */
+export function parseReservationDefaultDays(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const days = typeof value === "string" ? Number(value.trim()) : value;
+  if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 60) {
+    throw ErrorFactory.InvalidRequest("Los días de una reserva deben ser un número entero entre 1 y 60");
+  }
+  return days;
+}

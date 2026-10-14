@@ -256,7 +256,7 @@ export function EnhancedProductSelector({
                           variant="secondary"
                           className="absolute left-2 top-2 border-none bg-amber-500 font-medium text-white shadow-sm"
                         >
-                          Stock: {product.stock}
+                          Disponibles: {product.stock}
                         </Badge>
                       )
                     )}

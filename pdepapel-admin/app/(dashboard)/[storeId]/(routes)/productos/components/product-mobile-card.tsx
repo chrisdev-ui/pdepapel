@@ -104,6 +104,7 @@ export function ProductMobileCard({
             isArchived={product.isArchived}
             availableAt={product.availableAt}
             threshold={lowStockThreshold}
+            reserved={product.reservedUnits}
           />
           <ReadinessBadge readiness={getListReadiness(product)} />
           <FeaturedBadge isFeatured={product.isFeatured} />

@@ -1,3 +1,4 @@
+import { HOLDING_RESERVATION_STATUSES } from "@/lib/reservation-counters";
 import {
   GALLERY_ORDER,
   releaseGroupCopies,
@@ -366,6 +367,21 @@ export async function PATCH(
     }
     const becomesKit = Boolean(isKit) && !productToUpdate.isKit;
     const stopsBeingKit = !isKit && productToUpdate.isKit;
+    if (productToUpdate.isKit) {
+      // Un apartado de kit guarda las piezas de la receta con la que se hizo:
+      // cambiarla dejaría el contador de las piezas descuadrado al liberarlo.
+      const holds = await prismadb.stockReservation.count({
+        where: { productId: params.productId, storeId: params.storeId, status: { in: HOLDING_RESERVATION_STATUSES } },
+      });
+      if (holds > 0) {
+        const current = await prismadb.productKit.findMany({ where: { kitId: params.productId }, select: { componentId: true, quantity: true } });
+        const recipe = (rows: { componentId: string; quantity?: number }[]) =>
+          rows.map((row) => `${row.componentId}:${row.quantity || 1}`).sort().join(",");
+        if (stopsBeingKit || recipe(current) !== recipe(components ?? [])) {
+          throw ErrorFactory.Conflict("Este kit tiene reservas activas: libéralas o conviértelas antes de cambiar sus productos.");
+        }
+      }
+    }
     let pausedListings = 0;
 
     // Atributos acotados a la tienda: un id de otra tienda no se puede colgar de un producto.

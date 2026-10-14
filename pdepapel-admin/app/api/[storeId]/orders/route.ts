@@ -1,3 +1,4 @@
+import { closeReservationsForOrders } from "@/lib/reservation-counters";
 import { scrubOrders } from "@/lib/viewer-payloads";
 import { getStoreAccess } from "@/lib/store-access";
 import { BATCH_SIZE } from "@/constants";
@@ -1196,7 +1197,7 @@ export async function PATCH(
           if (stockValidationUpdates.length > 0) {
             // Validate stock availability first
             // We only care about ensuring we have enough for the NEW requirements
-            await validateStockAvailability(tx, stockValidationUpdates);
+            await validateStockAvailability(tx, stockValidationUpdates, ordersBecomingPaid.map((order) => order.id));
           }
         }
       }
@@ -1375,6 +1376,7 @@ export async function PATCH(
             createdBy: userId,
             reason: cancelAsFraud ? "Cancelado como fraude o bot" : "Cancelado desde la lista",
           });
+          await closeReservationsForOrders(tx, [updated.id], "RELEASED", userId);
         }
 
         // «Cancelar como fraude/bot»: el pedido se queda, con el motivo que

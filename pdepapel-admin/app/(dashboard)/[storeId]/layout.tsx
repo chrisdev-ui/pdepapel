@@ -40,7 +40,7 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
-  const [stores, pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending] =
+  const [stores, pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending, reservationsUnbacked] =
     await Promise.all([
     // El selector de tiendas de una cuenta de solo lectura muestra solo esta.
     access?.role === "viewer"
@@ -70,6 +70,12 @@ export default async function DashboardLayout({
     access?.role === "viewer"
       ? Promise.resolve(0)
       : countOpenMercadoLibreAlerts(params.storeId).catch(() => 0),
+    // Apartados que una venta pagada dejó sin unidades: Paula tiene que decidir.
+    access?.role === "viewer"
+      ? Promise.resolve(0)
+      : prismadb.stockReservation
+          .count({ where: { storeId: params.storeId, status: { in: ["ACTIVE", "CONVERTED"] }, unbackedAt: { not: null } } })
+          .catch(() => 0),
   ]);
 
   return (
@@ -81,7 +87,7 @@ export default async function DashboardLayout({
         canCreateStore={canCreateStore(userId)}
         role={access?.role ?? null}
         storeUrl={env.FRONTEND_STORE_URL}
-        counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending }}
+        counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending, reservationsUnbacked }}
         copilot={isCopilotConfigured()}
       >
         {children}

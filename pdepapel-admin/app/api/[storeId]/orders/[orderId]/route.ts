@@ -1,3 +1,4 @@
+import { closeReservationsForOrders } from "@/lib/reservation-counters";
 import { scrubOrder } from "@/lib/viewer-payloads";
 import { getStoreAccess } from "@/lib/store-access";
 import { BATCH_SIZE } from "@/constants";
@@ -443,6 +444,8 @@ export async function PATCH(
 
     const targetType = type || order.type;
     const isStandardType = targetType === OrderType.STANDARD;
+    // Cancelar o rechazar no activa nada: un pedido a medio llenar (p. ej. el de una reserva) se puede cerrar sin inventar datos.
+    const isClosingStatus = targetStatus === OrderStatus.CANCELLED || targetStatus === OrderStatus.REJECTED;
 
     // Una compra de tarjeta de regalo no se envía: le basta nombre y correo.
     const isGiftCardPurchase = targetType === OrderType.GIFT_CARD;
@@ -452,7 +455,7 @@ export async function PATCH(
           "La compra de una tarjeta de regalo necesita nombre y correo.",
         );
       }
-    } else if (isActiveStatus || isStandardType) {
+    } else if (isActiveStatus || (isStandardType && !isClosingStatus)) {
       const finalName = fullName || order.fullName;
       const finalPhone = phone || order.phone;
       const finalEmail = email || order.email;
@@ -1071,6 +1074,8 @@ export async function PATCH(
           createdBy: userId,
           reason: "Cancelado desde el panel",
         });
+        // El apartado que se convirtió en este pedido devuelve sus unidades.
+        await closeReservationsForOrders(tx, [updated.id], "RELEASED", userId);
       }
 
       return updated;
@@ -1271,6 +1276,7 @@ export async function DELETE(
         }
       }
 
+      await closeReservationsForOrders(tx, [params.orderId], "RELEASED", userId);
       // Delete the order
       const deletedOrder = await tx.order.delete({
         where: { id: params.orderId, storeId: params.storeId },

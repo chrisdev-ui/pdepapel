@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient, StockReservationStatus } from "@prisma/client";
 import { ErrorFactory } from "./api-errors";
 import { availableStock, kitAvailableFromComponents, kitPhysicalFromComponents } from "./available-stock";
 import {
@@ -7,6 +7,7 @@ import {
   type MovementType,
 } from "./inventory-constants";
 import { queueMarketplaceStockSyncEvents } from "./mercadolibre/outbox";
+import { closeReservationsForOrders } from "./reservation-counters";
 import { flagUnbackedReservations } from "./stock-review";
 
 export {
@@ -51,6 +52,7 @@ export async function createInventoryMovement(
     createdBy,
   } = data;
 
+  await consumeOrderReservations(tx, [data]);
   const product = await tx.product.findFirst({
     where: { id: productId, storeId },
     select: { stock: true, name: true },
@@ -343,14 +345,21 @@ export async function explodeSaleLines<
   return resolved;
 }
 
+/**
+ * `forOrderIds`: pedidos que se van a pagar. Lo que sus propias reservas
+ * convertidas guardan cuenta como suyo (la venta las consume), así que no se
+ * resta de lo disponible para ellos.
+ */
 export async function validateStockAvailability(
   tx: PrismaTx,
   items: { productId: string; quantity: number }[],
+  forOrderIds: string[] = [],
 ) {
   if (items.length === 0) return;
 
   const physical = await resolvePhysicalRequirements(tx, items);
   if (physical.size === 0) return;
+  const ownHolds = await piecesHeldForOrders(tx, forOrderIds);
 
   const products = await tx.product.findMany({
     where: { id: { in: Array.from(physical.keys()) } },
@@ -370,7 +379,8 @@ export async function validateStockAvailability(
     if (!product) {
       throw ErrorFactory.NotFound(`Producto no encontrado: ${productId}`);
     }
-    const available = availableStock(product);
+    const ownHeld = ownHolds.get(productId) ?? 0;
+    const available = availableStock(product) + (ownHeld > 0 ? Math.min(ownHeld, product.reservedUnits ?? 0) : 0);
     if (available < requested) {
       missing.push({
         productId: product.id,
@@ -393,6 +403,7 @@ export async function createInventoryMovementBatch(
   movements: CreateInventoryMovementParams[],
   validate: boolean = true,
 ) {
+  await consumeOrderReservations(tx, movements);
   if (movements.length === 0) return;
 
   // 1. Validate total requirements if needed (only for decrements)
@@ -534,6 +545,9 @@ export async function createInventoryMovementBatchResilient(
     }[],
   };
   if (movements.length === 0) return results;
+  // El apartado convertido de este pedido deja de guardar antes de la venta:
+  // si no, la venta chocaría con su propio apartado y lo marcaría sin respaldo.
+  await consumeOrderReservations(tx, movements);
 
   const productIds = Array.from(new Set(movements.map((m) => m.productId)));
   const products = await tx.product.findMany({
@@ -674,4 +688,25 @@ export async function createInventoryMovementBatchResilient(
   // Un pago confirmado se lleva las unidades aunque estuvieran apartadas.
   await flagUnbackedReservations(tx, accepted.filter((line) => line.quantity < 0).map((line) => line.productId));
   return results;
+}
+
+/** Las ventas de un pedido consumen el apartado que se convirtió en ese pedido. */
+async function consumeOrderReservations(tx: PrismaTx, movements: CreateInventoryMovementParams[]) {
+  const orderIds = movements.filter((movement) => movement.quantity < 0 && movement.referenceId).map((movement) => movement.referenceId!);
+  if (orderIds.length === 0) return;
+  await closeReservationsForOrders(tx, orderIds, "CONSUMED");
+}
+
+async function piecesHeldForOrders(tx: PrismaTx, orderIds: string[]): Promise<Map<string, number>> {
+  const held = new Map<string, number>();
+  if (orderIds.length === 0) return held;
+  const holds = await tx.stockReservation.findMany({
+    where: { orderId: { in: orderIds }, status: StockReservationStatus.CONVERTED },
+    select: { productId: true, quantity: true },
+  });
+  for (const hold of holds ?? []) {
+    const pieces = await resolvePhysicalRequirements(tx, [{ productId: hold.productId, quantity: hold.quantity }]);
+    pieces.forEach((units, id) => held.set(id, (held.get(id) ?? 0) + units));
+  }
+  return held;
 }

@@ -26,6 +26,7 @@ describe("inventory movements", () => {
       },
       inventoryMovement: { create: vi.fn().mockResolvedValue(movement) },
       productKit: { findMany: vi.fn().mockResolvedValue([]) },
+      stockReservation: { findMany: vi.fn().mockResolvedValue([]) },
     };
 
     await expect(
@@ -43,6 +44,10 @@ describe("inventory movements", () => {
       where: { id: "product-id", storeId: "store-id" },
       select: { stock: true, name: true },
     });
+    // La venta de un pedido consume antes el apartado que se convirtió en él.
+    expect(tx.stockReservation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { orderId: { in: ["order-id"] }, status: "CONVERTED" } }),
+    );
     expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         productId: "product-id",

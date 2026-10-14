@@ -1,3 +1,4 @@
+import { reservedSuffix } from "@/lib/reservation-labels";
 import { Check, ChevronsUpDown, Package } from "lucide-react";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -32,6 +33,8 @@ export type AsyncProductOption = {
   sku: string;
   gtin?: string | null;
   stock: number;
+  /** Unidades apartadas (Apartados): se muestran junto al stock. */
+  reservedUnits?: number;
   price?: number | null;
   acqPrice?: number | null;
   transportationCost?: number | null;
@@ -141,7 +144,7 @@ function useIsPhone(enabled: boolean) {
 const getRowDetails = (product: AsyncProductOption) =>
   [
     product.sku,
-    `${product.stock} und`,
+    `${product.stock} und${reservedSuffix(product.reservedUnits)}`,
     product.price !== undefined && product.price !== null ? currencyFormatter(product.price) : null,
   ]
     .filter(Boolean)

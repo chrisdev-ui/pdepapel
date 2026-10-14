@@ -124,17 +124,43 @@ export function FeaturedBadge({ isFeatured }: { isFeatured: boolean }) {
   );
 }
 
-/** Estado en la tienda con el stock siempre visible (también archivado). */
+/** Estado en la tienda con el stock siempre visible (también archivado) y lo apartado al lado. */
 export function StockBadge({
   stock,
   isArchived,
   availableAt,
   threshold = DEFAULT_LOW_STOCK_THRESHOLD,
+  reserved = 0,
 }: {
   stock: number;
   isArchived: boolean;
   availableAt?: Date | string | null;
   threshold?: number;
+  /** Unidades reservadas para clientas (Apartados): siguen en bodega pero no se venden. */
+  reserved?: number;
+}) {
+  const badge = <StockStatusBadge stock={stock} isArchived={isArchived} availableAt={availableAt} threshold={threshold} />;
+  if (!reserved || reserved <= 0) return badge;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {badge}
+      <span className="whitespace-nowrap text-xs text-muted-foreground">
+        · {reserved} {reserved === 1 ? "reservado" : "reservados"}
+      </span>
+    </span>
+  );
+}
+
+function StockStatusBadge({
+  stock,
+  isArchived,
+  availableAt,
+  threshold,
+}: {
+  stock: number;
+  isArchived: boolean;
+  availableAt?: Date | string | null;
+  threshold: number;
 }) {
   const product = { stock, isArchived, availableAt };
   const status = getProductStatus(product, threshold);

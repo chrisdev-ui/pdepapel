@@ -39,6 +39,7 @@ async function main() {
     select: { id: true },
   });
   const fairEventIds = existingFairs.map((fairEvent) => fairEvent.id);
+  await prisma.stockReservation.deleteMany({ where: { storeId } });
   const fairOrders = fairEventIds.length
     ? await prisma.order.findMany({
         where: { fairEventId: { in: fairEventIds } },
@@ -152,6 +153,7 @@ async function main() {
       slug: "producto-feria-e2e",
       sku: "E2E-FAIR-PRODUCT",
       stock: 20,
+      reservedUnits: 0,
       price: 10000,
       acqPrice: 4000,
       isArchived: false,

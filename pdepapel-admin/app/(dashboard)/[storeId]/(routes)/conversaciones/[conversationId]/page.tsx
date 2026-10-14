@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import prismadb from "@/lib/prismadb";
+
 import { ConversationThread } from "./components/conversation-thread";
 import { getConversation } from "./server/get-conversation";
 
@@ -19,11 +21,12 @@ export default async function ConversationPage({
   const conversation = await getConversation(params.storeId, params.conversationId);
   // Una conversación de otra tienda o inexistente no debe abrirse.
   if (!conversation) notFound();
+  const store = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { reservationDefaultDays: true } });
 
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
-        <ConversationThread conversation={conversation} storeId={params.storeId} />
+        <ConversationThread conversation={conversation} storeId={params.storeId} reservationDefaultDays={store?.reservationDefaultDays ?? 3} />
       </div>
     </div>
   );

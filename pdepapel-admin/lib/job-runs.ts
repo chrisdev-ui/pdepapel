@@ -34,6 +34,7 @@ export type JobName =
   | "abc-classification"
   | "bank-transfer-review"
   | "copilot-retention"
+  | "stock-reservations"
   // Cifras, no tareas: ver `measureWhatsAppBotRatio` y `measureCopilotSpend`.
   | "whatsapp-bot-ratio"
   | "copilot-spend"
@@ -52,6 +53,12 @@ export interface JobDefinition {
 }
 
 export const JOB_DEFINITIONS: JobDefinition[] = [
+  {
+    name: "stock-reservations",
+    label: "Reservas (vencimientos y resumen)",
+    expectedEveryHours: 1,
+    perStore: false,
+  },
   {
     name: "storefront-revalidation",
     label: "Actualización de la tienda",

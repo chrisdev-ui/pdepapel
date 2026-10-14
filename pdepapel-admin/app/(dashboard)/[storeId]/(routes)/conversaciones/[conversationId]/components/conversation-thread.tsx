@@ -1,5 +1,6 @@
 "use client";
 
+import { ReserveSheet } from "@/components/reservations/reserve-sheet";
 import axios from "axios";
 
 import {
@@ -83,14 +84,16 @@ function WebOriginCard({ origin, storeId }: { origin: NonNullable<ConversationTh
   );
 }
 
-/** Lo que el bot le pasó a Paula al decir la clienta que sí. Nada aquí se cobró ni se apartó. */
+/** Lo que el bot le pasó a Paula al decir la clienta que sí. Nada aquí se cobró ni se reservó. */
 function OrderRequestCard({
   record,
   onDismiss,
+  onReserve,
   busy,
 }: {
   record: NonNullable<ConversationThreadMessage["orderRequest"]>;
   onDismiss?: () => void;
+  onReserve?: (item: { productId: string; name: string; quantity: number }) => void;
   busy?: boolean;
 }) {
   const pending = record.status === "pending";
@@ -102,16 +105,23 @@ function OrderRequestCard({
       </p>
       <ul className="mt-1 space-y-0.5 text-xs">
         {record.items.map((item) => (
-          <li key={item.productId} className="break-words">
-            {item.name} × {item.quantity} — {currencyFormatter(item.unitPrice)} c/u
-            {item.stockConfirmed ? "" : " · confirmar cantidad"}
+          <li key={item.productId} className="flex flex-wrap items-center gap-x-2 break-words">
+            <span>
+              {item.name} × {item.quantity} — {currencyFormatter(item.unitPrice)} c/u
+              {item.stockConfirmed ? "" : " · confirmar cantidad"}
+            </span>
+            {pending && onReserve ? (
+              <Button type="button" size="xs" variant="outline" className="h-7" disabled={busy} onClick={() => onReserve(item)}>
+                Reservar
+              </Button>
+            ) : null}
           </li>
         ))}
       </ul>
       <p className="mt-1 text-xs font-semibold">
         Total {currencyFormatter(record.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0))} sin envío
       </p>
-      <p className="mt-1 text-[11px] text-muted-foreground">Sin apartar ni cobrar: confírmale envío y pago.</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">Sin reservar ni cobrar: confírmale envío y pago.</p>
       {pending && onDismiss ? (
         <Button type="button" size="xs" variant="ghost" className="mt-1" disabled={busy} onClick={onDismiss}>
           Descartar
@@ -182,11 +192,13 @@ function MessageBubble({
   message,
   storeId,
   onDismissOrder,
+  onReserveItem,
   busy,
 }: {
   message: ConversationThreadMessage;
   storeId: string;
   onDismissOrder?: () => void;
+  onReserveItem?: (item: { productId: string; name: string; quantity: number }) => void;
   busy?: boolean;
 }) {
   const fromCustomer = message.direction === ConversationMessageDirection.INBOUND;
@@ -215,7 +227,7 @@ function MessageBubble({
             <p className="mt-1 text-xs opacity-70">{media}</p>
           ) : null}
           {message.cart ? <CartCard cart={message.cart} /> : null}
-          {message.orderRequest ? <OrderRequestCard record={message.orderRequest} onDismiss={onDismissOrder} busy={busy} /> : null}
+          {message.orderRequest ? <OrderRequestCard record={message.orderRequest} onDismiss={onDismissOrder} onReserve={onReserveItem} busy={busy} /> : null}
           {message.webOrigin ? <WebOriginCard origin={message.webOrigin} storeId={storeId} /> : null}
         </div>
         <p
@@ -260,10 +272,13 @@ function MessageBubble({
 export function ConversationThread({
   conversation,
   storeId,
+  reservationDefaultDays = 3,
 }: {
   conversation: ConversationDetail;
   storeId: string;
+  reservationDefaultDays?: number;
 }) {
+  const [reserveItem, setReserveItem] = useState<{ productId: string; name: string; quantity: number } | null>(null);
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -500,7 +515,7 @@ export function ConversationThread({
           ) : (
             <ul className="space-y-4">
               {conversation.messages.map((message) => (
-                <MessageBubble key={message.id} message={message} storeId={storeId} onDismissOrder={dismissOrder} busy={loading} />
+                <MessageBubble key={message.id} message={message} storeId={storeId} onDismissOrder={dismissOrder} onReserveItem={setReserveItem} busy={loading} />
               ))}
             </ul>
           )}
@@ -510,6 +525,16 @@ export function ConversationThread({
         Este es el historial. Para responder, escribe desde el WhatsApp de la
         tienda en tu celular como siempre: lo que contestes aparece aquí solo.
       </p>
+      <ReserveSheet
+        open={reserveItem !== null}
+        onOpenChange={(open) => !open && setReserveItem(null)}
+        defaultDays={reservationDefaultDays}
+        product={reserveItem ? { id: reserveItem.productId, name: reserveItem.name } : null}
+        quantity={reserveItem?.quantity ?? 1}
+        customerName={conversation.contactName?.trim() ?? ""}
+        customerPhone={conversation.phone ?? ""}
+        note="Pedido solicitado por WhatsApp"
+      />
     </>
   );
 }

@@ -14,6 +14,7 @@ import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import {
   parseFreeShippingThreshold,
   parseLowStockThreshold,
+  parseReservationDefaultDays,
   parseMercadoLibreMinNetPerUnit,
   parseMercadoLibreTargetMarginPercent,
 } from "@/lib/store-settings";
@@ -77,6 +78,7 @@ export async function PATCH(
       lowStockThreshold,
       mercadoLibreTargetMarginPercent,
       mercadoLibreMinNetPerUnit,
+      reservationDefaultDays,
     } = body;
 
     const normalizedFreeShippingThreshold = parseFreeShippingThreshold(
@@ -85,6 +87,7 @@ export async function PATCH(
     const normalizedLowStockThreshold = parseLowStockThreshold(lowStockThreshold);
     const normalizedTargetMargin = parseMercadoLibreTargetMarginPercent(mercadoLibreTargetMarginPercent);
     const normalizedMinNet = parseMercadoLibreMinNetPerUnit(mercadoLibreMinNetPerUnit);
+    const normalizedReservationDays = parseReservationDefaultDays(reservationDefaultDays);
 
     if (!name?.trim()) {
       throw ErrorFactory.InvalidRequest("El nombre de la tienda es requerido");
@@ -153,6 +156,7 @@ export async function PATCH(
         lowStockThreshold: normalizedLowStockThreshold,
         ...(normalizedTargetMargin === undefined ? {} : { mercadoLibreTargetMarginPercent: normalizedTargetMargin }),
         ...(normalizedMinNet === undefined ? {} : { mercadoLibreMinNetPerUnit: normalizedMinNet }),
+        ...(normalizedReservationDays === undefined ? {} : { reservationDefaultDays: normalizedReservationDays }),
       },
     });
 
