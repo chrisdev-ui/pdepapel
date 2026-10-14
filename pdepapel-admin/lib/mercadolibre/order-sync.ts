@@ -1,3 +1,4 @@
+import { flagUnbackedReservations } from "@/lib/stock-review";
 import {
   InventoryMovementType,
   MarketplaceInventoryStatus,
@@ -436,6 +437,9 @@ async function applyMarketplaceInventory(
         );
       }
     }
+    // Una venta de Mercado Libre ya está cobrada: si tomó unidades apartadas,
+    // el apartado queda sin respaldo y Paula decide.
+    await flagUnbackedReservations(transaction, Array.from(physicalByProductId.keys()));
 
     const updatedProducts = await transaction.product.findMany({
       where: { id: { in: physicalProductIds } },

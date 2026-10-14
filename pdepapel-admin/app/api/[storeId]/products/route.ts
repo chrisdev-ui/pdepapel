@@ -6,6 +6,7 @@ import {
   productAvailabilityWhere,
 } from "@/lib/product-availability";
 import { movementActor } from "@/lib/movement-actor";
+import { netPublicProduct } from "@/lib/available-stock";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
   computeCardFacets,
@@ -477,14 +478,16 @@ export async function GET(
     // `ids` no forma parte de la llave y la respuesta debe ser la de ahora.
     const ids = searchParams.get("ids")?.split(",").filter(Boolean) || [];
     if (ids.length > 0) {
-      const products = await prismadb.product.findMany({
-        where: {
-          storeId: params.storeId,
-          id: { in: ids },
-          isArchived: false,
-        },
-        select: PUBLIC_PRODUCT_SELECT,
-      });
+      const products = (
+        await prismadb.product.findMany({
+          where: {
+            storeId: params.storeId,
+            id: { in: ids },
+            isArchived: false,
+          },
+          select: PUBLIC_PRODUCT_SELECT,
+        })
+      ).map((row) => netPublicProduct(row));
 
       // Solo en esta rama, que es la que el carrito consulta sin caché: en el
       // catálogo cacheado el número quedaría congelado, porque la caché se
@@ -844,7 +847,7 @@ export async function GET(
 
       // Fetch ALL groups and products (no pagination at DB level)
       // This is intentional for correct sorting - works well for <500 items
-      const [allGroups, allStandaloneProducts] = await Promise.all([
+      const [rawGroups, rawStandaloneProducts] = await Promise.all([
         prismadb.productGroup.findMany({
           where: baseGroupWhere,
           select: {
@@ -858,6 +861,7 @@ export async function GET(
               select: {
                 price: true,
                 stock: true,
+                reservedUnits: true,
                 id: true,
                 slug: true,
                 category: { select: PUBLIC_CATEGORY_SELECT },
@@ -889,6 +893,9 @@ export async function GET(
           orderBy: { createdAt: "desc" },
         }),
       ]);
+
+      const allGroups = rawGroups.map((row) => netPublicProduct(row));
+      const allStandaloneProducts = rawStandaloneProducts.map((row) => netPublicProduct(row));
 
       // Transform groups to unified format
       const transformedGroups: UnifiedProduct[] = allGroups.map((g: any) => {
@@ -1270,6 +1277,7 @@ export async function GET(
         },
         take: limit || undefined,
       });
+      products = products.map((row) => netPublicProduct(row));
       totalItems = products.length;
     } else if (sortOption === "isOnSale") {
       // ---------------------------------------------------------
@@ -1357,7 +1365,7 @@ export async function GET(
         });
       }
 
-      products = [...fetchedSales, ...fetchedRegular];
+      products = [...fetchedSales, ...fetchedRegular].map((row) => netPublicProduct(row));
 
       // Calculate Total Counts for Facetting/Pagination
       // Note: for performance we might skip calculating facets deeply if not strictly needed or handle differently
@@ -1455,7 +1463,7 @@ export async function GET(
             kitComponents: {
               select: {
                 quantity: true,
-                component: { select: { stock: true } },
+                component: { select: { stock: true, reservedUnits: true } },
               },
             },
           },
@@ -1496,7 +1504,7 @@ export async function GET(
         }),
       ]);
 
-      products = productsData;
+      products = productsData.map((row) => netPublicProduct(row));
       totalItems = count;
 
       facets = {

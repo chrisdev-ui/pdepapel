@@ -22,6 +22,7 @@ describe("inventory movements", () => {
           .fn()
           .mockResolvedValue({ stock: 5, name: "Agenda" }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findMany: vi.fn().mockResolvedValue([]),
       },
       inventoryMovement: { create: vi.fn().mockResolvedValue(movement) },
       productKit: { findMany: vi.fn().mockResolvedValue([]) },
@@ -107,11 +108,36 @@ describe("inventory movements", () => {
 
     expect(tx.product.update).toHaveBeenCalledWith({
       where: { id: "kit-id" },
-      data: { stock: 3 },
+      data: { stock: 3, reservedUnits: 0 },
     });
     expect(tx.product.update).toHaveBeenCalledWith({
       where: { id: "empty-kit" },
-      data: { stock: 0 },
+      data: { stock: 0, reservedUnits: 0 },
+    });
+  });
+
+  it("keeps a kit's stock physical and turns component reservations into kit reserved units", async () => {
+    const tx = {
+      product: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "kit-id",
+            kitComponents: [
+              { quantity: 2, component: { stock: 10, reservedUnits: 6 } },
+              { quantity: 1, component: { stock: 3, reservedUnits: 0 } },
+            ],
+          },
+        ]),
+        update: vi.fn(),
+      },
+    };
+
+    await recalculateKitStock(tx as any, ["kit-id"]);
+
+    // Físicamente salen 3 kits; con 6 piezas apartadas solo se pueden vender 2.
+    expect(tx.product.update).toHaveBeenCalledWith({
+      where: { id: "kit-id" },
+      data: { stock: 3, reservedUnits: 1 },
     });
   });
 
@@ -222,7 +248,7 @@ describe("inventory movements", () => {
     // 2 kits x 2 stickers = 4, y hay 4: pasa justo.
     expect(tx.product.findMany).toHaveBeenLastCalledWith({
       where: { id: { in: ["component-id"] } },
-      select: { id: true, stock: true, name: true },
+      select: { id: true, stock: true, reservedUnits: true, name: true },
     });
   });
 

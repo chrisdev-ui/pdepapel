@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { ProductPresaleStatus } from "@prisma/client";
 
 import { mapWithConcurrency } from "@/lib/concurrency";
@@ -219,7 +220,7 @@ async function runReconcileOnce(
         syncPrice: true,
         categoryId: true,
         listingType: true,
-        product: { select: { name: true, stock: true, acqPrice: true, transportationCost: true } },
+        product: { select: { name: true, stock: true, reservedUnits: true, acqPrice: true, transportationCost: true } },
       },
     });
     const presales = await prismadb.productPresale.findMany({
@@ -239,7 +240,7 @@ async function runReconcileOnce(
       stockSafetyBuffer: row.stockSafetyBuffer,
       syncStock: row.syncStock,
       syncPrice: row.syncPrice,
-      productStock: row.product.stock,
+      productStock: availableStock(row.product),
       inPresale: inPresale.has(row.productId),
     }));
 

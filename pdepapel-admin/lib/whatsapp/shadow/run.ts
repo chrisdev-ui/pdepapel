@@ -1,3 +1,4 @@
+import { availableStockWhere } from "@/lib/available-stock-where";
 import { ConversationMessageDirection, ConversationMessageSentBy, ConversationMessageStatus, Prisma } from "@prisma/client";
 
 import { describeBotPause } from "@/lib/conversation-bot-pause";
@@ -169,7 +170,7 @@ async function loadContext(
   const webProductAvailable = Boolean(
     web?.pageType === "product" &&
       web.refs[0] &&
-      (await prismadb.product.count({ where: { storeId, sku: web.refs[0], isArchived: false, stock: { gt: 0 } } })) > 0,
+      (await prismadb.product.count({ where: { storeId, sku: web.refs[0], isArchived: false, ...availableStockWhere() } })) > 0,
   );
 
   const ctx: ShadowContext = {

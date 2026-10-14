@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { scrubProducts } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
 import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
@@ -82,7 +83,7 @@ export async function GET(
     }
 
     const productsWithDiscounts = await Promise.all(
-      products.map(async (product) => {
+      products.filter((product) => availableStock(product) > 0).map(async (product) => {
         const priceInfo = await calculateDiscountedPrice(
           product,
           params.storeId,

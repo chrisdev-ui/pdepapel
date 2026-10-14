@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -38,6 +39,7 @@ const variantSelect = {
   name: true,
   sku: true,
   stock: true,
+  reservedUnits: true,
   price: true,
   acqPrice: true,
   transportationCost: true,
@@ -191,7 +193,7 @@ export async function loadGroupPublicationPlan(
         productId: variant.id,
         name: variant.name,
         sku: variant.sku,
-        stock: variant.stock,
+        stock: availableStock(variant),
         price: variant.price,
         acqPrice: variant.acqPrice,
         transportationCost: variant.transportationCost,
@@ -209,7 +211,7 @@ export async function loadGroupPublicationPlan(
         state: getGroupVariantState(
           {
             isArchived: variant.isArchived,
-            stock: variant.stock,
+            stock: availableStock(variant),
             imageCount: variant.images.length,
             listing,
             remoteItems,
@@ -313,7 +315,7 @@ export async function createGroupPublicationDrafts(
     const state = getGroupVariantState(
       {
         isArchived: product.isArchived,
-        stock: product.stock,
+        stock: availableStock(product),
         imageCount: product.images.length,
         listing: listingByProduct.get(product.id) ?? null,
         remoteItems: await lookupRemote(lookup, master.connectionId, product.sku),

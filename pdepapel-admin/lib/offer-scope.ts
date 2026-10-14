@@ -1,3 +1,5 @@
+import { availableStockWhere } from "@/lib/available-stock-where";
+import { availableStock } from "@/lib/available-stock";
 import { DiscountType, type PrismaClient } from "@prisma/client";
 
 export interface ScopeOffer {
@@ -106,6 +108,7 @@ const productSelect = {
   sku: true,
   price: true,
   stock: true,
+  reservedUnits: true,
   categoryId: true,
   productGroupId: true,
   category: { select: { name: true } },
@@ -125,7 +128,7 @@ export async function searchScopeProducts(
       where: {
         storeId,
         isArchived: false,
-        ...(options.includeOutOfStock ? {} : { stock: { gt: 0 } }),
+        ...(options.includeOutOfStock ? {} : availableStockWhere()),
         ...(query ? { OR: [{ name: { contains: query } }, { sku: { contains: query } }, { category: { name: { contains: query } } }] } : {}),
       },
       select: productSelect,
@@ -142,7 +145,7 @@ export async function searchScopeProducts(
       name: product.name,
       sku: product.sku,
       price: product.price,
-      stock: product.stock,
+      stock: availableStock(product),
       categoryId: product.categoryId,
       categoryName: product.category.name,
       productGroupId: product.productGroupId,
@@ -164,7 +167,7 @@ export async function loadScopeProducts(db: ScopeDatabase, storeId: string, prod
     name: product.isArchived ? `${product.name} (archivado)` : product.name,
     sku: product.sku,
     price: product.price,
-    stock: product.stock,
+    stock: availableStock(product),
     categoryId: product.categoryId,
     categoryName: product.category.name,
     productGroupId: product.productGroupId,
@@ -185,7 +188,7 @@ export async function summarizeScope(db: ScopeDatabase, storeId: string, input: 
   const [products, offers] = await Promise.all([
     db.product.findMany({
       where: { storeId, isArchived: false, OR: conditions },
-      select: { id: true, name: true, price: true, stock: true, categoryId: true, productGroupId: true },
+      select: { id: true, name: true, price: true, stock: true, reservedUnits: true, categoryId: true, productGroupId: true },
       orderBy: [{ soldCount: "desc" }, { name: "asc" }],
     }),
     loadActiveScopeOffers(db, storeId, input.excludeOfferId),
@@ -194,7 +197,7 @@ export async function summarizeScope(db: ScopeDatabase, storeId: string, input: 
   const free = input.type === DiscountType.FIXED && input.amount ? products.filter((product) => product.price <= input.amount!) : [];
   return {
     affected: products.length,
-    sellable: products.filter((product) => product.stock > 0).length,
+    sellable: products.filter((product) => availableStock(product) > 0).length,
     byProducts: products.filter((product) => input.productIds.includes(product.id)).length,
     byCategories: products.filter((product) => input.categoryIds.includes(product.categoryId)).length,
     byGroups: products.filter((product) => product.productGroupId !== null && input.productGroupIds.includes(product.productGroupId)).length,

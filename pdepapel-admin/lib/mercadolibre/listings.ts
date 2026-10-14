@@ -1,3 +1,4 @@
+import { availableStock, marketplaceAvailableStock } from "@/lib/available-stock";
 import { MarketplaceListingStatus, Prisma } from "@prisma/client";
 
 import {
@@ -54,6 +55,7 @@ export const LISTING_FOR_PUBLICATION_SELECT = {
       name: true,
       description: true,
       stock: true,
+      reservedUnits: true,
       sku: true,
       brand: true,
       gtin: true,
@@ -84,6 +86,8 @@ export type ListingForPublication = {
     name: string;
     description: string;
     stock: number;
+    /** Unidades apartadas para clientas: no se publican. */
+    reservedUnits?: number;
     sku: string;
     brand: string | null;
     gtin: string | null;
@@ -317,10 +321,7 @@ function buildItemPayload(listing: ListingForPublication) {
       { requiresDraftReview: true },
     );
   }
-  const availableQuantity = Math.max(
-    0,
-    listing.product.stock - listing.stockSafetyBuffer,
-  );
+  const availableQuantity = marketplaceAvailableStock(listing.product, listing.stockSafetyBuffer);
   if (availableQuantity === 0) {
     throw new MercadoLibrePublicationError(
       "No hay unidades disponibles para publicar después de descontar el stock de seguridad",

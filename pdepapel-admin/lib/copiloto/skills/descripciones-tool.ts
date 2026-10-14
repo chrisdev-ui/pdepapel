@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -45,6 +46,7 @@ const PRODUCT_SELECT = {
   categoryId: true,
   abcClassification: true,
   stock: true,
+  reservedUnits: true,
   category: { select: { name: true } },
 } as const;
 
@@ -59,6 +61,7 @@ interface FoundProduct {
   categoryId: string;
   abcClassification: string | null;
   stock: number;
+  reservedUnits: number;
   category: { name: string } | null;
 }
 
@@ -314,7 +317,7 @@ export function productoParaDescripcionTool(storeId: string) {
             texto: descriptionToLines(product.description),
           },
           clasificacionABC: product.abcClassification ?? null,
-          escasezPermitida: product.stock > 0 && product.stock <= threshold,
+          escasezPermitida: availableStock(product) > 0 && availableStock(product) <= threshold,
           popularidadPermitida: product.abcClassification === "A",
           avisoPermisos,
           ejemplosDeEstilo: {

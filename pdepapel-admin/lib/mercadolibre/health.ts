@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import {
   type Prisma,
   MarketplaceInventoryStatus,
@@ -164,7 +165,7 @@ export async function getMercadoLibreHealthSummary(
     Date.now() - SETTLEMENT_PENDING_DAYS * 24 * 60 * 60 * 1000,
   );
   const [
-    listings,
+    rawListings,
     questions,
     shipments,
     claims,
@@ -193,6 +194,7 @@ export async function getMercadoLibreHealthSummary(
             select: {
               name: true,
               stock: true,
+              reservedUnits: true,
               isArchived: true,
               acqPrice: true,
               transportationCost: true,
@@ -315,6 +317,11 @@ export async function getMercadoLibreHealthSummary(
         take: MAX_HEALTH_ISSUES,
       }),
     ]);
+  // Lo apartado para clientas no se publica: las reglas miran lo disponible.
+  const listings = rawListings.map((listing) => ({
+    ...listing,
+    product: { ...listing.product, stock: availableStock(listing.product) },
+  }));
 
   const issues: MercadoLibreHealthIssue[] = [];
   for (const listing of listings) {

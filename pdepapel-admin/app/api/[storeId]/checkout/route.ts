@@ -11,6 +11,7 @@ import {
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { availableStock } from "@/lib/available-stock";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
 import { normalizeGoogleAnalyticsClientId, normalizeGoogleAnalyticsSessionId } from "@/lib/google-analytics";
@@ -652,11 +653,12 @@ async function createCheckout(
         return;
       }
 
-      if (product.stock < requiredQuantity) {
+      const available = availableStock(product);
+      if (available < requiredQuantity) {
         outOfStockItems.push({
           productId: product.id,
           productName: product.name,
-          available: product.stock,
+          available,
           requested: requiredQuantity,
         });
       }

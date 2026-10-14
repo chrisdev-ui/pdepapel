@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { MarketplaceConnectionStatus, MarketplaceProvider, OrderStatus, OrderType, Prisma } from "@prisma/client";
 import { tool } from "ai";
 import { endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
@@ -153,20 +154,22 @@ async function sales30(db: CopilotDb, storeId: string, productIds: string[]) {
 async function coverRows(db: CopilotDb, storeId: string, supplierId?: string | null) {
   const products = await db.product.findMany({
     where: { storeId, isArchived: false, ...(supplierId ? { supplierId } : {}) },
-    select: { id: true, name: true, sku: true, stock: true, price: true, supplier: { select: { name: true } } },
+    select: { id: true, name: true, sku: true, stock: true, reservedUnits: true, price: true, supplier: { select: { name: true } } },
     take: 3000,
   });
   const sold = await sales30(db, storeId, products.map((product) => product.id));
   return products.map((product) => {
     const units = sold.get(product.id) ?? 0;
     const perDay = units / 30;
+    const disponible = availableStock(product);
     return {
       productId: product.id,
       nombre: product.name,
       sku: product.sku,
-      stock: product.stock,
+      stock: disponible,
+      apartados: product.reservedUnits,
       vendidas30Dias: units,
-      diasDeCobertura: perDay > 0 ? Math.round((product.stock / perDay) * 10) / 10 : null,
+      diasDeCobertura: perDay > 0 ? Math.round((disponible / perDay) * 10) / 10 : null,
       proveedor: product.supplier?.name ?? null,
     };
   });
@@ -278,7 +281,7 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
     }),
     db.product.findMany({
       where: { storeId, isArchived: false },
-      select: { id: true, name: true, slug: true, stock: true, acqPrice: true, description: true, createdAt: true },
+      select: { id: true, name: true, slug: true, stock: true, reservedUnits: true, acqPrice: true, description: true, createdAt: true },
       orderBy: [{ stock: "desc" }, { updatedAt: "desc" }],
       take: 100,
     }),
@@ -314,11 +317,11 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
     if (row.productId && at && (!lastSale.has(row.productId) || at > lastSale.get(row.productId)!)) lastSale.set(row.productId, at);
   }
 
-  const byId = new Map(products.map((product) => [product.id, product]));
   const candidates: CampaignCandidate[] = products.map((product) => {
     const stat = stats.get(product.id);
     const perDay = (stat?.units ?? 0) / 30;
-    const days = perDay > 0 ? Math.floor(product.stock / perDay) : product.stock === 0 ? 0 : null;
+    const disponible = availableStock(product);
+    const days = perDay > 0 ? Math.floor(disponible / perDay) : disponible === 0 ? 0 : null;
     const riskState = days === null ? "NO_DATA" : days <= 7 ? "CRITICAL" : days <= 14 ? "WARNING" : "SAFE";
     const atRisk = riskState === "CRITICAL" || riskState === "WARNING";
     const sold = lastSale.get(product.id);
@@ -326,7 +329,7 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
       productId: product.id,
       productName: product.name,
       slug: product.slug,
-      stock: product.stock,
+      stock: disponible,
       acquisitionCost: product.acqPrice === null ? null : Number(product.acqPrice),
       imageCount: imageCount.get(product.id) ?? 0,
       descriptionLength: product.description.trim().length,
@@ -335,7 +338,7 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
       profitMarginPct: stat && stat.revenue > 0 ? (stat.profit / stat.revenue) * 100 : null,
       riskState: atRisk ? riskState : "NO_DATA",
       daysUntilStockout: atRisk ? days : null,
-      isDeadStock: product.stock > 0 && product.createdAt < deadCutoff && (!sold || sold < deadCutoff),
+      isDeadStock: disponible > 0 && product.createdAt < deadCutoff && (!sold || sold < deadCutoff),
     };
   });
   const candidateById = new Map(candidates.map((candidate) => [candidate.productId, candidate]));
@@ -349,7 +352,7 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
       estado: PROMOTION_STATE[recommendation.state],
       motivo: recommendation.reason,
       sugerencia: recommendation.brief,
-      stock: byId.get(recommendation.productId)?.stock ?? 0,
+      stock: candidateById.get(recommendation.productId)?.stock ?? 0,
       bandaDeMargen: marginBand(candidate.profitMarginPct),
       cumpleMargenMinimo: candidate.profitMarginPct !== null && candidate.profitMarginPct >= policy.minimumCampaignMarginPct,
       unidades30Dias: last,
@@ -506,9 +509,9 @@ export function buildCopilotTools(storeId: string) {
               storeId,
               isArchived: false,
               AND: productNameSearchConditions(texto),
-              ...(soloConStock ? { stock: { gt: 0 } } : {}),
+              ...(soloConStock ? { stock: { gt: db.product.fields.reservedUnits } } : {}),
             },
-            select: { id: true, name: true, sku: true, price: true, stock: true, category: { select: { name: true } } },
+            select: { id: true, name: true, sku: true, price: true, stock: true, reservedUnits: true, category: { select: { name: true } } },
             orderBy: { stock: "desc" },
             take: take + 1,
           });
@@ -520,7 +523,8 @@ export function buildCopilotTools(storeId: string) {
               nombre: row.name,
               sku: row.sku,
               precio: row.price,
-              stock: row.stock,
+              stock: availableStock(row),
+              apartados: row.reservedUnits,
               categoria: row.category?.name ?? null,
             })),
             rows.length > take,
@@ -543,6 +547,7 @@ export function buildCopilotTools(storeId: string) {
               acqPrice: true,
               transportationCost: true,
               stock: true,
+              reservedUnits: true,
               soldCount: true,
               isArchived: true,
               category: { select: { name: true } },
@@ -559,7 +564,8 @@ export function buildCopilotTools(storeId: string) {
             costo: cost,
             margenPct: cost !== null && product.price > 0 ? Math.round(((product.price - cost) / product.price) * 1000) / 10 : null,
             precioBajoCosto: cost !== null ? product.price < cost : null,
-            stock: product.stock,
+            stock: availableStock(product),
+            apartados: product.reservedUnits,
             vendidasHistorico: product.soldCount,
             archivado: product.isArchived,
             categoria: product.category?.name ?? null,

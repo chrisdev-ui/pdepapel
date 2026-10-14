@@ -78,6 +78,7 @@ export const PUBLIC_KIT_COMPONENT_SELECT = {
       slug: true,
       name: true,
       stock: true,
+      reservedUnits: true,
       images: { where: { isMain: true }, select: PUBLIC_IMAGE_SELECT },
     },
   },
@@ -97,6 +98,8 @@ export const PUBLIC_PRODUCT_SELECT = {
   description: true,
   price: true,
   stock: true,
+  // Solo para calcular lo disponible; `netPublicProduct` lo quita antes de responder.
+  reservedUnits: true,
   isFeatured: true,
   isArchived: true,
   isKit: true,
@@ -150,7 +153,7 @@ export type PublicProductDetailRecord = Prisma.ProductGetPayload<{
  * cuando cambie lo que se devuelve: las entradas viejas dejan de leerse en el
  * acto y caducan solas (máximo 15 minutos) sin ningún paso manual.
  */
-export const PUBLIC_PRODUCTS_CACHE_VERSION = "v6";
+export const PUBLIC_PRODUCTS_CACHE_VERSION = "v7";
 
 /** Campos de `Product` que nunca deben salir por una ruta pública (para pruebas). */
 export const INTERNAL_PRODUCT_FIELDS = [

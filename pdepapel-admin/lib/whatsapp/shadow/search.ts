@@ -1,3 +1,4 @@
+import { availableStockWhere } from "@/lib/available-stock-where";
 import prismadb from "@/lib/prismadb";
 import { productNameTokenSearchWhere, productTokenSearchWhere, searchTokens } from "@/lib/search-terms";
 import { MIN_SEARCH_TOKENS } from "@/lib/whatsapp/bot-products";
@@ -18,7 +19,7 @@ export async function countInStockMatches(
   if (searchTokens(query).length < minTokens) return null;
   const byName = productNameTokenSearchWhere(query);
   if (byName.length === 0) return null;
-  const base = { storeId, isArchived: false, stock: { gt: 0 }, ...(maxPrice ? { price: { lte: maxPrice } } : {}) };
+  const base = { storeId, isArchived: false, ...availableStockWhere(), ...(maxPrice ? { price: { lte: maxPrice } } : {}) };
   const first = await prismadb.product.count({ where: { ...base, AND: byName } });
   if (first > 0) return first;
   return prismadb.product.count({ where: { ...base, AND: productTokenSearchWhere(query) } });

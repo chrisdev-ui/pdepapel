@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { OrderSource, OrderStatus, OrderType } from "@prisma/client";
 
 import { ErrorFactory } from "@/lib/api-errors";
@@ -29,6 +30,7 @@ export const CART_PRODUCT_SELECT = {
   sku: true,
   price: true,
   stock: true,
+  reservedUnits: true,
   isArchived: true,
   categoryId: true,
   productGroupId: true,
@@ -40,6 +42,7 @@ type CartProduct = {
   sku: string;
   price: number;
   stock: number;
+  reservedUnits: number;
   isArchived: boolean;
   categoryId: string;
   productGroupId: string | null;
@@ -71,7 +74,8 @@ export async function priceCartProducts<T extends CartProduct>(
       });
     }
   }
-  return products.map((product) => ({ ...product, price: prices.get(product.id) ?? product.price }));
+  // `stock` sale neto de apartados: el carrito avisa «sin existencias» con lo que de verdad se puede vender.
+  return products.map((product) => ({ ...product, price: prices.get(product.id) ?? product.price, stock: availableStock(product) }));
 }
 
 const escapeHtml = (value: string) =>

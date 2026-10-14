@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
 import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import { createInventoryMovement } from "@/lib/inventory";
@@ -89,7 +90,7 @@ export async function packCapsules({
 
     const sourceProducts = await tx.product.findMany({
       where: { id: { in: Array.from(seen) }, storeId },
-      select: { id: true, name: true, stock: true, acqPrice: true, isKit: true },
+      select: { id: true, name: true, stock: true, reservedUnits: true, acqPrice: true, isKit: true },
     });
     if (sourceProducts.length !== seen.size) {
       throw ErrorFactory.InvalidRequest("Un producto del lote no existe en esta tienda");
@@ -106,10 +107,11 @@ export async function packCapsules({
           `“${product.name}” es un kit: empaca sus componentes, no el kit`,
         );
       }
-      if (product.stock < source.quantity) {
+      // Lo apartado para una clienta no se empaca en cápsulas.
+      if (availableStock(product) < source.quantity) {
         throw ErrorFactory.InsufficientStock(
           product.name,
-          product.stock,
+          availableStock(product),
           source.quantity,
         );
       }

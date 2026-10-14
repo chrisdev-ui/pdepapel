@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import {
   InventoryMovementType,
   OrderStatus,
@@ -221,6 +222,7 @@ export async function createPointOfSaleSale({
         id: true,
         name: true,
         stock: true,
+        reservedUnits: true,
         price: true,
         acqPrice: true,
       },
@@ -232,12 +234,12 @@ export async function createPointOfSaleSale({
     const insufficientItems = physicalProductIds.flatMap((productId) => {
       const product = physicalProductsById.get(productId);
       const requested = physicalRequirements.get(productId)!.quantity;
-      if (!product || product.stock < requested) {
+      if (!product || availableStock(product) < requested) {
         return [
           {
             productId,
             productName: product?.name || "Producto no encontrado",
-            available: product?.stock || 0,
+            available: product ? availableStock(product) : 0,
             requested,
           },
         ];
@@ -351,15 +353,16 @@ export async function createPointOfSaleSale({
       physicalRequirements.entries(),
     )) {
       const product = physicalProductsById.get(productId)!;
-      const stockUpdate = await tx.product.updateMany({
-        where: {
-          id: productId,
-          storeId,
-          stock: { gte: requirement.quantity },
-        },
-        data: { stock: { decrement: requirement.quantity } },
-      });
-      if (stockUpdate.count !== 1) {
+      // Una sola sentencia: lo apartado para una clienta no se vende en caja,
+      // y dos ventas a la vez no se llevan la misma última unidad.
+      const stockUpdate = await tx.$executeRaw`
+        UPDATE \`Product\`
+           SET \`stock\` = \`stock\` - ${requirement.quantity},
+               \`updatedAt\` = NOW(3)
+         WHERE \`id\` = ${productId}
+           AND \`storeId\` = ${storeId}
+           AND \`stock\` - \`reservedUnits\` >= ${requirement.quantity}`;
+      if (stockUpdate !== 1) {
         throw ErrorFactory.Conflict(
           "El inventario cambió mientras registrabas la venta. Actualiza e intenta de nuevo.",
         );

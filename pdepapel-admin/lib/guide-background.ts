@@ -1,3 +1,4 @@
+import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
 import { recordFailedNotification } from "@/lib/notification-failures";
 import prismadb from "@/lib/prismadb";
@@ -20,11 +21,30 @@ import { createGuideForOrder } from "@/lib/shipping-helpers";
  * NUNCA se reintenta sola: una guía de EnvioClick se paga al crearla, y un
  * reintento a ciegas puede pagar dos. Se crea a mano desde el pedido.
  */
+/** Pedido pagado con líneas sin descontar: la guía espera a que Paula decida. */
+async function hasOpenStockShortfall(storeId: string, orderId: string): Promise<boolean> {
+  const open = await prismadb.orderInventoryIssue.count({
+    where: { storeId, orderId, kind: OrderInventoryIssueKind.DECREMENT, resolvedAt: null },
+  });
+  return open > 0;
+}
+
 export function createGuideInBackground(params: { orderId: string; storeId: string; source: string }): void {
   runInBackground(`guía de EnvioClick (${params.source})`, () => createGuideRecordingFailure(params));
 }
 
 export async function createGuideRecordingFailure(params: { orderId: string; storeId: string; source: string }): Promise<boolean> {
+  if (await hasOpenStockShortfall(params.storeId, params.orderId)) {
+    // Pagado sin unidades: la guía espera a que Paula decida (lib/stock-review.ts).
+    await prismadb.shipping.updateMany({
+      where: { orderId: params.orderId, storeId: params.storeId, envioClickIdOrder: null },
+      data: {
+        guideError: `${params.source}: el pedido se pagó sin stock suficiente; revisa el inventario antes de crear la guía.`,
+        guideAttemptedAt: new Date(),
+      },
+    });
+    return false;
+  }
   try {
     await createGuideForOrder(params.orderId, params.storeId);
     return true;

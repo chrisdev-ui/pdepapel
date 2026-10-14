@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { productAvailabilityWhere } from "@/lib/product-availability";
 import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
@@ -179,7 +180,7 @@ export function buildGoogleMerchantFeed(
         ? "no"
         : "";
     if (identifierExists === "no") withoutIdentifier += 1;
-    const availability = product.stock > 0 ? "in_stock" : "out_of_stock";
+    const availability = availableStock(product) > 0 ? "in_stock" : "out_of_stock";
     if (availability === "out_of_stock") outOfStock += 1;
     const itemGroupId =
       product.productGroupId &&

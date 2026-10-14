@@ -16,6 +16,7 @@ import { createCorsHeaders } from "@/lib/cors";
 import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_PRODUCT_DETAIL_SELECT } from "@/lib/public-catalog";
+import { netPublicProduct } from "@/lib/available-stock";
 import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
 import {
@@ -185,7 +186,7 @@ export async function GET(
 
     return NextResponse.json(
       {
-        ...product,
+        ...(isOwner ? product : netPublicProduct(product)),
         price: productWithDiscount.price, // EFFECTIVE PRICE
         originalPrice: product.price, // BASE PRICE
         discountedPrice: productWithDiscount.price, // Alias

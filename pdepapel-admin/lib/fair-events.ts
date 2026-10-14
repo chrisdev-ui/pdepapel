@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import {
   FairCapsuleStatus,
   FairEventStatus,
@@ -251,11 +252,15 @@ async function takeStockForFair(
     select: { stock: true },
   });
   if (!before) return null;
-  const update = await tx.product.updateMany({
-    where: { id: productId, storeId, stock: { gte: units } },
-    data: { stock: { decrement: units } },
-  });
-  if (update.count !== 1) return null;
+  // Lo apartado para una clienta no sale a la feria.
+  const updated = await tx.$executeRaw`
+    UPDATE \`Product\`
+       SET \`stock\` = \`stock\` - ${units},
+           \`updatedAt\` = NOW(3)
+     WHERE \`id\` = ${productId}
+       AND \`storeId\` = ${storeId}
+       AND \`stock\` - \`reservedUnits\` >= ${units}`;
+  if (updated !== 1) return null;
   return { previousStock: before.stock };
 }
 
@@ -301,9 +306,9 @@ async function reserveKitForFair({
     if (!taken) {
       const current = await tx.product.findUnique({
         where: { id: line.componentId },
-        select: { stock: true },
+        select: { stock: true, reservedUnits: true },
       });
-      const stock = current?.stock ?? 0;
+      const stock = current ? availableStock(current) : 0;
       const possible = Math.floor(stock / line.quantityPerKit);
       throw new AppError(
         `Solo alcanza para ${possible} ${possible === 1 ? "kit" : "kits"} de “${kit.name}”: «${line.component.name}» tiene ${stock} y cada kit lleva ${line.quantityPerKit}`,
@@ -526,11 +531,11 @@ export async function allocateFairInventory({
       if (!taken) {
         const current = await tx.product.findUnique({
           where: { id: productId },
-          select: { stock: true },
+          select: { stock: true, reservedUnits: true },
         });
         throw ErrorFactory.InsufficientStock(
           product.name,
-          current?.stock ?? product.stock,
+          current ? availableStock(current) : product.stock,
           quantity,
         );
       }

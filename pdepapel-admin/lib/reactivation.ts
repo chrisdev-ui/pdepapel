@@ -1,3 +1,4 @@
+import { availableStockWhere } from "@/lib/available-stock-where";
 import prismadb from "@/lib/prismadb";
 import { findReactivationCandidatesForSystemJob } from "@/actions/get-customer-intelligence";
 import { DiscountType, NewsletterSubscriberStatus, ReactivationStatus } from "@prisma/client";
@@ -123,7 +124,7 @@ export async function processAutomaticReactivations(
         where: {
           storeId,
           isArchived: false,
-          stock: { gt: 0 },
+          ...availableStockWhere(),
           ...(categoryIds.size > 0
             ? { categoryId: { in: Array.from(categoryIds) } }
             : {}),
@@ -139,7 +140,7 @@ export async function processAutomaticReactivations(
           where: {
             storeId,
             isArchived: false,
-            stock: { gt: 0 },
+            ...availableStockWhere(),
             id: { notIn: recommendedProductsQuery.map((p) => p.id) },
           },
           take: 4 - recommendedProductsQuery.length,

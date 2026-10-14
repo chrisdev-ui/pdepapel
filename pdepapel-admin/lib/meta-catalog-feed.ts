@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { getFeedPricing, getFeedPricingMap, type FeedPricingInput } from "@/lib/feed-pricing";
 import {
   cleanFeedText,
@@ -184,7 +185,7 @@ export function buildMetaCatalogFeed(
     if (identifierExists === "no") withoutIdentifier += 1;
     // Con espacio, no con guion bajo: es la diferencia que rechaza el catálogo
     // entero si se copia el feed de Google tal cual.
-    const availability = product.stock > 0 ? "in stock" : "out of stock";
+    const availability = availableStock(product) > 0 ? "in stock" : "out of stock";
     if (availability === "out of stock") outOfStock += 1;
     const itemGroupId =
       product.productGroupId &&

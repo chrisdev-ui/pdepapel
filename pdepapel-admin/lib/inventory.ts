@@ -1,11 +1,13 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { ErrorFactory } from "./api-errors";
+import { availableStock, kitAvailableFromComponents, kitPhysicalFromComponents } from "./available-stock";
 import {
   MANUAL_ADJUSTMENT_OPTIONS,
   MOVEMENT_TYPE_LABELS,
   type MovementType,
 } from "./inventory-constants";
 import { queueMarketplaceStockSyncEvents } from "./mercadolibre/outbox";
+import { flagUnbackedReservations } from "./stock-review";
 
 export {
   MANUAL_ADJUSTMENT_OPTIONS,
@@ -112,6 +114,7 @@ export async function createInventoryMovement(
   } else {
     await queueMarketplaceStockSyncEvents(tx, [productId]);
   }
+  if (quantity < 0) await flagUnbackedReservations(tx, [productId]);
 
   return movement;
 }
@@ -126,50 +129,21 @@ export async function recalculateKitStock(tx: PrismaTx, kitIds: string[]) {
     include: {
       kitComponents: {
         include: {
-          component: { select: { stock: true } },
+          component: { select: { stock: true, reservedUnits: true } },
         },
       },
     },
   });
 
   for (const kit of kits) {
-    // If no components, stock is 0 (or manually managed? Plan said determined by components)
-    if (kit.kitComponents.length === 0) {
-      // Option: Do nothing, or set to 0. Let's set to 0 to be safe.
-      await tx.product.update({
-        where: { id: kit.id },
-        data: { stock: 0 },
-      });
-      continue;
-    }
-
-    // Calculate max available kits based on components
-    // Example: Copmonent A (Stock 10, Qty 2) -> 10/2 = 5 kits.
-    //          Component B (Stock 3, Qty 1) -> 3/1 = 3 kits.
-    //          Max Kits = 3 (Min of results)
-
-    let maxKits = Number.MAX_SAFE_INTEGER;
-
-    for (const item of kit.kitComponents) {
-      const componentStock = item.component.stock;
-      const requiredQty = item.quantity;
-
-      if (requiredQty <= 0) continue; // Should not happen, but avoid division by zero
-
-      const possible = Math.floor(componentStock / requiredQty);
-      if (possible < maxKits) {
-        maxKits = possible;
-      }
-    }
-
-    // Safety check if maxKits wasn't touched (e.g. all qty 0)
-    if (maxKits === Number.MAX_SAFE_INTEGER) maxKits = 0;
-    // Don't allow negative
-    if (maxKits < 0) maxKits = 0;
-
+    // `stock` del kit = kits que salen de las piezas físicas; `reservedUnits`
+    // = los que no se pueden vender porque alguna pieza está apartada. Así
+    // `availableStock(kit)` da lo mismo que armar el kit con lo disponible.
+    const physical = kitPhysicalFromComponents(kit.kitComponents);
+    const sellable = Math.min(physical, kitAvailableFromComponents(kit.kitComponents));
     await tx.product.update({
       where: { id: kit.id },
-      data: { stock: maxKits },
+      data: { stock: physical, reservedUnits: physical - sellable },
     });
   }
 }
@@ -380,7 +354,7 @@ export async function validateStockAvailability(
 
   const products = await tx.product.findMany({
     where: { id: { in: Array.from(physical.keys()) } },
-    select: { id: true, stock: true, name: true },
+    select: { id: true, stock: true, reservedUnits: true, name: true },
   });
   const productMap = new Map(products.map((p) => [p.id, p]));
 
@@ -396,11 +370,12 @@ export async function validateStockAvailability(
     if (!product) {
       throw ErrorFactory.NotFound(`Producto no encontrado: ${productId}`);
     }
-    if (product.stock < requested) {
+    const available = availableStock(product);
+    if (available < requested) {
       missing.push({
         productId: product.id,
         productName: product.name,
-        available: product.stock,
+        available,
         requested,
       });
     }
@@ -520,6 +495,7 @@ export async function createInventoryMovementBatch(
   } else {
     await queueMarketplaceStockSyncEvents(tx, allAffectedIds);
   }
+  await flagUnbackedReservations(tx, movements.filter((m) => m.quantity < 0).map((m) => m.productId));
 }
 
 /**
@@ -695,5 +671,7 @@ export async function createInventoryMovementBatchResilient(
     await recalculateKitStock(tx, kitIds);
   }
   await queueMarketplaceStockSyncEvents(tx, [...successIds, ...kitIds]);
+  // Un pago confirmado se lleva las unidades aunque estuvieran apartadas.
+  await flagUnbackedReservations(tx, accepted.filter((line) => line.quantity < 0).map((line) => line.productId));
   return results;
 }

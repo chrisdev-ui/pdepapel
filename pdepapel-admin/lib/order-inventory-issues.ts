@@ -3,6 +3,7 @@ import { OrderInventoryIssueKind, Prisma, PrismaClient } from "@prisma/client";
 import { ErrorFactory } from "./api-errors";
 import { isFairIssueReference } from "./fair-issue-reference";
 import { createInventoryMovement } from "./inventory";
+import { scheduleStockShortfallAlert } from "./stock-review";
 
 type PrismaTx = Omit<
   PrismaClient,
@@ -61,6 +62,9 @@ export async function recordInventoryIssues(
   const kitIds = new Set(kits.map((kit) => kit.id));
   const failed = input.failed.filter((line) => !kitIds.has(line.productId));
   if (failed.length === 0) return 0;
+  if (input.kind === OrderInventoryIssueKind.DECREMENT && input.orderId) {
+    scheduleStockShortfallAlert(input.storeId, input.orderId);
+  }
   const created = await tx.orderInventoryIssue.createMany({
     data: failed.map((line) => ({
       storeId: input.storeId,

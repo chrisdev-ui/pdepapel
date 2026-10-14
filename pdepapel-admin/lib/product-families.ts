@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import prismadb from "@/lib/prismadb";
 import { getProductsPrices } from "@/lib/discount-engine";
 import {
@@ -45,6 +46,7 @@ export async function loadProductFamilies(storeId: string, groupIds: string[]) {
           slug: true,
           price: true,
           stock: true,
+          reservedUnits: true,
           categoryId: true,
           productGroupId: true,
           category: { select: PUBLIC_CATEGORY_SELECT },
@@ -74,7 +76,7 @@ export async function loadProductFamilies(storeId: string, groupIds: string[]) {
   return groups.flatMap((group) => {
     if (group.products.length === 0) return [];
     const primary =
-      group.products.find((product) => product.stock > 0) ?? group.products[0];
+      group.products.find((product) => availableStock(product) > 0) ?? group.products[0];
     const priced = group.products.map((product) => {
       const offer = pricing.get(product.id);
       const base = Number(product.price);
@@ -116,7 +118,7 @@ export async function loadProductFamilies(storeId: string, groupIds: string[]) {
         reviews: group.products.flatMap((product) => product.reviews),
         sku: "GROUP",
         createdAt: group.createdAt,
-        stock: group.products.reduce((sum, product) => sum + product.stock, 0),
+        stock: group.products.reduce((sum, product) => sum + availableStock(product), 0),
         isFeatured: group.products.some((product) => product.isFeatured),
         availableAt: primary.availableAt ?? null,
         presales: [],

@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
@@ -163,6 +164,7 @@ export async function GET(
             products: {
               select: {
                 stock: true,
+                reservedUnits: true,
               },
             },
           },
@@ -199,7 +201,7 @@ export async function GET(
             image: groupImage,
             isGroup: true,
             stock: product.productGroup.products.reduce(
-              (acc, p) => acc + p.stock,
+              (acc, p) => acc + availableStock(p),
               0,
             ),
           });
@@ -217,7 +219,7 @@ export async function GET(
             price: effectivePrice,
             image: product.images[0],
             isGroup: false,
-            stock: product.stock,
+            stock: availableStock(product),
           });
         }
       }

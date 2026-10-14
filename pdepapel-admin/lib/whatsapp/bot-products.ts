@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { logModelUsage } from "@/lib/ai-usage";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -354,6 +355,7 @@ const MATCH_SELECT = {
   name: true,
   price: true,
   stock: true,
+  reservedUnits: true,
   categoryId: true,
   productGroupId: true,
 } as const;
@@ -448,6 +450,7 @@ async function buscarCon(
       name: string;
       price: number;
       stock: number;
+      reservedUnits: number;
       categoryId: string;
       productGroupId: string | null;
       description?: string | null;
@@ -554,7 +557,7 @@ export async function resolveAvailability(
     known: true,
     value: {
       // Aquí muere `stock`: de este map sale un sí o un no, nunca un número.
-      matches: found.rows.map((p) => ({ name: p.name, inStock: p.stock > 0 })),
+      matches: found.rows.map((p) => ({ name: p.name, inStock: availableStock(p) > 0 })),
       ids: found.rows.map((p) => p.id),
       total: found.total,
       hasMore: found.total > PRODUCT_MATCH_LIMIT,
@@ -1548,6 +1551,7 @@ export async function answerAboutProduct(
     name: string;
     price: number;
     stock: number;
+    reservedUnits: number;
     categoryId: string;
     productGroupId: string | null;
     description: string | null;
@@ -1565,7 +1569,7 @@ export async function answerAboutProduct(
       ...comun,
       text: renderAvailability({
         ...base,
-        matches: [{ name: producto.name, inStock: producto.stock > 0 }],
+        matches: [{ name: producto.name, inStock: availableStock(producto) > 0 }],
       }),
     };
   }

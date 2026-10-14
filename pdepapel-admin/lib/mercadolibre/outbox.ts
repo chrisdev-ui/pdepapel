@@ -1,3 +1,4 @@
+import { availableStock, marketplaceAvailableStock } from "@/lib/available-stock";
 import {
   MarketplaceConnectionStatus,
   MarketplaceListingStatus,
@@ -153,11 +154,9 @@ export async function queueMarketplaceStockSyncEvents(
 
   const products = await transaction.product.findMany({
     where: { id: { in: uniqueProductIds } },
-    select: { id: true, stock: true },
+    select: { id: true, stock: true, reservedUnits: true },
   });
-  const stockByProductId = new Map(
-    products.map((product) => [product.id, product.stock]),
-  );
+  const productById = new Map(products.map((product) => [product.id, product]));
   const listings = await transaction.marketplaceListing.findMany({
     where: {
       productId: { in: uniqueProductIds },
@@ -174,8 +173,8 @@ export async function queueMarketplaceStockSyncEvents(
 
   await Promise.all(
     listings.map((listing) => {
-      const stock = stockByProductId.get(listing.productId) ?? 0;
-      const targetQuantity = Math.max(0, stock - listing.stockSafetyBuffer);
+      const product = productById.get(listing.productId);
+      const targetQuantity = product ? marketplaceAvailableStock(product, listing.stockSafetyBuffer) : 0;
       const deduplicationKey = `${listing.connectionId}:stock:${listing.id}`;
 
       return transaction.marketplaceOutboxEvent.upsert({
@@ -578,6 +577,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               name: true,
               description: true,
               stock: true,
+              reservedUnits: true,
               sku: true,
               brand: true,
               gtin: true,
@@ -789,7 +789,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       // manda es el stock de ahora; el payload solo sirve de respaldo.
       const liveProduct = await prismadb.product.findUnique({
         where: { id: event.listing!.product.id },
-        select: { stock: true },
+        select: { stock: true, reservedUnits: true },
       });
       // Candado de preventa. Es el punto exacto donde esto importa: al liberar
       // una preventa el stock sube de golpe con la mercancía recién llegada y
@@ -802,8 +802,8 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         ? 0
         : liveProduct === null
           ? getTargetQuantity(event.payload)
-          : Math.max(0, liveProduct.stock - event.listing!.stockSafetyBuffer);
-      stockSnapshot = liveProduct?.stock ?? null;
+          : marketplaceAvailableStock(liveProduct, event.listing!.stockSafetyBuffer);
+      stockSnapshot = liveProduct ? availableStock(liveProduct) : null;
       await updateMercadoLibreStock(
         event.connectionId,
         event.listing!.externalItemId!,
@@ -893,10 +893,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
             externalPermalink: created.permalink,
             ...(created.userProductId ? { externalUserProductId: created.userProductId } : {}),
             status: remote.status,
-            lastSyncedStock: Math.max(
-              0,
-              event.listing!.product.stock - event.listing!.stockSafetyBuffer,
-            ),
+            lastSyncedStock: marketplaceAvailableStock(event.listing!.product, event.listing!.stockSafetyBuffer),
             lastSyncedPrice: event.listing!.marketplacePrice,
             lastRemoteUpdateAt: new Date(),
             lastError: remote.note,
@@ -945,14 +942,14 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       // mientras corría. Si el upsert la dejó otra vez en PENDING (o el stock
       // cambió desde que se leyó), lo enviado ya está viejo: se deja abierta y
       // se vuelve a encolar en vez de marcarla COMPLETED encima.
-      const stockMoved =
-        stockSnapshot !== null &&
-        (
-          await transaction.product.findUnique({
-            where: { id: event.listing!.product.id },
-            select: { stock: true },
-          })
-        )?.stock !== stockSnapshot;
+      const stockNow =
+        stockSnapshot === null
+          ? null
+          : await transaction.product.findUnique({
+              where: { id: event.listing!.product.id },
+              select: { stock: true, reservedUnits: true },
+            });
+      const stockMoved = stockSnapshot !== null && (stockNow ? availableStock(stockNow) : null) !== stockSnapshot;
       const completed = stockMoved
         ? { count: 0 }
         : await transaction.marketplaceOutboxEvent.updateMany({
@@ -1004,11 +1001,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
                   status: getMarketplaceListingStatusFromRemote(
                     publishedItem.status,
                   ).status,
-                  lastSyncedStock: Math.max(
-                    0,
-                    event.listing.product.stock -
-                      event.listing.stockSafetyBuffer,
-                  ),
+                  lastSyncedStock: marketplaceAvailableStock(event.listing.product, event.listing.stockSafetyBuffer),
                   lastSyncedPrice: event.listing.marketplacePrice,
                 }
               : {}),

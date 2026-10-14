@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import type { HomeCampaignType, HomeContentPlacement, Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -213,6 +214,7 @@ export const HOME_CONTENT_ADMIN_SELECT = {
           slug: true,
           price: true,
           stock: true,
+          reservedUnits: true,
           isArchived: true,
           images: { where: { isMain: true }, take: 1, select: { url: true } },
         },
@@ -246,7 +248,7 @@ export function toPublicHomeContent(entry: Prisma.HomeContentGetPayload<{ select
         name: item.product.name,
         slug: item.product.slug,
         price: Number(item.product.price),
-        stock: item.product.stock,
+        stock: availableStock(item.product),
         imageUrl: item.product.images[0]?.url ?? null,
       })),
   };

@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { requireStoreOwner } from "@/lib/store-access";
 import { endOfMonth, startOfMonth } from "date-fns";
 
@@ -181,6 +182,7 @@ export async function getBusinessGrowthOverview(
         name: true,
         slug: true,
         stock: true,
+        reservedUnits: true,
         acqPrice: true,
         description: true,
         images: { select: { id: true } },
@@ -255,7 +257,7 @@ export async function getBusinessGrowthOverview(
         productId: product.id,
         productName: product.name,
         slug: product.slug,
-        stock: product.stock,
+        stock: availableStock(product),
         acquisitionCost: numberValue(product.acqPrice),
         imageCount: product.images.length,
         descriptionLength: product.description.trim().length,

@@ -237,7 +237,7 @@ describe("resolvedores", () => {
     mocks.count.mockResolvedValue(0);
     await resolveAvailability("store-1", clasificacion);
     const args = mocks.findMany.mock.calls[0][0];
-    // Lo de siempre, más la foto; nada más. `stock` entra aquí y sale booleano;
+    // Lo de siempre, más la foto; nada más. `stock` y lo apartado entran aquí y salen booleano;
     // categoría y grupo solo sirven para buscar las ofertas vigentes.
     expect(Object.keys(args.select).sort()).toEqual([
       "categoryId",
@@ -246,6 +246,7 @@ describe("resolvedores", () => {
       "name",
       "price",
       "productGroupId",
+      "reservedUnits",
       "stock",
     ]);
     expect(args.select.images).toEqual({

@@ -1,3 +1,5 @@
+import { availableStock } from "@/lib/available-stock";
+import { availableStockWhere } from "@/lib/available-stock-where";
 import {
   ConversationMessageDirection,
   ConversationMessageSentBy,
@@ -1174,7 +1176,7 @@ async function lastBotMessageBefore(conversationId: string, before: Date) {
 async function orderProduct(storeId: string, productId: string) {
   return prismadb.product.findFirst({
     where: { id: productId, storeId, isArchived: false },
-    select: { id: true, name: true, price: true, stock: true, categoryId: true, productGroupId: true },
+    select: { id: true, name: true, price: true, stock: true, reservedUnits: true, categoryId: true, productGroupId: true },
   });
 }
 
@@ -1195,16 +1197,16 @@ async function uniqueProductFor(storeId: string, query: string) {
   const found = await resolveProductSearch(storeId, { intent: "product.search", productType: query, character: null, descriptor: null });
   if (!found.known || found.value.total !== 1 || !found.value.ids?.[0]) return null;
   const product = await orderProduct(storeId, found.value.ids[0]);
-  return product && product.stock > 0 ? product : null;
+  return product && availableStock(product) > 0 ? product : null;
 }
 
-function orderItem(product: { id: string; name: string; stock: number }, quantity: number, unitPrice: number): OrderItem {
+function orderItem(product: { id: string; name: string; stock: number; reservedUnits: number }, quantity: number, unitPrice: number): OrderItem {
   return {
     productId: product.id,
     name: product.name,
     quantity,
     unitPrice,
-    stockConfirmed: quantity <= MAX_ORDER_QUANTITY && quantity <= product.stock,
+    stockConfirmed: quantity <= MAX_ORDER_QUANTITY && quantity <= availableStock(product),
   };
 }
 
@@ -1236,7 +1238,7 @@ async function answerWebOrigin(
 
   if (web.pageType === "product" && web.refs[0] && areProductAnswersApproved(settings)) {
     const product = await prismadb.product.findFirst({
-      where: { storeId: conversation.storeId, sku: web.refs[0], isArchived: false, stock: { gt: 0 } },
+      where: { storeId: conversation.storeId, sku: web.refs[0], isArchived: false, ...availableStockWhere() },
       select: { id: true },
     });
     const answer = product ? await answerAboutProduct(conversation.storeId, product.id, "product.search") : null;
