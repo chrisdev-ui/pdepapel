@@ -98,8 +98,13 @@ export async function PUT(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const body = await req.json();
-    const mode = body?.mode ?? "replace";
+    // Un cuerpo vacío o cortado llega cuando la página se va a mitad del
+    // envío: es un 400, no un error del servidor.
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      throw ErrorFactory.InvalidRequest("El cuerpo de la solicitud no es JSON válido");
+    }
+    const mode = body.mode ?? "replace";
     if (mode !== "merge" && mode !== "replace") {
       throw ErrorFactory.InvalidRequest("Modo de sincronización no válido");
     }
@@ -179,6 +184,7 @@ export async function PUT(
   } catch (error) {
     return handleErrorResponse(error, "CUSTOMER_WISHLIST_PUT", {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+      expectedStatusCodes: [400],
     });
   }
 }

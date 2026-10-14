@@ -48,6 +48,23 @@ describe("customer wishlist API", () => {
     expect(body.items).toEqual([{ productId: "p1", savedPrice: 13000, savedAsGroup: false, createdAt: savedAt.toISOString() }]);
   });
 
+  it.each([
+    ["an empty body", ""],
+    ["a body cut off mid-request", '{"productIds":["p1"'],
+    ["JSON that is not an object", "null"],
+  ])("answers 400 without touching the wishlist or logging an error for %s", async (_label, raw) => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const infoLog = vi.spyOn(console, "info").mockImplementation(() => {});
+    const response = await PUT(new Request(base, { method: "PUT", body: raw }), { params });
+    expect(response.status).toBe(400);
+    expect(mocks.productFindMany).not.toHaveBeenCalled();
+    expect(mocks.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.createMany).not.toHaveBeenCalled();
+    expect(errorLog).not.toHaveBeenCalled();
+    errorLog.mockRestore();
+    infoLog.mockRestore();
+  });
+
   it("stores the effective price the customer saw when a product is saved", async () => {
     const response = await PUT(new Request(base, { method: "PUT", body: JSON.stringify({ productIds: ["p1"], mode: "merge" }) }), { params });
     expect(response.status).toBe(200);
