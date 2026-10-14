@@ -5,6 +5,8 @@ export const ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 export const ANALYTICS_CONSENT_ENDPOINT = "/api/consent";
 export const OPEN_PRIVACY_PREFERENCES_EVENT =
   "pdepapel:open-privacy-preferences";
+/** Se emite al guardar la decisión, para quien mide solo con permiso. */
+export const ANALYTICS_CONSENT_CHANGED_EVENT = "pdepapel:analytics-consent-changed";
 
 export interface AnalyticsConsent {
   analytics: boolean;
@@ -158,6 +160,7 @@ export function saveAnalyticsConsent(
 
   writeStoredConsent(consent);
   persistAnalyticsConsentCookie(consent);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(ANALYTICS_CONSENT_CHANGED_EVENT));
 
   return consent;
 }

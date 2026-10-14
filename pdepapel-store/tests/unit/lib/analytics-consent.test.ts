@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ANALYTICS_CONSENT_CHANGED_EVENT,
   ANALYTICS_CONSENT_COOKIE_NAME,
   ANALYTICS_CONSENT_ENDPOINT,
   ANALYTICS_CONSENT_STORAGE_KEY,
@@ -86,6 +87,14 @@ describe("analytics consent persistence", () => {
     expect(readAnalyticsConsent()).toBeNull();
     expect(hasAnalyticsConsent()).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("announces every saved decision so consent-gated measurement can start", () => {
+    const listener = vi.fn();
+    window.addEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, listener);
+    saveAnalyticsConsent({ analytics: true });
+    window.removeEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, listener);
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("saves the decision locally and asks the server for the long-lived cookie", () => {

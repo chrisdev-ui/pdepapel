@@ -2,12 +2,13 @@
 
 import { useEffect, useRef } from "react";
 
+import { ANALYTICS_CONSENT_CHANGED_EVENT, hasAnalyticsConsent } from "@/lib/analytics-consent";
 import { createClsTracker, type LayoutShiftEntry } from "@/lib/cls-metric";
 import { trackGoogleEvent } from "@/lib/customer-analytics";
 import { inpEventParams, isBackForwardRestore, lcpEventParams, WEB_VITALS_INP_EVENT, WEB_VITALS_LCP_EVENT } from "@/lib/web-vitals-events";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
-/** Una de cada diez vistas de página manda su CLS (y la carga, su LCP e INP). */
+/** Una de cada diez vistas de página manda su CLS. LCP e INP salen en todas las cargas con permiso. */
 export const WEB_VITALS_SAMPLE_RATE = 0.1;
 export const WEB_VITALS_CLS_EVENT = "web_vitals_cls";
 
@@ -32,8 +33,9 @@ const safely = (run: () => void) => {
 };
 
 /**
- * LCP e INP con su atribución (librería `web-vitals`), solo en la carga
- * sorteada: la librería baja en un trozo aparte y nada más en esas vistas.
+ * LCP e INP con su atribución (librería `web-vitals`) en toda carga con
+ * permiso de analítica: con unas decenas de visitas al día, una muestra no
+ * junta datos. La librería baja en un trozo aparte solo cuando hay permiso.
  * Son eventos propios porque se cierran en otro momento que el CLS: el LCP
  * con la primera interacción u ocultando la página, el INP al ocultarla, y
  * los dos cubren la carga completa, no cada ruta. Por eso llevan la ruta de
@@ -108,10 +110,6 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
       // El sorteo es por vista de página; el observador corre siempre (es
       // barato) para que una vista sorteada más adelante tenga sus datos.
       sampledRef.current = Math.random() < sampleRate;
-      if (sampledRef.current && !vitalsStartedRef.current) {
-        vitalsStartedRef.current = true;
-        reportAttributedVitals(pathRef.current ?? "");
-      }
       if (typeof PerformanceObserver === "undefined" || !PerformanceObserver.supportedEntryTypes?.includes("layout-shift")) return;
 
       const tracker = createClsTracker();
@@ -133,6 +131,22 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
     }
     return stop;
     // Una sola vez por carga; las rutas siguientes las maneja el efecto de abajo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sin permiso al cargar, se espera a que la persona lo dé en el aviso: el
+  // LCP y el INP de esta carga siguen en el búfer del navegador.
+  useEffect(() => {
+    const page = pathRef.current ?? "";
+    const start = () =>
+      safely(() => {
+        if (vitalsStartedRef.current || !hasAnalyticsConsent()) return;
+        vitalsStartedRef.current = true;
+        reportAttributedVitals(page);
+      });
+    start();
+    window.addEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, start);
+    return () => window.removeEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

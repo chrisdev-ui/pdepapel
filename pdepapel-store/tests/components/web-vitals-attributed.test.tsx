@@ -9,13 +9,19 @@ const mocks = vi.hoisted(() => ({
   trackGoogleEvent: vi.fn(),
   onLCP: vi.fn(),
   onINP: vi.fn(),
+  consent: true,
 }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => mocks.pathname }));
 vi.mock("@/lib/customer-analytics", () => ({ trackGoogleEvent: mocks.trackGoogleEvent }));
 vi.mock("@/lib/web-vitals-attribution", () => ({ onLCP: mocks.onLCP, onINP: mocks.onINP }));
+vi.mock("@/lib/analytics-consent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/analytics-consent")>()),
+  hasAnalyticsConsent: () => mocks.consent,
+}));
 
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
+import { ANALYTICS_CONSENT_CHANGED_EVENT } from "@/lib/analytics-consent";
 import { GA4_PARAM_VALUE_LIMIT, inpEventParams, lcpEventParams, WEB_VITALS_INP_EVENT, WEB_VITALS_LCP_EVENT } from "@/lib/web-vitals-events";
 
 class FakeObserver {
@@ -58,6 +64,7 @@ beforeEach(() => {
   mocks.trackGoogleEvent.mockReset();
   mocks.onLCP.mockReset();
   mocks.onINP.mockReset();
+  mocks.consent = true;
 });
 afterEach(() => {
   cleanup();
@@ -65,8 +72,8 @@ afterEach(() => {
 });
 
 describe("WebVitalsReporter: LCP and INP with attribution", () => {
-  it("a sampled load sends LCP with its four subparts, element and host, and INP with target and type", async () => {
-    render(<WebVitalsReporter sampleRate={1} />);
+  it("every consented load sends LCP with its four subparts, element and host, and INP with target and type, even when CLS is not sampled", async () => {
+    render(<WebVitalsReporter sampleRate={0} />);
     const { lcp, inp } = await registered();
     lcp(lcpMetric());
     inp(inpMetric());
@@ -91,11 +98,27 @@ describe("WebVitalsReporter: LCP and INP with attribution", () => {
     });
   });
 
-  it("an unsampled load never loads the library", async () => {
-    render(<WebVitalsReporter sampleRate={0} />);
+  it("without consent the library is never loaded", async () => {
+    mocks.consent = false;
+    render(<WebVitalsReporter sampleRate={1} />);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(mocks.onLCP).not.toHaveBeenCalled();
     expect(mocks.onINP).not.toHaveBeenCalled();
+  });
+
+  it("consent given on the banner later in the same load starts the measurement once", async () => {
+    mocks.consent = false;
+    render(<WebVitalsReporter sampleRate={0} />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mocks.onLCP).not.toHaveBeenCalled();
+
+    mocks.consent = true;
+    window.dispatchEvent(new Event(ANALYTICS_CONSENT_CHANGED_EVENT));
+    window.dispatchEvent(new Event(ANALYTICS_CONSENT_CHANGED_EVENT));
+    await registered();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mocks.onLCP).toHaveBeenCalledTimes(1);
+    expect(mocks.onINP).toHaveBeenCalledTimes(1);
   });
 
   it("skips reports from a back/forward cache restore", async () => {
