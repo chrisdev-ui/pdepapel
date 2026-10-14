@@ -545,6 +545,17 @@ export const KITS_FIXTURE = {
   mismaLineaQueOferta: "Lapicero gel Eval",
   /** Misma línea (Cuadernos) que la libreta lenta. */
   mismaLineaQueLento: "Cuaderno espiral Eval",
+  /** Lento cuyo kit solo puede repetir piezas del de la libreta. */
+  segundoLento: "Carpeta lenta Eval",
+  /** Pieza que comparten los dos kits; su stock se reparte entre ellos. */
+  piezaCompartida: "Borrador Eval",
+  stockPiezaCompartida: 9,
+  /** Línea «Kits» sin marca de kit: nunca es pieza. */
+  lineaDeKits: "Kit kawaii Eval",
+  /** Belleza: se compra con la libreta, pero no es de la familia de un kit escolar. */
+  otraFamilia: "Jabón Eval",
+  /** Lento de 500: va a «Quietos de bajo valor». */
+  bajoValor: "Sobre lento Eval",
 } as const;
 
 export const KITS_QUESTION = "¿Qué productos llevan más de 90 días sin venderse y qué kits podría armar con ellos?";
@@ -553,6 +564,8 @@ export const KITS_FOLLOW_UP = "Hazlo con 120 días";
 type KitsAnswers = { main: EvalAnswer; followUp: EvalAnswer; empty: EvalAnswer; expectedOccasion: string | null };
 
 const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** Cada kit: desde una viñeta de primer nivel o un párrafo nuevo, el bloque que trae «Se pueden armar» (la lista de lentos no lo trae). */
+const kitBlocks = (text: string) => text.split(/\n(?=[-*] )|\n{2,}/).filter((block) => /Se pueden armar/i.test(block));
 const mentions = (answer: EvalAnswer, name: string) => fold(answer.text).includes(fold(name).replace(/ eval$/, ""));
 
 export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa: (a: KitsAnswers) => boolean }[] = [
@@ -658,6 +671,52 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
     criterio: "Trae la descripción corta con la plantilla de Paula («Lo que amarás» e «Incluye»).",
     estricto: false,
     pasa: ({ main }) => /Lo que amar[aá]s/i.test(main.text) && /Incluye/i.test(main.text),
+  },
+  {
+    id: "kits-stock-compartido",
+    criterio: "Una pieza en dos kits lo dice («comparte stock») y los kits armables de ambos no pasan de su disponible.",
+    estricto: true,
+    pasa: ({ main }) => {
+      const blocks = kitBlocks(main.text).filter((block) => fold(block).includes(fold(KITS_FIXTURE.piezaCompartida)));
+      const armables = blocks.map((block) => Number(block.match(/Se pueden armar (\d+)/)?.[1] ?? NaN));
+      return blocks.length >= 2 && /comparte stock/i.test(main.text) && armables.every(Number.isFinite) && armables.reduce((a, b) => a + b, 0) <= KITS_FIXTURE.stockPiezaCompartida;
+    },
+  },
+  {
+    id: "kits-sin-kit-como-pieza",
+    criterio: "Un producto de la línea de kits (sin marca de kit) nunca entra como pieza.",
+    estricto: true,
+    pasa: ({ main }) => !mentions(main, KITS_FIXTURE.lineaDeKits),
+  },
+  {
+    id: "kits-misma-familia",
+    criterio: "Lo que se compra con el lento pero es de otra familia (jabón con una libreta) no entra al kit.",
+    estricto: true,
+    pasa: ({ main }) => !mentions(main, KITS_FIXTURE.otraFamilia),
+  },
+  {
+    id: "kits-valor-minimo",
+    criterio: "El lento de bajo valor no es pieza de ningún kit y sale en «Quietos de bajo valor: 1».",
+    estricto: true,
+    pasa: ({ main }) =>
+      /Quietos de bajo valor:\s*1\b/i.test(main.text) &&
+      kitBlocks(main.text).every((block) => !fold(block).includes(fold(KITS_FIXTURE.bajoValor).replace(/ eval$/, ""))) &&
+      main.text.split("\n").every((line) => !(fold(line).includes(fold(KITS_FIXTURE.bajoValor).replace(/ eval$/, "")) && /\((lento|se vende)\)/.test(line))),
+  },
+  {
+    id: "kits-una-linea-nuevos",
+    criterio: "Los productos nuevos salen en una sola línea (la fija), no repetidos con otras palabras.",
+    estricto: true,
+    pasa: ({ main }) => main.text.split("\n").filter((line) => /(?<![\d.,])1(?![\d.,]\d|\d)/.test(line) && /\bnuev[oa]s?\b|sin (suficientes )?datos de venta/i.test(line)).length === 1,
+  },
+  {
+    id: "kits-formato-anidado",
+    criterio: "Las líneas de piezas van como viñetas dentro del kit (sangradas), no al mismo nivel que su nombre.",
+    estricto: false,
+    pasa: ({ main }) => {
+      const pieces = main.text.split("\n").filter((line) => /\((lento|se vende)\):/.test(line));
+      return pieces.length > 0 && pieces.every((line) => /^\s{2,}[-*]\s/.test(line));
+    },
   },
   {
     id: "kits-sin-contacto",
