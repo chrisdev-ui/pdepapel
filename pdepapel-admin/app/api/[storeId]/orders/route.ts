@@ -549,7 +549,9 @@ async function createOrder(
 
       // CRITICAL FIX: Validate stock for ALL active orders (PENDING, PAID, etc.)
       // We don't deduct stock yet (that happens on PAID), but we MUST ensure it exists.
-      if (isActiveOrder) {
+      // Sin `status` el pedido nace PENDING (transferencia y contra entrega de la tienda):
+      // también se valida, o se aceptaba lo agotado o lo apartado.
+      if (isActiveOrder || !status) {
         const stockValidationUpdates = orderItems.map(
           (item: { productId: string; quantity: number }) => ({
             productId: item.productId,

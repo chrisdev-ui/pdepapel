@@ -121,7 +121,7 @@ describe("lo apartado no se vende en ninguna superficie (MySQL)", () => {
     expect(owner).toMatchObject({ stock: 6, reservedUnits: 2 });
   });
 
-  it("checkout de la tienda y pedido del panel: rechazan lo apartado y aceptan lo disponible", async () => {
+  it("checkout, transferencia de la tienda y pedido del panel: rechazan lo apartado y aceptan lo disponible", async () => {
     fixture = await createInventoryFixture();
     await reserve(fixture.component.id, 2);
     const params = { params: { storeId: fixture.store.id } };
@@ -132,6 +132,10 @@ describe("lo apartado no se vende en ninguna superficie (MySQL)", () => {
     expect(tooMany.status).toBeGreaterThanOrEqual(400);
     expect(JSON.stringify(await tooMany.json())).toContain("\"available\":4");
     expect((await checkout(post(storeBody(fixture, 4)), params)).status).toBe(200);
+
+    // Transferencia y contra entrega de la tienda llegan a /orders sin `status`.
+    expect((await orders(post(storeBody(fixture, 5)), params)).status).toBeGreaterThanOrEqual(400);
+    expect((await orders(post(storeBody(fixture, 4)), params)).status).toBe(200);
 
     // Pedido del panel (pendiente): la misma regla.
     session.userId = fixture.store.userId;
