@@ -9,6 +9,7 @@ import {
   roundDown900,
   roundUp900,
   typeCoPurchaseCounts,
+  type KitOptions,
   type KitPiece,
   type KitProduct,
   type KitSignals,
@@ -178,6 +179,8 @@ describe("precio del kit", () => {
 
 describe("borradores de kits", () => {
   const OLD_ORDER = 120;
+  const OLD_ORDERS = ["o-viejo-1", "o-viejo-2", "o-viejo-3"];
+  const inOldOrders = (id: string) => OLD_ORDERS.map((order, index) => sale(id, OLD_ORDER + index * 10, 1, order));
   const scenario = (extra: KitProduct[] = []) => {
     const products = [
       product("Libreta lenta", { typeId: "cuadernos", typeName: "Cuadernos", stock: 8, unitCost: 4000, listPrice: 9000, effectivePrice: 9000 }),
@@ -191,13 +194,13 @@ describe("borradores de kits", () => {
     ];
     const sellers = products.slice(1).map((p) => p.id);
     const rows = [
-      // Hace 120 días: la libreta salió con todo (sigue siendo lenta a 90 días, pero se sabe con qué se compra).
-      ...["Libreta lenta", ...sellers].map((id) => sale(id, OLD_ORDER, 1, "o-viejo")),
+      // Hace 120 a 140 días la libreta salió con todo en tres pedidos (sigue siendo lenta a 90 días, pero se sabe con qué se compra).
+      ...OLD_ORDERS.flatMap((order, index) => ["Libreta lenta", ...sellers].map((id) => sale(id, OLD_ORDER + index * 10, 1, order))),
       ...sellers.map((id) => sale(id, 40)),
     ];
     return { products, rows };
   };
-  const run = (products: KitProduct[], rows: SaleRow[], signals: KitSignals = noSignals, options = OPTIONS) => {
+  const run = (products: KitProduct[], rows: SaleRow[], signals: KitSignals = noSignals, options: KitOptions = OPTIONS) => {
     const history = buildSalesHistory({ days: 90, now: NOW, rows, kits: [] });
     const orders = history.ordersSince(180);
     const typeById = new Map(products.map((p) => [p.id, p.typeId]));
@@ -205,7 +208,7 @@ describe("borradores de kits", () => {
       products,
       history,
       together: coPurchaseCounts(orders).together,
-      typesTogether: typeCoPurchaseCounts(orders, (id) => typeById.get(id) ?? null).together,
+      lines: typeCoPurchaseCounts(orders, (id) => typeById.get(id) ?? null),
       signals,
       options,
     });
@@ -239,9 +242,9 @@ describe("borradores de kits", () => {
     expect(kindOf({ name: "Cuaderno NORMA 5 materias", typeId: "a" }).noun).toBe("cuaderno");
     expect(kindOf({ name: "Cuadernos One Piece", typeId: "b" }).noun).toBe("cuaderno");
     expect(kindOf({ name: "Set de marcadores", typeId: "c" }).noun).toBe("marcador");
-    const { products, rows } = scenario([product("Cuaderno de dibujo que se vende", { typeId: "arte", typeName: "Arte", stock: 20 })]);
+    const { products, rows } = scenario([product("Cuaderno de dibujo que se vende", { typeId: "arte", typeName: "Creatividad & Juego", stock: 20 })]);
     products[0] = { ...products[0], name: "Cuaderno lento" };
-    const [kit] = run(products, [...rows, sale("Cuaderno de dibujo que se vende", OLD_ORDER, 1, "o-viejo"), sale("Cuaderno de dibujo que se vende", 40)]).kits;
+    const [kit] = run(products, [...rows, ...inOldOrders("Cuaderno de dibujo que se vende"), sale("Cuaderno de dibujo que se vende", 40)]).kits;
     expect(kit.piezas.map((p) => p.productId)).not.toContain("Cuaderno de dibujo que se vende");
   });
 
@@ -250,20 +253,29 @@ describe("borradores de kits", () => {
     const rows = products.slice(1).map((p) => sale(p.id, 40));
     const result = run(products, rows);
     expect(result.kits).toEqual([]);
-    expect(result.sinKit[0]).toMatchObject({ nombre: "Libreta lenta", motivo: expect.stringContaining("otras líneas") });
+    expect(result.sinKit[0]).toMatchObject({ nombre: "Libreta lenta", motivo: expect.stringContaining("líneas afines") });
   });
 
-  it("las líneas que salen juntas en dos o más pedidos bastan aunque el producto lento no se haya comprado con ellas", () => {
+  it("las líneas que salen juntas en tres o más pedidos, más que por azar, bastan aunque el producto lento no se haya comprado con ellas", () => {
     const { products } = scenario([product("Agenda que se vende", { typeId: "cuadernos", typeName: "Cuadernos", stock: 20 })]);
-    const rows = [
-      ...["Agenda que se vende", "Lápiz que se vende", "Borrador que se vende"].map((id) => sale(id, 30, 1, "o-a")),
-      ...["Agenda que se vende", "Lápiz que se vende", "Borrador que se vende"].map((id) => sale(id, 20, 1, "o-b")),
-      // El resto se vende por su lado, sin compartir pedido: no son lentos ni se relacionan.
-      ...["Regla que se vende", "Marcador en alza", "Marcadores x12 que se venden", "Otro cuaderno que se vende"].map((id) => sale(id, 40, 1, `o-${id}`)),
-    ];
-    const [kit] = run(products, rows).kits;
+    const together = (orders: string[]) => orders.flatMap((order, index) => ["Agenda que se vende", "Lápiz que se vende", "Borrador que se vende"].map((id) => sale(id, 20 + index * 5, 1, order)));
+    // El resto se vende por su lado, sin compartir pedido: no son lentos ni se relacionan.
+    const apart = ["Regla que se vende", "Marcador en alza", "Marcadores x12 que se venden", "Otro cuaderno que se vende"].map((id) => sale(id, 40, 1, `o-${id}`));
+    const [kit] = run(products, [...together(["o-a", "o-b", "o-c"]), ...apart]).kits;
     expect(kit.piezas.map((p) => p.productId)).toEqual(["Libreta lenta", "Borrador que se vende", "Lápiz que se vende"]);
-    expect(kit.señales.join(" ")).toContain("su línea se compra junto con la de Libreta lenta (2 pedidos en 180 días)");
+    expect(kit.señales.join(" ")).toContain("su línea se compra junto con la de Libreta lenta (3 pedidos en 180 días)");
+    // Dos pedidos no bastan: con tan pocos, juntos puede ser casualidad.
+    expect(run(products, [...together(["o-a", "o-b"]), ...apart]).kits).toEqual([]);
+  });
+
+  it("líneas que salen juntas solo tanto como daría el azar (lift 1 o menos) no se relacionan", () => {
+    const { products } = scenario([product("Agenda que se vende", { typeId: "cuadernos", typeName: "Cuadernos", stock: 20 })]);
+    // Cuadernos y Escritura salen en todos los pedidos: juntas siempre, pero no más que por azar (lift 1).
+    const rows = ["o-a", "o-b", "o-c", "o-d"].flatMap((order, index) => ["Agenda que se vende", "Lápiz que se vende", "Borrador que se vende"].map((id) => sale(id, 20 + index * 5, 1, order)));
+    const lines = typeCoPurchaseCounts(buildSalesHistory({ days: 90, now: NOW, rows, kits: [] }).ordersSince(180), (id) => products.find((p) => p.id === id)!.typeId);
+    expect(lines.together("cuadernos", "escritura")).toBe(4);
+    expect(lines.lift("cuadernos", "escritura")).toBe(1);
+    expect(run(products, rows).kits).toEqual([]);
   });
 
   it("un kit con ahorro menor al 5 % va a «poco atractivos» y no ocupa un lugar", () => {
@@ -279,7 +291,9 @@ describe("borradores de kits", () => {
     products[0] = { ...products[0], id: "Vela aromática lenta", name: "Vela aromática lenta", typeId: "regalos", typeName: "Regalos" };
     const fixed = rows.map((row) => (row.productId === "Libreta lenta" ? { ...row, productId: "Vela aromática lenta" } : row));
     const occasions = upcomingOccasions(new Date("2026-04-20T15:00:00Z"), 45);
-    const [kit] = run(products, fixed, { ...noSignals, occasions }).kits;
+    // Las familias se pueden pasar: aquí «Regalos» va con la papelería.
+    const families = { regalo: ["Regalos", "Escritura", "Útiles", "Oficina", "Lápices & Colores"] };
+    const [kit] = run(products, fixed, { ...noSignals, occasions }, { ...OPTIONS, families }).kits;
     expect(kit.ocasion).toMatch(/^Día de la madre \(en 20 días\)$/);
     expect(kit.señales).toContain("temporada: Día de la madre el 2026-05-10");
   });
@@ -298,13 +312,107 @@ describe("borradores de kits", () => {
       product("Archivado que se vende", { isArchived: true, typeId: "archivo", stock: 20 }),
       product("Poco stock que se vende", { typeId: "poco", stock: 2 }),
     ]);
-    const extraRows = ["Kit que se vende", "Archivado que se vende", "Poco stock que se vende"].flatMap((id) => [sale(id, OLD_ORDER, 1, "o-viejo"), sale(id, 10)]);
+    const extraRows = ["Kit que se vende", "Archivado que se vende", "Poco stock que se vende"].flatMap((id) => [...inOldOrders(id), sale(id, 10)]);
     const [kit] = run(products, [...rows, ...extraRows]).kits;
     const ids = kit.piezas.map((p) => p.productId);
     expect(ids).not.toContain("Kit que se vende");
     expect(ids).not.toContain("Archivado que se vende");
     expect(ids).not.toContain("Poco stock que se vende");
     expect(run(products, [...rows, ...extraRows, sale("Libreta lenta", 10)])).toMatchObject({ lentos: [], kits: [] });
+  });
+
+  describe("calidad de los borradores", () => {
+    const carpeta = product("Carpeta lenta", { typeId: "carpetas", typeName: "Carpetas", stock: 8, unitCost: 2000, listPrice: 9000, effectivePrice: 9000 });
+    /** El escenario más un lento que no tiene ventas recientes (las piezas extra de `scenario` sí se venden). */
+    const withSlow = (slowProduct: KitProduct, extra: KitProduct[] = []) => {
+      const base = scenario(extra);
+      return { products: [...base.products, slowProduct], rows: base.rows };
+    };
+    const carpetaOrders = (ids: string[]) => ["o-c1", "o-c2", "o-c3"].flatMap((order, index) => ["Carpeta lenta", ...ids].map((id) => sale(id, 100 + index * 10, 1, order)));
+
+    it("una pieza en dos borradores reparte su stock: la suma de kits armables no pasa de su disponible, y cada uno lo dice", () => {
+      const { products, rows } = withSlow(carpeta);
+      products.find((p) => p.id === "Borrador que se vende")!.stock = 9;
+      const result = run(products, [...rows, ...carpetaOrders(["Borrador que se vende", "Regla que se vende"])]);
+      expect(result.kits).toHaveLength(2);
+      const users = result.kits.filter((kit) => kit.piezas.some((p) => p.productId === "Borrador que se vende"));
+      expect(users).toHaveLength(2);
+      expect(users.reduce((total, kit) => total + kit.kitsArmables, 0)).toBeLessThanOrEqual(9);
+      for (const kit of users) {
+        const other = result.kits.find((candidate) => candidate !== kit)!.nombreSugerido;
+        expect(kit.piezas.find((p) => p.productId === "Borrador que se vende")!.comparteStockCon).toEqual([other]);
+      }
+      // Sin repartir, cada uno diría 8.
+      expect(result.kits.map((kit) => kit.kitsArmables)).toEqual([4, 4]);
+    });
+
+    it("prefiere una pieza que nadie usa y solo repite si no hay otra; si el reparto no alcanza, el borrador sale", () => {
+      const tijeras = product("Tijeras que se venden", { typeId: "utiles", typeName: "Útiles", stock: 20 });
+      const { products, rows } = withSlow(carpeta, [tijeras]);
+      const result = run(products, [...rows, sale("Tijeras que se venden", 40), ...carpetaOrders(["Tijeras que se venden", "Regla que se vende"])]);
+      expect(result.kits).toHaveLength(2);
+      // Hay dos piezas de Útiles: cada kit lleva una distinta. La regla no tiene otra de su línea: se repite y lo dice.
+      const utiles = result.kits.map((kit) => kit.piezas.find((p) => ["Tijeras que se venden", "Borrador que se vende"].includes(p.productId))!);
+      expect(new Set(utiles.map((p) => p.productId)).size).toBe(2);
+      expect(utiles.every((p) => !p.comparteStockCon)).toBe(true);
+      expect(result.kits.every((kit) => kit.piezas.find((p) => p.productId === "Regla que se vende")?.comparteStockCon?.length === 1)).toBe(true);
+
+      const { products: few, rows: fewRows } = withSlow(carpeta);
+      few.find((p) => p.id === "Borrador que se vende")!.stock = 5;
+      const short = run(few, [...fewRows, ...carpetaOrders(["Borrador que se vende", "Regla que se vende"])]);
+      expect(short.kits.every((kit) => kit.kitsArmables >= 3)).toBe(true);
+      expect(short.sinKit.some((row) => /stock repartido no alcanza/.test(row.motivo))).toBe(true);
+    });
+
+    it("nunca usa como pieza algo de la línea de kits, aunque no esté marcado como kit", () => {
+      const bundle = product("Kit kawaii x 5 que se vende", { typeId: "kits", typeName: "Kits", categoryName: "Kits kawaii", stock: 20 });
+      const bundleSlow = product("Kit lento de la línea", { typeId: "kits", typeName: "Kits", categoryName: "Kits kawaii", stock: 9, unitCost: 9000, effectivePrice: 20000, listPrice: 20000 });
+      const { products, rows } = withSlow(bundleSlow, [bundle]);
+      const result = run(products, [...rows, ...inOldOrders("Kit kawaii x 5 que se vende"), sale("Kit kawaii x 5 que se vende", 10), ...inOldOrders("Kit lento de la línea")]);
+      const pieces = result.kits.flatMap((kit) => kit.piezas.map((p) => p.productId));
+      expect(pieces).not.toContain("Kit kawaii x 5 que se vende");
+      expect(pieces).not.toContain("Kit lento de la línea");
+      expect(result.lentos.map((row) => row.id)).toContain("Kit lento de la línea");
+      expect(result.sinKit.map((row) => row.nombre)).not.toContain("Kit lento de la línea");
+    });
+
+    it("solo junta líneas de una misma familia: un jabón que se compra con la libreta no entra a un kit escolar", () => {
+      const jabon = product("Jabón que se vende", { typeId: "belleza", typeName: "Belleza / Cuidado Personal", stock: 20, effectivePrice: 7000, listPrice: 7000 });
+      const { products, rows } = scenario([jabon]);
+      const withJabon = [...rows, ...inOldOrders("Jabón que se vende"), sale("Jabón que se vende", 40)];
+      const lines = typeCoPurchaseCounts(buildSalesHistory({ days: 90, now: NOW, rows: withJabon, kits: [] }).ordersSince(180), (id) => products.find((p) => p.id === id)!.typeId);
+      expect(lines.together("cuadernos", "belleza")).toBe(3);
+      expect(lines.lift("cuadernos", "belleza")).toBeGreaterThan(1);
+      const [kit] = run(products, withJabon).kits;
+      expect(kit.piezas.map((p) => p.productId)).not.toContain("Jabón que se vende");
+      expect(kit.piezas.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("una pieza lenta de una línea sin familia no arma kit y la línea se reporta", () => {
+      const { products, rows } = scenario();
+      products[0] = { ...products[0], typeId: "hogar", typeName: "Hogar" };
+      const result = run(products, rows);
+      expect(result.kits).toEqual([]);
+      expect(result.lineasSinFamilia).toEqual(["Hogar"]);
+      expect(result.sinKit[0].motivo).toContain("no está en ninguna familia");
+    });
+
+    it("una pieza lenta tiene que valer: si es barata va a «bajo valor» y no a un kit (los dos topes se pueden cambiar)", () => {
+      const sobre = product("Sobre lento", { typeId: "oficina-2", typeName: "Oficina", stock: 90, unitCost: 300, effectivePrice: 500, listPrice: 500 });
+      const { products, rows } = scenario();
+      products[0] = { ...sobre, id: "Libreta lenta", name: "Sobre lento" };
+      const cheap = run(products, rows);
+      expect(cheap.kits).toEqual([]);
+      expect(cheap.bajoValor).toEqual([{ nombre: "Sobre lento", precioEfectivo: 500 }]);
+      expect(run(products, rows, noSignals, { ...OPTIONS, minSlowValue: 400, minSlowSharePct: 1 }).kits).toHaveLength(1);
+
+      const { products: normal, rows: normalRows } = scenario();
+      expect(run(normal, normalRows).kits).toHaveLength(1);
+      // Con un tope del 40 % de la suma, la libreta de 9.000 en un kit de unos 29.000 ya no carga el kit.
+      const heavy = run(normal, normalRows, noSignals, { ...OPTIONS, minSlowSharePct: 40 });
+      expect(heavy.kits).toEqual([]);
+      expect(heavy.bajoValor.map((row) => row.nombre)).toEqual(["Libreta lenta"]);
+    });
   });
 
   it("WhatsApp entra solo como cuentas y solo si se repite", () => {
@@ -355,16 +463,22 @@ describe("detalle fijo de un borrador", () => {
     señales: ["Lápiz: «lapiz» se pidió 2 veces por WhatsApp en 30 días"],
   };
 
-  it("trae cada pieza con su precio efectivo, la oferta, las cuentas y las señales", () => {
+  it("trae cada pieza con su precio efectivo y la oferta, las cuentas y un porqué por pieza, sangrado bajo el nombre del kit", () => {
     expect(kitDetail(base)).toBe(
       [
-        "- Libreta (lento): $6.000",
-        "- Lápiz (se vende): $4.000 con la oferta «Regreso a clases» (antes $5.000)",
-        "- Regla (se vende): $2.500",
-        "Se pueden armar 8 · suma de precios efectivos $12.500 · precio sugerido $10.900 · margen 56 % · ahorro $1.600 (12,8 %).",
-        "Por qué: Lápiz: «lapiz» se pidió 2 veces por WhatsApp en 30 días.",
+        "  - Libreta (lento): $6.000",
+        "  - Lápiz (se vende): $4.000 con la oferta «Regreso a clases» (antes $5.000)",
+        "  - Regla (se vende): $2.500",
+        "  - Se pueden armar 8 · suma de precios efectivos $12.500 · precio sugerido $10.900 · margen 56 % · ahorro $1.600 (12,8 %).",
+        "  - Por qué:",
+        "    - Lápiz: «lapiz» se pidió 2 veces por WhatsApp en 30 días",
       ].join("\n"),
     );
+  });
+
+  it("una pieza que comparte stock con otro borrador lo dice en su línea", () => {
+    const shared = { ...base, piezas: base.piezas.map((p) => (p.productId === "c" ? { ...p, comparteStockCon: ["Kit de oficina"] } : p)) };
+    expect(kitDetail(shared)).toContain("  - Regla (se vende): $2.500 · comparte stock con «Kit de oficina»");
   });
 
   it("sin costo no muestra margen y lo dice; el descuento limitado por costo también se explica", () => {

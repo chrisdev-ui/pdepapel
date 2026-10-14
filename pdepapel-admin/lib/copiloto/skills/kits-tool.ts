@@ -41,8 +41,9 @@ export const kitsInput = z.object({
     .describe("Descuento del kit frente a comprar las piezas sueltas, en % (8 a 20; por defecto 12)"),
 });
 
-/** La línea fija de productos nuevos; el chat la agrega al final si la respuesta no la trae. */
+/** Las líneas fijas del final: las arma la herramienta y el chat las pone una sola vez (el modelo no las escribe). */
 export const newProductsLine = (count: number) => `Nuevos sin datos de venta: ${count} (no se tratan como lentos).`;
+export const lowValueLine = (count: number) => `Quietos de bajo valor: ${count} (mejor en promo o combo de caja).`;
 
 interface DemandRow {
   productType: string | null;
@@ -205,12 +206,12 @@ export function kitsParaRotarTool(storeId: string) {
       const orders = data.history.ordersSince(CO_PURCHASE_DAYS);
       const together = coPurchaseCounts(orders).together;
       const typeById = new Map(data.products.map((product) => [product.id, product.typeId]));
-      const typesTogether = typeCoPurchaseCounts(orders, (id) => typeById.get(id) ?? null).together;
+      const lines = typeCoPurchaseCounts(orders, (id) => typeById.get(id) ?? null);
       const result = proposeKits({
         products: data.products,
         history: data.history,
         together,
-        typesTogether,
+        lines,
         signals,
         options: { days: dias, kits, minPerKit: minimoPorKit, minMarginPct: margenMinimo, targetDiscountPct: descuentoObjetivo },
       });
@@ -227,7 +228,8 @@ export function kitsParaRotarTool(storeId: string) {
             minimoPorKit,
             margenMinimoPct: margenMinimo,
             descuentoObjetivoPct: descuentoObjetivo,
-            variedad: "una pieza por línea de producto, y piezas que se compran juntas (no sustitutos)",
+            variedad: "una pieza por línea de producto, de líneas de la misma familia que se compran juntas más que por azar (no sustitutos ni kits)",
+            lineasSinFamilia: result.lineasSinFamilia,
             precios: "efectivos: lista, oferta vigente y precio por cantidad, como en la tienda",
             costo: "compra más transporte, como en detalleProducto",
           },
@@ -247,6 +249,12 @@ export function kitsParaRotarTool(storeId: string) {
             nombres: result.nuevos.slice(0, 10).map((row) => row.nombre),
             nota: `entraron al inventario hace menos de ${dias} días: todavía no se sabe si se venden; no se proponen en kits`,
             linea: result.nuevos.length > 0 ? newProductsLine(result.nuevos.length) : null,
+          },
+          quietosDeBajoValor: {
+            cantidad: result.bajoValor.length,
+            nombres: result.bajoValor.slice(0, 5).map((row) => row.nombre),
+            nota: `lentos con precio efectivo bajo para cargar un kit: no se proponen como pieza lenta`,
+            linea: result.bajoValor.length > 0 ? lowValueLine(result.bajoValor.length) : null,
           },
           kits: result.kits.map((kit) => ({ ...kit, detalle: kitDetail(kit) })),
           pocoAtractivos: result.pocoAtractivos.slice(0, 5),

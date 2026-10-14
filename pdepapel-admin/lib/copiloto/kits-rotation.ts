@@ -2,13 +2,17 @@ import { availableStock } from "@/lib/available-stock";
 import { newWithoutSalesData, rankSlowMovers, type SalesHistory, type SlowMover } from "@/lib/sales-velocity";
 import { EVERYDAY_USES, foldWords, matchesOccasion, type Occasion } from "@/lib/season-calendar";
 
+import { KIT_FAMILIES, familiesOf, isBundleLine, type KitFamilies } from "./kit-families";
+
 /**
  * Kits para rotar inventario, en código: el modelo solo los cuenta. Cada kit
- * junta uno o dos productos lentos con piezas que sí se venden y que tienen
- * relación con ellos (se compran juntos, mismo tipo o misma categoría). Las
- * señales (en alza, pedidos por WhatsApp, temporada) ordenan las piezas y
- * nombran la ocasión. El precio sale de los precios efectivos de las piezas:
- * nunca por encima de su suma y nunca por debajo del costo más el margen.
+ * junta uno o dos productos lentos (con valor de verdad) con piezas que sí se
+ * venden, de líneas de la misma familia (`kit-families.ts`) que se compran
+ * juntas más de lo que daría el azar. Las señales (en alza, pedidos por
+ * WhatsApp, temporada) ordenan las piezas y nombran la ocasión. El stock de
+ * una pieza que repite entre borradores se reparte entre ellos. El precio sale
+ * de los precios efectivos: nunca por encima de su suma ni por debajo del
+ * costo más el margen.
  */
 export interface KitProduct {
   id: string;
@@ -47,7 +51,21 @@ export interface KitOptions {
   minMarginPct: number;
   /** Descuento objetivo sobre la suma de precios efectivos, en % (8 a 20). */
   targetDiscountPct: number;
+  /** Pedidos en los que dos líneas salen juntas para contar como relacionadas. */
+  minLinePairOrders?: number;
+  /** Cuánto más que el azar salen juntas dos líneas (lift); tiene que pasar de esto. */
+  minLineLift?: number;
+  /** Precio efectivo mínimo de una pieza lenta. */
+  minSlowValue?: number;
+  /** Parte mínima de la suma del kit que debe pesar cada pieza lenta, en %. */
+  minSlowSharePct?: number;
+  families?: KitFamilies;
 }
+
+export const DEFAULT_MIN_LINE_PAIR_ORDERS = 3;
+export const DEFAULT_MIN_LINE_LIFT = 1;
+export const DEFAULT_MIN_SLOW_VALUE = 5000;
+export const DEFAULT_MIN_SLOW_SHARE_PCT = 10;
 
 export interface KitPiece {
   productId: string;
@@ -58,6 +76,8 @@ export interface KitPiece {
   precioDeLista: number;
   oferta: string | null;
   costo: number | null;
+  /** Otros borradores que usan esta misma pieza: su stock se reparte. */
+  comparteStockCon?: string[];
 }
 
 export interface KitDraft {
@@ -76,6 +96,7 @@ export interface KitDraft {
   margenPct: number | null;
   sinCostoDe: string[];
   estado: KitPricing["estado"];
+  /** Una línea por pieza (y la temporada, si hay): por qué está en el kit. */
   señales: string[];
 }
 
@@ -184,9 +205,24 @@ export function coPurchaseCounts(orders: readonly (readonly string[])[]) {
   return { together: (a: string, b: string) => pairs.get(coKey(a, b)) ?? 0 };
 }
 
-/** Las mismas compras por línea de producto (Type): dos líneas que salen juntas se complementan. */
+/**
+ * Las mismas compras por línea de producto (Type): cuántos pedidos juntan dos
+ * líneas y su lift, cuánto más salen juntas de lo que daría el azar
+ * (pedidos juntos × pedidos totales ÷ pedidos de cada una). Con pocos pedidos
+ * el conteo por producto es casi siempre 1; por línea sí dice algo.
+ */
 export function typeCoPurchaseCounts(orders: readonly (readonly string[])[], typeOf: (productId: string) => string | null) {
-  return coPurchaseCounts(orders.map((items) => Array.from(new Set(items.map(typeOf).filter((type): type is string => Boolean(type))))));
+  const baskets = orders.map((items) => Array.from(new Set(items.map(typeOf).filter((type): type is string => Boolean(type))))).filter((types) => types.length > 0);
+  const perType = new Map<string, number>();
+  for (const types of baskets) for (const type of types) perType.set(type, (perType.get(type) ?? 0) + 1);
+  const { together } = coPurchaseCounts(baskets);
+  const lift = (a: string, b: string) => {
+    const both = together(a, b);
+    const na = perType.get(a) ?? 0;
+    const nb = perType.get(b) ?? 0;
+    return both && na && nb ? (both * baskets.length) / (na * nb) : 0;
+  };
+  return { together, lift, orders: baskets.length };
 }
 
 /** Palabras que no dicen qué es el producto («Set de…», «Kit…»). */
@@ -216,31 +252,78 @@ function termsFor(product: KitProduct, terms: KitSignals["whatsAppTerms"]) {
   return terms.filter((term) => matchesOccasion(textsOf(product), [term.termino]));
 }
 
+interface ScoredPartner {
+  partner: KitProduct;
+  score: number;
+  reasons: string[];
+}
+
+/** El stock de una pieza que está en varios borradores se reparte por igual; un borrador que queda por debajo del mínimo sale. */
+function allocateSharedStock(kits: KitDraft[], minPerKit: number) {
+  let current = kits;
+  const dropped: KitDraft[] = [];
+  for (;;) {
+    const users = new Map<string, number>();
+    for (const kit of current) for (const piece of kit.piezas) users.set(piece.productId, (users.get(piece.productId) ?? 0) + 1);
+    for (const kit of current) kit.kitsArmables = Math.min(...kit.piezas.map((piece) => Math.floor(piece.disponible / (users.get(piece.productId) ?? 1))));
+    const short = current.filter((kit) => kit.kitsArmables < minPerKit);
+    if (short.length === 0) break;
+    dropped.push(...short);
+    current = current.filter((kit) => !short.includes(kit));
+  }
+  for (const kit of current) {
+    for (const piece of kit.piezas) {
+      const others = current.filter((other) => other !== kit && other.piezas.some((p) => p.productId === piece.productId)).map((other) => other.nombreSugerido);
+      if (others.length) piece.comparteStockCon = others;
+      else delete piece.comparteStockCon;
+    }
+  }
+  return { kits: current, dropped };
+}
+
 export function proposeKits(input: {
   products: readonly KitProduct[];
   history: SalesHistory;
   together: (a: string, b: string) => number;
-  /** Veces que dos líneas (Type) salen en el mismo pedido en 180 días. */
-  typesTogether?: (a: string, b: string) => number;
+  /** Pedidos en 180 días que juntan dos líneas (Type) y su lift. */
+  lines?: { together: (a: string, b: string) => number; lift: (a: string, b: string) => number };
   signals: KitSignals;
   options: KitOptions;
-}): { lentos: SlowMover[]; nuevos: { nombre: string; enInventarioDesde: Date }[]; kits: KitDraft[]; pocoAtractivos: WeakKit[]; sinKit: { nombre: string; motivo: string }[] } {
+}): {
+  lentos: SlowMover[];
+  nuevos: { nombre: string; enInventarioDesde: Date }[];
+  kits: KitDraft[];
+  pocoAtractivos: WeakKit[];
+  sinKit: { nombre: string; motivo: string }[];
+  bajoValor: { nombre: string; precioEfectivo: number }[];
+  lineasSinFamilia: string[];
+} {
   const { products, history, together, signals, options } = input;
-  const typesTogether = input.typesTogether ?? (() => 0);
+  const lines = input.lines ?? { together: () => 0, lift: () => 0 };
+  const families = options.families ?? KIT_FAMILIES;
+  const minLinePairs = options.minLinePairOrders ?? DEFAULT_MIN_LINE_PAIR_ORDERS;
+  const minLift = options.minLineLift ?? DEFAULT_MIN_LINE_LIFT;
+  const minSlowValue = options.minSlowValue ?? DEFAULT_MIN_SLOW_VALUE;
+  const minSlowShare = options.minSlowSharePct ?? DEFAULT_MIN_SLOW_SHARE_PCT;
   const byId = new Map(products.map((product) => [product.id, product]));
   const lentos = rankSlowMovers(products.map((product) => ({ ...product })), history);
   const slowIds = new Set(lentos.map((row) => row.id));
   const nuevos = newWithoutSalesData(products, history).map((product) => ({ nombre: product.name, enInventarioDesde: product.stockedSince }));
+  const isBundle = (product: KitProduct) => product.isKit || isBundleLine(product.typeName, product.categoryName);
+  const familiesOfProduct = (product: KitProduct) => familiesOf(product.typeName, families);
 
   const sellers = products.filter(
-    (product) => !product.isKit && !product.isArchived && !slowIds.has(product.id) && availableStock(product) >= options.minPerKit && history.get(product.id).soldInWindow > 0,
+    (product) =>
+      !isBundle(product) && !product.isArchived && !slowIds.has(product.id) && availableStock(product) >= options.minPerKit && history.get(product.id).soldInWindow > 0,
   );
 
-  /** Se complementan: se compraron juntos, o sus líneas salen juntas en los pedidos. Nunca la misma línea ni el mismo producto con otro nombre. */
+  /** Se complementan: líneas distintas que salen juntas en suficientes pedidos y más que por azar. Comprarlos juntos suma puntos, no basta. */
   const complements = (a: KitProduct, b: KitProduct) => {
     const pair = together(a.id, b.id);
-    const lines = a.typeId && b.typeId && a.typeId !== b.typeId ? typesTogether(a.typeId, b.typeId) : 0;
-    return { pair, lines, related: pair > 0 || lines >= 2 };
+    if (!a.typeId || !b.typeId || a.typeId === b.typeId) return { pair, lines: 0, lift: 0, related: false };
+    const count = lines.together(a.typeId, b.typeId);
+    const lift = lines.lift(a.typeId, b.typeId);
+    return { pair, lines: count, lift, related: count >= minLinePairs && lift > minLift };
   };
   const clashes = (chosen: readonly KitProduct[], candidate: KitProduct) => {
     const kind = kindOf(candidate);
@@ -249,72 +332,121 @@ export function proposeKits(input: {
       return (kind.typeId !== null && kind.typeId === otherKind.typeId) || (kind.noun !== null && kind.noun === otherKind.noun);
     });
   };
+  const shareFamily = (theme: ReadonlySet<string>, candidate: KitProduct) => Array.from(familiesOfProduct(candidate)).some((family) => theme.has(family));
 
-  const kits: KitDraft[] = [];
+  let kits: KitDraft[] = [];
   const pocoAtractivos: WeakKit[] = [];
   const sinKit: { nombre: string; motivo: string }[] = [];
+  const bajoValor: { nombre: string; precioEfectivo: number }[] = [];
+  const lineasSinFamilia = new Set<string>();
   const usedSlow = new Set<string>();
-  const usedPartner = new Map<string, number>();
+  const usedPartner = new Set<string>();
 
   for (const slow of lentos) {
     if (kits.length >= options.kits) break;
     if (usedSlow.has(slow.id)) continue;
     const product = byId.get(slow.id)!;
+    if (isBundle(product)) continue;
+    if (product.effectivePrice < minSlowValue) {
+      bajoValor.push({ nombre: product.name, precioEfectivo: Math.round(product.effectivePrice) });
+      continue;
+    }
     if (slow.available < options.minPerKit) {
       sinKit.push({ nombre: product.name, motivo: `solo hay ${slow.available} disponibles; no alcanza para ${options.minPerKit} kits` });
       continue;
     }
+    const theme = familiesOfProduct(product);
+    if (theme.size === 0) {
+      if (product.typeName) lineasSinFamilia.add(product.typeName);
+      sinKit.push({ nombre: product.name, motivo: `su línea${product.typeName ? ` («${product.typeName}»)` : ""} no está en ninguna familia de kits` });
+      continue;
+    }
     const occasion = signals.occasions.find((candidate) => matchesOccasion(textsOf(product), candidate.palabras)) ?? null;
 
-    const scored = sellers
+    const scored: ScoredPartner[] = sellers
       .map((partner) => {
         const relation = complements(product, partner);
-        if (!relation.related) return null;
-        const reasons: string[] = [];
-        let score = Math.min(relation.pair, 5) * 3 + Math.min(relation.lines, 5);
-        if (relation.pair) reasons.push(`se compra junto con ${product.name} (${relation.pair} ${relation.pair === 1 ? "pedido" : "pedidos"} en 180 días)`);
-        else reasons.push(`su línea se compra junto con la de ${product.name} (${relation.lines} pedidos en 180 días)`);
+        if (!relation.related || !shareFamily(theme, partner)) return null;
+        const trend: string[] = [`su línea se compra junto con la de ${product.name} (${relation.lines} pedidos en 180 días)`];
+        let score = Math.min(relation.lines, 5) + Math.min(relation.lift, 3) + Math.min(relation.pair, 5) * 2;
+        if (relation.pair) trend.push(`comprado con ${product.name} ${relation.pair} ${relation.pair === 1 ? "vez" : "veces"}`);
         const up = signals.rising.get(partner.id);
         if (up) {
           score += 3;
-          reasons.push(`en alza: ${up.sold30} unidades en 30 días contra ${up.previous30} antes`);
+          trend.push(`en alza (${up.sold30} en 30 días contra ${up.previous30} antes)`);
         }
         const shown = signals.shownOnWhatsApp.get(partner.id);
         if (shown) {
           score += Math.min(shown, 3);
-          reasons.push(`el bot lo enseñó ${shown} veces por WhatsApp en 30 días`);
+          trend.push(`el bot lo enseñó ${shown} veces por WhatsApp en 30 días`);
         }
         for (const term of termsFor(partner, signals.whatsAppTerms)) {
           score += 1;
-          reasons.push(`«${term.termino}» se pidió ${term.veces} veces por WhatsApp en 30 días`);
+          trend.push(`«${term.termino}» se pidió ${term.veces} veces por WhatsApp en 30 días`);
         }
         if (occasion && matchesOccasion(textsOf(partner), occasion.palabras)) score += 2;
-        score += Math.log1p(history.get(partner.id).soldInWindow) - (usedPartner.get(partner.id) ?? 0) * 2;
-        return { partner, score, reasons };
+        score += Math.log1p(history.get(partner.id).soldInWindow);
+        return { partner, score, reasons: trend };
       })
-      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .filter((row): row is ScoredPartner => row !== null)
       .sort((a, b) => b.score - a.score || a.partner.name.localeCompare(b.partner.name));
 
-    const chosen: KitProduct[] = [product];
-    const secondSlowRow = lentos.find((other) => {
-      if (other.id === slow.id || usedSlow.has(other.id) || other.available < options.minPerKit) return false;
-      const candidate = byId.get(other.id)!;
-      return !clashes(chosen, candidate) && complements(product, candidate).related;
-    });
-    if (secondSlowRow) chosen.push(byId.get(secondSlowRow.id)!);
-    const partners: typeof scored = [];
-    for (const row of scored) {
-      if (chosen.length >= MAX_PIECES) break;
-      if (clashes(chosen, row.partner)) continue;
-      chosen.push(row.partner);
-      partners.push(row);
+    // Cada kit sale de una sola familia: se arma uno por familia de la pieza lenta y queda el de más puntos.
+    const attempt = (family: string) => {
+      const inFamily = (candidate: KitProduct) => familiesOfProduct(candidate).has(family);
+      const chosen: KitProduct[] = [product];
+      const secondRow = lentos.find((other) => {
+        if (other.id === slow.id || usedSlow.has(other.id) || other.available < options.minPerKit) return false;
+        const candidate = byId.get(other.id)!;
+        return !isBundle(candidate) && candidate.effectivePrice >= minSlowValue && inFamily(candidate) && !clashes(chosen, candidate) && complements(product, candidate).related;
+      });
+      const second = secondRow ? byId.get(secondRow.id)! : null;
+      if (second) chosen.push(second);
+      const picked: ScoredPartner[] = [];
+      const eligible = scored.filter((row) => inFamily(row.partner));
+      // Primero piezas que ningún otro borrador usa; repetir una solo si sin ella no se llega al mínimo.
+      for (const row of eligible) {
+        if (chosen.length >= MAX_PIECES) break;
+        if (!usedPartner.has(row.partner.id) && !clashes(chosen, row.partner)) {
+          chosen.push(row.partner);
+          picked.push(row);
+        }
+      }
+      for (const row of eligible) {
+        if (chosen.length >= MIN_PIECES) break;
+        if (usedPartner.has(row.partner.id) && !clashes(chosen, row.partner)) {
+          chosen.push(row.partner);
+          picked.push(row);
+        }
+      }
+      return { second, partners: picked, size: chosen.length, score: picked.reduce((total, row) => total + row.score, 0) };
+    };
+    const best = Array.from(theme)
+      .map(attempt)
+      .filter((option) => option.size >= MIN_PIECES)
+      .sort((a, b) => b.score - a.score)[0];
+    if (!best) {
+      sinKit.push({ nombre: product.name, motivo: "no hay piezas de líneas afines que se compren con él más que por azar, se vendan y tengan stock suficiente" });
+      continue;
     }
-    if (chosen.length < MIN_PIECES) {
-      sinKit.push({ nombre: product.name, motivo: "no hay piezas de otras líneas que se compren con él, se vendan y tengan stock suficiente" });
+    const secondSlowRow = best.second;
+    const partners = best.partners;
+
+    let slowPieces = [product, ...(secondSlowRow ? [secondSlowRow] : [])];
+    const sumOf = (list: readonly KitProduct[]) => list.reduce((total, item) => total + item.effectivePrice, 0);
+    const partnerProducts = partners.map((row) => row.partner);
+    // Una pieza lenta tiene que pesar en el kit: si no, es relleno y va mejor en promo.
+    if (slowPieces.length > 1 && slowPieces[1].effectivePrice < (sumOf([...slowPieces, ...partnerProducts]) * minSlowShare) / 100) slowPieces = [product];
+    if (slowPieces.length + partnerProducts.length < MIN_PIECES) {
+      sinKit.push({ nombre: product.name, motivo: "no hay piezas de líneas afines que se compren con él más que por azar, se vendan y tengan stock suficiente" });
+      continue;
+    }
+    if (product.effectivePrice < (sumOf([...slowPieces, ...partnerProducts]) * minSlowShare) / 100) {
+      bajoValor.push({ nombre: product.name, precioEfectivo: Math.round(product.effectivePrice) });
       continue;
     }
 
-    const pieces = [piece(product, "lento"), ...(secondSlowRow ? [piece(byId.get(secondSlowRow.id)!, "lento")] : []), ...partners.map((row) => piece(row.partner, "se vende"))];
+    const pieces = [...slowPieces.map((item) => piece(item, "lento")), ...partners.map((row) => piece(row.partner, "se vende"))];
     const pricing = priceKit(pieces, options.minMarginPct, options.targetDiscountPct);
     const everyday = EVERYDAY_USES.find((use) => pieces.some((p) => matchesOccasion(textsOf(byId.get(p.productId)!), use.palabras)));
     const ocasion = occasion ? `${occasion.nombre} (en ${occasion.enDias} ${occasion.enDias === 1 ? "día" : "días"})` : (everyday?.nombre ?? null);
@@ -333,10 +465,14 @@ export function proposeKits(input: {
       continue;
     }
 
+    const slowLine = (item: KitProduct) => {
+      const row = lentos.find((candidate) => candidate.id === item.id)!;
+      return `${item.name}: ${row.daysSinceLastSale === null ? "sin ventas en el último año" : `${row.daysSinceLastSale} días sin venderse`}${row.tiedUpAtCost !== null ? `, ${pesos(row.tiedUpAtCost)} quietos a costo` : ""}`;
+    };
     const señales = [
-      `${product.name}: ${slow.daysSinceLastSale === null ? "sin ventas en el último año" : `${slow.daysSinceLastSale} días sin venderse`}${slow.tiedUpAtCost !== null ? `, ${pesos(slow.tiedUpAtCost)} quietos a costo` : ""}`,
+      ...slowPieces.map(slowLine),
+      ...partners.map((row) => `${row.partner.name}: ${row.reasons.join("; ")}`),
       ...(occasion ? [`temporada: ${occasion.nombre} el ${occasion.fecha}`] : []),
-      ...partners.flatMap((row) => row.reasons.map((reason) => `${row.partner.name}: ${reason}`)),
     ];
 
     kits.push({
@@ -356,25 +492,35 @@ export function proposeKits(input: {
       estado: pricing.estado,
       señales,
     });
-    usedSlow.add(slow.id);
-    if (secondSlowRow) usedSlow.add(secondSlowRow.id);
-    for (const row of partners) usedPartner.set(row.partner.id, (usedPartner.get(row.partner.id) ?? 0) + 1);
+    for (const item of slowPieces) usedSlow.add(item.id);
+    for (const row of partners) usedPartner.add(row.partner.id);
   }
 
-  return { lentos, nuevos, kits, pocoAtractivos, sinKit };
+  const allocated = allocateSharedStock(kits, options.minPerKit);
+  kits = allocated.kits;
+  for (const kit of allocated.dropped) {
+    sinKit.push({ nombre: kit.piezas[0].nombre, motivo: `comparte piezas con otros kits y el stock repartido no alcanza para ${options.minPerKit}` });
+  }
+
+  return { lentos, nuevos, kits, pocoAtractivos, sinKit, bajoValor, lineasSinFamilia: Array.from(lineasSinFamilia) };
 }
 
 export const pesos = (value: number) => `$${Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
 const percent = (value: number) => `${String(value).replace(".", ",")} %`;
 
 /**
- * El detalle fijo de un borrador (piezas con su precio, cuentas y señales),
- * para copiarlo tal cual: con cinco piezas el modelo tiende a resumir y se
- * pierden los precios por pieza y las cuentas de WhatsApp.
+ * El detalle fijo de un borrador (piezas con su precio, cuentas y por qué),
+ * para copiarlo tal cual debajo del nombre del kit: cada línea va sangrada
+ * para quedar como viñeta dentro de «- **Kit …**», y el porqué es una línea
+ * por pieza. Con cinco piezas el modelo tiende a resumir y se pierden los
+ * precios por pieza y las cuentas de WhatsApp.
  */
 export function kitDetail(kit: KitDraft): string {
   const pieces = kit.piezas.map(
-    (piece) => `- ${piece.nombre} (${piece.rol}): ${pesos(piece.precioEfectivo)}${piece.oferta ? ` con la oferta «${piece.oferta}» (antes ${pesos(piece.precioDeLista)})` : ""}`,
+    (piece) =>
+      `  - ${piece.nombre} (${piece.rol}): ${pesos(piece.precioEfectivo)}${piece.oferta ? ` con la oferta «${piece.oferta}» (antes ${pesos(piece.precioDeLista)})` : ""}${
+        piece.comparteStockCon?.length ? ` · comparte stock con ${piece.comparteStockCon.map((name) => `«${name}»`).join(" y ")}` : ""
+      }`,
   );
   const numbers = [
     `Se pueden armar ${kit.kitsArmables}`,
@@ -387,5 +533,5 @@ export function kitDetail(kit: KitDraft): string {
     ...(kit.sinCostoDe.length ? [`Sin costo de ${kit.sinCostoDe.join(", ")}: no se calcula margen ni precio mínimo.`] : []),
     ...(kit.estado === "descuento limitado por costo" ? [`El descuento quedó por debajo del ${kit.descuentoObjetivoPct} % porque el costo no deja bajar más.`] : []),
   ];
-  return [...pieces, `${numbers.join(" · ")}.`, ...notes, `Por qué: ${kit.señales.join("; ")}.`].join("\n");
+  return [...pieces, `  - ${numbers.join(" · ")}.`, ...notes.map((note) => `  - ${note}`), "  - Por qué:", ...kit.señales.map((line) => `    - ${line}`)].join("\n");
 }

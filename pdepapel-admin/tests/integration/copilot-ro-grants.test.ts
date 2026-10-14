@@ -320,7 +320,7 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
 });
 
 describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
-  const ids = { slow: "", pencil: "", eraser: "", ruler: "", offer: "", conversation: "", order: "", oldOrder: "" };
+  const ids = { slow: "", pencil: "", eraser: "", ruler: "", offer: "", conversation: "", order: "", oldOrder: "", extraOrders: [] as string[] };
   const KITS_FILE = () => copilotRoGrantFiles().find((name) => name.endsWith("grant_copilot_ro_kits.sql"))!;
   const kitsStatements = () => {
     const database = new URL(process.env.DATABASE_URL as string).pathname.replace(/^\//, "");
@@ -354,10 +354,10 @@ describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
         },
       });
     const old = new Date(Date.now() - 200 * 86_400_000);
-    ids.slow = (await make("Libreta sintetica lenta", { stock: 8, price: 9000, acqPrice: 3000, createdAt: old })).id;
+    ids.slow = (await make("Libreta sintetica lenta", { stock: 8, price: 9000, acqPrice: 3000, createdAt: old, categoryId: await line("Cuadernos") })).id;
     ids.pencil = (await make("Lapiz sintetico", { stock: 20, price: 5000, acqPrice: 1500, categoryId: await line("Escritura") })).id;
     ids.eraser = (await make("Borrador sintetico", { stock: 20, price: 4000, acqPrice: 1000, categoryId: await line("Utiles") })).id;
-    ids.ruler = (await make("Regla sintetica", { stock: 20, price: 3000, acqPrice: 800, categoryId: await line("Medicion") })).id;
+    ids.ruler = (await make("Regla sintetica", { stock: 20, price: 3000, acqPrice: 800, categoryId: await line("Oficina") })).id;
     const paidAt = new Date(Date.now() - 20 * 86_400_000);
     ids.order = (await testPrisma.order.create({
       data: {
@@ -395,6 +395,22 @@ describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
         },
       })
     ).id;
+    // Las líneas tienen que salir juntas en 3 pedidos o más, y más que por azar: dos pedidos más como el viejo y dos de otra línea.
+    const paidOrder = (days: number, lines: { productId: string; price: number }[]) =>
+      testPrisma.order.create({
+        data: {
+          storeId: store,
+          orderNumber: `ORD-KIT-${randomBytes(4).toString("hex")}`,
+          status: "PAID",
+          type: "POINT_OF_SALE",
+          paidAt: new Date(Date.now() - days * 86_400_000),
+          subtotal: lines.reduce((total, item) => total + item.price, 0),
+          total: lines.reduce((total, item) => total + item.price, 0),
+          orderItems: { create: lines.map((item) => ({ ...item, quantity: 1, name: "Linea" })) },
+        },
+      });
+    for (const days of [130, 140]) ids.extraOrders.push((await paidOrder(days, [ids.slow, ids.pencil, ids.eraser, ids.ruler].map((productId) => ({ productId, price: 5000 })))).id);
+    for (const days of [50, 60]) ids.extraOrders.push((await paidOrder(days, [{ productId: fixture!.component.id, price: 10000 }])).id);
     ids.offer = (
       await testPrisma.offer.create({
         data: { storeId: store, name: "Nombre interno secreto", label: "20 %", type: "PERCENTAGE", amount: 20, startDate: new Date(Date.now() - 86_400_000), endDate: new Date(Date.now() + 86_400_000), products: { create: [{ productId: ids.pencil }] } },
@@ -416,8 +432,8 @@ describe("copilot_ro: kitsParaRotar (habilidad kits)", () => {
   });
 
   afterAll(async () => {
-    await testPrisma.orderItem.deleteMany({ where: { orderId: { in: [ids.order, ids.oldOrder] } } });
-    await testPrisma.order.deleteMany({ where: { id: { in: [ids.order, ids.oldOrder] } } });
+    await testPrisma.orderItem.deleteMany({ where: { orderId: { in: [ids.order, ids.oldOrder, ...ids.extraOrders] } } });
+    await testPrisma.order.deleteMany({ where: { id: { in: [ids.order, ids.oldOrder, ...ids.extraOrders] } } });
     await testPrisma.conversationMessage.deleteMany({ where: { conversationId: ids.conversation } });
     await testPrisma.conversation.deleteMany({ where: { id: ids.conversation } });
     await testPrisma.offerProduct.deleteMany({ where: { offerId: ids.offer } });
