@@ -5,7 +5,7 @@ import { foldText } from "@/lib/copiloto/skills/product-match";
 export interface KitOutput {
   nombreSugerido?: string;
   detalle?: string;
-  piezas?: { nombre?: string; precioEfectivo?: number }[];
+  piezas?: { nombre?: string; rol?: string; precioEfectivo?: number }[];
   ahorroParaLaClienta?: number | null;
 }
 
@@ -16,17 +16,26 @@ interface KitsToolOutput {
 const AMOUNT = /\$\s?\d{1,3}(?:[.,]\d{3})+|\$\s?\d+/g;
 const amountsIn = (text: string) => Array.from(text.matchAll(AMOUNT), (match) => match[0].replace(/\D+/g, ""));
 
-/** Un párrafo es de un kit si nombra al menos dos de sus piezas: los lentos sueltos o la línea de otro kit no cuentan. */
+const DETAIL_PREFIX = "**Detalle de «";
+
+/**
+ * Un párrafo es de un kit si nombra una de sus piezas lentas y una de las que
+ * se venden. Las lentas no se repiten entre kits (las que se venden sí), así
+ * que otro kit con las mismas piezas que se venden no cuenta, ni la lista de
+ * lentos, ni un detalle ya puesto.
+ */
 const belongsTo = (paragraph: string, kit: KitOutput) => {
+  if (paragraph.startsWith(DETAIL_PREFIX)) return false;
   const folded = foldText(paragraph);
-  return (kit.piezas ?? []).filter((piece) => piece.nombre && folded.includes(foldText(piece.nombre))).length >= 2;
+  const named = (kit.piezas ?? []).filter((piece) => piece.nombre && folded.includes(foldText(piece.nombre)));
+  return named.some((piece) => piece.rol === "lento") && named.some((piece) => piece.rol !== "lento");
 };
 
-const heading = (kit: KitOutput) => `**Detalle de «${kit.nombreSugerido ?? "kit"}»**\n${kit.detalle}`;
+const heading = (kit: KitOutput) => `${DETAIL_PREFIX}${kit.nombreSugerido ?? "kit"}»**\n${kit.detalle}`;
 
 /**
  * Los números de cada kit los pone la herramienta, no el modelo. Por kit (sus
- * párrafos se reconocen por los nombres de sus piezas): si muestran un monto
+ * párrafos se reconocen como dice `belongsTo`): si muestran un monto
  * que la herramienta no dio, esas líneas con montos se quitan y en su lugar va
  * el `detalle`; si les falta el precio de alguna pieza o el ahorro, el
  * `detalle` va debajo; si no se nombra en ninguna parte, va al final.

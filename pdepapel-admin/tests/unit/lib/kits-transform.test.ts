@@ -35,9 +35,10 @@ describe("línea de productos nuevos en la respuesta de kits", () => {
   });
 });
 
-const kitOf = (name: string, pieces: [string, number][], ahorro: number, sugerido: number): KitOutput => ({
+/** Las piezas lentas van primero; `slow` dice cuántas son. */
+const kitOf = (name: string, pieces: [string, number][], ahorro: number, sugerido: number, slow = 1): KitOutput => ({
   nombreSugerido: name,
-  piezas: pieces.map(([nombre, precioEfectivo]) => ({ nombre, precioEfectivo })),
+  piezas: pieces.map(([nombre, precioEfectivo], index) => ({ nombre, precioEfectivo, rol: index < slow ? "lento" : "se vende" })),
   ahorroParaLaClienta: ahorro,
   detalle: [
     ...pieces.map(([nombre, precio]) => `- ${nombre}: $${precio.toLocaleString("es-CO")}`),
@@ -100,5 +101,34 @@ describe("cada kit con los números de la herramienta", () => {
     const text = await run([kitsResult([grados]), { type: "text-delta", id: "t1", text: "Kit con Libreta lenta y Lápiz HB." }]);
     expect(text).toContain("Kit con Libreta lenta y Lápiz HB.");
     expect(text).toContain("Detalle de «Kit de grados con Libreta»");
+  });
+
+  const conLibreta = kitOf("Kit A", [["Libreta lenta", 6000], ["Lápiz HB", 4000], ["Regla", 2500]], 1600, 10900);
+  const conAgenda = kitOf("Kit B", [["Agenda roja", 9000], ["Lápiz HB", 4000], ["Regla", 2500]], 1900, 13600);
+  const written = (kit: KitOutput, sugerido: string) =>
+    `${kit.nombreSugerido}:\n${(kit.piezas ?? []).map((piece) => `- ${piece.nombre}: $${piece.precioEfectivo!.toLocaleString("es-CO")}`).join("\n")}\nPrecio ${sugerido}, ahorro $${kit.ahorroParaLaClienta!.toLocaleString("es-CO")}.`;
+
+  it("dos kits que comparten las piezas que se venden, bien escritos, quedan tal cual", () => {
+    const answer = [written(conLibreta, "$10.900"), written(conAgenda, "$13.600"), "Son borradores."].join("\n\n");
+    expect(reconcileKitAnswer(answer, [conLibreta, conAgenda])).toBe(answer);
+  });
+
+  it("si solo el segundo trae un precio equivocado, solo se corrige ese y el primero no se toca", () => {
+    const first = written(conLibreta, "$10.900");
+    const answer = [first, written(conAgenda, "$12.500"), "Son borradores."].join("\n\n");
+    const out = reconcileKitAnswer(answer, [conLibreta, conAgenda]);
+    expect(out.startsWith(`${first}\n\n`)).toBe(true);
+    expect(out).not.toContain("$12.500");
+    expect(out).toContain(`**Detalle de «Kit B»**\n${conAgenda.detalle}`);
+    expect(out).not.toContain("Detalle de «Kit A»");
+  });
+
+  it("un kit con dos lentas no toca la lista de lentos con su plata quieta", () => {
+    const doble = kitOf("Kit doble", [["Libreta lenta", 6000], ["Agenda roja", 9000], ["Regla", 2500]], 2000, 15500, 2);
+    const lentos = "Lentos:\n- Libreta lenta: $24.000 quietos a costo\n- Agenda roja: $18.000 quietos a costo";
+    const answer = [lentos, written(doble, "$15.500"), "Son borradores."].join("\n\n");
+    const out = reconcileKitAnswer(answer, [doble]);
+    expect(out.startsWith(`${lentos}\n\n`)).toBe(true);
+    expect(out).toBe(answer);
   });
 });
