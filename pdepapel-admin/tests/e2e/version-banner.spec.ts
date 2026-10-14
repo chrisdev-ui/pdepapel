@@ -4,9 +4,10 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./helpers/image-stub";
 
 /**
- * Una pestaña abierta antes de un despliegue avisa que hay versión nueva y,
- * antes de escribir, pregunta si recargar. Necesita el servidor de pruebas
- * arrancado con VERCEL_GIT_COMMIT_SHA (el commit con el que se construyó).
+ * Una pestaña abierta antes de un despliegue avisa que hay versión nueva, deja
+ * guardar sin frenar nada y se recarga entera al pasar a otra pantalla.
+ * Necesita el servidor de pruebas arrancado con VERCEL_GIT_COMMIT_SHA (el
+ * commit con el que se construyó).
  */
 
 const baseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:3101";
@@ -36,7 +37,7 @@ async function signIn(page: Page, path: string) {
 test.describe("aviso de versión nueva", () => {
   test.skip(!hasConfiguration || !buildSha, "Necesita claves de desarrollo de Clerk y VERCEL_GIT_COMMIT_SHA.");
 
-  test("avisa, y antes de guardar pregunta; «Recargar» no envía el cambio", async ({ page }) => {
+  test("avisa sin frenar las escrituras y recarga al pasar a otra pantalla", async ({ page }) => {
     let deployed = buildSha!;
     await page.route("**/api/version", (route) => route.fulfill({ json: { sha: deployed } }));
     const writes: string[] = [];
@@ -52,18 +53,17 @@ test.describe("aviso de versión nueva", () => {
     // Volver a la pestaña consulta otra vez, como mucho cada 30 s.
     await expect(async () => {
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await expect(page.getByText("Hay una versión nueva del panel. Recarga para usarla")).toBeVisible({ timeout: 2_000 });
+      await expect(page.getByText("Hay una versión nueva del panel. Se carga sola al cambiar de pantalla.")).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 90_000, intervals: [5_000] });
 
-    await page.evaluate((path) => {
-      void fetch(path, { method: "PATCH" }).catch(() => {});
-    }, `/api/${storeId}/version-e2e-probe`);
-    const dialog = page.getByRole("alertdialog");
-    await expect(dialog).toBeVisible();
+    const status = await page.evaluate(async (path) => (await fetch(path, { method: "PATCH" })).status, `/api/${storeId}/version-e2e-probe`);
+    expect(status).toBe(200);
+    expect(writes).toEqual(["PATCH"]);
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
 
     const reloaded = page.waitForEvent("load");
-    await dialog.getByRole("button", { name: "Recargar", exact: true }).click();
+    await page.getByRole("link", { name: /^Pedidos/ }).first().click();
     await reloaded;
-    expect(writes).toEqual([]);
+    await expect(page).toHaveURL(new RegExp(`/${storeId}/pedidos`));
   });
 });

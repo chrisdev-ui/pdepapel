@@ -1,58 +1,26 @@
 import { create } from "zustand";
 
-export type ReloadChoice = "reload" | "continue";
-
 interface VersionGuardState {
   /** El panel abierto es de un despliegue anterior. */
   stale: boolean;
-  /** Ya eligió «Continuar sin recargar» en esta pestaña: no se vuelve a preguntar. */
-  acknowledged: boolean;
-  /** Pregunta abierta; la contesta el diálogo de `VersionGuard`. */
-  prompt: ((choice: ReloadChoice) => void) | null;
-  answer: (choice: ReloadChoice) => void;
+  /** La pantalla en la que se notó: al pasar a otra, la página se carga entera con la versión nueva. */
+  staleAtPath: string | null;
   reload: () => void;
 }
 
-export const useVersionGuard = create<VersionGuardState>((set, get) => ({
+/**
+ * Pestaña con una versión vieja del panel: solo se avisa. Nunca se frena ni
+ * se retiene una petición (antes un guardado esperaba a que se contestara un
+ * diálogo y la pantalla parecía colgada); la recarga llega sola en la
+ * siguiente navegación o al tocar «Recargar».
+ */
+export const useVersionGuard = create<VersionGuardState>(() => ({
   stale: false,
-  acknowledged: false,
-  prompt: null,
-  answer: (choice) => {
-    const resolve = get().prompt;
-    set({ prompt: null, acknowledged: choice === "continue" ? true : get().acknowledged });
-    resolve?.(choice);
-  },
+  staleAtPath: null,
   reload: () => window.location.reload(),
 }));
 
-const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
-
-export function needsReloadPrompt(method: string | undefined, state: { stale: boolean; acknowledged: boolean }) {
-  return Boolean(method && MUTATING_METHODS.has(method.toLowerCase()) && state.stale && !state.acknowledged);
-}
-
-/** Antes de guardar, crear o borrar con una versión vieja abierta: pregunta si recargar primero. */
-export async function guardMutation(method: string | undefined): Promise<"proceed" | "reload"> {
-  if (!needsReloadPrompt(method, useVersionGuard.getState())) return "proceed";
-  const choice = await new Promise<ReloadChoice>((resolve) => {
-    // Dos acciones a la vez comparten la misma pregunta.
-    const previous = useVersionGuard.getState().prompt;
-    useVersionGuard.setState({
-      prompt: (answer) => {
-        previous?.(answer);
-        resolve(answer);
-      },
-    });
-  });
-  return choice === "continue" ? "proceed" : "reload";
-}
-
-/** Si la recarga no llega (por ejemplo, la persona la cancela), la acción se suelta con error. */
-export const RELOAD_HOLD_MS = 10_000;
-
-export function holdForReload(): Promise<never> {
-  useVersionGuard.getState().reload();
-  return new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("La página no se recargó. Vuelve a intentarlo.")), RELOAD_HOLD_MS);
-  });
+/** ¿Hay que recargar? Solo cuando la pestaña es vieja y cambió la pantalla (no los filtros de la misma). */
+export function shouldReloadOnNavigation(state: { stale: boolean; staleAtPath: string | null }, pathname: string | null): boolean {
+  return Boolean(state.stale && state.staleAtPath !== null && pathname !== null && pathname !== state.staleAtPath);
 }
