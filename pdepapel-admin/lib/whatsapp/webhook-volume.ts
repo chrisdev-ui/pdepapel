@@ -30,6 +30,12 @@ export function resolveVolumeThreshold(
   return Math.min(Math.floor(raw), QSTASH_DAILY_CAP);
 }
 
+/** Solo la conversación (id interno) y su cuenta: el aviso se guarda y se imprime, así que nunca lleva nombre, teléfono ni texto. */
+export interface TopConversation {
+  conversationId: string;
+  count: number;
+}
+
 export interface VolumeVerdict {
   total: number;
   threshold: number;
@@ -49,14 +55,14 @@ export interface VolumeVerdict {
 export function judgeWebhookVolume(input: {
   total: number;
   threshold: number;
-  topContact?: { label: string; count: number } | null;
+  topContact?: TopConversation | null;
 }): VolumeVerdict {
   const { total, threshold } = input;
   const remaining = Math.max(0, QSTASH_DAILY_CAP - total);
   const alert = total >= threshold;
 
   const quien = input.topContact
-    ? ` El que más aporta hoy: ${input.topContact.label} con ${input.topContact.count}.`
+    ? ` La conversación que más aporta hoy suma ${input.topContact.count} mensajes (id ${input.topContact.conversationId}).`
     : "";
 
   const detail = alert
@@ -74,16 +80,12 @@ export async function countTodayWebhookEvents(now = new Date()): Promise<number>
 }
 
 /**
- * Quién habla más hoy, para no tener que ir a buscarlo a mano.
- *
- * Sale de `ConversationMessage`, que está indexado, y no de rastrear los
- * payloads guardados: es una aproximación —no cuenta los eventos que aún no
- * se procesaron— pero suficiente para señalar al culpable, y cuesta una
- * consulta en vez de un escaneo de JSON.
+ * La conversación con más mensajes hoy, para no tener que ir a buscarla a
+ * mano. Sale de `ConversationMessage`, que está indexado: es una
+ * aproximación —no cuenta los eventos que aún no se procesaron— pero basta
+ * para señalarla. Devuelve el id interno, nunca el contacto.
  */
-export async function findTopContactToday(
-  now = new Date(),
-): Promise<{ label: string; count: number } | null> {
+export async function findTopContactToday(now = new Date()): Promise<TopConversation | null> {
   const desde = startOfBogotaDay(now);
   const grupos = await prismadb.conversationMessage.groupBy({
     by: ["conversationId"],
@@ -93,18 +95,7 @@ export async function findTopContactToday(
     take: 1,
   });
   const top = grupos[0];
-  if (!top) return null;
-
-  const conversation = await prismadb.conversation.findUnique({
-    where: { id: top.conversationId },
-    select: { contactName: true, phone: true, bsuid: true },
-  });
-  const label =
-    conversation?.contactName?.trim() ||
-    conversation?.phone ||
-    conversation?.bsuid ||
-    "un contacto sin nombre";
-  return { label, count: top._count._all };
+  return top ? { conversationId: top.conversationId, count: top._count._all } : null;
 }
 
 /** Medianoche de Bogotá (UTC−5, sin horario de verano) en tiempo absoluto. */
@@ -116,4 +107,15 @@ export function startOfBogotaDay(now: Date): Date {
     bogota.getUTCDate(),
   );
   return new Date(midnight + 5 * 60 * 60 * 1000);
+}
+
+/**
+ * Los avisos viejos nombraban al contacto («El que más aporta hoy: <nombre o
+ * teléfono> con N.»). Deja solo la cuenta; `null` si no hay nada que quitar.
+ * Para la limpieza única de `scripts/whatsapp-redact-volume-log.ts`.
+ */
+export function redactVolumeDetail(detail: string | null): string | null {
+  if (!detail) return null;
+  const redacted = detail.replace(/ El que más aporta hoy: .* con (\d+)\.(?= |$)/, " La conversación que más aportaba sumaba $1 mensajes.");
+  return redacted === detail ? null : redacted;
 }

@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_VOLUME_THRESHOLD,
   QSTASH_DAILY_CAP,
   judgeWebhookVolume,
+  redactVolumeDetail,
   resolveVolumeThreshold,
   startOfBogotaDay,
 } from "@/lib/whatsapp/webhook-volume";
@@ -49,14 +50,35 @@ describe("cuándo hay que avisar", () => {
     expect(detail).toContain("ignorar");
   });
 
-  it("nombra al que más aporta cuando se sabe", () => {
+  it("señala la conversación que más aporta solo con su id y su cuenta", () => {
     const { detail } = judgeWebhookVolume({
       total: 800,
       threshold: 700,
-      topContact: { label: "Chuchu UyoungCulture", count: 394 },
+      topContact: { conversationId: "conv-123", count: 394 },
     });
-    expect(detail).toContain("Chuchu UyoungCulture");
+    expect(detail).toContain("conv-123");
     expect(detail).toContain("394");
+  });
+});
+
+describe("el aviso nunca lleva datos de la clienta", () => {
+  it("la conversación que más aporta se busca sin leer nombre, teléfono ni BSUID", async () => {
+    const conversationFindUnique = vi.fn();
+    vi.doMock("@/lib/prismadb", () => ({
+      default: {
+        conversationMessage: { groupBy: vi.fn().mockResolvedValue([{ conversationId: "conv-123", _count: { _all: 41 } }]) },
+        conversation: { findUnique: conversationFindUnique },
+      },
+    }));
+    vi.resetModules();
+    const { findTopContactToday, judgeWebhookVolume: judge } = await import("@/lib/whatsapp/webhook-volume");
+    const top = await findTopContactToday(new Date("2026-10-14T18:00:00Z"));
+    expect(top).toEqual({ conversationId: "conv-123", count: 41 });
+    expect(conversationFindUnique).not.toHaveBeenCalled();
+    const verdict = judge({ total: 800, threshold: 700, topContact: top });
+    expect(Object.keys(top!).sort()).toEqual(["conversationId", "count"]);
+    expect(verdict.detail).not.toMatch(/\+?\d{10,}/);
+    vi.doUnmock("@/lib/prismadb");
   });
 });
 
@@ -91,3 +113,25 @@ describe("el día cuenta en hora de Bogotá", () => {
     expect(inicio.toISOString()).toBe("2026-09-21T05:00:00.000Z");
   });
 });
+
+describe("limpieza de los avisos viejos", () => {
+  it("quita el nombre o teléfono y deja solo la cuenta", () => {
+    expect(redactVolumeDetail("188 eventos hoy, por debajo del aviso (700). El que más aporta hoy: Nombre De Prueba con 41.")).toBe(
+      "188 eventos hoy, por debajo del aviso (700). La conversación que más aportaba sumaba 41 mensajes.",
+    );
+    expect(redactVolumeDetail("800 eventos hoy (aviso a partir de 700, tope del plan 1000). Quedan 200 antes de que se empiecen a perder mensajes. El que más aporta hoy: 573000000000 con 394. Si sobra volumen de un contacto, se puede ignorar desde su conversación.")).toBe(
+      "800 eventos hoy (aviso a partir de 700, tope del plan 1000). Quedan 200 antes de que se empiecen a perder mensajes. La conversación que más aportaba sumaba 394 mensajes. Si sobra volumen de un contacto, se puede ignorar desde su conversación.",
+    );
+  });
+
+  it("un nombre que contiene «con» se quita entero", () => {
+    expect(redactVolumeDetail("10 eventos hoy, por debajo del aviso (700). El que más aporta hoy: Tienda con Amor con 7.")).toBe("10 eventos hoy, por debajo del aviso (700). La conversación que más aportaba sumaba 7 mensajes.");
+  });
+
+  it("lo que ya está limpio o vacío no se toca", () => {
+    expect(redactVolumeDetail("10 eventos hoy, por debajo del aviso (700). La conversación que más aporta hoy suma 7 mensajes (id conv-1).")).toBeNull();
+    expect(redactVolumeDetail(null)).toBeNull();
+    expect(redactVolumeDetail("")).toBeNull();
+  });
+});
+

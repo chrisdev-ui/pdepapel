@@ -404,7 +404,7 @@ describe("runWhatsAppBot", () => {
       expect(mocks.send).not.toHaveBeenCalled();
     });
 
-    it("el caso Chuchu, con las horas reales de producción", async () => {
+    it("el caso del contacto que escribía sin parar, con las horas reales de producción", async () => {
       // El hilo de la proveedora: ella contestó a las 02:25:28 y el bot se
       // metió cinco veces entre sus mensajes. Con la ventana, los mensajes
       // que llegan justo después ya no lo despiertan.
