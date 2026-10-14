@@ -1,5 +1,5 @@
 import { availableStock } from "@/lib/available-stock";
-import { rankSlowMovers, type SalesHistory, type SlowMover } from "@/lib/sales-velocity";
+import { newWithoutSalesData, rankSlowMovers, type SalesHistory, type SlowMover } from "@/lib/sales-velocity";
 import { EVERYDAY_USES, matchesOccasion, type Occasion } from "@/lib/season-calendar";
 
 /**
@@ -22,6 +22,8 @@ export interface KitProduct {
   stock: number;
   reservedUnits: number;
   createdAt: Date;
+  /** Primera entrada de inventario, o creación si no hay. */
+  stockedSince: Date;
   unitCost: number | null;
   listPrice: number;
   effectivePrice: number;
@@ -160,11 +162,12 @@ export function proposeKits(input: {
   together: (a: string, b: string) => number;
   signals: KitSignals;
   options: KitOptions;
-}): { lentos: SlowMover[]; kits: KitDraft[]; sinKit: { nombre: string; motivo: string }[] } {
+}): { lentos: SlowMover[]; nuevos: { nombre: string; enInventarioDesde: Date }[]; kits: KitDraft[]; sinKit: { nombre: string; motivo: string }[] } {
   const { products, history, together, signals, options } = input;
   const byId = new Map(products.map((product) => [product.id, product]));
   const lentos = rankSlowMovers(products.map((product) => ({ ...product })), history);
   const slowIds = new Set(lentos.map((row) => row.id));
+  const nuevos = newWithoutSalesData(products, history).map((product) => ({ nombre: product.name, enInventarioDesde: product.stockedSince }));
 
   const sellers = products.filter(
     (product) => !product.isKit && !product.isArchived && !slowIds.has(product.id) && availableStock(product) >= options.minPerKit && history.get(product.id).soldInWindow > 0,
@@ -256,5 +259,5 @@ export function proposeKits(input: {
     for (const row of partners) usedPartner.set(row.partner.id, (usedPartner.get(row.partner.id) ?? 0) + 1);
   }
 
-  return { lentos, kits, sinKit };
+  return { lentos, nuevos, kits, sinKit };
 }

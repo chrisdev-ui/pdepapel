@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { coPurchaseCounts, priceKit, proposeKits, risingProducts, roundBelow, type KitPiece, type KitProduct, type KitSignals } from "@/lib/copiloto/kits-rotation";
 import { summarizeDemand } from "@/lib/copiloto/skills/kits-tool";
 import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
-import { buildSalesHistory, rankSlowMovers, type SaleRow } from "@/lib/sales-velocity";
+import { buildSalesHistory, newWithoutSalesData, rankSlowMovers, type SaleRow } from "@/lib/sales-velocity";
 import { upcomingOccasions } from "@/lib/season-calendar";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
@@ -21,6 +21,7 @@ const product = (id: string, overrides: Partial<KitProduct> = {}): KitProduct =>
   stock: 10,
   reservedUnits: 0,
   createdAt: daysAgo(400),
+  stockedSince: daysAgo(400),
   unitCost: 2000,
   listPrice: 5000,
   effectivePrice: 5000,
@@ -87,6 +88,21 @@ describe("producto lento (una sola regla)", () => {
     expect(rows[0]).toMatchObject({ available: 5, tiedUpAtCost: 25000, daysSinceLastSale: null });
     expect(rows.find((row) => row.id === "vieja")).toMatchObject({ daysSinceLastSale: 200 });
     expect(rows.at(-1)).toMatchObject({ tiedUpAtCost: null });
+  });
+
+  it("lo que entró al inventario hace menos de la ventana no es lento: va como nuevo, aún sin datos de venta", () => {
+    const history = buildSalesHistory({ days: 90, now: NOW, rows: [], kits: [] });
+    const products = [
+      { ...product("vieja", { stockedSince: daysAgo(200) }) },
+      { ...product("recien creada", { createdAt: daysAgo(10), stockedSince: daysAgo(10) }) },
+      { ...product("creada hace mucho, primera entrada hace poco", { createdAt: daysAgo(300), stockedSince: daysAgo(15) }) },
+      { ...product("nueva agotada", { stockedSince: daysAgo(5), stock: 0 }) },
+    ];
+    expect(rankSlowMovers(products, history).map((row) => row.id)).toEqual(["vieja"]);
+    expect(newWithoutSalesData(products, history).map((row) => row.id)).toEqual(["recien creada", "creada hace mucho, primera entrada hace poco"]);
+    const result = proposeKits({ products, history, together: () => 0, signals: noSignals, options: OPTIONS });
+    expect(result.nuevos.map((row) => row.nombre)).toEqual(["recien creada", "creada hace mucho, primera entrada hace poco"]);
+    expect(result.lentos.map((row) => row.id)).toEqual(["vieja"]);
   });
 
   it("«se compran juntos» sale de los mismos pedidos", () => {

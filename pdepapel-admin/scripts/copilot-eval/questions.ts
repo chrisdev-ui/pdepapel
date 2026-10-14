@@ -522,7 +522,7 @@ export const DESCRIPTION_QUESTIONS: EvalQuestion[] = [
  * Habilidad «kits»: una tienda propia sembrada por `seedKits` (copilot.eval.ts)
  * y tres respuestas reales (la pregunta, «hazlo con 120 días» y la misma
  * pregunta en una tienda donde todo se vende). Cada caso lee la respuesta que
- * le toca; así 14 comprobaciones cuestan tres llamadas.
+ * le toca; así 15 comprobaciones cuestan tres llamadas.
  */
 export const KITS_FIXTURE = {
   lento: "Libreta lenta Eval",
@@ -539,6 +539,8 @@ export const KITS_FIXTURE = {
   enAlza: "Marcador en alza Eval",
   terminoWhatsApp: "lapiz",
   textoLibreClienta: "Texto libre de la clienta Eval",
+  /** Creado y con primera entrada hace 10 días, sin ventas. */
+  nuevo: "Estuche nuevo Eval",
 } as const;
 
 export const KITS_QUESTION = "¿Qué productos llevan más de 90 días sin venderse y qué kits podría armar con ellos?";
@@ -609,6 +611,16 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
     criterio: "La demanda por WhatsApp sale como cuentas («2 veces»), sin citar mensajes.",
     estricto: true,
     pasa: ({ main }) => /whatsapp/i.test(main.text) && /\b2\s+(veces|pedidos|solicitudes|consultas|preguntas)\b/i.test(main.text) && !main.text.includes(KITS_FIXTURE.textoLibreClienta),
+  },
+  {
+    id: "kits-nuevo-no-quieto",
+    criterio: "Un producto creado hace 10 días no aparece como quieto ni en un kit: si se nombra, es como nuevo o sin datos de venta.",
+    estricto: true,
+    pasa: ({ main }) =>
+      main.text
+        .split("\n")
+        .filter((line) => fold(line).includes(fold(KITS_FIXTURE.nuevo).replace(/ eval$/, "")))
+        .every((line) => /nuev|sin datos|a[uú]n no/i.test(line) && !/quietos? a costo|d[ií]as sin vend|[—-]\s*(lento|se vende)\b/i.test(line)),
   },
   {
     id: "kits-descripcion",

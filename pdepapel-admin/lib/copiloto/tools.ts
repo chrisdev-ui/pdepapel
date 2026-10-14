@@ -22,7 +22,7 @@ import {
   getMarketplaceOrderNetProfit,
 } from "@/lib/mercadolibre/reporting";
 import { revenueOrderWhere } from "@/lib/revenue-orders";
-import { DEFAULT_SLOW_DAYS, isSlowMover, loadSalesHistory, unitCostOf } from "@/lib/sales-velocity";
+import { DEFAULT_SLOW_DAYS, isSlowMover, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf } from "@/lib/sales-velocity";
 import { productNameSearchConditions } from "@/lib/search-terms";
 import { requireStoreOwner } from "@/lib/store-access";
 
@@ -273,10 +273,11 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
     }),
   };
   const ids = products.map((product) => product.id);
-  const [images, stats, history] = await Promise.all([
+  const [images, stats, history, firstStocked] = await Promise.all([
     db.image.groupBy({ by: ["productId"], where: { productId: { in: ids } }, _count: { _all: true } }),
     profit30(db, storeId, last30, now),
     loadSalesHistory(db, storeId, { days: DEFAULT_SLOW_DAYS, now }),
+    loadFirstStockedAt(db, storeId),
   ]);
   const imageCount = new Map(images.map((row) => [row.productId, row._count._all]));
 
@@ -301,7 +302,7 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
       profitMarginPct: stat && stat.revenue > 0 ? (stat.profit / stat.revenue) * 100 : null,
       riskState: atRisk ? riskState : "NO_DATA",
       daysUntilStockout: atRisk ? days : null,
-      isDeadStock: isSlowMover({ ...product, isArchived: false, unitCost: unitCostOf(product) }, sales),
+      isDeadStock: isSlowMover({ ...product, isArchived: false, stockedSince: stockedSinceOf(firstStocked, product), unitCost: unitCostOf(product) }, sales, DEFAULT_SLOW_DAYS, now),
     };
   });
   const candidateById = new Map(candidates.map((candidate) => [candidate.productId, candidate]));

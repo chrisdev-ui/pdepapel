@@ -17,7 +17,7 @@ import { revenueOrderWhere } from "@/lib/revenue-orders";
  * Recibe el cliente de Prisma: el panel le pasa el suyo y el copiloto el de
  * `copilot_ro` (solo pide columnas que ese usuario puede leer).
  */
-export type SalesDb = Pick<Prisma.TransactionClient, "orderItem" | "marketplaceOrderItem" | "productKit">;
+export type SalesDb = Pick<Prisma.TransactionClient, "orderItem" | "marketplaceOrderItem" | "productKit" | "inventoryMovement">;
 
 export const DEFAULT_SLOW_DAYS = DORMANT_WINDOW_DAYS;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -163,6 +163,8 @@ export interface SlowMoverCandidate {
   reservedUnits: number;
   isKit: boolean;
   isArchived: boolean;
+  /** Primera entrada de inventario (o creación si no hay): desde cuándo se puede vender. */
+  stockedSince: Date;
   /** Costo por unidad (compra + transporte); null si no está cargado. */
   unitCost: number | null;
 }
@@ -180,21 +182,45 @@ export interface SlowMover {
 }
 
 /**
- * Lento: se puede vender (disponible > 0), no es kit, no está archivado y no
- * se vendió en la ventana, ni suelto ni dentro de un kit. Es la misma regla
- * que la tarjeta «Sin movimiento» de Inventario (sin mirar la fecha de
- * creación). Ordenado por plata quieta a costo; los que no tienen
- * costo van al final.
+ * Lento: se puede vender (disponible > 0), no es kit, no está archivado, lleva
+ * en inventario al menos la ventana completa y no se vendió en ella, ni suelto
+ * ni dentro de un kit. Un producto que entró hace menos no es lento: es nuevo
+ * y todavía no tiene datos de venta (la tarjeta de Inventario no hace esta
+ * distinción y se deja igual). Ordenado por plata quieta a costo; los que no
+ * tienen costo van al final.
  */
-export function isSlowMover(product: SlowMoverCandidate, sales: ProductSales): boolean {
-  if (product.isKit || product.isArchived) return false;
-  if (availableStock(product) <= 0) return false;
-  return sales.soldInWindow <= 0;
+const unsoldAndSellable = (product: SlowMoverCandidate, sales: ProductSales) =>
+  !product.isKit && !product.isArchived && availableStock(product) > 0 && sales.soldInWindow <= 0;
+
+export function isSlowMover(product: SlowMoverCandidate, sales: ProductSales, days: number, now: Date): boolean {
+  return unsoldAndSellable(product, sales) && product.stockedSince <= since(now, days);
 }
+
+/** Sin ventas pero con menos de la ventana en inventario: «nuevos, aún sin datos de venta». */
+export function newWithoutSalesData(products: readonly SlowMoverCandidate[], history: SalesHistory): SlowMoverCandidate[] {
+  return products
+    .filter((product) => unsoldAndSellable(product, history.get(product.id)) && product.stockedSince > since(history.now, history.days))
+    .sort((a, b) => b.stockedSince.getTime() - a.stockedSince.getTime() || a.name.localeCompare(b.name));
+}
+
+/** Movimientos que meten mercancía por primera vez o la reponen. */
+const INTAKE_TYPES = ["INITIAL_INTAKE", "INITIAL_MIGRATION", "PURCHASE", "RESTOCK_RECEIVED"] as const;
+
+/** Primera entrada de inventario por producto; los que no tienen ninguna usan su fecha de creación. */
+export async function loadFirstStockedAt(db: SalesDb, storeId: string): Promise<Map<string, Date>> {
+  const rows = await db.inventoryMovement.groupBy({
+    by: ["productId"],
+    where: { storeId, type: { in: [...INTAKE_TYPES] }, quantity: { gt: 0 } },
+    _min: { createdAt: true },
+  });
+  return new Map(rows.flatMap((row) => (row._min.createdAt ? [[row.productId, row._min.createdAt] as const] : [])));
+}
+
+export const stockedSinceOf = (firstStocked: ReadonlyMap<string, Date>, product: { id: string; createdAt: Date }) => firstStocked.get(product.id) ?? product.createdAt;
 
 export function rankSlowMovers(products: readonly SlowMoverCandidate[], history: SalesHistory): SlowMover[] {
   const rows = products
-    .filter((product) => isSlowMover(product, history.get(product.id)))
+    .filter((product) => isSlowMover(product, history.get(product.id), history.days, history.now))
     .map((product) => {
       const available = availableStock(product);
       const lastSaleAt = history.get(product.id).lastSaleAt;

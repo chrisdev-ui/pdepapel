@@ -5,7 +5,7 @@ import { z } from "zod";
 import { withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import { coPurchaseCounts, proposeKits, risingProducts, type KitProduct, type KitSignals } from "@/lib/copiloto/kits-rotation";
 import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
-import { DEFAULT_SLOW_DAYS, loadSalesHistory, unitCostOf, type SalesHistory } from "@/lib/sales-velocity";
+import { DEFAULT_SLOW_DAYS, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf, type SalesHistory } from "@/lib/sales-velocity";
 import { foldWords, upcomingOccasions } from "@/lib/season-calendar";
 import { requireStoreOwner } from "@/lib/store-access";
 
@@ -90,7 +90,7 @@ export async function loadDemand(storeId: string, now: Date, run: typeof withCop
 }
 
 export async function loadKitData(db: CopilotDb, storeId: string, days: number, now = new Date()) {
-  const [rows, history, offers, tiers] = await Promise.all([
+  const [rows, history, offers, tiers, firstStocked] = await Promise.all([
     db.product.findMany({
       where: { storeId, isArchived: false },
       select: {
@@ -125,6 +125,7 @@ export async function loadKitData(db: CopilotDb, storeId: string, days: number, 
       },
     }),
     db.productPriceTier.findMany({ where: { storeId }, select: { productId: true, minQuantity: true, unitPrice: true } }),
+    loadFirstStockedAt(db, storeId),
   ]);
 
   const tiersByProduct = new Map<string, { minQuantity: number; unitPrice: number }[]>();
@@ -146,6 +147,7 @@ export async function loadKitData(db: CopilotDb, storeId: string, days: number, 
       stock: row.stock,
       reservedUnits: row.reservedUnits,
       createdAt: row.createdAt,
+      stockedSince: stockedSinceOf(firstStocked, row),
       unitCost: unitCostOf(row),
       listPrice: row.price,
       effectivePrice: resolved.unitPrice,
@@ -208,6 +210,11 @@ export function kitsParaRotarTool(storeId: string) {
             plataQuietaACosto: row.tiedUpAtCost,
             ultimaVenta: ago(row.daysSinceLastSale),
           })),
+          nuevosSinDatosDeVenta: {
+            cantidad: result.nuevos.length,
+            nombres: result.nuevos.slice(0, 10).map((row) => row.nombre),
+            nota: `entraron al inventario hace menos de ${dias} días: todavía no se sabe si se venden; no se proponen en kits`,
+          },
           kits: result.kits,
           sinKit: result.sinKit.slice(0, 5),
           señales: {

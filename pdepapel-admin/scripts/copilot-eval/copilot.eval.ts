@@ -225,7 +225,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
   const attributes = await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id }, select: { colorId: true, sizeId: true, designId: true } });
   const officeType = await testPrisma.type.create({ data: { name: "Oficina Eval", slug: `oficina-eval-${randomBytes(3).toString("hex")}`, storeId: store } });
   const office = await testPrisma.category.create({ data: { name: "Oficina Eval", slug: `oficina-eval-${randomBytes(3).toString("hex")}`, storeId: store, typeId: officeType.id } });
-  const make = (name: string, data: { price: number; stock: number; acqPrice: number | null; categoryId?: string; isKit?: boolean; isArchived?: boolean; reservedUnits?: number }) =>
+  const make = (name: string, data: { price: number; stock: number; acqPrice: number | null; categoryId?: string; isKit?: boolean; isArchived?: boolean; reservedUnits?: number; createdAt?: Date }) =>
     testPrisma.product.create({
       data: {
         storeId: store,
@@ -241,7 +241,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
         isKit: data.isKit ?? false,
         isArchived: data.isArchived ?? false,
         reservedUnits: data.reservedUnits ?? 0,
-        createdAt: new Date(Date.now() - 300 * DAY),
+        createdAt: data.createdAt ?? new Date(Date.now() - 300 * DAY),
       },
     });
   await testPrisma.product.update({ where: { id: f.component.id }, data: { stock: 0 } });
@@ -253,6 +253,10 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
   const marker = await make(KITS_FIXTURE.enAlza, { price: 6000, stock: 20, acqPrice: 2000 });
   await make(KITS_FIXTURE.archivado, { price: 7000, stock: 5, acqPrice: 2500, isArchived: true });
   await make(KITS_FIXTURE.reservado, { price: 4000, stock: 3, acqPrice: 1200, reservedUnits: 3 });
+  const fresh = await make(KITS_FIXTURE.nuevo, { price: 8000, stock: 6, acqPrice: 2500, createdAt: new Date(Date.now() - 10 * DAY) });
+  await testPrisma.inventoryMovement.create({
+    data: { storeId: store, productId: fresh.id, type: "INITIAL_INTAKE", quantity: 6, previousStock: 0, newStock: 6, createdBy: "eval", reason: "Entrada inicial", createdAt: new Date(Date.now() - 10 * DAY) },
+  });
   const sharpener = await make(KITS_FIXTURE.piezaSoloEnKits, { price: 2000, stock: 10, acqPrice: 500, categoryId: office.id });
   const schoolKit = await make("Kit escolar Eval", { price: 9000, stock: 5, acqPrice: null, isKit: true, categoryId: office.id });
   const oldKit = await make(KITS_FIXTURE.kitViejo, { price: 12000, stock: 4, acqPrice: null, isKit: true });
