@@ -71,6 +71,14 @@ Vistas: **Por atender** (todo lo que necesita acción hoy), **Por verificar**
 camino**, **Cotizaciones**, **Todos**. La columna Canal distingue Tienda,
 Presencial, Feria, Cotización o Mercado Libre.
 
+La lista muestra 25 pedidos por página. El buscador busca en todos los pedidos
+(número, cliente, teléfono, documento o producto), no solo en la página que se
+ve, y los contadores de las vistas cuentan todo. La vista, los filtros, la
+búsqueda y la página quedan en la dirección: el enlace se puede compartir. Las
+acciones en lote (marcar pagado, exportar…) actúan sobre los pedidos marcados
+de la página que se está viendo; al cambiar de página, de vista o de filtro se
+quitan las marcas.
+
 La página de un pedido tiene: título con insignias (canal, pago, envío) y
 teléfono que abre WhatsApp; línea de tiempo Creado › Pagado › Guía › En camino
 › Entregado; banner con el siguiente paso; «Links y Pagos» (link de pago o
