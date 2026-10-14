@@ -1,6 +1,7 @@
 "use client";
 
 import type { SupplierPickerOption } from "@/lib/public-catalog";
+import { ReservedBreakdown } from "@/components/reservations/reserved-breakdown";
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
@@ -2012,6 +2013,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         ? `Lo limita ${kitStockLimit.binding.name} (${kitStockLimit.binding.stock ?? 0} en bodega ÷ ${kitStockLimit.binding.quantity || 1} por kit).`
                         : "Agrega componentes para saber cuántos kits se pueden armar."}
                     </FormDescription>
+                    {initialData ? (
+                      <ReservedBreakdown storeId={String(params.storeId)} stock={initialData.stock} reserved={initialData.reservedUnits} />
+                    ) : null}
                   </FormItem>
                 ) : (
                   <FormField
@@ -2072,6 +2076,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                             <FormControl>
                               <Input type="hidden" {...field} />
                             </FormControl>
+                            <ReservedBreakdown storeId={String(params.storeId)} stock={initialData.stock} reserved={initialData.reservedUnits} />
                           </>
                         ) : (
                           // CREATE MODE: Show editable stock input

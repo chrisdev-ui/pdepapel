@@ -17,3 +17,11 @@ export function expiryLabel(expiresAt: Date | string, now: Date = new Date()): s
   if (diff === -1) return "venció ayer";
   return `venció hace ${-diff} días`;
 }
+
+/** Línea de la hoja «Reservar»: lo que se puede reservar y, si hay reservas, el stock y lo reservado. */
+export function reservableLine(stock: number, reserved: number | null | undefined): string {
+  const held = reserved && reserved > 0 ? reserved : 0;
+  const available = Math.max(0, stock - held);
+  const head = available === 0 ? "No hay unidades disponibles para reservar" : `Disponibles para reservar: ${available}`;
+  return held > 0 ? `${head} · stock ${stock}${reservedSuffix(held)}` : available === 0 ? `${head}.` : head;
+}

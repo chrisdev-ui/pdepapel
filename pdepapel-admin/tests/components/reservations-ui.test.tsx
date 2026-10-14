@@ -60,7 +60,7 @@ describe("Hoja «Reservar»", () => {
       />,
     );
     expect(screen.getByText("Sobre de manila")).toBeInTheDocument();
-    expect(screen.getByTestId("reserve-available")).toHaveTextContent("Disponibles para reservar: 4");
+    expect(screen.getByTestId("reserve-available")).toHaveTextContent(/^Disponibles para reservar: 4 · stock 5 · 1 reservado$/);
     expect(screen.getByLabelText("Clienta")).toHaveValue("Laura");
 
     fireEvent.click(screen.getByRole("button", { name: "Reservar 2 unidades" }));
@@ -103,7 +103,7 @@ describe("Hoja «Reservar»", () => {
 
   it("sin unidades disponibles no deja reservar", () => {
     render(<ReserveSheet open onOpenChange={() => undefined} defaultDays={3} product={{ id: "p-1", name: "Sobre de manila", stock: 2, reservedUnits: 2 }} customerName="Laura" />);
-    expect(screen.getByTestId("reserve-available")).toHaveTextContent("No hay unidades disponibles para reservar.");
+    expect(screen.getByTestId("reserve-available")).toHaveTextContent(/^No hay unidades disponibles para reservar · stock 2 · 2 reservados$/);
     expect(screen.getByRole("button", { name: "Reservar 1 unidad" })).toBeDisabled();
   });
 });

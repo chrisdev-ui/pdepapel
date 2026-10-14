@@ -15,6 +15,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { reservableLine } from "@/lib/reservation-labels";
 import { scanAccepted } from "@/lib/scan-outcome";
 import { createIdempotencyKey } from "@/lib/sell-cart";
 
@@ -143,7 +144,7 @@ export function ReserveSheet(props: ReserveSheetProps) {
             )}
             {available !== null && (
               <p className="text-xs text-muted-foreground" data-testid="reserve-available">
-                {available === 0 ? "No hay unidades disponibles para reservar." : `Disponibles para reservar: ${available}`}
+                {reservableLine(product!.stock!, product!.reservedUnits)}
               </p>
             )}
           </div>

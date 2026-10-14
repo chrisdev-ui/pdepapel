@@ -273,10 +273,13 @@ export function ConversationThread({
   conversation,
   storeId,
   reservationDefaultDays = 3,
+  productStock = {},
 }: {
   conversation: ConversationDetail;
   storeId: string;
   reservationDefaultDays?: number;
+  /** Stock y reservados de los productos pedidos, para la línea de la hoja «Reservar». */
+  productStock?: Record<string, { stock: number; reservedUnits: number }>;
 }) {
   const [reserveItem, setReserveItem] = useState<{ productId: string; name: string; quantity: number } | null>(null);
   const router = useRouter();
@@ -529,7 +532,7 @@ export function ConversationThread({
         open={reserveItem !== null}
         onOpenChange={(open) => !open && setReserveItem(null)}
         defaultDays={reservationDefaultDays}
-        product={reserveItem ? { id: reserveItem.productId, name: reserveItem.name } : null}
+        product={reserveItem ? { id: reserveItem.productId, name: reserveItem.name, ...productStock[reserveItem.productId] } : null}
         quantity={reserveItem?.quantity ?? 1}
         customerName={conversation.contactName?.trim() ?? ""}
         customerPhone={conversation.phone ?? ""}

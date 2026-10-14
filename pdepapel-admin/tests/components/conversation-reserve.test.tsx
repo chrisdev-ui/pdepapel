@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 /**
  * «Reservar» en la tarjeta «Pedido solicitado» de una conversación: abre la
  * hoja con el producto, la cantidad, el nombre y el celular de la clienta.
- * Un pedido descartado no ofrece reservar.
+ * Muestra lo que se puede reservar con el stock y lo ya reservado. Un pedido
+ * descartado no ofrece reservar.
  */
 const mocks = vi.hoisted(() => ({ post: vi.fn() }));
 
@@ -65,11 +66,12 @@ afterEach(() => {
 describe("Reservar desde un pedido de WhatsApp", () => {
   it("abre la hoja prellenada con lo que pidió la clienta y la reserva", async () => {
     mocks.post.mockResolvedValue({ data: {} });
-    render(<ConversationThread conversation={conversation("pending")} storeId="store-1" reservationDefaultDays={2} />);
+    render(<ConversationThread conversation={conversation("pending")} storeId="store-1" reservationDefaultDays={2} productStock={{ "p-1": { stock: 10, reservedUnits: 2 } }} />);
     fireEvent.click(screen.getByRole("button", { name: "Reservar" }));
 
     const sheet = await screen.findByRole("dialog", { name: "Reservar" });
     expect(within(sheet).getByText("Sobre de manila")).toBeInTheDocument();
+    expect(within(sheet).getByTestId("reserve-available")).toHaveTextContent(/^Disponibles para reservar: 8 · stock 10 · 2 reservados$/);
     expect(within(sheet).getByLabelText("Clienta")).toHaveValue("Laura");
     expect(within(sheet).getByLabelText("Celular")).toHaveValue("+573001234567");
     expect(within(sheet).getByLabelText("Días")).toHaveValue(2);

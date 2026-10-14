@@ -90,6 +90,9 @@ test.describe("reservas en distintos tamaños", () => {
       await sheet.getByRole("button", { name: "Reservar 1 unidad" }).click();
       await expect(sheet).toBeHidden({ timeout: 30_000 });
       await expect(page.getByText(/1 reservado/).first()).toBeVisible({ timeout: 30_000 });
+      const breakdown = page.getByTestId("reserved-breakdown");
+      await expect(breakdown).toContainText("En bodega20");
+      await expect(breakdown).toContainText("Se pueden vender19");
 
       await page.goto(new URL(`/${storeId}/reservas`, baseURL).toString(), { waitUntil: "domcontentloaded" });
       const card = page.getByTestId("reservation-card").filter({ hasText: "Clienta E2E" });

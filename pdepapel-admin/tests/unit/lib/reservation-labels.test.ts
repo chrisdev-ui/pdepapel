@@ -5,7 +5,7 @@ vi.mock("@/lib/prismadb", () => ({ default: {} }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } } }));
 vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: vi.fn() }));
 
-import { expiryLabel, reservedSuffix } from "@/lib/reservation-labels";
+import { expiryLabel, reservableLine, reservedSuffix } from "@/lib/reservation-labels";
 import { renderDigest } from "@/lib/stock-reservations-job";
 
 describe("etiquetas de reservas", () => {
@@ -14,6 +14,14 @@ describe("etiquetas de reservas", () => {
     expect(reservedSuffix(null)).toBe("");
     expect(reservedSuffix(1)).toBe(" · 1 reservado");
     expect(reservedSuffix(3)).toBe(" · 3 reservados");
+  });
+
+  it("la línea de la hoja dice lo reservable y, si hay reservas, el stock", () => {
+    expect(reservableLine(20, 0)).toBe("Disponibles para reservar: 20");
+    expect(reservableLine(10, 2)).toBe("Disponibles para reservar: 8 · stock 10 · 2 reservados");
+    expect(reservableLine(5, 1)).toBe("Disponibles para reservar: 4 · stock 5 · 1 reservado");
+    expect(reservableLine(2, 2)).toBe("No hay unidades disponibles para reservar · stock 2 · 2 reservados");
+    expect(reservableLine(0, 0)).toBe("No hay unidades disponibles para reservar.");
   });
 
   it("la cuenta regresiva usa los días de Bogotá", () => {
