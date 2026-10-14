@@ -126,7 +126,7 @@ export function ReserveSheet(props: ReserveSheetProps) {
         <div className="mt-4 flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label>Producto</Label>
-            {props.product ? (
+            {presetId ? (
               <p className="rounded-md border px-3 py-2 text-sm font-medium">{product?.name}</p>
             ) : (
               <div className="flex gap-2">

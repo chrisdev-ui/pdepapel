@@ -100,6 +100,28 @@ test.describe("reservas en distintos tamaños", () => {
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-reservas.png`), fullPage: true });
 
+      if (viewport.width === 390) {
+        // Convertir lleva al pedido pendiente del panel; la reserva sigue guardando la unidad.
+        // Hidratada cuando el menú «+ días» abre; Convertir se pulsa una sola vez (navega).
+        await expect(async () => {
+          await card.getByRole("button", { name: "+ días" }).click();
+          await expect(page.getByRole("menuitem", { name: "1 día más" })).toBeVisible({ timeout: 2000 });
+        }).toPass({ timeout: 60_000 });
+        await page.keyboard.press("Escape");
+        await card.getByRole("button", { name: "Convertir" }).click();
+        await page.waitForURL(new RegExp(`/${storeId}/pedidos/[^/?]+$`), { timeout: 120_000 });
+        await expect(page.getByText("Producto feria E2E").first()).toBeVisible({ timeout: 90_000 });
+        await expect(page.getByText("Clienta E2E").first()).toBeVisible();
+        expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+        await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-pedido.png`) });
+
+        await page.goto(new URL(`/${storeId}/reservas?filtro=convertidas`, baseURL).toString(), { waitUntil: "domcontentloaded" });
+        await expect(card).toBeVisible({ timeout: 60_000 });
+        await settled(card);
+        await expect(card.getByText("Con pedido", { exact: true })).toBeVisible();
+        await expect(card.getByRole("button", { name: "Convertir" })).toHaveCount(0);
+      }
+
       const confirm = page.getByRole("alertdialog").or(page.getByRole("dialog")).filter({ hasText: "¿Liberar esta reserva?" });
       await expect(async () => {
         await card.getByRole("button", { name: "Liberar" }).click();

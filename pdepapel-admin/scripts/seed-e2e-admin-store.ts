@@ -39,7 +39,14 @@ async function main() {
     select: { id: true },
   });
   const fairEventIds = existingFairs.map((fairEvent) => fairEvent.id);
+  const reservationOrders = await prisma.stockReservation.findMany({ where: { storeId, orderId: { not: null } }, select: { orderId: true } });
+  const reservationOrderIds = reservationOrders.map((row) => row.orderId as string);
   await prisma.stockReservation.deleteMany({ where: { storeId } });
+  if (reservationOrderIds.length > 0) {
+    await prisma.orderItem.deleteMany({ where: { orderId: { in: reservationOrderIds } } });
+    await prisma.paymentDetails.deleteMany({ where: { orderId: { in: reservationOrderIds } } });
+    await prisma.order.deleteMany({ where: { id: { in: reservationOrderIds } } });
+  }
   const fairOrders = fairEventIds.length
     ? await prisma.order.findMany({
         where: { fairEventId: { in: fairEventIds } },
