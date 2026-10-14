@@ -13,6 +13,7 @@ import {
 import { Models, ModelsColumns } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { makeApiCall } from "@/lib/api";
+import { orderCsvValues } from "@/lib/order-csv";
 import { getErrorMessage } from "@/lib/api-errors";
 import { getDashboardApiRoute } from "@/lib/dashboard-api-routes";
 import { cn } from "@/lib/utils";
@@ -402,14 +403,15 @@ export function DataTableActionOptions<TData>({
       const displayNames = Object.values(columnsDefs);
       const headers = displayNames.join(",");
       const rowsData = rows
-        .map((row) =>
-          keys
+        .map((row) => {
+          const values = model === Models.Orders ? orderCsvValues(row.original) : row.original;
+          return keys
             .map((key) => {
-              const value = row.original[key];
-              return typeof value === "string" ? `"${value}"` : value;
+              const value = values[key];
+              return typeof value === "string" ? `"${value.replace(/"/g, '""')}"` : value;
             })
-            .join(","),
-        )
+            .join(",");
+        })
         .join("\n");
       const csvContent = `${headers}\n${rowsData}`;
 
