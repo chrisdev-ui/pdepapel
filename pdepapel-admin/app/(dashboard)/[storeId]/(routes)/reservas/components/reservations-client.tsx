@@ -4,7 +4,7 @@ import axios from "axios";
 import { CalendarPlus, Loader2, MessageCircle, Package, Plus, Receipt, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ActionConfirmationDialog } from "@/components/modals/action-confirmation-dialog";
 import { ReserveSheet } from "@/components/reservations/reserve-sheet";
@@ -70,54 +70,103 @@ export function ReservationsClient({
   const { toast } = useToast();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [releasing, setReleasing] = useState<ReservationView | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [items, setItems] = useState(reservations);
+  const [tally, setTally] = useState(counts);
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
+  // El estado de React no se ve hasta el siguiente render: un doble toque en el mismo tick pasaría la guarda.
+  const inFlight = useRef(new Set<string>());
+
+  useEffect(() => {
+    setItems(reservations);
+    setTally(counts);
+  }, [reservations, counts]);
+
+  const begin = (id: string) => {
+    if (inFlight.current.has(id)) return false;
+    inFlight.current.add(id);
+    setBusyIds(new Set(inFlight.current));
+    return true;
+  };
+  const end = (id: string) => {
+    inFlight.current.delete(id);
+    setBusyIds(new Set(inFlight.current));
+  };
 
   const fail = (cause: unknown, fallback: string) => {
     const message = axios.isAxiosError(cause) ? cause.response?.data?.error : null;
     toast({ variant: "destructive", title: "No se pudo", description: typeof message === "string" ? message : fallback });
   };
 
+  const holdShift = (hold: ReservationView, sign: 1 | -1) =>
+    setTally((current) => ({
+      activas: current.activas + sign,
+      convertidas: current.convertidas + (hold.status === "CONVERTED" ? sign : 0),
+      sinRespaldo: current.sinRespaldo + (hold.unbackedAt ? sign : 0),
+    }));
+
+  const replace = (id: string, next: ReservationView) => setItems((current) => current.map((row) => (row.id === id ? next : row)));
+
   const release = async (hold: ReservationView) => {
-    setBusyId(hold.id);
+    if (!begin(hold.id)) return;
+    setReleasing(null);
+    const index = items.findIndex((row) => row.id === hold.id);
+    setItems((current) => current.filter((row) => row.id !== hold.id));
+    holdShift(hold, -1);
     try {
       await axios.patch(`/api/${storeId}/stock-reservations/${hold.id}`, { action: "liberar" });
       toast({ variant: "success", title: "Liberado", description: `${hold.quantity} × ${hold.product.name} vuelve a estar a la venta.` });
       router.refresh();
     } catch (cause) {
-      fail(cause, "Intenta de nuevo.");
+      setItems((current) => (current.some((row) => row.id === hold.id) ? current : [...current.slice(0, index), hold, ...current.slice(index)]));
+      holdShift(hold, 1);
+      fail(cause, "La reserva sigue activa. Intenta de nuevo.");
     } finally {
-      setBusyId(null);
-      setReleasing(null);
+      end(hold.id);
     }
   };
 
   const extend = async (hold: ReservationView, days: number) => {
-    setBusyId(hold.id);
+    if (!begin(hold.id)) return;
+    const base = Math.max(new Date(hold.expiresAt).getTime(), Date.now());
+    replace(hold.id, { ...hold, expiresAt: new Date(base + days * 86_400_000).toISOString() });
     try {
-      await axios.patch(`/api/${storeId}/stock-reservations/${hold.id}`, { action: "extender", days });
+      const { data } = await axios.patch(`/api/${storeId}/stock-reservations/${hold.id}`, { action: "extender", days });
+      if (data?.reservation?.expiresAt) replace(hold.id, { ...hold, expiresAt: String(data.reservation.expiresAt) });
       toast({ variant: "success", title: "Listo", description: `La reserva de ${hold.customerName} tiene ${days} ${days === 1 ? "día" : "días"} más.` });
       router.refresh();
     } catch (cause) {
-      fail(cause, "Intenta de nuevo.");
+      replace(hold.id, hold);
+      fail(cause, "La fecha no cambió. Intenta de nuevo.");
     } finally {
-      setBusyId(null);
+      end(hold.id);
     }
   };
 
   const convert = async (hold: ReservationView) => {
-    setBusyId(hold.id);
+    if (!begin(hold.id)) return;
+    replace(hold.id, { ...hold, status: "CONVERTED" });
+    setTally((current) => ({ ...current, convertidas: current.convertidas + 1 }));
     try {
       const { data } = await axios.post(`/api/${storeId}/stock-reservations/${hold.id}/convert`);
+      replace(hold.id, { ...hold, status: "CONVERTED", orderId: data.orderId });
       toast({ variant: "success", title: "Pedido creado", description: "Completa el correo, la dirección y el pago en el pedido." });
       router.push(`/${storeId}/pedidos/${data.orderId}`);
     } catch (cause) {
-      fail(cause, "Intenta de nuevo.");
-      setBusyId(null);
+      replace(hold.id, hold);
+      setTally((current) => ({ ...current, convertidas: current.convertidas - 1 }));
+      fail(cause, "No se creó el pedido. Intenta de nuevo.");
+    } finally {
+      end(hold.id);
     }
   };
 
+  const created = (row: ReservationView) => {
+    if (filter === "activas") setItems((current) => (current.some((item) => item.id === row.id) ? current : [...current, row].sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))));
+    setTally((current) => ({ ...current, activas: current.activas + 1 }));
+  };
+
   const tabCount = (value: Filter) =>
-    value === "activas" ? counts.activas : value === "convertidas" ? counts.convertidas : value === "sin-respaldo" ? counts.sinRespaldo : null;
+    value === "activas" ? tally.activas : value === "convertidas" ? tally.convertidas : value === "sin-respaldo" ? tally.sinRespaldo : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -150,14 +199,15 @@ export function ReservationsClient({
         })}
       </nav>
 
-      {reservations.length === 0 ? (
+      {items.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
           <Package className="h-6 w-6" aria-hidden="true" />
           {filter === "activas" ? "No hay reservas activas." : "No hay reservas aquí."}
         </div>
       ) : (
         <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {reservations.map((hold) => {
+          {items.map((hold) => {
+            const busy = busyIds.has(hold.id);
             const holding = hold.status === "ACTIVE" || hold.status === "CONVERTED";
             const overdue = holding && new Date(hold.expiresAt) < new Date();
             const chip = STATUS_CHIP[hold.status];
@@ -199,8 +249,8 @@ export function ReservationsClient({
                 {holding && (
                   <div className="grid grid-cols-3 gap-2">
                     {hold.status === "ACTIVE" ? (
-                      <Button size="sm" className="min-h-10" disabled={busyId === hold.id} onClick={() => convert(hold)}>
-                        {busyId === hold.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Receipt className="mr-1.5 h-4 w-4" aria-hidden="true" />}
+                      <Button size="sm" className="min-h-10" disabled={busy} onClick={() => convert(hold)}>
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Receipt className="mr-1.5 h-4 w-4" aria-hidden="true" />}
                         Convertir
                       </Button>
                     ) : (
@@ -211,13 +261,13 @@ export function ReservationsClient({
                         </Link>
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" className="min-h-10" disabled={busyId === hold.id} onClick={() => setReleasing(hold)}>
+                    <Button size="sm" variant="outline" className="min-h-10" disabled={busy} onClick={() => setReleasing(hold)}>
                       <Undo2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
                       Liberar
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="outline" className="min-h-10" disabled={busyId === hold.id}>
+                        <Button size="sm" variant="outline" className="min-h-10" disabled={busy}>
                           <CalendarPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                           + días
                         </Button>
@@ -238,7 +288,7 @@ export function ReservationsClient({
         </ul>
       )}
 
-      <ReserveSheet open={sheetOpen} onOpenChange={setSheetOpen} defaultDays={defaultDays} />
+      <ReserveSheet open={sheetOpen} onOpenChange={setSheetOpen} defaultDays={defaultDays} onCreated={(row) => created(row as unknown as ReservationView)} />
       <ActionConfirmationDialog
         isOpen={releasing !== null}
         onOpenChange={(open) => !open && setReleasing(null)}

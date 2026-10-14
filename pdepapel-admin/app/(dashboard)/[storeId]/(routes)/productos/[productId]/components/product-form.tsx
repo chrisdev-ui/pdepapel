@@ -319,6 +319,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const canWrite = useCanWrite();
   const [reserveOpen, setReserveOpen] = useState(false);
+  // Lo reservado se ve al instante; la recarga del servidor trae el número real después.
+  const [reservedNow, setReservedNow] = useState(initialData?.reservedUnits ?? 0);
+  useEffect(() => setReservedNow(initialData?.reservedUnits ?? 0), [initialData?.reservedUnits]);
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -1221,7 +1224,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         }
         summary={
           initialData
-            ? `${initialData.sku} · ${currencyFormatter(initialData.price)}${headerMargin !== null ? ` · margen ${headerMargin} %` : ""} · ${initialData.stock} und${reservedSuffix(initialData.reservedUnits)}${!headerReadiness.complete ? ` · faltan ${headerReadiness.total - headerReadiness.done} para vender` : ""}`
+            ? `${initialData.sku} · ${currencyFormatter(initialData.price)}${headerMargin !== null ? ` · margen ${headerMargin} %` : ""} · ${initialData.stock} und${reservedSuffix(reservedNow)}${!headerReadiness.complete ? ` · faltan ${headerReadiness.total - headerReadiness.done} para vender` : ""}`
             : seed
               ? "Se copiaron nombre, precio, costo, clasificación y descripción. Sube fotos nuevas y revisa el stock inicial; el SKU y la URL se generan al guardar."
               : "Sube la foto, completa nombre, precio y categoría; la lista te dice qué falta para venderlo."
@@ -1256,7 +1259,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 open={reserveOpen}
                 onOpenChange={setReserveOpen}
                 defaultDays={reservationDefaultDays}
-                product={{ id: initialData.id, name: initialData.name, stock: initialData.stock, reservedUnits: initialData.reservedUnits }}
+                product={{ id: initialData.id, name: initialData.name, stock: initialData.stock, reservedUnits: reservedNow }}
+                onCreated={(reservation) => setReservedNow((current) => current + reservation.quantity)}
               />
               <Button
                 type="button"
@@ -2014,7 +2018,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         : "Agrega componentes para saber cuántos kits se pueden armar."}
                     </FormDescription>
                     {initialData ? (
-                      <ReservedBreakdown storeId={String(params.storeId)} stock={initialData.stock} reserved={initialData.reservedUnits} />
+                      <ReservedBreakdown storeId={String(params.storeId)} stock={initialData.stock} reserved={reservedNow} />
                     ) : null}
                   </FormItem>
                 ) : (
@@ -2076,7 +2080,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                             <FormControl>
                               <Input type="hidden" {...field} />
                             </FormControl>
-                            <ReservedBreakdown storeId={String(params.storeId)} stock={initialData.stock} reserved={initialData.reservedUnits} />
+                            <ReservedBreakdown storeId={String(params.storeId)} stock={initialData.stock} reserved={reservedNow} />
                           </>
                         ) : (
                           // CREATE MODE: Show editable stock input

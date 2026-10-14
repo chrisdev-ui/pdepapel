@@ -3,7 +3,7 @@
 import axios from "axios";
 import { Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,11 @@ export interface ReserveSheetProps {
   customerName?: string;
   customerPhone?: string;
   note?: string;
-  onCreated?: () => void;
+  /** La reserva creada, tal como la devuelve la API (fechas como texto). */
+  onCreated?: (reservation: CreatedReservation) => void;
 }
+
+export type CreatedReservation = { id: string; productId: string; quantity: number; expiresAt: string } & Record<string, unknown>;
 
 const availableOf = (product?: ReserveSheetProduct | null) =>
   product && typeof product.stock === "number" ? Math.max(0, product.stock - (product.reservedUnits ?? 0)) : null;
@@ -61,6 +64,7 @@ export function ReserveSheet(props: ReserveSheetProps) {
   const [days, setDays] = useState(String(defaultDays));
   const [note, setNote] = useState(props.note ?? "");
   const [saving, setSaving] = useState(false);
+  const submitting = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => createIdempotencyKey("reserve"));
 
@@ -88,12 +92,14 @@ export function ReserveSheet(props: ReserveSheetProps) {
   };
 
   const submit = async () => {
+    if (submitting.current) return;
     if (!product) return setError("Elige el producto que vas a reservar.");
     if (customerName.trim().length < 2) return setError("Escribe el nombre de la clienta.");
+    submitting.current = true;
     setSaving(true);
     setError(null);
     try {
-      await axios.post(
+      const { data } = await axios.post(
         `/api/${params.storeId}/stock-reservations`,
         { productId: product.id, quantity, customerName, customerPhone, days: Number(days), note },
         { headers: { "Idempotency-Key": idempotencyKey } },
@@ -104,12 +110,13 @@ export function ReserveSheet(props: ReserveSheetProps) {
         description: `${quantity} × ${product.name} para ${customerName.trim()}. Ya no se vende en la tienda ni en Mercado Libre.`,
       });
       onOpenChange(false);
-      onCreated?.();
+      if (data?.reservation) onCreated?.(data.reservation as CreatedReservation);
       router.refresh();
     } catch (cause) {
       const message = axios.isAxiosError(cause) ? (cause.response?.data?.error ?? cause.response?.data?.message) : null;
       setError(typeof message === "string" ? message : "No se pudo reservar. Intenta de nuevo.");
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };

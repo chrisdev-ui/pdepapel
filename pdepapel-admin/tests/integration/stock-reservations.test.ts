@@ -302,4 +302,30 @@ describe("reservas (MySQL)", () => {
     expect((await PATCH(request("PATCH", { action: "liberar" }), { params: { storeId: f.store.id, reservationId: id } })).status).toBe(200);
     await expect(counters(f.component.id)).resolves.toEqual({ stock: 3, reservedUnits: 0, available: 3 });
   });
+
+  it("repetir «Liberar» o «Convertir» por la API no hace nada la segunda vez", async () => {
+    const f = await setup(4);
+    const other = await reserve(f, 1);
+    const target = await reserve(f, 2);
+    const { PATCH } = await import("@/app/api/[storeId]/stock-reservations/[reservationId]/route");
+    const { POST: CONVERT } = await import("@/app/api/[storeId]/stock-reservations/[reservationId]/convert/route");
+    const params = (reservationId: string) => ({ params: { storeId: f.store.id, reservationId } });
+
+    const first = await PATCH(request("PATCH", { action: "liberar" }), params(target.reservation.id));
+    expect(await first.json()).toEqual({ released: true });
+    await expect(counters(f.component.id)).resolves.toMatchObject({ reservedUnits: 1 });
+    const again = await PATCH(request("PATCH", { action: "liberar" }), params(target.reservation.id));
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ released: false });
+    await expect(counters(f.component.id)).resolves.toMatchObject({ reservedUnits: 1 });
+
+    const converted = await CONVERT(request("POST"), params(other.reservation.id));
+    expect(converted.status).toBe(201);
+    const { orderId } = (await converted.json()) as { orderId: string };
+    const repeated = await CONVERT(request("POST"), params(other.reservation.id));
+    expect(repeated.status).toBe(200);
+    expect(await repeated.json()).toEqual({ orderId, existing: true });
+    await expect(testPrisma.order.count({ where: { storeId: f.store.id } })).resolves.toBe(1);
+    await expect(counters(f.component.id)).resolves.toMatchObject({ stock: 4, reservedUnits: 1 });
+  });
 });

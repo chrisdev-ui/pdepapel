@@ -27,7 +27,13 @@ vi.mock("axios", () => ({
 }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }), useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
-vi.mock("@/components/ui/async-product-select", () => ({ AsyncProductSelect: () => <output data-testid="picker" /> }));
+vi.mock("@/components/ui/async-product-select", () => ({
+  AsyncProductSelect: ({ onChange }: { onChange: (value: string, option: unknown) => void }) => (
+    <button type="button" data-testid="picker" onClick={() => onChange("p-9", { id: "p-9", name: "Washi tape", stock: 4, reservedUnits: 0 })}>
+      Elegir producto
+    </button>
+  ),
+}));
 vi.mock("@/components/ui/product-scan-button", () => ({ ProductScanButton: () => null }));
 vi.mock("@/components/ui/phone-input", () => ({
   PhoneInput: ({ value, onChange, id }: { value: string; onChange: (v: string) => void; id?: string }) => (
@@ -168,5 +174,107 @@ describe("Pantalla Reservas", () => {
     expect(within(converted).getByText("Con pedido")).toBeInTheDocument();
     expect(within(converted).getByRole("link", { name: "Pedido ORD-77" })).toHaveAttribute("href", "/store-1/pedidos/o-1");
     expect(within(converted).queryByRole("button", { name: "Convertir" })).not.toBeInTheDocument();
+  });
+});
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((ok, ko) => {
+    resolve = ok;
+    reject = ko;
+  });
+  return { promise, resolve, reject };
+};
+const activasTab = () => screen.getByRole("link", { name: /^Activas/ });
+const confirmRelease = async () => {
+  fireEvent.click(within(screen.getAllByTestId("reservation-card")[0]).getByRole("button", { name: "Liberar" }));
+  const dialog = await screen.findByRole("alertdialog").catch(() => screen.findByRole("dialog"));
+  return within(dialog).getByRole("button", { name: "Liberar" });
+};
+
+describe("Pantalla Reservas · al instante", () => {
+  it("liberar quita la tarjeta y baja «Activas» antes de que responda el servidor; luego recarga", async () => {
+    const request = deferred<{ data: { released: boolean } }>();
+    mocks.patch.mockReturnValue(request.promise);
+    screenWith([hold(), hold({ id: "r-2", customerName: "Marta" })]);
+    expect(activasTab()).toHaveTextContent("Activas2");
+
+    fireEvent.click(await confirmRelease());
+    await waitFor(() => expect(screen.getAllByTestId("reservation-card")).toHaveLength(1));
+    expect(screen.queryByText("Laura")).not.toBeInTheDocument();
+    expect(activasTab()).toHaveTextContent("Activas1");
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    await act(async () => request.resolve({ data: { released: true } }));
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("si el servidor falla, la tarjeta vuelve a su lugar, el contador se restaura y sale el error", async () => {
+    mocks.patch.mockRejectedValue({ isAxiosError: true, response: { data: { error: "Reserva no encontrada" } } });
+    screenWith([hold(), hold({ id: "r-2", customerName: "Marta" })]);
+    fireEvent.click(await confirmRelease());
+
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive", description: "Reserva no encontrada" })));
+    const cards = screen.getAllByTestId("reservation-card");
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]).getByText("Laura")).toBeInTheDocument();
+    expect(activasTab()).toHaveTextContent("Activas2");
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it("un doble toque en «Liberar» manda una sola petición", async () => {
+    const request = deferred<{ data: { released: boolean } }>();
+    mocks.patch.mockReturnValue(request.promise);
+    screenWith([hold()]);
+    const confirm = await confirmRelease();
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await act(async () => request.resolve({ data: { released: true } }));
+    expect(mocks.patch).toHaveBeenCalledTimes(1);
+  });
+
+  it("un doble toque en «Convertir» crea un solo pedido", async () => {
+    const request = deferred<{ data: { orderId: string } }>();
+    mocks.post.mockReturnValue(request.promise);
+    screenWith([hold()]);
+    const button = screen.getByRole("button", { name: "Convertir" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await act(async () => request.resolve({ data: { orderId: "o-1" } }));
+    expect(mocks.post).toHaveBeenCalledTimes(1);
+    expect(mocks.push).toHaveBeenCalledTimes(1);
+  });
+
+  it("mientras convierte, los botones de la tarjeta se apagan y ya dice «Con pedido»; si falla, vuelve", async () => {
+    const request = deferred<{ data: { orderId: string } }>();
+    mocks.post.mockReturnValue(request.promise);
+    screenWith([hold()]);
+    fireEvent.click(screen.getByRole("button", { name: "Convertir" }));
+    const card = screen.getByTestId("reservation-card");
+    await waitFor(() => expect(within(card).getByText("Con pedido")).toBeInTheDocument());
+    expect(within(card).getByRole("button", { name: "Liberar" })).toBeDisabled();
+    expect(within(card).getByRole("button", { name: /\+ días/ })).toBeDisabled();
+
+    await act(async () => request.reject({ isAxiosError: true, response: { data: { error: "Solo una reserva activa se puede convertir en pedido" } } }));
+    expect(within(card).getByText("Reservado")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Liberar" })).toBeEnabled();
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
+  });
+
+  it("una reserva creada desde la hoja aparece en la lista sin esperar la recarga", async () => {
+    const later = new Date(Date.now() + 5 * 86_400_000).toISOString();
+    mocks.post.mockResolvedValue({ data: { reservation: hold({ id: "r-new", productId: "p-9", customerName: "Sofía", quantity: 1, expiresAt: later, product: { ...hold().product, id: "p-9", name: "Washi tape" } }) } });
+    screenWith([hold()]);
+    fireEvent.click(screen.getByRole("button", { name: /Reservar/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Reservar" });
+    fireEvent.click(within(sheet).getByTestId("picker"));
+    fireEvent.change(within(sheet).getByLabelText("Clienta"), { target: { value: "Sofía" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Reservar 1 unidad" }));
+
+    await waitFor(() => expect(screen.getAllByTestId("reservation-card")).toHaveLength(2));
+    expect(screen.getAllByTestId("reservation-card")[1]).toHaveTextContent("1 × Washi tape");
+    expect(activasTab()).toHaveTextContent("Activas2");
   });
 });

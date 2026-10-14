@@ -65,7 +65,7 @@ afterEach(() => {
 
 describe("Reservar desde un pedido de WhatsApp", () => {
   it("abre la hoja prellenada con lo que pidió la clienta y la reserva", async () => {
-    mocks.post.mockResolvedValue({ data: {} });
+    mocks.post.mockResolvedValue({ data: { reservation: { id: "r-1", productId: "p-1", quantity: 3, expiresAt: "2026-10-17T12:00:00.000Z" } } });
     render(<ConversationThread conversation={conversation("pending")} storeId="store-1" reservationDefaultDays={2} productStock={{ "p-1": { stock: 10, reservedUnits: 2 } }} />);
     fireEvent.click(screen.getByRole("button", { name: "Reservar" }));
 
@@ -85,6 +85,8 @@ describe("Reservar desde un pedido de WhatsApp", () => {
         expect.anything(),
       ),
     );
+    expect(await screen.findByText("Reservado 3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reservar" })).not.toBeInTheDocument();
   });
 
   it("un pedido descartado no ofrece reservar", () => {
