@@ -50,7 +50,7 @@ Durante todo el proceso, root sigue funcionando. Nada se borra ni se revoca hast
 | 4 | Christian, en Vercel › pdepapel-admin › Settings › Environment Variables › `DATABASE_URL` (Production) › Edit | Reemplaza el valor por la URL de `pdepapel_app` y conserva los parámetros que tenga después de `?`. **Editar, nunca borrar y volver a crear** (`vercel env rm` sin entorno borra la variable en todos). |
 | 5 | Claude, con su sí | Deploy **nuevo** por git: cambia la línea de `pdepapel-admin/deploy-stamp.txt`, commit y push. Nunca un redeploy (reusa el entorno viejo) ni `vercel deploy` local (subió archivos `.env` el 2026-10-06). Espera `READY` y compara `/api/version` con el commit. |
 | 6 | Claude | Verificación, la misma tarde (ver abajo). |
-| 7 | Christian, días después | Cuando lleve una semana sin errores de permisos: rotar la contraseña de root, porque la vieja vivió en Vercel y en la integración de Railway que se cortó el 2026-10-07. Root sigue existiendo para `prod:migrate`. Actualizar `.env.prod-write`. |
+| 7 | Christian, días después | Cuando lleve una semana sin errores de permisos: rotar la contraseña de root, porque la vieja vivió en Vercel y en la integración de Railway que se cortó el 2026-10-07. Root sigue existiendo para `prod:migrate`. Actualizar `.env.prod-write`. Cambiar solo la contraseña no afecta la vista `CopilotBotDemand` (DEFINER root); si se borra o renombra la cuenta root, recrear la vista con el `CREATE OR REPLACE VIEW` de `pdepapel-admin/prisma/manual-migrations/20261014_grant_copilot_ro_kits.sql` como el nuevo administrador. |
 
 ### Verificación del paso 6
 
