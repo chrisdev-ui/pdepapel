@@ -32,6 +32,8 @@ npm run dev            # http://localhost:3000
 
 Environment is validated at build time by `@t3-oss/env-nextjs` + Zod in `lib/env.mjs`, imported by `next.config.mjs`. A missing mandatory variable **fails the build**.
 
+Code that can reach the browser reads public values from `lib/public-env.ts` (`import { publicEnv as env } from "@/lib/public-env"`), never from `lib/env.mjs`. `public-env.ts` reads each `process.env.NEXT_PUBLIC_*` **literally**, so Next inlines the value at build time; importing `env.mjs` from a client component put Zod and `@t3-oss/env-nextjs` on every page. Validation still happens only in `env.mjs` at build time. `tests/unit/lib/public-env-literals.test.ts` fails if an entry stops being a literal `process.env.<same name>` read (a dynamic `process.env[name]` read is not inlined and arrives empty in the browser, with no error). A new public variable goes in both files.
+
 Baseline variables: Clerk keys and routes, `NEXT_PUBLIC_API_URL` (the admin API), `RESEND_API_KEY`, and the server-side `REVALIDATION_SECRET` that must match the admin's value exactly.
 
 The analytics identifiers `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_CLARITY_PROJECT_ID` and `NEXT_PUBLIC_CLARITY_ENABLED` use `requiredInProduction` (`lib/env-rules.mjs`): optional locally, in CI and in Preview, mandatory when `VERCEL_ENV=production`. They are public identifiers, not secrets, and belong only to this project.
@@ -76,7 +78,8 @@ CI (`.github/workflows/quality.yml`) runs `type-check` and `test:coverage`. `pub
 
   ```text
   app/
-  ├── (routes)/       # public pages: Spanish canonical + English redirect stubs
+  ├── (routes)/       # public pages: Spanish canonical + English redirect stubs (headless Clerk)
+  ├── (cuenta)/       # iniciar-sesion, crear-cuenta, mi-cuenta, mis-pedidos, mis-busquedas (full Clerk)
   └── api/
       ├── revalidate/ # admin cache-refresh callback (shared secret)
       └── send/       # contact/email action
@@ -137,6 +140,20 @@ When adding a customer-navigable route:
 **Any new page that calls `auth()` or `currentUser()` on the server must be added to `requiresServerAuth` in `middleware.ts`, or Clerk throws and the page answers 500.** `/pedido/[id]` has shipped in that state.
 
 When a change touches authentication or authorization, verify that route list **and** confirm the assumption the change rests on with a read-only query against production data rather than reading it off the schema. Most production orders carry the **owner's** `userId`: the owner registers WhatsApp orders on the customer's behalf. True in the schema, false in the data.
+
+### Clerk: headless on public pages, full only in `(cuenta)`
+
+`components/storefront-shell.tsx` renders the header, footer, providers and `ClerkProvider` for both route groups, with a pinned `clerkJSVersion` and a `clerkVariant`:
+
+- `app/(routes)` (every public page, including `not-found`) loads **headless** clerk-js: session, token and `signOut`, no UI components. `<SignIn>`, `<SignUp>`, `<UserButton>` and `openUserProfile()` do not work there. The header uses our own `components/account-menu.tsx`, and «Administrar cuenta» is the link `/mi-cuenta?perfil=1`, which opens the Clerk profile from `AccountHub`.
+- `app/(cuenta)` (`/iniciar-sesion`, `/crear-cuenta`, `/mi-cuenta`, `/mis-pedidos`, `/mis-busquedas`) loads **full** clerk-js. New pages that need Clerk UI go here, and `isAccountGroupPath` in `lib/routes.ts` must list them.
+
+**Entering or leaving the account pages is always a full page load.** A soft navigation between the two groups remounts the shell, keeps the wrong Clerk script, re-downloads Clerk and loses the GA4 page_view. The mechanisms:
+
+- Outside `(cuenta)`, links to account pages use `components/storefront-link.tsx` (`StorefrontLink`, a drop-in for `next/link` that renders a plain `<a>` for account hrefs) or `window.location.assign`, never `next/link` or `router.push`. `tests/unit/security/account-links-scan.test.ts` enforces this; its allowlist holds only components rendered inside `(cuenta)`.
+- Inside `(cuenta)`, `FullClerkGuard` turns clicks on internal links that leave the group into full loads, and reloads once if it finds the headless script.
+- `HeadlessClerkGuard` in `(routes)` reloads once if a programmatic exit (the search box, Clerk's post-sign-in redirect) arrived with the full script.
+- Covered end to end by `tests/e2e/local/account-session.spec.ts`: script variant per group, owner order → `PANEL` without analytics, customer order → `STORE` with `userId` and consent, wishlist PUT with the Bearer token, return to the original page after sign-in, sign-out from the menu, one page_view per crossing, no hydration errors.
 
 ### Cache and revalidation
 
