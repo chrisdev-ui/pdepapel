@@ -9,105 +9,108 @@ datasource db {
 }
 
 model Store {
-  id                             String                          @id @default(uuid())
-  name                           String
-  userId                         String
-  logoUrl                        String?
-  phone                          String?                         @default("")
-  email                          String?                         @default("")
-  address                        String?                         @default("")
-  instagram                      String?                         @default("")
-  tiktok                         String?                         @default("")
-  youtube                        String?                         @default("")
-  facebook                       String?                         @default("")
-  twitter                        String?                         @default("")
-  pinterest                      String?                         @default("")
-  policies                       Json?                           @default("{}")
-  daneCode                       String?                         @default("")
-  neighborhood                   String?                         @default("")
-  addressReference               String?                         @default("")
-  contactName                    String?                         @default("")
-  defaultPackageWeight           Float?                          @default(1.0) // Peso por defecto (kg)
-  defaultPackageHeight           Float?                          @default(10.0) // Alto por defecto (cm)
-  defaultPackageWidth            Float?                          @default(10.0) // Ancho por defecto (cm)
-  defaultPackageLength           Float?                          @default(10.0) // Largo por defecto (cm)
-  freeShippingThreshold          Int? // Subtotal (COP) desde el cual el envío es gratis; null = desactivado
-  lowStockThreshold              Int? // Unidades desde las cuales el stock se considera crítico; null = usa TRESHOLD_LOW_STOCK (5)
+  id                              String                          @id @default(uuid())
+  name                            String
+  userId                          String
+  logoUrl                         String?
+  phone                           String?                         @default("")
+  email                           String?                         @default("")
+  address                         String?                         @default("")
+  instagram                       String?                         @default("")
+  tiktok                          String?                         @default("")
+  youtube                         String?                         @default("")
+  facebook                        String?                         @default("")
+  twitter                         String?                         @default("")
+  pinterest                       String?                         @default("")
+  policies                        Json?                           @default("{}")
+  daneCode                        String?                         @default("")
+  neighborhood                    String?                         @default("")
+  addressReference                String?                         @default("")
+  contactName                     String?                         @default("")
+  defaultPackageWeight            Float?                          @default(1.0) // Peso por defecto (kg)
+  defaultPackageHeight            Float?                          @default(10.0) // Alto por defecto (cm)
+  defaultPackageWidth             Float?                          @default(10.0) // Ancho por defecto (cm)
+  defaultPackageLength            Float?                          @default(10.0) // Largo por defecto (cm)
+  freeShippingThreshold           Int? // Subtotal (COP) desde el cual el envío es gratis; null = desactivado
+  lowStockThreshold               Int? // Unidades desde las cuales el stock se considera crítico; null = usa TRESHOLD_LOW_STOCK (5)
+  /// Días que dura un apartado si no se elige otra fecha.
+  reservationDefaultDays          Int                             @default(3)
   /// Margen neto objetivo en Mercado Libre, en % del precio, para sugerir precios.
-  mercadoLibreTargetMarginPercent Float @default(20)
+  mercadoLibreTargetMarginPercent Float                           @default(20)
   /// Ganancia neta mínima por unidad en Mercado Libre, en COP.
-  mercadoLibreMinNetPerUnit      Int   @default(10000)
-  createdAt                      DateTime                        @default(now())
-  updatedAt                      DateTime                        @updatedAt
-  types                          Type[]                          @relation("StoreToType")
-  homeContents                   HomeContent[]                   @relation("StoreToHomeContent")
-  posts                          Post[]                          @relation("StoreToPost")
-  categories                     Category[]                      @relation("StoreToCategory")
-  sizes                          Size[]                          @relation("StoreToSize")
-  shippingProfiles               ShippingProfile[]
-  catalogOptions                 CatalogOption[]
-  catalogOptionValues            CatalogOptionValue[]
-  categoryCatalogOptions         CategoryCatalogOption[]
-  productCatalogOptionValues     ProductCatalogOptionValue[]
-  catalogMigrationSuggestions    CatalogMigrationSuggestion[]
-  colors                         Color[]                         @relation("StoreToColor")
-  designs                        Design[]                        @relation("StoreToDesign")
-  products                       Product[]                       @relation("StoreToProduct")
-  productSlugAliases             ProductSlugAlias[]
-  deletedProductUrls             DeletedProductUrl[]
-  categorySlugAliases            CategorySlugAlias[]
-  typeSlugAliases                TypeSlugAlias[]
-  orders                         Order[]                         @relation("StoreToOrder")
-  reviews                        Review[]                        @relation("StoreToReview")
-  shippings                      Shipping[]                      @relation("StoreToShipping")
-  payments                       PaymentDetails[]                @relation("StoreToPaymentDetails")
-  suppliers                      Supplier[]                      @relation("StoreToSupplier")
-  coupons                        Coupon[]                        @relation("StoreToCoupons")
-  giftCards                      GiftCard[]                      @relation("StoreToGiftCard")
-  giftCardMovements              GiftCardMovement[]              @relation("StoreToGiftCardMovement")
-  giftCardDenominations          GiftCardDenomination[]          @relation("StoreToGiftCardDenomination")
-  customerAddresses              CustomerAddress[]               @relation("StoreToCustomerAddress")
-  customerWishlistItems          CustomerWishlistItem[]          @relation("StoreToCustomerWishlistItem")
-  customerSavedSearches          CustomerSavedSearch[]           @relation("StoreToCustomerSavedSearch")
-  couponRedemptions              CouponRedemption[]              @relation("StoreToCouponRedemption")
-  shippingQuotes                 ShippingQuote[]                 @relation("StoreToShippingQuotes")
-  offers                         Offer[]                         @relation("StoreToOffer")
-  boxes                          Box[]                           @relation("StoreToBox")
-  productGroups                  ProductGroup[]                  @relation("StoreToProductGroup")
-  inventoryMovements             InventoryMovement[]             @relation("StoreToInventoryMovement")
-  restockOrders                  RestockOrder[]                  @relation("StoreToRestockOrder")
-  restockOrderReceipts           RestockOrderReceipt[]           @relation("StoreToRestockOrderReceipt")
-  quoteRequests                  QuoteRequest[]                  @relation("StoreToQuoteRequest")
-  invoices                       Invoice[]                       @relation("StoreToInvoice")
-  taxPurchases                   TaxPurchase[]                   @relation("StoreToTaxPurchase")
-  customerReactivations          CustomerReactivation[]          @relation("StoreToCustomerReactivation")
-  newsletterSubscribers          NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
-  conversations                  Conversation[]                  @relation("StoreToConversation")
-  ignoredContacts                IgnoredContact[]
-  assistantConversations         AssistantConversation[]
-  assistantKnowledgeNotes        AssistantKnowledgeNote[]
-  whatsAppBotReplies             WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
-  productPresales                ProductPresale[]                @relation("StoreToProductPresale")
-  newsletterIssues               NewsletterIssue[]               @relation("StoreToNewsletterIssue")
-  newsletterCampaignSends        NewsletterCampaignSend[]        @relation("StoreToNewsletterCampaignSend")
-  fairEvents                     FairEvent[]
-  capsuleBatches                 CapsuleBatch[]
-  productPriceTiers              ProductPriceTier[]
-  marketplaceConnections         MarketplaceConnection[]
-  marketplaceOAuthStates         MarketplaceOAuthState[]
-  marketplaceCategoryTemplates   MarketplaceCategoryTemplate[]
-  marketplacePublicationProfiles MarketplacePublicationProfile[]
-  productNamingChanges           ProductNamingChange[]
-  businessCashPolicy             BusinessCashPolicy?
-  businessCashMovements          BusinessCashMovement[]
-  growthCampaigns                GrowthCampaign[]
-  orderInventoryIssues           OrderInventoryIssue[]
-  failedNotifications            FailedNotification[]
-  settings                       StoreSettings?
-  jobRuns                        JobRun[]
-  shippingWebhookEvents          ShippingWebhookEvent[]
-  paymentWebhookEvents           PaymentWebhookEvent[]
-  scannerSessions                ScannerSession[]
+  mercadoLibreMinNetPerUnit       Int                             @default(10000)
+  createdAt                       DateTime                        @default(now())
+  updatedAt                       DateTime                        @updatedAt
+  types                           Type[]                          @relation("StoreToType")
+  homeContents                    HomeContent[]                   @relation("StoreToHomeContent")
+  posts                           Post[]                          @relation("StoreToPost")
+  categories                      Category[]                      @relation("StoreToCategory")
+  sizes                           Size[]                          @relation("StoreToSize")
+  shippingProfiles                ShippingProfile[]
+  catalogOptions                  CatalogOption[]
+  catalogOptionValues             CatalogOptionValue[]
+  categoryCatalogOptions          CategoryCatalogOption[]
+  productCatalogOptionValues      ProductCatalogOptionValue[]
+  catalogMigrationSuggestions     CatalogMigrationSuggestion[]
+  colors                          Color[]                         @relation("StoreToColor")
+  designs                         Design[]                        @relation("StoreToDesign")
+  products                        Product[]                       @relation("StoreToProduct")
+  productSlugAliases              ProductSlugAlias[]
+  deletedProductUrls              DeletedProductUrl[]
+  categorySlugAliases             CategorySlugAlias[]
+  typeSlugAliases                 TypeSlugAlias[]
+  orders                          Order[]                         @relation("StoreToOrder")
+  reviews                         Review[]                        @relation("StoreToReview")
+  shippings                       Shipping[]                      @relation("StoreToShipping")
+  payments                        PaymentDetails[]                @relation("StoreToPaymentDetails")
+  suppliers                       Supplier[]                      @relation("StoreToSupplier")
+  coupons                         Coupon[]                        @relation("StoreToCoupons")
+  giftCards                       GiftCard[]                      @relation("StoreToGiftCard")
+  giftCardMovements               GiftCardMovement[]              @relation("StoreToGiftCardMovement")
+  giftCardDenominations           GiftCardDenomination[]          @relation("StoreToGiftCardDenomination")
+  customerAddresses               CustomerAddress[]               @relation("StoreToCustomerAddress")
+  customerWishlistItems           CustomerWishlistItem[]          @relation("StoreToCustomerWishlistItem")
+  customerSavedSearches           CustomerSavedSearch[]           @relation("StoreToCustomerSavedSearch")
+  couponRedemptions               CouponRedemption[]              @relation("StoreToCouponRedemption")
+  shippingQuotes                  ShippingQuote[]                 @relation("StoreToShippingQuotes")
+  offers                          Offer[]                         @relation("StoreToOffer")
+  boxes                           Box[]                           @relation("StoreToBox")
+  productGroups                   ProductGroup[]                  @relation("StoreToProductGroup")
+  inventoryMovements              InventoryMovement[]             @relation("StoreToInventoryMovement")
+  restockOrders                   RestockOrder[]                  @relation("StoreToRestockOrder")
+  restockOrderReceipts            RestockOrderReceipt[]           @relation("StoreToRestockOrderReceipt")
+  quoteRequests                   QuoteRequest[]                  @relation("StoreToQuoteRequest")
+  invoices                        Invoice[]                       @relation("StoreToInvoice")
+  taxPurchases                    TaxPurchase[]                   @relation("StoreToTaxPurchase")
+  customerReactivations           CustomerReactivation[]          @relation("StoreToCustomerReactivation")
+  newsletterSubscribers           NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
+  conversations                   Conversation[]                  @relation("StoreToConversation")
+  ignoredContacts                 IgnoredContact[]
+  assistantConversations          AssistantConversation[]
+  assistantKnowledgeNotes         AssistantKnowledgeNote[]
+  whatsAppBotReplies              WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
+  productPresales                 ProductPresale[]                @relation("StoreToProductPresale")
+  stockReservations               StockReservation[]              @relation("StoreToStockReservation")
+  newsletterIssues                NewsletterIssue[]               @relation("StoreToNewsletterIssue")
+  newsletterCampaignSends         NewsletterCampaignSend[]        @relation("StoreToNewsletterCampaignSend")
+  fairEvents                      FairEvent[]
+  capsuleBatches                  CapsuleBatch[]
+  productPriceTiers               ProductPriceTier[]
+  marketplaceConnections          MarketplaceConnection[]
+  marketplaceOAuthStates          MarketplaceOAuthState[]
+  marketplaceCategoryTemplates    MarketplaceCategoryTemplate[]
+  marketplacePublicationProfiles  MarketplacePublicationProfile[]
+  productNamingChanges            ProductNamingChange[]
+  businessCashPolicy              BusinessCashPolicy?
+  businessCashMovements           BusinessCashMovement[]
+  growthCampaigns                 GrowthCampaign[]
+  orderInventoryIssues            OrderInventoryIssue[]
+  failedNotifications             FailedNotification[]
+  settings                        StoreSettings?
+  jobRuns                         JobRun[]
+  shippingWebhookEvents           ShippingWebhookEvent[]
+  paymentWebhookEvents            PaymentWebhookEvent[]
+  scannerSessions                 ScannerSession[]
 }
 
 model Offer {
@@ -416,6 +419,11 @@ model Product {
   slug                        String                       @default("")
   description                 String                       @db.Text
   stock                       Int                          @default(0)
+  /// Unidades apartadas para una clienta (ver StockReservation): no salen del
+  /// stock físico ni del kardex, pero no se pueden vender. Lo disponible es
+  /// `stock - reservedUnits` (lib/available-stock.ts). En un kit se deriva de
+  /// sus componentes en `recalculateKitStock`.
+  reservedUnits               Int                          @default(0)
   price                       Float                        @default(0)
   acqPrice                    Float?                       @default(0)
   /// Envío y otros gastos por unidad. Entra en el precio sugerido de Productos y en el piso de precio de Mercado Libre.
@@ -465,6 +473,7 @@ model Product {
   catalogMigrationSuggestions CatalogMigrationSuggestion[]
   homeContents                HomeContentProduct[]
   presales                    ProductPresale[]
+  stockReservations           StockReservation[]
 
   // -- CÁPSULAS SORPRESA --
   /// Lotes empacados de este producto cápsula (la cápsula es un producto normal).
@@ -859,10 +868,10 @@ model Order {
   // es un medio de pago, no un descuento; lo que va a la pasarela es
   // `total - giftCardAmount` (lib/gift-cards.ts getAmountDue).
   giftCardId       String?
-  giftCardAmount   Float     @default(0)
-  giftCard         GiftCard? @relation("GiftCardRedemption", fields: [giftCardId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  giftCardAmount   Float           @default(0)
+  giftCard         GiftCard?       @relation("GiftCardRedemption", fields: [giftCardId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   /// La tarjeta que ESTE pedido compró (solo pedidos de tipo GIFT_CARD).
-  giftCardPurchase GiftCard? @relation("GiftCardPurchase")
+  giftCardPurchase GiftCard?       @relation("GiftCardPurchase")
   /// Una compra de tarjeta marcada espera aquí a que alguien la apruebe antes de emitir el código.
   giftCardReview   GiftCardReview?
 
@@ -877,11 +886,12 @@ model Order {
    */
   source    OrderSource?
 
-  quoteRequests   QuoteRequest[]
-  conversations   Conversation[]
-  invoices        Invoice[]
-  fairEvent       FairEvent?            @relation(fields: [fairEventId], references: [id])
-  inventoryIssues OrderInventoryIssue[]
+  quoteRequests     QuoteRequest[]
+  conversations     Conversation[]
+  invoices          Invoice[]
+  fairEvent         FairEvent?            @relation(fields: [fairEventId], references: [id])
+  inventoryIssues   OrderInventoryIssue[]
+  stockReservations StockReservation[]
 
   @@index([storeId])
   @@index([couponId])
@@ -1075,19 +1085,19 @@ model CustomerSavedSearch {
 }
 
 model CustomerWishlistItem {
-  id         String   @id @default(uuid())
-  storeId    String
-  userId     String   @db.VarChar(128)
-  productId  String
+  id           String   @id @default(uuid())
+  storeId      String
+  userId       String   @db.VarChar(128)
+  productId    String
   /// Precio efectivo (con oferta) que vio la clienta al guardar; sirve para avisar «bajó de precio».
-  savedPrice Float?
+  savedPrice   Float?
   /// Guardado como familia (grupo de variantes) desde la tarjeta o la ficha del
   /// grupo: Favoritos lo muestra como grupo con «Elegir opción», no como la
   /// variante que le puso cara ese día. `productId` es la variante que
   /// representaba al grupo al guardarlo.
-  savedAsGroup Boolean @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  savedAsGroup Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   store   Store   @relation("StoreToCustomerWishlistItem", fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -1661,19 +1671,19 @@ model StoreSettings {
   /// Lo mismo, pero para las respuestas sobre productos. Va aparte del visto
   /// bueno de los datos del negocio a propósito: si compartieran versión,
   /// añadir respuestas nuevas retiraría sin querer la aprobación de las viejas.
-  botProductsApprovedAt DateTime?
-  botProductsApprovedBy String?
-  botProductsVersion    String?   @db.VarChar(64)
+  botProductsApprovedAt   DateTime?
+  botProductsApprovedBy   String?
+  botProductsVersion      String?   @db.VarChar(64)
   /// Visto bueno de Paula a las respuestas de cortesía (`lib/whatsapp/bot-casual.ts`).
-  botCasualApprovedAt DateTime?
-  botCasualApprovedBy String?
-  botCasualVersion    String?
+  botCasualApprovedAt     DateTime?
+  botCasualApprovedBy     String?
+  botCasualVersion        String?
   /// Correos del equipo que no cuentan como clientas (uno por línea). Se
   /// suman al correo de la tienda y al de relleno (lib/store-email-settings.ts).
-  excludedCustomerEmails  String? @db.Text
+  excludedCustomerEmails  String?   @db.Text
   /// Quién recibe los avisos del panel (uno por línea); vacía usa Store.email.
   /// Nunca sale por una ruta pública.
-  adminNotificationEmails String? @db.Text
+  adminNotificationEmails String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2861,7 +2871,7 @@ model Conversation {
   /// Mientras el bot contesta, hasta cuándo es suyo el turno de envío
   /// (`lib/whatsapp/bot-lease.ts`). El valor también identifica a la corrida
   /// que lo tiene: solo ella lo extiende o lo suelta.
-  botLeaseUntil  DateTime? @db.DateTime(3)
+  botLeaseUntil  DateTime?           @db.DateTime(3)
   orderId        String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
@@ -3167,4 +3177,53 @@ model WhatsAppBotShadowRun {
 
   @@index([storeId, createdAt])
   @@index([conversationId, createdAt])
+}
+
+/// Apartado: unidades que se le guardan a una clienta (grupo de WhatsApp) sin
+/// venderlas todavía. Solo sube `Product.reservedUnits`; el stock físico y el
+/// kardex no se tocan hasta la venta.
+model StockReservation {
+  id            String                 @id @default(uuid())
+  storeId       String
+  /// Puede ser un kit: entonces el apartado sube el contador de sus componentes.
+  productId     String
+  quantity      Int
+  customerName  String
+  /// Celular normalizado con lib/phone.ts. Nunca va a logs.
+  customerPhone String                 @default("")
+  note          String?                @db.Text
+  expiresAt     DateTime
+  status        StockReservationStatus @default(ACTIVE)
+  /// Pedido al que se convirtió; el apartado sigue guardando las unidades hasta
+  /// que ese pedido se pague (las consume) o se cancele (las libera).
+  orderId       String?
+  /// «Sin respaldo»: una venta pagada se llevó las unidades que este apartado
+  /// guardaba. No se deshace la venta; Paula decide qué hacer.
+  unbackedAt    DateTime?
+  createdBy     String?
+  closedBy      String?
+  closedAt      DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  store   Store   @relation("StoreToStockReservation", fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  @@index([storeId, status, expiresAt])
+  @@index([productId, status])
+  @@index([orderId])
+}
+
+enum StockReservationStatus {
+  /// Guardando unidades para la clienta.
+  ACTIVE
+  /// Ya tiene pedido pendiente; sigue guardando las unidades hasta el pago.
+  CONVERTED
+  /// El pedido se pagó: la venta se llevó las unidades.
+  CONSUMED
+  /// Paula lo liberó o el pedido se canceló.
+  RELEASED
+  /// Venció sin pedido.
+  EXPIRED
 }
