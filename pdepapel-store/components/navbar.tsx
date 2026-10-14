@@ -77,10 +77,11 @@ const Navbar: React.FC<NavbarProps> = ({
               logoSrc={seasonConfig.navbarText}
             />
           </div>
-          {/* `loading="eager"` y no `priority`: los dos logos —el de teléfono y
-              el de escritorio— viven siempre en el DOM, así que `priority`
-              precargaba los dos con prioridad alta en cualquier pantalla y le
-              quitaba ancho de banda al CSS y a la imagen que sí es la LCP. */}
+          {/* Los dos logos —teléfono y escritorio— viven siempre en el DOM.
+              `priority` los precargaba con prioridad alta en cualquier
+              pantalla, y con `loading="eager"` React igual añadía su aviso de
+              precarga; `fetchPriority="low"` lo quita y deja el ancho de banda
+              para la imagen LCP. */}
           <Link
             href="/"
             prefetch={false}
@@ -93,6 +94,7 @@ const Navbar: React.FC<NavbarProps> = ({
               width={120}
               height={44}
               loading="eager"
+              fetchPriority="low"
               className="h-11 w-auto max-w-full object-contain"
             />
           </Link>
@@ -119,6 +121,7 @@ const Navbar: React.FC<NavbarProps> = ({
               width={160}
               height={58}
               loading="eager"
+              fetchPriority="low"
               className="h-14 w-auto max-w-full object-contain"
             />
             {seasonConfig.logoAccent ? (
