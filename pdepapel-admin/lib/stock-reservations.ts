@@ -7,7 +7,6 @@ import prismadb from "@/lib/prismadb";
 import { priceLines } from "@/lib/product-pricing";
 import {
   HOLDING_RESERVATION_STATUSES,
-  RESERVATION_LINES_SELECT,
   adjustReservedUnits,
   claimReservation,
   lockReservation,
@@ -18,7 +17,7 @@ import {
   type ReservationLine,
 } from "@/lib/reservation-counters";
 import { recordReservationEvents, type ReservationEventInput } from "@/lib/reservation-events";
-import { headerMirror } from "@/lib/reservation-header";
+import { headerMirror, RESERVATION_LINES_SELECT } from "@/lib/reservation-header";
 import { generateOrderNumber } from "@/lib/utils";
 
 type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;

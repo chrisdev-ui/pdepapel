@@ -39,7 +39,7 @@ vi.mock("@/components/ui/async-product-select", () => ({
 vi.mock("@/components/ui/product-scan-button", () => ({ ProductScanButton: () => null }));
 vi.mock("@/components/ui/user-combobox", () => ({
   UserCombobox: ({ onChange }: { onChange: (value: string, user?: { value: string; label: string; phone?: string }) => void }) => (
-    <button type="button" data-testid="customer-picker" onClick={() => onChange("guest_3105556677", { value: "guest_3105556677", label: "Valentina", phone: "+573105556677" })}>
+    <button type="button" data-testid="customer-picker" onClick={() => onChange("guest_3112223344", { value: "guest_3112223344", label: "Valentina", phone: "+573112223344" })}>
       Buscar clienta
     </button>
   ),
@@ -163,7 +163,7 @@ describe("Hoja «Reservar»", () => {
     const box = await screen.findByTestId("open-reservation");
     expect(box).toHaveTextContent("Valentina ya tiene una reserva abierta");
     expect(box).toHaveTextContent("1 × Agenda");
-    expect(mocks.get).toHaveBeenCalledWith("/api/store-1/stock-reservations", { params: { telefono: "+573105556677" } });
+    expect(mocks.get).toHaveBeenCalledWith("/api/store-1/stock-reservations", { params: { telefono: "+573112223344" } });
     expect(within(box).getByLabelText("Agregar a la reserva abierta")).toBeChecked();
     expect(screen.queryByTestId("extend-offer")).not.toBeInTheDocument();
 
@@ -177,7 +177,7 @@ describe("Hoja «Reservar»", () => {
   it("«Crear otra» crea una reserva nueva aunque haya una abierta", async () => {
     mocks.get.mockResolvedValue({ data: { reservations: [{ id: "r-open", customerName: "Valentina", expiresAt: new Date(Date.now() + 5 * 86_400_000).toISOString(), items: [{ quantity: 1, product: { name: "Agenda" } }] }] } });
     mocks.post.mockResolvedValue({ data: { reservation: { id: "r-new", expiresAt: "x", items: [] } } });
-    render(<ReserveSheet open onOpenChange={() => undefined} defaultDays={3} product={{ id: "p-1", name: "Sobre de manila", stock: 5, reservedUnits: 0 }} customerName="Valentina" customerPhone="+573105556677" />);
+    render(<ReserveSheet open onOpenChange={() => undefined} defaultDays={3} product={{ id: "p-1", name: "Sobre de manila", stock: 5, reservedUnits: 0 }} customerName="Valentina" customerPhone="+573112223344" />);
     const box = await screen.findByTestId("open-reservation");
     fireEvent.click(within(box).getByLabelText("Crear otra reserva"));
     fireEvent.click(screen.getByRole("button", { name: "Reservar 1 unidad" }));
