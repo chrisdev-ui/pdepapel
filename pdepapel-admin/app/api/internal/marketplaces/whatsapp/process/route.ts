@@ -10,7 +10,11 @@ type QueueMessage = {
   eventId?: unknown;
   /** Un mensaje que se vuelve a pasar por el bot (lib/whatsapp/bot-lease.ts). */
   rerun?: { conversationId?: unknown; messageId?: unknown; attempt?: unknown };
+  /** Una revisión de espera (lib/whatsapp/wait-assist.ts). */
+  waitCheck?: { conversationId?: unknown; messageId?: unknown; kind?: unknown };
 };
+
+const WAIT_KINDS = new Set(["fallback", "holding", "reminder"]);
 
 /** Procesador firmado por QStash: convierte un evento guardado en conversación. */
 export async function POST(request: Request) {
@@ -34,6 +38,12 @@ export async function POST(request: Request) {
     if (rerun && typeof rerun.conversationId === "string" && typeof rerun.messageId === "string" && typeof rerun.attempt === "number") {
       return NextResponse.json(
         await rerunWhatsAppBot({ conversationId: rerun.conversationId, messageId: rerun.messageId, attempt: rerun.attempt }),
+      );
+    }
+    const waitCheck = message.waitCheck;
+    if (waitCheck && typeof waitCheck.conversationId === "string" && typeof waitCheck.messageId === "string" && typeof waitCheck.kind === "string" && WAIT_KINDS.has(waitCheck.kind)) {
+      return NextResponse.json(
+        await (await import("@/lib/whatsapp/wait-assist")).runWaitCheck({ conversationId: waitCheck.conversationId, messageId: waitCheck.messageId, kind: waitCheck.kind as "fallback" | "holding" | "reminder" }),
       );
     }
     if (typeof message.eventId !== "string" || !message.eventId) {

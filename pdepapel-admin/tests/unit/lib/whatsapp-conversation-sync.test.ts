@@ -990,7 +990,7 @@ describe("processWhatsAppWebhookEvent", () => {
     // Paula contestó desde el celular: la conversación deja de esperarla.
     expect(mocks.conversationUpdateMany).toHaveBeenCalledWith({
       where: { id: "conversation-1", status: "NEEDS_OWNER" },
-      data: { status: "OPEN" },
+      data: { status: "OPEN", needsOwnerReason: null },
     });
     expect(mocks.messageCreate).toHaveBeenCalledWith({
       data: {
@@ -1043,6 +1043,26 @@ describe("processWhatsAppWebhookEvent", () => {
     expect(mocks.messageCreate).toHaveBeenCalledTimes(1);
     expect(mocks.messageFindUnique).not.toHaveBeenCalled();
     expect(mocks.runBot).not.toHaveBeenCalled();
+  });
+
+  it("una foto con pie va por el camino de siempre con el pie como texto; sin pie, a Paula", async () => {
+    mocks.findEvent.mockResolvedValue(
+      event({
+        payload: metaPayload({
+          metadata: { display_phone_number: "573000000000", phone_number_id: "PHONE-1" },
+          contacts: [{ profile: { name: "Laura" }, wa_id: "573001234567" }],
+          messages: [
+            { from: "573001234567", id: "wamid.c1", timestamp: "1789300000", type: "image", image: { id: "media-1", mime_type: "image/jpeg", caption: "¿tienen este cuaderno?" } },
+            { from: "573001234567", id: "wamid.c2", timestamp: "1789300005", type: "image", image: { id: "media-2", mime_type: "image/jpeg" } },
+          ],
+        }),
+      }),
+    );
+    mocks.runBot.mockResolvedValue({ outcome: "replied" });
+    await processWhatsAppWebhookEvent("event-1");
+    const calls = mocks.runBot.mock.calls.map(([call]) => call as { body: string; mediaForOwner?: boolean });
+    expect(calls.find((call) => call.body === "¿tienen este cuaderno?")).not.toHaveProperty("mediaForOwner");
+    expect(calls.find((call) => call.body === "")).toMatchObject({ mediaForOwner: true });
   });
 
   it("runs the bot once per new inbound message, media included", async () => {

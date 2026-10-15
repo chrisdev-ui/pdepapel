@@ -141,3 +141,21 @@ describe("chooseFromBurst", () => {
     expect(chooseFromBurst([], CTX)).toBeNull();
   });
 });
+
+describe("ráfaga y lo ya contestado (2026-10-14)", () => {
+  it("no vuelve a leer un mensaje que otra corrida ya contestó, aunque su respuesta se haya guardado después", () => {
+    const first = row(0, "Hola veci");
+    first.metadata = { answered: first.externalId } as never;
+    const rows = [first, row(7, "Buenas noches")];
+    expect(texts(rows)).toEqual(["Buenas noches"]);
+  });
+
+  it("la ráfaga del mismo mensaje que se contestó se sigue armando completa (el modo sombra la vuelve a leer)", () => {
+    const first = row(0, "Tienes el cuaderno Norma?");
+    const last = row(4, "es para mi hija");
+    first.metadata = { answered: last.externalId } as never;
+    last.metadata = { answered: last.externalId } as never;
+    expect(texts([first, last])).toEqual(["Tienes el cuaderno Norma?", "es para mi hija"]);
+  });
+});
+

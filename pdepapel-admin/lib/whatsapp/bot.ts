@@ -21,7 +21,9 @@ import {
   welcomeSentRecently,
   type BotCap,
 } from "@/lib/whatsapp/bot-guards";
-import { assembleBurst, chooseFromBurst, claimBurst, loadBurstContext, loadBurstRows, type BurstChoice } from "@/lib/whatsapp/burst";
+import { assembleBurst, chooseFromBurst, claimBurst, loadBurstContext, loadBurstRows, markAnswered, type BurstChoice } from "@/lib/whatsapp/burst";
+import { isFillerText, plainBotText } from "@/lib/whatsapp/filler";
+import { NO_MATCH_ACKNOWLEDGEMENT, TALK_TO_OWNER_ACKNOWLEDGEMENT, UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, UNREADABLE_MEDIA_ACKNOWLEDGEMENT } from "@/lib/whatsapp/bot-acknowledgements";
 import { acquireBotLease, claimBotLease, newBotLease, releaseBotLease, type BotLease } from "@/lib/whatsapp/bot-lease";
 import { enqueueWhatsAppBotRerun } from "@/lib/whatsapp/queue";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
@@ -135,6 +137,8 @@ export { formatBotReply, matchWhatsAppKeyword, normalizeBotText };
  * y no desde el panel.
  */
 
+export { NO_MATCH_ACKNOWLEDGEMENT, TALK_TO_OWNER_ACKNOWLEDGEMENT, UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, UNREADABLE_MEDIA_ACKNOWLEDGEMENT };
+
 export type WhatsAppBotOutcome =
   /** La conversación ya esperaba a una persona: el bot no hace nada. */
   | "skipped_needs_owner"
@@ -179,7 +183,11 @@ export type WhatsAppBotOutcome =
   /** Preguntó cuánto vale el envío: lo que se sabe de los ajustes y pasa a Paula. */
   | "replied_shipping_quote"
   /** Coincidió pero el envío falló. */
-  | "escalated_send_failed";
+  | "escalated_send_failed"
+  /** Solo «ok», «gracias», «listo»: no pide nada; el bot no contesta ni la pasa a Paula. */
+  | "skipped_filler"
+  /** Respuesta de espera (10 min sin respuesta): lo que llegó no es algo que el bot conteste bien. */
+  | "skipped_assist_unrecognized";
 
 export interface WhatsAppBotResult {
   outcome: WhatsAppBotOutcome;
@@ -212,31 +220,9 @@ export function getHumanPauseMs(answer: string): number {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Lo que se contesta al tocar «Hablar con Paula». */
-export const TALK_TO_OWNER_ACKNOWLEDGEMENT =
-  "Listo, le aviso a Paula. Ella te escribe apenas pueda 💛";
-
-/**
- * Lo que se contesta cuando el bot no sabe.
- *
- * Antes no se contestaba nada: la conversación pasaba a NEEDS_OWNER y la
- * clienta se quedaba mirando el chat sin saber si su mensaje llegó. Con cero
- * respuestas configuradas ese era el caso de SIEMPRE.
- */
-export const NO_MATCH_ACKNOWLEDGEMENT =
-  "Esa no me la sé 💛 Le paso tu mensaje a Paula y ella te escribe apenas pueda.";
-
 /** Para que 20 s de espera no se lean como que el mensaje no llegó. */
 export const SLOW_ANSWER_ACKNOWLEDGEMENT =
   "Dame un segundito que lo busco 💛";
-
-/** «Lo que me enviaste» y no «tu foto»: por aquí pasan audios y documentos. */
-export const UNREADABLE_MEDIA_ACKNOWLEDGEMENT =
-  "Recibí lo que me enviaste 💛 Se lo paso a Paula y ella te escribe apenas pueda.";
-
-/** Cuando el botón apunta a una respuesta que ya no está disponible. */
-export const UNAVAILABLE_OPTION_ACKNOWLEDGEMENT =
-  "Esa opción ya no está disponible 💛 Le aviso a Paula para que te ayude.";
 
 /** Los avisos que cierran una escalada: «Paula te escribe». */
 export type HandoffNotice = "no_match" | "media" | "owner_requested" | "option_unavailable";
@@ -418,7 +404,11 @@ async function shouldStayQuiet(
     where: { id: conversationId },
     select: { lastOwnerAt: true },
   });
-  if (isOwnerActive(actual?.lastOwnerAt, new Date())) return "owner_active";
+  // La respuesta de espera sale justamente dentro de las 24 h de Paula: lo que
+  // la calla es que Paula haya escrito desde que empezó la espera.
+  if (pace.assist) {
+    if (actual?.lastOwnerAt && actual.lastOwnerAt >= pace.assist.waitStartedAt) return "owner_active";
+  } else if (isOwnerActive(actual?.lastOwnerAt, new Date())) return "owner_active";
   if (pace.supersedable && (await hasNewerInbound(conversationId, pace.inboundAt))) {
     return "superseded";
   }
@@ -453,10 +443,16 @@ async function justSaid(conversationId: string, reply: string): Promise<boolean>
   return ultimo?.body === reply;
 }
 
-async function escalate(conversationId: string) {
+/**
+ * Pasa la conversación a Paula. `owner_window` solo cuando es por su pausa de
+ * 24 h (paso 0): esa marca vence con la pausa. Cualquier otra escalada la
+ * borra, porque ahí el bot ya le dijo a la clienta que Paula escribe.
+ */
+async function escalate(conversationId: string, reason: "owner_window" | null = null) {
   await prismadb.conversation.update({
     where: { id: conversationId },
-    data: { status: ConversationStatus.NEEDS_OWNER },
+    data: { status: ConversationStatus.NEEDS_OWNER, needsOwnerReason: reason },
+    select: { id: true },
   });
 }
 
@@ -531,10 +527,17 @@ async function decideAndAnswer(input: {
   rerunAttempt?: number;
   /** Lo que ya se esperó por el turno; se descuenta de la pausa humana. */
   waitedMs?: number;
+  /**
+   * Respuesta de espera (lib/whatsapp/wait-assist.ts): la clienta lleva 10 min
+   * sin respuesta y lo que escribió es algo que el bot contesta bien. Se salta
+   * la pausa de Paula y el «ya es de Paula»; no saluda, no manda el aviso de
+   * fotos y, si nada encaja, se calla en vez de decir «Esa no me la sé».
+   */
+  assist?: { waitStartedAt: Date } | null;
 }): Promise<WhatsAppBotResult> {
   const conversation = await prismadb.conversation.findUnique({
     where: { id: input.conversationId },
-    select: { id: true, status: true, storeId: true, lastOwnerAt: true },
+    select: { id: true, status: true, storeId: true, lastOwnerAt: true, needsOwnerReason: true },
   });
   if (!conversation) return { outcome: "skipped_needs_owner" };
   input = { ...input, storeId: conversation.storeId };
@@ -552,11 +555,23 @@ async function decideAndAnswer(input: {
   // 0. Paula está en la conversación: a la clienta no le llega nada, ni
   //    siquiera si tocó «Hablar con Paula» (ella ya está ahí). Por dentro sí
   //    queda marcada, que es como le aparece pendiente en el panel.
-  if (isOwnerActive(conversation.lastOwnerAt, new Date())) {
+  if (!input.assist && isOwnerActive(conversation.lastOwnerAt, new Date())) {
     if (conversation.status !== ConversationStatus.NEEDS_OWNER) {
-      await escalate(conversation.id);
+      await escalate(conversation.id, "owner_window");
     }
     return { outcome: "skipped_owner_active" };
+  }
+
+  // 0 y medio. Quedó en «es de Paula» solo por su pausa, y la pausa ya venció:
+  //    vuelve a ser del bot. Una escalada del bot (ya le dijo a la clienta que
+  //    Paula escribe) no vence así.
+  if (conversation.status === ConversationStatus.NEEDS_OWNER && conversation.needsOwnerReason === "owner_window") {
+    await prismadb.conversation.update({
+      where: { id: conversation.id },
+      data: { status: ConversationStatus.OPEN, needsOwnerReason: null },
+      select: { id: true },
+    });
+    conversation.status = ConversationStatus.OPEN;
   }
 
   // 0 bis. Una ráfaga se contesta una vez, al último mensaje. Los toques de
@@ -579,7 +594,7 @@ async function decideAndAnswer(input: {
 
   // 0 ter. Modo ráfaga: con lo que escribió seguido se elige qué contestar, y
   //    todo lo de abajo sigue igual con ese texto.
-  if (!buttonIdOf(input) && !input.mediaForOwner && (await isBurstModeOn(conversation.storeId))) {
+  if (!input.assist && !buttonIdOf(input) && !input.mediaForOwner && (await isBurstModeOn(conversation.storeId))) {
     const keywords = input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
     const choice = await readBurst(conversation.id, input, keywords);
     if (!choice) return { outcome: "skipped_superseded" };
@@ -773,7 +788,7 @@ async function decideAndAnswer(input: {
 
   // 2. Detenido: la conversación ya espera a una persona. Un mensaje escrito
   //    no la despierta; tocar un botón sí, porque es la clienta eligiendo.
-  if (conversation.status === ConversationStatus.NEEDS_OWNER && !buttonTarget) {
+  if (!input.assist && conversation.status === ConversationStatus.NEEDS_OWNER && !buttonTarget) {
     // Única excepción: el pedido que el propio bot acaba de pasarle a Paula,
     // si suma un producto que se reconoce sin dudas. Todo lo demás, silencio.
     const appended = await appendToOrderRequest(conversation, input);
@@ -991,7 +1006,7 @@ async function decideAndAnswer(input: {
   //    Se reconoce con `matchWhatsAppKeyword` —palabras enteras—, no con el
   //    `includes` de `classifyBusinessFact`: aquí hay disparadores de tres
   //    letras y con `includes` volverían a colarse dentro de «escolares».
-  if (isWelcomeGreeting(input.body)) {
+  if (!input.assist && isWelcomeGreeting(input.body)) {
     const welcomeSettings =
       input.settings ?? (await readSettings(conversation.storeId));
     if (welcomeSettings && areBusinessFactsApproved(welcomeSettings)) {
@@ -1140,6 +1155,18 @@ async function decideAndAnswer(input: {
       : { outcome: "escalated_owner_requested", error: sent.error };
   }
 
+  // 6 ter. Solo «ok», «gracias», «listo»: no pide nada. Ni «Esa no me la sé» ni
+  //    pasarla a Paula, pero solo si todo el turno es eso: tras una pregunta
+  //    sin contestar sigue el camino de siempre, y un «sí» o «dale» a una
+  //    pregunta del bot es una respuesta, no relleno.
+  if (isFillerText(input.body) && (await fillerStaysSilent(conversation.id, input.body, input.inboundAt ?? null))) {
+    return { outcome: "skipped_filler" };
+  }
+
+  // 6 quater. Respuesta de espera que no encajó en nada seguro: silencio. La
+  //    clienta sigue esperando a Paula, que es lo que ya sabía.
+  if (input.assist) return { outcome: "skipped_assist_unrecognized" };
+
   // 7. Nada encajó: no se inventa una respuesta, se le pasa a Paula.
   //
   //    El orden importa: se marca primero. La pausa humana de `deliver` dura
@@ -1155,6 +1182,36 @@ async function decideAndAnswer(input: {
     { handoff: "no_match" },
   );
   return { outcome: "escalated_no_match" };
+}
+
+/** «Gracias», «quedo atenta», «por la info»: cierran; «sí», «dale», «listo» contestan. */
+const THANKS = /gracias|quedo atent|por la info|por todo/;
+
+/**
+ * ¿El relleno se queda sin respuesta? Sí si desde lo último que salió la
+ * clienta no escribió nada de verdad y, si es un «sí/dale/listo», lo último
+ * que salió no es una pregunta del bot.
+ */
+async function fillerStaysSilent(conversationId: string, body: string, inboundAt: Date | null): Promise<boolean> {
+  const at = inboundAt ?? new Date();
+  const lastOut = await prismadb.conversationMessage.findFirst({
+    where: { conversationId, direction: ConversationMessageDirection.OUTBOUND, status: { not: ConversationMessageStatus.FAILED }, createdAt: { lt: at } },
+    orderBy: { createdAt: "desc" },
+    select: { sentBy: true, body: true, createdAt: true },
+  });
+  const earlier = await prismadb.conversationMessage.findMany({
+    where: { conversationId, sentBy: ConversationMessageSentBy.CUSTOMER, createdAt: { lt: at, ...(lastOut ? { gt: lastOut.createdAt } : {}) } },
+    select: { body: true, mediaType: true, metadata: true },
+    take: 20,
+  });
+  const real = earlier.some((message) => {
+    if (message.mediaType === "reaction") return false;
+    if (!message.body?.trim()) return Boolean(message.mediaType) && !(message.metadata as { edit?: unknown } | null)?.edit;
+    return !isFillerText(message.body);
+  });
+  if (real) return false;
+  const thanks = THANKS.test(plainBotText(body));
+  return thanks || !(lastOut?.sentBy === ConversationMessageSentBy.BOT && (lastOut.body ?? "").includes("?"));
 }
 
 /** El último mensaje del bot antes de este, con lo que dejó anotado. */
@@ -1381,6 +1438,8 @@ interface Pacing {
   eventCreatedAt: Date | null;
   customerPhone: string | null;
   customerBsuid: string | null;
+  /** Respuesta de espera (lib/whatsapp/wait-assist.ts): Paula se mira desde que empezó la espera, no las 24 h. */
+  assist: { waitStartedAt: Date } | null;
 }
 
 function pacing(input: {
@@ -1395,6 +1454,7 @@ function pacing(input: {
   eventCreatedAt?: Date | null;
   customerPhone?: string | null;
   customerBsuid?: string | null;
+  assist?: { waitStartedAt: Date } | null;
 }): Pacing {
   return {
     inboundMessageId: input.inboundMessageId?.trim() || null,
@@ -1408,6 +1468,7 @@ function pacing(input: {
     eventCreatedAt: input.eventCreatedAt ?? null,
     customerPhone: input.customerPhone ?? null,
     customerBsuid: input.customerBsuid ?? null,
+    assist: input.assist ?? null,
   };
 }
 
@@ -1592,6 +1653,8 @@ async function deliver(
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean; reason?: QuietReason }> {
   const { photo, shown, list, omitOwnerButton, decision, kind, orderRequest, handoff } = extras;
   const metadata = {
+    // «El bot contestó por ti» en el hilo del panel.
+    ...(pace.assist ? { fallback: true } : {}),
     ...(orderRequest ? { orderRequest } : {}),
     ...(shown && shown.ids.length > 0 ? { shown } : {}),
     ...(decision ? { decision } : {}),
@@ -1751,5 +1814,10 @@ async function deliver(
     where: { id: conversationId },
     data: { lastOutboundAt: now },
   });
+  if (pace.inboundAt && pace.inboundMessageId) {
+    await markAnswered(conversationId, pace.inboundAt, pace.inboundMessageId).catch((error: unknown) => {
+      console.warn("[WHATSAPP_BOT] No se pudo marcar lo contestado", { conversationId, message: error instanceof Error ? error.message : "unknown" });
+    });
+  }
   return { ok: true };
 }

@@ -190,6 +190,10 @@ const ajustesBase: ResolvedStoreSettings = {
   botProductsVersion: null,
   botCasualApprovedAt: null,
   botCasualVersion: null,
+  botFallbackMode: "SHADOW",
+  botHoldingMode: "SHADOW",
+  botHoldingText: null,
+  botHoldingNightText: null,
 };
 
 describe("keyword matching", () => {
@@ -315,6 +319,74 @@ describe("runWhatsAppBot", () => {
     expect(mocks.send).toHaveBeenCalled();
   });
 
+  describe("«ok/gracias», la espera de Paula y la respuesta de espera", () => {
+    const HACE = (minutes: number) => new Date(Date.now() - minutes * 60 * 1000);
+
+    it("«gracias» no recibe «Esa no me la sé» ni pasa a Paula", async () => {
+      await expect(runWhatsAppBot({ ...input, body: "Gracias!!" })).resolves.toEqual({ outcome: "skipped_filler" });
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.sendText).not.toHaveBeenCalled();
+      expect(mocks.conversationUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "NEEDS_OWNER" }) }));
+    });
+
+    it("«dale» a una pregunta del bot es una respuesta: sigue el camino de siempre; «gracias» a la misma pregunta se queda en silencio", async () => {
+      mocks.messageFindFirst.mockImplementation(async (args: { where?: { direction?: string } }) =>
+        args?.where?.direction === "OUTBOUND" ? { sentBy: "BOT", body: "¿Lo quieres?", createdAt: HACE(2) } : null,
+      );
+      mocks.messageFindMany.mockResolvedValue([]);
+      await expect(runWhatsAppBot({ ...input, body: "dale" })).resolves.toMatchObject({ outcome: "escalated_no_match" });
+      vi.clearAllMocks();
+      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1" });
+      mocks.activeKeywords.mockResolvedValue(keywords);
+      mocks.messageFindFirst.mockImplementation(async (args: { where?: { direction?: string } }) =>
+        args?.where?.direction === "OUTBOUND" ? { sentBy: "BOT", body: "¿Lo quieres?", createdAt: HACE(2) } : null,
+      );
+      mocks.messageFindMany.mockResolvedValue([]);
+      await expect(runWhatsAppBot({ ...input, body: "gracias!" })).resolves.toEqual({ outcome: "skipped_filler" });
+    });
+
+    it("«gracias» después de una pregunta sin contestar no la deja perder: sigue el camino de siempre", async () => {
+      mocks.messageFindFirst.mockResolvedValue(null);
+      mocks.messageFindMany.mockResolvedValue([{ body: "¿tienen agendas 2027?", mediaType: null, metadata: null }]);
+      await expect(runWhatsAppBot({ ...input, body: "gracias" })).resolves.toMatchObject({ outcome: "escalated_no_match" });
+    });
+
+    it("«es de Paula» solo por su pausa vence con la pausa: vuelve al bot y contesta", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER", needsOwnerReason: "owner_window", storeId: "store-1", lastOwnerAt: HACE(25 * 60) });
+      await expect(runWhatsAppBot(input)).resolves.toMatchObject({ outcome: "replied" });
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({ where: { id: "conversation-1" }, data: { status: "OPEN", needsOwnerReason: null }, select: { id: true } });
+    });
+
+    it("una escalada del bot no vence sola", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER", needsOwnerReason: null, storeId: "store-1", lastOwnerAt: HACE(25 * 60) });
+      await expect(runWhatsAppBot(input)).resolves.toEqual({ outcome: "skipped_needs_owner" });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("respuesta de espera: contesta dentro de la pausa de Paula y queda marcada «El bot contestó por ti»", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER", needsOwnerReason: "owner_window", storeId: "store-1", lastOwnerAt: HACE(60) });
+      await expect(runWhatsAppBot({ ...input, assist: { waitStartedAt: HACE(12) } })).resolves.toMatchObject({ outcome: "replied" });
+      expect(mocks.send).toHaveBeenCalledOnce();
+      expect(mocks.messageCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ sentBy: "BOT", metadata: expect.objectContaining({ fallback: true }) }) });
+    });
+
+    it("respuesta de espera: si Paula escribió después de que empezó la espera, se calla", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1", lastOwnerAt: HACE(2) });
+      await expect(runWhatsAppBot({ ...input, assist: { waitStartedAt: HACE(12) } })).resolves.toEqual({ outcome: "skipped_owner_active" });
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.messageCreate).not.toHaveBeenCalled();
+    });
+
+    it("respuesta de espera: si nada encaja no dice «Esa no me la sé» ni saluda; se calla", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1", lastOwnerAt: HACE(60) });
+      await expect(runWhatsAppBot({ ...input, body: "y lo del otro día cómo quedó", assist: { waitStartedAt: HACE(12) } })).resolves.toEqual({ outcome: "skipped_assist_unrecognized" });
+      await expect(runWhatsAppBot({ ...input, body: "hola", assist: { waitStartedAt: HACE(12) } })).resolves.toEqual({ outcome: "skipped_assist_unrecognized" });
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.sendText).not.toHaveBeenCalled();
+      expect(mocks.sendList).not.toHaveBeenCalled();
+    });
+  });
+
   describe("mientras Paula esté encima de la conversación", () => {
     const AHORA = new Date("2026-09-15T02:30:00.000Z");
     /** Deja la conversación con el último mensaje de Paula hace `horas`. */
@@ -347,7 +419,8 @@ describe("runWhatsAppBot", () => {
       // Callarse hacia afuera no es no hacer nada: por dentro queda pendiente.
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: "owner_window" },
+      select: { id: true },
       });
     });
 
@@ -459,7 +532,8 @@ describe("runWhatsAppBot", () => {
       expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
   });
@@ -566,7 +640,8 @@ describe("runWhatsAppBot", () => {
       expect(mocks.sendText.mock.calls[0][1]).not.toBe(NO_MATCH_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
 
@@ -635,7 +710,8 @@ describe("runWhatsAppBot", () => {
       expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
 
@@ -897,7 +973,8 @@ describe("runWhatsAppBot", () => {
       expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
 
@@ -1020,7 +1097,8 @@ describe("runWhatsAppBot", () => {
       });
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
 
@@ -1071,7 +1149,8 @@ describe("runWhatsAppBot", () => {
     expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
-      data: { status: "NEEDS_OWNER" },
+      data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
     });
   });
 
@@ -1116,7 +1195,8 @@ describe("runWhatsAppBot", () => {
     });
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
-      data: { status: "NEEDS_OWNER" },
+      data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
     });
   });
 
@@ -1141,7 +1221,8 @@ describe("runWhatsAppBot", () => {
     expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
-      data: { status: "NEEDS_OWNER" },
+      data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
     });
   });
 
@@ -1235,7 +1316,8 @@ describe("botón «Hablar con Paula»", () => {
     esperarAcuseSinBotonDePaula(TALK_TO_OWNER_ACKNOWLEDGEMENT);
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
-      data: { status: "NEEDS_OWNER" },
+      data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
     });
   });
 
@@ -1339,7 +1421,8 @@ describe("menús por botón", () => {
     );
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
-      data: { status: "NEEDS_OWNER" },
+      data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
     });
   });
 
@@ -1456,7 +1539,7 @@ describe("ritmo humano", () => {
           inboundAt: LLEGO,
         }),
       ).resolves.toEqual({ outcome: "skipped_owner_active" });
-      expect(mocks.conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "NEEDS_OWNER" } }));
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "NEEDS_OWNER", needsOwnerReason: null } }));
       expect(mocks.sendText).not.toHaveBeenCalled();
       expect(mocks.send).not.toHaveBeenCalled();
     });
@@ -1605,7 +1688,8 @@ describe("ritmo humano", () => {
       esperarAcuseSinBotonDePaula(UNREADABLE_MEDIA_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
 
@@ -1682,7 +1766,8 @@ describe("ritmo humano", () => {
       });
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
   });
@@ -2047,7 +2132,8 @@ describe("ritmo humano", () => {
       expect(mocks.send.mock.calls[0][1]).toBe(UNAVAILABLE_OPTION_ACKNOWLEDGEMENT);
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
     });
 
@@ -2185,7 +2271,7 @@ describe("ritmo humano", () => {
       expect(mocks.send.mock.calls[0][1]).toBe(PRODUCT_TEMPLATES["reference.lost"]());
       // No se marca para Paula: es una conversación de un mensaje más.
       expect(mocks.conversationUpdate).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: "NEEDS_OWNER" } }),
+        expect.objectContaining({ data: { status: "NEEDS_OWNER", needsOwnerReason: null } }),
       );
     });
 
@@ -2346,7 +2432,8 @@ describe("ritmo humano", () => {
 
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({
         where: { id: "conversation-1" },
-        data: { status: "NEEDS_OWNER" },
+        data: { status: "NEEDS_OWNER", needsOwnerReason: null },
+      select: { id: true },
       });
       // El texto ya dice que Paula escribe: sin botón de «Hablar con Paula».
       expect(mocks.send).not.toHaveBeenCalled();
@@ -2491,7 +2578,7 @@ describe("seguridad del bot: cuántos mensajes salen de verdad", () => {
     ).resolves.toEqual({ outcome: "skipped_bot_disabled" });
     expect(totalEnvios()).toBe(0);
     expect(mocks.typing).not.toHaveBeenCalled();
-    expect(mocks.conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "NEEDS_OWNER" } }));
+    expect(mocks.conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "NEEDS_OWNER", needsOwnerReason: null } }));
   });
 
   it("interruptor apagado durante la pausa: la respuesta pendiente no sale", async () => {

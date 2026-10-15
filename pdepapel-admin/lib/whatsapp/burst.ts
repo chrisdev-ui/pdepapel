@@ -7,7 +7,7 @@ import {
 
 import prismadb from "@/lib/prismadb";
 import { classifyBusinessFact, isWelcomeGreeting } from "@/lib/whatsapp/bot-facts";
-import { matchWhatsAppKeyword, normalizeBotText, type WhatsAppBotKeyword } from "@/lib/whatsapp/bot-matching";
+import { matchWhatsAppKeyword, type WhatsAppBotKeyword } from "@/lib/whatsapp/bot-matching";
 import {
   isOfferFresh,
   isShippingCostQuestion,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/whatsapp/bot-order-request";
 import { looksLikeProductQuestion } from "@/lib/whatsapp/bot-products";
 import { latestOrderRequest } from "@/lib/whatsapp/order-request-store";
+import { isFillerText } from "@/lib/whatsapp/filler";
 import { detectWebOrigin, type WebOrigin } from "@/lib/whatsapp/web-origin";
 
 /**
@@ -56,6 +57,35 @@ export function readEdit(metadata: Prisma.JsonValue | null): { of: string; text:
 }
 
 /**
+ * A qué mensaje contestó el bot cuando dejó marcado este (`markAnswered`): el
+ * `externalId` del mensaje al que respondió esa corrida, o `null`.
+ */
+export function answeredFor(metadata: Prisma.JsonValue | null): string | null {
+  const value = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).answered : null;
+  return typeof value === "string" ? value : null;
+}
+
+/**
+ * Después de un envío del bot: los mensajes de la clienta hasta el que se
+ * contestó quedan marcados con ese mensaje, para que una ráfaga de OTRO
+ * mensaje no los vuelva a leer (la respuesta se guarda segundos después y
+ * puede quedar detrás del mensaje siguiente). La ráfaga del mismo mensaje sí
+ * los sigue leyendo (el modo sombra la vuelve a armar después). Solo la
+ * última hora; una sola sentencia.
+ */
+export async function markAnswered(conversationId: string, upTo: Date, answeredExternalId: string, now = new Date()): Promise<void> {
+  await prismadb.$executeRaw`
+    UPDATE \`ConversationMessage\`
+       SET \`metadata\` = JSON_SET(COALESCE(\`metadata\`, JSON_OBJECT()), '$.answered', ${answeredExternalId})
+     WHERE \`conversationId\` = ${conversationId}
+       AND \`direction\` = 'INBOUND'
+       AND \`sentBy\` = 'CUSTOMER'
+       AND \`createdAt\` <= ${upTo}
+       AND \`createdAt\` >= ${new Date(now.getTime() - 60 * 60 * 1000)}
+       AND JSON_EXTRACT(COALESCE(\`metadata\`, JSON_OBJECT()), '$.answered') IS NULL`;
+}
+
+/**
  * Los mensajes de la clienta desde la última salida (del bot o de Paula) hasta
  * `currentId`, en orden. Corta si entre dos pasan más de 90 s; con la edición
  * más reciente de cada mensaje; los 6 últimos y, si pasan de 600 caracteres,
@@ -68,6 +98,10 @@ export function assembleBurst(rows: BurstRow[], currentId: string): BurstMessage
   for (let index = end; index >= 0; index -= 1) {
     const row = rows[index];
     if (row.direction !== ConversationMessageDirection.INBOUND || row.sentBy !== ConversationMessageSentBy.CUSTOMER) break;
+    // Ya contestado por otra corrida: su respuesta puede haberse guardado
+    // después de este mensaje, así que la salida no sirve de corte.
+    const answered = answeredFor(row.metadata);
+    if (index !== end && answered && answered !== rows[end].externalId) break;
     const newer = chain.at(-1);
     if (newer && newer.createdAt.getTime() - row.createdAt.getTime() > BURST_GAP_MS) break;
     chain.push(row);
@@ -94,8 +128,6 @@ const PRIORITY: BurstIntent[] = ["order", "product", "fact", "web", "greeting", 
 
 /** Orden de prioridad del modo ráfaga: 0 es lo más importante. */
 export const burstIntentRank = (intent: BurstIntent) => PRIORITY.indexOf(intent);
-const FILLER =
-  /^(gracias|muchas gracias|mil gracias|ok|okey|okay|vale|listo|dale|bueno|perfecto|super|genial|si|bien|claro|ah ok|ya|es para mi \w+|es para un regalo|es un regalo|porfa|por favor|quedo atenta|quedo atento)$/;
 
 export interface BurstContext {
   /** El bot ofreció un producto con «¿Lo quieres?» hace poco: un «sí» es pedido. */
@@ -111,8 +143,7 @@ export function burstIntentOf(text: string, ctx: BurstContext): BurstIntent {
   if (isShippingCostQuestion(text) || classifyBusinessFact(text) || matchWhatsAppKeyword(text, ctx.keywords)) return "fact";
   if (detectWebOrigin(text)) return "web";
   if (isWelcomeGreeting(text)) return "greeting";
-  const plain = normalizeBotText(text).replace(/[^a-z0-9ñ\s]/g, " ").replace(/\s+/g, " ").trim();
-  return !plain || FILLER.test(plain) ? "filler" : "other";
+  return isFillerText(text) ? "filler" : "other";
 }
 
 export interface BurstChoice {

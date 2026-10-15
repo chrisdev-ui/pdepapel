@@ -169,6 +169,13 @@ export async function sweepWhatsAppEvents(
     result.alerted = true;
   }
 
+  // De paso, el recordatorio de «Esperando a Paula» (como mucho uno por hora).
+  await import("@/lib/whatsapp/waiting-reminder")
+    .then(({ remindWaitingFromSweep }) => remindWaitingFromSweep(now))
+    .catch((error: unknown) => {
+      console.warn("[WHATSAPP_RECOVERY] No se pudo revisar «Esperando a Paula»", { message: error instanceof Error ? error.message : "unknown" });
+    });
+
   await recordJobRun("whatsapp-recovery", {
     ok: !result.publishFailed && result.stuck.pending + result.stuck.retryOverdue === 0,
     detail: `Reencolados ${result.requeued}; ignorados ${result.ignored}; viejos ${result.tooOld}; atascados ${result.stuck.pending} pendientes y ${result.stuck.retryOverdue} reintentos vencidos${result.publishFailed ? "; QStash no aceptó un evento" : ""}.`,

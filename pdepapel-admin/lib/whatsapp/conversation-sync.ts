@@ -237,6 +237,23 @@ function getCustomerEdit(message: JsonRecord): { of: string; text: string } | nu
   return of && text ? { of, text } : null;
 }
 
+/** Lo que deja a la clienta esperando a Paula sin respuesta del bot: ahí se programan las revisiones de espera. */
+const WAITING_OUTCOMES = new Set<WhatsAppBotResult["outcome"]>(["skipped_owner_active", "skipped_needs_owner", "skipped_bot_disabled", "skipped_filler"]);
+
+/** Nunca hace fallar el archivo ni la respuesta: si la cola falla, la clienta queda como hoy. */
+async function scheduleWaitIfSilent(conversationId: string, outcome: WhatsAppBotResult["outcome"]) {
+  if (!WAITING_OUTCOMES.has(outcome)) return;
+  // Import diferido: la espera arrastra el correo y su entorno, que el archivo de mensajes no necesita.
+  await import("@/lib/whatsapp/wait-assist")
+    .then(({ scheduleWaitChecks }) => scheduleWaitChecks(conversationId))
+    .catch((error: unknown) => {
+      console.warn("[WHATSAPP_SYNC] No se pudieron programar las revisiones de espera", {
+        conversationId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+}
+
 /** Un mensaje viejo que nadie contestó después queda esperando a Paula. */
 async function escalateIfUnanswered(conversationId: string, sentAt: Date) {
   const answered = await prismadb.conversationMessage.count({
@@ -245,7 +262,7 @@ async function escalateIfUnanswered(conversationId: string, sentAt: Date) {
   if (answered > 0) return;
   await prismadb.conversation.updateMany({
     where: { id: conversationId, status: { not: ConversationStatus.NEEDS_OWNER } },
-    data: { status: ConversationStatus.NEEDS_OWNER },
+    data: { status: ConversationStatus.NEEDS_OWNER, needsOwnerReason: null },
   });
 }
 
@@ -297,11 +314,12 @@ export async function rerunWhatsAppBot(rerun: { conversationId: string; messageI
     customerPhone: conversation?.phone ?? null,
     customerBsuid: conversation?.bsuid ?? null,
     webOrigin: metadata.webOrigin ?? null,
-    ...(isMediaForOwner(message.mediaType) ? { mediaForOwner: true } : {}),
+    ...(isMediaForOwner(message.mediaType) && !message.body?.trim() ? { mediaForOwner: true } : {}),
     ...(!message.body && metadata.edit?.text ? { burstEdit: true } : {}),
     rerunAttempt: rerun.attempt,
     jobStartedAt,
   });
+  await scheduleWaitIfSilent(message.conversationId, result.outcome);
   return { rerun: true, outcome: result.outcome };
 }
 
@@ -830,7 +848,7 @@ export async function fileOwnerEcho(
   if (!options.stale) {
     await prismadb.conversation.updateMany({
       where: { id: conversation.id, status: ConversationStatus.NEEDS_OWNER },
-      data: { status: ConversationStatus.OPEN },
+      data: { status: ConversationStatus.OPEN, needsOwnerReason: null },
     });
   }
 
@@ -972,11 +990,10 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
         if (!backlog) await escalateIfUnanswered(filed.conversationId, sentAt);
         continue;
       }
-      // Una foto o un audio van a Paula lleven pie o no: el pie se guarda para
-      // que ella lo lea en el panel, pero no se usa para adivinar una
-      // respuesta. Antes esto ni llegaba aquí y la clienta se quedaba mirando
-      // el chat sin saber si su foto había llegado.
-      const paraPaula = isMediaForOwner(message.mediaType);
+      // Una foto o un audio sin pie van a Paula: lo que importa está dentro y
+      // el bot no lo ve. Con pie («¿tienen este cuaderno?») el pie es lo que
+      // preguntó y se contesta por el camino de siempre.
+      const paraPaula = isMediaForOwner(message.mediaType) && !message.body?.trim();
       // Una edición solo se lee con el modo ráfaga: sin él no trae cuerpo y no se contesta.
       const edit = message.metadata?.edit;
       const burstEdit = Boolean(edit && (await isBurstModeOn(storeId)));
@@ -1036,6 +1053,7 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
       try {
         const result = await runWhatsAppBot(candidate);
         botResults.push(result);
+        await scheduleWaitIfSilent(candidate.conversationId, result.outcome);
         // Modo sombra: después de la respuesta real y en segundo plano, para
         // no demorar a la clienta ni a su siguiente mensaje en la fila.
         if (isShadowCandidate(candidate)) {

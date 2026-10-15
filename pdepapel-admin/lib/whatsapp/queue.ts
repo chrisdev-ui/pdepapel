@@ -115,6 +115,50 @@ export async function enqueueWhatsAppBotRerun(
   return true;
 }
 
+/** Una revisión de espera (lib/whatsapp/wait-assist.ts): respuesta a los 10 min o mensaje de espera. */
+export interface WhatsAppWaitCheck {
+  conversationId: string;
+  /** El mensaje de la clienta que la programó (para la respuesta, el último de la espera). */
+  messageId: string;
+  kind: "fallback" | "holding" | "reminder";
+}
+
+/**
+ * Programa una revisión de espera por la misma fila de la clienta, para que
+ * quede detrás de lo que el bot esté contestando. `deduplicationId` es fijo
+ * por espera: si dos webhooks la programan, QStash deja una sola. Devuelve
+ * `false` sin lanzar cuando la cola no está configurada.
+ */
+export async function enqueueWhatsAppWaitCheck(
+  check: WhatsAppWaitCheck,
+  contactKey: string | null,
+  delaySeconds: number,
+  deduplicationId: string,
+  environment: QueueEnvironment = process.env,
+) {
+  if (!getWhatsAppQueueConfigurationStatus(environment).configured) {
+    return false;
+  }
+  const client = new Client({
+    token: environment.QSTASH_TOKEN,
+    enableTelemetry: false,
+  });
+  await client.publishJSON({
+    url: getWhatsAppProcessorUrl(environment),
+    body: { waitCheck: check },
+    retries: 2,
+    timeout: 50,
+    delay: `${BigInt(Math.max(1, Math.ceil(delaySeconds)))}s`,
+    deduplicationId,
+    flowControl: {
+      key: getWhatsAppFlowControlKey(contactKey),
+      parallelism: 1,
+    },
+    label: ["whatsapp", `wait-${check.kind}`],
+  });
+  return true;
+}
+
 export async function verifyWhatsAppProcessorRequest(
   body: string,
   signature: string | null,

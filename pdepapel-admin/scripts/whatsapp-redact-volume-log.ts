@@ -34,3 +34,4 @@ main().catch((error: unknown) => {
   console.error("Falló la limpieza del aviso de volumen:", error instanceof Error ? error.message : "desconocido");
   process.exit(1);
 });
+export {};
