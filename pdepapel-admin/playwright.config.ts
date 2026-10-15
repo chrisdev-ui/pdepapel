@@ -15,7 +15,9 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   // `E2E_SERVER=production` (la puerta): build de producción ya compilado, ver
-  // `scripts/e2e-production-server.mjs`. Sin él, `next dev` para una prueba suelta.
+  // `scripts/e2e-production-server.mjs`. Sin él, `next dev` para una prueba
+  // suelta (`scripts/e2e-dev-server.mjs`). Los dos con claves de prueba y sin
+  // red salvo la máquina local y Clerk de desarrollo.
   webServer: process.env.E2E_ADMIN_BASE_URL
     ? undefined
     : process.env.E2E_SERVER === "production"
@@ -26,10 +28,10 @@ export default defineConfig({
           timeout: 600_000,
         }
       : {
-          command:
-            "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npm run dev -- -p 3101",
+          command: "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs node scripts/e2e-dev-server.mjs",
           url: healthCheckUrl,
-          reuseExistingServer: !process.env.CI,
+          // Nunca un servidor que ya estaba: podría ser un `npm run dev` con las claves reales.
+          reuseExistingServer: false,
           timeout: 120_000,
         },
   projects: [

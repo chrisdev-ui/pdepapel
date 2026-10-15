@@ -86,7 +86,10 @@ test.describe("modo sombra en distintos tamaños", () => {
       const title = page.getByText("Bot en modo sombra", { exact: true });
       await expect(title).toBeVisible({ timeout: 60_000 });
       const card = title.locator("xpath=ancestor::div[contains(@class, 'border')][1]");
-      await card.scrollIntoViewIfNeeded();
+      // La tarjeta se vuelve a pintar al llegar sus datos: se reintenta si se soltó del DOM.
+      await expect(async () => {
+        await card.scrollIntoViewIfNeeded({ timeout: 2000 });
+      }).toPass({ timeout: 30_000 });
       // La página entra con un fundido: Playwright cuenta la opacidad 0 como visible.
       await expect
         .poll(
