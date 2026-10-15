@@ -4,6 +4,9 @@ import { AppError, ErrorFactory } from "./api-errors";
 import { availableStock } from "./available-stock";
 import { recalculateKitStock, resolvePhysicalRequirements } from "./inventory";
 import { queueMarketplaceStockSyncEvents } from "./mercadolibre/outbox";
+import { headerLine } from "./reservation-header";
+
+export { headerLine };
 
 type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -160,7 +163,8 @@ export async function closeReservationsForOrders(
       closedBy,
     });
     if (!claimed) continue;
-    const pieces = await reservationPieces(tx, hold.productId, hold.quantity);
+    const line = headerLine(hold);
+    const pieces = await reservationPieces(tx, line.productId, line.quantity);
     affected.push(...(await adjustReservedUnits(tx, hold.storeId, pieces, "free")));
   }
   return Array.from(new Set(affected));

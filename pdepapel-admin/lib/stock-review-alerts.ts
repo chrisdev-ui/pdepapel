@@ -68,7 +68,7 @@ export async function notifyUnbackedReservations(reservationIds: string[], waits
     const fresh = [];
     for (const hold of holds) if (await claimAlert(`alert:reservation-unbacked:${hold.id}`)) fresh.push(hold);
     if (fresh.length === 0) return false;
-    const lines = fresh.map((hold) => `• ${hold.product.name} × ${hold.quantity} (reserva de ${hold.customerName})`).join("\n");
+    const lines = fresh.map((hold) => `• ${hold.product?.name} × ${hold.quantity} (reserva de ${hold.customerName})`).join("\n");
     return send(
       fresh[0].storeId,
       `[Revisar] ${fresh.length === 1 ? "Una reserva quedó" : `${fresh.length} reservas quedaron`} sin respaldo`,

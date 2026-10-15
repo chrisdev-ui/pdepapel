@@ -5,7 +5,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { env } from "@/lib/env.mjs";
 import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
-import { HOLDING_RESERVATION_STATUSES, reservationPieces } from "@/lib/reservation-counters";
+import { HOLDING_RESERVATION_STATUSES, headerLine, reservationPieces } from "@/lib/reservation-counters";
 import { resend } from "@/lib/resend";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { expireReservation, releaseReservation } from "@/lib/stock-reservations";
@@ -105,7 +105,7 @@ export async function sweepStockReservations(options: { now?: Date; forceDigest?
     if (hold.expiresAt < now && (await claimOnce(`alert:reservation-converted-overdue:${hold.id}:${hold.expiresAt.getTime()}`))) overdue.push(hold);
   }
   for (const [storeId, rows] of Array.from(groupBy(overdue, (row) => row.storeId))) {
-    const lines = rows.map((row) => `• ${row.product.name} × ${row.quantity} — ${row.customerName}, pedido ${row.order!.orderNumber}`).join("\n");
+    const lines = rows.map((row) => `• ${row.product?.name} × ${row.quantity} — ${row.customerName}, pedido ${row.order!.orderNumber}`).join("\n");
     if (await send(storeId, `[Reservas] ${rows.length === 1 ? "Un pedido de reserva venció" : `${rows.length} pedidos de reservas vencieron`} sin pagar`,
       `Estas reservas ya tienen pedido, pero se venció la fecha y el pedido sigue sin pagar:\n${lines}\n\n` +
         "Las unidades siguen guardadas. Si la clienta no va a pagar, cancela el pedido y las unidades vuelven a la venta; si sí, dale más días a la reserva.")) {
@@ -152,7 +152,8 @@ async function expectedReservedUnits(): Promise<Map<string, number>> {
     select: { productId: true, quantity: true },
   });
   const expected = new Map<string, number>();
-  for (const hold of holds) {
+  for (const found of holds) {
+    const hold = headerLine(found);
     const pieces = await reservationPieces(prismadb, hold.productId, hold.quantity);
     pieces.forEach((units, id) => expected.set(id, (expected.get(id) ?? 0) + units));
   }
@@ -199,10 +200,10 @@ export async function sendDailyDigest(storeId: string, now = new Date()): Promis
   return send(storeId, `[Reservas] Resumen del ${formatDay(now)}`, text);
 }
 
-type DigestRow = { quantity: number; customerName: string; expiresAt: Date; product: { name: string }; order: { orderNumber: string } | null };
+type DigestRow = { quantity: number | null; customerName: string; expiresAt: Date; product: { name: string } | null; order: { orderNumber: string } | null };
 
 export function renderDigest(buckets: { expiringToday: DigestRow[]; expired: DigestRow[]; convertedUnpaid: DigestRow[]; unbacked: DigestRow[] }): string | null {
-  const line = (row: DigestRow) => `• ${row.product.name} × ${row.quantity} — ${row.customerName}${row.order ? ` (pedido ${row.order.orderNumber})` : ""}`;
+  const line = (row: DigestRow) => `• ${row.product?.name} × ${row.quantity} — ${row.customerName}${row.order ? ` (pedido ${row.order.orderNumber})` : ""}`;
   const sections = [
     ["Vencen hoy", buckets.expiringToday],
     ["Vencieron desde el último resumen (ya están otra vez a la venta)", buckets.expired],

@@ -8,6 +8,7 @@ import { priceLines } from "@/lib/product-pricing";
 import {
   HOLDING_RESERVATION_STATUSES,
   adjustReservedUnits,
+  headerLine,
   claimReservation,
   reservationPieces,
   withDeadlockRetry,
@@ -129,6 +130,9 @@ export async function createReservation(input: {
       },
       select: RESERVATION_SELECT,
     });
+    await tx.stockReservationItem.create({
+      data: { storeId: input.storeId, reservationId: reservation.id, productId: product.id, quantity, addedBy: input.createdBy },
+    });
     return { reservation, affectedProductIds: [product.id, ...affectedProductIds] };
   }));
 }
@@ -141,10 +145,11 @@ async function closeOne(
   closedBy: string,
 ) {
   return withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
-    const hold = await tx.stockReservation.findFirst({ where: { id, storeId }, select: { id: true, productId: true, quantity: true, status: true } });
-    if (!hold) throw ErrorFactory.NotFound("Reserva no encontrada");
+    const found = await tx.stockReservation.findFirst({ where: { id, storeId }, select: { id: true, productId: true, quantity: true, status: true } });
+    if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
     const claimed = await claimReservation(tx, { id, storeId, from, to, closedBy });
     if (!claimed) return { changed: false as const, affectedProductIds: [] as string[] };
+    const hold = headerLine(found);
     const pieces = await reservationPieces(tx, hold.productId, hold.quantity);
     const affected = await adjustReservedUnits(tx, storeId, pieces, "free");
     return { changed: true as const, affectedProductIds: [hold.productId, ...affected] };
@@ -183,13 +188,14 @@ export async function extendReservation(storeId: string, id: string, daysInput: 
  * El pago queda como transferencia por defecto; Paula lo cambia en el pedido.
  */
 export async function convertReservation(storeId: string, id: string, createdBy: string) {
-  const hold = await prismadb.stockReservation.findFirst({
+  const found = await prismadb.stockReservation.findFirst({
     where: { id, storeId },
     select: { id: true, status: true, orderId: true, productId: true, quantity: true, customerName: true, customerPhone: true, note: true },
   });
-  if (!hold) throw ErrorFactory.NotFound("Reserva no encontrada");
-  if (hold.status === StockReservationStatus.CONVERTED && hold.orderId) return { orderId: hold.orderId, existing: true };
-  if (hold.status !== StockReservationStatus.ACTIVE) throw ErrorFactory.Conflict("Solo una reserva activa se puede convertir en pedido");
+  if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
+  if (found.status === StockReservationStatus.CONVERTED && found.orderId) return { orderId: found.orderId, existing: true };
+  if (found.status !== StockReservationStatus.ACTIVE) throw ErrorFactory.Conflict("Solo una reserva activa se puede convertir en pedido");
+  const hold = headerLine(found);
 
   const product = await prismadb.product.findFirstOrThrow({
     where: { id: hold.productId, storeId },

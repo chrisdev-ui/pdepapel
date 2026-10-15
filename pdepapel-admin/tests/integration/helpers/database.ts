@@ -106,6 +106,7 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
       where: { fairEventId: { in: fairEventIds } },
     });
   }
+  await testPrisma.stockReservationItem.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.stockReservation.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.orderInventoryIssue.deleteMany({ where: { storeId: fixture.store.id } });
   if (storeOrderIds.length > 0) {

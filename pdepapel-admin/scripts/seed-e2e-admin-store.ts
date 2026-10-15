@@ -43,6 +43,7 @@ async function main() {
   const fairEventIds = existingFairs.map((fairEvent) => fairEvent.id);
   const reservationOrders = await prisma.stockReservation.findMany({ where: { storeId, orderId: { not: null } }, select: { orderId: true } });
   const reservationOrderIds = reservationOrders.map((row) => row.orderId as string);
+  await prisma.stockReservationItem.deleteMany({ where: { storeId } });
   await prisma.stockReservation.deleteMany({ where: { storeId } });
   if (reservationOrderIds.length > 0) {
     await prisma.orderItem.deleteMany({ where: { orderId: { in: reservationOrderIds } } });

@@ -1,6 +1,7 @@
 import { PrismaClient, StockReservationStatus } from "@prisma/client";
 
 import { runInBackground } from "@/lib/background";
+import { headerLine } from "@/lib/reservation-header";
 
 type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -33,15 +34,18 @@ export async function flagUnbackedReservations(tx: PrismaTx, productIds: string[
       orderBy: { createdAt: "desc" },
       select: { id: true, productId: true, quantity: true, unbackedAt: true },
     });
-    for (const hold of holds) {
+    for (const found of holds) {
       if (missing <= 0) break;
+      const hold = headerLine(found);
       missing -= hold.quantity * (perUnit.get(hold.productId) ?? 1);
       if (!hold.unbackedAt) flagged.push(hold.id);
     }
   }
 
   if (flagged.length > 0) {
-    await tx.stockReservation.updateMany({ where: { id: { in: flagged }, unbackedAt: null }, data: { unbackedAt: new Date() } });
+    const now = new Date();
+    await tx.stockReservation.updateMany({ where: { id: { in: flagged }, unbackedAt: null }, data: { unbackedAt: now } });
+    await tx.stockReservationItem.updateMany({ where: { reservationId: { in: flagged }, unbackedAt: null }, data: { unbackedAt: now } });
     runInBackground("aviso de apartados sin respaldo", async () =>
       (await import("@/lib/stock-review-alerts")).notifyUnbackedReservations(flagged),
     );

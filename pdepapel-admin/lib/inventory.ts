@@ -7,7 +7,7 @@ import {
   type MovementType,
 } from "./inventory-constants";
 import { queueMarketplaceStockSyncEvents } from "./mercadolibre/outbox";
-import { closeReservationsForOrders } from "./reservation-counters";
+import { closeReservationsForOrders, headerLine } from "./reservation-counters";
 import { flagUnbackedReservations } from "./stock-review";
 
 export {
@@ -704,7 +704,8 @@ async function piecesHeldForOrders(tx: PrismaTx, orderIds: string[]): Promise<Ma
     where: { orderId: { in: orderIds }, status: StockReservationStatus.CONVERTED },
     select: { productId: true, quantity: true },
   });
-  for (const hold of holds ?? []) {
+  for (const found of holds ?? []) {
+    const hold = headerLine(found);
     const pieces = await resolvePhysicalRequirements(tx, [{ productId: hold.productId, quantity: hold.quantity }]);
     pieces.forEach((units, id) => held.set(id, (held.get(id) ?? 0) + units));
   }

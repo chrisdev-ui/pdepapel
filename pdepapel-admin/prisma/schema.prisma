@@ -474,6 +474,7 @@ model Product {
   homeContents                HomeContentProduct[]
   presales                    ProductPresale[]
   stockReservations           StockReservation[]
+  stockReservationItems       StockReservationItem[]
 
   // -- CÁPSULAS SORPRESA --
   /// Lotes empacados de este producto cápsula (la cápsula es un producto normal).
@@ -3205,9 +3206,11 @@ model WhatsAppBotShadowRun {
 model StockReservation {
   id            String                 @id @default(uuid())
   storeId       String
-  /// Puede ser un kit: entonces el apartado sube el contador de sus componentes.
-  productId     String
-  quantity      Int
+  /// Reservas v2: lo que se guarda vive en `items`. Estos dos campos se siguen
+  /// llenando mientras dura la transición (una reserva = un producto) y se
+  /// borran en la contracción; nada nuevo debe leerlos.
+  productId     String?
+  quantity      Int?
   customerName  String
   /// Celular normalizado con lib/phone.ts. Nunca va a logs.
   customerPhone String                 @default("")
@@ -3226,13 +3229,36 @@ model StockReservation {
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
 
-  store   Store   @relation("StoreToStockReservation", fields: [storeId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-  order   Order?  @relation(fields: [orderId], references: [id])
+  store   Store                  @relation("StoreToStockReservation", fields: [storeId], references: [id])
+  product Product?               @relation(fields: [productId], references: [id])
+  order   Order?                 @relation(fields: [orderId], references: [id])
+  items   StockReservationItem[]
 
   @@index([storeId, status, expiresAt])
   @@index([productId, status])
   @@index([orderId])
+}
+
+/// Un producto dentro de una reserva. Puede ser un kit: guarda sus
+/// componentes. «Sin respaldo» va por producto porque una venta pagada se
+/// lleva las unidades de uno solo.
+model StockReservationItem {
+  id            String    @id @default(uuid())
+  storeId       String
+  reservationId String
+  productId     String
+  quantity      Int
+  unbackedAt    DateTime?
+  addedBy       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  reservation StockReservation @relation(fields: [reservationId], references: [id])
+  product     Product          @relation(fields: [productId], references: [id])
+
+  @@unique([reservationId, productId])
+  @@index([productId])
+  @@index([storeId, createdAt])
 }
 
 enum StockReservationStatus {
