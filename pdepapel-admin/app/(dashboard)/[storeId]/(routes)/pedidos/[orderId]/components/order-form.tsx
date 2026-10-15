@@ -540,7 +540,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           },
           orderTotal: totals.total,
           // El recaudo se calcula sobre el pedido sin envío ni recaudo.
-          amountBeforeShipping: Math.max(0, totals.total - (Number(data.shipping?.cost) || 0) - (data.shipping?.isCOD ? Number(data.shipping?.codFee) || 0 : 0)),
+          // Lo que ya cubrió una tarjeta de regalo no se recauda.
+          amountBeforeShipping: Math.max(
+            0,
+            totals.total -
+              (Number(data.shipping?.cost) || 0) -
+              (data.shipping?.isCOD ? Number(data.shipping?.codFee) || 0 : 0) -
+              Number(initialData?.giftCardAmount ?? 0),
+          ),
           productSubtotal: totals.subtotal,
           items: data.orderItems.map((item) => ({ ...item })),
           boxId: data.shipping.boxId,

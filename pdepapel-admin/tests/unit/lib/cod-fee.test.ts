@@ -77,3 +77,13 @@ describe("cotizar con recaudo dos veces", () => {
     expect(result.every((rate) => rate.codFee === null)).toBe(true);
   });
 });
+
+describe("lo que se recauda al entregar", () => {
+  it("total menos tarjeta de regalo, nunca menos de 0", async () => {
+    const { amountToCollect } = await import("@/lib/cod-fee");
+    expect(amountToCollect({ total: 75000, giftCardAmount: 30000 })).toBe(45000);
+    expect(amountToCollect({ total: 75000, giftCardAmount: 75000 })).toBe(0);
+    expect(amountToCollect({ total: 75000, giftCardAmount: 90000 })).toBe(0);
+    expect(amountToCollect({ total: 75000 })).toBe(75000);
+  });
+});

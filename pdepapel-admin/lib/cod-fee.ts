@@ -81,3 +81,15 @@ export async function quoteWithCodFees<R extends CodQuoteRate>(input: {
     return { ...rate, codFee };
   });
 }
+
+/**
+ * Lo que la clienta paga al recibir: el total menos lo que ya cubrió la
+ * tarjeta de regalo (el único pago parcial que existe hoy), nunca menos de
+ * 0. Es el valor a recaudar de la guía y la base del recaudo.
+ */
+export function amountToCollect(order: { total: number | null | undefined; giftCardAmount?: number | null }): number {
+  return Math.max(0, Math.round((Number(order.total ?? 0) - Number(order.giftCardAmount ?? 0)) * 100) / 100);
+}
+
+export const NOTHING_TO_COLLECT_MESSAGE =
+  "La tarjeta de regalo cubre todo el pedido: no hay nada que cobrar contra entrega. Quita «Pago contra entrega», cotiza de nuevo y crea la guía sin recaudo.";

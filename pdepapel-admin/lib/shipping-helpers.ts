@@ -1,3 +1,4 @@
+import { amountToCollect, NOTHING_TO_COLLECT_MESSAGE } from "@/lib/cod-fee";
 import {
   ENVIOCLICK_DEFAULTS,
   getPickupDate,
@@ -233,10 +234,15 @@ export async function createGuideForOrder(
     );
   }
 
+  // Contra entrega se recauda lo que la clienta debe al recibir, no el total.
+  const codValue = amountToCollect(order);
   if (order.shipping.isCOD) {
-    if (order.total < 0 || order.total > 3000000) {
+    if (codValue <= 0) {
+      throw ErrorFactory.InvalidRequest(NOTHING_TO_COLLECT_MESSAGE);
+    }
+    if (codValue > 3000000) {
       throw ErrorFactory.InvalidRequest(
-        `El valor a recaudar contra entrega ($${order.total}) debe estar entre $0 y $3.000.000 COP.`,
+        `El valor a recaudar contra entrega ($${codValue}) debe estar entre $0 y $3.000.000 COP.`,
       );
     }
   }
@@ -293,7 +299,7 @@ export async function createGuideForOrder(
         daneCode: order.daneCode!,
       },
       ...(order.shipping.isCOD && {
-        codValue: order.total,
+        codValue,
         codPaymentMethod:
           order.shipping.codPaymentMethod ||
           ENVIOCLICK_DEFAULTS.codPaymentMethod,

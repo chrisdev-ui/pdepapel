@@ -1,3 +1,4 @@
+import { amountToCollect, NOTHING_TO_COLLECT_MESSAGE } from "@/lib/cod-fee";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -71,12 +72,15 @@ export async function POST(
     }
 
     const isCOD = Boolean(order.shipping.isCOD);
+    if (isCOD && amountToCollect(order) <= 0) {
+      throw ErrorFactory.InvalidRequest(NOTHING_TO_COLLECT_MESSAGE);
+    }
     const quoted = await requoteCartShipping({
       storeId: params.storeId,
       items,
       destination: { daneCode: order.daneCode, address: order.address ?? "" },
       contentValue: order.total,
-      ...(isCOD && { cod: { value: order.total } }),
+      ...(isCOD && { cod: { value: amountToCollect(order) } }),
     });
     // Contra entrega: una tarifa sin recaudo daría «idRate no válido para COD» al crear la guía.
     const freshRates = isCOD ? quoted.filter((rate) => rate.isCOD) : quoted;
