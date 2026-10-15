@@ -32,6 +32,8 @@ interface ShippingSectionProps {
   onSelectRate: (quote: ShippingQuote, options?: { silent?: boolean }) => void;
   /** Descarta la tarifa elegida: en el formulario y, si ya estaba guardada, en el servidor. */
   onDiscardRate: () => Promise<void> | void;
+  /** Guarda el pedido antes de pedir la guía; true si quedó guardado. */
+  saveForGuide?: () => Promise<boolean>;
   /** Estado real del envío (guía, seguimiento): se muestra debajo de la configuración. */
   children?: ReactNode;
 }
@@ -54,6 +56,7 @@ export function ShippingSection({
   onSelectRate,
   onDiscardRate,
   children,
+  saveForGuide,
 }: ShippingSectionProps) {
   const form = useFormContext<OrderFormValues>();
   const provider = useWatch({ control: form.control, name: "shippingProvider" });
@@ -160,6 +163,7 @@ export function ShippingSection({
           onDiscard={() => (savedRateId ? setDiscardOpen(true) : void discard())}
           discarding={discarding}
           setCOD={setCOD}
+          saveForGuide={saveForGuide}
         />
       )}
 

@@ -62,6 +62,7 @@ interface EnvioClickBlockProps {
   onDiscard: () => void;
   discarding: boolean;
   setCOD: (checked: boolean) => void;
+  saveForGuide?: () => Promise<boolean>;
 }
 
 /**
@@ -83,6 +84,7 @@ export function EnvioClickBlock({
   onDiscard,
   discarding,
   setCOD,
+  saveForGuide,
 }: EnvioClickBlockProps) {
   const form = useFormContext<OrderFormValues>();
   const boxId = useWatch({ control: form.control, name: "shipping.boxId" });
@@ -501,9 +503,13 @@ export function EnvioClickBlock({
           isCOD={Boolean(isCOD)}
           carrier={carrierName || "transportadora"}
           cost={selectedCost}
+          rate={selectedQuote ?? null}
           saved={savedRateId === rateId}
-          stale={savedRateId === rateId && !quotedAt && expired}
+          stale={expired}
           guideError={initialData.shipping?.guideError}
+          guideAttemptedAt={initialData.shipping?.guideAttemptedAt ?? null}
+          quotedAt={quotedAt}
+          saveForGuide={saveForGuide}
           disabled={loading || discarding}
         />
       )}

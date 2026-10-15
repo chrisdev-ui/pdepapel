@@ -374,6 +374,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             toast({ description: "Cambios guardados", variant: "success" });
           }
           router.refresh();
+          return true;
         } else {
           const response = await axios.post(`/api/${storeId}/orders`, payload, {
             headers: { "Idempotency-Key": idempotencyKey },
@@ -388,7 +389,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           startNavigation(() => {
             router.push(`/${storeId}/pedidos/${response.data.id}`);
           });
-          return;
+          return true;
         }
       } catch (error) {
         if (isAxiosError(error) && error.response?.status === 409) {
@@ -402,6 +403,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             variant: "destructive",
           });
         }
+        return false;
       } finally {
         setLoading(false);
       }
@@ -470,6 +472,22 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   // al campo, que en un formulario tan largo casi siempre está fuera de
   // pantalla.
   const onInvalid = useCallback(() => focusFirstInvalidField(), []);
+
+  // «Crear guía» con una tarifa recién elegida: primero se guarda el pedido
+  // (la guía usa la tarifa guardada); si no se guarda, no se pide la guía.
+  const saveForGuide = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        void form.handleSubmit(
+          async (data) => resolve(Boolean(await submitOrder(data))),
+          () => {
+            onInvalid();
+            resolve(false);
+          },
+        )();
+      }),
+    [form, submitOrder, onInvalid],
+  );
 
   const onDelete = async () => {
     if (!initialData) return;
@@ -887,6 +905,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 onGetShippingQuotes={onGetShippingQuotes}
                 onSelectRate={onSelectRate}
                 onDiscardRate={onDiscardRate}
+                saveForGuide={saveForGuide}
               >
                 {shippingInfo}
               </ShippingSection>

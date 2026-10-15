@@ -61,7 +61,8 @@ export function describeRequote(
   previous: { carrier: string | null; cost: number } | null,
   next: ShippingQuote,
 ): RequoteNotice | null {
-  if (!previous?.carrier) return null;
+  // Sin precio guardado no hubo «antes»: decir «pasó de $0» confunde.
+  if (!previous?.carrier || !previous.cost) return null;
   if (previous.carrier !== next.carrier) {
     return {
       kind: "carrier",

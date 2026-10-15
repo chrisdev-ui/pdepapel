@@ -21,7 +21,7 @@ vi.mock("@/lib/rate-limit", () => ({ consumeRateLimit: vi.fn().mockResolvedValue
 
 import { POST } from "@/app/api/[storeId]/shipment/quote/route";
 
-const ADDRESS = "Carrera 7 # 10-20 casa azul";
+const ADDRESS = "Calle 1 # 2-3";
 const request = (isCOD: boolean) =>
   new Request("https://admin.test/api/store-1/shipment/quote", {
     method: "POST",
@@ -59,7 +59,7 @@ describe("POST /shipment/quote", () => {
     const line = mocks.log.mock.calls.find(([tag]) => tag === "[SHIPPING_QUOTE] contra entrega");
     expect(line).toBeDefined();
     expect(JSON.parse(String(line![1]))).toMatchObject({ destDaneCode: "17380000", rates: [{ carrier: "ENVIA", cod: true, codCost: 7000 }, { carrier: "COORDINADORA", cod: false, codCost: null }] });
-    expect(String(line![1])).not.toContain("Carrera");
+    expect(String(line![1])).not.toContain(ADDRESS);
   });
 
   it("sin contra entrega no manda recaudo, guarda en la caché y no registra la línea", async () => {

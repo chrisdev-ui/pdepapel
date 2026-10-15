@@ -70,17 +70,18 @@ export function RateOption({ quote, selected, disabled }: RateOptionProps) {
             </span>
           </span>
         </span>
-        <span className="flex items-baseline gap-2 sm:flex-col sm:items-end sm:gap-0">
+        <span className="flex flex-wrap items-baseline gap-x-2 sm:flex-col sm:items-end sm:gap-0">
           <span className="text-lg font-bold text-primary">
-            {currencyFormatter(quote.totalCost)}
+            {currencyFormatter(quote.totalCost + (quote.isCOD ? Number(quote.codCost ?? 0) : 0))}
           </span>
           <span className="text-xs text-muted-foreground">
-            flete {currencyFormatter(quote.flete)} · seguro{" "}
+            flete {currencyFormatter(quote.flete)} + seguro{" "}
             {currencyFormatter(quote.minimumInsurance)}
+            {quote.isCOD && quote.codCost ? ` + recaudo ${currencyFormatter(quote.codCost)}` : ""}
           </span>
-          {quote.codCost ? (
+          {quote.isCOD && quote.codCost ? (
             <span className="text-xs text-muted-foreground">
-              + recaudo {currencyFormatter(quote.codCost)} (lo cobra EnvioClick)
+              En el pedido: {currencyFormatter(quote.totalCost)}
             </span>
           ) : null}
         </span>
