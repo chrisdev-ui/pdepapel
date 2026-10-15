@@ -265,7 +265,9 @@ const WELCOME_TRIGGERS: WhatsAppBotKeyword[] = [
       "buenas noches", "saludos", "hey", "que mas", "buen dia",
       "hi", "hello", "hi there", "hello there", "good morning", "good afternoon",
       "good evening", "greetings",
-      "como estas", "como estan", "como va", "como van", "que tal", "pau", "paula",
+      "como estas", "como estan", "como esta", "como va", "como van", "que tal", "pau", "paula",
+      // «Hola veci»: vecina/o, como le dicen a Paula.
+      "veci", "vecina", "vecino",
     ],
     answer: "",
   },

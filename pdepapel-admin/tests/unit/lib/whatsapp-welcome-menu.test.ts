@@ -261,3 +261,13 @@ describe("el mensaje que se le arma a Meta", () => {
     }
   });
 });
+
+describe("saludos que antes caían en «Esa no me la sé» (2026-10-14)", () => {
+  it("«como esta?» sin la s y «veci» son saludo", () => {
+    for (const frase of ["como esta?", "Hola veci", "Buenas noches veci", "hola vecina, cómo está?", "Veci!"]) {
+      expect(isWelcomeGreeting(frase), frase).toBe(true);
+    }
+    expect(isWelcomeGreeting("veci tienen agendas?")).toBe(false);
+  });
+});
+

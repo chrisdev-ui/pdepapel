@@ -64,6 +64,10 @@ const completa: ResolvedStoreSettings = {
   botProductsVersion: null,
   botCasualApprovedAt: null,
   botCasualVersion: null,
+  botFallbackMode: "SHADOW",
+  botHoldingMode: "SHADOW",
+  botHoldingText: null,
+  botHoldingNightText: null,
 };
 
 const con = (cambios: Partial<ResolvedStoreSettings>): ResolvedStoreSettings => ({
