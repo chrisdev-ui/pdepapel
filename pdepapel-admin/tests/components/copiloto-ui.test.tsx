@@ -113,10 +113,12 @@ describe("CopilotChat", () => {
     expect(await item.items["text/plain"].text()).toBe("¡Hola!\n• Marca: X.");
   });
 
-  it("sin mensajes muestra las sugerencias de la pantalla y las manda al tocarlas", () => {
-    render(<CopilotChat storeId="store-1" screen="mercadolibre" conversations={[]} />);
+  it("sin mensajes muestra las sugerencias de la pantalla; tocar una la escribe en la caja sin mandarla", () => {
+    render(<CopilotChat storeId="store-1" screen="mercadolibre/publicaciones" conversations={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "¿Hay alertas en Mercado Libre?" }));
-    expect(mocks.chat.sendMessage).toHaveBeenCalledWith({ text: "¿Hay alertas en Mercado Libre?" });
+    expect(mocks.chat.sendMessage).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Tu pregunta")).toHaveValue("¿Hay alertas en Mercado Libre?");
+    expect(screen.getByLabelText("Tu pregunta")).toHaveFocus();
   });
 
   it("muestra de dónde salen los datos, la negrita, el enlace a la nota y «Ver más»", () => {

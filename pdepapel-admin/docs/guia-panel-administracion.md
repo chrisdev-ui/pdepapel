@@ -262,6 +262,48 @@ estrellas), Ocultas. Desde el menú de la fila: **Responder** (se publica bajo
 la reseña como «Respuesta de P de Papel»), **Ocultar de la tienda** /
 **Publicar**, **Eliminar** (solo cuando ocultar no basta).
 
+## 9b. Reservas (`/reservas`, `/reservas/<id>`)
+
+Una reserva guarda unidades para una clienta que todavía no paga: dejan de
+venderse en la tienda en línea, Mercado Libre y el punto de venta hasta que se
+convierta en pedido, se libere o venza. Una reserva puede tener **varios
+productos**, cada uno con su cantidad; nunca aparta más de lo disponible (si
+no alcanza, no guarda nada y nombra el producto y lo que queda; con varios es
+todo o nada).
+
+- **Crear:** «Reservar» en la lista, en un producto, o «Reservar los N
+  productos» en un pedido de WhatsApp (llega con todo lo pedido). Se busca o
+  escanea cada producto («Agregar otro producto» suma una línea; el mismo
+  producto dos veces se suma), se elige la clienta («Buscar una clienta que ya
+  compró» o nombre y celular), los días y «Reservar N unidades».
+- **Ya tiene una abierta:** con el celular de una clienta que tiene una
+  reserva abierta, la hoja propone «Agregar a la reserva abierta»; «Crear otra
+  reserva» queda a mano.
+- **Agregar después:** en el detalle, «Agregar productos». Agregar no mueve el
+  vencimiento; si vence en menos de 24 h, la casilla «Extender N días al
+  guardar» (apagada) lo hace.
+- **Editar:** en el detalle, − / + y «Guardar» (sube: aparta la diferencia o
+  dice por qué no; baja: devuelve a la venta); la papelera quita un producto;
+  quitar el último libera la reserva. El «Historial» guarda cada cambio, quién
+  y cuándo.
+- **Extender:** la etiqueta dice «vence hoy» (rojo), «vence mañana» (rosado) o
+  en cuántos días. Con menos de 24 h, la tarjeta y el detalle muestran «Vence en
+  menos de 24 horas» con «Extender N días» (los de la tienda); «+ días» y el
+  campo «Días» dejan elegir otro número. Sin extender, vence sola; a las 8:00
+  llega el correo con las que vencen al día siguiente.
+- **Convertir:** «Convertir en pedido» enseña el resumen (cada producto a su
+  precio de hoy, «Total (sin envío)») y «Crear el pedido» crea **un** pedido
+  pendiente con todos. Las unidades siguen apartadas; desde ahí se edita en el
+  pedido (sus líneas mueven lo reservado). Pagado, se descuenta; cancelado,
+  vuelve a la venta.
+- **Liberar:** devuelve todo a la venta, con confirmación. Si ya era pedido,
+  el pedido sigue abierto.
+
+Pestañas: Activas, Con pedido sin pagar, Sin respaldo (una venta pagada se
+llevó unidades reservadas: reponer, ofrecer otro o liberar; llega correo),
+Vencidas, Cerradas. Los días por defecto están en Ajustes › Reservas («Días
+de una reserva»).
+
 ## 10. Productos (`/productos`, `/productos/<id>`)
 
 Vistas: Activos, Sin completar, Sin identificador (sin GTIN y sin la marca
@@ -574,6 +616,35 @@ espera (una vez por espera: a los 15 minutos de día, enseguida de 12 a 6:59
 a. m.). Los dos textos del mensaje de espera los escribe Paula; vacíos, no
 sale nada. En Sombra solo se anota lo que haría y a la clienta no le llega
 nada.
+
+## 18b. Copiloto (`/copiloto`)
+
+Chat que consulta los datos de la tienda y responde con cifras y su fuente
+(«Datos: …» con la fecha). **Solo lee:** no crea, edita ni borra nada, no da
+contactos de clientas y no ve métricas de redes ni anuncios. Se abre con el
+botón «Copiloto» de la barra de arriba; el chat vacío muestra ejemplos de la
+pantalla de origen, y tocar uno lo escribe en la caja sin mandarlo.
+
+Lo que se le puede preguntar (los mismos ejemplos del chat; cada uno lo
+responde una consulta concreta y la evaluación lo comprueba):
+
+| Tema | Ejemplo | Responde con |
+|---|---|---|
+| El día | «¿Cómo voy hoy?» · «¿Cuántos pedidos tengo pendientes?» | ventas, pedidos y unidades de hoy por canal, pendientes, stock bajo |
+| Dinero del mes | «¿Cuál fue mi margen este mes?» · «¿Cómo me fue este mes frente al anterior?» | ingresos, utilidad, margen y pedidos por canal; comparación de meses (últimos 24) |
+| Punto de venta | «¿Cuánto vendí en el punto de venta ayer?» | ventas presenciales de un día por medio de pago |
+| Catálogo | «Busca las libretas con stock» · «¿Qué margen me deja la Libreta Kuromi y cuántas he vendido?» | búsqueda por nombre; detalle con precio, costo, margen, stock y vendidas |
+| Inventario | «¿Qué entradas y salidas tuvo la Libreta Kuromi este mes?» · «¿Qué tengo que reponer esta semana?» · «¿Qué se agota en menos de una semana?» | kardex; por reponer por cobertura; riesgo de agotarse |
+| Impuestos | «¿Cuánto vendí y cuánto compré con factura este mes, para la declaración?» | ventas por canal y compras con factura (no reemplaza al contador) |
+| Mercado Libre | «¿Hay alertas en Mercado Libre?» | conexión, publicaciones por estado, alertas (sin dinero) |
+| Promoción y redes | «¿Qué producto me conviene promocionar este mes?» · «Dame 3 ideas de Reel para esta semana» | regla de Campañas con enlace; habilidad de mercadeo |
+| Textos y kits | «Escríbeme la descripción para la tienda del Set de washi tape pastel» · «¿Qué productos llevan más de 90 días sin venderse y qué kits podría armar con ellos?» | descripción para la ficha; kits con productos quietos |
+
+Dudas del oficio: usa y cita las notas aprobadas en Copiloto › Conocimiento;
+sin nota, lo dice y marca su idea como no verificada. No hay una consulta de
+«productos por debajo del costo»: se mira el margen producto por producto.
+La lista vive en `lib/copiloto/examples.ts`; una prueba exige que el manual y
+esta guía traigan cada ejemplo.
 
 ## 19. Estados
 

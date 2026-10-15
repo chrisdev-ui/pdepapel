@@ -7,6 +7,7 @@ import { subDays } from "date-fns";
 import { zonedTimeToUtc } from "date-fns-tz";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { COPILOT_EXAMPLES } from "@/lib/copiloto/examples";
 import { matchesOccasion, upcomingOccasions } from "@/lib/season-calendar";
 
 import { copilotRoStatements } from "../../tests/integration/helpers/copilot-ro";
@@ -601,5 +602,24 @@ describe("evaluación del copiloto", () => {
     expect(of("kits").filter((result) => strictKits.has(result.id) && !result.pasa).map((result) => result.id)).toEqual([]);
     expect(passing("kits")).toBeGreaterThanOrEqual(of("kits").length - 1);
     if (NOTES_MODE === "borradores") expect(passed).toBeGreaterThanOrEqual(18);
+  });
+
+  // Solo esta parte: npx vitest run --config scripts/copilot-eval/vitest.config.mts -t "ejemplos del manual"
+  it(`los ${COPILOT_EXAMPLES.length} ejemplos del manual y del chat llaman a la herramienta que los responde`, async () => {
+    const results: { pregunta: string; espera: string; herramientas: string[]; pasa: boolean }[] = [];
+    for (const example of COPILOT_EXAMPLES) {
+      // Los kits necesitan productos quietos: se preguntan en su tienda, con su dueña.
+      const kits = example.herramienta === "kitsParaRotar";
+      const previous = session.userId;
+      if (kits) session.userId = kitsFixture!.store.userId;
+      try {
+        const answer = await ask(kits ? kitsFixture!.store.id : fixture!.store.id, example.pregunta);
+        results.push({ pregunta: example.pregunta, espera: example.herramienta, herramientas: answer.tools, pasa: usedTool(answer, example.herramienta) });
+      } finally {
+        session.userId = previous;
+      }
+    }
+    console.table(results.map(({ pregunta, espera, herramientas, pasa }) => ({ pregunta, espera, herramientas: herramientas.join(", "), pasa: pasa ? "sí" : "NO" })));
+    expect(results.filter((result) => !result.pasa).map((result) => result.pregunta)).toEqual([]);
   });
 });

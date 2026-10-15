@@ -1,25 +1,7 @@
-/** Sugerencias según la pantalla desde la que se abrió el copiloto (`?desde=`). */
-const BY_SCREEN: Record<string, string[]> = {
-  inicio: ["¿Cómo voy hoy?", "¿Cómo me fue este mes frente al anterior?", "¿Qué tengo que reponer esta semana?"],
-  productos: ["¿Qué productos están por debajo del costo?", "¿Qué se agota en menos de una semana?", "Busca las libretas con stock"],
-  "por-reponer": ["¿Qué debería pedirle primero al proveedor?", "¿Qué se agota en menos de una semana?"],
-  pedidos: ["¿Cuántos pedidos tengo pendientes?", "¿Cuánto vendí en el punto de venta ayer?"],
-  mercadolibre: ["¿Hay alertas en Mercado Libre?", "¿Cómo está la conexión con Mercado Libre?"],
-};
+import { copilotSuggestions } from "@/lib/copiloto/examples";
 
-const GENERAL = [
-  "¿Cómo voy hoy?",
-  "¿Qué marcador sirve para pintar sobre tela?",
-  "Escríbeme la descripción de un producto",
-  "Dame 3 ideas de Reel para esta semana",
-  "¿Qué tengo que reponer esta semana?",
-];
-
-export function suggestionsFor(screen: string | null | undefined): string[] {
-  if (!screen) return GENERAL;
-  const key = Object.keys(BY_SCREEN).find((candidate) => screen.includes(candidate));
-  return key ? BY_SCREEN[key] : GENERAL;
-}
+/** Sugerencias según la pantalla desde la que se abrió el copiloto (`?desde=`): los ejemplos del manual. */
+export const suggestionsFor = copilotSuggestions;
 
 /** Lo que se ve mientras corre cada herramienta. */
 export const TOOL_LABELS: Record<string, string> = {
@@ -37,4 +19,5 @@ export const TOOL_LABELS: Record<string, string> = {
   productosParaPromocionar: "Buscando qué promocionar",
   cargarHabilidad: "Preparando la habilidad",
   productoParaDescripcion: "Leyendo la ficha del producto",
+  kitsParaRotar: "Buscando productos quietos para kits",
 };

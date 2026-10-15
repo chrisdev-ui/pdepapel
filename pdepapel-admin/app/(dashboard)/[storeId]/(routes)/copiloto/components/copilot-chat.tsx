@@ -435,7 +435,11 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => send(suggestion)}
+                    onClick={() => {
+                      // Se escribe en la caja, no se manda: Paula cambia el producto o la fecha antes de preguntar.
+                      setInput(suggestion);
+                      document.getElementById("copiloto-pregunta")?.focus();
+                    }}
                     className="rounded-full border bg-tint-pink px-3 py-1.5 text-left text-sm text-primary hover:bg-accent"
                   >
                     {suggestion}
