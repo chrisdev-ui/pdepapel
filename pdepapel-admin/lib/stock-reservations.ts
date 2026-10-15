@@ -352,7 +352,17 @@ export async function extendReservation(storeId: string, id: string, daysInput: 
   });
 }
 
-const CONVERT_SELECT = { id: true, status: true, orderId: true, customerName: true, customerPhone: true, note: true, ...RESERVATION_LINES_SELECT } as const;
+const CONVERT_SELECT = {
+  id: true,
+  status: true,
+  orderId: true,
+  customerName: true,
+  customerPhone: true,
+  note: true,
+  ...RESERVATION_LINES_SELECT,
+  // El resumen y el pedido salen en el orden del detalle.
+  items: { orderBy: [{ createdAt: "asc" }, { product: { name: "asc" } }], select: { productId: true, quantity: true } },
+} satisfies Prisma.StockReservationSelect;
 
 /** Las líneas del pedido al precio efectivo de hoy (el mismo cálculo que «Convertir»). */
 async function priceReservation(storeId: string, lines: ReservationLine[]) {

@@ -14,6 +14,7 @@ import {
   editReservationCustomer,
   extendReservation,
   getReservationDetail,
+  releaseReservation,
   setReservationItemQuantity,
 } from "@/lib/stock-reservations";
 import { checkReservationDrift, sendDailyDigest } from "@/lib/stock-reservations-job";
@@ -444,5 +445,52 @@ describe("reservas v2: varios productos (MySQL)", () => {
     const preview = await (await convert.GET(request("GET"), params)).json();
     expect(preview.lines).toHaveLength(2);
     expect(preview.total).toBe(28000);
+  });
+
+  it("la cuenta cuadra después de cada operación: reservados = suma de los productos activos y convertidos, nunca más que el stock", async () => {
+    const { f, notebook } = await setup(4);
+    const ids = [f.component.id, notebook.id];
+    const holds = async () => {
+      for (const id of ids) {
+        const items = await testPrisma.stockReservationItem.findMany({
+          where: { productId: id, reservation: { status: { in: [StockReservationStatus.ACTIVE, StockReservationStatus.CONVERTED] } } },
+          select: { quantity: true },
+        });
+        const { stock, reservedUnits } = await counters(id);
+        expect(reservedUnits).toBe(items.reduce((sum, item) => sum + item.quantity, 0));
+        expect(reservedUnits).toBeLessThanOrEqual(stock);
+      }
+      await expect(checkReservationDrift()).resolves.toBe(0);
+    };
+
+    const { reservation } = await create([{ productId: f.component.id, quantity: 2 }, { productId: notebook.id, quantity: 1 }]);
+    await holds();
+    const other = await createReservation({ storeId: f.store.id, items: [{ productId: notebook.id, quantity: 1 }], customerName: "Otra clienta", customerPhone: "3007654321", createdBy: owner() });
+    await holds();
+
+    await addReservationItems(f.store.id, reservation.id, { items: [{ productId: f.component.id, quantity: 1 }, { productId: notebook.id, quantity: 1 }] }, owner());
+    await holds();
+    const itemOf = async (productId: string) => (await testPrisma.stockReservationItem.findFirstOrThrow({ where: { reservationId: reservation.id, productId } })).id;
+
+    await setReservationItemQuantity(f.store.id, reservation.id, { itemId: await itemOf(f.component.id), quantity: 6 }, owner());
+    await holds();
+    const blocked = await setReservationItemQuantity(f.store.id, reservation.id, { itemId: await itemOf(notebook.id), quantity: 4 }, owner()).catch((error) => error);
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.message).toContain("Libreta");
+    await holds();
+    await setReservationItemQuantity(f.store.id, reservation.id, { itemId: await itemOf(f.component.id), quantity: 3 }, owner());
+    await holds();
+    await setReservationItemQuantity(f.store.id, reservation.id, { itemId: await itemOf(notebook.id), quantity: 0 }, owner());
+    await holds();
+
+    const { orderId } = await convertReservation(f.store.id, reservation.id, owner());
+    await holds();
+    const lines = await testPrisma.orderItem.findMany({ where: { orderId }, select: { productId: true, quantity: true } });
+    expect(lines).toEqual([{ productId: f.component.id, quantity: 3 }]);
+
+    await releaseReservation(f.store.id, other.reservation.id, owner());
+    await holds();
+    await expect(counters(f.component.id)).resolves.toMatchObject({ reservedUnits: 3 });
+    await expect(counters(notebook.id)).resolves.toMatchObject({ reservedUnits: 0 });
   });
 });
