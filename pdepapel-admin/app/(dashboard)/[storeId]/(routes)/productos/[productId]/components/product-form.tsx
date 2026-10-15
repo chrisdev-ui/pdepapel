@@ -1259,8 +1259,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 open={reserveOpen}
                 onOpenChange={setReserveOpen}
                 defaultDays={reservationDefaultDays}
-                product={{ id: initialData.id, name: initialData.name, stock: initialData.stock, reservedUnits: reservedNow }}
-                onCreated={(reservation) => setReservedNow((current) => current + reservation.quantity)}
+                product={{ id: initialData.id, name: initialData.name, stock: initialData.stock, reservedUnits: reservedNow, price: Number(initialData.price) }}
+                onSaved={(_reservation, _mode, saved) =>
+                  setReservedNow((current) => current + saved.filter((line) => line.productId === initialData.id).reduce((sum, line) => sum + line.quantity, 0))
+                }
               />
               <Button
                 type="button"

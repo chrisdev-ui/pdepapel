@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 
 import { IgnoreContactDialog } from "@/components/conversations/ignore-contact-dialog";
 import { MarkAttendedButton } from "@/components/conversations/mark-attended-button";
-import { ReserveSheet, type CreatedReservation } from "@/components/reservations/reserve-sheet";
+import { ReserveSheet, type ReserveSheetLine } from "@/components/reservations/reserve-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -99,7 +99,8 @@ function OrderRequestCard({
 }: {
   record: NonNullable<ConversationThreadMessage["orderRequest"]>;
   onDismiss?: () => void;
-  onReserve?: (item: { productId: string; name: string; quantity: number }) => void;
+  /** «Reservar»: abre la hoja con todos los productos pedidos y sus cantidades. */
+  onReserve?: (items: { productId: string; name: string; quantity: number; unitPrice?: number }[]) => void;
   /** Unidades reservadas desde esta conversación, por producto. */
   reserved?: Record<string, number>;
   busy?: boolean;
@@ -123,10 +124,6 @@ function OrderRequestCard({
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                 Reservado {reserved[item.productId]}
               </span>
-            ) : pending && onReserve ? (
-              <Button type="button" size="xs" variant="outline" className="h-7" disabled={busy} onClick={() => onReserve(item)}>
-                Reservar
-              </Button>
             ) : null}
           </li>
         ))}
@@ -134,6 +131,11 @@ function OrderRequestCard({
       <p className="mt-1 text-xs font-semibold">
         Total {currencyFormatter(record.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0))} sin envío
       </p>
+      {pending && onReserve && record.items.some((item) => !reserved[item.productId]) ? (
+        <Button type="button" size="sm" variant="outline" className="mt-2 min-h-9" disabled={busy} onClick={() => onReserve(record.items.filter((item) => !reserved[item.productId]))}>
+          {record.items.length > 1 ? `Reservar los ${record.items.length} productos` : "Reservar"}
+        </Button>
+      ) : null}
       <p className="mt-1 text-[11px] text-muted-foreground">Sin reservar ni cobrar: confírmale envío y pago.</p>
       {pending && onDismiss ? (
         <Button type="button" size="xs" variant="ghost" className="mt-1" disabled={busy} onClick={onDismiss}>
@@ -212,7 +214,7 @@ function MessageBubble({
   message: ConversationThreadMessage;
   storeId: string;
   onDismissOrder?: () => void;
-  onReserveItem?: (item: { productId: string; name: string; quantity: number }) => void;
+  onReserveItem?: (items: { productId: string; name: string; quantity: number; unitPrice?: number }[]) => void;
   reservedItems?: Record<string, number>;
   busy?: boolean;
 }) {
@@ -302,17 +304,20 @@ export function ConversationThread({
   /** Stock y reservados de los productos pedidos, para la línea de la hoja «Reservar». */
   productStock?: Record<string, { stock: number; reservedUnits: number }>;
 }) {
-  const [reserveItem, setReserveItem] = useState<{ productId: string; name: string; quantity: number } | null>(null);
+  const [reserveItems, setReserveItems] = useState<{ productId: string; name: string; quantity: number; unitPrice?: number }[] | null>(null);
   const [stockNow, setStockNow] = useState(productStock);
   const [reservedHere, setReservedHere] = useState<Record<string, number>>({});
   useEffect(() => setStockNow(productStock), [productStock]);
-  const onReserved = (reservation: CreatedReservation) => {
-    setReservedHere((current) => ({ ...current, [reservation.productId]: (current[reservation.productId] ?? 0) + reservation.quantity }));
-    setStockNow((current) => {
-      const row = current[reservation.productId];
-      return row ? { ...current, [reservation.productId]: { ...row, reservedUnits: row.reservedUnits + reservation.quantity } } : current;
-    });
+  const onReserved = (saved: { productId: string; quantity: number }[]) => {
+    setReservedHere((current) => saved.reduce((next, line) => ({ ...next, [line.productId]: (next[line.productId] ?? 0) + line.quantity }), current));
+    setStockNow((current) =>
+      saved.reduce((next, line) => {
+        const row = next[line.productId];
+        return row ? { ...next, [line.productId]: { ...row, reservedUnits: row.reservedUnits + line.quantity } } : next;
+      }, current),
+    );
   };
+  const reserveLines: ReserveSheetLine[] = (reserveItems ?? []).map((item) => ({ product: { id: item.productId, name: item.name, price: item.unitPrice ?? null, ...stockNow[item.productId] }, quantity: item.quantity }));
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -562,7 +567,7 @@ export function ConversationThread({
           ) : (
             <ul className="space-y-4">
               {conversation.messages.map((message) => (
-                <MessageBubble key={message.id} message={message} storeId={storeId} onDismissOrder={dismissOrder} onReserveItem={setReserveItem} reservedItems={reservedHere} busy={loading} />
+                <MessageBubble key={message.id} message={message} storeId={storeId} onDismissOrder={dismissOrder} onReserveItem={setReserveItems} reservedItems={reservedHere} busy={loading} />
               ))}
             </ul>
           )}
@@ -573,15 +578,14 @@ export function ConversationThread({
         tienda en tu celular como siempre: lo que contestes aparece aquí solo.
       </p>
       <ReserveSheet
-        open={reserveItem !== null}
-        onOpenChange={(open) => !open && setReserveItem(null)}
+        open={reserveItems !== null}
+        onOpenChange={(open) => !open && setReserveItems(null)}
         defaultDays={reservationDefaultDays}
-        product={reserveItem ? { id: reserveItem.productId, name: reserveItem.name, ...stockNow[reserveItem.productId] } : null}
-        quantity={reserveItem?.quantity ?? 1}
+        lines={reserveLines}
         customerName={conversation.contactName?.trim() ?? ""}
         customerPhone={conversation.phone ?? ""}
         note="Pedido solicitado por WhatsApp"
-        onCreated={onReserved}
+        onSaved={(_reservation, _mode, saved) => onReserved(saved)}
       />
     </>
   );

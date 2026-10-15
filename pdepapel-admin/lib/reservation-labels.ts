@@ -18,6 +18,17 @@ export function expiryLabel(expiresAt: Date | string, now: Date = new Date()): s
   return `venció hace ${-diff} días`;
 }
 
+export type ExpiryUrgency = "vencida" | "hoy" | "manana" | "luego";
+
+/** Para el color de la etiqueta: vencida u hoy, mañana, o más adelante (días de Bogotá, como `expiryLabel`). */
+export function expiryUrgency(expiresAt: Date | string, now: Date = new Date()): ExpiryUrgency {
+  const label = expiryLabel(expiresAt, now);
+  if (label.startsWith("venció")) return "vencida";
+  if (label === "vence hoy") return "hoy";
+  if (label === "vence mañana") return "manana";
+  return "luego";
+}
+
 /** Línea de la hoja «Reservar»: lo que se puede reservar y, si hay reservas, el stock y lo reservado. */
 export function reservableLine(stock: number, reserved: number | null | undefined): string {
   const held = reserved && reserved > 0 ? reserved : 0;

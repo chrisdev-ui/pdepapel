@@ -5,7 +5,7 @@ vi.mock("@/lib/prismadb", () => ({ default: {} }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } } }));
 vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: vi.fn() }));
 
-import { expiryLabel, reservableLine, reservedSuffix } from "@/lib/reservation-labels";
+import { expiryLabel, expiryUrgency, reservableLine, reservedSuffix } from "@/lib/reservation-labels";
 import { describeLines, renderDigest } from "@/lib/stock-reservations-job";
 
 describe("etiquetas de reservas", () => {
@@ -22,6 +22,14 @@ describe("etiquetas de reservas", () => {
     expect(reservableLine(5, 1)).toBe("Disponibles para reservar: 4 · stock 5 · 1 reservado");
     expect(reservableLine(2, 2)).toBe("No hay unidades disponibles para reservar · stock 2 · 2 reservados");
     expect(reservableLine(0, 0)).toBe("No hay unidades disponibles para reservar.");
+  });
+
+  it("la urgencia sigue los mismos días de Bogotá: vencida, hoy, mañana o más adelante", () => {
+    const now = new Date("2026-10-14T15:00:00Z");
+    expect(expiryUrgency("2026-10-14T14:00:00Z", now)).toBe("vencida");
+    expect(expiryUrgency("2026-10-15T04:00:00Z", now)).toBe("hoy");
+    expect(expiryUrgency("2026-10-15T06:00:00Z", now)).toBe("manana");
+    expect(expiryUrgency("2026-10-17T15:00:00Z", now)).toBe("luego");
   });
 
   it("la cuenta regresiva usa los días de Bogotá", () => {

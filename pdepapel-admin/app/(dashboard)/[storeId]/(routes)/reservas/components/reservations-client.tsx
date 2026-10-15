@@ -7,13 +7,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { ActionConfirmationDialog } from "@/components/modals/action-confirmation-dialog";
+import { ConvertReservationDialog } from "@/components/reservations/convert-dialog";
+import { ExpiryChip } from "@/components/reservations/expiry-chip";
 import { ReserveSheet } from "@/components/reservations/reserve-sheet";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Heading } from "@/components/ui/heading";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
-import { expiryLabel } from "@/lib/reservation-labels";
 import { cn } from "@/lib/utils";
 
 type ProductCard = { id: string; name: string; sku: string; isKit: boolean; stock: number; reservedUnits: number; images: { url: string }[] };
@@ -86,6 +87,7 @@ export function ReservationsClient({
   const { toast } = useToast();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [releasing, setReleasing] = useState<ReservationView | null>(null);
+  const [converting, setConverting] = useState<ReservationView | null>(null);
   const [items, setItems] = useState(reservations);
   const [tally, setTally] = useState(counts);
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
@@ -158,25 +160,16 @@ export function ReservationsClient({
     }
   };
 
-  const convert = async (hold: ReservationView) => {
-    if (!begin(hold.id)) return;
-    replace(hold.id, { ...hold, status: "CONVERTED" });
+  const converted = (hold: ReservationView, orderId: string) => {
+    setConverting(null);
+    replace(hold.id, { ...hold, status: "CONVERTED", orderId });
     setTally((current) => ({ ...current, convertidas: current.convertidas + 1 }));
-    try {
-      const { data } = await axios.post(`/api/${storeId}/stock-reservations/${hold.id}/convert`);
-      replace(hold.id, { ...hold, status: "CONVERTED", orderId: data.orderId });
-      toast({ variant: "success", title: "Pedido creado", description: "Completa el correo, la dirección y el pago en el pedido." });
-      router.push(`/${storeId}/pedidos/${data.orderId}`);
-    } catch (cause) {
-      replace(hold.id, hold);
-      setTally((current) => ({ ...current, convertidas: current.convertidas - 1 }));
-      fail(cause, "No se creó el pedido. Intenta de nuevo.");
-    } finally {
-      end(hold.id);
-    }
+    toast({ variant: "success", title: "Pedido creado", description: "Completa el correo, la dirección y el pago en el pedido." });
+    router.push(`/${storeId}/pedidos/${orderId}`);
   };
 
-  const created = (row: ReservationView) => {
+  const saved = (row: ReservationView, mode: "created" | "added") => {
+    if (mode === "added") return setItems((current) => current.map((item) => (item.id === row.id ? row : item)));
     if (filter === "activas") setItems((current) => (current.some((item) => item.id === row.id) ? current : [...current, row].sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))));
     setTally((current) => ({ ...current, activas: current.activas + 1 }));
   };
@@ -225,7 +218,6 @@ export function ReservationsClient({
           {items.map((hold) => {
             const busy = busyIds.has(hold.id);
             const holding = hold.status === "ACTIVE" || hold.status === "CONVERTED";
-            const overdue = holding && new Date(hold.expiresAt) < new Date();
             const chip = STATUS_CHIP[hold.status];
             const shown = summary(hold);
             return (
@@ -234,13 +226,9 @@ export function ReservationsClient({
                   {/* eslint-disable-next-line @next/next/no-img-element -- miniatura de Cloudinary, ya optimizada */}
                   {shown.image ? <img src={shown.image} alt="" className="h-14 w-14 shrink-0 rounded-md object-cover" /> : <div className="h-14 w-14 shrink-0 rounded-md bg-muted" />}
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    {shown.productId ? (
-                      <Link href={`/${storeId}/productos/${shown.productId}`} className="break-words text-sm font-semibold leading-tight hover:underline">
-                        {shown.title}
-                      </Link>
-                    ) : (
-                      <p className="break-words text-sm font-semibold leading-tight">{shown.title}</p>
-                    )}
+                    <Link href={`/${storeId}/reservas/${hold.id}`} className="break-words text-sm font-semibold leading-tight hover:underline" data-testid="reservation-open">
+                      {shown.title}
+                    </Link>
                     {shown.names && <p className="break-words text-xs text-muted-foreground">{shown.names}</p>}
                     <p className="text-sm">
                       {hold.customerName}
@@ -253,7 +241,7 @@ export function ReservationsClient({
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <TintBadge label={chip.label} tone={chip.tone} className="text-[11px]" />
-                      {holding && <TintBadge label={expiryLabel(hold.expiresAt)} tone={overdue ? "pink" : "cream"} className="text-[11px]" />}
+                      {holding && <ExpiryChip expiresAt={hold.expiresAt} />}
                       {hold.unbackedAt && holding && <TintBadge label="Sin respaldo" tone="pink" className="text-[11px]" />}
                       {hold.order && (
                         <Link href={`/${storeId}/pedidos/${hold.order.id}`} className="text-xs text-primary hover:underline">
@@ -271,7 +259,7 @@ export function ReservationsClient({
                 {holding && (
                   <div className="grid grid-cols-3 gap-2">
                     {hold.status === "ACTIVE" ? (
-                      <Button size="sm" className="min-h-10" disabled={busy} onClick={() => convert(hold)}>
+                      <Button size="sm" className="min-h-10" disabled={busy} onClick={() => setConverting(hold)}>
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Receipt className="mr-1.5 h-4 w-4" aria-hidden="true" />}
                         Convertir
                       </Button>
@@ -310,7 +298,17 @@ export function ReservationsClient({
         </ul>
       )}
 
-      <ReserveSheet open={sheetOpen} onOpenChange={setSheetOpen} defaultDays={defaultDays} onCreated={(row) => created(row as unknown as ReservationView)} />
+      {converting && (
+        <ConvertReservationDialog
+          open
+          onOpenChange={(open) => !open && setConverting(null)}
+          storeId={storeId}
+          reservationId={converting.id}
+          customerName={converting.customerName}
+          onConverted={(orderId) => converted(converting, orderId)}
+        />
+      )}
+      <ReserveSheet open={sheetOpen} onOpenChange={setSheetOpen} defaultDays={defaultDays} onSaved={(row, mode) => saved(row as unknown as ReservationView, mode)} />
       <ActionConfirmationDialog
         isOpen={releasing !== null}
         onOpenChange={(open) => !open && setReleasing(null)}
