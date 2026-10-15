@@ -240,10 +240,11 @@ describe("reservas (MySQL)", () => {
     const overdueHold = await reserve(f, 1);
     const cancelled = await convertReservation(f.store.id, cancelledHold.reservation.id, f.store.userId);
     await convertReservation(f.store.id, overdueHold.reservation.id, f.store.userId);
-    const past = new Date(Date.now() - DAY);
+    // Fuera de las 8:00 de Bogotá (sin resumen); «pasado» se mide contra esta hora, no contra el reloj.
+    const now = new Date(Date.UTC(2026, 9, 14, 18));
+    const past = new Date(now.getTime() - DAY);
     await testPrisma.stockReservation.updateMany({ where: { id: { in: [expired.reservation.id, overdueHold.reservation.id] } }, data: { expiresAt: past } });
     await testPrisma.order.update({ where: { id: cancelled.orderId }, data: { status: OrderStatus.CANCELLED } });
-    const now = new Date(Date.UTC(2026, 9, 14, 18));
 
     const first = await sweepStockReservations({ now });
     expect(first).toMatchObject({ expired: 1, releasedForClosedOrders: 1, convertedOverdueAlerts: 1, driftProducts: 0 });
