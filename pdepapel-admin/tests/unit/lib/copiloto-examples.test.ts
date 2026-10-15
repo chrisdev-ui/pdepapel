@@ -11,7 +11,8 @@ import { SKILL_TOOL_NAMES } from "@/lib/copiloto/skills";
 import { COPILOT_TOOL_NAMES } from "@/lib/copiloto/tools";
 
 const ROOT = path.resolve(__dirname, "../../..");
-const ROUTES = new Set(readdirSync(path.join(ROOT, "app/(dashboard)/[storeId]/(routes)"), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name));
+const ROUTE_NAMES = readdirSync(path.join(ROOT, "app/(dashboard)/[storeId]/(routes)"), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+const ROUTES = new Set(ROUTE_NAMES);
 const REAL_TOOLS = [...COPILOT_TOOL_NAMES, ...SKILL_TOOL_NAMES, "cargarHabilidad"];
 
 describe("ejemplos del copiloto", () => {
@@ -39,11 +40,11 @@ describe("ejemplos del copiloto", () => {
     const general = COPILOT_EXAMPLES.filter((example) => example.general).map((example) => example.pregunta);
     expect(copilotSuggestions(null)).toEqual(general.slice(0, 5));
     expect(copilotSuggestions("tarjetas-regalo")).toEqual(general.slice(0, 5));
-    for (const screen of [...ROUTES, "inicio"]) expect(copilotSuggestions(screen).length).toBeLessThanOrEqual(5);
+    for (const screen of [...ROUTE_NAMES, "inicio"]) expect(copilotSuggestions(screen).length).toBeLessThanOrEqual(5);
   });
 
   it("no sugiere lo que ninguna herramienta responde", () => {
-    const all = [...ROUTES, "inicio", null].flatMap((screen) => copilotSuggestions(screen));
+    const all = [...ROUTE_NAMES, "inicio", null].flatMap((screen) => copilotSuggestions(screen));
     expect(all.some((question) => /debajo del costo/i.test(question))).toBe(false);
   });
 
