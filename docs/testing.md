@@ -65,6 +65,8 @@ npm run test:e2e:admin
 - No reutilizar credenciales personales ni de producción en pruebas autenticadas.
 - Para flujos autenticados del administrador, usar una cuenta Clerk exclusiva de pruebas y una base de datos aislada.
 - Las pruebas nunca heredan la URL de producción del `.env` local. Toda conexión pasa por `pdepapel-admin/scripts/lib/test-database.mjs`. Solo acepta `pdepapel_test` en `127.0.0.1`, `localhost` o `::1`. Detiene la corrida con un error, nunca la salta, si la URL falta, si apunta al servidor de producción o si usa el usuario `pdepapel_ro`. Lo aplican la configuración de Vitest (unitarias, integración y evaluaciones), el arranque de Playwright, `createTestPrismaClient` en las e2e y las semillas. Una e2e sola se corre con `npm run test:e2e -- <archivo>`.
+- Las unitarias y las de integración no usan claves reales ni salen a la red (`pdepapel-admin/scripts/lib/test-isolation.mjs`). Toda clave externa recibe un valor de prueba antes de cualquier import, porque Prisma copia el `.env` en `process.env` al cargarse. Además, cualquier conexión que no vaya a la máquina local falla con «red bloqueada». Una clave nueva va en `TEST_ENV_STUBS`, o la prueba de auditoría falla. Un servicio de fuera se dobla con `vi.mock`.
+- Las e2e corren solas, nunca a la vez que Vitest, un build u otro trabajo pesado: la carga produce fallos falsos.
 - No subir `.env.e2e.local` ni claves de Clerk. Cuando se habilite este E2E en CI, configurar esas claves únicamente como secretos del repositorio.
 - Cada regresión corregida debe añadir primero una prueba que falle con el comportamiento anterior.
 

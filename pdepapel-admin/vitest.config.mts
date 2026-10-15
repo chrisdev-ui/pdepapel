@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 import { readTestDatabaseUrl } from "./scripts/lib/test-database.mjs";
+import { testEnvStubs } from "./scripts/lib/test-isolation.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 // Las unitarias no abren la base, pero si alguna llegara a hacerlo debe caer en
@@ -31,24 +32,17 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // Placeholder public (client) values so component tests that import
-    // lib/env.mjs validate in CI, where no .env file exists. Locally Vitest
-    // loads .env, which is why these failures only showed up in CI. Server
-    // secrets are deliberately not listed here.
+    // Claves externas dobladas antes de cualquier import (ver
+    // `scripts/lib/test-isolation.mjs`): local y CI corren con el mismo entorno.
     env: {
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_vitest_placeholder",
-      NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/iniciar-sesion",
-      NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/crear-cuenta",
-      NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: "/",
-      NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: "/",
-      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: "vitest-placeholder",
+      ...testEnvStubs(fileURLToPath(new URL(".env", import.meta.url))),
       ...(testDatabaseUrl ? { DATABASE_URL: testDatabaseUrl } : {}),
     },
     include: [
       "tests/unit/**/*.{test,spec}.{ts,tsx}",
       "tests/components/**/*.{test,spec}.{ts,tsx}",
     ],
-    setupFiles: ["./tests/setup.ts"],
+    setupFiles: ["./tests/setup-isolation.ts", "./tests/setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

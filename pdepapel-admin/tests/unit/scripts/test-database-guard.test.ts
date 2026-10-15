@@ -194,8 +194,8 @@ describe("auditoría: nadie abre una base de pruebas por su cuenta", () => {
 
   it("Vitest y Playwright arrancan con la guarda", () => {
     const read = (file: string) => readFileSync(resolve(root, file), "utf8");
-    expect(read("vitest.config.mts")).toContain('setupFiles: ["./tests/setup.ts"]');
-    expect(read("vitest.integration.config.mts")).toContain('setupFiles: ["./tests/integration/setup.ts"]');
+    expect(read("vitest.config.mts")).toContain('setupFiles: ["./tests/setup-isolation.ts", "./tests/setup.ts"]');
+    expect(read("vitest.integration.config.mts")).toContain('setupFiles: ["./tests/setup-isolation.ts", "./tests/integration/setup.ts"]');
     expect(read("scripts/copilot-eval/vitest.config.mts")).toContain('setupFiles: ["./tests/integration/setup.ts"]');
     expect(read("tests/setup.ts")).toContain("assertTestDatabaseEnv(");
     expect(read("tests/integration/setup.ts")).toContain("assertTestDatabaseEnv(");
