@@ -32,6 +32,8 @@ test.describe("panel autenticado de pruebas", () => {
   test("carga productos, pedidos e inventario sin redirigir a inicio de sesión", async ({
     page,
   }) => {
+    // Con el servidor de desarrollo en frío, compilar Pedidos solo ya pasa de 30 s.
+    test.setTimeout(120_000);
     const clerkClient = createClerkClient({ secretKey: clerkSecretKey! });
     const redirectUrl = new URL(
       `/${testStoreId}/productos`,

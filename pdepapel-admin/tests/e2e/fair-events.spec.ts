@@ -69,7 +69,7 @@ test.describe("ventas en feria", () => {
     const fairName = `E2E Feria ${Date.now()}`;
     await openFairCreationForm(page);
     await page.getByLabel("Nombre", { exact: true }).fill(fairName);
-    await page.getByLabel("Lugar").fill("Prueba automatizada");
+    await page.getByLabel("Lugar", { exact: true }).fill("Prueba automatizada");
     await Promise.all([
       page.waitForURL(new RegExp(`/${testStoreId}/ferias/[^/?]+$`), {
         timeout: 30_000,
@@ -129,7 +129,8 @@ test.describe("ventas en feria", () => {
     });
     await expect(page.getByText("Estás contando lo que volvió.")).toBeVisible();
     // Se reservaron 2 y se vendió 1: nada se da por contado hasta pulsar el atajo.
-    await expect(page.getByText("Sin contar", { exact: true })).toBeVisible();
+    // «Sin contar» sale dos veces: la tarjeta del resumen y el estado de la única fila.
+    await expect(page.getByText("Sin contar", { exact: true })).toHaveCount(2);
     await page.getByRole("button", { name: "Todo volvió intacto" }).click();
     await expect(page.getByText("Cuadra", { exact: true })).toBeVisible();
 

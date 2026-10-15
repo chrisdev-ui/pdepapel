@@ -1,14 +1,18 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
+import { randomUUID } from "node:crypto";
+
 import { createClerkClient } from "@clerk/backend";
+import type { PrismaClient } from "@prisma/client";
 
 import { expect, test } from "./helpers/image-stub";
+import { createTestPrismaClient } from "./helpers/test-database";
 
 /**
  * Historial del copiloto: un solo clic (o Enter) abre una conversación, y
- * «Eliminar» la borra tras confirmar. Necesita dos conversaciones guardadas
- * de la usuaria de prueba en la base local (ver la receta en AGENTS.md).
+ * «Eliminar» la borra tras confirmar. Cada prueba guarda antes sus dos
+ * conversaciones de la usuaria de prueba y al final borra lo que quede.
  */
 const baseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:3101";
 const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";
@@ -43,6 +47,41 @@ async function signIn(page: import("@playwright/test").Page) {
 test.describe("historial del copiloto", () => {
   test.skip(!configured, "Define claves de prueba de Clerk, E2E_ADMIN_CLERK_USER_ID y COPILOT_DATABASE_URL.");
   test.describe.configure({ mode: "serial" });
+
+  let db: PrismaClient;
+  const conversationIds: string[] = [];
+  const saveConversation = async (title: string, answer: string, minutesAgo: number) => {
+    const at = new Date(Date.now() - minutesAgo * 60_000);
+    const conversation = await db.assistantConversation.create({
+      data: { storeId, userId: clerkUserId!, title, lastMessageAt: at, createdAt: at },
+      select: { id: true },
+    });
+    conversationIds.push(conversation.id);
+    await db.assistantMessage.createMany({
+      data: [
+        { id: randomUUID(), conversationId: conversation.id, role: "user", parts: [{ type: "text", text: title }], createdAt: at },
+        { id: randomUUID(), conversationId: conversation.id, role: "assistant", parts: [{ type: "text", text: answer }], createdAt: new Date(at.getTime() + 1000) },
+      ],
+    });
+  };
+  const cleanUp = async () => {
+    const ids = conversationIds.splice(0);
+    await db.assistantMessage.deleteMany({ where: { conversationId: { in: ids } } });
+    await db.assistantConversation.deleteMany({ where: { id: { in: ids } } });
+  };
+
+  test.beforeAll(() => {
+    db = createTestPrismaClient("copilot-history");
+  });
+  test.beforeEach(async () => {
+    await cleanUp();
+    await saveConversation("Ventas de ayer", "Respuesta guardada 1", 10);
+    await saveConversation("Ideas de regalo", "Respuesta guardada 2", 5);
+  });
+  test.afterAll(async () => {
+    await cleanUp();
+    await db.$disconnect();
+  });
 
   test("computador: un clic abre, Enter abre la otra, y eliminar vuelve a un chat vacío", async ({ page }) => {
     test.setTimeout(180_000);

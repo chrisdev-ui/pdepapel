@@ -171,8 +171,9 @@ test.describe("opciones visibles para clientes", () => {
     const valueInput = page.getByRole("combobox", {
       name: "Valor de característica 1",
     });
-    await expect(featureInput).toHaveValue("Formato");
-    await expect(valueInput).toHaveValue("A5");
+    // Desde decf1cc4 los dos campos son un Combobox: un botón que muestra la opción elegida.
+    await expect(featureInput).toHaveText("Formato");
+    await expect(valueInput).toHaveText("A5");
 
     await featureInput.click();
     await expect(featureInput).toHaveAttribute("aria-expanded", "true");
