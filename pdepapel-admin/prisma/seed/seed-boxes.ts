@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
+import { assertTestDatabaseEnv } from "../../scripts/lib/test-database.mjs";
+
 const BOX_CONFIGURATIONS = {
   XS: {
     width: 26,
@@ -74,7 +76,7 @@ export const seedBoxes = async (prisma: PrismaClient, storeId: string) => {
 
 // Allow running this seed script standalone
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ datasourceUrl: assertTestDatabaseEnv(process.env, "prisma/seed/seed-boxes") });
 
   const main = async () => {
     // 1. Try to get STORE_ID from env variable

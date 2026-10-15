@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+
+import { assertTestDatabaseEnv } from "../../scripts/lib/test-database.mjs";
 import { clearDB } from "./clear-db";
 import { seedCategories } from "./seed-categories";
 import { seedColors } from "./seed-colors";
@@ -14,7 +16,7 @@ import { seedTypes } from "./seed-types";
 import { seedCoupons } from "./seed-coupons";
 import { seedBoxes } from "./seed-boxes";
 
-const prismadb = new PrismaClient();
+const prismadb = new PrismaClient({ datasourceUrl: assertTestDatabaseEnv(process.env, "prisma/seed") });
 
 /**
  * La tienda que se siembra. Se puede apuntar a otra con `SEED_STORE_ID`, que es

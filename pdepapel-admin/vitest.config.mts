@@ -2,7 +2,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+import { readTestDatabaseUrl } from "./scripts/lib/test-database.mjs";
+
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
+// Las unitarias no abren la base, pero si alguna llegara a hacerlo debe caer en
+// la local: sin esto, Prisma lee `.env`, que apunta a producción. No se usa
+// `with-test-env` porque fuerza NODE_ENV=development y el código bifurca por
+// NODE_ENV. `tests/setup.ts` detiene la corrida si esto queda sin definir.
+const testDatabaseUrl = readTestDatabaseUrl(new URL(".env.test", import.meta.url));
 
 export default defineConfig({
   oxc: {
@@ -35,6 +42,7 @@ export default defineConfig({
       NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: "/",
       NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: "/",
       NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: "vitest-placeholder",
+      ...(testDatabaseUrl ? { DATABASE_URL: testDatabaseUrl } : {}),
     },
     include: [
       "tests/unit/**/*.{test,spec}.{ts,tsx}",

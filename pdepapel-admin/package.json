@@ -6,7 +6,7 @@
     "node": "24.x"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed/index.ts"
+    "seed": "node scripts/with-test-env.mjs ts-node prisma/seed/index.ts"
   },
   "scripts": {
     "dev": "next dev",
@@ -24,11 +24,11 @@
     "test:integration": "node scripts/with-test-env.mjs npx vitest run --config vitest.integration.config.mts",
     "test:integration:watch": "node scripts/with-test-env.mjs npx vitest --config vitest.integration.config.mts",
     "test:all": "npm run test:unit && npm run test:integration",
-    "test:e2e": "node scripts/with-e2e-env.mjs npx playwright test",
+    "test:e2e": "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npx playwright test",
     "test:e2e:seed-admin": "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs tsx scripts/seed-e2e-admin-store.ts",
-    "test:e2e:admin": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs npx playwright test tests/e2e/authenticated-smoke.spec.ts",
-    "test:e2e:fair-events": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs npx playwright test tests/e2e/fair-events.spec.ts",
-    "test:e2e:shell": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs npx playwright test tests/e2e/shell-navigation.spec.ts --workers=1",
+    "test:e2e:admin": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npx playwright test tests/e2e/authenticated-smoke.spec.ts",
+    "test:e2e:fair-events": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npx playwright test tests/e2e/fair-events.spec.ts",
+    "test:e2e:shell": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npx playwright test tests/e2e/shell-navigation.spec.ts --workers=1",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "format:prettier": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json}\"",
@@ -41,7 +41,7 @@
     "prod:approve": "node scripts/prod-approve.mjs",
     "prod:write": "node scripts/prod-write.mjs",
     "prod:migrate": "node scripts/prod-write.mjs scripts/apply-manual-migration.mjs",
-    "seed:boxes": "ts-node prisma/seed/seed-boxes.ts"
+    "seed:boxes": "node scripts/with-test-env.mjs ts-node prisma/seed/seed-boxes.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.93",

@@ -3,24 +3,9 @@ import { randomUUID } from "node:crypto";
 
 import { MAX_WAIT_TIME, TIMEOUT_TIME } from "@/constants";
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const databaseUrl = process.env.DATABASE_URL;
+import { assertTestDatabaseEnv } from "../../../scripts/lib/test-database.mjs";
 
-if (!testDatabaseUrl || databaseUrl !== testDatabaseUrl) {
-  throw new Error(
-    "Las pruebas de integración requieren TEST_DATABASE_URL y deben ejecutarse con npm run test:integration.",
-  );
-}
-
-const parsedUrl = new URL(testDatabaseUrl);
-if (
-  !["127.0.0.1", "::1", "localhost"].includes(parsedUrl.hostname) ||
-  parsedUrl.pathname !== "/pdepapel_test"
-) {
-  throw new Error(
-    "Las pruebas de integración solo se pueden conectar a la base local pdepapel_test.",
-  );
-}
+const testDatabaseUrl = assertTestDatabaseEnv(process.env, "integración");
 
 /**
  * Mismo aislamiento que producción (`lib/prismadb.ts`): con el nivel por
@@ -28,6 +13,7 @@ if (
  * y el kardex guarda filas que se pisan.
  */
 export const testPrisma = new PrismaClient({
+  datasourceUrl: testDatabaseUrl,
   transactionOptions: {
     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     maxWait: MAX_WAIT_TIME,

@@ -2,10 +2,11 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { createClerkClient } from "@clerk/backend";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import type { Locator, Page } from "@playwright/test";
 
 import { expect, test } from "./helpers/image-stub";
+import { createTestPrismaClient } from "./helpers/test-database";
 
 /**
  * «Marcar como atendido» en Conversaciones, en el teléfono, la tableta y el
@@ -14,17 +15,13 @@ import { expect, test } from "./helpers/image-stub";
  * ancho. Con la base local de pruebas:
  *
  *   npm run test:e2e:seed-admin
- *   node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npx playwright test tests/e2e/conversations-attended.spec.ts
- *
- * Escribe filas: el cliente de Prisma se arma solo con una URL que termina en
- * `/pdepapel_test` (sin eso, Prisma leería `.env`, que apunta a producción).
+ *   npm run test:e2e -- tests/e2e/conversations-attended.spec.ts
  */
 const baseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:3101";
 const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";
 const clerkSecretKey = process.env.CLERK_SECRET_KEY;
 const clerkUserId = process.env.E2E_ADMIN_CLERK_USER_ID;
 const configured = Boolean(clerkSecretKey?.startsWith("sk_test_") && clerkUserId);
-const testDatabaseUrl = (process.env.DATABASE_URL ?? "").endsWith("/pdepapel_test") ? process.env.DATABASE_URL : undefined;
 const SHOTS = path.resolve(__dirname, "../../tmp/atendido-shots");
 const MIN = 60 * 1000;
 
@@ -67,10 +64,10 @@ async function waitingConversation(name: string, phone: string) {
 }
 
 test.describe("marcar como atendido en distintos tamaños", () => {
-  test.skip(!configured || !testDatabaseUrl, "Necesita claves de desarrollo de Clerk y la base pdepapel_test.");
+  test.skip(!configured, "Necesita claves de desarrollo de Clerk.");
 
   test.beforeAll(async () => {
-    db = new PrismaClient({ datasourceUrl: testDatabaseUrl });
+    db = createTestPrismaClient("conversations-attended");
   });
 
   test.afterAll(async () => {

@@ -11,7 +11,7 @@ import { expect, test } from "./helpers/image-stub";
  *
  *   npm run test:e2e:seed-admin
  *   COPILOT_DATABASE_URL=mysql://copilot_ro@127.0.0.1/pdepapel_test \
- *     node scripts/with-e2e-env.mjs npx playwright test tests/e2e/copilot-viewports.spec.ts
+ *     npm run test:e2e -- tests/e2e/copilot-viewports.spec.ts
  */
 const baseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:3101";
 const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
 import { copilotRoGrantFiles, copilotRoStatements } from "./helpers/copilot-ro";
+import { assertTestDatabaseUrl } from "../../scripts/lib/test-database.mjs";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
 /**
@@ -38,7 +39,7 @@ beforeAll(async () => {
   roUrl = base.toString();
   process.env.COPILOT_DATABASE_URL = roUrl;
   globalThis.copilotPrisma = undefined;
-  roClient = new PrismaClient({ datasourceUrl: roUrl });
+  roClient = new PrismaClient({ datasourceUrl: assertTestDatabaseUrl(roUrl, { variable: "COPILOT_DATABASE_URL", context: "copilot-ro-grants" }) });
 
   fixture = await createInventoryFixture();
   session.userId = fixture.store.userId;

@@ -1,5 +1,9 @@
 import "@testing-library/jest-dom/vitest";
 
+import { assertTestDatabaseEnv } from "../scripts/lib/test-database.mjs";
+
+assertTestDatabaseEnv(process.env, "vitest (unitarias)");
+
 const FAKE_STORE_SENDER = {
   STORE_SENDER_FIRST_NAME: "Remitente",
   STORE_SENDER_LAST_NAME: "De Prueba",

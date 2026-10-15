@@ -1,8 +1,9 @@
 import { createClerkClient } from "@clerk/backend";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./helpers/image-stub";
+import { createTestPrismaClient } from "./helpers/test-database";
 
 /**
  * Un producto suelto se convierte en grupo desde su propia página con varios
@@ -16,7 +17,6 @@ const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";
 const clerkSecretKey = process.env.CLERK_SECRET_KEY;
 const clerkUserId = process.env.E2E_ADMIN_CLERK_USER_ID;
 const hasConfiguration = Boolean(clerkSecretKey?.startsWith("sk_test_") && clerkUserId);
-const testDatabase = (process.env.DATABASE_URL ?? "").endsWith("/pdepapel_test");
 
 const NAME = "Folder tarjetero e2e";
 const COLOR_NAMES = ["E2E Rosado", "E2E Azul", "E2E Verde", "E2E Lila"];
@@ -57,10 +57,10 @@ async function signIn(page: Page, path: string) {
 }
 
 test.describe("convertir un producto suelto en grupo", () => {
-  test.skip(!hasConfiguration || !testDatabase, "Necesita claves de desarrollo de Clerk y la base pdepapel_test.");
+  test.skip(!hasConfiguration, "Necesita claves de desarrollo de Clerk.");
 
   test.beforeAll(async () => {
-    db = new PrismaClient();
+    db = createTestPrismaClient("convert-standalone-to-group");
     await cleanup();
     await db.store.upsert({ where: { id: storeId }, update: {}, create: { id: storeId, name: "Tienda E2E", userId: clerkUserId! } });
     const type =

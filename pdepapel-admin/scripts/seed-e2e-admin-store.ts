@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
+import { assertTestDatabaseEnv } from "./lib/test-database.mjs";
+
 const clerkUserId = process.env.E2E_ADMIN_CLERK_USER_ID;
 const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";
 const productId = "e2e-fair-product";
@@ -18,7 +20,7 @@ if (!clerkUserId) {
   );
 }
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: assertTestDatabaseEnv(process.env, "seed-e2e-admin-store") });
 
 async function main() {
   await prisma.store.upsert({

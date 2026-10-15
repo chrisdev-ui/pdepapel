@@ -12,8 +12,16 @@ const e2eEnvironmentVariables = new Set([
   "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
 ]);
 
+// De `.env` salen las claves de Clerk y lo demás, nunca una base: esas URL
+// apuntan a producción. La base de pruebas la pone `with-test-env`.
+const inherited = new Set(Object.keys(process.env));
+
 if (existsSync(applicationEnvironmentFile)) {
   process.loadEnvFile(applicationEnvironmentFile);
+}
+
+for (const name of ["DATABASE_URL", "COPILOT_DATABASE_URL"]) {
+  if (!inherited.has(name)) delete process.env[name];
 }
 
 if (existsSync(e2eEnvironmentFile)) {

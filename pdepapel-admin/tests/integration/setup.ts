@@ -1,5 +1,9 @@
 import { vi } from "vitest";
 
+import { assertTestDatabaseEnv } from "../../scripts/lib/test-database.mjs";
+
+assertTestDatabaseEnv(process.env, "vitest (integración)");
+
 /**
  * Fills the baseline env contract with placeholders for variables that are
  * absent, so integration suites that (transitively) import lib/env.mjs
