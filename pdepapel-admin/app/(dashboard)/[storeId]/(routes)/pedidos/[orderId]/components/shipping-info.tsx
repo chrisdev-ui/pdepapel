@@ -46,6 +46,7 @@ interface ShippingData {
   minimumInsurance?: number | null;
   deliveryDays?: number | null;
   isCOD?: boolean;
+  codFee?: number | null;
 }
 
 interface ShippingInfoProps {
@@ -321,6 +322,11 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
             ) : (
               <span className="text-lg font-bold">
                 {currencyFormatter(shipping.cost ?? 0)}
+              </span>
+            )}
+            {shipping.isCOD && Number(shipping.codFee) > 0 && (
+              <span className="text-sm" data-testid="shipping-cod-fee">
+                Recaudo contra entrega: <strong>{currencyFormatter(Number(shipping.codFee))}</strong>
               </span>
             )}
           </div>

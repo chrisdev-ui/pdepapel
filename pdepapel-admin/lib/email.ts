@@ -165,6 +165,9 @@ export function getOrderTotalsSummary(order: EmailOrder): EmailSummaryLine[] {
     } else if (state === "free") {
       adjustments.push({ label: "Envío", value: "Gratis" });
     }
+    if (order.shipping.isCOD && Number(order.shipping.codFee) > 0) {
+      adjustments.push({ label: "Recaudo contra entrega", value: currencyFormatter(Number(order.shipping.codFee)) });
+    }
   }
   if (adjustments.length === 0) return [];
   return [{ label: "Subtotal", value: currencyFormatter(order.subtotal) }, ...adjustments];

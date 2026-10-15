@@ -24,6 +24,8 @@ export function calculateOrderTotals(
     discount?: DiscountConfig;
     coupon?: DiscountConfig;
     shippingCost?: number;
+    /** Recaudo contra entrega: se suma al total, nunca al envío. */
+    codFee?: number | null;
   },
 ): OrderTotals {
   const subtotal = orderItems.reduce(
@@ -50,7 +52,7 @@ export function calculateOrderTotals(
 
   const total = Math.max(
     0,
-    subtotal - discount - couponDiscount + (config?.shippingCost || 0),
+    subtotal - discount - couponDiscount + (config?.shippingCost || 0) + (config?.codFee || 0),
   );
 
   return {

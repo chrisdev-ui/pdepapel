@@ -1295,6 +1295,9 @@ model Shipping {
   notes                 String?                 @db.Text
   courier               String?
   cost                  Float?
+  /// Contra entrega: lo que cobra EnvioClick por recaudar, cobrado a la clienta
+  /// aparte del envío (nunca dentro de `cost`). Null si no aplica.
+  codFee                Float?
   /// Último intento fallido de crear la guía en EnvioClick (mensaje y momento).
   /// Se limpia cuando la guía se crea. Sin esto el pedido se quedaba en
   /// «Por despachar» sin decir por qué.

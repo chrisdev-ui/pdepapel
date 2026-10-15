@@ -12,6 +12,8 @@ interface SummaryCardProps {
   totals: OrderTotals;
   shippingChargeState: ShippingChargeState;
   shippingCost: number;
+  /** Recaudo contra entrega, su propia línea (0 si no aplica). */
+  codFee?: number;
   coupon: Coupon | null;
   itemCount: number;
   /** Lo que una tarjeta de regalo cubrió del pedido (solo pedidos guardados). */
@@ -21,7 +23,7 @@ interface SummaryCardProps {
 }
 
 /** Resumen de dinero del pedido: siempre a la vista en la columna lateral. */
-export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon, itemCount, giftCardAmount = 0, digital = false }: SummaryCardProps) {
+export function SummaryCard({ totals, shippingChargeState, shippingCost, codFee = 0, coupon, itemCount, giftCardAmount = 0, digital = false }: SummaryCardProps) {
   const amountDue = Math.max(0, totals.total - giftCardAmount);
   const { control } = useFormContext<OrderFormValues>();
   const discountType = useWatch({ control, name: "discount.type" });
@@ -71,6 +73,12 @@ export function SummaryCard({ totals, shippingChargeState, shippingCost, coupon,
             <dd>
               {shippingChargeState === "charged" ? `+ ${currencyFormatter(shippingCost)}` : shippingChargeState === "free" ? <span className="font-medium text-success">Gratis</span> : "Por calcular"}
             </dd>
+          </div>
+        )}
+        {codFee > 0 && (
+          <div className="flex justify-between" data-testid="summary-cod-fee">
+            <dt>Recaudo contra entrega</dt>
+            <dd>+ {currencyFormatter(codFee)}</dd>
           </div>
         )}
       </dl>

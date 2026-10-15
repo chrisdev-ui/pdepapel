@@ -90,6 +90,8 @@ export const CUSTOMER_ORDER_SELECT = {
       productName: true,
       deliveryDays: true,
       cost: true,
+      codFee: true,
+      isCOD: true,
       trackingCode: true,
       trackingUrl: true,
       envioClickIdOrder: true,

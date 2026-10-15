@@ -15,6 +15,9 @@ interface RateOptionProps {
   disabled: boolean;
 }
 
+/** El recaudo que pagaría la clienta con esta tarifa: el final si el servidor lo calculó. */
+const codFeeOf = (quote: ShippingQuote) => (quote.isCOD ? Number(quote.codFee ?? quote.codCost ?? 0) : 0);
+
 export function RateOption({ quote, selected, disabled }: RateOptionProps) {
   const info = getCarrierInfo(quote.carrier);
   return (
@@ -72,18 +75,13 @@ export function RateOption({ quote, selected, disabled }: RateOptionProps) {
         </span>
         <span className="flex flex-wrap items-baseline gap-x-2 sm:flex-col sm:items-end sm:gap-0">
           <span className="text-lg font-bold text-primary">
-            {currencyFormatter(quote.totalCost + (quote.isCOD ? Number(quote.codCost ?? 0) : 0))}
+            {currencyFormatter(quote.totalCost + codFeeOf(quote))}
           </span>
           <span className="text-xs text-muted-foreground">
             flete {currencyFormatter(quote.flete)} + seguro{" "}
             {currencyFormatter(quote.minimumInsurance)}
-            {quote.isCOD && quote.codCost ? ` + recaudo ${currencyFormatter(quote.codCost)}` : ""}
+            {codFeeOf(quote) ? ` + recaudo ${currencyFormatter(codFeeOf(quote))}` : ""}
           </span>
-          {quote.isCOD && quote.codCost ? (
-            <span className="text-xs text-muted-foreground">
-              En el pedido: {currencyFormatter(quote.totalCost)}
-            </span>
-          ) : null}
         </span>
       </Label>
     </div>

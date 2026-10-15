@@ -42,6 +42,8 @@ const shippingSchema = z
     deliveryDays: z.coerce.number(),
     isCOD: z.boolean(),
     cost: z.coerce.number(),
+    /** Recaudo contra entrega, aparte del envío (lo calcula la cotización). */
+    codFee: z.number().nullable(),
     trackingCode: z.string(),
     trackingUrl: z.string().optional(),
     guideUrl: z.string().optional(),
@@ -174,8 +176,10 @@ export interface ShippingQuote {
   totalCost: number;
   deliveryDays: string | number;
   isCOD: boolean;
-  /** Lo que cobra EnvioClick por recaudar (solo en cotizaciones contra entrega). */
+  /** Lo que cobra EnvioClick por recaudar al valor cotizado (solo contra entrega). */
   codCost?: number | null;
+  /** El recaudo final que paga la clienta con esta tarifa (calculado en el servidor). */
+  codFee?: number | null;
 }
 
 export const safeDate = (date: string | Date | null | undefined): Date | undefined => {
@@ -375,6 +379,7 @@ export function buildExistingOrderDefaults(order: NonNullable<GetOrderResult["or
       deliveryDays: order.shipping?.deliveryDays || undefined,
       isCOD: order.shipping?.isCOD || false,
       cost: order.shipping?.cost || 0,
+      codFee: order.shipping?.codFee ?? null,
       trackingCode: order.shipping?.trackingCode || undefined,
       trackingUrl: order.shipping?.trackingUrl || undefined,
       guideUrl: order.shipping?.guideUrl || undefined,

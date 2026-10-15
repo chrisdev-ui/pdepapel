@@ -198,6 +198,7 @@ export function PaymentCard({
                   disabled={loading || locked}
                   onValueChange={(val) => {
                     field.onChange(val);
+                    if (val !== PaymentMethod.COD) form.setValue("shipping.codFee", null, { shouldDirty: true });
                     form.setValue("shipping.isCOD", val === PaymentMethod.COD, {
                       shouldDirty: true,
                     });

@@ -14,7 +14,9 @@ import {
 } from "@/lib/package-calculator";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { envioClickClient } from "@/lib/envioclick";
+import { envioClickClient, type QuoteResponse } from "@/lib/envioclick";
+import { quoteWithCodFees } from "@/lib/cod-fee";
+import { qualifiesForFreeShipping } from "@/lib/order-totals";
 import { consumeRateLimit, getClientKey } from "@/lib/rate-limit";
 
 /** Cotizaciones reales contra la transportadora por IP y hora. */
@@ -34,8 +36,19 @@ export async function POST(
 ) {
   const corsHeaders = getCorsHeaders(req);
   try {
-    const { destination, orderTotal, items, forceRefresh, boxId, isCOD } =
-      await req.json();
+    const {
+      destination,
+      orderTotal,
+      items,
+      forceRefresh,
+      boxId,
+      isCOD,
+      // Contra entrega: el pedido sin envío (después de cupones) y el subtotal
+      // de productos, para calcular el recaudo final de cada tarifa. Sin ellos
+      // se usa `orderTotal` (la tienda de antes).
+      amountBeforeShipping: rawAmountBeforeShipping,
+      productSubtotal: rawProductSubtotal,
+    } = await req.json();
 
     if (!orderTotal || isNaN(orderTotal) || orderTotal <= 0)
       throw ErrorFactory.InvalidRequest("El total del pedido es inválido");
@@ -244,24 +257,67 @@ export async function POST(
       length: packageDimensions.length,
     };
 
-    const quotation = await envioClickClient.quoteShipment({
-      packages: [packageForApi],
-      description: ENVIOCLICK_DEFAULTS.defaultDescription,
-      contentValue: orderTotal,
-      origin: {
-        daneCode: STORE_SHIPPING_ORIGIN.daneCode,
-        address: getStoreSender().address,
-      },
-      destination: {
-        daneCode: destination.daneCode,
-        address: truncateField(destination.address, "address"),
-      },
-      ...(isCOD && {
-        codValue: orderTotal,
-        codPaymentMethod: ENVIOCLICK_DEFAULTS.codPaymentMethod,
-        includeGuideCost: ENVIOCLICK_DEFAULTS.includeGuideCost,
-      }),
-    });
+    let lastQuotation: QuoteResponse | undefined;
+    const runQuote = async (codValue: number | null) => {
+      const response = await envioClickClient.quoteShipment({
+        packages: [packageForApi],
+        description: ENVIOCLICK_DEFAULTS.defaultDescription,
+        contentValue: orderTotal,
+        origin: {
+          daneCode: STORE_SHIPPING_ORIGIN.daneCode,
+          address: getStoreSender().address,
+        },
+        destination: {
+          daneCode: destination.daneCode,
+          address: truncateField(destination.address, "address"),
+        },
+        ...(codValue !== null && {
+          codValue,
+          codPaymentMethod: ENVIOCLICK_DEFAULTS.codPaymentMethod,
+          includeGuideCost: ENVIOCLICK_DEFAULTS.includeGuideCost,
+        }),
+      });
+      lastQuotation = response;
+      return response.data.rates.map((rate) => ({
+        idRate: rate.idRate,
+        idCarrier: rate.idCarrier,
+        idProduct: rate.idProduct,
+        carrier: rate.carrier,
+        product: rate.product,
+        flete: rate.flete,
+        minimumInsurance: rate.minimumInsurance,
+        totalCost: rate.flete + rate.minimumInsurance,
+        deliveryDays: rate.deliveryDays,
+        isCOD: rate.cod,
+        codCost: rate.codDetails?.codCost ?? null,
+      }));
+    };
+
+    // Contra entrega: dos cotizaciones y el recaudo final de cada tarifa
+    // (lib/cod-fee.ts), el mismo cálculo que hace el pedido al guardarse, para
+    // que lo que ve la clienta sea lo que se cobra. Con envío gratis el
+    // recaudo se calcula sobre el pedido sin envío.
+    const amountBeforeShipping =
+      Number(rawAmountBeforeShipping) > 0 ? Number(rawAmountBeforeShipping) : orderTotal;
+    let quotes: Array<Awaited<ReturnType<typeof runQuote>>[number] & { codFee: number | null }>;
+    if (isCOD) {
+      const settings = await prismadb.store.findUnique({
+        where: { id: params.storeId },
+        select: { freeShippingThreshold: true },
+      });
+      const freeShipping = qualifiesForFreeShipping(
+        Number(rawProductSubtotal) > 0 ? Number(rawProductSubtotal) : amountBeforeShipping,
+        settings?.freeShippingThreshold,
+      );
+      quotes = await quoteWithCodFees({
+        amountBeforeShipping,
+        quote: runQuote,
+        shippingOf: (rate) => (freeShipping ? 0 : rate.totalCost),
+      });
+    } else {
+      quotes = (await runQuote(null)).map((quote) => ({ ...quote, codFee: null }));
+    }
+    const quotation = lastQuotation as QuoteResponse;
 
     const processedPackage = quotation.data.packages?.[0] || packageForApi;
 
@@ -272,20 +328,6 @@ export async function POST(
       length: processedPackage.length ?? packageForApi.length,
     };
 
-    const quotes = quotation.data.rates.map((rate) => ({
-      idRate: rate.idRate,
-      idCarrier: rate.idCarrier,
-      idProduct: rate.idProduct,
-      carrier: rate.carrier,
-      product: rate.product,
-      flete: rate.flete,
-      minimumInsurance: rate.minimumInsurance,
-      totalCost: rate.flete + rate.minimumInsurance,
-      deliveryDays: rate.deliveryDays,
-      isCOD: rate.cod,
-      codCost: rate.codDetails?.codCost ?? null,
-    }));
-
     // Las cotizaciones contra entrega no se guardan en la caché: sin esta
     // línea no queda rastro de qué respondió EnvioClick (2026-10-15).
     if (isCOD) {
@@ -293,7 +335,7 @@ export async function POST(
         "[SHIPPING_QUOTE] contra entrega",
         JSON.stringify({
           destDaneCode: destination.daneCode,
-          rates: quotes.map((quote) => ({ carrier: quote.carrier, product: quote.product, cod: quote.isCOD, codCost: quote.codCost })),
+          rates: quotes.map((quote) => ({ carrier: quote.carrier, product: quote.product, cod: quote.isCOD, codCost: quote.codCost, codFee: quote.codFee })),
           idCarriersNoWsResult: quotation.data.idCarriersNoWsResult ?? [],
         }),
       );

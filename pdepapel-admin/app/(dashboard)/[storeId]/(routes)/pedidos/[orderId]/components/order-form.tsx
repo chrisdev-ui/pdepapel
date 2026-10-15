@@ -261,7 +261,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   });
   useFormValidationToast({ form });
 
-  const { totals, shippingChargeState, shippingCost } = useOrderTotals(
+  const { totals, shippingChargeState, shippingCost, codFee } = useOrderTotals(
     form.control,
     coupon,
     freeShippingThreshold,
@@ -539,6 +539,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             address: data.address || "",
           },
           orderTotal: totals.total,
+          // El recaudo se calcula sobre el pedido sin envío ni recaudo.
+          amountBeforeShipping: Math.max(0, totals.total - (Number(data.shipping?.cost) || 0) - (data.shipping?.isCOD ? Number(data.shipping?.codFee) || 0 : 0)),
+          productSubtotal: totals.subtotal,
           items: data.orderItems.map((item) => ({ ...item })),
           boxId: data.shipping.boxId,
           forceRefresh: !options.silent,
@@ -578,7 +581,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         setLoadingQuotes(false);
       }
     },
-    [form, storeId, toast, totals.total],
+    [form, storeId, toast, totals.total, totals.subtotal],
   );
 
   const onSelectRate = useCallback(
@@ -613,6 +616,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           // sobreescribe. Si la transportadora no recauda, la sección avisa.
           isCOD: form.getValues("shipping.isCOD") ?? false,
           cost: quote.totalCost,
+          codFee: form.getValues("shipping.isCOD") && quote.isCOD ? (quote.codFee ?? null) : null,
           status: ShippingStatus.Preparing,
         },
         { shouldDirty: true },
@@ -650,6 +654,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     setRecommendedBox(null);
     form.setValue("envioClickIdRate", undefined, { shouldDirty: true });
     form.setValue("shipping.cost", 0, { shouldDirty: true });
+    form.setValue("shipping.codFee", null, { shouldDirty: true });
     form.setValue("shipping.carrierName", "", { shouldDirty: true });
     form.setValue("shipping.courier", "", { shouldDirty: true });
   }, [form, initialData, router, storeId, toast]);
@@ -981,6 +986,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 totals={totals}
                 shippingChargeState={shippingChargeState}
                 shippingCost={shippingCost}
+                codFee={codFee}
                 coupon={coupon}
                 itemCount={(watchedItems ?? []).reduce(
                   (sum, item) => sum + Number(item.quantity || 0),

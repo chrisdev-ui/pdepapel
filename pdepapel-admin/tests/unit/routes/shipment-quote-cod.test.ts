@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { solveCodFee } from "@/lib/cod-fee";
+
 /**
- * /shipment/quote con «Pago contra entrega» (2026-10-15): manda el recaudo a
- * EnvioClick, devuelve lo que cobra por recaudar, no guarda la respuesta en la
- * caché y deja una línea de registro sin la dirección para poder ver qué
- * respondió EnvioClick.
+ * /shipment/quote con «Pago contra entrega»: cotiza dos veces con recaudo y
+ * devuelve el recaudo FINAL de cada tarifa (el que cobra el pedido), no
+ * guarda la respuesta en la caché y deja una línea de registro sin la
+ * dirección. Sin contra entrega, una sola cotización, sin recaudo, a la caché.
  */
-const mocks = vi.hoisted(() => ({ quoteShipment: vi.fn(), upsert: vi.fn(), log: vi.spyOn(console, "log") }));
+const mocks = vi.hoisted(() => ({ quoteShipment: vi.fn(), upsert: vi.fn(), threshold: { value: null as number | null }, log: vi.spyOn(console, "log") }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     product: { findMany: vi.fn().mockResolvedValue([]) },
     box: { findMany: vi.fn().mockResolvedValue([]) },
+    store: { findUnique: vi.fn(async () => ({ freeShippingThreshold: mocks.threshold.value })) },
     shippingQuote: { findUnique: vi.fn().mockResolvedValue(null), upsert: mocks.upsert, update: vi.fn(), deleteMany: vi.fn().mockResolvedValue({}) },
   },
 }));
@@ -22,48 +25,65 @@ vi.mock("@/lib/rate-limit", () => ({ consumeRateLimit: vi.fn().mockResolvedValue
 import { POST } from "@/app/api/[storeId]/shipment/quote/route";
 
 const ADDRESS = "Calle 1 # 2-3";
-const request = (isCOD: boolean) =>
+/** ENVIA: 3 % del valor a recaudar + 3.000. Coordinadora: plano. */
+const enviaFee = (codValue: number) => 0.03 * codValue + 3000;
+
+const request = (isCOD: boolean, extra: Record<string, unknown> = {}) =>
   new Request("https://admin.test/api/store-1/shipment/quote", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ destination: { daneCode: "17380000", address: ADDRESS }, orderTotal: 52000, items: [{ productId: "MAN-1", name: "Libreta", quantity: 1, price: 52000 }], forceRefresh: true, isCOD }),
+    body: JSON.stringify({ destination: { daneCode: "17380000", address: ADDRESS }, orderTotal: 52000, items: [{ productId: "MAN-1", name: "Libreta", quantity: 1, price: 52000 }], forceRefresh: true, isCOD, ...extra }),
   });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.quoteShipment.mockResolvedValue({
+  mocks.threshold.value = null;
+  mocks.quoteShipment.mockImplementation(async (body: { codValue?: number }) => ({
     data: {
       packages: [],
       idCarriersNoWsResult: [],
       rates: [
-        { idRate: 1, idCarrier: 2, idProduct: 3, carrier: "ENVIA", product: "Normal", flete: 17000, minimumInsurance: 1000, deliveryDays: 3, cod: true, codDetails: { codCost: 7000, codCostWithInsurance: 7500, codPaymentMethod: "cash", includeGuideCost: false } },
-        { idRate: 2, idCarrier: 4, idProduct: 5, carrier: "COORDINADORA", product: "Normal", flete: 16000, minimumInsurance: 900, deliveryDays: 4, cod: false, codDetails: null },
+        { idRate: 1 + (body.codValue ?? 0), idCarrier: 2, idProduct: 3, carrier: "ENVIA", product: "Normal", flete: 17000, minimumInsurance: 1000, deliveryDays: 3, cod: Boolean(body.codValue), codDetails: body.codValue ? { codCost: enviaFee(body.codValue), codCostWithInsurance: 0, codPaymentMethod: "cash", includeGuideCost: false } : null },
+        { idRate: 2 + (body.codValue ?? 0), idCarrier: 4, idProduct: 5, carrier: "COORDINADORA", product: "Normal", flete: 24000, minimumInsurance: 1781, deliveryDays: 4, cod: Boolean(body.codValue), codDetails: body.codValue ? { codCost: 6116, codCostWithInsurance: 0, codPaymentMethod: "cash", includeGuideCost: false } : null },
       ],
     },
-  });
+  }));
 });
 
 describe("POST /shipment/quote", () => {
-  it("contra entrega: manda el recaudo, trae lo que cobra EnvioClick y lo registra sin la dirección", async () => {
-    const response = await POST(request(true), { params: { storeId: "store-1" } });
+  it("contra entrega: dos cotizaciones con recaudo y el recaudo final de cada tarifa, registrado sin la dirección", async () => {
+    const response = await POST(request(true, { amountBeforeShipping: 50000, productSubtotal: 50000 }), { params: { storeId: "store-1" } });
     expect(response.status).toBe(200);
 
-    expect(mocks.quoteShipment).toHaveBeenCalledWith(expect.objectContaining({ codValue: 52000, codPaymentMethod: "cash", includeGuideCost: false }));
+    expect(mocks.quoteShipment).toHaveBeenCalledTimes(2);
+    expect(mocks.quoteShipment.mock.calls[0][0]).toMatchObject({ codValue: 50000, codPaymentMethod: "cash", includeGuideCost: false });
+    const v2 = mocks.quoteShipment.mock.calls[1][0].codValue;
     const { quotes } = await response.json();
-    expect(quotes.map(({ carrier, isCOD, codCost, totalCost }: Record<string, unknown>) => ({ carrier, isCOD, codCost, totalCost }))).toEqual([
-      { carrier: "ENVIA", isCOD: true, codCost: 7000, totalCost: 18000 },
-      { carrier: "COORDINADORA", isCOD: false, codCost: null, totalCost: 16900 },
-    ]);
+    const envia = quotes.find((quote: { carrier: string }) => quote.carrier === "ENVIA");
+    expect(envia).toMatchObject({ isCOD: true, totalCost: 18000, idRate: 1 + v2 });
+    expect(envia.codFee).toBe(solveCodFee(68000, { codValue: 50000, fee: enviaFee(50000) }, { codValue: v2, fee: enviaFee(v2) }));
+    // El recaudo final cuadra: lo que cobra EnvioClick sobre el total con recaudo.
+    expect(envia.codFee - enviaFee(68000 + envia.codFee)).toBeLessThan(1);
+    expect(quotes.find((quote: { carrier: string }) => quote.carrier === "COORDINADORA").codFee).toBe(6116);
     expect(mocks.upsert).not.toHaveBeenCalled();
 
     const line = mocks.log.mock.calls.find(([tag]) => tag === "[SHIPPING_QUOTE] contra entrega");
-    expect(line).toBeDefined();
-    expect(JSON.parse(String(line![1]))).toMatchObject({ destDaneCode: "17380000", rates: [{ carrier: "ENVIA", cod: true, codCost: 7000 }, { carrier: "COORDINADORA", cod: false, codCost: null }] });
+    expect(JSON.parse(String(line![1]))).toMatchObject({ destDaneCode: "17380000", rates: [{ carrier: "ENVIA", cod: true, codFee: envia.codFee }, { carrier: "COORDINADORA", cod: true, codFee: 6116 }] });
     expect(String(line![1])).not.toContain(ADDRESS);
   });
 
-  it("sin contra entrega no manda recaudo, guarda en la caché y no registra la línea", async () => {
+  it("contra entrega con envío gratis: el recaudo se calcula sobre el pedido sin envío", async () => {
+    mocks.threshold.value = 40000;
+    const response = await POST(request(true, { amountBeforeShipping: 50000, productSubtotal: 50000 }), { params: { storeId: "store-1" } });
+    const { quotes } = await response.json();
+    const envia = quotes.find((quote: { carrier: string }) => quote.carrier === "ENVIA");
+    // 0,03·(50.000 + F) + 3.000 = F → F = 4.500 / 0,97 = 4.639,18 → 4.640
+    expect(envia.codFee).toBe(4640);
+  });
+
+  it("sin contra entrega: una sola cotización, sin recaudo, a la caché y sin la línea", async () => {
     await POST(request(false), { params: { storeId: "store-1" } });
+    expect(mocks.quoteShipment).toHaveBeenCalledTimes(1);
     expect(mocks.quoteShipment.mock.calls[0][0]).not.toHaveProperty("codValue");
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
     expect(mocks.log.mock.calls.some(([tag]) => tag === "[SHIPPING_QUOTE] contra entrega")).toBe(false);

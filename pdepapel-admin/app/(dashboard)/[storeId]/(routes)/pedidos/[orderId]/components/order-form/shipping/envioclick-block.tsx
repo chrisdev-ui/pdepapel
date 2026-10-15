@@ -99,6 +99,7 @@ export function EnvioClickBlock({
   });
   const rateId = useWatch({ control: form.control, name: "envioClickIdRate" });
   const savedCost = useWatch({ control: form.control, name: "shipping.cost" });
+  const formCodFee = useWatch({ control: form.control, name: "shipping.codFee" });
 
   const hasGuide = Boolean(initialData?.shipping?.envioClickIdOrder);
   const savedRateId = initialData?.shipping?.envioClickIdRate ?? null;
@@ -466,7 +467,8 @@ export function EnvioClickBlock({
             />
             <span>
               Tarifa elegida: <strong>{carrierName || "transportadora"}</strong>{" "}
-              · {currencyFormatter(selectedCost)}.{" "}
+              · {currencyFormatter(selectedCost)}
+              {isCOD && formCodFee ? ` + recaudo contra entrega ${currencyFormatter(formCodFee)}` : ""}.{" "}
               <span className="text-muted-foreground">
                 {savedRateId === rateId
                   ? "Guardada en el pedido."
@@ -504,6 +506,7 @@ export function EnvioClickBlock({
           carrier={carrierName || "transportadora"}
           cost={selectedCost}
           rate={selectedQuote ?? null}
+          codFee={isCOD ? (formCodFee ?? null) : null}
           saved={savedRateId === rateId}
           stale={expired}
           guideError={initialData.shipping?.guideError}

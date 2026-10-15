@@ -9,10 +9,12 @@ import { BATCH_SIZE } from "@/constants";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
+import { resolveStoreCodShipping, type StoreCodShipping } from "@/lib/cod-shipping";
 import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
+import { qualifiesForFreeShipping } from "@/lib/order-totals";
 import { priceLines } from "@/lib/product-pricing";
 import { normalizeGoogleAnalyticsClientId, normalizeGoogleAnalyticsSessionId } from "@/lib/google-analytics";
 import { screenStoreOrder } from "@/lib/order-intake";
@@ -401,6 +403,63 @@ async function createOrder(
       }
     }
 
+    // Recaudo contra entrega (decisión 2026-10-15: lo paga la clienta, aparte
+    // del envío). Nunca se acepta el monto que manda la tienda: con la tienda
+    // nueva (`shipping.codFeeShown`) el servidor re-cotiza con recaudo, revisa
+    // el flete y calcula el recaudo antes de abrir la transacción; sin ese
+    // campo (la tienda de antes) el pedido se guarda como siempre, sin
+    // recaudo. Desde el panel vale el recaudo que trae el formulario, que
+    // viene de nuestra propia cotización.
+    const {
+      codFee: sentCodFee,
+      codFeeShown: sentCodFeeShown,
+      ...shippingFields
+    } = (shipping && typeof shipping === "object" ? shipping : {}) as Record<string, unknown>;
+    const codShipment =
+      normalizedShippingProvider === ShippingProvider.ENVIOCLICK &&
+      (payment?.method === PaymentMethod.COD || shippingFields.isCOD === true);
+    const ownerCodFee =
+      isStoreOwner && codShipment && typeof sentCodFee === "number" && Number.isFinite(sentCodFee) && sentCodFee >= 0
+        ? Math.round(sentCodFee)
+        : null;
+    let storeCod: StoreCodShipping | null = null;
+    if (
+      !isStoreOwner &&
+      payment?.method === PaymentMethod.COD &&
+      normalizedShippingProvider === ShippingProvider.ENVIOCLICK &&
+      typeof sentCodFeeShown === "number" &&
+      Number.isFinite(sentCodFeeShown) &&
+      sentCodFeeShown >= 0
+    ) {
+      const lines = orderItems
+        .filter((item: { productId: string | null }) => Boolean(item.productId))
+        .map((item: { productId: string; quantity?: number }) => ({ productId: item.productId, quantity: Number(item.quantity) || 1 }));
+      const products = await processOrderItemsInBatches(lines, params.storeId, BATCH_SIZE);
+      const priceOf = new Map(products.map((product) => [product.id, Number(product.price)]));
+      const priced = await priceLines(params.storeId, lines, products);
+      const pricedItems = lines.map((line: { productId: string; quantity: number }) => ({
+        product: { price: priced.get(line.productId)?.unitPrice ?? priceOf.get(line.productId) ?? 0 },
+        quantity: line.quantity,
+      }));
+      const couponConfig = coupon ? { type: coupon.type as DiscountType, amount: coupon.amount } : undefined;
+      const storeSettings = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { freeShippingThreshold: true } });
+      storeCod = await resolveStoreCodShipping({
+        storeId: params.storeId,
+        items: lines,
+        destination: { daneCode, address },
+        amountBeforeShipping: calculateOrderTotals(pricedItems, { coupon: couponConfig }).total,
+        freeShipping: qualifiesForFreeShipping(calculateOrderTotals(pricedItems).subtotal, storeSettings?.freeShippingThreshold),
+        chosen: {
+          carrier: (shippingFields.carrierName as string) || (shippingFields.courier as string),
+          product: shippingFields.productName as string,
+          cost: Number(shippingFields.cost ?? 0),
+        },
+        codFeeShown: sentCodFeeShown,
+      });
+    }
+    const codFee = storeCod?.codFee ?? ownerCodFee;
+    const shippingCostCharged = storeCod ? storeCod.cost : Number(shippingFields.cost) || 0;
+
     let issuedGiftCard: IssuedGiftCard | null = null;
     // La caché se purga después del commit (ver b433abe4): dentro de la
     // transacción esperaba a Redis, a la tienda y a QStash con los bloqueos
@@ -511,7 +570,8 @@ async function createOrder(
               amount: coupon.amount,
             }
           : undefined,
-        shippingCost: shipping?.cost || 0,
+        shippingCost: shippingCostCharged,
+        codFee,
       });
 
       // Skip price validation for admin orders — the backend's calculated totals
@@ -647,10 +707,23 @@ async function createOrder(
       )
         orderData.shipping = {
           create: {
-            ...shipping,
+            ...shippingFields,
+            ...(storeCod && {
+              carrierId: storeCod.idCarrier,
+              carrierName: storeCod.carrier,
+              courier: storeCod.carrier,
+              productId: storeCod.idProduct,
+              productName: storeCod.product,
+              flete: storeCod.flete,
+              minimumInsurance: storeCod.minimumInsurance,
+              deliveryDays: storeCod.deliveryDays,
+              isCOD: true,
+              cost: storeCod.cost,
+            }),
+            codFee: codShipment ? codFee : null,
             status: ShippingStatus.Preparing, // Always start with Preparing
             provider: normalizedShippingProvider,
-            envioClickIdRate: envioClickIdRate || null,
+            envioClickIdRate: storeCod?.idRate ?? (envioClickIdRate || null),
             storeId: params.storeId,
           },
         };
@@ -732,7 +805,7 @@ async function createOrder(
         const financials = await calculateOrderFinancials(
           createdOrder as any,
           payment?.method,
-          Number(shipping?.cost) || 0,
+          shippingCostCharged + (codFee ?? 0),
           tx,
         );
         await tx.order.update({

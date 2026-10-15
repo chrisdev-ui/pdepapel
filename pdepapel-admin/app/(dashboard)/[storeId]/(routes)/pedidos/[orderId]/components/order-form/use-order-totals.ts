@@ -15,6 +15,9 @@ export function useOrderTotals(control: Control<OrderFormValues>, coupon: Coupon
   const discountType = useWatch({ control, name: "discount.type" });
   const discountAmount = useWatch({ control, name: "discount.amount" });
   const shippingCost = useWatch({ control, name: "shipping.cost" });
+  const isCOD = useWatch({ control, name: "shipping.isCOD" });
+  const rawCodFee = useWatch({ control, name: "shipping.codFee" });
+  const codFee = isCOD ? Number(rawCodFee) || 0 : 0;
   const rateId = useWatch({ control, name: "envioClickIdRate" });
 
   const totals: OrderTotals = useMemo(() => {
@@ -30,8 +33,9 @@ export function useOrderTotals(control: Control<OrderFormValues>, coupon: Coupon
       discount: discountType && discountAmount && !isNaN(Number(discountAmount)) ? { type: discountType as DiscountType, amount: Number(discountAmount) } : undefined,
       coupon: couponApplies ? { type: coupon.type as DiscountType, amount: Number(coupon.amount) } : undefined,
       shippingCost: Number(shippingCost) || 0,
+      codFee,
     });
-  }, [items, discountType, discountAmount, coupon, shippingCost]);
+  }, [items, discountType, discountAmount, coupon, shippingCost, codFee]);
 
   const shippingChargeState = useMemo(
     () =>
@@ -44,5 +48,5 @@ export function useOrderTotals(control: Control<OrderFormValues>, coupon: Coupon
     [shippingCost, totals.subtotal, freeShippingThreshold, rateId],
   );
 
-  return { totals, shippingChargeState, shippingCost: Number(shippingCost) || 0 };
+  return { totals, shippingChargeState, shippingCost: Number(shippingCost) || 0, codFee };
 }

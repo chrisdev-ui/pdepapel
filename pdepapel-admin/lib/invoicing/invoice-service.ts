@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { codShippingInvoiceLines, INVOICE_COD_FEE_LINES_ENABLED } from "./shipping-lines";
 import { DianStatus, InvoiceStatus } from "@prisma/client";
 import { InvoiceProvider, InvoiceRequest } from "./types";
 import { StubProvider } from "./providers/stub-provider";
@@ -17,6 +18,7 @@ export class InvoiceService {
       where: { id: orderId, storeId },
       include: {
         orderItems: { include: { product: true } },
+        shipping: { select: { cost: true, codFee: true } },
       },
     });
 
@@ -42,12 +44,15 @@ export class InvoiceService {
       customerEmail: order.email || "consumidorfinal@example.com",
       totalAmount: order.total,
       taxAmount: 0, // Calculate properly based on product tax rates in local logic
-      items: order.orderItems.map((item) => ({
-        description: item.product?.name || item.name,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        taxRate: 0, // Extend schema or logic to pull real tax if needed
-      })),
+      items: [
+        ...order.orderItems.map((item) => ({
+          description: item.product?.name || item.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          taxRate: 0, // Extend schema or logic to pull real tax if needed
+        })),
+        ...(INVOICE_COD_FEE_LINES_ENABLED ? codShippingInvoiceLines(order.shipping) : []),
+      ],
     };
 
     // 3. Create Draft Invoice record in DB

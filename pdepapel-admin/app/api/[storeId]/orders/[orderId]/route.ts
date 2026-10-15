@@ -583,6 +583,21 @@ export async function PATCH(
         shipping?.cost !== undefined
           ? Number(shipping.cost)
           : Number(order.shipping?.cost || 0);
+      // Recaudo contra entrega: aparte del envío, solo con EnvioClick contra
+      // entrega. El formulario lo trae de nuestra propia cotización; si no lo
+      // manda, se queda el guardado; si el envío deja de ser contra entrega
+      // con EnvioClick, se va.
+      const nextProvider = shippingProvider ?? order.shipping?.provider;
+      const nextIsCOD = shipping?.isCOD ?? order.shipping?.isCOD ?? false;
+      const sentCodFee = shipping && "codFee" in shipping ? shipping.codFee : undefined;
+      const newCodFee =
+        nextProvider === "ENVIOCLICK" && nextIsCOD
+          ? sentCodFee === undefined
+            ? (order.shipping?.codFee ?? null)
+            : typeof sentCodFee === "number" && Number.isFinite(sentCodFee) && sentCodFee >= 0
+              ? Math.round(sentCodFee)
+              : null
+          : null;
 
       // Calculate totals (including shipping cost). A paid order keeps its
       // stored subtotal and discounts; only the shipping cost can still move.
@@ -593,8 +608,10 @@ export async function PATCH(
             couponDiscount: Number(order.couponDiscount ?? 0),
             total: round2(
               Number(order.total) -
-                Number(order.shipping?.cost ?? 0) +
-                newShippingCost,
+                Number(order.shipping?.cost ?? 0) -
+                Number(order.shipping?.codFee ?? 0) +
+                newShippingCost +
+                (newCodFee ?? 0),
             ),
           }
         : calculateOrderTotals(itemsWithPrices, {
@@ -612,6 +629,7 @@ export async function PATCH(
                 }
               : undefined,
             shippingCost: newShippingCost,
+            codFee: newCodFee,
           });
 
       // Log informative log if sent totals differ from recalculated totals,
@@ -815,6 +833,7 @@ export async function PATCH(
                           : undefined,
                       }),
                       cost: shipping.cost,
+                      codFee: newCodFee,
                       notes: shipping.notes,
                       store: { connect: { id: params.storeId } },
                     },
@@ -847,6 +866,7 @@ export async function PATCH(
                               : undefined,
                       }),
                       cost: shipping.cost,
+                      codFee: newCodFee,
                       notes: shipping.notes,
                     },
                   },
@@ -1007,7 +1027,7 @@ export async function PATCH(
         const financials = await calculateOrderFinancials(
           updated as any,
           updated.payment?.method,
-          updated.shipping?.cost || 0,
+          (updated.shipping?.cost || 0) + (updated.shipping?.codFee || 0),
           tx,
         );
 

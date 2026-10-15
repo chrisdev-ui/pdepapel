@@ -72,6 +72,7 @@ export function ShippingSection({
 
   const setCOD = (checked: boolean) => {
     form.setValue("shipping.isCOD", checked, { shouldDirty: true });
+    if (!checked) form.setValue("shipping.codFee", null, { shouldDirty: true });
     if (checked) form.setValue("payment.method", PaymentMethod.COD, { shouldDirty: true });
     else if (form.getValues("payment.method") === PaymentMethod.COD)
       form.setValue("payment.method", PaymentMethod.BankTransfer, { shouldDirty: true });

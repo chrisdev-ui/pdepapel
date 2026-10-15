@@ -35,6 +35,8 @@ interface GuidePanelProps {
   stale: boolean;
   /** La tarifa de la última cotización, si está en pantalla (trae el recaudo). */
   rate?: ShippingQuote | null;
+  /** Recaudo contra entrega guardado o elegido en el formulario. */
+  codFee?: number | null;
   guideError?: string | null;
   guideAttemptedAt?: string | Date | null;
   /** Cuándo llegó la última cotización: un fallo anterior ya no es noticia. */
@@ -58,6 +60,7 @@ export function GuidePanel({
   saved,
   stale,
   rate = null,
+  codFee: formCodFee = null,
   guideError,
   guideAttemptedAt = null,
   quotedAt = null,
@@ -83,7 +86,7 @@ export function GuidePanel({
 
   // Lo que cobra EnvioClick por la guía: flete + seguro y, contra entrega, el
   // recaudo. Lo que paga la clienta en el pedido sigue siendo `cost`.
-  const codCost = isCOD && rate?.isCOD ? Number(rate.codCost ?? 0) : 0;
+  const codCost = isCOD ? Number(formCodFee ?? (rate?.isCOD ? (rate.codFee ?? rate.codCost) : 0) ?? 0) : 0;
   const envioClickTotal = cost + codCost;
   const breakdown = rate
     ? `flete ${currencyFormatter(rate.flete)} + seguro ${currencyFormatter(rate.minimumInsurance)}${codCost ? ` + recaudo ${currencyFormatter(codCost)}` : ""}`

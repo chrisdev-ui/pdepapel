@@ -71,9 +71,9 @@ export async function DELETE(
     }
 
     // Limpiar el idRate y datos relacionados de cotización. El total del
-    // pedido incluía el flete cotizado: se descuenta para no seguir cobrando
-    // un envío que ya no existe.
-    const previousCost = Number(order.shipping.cost ?? 0);
+    // pedido incluía el flete cotizado y el recaudo: se descuentan para no
+    // seguir cobrando un envío que ya no existe.
+    const previousCost = Number(order.shipping.cost ?? 0) + Number(order.shipping.codFee ?? 0);
     if (previousCost > 0) {
       await prismadb.order.update({
         where: { id: order.id },
@@ -93,9 +93,12 @@ export async function DELETE(
         productName: null,
         flete: null,
         minimumInsurance: null,
-        isCOD: false, // Reset to default value, not null
+        // Contra entrega es la forma de pago, no la tarifa: se queda. Antes se
+        // borraba y un pedido contra entrega volvía a cotizar sin recaudo
+        // (ORD-1791998787841-915, 2026-10-15).
         deliveryDays: null,
         cost: null,
+        codFee: null,
         quotationData: Prisma.JsonNull,
       },
     });
