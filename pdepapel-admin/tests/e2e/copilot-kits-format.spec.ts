@@ -97,6 +97,8 @@ test.describe("respuesta de kits en el teléfono", () => {
     await expect(page).toHaveURL(new RegExp(`/${storeId}/copiloto`));
     const box = page.getByRole("textbox", { name: "Tu pregunta" });
     await expect(async () => {
+      // Vaciar antes: si el primer intento llegó antes de hidratar, repetir el mismo texto no dispara onChange.
+      await box.fill("");
       await box.fill("¿Qué kits puedo armar?");
       await expect(page.getByRole("button", { name: "Enviar" })).toBeEnabled({ timeout: 1000 });
     }).toPass({ timeout: 60_000 });
