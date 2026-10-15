@@ -7,6 +7,10 @@ export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/e2e/global-setup.ts",
   fullyParallel: true,
+  // La puerta va con un solo trabajador: las pruebas comparten la tienda de
+  // pruebas y en paralelo se pisan los datos (falsos fallos, 2026-10-15).
+  // `--workers=N` en la línea de comandos sigue mandando.
+  workers: process.env.E2E_SERVER === "production" ? 1 : undefined,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",

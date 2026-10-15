@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { e2eServerEnv, withNetworkGuard } from "../../../scripts/lib/e2e-server-env.mjs";
 import { TEST_ENV_STUBS } from "../../../scripts/lib/test-isolation.mjs";
@@ -73,5 +73,16 @@ describe("servidor de las e2e aislado", () => {
     expect(config).toContain("node scripts/e2e-dev-server.mjs");
     expect(config).not.toMatch(/command:[^\n]*npm run dev/);
     expect(config).not.toMatch(/reuseExistingServer: !process\.env\.CI/);
+  });
+
+  it("la puerta (build de producción) corre con un solo trabajador; la prueba suelta no se limita", async () => {
+    const load = async (server: string | undefined) => {
+      vi.resetModules();
+      vi.stubEnv("E2E_SERVER", server ?? "");
+      return (await import("../../../playwright.config")).default;
+    };
+    expect((await load("production")).workers).toBe(1);
+    expect((await load(undefined)).workers).toBeUndefined();
+    vi.unstubAllEnvs();
   });
 });
