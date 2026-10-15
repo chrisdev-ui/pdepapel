@@ -125,13 +125,9 @@ test.describe("convertir un producto suelto en grupo", () => {
     const matrix = page.getByRole("dialog");
     await expect(matrix).toBeVisible();
     await matrix.getByRole("button", { name: "Crear variantes" }).click();
-    await expect(page.getByText("3 variantes nuevas se crean al guardar, con 0 unidades.").first()).toBeVisible({ timeout: 30_000 });
+    // El resultado de «Generar» va en línea junto a las variantes: ya no es un aviso flotante que tape «Crear grupo».
+    await expect(page.getByTestId("generation-notice")).toContainText("3 variantes nuevas se crean al guardar, con 0 unidades.", { timeout: 30_000 });
 
-    // El aviso tapa «Crear grupo». Radix pausa su cierre automático mientras la
-    // ventana no tiene foco, y la de Playwright no lo tiene: se cierra con su ×.
-    const notice = page.locator("[data-radix-collection-item]").filter({ hasText: "3 variantes nuevas se crean al guardar" });
-    await notice.locator("[toast-close]").click({ force: true });
-    await expect(notice).toHaveCount(0, { timeout: 10_000 });
     await page.getByRole("button", { name: "Crear grupo" }).last().click();
     await page.waitForURL((url) => !url.pathname.includes("nuevo-grupo"), { timeout: 240_000 });
 

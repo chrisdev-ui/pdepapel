@@ -10,6 +10,7 @@ import {
   PackageCheckIcon,
   Settings2,
   Trash,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
@@ -425,6 +426,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
   const [open, setOpen] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
+  // Lo que dejó «Generar»: en línea junto a las variantes, nunca un aviso flotante sobre «Crear grupo».
+  const [generationNotice, setGenerationNotice] = useState<ReturnType<typeof describeGeneration> | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [batchIntakeOpen, setBatchIntakeOpen] = useState(false);
   const [batchIntakeVariants, setBatchIntakeVariants] = useState<
@@ -871,7 +874,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       };
       const created = create.map((gen) => buildGeneratedRow(gen, ctx));
       if (created.length === 0) {
-        toast(describeGeneration({ requested: plan.toCreate.length, created: 0, alreadyInGroup: 0, skippedStandalone: skipped.length }));
+        setGenerationNotice(describeGeneration({ requested: plan.toCreate.length, created: 0, alreadyInGroup: 0, skippedStandalone: skipped.length }));
         return;
       }
 
@@ -881,7 +884,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         shouldTouch: true,
         shouldValidate: true,
       });
-      toast(describeGeneration({ requested: plan.toCreate.length, created: created.length, alreadyInGroup: 0, skippedStandalone: skipped.length }));
+      setGenerationNotice(describeGeneration({ requested: plan.toCreate.length, created: created.length, alreadyInGroup: 0, skippedStandalone: skipped.length }));
     }, 800);
 
     return () => clearTimeout(timer);
@@ -1284,7 +1287,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       shouldValidate: true,
     });
     const requested = new Set(allGenerated.map((gen) => `${gen.sizeId}|${gen.colorId}|${gen.designId}`)).size;
-    toast(
+    setGenerationNotice(
       describeGeneration({
         requested,
         created: created.length,
@@ -2352,6 +2355,23 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 </span>
               </span>
             </label>
+            {generationNotice && (
+              <div
+                role="status"
+                data-testid="generation-notice"
+                className={cn(
+                  "flex items-start justify-between gap-3 rounded-lg border p-3 text-sm",
+                  generationNotice.variant === "success" ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-amber-50",
+                )}
+              >
+                <p className="min-w-0">
+                  <span className="font-semibold">{generationNotice.title}.</span> {generationNotice.description}
+                </p>
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Cerrar aviso" onClick={() => setGenerationNotice(null)}>
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
+            )}
             <VariantGrid
               form={form}
               loading={loading}
