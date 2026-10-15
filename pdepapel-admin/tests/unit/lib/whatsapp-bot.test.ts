@@ -194,6 +194,7 @@ const ajustesBase: ResolvedStoreSettings = {
   botHoldingMode: "SHADOW",
   botHoldingText: null,
   botHoldingNightText: null,
+  waitingReminderEmail: false,
 };
 
 describe("keyword matching", () => {

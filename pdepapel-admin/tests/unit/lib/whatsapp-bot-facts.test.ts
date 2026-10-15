@@ -68,6 +68,7 @@ const completa: ResolvedStoreSettings = {
   botHoldingMode: "SHADOW",
   botHoldingText: null,
   botHoldingNightText: null,
+  waitingReminderEmail: false,
 };
 
 const con = (cambios: Partial<ResolvedStoreSettings>): ResolvedStoreSettings => ({

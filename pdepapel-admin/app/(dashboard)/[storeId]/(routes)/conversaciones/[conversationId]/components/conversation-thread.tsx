@@ -6,13 +6,15 @@ import {
   canHandBackToBot,
   describeBotPause,
   formatBotPause,
+  formatWaitingFor,
 } from "@/lib/conversation-bot-pause";
-import { AlertTriangle, ArrowLeft, BellOff, Bot, BotOff, CheckCircle2, ClipboardList, Globe, MousePointerClick, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BellOff, Bot, BotOff, CheckCheck, CheckCircle2, ClipboardList, Hourglass, Globe, MousePointerClick, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { IgnoreContactDialog } from "@/components/conversations/ignore-contact-dialog";
+import { MarkAttendedButton } from "@/components/conversations/mark-attended-button";
 import { ReserveSheet, type CreatedReservation } from "@/components/reservations/reserve-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -452,6 +454,18 @@ export function ConversationThread({
           <Badge variant={isResolved ? "secondary" : "default"}>
             {CONVERSATION_STATUS_LABELS[conversation.status]}
           </Badge>
+          {conversation.waitingSince ? (
+            <span className="flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
+              <Hourglass className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {formatWaitingFor(conversation.waitingSince)}
+            </span>
+          ) : conversation.waitAttendedAt &&
+            (!conversation.lastInboundAt || conversation.lastInboundAt <= conversation.waitAttendedAt) ? (
+            <span className="flex items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <CheckCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Atendida sin responder · {dateFormatter.format(conversation.waitAttendedAt)}
+            </span>
+          ) : null}
           {/* Tras contestar Paula, el estado vuelve a «Abierta» pero el bot
               sigue callado 24 h. Sin decirlo, ella no tenía cómo saberlo. */}
           {pausaDelBot ? (
@@ -470,6 +484,7 @@ export function ConversationThread({
                 : "Ignorado"}
             </span>
           ) : null}
+          {conversation.waitingSince ? <MarkAttendedButton conversationId={conversation.id} /> : null}
           {conversation.orderId ? (
             <Button
               variant="outline"

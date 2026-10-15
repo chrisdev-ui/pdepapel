@@ -57,6 +57,7 @@ const formSchema = z.object({
   botReadBursts: z.boolean(),
   botFallbackMode: z.nativeEnum(BotAssistMode),
   botHoldingMode: z.nativeEnum(BotAssistMode),
+  waitingReminderEmail: z.boolean(),
   botHoldingText: z.string().trim().max(500),
   botHoldingNightText: z.string().trim().max(500),
   days: z.record(
@@ -101,6 +102,7 @@ export function BusinessInfoPanel({
       botReadBursts: settings.botReadBursts,
       botFallbackMode: settings.botFallbackMode,
       botHoldingMode: settings.botHoldingMode,
+      waitingReminderEmail: settings.waitingReminderEmail,
       botHoldingText: settings.botHoldingText ?? "",
       botHoldingNightText: settings.botHoldingNightText ?? "",
       days: Object.fromEntries(
@@ -165,6 +167,7 @@ export function BusinessInfoPanel({
         botReadBursts: values.botReadBursts,
         botFallbackMode: values.botFallbackMode,
         botHoldingMode: values.botHoldingMode,
+        waitingReminderEmail: values.waitingReminderEmail,
         botHoldingText: values.botHoldingText.trim() || null,
         botHoldingNightText: values.botHoldingNightText.trim() || null,
         openingHours: Object.fromEntries(
@@ -652,6 +655,23 @@ export function BusinessInfoPanel({
                   </FormControl>
                   <FormDescription>De 12:00 a 6:59 a. m., cuando no vas a contestar enseguida.</FormDescription>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="waitingReminderEmail"
+              render={({ field }) => (
+                <FormItem className="flex flex-col gap-2">
+                  <FormLabel>Avisarme por correo cuando un cliente espere</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} disabled={loading} />
+                  </FormControl>
+                  <FormDescription>
+                    Apagado, no llega ningún correo: las esperas se ven en Conversaciones, en «Esperando a
+                    Paula». Encendido, un correo con cuántas clientas llevan 30 minutos o más sin respuesta
+                    (solo las del último día), como mucho uno por hora y de 8 a. m. a 11 p. m.
+                  </FormDescription>
                 </FormItem>
               )}
             />

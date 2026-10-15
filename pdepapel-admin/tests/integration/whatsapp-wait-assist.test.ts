@@ -11,6 +11,11 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
  * mensaje de espera. WhatsApp, la cola y la corrida del bot se simulan y se
  * cuentan. Datos sintéticos.
  */
+const session = vi.hoisted(() => ({ userId: null as string | null }));
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: () => ({ userId: session.userId }),
+  clerkClient: async () => ({ users: { getUser: async () => null } }),
+}));
 const sim = vi.hoisted(() => ({ sent: [] as string[], queued: [] as { kind: string; dedup: string; delay: number }[], botRuns: [] as unknown[] }));
 vi.mock("@/lib/whatsapp/send", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("@/lib/whatsapp/send");
@@ -44,6 +49,7 @@ vi.mock("@/lib/whatsapp/bot", async () => {
 });
 
 const MIN = 60 * 1000;
+const OTHER_STORE = `otra-tienda-${randomUUID()}`;
 /** 2026-10-14 15:00 Bogotá. */
 const DAY = new Date("2026-10-14T20:00:00Z");
 /** 2026-10-14 02:00 Bogotá. */
@@ -54,11 +60,11 @@ let fixture: InventoryFixture;
 let store = "";
 let phoneSeq = 0;
 
-async function settings(data: { botFallbackMode?: "OFF" | "SHADOW" | "ON"; botHoldingMode?: "OFF" | "SHADOW" | "ON"; botHoldingText?: string | null; botHoldingNightText?: string | null }) {
+async function settings(data: { botFallbackMode?: "OFF" | "SHADOW" | "ON"; botHoldingMode?: "OFF" | "SHADOW" | "ON"; botHoldingText?: string | null; botHoldingNightText?: string | null; waitingReminderEmail?: boolean }) {
   await testPrisma.storeSettings.upsert({
     where: { storeId: store },
     create: { storeId: store, botEnabled: true, botFallbackMode: "SHADOW", botHoldingMode: "SHADOW", ...data },
-    update: { botEnabled: true, botFallbackMode: "SHADOW", botHoldingMode: "SHADOW", botHoldingText: null, botHoldingNightText: null, ...data },
+    update: { botEnabled: true, botFallbackMode: "SHADOW", botHoldingMode: "SHADOW", botHoldingText: null, botHoldingNightText: null, waitingReminderEmail: false, ...data },
   });
 }
 
@@ -109,7 +115,7 @@ afterAll(async () => {
   const conversations = (await testPrisma.conversation.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
   await testPrisma.conversationMessage.deleteMany({ where: { conversationId: { in: conversations } } });
   await testPrisma.whatsAppWaitDecision.deleteMany({ where: { storeId: store } });
-  await testPrisma.conversation.deleteMany({ where: { storeId: store } });
+  await testPrisma.conversation.deleteMany({ where: { storeId: { in: [store, OTHER_STORE] } } });
   await testPrisma.storeSettings.deleteMany({ where: { storeId: store } });
   await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
   await deleteInventoryFixture(fixture);
@@ -223,6 +229,14 @@ describe("programar una espera", () => {
     expect(sim.queued.map((job) => job.kind)).toEqual(["holding"]);
     expect(sim.queued[0]).toMatchObject({ dedup: `wait-holding-${chat.ids[1]}`, delay: 4 * 60 });
   });
+
+  it("con «Avisarme por correo» encendido en Ajustes, la revisión también programa el recordatorio", async () => {
+    const { runWaitCheck } = await import("@/lib/whatsapp/wait-assist");
+    await settings({ waitingReminderEmail: true });
+    const chat = await conversation([{ sentBy: "OWNER", at: ago(DAY, 120) }, { sentBy: "CUSTOMER", at: ago(DAY, 11), body: "quería preguntar por un pedido especial" }]);
+    await runWaitCheck({ conversationId: chat.id, messageId: chat.ids[1], kind: "fallback" }, DAY);
+    expect(sim.queued.map((job) => job.kind)).toEqual(["holding", "reminder"]);
+  });
 });
 
 describe("la lista «Esperando a Paula»", () => {
@@ -277,6 +291,26 @@ describe("correo de recordatorio", () => {
     expect(emails).toEqual([{ storeId: store, count: before + 1 }]);
   });
 
+  it("el interruptor de Ajustes enciende el correo para la revisión y el barrido", async () => {
+    const { maybeSendWaitingReminder, remindWaitingFromSweep } = await import("@/lib/whatsapp/waiting-reminder");
+    await conversation([{ sentBy: "OWNER", at: ago(DAY, 200) }, { sentBy: "CUSTOMER", at: ago(DAY, 45) }]);
+    await settings({ waitingReminderEmail: true });
+    await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
+    const send = vi.fn(async () => undefined);
+    await expect(maybeSendWaitingReminder(store, DAY, { send })).resolves.toMatchObject({ sent: true });
+    expect(send).toHaveBeenCalledTimes(1);
+
+    // El barrido no recibe `send`: se cuenta por la fila de «uno por hora».
+    await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
+    await remindWaitingFromSweep(DAY);
+    expect(await testPrisma.jobRun.count({ where: { id: `whatsapp-waiting:alert:${store}` } })).toBe(1);
+
+    await settings({ waitingReminderEmail: false });
+    await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
+    await expect(maybeSendWaitingReminder(store, DAY, { send })).resolves.toEqual({ sent: false, count: 0 });
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it("una espera de más de un día sigue en la lista, pero no cuenta para el correo", async () => {
     const { maybeSendWaitingReminder } = await import("@/lib/whatsapp/waiting-reminder");
     const { findWaitingConversations } = await import("@/lib/whatsapp/waiting-list");
@@ -289,3 +323,70 @@ describe("correo de recordatorio", () => {
   });
 });
 
+
+describe("Marcar como atendido", () => {
+  const post = async (ids: string[]) => {
+    const { POST } = await import("@/app/api/[storeId]/conversations/attended/route");
+    return POST(new Request(`http://admin.test/api/${store}/conversations/attended`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) }), { params: { storeId: store } });
+  };
+
+  it("cierra la espera sin mandarle nada, guarda quién y cuándo, apaga lo pendiente del bot y vuelve si ella escribe", async () => {
+    const { findWaitingConversations } = await import("@/lib/whatsapp/waiting-list");
+    const { runWaitCheck } = await import("@/lib/whatsapp/wait-assist");
+    const now = new Date();
+    const chat = await conversation([{ sentBy: "OWNER", at: ago(now, 200) }, { sentBy: "CUSTOMER", at: ago(now, 45) }]);
+    expect((await findWaitingConversations(store, now)).has(chat.id)).toBe(true);
+
+    session.userId = "user_not_owner";
+    expect((await post([chat.id])).status).toBe(403);
+    session.userId = null;
+    expect((await post([chat.id])).status).toBe(401);
+    expect((await testPrisma.conversation.findUnique({ where: { id: chat.id } }))?.waitAttendedAt).toBeNull();
+
+    session.userId = fixture.store.userId;
+    const before = new Date();
+    const response = await post([chat.id]);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ count: 1 });
+    const row = await testPrisma.conversation.findUnique({ where: { id: chat.id } });
+    expect(row?.waitAttendedBy).toBe(fixture.store.userId);
+    expect(row!.waitAttendedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
+
+    const after = new Date();
+    expect((await findWaitingConversations(store, after)).has(chat.id)).toBe(false);
+    await expect(runWaitCheck({ conversationId: chat.id, messageId: chat.ids[1], kind: "fallback" }, after)).resolves.toEqual({ kind: "fallback", decision: "no_wait" });
+    await expect(runWaitCheck({ conversationId: chat.id, messageId: chat.ids[1], kind: "holding" }, after)).resolves.toEqual({ kind: "holding", decision: "no_wait" });
+    expect(await testPrisma.conversationMessage.count({ where: { conversationId: chat.id } })).toBe(2);
+    expect(sim.sent).toHaveLength(0);
+    expect(sim.botRuns).toHaveLength(0);
+    expect(await decisions(chat.id)).toEqual([]);
+
+    // Ella vuelve a escribir: la espera reaparece desde ese mensaje.
+    const again = new Date(after.getTime() + 1000);
+    const message = await testPrisma.conversationMessage.create({
+      data: { conversationId: chat.id, direction: "INBOUND", sentBy: "CUSTOMER", body: "¿y para mañana?", externalId: `wamid.${randomUUID()}`, status: "RECEIVED", createdAt: again },
+    });
+    await testPrisma.conversation.update({ where: { id: chat.id }, data: { lastInboundAt: again } });
+    const later = await findWaitingConversations(store, new Date(again.getTime() + 20 * MIN));
+    expect(later.get(chat.id)?.getTime()).toBe(again.getTime());
+    const { loadWait } = await import("@/lib/whatsapp/waiting-list");
+    expect((await loadWait(chat.id)).wait?.startMessageId).toBe(message.id);
+    session.userId = null;
+  });
+
+  it("en bloque: todas las de la lista de una vez, sin tocar conversaciones de otra tienda", async () => {
+    const { findWaitingConversations } = await import("@/lib/whatsapp/waiting-list");
+    const now = new Date();
+    const first = await conversation([{ sentBy: "OWNER", at: ago(now, 300) }, { sentBy: "CUSTOMER", at: ago(now, 3 * 24 * 60) }]);
+    const second = await conversation([{ sentBy: "OWNER", at: ago(now, 300) }, { sentBy: "CUSTOMER", at: ago(now, 30) }]);
+    const foreign = await testPrisma.conversation.create({ data: { storeId: OTHER_STORE, phone: "3009999999", status: "OPEN", lastInboundAt: ago(now, 30) } });
+    session.userId = fixture.store.userId;
+    const response = await post([first.id, second.id, foreign.id, first.id]);
+    await expect(response.json()).resolves.toEqual({ count: 2 });
+    const waiting = await findWaitingConversations(store, new Date());
+    expect(waiting.has(first.id) || waiting.has(second.id)).toBe(false);
+    expect((await testPrisma.conversation.findUnique({ where: { id: foreign.id } }))?.waitAttendedAt).toBeNull();
+    expect((await post([])).status).toBe(400);
+    session.userId = null;
+  });
+});

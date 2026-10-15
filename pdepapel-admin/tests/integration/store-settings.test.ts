@@ -126,5 +126,15 @@ describe("datos del negocio", () => {
     await saveStoreSettings(storeId, { cityName: "Medellín" });
     expect(await getStoreSettings(storeId)).toMatchObject({ botFallbackMode: "ON", botHoldingMode: "OFF", botHoldingText: "Paula te responde en breve" });
   });
+
+  it("«Avisarme por correo cuando un cliente espere» viene apagado y guardar sin el campo no lo enciende ni lo apaga", async () => {
+    expect(await getStoreSettings(storeId)).toMatchObject({ waitingReminderEmail: false });
+    await saveStoreSettings(storeId, { waitingReminderEmail: true });
+    expect(await getStoreSettings(storeId)).toMatchObject({ waitingReminderEmail: true });
+    await saveStoreSettings(storeId, { cityName: "Cali" });
+    expect(await getStoreSettings(storeId)).toMatchObject({ waitingReminderEmail: true });
+    await saveStoreSettings(storeId, { waitingReminderEmail: false });
+    expect(await getStoreSettings(storeId)).toMatchObject({ waitingReminderEmail: false });
+  });
 });
 

@@ -13,7 +13,6 @@ import {
   LIVE_CHAT_OWNER_MESSAGES,
   LIVE_CHAT_WINDOW_MS,
   REMINDER_AFTER_MS,
-  WAITING_REMINDER_EMAIL_ENABLED,
   currentWait,
   decideFallback,
   decideHolding,
@@ -181,7 +180,7 @@ export async function runWaitCheck(check: WhatsAppWaitCheck, now = new Date()): 
   if (!(await claimDecision({ storeId: conversation.storeId, conversationId: conversation.id, wait, kind: "fallback", mode, decision, scheduledFor: new Date(wait.lastCustomerAt.getTime() + FALLBACK_AFTER_MS), now }))) {
     return { kind: "fallback", decision: "claimed_elsewhere" };
   }
-  if (decision.decision !== "send") await scheduleFollowUps(conversation, wait, now);
+  if (decision.decision !== "send") await scheduleFollowUps(conversation, wait, now, settings.waitingReminderEmail);
   if (decision.decision === "send" && choice) {
     const recipient = conversation.phone ?? conversation.bsuid;
     const latest = await prismadb.conversationMessage.findUnique({ where: { id: wait.lastCustomerMessageId }, select: { externalId: true, createdAt: true } });
@@ -207,14 +206,14 @@ export async function runWaitCheck(check: WhatsAppWaitCheck, now = new Date()): 
 }
 
 /** La espera sigue abierta a los 10 min: mensaje de espera a los 15 (de día) y, si el correo está encendido, el recordatorio de la tienda en su tramo de 30 min. */
-async function scheduleFollowUps(conversation: { id: string; storeId: string; phone: string | null; bsuid: string | null }, wait: Wait, now: Date) {
+async function scheduleFollowUps(conversation: { id: string; storeId: string; phone: string | null; bsuid: string | null }, wait: Wait, now: Date, reminderEmail: boolean) {
   const contactKey = conversation.bsuid ?? conversation.phone;
   const check = (kind: WhatsAppWaitCheck["kind"]): WhatsAppWaitCheck => ({ conversationId: conversation.id, messageId: wait.startMessageId, kind });
   const holdingAt = holdingDueAt(wait.since);
   if (holdingAt.getTime() > wait.since.getTime()) {
     await enqueueWhatsAppWaitCheck(check("holding"), contactKey, delayUntil(holdingAt, now.getTime()), dedup("holding", wait.startMessageId));
   }
-  if (!WAITING_REMINDER_EMAIL_ENABLED) return;
+  if (!reminderEmail) return;
   const reminderAt = new Date(Math.ceil((wait.since.getTime() + REMINDER_AFTER_MS) / THIRTY_MIN) * THIRTY_MIN);
   await enqueueWhatsAppWaitCheck(check("reminder"), contactKey, delayUntil(reminderAt, now.getTime()), dedup("reminder", conversation.storeId, String(reminderAt.getTime())));
 }

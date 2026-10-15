@@ -557,8 +557,14 @@ imágenes, zona de cuidado). «Eliminar tienda» no se puede deshacer.
 «Esperando a Paula (N)» filtra los chats donde la clienta escribió de último
 (algo de verdad, no «ok», «gracias» ni una reacción) y nadie le responde hace
 15 minutos o más; cada uno lleva la insignia «Esperando a Paula · 25 min».
-No llega ningún correo por estas esperas: Paula prefirió no recibirlo, así que
-la lista se revisa en el panel. En
+Si ya la atendiste por otro lado, «Marcar como atendido» (en la fila o dentro
+del chat) la saca de la lista sin mandarle nada a la clienta; si ella vuelve a
+escribir, reaparece. Con el filtro puesto, «Marcar todas como atendidas (N)»
+limpia las esperas viejas de una vez, con confirmación. Por defecto no llega
+ningún correo por estas esperas (Paula prefirió revisarlas en el panel); el
+interruptor «Avisarme por correo cuando un cliente espere», en la misma parte
+de Ajustes, lo enciende: como mucho un correo por hora, de 8 a. m. a 11 p. m.,
+con la cuenta de esperas de 30 minutos o más del último día. En
 Configuración › Tienda › Datos del negocio, «Mientras la clienta te espera»
 tiene dos interruptores de tres estados (Apagado, Sombra, Encendido), en
 Sombra al empezar: la respuesta del bot a los 10 minutos (solo preguntas que

@@ -125,6 +125,7 @@ export const storeSettingsInputSchema = z
     botHoldingMode: z.nativeEnum(BotAssistMode).optional(),
     botHoldingText: z.string().trim().max(500).nullable().optional(),
     botHoldingNightText: z.string().trim().max(500).nullable().optional(),
+    waitingReminderEmail: z.boolean().optional(),
   })
   .refine(
     (input) =>
@@ -183,6 +184,8 @@ export interface ResolvedStoreSettings {
   /** Textos que escribe Paula; vacíos, el mensaje de espera no sale. */
   botHoldingText: string | null;
   botHoldingNightText: string | null;
+  /** «Avisarme por correo cuando un cliente espere»; apagado por defecto. */
+  waitingReminderEmail: boolean;
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
   botFactsVersion: string | null;
@@ -239,6 +242,7 @@ export async function getStoreSettings(
     botHoldingMode: settings?.botHoldingMode ?? BotAssistMode.SHADOW,
     botHoldingText: settings?.botHoldingText?.trim() || null,
     botHoldingNightText: settings?.botHoldingNightText?.trim() || null,
+    waitingReminderEmail: settings?.waitingReminderEmail ?? false,
     botFactsApprovedAt: settings?.botFactsApprovedAt ?? null,
     botFactsVersion: settings?.botFactsVersion ?? null,
     botProductsApprovedAt: settings?.botProductsApprovedAt ?? null,
@@ -273,6 +277,7 @@ export async function saveStoreSettings(
     ...(input.botHoldingMode === undefined ? {} : { botHoldingMode: input.botHoldingMode }),
     ...(input.botHoldingText === undefined ? {} : { botHoldingText: input.botHoldingText?.trim() || null }),
     ...(input.botHoldingNightText === undefined ? {} : { botHoldingNightText: input.botHoldingNightText?.trim() || null }),
+    ...(input.waitingReminderEmail === undefined ? {} : { waitingReminderEmail: input.waitingReminderEmail }),
     // Un campo que no venga se deja como estaba, en vez de borrarlo.
     ...(input.deliveryEstimate === undefined
       ? {}

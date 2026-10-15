@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
@@ -8,9 +9,12 @@ import { Models } from "@/constants";
 import { CONVERSATION_STATUS_LABELS, type ConversationRow } from "@/lib/conversations";
 import { ConversationStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
-import { Bot, Hourglass } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
+import axios from "axios";
+import { Bot, CheckCheck, Hourglass } from "lucide-react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { columns } from "./columns";
 
 interface ConversationClientProps {
@@ -28,6 +32,28 @@ const ConversationClient: React.FC<ConversationClientProps> = ({ data }) => {
   const waiting = data.filter((row) => row.waitingSince).length;
   const rows = useMemo(() => (onlyWaiting ? data.filter((row) => row.waitingSince) : data), [data, onlyWaiting]);
   const toggleWaiting = () => router.replace(onlyWaiting ? pathname : `${pathname}?esperando=1`, { scroll: false });
+  const { toast } = useToast();
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
+  // Para limpiar esperas viejas de una vez: solo las que se ven en el filtro.
+  const markAllAttended = async () => {
+    const ids = data.filter((row) => row.waitingSince).map((row) => row.id);
+    try {
+      setMarkingAll(true);
+      const { data: result } = await axios.post(`/api/${storeId}/conversations/attended`, { ids });
+      setConfirmAll(false);
+      router.refresh();
+      toast({
+        title: result.count === 1 ? "1 conversación atendida" : `${result.count} conversaciones atendidas`,
+        description: "No se le envió nada a ninguna clienta. Si alguna vuelve a escribir, aparece otra vez.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({ title: "No se pudieron marcar como atendidas", description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setMarkingAll(false);
+    }
+  };
   const needsOwner = data.filter(
     (row) => row.status === ConversationStatus.NEEDS_OWNER,
   ).length;
@@ -63,8 +89,24 @@ const ConversationClient: React.FC<ConversationClientProps> = ({ data }) => {
           <Hourglass className="mr-2 h-4 w-4" aria-hidden="true" />
           Esperando a Paula ({waiting})
         </Button>
+        {onlyWaiting && waiting > 0 ? (
+          <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => setConfirmAll(true)}>
+            <CheckCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+            Marcar todas como atendidas ({waiting})
+          </Button>
+        ) : null}
         <span className="text-xs text-muted-foreground">La clienta escribió de último y nadie le responde hace 15 min o más.</span>
       </div>
+      <AlertModal
+        isOpen={confirmAll}
+        onClose={() => setConfirmAll(false)}
+        onConfirm={markAllAttended}
+        loading={markingAll}
+        destructive={false}
+        title={waiting === 1 ? "¿Marcar 1 conversación como atendida?" : `¿Marcar ${waiting} conversaciones como atendidas?`}
+        description="Salen de «Esperando a Paula» y no se le envía nada a ninguna clienta. Si alguna vuelve a escribir, aparece otra vez."
+        confirmLabel="Sí, marcar como atendidas"
+      />
       <Separator />
       <DataTable
         tableKey={Models.Conversations}

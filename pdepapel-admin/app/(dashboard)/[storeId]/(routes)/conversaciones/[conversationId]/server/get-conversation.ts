@@ -1,6 +1,8 @@
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import { CART_PRODUCT_SELECT, priceCartProducts } from "@/lib/whatsapp/cart-orders";
+import { isWaitingOnPaula } from "@/lib/whatsapp/waiting";
+import { loadWait } from "@/lib/whatsapp/waiting-list";
 import {
   parseCartMetadata,
   parseOrderRequestMetadata,
@@ -38,6 +40,7 @@ export async function getConversation(
       lastInboundAt: true,
       lastOutboundAt: true,
       lastOwnerAt: true,
+      waitAttendedAt: true,
       orderId: true,
       createdAt: true,
       messages: {
@@ -98,9 +101,11 @@ export async function getConversation(
         })
       : null;
 
+  const { wait } = await loadWait(conversation.id, conversation.waitAttendedAt);
   const { messages, ...fields } = conversation;
   return {
     ...fields,
+    waitingSince: isWaitingOnPaula(wait, new Date()) ? wait!.since : null,
     ignored: Boolean(ignorado),
     skippedCount: ignorado?.skippedCount ?? 0,
     messages: messages.map(({ metadata, ...message }, index) => ({

@@ -16,6 +16,7 @@ import {
 import { ConversationStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { BellOff, BotOff, Hourglass, ShoppingBag } from "lucide-react";
+import { MarkAttendedButton } from "@/components/conversations/mark-attended-button";
 import { CellAction } from "./cell-action";
 
 export type ConversationColumn = ConversationRow;
@@ -44,10 +45,13 @@ export const columns: ColumnDef<ConversationColumn>[] = [
         </span>
         {/* En la primera columna para que se vea en el teléfono sin desplazar. */}
         {row.original.waitingSince ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
-            <Hourglass className="h-3 w-3 shrink-0" aria-hidden="true" />
-            {formatWaitingFor(row.original.waitingSince)}
-          </span>
+          <>
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
+              <Hourglass className="h-3 w-3 shrink-0" aria-hidden="true" />
+              {formatWaitingFor(row.original.waitingSince)}
+            </span>
+            <MarkAttendedButton conversationId={row.original.id} compact className="h-11 px-3 text-xs sm:h-7 sm:min-h-7 sm:px-2" />
+          </>
         ) : null}
         {/* Discreto pero visible: sin esto una conversación ignorada parece
             una que simplemente dejó de escribir. */}

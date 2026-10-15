@@ -321,6 +321,10 @@ export interface ConversationDetail {
   ignored: boolean;
   /** Eventos dejados pasar desde que se ignoró. */
   skippedCount: number;
+  /** Desde cuándo espera a Paula (15 min o más sin respuesta), o `null`. */
+  waitingSince: Date | null;
+  /** Última vez que Paula la marcó como atendida sin escribirle. */
+  waitAttendedAt: Date | null;
 }
 
 /** Texto corto para la lista: el cuerpo, o el tipo de adjunto entre paréntesis. */

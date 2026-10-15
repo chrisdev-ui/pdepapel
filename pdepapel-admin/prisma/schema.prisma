@@ -1666,6 +1666,8 @@ model StoreSettings {
   /// Textos del mensaje de espera, de día y de noche (00:00–06:59). Los escribe Paula; vacíos, no sale nada.
   botHoldingText            String?          @db.Text
   botHoldingNightText       String?          @db.Text
+  /// Correo «clientas esperando» (lib/whatsapp/waiting-reminder.ts). Apagado por defecto: Paula no lo quiso (2026-10-15).
+  waitingReminderEmail      Boolean          @default(false)
 
   /// Visto bueno de Paula a los textos con los que el bot contesta los datos
   /// del negocio. `botFactsVersion` guarda la versión aprobada: si se edita
@@ -2887,6 +2889,9 @@ model Conversation {
   botLeaseUntil    DateTime?           @db.DateTime(3)
   /// Por qué quedó en NEEDS_OWNER: "owner_window" si fue solo por la pausa de 24 h de Paula (vence con ella); null si el bot se la pasó.
   needsOwnerReason String?             @db.VarChar(16)
+  /// «Marcar como atendido»: lo que la clienta escribió hasta aquí ya no cuenta como espera. Quién (Clerk) y cuándo.
+  waitAttendedAt   DateTime?
+  waitAttendedBy   String?             @db.VarChar(64)
   orderId          String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
