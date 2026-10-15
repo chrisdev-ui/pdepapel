@@ -258,6 +258,7 @@ export function ReserveSheet(props: ReserveSheetProps) {
                         min={1}
                         max={available && available > 0 ? available : undefined}
                         ariaLabel={`Cantidad de ${line.product.name}`}
+                        className="w-36 shrink-0"
                       />
                     </div>
                   </li>

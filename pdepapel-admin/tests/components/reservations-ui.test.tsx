@@ -120,6 +120,16 @@ describe("Hoja «Reservar»", () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
+  it("en el teléfono es una hoja de abajo a todo el ancho; en tableta y computador, centrada y más angosta", () => {
+    render(<ReserveSheet open onOpenChange={() => undefined} defaultDays={3} product={{ id: "p-1", name: "Sobre de manila", stock: 5, reservedUnits: 0 }} customerName="Laura" />);
+    const sheet = screen.getByRole("dialog", { name: "Reservar" });
+    // Sin prefijo (teléfono): ancho completo y sin tope; el tope solo desde md.
+    expect(sheet.className).toMatch(/(^|\s)w-full(\s|$)/);
+    expect(sheet.className).toMatch(/(^|\s)max-w-none(\s|$)/);
+    expect(sheet.className).toMatch(/md:max-w-2xl/);
+    expect(sheet.className).toMatch(/max-h-\[94dvh\]/);
+  });
+
   it("sin unidades disponibles no deja reservar", () => {
     render(<ReserveSheet open onOpenChange={() => undefined} defaultDays={3} product={{ id: "p-1", name: "Sobre de manila", stock: 2, reservedUnits: 2 }} customerName="Laura" />);
     expect(screen.getByTestId("reserve-available")).toHaveTextContent(/^No hay unidades disponibles para reservar · stock 2 · 2 reservados$/);
@@ -256,8 +266,26 @@ describe("Pantalla Reservas", () => {
     ]);
     const card = screen.getByTestId("reservation-card");
     expect(within(card).getByText("2 productos · 3 unidades")).toBeInTheDocument();
-    expect(within(card).getByText("2 × Sobre de manila, 1 × Libreta")).toBeInTheDocument();
+    expect(within(card).getByTestId("reservation-lines")).toHaveTextContent("2 × Sobre de manila1 × Libreta");
     expect(within(card).queryByRole("link", { name: /Sobre de manila/ })).toBeNull();
+  });
+
+  it("con muchos productos muestra los 3 primeros y «y N más», sin alto fijo; la grilla no estira las tarjetas", () => {
+    const many = ["Libreta", "Lapicero", "Washi", "Sobre", "Sticker"].map((name, index) => ({
+      id: `i-${index}`,
+      productId: `p-${index}`,
+      quantity: 1,
+      unbackedAt: null,
+      product: { ...PRODUCT, id: `p-${index}`, name },
+    }));
+    screenWith([hold({ productId: null, quantity: null, product: null, items: many }), hold({ id: "r-2" })]);
+    const grid = screen.getByTestId("reservation-grid");
+    // items-start: una tarjeta corta no se estira hasta la más alta de su fila (el hueco bajo los botones).
+    expect(grid.className).toContain("items-start");
+    const [card] = screen.getAllByTestId("reservation-card");
+    const lines = within(card).getByTestId("reservation-lines");
+    expect(within(lines).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["1 × Libreta", "1 × Lapicero", "1 × Washi", "y 2 más"]);
+    expect(card.className).not.toMatch(/\bh-(full|\d)/);
   });
 
   it("cada tarjeta dice qué, para quién y cuándo vence, con WhatsApp", () => {

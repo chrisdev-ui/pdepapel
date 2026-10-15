@@ -46,9 +46,13 @@ function summary(hold: ReservationView) {
     image: first?.product.images[0]?.url ?? null,
     productId: lines.length === 1 ? first.productId : null,
     title: lines.length === 1 ? `${first.quantity} × ${first.product.name}` : `${lines.length} productos · ${units} ${units === 1 ? "unidad" : "unidades"}`,
-    names: lines.length > 1 ? lines.map((line) => `${line.quantity} × ${line.product.name}`).join(", ") : null,
+    // Varias líneas: las primeras y «y N más», sin alto fijo.
+    lines: lines.length > 1 ? lines.slice(0, VISIBLE_LINES).map((line) => `${line.quantity} × ${line.product.name}`) : [],
+    more: Math.max(0, lines.length - VISIBLE_LINES),
   };
 }
+
+const VISIBLE_LINES = 3;
 
 type Filter = "activas" | "convertidas" | "sin-respaldo" | "vencidas" | "cerradas";
 
@@ -214,7 +218,7 @@ export function ReservationsClient({
           {filter === "activas" ? "No hay reservas activas." : "No hay reservas aquí."}
         </div>
       ) : (
-        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ul className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2" data-testid="reservation-grid">
           {items.map((hold) => {
             const busy = busyIds.has(hold.id);
             const holding = hold.status === "ACTIVE" || hold.status === "CONVERTED";
@@ -229,7 +233,16 @@ export function ReservationsClient({
                     <Link href={`/${storeId}/reservas/${hold.id}`} className="break-words text-sm font-semibold leading-tight hover:underline" data-testid="reservation-open">
                       {shown.title}
                     </Link>
-                    {shown.names && <p className="break-words text-xs text-muted-foreground">{shown.names}</p>}
+                    {shown.lines.length > 0 && (
+                      <ul className="text-xs text-muted-foreground" data-testid="reservation-lines">
+                        {shown.lines.map((line) => (
+                          <li key={line} className="break-words">
+                            {line}
+                          </li>
+                        ))}
+                        {shown.more > 0 && <li>y {shown.more} más</li>}
+                      </ul>
+                    )}
                     <p className="text-sm">
                       {hold.customerName}
                       {hold.customerPhone ? (

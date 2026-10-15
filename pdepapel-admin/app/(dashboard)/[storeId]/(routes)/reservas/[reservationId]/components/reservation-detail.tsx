@@ -147,7 +147,7 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
   const chip = STATUS_CHIP[reservation.status];
 
   return (
-    <div className="flex flex-col gap-5 pb-28 md:pb-6">
+    <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
         <Link href={`/${storeId}/reservas`} className="inline-flex min-h-11 w-fit items-center gap-1 text-sm text-primary hover:underline">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -167,6 +167,22 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
           </div>
         </div>
       </div>
+
+      {holding && (
+        // En el flujo de la página, no fija abajo: en el teléfono la barra del panel la taparía.
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end" data-testid="reservation-actions">
+          <Button type="button" variant="outline" className="min-h-11" disabled={busy !== null} onClick={() => setReleasing(true)}>
+            <Undo2 className="mr-2 h-4 w-4" aria-hidden="true" />
+            Liberar
+          </Button>
+          {active && (
+            <Button type="button" className="min-h-11" disabled={busy !== null} onClick={() => setConverting(true)}>
+              <Receipt className="mr-2 h-4 w-4" aria-hidden="true" />
+              Convertir en pedido
+            </Button>
+          )}
+        </div>
+      )}
 
       {reservation.status === "CONVERTED" && reservation.order && (
         <div className="rounded-lg border border-tint-lavender bg-tint-lavender/40 p-3 text-sm" data-testid="converted-note">
@@ -211,13 +227,14 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
                       </div>
                     </div>
                     {active && item.id !== "header" && (
-                      <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2">
                         <StockQuantityInput
                           value={draft}
                           onChange={(value) => setQuantities((current) => ({ ...current, [item.id]: Math.max(1, value) }))}
                           min={1}
                           max={item.quantity + available}
                           ariaLabel={`Cantidad de ${item.product.name}`}
+                          className="w-36 shrink-0"
                         />
                         {changed && (
                           <Button type="button" className="min-h-11" disabled={busy !== null} onClick={() => saveQuantity(item)}>
@@ -326,21 +343,6 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
           )}
         </div>
       </div>
-
-      {holding && (
-        <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t bg-background/95 p-3 backdrop-blur md:static md:z-auto md:justify-end md:border-0 md:bg-transparent md:p-0">
-          <Button type="button" variant="outline" className="min-h-11 flex-1 md:flex-none" disabled={busy !== null} onClick={() => setReleasing(true)}>
-            <Undo2 className="mr-2 h-4 w-4" aria-hidden="true" />
-            Liberar
-          </Button>
-          {active && (
-            <Button type="button" className="min-h-11 flex-1 md:flex-none" disabled={busy !== null} onClick={() => setConverting(true)}>
-              <Receipt className="mr-2 h-4 w-4" aria-hidden="true" />
-              Convertir en pedido
-            </Button>
-          )}
-        </div>
-      )}
 
       <ReserveSheet
         open={adding}

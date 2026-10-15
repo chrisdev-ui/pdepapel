@@ -297,12 +297,15 @@ export function ConversationThread({
   storeId,
   reservationDefaultDays = 3,
   productStock = NO_STOCK,
+  reservedForCustomer = NO_RESERVED,
 }: {
   conversation: ConversationDetail;
   storeId: string;
   reservationDefaultDays?: number;
   /** Stock y reservados de los productos pedidos, para la línea de la hoja «Reservar». */
   productStock?: Record<string, { stock: number; reservedUnits: number }>;
+  /** Lo que esta clienta ya tiene reservado de lo pedido, según la base (sobrevive a recargar). */
+  reservedForCustomer?: Record<string, number>;
 }) {
   const [reserveItems, setReserveItems] = useState<{ productId: string; name: string; quantity: number; unitPrice?: number }[] | null>(null);
   const [stockNow, setStockNow] = useState(productStock);
@@ -567,7 +570,7 @@ export function ConversationThread({
           ) : (
             <ul className="space-y-4">
               {conversation.messages.map((message) => (
-                <MessageBubble key={message.id} message={message} storeId={storeId} onDismissOrder={dismissOrder} onReserveItem={setReserveItems} reservedItems={reservedHere} busy={loading} />
+                <MessageBubble key={message.id} message={message} storeId={storeId} onDismissOrder={dismissOrder} onReserveItem={setReserveItems} reservedItems={{ ...reservedHere, ...reservedForCustomer }} busy={loading} />
               ))}
             </ul>
           )}
