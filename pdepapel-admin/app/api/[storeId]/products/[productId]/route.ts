@@ -371,7 +371,11 @@ export async function PATCH(
       // Un apartado de kit guarda las piezas de la receta con la que se hizo:
       // cambiarla dejaría el contador de las piezas descuadrado al liberarlo.
       const holds = await prismadb.stockReservation.count({
-        where: { productId: params.productId, storeId: params.storeId, status: { in: HOLDING_RESERVATION_STATUSES } },
+        where: {
+          storeId: params.storeId,
+          status: { in: HOLDING_RESERVATION_STATUSES },
+          OR: [{ productId: params.productId }, { items: { some: { productId: params.productId } } }],
+        },
       });
       if (holds > 0) {
         const current = await prismadb.productKit.findMany({ where: { kitId: params.productId }, select: { componentId: true, quantity: true } });

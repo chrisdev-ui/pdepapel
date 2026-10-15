@@ -114,6 +114,8 @@ describe("Hoja «Reservar»", () => {
   });
 });
 
+const PRODUCT = { id: "p-1", name: "Sobre de manila", sku: "SOB", isKit: false, stock: 5, reservedUnits: 2, images: [] };
+
 const hold = (overrides: Partial<ReservationView> = {}): ReservationView => ({
   id: "r-1",
   productId: "p-1",
@@ -127,7 +129,8 @@ const hold = (overrides: Partial<ReservationView> = {}): ReservationView => ({
   unbackedAt: null,
   createdAt: new Date().toISOString(),
   closedAt: null,
-  product: { id: "p-1", name: "Sobre de manila", sku: "SOB", isKit: false, stock: 5, reservedUnits: 2, images: [] },
+  product: PRODUCT,
+  items: [],
   order: null,
   ...overrides,
 });
@@ -136,6 +139,25 @@ const screenWith = (reservations: ReservationView[]) =>
   render(<ReservationsClient storeId="store-1" filter="activas" reservations={reservations} defaultDays={3} counts={{ activas: reservations.length, convertidas: 0, sinRespaldo: 0 }} />);
 
 describe("Pantalla Reservas", () => {
+  it("una reserva con varios productos dice cuántos y cuáles, sin enlace a uno solo", () => {
+    const notebook = { ...PRODUCT, id: "p-2", name: "Libreta" };
+    screenWith([
+      hold({
+        productId: null,
+        quantity: null,
+        product: null,
+        items: [
+          { id: "i-1", productId: "p-1", quantity: 2, unbackedAt: null, product: PRODUCT },
+          { id: "i-2", productId: "p-2", quantity: 1, unbackedAt: null, product: notebook },
+        ],
+      }),
+    ]);
+    const card = screen.getByTestId("reservation-card");
+    expect(within(card).getByText("2 productos · 3 unidades")).toBeInTheDocument();
+    expect(within(card).getByText("2 × Sobre de manila, 1 × Libreta")).toBeInTheDocument();
+    expect(within(card).queryByRole("link", { name: /Sobre de manila/ })).toBeNull();
+  });
+
   it("cada tarjeta dice qué, para quién y cuándo vence, con WhatsApp", () => {
     screenWith([hold()]);
     const card = screen.getByTestId("reservation-card");
@@ -265,7 +287,7 @@ describe("Pantalla Reservas · al instante", () => {
 
   it("una reserva creada desde la hoja aparece en la lista sin esperar la recarga", async () => {
     const later = new Date(Date.now() + 5 * 86_400_000).toISOString();
-    mocks.post.mockResolvedValue({ data: { reservation: hold({ id: "r-new", productId: "p-9", customerName: "Sofía", quantity: 1, expiresAt: later, product: { ...hold().product, id: "p-9", name: "Washi tape" } }) } });
+    mocks.post.mockResolvedValue({ data: { reservation: hold({ id: "r-new", productId: "p-9", customerName: "Sofía", quantity: 1, expiresAt: later, product: { ...PRODUCT, id: "p-9", name: "Washi tape" } }) } });
     screenWith([hold()]);
     fireEvent.click(screen.getByRole("button", { name: /Reservar/ }));
     const sheet = await screen.findByRole("dialog", { name: "Reservar" });

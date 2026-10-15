@@ -6,7 +6,7 @@ vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } } }));
 vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: vi.fn() }));
 
 import { expiryLabel, reservableLine, reservedSuffix } from "@/lib/reservation-labels";
-import { renderDigest } from "@/lib/stock-reservations-job";
+import { describeLines, renderDigest } from "@/lib/stock-reservations-job";
 
 describe("etiquetas de reservas", () => {
   it("el sufijo de reservados solo aparece cuando hay", () => {
@@ -48,5 +48,18 @@ describe("resumen diario", () => {
     expect(text).toContain("Convertidos en pedido y sin pagar (1):\n• Sobre × 1 — Laura (pedido ORD-1)");
     expect(text).not.toContain("Sin respaldo");
     expect(text).toContain("en Reservas");
+  });
+
+  it("«Vencen mañana» va después de «Vencen hoy» y una reserva con varios productos los nombra todos", () => {
+    const multi = { quantity: null, product: null, customerName: "Sofía", expiresAt: new Date(), order: null, items: [{ quantity: 2, product: { name: "Libreta" } }, { quantity: 1, product: { name: "Washi tape" } }] };
+    const text = renderDigest({ expiringToday: [row("Agenda")], expiringTomorrow: [multi], expired: [], convertedUnpaid: [], unbacked: [] })!;
+    expect(text.indexOf("Vencen hoy")).toBeLessThan(text.indexOf("Vencen mañana"));
+    expect(text).toContain("• Libreta × 2, Washi tape × 1 — Sofía");
+    expect(renderDigest({ expiringToday: [], expiringTomorrow: [multi], expired: [], convertedUnpaid: [], unbacked: [] })).toContain("Vencen mañana (1)");
+  });
+
+  it("una reserva anterior a los ítems se describe por su encabezado", () => {
+    expect(describeLines({ quantity: 3, product: { name: "Agenda" }, items: [] })).toBe("Agenda × 3");
+    expect(describeLines({ quantity: null, product: null, items: [] })).toBe("");
   });
 });

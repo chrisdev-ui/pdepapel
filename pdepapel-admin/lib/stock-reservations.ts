@@ -1,4 +1,4 @@
-import { OrderSource, OrderStatus, OrderType, PaymentMethod, Prisma, StockReservationStatus } from "@prisma/client";
+import { OrderSource, OrderStatus, OrderType, PaymentMethod, Prisma, PrismaClient, StockReservationStatus } from "@prisma/client";
 
 import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { calculateOrderTotals } from "@/lib/order-totals";
@@ -7,19 +7,38 @@ import prismadb from "@/lib/prismadb";
 import { priceLines } from "@/lib/product-pricing";
 import {
   HOLDING_RESERVATION_STATUSES,
+  RESERVATION_LINES_SELECT,
   adjustReservedUnits,
-  headerLine,
   claimReservation,
-  reservationPieces,
+  lockReservation,
+  piecesForLines,
+  reservationLines,
+  syncReservationHeader,
   withDeadlockRetry,
+  type ReservationLine,
 } from "@/lib/reservation-counters";
+import { recordReservationEvents, type ReservationEventInput } from "@/lib/reservation-events";
+import { headerMirror } from "@/lib/reservation-header";
 import { generateOrderNumber } from "@/lib/utils";
+
+type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MAX_RESERVATION_DAYS = 60;
 export const MAX_RESERVATION_QUANTITY = 999;
+export const MAX_RESERVATION_ITEMS = 50;
 
 export type ReservationListFilter = "activas" | "vencidas" | "convertidas" | "sin-respaldo" | "cerradas";
+
+const PRODUCT_CARD_SELECT = {
+  id: true,
+  name: true,
+  sku: true,
+  isKit: true,
+  stock: true,
+  reservedUnits: true,
+  images: { where: { isMain: true }, take: 1, select: { url: true } },
+} satisfies Prisma.ProductSelect;
 
 export const RESERVATION_SELECT = {
   id: true,
@@ -34,26 +53,22 @@ export const RESERVATION_SELECT = {
   unbackedAt: true,
   createdAt: true,
   closedAt: true,
-  product: {
-    select: {
-      id: true,
-      name: true,
-      sku: true,
-      isKit: true,
-      stock: true,
-      reservedUnits: true,
-      images: { where: { isMain: true }, take: 1, select: { url: true } },
-    },
+  product: { select: PRODUCT_CARD_SELECT },
+  // Los ítems creados juntos comparten la hora: el nombre deja el orden estable.
+  items: {
+    orderBy: [{ createdAt: "asc" }, { product: { name: "asc" } }],
+    select: { id: true, productId: true, quantity: true, unbackedAt: true, createdAt: true, product: { select: PRODUCT_CARD_SELECT } },
   },
   order: { select: { id: true, orderNumber: true, status: true } },
 } satisfies Prisma.StockReservationSelect;
 
 export type ReservationRow = Prisma.StockReservationGetPayload<{ select: typeof RESERVATION_SELECT }>;
 
-function parseQuantity(value: unknown): number {
+function parseQuantity(value: unknown, { allowZero = false } = {}): number {
   const quantity = Number(value);
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_RESERVATION_QUANTITY) {
-    throw ErrorFactory.InvalidRequest("La cantidad debe ser un número entero entre 1 y 999");
+  const min = allowZero ? 0 : 1;
+  if (!Number.isInteger(quantity) || quantity < min || quantity > MAX_RESERVATION_QUANTITY) {
+    throw ErrorFactory.InvalidRequest(`La cantidad debe ser un número entero entre ${min} y ${MAX_RESERVATION_QUANTITY}`);
   }
   return quantity;
 }
@@ -80,10 +95,61 @@ function parseNote(value: unknown): string | null {
   return note || null;
 }
 
+/**
+ * Los productos de una reserva nueva: `items[]` o, como antes, un solo
+ * `productId` con su `quantity`. El mismo producto dos veces se suma.
+ */
+export function parseReservationItems(input: { items?: unknown; productId?: unknown; quantity?: unknown }): ReservationLine[] {
+  const raw = Array.isArray(input.items) ? input.items : input.productId !== undefined ? [{ productId: input.productId, quantity: input.quantity }] : [];
+  if (raw.length === 0) throw ErrorFactory.InvalidRequest("Elige al menos un producto");
+  const merged = new Map<string, number>();
+  for (const entry of raw) {
+    const productId = entry && typeof entry === "object" ? (entry as { productId?: unknown }).productId : undefined;
+    if (typeof productId !== "string" || !productId) throw ErrorFactory.InvalidRequest("Elige el producto");
+    merged.set(productId, (merged.get(productId) ?? 0) + parseQuantity((entry as { quantity?: unknown }).quantity));
+  }
+  if (merged.size > MAX_RESERVATION_ITEMS) throw ErrorFactory.InvalidRequest(`Una reserva puede tener hasta ${MAX_RESERVATION_ITEMS} productos`);
+  return Array.from(merged, ([productId, quantity]) => ({ productId, quantity: parseQuantity(quantity) }));
+}
+
+async function assertReservable(tx: PrismaTx, storeId: string, productIds: string[]) {
+  const products = await tx.product.findMany({
+    where: { id: { in: productIds }, storeId },
+    select: { id: true, name: true, isArchived: true, isKit: true, kitComponents: { select: { componentId: true } } },
+  });
+  const byId = new Map(products.map((product) => [product.id, product]));
+  for (const id of productIds) {
+    const product = byId.get(id);
+    if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
+    if (product.isArchived) throw ErrorFactory.InvalidRequest(`«${product.name}» está archivado y no se puede reservar`);
+    if (product.isKit && product.kitComponents.length === 0) {
+      throw ErrorFactory.InvalidRequest(`El kit «${product.name}» no tiene productos configurados`);
+    }
+  }
+  return byId;
+}
+
+/** Sube el contador de las piezas; si el único producto es un kit, el 409 lo dice. */
+async function holdLines(tx: PrismaTx, storeId: string, lines: ReservationLine[], names: Map<string, { name: string; isKit: boolean }>) {
+  const pieces = await piecesForLines(tx, lines);
+  return adjustReservedUnits(tx, storeId, pieces, "hold").catch((error: unknown) => {
+    const only = lines.length === 1 ? names.get(lines[0].productId) : undefined;
+    if (only?.isKit && error instanceof AppError && error.statusCode === 409) {
+      throw new AppError(`No alcanza para reservar ${lines[0].quantity} × el kit «${only.name}»: ${error.message}`, 409, error.details);
+    }
+    throw error;
+  });
+}
+
+async function freeLines(tx: PrismaTx, storeId: string, lines: ReservationLine[]) {
+  return adjustReservedUnits(tx, storeId, await piecesForLines(tx, lines), "free");
+}
+
 export async function createReservation(input: {
   storeId: string;
-  productId: string;
-  quantity: unknown;
+  items?: unknown;
+  productId?: unknown;
+  quantity?: unknown;
   customerName: unknown;
   customerPhone?: unknown;
   note?: unknown;
@@ -91,7 +157,7 @@ export async function createReservation(input: {
   createdBy: string;
   now?: Date;
 }) {
-  const quantity = parseQuantity(input.quantity);
+  const lines = parseReservationItems(input);
   const customerName = parseName(input.customerName);
   const customerPhone = typeof input.customerPhone === "string" ? normalizePhone(input.customerPhone) : "";
   const note = parseNote(input.note);
@@ -101,40 +167,124 @@ export async function createReservation(input: {
   const now = input.now ?? new Date();
 
   return withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
-    const product = await tx.product.findFirst({
-      where: { id: input.productId, storeId: input.storeId },
-      select: { id: true, name: true, isArchived: true, isKit: true, kitComponents: { select: { componentId: true } } },
-    });
-    if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
-    if (product.isArchived) throw ErrorFactory.InvalidRequest(`«${product.name}» está archivado y no se puede reservar`);
-    if (product.isKit && product.kitComponents.length === 0) {
-      throw ErrorFactory.InvalidRequest(`El kit «${product.name}» no tiene productos configurados`);
-    }
-    const pieces = await reservationPieces(tx, product.id, quantity);
-    const affectedProductIds = await adjustReservedUnits(tx, input.storeId, pieces, "hold").catch((error: unknown) => {
-      if (product.isKit && error instanceof AppError && error.statusCode === 409) {
-        throw new AppError(`No alcanza para reservar ${quantity} × el kit «${product.name}»: ${error.message}`, 409, error.details);
-      }
-      throw error;
-    });
-    const reservation = await tx.stockReservation.create({
+    const products = await assertReservable(tx, input.storeId, lines.map((line) => line.productId));
+    const affectedProductIds = await holdLines(tx, input.storeId, lines, products);
+    const created = await tx.stockReservation.create({
       data: {
         storeId: input.storeId,
-        productId: product.id,
-        quantity,
+        ...headerMirror(lines),
         customerName,
         customerPhone,
         note,
         expiresAt: new Date(now.getTime() + days * DAY_MS),
         createdBy: input.createdBy,
       },
-      select: RESERVATION_SELECT,
+      select: { id: true },
     });
-    await tx.stockReservationItem.create({
-      data: { storeId: input.storeId, reservationId: reservation.id, productId: product.id, quantity, addedBy: input.createdBy },
+    await tx.stockReservationItem.createMany({
+      data: lines.map((line) => ({ storeId: input.storeId, reservationId: created.id, productId: line.productId, quantity: line.quantity, addedBy: input.createdBy })),
     });
-    return { reservation, affectedProductIds: [product.id, ...affectedProductIds] };
+    await recordReservationEvents(tx, [
+      { storeId: input.storeId, reservationId: created.id, kind: "created", actor: input.createdBy, detail: { items: lines.length, days } },
+      ...lines.map((line) => ({ storeId: input.storeId, reservationId: created.id, kind: "item_added" as const, actor: input.createdBy, productId: line.productId, quantity: line.quantity, previousQuantity: 0 })),
+    ]);
+    const reservation = await tx.stockReservation.findUniqueOrThrow({ where: { id: created.id }, select: RESERVATION_SELECT });
+    return { reservation, affectedProductIds: [...lines.map((line) => line.productId), ...affectedProductIds] };
   }));
+}
+
+/** Una reserva que se edita tiene que seguir ACTIVA; la convertida se edita desde su pedido. */
+async function lockActive(tx: PrismaTx, storeId: string, id: string) {
+  const hold = await lockReservation(tx, storeId, id);
+  if (!hold) throw ErrorFactory.NotFound("Reserva no encontrada");
+  if (hold.status === StockReservationStatus.CONVERTED) {
+    const order = hold.orderId ? await tx.order.findUnique({ where: { id: hold.orderId }, select: { orderNumber: true } }) : null;
+    const which = order ? `el pedido ${order.orderNumber}` : "un pedido";
+    throw ErrorFactory.Conflict(`Esta reserva ya es ${which}: sus productos se editan desde el pedido.`);
+  }
+  if (hold.status !== StockReservationStatus.ACTIVE) throw ErrorFactory.Conflict("Esta reserva ya se cerró; no se puede editar");
+  return hold;
+}
+
+/**
+ * «Agregar a la reserva»: otro producto, o más unidades de uno que ya está.
+ * El vencimiento no se mueve; para eso está «Extender».
+ */
+export async function addReservationItem(storeId: string, id: string, input: { productId: unknown; quantity: unknown }, actor: string) {
+  if (typeof input.productId !== "string" || !input.productId) throw ErrorFactory.InvalidRequest("Elige el producto");
+  const productId = input.productId;
+  const quantity = parseQuantity(input.quantity);
+  return withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
+    await lockActive(tx, storeId, id);
+    const products = await assertReservable(tx, storeId, [productId]);
+    const existing = await tx.stockReservationItem.findUnique({ where: { reservationId_productId: { reservationId: id, productId } }, select: { id: true, quantity: true } });
+    if (!existing && (await tx.stockReservationItem.count({ where: { reservationId: id } })) >= MAX_RESERVATION_ITEMS) {
+      throw ErrorFactory.InvalidRequest(`Una reserva puede tener hasta ${MAX_RESERVATION_ITEMS} productos`);
+    }
+    const total = (existing?.quantity ?? 0) + quantity;
+    if (total > MAX_RESERVATION_QUANTITY) throw ErrorFactory.InvalidRequest(`Un producto puede tener hasta ${MAX_RESERVATION_QUANTITY} unidades en la reserva`);
+    const affected = await holdLines(tx, storeId, [{ productId, quantity }], products);
+    if (existing) await tx.stockReservationItem.update({ where: { id: existing.id }, data: { quantity: total } });
+    else await tx.stockReservationItem.create({ data: { storeId, reservationId: id, productId, quantity, addedBy: actor } });
+    await syncReservationHeader(tx, id);
+    await recordReservationEvents(tx, [{ storeId, reservationId: id, kind: "item_added", actor, productId, quantity: total, previousQuantity: existing?.quantity ?? 0 }]);
+    const reservation = await tx.stockReservation.findUniqueOrThrow({ where: { id }, select: RESERVATION_SELECT });
+    return { reservation, released: false, affectedProductIds: [productId, ...affected] };
+  }));
+}
+
+/** Cambia la cantidad de un ítem; 0 lo quita. Quitar el último libera la reserva. */
+export async function setReservationItemQuantity(storeId: string, id: string, input: { itemId: unknown; quantity: unknown }, actor: string) {
+  if (typeof input.itemId !== "string" || !input.itemId) throw ErrorFactory.InvalidRequest("Elige el producto de la reserva");
+  const itemId = input.itemId;
+  const quantity = parseQuantity(input.quantity, { allowZero: true });
+  return withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
+    await lockActive(tx, storeId, id);
+    const item = await tx.stockReservationItem.findFirst({
+      where: { id: itemId, reservationId: id, storeId },
+      select: { id: true, productId: true, quantity: true, product: { select: { name: true, isKit: true } } },
+    });
+    if (!item) throw ErrorFactory.NotFound("Ese producto ya no está en la reserva");
+    const diff = quantity - item.quantity;
+    let affected: string[] = [];
+    if (diff > 0) {
+      affected = await holdLines(tx, storeId, [{ productId: item.productId, quantity: diff }], new Map([[item.productId, item.product]]));
+    } else if (diff < 0) {
+      affected = await freeLines(tx, storeId, [{ productId: item.productId, quantity: -diff }]);
+    }
+    if (quantity === 0) await tx.stockReservationItem.delete({ where: { id: item.id } });
+    else if (diff !== 0) await tx.stockReservationItem.update({ where: { id: item.id }, data: { quantity } });
+
+    const events: ReservationEventInput[] = [];
+    if (diff !== 0) {
+      events.push({ storeId, reservationId: id, kind: quantity === 0 ? "item_removed" : "item_quantity", actor, productId: item.productId, quantity, previousQuantity: item.quantity });
+    }
+    const remaining = await syncReservationHeader(tx, id);
+    let released = false;
+    if (remaining.length === 0) {
+      released = await claimReservation(tx, { id, storeId, from: [StockReservationStatus.ACTIVE], to: StockReservationStatus.RELEASED, closedBy: actor });
+      if (released) events.push({ storeId, reservationId: id, kind: "released", actor, detail: { reason: "sin_productos" } });
+    }
+    await recordReservationEvents(tx, events);
+    const reservation = await tx.stockReservation.findUniqueOrThrow({ where: { id }, select: RESERVATION_SELECT });
+    return { reservation, released, affectedProductIds: [item.productId, ...affected] };
+  }));
+}
+
+/** Nombre, celular o nota de la clienta. El historial anota qué cambió, nunca los datos. */
+export async function editReservationCustomer(storeId: string, id: string, input: { customerName?: unknown; customerPhone?: unknown; note?: unknown }, actor: string) {
+  const data: Prisma.StockReservationUpdateInput = {};
+  if (input.customerName !== undefined) data.customerName = parseName(input.customerName);
+  if (input.customerPhone !== undefined) data.customerPhone = typeof input.customerPhone === "string" ? normalizePhone(input.customerPhone) : "";
+  if (input.note !== undefined) data.note = parseNote(input.note);
+  const fields = Object.keys(data);
+  if (fields.length === 0) throw ErrorFactory.InvalidRequest("No hay nada que cambiar");
+  return prismadb.$transaction(async (tx) => {
+    await lockActive(tx, storeId, id);
+    await tx.stockReservation.update({ where: { id }, data });
+    await recordReservationEvents(tx, [{ storeId, reservationId: id, kind: "customer_edited", actor, detail: { fields } }]);
+    return tx.stockReservation.findUniqueOrThrow({ where: { id }, select: RESERVATION_SELECT });
+  });
 }
 
 async function closeOne(
@@ -145,14 +295,16 @@ async function closeOne(
   closedBy: string,
 ) {
   return withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
-    const found = await tx.stockReservation.findFirst({ where: { id, storeId }, select: { id: true, productId: true, quantity: true, status: true } });
+    const found = await tx.stockReservation.findFirst({ where: { id, storeId }, select: { id: true, status: true, ...RESERVATION_LINES_SELECT } });
     if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
     const claimed = await claimReservation(tx, { id, storeId, from, to, closedBy });
     if (!claimed) return { changed: false as const, affectedProductIds: [] as string[] };
-    const hold = headerLine(found);
-    const pieces = await reservationPieces(tx, hold.productId, hold.quantity);
-    const affected = await adjustReservedUnits(tx, storeId, pieces, "free");
-    return { changed: true as const, affectedProductIds: [hold.productId, ...affected] };
+    const lines = reservationLines(found);
+    const affected = await freeLines(tx, storeId, lines);
+    await recordReservationEvents(tx, [
+      { storeId, reservationId: id, kind: to === StockReservationStatus.EXPIRED ? "expired" : "released", actor: closedBy },
+    ]);
+    return { changed: true as const, affectedProductIds: [...lines.map((line) => line.productId), ...affected] };
   }));
 }
 
@@ -167,43 +319,55 @@ export function expireReservation(storeId: string, id: string) {
 }
 
 /** «+ días»: corre el vencimiento desde hoy o desde la fecha que ya tenía, la que sea más tarde. */
-export async function extendReservation(storeId: string, id: string, daysInput: unknown, now = new Date()) {
+export async function extendReservation(storeId: string, id: string, daysInput: unknown, actor: string | null = null, now = new Date()) {
   const days = parseDays(daysInput, 1);
-  const hold = await prismadb.stockReservation.findFirst({ where: { id, storeId }, select: { expiresAt: true } });
-  if (!hold) throw ErrorFactory.NotFound("Reserva no encontrada");
-  const base = Math.max(hold.expiresAt.getTime(), now.getTime());
-  const affected = await prismadb.$executeRaw`
-    UPDATE \`StockReservation\`
-       SET \`expiresAt\` = ${new Date(base + days * DAY_MS)}, \`updatedAt\` = NOW(3)
-     WHERE \`id\` = ${id} AND \`storeId\` = ${storeId}
-       AND \`status\` IN (${Prisma.join(HOLDING_RESERVATION_STATUSES)})`;
-  if (affected !== 1) throw ErrorFactory.Conflict("Esta reserva ya se cerró; no se puede extender");
-  return prismadb.stockReservation.findFirstOrThrow({ where: { id, storeId }, select: RESERVATION_SELECT });
+  return prismadb.$transaction(async (tx) => {
+    const hold = await tx.stockReservation.findFirst({ where: { id, storeId }, select: { expiresAt: true } });
+    if (!hold) throw ErrorFactory.NotFound("Reserva no encontrada");
+    const base = Math.max(hold.expiresAt.getTime(), now.getTime());
+    const expiresAt = new Date(base + days * DAY_MS);
+    const affected = await tx.$executeRaw`
+      UPDATE \`StockReservation\`
+         SET \`expiresAt\` = ${expiresAt}, \`updatedAt\` = NOW(3)
+       WHERE \`id\` = ${id} AND \`storeId\` = ${storeId}
+         AND \`status\` IN (${Prisma.join(HOLDING_RESERVATION_STATUSES)})`;
+    if (affected !== 1) throw ErrorFactory.Conflict("Esta reserva ya se cerró; no se puede extender");
+    await recordReservationEvents(tx, [
+      { storeId, reservationId: id, kind: "extended", actor, detail: { days, from: hold.expiresAt.toISOString(), to: expiresAt.toISOString() } },
+    ]);
+    return tx.stockReservation.findFirstOrThrow({ where: { id, storeId }, select: RESERVATION_SELECT });
+  });
 }
 
 /**
- * «Convertir en pedido»: pedido PENDIENTE del panel con la clienta y el
- * producto al precio de hoy. La reserva sigue guardando las unidades hasta
- * que el pedido se pague (la venta las consume) o se cancele (se liberan).
- * El pago queda como transferencia por defecto; Paula lo cambia en el pedido.
+ * «Convertir en pedido»: UN pedido PENDIENTE del panel con la clienta y una
+ * línea por producto al precio de hoy. La reserva sigue guardando las
+ * unidades hasta que el pedido se pague (la venta las consume) o se cancele
+ * (se liberan). El pago queda como transferencia por defecto.
  */
 export async function convertReservation(storeId: string, id: string, createdBy: string) {
   const found = await prismadb.stockReservation.findFirst({
     where: { id, storeId },
-    select: { id: true, status: true, orderId: true, productId: true, quantity: true, customerName: true, customerPhone: true, note: true },
+    select: { id: true, status: true, orderId: true, customerName: true, customerPhone: true, note: true, ...RESERVATION_LINES_SELECT },
   });
   if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
   if (found.status === StockReservationStatus.CONVERTED && found.orderId) return { orderId: found.orderId, existing: true };
   if (found.status !== StockReservationStatus.ACTIVE) throw ErrorFactory.Conflict("Solo una reserva activa se puede convertir en pedido");
-  const hold = headerLine(found);
+  const lines = reservationLines(found);
 
-  const product = await prismadb.product.findFirstOrThrow({
-    where: { id: hold.productId, storeId },
+  const products = await prismadb.product.findMany({
+    where: { id: { in: lines.map((line) => line.productId) }, storeId },
     select: { id: true, name: true, sku: true, price: true, categoryId: true, productGroupId: true, images: { orderBy: [{ isMain: "desc" }, { createdAt: "asc" }], take: 1, select: { url: true } } },
   });
-  const priced = await priceLines(storeId, [{ productId: product.id, quantity: hold.quantity }], [product]);
-  const unitPrice = Math.round(priced.get(product.id)?.unitPrice ?? product.price);
-  const totals = calculateOrderTotals([{ product: { price: unitPrice }, quantity: hold.quantity }]);
+  const byId = new Map(products.map((product) => [product.id, product]));
+  if (lines.some((line) => !byId.has(line.productId))) throw ErrorFactory.Conflict("Un producto de la reserva ya no existe; quítalo antes de convertir");
+  const priced = await priceLines(storeId, lines, products);
+  const orderLines = lines.map((line) => {
+    const product = byId.get(line.productId)!;
+    const unitPrice = Math.round(priced.get(product.id)?.unitPrice ?? product.price);
+    return { productId: product.id, quantity: line.quantity, name: product.name, sku: product.sku, price: unitPrice, imageUrl: product.images[0]?.url ?? "" };
+  });
+  const totals = calculateOrderTotals(orderLines.map((line) => ({ product: { price: line.price }, quantity: line.quantity })));
 
   return prismadb.$transaction(async (tx) => {
     const order = await tx.order.create({
@@ -214,14 +378,12 @@ export async function convertReservation(storeId: string, id: string, createdBy:
         status: OrderStatus.PENDING,
         source: OrderSource.PANEL,
         createdBy,
-        fullName: hold.customerName,
-        phone: hold.customerPhone,
+        fullName: found.customerName,
+        phone: found.customerPhone,
         subtotal: totals.subtotal,
         total: totals.total,
-        internalNotes: [`Pedido creado desde una reserva de ${hold.customerName}.`, hold.note].filter(Boolean).join(" "),
-        orderItems: {
-          create: [{ productId: product.id, quantity: hold.quantity, name: product.name, sku: product.sku, price: unitPrice, imageUrl: product.images[0]?.url ?? "" }],
-        },
+        internalNotes: [`Pedido creado desde una reserva de ${found.customerName}.`, found.note].filter(Boolean).join(" "),
+        orderItems: { create: orderLines },
         payment: { create: { method: PaymentMethod.BankTransfer, storeId } },
       },
       select: { id: true },
@@ -234,8 +396,75 @@ export async function convertReservation(storeId: string, id: string, createdBy:
       orderId: order.id,
     });
     if (!claimed) throw ErrorFactory.Conflict("La reserva cambió mientras la convertías. Actualiza e intenta de nuevo.");
+    await recordReservationEvents(tx, [{ storeId, reservationId: id, kind: "converted", actor: createdBy, detail: { orderId: order.id, lines: orderLines.length } }]);
     return { orderId: order.id, existing: false };
   });
+}
+
+/**
+ * Un pedido PENDIENTE que salió de una reserva es el único lugar donde se
+ * editan sus productos: al guardarlo, la reserva sigue a sus líneas en la
+ * misma transacción. Lo que sube se aparta con la guarda de siempre (409 si
+ * no alcanza), lo que baja se libera, y un pedido sin productos libera la
+ * reserva. Devuelve los productos afectados para la purga de la tienda.
+ */
+export async function syncConvertedReservation(
+  tx: PrismaTx,
+  input: { storeId: string; orderId: string; lines: { productId: string | null; quantity: number }[]; actor: string | null },
+): Promise<string[]> {
+  const hold = await tx.stockReservation.findFirst({
+    where: { storeId: input.storeId, orderId: input.orderId, status: StockReservationStatus.CONVERTED },
+    select: { id: true },
+  });
+  if (!hold) return [];
+  const locked = await lockReservation(tx, input.storeId, hold.id);
+  if (!locked || locked.status !== StockReservationStatus.CONVERTED) return [];
+
+  const target = new Map<string, number>();
+  for (const line of input.lines) {
+    if (line.productId && line.quantity > 0) target.set(line.productId, (target.get(line.productId) ?? 0) + line.quantity);
+  }
+  const items = await tx.stockReservationItem.findMany({ where: { reservationId: hold.id }, select: { id: true, productId: true, quantity: true } });
+  const current = new Map(items.map((item) => [item.productId, item]));
+
+  const more: ReservationLine[] = [];
+  const less: ReservationLine[] = [];
+  const events: ReservationEventInput[] = [];
+  const productIds = new Set<string>([...Array.from(target.keys()), ...Array.from(current.keys())]);
+  for (const productId of Array.from(productIds)) {
+    const before = current.get(productId)?.quantity ?? 0;
+    const after = target.get(productId) ?? 0;
+    if (after === before) continue;
+    if (after > before) more.push({ productId, quantity: after - before });
+    else less.push({ productId, quantity: before - after });
+    const kind = before === 0 ? "item_added" : after === 0 ? "item_removed" : "item_quantity";
+    events.push({ storeId: input.storeId, reservationId: hold.id, kind, actor: input.actor, productId, quantity: after, previousQuantity: before, detail: { via: "pedido", orderId: input.orderId } });
+  }
+  if (events.length === 0) return [];
+
+  const affected: string[] = [];
+  if (more.length > 0) {
+    const names = new Map((await tx.product.findMany({ where: { id: { in: more.map((line) => line.productId) } }, select: { id: true, name: true, isKit: true } })).map((product) => [product.id, product]));
+    affected.push(...(await holdLines(tx, input.storeId, more, names)));
+  }
+  if (less.length > 0) affected.push(...(await freeLines(tx, input.storeId, less)));
+
+  for (const productId of Array.from(productIds)) {
+    const existing = current.get(productId);
+    const after = target.get(productId) ?? 0;
+    if (existing && after === 0) await tx.stockReservationItem.delete({ where: { id: existing.id } });
+    else if (existing && after !== existing.quantity) await tx.stockReservationItem.update({ where: { id: existing.id }, data: { quantity: after } });
+    else if (!existing && after > 0) {
+      await tx.stockReservationItem.create({ data: { storeId: input.storeId, reservationId: hold.id, productId, quantity: after, addedBy: input.actor } });
+    }
+  }
+  const remaining = await syncReservationHeader(tx, hold.id);
+  if (remaining.length === 0) {
+    const released = await claimReservation(tx, { id: hold.id, storeId: input.storeId, from: [StockReservationStatus.CONVERTED], to: StockReservationStatus.RELEASED, closedBy: input.actor });
+    if (released) events.push({ storeId: input.storeId, reservationId: hold.id, kind: "released", actor: input.actor, detail: { reason: "pedido_sin_productos", orderId: input.orderId } });
+  }
+  await recordReservationEvents(tx, events);
+  return Array.from(new Set([...Array.from(productIds), ...affected]));
 }
 
 export function reservationListWhere(storeId: string, filter: ReservationListFilter, now = new Date()): Prisma.StockReservationWhereInput {
@@ -262,6 +491,19 @@ export async function listReservations(storeId: string, filter: ReservationListF
     orderBy: closed ? [{ updatedAt: "desc" }] : [{ expiresAt: "asc" }],
     take: 200,
   });
+}
+
+/** Una reserva con su historial, lo más reciente primero. */
+export async function getReservationDetail(storeId: string, id: string) {
+  const reservation = await prismadb.stockReservation.findFirst({ where: { id, storeId }, select: RESERVATION_SELECT });
+  if (!reservation) throw ErrorFactory.NotFound("Reserva no encontrada");
+  const events = await prismadb.stockReservationEvent.findMany({
+    where: { reservationId: id, storeId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: { id: true, kind: true, productId: true, quantity: true, previousQuantity: true, actor: true, detail: true, createdAt: true },
+  });
+  return { reservation, events };
 }
 
 export const isReservationFilter = (value: string | null): value is ReservationListFilter =>

@@ -16,10 +16,12 @@ import { useToast } from "@/hooks/use-toast";
 import { expiryLabel } from "@/lib/reservation-labels";
 import { cn } from "@/lib/utils";
 
+type ProductCard = { id: string; name: string; sku: string; isKit: boolean; stock: number; reservedUnits: number; images: { url: string }[] };
+
 export interface ReservationView {
   id: string;
-  productId: string;
-  quantity: number;
+  productId: string | null;
+  quantity: number | null;
   customerName: string;
   customerPhone: string;
   note: string | null;
@@ -29,8 +31,22 @@ export interface ReservationView {
   unbackedAt: string | null;
   createdAt: string;
   closedAt: string | null;
-  product: { id: string; name: string; sku: string; isKit: boolean; stock: number; reservedUnits: number; images: { url: string }[] };
+  product: ProductCard | null;
+  items: { id: string; productId: string; quantity: number; unbackedAt: string | null; product: ProductCard }[];
   order: { id: string; orderNumber: string; status: string } | null;
+}
+
+/** Lo que se muestra de una reserva: sus ítems, o el encabezado si es anterior a ellos. */
+function summary(hold: ReservationView) {
+  const lines = hold.items.length > 0 ? hold.items : hold.product ? [{ productId: hold.product.id, quantity: hold.quantity ?? 0, product: hold.product }] : [];
+  const units = lines.reduce((sum, line) => sum + line.quantity, 0);
+  const first = lines[0];
+  return {
+    image: first?.product.images[0]?.url ?? null,
+    productId: lines.length === 1 ? first.productId : null,
+    title: lines.length === 1 ? `${first.quantity} × ${first.product.name}` : `${lines.length} productos · ${units} ${units === 1 ? "unidad" : "unidades"}`,
+    names: lines.length > 1 ? lines.map((line) => `${line.quantity} × ${line.product.name}`).join(", ") : null,
+  };
 }
 
 type Filter = "activas" | "convertidas" | "sin-respaldo" | "vencidas" | "cerradas";
@@ -114,7 +130,7 @@ export function ReservationsClient({
     holdShift(hold, -1);
     try {
       await axios.patch(`/api/${storeId}/stock-reservations/${hold.id}`, { action: "liberar" });
-      toast({ variant: "success", title: "Liberado", description: `${hold.quantity} × ${hold.product.name} vuelve a estar a la venta.` });
+      toast({ variant: "success", title: "Liberado", description: `${summary(hold).title} vuelve a estar a la venta.` });
       router.refresh();
     } catch (cause) {
       setItems((current) => (current.some((row) => row.id === hold.id) ? current : [...current.slice(0, index), hold, ...current.slice(index)]));
@@ -211,15 +227,21 @@ export function ReservationsClient({
             const holding = hold.status === "ACTIVE" || hold.status === "CONVERTED";
             const overdue = holding && new Date(hold.expiresAt) < new Date();
             const chip = STATUS_CHIP[hold.status];
+            const shown = summary(hold);
             return (
               <li key={hold.id} className={cn("flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4", hold.unbackedAt && holding && "border-destructive/60")} data-testid="reservation-card">
                 <div className="flex min-w-0 items-start gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element -- miniatura de Cloudinary, ya optimizada */}
-                  {hold.product.images[0] ? <img src={hold.product.images[0].url} alt="" className="h-14 w-14 shrink-0 rounded-md object-cover" /> : <div className="h-14 w-14 shrink-0 rounded-md bg-muted" />}
+                  {shown.image ? <img src={shown.image} alt="" className="h-14 w-14 shrink-0 rounded-md object-cover" /> : <div className="h-14 w-14 shrink-0 rounded-md bg-muted" />}
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <Link href={`/${storeId}/productos/${hold.productId}`} className="break-words text-sm font-semibold leading-tight hover:underline">
-                      {hold.quantity} × {hold.product.name}
-                    </Link>
+                    {shown.productId ? (
+                      <Link href={`/${storeId}/productos/${shown.productId}`} className="break-words text-sm font-semibold leading-tight hover:underline">
+                        {shown.title}
+                      </Link>
+                    ) : (
+                      <p className="break-words text-sm font-semibold leading-tight">{shown.title}</p>
+                    )}
+                    {shown.names && <p className="break-words text-xs text-muted-foreground">{shown.names}</p>}
                     <p className="text-sm">
                       {hold.customerName}
                       {hold.customerPhone ? (
@@ -294,7 +316,7 @@ export function ReservationsClient({
         onOpenChange={(open) => !open && setReleasing(null)}
         onConfirm={() => releasing && release(releasing)}
         title="¿Liberar esta reserva?"
-        description={releasing ? `${releasing.quantity} × ${releasing.product.name} de ${releasing.customerName} vuelve a estar a la venta en la tienda, Mercado Libre y el punto de venta.${releasing.status === "CONVERTED" ? " El pedido sigue abierto: cancélalo si ya no va." : ""}` : ""}
+        description={releasing ? `${summary(releasing).title} de ${releasing.customerName} vuelve a estar a la venta en la tienda, Mercado Libre y el punto de venta.${releasing.status === "CONVERTED" ? " El pedido sigue abierto: cancélalo si ya no va." : ""}` : ""}
         confirmLabel="Liberar"
         destructive
       />

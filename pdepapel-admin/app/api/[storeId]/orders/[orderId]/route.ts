@@ -1,4 +1,5 @@
 import { closeReservationsForOrders } from "@/lib/reservation-counters";
+import { syncConvertedReservation } from "@/lib/stock-reservations";
 import { scrubOrder } from "@/lib/viewer-payloads";
 import { getStoreAccess } from "@/lib/store-access";
 import { BATCH_SIZE } from "@/constants";
@@ -478,6 +479,7 @@ export async function PATCH(
       await prismadb.orderItem.findMany({ where: { orderId: params.orderId }, select: { productId: true } })
     ).flatMap((item) => (item.productId ? [item.productId] : []));
     let purgeCacheAfterCommit = false;
+    let reservationProductIds: string[] = [];
     const updatedOrder = await prismadb.$transaction(async (tx) => {
       // Batch process products for better performance
       const products = await processOrderItemsInBatches(
@@ -711,6 +713,14 @@ export async function PATCH(
           );
         }
         await Promise.all(createOperations);
+        // Si el pedido salió de una reserva, la reserva sigue a sus líneas
+        // antes de cualquier movimiento de stock de este mismo guardado.
+        reservationProductIds = await syncConvertedReservation(tx, {
+          storeId: params.storeId,
+          orderId: order.id,
+          lines: itemsWithPrices.map((item: any) => ({ productId: item.productId || null, quantity: item.quantity })),
+          actor: userId,
+        });
       }
 
       // Estado del envío derivado de «Marcar como enviado» cuando la petición
@@ -1079,6 +1089,8 @@ export async function PATCH(
 
     if (purgeCacheAfterCommit) {
       await invalidateStoreProductsCache(params.storeId, { orderIds: [params.orderId], productIds: productIdsBefore });
+    } else if (reservationProductIds.length > 0) {
+      await invalidateStoreProductsCache(params.storeId, { productIds: reservationProductIds });
     }
 
     if (issuedGiftCard) {

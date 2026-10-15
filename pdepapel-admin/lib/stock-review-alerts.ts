@@ -62,13 +62,20 @@ export async function notifyUnbackedReservations(reservationIds: string[], waits
     await sleep(wait);
     const holds = await prismadb.stockReservation.findMany({
       where: { id: { in: reservationIds }, unbackedAt: { not: null } },
-      select: { id: true, storeId: true, quantity: true, customerName: true, product: { select: { name: true } } },
+      select: {
+        id: true,
+        storeId: true,
+        customerName: true,
+        items: { where: { unbackedAt: { not: null } }, select: { quantity: true, product: { select: { name: true } } } },
+      },
     });
     if (holds.length === 0) continue;
     const fresh = [];
     for (const hold of holds) if (await claimAlert(`alert:reservation-unbacked:${hold.id}`)) fresh.push(hold);
     if (fresh.length === 0) return false;
-    const lines = fresh.map((hold) => `• ${hold.product?.name} × ${hold.quantity} (reserva de ${hold.customerName})`).join("\n");
+    const lines = fresh
+      .flatMap((hold) => hold.items.map((item) => `• ${item.product.name} × ${item.quantity} (reserva de ${hold.customerName})`))
+      .join("\n");
     return send(
       fresh[0].storeId,
       `[Revisar] ${fresh.length === 1 ? "Una reserva quedó" : `${fresh.length} reservas quedaron`} sin respaldo`,

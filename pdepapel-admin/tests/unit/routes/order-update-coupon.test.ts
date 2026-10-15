@@ -148,6 +148,7 @@ vi.mock("@/lib/google-analytics", () => ({
   recordPaidOrderInGoogleAnalytics: vi.fn(),
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
+vi.mock("@/lib/stock-reservations", () => ({ syncConvertedReservation: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/lib/customer-benefits", () => ({
   assertWelcomeBenefitEligibility: vi.fn(),
   markWelcomeBenefitRedeemed: vi.fn(),

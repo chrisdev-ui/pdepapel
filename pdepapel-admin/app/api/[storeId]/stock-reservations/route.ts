@@ -29,9 +29,9 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     return await withIdempotency(req, params.storeId, async () => {
       const body = await req.json().catch(() => null);
       if (!body || typeof body !== "object") throw ErrorFactory.InvalidRequest("Datos de la reserva inválidos");
-      if (typeof body.productId !== "string" || !body.productId) throw ErrorFactory.InvalidRequest("Elige el producto");
       const { reservation, affectedProductIds } = await createReservation({
         storeId: params.storeId,
+        items: body.items,
         productId: body.productId,
         quantity: body.quantity,
         customerName: body.customerName,

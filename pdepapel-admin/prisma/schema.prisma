@@ -3206,9 +3206,9 @@ model WhatsAppBotShadowRun {
 model StockReservation {
   id            String                 @id @default(uuid())
   storeId       String
-  /// Reservas v2: lo que se guarda vive en `items`. Estos dos campos se siguen
-  /// llenando mientras dura la transición (una reserva = un producto) y se
-  /// borran en la contracción; nada nuevo debe leerlos.
+  /// Reservas v2: lo que se guarda vive en `items`. Estos dos campos solo
+  /// reflejan el producto cuando la reserva tiene exactamente uno (null si
+  /// tiene varios) y se borran en la contracción; nada nuevo debe leerlos.
   productId     String?
   quantity      Int?
   customerName  String
@@ -3229,10 +3229,11 @@ model StockReservation {
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
 
-  store   Store                  @relation("StoreToStockReservation", fields: [storeId], references: [id])
-  product Product?               @relation(fields: [productId], references: [id])
-  order   Order?                 @relation(fields: [orderId], references: [id])
+  store   Store                   @relation("StoreToStockReservation", fields: [storeId], references: [id])
+  product Product?                @relation(fields: [productId], references: [id])
+  order   Order?                  @relation(fields: [orderId], references: [id])
   items   StockReservationItem[]
+  events  StockReservationEvent[]
 
   @@index([storeId, status, expiresAt])
   @@index([productId, status])
@@ -3258,6 +3259,31 @@ model StockReservationItem {
 
   @@unique([reservationId, productId])
   @@index([productId])
+  @@index([storeId, createdAt])
+}
+
+/// Historial de una reserva: quién hizo qué y cuándo (crear, agregar, cambiar
+/// cantidad, quitar, extender, convertir, cerrar, «sin respaldo»). Solo
+/// conteos e ids: los datos de la clienta no se copian aquí.
+model StockReservationEvent {
+  id               String   @id @default(uuid())
+  storeId          String
+  reservationId    String
+  /// created, item_added, item_quantity, item_removed, customer_edited,
+  /// extended, converted, released, expired, consumed, unbacked.
+  kind             String   @db.VarChar(32)
+  productId        String?
+  quantity         Int?
+  previousQuantity Int?
+  /// Usuaria del panel o SYSTEM (corrida horaria, pago).
+  actor            String?  @db.VarChar(191)
+  /// Contexto sin datos personales, p. ej. { days, from, to } o { orderId, via }.
+  detail           Json?
+  createdAt        DateTime @default(now())
+
+  reservation StockReservation @relation(fields: [reservationId], references: [id])
+
+  @@index([reservationId, createdAt])
   @@index([storeId, createdAt])
 }
 

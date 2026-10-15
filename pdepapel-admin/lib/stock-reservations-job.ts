@@ -1,11 +1,11 @@
-import { OrderStatus, StockReservationStatus } from "@prisma/client";
+import { OrderStatus, Prisma, StockReservationStatus } from "@prisma/client";
 import { Redis } from "@upstash/redis";
 
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { env } from "@/lib/env.mjs";
 import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
-import { HOLDING_RESERVATION_STATUSES, headerLine, reservationPieces } from "@/lib/reservation-counters";
+import { HOLDING_RESERVATION_STATUSES, RESERVATION_LINES_SELECT, piecesForLines, reservationLines } from "@/lib/reservation-counters";
 import { resend } from "@/lib/resend";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { expireReservation, releaseReservation } from "@/lib/stock-reservations";
@@ -89,7 +89,7 @@ export async function sweepStockReservations(options: { now?: Date; forceDigest?
 
   const converted = await prismadb.stockReservation.findMany({
     where: { status: StockReservationStatus.CONVERTED },
-    select: { id: true, storeId: true, expiresAt: true, customerName: true, quantity: true, product: { select: { name: true } }, order: { select: { status: true, orderNumber: true } } },
+    select: { id: true, storeId: true, expiresAt: true, customerName: true, ...DIGEST_LINES_SELECT, order: { select: { status: true, orderNumber: true } } },
     take: MAX_PER_RUN,
   });
   const overdue = [];
@@ -105,7 +105,7 @@ export async function sweepStockReservations(options: { now?: Date; forceDigest?
     if (hold.expiresAt < now && (await claimOnce(`alert:reservation-converted-overdue:${hold.id}:${hold.expiresAt.getTime()}`))) overdue.push(hold);
   }
   for (const [storeId, rows] of Array.from(groupBy(overdue, (row) => row.storeId))) {
-    const lines = rows.map((row) => `• ${row.product?.name} × ${row.quantity} — ${row.customerName}, pedido ${row.order!.orderNumber}`).join("\n");
+    const lines = rows.map((row) => `• ${describeLines(row)} — ${row.customerName}, pedido ${row.order!.orderNumber}`).join("\n");
     if (await send(storeId, `[Reservas] ${rows.length === 1 ? "Un pedido de reserva venció" : `${rows.length} pedidos de reservas vencieron`} sin pagar`,
       `Estas reservas ya tienen pedido, pero se venció la fecha y el pedido sigue sin pagar:\n${lines}\n\n` +
         "Las unidades siguen guardadas. Si la clienta no va a pagar, cancela el pedido y las unidades vuelven a la venta; si sí, dale más días a la reserva.")) {
@@ -149,15 +149,9 @@ function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
 async function expectedReservedUnits(): Promise<Map<string, number>> {
   const holds = await prismadb.stockReservation.findMany({
     where: { status: { in: HOLDING_RESERVATION_STATUSES } },
-    select: { productId: true, quantity: true },
+    select: RESERVATION_LINES_SELECT,
   });
-  const expected = new Map<string, number>();
-  for (const found of holds) {
-    const hold = headerLine(found);
-    const pieces = await reservationPieces(prismadb, hold.productId, hold.quantity);
-    pieces.forEach((units, id) => expected.set(id, (expected.get(id) ?? 0) + units));
-  }
-  return expected;
+  return piecesForLines(prismadb, holds.flatMap((hold) => reservationLines(hold)));
 }
 
 async function driftedProducts(expected: Map<string, number>, onlyIds?: string[]) {
@@ -188,24 +182,52 @@ export async function checkReservationDrift(now = new Date()): Promise<number> {
 /** Resumen de las 8:00. Devuelve false (sin correo) si no hay nada que contar. */
 export async function sendDailyDigest(storeId: string, now = new Date()): Promise<boolean> {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const select = { quantity: true, customerName: true, expiresAt: true, product: { select: { name: true } }, order: { select: { orderNumber: true } } } as const;
-  const [expiringToday, expired, convertedUnpaid, unbacked] = await Promise.all([
-    prismadb.stockReservation.findMany({ where: { storeId, status: StockReservationStatus.ACTIVE, expiresAt: { gte: now, lte: endOfBogotaDay(now) } }, select }),
+  const endOfToday = endOfBogotaDay(now);
+  const endOfTomorrow = endOfBogotaDay(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+  const select = { customerName: true, expiresAt: true, ...DIGEST_LINES_SELECT, order: { select: { orderNumber: true } } } as const;
+  const [expiringToday, expiringTomorrow, expired, convertedUnpaid, unbacked] = await Promise.all([
+    prismadb.stockReservation.findMany({ where: { storeId, status: StockReservationStatus.ACTIVE, expiresAt: { gte: now, lte: endOfToday } }, select }),
+    prismadb.stockReservation.findMany({ where: { storeId, status: StockReservationStatus.ACTIVE, expiresAt: { gt: endOfToday, lte: endOfTomorrow } }, select }),
     prismadb.stockReservation.findMany({ where: { storeId, status: StockReservationStatus.EXPIRED, closedAt: { gte: since } }, select }),
     prismadb.stockReservation.findMany({ where: { storeId, status: StockReservationStatus.CONVERTED }, select }),
     prismadb.stockReservation.findMany({ where: { storeId, status: { in: HOLDING_RESERVATION_STATUSES }, unbackedAt: { not: null } }, select }),
   ]);
-  const text = renderDigest({ expiringToday, expired, convertedUnpaid, unbacked });
+  const text = renderDigest({ expiringToday, expiringTomorrow, expired, convertedUnpaid, unbacked });
   if (!text) return false;
   return send(storeId, `[Reservas] Resumen del ${formatDay(now)}`, text);
 }
 
-type DigestRow = { quantity: number | null; customerName: string; expiresAt: Date; product: { name: string } | null; order: { orderNumber: string } | null };
+const DIGEST_LINES_SELECT = {
+  productId: true,
+  quantity: true,
+  product: { select: { name: true } },
+  items: { orderBy: [{ createdAt: "asc" }, { product: { name: "asc" } }], select: { quantity: true, product: { select: { name: true } } } },
+} satisfies Prisma.StockReservationSelect;
 
-export function renderDigest(buckets: { expiringToday: DigestRow[]; expired: DigestRow[]; convertedUnpaid: DigestRow[]; unbacked: DigestRow[] }): string | null {
-  const line = (row: DigestRow) => `• ${row.product?.name} × ${row.quantity} — ${row.customerName}${row.order ? ` (pedido ${row.order.orderNumber})` : ""}`;
+type DigestLines = {
+  quantity: number | null;
+  product: { name: string } | null;
+  items?: { quantity: number; product: { name: string } }[];
+};
+type DigestRow = DigestLines & { customerName: string; expiresAt: Date; order: { orderNumber: string } | null };
+
+/** «Libreta A5 × 2, Stickers × 1»: los ítems; una reserva sin ítems usa el encabezado. */
+export function describeLines(row: DigestLines): string {
+  const lines = row.items && row.items.length > 0 ? row.items : row.product ? [{ quantity: row.quantity ?? 0, product: row.product }] : [];
+  return lines.map((line) => `${line.product.name} × ${line.quantity}`).join(", ");
+}
+
+export function renderDigest(buckets: {
+  expiringToday: DigestRow[];
+  expiringTomorrow?: DigestRow[];
+  expired: DigestRow[];
+  convertedUnpaid: DigestRow[];
+  unbacked: DigestRow[];
+}): string | null {
+  const line = (row: DigestRow) => `• ${describeLines(row)} — ${row.customerName}${row.order ? ` (pedido ${row.order.orderNumber})` : ""}`;
   const sections = [
     ["Vencen hoy", buckets.expiringToday],
+    ["Vencen mañana", buckets.expiringTomorrow ?? []],
     ["Vencieron desde el último resumen (ya están otra vez a la venta)", buckets.expired],
     ["Convertidos en pedido y sin pagar", buckets.convertedUnpaid],
     ["Sin respaldo (una venta pagada se llevó las unidades)", buckets.unbacked],
