@@ -193,7 +193,6 @@ async function createOrder(
       daysValid, // For calculating expiresAt
       adminNotes,
       internalNotes,
-      createdBy, // Optional admin user ID
       analyticsClientId,
       analyticsSessionId,
       analyticsConsent,
@@ -274,6 +273,8 @@ async function createOrder(
       );
     }
 
+    // `userId` es la clienta; quien registra el pedido desde el panel va en
+    // `createdBy` (y en el kardex), nunca como clienta.
     let authenticatedUserId = isStoreOwner ? null : userLogged;
     if (userId) {
       if (isStoreOwner) {
@@ -609,7 +610,7 @@ async function createOrder(
         adminNotes,
         internalNotes,
         ...gift,
-        createdBy: isStoreOwner ? createdBy || authenticatedUserId : null,
+        createdBy: isStoreOwner ? userLogged : null,
         source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
         ...(normalizedAnalyticsClientId
           ? { analyticsClientId: normalizedAnalyticsClientId }
@@ -682,7 +683,7 @@ async function createOrder(
             referenceId: createdOrder.id,
             cost: Number(item.product!.acqPrice) || 0,
             price: Number(item.product!.price),
-            createdBy: authenticatedUserId || "SYSTEM",
+            createdBy: userLogged || "SYSTEM",
           }));
 
         const explodedMovements = await explodeKitMovements(tx, stockMovements);
@@ -741,7 +742,7 @@ async function createOrder(
         issuedGiftCard = await issueGiftCardForOrder(tx, {
           storeId: params.storeId,
           orderId: createdOrder.id,
-          createdBy: authenticatedUserId || "SYSTEM",
+          createdBy: userLogged || "SYSTEM",
         });
       }
 

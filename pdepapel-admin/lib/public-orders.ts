@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 
-import { checkIfStoreOwner } from "@/lib/utils";
 import {
   PUBLIC_CATALOG_OPTION_VALUE_SELECT,
   PUBLIC_CATEGORY_SELECT,
@@ -209,14 +208,12 @@ export function parseOrderListPage(params: URLSearchParams) {
  * los pedidos de invitada y de los que la dueña registra desde el panel; el
  * de una clienta con cuenta solo se abre con su sesión.
  */
-export async function canCustomerViewOrder(
+export function canCustomerViewOrder(
   order: { userId: string | null; createdBy: string | null },
-  storeId: string,
   sessionUserId: string | null,
 ) {
   if (!order.userId || order.createdBy) return true;
-  if (order.userId === sessionUserId) return true;
-  return checkIfStoreOwner(order.userId, storeId);
+  return order.userId === sessionUserId;
 }
 
 /** Lo que el rastreo de un envío devuelve: estado, transportadora, guía y fechas. */

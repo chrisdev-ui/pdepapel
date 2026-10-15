@@ -60,7 +60,7 @@ export async function POST(
       shipping &&
       (isStoreOwner ||
         (orderId
-          ? await canCustomerViewOrder(shipping.order, params.storeId, userId)
+          ? canCustomerViewOrder(shipping.order, userId)
           : Boolean(userId) && shipping.order.userId === userId));
     if (!shipping || !allowed) {
       if (!orderId && !userId) throw ErrorFactory.Unauthenticated();

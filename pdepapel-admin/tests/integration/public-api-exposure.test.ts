@@ -215,13 +215,13 @@ describe("public API exposure with MySQL", () => {
       },
     });
     // Pedido registrado por la dueña desde el panel para una clienta de WhatsApp:
-    // lleva el userId de la dueña (y a veces ningún createdBy) y viaja por enlace.
+    // sin cuenta de clienta, con la dueña como creadora, y viaja por enlace.
     const panelOrder = await testPrisma.order.create({
       data: {
         storeId: fixture.store.id,
         orderNumber: `ORD-${randomUUID().slice(0, 8)}`,
-        userId: fixture.store.userId,
-        createdBy: null,
+        userId: null,
+        createdBy: fixture.store.userId,
         fullName: "Clienta por WhatsApp",
         phone: "3000000004",
         subtotal: 5000,
