@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@/lib/prismadb", () => ({ default: {} }));
+// lib/resend construye el cliente al importarse y exige la clave: en CI no hay
+// .env y el archivo entero no carga (rojo desde el 2026-10-13).
+vi.mock("@/lib/resend", () => ({ resend: {} }));
 
 import { recoveryBackoffMs } from "@/lib/whatsapp/recovery";
 
