@@ -303,6 +303,20 @@ describe("reservas (MySQL)", () => {
     await expect(counters(f.component.id)).resolves.toEqual({ stock: 3, reservedUnits: 0, available: 3 });
   });
 
+  it("la API responde 409 con el motivo cuando no alcanza y 400 con datos inválidos (no 500)", async () => {
+    const f = await setup(1);
+    const { POST } = await import("@/app/api/[storeId]/stock-reservations/route");
+    const params = { params: { storeId: f.store.id } };
+
+    const short = await POST(request("POST", { productId: f.component.id, quantity: 2, customerName: "Clienta del grupo" }), params);
+    expect(short.status).toBe(409);
+    await expect(short.json()).resolves.toMatchObject({ error: "Solo queda 1 unidad disponible de «Componente» y pediste 2." });
+
+    const invalid = await POST(request("POST", { productId: f.component.id, quantity: 1, customerName: "A" }), params);
+    expect(invalid.status).toBe(400);
+    await expect(counters(f.component.id)).resolves.toEqual({ stock: 1, reservedUnits: 0, available: 1 });
+  });
+
   it("repetir «Liberar» o «Convertir» por la API no hace nada la segunda vez", async () => {
     const f = await setup(4);
     const other = await reserve(f, 1);
