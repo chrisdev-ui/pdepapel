@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { ABSENT_IN_TESTS, isLocalHost, NOT_STUBBED, TEST_ENV_STUBS, testEnvStubs } from "../../../scripts/lib/test-isolation.mjs";
+import { ABSENT_IN_TESTS, isAllowedHost, isLocalHost, NOT_STUBBED, TEST_ENV_STUBS, testEnvStubs } from "../../../scripts/lib/test-isolation.mjs";
 
 /**
  * Las pruebas no usan claves reales ni salen a la red. Lo que importa: un
@@ -106,6 +106,13 @@ describe("red bloqueada fuera de la máquina local", () => {
     await expect(response.text()).resolves.toBe("ok-local");
     const viaName = await fetch(`http://localhost:${port}/`).catch(() => null);
     if (viaName) await expect(viaName.text()).resolves.toBe("ok-local");
+  });
+
+  it("el servidor de las e2e solo deja salir a Clerk de desarrollo", () => {
+    const clerk = ["clerk.accounts.dev", "api.clerk.com", "api.clerk.dev"];
+    for (const host of ["glowing-tarpon-88.clerk.accounts.dev", "api.clerk.com", "api.clerk.dev"]) expect(isAllowedHost(host, clerk), host).toBe(true);
+    for (const host of ["papeleriapdepapel.com", "api.openai.com", "evilclerk.accounts.dev.com", "clerk.accounts.dev.evil.com", "graph.facebook.com"]) expect(isAllowedHost(host, clerk), host).toBe(false);
+    expect(isAllowedHost("api.clerk.com")).toBe(false);
   });
 
   it("qué cuenta como local", () => {

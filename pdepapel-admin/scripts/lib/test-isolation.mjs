@@ -155,12 +155,19 @@ function connectTarget(args) {
 
 const PATCHED = Symbol.for("pdepapel.testNetworkBlocked");
 
-export function blockOutboundNetwork() {
+/** El host es uno de `allowHosts` o un subdominio suyo (nunca «evilclerk.accounts.dev.com»). */
+export function isAllowedHost(host, allowHosts = []) {
+  const name = String(host ?? "").toLowerCase();
+  return allowHosts.some((suffix) => name === suffix || name.endsWith(`.${suffix}`));
+}
+
+/** `allowHosts`: hosts que sí pueden salir (el servidor de las e2e necesita Clerk de desarrollo). */
+export function blockOutboundNetwork({ allowHosts = [] } = {}) {
   if (net.Socket.prototype[PATCHED]) return;
   const original = net.Socket.prototype.connect;
   net.Socket.prototype.connect = function connect(...args) {
     const target = connectTarget(args);
-    if (target && !isLocalHost(target.host)) {
+    if (target && !isLocalHost(target.host) && !isAllowedHost(target.host, allowHosts)) {
       const error = new OutboundNetworkBlockedError(`${target.host}:${target.port ?? "?"}`);
       process.nextTick(() => this.destroy(error));
       return this;

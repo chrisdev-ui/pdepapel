@@ -81,7 +81,11 @@ test.describe("reservas en distintos tamaños", () => {
       const box = await sheet.boundingBox();
       expect(box!.y).toBeGreaterThanOrEqual(0);
       expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
-      await expect(sheet.getByTestId("reserve-available")).toHaveText("Disponibles para reservar: 20");
+      // Otras e2e de la misma corrida venden o apartan el mismo producto: se parte de lo que muestra la hoja.
+      const availableText = (await sheet.getByTestId("reserve-available").textContent()) ?? "";
+      const available = Number(availableText.match(/Disponibles para reservar: (\d+)/)?.[1]);
+      const onShelf = Number(availableText.match(/stock (\d+)/)?.[1] ?? available);
+      expect(available).toBeGreaterThan(0);
       await sheet.getByLabel("Clienta").fill("Clienta E2E");
       await sheet.getByLabel("Nota (opcional)").fill("Prueba automática");
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
@@ -91,8 +95,8 @@ test.describe("reservas en distintos tamaños", () => {
       await expect(sheet).toBeHidden({ timeout: 30_000 });
       await expect(page.getByText(/1 reservado/).first()).toBeVisible({ timeout: 30_000 });
       const breakdown = page.getByTestId("reserved-breakdown");
-      await expect(breakdown).toContainText("En bodega20");
-      await expect(breakdown).toContainText("Se pueden vender19");
+      await expect(breakdown).toContainText(`En bodega${onShelf}`);
+      await expect(breakdown).toContainText(`Se pueden vender${available - 1}`);
 
       await page.goto(new URL(`/${storeId}/reservas`, baseURL).toString(), { waitUntil: "domcontentloaded" });
       const card = page.getByTestId("reservation-card").filter({ hasText: "Clienta E2E" });

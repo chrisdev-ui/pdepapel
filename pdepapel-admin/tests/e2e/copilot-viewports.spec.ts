@@ -73,7 +73,9 @@ test.describe("copiloto en distintos tamaños", () => {
       // Hasta que React hidrata, un clic no hace nada: escribir habilita «Enviar».
       const box = page.getByRole("textbox", { name: "Tu pregunta" });
       await expect(async () => {
-        await box.fill("hola");
+        // Vaciar antes: si el primer «hola» llegó antes de hidratar, repetir el mismo texto no dispara onChange.
+    await box.fill("");
+    await box.fill("hola");
         await expect(page.getByRole("button", { name: "Enviar" })).toBeEnabled({ timeout: 1000 });
       }).toPass({ timeout: 60_000 });
       await box.fill("");

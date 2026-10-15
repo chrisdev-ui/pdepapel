@@ -46,6 +46,8 @@ const newDashboardRoutePairs = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Las e2e de la puerta construyen en su propia carpeta para no pisar `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   env: {
     NEXT_PUBLIC_BUILD_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? "",

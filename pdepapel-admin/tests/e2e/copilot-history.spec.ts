@@ -38,6 +38,8 @@ async function signIn(page: import("@playwright/test").Page) {
   // Hasta que React hidrata, un clic no hace nada.
   const box = page.getByRole("textbox", { name: "Tu pregunta" });
   await expect(async () => {
+    // Vaciar antes: si el primer «hola» llegó antes de hidratar, repetir el mismo texto no dispara onChange.
+    await box.fill("");
     await box.fill("hola");
     await expect(page.getByRole("button", { name: "Enviar" })).toBeEnabled({ timeout: 1000 });
   }).toPass({ timeout: 60_000 });
