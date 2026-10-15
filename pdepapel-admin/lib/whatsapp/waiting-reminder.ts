@@ -4,7 +4,7 @@ import { resend } from "@/lib/resend";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { claimWindow } from "@/lib/whatsapp/recovery";
 import { countWaitingConversations } from "@/lib/whatsapp/waiting-list";
-import { REMINDER_AFTER_MS, REMINDER_MAX_WAIT_MS, isReminderHours, waitingReminderEmail } from "@/lib/whatsapp/waiting";
+import { REMINDER_AFTER_MS, REMINDER_MAX_WAIT_MS, WAITING_REMINDER_EMAIL_ENABLED, isReminderHours, waitingReminderEmail } from "@/lib/whatsapp/waiting";
 
 export const WAITING_REMINDER_EVERY_MS = 60 * 60 * 1000;
 export const WAITING_CHECK_EVERY_MS = 10 * 60 * 1000;
@@ -13,6 +13,7 @@ export const waitingReminderRow = (storeId: string) => `whatsapp-waiting:alert:$
 
 export interface WaitingReminderDeps {
   send?: (input: { storeId: string; count: number }) => Promise<void>;
+  enabled?: boolean;
 }
 
 /**
@@ -22,7 +23,7 @@ export interface WaitingReminderDeps {
  * la lista filtrada: ni nombres, ni teléfonos, ni texto de mensajes.
  */
 export async function maybeSendWaitingReminder(storeId: string, now = new Date(), deps: WaitingReminderDeps = {}): Promise<{ sent: boolean; count: number }> {
-  if (!isReminderHours(now)) return { sent: false, count: 0 };
+  if (!(deps.enabled ?? WAITING_REMINDER_EMAIL_ENABLED) || !isReminderHours(now)) return { sent: false, count: 0 };
   // Contar lee unas cuantas conversaciones: como mucho una vez cada 10 min por tienda.
   if (!(await claimWindow(`whatsapp-waiting:check:${storeId}`, WAITING_CHECK_EVERY_MS, now))) return { sent: false, count: 0 };
   const count = await countWaitingConversations(storeId, now, REMINDER_AFTER_MS, REMINDER_MAX_WAIT_MS);
@@ -44,7 +45,7 @@ async function sendWaitingReminder(input: { storeId: string; count: number }): P
 
 /** Lo que dispara el barrido de recuperación (≤ cada 2 min): las tiendas con mensajes de clientas en el último día. */
 export async function remindWaitingFromSweep(now = new Date()): Promise<void> {
-  if (!isReminderHours(now)) return;
+  if (!WAITING_REMINDER_EMAIL_ENABLED || !isReminderHours(now)) return;
   const stores = await prismadb.conversation.findMany({
     where: { lastInboundAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
     distinct: ["storeId"],

@@ -13,6 +13,8 @@ export const WAITING_BADGE_AFTER_MS = 15 * 60 * 1000;
 export const FALLBACK_AFTER_MS = 10 * 60 * 1000;
 export const HOLDING_AFTER_MS = 15 * 60 * 1000;
 export const REMINDER_AFTER_MS = 30 * 60 * 1000;
+/** Paula no quiere el correo de «clientas esperando» (2026-10-15): apagado hasta que haya un interruptor en Ajustes. */
+export const WAITING_REMINDER_EMAIL_ENABLED = false;
 /** El correo cuenta solo esperas de menos de un día: las viejas siguen en la lista, pero no mandan un correo cada hora. */
 export const REMINDER_MAX_WAIT_MS = 24 * 60 * 60 * 1000;
 /** Meta deja escribir 24 h después del último mensaje de la clienta; se deja margen. */

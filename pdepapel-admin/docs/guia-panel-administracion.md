@@ -556,10 +556,9 @@ imágenes, zona de cuidado). «Eliminar tienda» no se puede deshacer.
 **WhatsApp mientras la clienta espera.** En Conversaciones, el botón
 «Esperando a Paula (N)» filtra los chats donde la clienta escribió de último
 (algo de verdad, no «ok», «gracias» ni una reacción) y nadie le responde hace
-15 minutos o más; cada uno lleva la insignia «Esperando a Paula · 25 min». Si
-una espera pasa de 30 minutos entre las 8 a. m. y las 11 p. m., llega un
-correo con la cuenta y el enlace a esa lista (uno por hora como mucho); las
-esperas de más de un día siguen en la lista, pero ya no mandan correo. En
+15 minutos o más; cada uno lleva la insignia «Esperando a Paula · 25 min».
+No llega ningún correo por estas esperas: Paula prefirió no recibirlo, así que
+la lista se revisa en el panel. En
 Configuración › Tienda › Datos del negocio, «Mientras la clienta te espera»
 tiene dos interruptores de tres estados (Apagado, Sombra, Encendido), en
 Sombra al empezar: la respuesta del bot a los 10 minutos (solo preguntas que

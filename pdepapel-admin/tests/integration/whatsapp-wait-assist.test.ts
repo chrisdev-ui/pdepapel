@@ -216,13 +216,12 @@ describe("programar una espera", () => {
     expect(sim.queued).toEqual([{ kind: "fallback", dedup: `wait-fallback-${chat.ids[1]}`, delay: expect.any(Number) }]);
   });
 
-  it("si a los 10 min la espera sigue abierta, la revisión programa el mensaje de espera y el recordatorio de la tienda", async () => {
+  it("si a los 10 min la espera sigue abierta, la revisión programa el mensaje de espera; con el correo apagado, ningún recordatorio", async () => {
     const { runWaitCheck } = await import("@/lib/whatsapp/wait-assist");
     const chat = await conversation([{ sentBy: "OWNER", at: ago(DAY, 120) }, { sentBy: "CUSTOMER", at: ago(DAY, 11), body: "quería preguntar por un pedido especial" }]);
     await expect(runWaitCheck({ conversationId: chat.id, messageId: chat.ids[1], kind: "fallback" }, DAY)).resolves.toMatchObject({ decision: "skip", reason: "not_recognized" });
-    expect(sim.queued.map((job) => job.kind)).toEqual(["holding", "reminder"]);
+    expect(sim.queued.map((job) => job.kind)).toEqual(["holding"]);
     expect(sim.queued[0]).toMatchObject({ dedup: `wait-holding-${chat.ids[1]}`, delay: 4 * 60 });
-    expect(sim.queued[1].dedup).toMatch(new RegExp(`^wait-reminder-${store}-\\d+$`));
   });
 });
 
@@ -243,7 +242,20 @@ describe("la lista «Esperando a Paula»", () => {
 });
 
 describe("correo de recordatorio", () => {
-  it("de 8 a 23 h, si alguien espera 30 min o más, como mucho uno por hora y solo con la cuenta", async () => {
+  it("apagado (como lo dejó Paula): nunca sale, ni por la revisión ni por el barrido, aunque haya esperas", async () => {
+    const { maybeSendWaitingReminder, remindWaitingFromSweep } = await import("@/lib/whatsapp/waiting-reminder");
+    const { runWaitCheck } = await import("@/lib/whatsapp/wait-assist");
+    await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
+    const chat = await conversation([{ sentBy: "OWNER", at: ago(DAY, 200) }, { sentBy: "CUSTOMER", at: ago(DAY, 45) }]);
+    const send = vi.fn(async () => undefined);
+    await expect(maybeSendWaitingReminder(store, DAY, { send })).resolves.toEqual({ sent: false, count: 0 });
+    await expect(runWaitCheck({ conversationId: chat.id, messageId: chat.ids[1], kind: "reminder" }, DAY)).resolves.toMatchObject({ kind: "reminder" });
+    await remindWaitingFromSweep(DAY);
+    expect(send).not.toHaveBeenCalled();
+    expect(await testPrisma.jobRun.count({ where: { id: { contains: store } } })).toBe(0);
+  });
+
+  it("encendido: de 8 a 23 h, si alguien espera 30 min o más, como mucho uno por hora y solo con la cuenta", async () => {
     const { maybeSendWaitingReminder } = await import("@/lib/whatsapp/waiting-reminder");
     await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
     const emails: { storeId: string; count: number }[] = [];
@@ -251,17 +263,17 @@ describe("correo de recordatorio", () => {
       emails.push(input);
     };
     const late = new Date("2026-10-15T04:30:00Z"); // 23:30 Bogotá
-    await expect(maybeSendWaitingReminder(store, late, { send })).resolves.toEqual({ sent: false, count: 0 });
+    await expect(maybeSendWaitingReminder(store, late, { send, enabled: true })).resolves.toEqual({ sent: false, count: 0 });
 
     // Las pruebas de arriba ya dejaron conversaciones esperando: esa es la base.
-    const before = (await maybeSendWaitingReminder(store, DAY, { send })).count;
+    const before = (await maybeSendWaitingReminder(store, DAY, { send, enabled: true })).count;
     emails.length = 0;
     await conversation([{ sentBy: "OWNER", at: ago(DAY, 200) }, { sentBy: "CUSTOMER", at: ago(DAY, 45) }]);
     await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
-    const first = await maybeSendWaitingReminder(store, DAY, { send });
+    const first = await maybeSendWaitingReminder(store, DAY, { send, enabled: true });
     expect(first).toEqual({ sent: true, count: before + 1 });
     // Pasados 20 min ya se puede volver a contar, pero el correo no sale hasta la hora.
-    await expect(maybeSendWaitingReminder(store, new Date(DAY.getTime() + 20 * MIN), { send })).resolves.toMatchObject({ sent: false });
+    await expect(maybeSendWaitingReminder(store, new Date(DAY.getTime() + 20 * MIN), { send, enabled: true })).resolves.toMatchObject({ sent: false });
     expect(emails).toEqual([{ storeId: store, count: before + 1 }]);
   });
 
@@ -269,11 +281,11 @@ describe("correo de recordatorio", () => {
     const { maybeSendWaitingReminder } = await import("@/lib/whatsapp/waiting-reminder");
     const { findWaitingConversations } = await import("@/lib/whatsapp/waiting-list");
     await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
-    const before = (await maybeSendWaitingReminder(store, DAY, { send: async () => undefined })).count;
+    const before = (await maybeSendWaitingReminder(store, DAY, { send: async () => undefined, enabled: true })).count;
     const old = await conversation([{ sentBy: "OWNER", at: ago(DAY, 3 * 24 * 60) }, { sentBy: "CUSTOMER", at: ago(DAY, 2 * 24 * 60) }]);
     expect((await findWaitingConversations(store, DAY)).has(old.id)).toBe(true);
     await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
-    await expect(maybeSendWaitingReminder(store, DAY, { send: async () => undefined })).resolves.toMatchObject({ count: before });
+    await expect(maybeSendWaitingReminder(store, DAY, { send: async () => undefined, enabled: true })).resolves.toMatchObject({ count: before });
   });
 });
 
