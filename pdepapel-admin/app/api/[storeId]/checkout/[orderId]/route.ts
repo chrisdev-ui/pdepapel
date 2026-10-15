@@ -13,6 +13,7 @@ import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { BATCH_SIZE } from "@/constants";
 import { runInBackground } from "@/lib/background";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -49,7 +50,7 @@ export async function POST(
           },
         },
         payment: true,
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
         coupon: {
           select: {
             id: true,

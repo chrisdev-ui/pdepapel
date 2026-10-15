@@ -5,6 +5,7 @@ import { ErrorFactory } from "@/lib/api-errors";
 import { describeGuideBlock } from "@/lib/order-transitions";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { ResourceBusyError, withResourceLock } from "@/lib/resource-lock";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 export async function POST(
   req: Request,
@@ -43,7 +44,7 @@ export async function POST(
         storeId: params.storeId,
       },
       include: {
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
       },
     });
 

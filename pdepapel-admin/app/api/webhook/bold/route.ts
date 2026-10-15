@@ -47,6 +47,7 @@ import {
   recordPaymentWebhookReceived,
 } from "@/lib/payment-webhook-events";
 import { createGuideInBackground } from "@/lib/guide-background";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * La fila se escribe antes de mirar la firma y se cierra con lo que respondió
@@ -599,7 +600,7 @@ async function processBoldPayment(
     where: { id: order.id },
     include: {
       payment: true,
-      shipping: true,
+      shipping: SHIPPING_WITHOUT_GUIDE_PDF,
       orderItems: {
         include: {
           product: true,

@@ -7,6 +7,7 @@ import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
 import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * «Actualizar rastreo» de un envío de EnvioClick desde el panel. Escribe solo
@@ -61,7 +62,10 @@ export async function POST(req: Request, { params }: { params: { storeId: string
       }),
     );
 
-    const updatedShipping = await prismadb.shipping.findFirst({ where: { id: shipping.id, storeId: params.storeId } });
+    const updatedShipping = await prismadb.shipping.findFirst({
+      where: { id: shipping.id, storeId: params.storeId },
+      ...SHIPPING_WITHOUT_GUIDE_PDF,
+    });
 
     return NextResponse.json(
       { success: true, shipping: updatedShipping, trackingInfo: trackingData, changed: Boolean(result?.shipmentChanged), orderStatus: result?.orderStatus ?? null },

@@ -4,27 +4,36 @@ import axios from "axios";
 
 export interface TrackShipmentResponse {
   success: boolean;
-  shipping: Shipping;
-  tracking: any[];
+  shipping: Pick<
+    Shipping,
+    | "id"
+    | "status"
+    | "provider"
+    | "carrierName"
+    | "courier"
+    | "trackingCode"
+    | "trackingUrl"
+    | "estimatedDeliveryDate"
+    | "actualDeliveryDate"
+    | "updatedAt"
+  > | null;
   events: ShippingTrackingEvent[];
 }
 
 export interface TrackShipmentVariables {
-  shippingId: string;
-  guestId?: string | null;
+  orderId: string;
   sessionToken?: string | null;
 }
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/shipment/track`;
 
 export const postTrackShipment = async ({
-  shippingId,
-  guestId,
+  orderId,
   sessionToken,
 }: TrackShipmentVariables): Promise<TrackShipmentResponse> => {
   const response = await axios.post(
     API_URL,
-    { shippingId, guestId },
+    { orderId },
     sessionToken
       ? { headers: { Authorization: `Bearer ${sessionToken}` } }
       : undefined,

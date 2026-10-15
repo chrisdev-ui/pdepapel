@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 
+import { checkIfStoreOwner } from "@/lib/utils";
 import {
   PUBLIC_CATALOG_OPTION_VALUE_SELECT,
   PUBLIC_CATEGORY_SELECT,
@@ -148,3 +149,96 @@ export const INTERNAL_ORDER_FIELDS = [
   "giftRecipientPhone",
   "giftCardId",
 ] as const;
+
+/** Lista «Mis pedidos» de la tienda: lo que pintan el historial y el resumen de la cuenta. */
+export const CUSTOMER_ORDER_LIST_SELECT = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  type: true,
+  createdAt: true,
+  total: true,
+  payment: { select: { method: true } },
+  shipping: {
+    select: {
+      status: true,
+      provider: true,
+      carrierName: true,
+      courier: true,
+      trackingCode: true,
+      trackingUrl: true,
+      actualDeliveryDate: true,
+    },
+  },
+  orderItems: {
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      quantity: true,
+      imageUrl: true,
+      product: {
+        select: {
+          images: {
+            select: { url: true, isMain: true },
+            orderBy: { isMain: "desc" },
+            take: 1,
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.OrderSelect;
+
+export const ORDER_LIST_DEFAULT_LIMIT = 200;
+export const ORDER_LIST_MAX_LIMIT = 200;
+
+/** `?pagina=` (desde 1) y `?limite=` de la lista; valores raros caen al defecto. */
+export function parseOrderListPage(params: URLSearchParams) {
+  const page = Number.parseInt(params.get("pagina") ?? "", 10);
+  const limit = Number.parseInt(params.get("limite") ?? "", 10);
+  const take =
+    Number.isFinite(limit) && limit > 0
+      ? Math.min(limit, ORDER_LIST_MAX_LIMIT)
+      : ORDER_LIST_DEFAULT_LIMIT;
+  const skip = Number.isFinite(page) && page > 1 ? (page - 1) * take : 0;
+  return { take, skip };
+}
+
+/**
+ * Quién puede ver un pedido sin ser la dueña. El id del pedido es la llave de
+ * los pedidos de invitada y de los que la dueña registra desde el panel; el
+ * de una clienta con cuenta solo se abre con su sesión.
+ */
+export async function canCustomerViewOrder(
+  order: { userId: string | null; createdBy: string | null },
+  storeId: string,
+  sessionUserId: string | null,
+) {
+  if (!order.userId || order.createdBy) return true;
+  if (order.userId === sessionUserId) return true;
+  return checkIfStoreOwner(order.userId, storeId);
+}
+
+/** Lo que el rastreo de un envío devuelve: estado, transportadora, guía y fechas. */
+export const TRACKING_SHIPPING_SELECT = {
+  id: true,
+  status: true,
+  provider: true,
+  carrierName: true,
+  courier: true,
+  trackingCode: true,
+  trackingUrl: true,
+  estimatedDeliveryDate: true,
+  actualDeliveryDate: true,
+  updatedAt: true,
+} satisfies Prisma.ShippingSelect;
+
+export const TRACKING_EVENT_SELECT = {
+  id: true,
+  shippingId: true,
+  status: true,
+  description: true,
+  location: true,
+  timestamp: true,
+  createdAt: true,
+} satisfies Prisma.ShippingTrackingEventSelect;

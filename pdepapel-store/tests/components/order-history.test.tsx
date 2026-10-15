@@ -120,6 +120,36 @@ describe("OrderHistory", () => {
     );
   });
 
+  it("renders from the slim list shape the API returns (photo from the product's first image)", async () => {
+    const listOrder = {
+      id: "order_3",
+      orderNumber: "PDP-0003",
+      status: "PAID",
+      type: "STANDARD",
+      createdAt: "2026-09-10T12:00:00.000Z",
+      total: 30000,
+      payment: { method: "Bold" },
+      shipping: {
+        status: "Delivered",
+        provider: "ENVIOCLICK",
+        carrierName: "Coordinadora",
+        courier: null,
+        trackingCode: "971",
+        trackingUrl: null,
+        actualDeliveryDate: "2026-09-14T12:00:00.000Z",
+      },
+      orderItems: [
+        { id: "i3", quantity: 1, imageUrl: null, product: { images: [{ url: "https://img/3.jpg", isMain: false }] } },
+      ],
+    } as unknown as Order;
+    getOrders.mockResolvedValue([listOrder]);
+    renderOrderHistory();
+
+    const card = (await screen.findByText("#PDP-0003")).closest("article")!;
+    expect(within(card).getByText(/Entregado el/)).toBeInTheDocument();
+    expect(card.querySelector('img[src="https://img/3.jpg"]')).not.toBeNull();
+  });
+
   it("filters by stage", async () => {
     const user = userEvent.setup();
     getOrders.mockResolvedValue([paidOrder, unpaidOrder]);

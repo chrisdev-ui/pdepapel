@@ -12,6 +12,7 @@ import {
 } from "@/lib/webhook-auth";
 import { NextResponse } from "next/server";
 import { runInBackground } from "@/lib/background";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * EnvioClick no firma sus webhooks, así que la URL configurada en su panel
@@ -266,7 +267,7 @@ export async function POST(req: Request) {
         where: { id: result.shipping.orderId },
         include: {
           payment: true,
-          shipping: true,
+          shipping: SHIPPING_WITHOUT_GUIDE_PDF,
           orderItems: {
             include: {
               product: true,

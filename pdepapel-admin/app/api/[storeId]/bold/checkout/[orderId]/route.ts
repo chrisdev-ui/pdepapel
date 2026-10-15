@@ -10,6 +10,7 @@ import { CACHE_HEADERS } from "@/lib/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getAmountDue } from "@/lib/gift-card-amounts";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -44,7 +45,7 @@ export async function POST(
           },
         },
         payment: true,
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
       },
     });
 

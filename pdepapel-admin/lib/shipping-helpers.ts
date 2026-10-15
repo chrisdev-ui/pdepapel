@@ -18,6 +18,7 @@ import {
   calculatePackageDimensions,
   BoxConfiguration,
 } from "./package-calculator";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * Extracts national phone number (10 digits) from E.164 format for EnvioClick API
@@ -55,7 +56,7 @@ export async function createGuideForOrder(
     (await db.order.findUnique({
       where: { id: orderId, storeId },
       include: {
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
         orderItems: {
           include: {
             product: {

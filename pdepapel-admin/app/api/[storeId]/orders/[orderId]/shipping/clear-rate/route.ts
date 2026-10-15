@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { ErrorFactory } from "@/lib/api-errors";
 import { Prisma } from "@prisma/client";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 export async function DELETE(
   req: Request,
@@ -41,7 +42,7 @@ export async function DELETE(
         storeId: params.storeId,
       },
       include: {
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
       },
     });
 

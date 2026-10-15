@@ -41,6 +41,7 @@ import {
   recordPaymentWebhookReceived,
 } from "@/lib/payment-webhook-events";
 import { createGuideInBackground } from "@/lib/guide-background";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 const HASH_ALGORITHM = "sha256";
 
@@ -159,7 +160,7 @@ async function processWebhookPayment(
                 isWelcomeBenefit: true,
               },
             },
-            shipping: true,
+            shipping: SHIPPING_WITHOUT_GUIDE_PDF,
           },
         });
 
@@ -614,7 +615,7 @@ async function updateOrderData(order: any, transaction: any) {
       where: { id: order.id },
       include: {
         payment: true,
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
         orderItems: {
           include: {
             product: true,

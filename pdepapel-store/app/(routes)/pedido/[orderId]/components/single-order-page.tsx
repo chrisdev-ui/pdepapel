@@ -363,8 +363,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               isRefreshingTracking={trackingStatus === "pending"}
               onRefreshTracking={async () =>
                 trackShipment({
-                  shippingId: order.shipping!.id,
-                  guestId: guestId || null,
+                  orderId: order.id,
                   sessionToken: await getToken(),
                 })
               }

@@ -22,13 +22,14 @@ import {
 import prismadb from "@/lib/prismadb";
 import {
   CUSTOMER_ORDER_SELECT,
+  canCustomerViewOrder,
   toCustomerOrderResponse,
 } from "@/lib/public-orders";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import {
   CACHE_HEADERS,
   calculateOrderTotals,
-  checkIfStoreOwner,
   processOrderItemsInBatches,
   verifyStoreOwner,
 } from "@/lib/utils";
@@ -116,7 +117,7 @@ export async function GET(
             include: { product: { include: { images: true } } },
           },
           payment: true,
-          shipping: true,
+          shipping: SHIPPING_WITHOUT_GUIDE_PDF,
           coupon: true,
         },
       });
@@ -137,11 +138,7 @@ export async function GET(
     // no confirma que exista. Los pedidos que la dueña registra desde el
     // panel para clientas de WhatsApp llevan su propio `userId` (y
     // `createdBy`), y esos sí viajan por enlace, como los de invitada.
-    const belongsToAccountCustomer =
-      Boolean(order.userId) &&
-      !order.createdBy &&
-      !(await checkIfStoreOwner(order.userId, params.storeId));
-    if (belongsToAccountCustomer && order.userId !== userId)
+    if (!(await canCustomerViewOrder(order, params.storeId, userId)))
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
     return NextResponse.json(toCustomerOrderResponse(order), {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
@@ -229,7 +226,7 @@ export async function PATCH(
       where: { id: params.orderId },
       include: {
         orderItems: true,
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
         coupon: true,
         payment: true,
       },
@@ -855,7 +852,7 @@ export async function PATCH(
             include: { product: { include: { size: true } } },
           },
           payment: true,
-          shipping: true,
+          shipping: SHIPPING_WITHOUT_GUIDE_PDF,
           coupon: true,
         },
       });
@@ -1175,7 +1172,7 @@ export async function DELETE(
       const order = await tx.order.findUnique({
         where: { id: params.orderId },
         include: {
-          shipping: true,
+          shipping: SHIPPING_WITHOUT_GUIDE_PDF,
           payment: true,
           coupon: true,
           orderItems: true,

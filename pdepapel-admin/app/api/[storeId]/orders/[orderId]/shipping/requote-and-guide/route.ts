@@ -11,6 +11,7 @@ import {
 } from "@/lib/shipping-helpers";
 import { reconcileShippingRate } from "@/lib/shipping-rate-reconcile";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * Recotizar y crear la guía de una vez.
@@ -41,7 +42,7 @@ export async function POST(
 
     const order = await prismadb.order.findFirst({
       where: { id: params.orderId, storeId: params.storeId },
-      include: { shipping: true, orderItems: true },
+      include: { shipping: SHIPPING_WITHOUT_GUIDE_PDF, orderItems: true },
     });
     if (!order)
       throw ErrorFactory.NotFound("La orden no existe en esta tienda");

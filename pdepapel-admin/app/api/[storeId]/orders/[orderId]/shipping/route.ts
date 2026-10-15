@@ -5,6 +5,7 @@ import { ShippingStatus } from "@prisma/client";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 export async function POST(
   req: Request,
@@ -35,7 +36,7 @@ export async function POST(
         storeId: params.storeId,
       },
       include: {
-        shipping: true,
+        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
       },
     });
 
@@ -67,6 +68,7 @@ export async function POST(
           ? new Date(estimatedDeliveryDate)
           : null,
       },
+      ...SHIPPING_WITHOUT_GUIDE_PDF,
       include: {
         order: {
           select: {

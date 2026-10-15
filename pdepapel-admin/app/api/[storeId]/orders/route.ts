@@ -1,6 +1,10 @@
 import { closeReservationsForOrders } from "@/lib/reservation-counters";
-import { scrubOrders } from "@/lib/viewer-payloads";
 import { getStoreAccess } from "@/lib/store-access";
+import {
+  CUSTOMER_ORDER_LIST_SELECT,
+  parseOrderListPage,
+} from "@/lib/public-orders";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { BATCH_SIZE } from "@/constants";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
@@ -819,42 +823,36 @@ export async function GET(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
 
-    // La dueña ve todo; una cuenta de solo lectura ve la misma lista sin el
-    // contacto de la clienta ni la utilidad; una clienta, solo lo suyo.
+    // «Mis pedidos» de la tienda: cada sesión ve sus propios pedidos, también
+    // la dueña cuando compra con su cuenta. Solo la dueña puede pedir los de
+    // otra clienta con `?userId=`. La forma es la de la lista (sin direcciones,
+    // notas, costos ni la guía) y va paginada, lo más reciente primero.
     const access = await getStoreAccess(params.storeId);
-    const isStoreOwner = access?.role === "owner";
     const requestedUserId = req.nextUrl.searchParams.get("userId");
 
-    if (!isStoreOwner && requestedUserId && requestedUserId !== userId) {
+    if (requestedUserId && requestedUserId !== userId && access?.role !== "owner") {
       throw ErrorFactory.Unauthorized();
     }
 
-    const whereClause = isStoreOwner
-      ? {
-          storeId: params.storeId,
-          ...(requestedUserId ? { userId: requestedUserId } : {}),
-        }
-      : {
-          storeId: params.storeId,
-          userId,
-        };
+    const where = { storeId: params.storeId, userId: requestedUserId || userId };
+    const { take, skip } = parseOrderListPage(req.nextUrl.searchParams);
+    const [orders, total] = await Promise.all([
+      prismadb.order.findMany({
+        where,
+        select: CUSTOMER_ORDER_LIST_SELECT,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take,
+        skip,
+      }),
+      prismadb.order.count({ where }),
+    ]);
 
-    const orders = await prismadb.order.findMany({
-      where: whereClause,
-      include: {
-        orderItems: {
-          include: {
-            product: true,
-          },
-        },
-        payment: true,
-        shipping: true,
-        coupon: true,
+    return NextResponse.json(orders, {
+      headers: {
+        ...corsHeaders,
+        ...CACHE_HEADERS.NO_CACHE,
+        "X-Total-Count": String(total),
       },
-    });
-
-    return NextResponse.json(access?.role === "viewer" ? scrubOrders(orders) : orders, {
-      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   } catch (error) {
     return handleErrorResponse(error, "ORDERS_GET", {
@@ -900,7 +898,7 @@ export async function DELETE(
           storeId: params.storeId,
         },
         include: {
-          shipping: true,
+          shipping: SHIPPING_WITHOUT_GUIDE_PDF,
           payment: true,
           coupon: true,
           orderItems: {
@@ -1113,7 +1111,7 @@ export async function PATCH(
               product: true,
             },
           },
-          shipping: true,
+          shipping: SHIPPING_WITHOUT_GUIDE_PDF,
           payment: true,
         },
       });
@@ -1314,7 +1312,7 @@ export async function PATCH(
                 product: true,
               },
             },
-            shipping: true,
+            shipping: SHIPPING_WITHOUT_GUIDE_PDF,
             payment: true,
             coupon: true,
           },

@@ -2,6 +2,11 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
+import {
+  TRACKING_EVENT_SELECT,
+  TRACKING_SHIPPING_SELECT,
+  canCustomerViewOrder,
+} from "@/lib/public-orders";
 import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
 import { CACHE_HEADERS, checkIfStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
@@ -14,47 +19,53 @@ export async function OPTIONS(req: Request) {
   return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
+/**
+ * Rastreo de un envío. La tienda manda el `orderId` y la regla es la de la
+ * página del pedido (`canCustomerViewOrder`); el panel manda el `shippingId`
+ * con la sesión de la dueña. La respuesta trae solo lo que el rastreo
+ * necesita: nunca la guía, la dirección ni los datos de la clienta.
+ */
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   const corsHeaders = getCorsHeaders(req);
   try {
-    const { userId: userLogged } = await auth();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    const { userId } = await auth();
+    const body = await req.json().catch(() => ({}));
+    const orderId = typeof body?.orderId === "string" ? body.orderId : null;
+    const shippingId = typeof body?.shippingId === "string" ? body.shippingId : null;
+    if (!orderId && !shippingId)
+      throw ErrorFactory.InvalidRequest("El ID del pedido es requerido");
 
-    const isStoreOwner = userLogged
-      ? await checkIfStoreOwner(userLogged, params.storeId)
-      : false;
-
-    const body = await req.json();
-    const { shippingId, guestId } = body;
-
-    if (!shippingId)
-      throw ErrorFactory.InvalidRequest("El ID de envío es requerido");
-
-    if (!userLogged && !guestId) {
-      throw ErrorFactory.Unauthenticated();
-    }
-
-    // Find shipping with order relation to verify ownership
-    const shipping = await prismadb.shipping.findUnique({
-      where: { id: shippingId, storeId: params.storeId },
-      include: {
-        order: true,
+    const shipping = await prismadb.shipping.findFirst({
+      where: {
+        storeId: params.storeId,
+        ...(orderId ? { orderId } : {}),
+        ...(shippingId ? { id: shippingId } : {}),
+      },
+      select: {
+        id: true,
+        status: true,
+        envioClickIdOrder: true,
+        order: { select: { userId: true, createdBy: true } },
       },
     });
 
-    if (!shipping)
+    const isStoreOwner = await checkIfStoreOwner(userId, params.storeId);
+    // Sin `orderId` solo pasan la dueña y la clienta con sesión dueña del
+    // pedido (la tienda anterior mandaba solo el `shippingId`).
+    const allowed =
+      shipping &&
+      (isStoreOwner ||
+        (orderId
+          ? await canCustomerViewOrder(shipping.order, params.storeId, userId)
+          : Boolean(userId) && shipping.order.userId === userId));
+    if (!shipping || !allowed) {
+      if (!orderId && !userId) throw ErrorFactory.Unauthenticated();
       throw ErrorFactory.NotFound("Información de envío no encontrada");
-
-    // Verify ownership against the authenticated session or the guest identifier.
-    const isOwner =
-      isStoreOwner ||
-      (userLogged && shipping.order.userId === userLogged) ||
-      (guestId && shipping.order.guestId === guestId);
-
-    if (!isOwner) throw ErrorFactory.Unauthorized();
+    }
 
     if (!shipping.envioClickIdOrder)
       throw ErrorFactory.InvalidRequest(
@@ -81,6 +92,7 @@ export async function POST(
             timestamp: new Date(event.date),
             status: event.status,
           },
+          select: { id: true },
         });
 
         if (!existingEvent) {
@@ -102,25 +114,21 @@ export async function POST(
     await prismadb.$transaction((tx) =>
       applyShipmentStatus(tx, { shippingId: shipping.id, storeId: params.storeId, status: newStatus }),
     );
-    const updatedShipping = await prismadb.shipping.findFirst({
-      where: { id: shipping.id, storeId: params.storeId },
-    });
-
-    const events = await prismadb.shippingTrackingEvent.findMany({
-      where: { shippingId: shipping.id },
-      orderBy: { timestamp: "desc" },
-    });
+    const [updatedShipping, events] = await Promise.all([
+      prismadb.shipping.findFirst({
+        where: { id: shipping.id, storeId: params.storeId },
+        select: TRACKING_SHIPPING_SELECT,
+      }),
+      prismadb.shippingTrackingEvent.findMany({
+        where: { shippingId: shipping.id },
+        orderBy: { timestamp: "desc" },
+        select: TRACKING_EVENT_SELECT,
+      }),
+    ]);
 
     return NextResponse.json(
-      {
-        success: true,
-        shipping: updatedShipping,
-        tracking: trackingData.data,
-        events,
-      },
-      {
-        headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
-      },
+      { success: true, shipping: updatedShipping, events },
+      { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } },
     );
   } catch (error: any) {
     return handleErrorResponse(error, "TRACK_SHIPMENT", {

@@ -36,6 +36,7 @@ import { RISK_REASON_LABELS, isFlagged, parseRiskReasons } from "@/lib/order-ris
 import { getShippingChargeState } from "@/lib/order-totals";
 import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 import prismadb from "@/lib/prismadb";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * Lo que necesita un correo de pedido, en UNA sola consulta.
@@ -48,7 +49,7 @@ import prismadb from "@/lib/prismadb";
  */
 export const ORDER_EMAIL_INCLUDE = {
   payment: { select: { method: true } },
-  shipping: true,
+  shipping: SHIPPING_WITHOUT_GUIDE_PDF,
   orderItems: {
     include: { product: { select: { name: true } } },
     orderBy: { createdAt: "asc" },

@@ -76,6 +76,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { runInBackground } from "@/lib/background";
 import { createGuideInBackground } from "@/lib/guide-background";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -1044,7 +1045,7 @@ async function createCheckout(
       await invalidateStoreProductsCache(params.storeId, { orderIds: [order.id] });
       const paidOrder = await prismadb.order.findUnique({
         where: { id: order.id },
-        include: { payment: true, shipping: true, orderItems: { include: { product: true } } },
+        include: { payment: true, shipping: SHIPPING_WITHOUT_GUIDE_PDF, orderItems: { include: { product: true } } },
       });
       try {
         await recordPaidOrderInGoogleAnalytics(order.id);

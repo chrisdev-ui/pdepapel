@@ -6,6 +6,7 @@ import { OPEN_INVENTORY_ISSUE_SELECT } from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
 import { scrubOrder, scrubProducts } from "@/lib/viewer-payloads";
 import { headers } from "next/headers";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 export async function getOrder(orderId: string, storeId: string) {
   const access = await requireStoreRead(storeId);
@@ -17,7 +18,7 @@ export async function getOrder(orderId: string, storeId: string) {
     include: {
       orderItems: true,
       payment: true,
-      shipping: true,
+      shipping: SHIPPING_WITHOUT_GUIDE_PDF,
       coupon: true,
       inventoryIssues: {
         where: { resolvedAt: null },

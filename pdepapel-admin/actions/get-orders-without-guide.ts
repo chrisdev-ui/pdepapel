@@ -1,5 +1,6 @@
 import { requireStoreOwner } from "@/lib/store-access";
 import prismadb from "@/lib/prismadb";
+import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 export async function getOrdersWithoutGuide(storeId: string) {
   await requireStoreOwner(storeId);
@@ -15,7 +16,7 @@ export async function getOrdersWithoutGuide(storeId: string) {
       },
     },
     include: {
-      shipping: true,
+      shipping: SHIPPING_WITHOUT_GUIDE_PDF,
     },
   });
 }
