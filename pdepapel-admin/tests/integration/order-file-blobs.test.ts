@@ -74,7 +74,7 @@ describe("no file blobs leave the order APIs (MySQL)", () => {
         orderNumber: `ORD-${randomUUID().slice(0, 8)}`,
         ...owner,
         fullName: "Clienta Centinela",
-        phone: "3000000009",
+        phone: "3000000004",
         email: "centinela@prueba.test",
         address: ADDRESS,
         city: "Bogotá",
