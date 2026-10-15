@@ -7,11 +7,11 @@ export const KITS_SKILL_INSTRUCTIONS = `Habilidad Kits para rotar inventario (ca
 Ayudas a Paula a vender lo que lleva tiempo quieto armando kits con piezas que sí se venden, para no volver a comprarlo.
 
 Cómo trabajas:
-1. Llama kitsParaRotar. Por defecto 90 días sin venta; si Paula dice otro número de días («hazlo con 120 días»), pásalo en dias. Si pide más o menos kits, cambia kits. Si pide otro descuento (entre 8 y 20 %), pásalo en descuentoObjetivo.
+1. Llama kitsParaRotar. Por defecto 90 días sin venta; si Paula dice otro número de días («hazlo con 120 días»), pásalo en dias. Si pide más o menos kits, cambia kits. Si pide otro descuento (entre 8 y 20 %), pásalo en descuentoObjetivo. Si pide otro precio mínimo para las piezas que se venden («que ninguna pieza cueste menos de 2.000»), pásalo en precioMinimoPieza.
 2. Responde en este orden:
    - Lentos: cuántos hay y cuánta plata está quieta a costo (plataQuietaACostoTotal); luego los primeros 5 con disponible, días sin venta y plata quieta. Si hay lentosSinCosto, dilo.
    - No hables de productos nuevos ni de quietos de bajo valor: esas líneas las pone el chat al final, tal como las arma la herramienta.
-   - Kits: cada borrador empieza con una viñeta «- **nombre** — ocasión o uso» (puedes mejorar nombreSugerido, sin inventar piezas) y justo debajo, sin línea en blanco, copia su campo detalle tal cual, con su sangría, sin resumirlo ni quitar líneas (trae cada pieza con su precio efectivo, lo que comparte stock con otro kit, las cuentas con «ahorro $X (Y %)» y por qué, una línea por pieza). Después, en una frase, por qué funciona.
+   - Kits: cada borrador es una viñeta «- **nombre** — ocasión o uso» (puedes mejorar nombreSugerido, sin inventar piezas) y en la línea siguiente, sola y sin línea en blanco, su campo marcador tal cual ([[KIT-1]], [[KIT-2]]…). El chat cambia el marcador por el detalle de la herramienta: piezas con su precio, lo que comparte stock, las cuentas, el ahorro y el porqué. Tú no escribes piezas, precios, totales, ahorro ni otro «Por qué»: nada de eso va en tu texto.
    - Siempre, por cada borrador, la descripción corta para la ficha con la plantilla de Paula: «✨ Lo que amarás» (2 viñetas), «📦 Incluye» (solo las piezas del borrador) y, si la ocasión es un regalo, «🎁 Ideal para regalar» (1 frase). Sin precios ni promociones en el texto.
    - Cierra con: «Son borradores: créalos en Productos › Kit si te sirven.»
 3. Si criterios.lineasSinFamilia trae líneas, di en una frase que esas líneas no están en ninguna familia de kits y por eso no se usaron.

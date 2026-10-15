@@ -57,6 +57,8 @@ export interface KitOptions {
   minLineLift?: number;
   /** Precio efectivo mínimo de una pieza lenta. */
   minSlowValue?: number;
+  /** Precio efectivo mínimo de una pieza que se vende: una más barata no sostiene el kit. */
+  minSellerValue?: number;
   /** Parte mínima de la suma del kit que debe pesar cada pieza lenta, en %. */
   minSlowSharePct?: number;
   families?: KitFamilies;
@@ -65,6 +67,7 @@ export interface KitOptions {
 export const DEFAULT_MIN_LINE_PAIR_ORDERS = 3;
 export const DEFAULT_MIN_LINE_LIFT = 1;
 export const DEFAULT_MIN_SLOW_VALUE = 5000;
+export const DEFAULT_MIN_SELLER_VALUE = 1000;
 export const DEFAULT_MIN_SLOW_SHARE_PCT = 10;
 
 export interface KitPiece {
@@ -305,6 +308,7 @@ export function proposeKits(input: {
   const minLift = options.minLineLift ?? DEFAULT_MIN_LINE_LIFT;
   const minSlowValue = options.minSlowValue ?? DEFAULT_MIN_SLOW_VALUE;
   const minSlowShare = options.minSlowSharePct ?? DEFAULT_MIN_SLOW_SHARE_PCT;
+  const minSellerValue = options.minSellerValue ?? DEFAULT_MIN_SELLER_VALUE;
   const byId = new Map(products.map((product) => [product.id, product]));
   const lentos = rankSlowMovers(products.map((product) => ({ ...product })), history);
   const slowIds = new Set(lentos.map((row) => row.id));
@@ -314,7 +318,12 @@ export function proposeKits(input: {
 
   const sellers = products.filter(
     (product) =>
-      !isBundle(product) && !product.isArchived && !slowIds.has(product.id) && availableStock(product) >= options.minPerKit && history.get(product.id).soldInWindow > 0,
+      !isBundle(product) &&
+      !product.isArchived &&
+      !slowIds.has(product.id) &&
+      product.effectivePrice >= minSellerValue &&
+      availableStock(product) >= options.minPerKit &&
+      history.get(product.id).soldInWindow > 0,
   );
 
   /** Se complementan: líneas distintas que salen juntas en suficientes pedidos y más que por azar. Comprarlos juntos suma puntos, no basta. */

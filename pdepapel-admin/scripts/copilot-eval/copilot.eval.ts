@@ -249,7 +249,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
     const type = await testPrisma.type.create({ data: { name, slug: `${name.toLowerCase().replace(/[^a-z]+/g, "-")}-eval-${randomBytes(3).toString("hex")}`, storeId: store } });
     return (await testPrisma.category.create({ data: { name: categoryName, slug: `${name.toLowerCase().replace(/[^a-z]+/g, "-")}-cat-${randomBytes(3).toString("hex")}`, storeId: store, typeId: type.id } })).id;
   };
-  const [notebooks, writing, school, colors, measuring, folders, beauty, bundles] = [
+  const [notebooks, writing, school, colors, measuring, folders, beauty, bundles, planning] = [
     await line("Cuadernos"),
     await line("Escritura"),
     await line("Útiles"),
@@ -258,6 +258,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
     await line("Carpetas"),
     await line("Belleza / Cuidado Personal"),
     await line("Kits", "Kits kawaii Eval"),
+    await line("Planeación & Organización"),
   ];
   await testPrisma.product.update({ where: { id: f.component.id }, data: { stock: 0 } });
   const slow = await make(KITS_FIXTURE.lento, { price: 9000, stock: 8, acqPrice: 3000, categoryId: notebooks });
@@ -274,6 +275,8 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
   // Se compran con la libreta más que por azar, pero no van en un kit escolar: otra familia y la línea de kits.
   const soap = await make(KITS_FIXTURE.otraFamilia, { price: 7000, stock: 20, acqPrice: 2500, categoryId: beauty });
   const bundle = await make(KITS_FIXTURE.lineaDeKits, { price: 9000, stock: 20, acqPrice: 4000, categoryId: bundles });
+  // Se vende y se compra con la libreta, pero por menos de $1.000: no sostiene un kit.
+  const clip = await make(KITS_FIXTURE.piezaBarata, { price: 800, stock: 40, acqPrice: 200, categoryId: planning });
   // Lento de bajo valor: va a «Quietos de bajo valor», no a un kit.
   const envelope = await make(KITS_FIXTURE.bajoValor, { price: 500, stock: 40, acqPrice: 200, categoryId: measuring });
   await make(KITS_FIXTURE.archivado, { price: 7000, stock: 5, acqPrice: 2500, isArchived: true });
@@ -317,6 +320,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
     { productId: spiral.id, quantity: 1, price: 7000, name: "Cuaderno espiral" },
     { productId: soap.id, quantity: 1, price: 7000, name: "Jabon" },
     { productId: bundle.id, quantity: 1, price: 9000, name: "Kit kawaii" },
+    { productId: clip.id, quantity: 1, price: 800, name: "Clip" },
   ]);
   // Dos pedidos más como ese (hace 140 y 160 días): las líneas salen juntas en 3 pedidos, más que por azar.
   for (const days of [140, 160]) {
@@ -328,6 +332,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
       { productId: marker.id, quantity: 1, price: 6000, name: "Marcador" },
       { productId: soap.id, quantity: 1, price: 7000, name: "Jabon" },
       { productId: bundle.id, quantity: 1, price: 9000, name: "Kit kawaii" },
+      { productId: clip.id, quantity: 1, price: 800, name: "Clip" },
     ]);
   }
   // La carpeta salió hace 100 a 170 días con borrador, regla y marcador: lenta, y relacionada solo con piezas que ya usa la libreta.
@@ -341,6 +346,7 @@ async function seedKits(f: InventoryFixture, empty: InventoryFixture) {
   }
   await order(20, [{ productId: soap.id, quantity: 1, price: 7000, name: "Jabon" }]);
   await order(25, [{ productId: bundle.id, quantity: 1, price: 9000, name: "Kit kawaii" }]);
+  await order(15, [{ productId: clip.id, quantity: 2, price: 800, name: "Clip" }]);
   await order(150, [{ productId: envelope.id, quantity: 1, price: 500, name: "Sobre" }]);
   await order(30, [
     { productId: gelPen.id, quantity: 1, price: 4500, name: "Lapicero gel" },

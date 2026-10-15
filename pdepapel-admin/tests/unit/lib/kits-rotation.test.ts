@@ -306,6 +306,18 @@ describe("borradores de kits", () => {
     expect(kit.sumaPreciosEfectivos).toBe(kit.piezas.reduce((total, p) => total + p.precioEfectivo, 0));
   });
 
+  it("una pieza que se vende por menos de $1.000 no entra; el mínimo se puede cambiar", () => {
+    const { products, rows } = scenario();
+    products[1] = { ...products[1], effectivePrice: 900, listPrice: 900 };
+    const [kit] = run(products, rows).kits;
+    expect(kit.piezas.map((p) => p.productId)).not.toContain("Lápiz que se vende");
+    expect(kit.piezas.every((p) => p.rol === "lento" || p.precioEfectivo >= 1000)).toBe(true);
+    const [cheapAllowed] = run(products, rows, noSignals, { ...OPTIONS, minSellerValue: 500 }).kits;
+    expect(cheapAllowed.piezas.map((p) => p.productId)).toContain("Lápiz que se vende");
+    const [strict] = run(products, rows, noSignals, { ...OPTIONS, minSellerValue: 5001 }).kits ?? [];
+    expect(strict).toBeUndefined();
+  });
+
   it("no usa kits, archivados ni piezas sin stock para K kits; sin lentos no propone nada", () => {
     const { products, rows } = scenario([
       product("Kit que se vende", { isKit: true, typeId: "kits", stock: 20 }),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { kitsAnswerTransform, placeFixedLines, reconcileKitAnswer, type KitOutput } from "@/lib/copiloto/skills/kits-transform";
+import { kitsAnswerTransform, placeFixedLines, reconcileKitAnswer, toolAmounts, type KitOutput } from "@/lib/copiloto/skills/kits-transform";
 
 type Part = Record<string, unknown> & { type: string };
 
@@ -36,65 +36,103 @@ describe("línea de productos nuevos en la respuesta de kits", () => {
 });
 
 /** Las piezas lentas van primero; `slow` dice cuántas son. El detalle tiene la forma de `kitDetail`: sangrado bajo la viñeta del kit. */
-const kitOf = (name: string, pieces: [string, number][], ahorro: number, sugerido: number, slow = 1): KitOutput => ({
+const kitOf = (name: string, marcador: string, pieces: [string, number][], ahorro: number, sugerido: number, slow = 1): KitOutput => ({
   nombreSugerido: name,
+  marcador,
   piezas: pieces.map(([nombre, precioEfectivo], index) => ({ nombre, precioEfectivo, rol: index < slow ? "lento" : "se vende" })),
   ahorroParaLaClienta: ahorro,
   detalle: [
     ...pieces.map(([nombre, precio], index) => `  - ${nombre} (${index < slow ? "lento" : "se vende"}): $${precio.toLocaleString("es-CO")}`),
     `  - precio sugerido $${sugerido.toLocaleString("es-CO")} · ahorro $${ahorro.toLocaleString("es-CO")} (12 %).`,
+    "  - Por qué:",
+    `    - ${pieces[1][0]}: su línea se compra junto con la de ${pieces[0][0]} (3 pedidos en 180 días)`,
   ].join("\n"),
 });
-const grados = kitOf("Kit de grados con Libreta", [["Libreta lenta", 6000], ["Lápiz HB", 4000], ["Regla", 2500]], 1600, 10900);
-const oficina = kitOf("Kit de oficina con Agenda", [["Agenda roja", 9000], ["Lápiz HB", 4000], ["Clips", 2500]], 1900, 13600);
-const listed = (kit: KitOutput) => `- **${kit.nombreSugerido}** — útiles\n${kit.detalle}`;
+const grados = kitOf("Kit de grados con Libreta", "[[KIT-1]]", [["Libreta lenta", 6000], ["Lápiz HB", 4000], ["Regla", 2500]], 1600, 10900);
+const oficina = kitOf("Kit de oficina con Agenda", "[[KIT-2]]", [["Agenda roja", 9000], ["Lápiz HB", 4000], ["Regla", 2500]], 1900, 13600);
 const kitsResult = (kits: KitOutput[], linea: string | null = null) => ({ type: "tool-result", toolName: "kitsParaRotar", output: { datos: { nuevosSinDatosDeVenta: { linea }, kits } } });
 
-describe("cada kit con el detalle de la herramienta, tal cual", () => {
-  it("(a) un kit que ya trae su detalle, reconocido por sus piezas, no se repite", () => {
-    const answer = `${listed(grados)}\nFunciona porque se compran juntos.`;
-    expect(reconcileKitAnswer(answer, [grados])).toBe(answer);
+describe("cada kit con el detalle de la herramienta en su marcador", () => {
+  it("el marcador se cambia por el detalle, tal cual, debajo de la viñeta del modelo", () => {
+    const answer = "Lentos: Libreta lenta, $24.000 quietos.\n\n- **Kit de grados** — para grados\n[[KIT-1]]\n\nSon borradores.";
+    expect(reconcileKitAnswer(answer, [grados], toolAmounts({ plataQuietaACosto: 24000, kits: [grados] }))).toBe(`Lentos: Libreta lenta, $24.000 quietos.\n\n- **Kit de grados** — para grados\n${grados.detalle}\n\nSon borradores.`);
   });
 
-  it("(a) otro kit que comparte precios con el listado no cuenta como listado: se agrega el suyo", () => {
-    const answer = listed(grados);
-    const out = reconcileKitAnswer(answer, [grados, oficina]);
-    expect(out.startsWith(answer)).toBe(true);
+  it("un marcador en la misma línea de la viñeta también vale", () => {
+    expect(reconcileKitAnswer("- **Kit de grados** — para grados [[KIT-1]]", [grados])).toBe(`- **Kit de grados** — para grados\n${grados.detalle}`);
+  });
+
+  it("un marcador sin viñeta encima recibe el nombre del kit", () => {
+    expect(reconcileKitAnswer("Estos son los kits:\n\n[[KIT-1]]", [grados])).toBe(`Estos son los kits:\n\n- **Kit de grados con Libreta**\n${grados.detalle}`);
+  });
+
+  it("un kit sin marcador va al final, una sola vez, con su título", () => {
+    const out = reconcileKitAnswer("- **Kit de grados** — para grados\n[[KIT-1]]\n\nSon borradores.", [grados, oficina]);
     expect(out.match(/Detalle de/g)).toHaveLength(1);
-    expect(out).toContain(`**Detalle de «Kit de oficina con Agenda»**\n${oficina.detalle}`);
+    expect(out.endsWith(`**Detalle de «Kit de oficina con Agenda»**\n${oficina.detalle}`)).toBe(true);
+    expect(out.match(/Agenda roja \(lento\)/g)).toHaveLength(1);
   });
 
-  it("(a) un kit contado en prosa (aunque con los mismos números) recibe su detalle bajo la viñeta, sin dos precios", () => {
+  it("un marcador repetido no repite el detalle", () => {
+    const out = reconcileKitAnswer("- **Kit de grados**\n[[KIT-1]]\n\nOtra vez: [[KIT-1]]", [grados]);
+    expect(out.match(/Libreta lenta \(lento\)/g)).toHaveLength(1);
+  });
+
+  it("las piezas, precios y cuentas que escriba el modelo se quitan: solo queda el detalle", () => {
     const answer = [
-      "Lentos: Libreta lenta, 8 disponibles, $24.000 quietos.",
-      "- **Kit de grados** — para grados.\n  Incluye Libreta lenta ($6.000), Lápiz HB ($4.000) y Regla ($2.500); precio $10.900, ahorro $1.600.\n  Funciona porque se compran juntos.",
-      "Son borradores.",
-    ].join("\n\n");
+      "- **Kit de grados** — para grados",
+      "[[KIT-1]]",
+      "  - Lápiz HB (se vende): $3.500",
+      "Precio sugerido $9.900 y ahorro $2.600.",
+      "  - precio sugerido $10.900 · ahorro $1.600 (12 %).",
+      "",
+      "📦 Incluye: Libreta lenta, Lápiz HB, Regla.",
+    ].join("\n");
     const out = reconcileKitAnswer(answer, [grados]);
-    expect(out.split("\n\n")[1]).toBe(`- **Kit de grados** — para grados.\n${grados.detalle}\n  Funciona porque se compran juntos.`);
-    expect(out.match(/\$10\.900/g)).toHaveLength(1);
-    expect(out).toContain("$24.000 quietos");
-  });
-
-  it("(b) si el modelo da otro precio, gana el de la herramienta y no quedan dos precios para el mismo kit", () => {
-    const answer = "Kit de grados con Libreta lenta, Lápiz HB y Regla.\nPrecio sugerido $9.900 y ahorro $2.600.\nSe pueden armar 8.\n\n📦 Incluye: Libreta lenta, Lápiz HB, Regla.";
-    const out = reconcileKitAnswer(answer, [grados]);
-    expect(out).not.toContain("$9.900");
-    expect(out).not.toContain("$2.600");
-    expect(out).toContain("precio sugerido $10.900 · ahorro $1.600 (12 %)");
+    for (const wrong of ["$3.500", "$9.900", "$2.600"]) expect(out).not.toContain(wrong);
     expect(out.match(/\$10\.900/g)).toHaveLength(1);
     expect(out).toContain("📦 Incluye: Libreta lenta, Lápiz HB, Regla.");
   });
 
-  it("(b) por la ruta del chat: el texto del modelo se corrige antes de salir", async () => {
+  it("una viñeta con un precio queda solo con el nombre del kit", () => {
+    expect(reconcileKitAnswer("- **Kit de grados** — $10.900\n[[KIT-1]]", [grados])).toBe(`- **Kit de grados con Libreta**\n${grados.detalle}`);
+  });
+
+  it("el «Por qué» del modelo (y lo que cuelga de él) se quita: queda solo el de la herramienta", () => {
+    const answer = ["- **Kit de grados** — para grados", "[[KIT-1]]", "  - Por qué: se compran juntos.", "    - y es temporada de grados", "Funciona porque son útiles.", "", "Son borradores."].join("\n");
+    const out = reconcileKitAnswer(answer, [grados]);
+    expect(out.match(/Por qué/g)).toHaveLength(1);
+    expect(out).not.toContain("temporada de grados");
+    expect(out).not.toContain("Funciona porque");
+    expect(out).toBe(`- **Kit de grados** — para grados\n${grados.detalle}\n\nSon borradores.`);
+  });
+
+  it("un monto que no dio la herramienta se quita en cualquier parte; los suyos se quedan", () => {
+    const answer = "Lentos: $24.000 quietos a costo.\nEl kit deja $5.555 de ganancia.\n\n- **Kit de grados**\n[[KIT-1]]";
+    const out = reconcileKitAnswer(answer, [grados], new Set(["24000", "6000", "4000", "2500", "10900", "1600"]));
+    expect(out).toContain("$24.000 quietos a costo.");
+    expect(out).not.toContain("$5.555");
+  });
+
+  it("dos kits, cada uno en su marcador", () => {
+    const out = reconcileKitAnswer("- **Kit A**\n[[KIT-1]]\n- **Kit B**\n[[KIT-2]]", [grados, oficina]);
+    expect(out).toBe(`- **Kit A**\n${grados.detalle}\n- **Kit B**\n${oficina.detalle}`);
+  });
+
+  it("los montos permitidos salen de toda la salida de la herramienta", () => {
+    expect(Array.from(toolAmounts({ datos: { plataQuietaACostoTotal: 24000.4, kits: [{ detalle: "  - Regla: $2.500" }] } })).sort()).toEqual(["24000", "2500"]);
+  });
+
+  it("por la ruta del chat: el marcador sale cambiado y la línea de nuevos al final", async () => {
     const text = await run([
       kitsResult([grados], "Nuevos sin datos de venta: 1 (no se tratan como lentos)."),
       { type: "text-start", id: "t1" },
-      { type: "text-delta", id: "t1", text: "- **Kit de grados** con Libreta lenta, Lápiz HB y Regla.\n" },
-      { type: "text-delta", id: "t1", text: "  - Lápiz HB: $3.500\n  Precio $10.900, ahorro $1.600." },
+      { type: "text-delta", id: "t1", text: "- **Kit de grados** — para grados\n[[KI" },
+      { type: "text-delta", id: "t1", text: "T-1]]\n  - Lápiz HB: $3.500" },
       { type: "text-end", id: "t1" },
       { type: "finish" },
     ]);
+    expect(text).not.toContain("[[KIT");
     expect(text).not.toContain("$3.500");
     expect(text).toContain("  - Lápiz HB (se vende): $4.000");
     expect(text.trim().endsWith("Nuevos sin datos de venta: 1 (no se tratan como lentos).")).toBe(true);
@@ -104,48 +142,6 @@ describe("cada kit con el detalle de la herramienta, tal cual", () => {
     const text = await run([kitsResult([grados]), { type: "text-delta", id: "t1", text: "Kit con Libreta lenta y Lápiz HB." }]);
     expect(text).toContain("Kit con Libreta lenta y Lápiz HB.");
     expect(text).toContain("Detalle de «Kit de grados con Libreta»");
-  });
-
-  const conLibreta = kitOf("Kit A", [["Libreta lenta", 6000], ["Lápiz HB", 4000], ["Regla", 2500]], 1600, 10900);
-  const conAgenda = kitOf("Kit B", [["Agenda roja", 9000], ["Lápiz HB", 4000], ["Regla", 2500]], 1900, 13600);
-
-  it("dos kits que comparten las piezas que se venden, cada uno con su detalle, quedan tal cual", () => {
-    const answer = [listed(conLibreta), listed(conAgenda), "Son borradores."].join("\n\n");
-    expect(reconcileKitAnswer(answer, [conLibreta, conAgenda])).toBe(answer);
-  });
-
-  it("si solo el segundo trae un precio equivocado, solo se corrige ese y el primero no se toca", () => {
-    const first = listed(conLibreta);
-    const answer = [first, "- **Kit B** con Agenda roja, Lápiz HB y Regla: precio $12.500.", "Son borradores."].join("\n\n");
-    const out = reconcileKitAnswer(answer, [conLibreta, conAgenda]);
-    expect(out.startsWith(`${first}\n\n`)).toBe(true);
-    expect(out).not.toContain("$12.500");
-    expect(out.split("\n\n")[1]).toBe(`- **Kit B**\n${conAgenda.detalle}`);
-    expect(out).not.toContain("Detalle de «Kit A»");
-  });
-
-  it("el detalle de un kit que nombra a otro («comparte stock con «Kit … Carpeta…»») no lo hace pasar por el otro", () => {
-    const libreta = { ...kitOf("Kit con Libreta lenta", [["Libreta lenta", 9000], ["Marcador", 6000], ["Borrador", 3000]], 3600, 14900) };
-    libreta.detalle = libreta.detalle!.replace("  - Borrador (se vende): $3.000", "  - Borrador (se vende): $3.000 · comparte stock con «Kit con Carpeta lenta»");
-    const carpeta = kitOf("Kit con Carpeta lenta", [["Carpeta lenta", 9000], ["Marcador", 6000], ["Borrador", 3000]], 3100, 14900);
-    const first = `- **Kit con libreta**\n${libreta.detalle}`;
-    const answer = [first, "- **Kit con carpeta** con Carpeta lenta, Marcador y Borrador.\n  Funciona porque se compran juntos.", "Son borradores."].join("\n\n");
-    const out = reconcileKitAnswer(answer, [libreta, carpeta]);
-    expect(out.split("\n\n")[0]).toBe(first);
-    expect(out.split("\n\n")[1]).toBe(`- **Kit con carpeta** con Carpeta lenta, Marcador y Borrador.\n${carpeta.detalle}\n  Funciona porque se compran juntos.`);
-  });
-
-  it("dos kits en un mismo párrafo: cada detalle va bajo su propia viñeta", () => {
-    const answer = "- **Kit A** con Libreta lenta, Lápiz HB y Regla.\n- **Kit B** con Agenda roja, Lápiz HB y Regla.";
-    const out = reconcileKitAnswer(answer, [conLibreta, conAgenda]);
-    expect(out).toBe(`- **Kit A** con Libreta lenta, Lápiz HB y Regla.\n${conLibreta.detalle}\n- **Kit B** con Agenda roja, Lápiz HB y Regla.\n${conAgenda.detalle}`);
-  });
-
-  it("un kit con dos lentas no toca la lista de lentos con su plata quieta", () => {
-    const doble = kitOf("Kit doble", [["Libreta lenta", 6000], ["Agenda roja", 9000], ["Regla", 2500]], 2000, 15500, 2);
-    const lentos = "Lentos:\n- Libreta lenta: $24.000 quietos a costo\n- Agenda roja: $18.000 quietos a costo";
-    const answer = [lentos, listed(doble), "Son borradores."].join("\n\n");
-    expect(reconcileKitAnswer(answer, [doble])).toBe(answer);
   });
 });
 

@@ -554,6 +554,8 @@ export const KITS_FIXTURE = {
   lineaDeKits: "Kit kawaii Eval",
   /** Belleza: se compra con la libreta, pero no es de la familia de un kit escolar. */
   otraFamilia: "Jabón Eval",
+  /** Se vende y se compra con la libreta, pero a 800: por debajo del mínimo de una pieza que se vende. */
+  piezaBarata: "Clip mariposa Eval",
   /** Lento de 500: va a «Quietos de bajo valor». */
   bajoValor: "Sobre lento Eval",
 } as const;
@@ -717,6 +719,42 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
       const pieces = main.text.split("\n").filter((line) => /\((lento|se vende)\):/.test(line));
       return pieces.length > 0 && pieces.every((line) => /^\s{2,}[-*]\s/.test(line));
     },
+  },
+  {
+    id: "kits-sin-marcadores",
+    criterio: "No queda ningún marcador [[KIT-n]] en la respuesta.",
+    estricto: true,
+    pasa: ({ main, followUp }) => !/\[\[KIT-/i.test(main.text + followUp.text),
+  },
+  {
+    id: "kits-detalle-una-vez",
+    criterio: "El detalle de cada kit sale una sola vez (ninguna línea «Se pueden armar …» repetida).",
+    estricto: true,
+    pasa: ({ main }) => {
+      const lines = main.text.split("\n").map((line) => line.trim()).filter((line) => /Se pueden armar/i.test(line));
+      return lines.length > 0 && new Set(lines).size === lines.length;
+    },
+  },
+  {
+    id: "kits-un-por-que",
+    criterio: "Cada kit trae un solo «Por qué» (el de la herramienta), sin otro del modelo.",
+    estricto: true,
+    pasa: ({ main }) => {
+      const blocks = kitBlocks(main.text);
+      return blocks.length > 0 && blocks.every((block) => (block.match(/por qu[eé]/gi) ?? []).length === 1) && !/funciona porque/i.test(main.text);
+    },
+  },
+  {
+    id: "kits-marcador-en-su-lugar",
+    criterio: "El modelo pone el marcador de cada kit: ningún detalle tiene que agregarse al final.",
+    estricto: false,
+    pasa: ({ main }) => !/Detalle de «/.test(main.text),
+  },
+  {
+    id: "kits-pieza-minima",
+    criterio: "Una pieza que se vende por menos de $1.000 no entra a ningún kit.",
+    estricto: true,
+    pasa: ({ main }) => kitBlocks(main.text).length > 0 && kitBlocks(main.text).every((block) => !fold(block).includes(fold(KITS_FIXTURE.piezaBarata).replace(/ eval$/, ""))),
   },
   {
     id: "kits-sin-contacto",

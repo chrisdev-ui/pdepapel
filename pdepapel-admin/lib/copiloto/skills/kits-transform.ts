@@ -1,9 +1,9 @@
 import type { StreamTextTransform, TextStreamPart, ToolSet } from "ai";
 
-import { foldText } from "@/lib/copiloto/skills/product-match";
-
 export interface KitOutput {
   nombreSugerido?: string;
+  /** Lo que el modelo escribe donde va el detalle; el chat lo cambia por `detalle`. */
+  marcador?: string;
   detalle?: string;
   piezas?: { nombre?: string; rol?: string; precioEfectivo?: number }[];
   ahorroParaLaClienta?: number | null;
@@ -50,82 +50,75 @@ export function placeFixedLines(text: string, fixed: readonly FixedLine[]): stri
 const AMOUNT = /\$\s?\d{1,3}(?:[.,]\d{3})+|\$\s?\d+/g;
 const amountsIn = (text: string) => Array.from(text.matchAll(AMOUNT), (match) => match[0].replace(/\D+/g, ""));
 
-const DETAIL_PREFIX = "**Detalle de «";
+/** Cada número y cada monto de la salida de la herramienta: son los únicos montos que la respuesta puede traer. */
+export function toolAmounts(value: unknown, found = new Set<string>()): Set<string> {
+  if (typeof value === "number" && Number.isFinite(value)) found.add(String(Math.round(value)));
+  else if (typeof value === "string") amountsIn(value).forEach((amount) => found.add(amount));
+  else if (Array.isArray(value)) value.forEach((item) => toolAmounts(item, found));
+  else if (value && typeof value === "object") Object.values(value).forEach((item) => toolAmounts(item, found));
+  return found;
+}
+
+export const kitMarker = (index: number) => `[[KIT-${index + 1}]]`;
+const MARKER = /\[\[KIT-\d+\]\]/g;
+const HAS_MARKER = /\[\[KIT-\d+\]\]/;
+const PIECE_LINE = /\((lento|se vende)\):/;
+const WHY_LINE = /^\s*(?:[-*]\s+)?(?:\*\*)?\s*(?:por qu[eé]|funciona porque)(?![a-záéíóúüñ0-9])/i;
+const indentOf = (line: string) => line.match(/^\s*/)![0].length;
+
+const titleOf = (kit: KitOutput) => `- **${kit.nombreSugerido ?? "Kit"}**`;
+const heading = (kit: KitOutput) => `**Detalle de «${kit.nombreSugerido ?? "kit"}»**\n${kit.detalle}`;
 
 /**
- * Un párrafo es de un kit si nombra una de sus piezas lentas y una de las que
- * se venden. Las lentas no se repiten entre kits (las que se venden sí), así
- * que otro kit con las mismas piezas que se venden no cuenta, ni la lista de
- * lentos, ni un detalle ya puesto.
+ * El modelo escribe la viñeta de cada kit y debajo su marcador (`[[KIT-1]]`);
+ * aquí el marcador se cambia por el `detalle` de la herramienta, tal cual (las
+ * piezas, los precios, las cuentas y el porqué no son del modelo). Lo que el
+ * modelo escriba de eso por su cuenta se quita: líneas de piezas, líneas del
+ * detalle copiadas, su propio «Por qué» con lo que cuelga de él y cualquier
+ * línea con un monto que la herramienta no dio. Un kit cuyo marcador no
+ * aparece va al final, una vez, con su título.
  */
-const belongsTo = (paragraph: string, kit: KitOutput) => {
-  if (paragraph.startsWith(DETAIL_PREFIX)) return false;
-  const folded = foldText(paragraph);
-  const named = (kit.piezas ?? []).filter((piece) => piece.nombre && folded.includes(foldText(piece.nombre)));
-  return named.some((piece) => piece.rol === "lento") && named.some((piece) => piece.rol !== "lento");
-};
+export function reconcileKitAnswer(text: string, kits: readonly KitOutput[], allowed: ReadonlySet<string> = toolAmounts(kits)): string {
+  const byMarker = new Map(kits.filter((kit) => kit.detalle && kit.marcador).map((kit) => [kit.marcador!, kit]));
+  const detailLines = new Set(Array.from(byMarker.values()).flatMap((kit) => kit.detalle!.split("\n").map((line) => line.trim())));
+  const placed = new Set<string>();
+  const out: string[] = [];
+  let skipBelow: number | null = null;
 
-const heading = (kit: KitOutput) => `${DETAIL_PREFIX}${kit.nombreSugerido ?? "kit"}»**\n${kit.detalle}`;
-
-/**
- * El detalle de cada kit lo pone la herramienta, tal cual y con su sangría
- * (los precios, «comparte stock» y el porqué no son del modelo). Los párrafos
- * de cada kit se reconocen una sola vez sobre el texto del modelo (como dice
- * `belongsTo`, sin contar los nombres de kit entre «»), así lo que se inserta
- * para un kit no cambia a cuál pertenece un párrafo. Un kit que ya trae cada
- * línea de su detalle se deja; si no, de sus párrafos salen las líneas con
- * montos (salvo las líneas exactas del detalle de otro kit) y su detalle va
- * justo debajo de su viñeta, o en un párrafo propio si no hay viñeta. Un kit
- * que no se nombra en ninguna parte va al final.
- */
-export function reconcileKitAnswer(text: string, kits: readonly KitOutput[]): string {
-  const paragraphs = text.split(/\n{2,}/);
-  const withDetail = kits.filter((kit) => kit.detalle);
-  const detailOf = (kit: KitOutput) => kit.detalle!.split("\n").map((line) => line.trimEnd());
-  const unquoted = (value: string) => value.replace(/«[^»]*»/g, "");
-  const owners = withDetail.map((kit) => paragraphs.map((paragraph, index) => (belongsTo(unquoted(paragraph), kit) ? index : -1)).filter((index) => index >= 0));
-  const verbatim = withDetail.map((kit, k) => {
-    const lines = new Set(owners[k].flatMap((index) => paragraphs[index].split("\n").map((line) => line.trimEnd())));
-    return owners[k].length > 0 && detailOf(kit).every((line) => lines.has(line));
-  });
-  const keep = new Set(withDetail.flatMap((kit, k) => (verbatim[k] ? detailOf(kit) : [])));
-  const lines = paragraphs.map((paragraph) => paragraph.split("\n"));
-  const after: string[][] = paragraphs.map(() => []);
-  const appended: string[] = [];
-
-  const pending = withDetail.filter((_, k) => !verbatim[k] && owners[k].length > 0);
-  // Primero se limpian los párrafos de todos los kits; después se insertan los detalles, para que uno no borre lo del otro.
-  withDetail.forEach((kit, k) => {
-    if (verbatim[k]) return;
-    if (owners[k].length === 0) {
-      appended.push(heading(kit));
-      return;
+  for (const line of text.split("\n")) {
+    if (skipBelow !== null && line.trim() !== "" && indentOf(line) > skipBelow) continue;
+    skipBelow = null;
+    if (HAS_MARKER.test(line)) {
+      const markers = (line.match(MARKER) ?? []).filter((marker) => byMarker.has(marker) && !placed.has(marker));
+      const rest = line.replace(MARKER, "").trimEnd();
+      const kit = markers.length ? byMarker.get(markers[0])! : null;
+      const last = out[out.length - 1];
+      if (kit && rest.trim()) out.push(amountsIn(rest).length ? titleOf(kit) : rest);
+      else if (kit && last !== undefined && /^[-*] /.test(last)) out[out.length - 1] = amountsIn(last).length ? titleOf(kit) : last;
+      else if (kit) out.push(titleOf(kit));
+      else if (rest.trim() && !amountsIn(rest).some((amount) => !allowed.has(amount))) out.push(rest);
+      for (const marker of markers) {
+        out.push(byMarker.get(marker)!.detalle!);
+        placed.add(marker);
+      }
+      continue;
     }
-    const own = new Set(detailOf(kit));
-    for (const index of owners[k]) {
-      lines[index] = lines[index]
-        .map((line) => (/^[-*] /.test(line) && amountsIn(line).length > 0 && !keep.has(line.trimEnd()) ? `- **${kit.nombreSugerido ?? "Kit"}**` : line))
-        .filter((line) => !own.has(line.trimEnd()) && (keep.has(line.trimEnd()) || amountsIn(line).length === 0));
+    if (line.trim() && (detailLines.has(line.trim()) || PIECE_LINE.test(line))) continue;
+    if (WHY_LINE.test(line)) {
+      skipBelow = indentOf(line);
+      continue;
     }
-  });
-  for (const kit of pending) {
-    const first = owners[withDetail.indexOf(kit)][0];
-    const target = lines[first];
-    const bullets = target.map((line, index) => (/^[-*] /.test(line) ? index : -1)).filter((index) => index >= 0);
-    // La viñeta de este kit: la que nombra (fuera de «») la primera palabra de una de sus piezas lentas.
-    const slowWords = (kit.piezas ?? []).filter((piece) => piece.rol === "lento" && piece.nombre).map((piece) => foldText(piece.nombre!).split(/\s+/)[0]);
-    const mine = bullets.find((index) => slowWords.some((word) => foldText(unquoted(target[index])).includes(word))) ?? bullets[0];
-    if (mine !== undefined) target.splice(mine + 1, 0, ...detailOf(kit));
-    else after[first].push(heading(kit));
+    if (amountsIn(line).some((amount) => !allowed.has(amount))) continue;
+    out.push(line);
   }
 
-  const out = lines.flatMap((paragraphLines, index) => [paragraphLines.join("\n"), ...after[index]]).filter((paragraph) => paragraph.trim() !== "");
-  return [...out, ...appended].join("\n\n");
+  const missing = Array.from(byMarker).filter(([marker]) => !placed.has(marker)).map(([, kit]) => heading(kit));
+  return [out.join("\n").replace(/\n{3,}/g, "\n\n").trim(), ...missing].filter((part) => part !== "").join("\n\n");
 }
 
 /**
  * Lo fijo de `kitsParaRotar` llega a la respuesta tal como lo armó la
- * herramienta: el detalle de cada borrador (ver `reconcileKitAnswer`) y las
+ * herramienta: el detalle de cada borrador en su marcador (ver `reconcileKitAnswer`) y las
  * líneas del final (quietos de bajo valor, productos nuevos), que el modelo no
  * debe escribir: si las dice con otras palabras, se quitan y queda la fija una
  * vez. Para poder corregir, el texto que el modelo escribe después de la
@@ -137,10 +130,11 @@ export function kitsAnswerTransform<TOOLS extends ToolSet>(): StreamTextTransfor
     let holding = false;
     let fixed: FixedLine[] = [];
     let kits: KitOutput[] = [];
+    let allowed = new Set<string>();
     let done = false;
     const finalText = () => {
       done = true;
-      return placeFixedLines(kits.length ? reconcileKitAnswer(held, kits) : held, fixed).replace(/^\n+/, "");
+      return placeFixedLines(kits.length ? reconcileKitAnswer(held, kits, allowed) : held, fixed).replace(/^\n+/, "");
     };
     const emit = (controller: TransformStreamDefaultController<TextStreamPart<TOOLS>>, text: string) => {
       if (!text.trim()) return;
@@ -156,6 +150,7 @@ export function kitsAnswerTransform<TOOLS extends ToolSet>(): StreamTextTransfor
           const line = (value: unknown, topic: RegExp) => (typeof value === "string" && value ? [{ text: value, topic }] : []);
           fixed = [...line(datos?.quietosDeBajoValor?.linea, FIXED_TOPICS.bajoValor), ...line(datos?.nuevosSinDatosDeVenta?.linea, FIXED_TOPICS.nuevos)];
           kits = Array.isArray(datos?.kits) ? datos.kits.filter((kit) => kit.detalle) : [];
+          allowed = toolAmounts(part.output);
           holding = kits.length > 0 || fixed.length > 0;
         }
         if (holding && (part.type === "text-start" || part.type === "text-end")) return;

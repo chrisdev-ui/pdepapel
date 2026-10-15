@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import {
+  DEFAULT_MIN_SELLER_VALUE,
   DEFAULT_TARGET_DISCOUNT_PCT,
   MAX_TARGET_DISCOUNT_PCT,
   MIN_TARGET_DISCOUNT_PCT,
@@ -15,6 +16,7 @@ import {
   type KitProduct,
   type KitSignals,
 } from "@/lib/copiloto/kits-rotation";
+import { kitMarker } from "@/lib/copiloto/skills/kits-transform";
 import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
 import { DEFAULT_SLOW_DAYS, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf, type SalesHistory } from "@/lib/sales-velocity";
 import { foldWords, upcomingOccasions } from "@/lib/season-calendar";
@@ -39,6 +41,13 @@ export const kitsInput = z.object({
     .max(MAX_TARGET_DISCOUNT_PCT)
     .default(DEFAULT_TARGET_DISCOUNT_PCT)
     .describe("Descuento del kit frente a comprar las piezas sueltas, en % (8 a 20; por defecto 12)"),
+  precioMinimoPieza: z
+    .number()
+    .int()
+    .min(0)
+    .max(50000)
+    .default(DEFAULT_MIN_SELLER_VALUE)
+    .describe("Precio efectivo mínimo, en pesos, de una pieza que se vende para entrar a un kit (por defecto 1000)"),
 });
 
 /** Las líneas fijas del final: las arma la herramienta y el chat las pone una sola vez (el modelo no las escribe). */
@@ -198,7 +207,7 @@ export function kitsParaRotarTool(storeId: string) {
     inputSchema: kitsInput,
     execute: async (input) => {
       await requireStoreOwner(storeId);
-      const { dias, kits, minimoPorKit, margenMinimo, descuentoObjetivo } = kitsInput.parse(input);
+      const { dias, kits, minimoPorKit, margenMinimo, descuentoObjetivo, precioMinimoPieza } = kitsInput.parse(input);
       const now = new Date();
       const data = await withCopilotQuery((db) => loadKitData(db, storeId, dias, now));
       const demand = await loadDemand(storeId, now);
@@ -213,7 +222,7 @@ export function kitsParaRotarTool(storeId: string) {
         together,
         lines,
         signals,
-        options: { days: dias, kits, minPerKit: minimoPorKit, minMarginPct: margenMinimo, targetDiscountPct: descuentoObjetivo },
+        options: { days: dias, kits, minPerKit: minimoPorKit, minMarginPct: margenMinimo, targetDiscountPct: descuentoObjetivo, minSellerValue: precioMinimoPieza },
       });
       const byId = new Map(data.products.map((product) => [product.id, product]));
       const tiedTotal = result.lentos.reduce((total, row) => total + (row.tiedUpAtCost ?? 0), 0);
@@ -228,6 +237,7 @@ export function kitsParaRotarTool(storeId: string) {
             minimoPorKit,
             margenMinimoPct: margenMinimo,
             descuentoObjetivoPct: descuentoObjetivo,
+            precioMinimoPiezaQueSeVende: precioMinimoPieza,
             variedad: "una pieza por línea de producto, de líneas de la misma familia que se compran juntas más que por azar (no sustitutos ni kits)",
             lineasSinFamilia: result.lineasSinFamilia,
             precios: "efectivos: lista, oferta vigente y precio por cantidad, como en la tienda",
@@ -256,7 +266,7 @@ export function kitsParaRotarTool(storeId: string) {
             nota: `lentos con precio efectivo bajo para cargar un kit: no se proponen como pieza lenta`,
             linea: result.bajoValor.length > 0 ? lowValueLine(result.bajoValor.length) : null,
           },
-          kits: result.kits.map((kit) => ({ ...kit, detalle: kitDetail(kit) })),
+          kits: result.kits.map((kit, index) => ({ ...kit, marcador: kitMarker(index), detalle: kitDetail(kit) })),
           pocoAtractivos: result.pocoAtractivos.slice(0, 5),
           sinKit: result.sinKit.slice(0, 5),
           señales: {
