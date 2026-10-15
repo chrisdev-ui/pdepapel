@@ -7,7 +7,9 @@ import {
   TRACKING_SHIPPING_SELECT,
   canCustomerViewOrder,
 } from "@/lib/public-orders";
-import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
+import { applyShipmentStatus } from "@/lib/shipment-status-apply";
+import { mapEnvioClickStatus } from "@/lib/shipment-status";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS, checkIfStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
@@ -111,9 +113,12 @@ export async function POST(
 
     // Solo se escribe cuando el estado cambia: cada visita del cliente a su
     // página de rastreo no debe reiniciar la señal «sin novedades».
-    await prismadb.$transaction((tx) =>
+    const applied = await prismadb.$transaction((tx) =>
       applyShipmentStatus(tx, { shippingId: shipping.id, storeId: params.storeId, status: newStatus }),
     );
+    if (applied?.stockProductIds.length) {
+      await invalidateStoreProductsCache(params.storeId, { productIds: applied.stockProductIds });
+    }
     const [updatedShipping, events] = await Promise.all([
       prismadb.shipping.findFirst({
         where: { id: shipping.id, storeId: params.storeId },

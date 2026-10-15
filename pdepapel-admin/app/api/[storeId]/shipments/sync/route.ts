@@ -5,7 +5,9 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
-import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
+import { applyShipmentStatus } from "@/lib/shipment-status-apply";
+import { mapEnvioClickStatus } from "@/lib/shipment-status";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 const BATCH_SIZE = 50;
@@ -35,6 +37,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     const errors: { id?: string; batchIndex?: number; error: string }[] = [];
     let updated = 0;
     let ordersUpdated = 0;
+    const stockProductIds = new Set<string>();
 
     for (let i = 0; i < activeShipments.length; i += BATCH_SIZE) {
       const batch = activeShipments.slice(i, i + BATCH_SIZE);
@@ -59,11 +62,16 @@ export async function POST(req: Request, { params }: { params: { storeId: string
           );
           if (result?.shipmentChanged) updated += 1;
           if (result?.orderChanged) ordersUpdated += 1;
+          result?.stockProductIds.forEach((id) => stockProductIds.add(id));
         }
       } catch (error) {
         console.error("[SHIPMENT_SYNC] batch error:", error);
         errors.push({ batchIndex: i, error: error instanceof Error ? error.message : String(error) });
       }
+    }
+
+    if (stockProductIds.size > 0) {
+      await invalidateStoreProductsCache(params.storeId, { productIds: Array.from(stockProductIds) });
     }
 
     return NextResponse.json(

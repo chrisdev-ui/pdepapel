@@ -1,8 +1,10 @@
 import { handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { sendShippingEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
+import { applyShipmentStatus } from "@/lib/shipment-status-apply";
+import { mapEnvioClickStatus } from "@/lib/shipment-status";
 import {
   InvalidWebhookPayloadError,
   parseProviderDate,
@@ -152,7 +154,7 @@ export async function POST(req: Request) {
       // entrega borraba lo que hubiera escrito la administradora.
       // El pedido sigue al envío (a «Enviado» cuando arranca) solo si la
       // transición está permitida: un evento tardío no revive un cancelado.
-      await applyShipmentStatus(tx, {
+      const applied = await applyShipmentStatus(tx, {
         shippingId: shipping.id,
         storeId: shipping.storeId,
         status: newStatus,
@@ -217,7 +219,7 @@ export async function POST(req: Request) {
         }
       }
 
-      return { type: "SUCCESS", shipping, newStatus } as const;
+      return { type: "SUCCESS", shipping, newStatus, stockProductIds: applied?.stockProductIds ?? [] } as const;
     });
 
     if (result.type === "NOT_FOUND") {
@@ -257,6 +259,10 @@ export async function POST(req: Request) {
         },
         { status: 200, headers: corsHeaders },
       );
+    }
+
+    if (result.stockProductIds.length > 0) {
+      await invalidateStoreProductsCache(result.shipping.storeId, { productIds: result.stockProductIds });
     }
 
     // Send email notification if status changed

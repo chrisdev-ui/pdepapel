@@ -4,7 +4,9 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { applyShipmentStatus, isShipmentTransitionAllowed } from "@/lib/shipment-status";
+import { applyShipmentStatus } from "@/lib/shipment-status-apply";
+import { isShipmentTransitionAllowed } from "@/lib/shipment-status";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 /** Cambio de estado sobre una selección de envíos; el pedido de cada uno sigue al envío. */
@@ -38,13 +40,18 @@ export async function PATCH(req: Request, { params }: { params: { storeId: strin
 
     let updated = 0;
     let ordersUpdated = 0;
+    const stockProductIds = new Set<string>();
     await prismadb.$transaction(async (tx) => {
       for (const shipment of shipments) {
         const result = await applyShipmentStatus(tx, { shippingId: shipment.id, storeId: params.storeId, status });
+        result?.stockProductIds.forEach((id) => stockProductIds.add(id));
         if (result?.shipmentChanged) updated += 1;
         if (result?.orderChanged) ordersUpdated += 1;
       }
     });
+    if (stockProductIds.size > 0) {
+      await invalidateStoreProductsCache(params.storeId, { productIds: Array.from(stockProductIds) });
+    }
 
     return NextResponse.json({ success: true, updated, ordersUpdated }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

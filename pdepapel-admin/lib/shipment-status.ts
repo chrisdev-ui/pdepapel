@@ -1,17 +1,14 @@
 import { ALLOWED_TRANSITIONS } from "@/constants";
-import { reconcileShipmentStatus } from "@/lib/order-transitions";
-import type { OrderStatus, OrderType, PaymentMethod, Prisma, PrismaClient } from "@prisma/client";
 import { ShippingStatus } from "@prisma/client";
 
 /**
  * Una sola forma de mover el estado de un envío, la use quien la use: el
  * webhook de EnvioClick, el rastreo manual, la sincronización en lote, la
  * edición por selección o la corrección de envíos manuales. Aquí viven el
- * mapa de estados de EnvioClick, las transiciones permitidas y la regla que
- * mantiene coherente el pedido con su envío.
+ * mapa de estados de EnvioClick y las transiciones permitidas; el panel los
+ * importa en el cliente, así que nada de aquí toca la base. La escritura
+ * vive en `lib/shipment-status-apply.ts`.
  */
-
-type Db = PrismaClient | Prisma.TransactionClient;
 
 // ---------------------------------------------------------------------------
 // Estados de EnvioClick → ShippingStatus
@@ -87,74 +84,3 @@ export function isShipmentTransitionAllowed(from: ShippingStatus, to: ShippingSt
 }
 
 export const CLOSED_SHIPMENT_STATUSES: ShippingStatus[] = [ShippingStatus.Delivered, ShippingStatus.Cancelled];
-
-// ---------------------------------------------------------------------------
-// Aplicar un estado y mantener coherente el pedido
-// ---------------------------------------------------------------------------
-
-export interface ApplyShipmentStatusInput {
-  shippingId: string;
-  storeId: string;
-  status: ShippingStatus;
-  /** Otros campos del envío que llegan con la novedad (guía, fechas). */
-  extra?: Pick<Prisma.ShippingUncheckedUpdateInput, "trackingCode" | "pickupDate" | "estimatedDeliveryDate" | "actualDeliveryDate">;
-  /** Con `true`, se escribe aunque el estado no cambie (una novedad real de la transportadora). */
-  touch?: boolean;
-}
-
-export interface ApplyShipmentStatusResult {
-  shipmentChanged: boolean;
-  previousStatus: ShippingStatus;
-  status: ShippingStatus;
-  orderStatus: OrderStatus;
-  orderChanged: boolean;
-}
-
-/**
- * Escribe el estado del envío solo cuando cambia (o cuando `touch` dice que
- * hubo novedad), así `updatedAt` sigue midiendo el silencio real de la
- * transportadora para la señal «sin novedades». Después mueve el pedido a
- * «Enviado» si el envío arrancó y la transición está permitida
- * (`reconcileShipmentStatus`): un pedido cancelado no vuelve a «Enviado» por
- * un evento tardío.
- */
-export async function applyShipmentStatus(db: Db, input: ApplyShipmentStatusInput): Promise<ApplyShipmentStatusResult | null> {
-  const shipping = await db.shipping.findFirst({
-    where: { id: input.shippingId, storeId: input.storeId },
-    select: {
-      id: true,
-      status: true,
-      orderId: true,
-      order: { select: { id: true, status: true, type: true, payment: { select: { method: true } } } },
-    },
-  });
-  if (!shipping) return null;
-
-  const previousStatus = shipping.status;
-  const extra = input.extra ?? {};
-  const hasExtra = Object.values(extra).some((value) => value !== undefined);
-  const shipmentChanged = input.status !== previousStatus;
-
-  if (shipmentChanged || hasExtra || input.touch) {
-    await db.shipping.update({
-      where: { id: shipping.id },
-      data: { ...(shipmentChanged ? { status: input.status } : {}), ...extra },
-    });
-  }
-
-  let orderStatus = shipping.order.status;
-  let orderChanged = false;
-  const reconciled = reconcileShipmentStatus({
-    from: shipping.order.status,
-    shippingStatus: previousStatus,
-    requestedShippingStatus: input.status,
-    context: { type: shipping.order.type as OrderType, paymentMethod: (shipping.order.payment?.method as PaymentMethod | undefined) ?? null },
-  });
-  if (reconciled.status && reconciled.status !== shipping.order.status) {
-    await db.order.updateMany({ where: { id: shipping.orderId, storeId: input.storeId }, data: { status: reconciled.status } });
-    orderStatus = reconciled.status;
-    orderChanged = true;
-  }
-
-  return { shipmentChanged, previousStatus, status: input.status, orderStatus, orderChanged };
-}

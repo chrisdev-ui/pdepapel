@@ -165,7 +165,7 @@ describe("POST /api/webhook/envioclick", () => {
     });
 
     expect(tx.order.updateMany).toHaveBeenCalledWith({
-      where: { id: "order-id", storeId: "store-id" },
+      where: { id: "order-id", storeId: "store-id", status: "PAID" },
       data: { status: "SENT" },
     });
   });

@@ -5,7 +5,9 @@ import { z } from "zod";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { applyShipmentStatus, CLOSED_SHIPMENT_STATUSES, isShipmentTransitionAllowed } from "@/lib/shipment-status";
+import { applyShipmentStatus } from "@/lib/shipment-status-apply";
+import { CLOSED_SHIPMENT_STATUSES, isShipmentTransitionAllowed } from "@/lib/shipment-status";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 const bodySchema = z.object({
@@ -57,13 +59,18 @@ export async function POST(req: Request, { params }: { params: { storeId: string
 
     let updated = 0;
     let ordersUpdated = 0;
+    const stockProductIds = new Set<string>();
     await prismadb.$transaction(async (tx) => {
       for (const target of targets) {
         const result = await applyShipmentStatus(tx, { shippingId: target.id, storeId: params.storeId, status: toStatus });
+        result?.stockProductIds.forEach((id) => stockProductIds.add(id));
         if (result?.shipmentChanged) updated += 1;
         if (result?.orderChanged) ordersUpdated += 1;
       }
     });
+    if (stockProductIds.size > 0) {
+      await invalidateStoreProductsCache(params.storeId, { productIds: Array.from(stockProductIds) });
+    }
 
     return NextResponse.json({ count: targets.length, updated, ordersUpdated }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

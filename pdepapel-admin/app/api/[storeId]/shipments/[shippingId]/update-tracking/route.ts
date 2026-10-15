@@ -5,7 +5,9 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
-import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
+import { applyShipmentStatus } from "@/lib/shipment-status-apply";
+import { mapEnvioClickStatus } from "@/lib/shipment-status";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
@@ -61,6 +63,9 @@ export async function POST(req: Request, { params }: { params: { storeId: string
         extra: deliveryChanged ? { estimatedDeliveryDate: deliveryDate } : undefined,
       }),
     );
+    if (result?.stockProductIds.length) {
+      await invalidateStoreProductsCache(params.storeId, { productIds: result.stockProductIds });
+    }
 
     const updatedShipping = await prismadb.shipping.findFirst({
       where: { id: shipping.id, storeId: params.storeId },
