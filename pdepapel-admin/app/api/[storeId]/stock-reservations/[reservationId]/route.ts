@@ -5,7 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { withIdempotency } from "@/lib/idempotency";
 import {
-  addReservationItem,
+  addReservationItems,
   editReservationCustomer,
   extendReservation,
   getReservationDetail,
@@ -30,8 +30,9 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 /**
- * Acciones sobre una reserva: «liberar», «extender», «add_item»,
- * «set_quantity» (0 quita el producto) y «edit_customer». Con
+ * Acciones sobre una reserva: «liberar», «extender», «add_items» (o
+ * «add_item» con un solo producto), «set_quantity» (0 quita el producto) y
+ * «edit_customer». Con
  * `Idempotency-Key`, un doble toque en el teléfono no aparta dos veces.
  */
 export async function PATCH(req: Request, { params }: Params) {
@@ -53,11 +54,11 @@ export async function PATCH(req: Request, { params }: Params) {
         const reservation = await extendReservation(storeId, reservationId, body.days, userId);
         return NextResponse.json({ reservation }, { headers: CACHE_HEADERS.NO_CACHE });
       }
-      if (action === "add_item" || action === "set_quantity") {
+      if (action === "add_item" || action === "add_items" || action === "set_quantity") {
         const result =
-          action === "add_item"
-            ? await addReservationItem(storeId, reservationId, { productId: body.productId, quantity: body.quantity }, userId)
-            : await setReservationItemQuantity(storeId, reservationId, { itemId: body.itemId, quantity: body.quantity }, userId);
+          action === "set_quantity"
+            ? await setReservationItemQuantity(storeId, reservationId, { itemId: body.itemId, quantity: body.quantity }, userId)
+            : await addReservationItems(storeId, reservationId, { items: body.items, productId: body.productId, quantity: body.quantity }, userId);
         await invalidateStoreProductsCache(storeId, { productIds: result.affectedProductIds });
         return NextResponse.json({ reservation: result.reservation, released: result.released }, { headers: CACHE_HEADERS.NO_CACHE });
       }
@@ -65,7 +66,7 @@ export async function PATCH(req: Request, { params }: Params) {
         const reservation = await editReservationCustomer(storeId, reservationId, { customerName: body.customerName, customerPhone: body.customerPhone, note: body.note }, userId);
         return NextResponse.json({ reservation }, { headers: CACHE_HEADERS.NO_CACHE });
       }
-      throw ErrorFactory.InvalidRequest("Acción no válida: usa «liberar», «extender», «add_item», «set_quantity» o «edit_customer»");
+      throw ErrorFactory.InvalidRequest("Acción no válida: usa «liberar», «extender», «add_items», «set_quantity» o «edit_customer»");
     }, CACHE_HEADERS.NO_CACHE);
   } catch (error) {
     return handleErrorResponse(error, "STOCK_RESERVATION_PATCH", { headers: CACHE_HEADERS.NO_CACHE, expectedStatusCodes: [400, 404, 409] });

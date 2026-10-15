@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { withIdempotency } from "@/lib/idempotency";
-import { createReservation, isReservationFilter, listReservations } from "@/lib/stock-reservations";
+import { createReservation, findOpenReservationsByPhone, isReservationFilter, listReservations } from "@/lib/stock-reservations";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 /** Apartados de la tienda. Solo la dueña: llevan el nombre y el celular de la clienta. */
@@ -13,7 +13,13 @@ export async function GET(req: Request, { params }: { params: { storeId: string 
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
-    const filter = new URL(req.url).searchParams.get("filtro");
+    const search = new URL(req.url).searchParams;
+    // `?telefono=`: las reservas abiertas de esa clienta, para «Agregar a la reserva abierta».
+    if (search.has("telefono")) {
+      const reservations = await findOpenReservationsByPhone(params.storeId, search.get("telefono"));
+      return NextResponse.json({ reservations }, { headers: CACHE_HEADERS.NO_CACHE });
+    }
+    const filter = search.get("filtro");
     const reservations = await listReservations(params.storeId, isReservationFilter(filter) ? filter : "activas");
     return NextResponse.json({ reservations }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

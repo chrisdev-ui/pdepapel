@@ -2,8 +2,21 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { convertReservation } from "@/lib/stock-reservations";
+import { convertReservation, previewConversion } from "@/lib/stock-reservations";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+
+/** El resumen del pedido que se crearía (líneas al precio de hoy y total), sin crear nada. */
+export async function GET(_req: Request, { params }: { params: { storeId: string; reservationId: string } }) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
+    const preview = await previewConversion(params.storeId, params.reservationId);
+    return NextResponse.json(preview, { headers: CACHE_HEADERS.NO_CACHE });
+  } catch (error) {
+    return handleErrorResponse(error, "STOCK_RESERVATION_CONVERT_PREVIEW", { headers: CACHE_HEADERS.NO_CACHE, expectedStatusCodes: [404, 409] });
+  }
+}
 
 /**
  * «Convertir en pedido». No cambia lo disponible (la reserva sigue

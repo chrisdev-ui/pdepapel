@@ -207,30 +207,44 @@ async function lockActive(tx: PrismaTx, storeId: string, id: string) {
 }
 
 /**
- * «Agregar a la reserva»: otro producto, o más unidades de uno que ya está.
+ * «Agregar a la reserva abierta»: uno o varios productos, o más unidades de
+ * los que ya están, todo o nada (el 409 nombra cada producto que no alcanza).
  * El vencimiento no se mueve; para eso está «Extender».
  */
-export async function addReservationItem(storeId: string, id: string, input: { productId: unknown; quantity: unknown }, actor: string) {
-  if (typeof input.productId !== "string" || !input.productId) throw ErrorFactory.InvalidRequest("Elige el producto");
-  const productId = input.productId;
-  const quantity = parseQuantity(input.quantity);
+export async function addReservationItems(storeId: string, id: string, input: { items?: unknown; productId?: unknown; quantity?: unknown }, actor: string) {
+  const lines = parseReservationItems(input);
   return withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
     await lockActive(tx, storeId, id);
-    const products = await assertReservable(tx, storeId, [productId]);
-    const existing = await tx.stockReservationItem.findUnique({ where: { reservationId_productId: { reservationId: id, productId } }, select: { id: true, quantity: true } });
-    if (!existing && (await tx.stockReservationItem.count({ where: { reservationId: id } })) >= MAX_RESERVATION_ITEMS) {
-      throw ErrorFactory.InvalidRequest(`Una reserva puede tener hasta ${MAX_RESERVATION_ITEMS} productos`);
+    const products = await assertReservable(tx, storeId, lines.map((line) => line.productId));
+    const existing = new Map(
+      (await tx.stockReservationItem.findMany({ where: { reservationId: id }, select: { id: true, productId: true, quantity: true } })).map((item) => [item.productId, item]),
+    );
+    const newProducts = lines.filter((line) => !existing.has(line.productId)).length;
+    if (existing.size + newProducts > MAX_RESERVATION_ITEMS) throw ErrorFactory.InvalidRequest(`Una reserva puede tener hasta ${MAX_RESERVATION_ITEMS} productos`);
+    for (const line of lines) {
+      if ((existing.get(line.productId)?.quantity ?? 0) + line.quantity > MAX_RESERVATION_QUANTITY) {
+        throw ErrorFactory.InvalidRequest(`Un producto puede tener hasta ${MAX_RESERVATION_QUANTITY} unidades en la reserva`);
+      }
     }
-    const total = (existing?.quantity ?? 0) + quantity;
-    if (total > MAX_RESERVATION_QUANTITY) throw ErrorFactory.InvalidRequest(`Un producto puede tener hasta ${MAX_RESERVATION_QUANTITY} unidades en la reserva`);
-    const affected = await holdLines(tx, storeId, [{ productId, quantity }], products);
-    if (existing) await tx.stockReservationItem.update({ where: { id: existing.id }, data: { quantity: total } });
-    else await tx.stockReservationItem.create({ data: { storeId, reservationId: id, productId, quantity, addedBy: actor } });
+    const affected = await holdLines(tx, storeId, lines, products);
+    const events: ReservationEventInput[] = [];
+    for (const line of lines) {
+      const before = existing.get(line.productId);
+      const total = (before?.quantity ?? 0) + line.quantity;
+      if (before) await tx.stockReservationItem.update({ where: { id: before.id }, data: { quantity: total } });
+      else await tx.stockReservationItem.create({ data: { storeId, reservationId: id, productId: line.productId, quantity: line.quantity, addedBy: actor } });
+      events.push({ storeId, reservationId: id, kind: "item_added", actor, productId: line.productId, quantity: total, previousQuantity: before?.quantity ?? 0 });
+    }
     await syncReservationHeader(tx, id);
-    await recordReservationEvents(tx, [{ storeId, reservationId: id, kind: "item_added", actor, productId, quantity: total, previousQuantity: existing?.quantity ?? 0 }]);
+    await recordReservationEvents(tx, events);
     const reservation = await tx.stockReservation.findUniqueOrThrow({ where: { id }, select: RESERVATION_SELECT });
-    return { reservation, released: false, affectedProductIds: [productId, ...affected] };
+    return { reservation, released: false, affectedProductIds: [...lines.map((line) => line.productId), ...affected] };
   }));
+}
+
+/** Un solo producto: lo mismo que `addReservationItems`. */
+export function addReservationItem(storeId: string, id: string, input: { productId: unknown; quantity: unknown }, actor: string) {
+  return addReservationItems(storeId, id, { productId: input.productId ?? "", quantity: input.quantity }, actor);
 }
 
 /** Cambia la cantidad de un ítem; 0 lo quita. Quitar el último libera la reserva. */
@@ -339,22 +353,10 @@ export async function extendReservation(storeId: string, id: string, daysInput: 
   });
 }
 
-/**
- * «Convertir en pedido»: UN pedido PENDIENTE del panel con la clienta y una
- * línea por producto al precio de hoy. La reserva sigue guardando las
- * unidades hasta que el pedido se pague (la venta las consume) o se cancele
- * (se liberan). El pago queda como transferencia por defecto.
- */
-export async function convertReservation(storeId: string, id: string, createdBy: string) {
-  const found = await prismadb.stockReservation.findFirst({
-    where: { id, storeId },
-    select: { id: true, status: true, orderId: true, customerName: true, customerPhone: true, note: true, ...RESERVATION_LINES_SELECT },
-  });
-  if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
-  if (found.status === StockReservationStatus.CONVERTED && found.orderId) return { orderId: found.orderId, existing: true };
-  if (found.status !== StockReservationStatus.ACTIVE) throw ErrorFactory.Conflict("Solo una reserva activa se puede convertir en pedido");
-  const lines = reservationLines(found);
+const CONVERT_SELECT = { id: true, status: true, orderId: true, customerName: true, customerPhone: true, note: true, ...RESERVATION_LINES_SELECT } as const;
 
+/** Las líneas del pedido al precio efectivo de hoy (el mismo cálculo que «Convertir»). */
+async function priceReservation(storeId: string, lines: ReservationLine[]) {
   const products = await prismadb.product.findMany({
     where: { id: { in: lines.map((line) => line.productId) }, storeId },
     select: { id: true, name: true, sku: true, price: true, categoryId: true, productGroupId: true, images: { orderBy: [{ isMain: "desc" }, { createdAt: "asc" }], take: 1, select: { url: true } } },
@@ -368,6 +370,35 @@ export async function convertReservation(storeId: string, id: string, createdBy:
     return { productId: product.id, quantity: line.quantity, name: product.name, sku: product.sku, price: unitPrice, imageUrl: product.images[0]?.url ?? "" };
   });
   const totals = calculateOrderTotals(orderLines.map((line) => ({ product: { price: line.price }, quantity: line.quantity })));
+  return { orderLines, totals };
+}
+
+/** Lo que «Convertir en pedido» crearía, sin crear nada: para confirmar antes. */
+export async function previewConversion(storeId: string, id: string) {
+  const found = await prismadb.stockReservation.findFirst({ where: { id, storeId }, select: CONVERT_SELECT });
+  if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
+  if (found.status !== StockReservationStatus.ACTIVE) throw ErrorFactory.Conflict("Solo una reserva activa se puede convertir en pedido");
+  const { orderLines, totals } = await priceReservation(storeId, reservationLines(found));
+  return {
+    lines: orderLines.map((line) => ({ productId: line.productId, name: line.name, quantity: line.quantity, unitPrice: line.price, total: line.price * line.quantity })),
+    subtotal: totals.subtotal,
+    total: totals.total,
+    payment: "Transferencia (se cambia en el pedido)",
+  };
+}
+
+/**
+ * «Convertir en pedido»: UN pedido PENDIENTE del panel con la clienta y una
+ * línea por producto al precio de hoy. La reserva sigue guardando las
+ * unidades hasta que el pedido se pague (la venta las consume) o se cancele
+ * (se liberan). El pago queda como transferencia por defecto.
+ */
+export async function convertReservation(storeId: string, id: string, createdBy: string) {
+  const found = await prismadb.stockReservation.findFirst({ where: { id, storeId }, select: CONVERT_SELECT });
+  if (!found) throw ErrorFactory.NotFound("Reserva no encontrada");
+  if (found.status === StockReservationStatus.CONVERTED && found.orderId) return { orderId: found.orderId, existing: true };
+  if (found.status !== StockReservationStatus.ACTIVE) throw ErrorFactory.Conflict("Solo una reserva activa se puede convertir en pedido");
+  const { orderLines, totals } = await priceReservation(storeId, reservationLines(found));
 
   return prismadb.$transaction(async (tx) => {
     const order = await tx.order.create({
@@ -493,6 +524,21 @@ export async function listReservations(storeId: string, filter: ReservationListF
   });
 }
 
+/**
+ * Las reservas ACTIVAS de una clienta, por su celular normalizado (el mismo
+ * que guarda `createReservation`). El nombre no sirve de llave: se repite.
+ */
+export async function findOpenReservationsByPhone(storeId: string, phone: unknown) {
+  const normalized = typeof phone === "string" ? normalizePhone(phone) : "";
+  if (!normalized) return [];
+  return prismadb.stockReservation.findMany({
+    where: { storeId, status: StockReservationStatus.ACTIVE, customerPhone: normalized },
+    select: RESERVATION_SELECT,
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+}
+
 /** Una reserva con su historial, lo más reciente primero. */
 export async function getReservationDetail(storeId: string, id: string) {
   const reservation = await prismadb.stockReservation.findFirst({ where: { id, storeId }, select: RESERVATION_SELECT });
@@ -503,7 +549,12 @@ export async function getReservationDetail(storeId: string, id: string) {
     take: 100,
     select: { id: true, kind: true, productId: true, quantity: true, previousQuantity: true, actor: true, detail: true, createdAt: true },
   });
-  return { reservation, events };
+  // Un producto que se quitó ya no está en los ítems: el historial necesita su nombre igual.
+  const productIds = Array.from(new Set(events.flatMap((event) => (event.productId ? [event.productId] : []))));
+  const names = productIds.length
+    ? await prismadb.product.findMany({ where: { id: { in: productIds }, storeId }, select: { id: true, name: true } })
+    : [];
+  return { reservation, events, productNames: Object.fromEntries(names.map((row) => [row.id, row.name])) };
 }
 
 export const isReservationFilter = (value: string | null): value is ReservationListFilter =>

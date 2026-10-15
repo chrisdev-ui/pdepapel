@@ -6,6 +6,9 @@ import { OrderStatus, PaymentMethod, StockReservationStatus } from "@prisma/clie
 import { availableStock } from "@/lib/available-stock";
 import {
   addReservationItem,
+  addReservationItems,
+  findOpenReservationsByPhone,
+  previewConversion,
   convertReservation,
   createReservation,
   editReservationCustomer,
@@ -361,5 +364,85 @@ describe("reservas v2: varios productos (MySQL)", () => {
     await testPrisma.stockReservation.update({ where: { id: reservation.id }, data: { expiresAt: new Date(now.getTime() + 3 * DAY) } });
     mail.send.mockClear();
     await expect(sendDailyDigest(f.store.id, now)).resolves.toBe(false);
+  });
+
+  it("agregar varios a la reserva abierta es todo o nada, no mueve el vencimiento y el historial guarda cada uno", async () => {
+    const { f, notebook } = await setup(1);
+    const { reservation } = await create([{ productId: f.component.id, quantity: 1 }], { days: 1 });
+
+    const short = await addReservationItems(f.store.id, reservation.id, { items: [{ productId: f.component.id, quantity: 2 }, { productId: notebook.id, quantity: 2 }] }, owner()).catch((error) => error);
+    expect(short.statusCode).toBe(409);
+    expect(short.message).toContain("«Libreta»");
+    await expect(counters(f.component.id)).resolves.toMatchObject({ reservedUnits: 1 });
+
+    const added = await addReservationItems(f.store.id, reservation.id, { items: [{ productId: f.component.id, quantity: 2 }, { productId: notebook.id, quantity: 1 }] }, owner());
+    expect(added.reservation.items.map((item) => [item.productId, item.quantity])).toEqual([
+      [f.component.id, 3],
+      [notebook.id, 1],
+    ]);
+    expect(added.reservation.expiresAt.getTime()).toBe(reservation.expiresAt.getTime());
+    const { events } = await getReservationDetail(f.store.id, reservation.id);
+    expect(events.filter((event) => event.kind === "item_added")).toHaveLength(3);
+  });
+
+  it("las reservas abiertas de una clienta se encuentran por su celular, escrito como sea; solo las activas", async () => {
+    const { f } = await setup(3);
+    const { reservation } = await create([{ productId: f.component.id, quantity: 1 }]);
+    const closed = await create([{ productId: f.component.id, quantity: 1 }]);
+    await setReservationItemQuantity(f.store.id, closed.reservation.id, { itemId: closed.reservation.items[0].id, quantity: 0 }, owner());
+
+    for (const phone of ["3001234567", "+57 300 123 4567", "300-123-4567"]) {
+      const found = await findOpenReservationsByPhone(f.store.id, phone);
+      expect(found.map((row) => row.id), phone).toEqual([reservation.id]);
+    }
+    await expect(findOpenReservationsByPhone(f.store.id, "")).resolves.toEqual([]);
+    await expect(findOpenReservationsByPhone(f.store.id, "3009999999")).resolves.toEqual([]);
+  });
+
+  it("el resumen antes de convertir es el mismo pedido que se crea, y no crea nada", async () => {
+    const { f, notebook } = await setup(2);
+    const { reservation } = await create([{ productId: f.component.id, quantity: 2 }, { productId: notebook.id, quantity: 1 }]);
+    const before = await testPrisma.order.count({ where: { storeId: f.store.id } });
+
+    const preview = await previewConversion(f.store.id, reservation.id);
+    expect(preview).toMatchObject({ subtotal: 28000, total: 28000 });
+    expect(preview.lines.map((line) => [line.name, line.quantity, line.unitPrice, line.total])).toEqual([
+      ["Componente", 2, 10000, 20000],
+      ["Libreta", 1, 8000, 8000],
+    ]);
+    await expect(testPrisma.order.count({ where: { storeId: f.store.id } })).resolves.toBe(before);
+
+    const { orderId } = await convertReservation(f.store.id, reservation.id, owner());
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: orderId } })).resolves.toMatchObject({ total: preview.total });
+    await expect(previewConversion(f.store.id, reservation.id)).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("el historial conserva el nombre de un producto que se quitó", async () => {
+    const { f, notebook } = await setup(2);
+    const { reservation } = await create([{ productId: f.component.id, quantity: 1 }, { productId: notebook.id, quantity: 1 }]);
+    const notebookItem = reservation.items.find((item) => item.productId === notebook.id)!;
+    await setReservationItemQuantity(f.store.id, reservation.id, { itemId: notebookItem.id, quantity: 0 }, owner());
+
+    const detail = await getReservationDetail(f.store.id, reservation.id);
+    expect(detail.reservation.items.map((item) => item.productId)).toEqual([f.component.id]);
+    expect(detail.productNames).toMatchObject({ [notebook.id]: "Libreta", [f.component.id]: "Componente" });
+  });
+
+  it("la API: ?telefono= trae la reserva abierta, add_items agrega varios y GET …/convert muestra el resumen", async () => {
+    const { f, notebook } = await setup(2);
+    const { reservation } = await create([{ productId: f.component.id, quantity: 1 }]);
+    const { GET } = await import("@/app/api/[storeId]/stock-reservations/route");
+    const lookup = await (await GET(new Request("http://admin.test/api/x?telefono=%2B573001234567"), { params: { storeId: f.store.id } })).json();
+    expect(lookup.reservations.map((row: { id: string }) => row.id)).toEqual([reservation.id]);
+
+    const route = await import("@/app/api/[storeId]/stock-reservations/[reservationId]/route");
+    const params = { params: { storeId: f.store.id, reservationId: reservation.id } };
+    const added = await route.PATCH(request("PATCH", { action: "add_items", items: [{ productId: notebook.id, quantity: 1 }, { productId: f.component.id, quantity: 1 }] }), params);
+    expect(added.status).toBe(200);
+
+    const convert = await import("@/app/api/[storeId]/stock-reservations/[reservationId]/convert/route");
+    const preview = await (await convert.GET(request("GET"), params)).json();
+    expect(preview.lines).toHaveLength(2);
+    expect(preview.total).toBe(28000);
   });
 });
