@@ -70,15 +70,21 @@ export async function POST(
       );
     }
 
-    const freshRates = await requoteCartShipping({
+    const isCOD = Boolean(order.shipping.isCOD);
+    const quoted = await requoteCartShipping({
       storeId: params.storeId,
       items,
       destination: { daneCode: order.daneCode, address: order.address ?? "" },
       contentValue: order.total,
+      ...(isCOD && { cod: { value: order.total } }),
     });
+    // Contra entrega: una tarifa sin recaudo daría «idRate no válido para COD» al crear la guía.
+    const freshRates = isCOD ? quoted.filter((rate) => rate.isCOD) : quoted;
     if (freshRates.length === 0) {
       throw ErrorFactory.InvalidRequest(
-        "Ninguna transportadora cubre esta ciudad ahora mismo. Elige otra transportadora a mano.",
+        isCOD && quoted.length > 0
+          ? "Ninguna transportadora de EnvioClick recauda contra entrega en esta ciudad. Cobra antes del envío o elige otra transportadora a mano."
+          : "Ninguna transportadora cubre esta ciudad ahora mismo. Elige otra transportadora a mano.",
       );
     }
 

@@ -30,12 +30,22 @@ export function formatRemaining(ms: number) {
   return `${minutes} min`;
 }
 
+/**
+ * Las tarifas que se pueden elegir: contra entrega solo las que recaudan.
+ * Una tarifa sin recaudo con el pedido contra entrega termina en «idRate no
+ * válido para COD» al crear la guía, o en un paquete que nadie cobra.
+ */
+export function ratesForPayment(quotes: ShippingQuote[], isCOD: boolean): ShippingQuote[] {
+  return isCOD ? quotes.filter((quote) => quote.isCOD) : quotes;
+}
+
 /** Con qué tarifa se queda una recotización: la de antes si sigue, si no la más barata. */
 export function pickAfterRequote(
   quotes: ShippingQuote[],
   previousCarrier: string | null,
+  isCOD = false,
 ): ShippingQuote | undefined {
-  const { primary } = groupQuotes(quotes);
+  const { primary } = groupQuotes(ratesForPayment(quotes, isCOD));
   const keep = previousCarrier
     ? primary.find((q) => q.carrier === previousCarrier)
     : undefined;

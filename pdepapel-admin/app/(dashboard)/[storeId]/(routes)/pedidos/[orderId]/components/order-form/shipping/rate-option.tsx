@@ -78,6 +78,11 @@ export function RateOption({ quote, selected, disabled }: RateOptionProps) {
             flete {currencyFormatter(quote.flete)} · seguro{" "}
             {currencyFormatter(quote.minimumInsurance)}
           </span>
+          {quote.codCost ? (
+            <span className="text-xs text-muted-foreground">
+              + recaudo {currencyFormatter(quote.codCost)} (lo cobra EnvioClick)
+            </span>
+          ) : null}
         </span>
       </Label>
     </div>

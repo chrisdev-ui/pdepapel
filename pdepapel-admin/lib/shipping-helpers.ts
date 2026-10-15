@@ -323,6 +323,10 @@ export async function createGuideForOrder(
       error?.message ||
       "";
 
+    if (errorMessage.includes(COD_RATE_MISMATCH)) {
+      throw ErrorFactory.InvalidRequest(COD_RATE_MISMATCH_MESSAGE);
+    }
+
     if (
       errorMessage.includes("idRate") ||
       errorMessage.includes("rate") ||
@@ -374,7 +378,15 @@ export interface RequotedRate {
   totalCost: number;
   deliveryDays: number;
   isCOD: boolean;
+  /** Lo que cobra EnvioClick por recaudar; null si la tarifa no recauda. */
+  codCost: number | null;
 }
+
+/** Mensaje de EnvioClick cuando se pide guía contra entrega con una tarifa cotizada sin recaudo. */
+export const COD_RATE_MISMATCH = "idRate válido para COD";
+
+export const COD_RATE_MISMATCH_MESSAGE =
+  "La tarifa guardada se cotizó sin recaudo y el pedido es contra entrega. Pulsa «Cotizar de nuevo» con «Pago contra entrega» marcado, elige una tarifa que diga «Recauda contra entrega», guarda y crea la guía.";
 
 /**
  * Cotiza el carrito contra la transportadora, en el momento.
@@ -437,6 +449,8 @@ export async function requoteCartShipping(input: {
   items: { productId: string; quantity: number }[];
   destination: { daneCode: string; address: string };
   contentValue: number;
+  /** Contra entrega: el valor a recaudar. Sin esto EnvioClick devuelve tarifas sin recaudo. */
+  cod?: { value: number };
 }): Promise<RequotedRate[]> {
   const productIds = Array.from(
     new Set(input.items.map((item) => item.productId)),
@@ -512,6 +526,11 @@ export async function requoteCartShipping(input: {
       daneCode: input.destination.daneCode,
       address: truncateField(input.destination.address, "address"),
     },
+    ...(input.cod && {
+      codValue: input.cod.value,
+      codPaymentMethod: ENVIOCLICK_DEFAULTS.codPaymentMethod,
+      includeGuideCost: ENVIOCLICK_DEFAULTS.includeGuideCost,
+    }),
   });
 
   return (quotation.data.rates ?? []).map((rate) => ({
@@ -525,5 +544,6 @@ export async function requoteCartShipping(input: {
     totalCost: rate.flete + rate.minimumInsurance,
     deliveryDays: rate.deliveryDays,
     isCOD: rate.cod,
+    codCost: rate.codDetails?.codCost ?? null,
   }));
 }

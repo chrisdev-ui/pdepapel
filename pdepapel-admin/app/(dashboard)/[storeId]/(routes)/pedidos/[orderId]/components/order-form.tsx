@@ -565,6 +565,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const onSelectRate = useCallback(
     (quote: ShippingQuote, options: { silent?: boolean } = {}) => {
+      // Contra entrega con una tarifa sin recaudo: la guía falla o nadie cobra el paquete.
+      if (form.getValues("shipping.isCOD") && !quote.isCOD) {
+        toast({
+          description: `${quote.carrier} no recauda contra entrega con esta tarifa. Elige una que diga «Recauda contra entrega».`,
+          variant: "destructive",
+        });
+        return;
+      }
       form.setValue("shippingProvider", ShippingProvider.ENVIOCLICK, {
         shouldDirty: true,
       });

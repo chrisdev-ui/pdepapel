@@ -35,6 +35,7 @@ import {
   formatRemaining,
   groupQuotes,
   pickAfterRequote,
+  ratesForPayment,
   QUOTE_TTL_MS,
   type RequoteNotice,
 } from "./quotes";
@@ -125,7 +126,7 @@ export function EnvioClickBlock({
   }, [carrierName]);
 
   const applyRequote = (quotes: ShippingQuote[]) => {
-    const pick = pickAfterRequote(quotes, selectedCarrier.current);
+    const pick = pickAfterRequote(quotes, selectedCarrier.current, Boolean(isCOD));
     if (!pick) return;
     setNotice(
       describeRequote(
@@ -166,7 +167,11 @@ export function EnvioClickBlock({
     return () => window.clearInterval(id);
   }, [quotedAt, savedRateId]);
 
-  const grouped = useMemo(() => groupQuotes(shippingQuotes), [shippingQuotes]);
+  const selectableQuotes = useMemo(
+    () => ratesForPayment(shippingQuotes, Boolean(isCOD)),
+    [shippingQuotes, isCOD],
+  );
+  const grouped = useMemo(() => groupQuotes(selectableQuotes), [selectableQuotes]);
   const visibleQuotes = showAllRates
     ? [...grouped.primary, ...grouped.rest]
     : grouped.primary;
@@ -391,12 +396,28 @@ export function EnvioClickBlock({
             </p>
           )}
 
-          {shippingQuotes.length > 0 && (
+          {isCOD && shippingQuotes.length > 0 && selectableQuotes.length === 0 && (
+            <p
+              role="alert"
+              data-testid="no-cod-rates"
+              className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                Ninguna transportadora de EnvioClick recauda contra entrega en{" "}
+                {city || "esta ciudad"}. Cobra antes del envío (transferencia o
+                pago en línea) y quita «Pago contra entrega», o usa «Otra
+                transportadora».
+              </span>
+            </p>
+          )}
+
+          {selectableQuotes.length > 0 && (
             <>
               <RadioGroup
                 value={rateId?.toString() || ""}
                 onValueChange={(value) => {
-                  const quote = shippingQuotes.find(
+                  const quote = selectableQuotes.find(
                     (q) => q.idRate === parseInt(value),
                   );
                   if (quote) {

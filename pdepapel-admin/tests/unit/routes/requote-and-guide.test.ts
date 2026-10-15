@@ -126,4 +126,27 @@ describe("POST /shipping/requote-and-guide", () => {
 
     expect(mocks.requoteCartShipping).toHaveBeenCalledTimes(1);
   });
+
+  it("re-quotes a cash-on-delivery order with collection, and a prepaid one without", async () => {
+    mocks.findOrder.mockResolvedValue(order(OrderStatus.PENDING, true));
+    await call();
+    expect(mocks.requoteCartShipping).toHaveBeenLastCalledWith(expect.objectContaining({ cod: { value: 45000 } }));
+
+    mocks.findOrder.mockResolvedValue(order(OrderStatus.PAID, false));
+    await call();
+    expect(mocks.requoteCartShipping.mock.lastCall?.[0]).not.toHaveProperty("cod");
+  });
+
+  it("never builds a cash-on-delivery guide on a rate without collection", async () => {
+    mocks.findOrder.mockResolvedValue(order(OrderStatus.PENDING, true));
+    mocks.requoteCartShipping.mockResolvedValue([
+      { idRate: 10, carrier: "Servientrega", product: "Estándar", flete: 9800, minimumInsurance: 0, totalCost: 9800, deliveryDays: 2, isCOD: false, codCost: null },
+    ]);
+
+    const response = await call();
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("recauda contra entrega en esta ciudad") });
+    expect(mocks.createGuideForOrder).not.toHaveBeenCalled();
+  });
 });

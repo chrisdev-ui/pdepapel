@@ -19,6 +19,7 @@ const tarifa = (over: Partial<RequotedRate> = {}): RequotedRate => ({
   totalCost: 13997,
   deliveryDays: 2,
   isCOD: false,
+  codCost: null,
   ...over,
 });
 

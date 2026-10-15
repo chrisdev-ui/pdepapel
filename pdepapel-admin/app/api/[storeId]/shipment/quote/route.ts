@@ -283,7 +283,21 @@ export async function POST(
       totalCost: rate.flete + rate.minimumInsurance,
       deliveryDays: rate.deliveryDays,
       isCOD: rate.cod,
+      codCost: rate.codDetails?.codCost ?? null,
     }));
+
+    // Las cotizaciones contra entrega no se guardan en la caché: sin esta
+    // línea no queda rastro de qué respondió EnvioClick (2026-10-15).
+    if (isCOD) {
+      console.log(
+        "[SHIPPING_QUOTE] contra entrega",
+        JSON.stringify({
+          destDaneCode: destination.daneCode,
+          rates: quotes.map((quote) => ({ carrier: quote.carrier, product: quote.product, cod: quote.isCOD, codCost: quote.codCost })),
+          idCarriersNoWsResult: quotation.data.idCarriersNoWsResult ?? [],
+        }),
+      );
+    }
 
     if (!isCOD) {
       await prismadb.shippingQuote.upsert({

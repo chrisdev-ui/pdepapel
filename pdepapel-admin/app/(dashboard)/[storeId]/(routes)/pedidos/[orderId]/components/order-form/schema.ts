@@ -174,6 +174,8 @@ export interface ShippingQuote {
   totalCost: number;
   deliveryDays: string | number;
   isCOD: boolean;
+  /** Lo que cobra EnvioClick por recaudar (solo en cotizaciones contra entrega). */
+  codCost?: number | null;
 }
 
 export const safeDate = (date: string | Date | null | undefined): Date | undefined => {
