@@ -144,6 +144,8 @@ function resolveRequotedRate(input: {
   previousProduct?: string | null;
   storeId: string;
   daneCode: string;
+  /** Contra entrega: `freshRates` ya trae solo tarifas que recaudan. */
+  codRequired?: boolean;
 }): RequotedRate {
   const result = reconcileShippingRate(input);
 
@@ -186,11 +188,17 @@ function resolveRequotedRate(input: {
     alternativas: result.alternatives.length,
   });
   throw new AppError(
-    "Esa transportadora ya no tiene cobertura para tu dirección. Elige otra opción de envío.",
+    input.codRequired
+      ? COD_UNAVAILABLE_MESSAGE
+      : "Esa transportadora ya no tiene cobertura para tu dirección. Elige otra opción de envío.",
     409,
     { code: "SHIPPING_RATE_UNAVAILABLE", alternatives: result.alternatives },
   );
 }
+
+/** Contra entrega y la transportadora elegida no recauda en ese destino. */
+const COD_UNAVAILABLE_MESSAGE =
+  "La transportadora que elegiste no recibe pago contra entrega en tu ciudad. Elige otra que sí lo haga o paga en línea.";
 
 export async function POST(
   req: Request,
@@ -467,12 +475,46 @@ async function createCheckout(
     let selectedQuote: any = fallbackQuote; // Default to provided shipping data (normalized)
 
     // If we have active caches, try to validate (only for ENVIOCLICK rates)
+    // Contra entrega: la guía solo sale con un idRate cotizado con recaudo
+    // (EnvioClick rechaza el resto con «idRate no válido para COD»). La caché
+    // solo guarda cotizaciones sin recaudo, así que no sirve aquí: se
+    // re-cotiza con recaudo y se queda una tarifa que recaude. Lo que paga la
+    // clienta sigue siendo flete + seguro.
+    const wantsCOD = payment.method === PaymentMethod.COD && !isCustomShipping;
+    const requoteForCheckout = async () => {
+      let freshRates: Awaited<ReturnType<typeof requoteCartShipping>>;
+      try {
+        freshRates = await requoteCartShipping({
+          storeId: params.storeId,
+          items: typedOrderItems,
+          destination: { daneCode, address },
+          contentValue: Number(subtotal) || 0,
+          ...(wantsCOD && { cod: { value: Number(subtotal) || 0 } }),
+        });
+      } catch (quoteError) {
+        console.error("[ORDER_CHECKOUT] Re-cotización fallida:", quoteError);
+        throw ErrorFactory.InvalidRequest(
+          "No pudimos confirmar el costo de envío en este momento. Solicita una nueva cotización e inténtalo de nuevo.",
+        );
+      }
+      return resolveRequotedRate({
+        rateId,
+        freshRates: wantsCOD ? freshRates.filter((rate) => rate.isCOD) : freshRates,
+        previousCost: shipping.cost ?? null,
+        previousCarrier: shipping.carrierName || shipping.courier,
+        previousProduct: shipping.productName,
+        storeId: params.storeId,
+        daneCode,
+        codRequired: wantsCOD,
+      });
+    };
+
     if (!isCustomShipping && shippingCaches && shippingCaches.length > 0) {
       for (const cache of shippingCaches) {
         const quotes = readCachedRates(cache.quotesData);
         const found = quotes.find((q) => q.idRate === rateId);
 
-        if (found) {
+        if (found && (!wantsCOD || found.isCOD)) {
           selectedQuote = found;
           break;
         }
@@ -485,30 +527,7 @@ async function createCheckout(
         console.warn(
           `⚠️ Rate ID ${rateId} not found in active caches for store ${params.storeId}. Re-cotizando.`,
         );
-        let freshRates: Awaited<ReturnType<typeof requoteCartShipping>>;
-        try {
-          freshRates = await requoteCartShipping({
-            storeId: params.storeId,
-            items: typedOrderItems,
-            destination: { daneCode, address },
-            contentValue: Number(subtotal) || 0,
-          });
-        } catch (quoteError) {
-          console.error("[ORDER_CHECKOUT] Re-cotización fallida:", quoteError);
-          throw ErrorFactory.InvalidRequest(
-            "No pudimos confirmar el costo de envío en este momento. Solicita una nueva cotización e inténtalo de nuevo.",
-          );
-        }
-
-        selectedQuote = resolveRequotedRate({
-          rateId,
-          freshRates,
-          previousCost: shipping.cost ?? null,
-          previousCarrier: shipping.carrierName || shipping.courier,
-          previousProduct: shipping.productName,
-          storeId: params.storeId,
-          daneCode,
-        });
+        selectedQuote = await requoteForCheckout();
       } else {
         console.log(
           `✅ Using cached quote for rate ID ${rateId}, carrier: ${selectedQuote.carrier}, cost: ${currencyFormatter(selectedQuote.totalCost)}`,
@@ -519,30 +538,7 @@ async function createCheckout(
       console.warn(
         `⚠️ No active shipping caches for daneCode ${daneCode}, store ${params.storeId}. Re-cotizando.`,
       );
-      let freshRates: Awaited<ReturnType<typeof requoteCartShipping>>;
-      try {
-        freshRates = await requoteCartShipping({
-          storeId: params.storeId,
-          items: typedOrderItems,
-          destination: { daneCode, address },
-          contentValue: Number(subtotal) || 0,
-        });
-      } catch (quoteError) {
-        console.error("[ORDER_CHECKOUT] Re-cotización fallida:", quoteError);
-        throw ErrorFactory.InvalidRequest(
-          "No pudimos confirmar el costo de envío en este momento. Solicita una nueva cotización e inténtalo de nuevo.",
-        );
-      }
-
-      selectedQuote = resolveRequotedRate({
-        rateId,
-        freshRates,
-        previousCost: shipping.cost ?? null,
-        previousCarrier: shipping.carrierName || shipping.courier,
-        previousProduct: shipping.productName,
-        storeId: params.storeId,
-        daneCode,
-      });
+      selectedQuote = await requoteForCheckout();
     }
 
     // Ensure selectedQuote has required fields
