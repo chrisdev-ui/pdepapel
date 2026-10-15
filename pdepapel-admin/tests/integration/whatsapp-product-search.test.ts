@@ -15,12 +15,14 @@ import { testPrisma } from "./helpers/database";
  * relación, raíces, sinónimos) y en la segunda búsqueda solo por el tipo. Un
  * doble de Prisma no diría si MySQL encuentra el diseño por su raíz; esto sí.
  *
- * El modelo se dobla: lo que se prueba es la búsqueda, no Gemini. Las ranuras
- * de cada caso son las que devuelve el clasificador para ese mensaje.
+ * El modelo se dobla: lo que se prueba es la búsqueda, no OpenAI. Las ranuras
+ * de cada caso son las que devuelve el clasificador para ese mensaje. La clave
+ * de prueba hace falta porque en CI no hay `.env`: sin ella el clasificador
+ * contesta «no configurado» y el bot no responde.
  */
 
 const mocks = vi.hoisted(() => {
-  process.env.GEMINI_API_KEY ??= "clave-de-prueba";
+  process.env.OPENAI_API_KEY ??= "clave-de-prueba";
   return { generateText: vi.fn() };
 });
 
@@ -28,8 +30,8 @@ vi.mock("ai", async (importOriginal) => ({
   ...(await importOriginal<typeof import("ai")>()),
   generateText: mocks.generateText,
 }));
-vi.mock("@ai-sdk/google", () => ({
-  createGoogleGenerativeAI: () => () => "modelo-simulado",
+vi.mock("@ai-sdk/openai", () => ({
+  createOpenAI: () => () => "modelo-simulado",
 }));
 
 import {
