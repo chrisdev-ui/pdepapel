@@ -57,7 +57,7 @@ try {
         count += 1;
       }
       return count;
-    });
+    }, { timeout: 60_000, maxWait: 10_000 });
     console.log(`PROD_WRITE_ROWS=${written}`);
   }
 } finally {

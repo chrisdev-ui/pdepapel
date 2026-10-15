@@ -6,7 +6,7 @@ import { OrderSource, OrderStatus, OrderType, PaymentMethod, ShippingProvider, S
 import { availableStock } from "@/lib/available-stock";
 import { checkReservationDrift } from "@/lib/stock-reservations-job";
 
-import { applyOrderPaymentRevert, assertExpectedRows, planOrderPaymentRevert } from "../../scripts/lib/order-payment-revert.mjs";
+import { applyOrderPaymentRevert, assertExpectedRows, planOrderPaymentRevert, TRANSACTION_OPTIONS } from "../../scripts/lib/order-payment-revert.mjs";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
 /**
@@ -137,8 +137,21 @@ describe("revertir un pago marcado por error en un contra entrega", () => {
     const plan = await planOrderPaymentRevert(testPrisma, target);
     expect(plan.problems).toEqual([]);
     assertExpectedRows(plan, 1);
-    const written = await applyOrderPaymentRevert(testPrisma, plan, target);
+    // Corre desde fuera de Railway: el tope de 5 s de Prisma cortó la primera corrida en producción.
+    const transactionOptions: unknown[] = [];
+    const recording = new Proxy(testPrisma, {
+      get(client, key) {
+        if (key !== "$transaction") return Reflect.get(client, key);
+        return (run: never, options: unknown) => {
+          transactionOptions.push(options);
+          return client.$transaction(run, options as never);
+        };
+      },
+    });
+    const written = await applyOrderPaymentRevert(recording, plan, target);
     expect(written).toMatchObject({ order: 1, payment: 1, shipping: 1, movements: 2 });
+    expect(transactionOptions).toEqual([TRANSACTION_OPTIONS]);
+    expect(TRANSACTION_OPTIONS.timeout).toBeGreaterThanOrEqual(30_000);
 
     // Nada sale: ni correos ni avisos.
     expect(sent.order).not.toHaveBeenCalled();
@@ -154,6 +167,10 @@ describe("revertir un pago marcado por error en un contra entrega", () => {
     );
 
     const returns = await testPrisma.inventoryMovement.findMany({ where: { referenceId: order.id, type: "ORDER_CANCELLED" }, orderBy: { quantity: "asc" } });
+    expect(returns.map(({ productId, previousStock, newStock }) => ({ productId, previousStock, newStock }))).toEqual([
+      { productId: pen.id, previousStock: 2, newStock: 3 },
+      { productId: notebook.id, previousStock: 0, newStock: 2 },
+    ]);
     expect(returns.map(({ productId, quantity }) => ({ productId, quantity }))).toEqual([
       { productId: pen.id, quantity: 1 },
       { productId: notebook.id, quantity: 2 },

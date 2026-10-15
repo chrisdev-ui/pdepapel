@@ -16,6 +16,12 @@
  * así que lo disponible en la tienda y en Mercado Libre no cambia.
  */
 
+/**
+ * El guion corre desde la máquina de Christian contra Railway: con el tope de
+ * 5 s de Prisma la primera corrida (2026-10-15) se cortó a mitad y se deshizo.
+ */
+export const TRANSACTION_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
+
 export const PAID_FINANCIAL_FIELDS = ["totalProductCost", "gatewayFee", "shippingCost", "netProfit", "profitMarginPct"];
 
 const ORDER_SELECT = {
@@ -132,48 +138,61 @@ export async function applyOrderPaymentRevert(db, plan, target, { hold = true } 
       ? (await tx.shipping.updateMany({ where: { id: order.shipping.id, storeId: target.storeId, envioClickIdOrder: null }, data: { isCOD: true } })).count
       : 0;
 
-    const stock = {};
-    let movements = 0;
-    for (const placed of plan.movements) {
-      const quantity = -placed.quantity;
-      const updated = await tx.product.updateMany({ where: { id: placed.productId, storeId: target.storeId }, data: { stock: { increment: quantity } } });
-      if (updated.count !== 1) throw new Error(`no se pudo devolver el producto ${placed.productId}`);
-      const { stock: newStock } = await tx.product.findUniqueOrThrow({ where: { id: placed.productId }, select: { stock: true } });
-      await tx.inventoryMovement.create({
-        data: {
+    // Una sola sentencia para el stock (y lo apartado): desde fuera de Railway cada ida y vuelta pesa.
+    const returns = Array.from(stockToReturn(plan.movements).entries());
+    const ids = returns.map(([id]) => id);
+    const cases = returns.map(() => "WHEN ? THEN ?").join(" ");
+    const caseArgs = returns.flatMap(([id, units]) => [id, units]);
+    const affected = await tx.$executeRawUnsafe(
+      `UPDATE \`Product\` SET \`stock\` = \`stock\` + CASE \`id\` ${cases} ELSE 0 END${hold ? `, \`reservedUnits\` = \`reservedUnits\` + CASE \`id\` ${cases} ELSE 0 END` : ""}, \`updatedAt\` = NOW(3)
+        WHERE \`storeId\` = ? AND \`id\` IN (${ids.map(() => "?").join(", ")})`,
+      ...caseArgs,
+      ...(hold ? caseArgs : []),
+      target.storeId,
+      ...ids,
+    );
+    if (affected !== ids.length) throw new Error("no se pudo devolver algún producto; no se escribió nada");
+
+    const after = await tx.product.findMany({ where: { id: { in: ids } }, select: { id: true, stock: true } });
+    const stock = Object.fromEntries(after.map((product) => [product.id, product.stock]));
+    // Cada venta recibe su devolución con la foto de stock que le toca, en el orden de las ventas.
+    const running = new Map(returns.map(([id, units]) => [id, stock[id] - units]));
+    const movements = await tx.inventoryMovement.createMany({
+      data: plan.movements.map((placed) => {
+        const quantity = -placed.quantity;
+        const previousStock = running.get(placed.productId);
+        running.set(placed.productId, previousStock + quantity);
+        return {
           storeId: target.storeId,
           productId: placed.productId,
           type: "ORDER_CANCELLED",
           quantity,
-          previousStock: newStock - quantity,
-          newStock,
+          previousStock,
+          newStock: previousStock + quantity,
           cost: placed.cost,
           price: placed.price,
           reason: `Pago revertido #${order.orderNumber}`,
           description: "Se marcó pagado por error. Es contra entrega: el inventario se descuenta cuando sale el envío.",
           referenceId: order.id,
           createdBy: "SYSTEM",
-        },
-      });
-      stock[placed.productId] = newStock;
-      movements += 1;
-    }
+        };
+      }),
+    });
 
-    const reservation = hold ? await holdForOrder(tx, plan, target) : null;
+    const reservation = hold ? await holdForOrder(tx, plan, target, returns) : null;
 
-    return { order: reverted.count, payment: payment.count, shipping, movements, stock, reservation };
-  });
+    return { order: reverted.count, payment: payment.count, shipping, movements: movements.count, stock, reservation };
+  }, TRANSACTION_OPTIONS);
 }
 
-/** Reserva CONVERTED del pedido con lo devuelto; mismo UPDATE guardado que `adjustReservedUnits`. */
-async function holdForOrder(tx, plan, target) {
+/** Reserva CONVERTED del pedido con lo devuelto; el contador ya subió junto con el stock. */
+async function holdForOrder(tx, plan, target, returns) {
   const { order } = plan;
-  const entries = Array.from(stockToReturn(plan.movements).entries());
   const reservation = await tx.stockReservation.create({
     data: {
       storeId: target.storeId,
-      productId: entries.length === 1 ? entries[0][0] : null,
-      quantity: entries.length === 1 ? entries[0][1] : null,
+      productId: returns.length === 1 ? returns[0][0] : null,
+      quantity: returns.length === 1 ? returns[0][1] : null,
       customerName: order.fullName,
       customerPhone: order.phone ?? "",
       note: `Apartado para el pedido ${order.orderNumber} (contra entrega) hasta que salga el envío.`,
@@ -185,25 +204,13 @@ async function holdForOrder(tx, plan, target) {
     select: { id: true },
   });
   await tx.stockReservationItem.createMany({
-    data: entries.map(([productId, quantity]) => ({ storeId: target.storeId, reservationId: reservation.id, productId, quantity, addedBy: "SYSTEM" })),
+    data: returns.map(([productId, quantity]) => ({ storeId: target.storeId, reservationId: reservation.id, productId, quantity, addedBy: "SYSTEM" })),
   });
   await tx.stockReservationEvent.createMany({
     data: [
-      { storeId: target.storeId, reservationId: reservation.id, kind: "created", actor: "SYSTEM", detail: { items: entries.length, via: "pago_revertido" } },
+      { storeId: target.storeId, reservationId: reservation.id, kind: "created", actor: "SYSTEM", detail: { items: returns.length, via: "pago_revertido" } },
       { storeId: target.storeId, reservationId: reservation.id, kind: "converted", actor: "SYSTEM", detail: { orderId: order.id } },
     ],
   });
-  const ids = entries.map(([id]) => id);
-  const cases = entries.map(() => "WHEN ? THEN ?").join(" ");
-  const caseArgs = entries.flatMap(([id, units]) => [id, units]);
-  const affected = await tx.$executeRawUnsafe(
-    `UPDATE \`Product\` SET \`reservedUnits\` = \`reservedUnits\` + CASE \`id\` ${cases} ELSE 0 END, \`updatedAt\` = NOW(3)
-      WHERE \`storeId\` = ? AND \`id\` IN (${ids.map(() => "?").join(", ")}) AND \`stock\` - \`reservedUnits\` >= CASE \`id\` ${cases} ELSE 0 END`,
-    ...caseArgs,
-    target.storeId,
-    ...ids,
-    ...caseArgs,
-  );
-  if (affected !== ids.length) throw new Error("no alcanzó el stock para apartar lo devuelto; no se escribió nada");
   return reservation.id;
 }
