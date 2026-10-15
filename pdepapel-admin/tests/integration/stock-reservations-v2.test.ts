@@ -465,7 +465,7 @@ describe("reservas v2: varios productos (MySQL)", () => {
 
     const { reservation } = await create([{ productId: f.component.id, quantity: 2 }, { productId: notebook.id, quantity: 1 }]);
     await holds();
-    const other = await createReservation({ storeId: f.store.id, items: [{ productId: notebook.id, quantity: 1 }], customerName: "Otra clienta", customerPhone: "3007654321", createdBy: owner() });
+    const other = await createReservation({ storeId: f.store.id, items: [{ productId: notebook.id, quantity: 1 }], customerName: "Otra clienta", customerPhone: "3001234567", createdBy: owner() });
     await holds();
 
     await addReservationItems(f.store.id, reservation.id, { items: [{ productId: f.component.id, quantity: 1 }, { productId: notebook.id, quantity: 1 }] }, owner());
