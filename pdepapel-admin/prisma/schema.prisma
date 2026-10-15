@@ -1659,6 +1659,13 @@ model StoreSettings {
   /// Lee los mensajes seguidos de una clienta como uno solo y contesta lo que
   /// sí entiende de la ráfaga (`lib/whatsapp/burst.ts`). Apagado por defecto.
   botReadBursts             Boolean          @default(false)
+  /// Respuesta del bot a los 10 min sin respuesta de nadie (lib/whatsapp/wait-assist.ts): apagada, en sombra (se anota y no sale) o encendida.
+  botFallbackMode           BotAssistMode    @default(SHADOW)
+  /// Mensaje de espera, una vez por espera; mismo interruptor de tres estados.
+  botHoldingMode            BotAssistMode    @default(SHADOW)
+  /// Textos del mensaje de espera, de día y de noche (00:00–06:59). Los escribe Paula; vacíos, no sale nada.
+  botHoldingText            String?          @db.Text
+  botHoldingNightText       String?          @db.Text
 
   /// Visto bueno de Paula a los textos con los que el bot contesta los datos
   /// del negocio. `botFactsVersion` guarda la versión aprobada: si se edita
@@ -2753,6 +2760,12 @@ enum ConversationChannel {
   WHATSAPP
 }
 
+enum BotAssistMode {
+  OFF
+  SHADOW
+  ON
+}
+
 enum ConversationStatus {
   OPEN
   NEEDS_OWNER
@@ -2844,37 +2857,39 @@ enum OrderSource {
 
 /// Un hilo con una clienta en un canal: una fila por (tienda, canal, teléfono normalizado).
 model Conversation {
-  id             String              @id @default(uuid())
-  storeId        String
-  channel        ConversationChannel @default(WHATSAPP)
+  id               String              @id @default(uuid())
+  storeId          String
+  channel          ConversationChannel @default(WHATSAPP)
   /// Solo dígitos con indicativo (`normalizePhone`), la misma llave que agrupa
   /// Clientes. **Puede faltar**: desde que Meta admite nombres de usuario, el
   /// webhook omite el teléfono de quien tiene uno salvo que haya habido trato
   /// en 30 días o esté en la libreta del negocio. Responderle no basta.
-  phone          String?
+  phone            String?
   /// Identificador de Meta por negocio (BSUID, p. ej. `CO.2465629583926901`).
   /// Llega siempre, con teléfono o sin él, y es estable para un mismo contacto,
   /// así que es la identidad que no se pierde. `null` en las conversaciones
   /// anteriores a que esto existiera.
-  bsuid          String?
+  bsuid            String?
   /// Nombre de usuario de WhatsApp (`@mrs_han14`), sin la arroba. Meta lo
   /// manda en `contacts[].profile.username` y muchas veces es lo ÚNICO legible
   /// que llega: `profile.name` viene vacío para la mayoría de estos contactos.
-  username       String?
-  contactName    String?
-  status         ConversationStatus  @default(OPEN)
-  lastInboundAt  DateTime?
-  lastOutboundAt DateTime?
+  username         String?
+  contactName      String?
+  status           ConversationStatus  @default(OPEN)
+  lastInboundAt    DateTime?
+  lastOutboundAt   DateTime?
   /// Último mensaje de Paula desde su propio celular (`fileOwnerEcho`). Es lo
   /// que frena al bot: `lastOutboundAt` no sirve porque lo mueven los dos.
-  lastOwnerAt    DateTime?
+  lastOwnerAt      DateTime?
   /// Mientras el bot contesta, hasta cuándo es suyo el turno de envío
   /// (`lib/whatsapp/bot-lease.ts`). El valor también identifica a la corrida
   /// que lo tiene: solo ella lo extiende o lo suelta.
-  botLeaseUntil  DateTime?           @db.DateTime(3)
-  orderId        String?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  botLeaseUntil    DateTime?           @db.DateTime(3)
+  /// Por qué quedó en NEEDS_OWNER: "owner_window" si fue solo por la pausa de 24 h de Paula (vence con ella); null si el bot se la pasó.
+  needsOwnerReason String?             @db.VarChar(16)
+  orderId          String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   store    Store                 @relation("StoreToConversation", fields: [storeId], references: [id])
   order    Order?                @relation(fields: [orderId], references: [id])
@@ -3226,4 +3241,35 @@ enum StockReservationStatus {
   RELEASED
   /// Venció sin pedido.
   EXPIRED
+}
+
+/// Una decisión por espera y por tipo (respuesta a los 10 min o mensaje de
+/// espera). La llave única es el turno: dos corridas no deciden la misma
+/// espera. Es también el registro del modo sombra; nunca guarda texto.
+model WhatsAppWaitDecision {
+  id             String   @id @default(uuid())
+  storeId        String
+  conversationId String
+  /// Primer mensaje de verdad de la espera (ConversationMessage.id).
+  turnMessageId  String
+  /// fallback | holding
+  kind           String   @db.VarChar(16)
+  /// OFF | SHADOW | ON, como estaba al decidir.
+  mode           String   @db.VarChar(8)
+  /// send | would_send | skip
+  decision       String   @db.VarChar(16)
+  reason         String?  @db.VarChar(32)
+  /// fact | product | order | web
+  intent         String?  @db.VarChar(16)
+  /// La espera empezó de 00:00 a 06:59 en Bogotá.
+  night          Boolean  @default(false)
+  scheduledFor   DateTime @db.DateTime(3)
+  decidedAt      DateTime @db.DateTime(3)
+  /// Resultado del envío si salió (outcome del bot, sent, send_failed).
+  outcome        String?  @db.VarChar(48)
+  createdAt      DateTime @default(now())
+
+  @@unique([turnMessageId, kind])
+  @@index([storeId, createdAt])
+  @@index([conversationId])
 }

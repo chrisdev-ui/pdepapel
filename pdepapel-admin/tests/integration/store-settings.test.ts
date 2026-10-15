@@ -115,4 +115,16 @@ describe("datos del negocio", () => {
       openingHours: null,
     });
   });
+
+  it("mientras la clienta espera: en Sombra y sin textos de entrada; guardar sin esos campos no los toca", async () => {
+    const before = await getStoreSettings(storeId);
+    expect(before).toMatchObject({ botFallbackMode: "SHADOW", botHoldingMode: "SHADOW", botHoldingText: null, botHoldingNightText: null });
+
+    await saveStoreSettings(storeId, { botFallbackMode: "ON", botHoldingMode: "OFF", botHoldingText: "  Paula te responde en breve  ", botHoldingNightText: "" });
+    expect(await getStoreSettings(storeId)).toMatchObject({ botFallbackMode: "ON", botHoldingMode: "OFF", botHoldingText: "Paula te responde en breve", botHoldingNightText: null });
+
+    await saveStoreSettings(storeId, { cityName: "Medellín" });
+    expect(await getStoreSettings(storeId)).toMatchObject({ botFallbackMode: "ON", botHoldingMode: "OFF", botHoldingText: "Paula te responde en breve" });
+  });
 });
+

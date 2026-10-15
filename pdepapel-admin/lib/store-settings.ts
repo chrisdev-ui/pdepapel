@@ -1,4 +1,4 @@
-import { MinimumOrderRule } from "@prisma/client";
+import { BotAssistMode, MinimumOrderRule } from "@prisma/client";
 import { z } from "zod";
 
 import { ErrorFactory } from "@/lib/api-errors";
@@ -121,6 +121,10 @@ export const storeSettingsInputSchema = z
     paymentCardInfo: z.string().trim().max(300).nullable().optional(),
     botEnabled: z.boolean().optional(),
     botReadBursts: z.boolean().optional(),
+    botFallbackMode: z.nativeEnum(BotAssistMode).optional(),
+    botHoldingMode: z.nativeEnum(BotAssistMode).optional(),
+    botHoldingText: z.string().trim().max(500).nullable().optional(),
+    botHoldingNightText: z.string().trim().max(500).nullable().optional(),
   })
   .refine(
     (input) =>
@@ -172,6 +176,13 @@ export interface ResolvedStoreSettings {
   botEnabled: boolean;
   /** Leer los mensajes seguidos de una clienta como uno solo. */
   botReadBursts: boolean;
+  /** Respuesta del bot a los 10 min sin respuesta de nadie: apagada, sombra o encendida. */
+  botFallbackMode: BotAssistMode;
+  /** Mensaje de espera: apagado, sombra o encendido. */
+  botHoldingMode: BotAssistMode;
+  /** Textos que escribe Paula; vacíos, el mensaje de espera no sale. */
+  botHoldingText: string | null;
+  botHoldingNightText: string | null;
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
   botFactsVersion: string | null;
@@ -223,6 +234,11 @@ export async function getStoreSettings(
     // conecte esta bandera.
     botEnabled: settings?.botEnabled ?? false,
     botReadBursts: settings?.botReadBursts ?? false,
+    // En sombra por defecto: se anota lo que haría y no sale nada.
+    botFallbackMode: settings?.botFallbackMode ?? BotAssistMode.SHADOW,
+    botHoldingMode: settings?.botHoldingMode ?? BotAssistMode.SHADOW,
+    botHoldingText: settings?.botHoldingText?.trim() || null,
+    botHoldingNightText: settings?.botHoldingNightText?.trim() || null,
     botFactsApprovedAt: settings?.botFactsApprovedAt ?? null,
     botFactsVersion: settings?.botFactsVersion ?? null,
     botProductsApprovedAt: settings?.botProductsApprovedAt ?? null,
@@ -253,6 +269,10 @@ export async function saveStoreSettings(
     // enciende solo por guardar los datos del negocio.
     botEnabled: input.botEnabled ?? false,
     botReadBursts: input.botReadBursts ?? false,
+    ...(input.botFallbackMode === undefined ? {} : { botFallbackMode: input.botFallbackMode }),
+    ...(input.botHoldingMode === undefined ? {} : { botHoldingMode: input.botHoldingMode }),
+    ...(input.botHoldingText === undefined ? {} : { botHoldingText: input.botHoldingText?.trim() || null }),
+    ...(input.botHoldingNightText === undefined ? {} : { botHoldingNightText: input.botHoldingNightText?.trim() || null }),
     // Un campo que no venga se deja como estaba, en vez de borrarlo.
     ...(input.deliveryEstimate === undefined
       ? {}
