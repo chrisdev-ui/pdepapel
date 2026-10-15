@@ -264,5 +264,16 @@ describe("correo de recordatorio", () => {
     await expect(maybeSendWaitingReminder(store, new Date(DAY.getTime() + 20 * MIN), { send })).resolves.toMatchObject({ sent: false });
     expect(emails).toEqual([{ storeId: store, count: before + 1 }]);
   });
+
+  it("una espera de más de un día sigue en la lista, pero no cuenta para el correo", async () => {
+    const { maybeSendWaitingReminder } = await import("@/lib/whatsapp/waiting-reminder");
+    const { findWaitingConversations } = await import("@/lib/whatsapp/waiting-list");
+    await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
+    const before = (await maybeSendWaitingReminder(store, DAY, { send: async () => undefined })).count;
+    const old = await conversation([{ sentBy: "OWNER", at: ago(DAY, 3 * 24 * 60) }, { sentBy: "CUSTOMER", at: ago(DAY, 2 * 24 * 60) }]);
+    expect((await findWaitingConversations(store, DAY)).has(old.id)).toBe(true);
+    await testPrisma.jobRun.deleteMany({ where: { id: { contains: store } } });
+    await expect(maybeSendWaitingReminder(store, DAY, { send: async () => undefined })).resolves.toMatchObject({ count: before });
+  });
 });
 

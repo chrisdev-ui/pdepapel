@@ -63,23 +63,26 @@ const CANDIDATE_LIMIT = 200;
  * `lastOutboundAt`); el detalle se lee solo de esas. El mensaje de espera del
  * bot no cuenta como respuesta y no mueve `lastOutboundAt`.
  */
-export async function findWaitingConversations(storeId: string, now = new Date(), minAgeMs = WAITING_BADGE_AFTER_MS): Promise<Map<string, Date>> {
+export async function findWaitingConversations(storeId: string, now = new Date(), minAgeMs = WAITING_BADGE_AFTER_MS, maxAgeMs = Infinity): Promise<Map<string, Date>> {
+  const oldest = Number.isFinite(maxAgeMs) ? new Date(now.getTime() - maxAgeMs) : new Date(0);
   const candidates = await prismadb.$queryRaw<{ id: string }[]>`
     SELECT \`id\` FROM \`Conversation\`
      WHERE \`storeId\` = ${storeId}
        AND \`lastInboundAt\` IS NOT NULL
        AND \`lastInboundAt\` <= ${now}
+       AND \`lastInboundAt\` >= ${oldest}
        AND (\`lastOutboundAt\` IS NULL OR \`lastInboundAt\` > \`lastOutboundAt\`)
      ORDER BY \`lastInboundAt\` DESC
      LIMIT ${CANDIDATE_LIMIT}`;
   const waiting = new Map<string, Date>();
   for (const { id } of candidates) {
     const { wait } = await loadWait(id);
-    if (wait && now.getTime() - wait.since.getTime() >= minAgeMs) waiting.set(id, wait.since);
+    const age = wait ? now.getTime() - wait.since.getTime() : -1;
+    if (wait && age >= minAgeMs && age <= maxAgeMs) waiting.set(id, wait.since);
   }
   return waiting;
 }
 
-export async function countWaitingConversations(storeId: string, now = new Date(), minAgeMs = WAITING_BADGE_AFTER_MS): Promise<number> {
-  return (await findWaitingConversations(storeId, now, minAgeMs)).size;
+export async function countWaitingConversations(storeId: string, now = new Date(), minAgeMs = WAITING_BADGE_AFTER_MS, maxAgeMs = Infinity): Promise<number> {
+  return (await findWaitingConversations(storeId, now, minAgeMs, maxAgeMs)).size;
 }

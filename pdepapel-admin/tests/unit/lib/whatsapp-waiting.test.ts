@@ -177,6 +177,7 @@ describe("correo de recordatorio", () => {
     const { subject, text } = waitingReminderEmail({ storeId: "store-1", count: 3 });
     expect(subject).toBe("3 clientas te esperan en WhatsApp");
     expect(text).toContain("Hay 3 conversaciones");
+    expect(text).toContain("(en las últimas 24 horas)");
     expect(text).toContain("/store-1/conversaciones?esperando=1");
     expect(waitingReminderEmail({ storeId: "s", count: 1 }).subject).toBe("Una clienta te espera en WhatsApp");
   });

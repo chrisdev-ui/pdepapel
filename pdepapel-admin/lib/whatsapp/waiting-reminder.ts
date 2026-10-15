@@ -4,7 +4,7 @@ import { resend } from "@/lib/resend";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { claimWindow } from "@/lib/whatsapp/recovery";
 import { countWaitingConversations } from "@/lib/whatsapp/waiting-list";
-import { REMINDER_AFTER_MS, isReminderHours, waitingReminderEmail } from "@/lib/whatsapp/waiting";
+import { REMINDER_AFTER_MS, REMINDER_MAX_WAIT_MS, isReminderHours, waitingReminderEmail } from "@/lib/whatsapp/waiting";
 
 export const WAITING_REMINDER_EVERY_MS = 60 * 60 * 1000;
 export const WAITING_CHECK_EVERY_MS = 10 * 60 * 1000;
@@ -16,15 +16,16 @@ export interface WaitingReminderDeps {
 }
 
 /**
- * Correo a Paula cuando una clienta lleva más de 30 min esperándola, de 08:00
- * a 22:59 en Bogotá y como mucho uno por hora. Solo la cuenta y el enlace a
+ * Correo a Paula cuando una clienta lleva más de 30 min (y menos de un día)
+ * esperándola, de 08:00 a 22:59 en Bogotá y como mucho uno por hora. Solo la
+ * cuenta y el enlace a
  * la lista filtrada: ni nombres, ni teléfonos, ni texto de mensajes.
  */
 export async function maybeSendWaitingReminder(storeId: string, now = new Date(), deps: WaitingReminderDeps = {}): Promise<{ sent: boolean; count: number }> {
   if (!isReminderHours(now)) return { sent: false, count: 0 };
   // Contar lee unas cuantas conversaciones: como mucho una vez cada 10 min por tienda.
   if (!(await claimWindow(`whatsapp-waiting:check:${storeId}`, WAITING_CHECK_EVERY_MS, now))) return { sent: false, count: 0 };
-  const count = await countWaitingConversations(storeId, now, REMINDER_AFTER_MS);
+  const count = await countWaitingConversations(storeId, now, REMINDER_AFTER_MS, REMINDER_MAX_WAIT_MS);
   if (count === 0) return { sent: false, count };
   if (!(await claimWindow(waitingReminderRow(storeId), WAITING_REMINDER_EVERY_MS, now))) return { sent: false, count };
   await (deps.send ?? sendWaitingReminder)({ storeId, count }).catch((error: unknown) => {

@@ -13,6 +13,8 @@ export const WAITING_BADGE_AFTER_MS = 15 * 60 * 1000;
 export const FALLBACK_AFTER_MS = 10 * 60 * 1000;
 export const HOLDING_AFTER_MS = 15 * 60 * 1000;
 export const REMINDER_AFTER_MS = 30 * 60 * 1000;
+/** El correo cuenta solo esperas de menos de un día: las viejas siguen en la lista, pero no mandan un correo cada hora. */
+export const REMINDER_MAX_WAIT_MS = 24 * 60 * 60 * 1000;
 /** Meta deja escribir 24 h después del último mensaje de la clienta; se deja margen. */
 export const CUSTOMER_WINDOW_SAFE_MS = 23 * 60 * 60 * 1000;
 /** «Conversación en vivo»: Paula mandó al menos 3 mensajes en los últimos 30 min. */
@@ -176,7 +178,7 @@ export function waitingReminderEmail(input: { storeId: string; count: number }) 
   const link = `${PANEL_ORIGIN}/${input.storeId}/conversaciones?esperando=1`;
   const subject = input.count === 1 ? "Una clienta te espera en WhatsApp" : `${input.count} clientas te esperan en WhatsApp`;
   const text =
-    `${input.count === 1 ? "Hay 1 conversación" : `Hay ${input.count} conversaciones`} en las que la clienta escribió hace más de 30 minutos y nadie le ha respondido.\n\n` +
+    `${input.count === 1 ? "Hay 1 conversación" : `Hay ${input.count} conversaciones`} en las que la clienta escribió hace más de 30 minutos (en las últimas 24 horas) y nadie le ha respondido.\n\n` +
     `Ver «Esperando a Paula»: ${link}\n\n` +
     "Este recordatorio sale como mucho una vez por hora, de 8 a. m. a 11 p. m.";
   return { subject, text };
