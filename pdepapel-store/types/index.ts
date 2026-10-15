@@ -325,6 +325,8 @@ export interface Shipping {
   deliveryDays?: number;
   isCOD?: boolean;
   cost: number;
+  /** Recaudo contra entrega, aparte del envío. */
+  codFee?: number | null;
   trackingCode?: string;
   trackingUrl?: string;
   guideUrl?: string;
@@ -355,6 +357,8 @@ export interface ShippingQuote {
   totalCost: number;
   deliveryDays: string | number;
   isCOD: boolean;
+  /** Contra entrega: el recaudo final que se cobra con esta tarifa (lo calcula el panel). */
+  codFee?: number | null;
 }
 
 export interface Post {
@@ -528,6 +532,9 @@ export interface ShippingQuoteRequest {
     address: string;
   };
   orderTotal: number;
+  /** Contra entrega: el pedido sin envío (después del cupón) y el subtotal de productos. */
+  amountBeforeShipping?: number;
+  productSubtotal?: number;
   items: {
     productId: string;
     quantity: number;

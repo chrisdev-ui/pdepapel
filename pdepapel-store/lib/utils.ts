@@ -152,6 +152,8 @@ export const calculateTotals = (
   shippingCost: number = 0,
   /** Store free-shipping threshold (COP) on the product subtotal; null/0 = off. */
   freeShippingThreshold: number | null = null,
+  /** Recaudo contra entrega: su propia línea, aparte del envío (también con envío gratis). */
+  codFee: number = 0,
 ) => {
   // Calculate subtotal using discounted prices when available
   // Calculate subtotal using effective price
@@ -189,13 +191,14 @@ export const calculateTotals = (
     freeShippingThreshold > 0 &&
     subtotal >= freeShippingThreshold;
   const effectiveShippingCost = freeShipping ? 0 : shippingCost;
-  const total = Math.max(subtotal - couponDiscount + effectiveShippingCost, 0);
+  const total = Math.max(subtotal - couponDiscount + effectiveShippingCost + codFee, 0);
 
   return {
     subtotal,
     total,
     couponDiscount,
     productSavings,
+    codFee,
     shippingCost: effectiveShippingCost,
     freeShipping,
     /** Amount still missing to unlock free shipping (0 when unlocked/off). */

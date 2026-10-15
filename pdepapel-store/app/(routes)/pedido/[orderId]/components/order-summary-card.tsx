@@ -49,6 +49,7 @@ export function OrderSummaryCard({
 }: OrderSummaryCardProps) {
   const method = order.payment?.method;
   const shippingCost = Number(order.shipping?.cost ?? 0);
+  const codFee = order.shipping?.isCOD ? Number(order.shipping?.codFee ?? 0) : 0;
   const discount = Number(order.discount ?? 0);
   const couponDiscount = Number(order.couponDiscount ?? 0);
   const giftCardAmount = Number(order.giftCardAmount ?? 0);
@@ -103,6 +104,11 @@ export function OrderSummaryCard({
             ) : (
               <span className="text-sm font-semibold text-success">Gratis</span>
             )}
+          </Row>
+        )}
+        {!digital && codFee > 0 && (
+          <Row label="Recaudo contra entrega">
+            <Currency value={codFee} className="text-sm font-semibold" />
           </Row>
         )}
         <div className="border-t border-dashed border-border pt-2">

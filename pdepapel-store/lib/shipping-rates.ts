@@ -17,44 +17,48 @@ const toDays = (value: ShippingQuote["deliveryDays"]): number => {
  * EnvioClick returns the same carrier twice when it can ship with and without
  * cash on delivery, often at the same price. Customers only need one row per
  * carrier: keep the cheapest, and when the COD variant costs the same prefer
- * it (it leaves «contra entrega» available in the payment step).
+ * it (it leaves «contra entrega» available in the payment step). When the
+ * cheapest row of a carrier does not collect but a COD variant exists, that
+ * variant stays as its own row: grouping never hides a carrier's only way to
+ * pay on delivery (2026-10-15).
  */
+const isBetter = (quote: ShippingQuote, current: ShippingQuote) =>
+  quote.totalCost < current.totalCost ||
+  (quote.totalCost === current.totalCost && quote.isCOD && !current.isCOD) ||
+  (quote.totalCost === current.totalCost &&
+    quote.isCOD === current.isCOD &&
+    toDays(quote.deliveryDays) < toDays(current.deliveryDays));
+
 export function groupShippingQuotes(
   quotes: ShippingQuote[] | null | undefined,
 ): GroupedShippingQuote[] {
   if (!quotes || quotes.length === 0) return [];
 
-  const byCarrier = new Map<string, { best: ShippingQuote; count: number }>();
+  const byCarrier = new Map<string, { best: ShippingQuote; bestCod: ShippingQuote | null; count: number }>();
 
   for (const quote of quotes) {
     const key = `${quote.carrier}`.trim().toUpperCase();
     const current = byCarrier.get(key);
     if (!current) {
-      byCarrier.set(key, { best: quote, count: 1 });
+      byCarrier.set(key, { best: quote, bestCod: quote.isCOD ? quote : null, count: 1 });
       continue;
     }
 
     current.count += 1;
-    const cheaper = quote.totalCost < current.best.totalCost;
-    const samePriceButCod =
-      quote.totalCost === current.best.totalCost &&
-      quote.isCOD &&
-      !current.best.isCOD;
-    const samePriceButFaster =
-      quote.totalCost === current.best.totalCost &&
-      quote.isCOD === current.best.isCOD &&
-      toDays(quote.deliveryDays) < toDays(current.best.deliveryDays);
-
-    if (cheaper || samePriceButCod || samePriceButFaster) {
-      current.best = quote;
-    }
+    if (isBetter(quote, current.best)) current.best = quote;
+    if (quote.isCOD && (!current.bestCod || isBetter(quote, current.bestCod))) current.bestCod = quote;
   }
 
-  const grouped = Array.from(byCarrier.values())
-    .map(({ best, count }) => ({
-      ...best,
+  const rows = Array.from(byCarrier.values()).flatMap(({ best, bestCod, count }) => {
+    const kept = bestCod && !best.isCOD ? [best, bestCod] : [best];
+    return kept.map((quote) => ({ quote, hidden: count - kept.length }));
+  });
+
+  const grouped = rows
+    .map(({ quote, hidden }) => ({
+      ...quote,
       badges: [] as ShippingRateBadge[],
-      hiddenAlternatives: count - 1,
+      hiddenAlternatives: hidden,
     }))
     .sort((a, b) => a.totalCost - b.totalCost);
 

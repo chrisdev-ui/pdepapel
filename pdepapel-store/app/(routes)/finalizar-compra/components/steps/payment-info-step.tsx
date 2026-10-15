@@ -11,6 +11,7 @@ import { PaymentMethodSelector } from "@/components/ui/payment-method-selector";
 import { PresaleCartNotice } from "@/components/presale-cart-notice";
 import { WelcomeBenefitCard } from "@/components/welcome-benefit-card";
 import { PaymentMethod } from "@/constants";
+import { currencyFormatter } from "@/lib/utils";
 import { useCart } from "@/hooks/use-cart";
 import { isPresaleItem } from "@/lib/purchasable-units";
 import { AlertTriangle, MapPin, UserRound } from "lucide-react";
@@ -103,6 +104,15 @@ export const PaymentInfoStep = ({
   // clienta llegue hasta el botón para que se lo nieguen.
   const hasPresale = cartItems.some((item) => isPresaleItem(item));
   const codAvailable = Boolean(isCODShipment) && !hasPresale;
+  const selectedMethod = form.watch("paymentMethod");
+  const quotedCodFee = form.watch("shipping.codFee");
+  // Borrador de texto, pendiente de que Paula lo apruebe.
+  const codFeeNote =
+    selectedMethod === PaymentMethod.COD && codAvailable && typeof quotedCodFee === "number" && quotedCodFee > 0
+      ? freeShipping
+        ? `Tu envío es gratis. Al pagar contra entrega, la transportadora cobra un recaudo de ${currencyFormatter.format(quotedCodFee)}; ya está sumado a tu total.`
+        : `Al pagar contra entrega, la transportadora cobra un recaudo de ${currencyFormatter.format(quotedCodFee)}; ya está sumado a tu total.`
+      : null;
 
   const deliveryDays = formatDeliveryDays(values.shipping?.deliveryDays);
   const shippingLine =
@@ -244,6 +254,11 @@ export const PaymentInfoStep = ({
                 }
               />
             </FormControl>
+            {codFeeNote && (
+              <p className="rounded-lg bg-kawaii-yellow-light/60 px-3 py-2 text-sm" data-testid="cod-fee-note">
+                {codFeeNote}
+              </p>
+            )}
             <FormMessage reserveSpace />
           </FormItem>
         )}

@@ -118,6 +118,7 @@ const shippingSchema = z
     deliveryDays: z.number(),
     isCOD: z.boolean(),
     cost: z.number(),
+    codFee: z.number().nullable(),
     status: z.string(),
   })
   .partial();
@@ -509,6 +510,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, [isCODShipment, paymentMethod, form]);
 
   const shippingCost = form.watch("shipping.cost");
+  const quotedCodFee = form.watch("shipping.codFee");
+  // Contra entrega: el recaudo que calculó el panel para esta tarifa, aparte
+  // del envío. Se cobra solo si la clienta elige pagar contra entrega.
+  const codFee =
+    paymentMethod === PaymentMethod.COD &&
+    isCODShipment &&
+    shippingOptionType === "ENVIOCLICK" &&
+    typeof quotedCodFee === "number"
+      ? Math.max(0, quotedCodFee)
+      : 0;
 
   const { total, subtotal, couponDiscount, productSavings, freeShipping } =
     useMemo(
@@ -518,8 +529,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           couponState.coupon,
           shippingCost,
           freeShippingThreshold,
+          codFee,
         ),
-      [activeItems, couponState.coupon, shippingCost, freeShippingThreshold],
+      [activeItems, couponState.coupon, shippingCost, freeShippingThreshold, codFee],
     );
   // Cupón primero (ya está en `total`); la tarjeta cubre lo que queda.
   const giftCardApplied = giftCardState.card
@@ -530,7 +542,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   // Reenviar SOLO cuando `shipping.cost` ya es el nuevo: en ese render `total`
   // también lo es, porque sale del mismo `useMemo`.
-  const { scheduleResubmit } = useDeferredResubmit(shippingCost, () => {
+  const { scheduleResubmit } = useDeferredResubmit((Number(shippingCost) || 0) + codFee, () => {
     void form.handleSubmit(onSubmit, handleInvalidSubmit)();
   });
 
@@ -825,6 +837,13 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           kind: "changed",
           rate: detalle.rate as RecoveryRate,
           previousCost: Number(detalle.previousCost ?? 0),
+          ...(typeof detalle.codFee === "number"
+            ? {
+                codFee: detalle.codFee,
+                previousCodFee: typeof detalle.previousCodFee === "number" ? detalle.previousCodFee : undefined,
+                newTotal: typeof detalle.newTotal === "number" ? detalle.newTotal : undefined,
+              }
+            : {}),
         });
         trackCustomerEvent("checkout_shipping_rate_changed", {
           checkout_step: currentStep,
@@ -1009,6 +1028,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       deliveryDays: Number(rate.deliveryDays),
       isCOD: rate.isCOD,
       cost: rate.totalCost,
+      codFee: typeof rate.codFee === "number" ? rate.codFee : null,
       status: ShippingStatus.Preparing,
     });
     idempotencyKeyRef.current = createIdempotencyKey();
@@ -1019,7 +1039,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     // El reenvío lo dispara el efecto de abajo, cuando el total ya se rehizo
     // con el envío nuevo. Si vuelve a fallar, `onError` lo recoge y vuelve a
     // salir esta misma tarjeta: no hay forma de acabar en un error sin salida.
-    scheduleResubmit(rate.totalCost);
+    scheduleResubmit(
+      rate.totalCost +
+        (paymentMethod === PaymentMethod.COD && rate.isCOD && typeof rate.codFee === "number" ? rate.codFee : 0),
+    );
   };
 
   /** «Elegir otro envío»: de vuelta al paso de entrega, con todo lo demás puesto. */
@@ -1159,6 +1182,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       // Sólo el sí o el no, para poder medir después cuántas ventas pagadas
       // quedan fuera de GA4. De quien dice que no no se manda nada más.
       const analyticsConsent = hasAnalyticsConsent();
+      const { codFee: quotedFee, ...shippingWithoutFee } = shipping ?? {};
+      const codFeeShown =
+        paymentMethod === PaymentMethod.COD &&
+        shipping?.isCOD &&
+        shippingOptionType === "ENVIOCLICK" &&
+        typeof quotedFee === "number"
+          ? Math.max(0, quotedFee)
+          : null;
       const formattedData = {
         fullName: fullName.trim(),
         phone: telephone,
@@ -1183,7 +1214,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         },
         // The API re-applies the store rule; sending cost 0 keeps both sides
         // and the stored shipping record consistent.
-        shipping: freeShipping ? { ...shipping, cost: 0 } : shipping,
+        shipping: {
+          ...shippingWithoutFee,
+          ...(freeShipping ? { cost: 0 } : {}),
+          // El panel recalcula el recaudo y solo lo compara con este: el monto nunca se cobra tal cual.
+          ...(codFeeShown !== null ? { codFeeShown } : {}),
+        },
         couponCode: couponState.coupon?.code ?? null,
         // Solo viaja si se validó: un código escrito y no aplicado no cuenta.
         giftCardCode: giftCardState.card ? giftCardCode || null : null,
@@ -1469,6 +1505,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           <dt>Envío</dt>
           <dd>{shippingSummary}</dd>
         </div>
+        {codFee > 0 ? (
+          <div className="flex items-center justify-between" data-testid="checkout-cod-fee">
+            <dt>Recaudo contra entrega</dt>
+            <dd>
+              <Currency className="text-base font-semibold" value={codFee} />
+            </dd>
+          </div>
+        ) : null}
         {giftCardApplied > 0 ? (
           <>
             <div className="flex items-center justify-between">
@@ -1644,6 +1688,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                             quantity: item.quantity || 1,
                           }))}
                           orderTotal={subtotal}
+                          amountBeforeShipping={Math.max(0, subtotal - couponDiscount)}
                           freeShipping={freeShipping}
                         />
                       )}

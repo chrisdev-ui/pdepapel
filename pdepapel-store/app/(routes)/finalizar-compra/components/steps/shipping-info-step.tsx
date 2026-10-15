@@ -67,6 +67,8 @@ interface ShippingInfoStepProps {
   isGuest?: boolean;
   cartItems: { id: string; quantity: number }[];
   orderTotal: number;
+  /** El pedido sin envío, después del cupón: sobre él calcula el panel el recaudo contra entrega. */
+  amountBeforeShipping?: number;
   /** The order already qualifies for free shipping: rates show «Gratis». */
   freeShipping?: boolean;
 }
@@ -114,6 +116,7 @@ export const ShippingInfoStep = ({
   isGuest = true,
   cartItems,
   orderTotal,
+  amountBeforeShipping,
   freeShipping = false,
 }: ShippingInfoStepProps) => {
   const { getToken, isLoaded: isAuthLoaded, userId } = useAuth();
@@ -256,6 +259,8 @@ export const ShippingInfoStep = ({
       fetchQuotes({
         destination: { daneCode: selectedDaneCode, address: address1 },
         orderTotal,
+        amountBeforeShipping: amountBeforeShipping ?? orderTotal,
+        productSubtotal: orderTotal,
         items: cartItems.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -266,6 +271,7 @@ export const ShippingInfoStep = ({
     },
     [
       address1,
+      amountBeforeShipping,
       canFetchQuotes,
       cartItems,
       fetchQuotes,
@@ -323,6 +329,7 @@ export const ShippingInfoStep = ({
         deliveryDays: Number(selectedQuote.deliveryDays),
         isCOD: selectedQuote.isCOD,
         cost: selectedQuote.totalCost,
+        codFee: typeof selectedQuote.codFee === "number" ? selectedQuote.codFee : null,
         status: ShippingStatus.Preparing,
       });
       void form.trigger("envioClickIdRate");

@@ -17,11 +17,21 @@ export interface RecoveryRate {
   totalCost: number;
   deliveryDays: number;
   isCOD: boolean;
+  /** Contra entrega: el recaudo que calculó el panel para esta tarifa. */
+  codFee?: number | null;
 }
 
 export type ShippingRecovery =
   /** Sigue estando la misma transportadora, pero por otro precio. */
-  | { kind: "changed"; rate: RecoveryRate; previousCost: number }
+  | {
+      kind: "changed";
+      rate: RecoveryRate;
+      previousCost: number;
+      /** Cambió el recaudo contra entrega: el nuevo, el que se mostró y el total nuevo. */
+      codFee?: number;
+      previousCodFee?: number;
+      newTotal?: number;
+    }
   /** Esa transportadora ya no llega; estas sí. */
   | { kind: "unavailable"; alternatives: RecoveryRate[] };
 
@@ -64,7 +74,13 @@ export function ShippingRateRecovery({
           <PackageSearch className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         )}
         <span>
-          {esCambio ? (
+          {esCambio && recovery.codFee !== undefined ? (
+            <>
+              <strong>El recaudo contra entrega cambió.</strong> Tu pedido sigue
+              completo y no se ha cobrado nada; confirma el nuevo total para
+              terminar.
+            </>
+          ) : esCambio ? (
             <>
               <strong>El costo del envío cambió mientras comprabas.</strong> Tu
               pedido sigue completo y no se ha cobrado nada; solo confirma el
@@ -96,6 +112,22 @@ export function ShippingRateRecovery({
                   : ""}
               </span>
             </span>
+            {recovery.codFee !== undefined ? (
+              <span className="flex flex-col items-end gap-0.5" data-testid="recovery-cod-fee">
+                <span className="text-muted-foreground">
+                  Recaudo contra entrega:{" "}
+                  {recovery.previousCodFee !== undefined && (
+                    <span className="line-through">{currencyFormatter.format(recovery.previousCodFee)}</span>
+                  )}{" "}
+                  <span className="font-semibold text-foreground">{currencyFormatter.format(recovery.codFee)}</span>
+                </span>
+                {recovery.newTotal !== undefined && (
+                  <span className="font-quicksand text-base font-semibold">
+                    Total: {currencyFormatter.format(recovery.newTotal)}
+                  </span>
+                )}
+              </span>
+            ) : (
             <span className="flex items-baseline gap-2">
               {recovery.previousCost > 0 && (
                 <span className="font-quicksand text-sm text-muted-foreground line-through">
@@ -106,6 +138,7 @@ export function ShippingRateRecovery({
                 {currencyFormatter.format(recovery.rate.totalCost)}
               </span>
             </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button

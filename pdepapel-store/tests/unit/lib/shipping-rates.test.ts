@@ -105,3 +105,26 @@ describe("isShippingQuoteFresh", () => {
     expect(isShippingQuoteFresh(null, now)).toBe(false);
   });
 });
+
+describe("groupShippingQuotes con contra entrega", () => {
+  it("nunca esconde la única tarifa con recaudo de una transportadora, aunque la prepagada sea más barata", () => {
+    const grouped = groupShippingQuotes([
+      quote({ idRate: 1, carrier: "ENVIA", totalCost: 16500, isCOD: false }),
+      quote({ idRate: 2, carrier: "ENVIA", totalCost: 18074, isCOD: true }),
+      quote({ idRate: 3, carrier: "COORDINADORA", totalCost: 19500, isCOD: false }),
+      quote({ idRate: 4, carrier: "COORDINADORA", totalCost: 25781, isCOD: true }),
+      quote({ idRate: 5, carrier: "COORDINADORA", totalCost: 26000, isCOD: true }),
+    ]);
+    expect(grouped.map((rate) => rate.idRate)).toEqual([1, 2, 3, 4]);
+    expect(grouped.filter((rate) => rate.isCOD).map((rate) => rate.carrier)).toEqual(["ENVIA", "COORDINADORA"]);
+    expect(grouped.find((rate) => rate.idRate === 4)?.hiddenAlternatives).toBe(1);
+  });
+
+  it("si la más barata ya recauda, queda una sola fila por transportadora", () => {
+    const grouped = groupShippingQuotes([
+      quote({ idRate: 1, carrier: "ENVIA", totalCost: 16500, isCOD: true }),
+      quote({ idRate: 2, carrier: "ENVIA", totalCost: 18000, isCOD: false }),
+    ]);
+    expect(grouped.map((rate) => rate.idRate)).toEqual([1]);
+  });
+});
