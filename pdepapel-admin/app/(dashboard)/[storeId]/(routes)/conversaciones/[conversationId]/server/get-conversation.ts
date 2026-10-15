@@ -4,6 +4,7 @@ import { CART_PRODUCT_SELECT, priceCartProducts } from "@/lib/whatsapp/cart-orde
 import {
   parseCartMetadata,
   parseOrderRequestMetadata,
+  parseAssistMetadata,
   parseRecoveredMetadata,
   parseTapMetadata,
   parseWebOriginMetadata,
@@ -107,6 +108,7 @@ export async function getConversation(
       cart: carts[index] ? resolveCart(carts[index]!, pricedCarts[index]!) : null,
       tappedOptionId: parseTapMetadata(metadata),
       recovered: parseRecoveredMetadata(metadata),
+      assist: parseAssistMetadata(metadata),
       orderRequest: parseOrderRequestMetadata(metadata),
       webOrigin: origins[index]
         ? {

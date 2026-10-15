@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { MinimumOrderRule } from "@prisma/client";
+import { BotAssistMode, MinimumOrderRule } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -55,6 +55,10 @@ const formSchema = z.object({
   alwaysOpen: z.boolean(),
   botEnabled: z.boolean(),
   botReadBursts: z.boolean(),
+  botFallbackMode: z.nativeEnum(BotAssistMode),
+  botHoldingMode: z.nativeEnum(BotAssistMode),
+  botHoldingText: z.string().trim().max(500),
+  botHoldingNightText: z.string().trim().max(500),
   days: z.record(
     z.enum(WEEK_DAYS),
     z.object({
@@ -95,6 +99,10 @@ export function BusinessInfoPanel({
       alwaysOpen: settings.alwaysOpen,
       botEnabled: settings.botEnabled,
       botReadBursts: settings.botReadBursts,
+      botFallbackMode: settings.botFallbackMode,
+      botHoldingMode: settings.botHoldingMode,
+      botHoldingText: settings.botHoldingText ?? "",
+      botHoldingNightText: settings.botHoldingNightText ?? "",
       days: Object.fromEntries(
         WEEK_DAYS.map((day) => {
           const saved = settings.openingHours?.[day];
@@ -155,6 +163,10 @@ export function BusinessInfoPanel({
         alwaysOpen: values.alwaysOpen,
         botEnabled: values.botEnabled,
         botReadBursts: values.botReadBursts,
+        botFallbackMode: values.botFallbackMode,
+        botHoldingMode: values.botHoldingMode,
+        botHoldingText: values.botHoldingText.trim() || null,
+        botHoldingNightText: values.botHoldingNightText.trim() || null,
         openingHours: Object.fromEntries(
           WEEK_DAYS.map((day) => [
             day,
@@ -592,6 +604,59 @@ export function BusinessInfoPanel({
             )}
           />
 
+          <div className="flex flex-col gap-4 rounded-lg border p-4">
+            <div>
+              <h3 className="text-sm font-semibold">Mientras la clienta te espera</h3>
+              <p className="text-sm text-muted-foreground">
+                Cuando escribiste en las últimas 24 h el bot se aparta. Esto decide qué hace si
+                pasan unos minutos y nadie le responde. En «Sombra» solo se anota lo que haría:
+                a la clienta no le llega nada.
+              </p>
+            </div>
+            <AssistModeField
+              control={form.control}
+              name="botFallbackMode"
+              label="Respuesta del bot a los 10 minutos"
+              description="Solo preguntas que el bot contesta bien (horario, envíos, pagos, productos, pedidos, enlaces de la tienda). Si estás conversando con ella o hay un pedido abierto, solo datos del negocio. Nunca «Esa no me la sé». Se marca en la conversación como «El bot contestó por ti»."
+              disabled={loading}
+            />
+            <AssistModeField
+              control={form.control}
+              name="botHoldingMode"
+              label="Mensaje de espera"
+              description="Una vez por espera: a los 15 minutos de 7 a. m. a 11:59 p. m., y enseguida de 12 a 6:59 a. m. Nunca después de «ok» o «gracias». Sin texto no sale nada, aunque esté encendido."
+              disabled={loading}
+            />
+            <FormField
+              control={form.control}
+              name="botHoldingText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Texto del mensaje de espera (de día)</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} rows={2} maxLength={500} disabled={loading} placeholder="Lo escribes tú. Vacío, no sale nada." />
+                  </FormControl>
+                  <FormDescription>De 7:00 a. m. a 11:59 p. m.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="botHoldingNightText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Texto del mensaje de espera (de noche)</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} rows={2} maxLength={500} disabled={loading} placeholder="Lo escribes tú. Vacío, no sale nada." />
+                  </FormControl>
+                  <FormDescription>De 12:00 a 6:59 a. m., cuando no vas a contestar enseguida.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
           <Button type="submit" disabled={loading} className="self-start">
             Guardar
           </Button>
@@ -600,3 +665,51 @@ export function BusinessInfoPanel({
     </div>
   );
 }
+
+const ASSIST_MODE_LABELS: Record<BotAssistMode, string> = {
+  [BotAssistMode.OFF]: "Apagado",
+  [BotAssistMode.SHADOW]: "Sombra (solo se anota)",
+  [BotAssistMode.ON]: "Encendido",
+};
+
+function AssistModeField({
+  control,
+  name,
+  label,
+  description,
+  disabled,
+}: {
+  control: ReturnType<typeof useForm<FormValue>>["control"];
+  name: "botFallbackMode" | "botHoldingMode";
+  label: string;
+  description: string;
+  disabled: boolean;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <Select onValueChange={field.onChange} value={field.value} disabled={disabled}>
+            <FormControl>
+              <SelectTrigger className="w-full sm:w-72">
+                <SelectValue />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {Object.values(BotAssistMode).map((mode) => (
+                <SelectItem key={mode} value={mode}>
+                  {ASSIST_MODE_LABELS[mode]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FormDescription>{description}</FormDescription>
+        </FormItem>
+      )}
+    />
+  );
+}
+

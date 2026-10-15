@@ -249,7 +249,13 @@ function MessageBubble({
             fromCustomer ? "justify-start" : "justify-end",
           ].join(" ")}
         >
-          <span>{CONVERSATION_SENT_BY_LABELS[message.sentBy]}</span>
+          <span>
+            {message.assist === "fallback"
+              ? "El bot contestó por ti"
+              : message.assist === "holding"
+                ? "Mensaje de espera"
+                : CONVERSATION_SENT_BY_LABELS[message.sentBy]}
+          </span>
           <span>{dateFormatter.format(message.createdAt)}</span>
           {/* Meta manda el toque de un botón con el mismo cuerpo que si lo
               hubieran escrito. Sin decirlo aquí, «Hablar con Paula» parece

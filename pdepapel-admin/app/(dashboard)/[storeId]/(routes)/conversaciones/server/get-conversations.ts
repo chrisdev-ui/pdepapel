@@ -4,6 +4,7 @@ import { ConversationMessageSentBy } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 import { parseCartMetadata, previewMessage, type ConversationRow } from "@/lib/conversations";
+import { findWaitingConversations } from "@/lib/whatsapp/waiting-list";
 
 /**
  * Conversaciones de la tienda para la lista, con su último mensaje.
@@ -79,6 +80,8 @@ export async function getConversations(storeId: string): Promise<ConversationRow
       })
     ).map((message) => message.conversationId),
   );
+  // «Esperando a Paula»: solo se leen las conversaciones donde la clienta escribió de último.
+  const esperando = await findWaitingConversations(storeId);
   const porTelefono = new Map(ignorados.filter((i) => i.phone).map((i) => [i.phone as string, i]));
   const porBsuid = new Map(ignorados.filter((i) => i.bsuid).map((i) => [i.bsuid as string, i]));
 
@@ -99,6 +102,7 @@ export async function getConversations(storeId: string): Promise<ConversationRow
       pendingOrder: conPedido.has(fields.id),
       fromWeb: desdeLaWeb.has(fields.id),
       recovered: recuperadas.has(fields.id),
+      waitingSince: esperando.get(fields.id) ?? null,
     };
   });
 }

@@ -245,6 +245,11 @@ export interface ConversationRow {
   pendingOrder: boolean;
   /** Algún mensaje suyo llegó desde un botón de la tienda web. */
   fromWeb: boolean;
+  /**
+   * La clienta escribió de último (algo de verdad, no «ok» ni una reacción) y
+   * nadie le responde hace 15 min o más: desde cuándo. `null` si no espera.
+   */
+  waitingSince: Date | null;
   /** Tiene mensajes que se quedaron sin procesar y se recuperaron después. */
   recovered: boolean;
 }
@@ -290,6 +295,8 @@ export interface ConversationThreadMessage {
   webOrigin: WebOriginContext | null;
   /** Llegó tarde y se recuperó del atraso de la cola (fecha del evento). */
   recovered: string | null;
+  /** Lo mandó el bot mientras la clienta esperaba a Paula: respuesta a los 10 min o mensaje de espera. */
+  assist: "fallback" | "holding" | null;
 }
 
 export interface ConversationDetail {
@@ -456,9 +463,18 @@ export async function handBackToBot(
       status: actual.status,
       lastOwnerAt: actual.lastOwnerAt,
     },
-    data: { status: ConversationStatus.OPEN, lastOwnerAt: null },
+    data: { status: ConversationStatus.OPEN, lastOwnerAt: null, needsOwnerReason: null },
   });
   if (escrito.count === 0) return { ok: false, reason: "conflict" };
 
   return { ok: true, changed: true };
 }
+
+/** Marca del bot al contestar mientras la clienta esperaba a Paula (lib/whatsapp/wait-assist.ts). */
+export function parseAssistMetadata(metadata: unknown): "fallback" | "holding" | null {
+  const record = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>) : {};
+  if (record.fallback === true) return "fallback";
+  if (record.holding === true) return "holding";
+  return null;
+}
+

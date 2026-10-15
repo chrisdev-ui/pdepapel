@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   describeBotPause,
   formatBotPause,
+  formatWaitingFor,
 } from "@/lib/conversation-bot-pause";
 import {
   CONVERSATION_STATUS_LABELS,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/conversations";
 import { ConversationStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { BellOff, BotOff, ShoppingBag } from "lucide-react";
+import { BellOff, BotOff, Hourglass, ShoppingBag } from "lucide-react";
 import { CellAction } from "./cell-action";
 
 export type ConversationColumn = ConversationRow;
@@ -41,6 +42,13 @@ export const columns: ColumnDef<ConversationColumn>[] = [
           {row.original.contactName?.trim() ||
             (row.original.username ? `@${row.original.username}` : "Sin nombre")}
         </span>
+        {/* En la primera columna para que se vea en el teléfono sin desplazar. */}
+        {row.original.waitingSince ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
+            <Hourglass className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {formatWaitingFor(row.original.waitingSince)}
+          </span>
+        ) : null}
         {/* Discreto pero visible: sin esto una conversación ignorada parece
             una que simplemente dejó de escribir. */}
         {row.original.ignored ? (

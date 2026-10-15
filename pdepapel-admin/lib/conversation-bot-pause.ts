@@ -73,3 +73,17 @@ export function canHandBackToBot(
 ): boolean {
   return conversation.status === "NEEDS_OWNER" || describeBotPause(conversation.lastOwnerAt, now).paused;
 }
+
+/**
+ * Cuánto lleva la clienta esperando a Paula, para la insignia de la lista:
+ * minutos la primera hora, horas el primer día y días después.
+ */
+export function formatWaitingFor(since: Date | string, now: Date = new Date()): string {
+  const start = since instanceof Date ? since : new Date(since);
+  const minutes = Math.max(0, Math.floor((now.getTime() - start.getTime()) / 60000));
+  if (minutes < 60) return `Esperando a Paula · ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Esperando a Paula · ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `Esperando a Paula · ${days} ${days === 1 ? "día" : "días"}`;
+}

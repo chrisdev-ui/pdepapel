@@ -31,7 +31,7 @@ describe("devolverle la conversación al bot", () => {
     });
     expect(mocks.updateMany).toHaveBeenCalledWith({
       where: { id: "c1", storeId: "store-1", status: "NEEDS_OWNER", lastOwnerAt: AYER },
-      data: { status: "OPEN", lastOwnerAt: null },
+      data: { status: "OPEN", lastOwnerAt: null, needsOwnerReason: null },
     });
   });
 
@@ -90,7 +90,7 @@ describe("devolverle la conversación al bot", () => {
     await handBackToBot("store-1", "c1");
     // Lo único que toca es la fila de la conversación.
     expect(Object.keys(mocks.updateMany.mock.calls[0][0].data).sort()).toEqual([
-      "lastOwnerAt", "status",
+      "lastOwnerAt", "needsOwnerReason", "status",
     ]);
   });
 });
