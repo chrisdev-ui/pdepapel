@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Heading } from "@/components/ui/heading";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
+import { expiresWithinADay } from "@/lib/reservation-labels";
 import { cn } from "@/lib/utils";
 
 type ProductCard = { id: string; name: string; sku: string; isKit: boolean; stock: number; reservedUnits: number; images: { url: string }[] };
@@ -268,6 +269,16 @@ export function ReservationsClient({
                     {hold.note && <p className="break-words text-xs text-muted-foreground">{hold.note}</p>}
                   </div>
                 </div>
+
+                {hold.status === "ACTIVE" && expiresWithinADay(hold.expiresAt) && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-tint-pink/60 px-3 py-2" data-testid="extend-offer">
+                    <p className="text-xs font-medium">Vence en menos de 24 horas.</p>
+                    <Button size="sm" className="min-h-10" disabled={busy} onClick={() => extend(hold, defaultDays)}>
+                      <CalendarPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      Extender {defaultDays} {defaultDays === 1 ? "día" : "días"}
+                    </Button>
+                  </div>
+                )}
 
                 {holding && (
                   <div className="grid grid-cols-3 gap-2">

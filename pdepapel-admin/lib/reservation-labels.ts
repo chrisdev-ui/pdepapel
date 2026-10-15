@@ -29,6 +29,11 @@ export function expiryUrgency(expiresAt: Date | string, now: Date = new Date()):
   return "luego";
 }
 
+/** Vence en menos de 24 h (o ya venció y la barrida aún no pasa): se ofrece «Extender». */
+export function expiresWithinADay(expiresAt: Date | string, now: Date = new Date()): boolean {
+  return new Date(expiresAt).getTime() - now.getTime() < 86_400_000;
+}
+
 /** Línea de la hoja «Reservar»: lo que se puede reservar y, si hay reservas, el stock y lo reservado. */
 export function reservableLine(stock: number, reserved: number | null | undefined): string {
   const held = reserved && reserved > 0 ? reserved : 0;

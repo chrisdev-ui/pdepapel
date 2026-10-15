@@ -5,10 +5,18 @@ vi.mock("@/lib/prismadb", () => ({ default: {} }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } } }));
 vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: vi.fn() }));
 
-import { expiryLabel, expiryUrgency, reservableLine, reservedSuffix } from "@/lib/reservation-labels";
+import { expiresWithinADay, expiryLabel, expiryUrgency, reservableLine, reservedSuffix } from "@/lib/reservation-labels";
 import { describeLines, renderDigest } from "@/lib/stock-reservations-job";
 
 describe("etiquetas de reservas", () => {
+  it("«Extender» se ofrece cuando faltan menos de 24 horas o ya venció", () => {
+    const now = new Date("2026-10-15T15:00:00Z");
+    expect(expiresWithinADay("2026-10-16T14:59:00Z", now)).toBe(true);
+    expect(expiresWithinADay("2026-10-15T14:00:00Z", now)).toBe(true);
+    expect(expiresWithinADay("2026-10-16T15:00:00Z", now)).toBe(false);
+    expect(expiresWithinADay("2026-10-18T15:00:00Z", now)).toBe(false);
+  });
+
   it("el sufijo de reservados solo aparece cuando hay", () => {
     expect(reservedSuffix(0)).toBe("");
     expect(reservedSuffix(null)).toBe("");

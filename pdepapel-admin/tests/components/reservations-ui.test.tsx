@@ -307,6 +307,16 @@ describe("Pantalla Reservas", () => {
     expect(chip).toHaveAttribute("data-urgency", "manana");
   });
 
+  it("si vence en menos de 24 h, la tarjeta ofrece «Extender 3 días» en un toque; si falta más, no", async () => {
+    mocks.patch.mockResolvedValue({ data: { reservation: { expiresAt: "2026-10-19T15:00:00.000Z" } } });
+    const soon = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+    screenWith([hold({ id: "r-soon", expiresAt: soon }), hold({ id: "r-later", customerName: "Sofía" })]);
+    const offers = screen.getAllByTestId("extend-offer");
+    expect(offers).toHaveLength(1);
+    fireEvent.click(within(offers[0]).getByRole("button", { name: /Extender 3 días/ }));
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-soon", { action: "extender", days: 3 }));
+  });
+
   it("liberar pide confirmación antes de llamar a la API", async () => {
     mocks.patch.mockResolvedValue({ data: { released: true } });
     screenWith([hold()]);

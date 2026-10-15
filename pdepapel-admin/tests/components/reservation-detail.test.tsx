@@ -65,6 +65,17 @@ afterEach(() => {
 });
 
 describe("detalle de una reserva", () => {
+  it("si vence en menos de 24 h ofrece «Extender» arriba, en un toque; con más tiempo, no", async () => {
+    mocks.patch.mockResolvedValue({ data: {} });
+    const { unmount } = render(<ReservationDetail storeId="store-1" detail={detail()} defaultDays={3} />);
+    expect(screen.queryByTestId("extend-offer")).toBeNull();
+    unmount();
+
+    render(<ReservationDetail storeId="store-1" detail={detail({ expiresAt: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString() })} defaultDays={3} />);
+    fireEvent.click(within(screen.getByTestId("extend-offer")).getByRole("button", { name: /Extender 3 días/ }));
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-1", { action: "extender", days: 3 }));
+  });
+
   it("cambiar la cantidad guarda solo con «Guardar»", async () => {
     mocks.patch.mockResolvedValue({ data: { reservation: {}, released: false } });
     render(<ReservationDetail storeId="store-1" detail={detail()} defaultDays={3} />);

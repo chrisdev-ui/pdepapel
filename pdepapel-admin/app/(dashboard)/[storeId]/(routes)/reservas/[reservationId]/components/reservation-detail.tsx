@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import { actorLabel, describeReservationEvent, type ReservationEventView } from "@/lib/reservation-history";
+import { expiresWithinADay } from "@/lib/reservation-labels";
 
 type ProductCard = { id: string; name: string; sku: string; isKit: boolean; stock: number; reservedUnits: number; images: { url: string }[] };
 type Item = { id: string; productId: string; quantity: number; unbackedAt: string | null; product: ProductCard };
@@ -84,6 +85,7 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
 
   const active = reservation.status === "ACTIVE";
   const holding = active || reservation.status === "CONVERTED";
+  const expiringSoon = holding && expiresWithinADay(reservation.expiresAt);
   const items: Item[] =
     reservation.items.length > 0
       ? reservation.items
@@ -167,6 +169,16 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
           </div>
         </div>
       </div>
+
+      {expiringSoon && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-tint-pink/60 px-3 py-2" data-testid="extend-offer">
+          <p className="text-sm font-medium">Vence en menos de 24 horas.</p>
+          <Button type="button" size="sm" className="min-h-10" disabled={busy !== null} onClick={extend}>
+            <CalendarPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Extender {Number(extendDays) || defaultDays} {(Number(extendDays) || defaultDays) === 1 ? "día" : "días"}
+          </Button>
+        </div>
+      )}
 
       {holding && (
         // En el flujo de la página, no fija abajo: en el teléfono la barra del panel la taparía.
@@ -329,12 +341,13 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
               <p className="text-sm">
                 <ExpiryChip expiresAt={reservation.expiresAt} />
               </p>
+
               <div className="flex items-end gap-2">
                 <div className="flex w-24 flex-col gap-1.5">
                   <Label htmlFor="detail-extend">Días</Label>
                   <Input id="detail-extend" inputMode="numeric" type="number" min={1} max={60} value={extendDays} onChange={(event) => setExtendDays(event.target.value)} />
                 </div>
-                <Button type="button" variant="outline" className="min-h-11 flex-1" disabled={busy !== null} onClick={extend}>
+                <Button type="button" variant={expiringSoon ? "default" : "outline"} className="min-h-11 flex-1" disabled={busy !== null} onClick={extend}>
                   {busy === "extend" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />}
                   Extender
                 </Button>
