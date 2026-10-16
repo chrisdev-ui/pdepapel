@@ -4,7 +4,7 @@ import { LEGACY_TRANSPORT_FILL, isKnownTransport, perUnitFromOrder, transportWar
 import { needsTransportReview, productMatchesView } from "@/lib/product-readiness";
 
 describe("envío por unidad", () => {
-  it("«Toda la orden»: el envío de la compra entre las unidades, a dos decimales; sin datos válidos, nada", () => {
+  it("«Envío de la compra (solo este producto)»: el envío de la compra entre las unidades, a dos decimales; sin datos válidos, nada", () => {
     expect(perUnitFromOrder(1000, 100)).toBe(10);
     expect(perUnitFromOrder(1000, 3)).toBe(333.33);
     expect(perUnitFromOrder(0, 10)).toBe(0);

@@ -12,9 +12,9 @@ import { cn, currencyFormatter } from "@/lib/utils";
 type Mode = "unidad" | "orden";
 
 /**
- * «Envío y otros gastos»: se guarda siempre por unidad. Con «Toda la orden» se
- * escribe el envío de la compra y cuántas unidades trajo, y el campo guarda la
- * parte de cada una. Avisa (sin bloquear) cuando el valor parece el de una orden.
+ * «Envío y otros gastos»: se guarda siempre por unidad. Con «Envío de la compra (solo este producto)»
+ * se escribe el envío de la compra y cuántas unidades trajo, y el campo guarda la
+ * parte de cada una. Avisa (sin bloquear) cuando el valor parece el de toda una compra.
  */
 export function TransportCostField({
   value,
@@ -43,11 +43,11 @@ export function TransportCostField({
 
   return (
     <div className="space-y-2" data-testid="transport-cost-field">
-      <div role="group" aria-label="Cómo escribir el envío" className="inline-flex rounded-md border p-0.5">
+      <div role="group" aria-label="Cómo escribir el envío" className="flex w-full flex-col gap-0.5 rounded-md border p-0.5">
         {(
           [
             ["unidad", "Por unidad"],
-            ["orden", "Toda la orden"],
+            ["orden", "Envío de la compra (solo este producto)"],
           ] as const
         ).map(([key, label]) => (
           <Button
@@ -57,7 +57,7 @@ export function TransportCostField({
             variant={mode === key ? "secondary" : "ghost"}
             aria-pressed={mode === key}
             disabled={disabled}
-            className="h-8"
+            className="h-auto min-h-8 w-full justify-start whitespace-normal py-1 text-left"
             onClick={() => setMode(key)}
           >
             {label}
@@ -66,8 +66,13 @@ export function TransportCostField({
       </div>
       {/* Lo calculado y el aviso van arriba de los campos: en el teléfono la barra fija de «Cambios sin guardar» tapa lo que queda debajo. */}
       {mode === "orden" && (
+        <p className="text-xs text-muted-foreground" data-testid="transport-order-hint">
+          Si la compra trajo varios productos, corrige el envío en la orden de compra.
+        </p>
+      )}
+      {mode === "orden" && (
         <p className="text-sm font-medium text-foreground" data-testid="transport-per-unit" aria-live="polite">
-          {perUnit === null ? "Escribe el envío de la orden y cuántas unidades trajo." : `= ${currencyFormatter(perUnit)} por unidad (esto es lo que se guarda)`}
+          {perUnit === null ? "Escribe el envío de la compra y cuántas unidades trajo." : `= ${currencyFormatter(perUnit)} por unidad (esto es lo que se guarda)`}
         </p>
       )}
       {warning && (
@@ -80,17 +85,17 @@ export function TransportCostField({
         <CurrencyInput placeholder="Sin registrar" disabled={disabled} value={value ?? undefined} onChange={(next) => onChange(next ?? null)} aria-label="Envío por unidad" />
       ) : (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <CurrencyInput placeholder="Envío de toda la orden" disabled={disabled} value={orderTotal ?? undefined} onChange={(next) => fromOrder(next ?? null, units)} aria-label="Envío de toda la orden" />
+          <CurrencyInput placeholder="Envío de la compra" disabled={disabled} value={orderTotal ?? undefined} onChange={(next) => fromOrder(next ?? null, units)} aria-label="Envío de la compra" />
           <Input
             type="number"
             inputMode="numeric"
             min={1}
             step={1}
-            placeholder="Unidades de la orden"
+            placeholder="Unidades de la compra"
             disabled={disabled}
             value={units}
             onChange={(event) => fromOrder(orderTotal, event.target.value)}
-            aria-label="Unidades de la orden"
+            aria-label="Unidades de la compra"
           />
         </div>
       )}

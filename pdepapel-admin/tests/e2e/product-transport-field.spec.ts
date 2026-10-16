@@ -7,7 +7,7 @@ import { expect, test } from "./helpers/image-stub";
 
 /**
  * «Envío y otros gastos» en la ficha de un producto nuevo, a 390 y 768 px:
- * «Toda la orden» reparte el envío entre las unidades y el aviso aparece
+ * «Envío de la compra (solo este producto)» reparte el envío entre las unidades y el aviso aparece
  * cuando el envío por unidad parece el de una orden. No guarda nada.
  *
  *   npm run test:e2e -- tests/e2e/product-transport-field.spec.ts
@@ -28,7 +28,7 @@ test.describe("envío por unidad en la ficha", () => {
     { name: "telefono-390", width: 390, height: 844 },
     { name: "tableta-768", width: 768, height: 1024 },
   ]) {
-    test(`por unidad o de toda la orden, con aviso, sin desbordar a ${viewport.width} px`, async ({ page }) => {
+    test(`por unidad o de toda la compra, con aviso, sin desbordar a ${viewport.width} px`, async ({ page }) => {
       test.setTimeout(180_000);
       mkdirSync(SHOTS, { recursive: true });
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -49,13 +49,14 @@ test.describe("envío por unidad en la ficha", () => {
       await expect(page).toHaveURL(new RegExp(`/${storeId}/productos/nuevo`));
 
       const field = page.getByTestId("transport-cost-field");
-      await field.scrollIntoViewIfNeeded();
+      // La ficha se vuelve a montar al hidratar: el desplazamiento va dentro del reintento.
       await expect(async () => {
-        await field.getByRole("button", { name: "Toda la orden" }).click();
-        await expect(field.getByRole("button", { name: "Toda la orden" })).toHaveAttribute("aria-pressed", "true", { timeout: 1000 });
+        await field.scrollIntoViewIfNeeded({ timeout: 1000 });
+        await field.getByRole("button", { name: "Envío de la compra (solo este producto)" }).click();
+        await expect(field.getByRole("button", { name: "Envío de la compra (solo este producto)" })).toHaveAttribute("aria-pressed", "true", { timeout: 1000 });
       }).toPass({ timeout: 60_000 });
-      await field.getByLabel("Envío de toda la orden").fill("1000");
-      await field.getByLabel("Unidades de la orden").fill("100");
+      await field.getByLabel("Envío de la compra", { exact: true }).fill("1000");
+      await field.getByLabel("Unidades de la compra").fill("100");
       await expect(field.getByTestId("transport-per-unit")).toContainText("10 por unidad");
       // Visible de verdad: lo que está encima en el centro de la línea es la línea misma, no la barra fija.
       const uncovered = (testId: string) =>
@@ -65,7 +66,9 @@ test.describe("envío por unidad en la ficha", () => {
           return box.top >= 0 && box.bottom <= window.innerHeight && top !== null && element.contains(top);
         });
       expect(await uncovered("transport-per-unit")).toBe(true);
-      await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-toda-la-orden.png`), fullPage: false });
+      await expect(field.getByTestId("transport-order-hint")).toHaveText("Si la compra trajo varios productos, corrige el envío en la orden de compra.");
+      expect(await uncovered("transport-order-hint")).toBe(true);
+      await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-envio-de-la-compra.png`), fullPage: false });
 
       // Un envío por unidad que parece de toda una orden: aviso, sin bloquear.
       await page.getByLabel("Costo de compra").fill("160");

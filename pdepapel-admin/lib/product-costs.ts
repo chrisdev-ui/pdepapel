@@ -40,7 +40,7 @@ export function getUnitCostFloor(product: {
 /** Un envío por unidad mayor que esto (sobre el precio de venta) merece una segunda mirada. */
 export const TRANSPORT_SHARE_OF_PRICE_WARNING = 0.25;
 
-/** «Toda la orden»: el envío de la compra repartido entre las unidades que trajo. */
+/** «Envío de la compra (solo este producto)»: el envío de la compra repartido entre las unidades que trajo. */
 export function perUnitFromOrder(orderTotal: number | null | undefined, units: number | null | undefined): number | null {
   if (typeof orderTotal !== "number" || !Number.isFinite(orderTotal) || orderTotal < 0) return null;
   if (typeof units !== "number" || !Number.isInteger(units) || units <= 0) return null;
@@ -51,10 +51,10 @@ export function perUnitFromOrder(orderTotal: number | null | undefined, units: n
 export function transportWarning({ transport, acqPrice, price }: { transport: number | null | undefined; acqPrice: number | null | undefined; price: number | null | undefined }): string | null {
   if (typeof transport !== "number" || !Number.isFinite(transport) || transport <= 0) return null;
   if (typeof acqPrice === "number" && acqPrice > 0 && transport >= acqPrice) {
-    return "El envío por unidad es igual o mayor que el costo de compra. ¿Es el envío de toda la orden? Elige «Toda la orden» para repartirlo entre las unidades.";
+    return "El envío por unidad es igual o mayor que el costo de compra. ¿Es el envío de toda la compra? Elige «Envío de la compra (solo este producto)» para repartirlo entre las unidades.";
   }
   if (typeof price === "number" && price > 0 && transport > TRANSPORT_SHARE_OF_PRICE_WARNING * price) {
-    return "El envío por unidad pasa del 25 % del precio de venta. ¿Es el envío de toda la orden? Elige «Toda la orden» para repartirlo entre las unidades.";
+    return "El envío por unidad pasa del 25 % del precio de venta. ¿Es el envío de toda la compra? Elige «Envío de la compra (solo este producto)» para repartirlo entre las unidades.";
   }
   return null;
 }
