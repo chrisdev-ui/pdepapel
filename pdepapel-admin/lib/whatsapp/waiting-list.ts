@@ -14,6 +14,12 @@ export const isHoldingMessage = (metadata: Prisma.JsonValue | null) => asRecord(
 
 interface LoadedWait {
   wait: Wait | null;
+  /**
+   * Lo último que salió hacia la clienta es un envío del bot que falló, aun
+   * después del reintento: no le llegó nada. Lo borra cualquier salida que sí
+   * llegue (de Paula o del bot) y «Marcar como atendido».
+   */
+  deliveryFailedAt: Date | null;
   /** Lo último que salió antes de la espera fue un aviso de que Paula escribe. */
   promised: boolean;
   /** Respuestas y mensajes de espera del bot en esta espera. */
@@ -40,6 +46,9 @@ export async function loadWait(conversationId: string, attendedAt?: Date | null)
       : attendedAt,
   ]);
   const rows = found.reverse();
+  const newestOut = [...rows].reverse().find((row) => row.direction === ConversationMessageDirection.OUTBOUND && !isHoldingMessage(row.metadata));
+  const deliveryFailedAt =
+    newestOut && newestOut.sentBy === "BOT" && newestOut.status === ConversationMessageStatus.FAILED && !(attended && attended >= newestOut.createdAt) ? newestOut.createdAt : null;
   const holdings = rows.filter((row) => row.direction === ConversationMessageDirection.OUTBOUND && isHoldingMessage(row.metadata));
   const messages: WaitMessage[] = rows
     .filter((row) => !(row.direction === ConversationMessageDirection.OUTBOUND && (isHoldingMessage(row.metadata) || row.status === ConversationMessageStatus.FAILED)))
@@ -57,10 +66,11 @@ export async function loadWait(conversationId: string, attendedAt?: Date | null)
     messages.splice(at === -1 ? messages.length : at, 0, attendedMark(attended));
   }
   const wait = currentWait(messages);
-  if (!wait) return { wait: null, promised: false, assistSends: 0 };
+  if (!wait) return { wait: null, promised: false, assistSends: 0, deliveryFailedAt };
   const lastOut = [...messages].reverse().find((message) => message.direction === "OUTBOUND" && message.createdAt <= wait.since);
   return {
     wait,
+    deliveryFailedAt,
     promised: Boolean(lastOut && lastOut.sentBy === "BOT" && PROMISE_TEXTS.has((lastOut.body ?? "").trim())),
     assistSends: holdings.filter((row) => row.createdAt >= wait.since).length,
   };
@@ -77,7 +87,23 @@ const CANDIDATE_LIMIT = 200;
  * `lastOutboundAt` y que `waitAttendedAt`); el detalle se lee solo de esas. El mensaje de espera del
  * bot no cuenta como respuesta y no mueve `lastOutboundAt`.
  */
-export async function findWaitingConversations(storeId: string, now = new Date(), minAgeMs = WAITING_BADGE_AFTER_MS, maxAgeMs = Infinity): Promise<Map<string, Date>> {
+export interface WaitingEntry {
+  since: Date;
+  /** El último envío del bot no le llegó; ver `LoadedWait.deliveryFailedAt`. */
+  deliveryFailed: boolean;
+}
+
+/**
+ * `includeFailedSends`: un envío fallido entra enseguida, sin esperar los 15
+ * min. Solo la lista y su insignia; el correo de recordatorio no lo usa.
+ */
+export async function findWaitingConversations(
+  storeId: string,
+  now = new Date(),
+  minAgeMs = WAITING_BADGE_AFTER_MS,
+  maxAgeMs = Infinity,
+  options: { includeFailedSends?: boolean } = {},
+): Promise<Map<string, WaitingEntry>> {
   const oldest = Number.isFinite(maxAgeMs) ? new Date(now.getTime() - maxAgeMs) : new Date(0);
   const candidates = await prismadb.$queryRaw<{ id: string; waitAttendedAt: Date | null }[]>`
     SELECT \`id\`, \`waitAttendedAt\` FROM \`Conversation\`
@@ -89,11 +115,14 @@ export async function findWaitingConversations(storeId: string, now = new Date()
        AND (\`waitAttendedAt\` IS NULL OR \`lastInboundAt\` > \`waitAttendedAt\`)
      ORDER BY \`lastInboundAt\` DESC
      LIMIT ${CANDIDATE_LIMIT}`;
-  const waiting = new Map<string, Date>();
+  const waiting = new Map<string, WaitingEntry>();
   for (const { id, waitAttendedAt } of candidates) {
-    const { wait } = await loadWait(id, waitAttendedAt);
-    const age = wait ? now.getTime() - wait.since.getTime() : -1;
-    if (wait && age >= minAgeMs && age <= maxAgeMs) waiting.set(id, wait.since);
+    const { wait, deliveryFailedAt } = await loadWait(id, waitAttendedAt);
+    const failed = Boolean(options.includeFailedSends && deliveryFailedAt);
+    const since = wait?.since ?? (failed ? deliveryFailedAt : null);
+    if (!since) continue;
+    const age = now.getTime() - since.getTime();
+    if ((age >= minAgeMs || failed) && age <= maxAgeMs) waiting.set(id, { since, deliveryFailed: Boolean(deliveryFailedAt) });
   }
   return waiting;
 }

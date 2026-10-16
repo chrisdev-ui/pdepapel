@@ -11,11 +11,12 @@ import {
 } from "@/lib/conversation-bot-pause";
 import {
   CONVERSATION_STATUS_LABELS,
+  DELIVERY_FAILED_LABEL,
   type ConversationRow,
 } from "@/lib/conversations";
 import { ConversationStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { BellOff, BotOff, Hourglass, ShoppingBag } from "lucide-react";
+import { AlertTriangle, BellOff, BotOff, Hourglass, ShoppingBag } from "lucide-react";
 import { MarkAttendedButton } from "@/components/conversations/mark-attended-button";
 import { CellAction } from "./cell-action";
 
@@ -43,6 +44,15 @@ export const columns: ColumnDef<ConversationColumn>[] = [
           {row.original.contactName?.trim() ||
             (row.original.username ? `@${row.original.username}` : "Sin nombre")}
         </span>
+        {row.original.deliveryFailed ? (
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive"
+            data-testid="delivery-failed"
+          >
+            <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {DELIVERY_FAILED_LABEL}
+          </span>
+        ) : null}
         {/* En la primera columna para que se vea en el teléfono sin desplazar. */}
         {row.original.waitingSince ? (
           <>

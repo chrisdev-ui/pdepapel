@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 
 import {
+  isRetryableFailure,
+  readMetaCode,
   buildRecipientFields,
   WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
   WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH,
@@ -90,6 +92,9 @@ describe("sendWhatsAppTextMessage", () => {
     ).resolves.toEqual({
       ok: false,
       error: "(#131009) Parameter value is not valid",
+      status: 400,
+      code: 131009,
+      retryable: false,
       requestId: null,
       fbTraceId: null,
     });
@@ -120,12 +125,15 @@ describe("sendWhatsAppTextMessage", () => {
     ).resolves.toEqual({
       ok: false,
       error: "Connection not routable (connection_not_routable)",
+      status: 409,
+      code: null,
+      retryable: false,
       requestId: null,
       fbTraceId: null,
     });
     expect(console.error).toHaveBeenCalledWith(
       "[WHATSAPP_SEND] El envío fue rechazado",
-      expect.objectContaining({ error: "Connection not routable (connection_not_routable)" }),
+      { status: 409, code: null, retryable: false, requestId: null, fbTraceId: null },
     );
   });
 
@@ -151,6 +159,9 @@ describe("sendWhatsAppTextMessage", () => {
     ).resolves.toEqual({
       ok: false,
       error: "Message failed to send because more than 24 hours have passed (131047)",
+      status: 400,
+      code: 131047,
+      retryable: false,
       requestId: null,
       fbTraceId: "Az8-abc",
     });
@@ -158,6 +169,42 @@ describe("sendWhatsAppTextMessage", () => {
       "[WHATSAPP_SEND] El envío fue rechazado",
       expect.objectContaining({ fbTraceId: "Az8-abc" }),
     );
+  });
+
+  it("solo se puede repetir lo que con certeza no salió: el 131000, un 5xx con error legible o una conexión que no abrió", async () => {
+    fetchMock.mockResolvedValueOnce(response({ _data: [], _errors: ["(#131000) Something went wrong"] }, 400));
+    await expect(sendWhatsAppTextMessage("573001234567", "Hola", configured)).resolves.toMatchObject({ ok: false, code: 131000, retryable: true });
+    expect(console.error).toHaveBeenLastCalledWith("[WHATSAPP_SEND] El envío fue rechazado", { status: 400, code: 131000, retryable: true, requestId: null, fbTraceId: null });
+
+    fetchMock.mockResolvedValueOnce(response({ _errors: ["Internal error"] }, 500));
+    await expect(sendWhatsAppTextMessage("573001234567", "Hola", configured)).resolves.toMatchObject({ ok: false, status: 500, retryable: true });
+
+    // Un 502 sin cuerpo pudo haber llegado: no se repite.
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 502, headers: { get: () => null }, json: async () => { throw new Error("not json"); } } as unknown as Response);
+    await expect(sendWhatsAppTextMessage("573001234567", "Hola", configured)).resolves.toMatchObject({ ok: false, status: 502, retryable: false });
+
+    fetchMock.mockRejectedValueOnce(Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } }));
+    await expect(sendWhatsAppTextMessage("573001234567", "Hola", configured)).resolves.toMatchObject({ ok: false, retryable: true });
+    expect(console.error).toHaveBeenLastCalledWith("[WHATSAPP_SEND] No se pudo contactar a Chakra", { code: "ECONNREFUSED", retryable: true });
+
+    fetchMock.mockRejectedValueOnce(Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } }));
+    await expect(sendWhatsAppTextMessage("573001234567", "Hola", configured)).resolves.toMatchObject({ ok: false, retryable: false });
+
+    for (const code of [131047, 131026, 131050, 131056, 470, 132000]) {
+      fetchMock.mockResolvedValueOnce(response({ _errors: [`(#${code}) policy`] }, 400));
+      await expect(sendWhatsAppTextMessage("573001234567", "Hola", configured)).resolves.toMatchObject({ code, retryable: false });
+    }
+  });
+
+  it("isRetryableFailure: un 4xx de política nunca, aunque venga con 5xx", () => {
+    expect(isRetryableFailure({ status: 500, code: 131047, parsedError: true })).toBe(false);
+    expect(isRetryableFailure({ status: 400, code: 131000, parsedError: true })).toBe(true);
+    expect(isRetryableFailure({ status: 400, code: null, parsedError: true })).toBe(false);
+    expect(isRetryableFailure({ status: 503, code: null, parsedError: false })).toBe(false);
+    expect(isRetryableFailure({ parsedError: false, connectError: true })).toBe(true);
+    expect(readMetaCode("(#131000) Something went wrong")).toBe(131000);
+    expect(readMetaCode("Message failed (131047)")).toBe(131047);
+    expect(readMetaCode("sin código")).toBeNull();
   });
 
   it("treats a 200 without a wamid as a failure", async () => {
@@ -172,7 +219,7 @@ describe("sendWhatsAppTextMessage", () => {
     fetchMock.mockRejectedValueOnce(new Error("socket hang up"));
     await expect(
       sendWhatsAppTextMessage("573001234567", "Hola", configured),
-    ).resolves.toEqual({ ok: false, error: "socket hang up" });
+    ).resolves.toEqual({ ok: false, error: "socket hang up", status: null, code: null, retryable: false });
 
     fetchMock.mockResolvedValueOnce({
       ok: false,

@@ -31,7 +31,7 @@ import ConversationClient from "@/app/(dashboard)/[storeId]/(routes)/conversacio
 import { columns } from "@/app/(dashboard)/[storeId]/(routes)/conversaciones/components/columns";
 import type { ConversationRow } from "@/lib/conversations";
 
-const row = (id: string, waitingSince: Date | null): ConversationRow => ({
+const row = (id: string, waitingSince: Date | null, deliveryFailed = false): ConversationRow => ({
   id,
   phone: null,
   bsuid: null,
@@ -52,6 +52,7 @@ const row = (id: string, waitingSince: Date | null): ConversationRow => ({
   fromWeb: false,
   recovered: false,
   waitingSince,
+  deliveryFailed,
 });
 
 const data = [row("a", new Date(Date.now() - 25 * 60 * 1000)), row("b", null), row("c", new Date(Date.now() - 3 * 60 * 60 * 1000))];
@@ -78,6 +79,19 @@ describe("Esperando a Paula", () => {
     cleanup();
     render(<ConversationClient data={[row("b", null)]} />);
     expect(screen.getByText("Nadie te está esperando")).toBeTruthy();
+  });
+
+  it("un envío que no le llegó: «El aviso no le llegó a la clienta» en la primera columna y la conversación cuenta en «Esperando a Paula»", () => {
+    const failed = row("d", new Date(Date.now() - 60 * 1000), true);
+    render(<ConversationClient data={[...data, failed]} />);
+    expect(screen.getByRole("button", { name: /Esperando a Paula \(3\)/ })).toBeTruthy();
+    cleanup();
+    const cell = columns[0].cell as (context: { row: { original: ConversationRow } }) => JSX.Element;
+    render(<>{cell({ row: { original: failed } })}</>);
+    expect(screen.getByTestId("delivery-failed").textContent).toBe("El aviso no le llegó a la clienta");
+    cleanup();
+    render(<>{cell({ row: { original: data[0] } })}</>);
+    expect(screen.queryByTestId("delivery-failed")).toBeNull();
   });
 
   it("la insignia va en la primera columna con cuánto lleva esperando", () => {

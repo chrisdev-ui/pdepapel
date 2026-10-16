@@ -101,11 +101,12 @@ export async function getConversation(
         })
       : null;
 
-  const { wait } = await loadWait(conversation.id, conversation.waitAttendedAt);
+  const { wait, deliveryFailedAt } = await loadWait(conversation.id, conversation.waitAttendedAt);
   const { messages, ...fields } = conversation;
   return {
     ...fields,
-    waitingSince: isWaitingOnPaula(wait, new Date()) ? wait!.since : null,
+    waitingSince: isWaitingOnPaula(wait, new Date()) ? wait!.since : deliveryFailedAt ? (wait?.since ?? deliveryFailedAt) : null,
+    deliveryFailed: Boolean(deliveryFailedAt),
     ignored: Boolean(ignorado),
     skippedCount: ignorado?.skippedCount ?? 0,
     messages: messages.map(({ metadata, ...message }, index) => ({

@@ -1175,7 +1175,7 @@ describe("runWhatsAppBot", () => {
     expect(orden).toEqual(["escala", "avisa"]);
   });
 
-  it("records a failed send as FAILED, escalates and never retries", async () => {
+  it("records a failed send as FAILED, escalates and does not retry what may have gone out", async () => {
     mocks.send.mockResolvedValue({ ok: false, error: "not configured" });
 
     await expect(runWhatsAppBot(input)).resolves.toEqual({
@@ -1187,10 +1187,12 @@ describe("runWhatsAppBot", () => {
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(mocks.messageCreate).toHaveBeenCalledWith({
       data: {
+        id: expect.any(String),
         conversationId: "conversation-1",
         direction: "OUTBOUND",
         sentBy: "BOT",
         body: "Abrimos de 9 a 6.",
+        metadata: { sendAttempts: 1, sendError: { status: null, code: null } },
         status: "FAILED",
       },
     });
@@ -2465,7 +2467,7 @@ describe("ritmo humano", () => {
       expect(mocks.messageCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({
           status: "FAILED",
-          metadata: { decision: expect.objectContaining({ outcome: "unsure" }) },
+          metadata: expect.objectContaining({ decision: expect.objectContaining({ outcome: "unsure" }), sendAttempts: 1 }),
         }),
       });
     });

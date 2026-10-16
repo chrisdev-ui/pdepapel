@@ -5,7 +5,8 @@ import { env } from "@/lib/env.mjs";
  *
  * Autenticación directa con `CHAKRA_API_KEY`: no hay intercambio de tokens.
  * Nunca lanza y nunca reintenta: un reintento a ciegas le llegaría dos veces
- * a la clienta. Quien llama decide qué hacer con el fallo.
+ * a la clienta. Quien llama decide qué hacer con el fallo; para eso cada fallo
+ * dice si es seguro repetirlo (`retryable`, ver `isRetryableFailure`).
  */
 
 const CHAKRA_API_BASE = "https://api.chakrahq.com/v1/ext/plugin/whatsapp";
@@ -78,6 +79,12 @@ export type WhatsAppSendResult =
   | {
       ok: false;
       error: string;
+      /** Código HTTP de la respuesta; sin respuesta, ausente. */
+      status?: number | null;
+      /** Código de Meta (`131000`), leído de `(#131000) …`. */
+      code?: number | null;
+      /** Meta o la red dijeron con certeza que el envío no salió, y repetirlo puede servir. */
+      retryable?: boolean;
       /** Cabecera de rastreo de Chakra, si la trae la respuesta. Forma sin confirmar todavía. */
       requestId?: string | null;
       /** `fbtrace_id` de Meta, cuando el rechazo viene de su lado. */
@@ -135,6 +142,46 @@ function readError(payload: unknown): string | null {
   }
 
   return null;
+}
+
+/**
+ * Lo que nunca se reintenta aunque falle: política o estado de la clienta
+ * (ventana de 24 h, destinatario inválido, bloqueado, plantilla requerida,
+ * parámetros, límites de envío). Repetirlo no cambia nada y puede pesar en la
+ * calidad del número.
+ */
+export const NON_RETRYABLE_META_CODES: ReadonlySet<number> = new Set([
+  368, 470, 130429, 130472, 131008, 131009, 131021, 131026, 131031, 131042, 131045, 131047, 131050, 131051, 131052, 131053, 131056,
+  132000, 132001, 132005, 132007, 132012, 132015, 132016,
+]);
+/** El error genérico de Meta: respondió que no salió y suele ser pasajero. */
+export const RETRYABLE_META_CODES: ReadonlySet<number> = new Set([131000]);
+/** Fallos de conexión en los que la petición no llegó a salir de aquí. */
+const CONNECT_ERROR_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT"]);
+
+/** El código de Meta dentro de «(#131000) Something went wrong» o «… (131000)». */
+export function readMetaCode(error: string | null | undefined): number | null {
+  const match = /\(#?(\d{3,6})\)/.exec(error ?? "");
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * ¿Es seguro repetir? Solo si con certeza no salió: Meta respondió con su
+ * error genérico, respondió un 5xx con un error legible, o la conexión no se
+ * llegó a abrir. Un timeout, un socket cortado o un 502/504 sin cuerpo pueden
+ * haber llegado: repetirlos podría mandar el mensaje dos veces.
+ */
+export function isRetryableFailure(failure: { status?: number | null; code?: number | null; parsedError: boolean; connectError?: boolean }): boolean {
+  if (failure.connectError) return true;
+  if (failure.code != null && NON_RETRYABLE_META_CODES.has(failure.code)) return false;
+  if (failure.code != null && RETRYABLE_META_CODES.has(failure.code)) return true;
+  return Boolean(failure.status && failure.status >= 500 && failure.parsedError);
+}
+
+function connectErrorCode(error: unknown): string | null {
+  const cause = error && typeof error === "object" ? (error as { cause?: { code?: unknown } }).cause : undefined;
+  const code = cause && typeof cause.code === "string" ? cause.code : null;
+  return code;
 }
 
 function readTraceId(payload: unknown): string | null {
@@ -265,21 +312,27 @@ async function postToChakra(
 
     const requestId = readRequestId(response, payload);
     const fbTraceId = readTraceId(payload);
-    const error = readError(payload) ?? `HTTP ${response.status}`;
-    // Sin el payload crudo: ya se confirmó la forma de `_errors` y volcarlo
-    // entero arrastraba el mensaje de la clienta a los logs de Vercel.
+    const parsed = readError(payload);
+    const error = parsed ?? `HTTP ${response.status}`;
+    const code = readMetaCode(parsed);
+    const retryable = isRetryableFailure({ status: response.status, code, parsedError: parsed !== null });
+    // Solo códigos: ni el payload crudo (arrastraba el mensaje de la clienta)
+    // ni el texto del error.
     console.error("[WHATSAPP_SEND] El envío fue rechazado", {
       status: response.status,
-      error,
+      code,
+      retryable,
       requestId,
       fbTraceId,
     });
-    return { ok: false, error, requestId, fbTraceId };
+    return { ok: false, error, status: response.status, code, retryable, requestId, fbTraceId };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Error desconocido";
-    console.error("[WHATSAPP_SEND] No se pudo contactar a Chakra", { message });
-    return { ok: false, error: message.slice(0, 500) };
+    const causeCode = connectErrorCode(error);
+    const connectError = Boolean(causeCode && CONNECT_ERROR_CODES.has(causeCode));
+    console.error("[WHATSAPP_SEND] No se pudo contactar a Chakra", { code: causeCode, retryable: connectError });
+    return { ok: false, error: message.slice(0, 500), status: null, code: null, retryable: connectError };
   }
 }
 

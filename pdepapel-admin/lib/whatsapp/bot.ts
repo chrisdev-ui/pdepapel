@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { availableStock } from "@/lib/available-stock";
 import { availableStockWhere } from "@/lib/available-stock-where";
 import {
@@ -100,6 +102,7 @@ import {
   sendWhatsAppTypingIndicator,
   type WhatsAppListRow,
   type WhatsAppReplyButton,
+  type WhatsAppSendResult,
 } from "@/lib/whatsapp/send";
 
 export { formatBotReply, matchWhatsAppKeyword, normalizeBotText };
@@ -220,6 +223,10 @@ export function getHumanPauseMs(answer: string): number {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Un solo reintento por respuesta, tras una pausa corta. */
+export const MAX_SEND_RETRIES = 1;
+export const SEND_RETRY_DELAY_MS = 2_500;
 
 /** Para que 20 s de espera no se lean como que el mensaje no llegó. */
 export const SLOW_ANSWER_ACKNOWLEDGEMENT =
@@ -1668,10 +1675,6 @@ async function deliver(
     ...(decision ? { decision } : {}),
     ...(kind ? { kind } : {}),
   };
-  const conMetadata =
-    Object.keys(metadata).length > 0
-      ? { metadata: metadata as unknown as Prisma.InputJsonValue }
-      : {};
   const reply = formatBotReply(answer);
 
   // Red contra un envío doble; las ráfagas se resuelven antes.
@@ -1735,6 +1738,27 @@ async function deliver(
       ? sendWhatsAppButtonMessage(phone, reply, conBotones)
       : sendWhatsAppTextMessage(phone, reply);
 
+  // Una respuesta tiene un id desde antes de salir (la fila del panel lo
+  // usa) y un solo reintento en total, aunque pase por la lista o la foto.
+  // Se repite solo lo que con certeza no salió (`retryable`, lib/whatsapp/send.ts):
+  // así un reintento nunca le llega dos veces a la clienta.
+  const replyId = randomUUID();
+  let attempts = 0;
+  let retryLeft = MAX_SEND_RETRIES;
+  let quietBeforeRetry: QuietReason | null = null;
+  const attempt = async (send: () => Promise<WhatsAppSendResult>): Promise<WhatsAppSendResult> => {
+    attempts += 1;
+    const first = await send();
+    if (first.ok || !first.retryable || retryLeft === 0) return first;
+    retryLeft -= 1;
+    await sleep(SEND_RETRY_DELAY_MS);
+    // Mientras se esperaba pudo escribir Paula o la clienta: entonces no se repite.
+    quietBeforeRetry = await shouldStayQuiet(conversationId, pace);
+    if (quietBeforeRetry) return first;
+    attempts += 1;
+    return send();
+  };
+
   let salioConFoto = Boolean(photo);
 
   // La lista manda cuando la hay: una lista no admite ni foto ni botones, así
@@ -1744,12 +1768,15 @@ async function deliver(
   if (list && list.rows.length > 0) {
     salioConFoto = false;
     const cuerpo = formatBotReply(list.body);
-    sent = await sendWhatsAppListMessage(phone, cuerpo, {
-      button: list.button ?? PRODUCT_TEMPLATES["list.button"](),
-      section: list.section ?? PRODUCT_TEMPLATES["list.section"](),
-      footer: PRODUCT_TEMPLATES["list.footer"](),
-      rows: [...list.rows, buildOwnerRow()],
-    });
+    sent = await attempt(() =>
+      sendWhatsAppListMessage(phone, cuerpo, {
+        button: list.button ?? PRODUCT_TEMPLATES["list.button"](),
+        section: list.section ?? PRODUCT_TEMPLATES["list.section"](),
+        footer: PRODUCT_TEMPLATES["list.footer"](),
+        rows: [...list.rows, buildOwnerRow()],
+      }),
+    );
+    if (quietBeforeRetry) return { ok: true, aborted: true, reason: quietBeforeRetry };
     if (sent.ok) {
       // En el panel tiene que verse lo que se le ofreció, no solo la frase.
       archivado = [cuerpo, ...list.rows.map((r) => `• ${r.description ?? r.title}`)].join("\n");
@@ -1759,16 +1786,17 @@ async function deliver(
       // detalle; dejar a la clienta sin respuesta, no.
       console.warn("[WHATSAPP_BOT] La lista no salió; se manda el texto", {
         conversationId,
-        error: sent.error,
+        code: sent.code ?? null,
       });
       if (await shouldStayQuiet(conversationId, pace)) return { ok: true, aborted: true };
-      sent = await enviarTexto();
+      sent = await attempt(enviarTexto);
     }
   } else {
     sent = photo
-      ? await sendWhatsAppImageButtonMessage(phone, reply, conBotones, photo)
-      : await enviarTexto();
+      ? await attempt(() => sendWhatsAppImageButtonMessage(phone, reply, conBotones, photo))
+      : await attempt(enviarTexto);
   }
+  if (quietBeforeRetry) return { ok: true, aborted: true, reason: quietBeforeRetry };
 
   // Si lo que falló fue la foto (URL caída, formato raro, un no de Meta), se
   // manda el MISMO texto sin ella. Perder la foto es un detalle; dejar a la
@@ -1777,25 +1805,30 @@ async function deliver(
   if (!sent.ok && photo) {
     console.warn("[WHATSAPP_BOT] La foto no salió; se manda solo el texto", {
       conversationId,
-      error: sent.error,
+      code: sent.code ?? null,
     });
     if (await shouldStayQuiet(conversationId, pace)) return { ok: true, aborted: true };
     salioConFoto = false;
-    sent = await enviarTexto();
+    sent = await attempt(enviarTexto);
+    if (quietBeforeRetry) return { ok: true, aborted: true, reason: quietBeforeRetry };
   }
 
   if (!sent.ok) {
-    // Queda el intento escrito para que se vea qué se quiso mandar. No se
-    // reintenta nunca: un reintento a ciegas le llega dos veces a la clienta.
+    // Queda el intento escrito para que se vea qué se quiso mandar. Siendo el
+    // último mensaje que sale, el panel lo muestra como «El aviso no le llegó
+    // a la clienta» y la conversación entra en «Esperando a Paula»
+    // (lib/whatsapp/waiting-list.ts).
+    console.error("[WHATSAPP_BOT] El envío no salió", { conversationId, status: sent.status ?? null, code: sent.code ?? null, attempts });
     await prismadb.conversationMessage.create({
       data: {
+        id: replyId,
         conversationId,
         direction: ConversationMessageDirection.OUTBOUND,
         sentBy: ConversationMessageSentBy.BOT,
         body: archivado,
         // La decisión también aquí: si el envío falló, saber qué se quiso
         // decir y por qué es justo lo que hace falta para revisarlo.
-        ...(decision ? { metadata: { decision } as unknown as Prisma.InputJsonValue } : {}),
+        metadata: { ...(decision ? { decision } : {}), sendAttempts: attempts, sendError: { status: sent.status ?? null, code: sent.code ?? null } } as unknown as Prisma.InputJsonValue,
         status: ConversationMessageStatus.FAILED,
       },
     });
@@ -1811,8 +1844,10 @@ async function deliver(
       msDesdeMensaje: pace.inboundAt ? now.getTime() - pace.inboundAt.getTime() : null,
     });
   }
+  const finalMetadata = { ...metadata, ...(attempts > 1 ? { sendAttempts: attempts } : {}) };
   await prismadb.conversationMessage.create({
     data: {
+      id: replyId,
       conversationId,
       direction: ConversationMessageDirection.OUTBOUND,
       sentBy: ConversationMessageSentBy.BOT,
@@ -1821,7 +1856,7 @@ async function deliver(
       // Solo si de verdad salió con foto: si hubo que repetir sin ella, en el
       // panel tiene que verse lo mismo que le llegó a la clienta.
       ...(salioConFoto && photo ? { mediaType: "image", mediaUrl: photo } : {}),
-      ...conMetadata,
+      ...(Object.keys(finalMetadata).length > 0 ? { metadata: finalMetadata as unknown as Prisma.InputJsonValue } : {}),
       status: ConversationMessageStatus.SENT,
       createdAt: now,
     },

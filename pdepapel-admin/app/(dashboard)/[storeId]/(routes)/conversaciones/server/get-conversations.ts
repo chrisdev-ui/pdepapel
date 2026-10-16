@@ -81,7 +81,8 @@ export async function getConversations(storeId: string): Promise<ConversationRow
     ).map((message) => message.conversationId),
   );
   // «Esperando a Paula»: solo se leen las conversaciones donde la clienta escribió de último.
-  const esperando = await findWaitingConversations(storeId);
+  // Un envío del bot que no salió entra enseguida, sin esperar los 15 min.
+  const esperando = await findWaitingConversations(storeId, undefined, undefined, undefined, { includeFailedSends: true });
   const porTelefono = new Map(ignorados.filter((i) => i.phone).map((i) => [i.phone as string, i]));
   const porBsuid = new Map(ignorados.filter((i) => i.bsuid).map((i) => [i.bsuid as string, i]));
 
@@ -102,7 +103,8 @@ export async function getConversations(storeId: string): Promise<ConversationRow
       pendingOrder: conPedido.has(fields.id),
       fromWeb: desdeLaWeb.has(fields.id),
       recovered: recuperadas.has(fields.id),
-      waitingSince: esperando.get(fields.id) ?? null,
+      waitingSince: esperando.get(fields.id)?.since ?? null,
+      deliveryFailed: esperando.get(fields.id)?.deliveryFailed ?? false,
     };
   });
 }

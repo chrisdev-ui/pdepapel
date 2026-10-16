@@ -25,6 +25,9 @@ import {
 
 // --- Etiquetas -------------------------------------------------------------
 
+/** Lo que ve Paula cuando un envío del bot no le llegó a la clienta. */
+export const DELIVERY_FAILED_LABEL = "El aviso no le llegó a la clienta";
+
 export const CONVERSATION_STATUS_LABELS: Record<ConversationStatus, string> = {
   [ConversationStatus.OPEN]: "Abierta",
   [ConversationStatus.NEEDS_OWNER]: "Necesita respuesta",
@@ -250,6 +253,8 @@ export interface ConversationRow {
    * nadie le responde hace 15 min o más: desde cuándo. `null` si no espera.
    */
   waitingSince: Date | null;
+  /** El último envío del bot no le llegó a la clienta, ni con el reintento. */
+  deliveryFailed: boolean;
   /** Tiene mensajes que se quedaron sin procesar y se recuperaron después. */
   recovered: boolean;
 }
@@ -321,8 +326,10 @@ export interface ConversationDetail {
   ignored: boolean;
   /** Eventos dejados pasar desde que se ignoró. */
   skippedCount: number;
-  /** Desde cuándo espera a Paula (15 min o más sin respuesta), o `null`. */
+  /** Desde cuándo espera a Paula (15 min o más sin respuesta, o enseguida si un envío no le llegó), o `null`. */
   waitingSince: Date | null;
+  /** El último envío del bot no le llegó a la clienta, ni con el reintento. */
+  deliveryFailed: boolean;
   /** Última vez que Paula la marcó como atendida sin escribirle. */
   waitAttendedAt: Date | null;
 }

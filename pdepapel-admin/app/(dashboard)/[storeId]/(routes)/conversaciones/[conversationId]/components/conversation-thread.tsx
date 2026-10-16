@@ -27,6 +27,7 @@ import {
   CONVERSATION_MESSAGE_STATUS_LABELS,
   CONVERSATION_SENT_BY_LABELS,
   CONVERSATION_STATUS_LABELS,
+  DELIVERY_FAILED_LABEL,
   describeMedia,
   type ConversationCart,
   type ConversationDetail,
@@ -462,6 +463,15 @@ export function ConversationThread({
           <Badge variant={isResolved ? "secondary" : "default"}>
             {CONVERSATION_STATUS_LABELS[conversation.status]}
           </Badge>
+          {conversation.deliveryFailed ? (
+            <span
+              className="flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive"
+              data-testid="delivery-failed"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {DELIVERY_FAILED_LABEL}
+            </span>
+          ) : null}
           {conversation.waitingSince ? (
             <span className="flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
               <Hourglass className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

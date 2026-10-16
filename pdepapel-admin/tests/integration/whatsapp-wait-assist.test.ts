@@ -249,7 +249,7 @@ describe("la lista «Esperando a Paula»", () => {
     const answered = await conversation([{ sentBy: "CUSTOMER", at: ago(DAY, 40) }, { sentBy: "OWNER", at: ago(DAY, 35) }]);
     const audio = await conversation([{ sentBy: "CUSTOMER", at: ago(DAY, 40), body: null, mediaType: "audio" }]);
     const found = await findWaitingConversations(store, DAY);
-    expect(found.get(waiting.id)).toEqual(ago(DAY, 16));
+    expect(found.get(waiting.id)).toEqual({ since: ago(DAY, 16), deliveryFailed: false });
     expect(found.has(audio.id)).toBe(true);
     for (const id of [recent.id, thanks.id, reaction.id, answered.id]) expect(found.has(id)).toBe(false);
   });
@@ -368,7 +368,7 @@ describe("Marcar como atendido", () => {
     });
     await testPrisma.conversation.update({ where: { id: chat.id }, data: { lastInboundAt: again } });
     const later = await findWaitingConversations(store, new Date(again.getTime() + 20 * MIN));
-    expect(later.get(chat.id)?.getTime()).toBe(again.getTime());
+    expect(later.get(chat.id)?.since.getTime()).toBe(again.getTime());
     const { loadWait } = await import("@/lib/whatsapp/waiting-list");
     expect((await loadWait(chat.id)).wait?.startMessageId).toBe(message.id);
     session.userId = null;
