@@ -9,9 +9,9 @@ const after = new Date("2026-10-01T00:00:00Z");
 const product = (overrides: Partial<PlanProduct> = {}): PlanProduct => ({
   id: "p1",
   sku: "SKU-1",
-  name: "Sobre de manila Prueba",
-  price: 500,
-  acqPrice: 162,
+  name: "Sobre Prueba",
+  price: 480,
+  acqPrice: 160,
   transportationCost: 1000,
   stock: 90,
   reservedUnits: 0,
@@ -36,15 +36,15 @@ describe("corrección del envío por unidad", () => {
 
   it("el valor nuevo es el envío real de la última recepción, repartido como la recepción; sin recepción, no registrado", () => {
     expect(proposedTransport(null)).toBeNull();
-    expect(proposedTransport({ kind: "recepcion", orderNumber: "PO-0004", at: after, unitCost: 162, landedUnitCost: 172.13 })).toBe(10.13);
-    // Pedido de 100 × 162 = 16.200 con 1.000 de envío: 1.000 / 16.200 × 162 = 10 por unidad.
-    expect(proposedTransport({ kind: "pedido", orderNumber: "PO-0004", at: after, unitCost: 162, totalAmount: 16200, shippingCost: 1000 })).toBe(10);
-    expect(proposedTransport({ kind: "pedido", orderNumber: "PO-1", at: after, unitCost: 162, totalAmount: 16200, shippingCost: 0 })).toBe(0);
+    expect(proposedTransport({ kind: "recepcion", orderNumber: "PO-0004", at: after, unitCost: 160, landedUnitCost: 170.13 })).toBe(10.13);
+    // Pedido de 100 × 160 = 16.000 con 1.000 de envío: 1.000 / 16.000 × 160 = 10 por unidad.
+    expect(proposedTransport({ kind: "pedido", orderNumber: "PO-0004", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 1000 })).toBe(10);
+    expect(proposedTransport({ kind: "pedido", orderNumber: "PO-1", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 0 })).toBe(0);
   });
 
-  it("el sobre de manila: de 1.162 a 172 por unidad; que el margen suba no es excepción, se aplica con la regla", () => {
-    const row = planRow(product({ lastReceipt: { kind: "pedido", orderNumber: "PO-0004", at: after, unitCost: 162, totalAmount: 16200, shippingCost: 1000 } }))!;
-    expect(row).toMatchObject({ grupo: "a-relleno", archivado: false, expectedTransport: 1000, newTransport: 10, costBefore: 1162, costAfter: 172, available: 90, exceptions: [], aprobado: true });
+  it("un producto barato con el 1.000: de 1.160 a 170 por unidad; que el margen suba no es excepción, se aplica con la regla", () => {
+    const row = planRow(product({ lastReceipt: { kind: "pedido", orderNumber: "PO-0004", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 1000 } }))!;
+    expect(row).toMatchObject({ grupo: "a-relleno", archivado: false, expectedTransport: 1000, newTransport: 10, costBefore: 1160, costAfter: 170, available: 90, exceptions: [], aprobado: true });
   });
 
   it("excepciones para Paula: copiado después del 18 de septiembre, promediado, envío real > 25 % del precio, sigue bajo costo, el margen baja", () => {
@@ -68,14 +68,14 @@ describe("corrección del envío por unidad", () => {
   });
 
   it("sin cambio no hay fila; un valor normal sin promedio tampoco", () => {
-    expect(planRow(product({ transportationCost: 10, averagedAfterBackfill: true, lastReceipt: { kind: "pedido", orderNumber: "PO-1", at: after, unitCost: 162, totalAmount: 16200, shippingCost: 1000 } }))).toBeNull();
+    expect(planRow(product({ transportationCost: 10, averagedAfterBackfill: true, lastReceipt: { kind: "pedido", orderNumber: "PO-1", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 1000 } }))).toBeNull();
     expect(planRow(product({ transportationCost: 300 }))).toBeNull();
   });
 
   it("Mercado Libre: piso de costo y punto de equilibrio estimado antes y después; en venta por debajo del piso nuevo; pérdida autorizada que ya no hace falta", () => {
-    const row = { acqPrice: 162, expectedTransport: 1000, newTransport: 10 };
+    const row = { acqPrice: 160, expectedTransport: 1000, newTransport: 10 };
     const impact = listingImpact({ id: "l1", productId: "p1", status: "ACTIVE", price: 900, hasBelowCostOverride: true }, row);
-    expect(impact).toMatchObject({ costFloorBefore: 1162, costFloorAfter: 172, liveBelowNewFloor: false, overrideNoLongerNeeded: true });
+    expect(impact).toMatchObject({ costFloorBefore: 1160, costFloorAfter: 170, liveBelowNewFloor: false, overrideNoLongerNeeded: true });
     expect(impact.breakevenAfter!).toBeLessThan(impact.breakevenBefore!);
     const higher = listingImpact({ id: "l2", productId: "p2", status: "ACTIVE", price: 1500, hasBelowCostOverride: false }, { acqPrice: 1200, expectedTransport: 1000, newTransport: 1400 });
     expect(higher.liveBelowNewFloor).toBe(true);

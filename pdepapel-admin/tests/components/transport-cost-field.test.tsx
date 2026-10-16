@@ -10,7 +10,7 @@ afterEach(cleanup);
 describe("envío y otros gastos en la ficha", () => {
   it("«Toda la orden» reparte el envío entre las unidades y guarda la parte de cada una", () => {
     const onChange = vi.fn();
-    render(<TransportCostField value={null} onChange={onChange} acqPrice={162} price={500} />);
+    render(<TransportCostField value={null} onChange={onChange} acqPrice={160} price={480} />);
     fireEvent.click(screen.getByRole("button", { name: "Toda la orden" }));
     expect(screen.getByRole("button", { name: "Toda la orden" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.change(screen.getByLabelText("Envío de toda la orden"), { target: { value: "1000" } });
@@ -21,7 +21,7 @@ describe("envío y otros gastos en la ficha", () => {
 
   it("sin unidades todavía no guarda nada y lo pide", () => {
     const onChange = vi.fn();
-    render(<TransportCostField value={null} onChange={onChange} acqPrice={162} price={500} />);
+    render(<TransportCostField value={null} onChange={onChange} acqPrice={160} price={480} />);
     fireEvent.click(screen.getByRole("button", { name: "Toda la orden" }));
     fireEvent.change(screen.getByLabelText("Envío de toda la orden"), { target: { value: "1000" } });
     expect(onChange).toHaveBeenLastCalledWith(null);
@@ -29,9 +29,9 @@ describe("envío y otros gastos en la ficha", () => {
   });
 
   it("avisa sin bloquear cuando el envío por unidad parece el de toda la orden", () => {
-    const { rerender } = render(<TransportCostField value={1000} onChange={vi.fn()} acqPrice={162} price={500} />);
+    const { rerender } = render(<TransportCostField value={1000} onChange={vi.fn()} acqPrice={160} price={480} />);
     expect(screen.getByTestId("transport-warning").textContent).toContain("igual o mayor que el costo de compra");
-    rerender(<TransportCostField value={10} onChange={vi.fn()} acqPrice={162} price={500} />);
+    rerender(<TransportCostField value={10} onChange={vi.fn()} acqPrice={160} price={480} />);
     expect(screen.queryByTestId("transport-warning")).toBeNull();
   });
 });

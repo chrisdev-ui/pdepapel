@@ -9,10 +9,10 @@ import { getProductSeed } from "@/app/(dashboard)/[storeId]/(routes)/productos/[
 
 const source = {
   id: "p1",
-  name: "Sobre de manila",
+  name: "Sobre Prueba",
   description: "",
-  price: 500,
-  acqPrice: 162,
+  price: 480,
+  acqPrice: 160,
   transportationCost: 1000,
   categoryId: "c1",
   colorId: "co1",
@@ -32,7 +32,7 @@ describe("duplicar un producto", () => {
     for (const transportationCost of [1000, 350, null]) {
       mocks.findFirst.mockResolvedValue({ ...source, transportationCost });
       const seed = await getProductSeed("store-1", "p1");
-      expect(seed).toMatchObject({ name: "Sobre de manila (copia)", acqPrice: 162, price: 500, transportationCost: null });
+      expect(seed).toMatchObject({ name: "Sobre Prueba (copia)", acqPrice: 160, price: 480, transportationCost: null });
     }
   });
 });

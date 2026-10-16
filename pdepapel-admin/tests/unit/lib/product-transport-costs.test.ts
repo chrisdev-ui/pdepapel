@@ -15,11 +15,11 @@ describe("envío por unidad", () => {
   });
 
   it("avisa cuando parece el envío de toda una orden: igual o mayor que la compra, o más del 25 % del precio", () => {
-    expect(transportWarning({ transport: 1000, acqPrice: 162, price: 500 })).toContain("igual o mayor que el costo de compra");
+    expect(transportWarning({ transport: 1000, acqPrice: 160, price: 480 })).toContain("igual o mayor que el costo de compra");
     expect(transportWarning({ transport: 3000, acqPrice: 9000, price: 10000 })).toContain("pasa del 25 % del precio");
-    expect(transportWarning({ transport: 10, acqPrice: 162, price: 500 })).toBeNull();
-    expect(transportWarning({ transport: null, acqPrice: 162, price: 500 })).toBeNull();
-    expect(transportWarning({ transport: 0, acqPrice: 162, price: 500 })).toBeNull();
+    expect(transportWarning({ transport: 10, acqPrice: 160, price: 480 })).toBeNull();
+    expect(transportWarning({ transport: null, acqPrice: 160, price: 480 })).toBeNull();
+    expect(transportWarning({ transport: 0, acqPrice: 160, price: 480 })).toBeNull();
   });
 
   it("el 1.000 del relleno y el vacío no son datos; cualquier otro valor sí", () => {
