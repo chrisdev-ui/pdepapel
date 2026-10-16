@@ -1746,6 +1746,11 @@ async function deliver(
   let attempts = 0;
   let retryLeft = MAX_SEND_RETRIES;
   let quietBeforeRetry: QuietReason | null = null;
+  // Como en la mirada de antes de enviar: si la clienta escribió, el aviso de escalada queda debido.
+  const quietAfterFailure = async (reason: QuietReason) => {
+    if (handoff && reason === "superseded") await recordOwedHandoff(conversationId, pace, handoff);
+    return { ok: true, aborted: true, reason };
+  };
   const attempt = async (send: () => Promise<WhatsAppSendResult>): Promise<WhatsAppSendResult> => {
     attempts += 1;
     const first = await send();
@@ -1776,7 +1781,7 @@ async function deliver(
         rows: [...list.rows, buildOwnerRow()],
       }),
     );
-    if (quietBeforeRetry) return { ok: true, aborted: true, reason: quietBeforeRetry };
+    if (quietBeforeRetry) return quietAfterFailure(quietBeforeRetry);
     if (sent.ok) {
       // En el panel tiene que verse lo que se le ofreció, no solo la frase.
       archivado = [cuerpo, ...list.rows.map((r) => `• ${r.description ?? r.title}`)].join("\n");
@@ -1796,7 +1801,7 @@ async function deliver(
       ? await attempt(() => sendWhatsAppImageButtonMessage(phone, reply, conBotones, photo))
       : await attempt(enviarTexto);
   }
-  if (quietBeforeRetry) return { ok: true, aborted: true, reason: quietBeforeRetry };
+  if (quietBeforeRetry) return quietAfterFailure(quietBeforeRetry);
 
   // Si lo que falló fue la foto (URL caída, formato raro, un no de Meta), se
   // manda el MISMO texto sin ella. Perder la foto es un detalle; dejar a la
@@ -1810,7 +1815,7 @@ async function deliver(
     if (await shouldStayQuiet(conversationId, pace)) return { ok: true, aborted: true };
     salioConFoto = false;
     sent = await attempt(enviarTexto);
-    if (quietBeforeRetry) return { ok: true, aborted: true, reason: quietBeforeRetry };
+    if (quietBeforeRetry) return quietAfterFailure(quietBeforeRetry);
   }
 
   if (!sent.ok) {

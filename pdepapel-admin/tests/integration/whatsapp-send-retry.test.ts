@@ -122,6 +122,37 @@ describe("envío rechazado por Meta", () => {
     expect((await botRows(conversation.id))[0]).toMatchObject({ status: "FAILED", metadata: { sendAttempts: 1, sendError: { code: 131047 } } });
   });
 
+  it("tras un acuse fallido, el siguiente mensaje de la clienta no manda nada: la conversación ya es de Paula y el aviso de fallo sigue", async () => {
+    sent.results = [META_GENERIC, META_GENERIC];
+    const { conversation } = await tapOwner();
+    expect(sent.calls).toBe(2);
+    const at = new Date(Date.now() + 20_000);
+    const externalId = `wamid.in-${randomUUID()}`;
+    await testPrisma.conversationMessage.create({ data: { conversationId: conversation.id, direction: "INBOUND", sentBy: "CUSTOMER", body: "hola?", createdAt: at, externalId } });
+    const { runWhatsAppBot } = await import("@/lib/whatsapp/bot");
+    const next = await runWhatsAppBot({ conversationId: conversation.id, recipient: conversation.phone!, body: "hola?", inboundAt: at, inboundMessageId: externalId, keywords: [], skipHumanPause: true });
+    expect(next.outcome).toBe("skipped_needs_owner");
+    expect(sent.calls).toBe(2);
+    const { loadWait } = await import("@/lib/whatsapp/waiting-list");
+    expect((await loadWait(conversation.id)).deliveryFailedAt).not.toBeNull();
+  });
+
+  it("si la clienta escribe durante la pausa del reintento de un acuse, no se repite y el aviso queda debido", async () => {
+    sent.results = [META_GENERIC];
+    let conversationId = "";
+    sent.onCall = async () => {
+      const row = await testPrisma.conversationMessage.findFirstOrThrow({ where: { body: "Hablar con Paula", direction: "INBOUND" }, orderBy: { createdAt: "desc" }, select: { conversationId: true } });
+      conversationId = row.conversationId;
+      await testPrisma.conversationMessage.create({ data: { conversationId, direction: "INBOUND", sentBy: "CUSTOMER", body: "¿me ayudas?", createdAt: new Date(Date.now() + 1_000), externalId: `wamid.in-${randomUUID()}` } });
+      sent.onCall = null;
+    };
+    const { conversation } = await tapOwner();
+    expect(sent.calls).toBe(1);
+    expect(await botRows(conversation.id)).toHaveLength(0);
+    const tap = await testPrisma.conversationMessage.findFirstOrThrow({ where: { conversationId: conversation.id, body: "Hablar con Paula" }, select: { metadata: true } });
+    expect((tap.metadata as { handoffOwed?: { state?: string; notice?: string } }).handoffOwed).toMatchObject({ state: "owed", notice: "owner_requested" });
+  });
+
   it("si Paula escribe durante la pausa del reintento, no se repite y no queda fallo", async () => {
     sent.results = [META_GENERIC];
     sent.onCall = async () => {
