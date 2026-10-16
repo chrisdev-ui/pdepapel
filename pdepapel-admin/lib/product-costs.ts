@@ -17,9 +17,13 @@ export function parseTransportationCost(value: unknown): number | null {
  */
 export const LEGACY_TRANSPORT_FILL = 1000;
 
-/** ¿El envío por unidad es un dato de verdad (ni vacío ni el 1.000 del relleno)? */
+/**
+ * ¿El envío por unidad es un dato de verdad? Ni vacío, ni el 1.000 del
+ * relleno, ni el 0 con que nacían las variantes por el valor por defecto de la
+ * columna: esos no se copian ni se promedian.
+ */
 export function isKnownTransport(value: number | null | undefined): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value !== LEGACY_TRANSPORT_FILL;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value !== LEGACY_TRANSPORT_FILL;
 }
 
 /** Costo total por unidad: adquisición más envío y otros gastos, si se conocen. */

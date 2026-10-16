@@ -212,6 +212,7 @@ describe("POST /product-groups", () => {
       name: "Cartuchera lucky girls",
       productGroupId: "group-1",
       stock: 0,
+      transportationCost: null,
     });
   });
 

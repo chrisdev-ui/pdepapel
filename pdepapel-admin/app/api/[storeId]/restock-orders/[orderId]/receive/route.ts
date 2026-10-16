@@ -133,7 +133,7 @@ currentCost: hasCostHistory ? before?.acqPrice : null,
             incomingUnits: line.quantity,
             incomingCost: line.unitCost,
           });
-          // Un envío vacío o el 1.000 del relleno no es un dato: el de esta compra lo reemplaza en vez de promediarse con él.
+          // Un envío vacío, en 0 o el 1.000 del relleno no es un dato: el de esta compra lo reemplaza en vez de promediarse con él.
           const transportationCost = weightedAverageCost({
             currentUnits,
 currentCost: hasCostHistory && isKnownTransport(before?.transportationCost) ? before!.transportationCost : null,

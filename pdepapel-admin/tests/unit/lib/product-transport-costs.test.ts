@@ -22,12 +22,12 @@ describe("envío por unidad", () => {
     expect(transportWarning({ transport: 0, acqPrice: 160, price: 480 })).toBeNull();
   });
 
-  it("el 1.000 del relleno y el vacío no son datos; cualquier otro valor sí", () => {
+  it("el 1.000 del relleno, el 0 y el vacío no son datos; cualquier otro valor sí", () => {
     expect(LEGACY_TRANSPORT_FILL).toBe(1000);
     expect(isKnownTransport(1000)).toBe(false);
     expect(isKnownTransport(null)).toBe(false);
     expect(isKnownTransport(undefined)).toBe(false);
-    expect(isKnownTransport(0)).toBe(true);
+    expect(isKnownTransport(0)).toBe(false);
     expect(isKnownTransport(999.5)).toBe(true);
   });
 

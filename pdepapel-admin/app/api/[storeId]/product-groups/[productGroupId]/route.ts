@@ -380,6 +380,8 @@ export async function PATCH(
               storeId: params.storeId,
               productGroupId: params.productGroupId,
               categoryId: data.categoryId ?? attributes.categoryFallback(),
+              // Sin compra todavía: el envío por unidad nace «no registrado», no en 0.
+              transportationCost: null,
               isArchived: data.isArchived ?? false,
               isFeatured: data.isFeatured ?? false,
               price: data.price ?? 0,

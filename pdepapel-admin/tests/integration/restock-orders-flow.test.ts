@@ -142,12 +142,13 @@ describe("pedidos de aprovisionamiento", () => {
 
     // Costo puesto en bodega: 30000 de mercancía + 6000 de envío sobre 60000 → 10 %,
     // promediado con lo que ya había. El producto entra con 6 unidades a 4000 y
-    // sin transporte: 1 unidad lleva el costo a (6×4000 + 30000) / 7 = 7714,29 y
-    // las 2 siguientes a (7×7714,29 + 2×30000) / 9 = 12666,67. El movimiento sí
-    // guarda el costo real de esta compra, 33000.
+    // envío en 0: 1 unidad lleva el costo a (6×4000 + 30000) / 7 = 7714,29 y
+    // las 2 siguientes a (7×7714,29 + 2×30000) / 9 = 12666,67. El envío en 0 no
+    // es un dato: la primera recepción pone el de la compra (3000) y la segunda
+    // lo promedia con el mismo 3000. El movimiento guarda el costo real, 33000.
     const product = await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id } });
     expect(product.acqPrice).toBe(12666.67);
-    expect(product.transportationCost).toBe(1000);
+    expect(product.transportationCost).toBe(3000);
     expect(product.supplierId).toBe(supplierId);
     const movements = await testPrisma.inventoryMovement.findMany({ where: { referenceId: order.id, type: "RESTOCK_RECEIVED" } });
     expect(movements).toHaveLength(2);
@@ -158,8 +159,8 @@ describe("pedidos de aprovisionamiento", () => {
     expect(closed.status).toBe(409);
   });
 
-  it("con «actualizar costos», un envío vacío o el 1.000 del relleno no se promedia: queda el envío real de esta compra", async () => {
-    for (const before of [1000, null]) {
+  it("con «actualizar costos», un envío vacío, en 0 o el 1.000 del relleno no se promedia: queda el envío real de esta compra", async () => {
+    for (const before of [1000, null, 0]) {
       const f = await setup();
       await testPrisma.product.update({ where: { id: f.component.id }, data: { acqPrice: 4000, transportationCost: before, stock: 6 } });
       const order = await createOrder(f, { status: RestockOrderStatus.ORDERED });

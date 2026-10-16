@@ -241,6 +241,8 @@ describe("product group integrity with MySQL", () => {
     expect(res.status).toBe(200);
     const created = await testPrisma.product.findFirstOrThrow({ where: { productGroupId: group.id, colorId: extraColor.id } });
     expect(created.stock).toBe(0);
+    // Sin compra todavía: envío «no registrado», no el 0 del valor por defecto de la columna.
+    expect(created.transportationCost).toBeNull();
     expect(await testPrisma.inventoryMovement.count({ where: { productId: created.id } })).toBe(0);
     expect(created.slug).not.toBe("");
   });

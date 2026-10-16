@@ -251,6 +251,8 @@ export async function POST(
               storeId: params.storeId,
               productGroupId: group.id,
               categoryId,
+              // Sin compra todavía: el envío por unidad nace «no registrado», no en 0.
+              transportationCost: null,
               isArchived: data.isArchived ?? false,
               isFeatured: data.isFeatured ?? false,
               price: data.price ?? 0,
