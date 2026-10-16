@@ -111,14 +111,21 @@ describe("calcularPrecio", () => {
     amountsComeFromTool(text, result);
   });
 
-  it("con los ajustes de Mercado Libre suma el cargo fijo bajo el umbral y deja de decir «sin cargo fijo»", async () => {
-    const result = await computePrice(fakeDb({ ...STORE, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 60000 }), "store", { costoUnitario: 4500, canal: "mercadolibre" });
-    expect(result.datos.tienda).toBeNull();
-    expect(result.datos.mercadolibre?.estimado).toMatchObject({ fixedFee: 900, withoutFixedFee: false });
-    const text = composePriceAnswer(result);
-    expect(text).toContain("cargo fijo $900");
-    expect(text).toContain("[[tag:estimado]]");
-    expect(text).not.toContain("sin cargo fijo");
+  it("con los ajustes de Mercado Libre: hasta el límite cargo fijo sin envío; por encima envío sin cargo fijo; ya no dice «sin cargo fijo»", async () => {
+    const low = await computePrice(fakeDb({ ...STORE, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 60000 }), "store", { costoUnitario: 4500, canal: "mercadolibre" });
+    expect(low.datos.tienda).toBeNull();
+    expect(low.datos.mercadolibre?.estimado).toMatchObject({ fixedFee: 900, shipping: 0, withoutFixedFee: false });
+    const lowText = composePriceAnswer(low);
+    expect(lowText).toContain("cargo fijo $900");
+    expect(lowText).not.toMatch(/envío \$/);
+    expect(lowText).toContain("[[tag:estimado]]");
+    expect(lowText).not.toContain("sin cargo fijo");
+
+    const high = await computePrice(fakeDb({ ...STORE, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 10000 }), "store", { costoUnitario: 4500, canal: "mercadolibre" });
+    expect(high.datos.mercadolibre?.estimado).toMatchObject({ fixedFee: 0, shipping: 8100 });
+    expect(composePriceAnswer(high)).toContain("envío $8.100");
+    expect(composePriceAnswer(high)).not.toContain("cargo fijo $");
+    amountsComeFromTool(composePriceAnswer(low), low);
   });
 
   it("sin margen mínimo lo dice; los precios de mercado de Paula dan la posición", async () => {

@@ -41,9 +41,9 @@ model Store {
   mercadoLibreMinNetPerUnit       Int                             @default(10000)
   /// Margen bruto mínimo sobre el precio en la tienda: (venta − costo con envío) / venta, en %; null = sin mínimo.
   storeMinMarginPercent           Float?                          @default(35)
-  /// Cargo fijo por unidad de Mercado Libre para productos de precio bajo, en COP; null = no registrado.
+  /// Cargo fijo por unidad de Mercado Libre en precios bajos (en vez del envío), en COP; null = no registrado.
   mercadoLibreLowPriceFixedFee    Int?
-  /// Precio desde el cual Mercado Libre exige envío gratis, en COP; null = no registrado.
+  /// Precio hasta el cual Mercado Libre cobra el cargo fijo en vez del envío, en COP; null = no registrado.
   mercadoLibreFreeShippingMin     Int?
   createdAt                       DateTime                        @default(now())
   updatedAt                       DateTime                        @updatedAt

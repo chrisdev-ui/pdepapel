@@ -3,8 +3,8 @@
 --     tienda, en %. 35 por defecto (las tiendas existentes quedan en 35);
 --     null = sin mínimo, y entonces nada se marca «por debajo del mínimo».
 --   * Store.mercadoLibreLowPriceFixedFee y Store.mercadoLibreFreeShippingMin:
---     cargo fijo por unidad de Mercado Libre para productos de precio bajo y
---     precio desde el cual exige envío gratis, en COP. Vacíos hasta que
+--     cargo fijo por unidad que Mercado Libre cobra en vez del envío en precios
+--     bajos y el precio hasta el cual lo cobra, en COP. Vacíos hasta que
 --     Christian los llene desde su cuenta; mientras tanto el Copiloto marca esas
 --     líneas «estimado, sin cargo fijo».
 --   * Category.markupOverridePercent: aumento sugerido definido por Paula para

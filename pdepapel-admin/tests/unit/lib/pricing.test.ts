@@ -62,10 +62,23 @@ describe("Mercado Libre, siempre estimado", () => {
     });
   });
 
-  it("con los ajustes, por debajo del umbral suma el cargo fijo; desde el umbral no", () => {
-    const settings = { lowPriceFixedFee: 900, freeShippingMin: 60000 };
-    expect(mercadoLibreEstimate(30000, 10000, settings)).toMatchObject({ fixedFee: 900, withoutFixedFee: false, net: 30000 - 4800 - 900 - 8100 - 450 - 10000 });
-    expect(mercadoLibreEstimate(60000, 10000, settings)).toMatchObject({ fixedFee: 0, withoutFixedFee: false });
+  it("con los ajustes, hasta el precio límite cobra el cargo fijo EN VEZ del envío; por encima, envío y sin cargo fijo", () => {
+    const settings = { lowPriceFixedFee: 2000, freeShippingMin: 9000 };
+    // Hasta el límite (incluido): sin envío a cargo de la vendedora, solo el cargo fijo.
+    expect(mercadoLibreEstimate(9000, 1000, settings)).toEqual({
+      price: 9000,
+      commission: 1440,
+      fixedFee: 2000,
+      shipping: 0,
+      withholding: 135,
+      net: 9000 - 1440 - 2000 - 135 - 1000,
+      marginPct: 49.2,
+      withoutFixedFee: false,
+    });
+    // En precios muy bajos el cargo fijo no pasa de la mitad del precio.
+    expect(mercadoLibreEstimate(3000, 500, settings)).toMatchObject({ fixedFee: 1500, shipping: 0 });
+    // Por encima del límite: el envío estimado y ningún cargo fijo.
+    expect(mercadoLibreEstimate(9001, 1000, settings)).toMatchObject({ fixedFee: 0, shipping: 8100, withoutFixedFee: false });
   });
 });
 

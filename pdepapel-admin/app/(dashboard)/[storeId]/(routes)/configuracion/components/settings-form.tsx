@@ -592,8 +592,8 @@ export const SettingsForm: React.FC<
                           <Input inputMode="numeric" disabled={loading} placeholder="No registrado" {...field} />
                         </FormControl>
                         <FormDescription>
-                          Lo que cobra Mercado Libre por unidad cuando el precio está por debajo del umbral de envío gratis. Cópialo de tu
-                          cuenta de Mercado Libre.
+                          Lo que Mercado Libre descuenta por unidad en vez del envío cuando el precio no pasa del precio límite (en precios
+                          muy bajos, hasta la mitad del precio). Cópialo del simulador de costos de tu cuenta.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -604,13 +604,13 @@ export const SettingsForm: React.FC<
                     name="mercadoLibreFreeShippingMin"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Envío gratis obligatorio desde (COP)</FormLabel>
+                        <FormLabel>Precio límite del cargo fijo (COP)</FormLabel>
                         <FormControl>
                           <Input inputMode="numeric" disabled={loading} placeholder="No registrado" {...field} />
                         </FormControl>
                         <FormDescription>
-                          Precio desde el cual Mercado Libre exige envío gratis. Sin estos dos valores, el Copiloto marca sus cálculos de
-                          Mercado Libre «estimado, sin cargo fijo».
+                          Hasta este precio se cobra el cargo fijo; por encima, el envío gratis corre por tu cuenta (con el descuento de tu
+                          reputación). Sin estos dos valores, el Copiloto marca sus cálculos de Mercado Libre «estimado, sin cargo fijo».
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

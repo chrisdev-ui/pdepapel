@@ -1,6 +1,6 @@
 import { bulletList, collapsible, heading, keyLine, numberedList, sections, tag } from "@/lib/copiloto/answer-blocks";
 import { percent } from "@/lib/copiloto/kits-rotation";
-import { MERCADOLIBRE_FEE_RATE_ESTIMATE, MERCADOLIBRE_SHIPPING_ESTIMATE } from "@/lib/mercadolibre/listing-margin";
+import { MERCADOLIBRE_FEE_RATE_ESTIMATE } from "@/lib/mercadolibre/listing-margin";
 import type { MercadoLibreEstimate } from "@/lib/pricing/price-calculator";
 
 import type { BelowMarginResult, PacksResult, PriceResult } from "./precios-tool";
@@ -14,12 +14,13 @@ import type { BelowMarginResult, PacksResult, PriceResult } from "./precios-tool
 const money = (value: number) => `${value < 0 ? "−" : ""}$${Math.abs(Math.round(value)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
 const units = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 const GROSS = "Es margen bruto, antes de la comisión de la pasarela de pago.";
-const ML_HOW = `Mercado Libre: comisión estimada del ${percent(MERCADOLIBRE_FEE_RATE_ESTIMATE * 100)} y envío estimado de ${money(MERCADOLIBRE_SHIPPING_ESTIMATE)}, no la cotización real.`;
+const ML_HOW = `Mercado Libre: comisión estimada del ${percent(MERCADOLIBRE_FEE_RATE_ESTIMATE * 100)} (más si ofreces cuotas extra) y envío estimado, no la cotización real; hasta el umbral de Configuración se cobra el cargo fijo en vez del envío.`;
 
 function mercadoLibreLine(estimate: MercadoLibreEstimate) {
   const parts = [`comisión ${money(estimate.commission)}`];
   if (estimate.fixedFee > 0) parts.push(`cargo fijo ${money(estimate.fixedFee)}`);
-  parts.push(`envío ${money(estimate.shipping)}`, `retención ${money(estimate.withholding)}`);
+  if (estimate.shipping > 0) parts.push(`envío ${money(estimate.shipping)}`);
+  parts.push(`retención ${money(estimate.withholding)}`);
   if (estimate.net !== null) parts.push(`te quedan ${money(estimate.net)}`);
   return parts;
 }
@@ -94,7 +95,7 @@ export function composePriceAnswer(result: PriceResult): string {
         tienda ? "Tienda: costo × (1 + aumento), redondeado al peso. Margen sobre el precio: (precio − costo) ÷ precio." : null,
         tienda ? GROSS : null,
         mercadolibre ? ML_HOW : null,
-        mercadolibre?.estimado?.withoutFixedFee ? "Sin el cargo fijo ni el umbral de envío gratis de Mercado Libre en Configuración: el cargo fijo no está incluido." : null,
+        mercadolibre?.estimado?.withoutFixedFee ? "Sin el cargo fijo ni su precio límite de Mercado Libre en Configuración: se estima con envío en cualquier precio." : null,
       ].filter(Boolean) as string[],
     ),
   );

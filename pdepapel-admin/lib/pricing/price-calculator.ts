@@ -46,9 +46,9 @@ export function priceToReachMargin(cost: number, marginPct: number): number | nu
 }
 
 export interface MercadoLibreFeeSettings {
-  /** Cargo fijo por unidad para productos de precio bajo; null = no registrado. */
+  /** Cargo fijo por unidad en precios bajos (en vez del envío); null = no registrado. */
   lowPriceFixedFee: number | null;
-  /** Precio desde el cual Mercado Libre exige envío gratis; null = no registrado. */
+  /** Precio hasta el cual se cobra el cargo fijo en vez del envío; null = no registrado. */
   freeShippingMin: number | null;
 }
 
@@ -65,17 +65,18 @@ export interface MercadoLibreEstimate {
 }
 
 /**
- * Lo que deja una venta en Mercado Libre, siempre como estimado: comisión de
- * Clásica estimada y el envío obligatorio estimado. Con los dos ajustes
- * registrados, un precio por debajo del umbral de envío gratis suma el cargo
- * fijo por unidad. El envío estimado se mantiene también bajo el umbral: es la
- * lectura más prudente mientras no se confirme con la cuenta (AGENTS.md).
+ * Lo que deja una venta en Mercado Libre, siempre como estimado. Por encima del
+ * umbral se paga la comisión estimada y el envío estimado. Hasta el umbral (con
+ * los dos ajustes registrados) no hay envío a cargo de la vendedora: se cobra el
+ * cargo fijo por unidad, que en precios muy bajos no pasa de la mitad del
+ * precio (lo que mostraron las ventas y el simulador de la cuenta, 2026-10-17).
  */
 export function mercadoLibreEstimate(price: number, unitCost: number | null, settings: MercadoLibreFeeSettings): MercadoLibreEstimate {
   const configured = settings.lowPriceFixedFee !== null && settings.freeShippingMin !== null;
-  const fixedFee = configured && price < (settings.freeShippingMin as number) ? (settings.lowPriceFixedFee as number) : 0;
+  const lowPrice = configured && price <= (settings.freeShippingMin as number);
+  const fixedFee = lowPrice ? Math.min(settings.lowPriceFixedFee as number, Math.round(price / 2)) : 0;
   const commission = Math.round(price * MERCADOLIBRE_FEE_RATE_ESTIMATE);
-  const breakdown = getMercadoLibreMarginBreakdown({ price, feeAmount: commission + fixedFee, shippingCost: MERCADOLIBRE_SHIPPING_ESTIMATE, unitCost });
+  const breakdown = getMercadoLibreMarginBreakdown({ price, feeAmount: commission + fixedFee, shippingCost: lowPrice ? 0 : MERCADOLIBRE_SHIPPING_ESTIMATE, unitCost });
   return {
     price,
     commission,
