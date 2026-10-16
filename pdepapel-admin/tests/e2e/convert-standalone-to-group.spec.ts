@@ -128,6 +128,8 @@ test.describe("convertir un producto suelto en grupo", () => {
     // El resultado de «Generar» va en línea junto a las variantes: ya no es un aviso flotante que tape «Crear grupo».
     await expect(page.getByTestId("generation-notice")).toContainText("3 variantes nuevas se crean al guardar, con 0 unidades.", { timeout: 30_000 });
 
+    // Ningún aviso flotante encima de «Crear grupo»: los resultados de traer y de «Generar» van en línea.
+    await expect(page.locator('[data-radix-collection-item][data-state="open"]')).toHaveCount(0);
     await page.getByRole("button", { name: "Crear grupo" }).last().click();
     await page.waitForURL((url) => !url.pathname.includes("nuevo-grupo"), { timeout: 240_000 });
 

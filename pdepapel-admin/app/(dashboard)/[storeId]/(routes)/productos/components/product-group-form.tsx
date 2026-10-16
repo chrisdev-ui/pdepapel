@@ -1360,9 +1360,6 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       form.setValue("images", [...existingImages, ...newImages], {
         shouldDirty: true,
       });
-      toast({
-        description: `${newImages.length} nuevas imágenes agregadas de los productos importados.`,
-      });
     }
 
     // 4. Los datos del grupo (precio, costo, proveedor) solo se rellenan si
@@ -1424,19 +1421,18 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       );
 
       const skipped = newVariants.length - toAdd.length;
-      toast({
+      // En línea, como el resultado de «Generar»: un aviso flotante tapaba «Crear grupo».
+      setGenerationNotice({
         title: "Productos traídos al grupo",
         description: `${toAdd.length} ${toAdd.length === 1 ? "producto se adopta" : "productos se adoptan"} con su precio, costo, stock y código.${
           skipped > 0
             ? ` ${skipped} ${skipped === 1 ? "se omitió porque ya está" : "se omitieron porque ya están"} en el grupo o repiten una combinación.`
             : ""
-        }`,
+        }${newImages.length > 0 ? ` ${newImages.length === 1 ? "Se agregó 1 imagen" : `Se agregaron ${newImages.length} imágenes`} de esos productos.` : ""}`,
         variant: "success",
       });
     } else {
-      toast({
-        description: "Los productos seleccionados ya están en el grupo.",
-      });
+      setGenerationNotice({ title: "Nada que traer", description: "Los productos seleccionados ya están en el grupo.", variant: "warning" });
     }
   };
 
@@ -1633,6 +1629,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       setPendingImageRemovals([]);
       setPendingOwnRemovals([]);
       setBlockedSave(false);
+      setGenerationNotice(null);
       await onClear();
     }
   }, [isEdit, onClear, requestConfirmation]);

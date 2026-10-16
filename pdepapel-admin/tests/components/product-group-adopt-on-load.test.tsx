@@ -69,6 +69,7 @@ class ObservadorVacio {
 }
 
 const adoptedToasts = () => mocks.toast.mock.calls.filter(([arg]) => arg?.title === "Productos traídos al grupo").length;
+const adoptedNotice = () => expect(screen.getByTestId("generation-notice")).toHaveTextContent("Productos traídos al grupo");
 
 function renderForm() {
   render(
@@ -95,19 +96,22 @@ afterEach(cleanup);
 describe("convertir un producto suelto en grupo", () => {
   it("abre el editor con el producto ya traído y su nombre", async () => {
     renderForm();
-    await waitFor(() => expect(adoptedToasts()).toBe(1));
+    // En línea junto a las variantes, nunca un aviso flotante que tape «Crear grupo».
+    await waitFor(adoptedNotice);
+    expect(adoptedToasts()).toBe(0);
     expect(screen.getAllByDisplayValue("Folder tarjetero kawaii").length).toBeGreaterThan(0);
   });
 
   it("«Descartar» deja el formulario limpio con el producto traído otra vez", async () => {
     renderForm();
-    await waitFor(() => expect(adoptedToasts()).toBe(1));
+    await waitFor(adoptedNotice);
 
     fireEvent.click(screen.getByRole("button", { name: "Descartar" }));
     fireEvent.click(await screen.findByRole("button", { name: "Limpiar" }));
 
     await waitFor(() => expect(mocks.clearStorage).toHaveBeenCalled());
-    await waitFor(() => expect(adoptedToasts()).toBe(2));
+    await waitFor(adoptedNotice);
+    expect(adoptedToasts()).toBe(0);
     expect(screen.getAllByDisplayValue("Folder tarjetero kawaii").length).toBeGreaterThan(0);
   });
 
