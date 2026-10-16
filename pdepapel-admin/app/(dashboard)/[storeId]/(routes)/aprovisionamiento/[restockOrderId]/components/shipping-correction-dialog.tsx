@@ -81,10 +81,10 @@ export function ShippingCorrectionDialog({ order, open, onOpenChange }: Shipping
       toast({
         title:
           data.changed > 0
-            ? `Envío corregido en ${data.changed} ${data.changed === 1 ? "producto" : "productos"}.`
+            ? `Envío del pedido ${orderNumber} corregido en ${data.changed} ${data.changed === 1 ? "producto" : "productos"}.`
             : data.shippingAfter !== order.shippingCost
-              ? "Envío del pedido corregido; ningún producto cambió."
-              : "El envío ya estaba así: no cambió nada.",
+              ? `Envío del pedido ${orderNumber} corregido; ningún producto cambió.`
+              : "El envío del pedido ya estaba así: no cambió nada.",
         variant: "success",
       });
       router.refresh();
@@ -108,15 +108,15 @@ export function ShippingCorrectionDialog({ order, open, onOpenChange }: Shipping
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Corregir el envío de {orderNumber}</DialogTitle>
+          <DialogTitle>Corregir el envío del pedido {orderNumber}</DialogTitle>
           <DialogDescription>
-            Escribe lo que costó en realidad el envío de toda la compra. Se reparte entre los productos según el valor de cada línea, igual que al recibir.
+            Escribe lo que costó en realidad el envío de todo el pedido. Se reparte entre los productos según el valor de cada línea, igual que al recibir.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <Label htmlFor="envio-real">Envío real de la compra</Label>
+            <Label htmlFor="envio-real">Envío real del pedido</Label>
             <CurrencyInput
               id="envio-real"
               value={shipping}

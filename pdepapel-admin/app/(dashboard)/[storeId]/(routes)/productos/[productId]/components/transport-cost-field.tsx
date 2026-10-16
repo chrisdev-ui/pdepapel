@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -57,9 +57,10 @@ export function TransportCostField({
             variant={mode === key ? "secondary" : "ghost"}
             aria-pressed={mode === key}
             disabled={disabled}
-            className="h-auto min-h-8 w-full justify-start whitespace-normal py-1 text-left"
+            className={cn("h-auto min-h-8 w-full justify-start gap-2 whitespace-normal py-1 text-left", mode === key && "font-semibold ring-1 ring-primary/40")}
             onClick={() => setMode(key)}
           >
+            <Check className={cn("h-4 w-4 shrink-0", mode === key ? "opacity-100" : "opacity-0")} aria-hidden="true" />
             {label}
           </Button>
         ))}
@@ -67,7 +68,7 @@ export function TransportCostField({
       {/* Lo calculado y el aviso van arriba de los campos: en el teléfono la barra fija de «Cambios sin guardar» tapa lo que queda debajo. */}
       {mode === "orden" && (
         <p className="text-xs text-muted-foreground" data-testid="transport-order-hint">
-          Si la compra trajo varios productos, corrige el envío en la orden de compra.
+          Si la compra trajo varios productos, corrige el envío en el pedido (Aprovisionamiento → Pedido).
         </p>
       )}
       {mode === "orden" && (

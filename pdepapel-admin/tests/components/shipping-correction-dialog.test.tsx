@@ -21,7 +21,7 @@ const plan = {
   changed: 1,
   lines: [
     { productId: "p1", name: "Cuaderno azul", received: 2, shareBefore: 3000, shareAfter: 3500, costBefore: 18000, costAfter: 18500, skipped: null },
-    { productId: "p2", name: "Resaltadores", received: 3, shareBefore: 200, shareAfter: 200, costBefore: 10200, costAfter: 10200, skipped: "No se cambia: su costo actual viene de una compra más reciente (PO-0040)." },
+    { productId: "p2", name: "Resaltadores", received: 3, shareBefore: 200, shareAfter: 200, costBefore: 10200, costAfter: 10200, skipped: "No se cambia: su costo actual viene de un pedido más reciente (PO-0040)." },
   ],
 };
 const url = "/api/store-1/restock-orders/po-1/shipping-correction";
@@ -30,7 +30,7 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 async function previewWith(value: string) {
-  fireEvent.change(screen.getByLabelText("Envío real de la compra"), { target: { value } });
+  fireEvent.change(screen.getByLabelText("Envío real del pedido"), { target: { value } });
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Ver cambios" }));
   });
@@ -61,7 +61,7 @@ describe("ShippingCorrectionDialog", () => {
       url,
       { shippingCost: 7000, confirm: true, expected: [{ productId: "p1", transportationCost: 3000 }, { productId: "p2", transportationCost: 200 }] },
     ]);
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Envío corregido en 1 producto.", variant: "success" }));
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Envío del pedido PO-0036 corregido en 1 producto.", variant: "success" }));
     expect(mocks.refresh).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -70,7 +70,7 @@ describe("ShippingCorrectionDialog", () => {
     vi.mocked(axios.post).mockResolvedValueOnce({ data: plan });
     render(<ShippingCorrectionDialog order={order} open onOpenChange={vi.fn()} />);
     await previewWith("7000");
-    fireEvent.change(screen.getByLabelText("Envío real de la compra"), { target: { value: "9000" } });
+    fireEvent.change(screen.getByLabelText("Envío real del pedido"), { target: { value: "9000" } });
     expect(screen.queryByRole("list", { name: "Cambios por producto" })).toBeNull();
     expect(screen.getByRole("button", { name: "Confirmar" })).toBeDisabled();
   });
@@ -102,7 +102,7 @@ describe("ShippingCorrectionDialog", () => {
 
   it("con el campo vacío no hay vista previa: vacío no es $ 0", () => {
     render(<ShippingCorrectionDialog order={order} open onOpenChange={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("Envío real de la compra"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Envío real del pedido"), { target: { value: "" } });
     expect(screen.getByRole("button", { name: "Ver cambios" })).toBeDisabled();
   });
 
@@ -115,7 +115,7 @@ describe("ShippingCorrectionDialog", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     });
-    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Envío del pedido corregido; ningún producto cambió." })));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Envío del pedido PO-0036 corregido; ningún producto cambió." })));
   });
 
   it("lo que no se cambia va en su propio grupo, con el motivo en una frase", async () => {
@@ -136,7 +136,7 @@ describe("ShippingCorrectionDialog", () => {
     expect(screen.getByRole("heading", { name: "No se cambian (3)" })).toBeInTheDocument();
     const skipped = within(screen.getByRole("list", { name: "Productos que no se cambian" })).getAllByRole("listitem");
     expect(skipped.map((item) => item.textContent)).toEqual([
-      "Resaltadores3 unidades recibidasNo se cambia: su costo actual viene de una compra más reciente (PO-0040).",
+      "Resaltadores3 unidades recibidasNo se cambia: su costo actual viene de un pedido más reciente (PO-0040).",
       "Kit escolar1 unidad recibidaNo se cambia: es un kit; su costo sale de sus piezas.",
       expect.stringMatching(/^Notas4 unidades recibidasSin cambio: ya tiene \$\s50 de envío por unidad\.$/),
     ]);

@@ -11,7 +11,7 @@ import { createTestPrismaClient } from "./helpers/test-database";
 /**
  * «Corregir envío» en un pedido de aprovisionamiento con mercancía recibida,
  * a 390 y 768 px: la vista previa por producto cabe en el teléfono, lo que
- * viene de una compra más reciente va aparte con su motivo, confirmar escribe
+ * viene de un pedido más reciente va aparte con su motivo, confirmar escribe
  * lo que mostró y deja un movimiento de 0 unidades por producto cambiado. Con
  * la base local de pruebas:
  *
@@ -141,8 +141,8 @@ test.describe("corregir el envío de un pedido recibido", () => {
         await expect(page.getByRole("dialog")).toBeVisible({ timeout: 1000 });
       }).toPass({ timeout: 60_000 });
       const dialog = page.getByRole("dialog");
-      await expect(dialog).toContainText("Corregir el envío de");
-      await dialog.getByLabel("Envío real de la compra").fill("11000");
+      await expect(dialog).toContainText("Corregir el envío del pedido");
+      await dialog.getByLabel("Envío real del pedido").fill("11000");
       await dialog.getByRole("button", { name: "Ver cambios" }).click();
 
       const cards = dialog.getByRole("list", { name: "Cambios por producto" }).getByRole("listitem");
@@ -153,7 +153,7 @@ test.describe("corregir el envío de un pedido recibido", () => {
       const skipped = dialog.getByRole("list", { name: "Productos que no se cambian" }).getByRole("listitem");
       await expect(skipped).toHaveCount(1);
       await expect(skipped).toContainText("Producto archivado E2E");
-      await expect(skipped).toContainText("No se cambia: su costo actual viene de una compra más reciente (PO-9999).");
+      await expect(skipped).toContainText("No se cambia: su costo actual viene de un pedido más reciente (PO-9999).");
       expect(await dialog.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-vista-previa.png`), fullPage: false });
@@ -163,7 +163,7 @@ test.describe("corregir el envío de un pedido recibido", () => {
       expect(await uncovered(confirm)).toBe(true);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-confirmar.png`), fullPage: false });
       await confirm.click();
-      await expect(page.getByText("Envío corregido en 2 productos.").first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/^Envío del pedido PO-E2E-\d+ corregido en 2 productos\.$/).first()).toBeVisible({ timeout: 30_000 });
       await expect(dialog).toBeHidden();
 
       const after = await db.product.findMany({ where: { id: { in: ALL } }, select: { id: true, transportationCost: true } });

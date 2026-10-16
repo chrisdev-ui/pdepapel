@@ -506,7 +506,7 @@ export function planShippingCorrection(input: ShippingCorrectionInput) {
       : !last
         ? "No se cambia: no se encontró su recepción en el kardex."
         : last.orderId !== order.id
-          ? `No se cambia: su costo actual viene de una compra más reciente${last.orderNumber ? ` (${displayRestockOrderNumber(last.orderNumber)})` : ""}.`
+          ? `No se cambia: su costo actual viene de un pedido más reciente${last.orderNumber ? ` (${displayRestockOrderNumber(last.orderNumber)})` : ""}.`
           : null;
     const shareAfter = skipped ? product.transportationCost : round2(entry.weighted / entry.units);
     lines.push({

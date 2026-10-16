@@ -89,6 +89,6 @@ describe("RestockOrderWorkspace", () => {
   it("ofrece «Corregir envío» cuando ya llegó mercancía y abre su diálogo", async () => {
     render(<RestockOrderWorkspace order={base} />);
     fireEvent.click(screen.getByRole("button", { name: "Corregir envío" }));
-    expect(await screen.findByRole("dialog")).toHaveTextContent("Corregir el envío de PO-0036");
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Corregir el envío del pedido PO-0036");
   });
 });

@@ -304,7 +304,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
   - «Duplicar» (`getProductSeed`) gives the copy a «no registrado» shipping.
   - Convert-to-variants copies the product's real value, never the legacy 1.000.
   - A receipt with «actualizar costos» replaces an empty, 0 or legacy value with the order's real share instead of averaging them (`receive/route.ts`).
-- **Form:** `TransportCostField` offers «Por unidad» or «Envío de la compra (solo este producto)» (the purchase's shipping ÷ units, `perUnitFromOrder`; only the per-unit value is saved). The second option shows the hint «Si la compra trajo varios productos, corrige el envío en la orden de compra.», because dividing the whole shipping by one product's units overcharges that product. It warns, without blocking, when shipping is ≥ the purchase cost or > 25 % of the price (`transportWarning`).
+- **Form:** `TransportCostField` offers «Por unidad» or «Envío de la compra (solo este producto)» (the purchase's shipping ÷ units, `perUnitFromOrder`; only the per-unit value is saved). The second option shows the hint «Si la compra trajo varios productos, corrige el envío en el pedido (Aprovisionamiento → Pedido).», because dividing the whole shipping by one product's units overcharges that product. It warns, without blocking, when shipping is ≥ the purchase cost or > 25 % of the price (`transportWarning`).
 - **List view «Transporte por revisar»:** active products at the legacy 1.000 or with that warning (`needsTransportReview`).
 - **Data correction:**
   - Rule approved by Paula on 2026-10-16: real per-unit shipping of the last receipt, split like the receipt does; otherwise null. Archived products follow the same rule, with no review.
@@ -316,7 +316,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
   - Only for PARTIALLY_RECEIVED or COMPLETED orders (409 otherwise). Paula types the real total shipping; `planShippingCorrection` (`lib/restock-orders.ts`) splits it by line value with the same `transportationShare` as the receipt, weighted over the received units of each product.
   - **Last receipt wins:** a product changes only if its latest `RESTOCK_RECEIVED` movement points to this order. Same rule as the 2026-10-16 data fix.
   - The preview shows two groups, «Cambian» and «No se cambian». Each skipped product carries its reason as one sentence built in `planShippingCorrection`:
-    - «No se cambia: su costo actual viene de una compra más reciente (PO-…)»: it is corrected from that later order.
+    - «No se cambia: su costo actual viene de un pedido más reciente (PO-…)»: it is corrected from that later order.
     - «No se cambia: es un kit; su costo sale de sus piezas»: a kit's own shipping stays as it is, like in the data fix.
     - «No se cambia: no se encontró su recepción en el kardex».
     - Products that already hold the new value are also listed under «No se cambian».

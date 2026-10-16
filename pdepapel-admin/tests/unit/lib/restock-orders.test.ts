@@ -214,7 +214,7 @@ describe("corregir el envío de un pedido ya recibido", () => {
     const plan = planShippingCorrection({ order, products: withKit, lastOrderByProduct: lastOrders, newShipping: 19000 });
     expect(plan.lines.map((line) => [line.productId, line.shareBefore, line.shareAfter, line.skipped])).toEqual([
       ["sello", 300, 300, "No se cambia: es un kit; su costo sale de sus piezas."],
-      ["cartuchera", null, null, "No se cambia: su costo actual viene de una compra más reciente (PO-0002)."],
+      ["cartuchera", null, null, "No se cambia: su costo actual viene de un pedido más reciente (PO-0002)."],
       ["notas", 0, 0, "No se cambia: no se encontró su recepción en el kardex."],
     ]);
     expect(plan.changed).toBe(0);

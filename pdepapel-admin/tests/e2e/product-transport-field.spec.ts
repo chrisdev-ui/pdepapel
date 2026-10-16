@@ -66,7 +66,7 @@ test.describe("envío por unidad en la ficha", () => {
           return box.top >= 0 && box.bottom <= window.innerHeight && top !== null && element.contains(top);
         });
       expect(await uncovered("transport-per-unit")).toBe(true);
-      await expect(field.getByTestId("transport-order-hint")).toHaveText("Si la compra trajo varios productos, corrige el envío en la orden de compra.");
+      await expect(field.getByTestId("transport-order-hint")).toHaveText("Si la compra trajo varios productos, corrige el envío en el pedido (Aprovisionamiento → Pedido).");
       expect(await uncovered("transport-order-hint")).toBe(true);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-envio-de-la-compra.png`), fullPage: false });
 

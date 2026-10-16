@@ -17,7 +17,7 @@ describe("envío y otros gastos en la ficha", () => {
     fireEvent.change(screen.getByLabelText("Unidades de la compra"), { target: { value: "100" } });
     expect(onChange).toHaveBeenLastCalledWith(10);
     expect(screen.getByTestId("transport-per-unit").textContent).toMatch(/10 por unidad/);
-    expect(screen.getByTestId("transport-order-hint").textContent).toBe("Si la compra trajo varios productos, corrige el envío en la orden de compra.");
+    expect(screen.getByTestId("transport-order-hint").textContent).toBe("Si la compra trajo varios productos, corrige el envío en el pedido (Aprovisionamiento → Pedido).");
   });
 
   it("sin unidades todavía no guarda nada y lo pide", () => {
