@@ -72,6 +72,26 @@ export interface PlanProduct {
   averagedAfterBackfill: boolean;
   convertedVariant: boolean;
   lastReceipt: LastReceipt | null;
+  /**
+   * Para una recepción vieja (sin registro de recepción): el envío por unidad
+   * que guardó su movimiento (costo puesto en bodega − costo de la línea).
+   * Manda sobre lo que se recalcula del pedido. undefined = no se revisó.
+   */
+  storedShare?: number | null;
+}
+
+export const UNTRUSTED_SHIPPING = "sin dato confiable: el pedido dice un envío y la recepción guardó 0";
+
+/** Lo que guardó la recepción manda; si guardó 0 y el pedido dice envío, no hay dato confiable. */
+function receiptValue(product: PlanProduct): { value: number | null; untrusted: boolean; fromStored: boolean } {
+  const computed = proposedTransport(product.lastReceipt);
+  if (product.lastReceipt?.kind !== "pedido" || product.storedShare === undefined || product.storedShare === null || computed === null) {
+    return { value: computed, untrusted: false, fromStored: false };
+  }
+  const stored = Math.max(0, product.storedShare);
+  if (Math.abs(stored - computed) < 1) return { value: computed, untrusted: false, fromStored: false };
+  if (stored > 0) return { value: Math.round(stored * 100) / 100, untrusted: false, fromStored: true };
+  return { value: null, untrusted: true, fromStored: false };
 }
 
 export interface PlanRow {
@@ -97,7 +117,8 @@ export interface PlanRow {
 export function planRow(product: PlanProduct): PlanRow | null {
   const grupo = transportGroup(product);
   if (!grupo) return null;
-  const newTransport = product.isKit ? null : proposedTransport(product.lastReceipt);
+  const fromReceipt = receiptValue(product);
+  const newTransport = product.isKit ? null : fromReceipt.value;
   if (newTransport === product.transportationCost) return null;
   const available = Math.max(0, product.stock - product.reservedUnits);
   const costBefore = unitCost(product.acqPrice, product.transportationCost);
@@ -108,6 +129,7 @@ export function planRow(product: PlanProduct): PlanRow | null {
   const exceptions = product.isArchived || product.isKit
     ? []
     : [
+        ...(fromReceipt.untrusted ? [UNTRUSTED_SHIPPING] : []),
         ...(grupo === "b2-despues" ? [product.convertedVariant ? "1.000 copiado al convertir en variantes" : "1.000 después del 18 de septiembre: copiado al duplicar o escrito a mano"] : []),
         ...(grupo === "d-promediado" ? ["el valor salió de promediar una recepción con el 1.000"] : []),
         ...(newTransport !== null && product.price > 0 && newTransport > SHARE_OF_PRICE_TO_REVIEW * product.price ? ["el envío real por unidad pasa del 25 % del precio"] : []),
@@ -126,7 +148,7 @@ export function planRow(product: PlanProduct): PlanRow | null {
     source: product.isKit
       ? "kit: su costo es el de sus piezas"
       : r
-        ? `${r.kind === "recepcion" ? "recepción" : "pedido"} ${r.orderNumber ?? "sin número"} (${r.at.toISOString().slice(0, 10)})`
+        ? `${r.kind === "recepcion" ? "recepción" : fromReceipt.fromStored ? "lo guardado en la recepción del pedido" : "pedido"} ${r.orderNumber ?? "sin número"} (${r.at.toISOString().slice(0, 10)})`
         : "sin recepción: no registrado",
     price: product.price,
     acqPrice: product.acqPrice,

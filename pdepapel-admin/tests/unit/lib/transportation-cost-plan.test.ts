@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTransportWrites, listingImpact, planRow, proposedTransport, transportGroup, type PlanProduct } from "@/lib/transportation-cost-plan";
+import { UNTRUSTED_SHIPPING, buildTransportWrites, listingImpact, planRow, proposedTransport, transportGroup, type PlanProduct } from "@/lib/transportation-cost-plan";
 
 const before = new Date("2026-08-01T00:00:00Z");
 const formWeek = new Date("2026-09-15T00:00:00Z");
@@ -61,6 +61,20 @@ describe("corrección del envío por unidad", () => {
     expect(higher.exceptions).toEqual(["el margen baja: el envío real pasa de lo que tenía"]);
     const quiet = planRow(product({ price: 20000, acqPrice: 9000 }))!;
     expect(quiet).toMatchObject({ newTransport: null, source: "sin recepción: no registrado", exceptions: [], aprobado: true });
+  });
+
+  it("recepción vieja: lo que guardó su movimiento manda sobre lo recalculado del pedido", () => {
+    const order = { kind: "pedido" as const, orderNumber: "PO-5", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 1000 };
+    // Coincide (10 calculado, 10 guardado): se queda.
+    expect(planRow(product({ price: 20000, lastReceipt: order, storedShare: 10.2 }))).toMatchObject({ newTransport: 10, aprobado: true, source: "pedido PO-5 (2026-10-01)" });
+    // Guardó otro valor real: manda lo guardado.
+    expect(planRow(product({ price: 20000, lastReceipt: order, storedShare: 25 }))).toMatchObject({ newTransport: 25, aprobado: true, source: "lo guardado en la recepción del pedido PO-5 (2026-10-01)" });
+    // Guardó 0 y el pedido dice envío: sin dato confiable, null, para Paula.
+    const untrusted = planRow(product({ price: 20000, lastReceipt: order, storedShare: 0 }))!;
+    expect(untrusted).toMatchObject({ newTransport: null, aprobado: false });
+    expect(untrusted.exceptions).toEqual([UNTRUSTED_SHIPPING]);
+    // Sin movimiento guardado: lo recalculado, como lo reparte la recepción.
+    expect(planRow(product({ price: 20000, lastReceipt: order, storedShare: null }))).toMatchObject({ newTransport: 10, aprobado: true });
   });
 
   it("kits: su envío propio queda null sin revisión, aunque el costo de sus piezas los deje bajo costo", () => {
