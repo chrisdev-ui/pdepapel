@@ -1,4 +1,5 @@
 import { availableStock } from "@/lib/available-stock";
+import { roundDown900, roundUp900 } from "@/lib/pricing/rounding";
 import { newWithoutSalesData, rankSlowMovers, type SalesHistory, type SlowMover } from "@/lib/sales-velocity";
 import { EVERYDAY_USES, foldWords, matchesOccasion, type Occasion } from "@/lib/season-calendar";
 
@@ -197,16 +198,7 @@ export const MAX_TARGET_DISCOUNT_PCT = 20;
 /** Por debajo de esto el kit no le dice nada a la clienta. */
 export const MIN_ATTRACTIVE_DISCOUNT_PCT = 5;
 
-/** El precio terminado en 900 más alto que no pasa de `value` (117.656 → 116.900). */
-export function roundDown900(value: number): number {
-  if (value < 900) return 0;
-  return Math.floor((value - 900) / 1000) * 1000 + 900;
-}
-
-/** El precio terminado en 900 más bajo que no baja de `value`. */
-export function roundUp900(value: number): number {
-  return Math.max(900, Math.ceil((value - 900) / 1000) * 1000 + 900);
-}
+export { roundDown900, roundUp900 } from "@/lib/pricing/rounding";
 
 export interface KitPricing {
   sum: number;

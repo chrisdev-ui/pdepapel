@@ -39,6 +39,12 @@ model Store {
   mercadoLibreTargetMarginPercent Float                           @default(20)
   /// Ganancia neta mínima por unidad en Mercado Libre, en COP.
   mercadoLibreMinNetPerUnit       Int                             @default(10000)
+  /// Margen bruto mínimo sobre el precio en la tienda: (venta − costo con envío) / venta, en %; null = sin mínimo.
+  storeMinMarginPercent           Float?                          @default(35)
+  /// Cargo fijo por unidad de Mercado Libre para productos de precio bajo, en COP; null = no registrado.
+  mercadoLibreLowPriceFixedFee    Int?
+  /// Precio desde el cual Mercado Libre exige envío gratis, en COP; null = no registrado.
+  mercadoLibreFreeShippingMin     Int?
   createdAt                       DateTime                        @default(now())
   updatedAt                       DateTime                        @updatedAt
   types                           Type[]                          @relation("StoreToType")
@@ -219,6 +225,8 @@ model Category {
   seoDescription                 String?                         @db.VarChar(170)
   seoIntro                       String?                         @db.Text
   imageUrl                       String?                         @db.Text
+  /// Aumento sugerido sobre el costo con envío, en %, definido por Paula; gana sobre la mediana de la categoría.
+  markupOverridePercent          Float?
   createdAt                      DateTime                        @default(now())
   updatedAt                      DateTime                        @updatedAt
   isArchived                     Boolean                         @default(false)
