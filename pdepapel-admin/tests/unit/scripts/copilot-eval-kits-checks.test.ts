@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { composeKitsAnswer, type KitData, type KitsAnswerData } from "../../../lib/copiloto/skills/kits-answer";
 import { KITS_CASES } from "../../../scripts/copilot-eval/questions";
 
 /** Las comprobaciones de la evaluación de kits, sin llamar al modelo: también tienen que reprobar lo que deben reprobar. */
@@ -44,43 +45,92 @@ describe("kits-en-alza", () => {
   });
 });
 
-const kitA = "- **Kit de grados**\n  - Libreta lenta Eval (lento): $9.000\n  - Borrador Eval (se vende): $3.000 · comparte stock con «Kit de carpetas»\n  - Se pueden armar 4 · ahorro $3.600 (14,1 %).";
-const kitB = (armables: number) => `- **Kit de carpetas**\n  - Carpeta lenta Eval (lento): $9.000\n  - Borrador Eval (se vende): $3.000 · comparte stock con «Kit de grados»\n  - Se pueden armar ${armables} · ahorro $3.100 (17,2 %).`;
-const lentos = "- **Libreta lenta Eval:** 8 disponibles.\n- **Sobre lento Eval:** 40 disponibles.";
+/** Respuestas con la forma real: las arma el mismo código que el chat. Valores de prueba. */
+const kit = (name: string, slow: string, armables: number, shares: string): KitData => ({
+  nombreSugerido: name,
+  ocasion: null,
+  marcador: name === "Kit de grados" ? "[[KIT-1]]" : "[[KIT-2]]",
+  piezas: [
+    { nombre: slow, rol: "lento", precioEfectivo: 9000 },
+    { nombre: "Borrador Eval", rol: "se vende", precioEfectivo: 3000, comparteStockCon: [shares] },
+  ],
+  kitsArmables: armables,
+  sumaPreciosEfectivos: 12000,
+  precioSugerido: 10900,
+  ahorroPct: 9.2,
+  margenPct: 50,
+  margenBajo: false,
+  señales: [`${slow}: 120 días sin venderse`],
+});
+const datos = (kits: KitData[], lowValue = 1): KitsAnswerData => ({
+  criterios: { diasSinVenta: 90 },
+  totalLentos: 3,
+  plataQuietaACostoTotal: 30000,
+  lentosSinCosto: 0,
+  lentos: [
+    { nombre: "Libreta lenta Eval", disponible: 8, plataQuietaACosto: 24000, ultimaVenta: "hace 120 días" },
+    { nombre: "Sobre lento Eval", disponible: 40, plataQuietaACosto: 6000, ultimaVenta: "hace 150 días" },
+  ],
+  nuevosSinDatosDeVenta: { cantidad: 1 },
+  quietosDeBajoValor: { cantidad: lowValue, nombres: lowValue ? ["Sobre lento Eval"] : [] },
+  kits,
+});
+const MODEL = "[[KIT-1]] Kit de grados\n✨ Lo que amarás\n- Algo\n📦 Incluye: Libreta y Borrador\n[[KIT-2]] Kit de carpetas\n📦 Incluye: Carpeta y Borrador";
+const kitA = kit("Kit de grados", "Libreta lenta Eval", 4, "Kit de carpetas");
+const kitB = (armables: number) => kit("Kit de carpetas", "Carpeta lenta Eval", armables, "Kit de grados");
 
 describe("kits-stock-compartido", () => {
   const pasa = check("kits-stock-compartido");
   it("aprueba dos kits que comparten el borrador, lo dicen y suman 9 o menos", () => {
-    expect(pasa(answer([lentos, kitA, kitB(4)].join("\n\n")))).toBe(true);
+    expect(pasa(answer(composeKitsAnswer(datos([kitA, kitB(4)]), MODEL)))).toBe(true);
   });
   it("reprueba si los dos dicen poder armar más de lo que hay", () => {
-    expect(pasa(answer([kitA, kitB(8)].join("\n\n")))).toBe(false);
+    expect(pasa(answer(composeKitsAnswer(datos([kitA, kitB(8)]), MODEL)))).toBe(false);
   });
   it("reprueba si no dice que comparten stock", () => {
-    expect(pasa(answer([kitA, kitB(4)].join("\n\n").replaceAll(/ · comparte stock con «[^»]+»/g, "")))).toBe(false);
+    expect(pasa(answer(composeKitsAnswer(datos([kitA, kitB(4)]), MODEL).replaceAll(/\n {2}- comparte stock con «[^»]+»/g, "")))).toBe(false);
   });
 });
 
 describe("kits-valor-minimo", () => {
   const pasa = check("kits-valor-minimo");
-  it("el sobre en la lista de lentos y en la línea de bajo valor está bien", () => {
-    expect(pasa(answer([lentos, kitA, "Quietos de bajo valor: 1 (mejor en promo o combo de caja)."].join("\n\n")))).toBe(true);
+  it("el sobre en la lista de quietos y en las notas de bajo valor está bien", () => {
+    expect(pasa(answer(composeKitsAnswer(datos([kitA]), MODEL)))).toBe(true);
   });
-  it("reprueba el sobre como pieza de un kit, o sin la línea de bajo valor", () => {
-    expect(pasa(answer([kitA.replace("Libreta lenta Eval (lento): $9.000", "Sobre lento Eval (lento): $500"), "Quietos de bajo valor: 1 (mejor en promo o combo de caja)."].join("\n\n")))).toBe(false);
-    expect(pasa(answer([lentos, kitA].join("\n\n")))).toBe(false);
+  it("reprueba el sobre como pieza de un kit, o sin la nota de bajo valor", () => {
+    expect(pasa(answer(composeKitsAnswer(datos([kit("Kit de grados", "Sobre lento Eval", 4, "Kit de carpetas")]), MODEL)))).toBe(false);
+    expect(pasa(answer(composeKitsAnswer(datos([kitA], 0), MODEL)))).toBe(false);
   });
 });
 
-describe("kits-formato-anidado y kits-una-linea-nuevos", () => {
-  it("las piezas sangradas aprueban; al mismo nivel que el kit reprueban", () => {
-    expect(check("kits-formato-anidado")(answer(kitA))).toBe(true);
-    expect(check("kits-formato-anidado")(answer(kitA.replaceAll("\n  - ", "\n- ")))).toBe(false);
+describe("kits-formato, kits-una-linea-nuevos, kits-sin-jerga y kits-montos-de-la-herramienta", () => {
+  it("la respuesta armada pasa el formato; la vieja (viñetas planas) no", () => {
+    expect(check("kits-formato")(answer(composeKitsAnswer(datos([kitA]), MODEL)))).toBe(true);
+    expect(check("kits-formato")(answer("- **Kit de grados**\n  - Libreta lenta Eval (lento): $9.000\n  - Se pueden armar 4 · ahorro $3.600 (14,1 %)."))).toBe(false);
   });
   it("una sola línea de nuevos; repetida con otras palabras reprueba", () => {
-    const fixed = "Nuevos sin datos de venta: 1 (no se tratan como lentos).";
-    expect(check("kits-una-linea-nuevos")(answer(`${kitA}\n\n${fixed}`))).toBe(true);
-    expect(check("kits-una-linea-nuevos")(answer(`Hay 1 producto nuevo sin datos de venta.\n\n${kitA}\n\n${fixed}`))).toBe(false);
+    const text = composeKitsAnswer(datos([kitA]), MODEL);
+    expect(check("kits-una-linea-nuevos")(answer(text))).toBe(true);
+    expect(check("kits-una-linea-nuevos")(answer(`Hay 1 producto nuevo sin datos de venta.\n\n${text}`))).toBe(false);
+  });
+  it("sin jerga: un nombre de herramienta o «(lento)» reprueba", () => {
+    const text = composeKitsAnswer(datos([kitA]), MODEL);
+    expect(check("kits-sin-jerga")(answer(text))).toBe(true);
+    expect(check("kits-sin-jerga")(answer(`Según kitsParaRotar…\n${text}`))).toBe(false);
+    expect(check("kits-sin-jerga")(answer("Libreta (lento): $9.000"))).toBe(false);
+  });
+  it("cada monto sale de la herramienta; uno recalculado reprueba", () => {
+    const tool = { tool: "kitsParaRotar", output: { datos: datos([kitA]) } };
+    const text = composeKitsAnswer(datos([kitA]), MODEL);
+    const withTool = (body: string) => ({ ...answer(body), main: { ...answer(body).main, toolOutputs: [tool] } });
+    expect(check("kits-montos-de-la-herramienta")(withTool(text))).toBe(true);
+    expect(check("kits-montos-de-la-herramienta")(withTool(text.replace("$10.900", "$10.899")))).toBe(false);
+  });
+  it("«margen bajo» solo debajo del criterio del panel", () => {
+    const tool = (pct: number) => ({ tool: "kitsParaRotar", output: { datos: { criterios: { margenCriterioPanelPct: pct } } } });
+    const withTool = (body: string, pct: number) => ({ ...answer(body), main: { ...answer(body).main, toolOutputs: [tool(pct)] } });
+    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 30 % [[tag:margen bajo]] · alcanza para 4 kits", 35))).toBe(true);
+    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 50 % [[tag:margen bajo]] · alcanza para 4 kits", 35))).toBe(false);
+    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 30 % · alcanza para 4 kits", 35))).toBe(false);
   });
 });
-

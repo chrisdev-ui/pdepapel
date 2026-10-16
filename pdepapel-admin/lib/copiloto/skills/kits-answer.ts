@@ -90,8 +90,12 @@ const emojiFor = (kit: KitData) => OCCASION_EMOJI.find(([pattern]) => pattern.te
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 const sinVentas = (ultimaVenta: string) => (/más de un año/.test(ultimaVenta) ? "sin ventas en más de un año" : `sin ventas ${ultimaVenta}`);
 
-function kitBlock(kit: KitData, model: { name: string | null; copy: string } | undefined): string {
-  const name = model?.name ?? kit.nombreSugerido;
+const DAY_MONTH = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "UTC" });
+/** «Grados el 2026-11-25» → «Grados (25 de noviembre)». */
+const friendlyDates = (line: string) => line.replace(/ el (\d{4}-\d{2}-\d{2})\b/g, (_match, iso: string) => ` (${DAY_MONTH.format(new Date(`${iso}T00:00:00Z`))})`);
+
+function kitBlock(kit: KitData, model: { name: string | null; copy: string } | undefined, shownName: (name: string) => string): string {
+  const name = shownName(kit.nombreSugerido);
   const separado = `por separado ${pesos(kit.sumaPreciosEfectivos)}`;
   const rest = [
     ...(kit.precioSugerido !== null ? [separado] : []),
@@ -103,7 +107,7 @@ function kitBlock(kit: KitData, model: { name: string | null; copy: string } | u
   const items = kit.piezas.map((piece) => {
     const price = `${pesos(piece.precioEfectivo)}${piece.oferta && piece.precioDeLista ? ` (oferta «${piece.oferta}», antes ${pesos(piece.precioDeLista)})` : ""}`;
     const line = `- ${piece.nombre} · ${price} ${tag(piece.rol === "lento" ? "quieto" : "se vende")}`;
-    return piece.comparteStockCon?.length ? `${line}\n  - comparte stock con ${piece.comparteStockCon.map((other) => `«${other}»`).join(" y ")}` : line;
+    return piece.comparteStockCon?.length ? `${line}\n  - comparte stock con ${piece.comparteStockCon.map((other) => `«${shownName(other)}»`).join(" y ")}` : line;
   });
   const notes = [
     ...(kit.sinCostoDe?.length ? [`Sin costo de ${kit.sinCostoDe.join(", ")}: no se calcula margen ni precio mínimo.`] : []),
@@ -116,7 +120,7 @@ function kitBlock(kit: KitData, model: { name: string | null; copy: string } | u
     key,
     items.join("\n"),
     notes.join("\n"),
-    kit.señales?.length ? collapsible("Por qué estos productos", bulletList(kit.señales)) : null,
+    kit.señales?.length ? collapsible("Por qué estos productos", bulletList(kit.señales.map(friendlyDates))) : null,
     model?.copy ? copyBlock("Texto para la ficha", model.copy) : null,
   );
 }
@@ -146,8 +150,11 @@ export function composeKitsAnswer(datos: KitsAnswerData, modelText: string): str
 
   const model = readModelKits(modelText);
   const kits = datos.kits ?? [];
+  // El mismo nombre en el título del kit y donde otro kit dice que comparte stock con él.
+  const names = new Map(kits.map((kit) => [kit.nombreSugerido, (kit.marcador && model.get(kit.marcador)?.name) || kit.nombreSugerido]));
+  const shownName = (name: string) => names.get(name) ?? name;
   const kitsSection = kits.length
-    ? sections(heading(`${plural(kits.length, "kit sugerido", "kits sugeridos")}`), ...kits.map((kit) => kitBlock(kit, kit.marcador ? model.get(kit.marcador) : undefined)))
+    ? sections(heading(`${plural(kits.length, "kit sugerido", "kits sugeridos")}`), ...kits.map((kit) => kitBlock(kit, kit.marcador ? model.get(kit.marcador) : undefined, shownName)))
     : sections(heading("Kits"), "No encontré kits que convengan con estos productos.");
 
   const lowValue = datos.quietosDeBajoValor?.cantidad ?? 0;

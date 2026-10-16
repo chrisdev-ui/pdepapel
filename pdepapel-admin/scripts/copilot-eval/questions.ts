@@ -20,6 +20,8 @@ export interface EvalAnswer {
   skillsLoaded: string[];
   /** Productos que `productoParaDescripcion` encontró (nombre de la ficha). */
   found: string[];
+  /** Lo que devolvió cada herramienta, para comparar las cifras de la respuesta. */
+  toolOutputs?: { tool: string; output: unknown }[];
 }
 
 export interface EvalQuestion {
@@ -567,7 +569,20 @@ type KitsAnswers = { main: EvalAnswer; followUp: EvalAnswer; empty: EvalAnswer; 
 
 const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 /** Cada kit: desde una viñeta de primer nivel o un párrafo nuevo, el bloque que trae «Se pueden armar» (la lista de lentos no lo trae). */
-const kitBlocks = (text: string) => text.split(/\n(?=[-*] )|\n{2,}/).filter((block) => /Se pueden armar/i.test(block));
+/** Cada kit es su bloque «### …» hasta el siguiente encabezado. */
+const kitBlocks = (text: string) => text.split(/\n(?=#{2,3} )/).filter((block) => /^### /.test(block) && /alcanza para \d+ kits?/i.test(block));
+const AMOUNT = /\$\s?\d{1,3}(?:[.,]\d{3})+|\$\s?\d+/g;
+/** Cada número y cada monto que devolvió una herramienta: los únicos montos que la respuesta puede traer. */
+export function toolAmounts(value: unknown, found = new Set<string>()): Set<string> {
+  if (typeof value === "number" && Number.isFinite(value)) found.add(String(Math.round(value)));
+  else if (typeof value === "string") Array.from(value.matchAll(AMOUNT), (match) => match[0].replace(/\D+/g, "")).forEach((amount) => found.add(amount));
+  else if (Array.isArray(value)) value.forEach((item) => toolAmounts(item, found));
+  else if (value && typeof value === "object") Object.values(value).forEach((item) => toolAmounts(item, found));
+  return found;
+}
+const amountsOf = (text: string) => Array.from(text.matchAll(AMOUNT), (match) => match[0].replace(/\D+/g, ""));
+/** Nombres de herramientas, de campos y jerga que Paula nunca debe ver. */
+export const JARGON = /kitsParaRotar|resumenDeHoy|resumenFinancieroMes|compararMeses|ventasDelDiaPuntoDeVenta|buscarProductos|detalleProducto|kardexProducto|porReponer|riesgoInventario|reporteTributario|saludMercadoLibre|productosParaPromocionar|cargarHabilidad|productoParaDescripcion|plataQuieta|nombreSugerido|precioSugerido|kitsArmables|margenPct|ahorroPct|precios? efectivos?|\((lento|se vende)\)/i;
 const mentions = (answer: EvalAnswer, name: string) => fold(answer.text).includes(fold(name).replace(/ eval$/, ""));
 
 export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa: (a: KitsAnswers) => boolean }[] = [
@@ -649,10 +664,10 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
   },
   {
     id: "kits-descuento",
-    criterio: "Cada kit muestra su ahorro en pesos y en % («ahorro $X (Y %)»), de al menos 5 %.",
+    criterio: "La línea clave de cada kit trae su ahorro en % («ahorro Y %»), de al menos 5 %.",
     estricto: false,
     pasa: ({ main }) => {
-      const found = Array.from(main.text.matchAll(/ahorro[^$\n]{0,40}\$\s?[\d.]+\s*\((\d+(?:[.,]\d+)?)\s?%\)/gi));
+      const found = Array.from(main.text.matchAll(/ahorro (\d+(?:[.,]\d+)?)\s?%/gi));
       return found.length > 0 && found.every((match) => Number(match[1].replace(",", ".")) >= 5);
     },
   },
@@ -664,9 +679,9 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
   },
   {
     id: "kits-linea-nuevos",
-    criterio: "Trae la línea fija «Nuevos sin datos de venta: 1 (no se tratan como lentos)».",
+    criterio: "El resumen dice que 1 producto nuevo no se cuenta y por qué.",
     estricto: true,
-    pasa: ({ main }) => /Nuevos sin datos de venta:\s*1\b/i.test(main.text),
+    pasa: ({ main }) => /No cuento 1 producto nuevo: entraron hace menos de \d+ días/i.test(main.text),
   },
   {
     id: "kits-descripcion",
@@ -680,7 +695,7 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
     estricto: true,
     pasa: ({ main }) => {
       const blocks = kitBlocks(main.text).filter((block) => fold(block).includes(fold(KITS_FIXTURE.piezaCompartida)));
-      const armables = blocks.map((block) => Number(block.match(/Se pueden armar (\d+)/)?.[1] ?? NaN));
+      const armables = blocks.map((block) => Number(block.match(/alcanza para (\d+) kits?/)?.[1] ?? NaN));
       return blocks.length >= 2 && /comparte stock/i.test(main.text) && armables.every(Number.isFinite) && armables.reduce((a, b) => a + b, 0) <= KITS_FIXTURE.stockPiezaCompartida;
     },
   },
@@ -698,12 +713,11 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
   },
   {
     id: "kits-valor-minimo",
-    criterio: "El lento de bajo valor no es pieza de ningún kit y sale en «Quietos de bajo valor: 1».",
+    criterio: "El lento de bajo valor no es pieza de ningún kit y sale en las notas («1 quieto de bajo valor…»).",
     estricto: true,
     pasa: ({ main }) =>
-      /Quietos de bajo valor:\s*1\b/i.test(main.text) &&
-      kitBlocks(main.text).every((block) => !fold(block).includes(fold(KITS_FIXTURE.bajoValor).replace(/ eval$/, ""))) &&
-      main.text.split("\n").every((line) => !(fold(line).includes(fold(KITS_FIXTURE.bajoValor).replace(/ eval$/, "")) && /\((lento|se vende)\)/.test(line))),
+      /1 quieto de bajo valor/i.test(main.text) &&
+      kitBlocks(main.text).every((block) => !fold(block).includes(fold(KITS_FIXTURE.bajoValor).replace(/ eval$/, ""))),
   },
   {
     id: "kits-una-linea-nuevos",
@@ -712,12 +726,24 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
     pasa: ({ main }) => main.text.split("\n").filter((line) => /(?<![\d.,])1(?![\d.,]\d|\d)/.test(line) && /\bnuev[oa]s?\b|sin (suficientes )?datos de venta/i.test(line)).length === 1,
   },
   {
-    id: "kits-formato-anidado",
-    criterio: "Las líneas de piezas van como viñetas dentro del kit (sangradas), no al mismo nivel que su nombre.",
-    estricto: false,
+    id: "kits-formato",
+    criterio: "Resumen, los N con más plata quieta, cada kit con su línea clave, piezas con etiqueta, «Por qué» y «Texto para la ficha» plegados, y notas.",
+    estricto: true,
     pasa: ({ main }) => {
-      const pieces = main.text.split("\n").filter((line) => /\((lento|se vende)\):/.test(line));
-      return pieces.length > 0 && pieces.every((line) => /^\s{2,}[-*]\s/.test(line));
+      const blocks = kitBlocks(main.text);
+      return (
+        /^## Resumen$/m.test(main.text) &&
+        /^## Los \d+ con más plata quieta$/m.test(main.text) &&
+        /^## Notas$/m.test(main.text) &&
+        blocks.length > 0 &&
+        blocks.every(
+          (block) =>
+            /^\*\*[^*]+\*\* · .*alcanza para \d+ kits?$/m.test(block) &&
+            /^- .+ · \$[\d.]+.*\[\[tag:(quieto|se vende)\]\]$/m.test(block) &&
+            /^:::detalle Por qué estos productos$/m.test(block) &&
+            /^:::copiar Texto para la ficha$/m.test(block),
+        )
+      );
     },
   },
   {
@@ -728,11 +754,17 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
   },
   {
     id: "kits-detalle-una-vez",
-    criterio: "El detalle de cada kit sale una sola vez (ninguna línea «Se pueden armar …» repetida).",
+    criterio: "La lista de piezas de cada kit sale una sola vez fuera del texto para la ficha (una pieza compartida sale en cada uno de sus kits).",
     estricto: true,
     pasa: ({ main }) => {
-      const lines = main.text.split("\n").map((line) => line.trim()).filter((line) => /Se pueden armar/i.test(line));
-      return lines.length > 0 && new Set(lines).size === lines.length;
+      const blocks = kitBlocks(main.text);
+      return (
+        blocks.length > 0 &&
+        blocks.every((block) => {
+          const lines = block.replace(/:::copiar[\s\S]*?\n:::/g, "").split("\n").filter((line) => /\[\[tag:(quieto|se vende)\]\]$/.test(line));
+          return lines.length > 0 && new Set(lines).size === lines.length;
+        })
+      );
     },
   },
   {
@@ -745,10 +777,30 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
     },
   },
   {
-    id: "kits-marcador-en-su-lugar",
-    criterio: "El modelo pone el marcador de cada kit: ningún detalle tiene que agregarse al final.",
-    estricto: false,
-    pasa: ({ main }) => !/Detalle de «/.test(main.text),
+    id: "kits-sin-jerga",
+    criterio: "Ni nombres de herramientas ni de campos ni jerga («precio efectivo», «(lento)») en la respuesta.",
+    estricto: true,
+    pasa: ({ main, followUp }) => !JARGON.test(main.text) && !JARGON.test(followUp.text),
+  },
+  {
+    id: "kits-montos-de-la-herramienta",
+    criterio: "Cada monto de la respuesta sale de la herramienta (ni recalculado ni redondeado distinto).",
+    estricto: true,
+    pasa: ({ main }) => {
+      const allowed = toolAmounts((main.toolOutputs ?? []).filter((item) => item.tool === "kitsParaRotar").map((item) => item.output));
+      const shown = amountsOf(main.text.replace(/:::copiar[\s\S]*?\n:::/g, ""));
+      return allowed.size > 0 && shown.length > 0 && shown.every((amount) => allowed.has(amount));
+    },
+  },
+  {
+    id: "kits-margen-bajo",
+    criterio: "«margen bajo» aparece solo junto a un margen por debajo del criterio del panel.",
+    estricto: true,
+    pasa: ({ main }) => {
+      const criterion = (main.toolOutputs ?? []).map((item) => (item.output as { datos?: { criterios?: { margenCriterioPanelPct?: number } } })?.datos?.criterios?.margenCriterioPanelPct).find((value) => typeof value === "number");
+      if (criterion === undefined) return false;
+      return Array.from(main.text.matchAll(/margen (\d+(?:,\d+)?) %( \[\[tag:margen bajo\]\])?/g)).every((match) => Number(match[1].replace(",", ".")) < criterion === Boolean(match[2]));
+    },
   },
   {
     id: "kits-pieza-minima",

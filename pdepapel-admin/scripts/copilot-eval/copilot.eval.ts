@@ -16,6 +16,7 @@ import {
   DESCRIPTION_FIXTURE,
   DESCRIPTION_QUESTIONS,
   FIXTURE,
+  JARGON,
   KITS_CASES,
   KITS_FIXTURE,
   KITS_FOLLOW_UP,
@@ -433,7 +434,7 @@ async function ask(storeId: string, question: string, options: AskOptions = {}):
     },
   );
   const raw = await response.text();
-  const answer = { text: "", tools: [] as string[], skillsLoaded: [] as string[], found: [] as string[], conversationId, messageId };
+  const answer = { text: "", tools: [] as string[], skillsLoaded: [] as string[], found: [] as string[], toolOutputs: [] as { tool: string; output: unknown }[], conversationId, messageId };
   const callNames: Record<string, string> = {};
   for (const line of raw.split("\n")) {
     if (!line.startsWith("data: ")) continue;
@@ -449,6 +450,7 @@ async function ask(storeId: string, question: string, options: AskOptions = {}):
         answer.found.push(chunk.output.datos.nombre);
       }
       if (chunk.type === "text-delta" && chunk.delta) answer.text += chunk.delta;
+      if (chunk.type === "tool-output-available" && chunk.toolCallId && callNames[chunk.toolCallId]) answer.toolOutputs.push({ tool: callNames[chunk.toolCallId], output: chunk.output });
       if ((chunk.type === "tool-input-available" || chunk.type === "tool-input-start") && chunk.toolName) {
         if (chunk.toolCallId) callNames[chunk.toolCallId] = chunk.toolName;
         if (!answer.tools.includes(chunk.toolName)) answer.tools.push(chunk.toolName);
@@ -621,5 +623,37 @@ describe("evaluación del copiloto", () => {
     }
     console.table(results.map(({ pregunta, espera, herramientas, pasa }) => ({ pregunta, espera, herramientas: herramientas.join(", "), pasa: pasa ? "sí" : "NO" })));
     expect(results.filter((result) => !result.pasa).map((result) => result.pregunta)).toEqual([]);
+  });
+
+  // Solo esta parte, en cada modo de notas: npx vitest run --config scripts/copilot-eval/vitest.config.mts -t "kits con formato"
+  it("kits con formato: resumen, bloques por kit, sin jerga y cada monto de la herramienta; y sin jerga en otras respuestas", async () => {
+    const askAs = async (f: InventoryFixture, question: string, options: AskOptions = {}) => {
+      const previous = session.userId;
+      session.userId = f.store.userId;
+      try {
+        return await ask(f.store.id, question, options);
+      } finally {
+        session.userId = previous;
+      }
+    };
+    const main = await askAs(kitsFixture!, KITS_QUESTION);
+    const followUp = await askAs(kitsFixture!, KITS_FOLLOW_UP, { conversationId: main.conversationId });
+    const empty = await askAs(emptyFixture!, KITS_QUESTION);
+    const verdicts = KITS_CASES.map((kitsCase) => ({ id: kitsCase.id, estricto: kitsCase.estricto, pasa: kitsCase.pasa({ main, followUp, empty, expectedOccasion: kitsContext.expectedOccasion }) }));
+
+    const store = fixture!.store.id;
+    const others = [];
+    for (const question of ["¿Cómo voy hoy?", "¿Qué tengo que reponer esta semana?", "¿Cuál fue mi margen este mes?", "¿Hay alertas en Mercado Libre?", "¿Qué producto me conviene promocionar este mes?"]) {
+      const answer = await ask(store, question);
+      others.push({ pregunta: question, sinJerga: !JARGON.test(answer.text), sinTablas: !/^\s*\|.*\|\s*$/m.test(answer.text) });
+    }
+
+    const dir = path.join(ROOT, "tmp", "copilot-eval");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-formato.json`), JSON.stringify({ verdicts, others, main: main.text, followUp: followUp.text, empty: empty.text }, null, 2));
+    console.table([...verdicts.map(({ id, estricto, pasa }) => ({ id, estricto, pasa: pasa ? "sí" : "NO" })), ...others.map(({ pregunta, sinJerga, sinTablas }) => ({ id: pregunta, estricto: true, pasa: sinJerga && sinTablas ? "sí" : "NO" }))]);
+    expect(verdicts.filter((verdict) => verdict.estricto && !verdict.pasa).map((verdict) => verdict.id)).toEqual([]);
+    expect(verdicts.filter((verdict) => !verdict.pasa).length).toBeLessThanOrEqual(1);
+    expect(others.filter((row) => !row.sinJerga || !row.sinTablas).map((row) => row.pregunta)).toEqual([]);
   });
 });

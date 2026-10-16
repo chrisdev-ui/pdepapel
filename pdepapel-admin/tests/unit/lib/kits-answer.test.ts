@@ -115,6 +115,14 @@ describe("respuesta de kits armada por el código", () => {
     expect(new Set(amounts)).toEqual(new Set(["$50.000", "$24.000", "$18.000", "$13.900", "$16.000", "$9.000", "$4.000", "$5.000", "$3.000"]));
   });
 
+  it("dos kits que comparten pieza se nombran igual en su título y en «comparte stock con»; la fecha de temporada se lee", () => {
+    const other = kit({ nombreSugerido: "Kit Útiles con Carpeta", ocasion: "útiles escolares", marcador: "[[KIT-2]]", señales: ["temporada: Grados el 2026-11-25"] });
+    const text = composeKitsAnswer(datos({ kits: [kit(), other] }), `${MODEL}\n[[KIT-2]] Kit de útiles\n📦 Incluye: Carpeta`);
+    expect(text).toContain("### ✏️ Kit de útiles");
+    expect(text).toContain("  - comparte stock con «Kit de útiles»");
+    expect(text).toContain("- temporada: Grados (25 de noviembre)");
+  });
+
   it("margen por debajo del criterio del panel: etiqueta «margen bajo» junto al margen", () => {
     const text = composeKitsAnswer(datos({ kits: [kit({ margenPct: 30, margenBajo: true })] }), MODEL);
     expect(text).toContain("margen 30 % [[tag:margen bajo]]");
