@@ -80,7 +80,15 @@ describe("RestockOrderWorkspace", () => {
     };
     render(<RestockOrderWorkspace order={untouched} />);
     expect(screen.getByRole("button", { name: "Cancelar pedido" })).toBeInTheDocument();
+    // Sin nada recibido no hay envío que corregir.
+    expect(screen.queryByRole("button", { name: "Corregir envío" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Recibir mercancía" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("Recibir mercancía de PO-0036");
+  });
+
+  it("ofrece «Corregir envío» cuando ya llegó mercancía y abre su diálogo", async () => {
+    render(<RestockOrderWorkspace order={base} />);
+    fireEvent.click(screen.getByRole("button", { name: "Corregir envío" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Corregir el envío de PO-0036");
   });
 });

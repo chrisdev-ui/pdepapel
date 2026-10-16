@@ -26,13 +26,14 @@ import type { RestockOrderWithRelations } from "@/lib/restock-orders-db";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { RestockOrderStatus } from "@prisma/client";
 import axios from "axios";
-import { PackageCheck } from "lucide-react";
+import { PackageCheck, Truck } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ReceiveDialog } from "./receive-dialog";
 import { RestockSteps } from "./restock-steps";
+import { ShippingCorrectionDialog } from "./shipping-correction-dialog";
 
 /** Las mismas fechas que el kardex y Movimientos, en hora de Colombia. */
 const fmtDate = (value: Date | string, withTime = false) => (withTime ? formatKardexDate(value) : formatKardexDay(value));
@@ -54,6 +55,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(openReceive);
+  const [shippingOpen, setShippingOpen] = useState(false);
 
   const progress = getRestockProgress(order.items);
   // Con los mismos ceros aunque en la base haya quedado un «PO-5».
@@ -62,6 +64,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
   const receivable = RECEIVABLE_STATUSES.includes(order.status);
   const cancelled = order.status === RestockOrderStatus.CANCELLED;
   const completed = order.status === RestockOrderStatus.COMPLETED;
+  const canCorrectShipping = canWrite && progress.receivedUnits > 0 && (completed || order.status === RestockOrderStatus.PARTIALLY_RECEIVED);
   const canCancel = canWrite && canTransitionRestockOrder(order.status, RestockOrderStatus.CANCELLED, context) && !cancelled;
   const canClose = canWrite && receivable && canTransitionRestockOrder(order.status, RestockOrderStatus.COMPLETED, context);
   const notesDirty = notes.trim() !== (order.notes ?? "").trim();
@@ -144,6 +147,7 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
     <>
       {confirmationDialog}
       <ReceiveDialog order={order} open={receiveOpen} onOpenChange={setReceiveOpen} />
+      {canCorrectShipping && <ShippingCorrectionDialog order={order} open={shippingOpen} onOpenChange={setShippingOpen} />}
 
       <FormPageHeader
         title={`Pedido ${orderNumber}`}
@@ -156,6 +160,12 @@ export function RestockOrderWorkspace({ order, openReceive = false }: RestockOrd
             <Button type="button" variant="outline" size="sm" onClick={saveNotes} disabled={!notesDirty || saving || busy} isLoading={saving} loadingText="Guardando…">
               Guardar notas
             </Button>
+            {canCorrectShipping && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setShippingOpen(true)} disabled={busy}>
+                <Truck className="mr-2 h-4 w-4" aria-hidden="true" />
+                Corregir envío
+              </Button>
+            )}
             {receivable && (
               // La acción principal del pedido abierto: antes era un botón
               // discreto con borde, al lado de «Volver».
