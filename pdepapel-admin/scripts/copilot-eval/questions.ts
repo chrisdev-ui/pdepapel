@@ -27,6 +27,7 @@ export interface EvalAnswer {
   found: string[];
   /** Lo que devolvió cada herramienta, para comparar las cifras de la respuesta. */
   toolOutputs?: { tool: string; output: unknown }[];
+  toolInputs?: { tool: string; input: unknown }[];
 }
 
 export interface EvalQuestion {
@@ -589,7 +590,7 @@ export function toolAmounts(value: unknown, found = new Set<string>()): Set<stri
 }
 const amountsOf = (text: string) => Array.from(text.matchAll(AMOUNT), (match) => match[0].replace(/\D+/g, ""));
 /** Nombres de herramientas, de campos y jerga que Paula nunca debe ver. */
-export const JARGON = /kitsParaRotar|resumenDeHoy|resumenFinancieroMes|compararMeses|ventasDelDiaPuntoDeVenta|buscarProductos|detalleProducto|kardexProducto|porReponer|riesgoInventario|reporteTributario|saludMercadoLibre|productosParaPromocionar|cargarHabilidad|productoParaDescripcion|plataQuieta|nombreSugerido|precioSugerido|kitsArmables|margenPct|ahorroPct|precios? efectivos?|\((lento|se vende)\)/i;
+export const JARGON = /kitsParaRotar|calcularPrecio|compararPacks|margenesBajoMinimo|resumenDeHoy|resumenFinancieroMes|compararMeses|ventasDelDiaPuntoDeVenta|buscarProductos|detalleProducto|kardexProducto|porReponer|riesgoInventario|reporteTributario|saludMercadoLibre|productosParaPromocionar|cargarHabilidad|productoParaDescripcion|plataQuieta|nombreSugerido|precioSugerido|kitsArmables|margenPct|ahorroPct|precios? efectivos?|\((lento|se vende)\)/i;
 const mentions = (answer: EvalAnswer, name: string) => fold(answer.text).includes(fold(name).replace(/ eval$/, ""));
 
 /**
@@ -905,3 +906,85 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
     pasa: ({ empty }) => used(empty, "kitsParaRotar") && /no hay/i.test(empty.text) && !/precio sugerido/i.test(empty.text),
   },
 ];
+
+/** Habilidad «Precios»: valores de prueba, ninguna cifra del negocio. */
+export const PRICING_RUNS = 3;
+
+type PricingToolName = "calcularPrecio" | "compararPacks" | "margenesBajoMinimo";
+type PricingInput = Record<string, unknown> | undefined;
+
+export interface PricingCase {
+  id: string;
+  pregunta: string;
+  /** null: no debe llamar ninguna herramienta de precios (pregunta lo que falta). */
+  herramienta: PricingToolName | null;
+  /** Qué tiene que haber llegado a la herramienta y a la respuesta. */
+  pasa: (answer: EvalAnswer, input: PricingInput) => boolean;
+}
+
+const has = (text: string, ...parts: string[]) => parts.every((part) => text.includes(part));
+
+export const PRICING_CASES: PricingCase[] = [
+  {
+    id: "precios-packs-150",
+    pregunta: "Me llegó un producto a $150 la unidad y tengo 150. ¿Me conviene venderlo en packs de 10, 20 o 30? El de 10 lo pensaba a $8.000",
+    herramienta: "compararPacks",
+    pasa: (answer, input) =>
+      input?.costoUnitario === 150 &&
+      input?.disponible === 150 &&
+      has(answer.text, "x20 · $14.900", "x30 · $20.900", "Mitad y mitad: 7 × x10 + 4 × x20 → $93.100", "Empieza con **x10 y x20**"),
+  },
+  {
+    id: "precios-libretas",
+    pregunta: "Compré unas libretas a $4.500, ¿a cuánto las vendo?",
+    herramienta: "calcularPrecio",
+    pasa: (answer, input) => input?.costoUnitario === 4500 && has(answer.text, "## Tienda", "Aumento de", "sobre el costo:"),
+  },
+  {
+    id: "precios-mercado",
+    pregunta: "Las venden a entre $8.000 y $10.000 en otras tiendas, me costaron $3.800, ¿a cuánto la pongo?",
+    herramienta: "calcularPrecio",
+    pasa: (answer, input) =>
+      input?.costoUnitario === 3800 && Array.isArray(input?.preciosMercado) && (input!.preciosMercado as number[]).includes(8000) && has(answer.text, "Frente al mercado", "$8.000 a $10.000"),
+  },
+  {
+    id: "precios-mercadolibre",
+    pregunta: "¿A cuánto tendría que venderla en Mercado Libre si me costó $6.000?",
+    herramienta: "calcularPrecio",
+    pasa: (answer, input) => input?.costoUnitario === 6000 && has(answer.text, "## Mercado Libre", "[[tag:estimado"),
+  },
+  {
+    id: "precios-empaque",
+    pregunta: "¿A cuánto vendo un set de stickers que me costó $1.200, más $300 de empaque?",
+    herramienta: "calcularPrecio",
+    pasa: (answer, input) => input?.costoUnitario === 1200 && input?.costoEmpaque === 300 && has(answer.text, "empaque $300"),
+  },
+  {
+    id: "precios-margenes",
+    pregunta: "¿Qué productos quedan por debajo del 35 % y del 40 % de margen?",
+    herramienta: "margenesBajoMinimo",
+    pasa: (answer, input) =>
+      JSON.stringify(input?.margenes ?? []) === "[35,40]" && has(answer.text, "Por debajo del 35 %", "Por debajo del 40 %", "Libreta precios eval: $10.000 → **$10.770**", "Agenda precios eval: $9.000 → **$10.000**"),
+  },
+  {
+    id: "precios-minimo",
+    pregunta: "¿Qué productos quedan por debajo del margen mínimo de la tienda?",
+    herramienta: "margenesBajoMinimo",
+    pasa: (answer) => has(answer.text, "Por debajo del 35 %", "Libreta precios eval: $10.000 → **$10.770**"),
+  },
+  {
+    id: "precios-sin-costo",
+    pregunta: "¿A cuánto vendo una libreta nueva que me llegó?",
+    herramienta: null,
+    pasa: (answer) => /cost[oó]|cu[aá]nto te cost|precio de compra/i.test(answer.text) && !/\$\s?\d/.test(answer.text),
+  },
+];
+
+/** Cada monto de la respuesta sale de lo que trajo una herramienta de precios (con o sin signo). */
+export function pricingAmountsFromTool(answer: EvalAnswer): boolean {
+  const outputs = (answer.toolOutputs ?? []).filter((item) => ["calcularPrecio", "compararPacks", "margenesBajoMinimo"].includes(item.tool)).map((item) => item.output);
+  const allowed = new Set(Array.from(toolAmounts(outputs), (amount) => amount.replace("-", "")));
+  const shown = amountsOf(answer.text);
+  return outputs.length > 0 && shown.length > 0 && shown.every((amount) => allowed.has(amount));
+}
+

@@ -25,9 +25,12 @@ import {
   MARKETING_MODE_QUESTIONS,
   MARKETING_QUESTIONS,
   PAULA_SLOTS,
+  PRICING_CASES,
+  PRICING_RUNS,
   QUESTIONS,
   ROUTING_QUESTIONS,
   kitsInTool,
+  pricingAmountsFromTool,
   renderedKits,
   type EvalAnswer,
 } from "./questions";
@@ -437,7 +440,7 @@ async function ask(storeId: string, question: string, options: AskOptions = {}):
     },
   );
   const raw = await response.text();
-  const answer = { text: "", tools: [] as string[], skillsLoaded: [] as string[], found: [] as string[], toolOutputs: [] as { tool: string; output: unknown }[], conversationId, messageId };
+  const answer = { text: "", tools: [] as string[], skillsLoaded: [] as string[], found: [] as string[], toolOutputs: [] as { tool: string; output: unknown }[], toolInputs: [] as { tool: string; input: unknown }[], conversationId, messageId };
   const callNames: Record<string, string> = {};
   for (const line of raw.split("\n")) {
     if (!line.startsWith("data: ")) continue;
@@ -448,7 +451,9 @@ async function ask(storeId: string, question: string, options: AskOptions = {}):
         toolName?: string;
         toolCallId?: string;
         output?: { ok?: boolean; id?: string; encontrado?: boolean; datos?: { nombre?: string } };
+        input?: unknown;
       };
+      if (chunk.type === "tool-input-available" && chunk.toolName) answer.toolInputs.push({ tool: chunk.toolName, input: chunk.input });
       if (chunk.type === "tool-output-available" && chunk.toolCallId && callNames[chunk.toolCallId] === "productoParaDescripcion" && chunk.output?.encontrado && chunk.output.datos?.nombre) {
         answer.found.push(chunk.output.datos.nombre);
       }
@@ -687,4 +692,60 @@ describe("evaluación del copiloto", () => {
     expect(perRun.every(({ fallan }) => fallan.length <= 1)).toBe(true);
     expect(others.filter((row) => !row.sinJerga || !row.sinTablas).map((row) => row.pregunta)).toEqual([]);
   });
+
+  // Solo esta parte, en cada modo de notas: npx vitest run --config scripts/copilot-eval/vitest.config.mts -t "precios con formato"
+  it("precios con formato: la herramienta correcta, sus entradas, la respuesta armada por el código y cada monto de la herramienta", async () => {
+    const store = fixture!.store.id;
+    const rows: { id: string; run: number; herramientas: string; entrada: string; pasa: boolean; montos: boolean; sinJerga: boolean }[] = [];
+    const texts: { id: string; run: number; text: string; input: unknown }[] = [];
+    // Dos productos con poco margen (valores de prueba) para que «por debajo de X %» tenga qué listar.
+    const base = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id } });
+    const lowMargin = await Promise.all(
+      [
+        { name: "Libreta precios eval", price: 10000, acqPrice: 7000 },
+        { name: "Agenda precios eval", price: 9000, acqPrice: 6000 },
+      ].map(({ name, price, acqPrice }) =>
+        testPrisma.product.create({
+          data: {
+            storeId: store,
+            name,
+            slug: `${name.toLowerCase().replace(/\s+/g, "-")}-${randomBytes(3).toString("hex")}`,
+            sku: `PRE-${randomBytes(3).toString("hex")}`,
+            description: "Producto de la evaluación de precios.",
+            price,
+            acqPrice,
+            stock: 5,
+            categoryId: base.categoryId,
+            sizeId: base.sizeId,
+            colorId: base.colorId,
+            designId: base.designId,
+          },
+        }),
+      ),
+    );
+    try {
+      for (const pricingCase of PRICING_CASES) {
+        for (let run = 1; run <= PRICING_RUNS; run += 1) {
+          const answer = await ask(store, pricingCase.pregunta);
+          const pricingTools = answer.tools.filter((tool) => ["calcularPrecio", "compararPacks", "margenesBajoMinimo"].includes(tool));
+          const input = pricingCase.herramienta ? ((answer.toolInputs ?? []).find((item) => item.tool === pricingCase.herramienta)?.input as Record<string, unknown> | undefined) : undefined;
+          const toolOk = pricingCase.herramienta === null ? pricingTools.length === 0 : pricingTools.length === 1 && pricingTools[0] === pricingCase.herramienta;
+          const montos = pricingCase.herramienta === null ? true : pricingAmountsFromTool(answer);
+          const sinJerga = !JARGON.test(answer.text) && !/\bIVA\b/.test(answer.text);
+          rows.push({ id: pricingCase.id, run, herramientas: answer.tools.join(", "), entrada: JSON.stringify(input ?? null), pasa: toolOk && pricingCase.pasa(answer, input), montos, sinJerga });
+          texts.push({ id: pricingCase.id, run, text: answer.text, input });
+        }
+      }
+    } finally {
+      await testPrisma.product.deleteMany({ where: { id: { in: lowMargin.map((row) => row.id) } } });
+    }
+    const dir = path.join(ROOT, "tmp", "copilot-eval");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-precios.json`), JSON.stringify({ rows, texts }, null, 2));
+    console.table(rows.map((row) => ({ ...row, pasa: row.pasa ? "sí" : "NO", montos: row.montos ? "sí" : "NO", sinJerga: row.sinJerga ? "sí" : "NO" })));
+    console.info(`[EVAL] Precios: ${rows.filter((row) => row.pasa && row.montos && row.sinJerga).length} de ${rows.length}, notas: ${NOTES_MODE}`);
+    expect(rows.filter((row) => !row.montos || !row.sinJerga).map((row) => `${row.id}#${row.run}`)).toEqual([]);
+    expect(rows.filter((row) => !row.pasa).map((row) => `${row.id}#${row.run}`)).toEqual([]);
+  });
 });
+
