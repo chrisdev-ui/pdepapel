@@ -639,6 +639,7 @@ responde una consulta concreta y la evaluación lo comprueba):
 | Mercado Libre | «¿Hay alertas en Mercado Libre?» | conexión, publicaciones por estado, alertas (sin dinero) |
 | Promoción y redes | «¿Qué producto me conviene promocionar este mes?» · «Dame 3 ideas de Reel para esta semana» | regla de Campañas con enlace; habilidad de mercadeo |
 | Textos y kits | «Escríbeme la descripción para la tienda del Set de washi tape pastel» · «¿Qué productos llevan más de 90 días sin venderse y qué kits podría armar con ellos?» | descripción para la ficha; kits con productos quietos |
+| Precios | «Me costó $4.500, ¿a cuánto lo vendo en la tienda?» · «Me llegó un producto a $150 la unidad y tengo 150. ¿Me conviene en packs de 10, 20 o 30? El de 10 lo pensaba a $8.000» · «¿Qué productos quedan por debajo del 35 % y del 40 % de margen?» · «¿A cuánto tendría que venderlo en Mercado Libre si me costó $6.000?» | precio sugerido con su margen y de dónde sale el aumento; tamaños de pack con ganancia y mezclas; productos por debajo de un margen con el precio para llegar; Mercado Libre siempre como estimado |
 
 Dudas del oficio: usa y cita las notas aprobadas en Copiloto › Conocimiento;
 sin nota, lo dice y marca su idea como no verificada. No hay una consulta de

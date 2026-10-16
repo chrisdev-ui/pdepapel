@@ -73,7 +73,7 @@ describe("cargarHabilidad", () => {
   });
 
   it("un id que no existe responde con la lista de las válidas", async () => {
-    expect(await exec([], "contabilidad")).toEqual({ ok: false, error: "No existe la habilidad «contabilidad».", validas: ["descripciones", "kits", "marketing"] });
+    expect(await exec([], "contabilidad")).toEqual({ ok: false, error: "No existe la habilidad «contabilidad».", validas: ["descripciones", "kits", "marketing", "precios"] });
   });
 
   it("si ya estaba cargada no repite las instrucciones", async () => {

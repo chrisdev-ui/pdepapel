@@ -42,6 +42,8 @@ import { activeToolNames, getCopilotSkill } from "@/lib/copiloto/skills";
 import { plainWordsTransform } from "@/lib/copiloto/plain-words";
 import { kitsAnswerTransform } from "@/lib/copiloto/skills/kits-transform";
 import { KITS_TEXTS_TOOL, kitsTextsStep } from "@/lib/copiloto/skills/kits-texts";
+import { PRICING_TOOLS } from "@/lib/copiloto/skills/precios-tool";
+import { pricingAnswerTransform } from "@/lib/copiloto/skills/precios-transform";
 import { specCheckTransform } from "@/lib/copiloto/skills/specs";
 import { buildSkillTools } from "@/lib/copiloto/skills/tools";
 import { COPILOT_TOOL_NAMES, buildCopilotTools } from "@/lib/copiloto/tools";
@@ -299,9 +301,9 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
       }
       return { activeTools: activeToolNames(COPILOT_TOOL_NAMES, loaded) as (keyof typeof tools)[] };
     },
-    // Al final, sin otra llamada: aviso de especificaciones que faltan, la respuesta de kits armada por el código y, para toda respuesta, palabras simples en vez de nombres internos.
-    experimental_transform: [specCheckTransform(), kitsAnswerTransform(), plainWordsTransform()],
-    stopWhen: [isStepCount(COPILOT_MAX_STEPS), hasToolCall(KITS_TEXTS_TOOL)],
+    // Al final, sin otra llamada: aviso de especificaciones que faltan, las respuestas de kits y de precios armadas por el código y, para toda respuesta, palabras simples en vez de nombres internos.
+    experimental_transform: [specCheckTransform(), kitsAnswerTransform(), pricingAnswerTransform({ hold: () => loaded.has("precios") }), plainWordsTransform()],
+    stopWhen: [isStepCount(COPILOT_MAX_STEPS), hasToolCall(KITS_TEXTS_TOOL), ...PRICING_TOOLS.map((name) => hasToolCall(name))],
     abortSignal: AbortSignal.timeout(COPILOT_TIMEOUT_MS),
     maxRetries: 0,
     providerOptions: {

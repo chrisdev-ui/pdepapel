@@ -13,7 +13,7 @@ export interface CopilotExample {
   general?: boolean;
 }
 
-export const COPILOT_EXAMPLE_TOPICS = ["El día", "Dinero del mes", "Punto de venta", "Catálogo", "Inventario", "Impuestos", "Mercado Libre", "Promoción y redes", "Textos y kits"] as const;
+export const COPILOT_EXAMPLE_TOPICS = ["El día", "Dinero del mes", "Punto de venta", "Catálogo", "Inventario", "Impuestos", "Mercado Libre", "Promoción y redes", "Textos y kits", "Precios"] as const;
 export type CopilotExampleTopic = (typeof COPILOT_EXAMPLE_TOPICS)[number];
 
 export const COPILOT_EXAMPLES: readonly CopilotExample[] = [
@@ -43,6 +43,15 @@ export const COPILOT_EXAMPLES: readonly CopilotExample[] = [
     herramienta: "kitsParaRotar",
     pantallas: ["productos", "inventario", "agotados"],
   },
+  { pregunta: "Me costó $4.500, ¿a cuánto lo vendo en la tienda?", tema: "Precios", herramienta: "calcularPrecio", pantallas: ["configuracion", "categorias"] },
+  {
+    pregunta: "Me llegó un producto a $150 la unidad y tengo 150. ¿Me conviene en packs de 10, 20 o 30? El de 10 lo pensaba a $8.000",
+    tema: "Precios",
+    herramienta: "compararPacks",
+    pantallas: ["configuracion", "categorias"],
+  },
+  { pregunta: "¿Qué productos quedan por debajo del 35 % y del 40 % de margen?", tema: "Precios", herramienta: "margenesBajoMinimo", pantallas: ["configuracion", "categorias"] },
+  { pregunta: "¿A cuánto tendría que venderlo en Mercado Libre si me costó $6.000?", tema: "Precios", herramienta: "calcularPrecio", pantallas: ["configuracion"] },
 ];
 
 const MAX_SUGGESTIONS = 5;

@@ -164,6 +164,28 @@ describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada m
     expect(JSON.stringify(promotion)).not.toMatch(/acqPrice|acquisitionCost|suggestedBudget/);
   });
 
+  it("las herramientas de Precios corren con el usuario de solo lectura", async () => {
+    const store = fixture!.store.id;
+    const order = await testPrisma.order.findFirstOrThrow({ where: { storeId: store, status: "PAID" }, select: { id: true } });
+    await testPrisma.shipping.upsert({ where: { orderId: order.id }, update: { cost: 9000 }, create: { orderId: order.id, storeId: store, cost: 9000 } });
+    const { buildSkillTools } = await import("@/lib/copiloto/skills/tools");
+    const tools = buildSkillTools(store, { alreadyLoaded: ["precios"], notesFor: async () => [] });
+    const run = (name: "calcularPrecio" | "compararPacks" | "margenesBajoMinimo", input: unknown) =>
+      (tools[name] as unknown as { execute: (input: unknown, options: unknown) => Promise<{ datos: Record<string, unknown> }> }).execute(input, { toolCallId: name, messages: [] });
+
+    const price = await run("calcularPrecio", { costoUnitario: 4500, parecidoA: "componente" });
+    expect(price.datos).toMatchObject({ tienda: { minimo: { margenPct: 35 } }, mercadolibre: { estimado: { withoutFixedFee: true } } });
+    expect((price.datos.parecidos as { vendidas30Dias: number }[])[0].vendidas30Dias).toBe(3);
+
+    const packs = await run("compararPacks", { costoUnitario: 150, disponible: 150, tamanos: [10, 20, 30], preciosPorPack: [{ tamano: 10, precio: 8000 }] });
+    expect((packs.datos.tamanos as { price: number }[]).map((row) => row.price)).toEqual([8000, 14900, 20900]);
+    expect(packs.datos.envioTipico).toEqual({ mediana: 9000, pedidos: 1 });
+
+    const below = await run("margenesBajoMinimo", { margenes: [35, 40] });
+    expect(below.datos).toMatchObject({ sinMargen: false, minimoConfigurado: 35 });
+    expect(JSON.stringify([price, packs, below])).not.toMatch(/Clienta Ficticia|ficticia@prueba\.test|3000000000|Calle Falsa/);
+  });
+
   it("no puede leer los datos de la clienta", async () => {
     await expect(roClient.order.findFirst({ where: { storeId: fixture!.store.id }, select: { email: true } })).rejects.toThrow();
     await expect(roClient.order.findFirst({ where: { storeId: fixture!.store.id } })).rejects.toThrow();

@@ -5,6 +5,7 @@ import { COPILOT_SKILL_IDS, getCopilotSkill, renderSkillBlock } from "@/lib/copi
 import { productoParaDescripcionTool } from "@/lib/copiloto/skills/descripciones-tool";
 import { kitsParaRotarTool } from "@/lib/copiloto/skills/kits-tool";
 import { textosDeKitsTool } from "@/lib/copiloto/skills/kits-texts";
+import { calcularPrecioTool, compararPacksTool, margenesBajoMinimoTool } from "@/lib/copiloto/skills/precios-tool";
 import { requireStoreOwner } from "@/lib/store-access";
 
 type SkillNote = { id: string; titulo: string; body: string };
@@ -45,5 +46,8 @@ export function buildSkillTools(
     productoParaDescripcion: productoParaDescripcionTool(storeId),
     kitsParaRotar: kitsParaRotarTool(storeId),
     textosDeKits: textosDeKitsTool(),
+    calcularPrecio: calcularPrecioTool(storeId),
+    compararPacks: compararPacksTool(storeId),
+    margenesBajoMinimo: margenesBajoMinimoTool(storeId),
   };
 }

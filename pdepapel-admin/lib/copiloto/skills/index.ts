@@ -1,6 +1,7 @@
 import { MARKETING_SKILL_INSTRUCTIONS } from "@/lib/copiloto/marketing-mode";
 import { DESCRIPTIONS_SKILL_INSTRUCTIONS } from "@/lib/copiloto/skills/descripciones";
 import { KITS_SKILL_INSTRUCTIONS } from "@/lib/copiloto/skills/kits";
+import { PRICING_SKILL_INSTRUCTIONS } from "@/lib/copiloto/skills/precios";
 import { COPILOT_SKILL_CATALOG } from "@/lib/copiloto/skills/names";
 
 /**
@@ -46,6 +47,12 @@ export const COPILOT_SKILLS: readonly CopilotSkill[] = [
     ...catalog("marketing"),
     instrucciones: MARKETING_SKILL_INSTRUCTIONS,
     herramientas: [],
+    version: 1,
+  },
+  {
+    ...catalog("precios"),
+    instrucciones: PRICING_SKILL_INSTRUCTIONS,
+    herramientas: ["calcularPrecio", "compararPacks", "margenesBajoMinimo"],
     version: 1,
   },
 ];

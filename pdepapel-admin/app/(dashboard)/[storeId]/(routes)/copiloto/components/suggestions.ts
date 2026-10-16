@@ -21,4 +21,7 @@ export const TOOL_LABELS: Record<string, string> = {
   productoParaDescripcion: "Leyendo la ficha del producto",
   kitsParaRotar: "Buscando productos quietos para kits",
   textosDeKits: "Escribiendo los textos de los kits",
+  calcularPrecio: "Calculando el precio",
+  compararPacks: "Comparando los packs",
+  margenesBajoMinimo: "Revisando los márgenes",
 };
