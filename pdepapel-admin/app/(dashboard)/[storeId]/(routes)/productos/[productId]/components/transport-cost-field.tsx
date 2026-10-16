@@ -64,6 +64,18 @@ export function TransportCostField({
           </Button>
         ))}
       </div>
+      {/* Lo calculado y el aviso van arriba de los campos: en el teléfono la barra fija de «Cambios sin guardar» tapa lo que queda debajo. */}
+      {mode === "orden" && (
+        <p className="text-sm font-medium text-foreground" data-testid="transport-per-unit" aria-live="polite">
+          {perUnit === null ? "Escribe el envío de la orden y cuántas unidades trajo." : `= ${currencyFormatter(perUnit)} por unidad (esto es lo que se guarda)`}
+        </p>
+      )}
+      {warning && (
+        <p role="status" className={cn("flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 ring-1 ring-amber-300/70")} data-testid="transport-warning">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {warning}
+        </p>
+      )}
       {mode === "unidad" ? (
         <CurrencyInput placeholder="Sin registrar" disabled={disabled} value={value ?? undefined} onChange={(next) => onChange(next ?? null)} aria-label="Envío por unidad" />
       ) : (
@@ -80,16 +92,7 @@ export function TransportCostField({
             onChange={(event) => fromOrder(orderTotal, event.target.value)}
             aria-label="Unidades de la orden"
           />
-          <p className="text-sm text-muted-foreground sm:col-span-2" data-testid="transport-per-unit">
-            {perUnit === null ? "Escribe el envío de la orden y cuántas unidades trajo." : `= ${currencyFormatter(perUnit)} por unidad (esto es lo que se guarda)`}
-          </p>
         </div>
-      )}
-      {warning && (
-        <p role="status" className={cn("flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 ring-1 ring-amber-300/70")} data-testid="transport-warning">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {warning}
-        </p>
       )}
     </div>
   );

@@ -57,6 +57,14 @@ test.describe("envío por unidad en la ficha", () => {
       await field.getByLabel("Envío de toda la orden").fill("1000");
       await field.getByLabel("Unidades de la orden").fill("100");
       await expect(field.getByTestId("transport-per-unit")).toContainText("10 por unidad");
+      // Visible de verdad: lo que está encima en el centro de la línea es la línea misma, no la barra fija.
+      const uncovered = (testId: string) =>
+        field.getByTestId(testId).evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          return box.top >= 0 && box.bottom <= window.innerHeight && top !== null && element.contains(top);
+        });
+      expect(await uncovered("transport-per-unit")).toBe(true);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-toda-la-orden.png`), fullPage: false });
 
       // Un envío por unidad que parece de toda una orden: aviso, sin bloquear.
@@ -64,7 +72,7 @@ test.describe("envío por unidad en la ficha", () => {
       await field.getByRole("button", { name: "Por unidad" }).click();
       await field.getByLabel("Envío por unidad").fill("1000");
       await expect(field.getByTestId("transport-warning")).toContainText("igual o mayor que el costo de compra");
-      await field.scrollIntoViewIfNeeded();
+      expect(await uncovered("transport-warning")).toBe(true);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-aviso.png`), fullPage: false });
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
