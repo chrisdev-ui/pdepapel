@@ -9,6 +9,7 @@ import {
   ACTIVE_ATTRIBUTE_WHERE,
   activeOrCurrentWhere,
 } from "@/lib/attribute-archive";
+import { loadMarkupMap } from "@/lib/pricing/category-markup-db";
 import prismadb from "@/lib/prismadb";
 import { scrubProduct } from "@/lib/viewer-payloads";
 import { NEW_PRODUCT_SEGMENT } from "@/lib/product-routes";
@@ -190,9 +191,13 @@ export async function getProduct(id: string, storeId: string) {
     });
   }
 
+  // Las medianas salen de los costos: solo lectura no las recibe.
+  const markups = access.role === "viewer" ? null : await loadMarkupMap(prismadb, storeId);
+
   return {
     // Solo lectura: la ficha se ve sin costo de compra, transporte ni proveedor.
     product: access.role === "viewer" ? scrubProduct(product) : product,
+    markups,
     activeOffers: activeOffers.map((row) => row.offer),
     activePresale: activePresale
       ? {

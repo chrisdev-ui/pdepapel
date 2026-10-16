@@ -56,4 +56,46 @@ describe("Mercado Libre pricing targets in store settings (MySQL)", () => {
     const response = await patch(fixture.store.id, { name: fixture.store.name, mercadoLibreTargetMarginPercent: 75 });
     expect(response.status).toBe(400);
   });
+
+  it("margen mínimo de la tienda en 35 por defecto, vacío es «sin mínimo»; los ajustes de Mercado Libre empiezan sin registrar", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const read = () =>
+      testPrisma.store.findUniqueOrThrow({
+        where: { id: fixture!.store.id },
+        select: { storeMinMarginPercent: true, mercadoLibreLowPriceFixedFee: true, mercadoLibreFreeShippingMin: true },
+      });
+    expect(await read()).toEqual({ storeMinMarginPercent: 35, mercadoLibreLowPriceFixedFee: null, mercadoLibreFreeShippingMin: null });
+
+    await patch(fixture.store.id, { name: fixture.store.name, storeMinMarginPercent: "40", mercadoLibreLowPriceFixedFee: "900", mercadoLibreFreeShippingMin: "60.000" });
+    expect(await read()).toEqual({ storeMinMarginPercent: 40, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 60_000 });
+
+    await patch(fixture.store.id, { name: fixture.store.name });
+    expect(await read()).toEqual({ storeMinMarginPercent: 40, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 60_000 });
+
+    await patch(fixture.store.id, { name: fixture.store.name, storeMinMarginPercent: "", mercadoLibreLowPriceFixedFee: "", mercadoLibreFreeShippingMin: "" });
+    expect(await read()).toEqual({ storeMinMarginPercent: null, mercadoLibreLowPriceFixedFee: null, mercadoLibreFreeShippingMin: null });
+  });
+
+  it("el aumento propio de una subcategoría se guarda, se mantiene si no viene y vuelve a la mediana vacío", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const category = await testPrisma.category.findUniqueOrThrow({ where: { id: fixture.component.categoryId } });
+    const { PATCH } = await import("@/app/api/[storeId]/categories/[categoryId]/route");
+    const save = (body: Record<string, unknown>) =>
+      PATCH(
+        new Request("http://admin.test/api/x", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: category.name, typeId: category.typeId, ...body }) }),
+        { params: { storeId: fixture!.store.id, categoryId: category.id } },
+      );
+    const read = async () => (await testPrisma.category.findUniqueOrThrow({ where: { id: category.id } })).markupOverridePercent;
+    expect((await save({ markupOverridePercent: "85" })).status).toBe(200);
+    expect(await read()).toBe(85);
+    const body = await (await save({})).json();
+    expect(await read()).toBe(85);
+    // La respuesta pública de la subcategoría no trae el aumento.
+    expect(body).not.toHaveProperty("markupOverridePercent");
+    await save({ markupOverridePercent: "" });
+    expect(await read()).toBeNull();
+    expect((await save({ markupOverridePercent: "-3" })).status).toBe(400);
+  });
 });

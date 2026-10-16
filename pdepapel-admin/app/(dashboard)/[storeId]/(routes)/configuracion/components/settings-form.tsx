@@ -115,6 +115,27 @@ const formSchema = z.object({
       (value) => !value || /^\d{1,8}$/.test(value.replace(/[.\s]/g, "")),
       { message: "Escribe solo el valor en pesos, sin decimales" },
     ),
+  storeMinMarginPercent: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || (/^\d{1,2}([.,]\d)?$/.test(value.trim()) && Number(value.replace(",", ".")) <= 90),
+      { message: "Escribe un porcentaje entre 0 y 90, o déjalo vacío" },
+    ),
+  mercadoLibreLowPriceFixedFee: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || /^\d{1,8}$/.test(value.replace(/[.\s]/g, "")),
+      { message: "Escribe solo el valor en pesos, sin decimales" },
+    ),
+  mercadoLibreFreeShippingMin: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || /^\d{1,8}$/.test(value.replace(/[.\s]/g, "")),
+      { message: "Escribe solo el valor en pesos, sin decimales" },
+    ),
   policies: z
     .object({
       shipping: z.string().optional(),
@@ -165,6 +186,9 @@ export const SettingsForm: React.FC<
       reservationDefaultDays: String(initialData.reservationDefaultDays ?? 3),
       mercadoLibreTargetMarginPercent: String(initialData.mercadoLibreTargetMarginPercent ?? 20),
       mercadoLibreMinNetPerUnit: String(initialData.mercadoLibreMinNetPerUnit ?? 10000),
+      storeMinMarginPercent: initialData.storeMinMarginPercent != null ? String(initialData.storeMinMarginPercent) : "",
+      mercadoLibreLowPriceFixedFee: initialData.mercadoLibreLowPriceFixedFee != null ? String(initialData.mercadoLibreLowPriceFixedFee) : "",
+      mercadoLibreFreeShippingMin: initialData.mercadoLibreFreeShippingMin != null ? String(initialData.mercadoLibreFreeShippingMin) : "",
       policies:
         typeof initialData.policies === "string"
           ? JSON.parse(initialData.policies)
@@ -496,6 +520,29 @@ export const SettingsForm: React.FC<
                   />
                 </div>
                 <Heading
+                  title="Precios en la tienda"
+                  description="Lo que usa el Copiloto para avisar qué productos dejan poco margen"
+                />
+                <div className="grid gap-8 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="storeMinMarginPercent"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Margen mínimo de la tienda (%)</FormLabel>
+                        <FormControl>
+                          <Input inputMode="decimal" disabled={loading} placeholder="Sin mínimo" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Margen bruto sobre el precio: (precio − costo con envío) ÷ precio. Por debajo de esto, el Copiloto marca el
+                          producto «por debajo del mínimo». Vacío: no marca nada.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <Heading
                   title="Precios en Mercado Libre"
                   description="Lo mínimo que debe dejar cada venta en Mercado Libre después de la comisión, el envío obligatorio y las retenciones"
                 />
@@ -530,6 +577,40 @@ export const SettingsForm: React.FC<
                           El asistente de publicación sugiere el menor precio que
                           cumpla el mayor de los dos: el margen objetivo o esta
                           ganancia mínima. No cambia los precios ya publicados.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mercadoLibreLowPriceFixedFee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cargo fijo por unidad en precios bajos (COP)</FormLabel>
+                        <FormControl>
+                          <Input inputMode="numeric" disabled={loading} placeholder="No registrado" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Lo que cobra Mercado Libre por unidad cuando el precio está por debajo del umbral de envío gratis. Cópialo de tu
+                          cuenta de Mercado Libre.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mercadoLibreFreeShippingMin"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Envío gratis obligatorio desde (COP)</FormLabel>
+                        <FormControl>
+                          <Input inputMode="numeric" disabled={loading} placeholder="No registrado" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Precio desde el cual Mercado Libre exige envío gratis. Sin estos dos valores, el Copiloto marca sus cálculos de
+                          Mercado Libre «estimado, sin cargo fijo».
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { activeOrCurrentWhere } from "@/lib/attribute-archive";
 import { getAttributeSiblings, getAttributeUsage } from "@/lib/attribute-usage";
 import { isCategoryCoverConfigured } from "@/lib/category-covers";
+import { loadMedianMarkup } from "@/lib/pricing/category-markup-db";
 import prismadb from "@/lib/prismadb";
 import { CategoryForm, type CategoryFormType } from "./components/category-form";
 
@@ -21,7 +22,7 @@ export default async function CategoryPage({
       });
   if (!isNew && !category) notFound();
 
-  const [types, usage, offersCount, siblings] = await Promise.all([
+  const [types, usage, offersCount, siblings, medianMarkup] = await Promise.all([
     prismadb.type.findMany({
       where: { storeId: params.storeId, ...activeOrCurrentWhere(category?.typeId) },
       orderBy: { name: "asc" },
@@ -32,6 +33,7 @@ export default async function CategoryPage({
       : Promise.resolve({ activeProducts: 0, archivedProducts: 0, groups: 0 }),
     category ? prismadb.offerCategory.count({ where: { categoryId: category.id } }) : Promise.resolve(0),
     getAttributeSiblings(prismadb, "categories", params.storeId),
+    category ? loadMedianMarkup(prismadb, params.storeId, category.id) : Promise.resolve(null),
   ]);
 
   return (
@@ -42,6 +44,7 @@ export default async function CategoryPage({
         usage={{ ...usage, offersCount }}
         siblings={siblings}
         coverConfigured={isCategoryCoverConfigured()}
+        medianMarkup={medianMarkup}
       />
     </div>
   );

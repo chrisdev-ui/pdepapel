@@ -62,6 +62,42 @@ export function parseMercadoLibreMinNetPerUnit(value: unknown): number | undefin
   return amount;
 }
 
+/**
+ * Margen bruto mínimo sobre el precio en la tienda (%). Ausente deja el valor
+ * guardado; vacío es «sin mínimo» (null) y entonces nada se marca por debajo.
+ */
+export function parseStoreMinMarginPercent(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const percent = typeof value === "string" ? Number(value.replace(",", ".").trim()) : value;
+  if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 90) {
+    throw ErrorFactory.InvalidRequest("El margen mínimo de la tienda debe ser un porcentaje entre 0 y 90, o vacío para no usar mínimo");
+  }
+  return Math.round(percent * 10) / 10;
+}
+
+/** Un valor opcional en pesos de los ajustes de Mercado Libre. Ausente deja el guardado; vacío es «no registrado» (null). */
+export function parseOptionalMercadoLibrePesos(value: unknown, label: string): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const amount = typeof value === "string" ? Number(value.replace(/[.\s]/g, "")) : value;
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 0 || amount > 10_000_000) {
+    throw ErrorFactory.InvalidRequest(`${label} debe ser un número entero en pesos, o vacío si no lo sabes`);
+  }
+  return amount;
+}
+
+/** Aumento propio de una categoría (%). Ausente deja el guardado; vacío vuelve a la mediana (null). */
+export function parseMarkupOverridePercent(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const percent = typeof value === "string" ? Number(value.replace(",", ".").trim()) : value;
+  if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 1000) {
+    throw ErrorFactory.InvalidRequest("El aumento sugerido debe ser un porcentaje entre 0 y 1000, o vacío para usar la mediana");
+  }
+  return Math.round(percent * 10) / 10;
+}
+
 // --- Datos del negocio editables desde Configuración -----------------------
 export const WEEK_DAYS = [
   "lun",

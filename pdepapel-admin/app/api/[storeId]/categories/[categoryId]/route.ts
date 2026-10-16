@@ -9,6 +9,7 @@ import {
   preserveCategorySlugAlias,
 } from "@/lib/category-slugs";
 import prismadb from "@/lib/prismadb";
+import { parseMarkupOverridePercent } from "@/lib/store-settings";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
 import {
@@ -112,7 +113,9 @@ export async function PATCH(
       seoIntro,
       imageUrl,
       icon,
+      markupOverridePercent,
     } = body;
+    const markupOverride = parseMarkupOverridePercent(markupOverridePercent);
 
     if (!name || typeof name !== "string" || !cleanTaxonomyName(name))
       throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("category", "nombre"));
@@ -181,6 +184,7 @@ export async function PATCH(
             seoDescription: seoDescription?.trim() || null,
             seoIntro: seoIntro?.trim() || null,
             imageUrl: imageUrl?.trim() || null,
+            ...(markupOverride === undefined ? {} : { markupOverridePercent: markupOverride }),
           },
           select: PUBLIC_CATEGORY_SELECT,
         });

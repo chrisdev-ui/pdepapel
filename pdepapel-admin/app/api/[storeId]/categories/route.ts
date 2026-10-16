@@ -4,6 +4,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import { getCategoryRevalidationPaths, getUniqueCategorySlug } from "@/lib/category-slugs";
 import prismadb from "@/lib/prismadb";
+import { parseMarkupOverridePercent } from "@/lib/store-settings";
 import { productAvailabilityWhere } from "@/lib/product-availability";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
@@ -64,7 +65,9 @@ export async function POST(
       seoIntro,
       imageUrl,
       icon,
+      markupOverridePercent,
     } = body;
+    const markupOverride = parseMarkupOverridePercent(markupOverridePercent);
 
     if (!name || typeof name !== "string" || !cleanTaxonomyName(name))
       throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("category", "nombre"));
@@ -112,6 +115,7 @@ export async function POST(
           seoDescription: seoDescription?.trim() || null,
           seoIntro: seoIntro?.trim() || null,
           imageUrl: imageUrl?.trim() || null,
+          ...(markupOverride === undefined ? {} : { markupOverridePercent: markupOverride }),
         },
         select: PUBLIC_CATEGORY_SELECT,
       })

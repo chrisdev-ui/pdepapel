@@ -36,6 +36,7 @@ export default async function ProductPage({
     reviews,
     productGroup,
     productGroups,
+    markups,
   } = await getProduct(params.productId, params.storeId);
 
   if (!product && params.productId !== NEW_PRODUCT_SEGMENT) notFound();
@@ -69,6 +70,7 @@ export default async function ProductPage({
             seed={seed}
             storeUrl={env.FRONTEND_STORE_URL}
             reservationDefaultDays={store?.reservationDefaultDays ?? 3}
+            markups={markups}
           />
         </div>
         <ProductWorkspaceAside product={product} storeId={params.storeId} />

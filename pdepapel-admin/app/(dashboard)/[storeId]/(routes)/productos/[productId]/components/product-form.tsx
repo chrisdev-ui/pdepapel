@@ -96,6 +96,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { INITIAL_PERCENTAGE_INCREASE, Models } from "@/constants";
+import type { MarkupMap } from "@/lib/pricing/category-markup";
+import { landedCost, suggestStorePrice } from "@/lib/pricing/price-calculator";
 import { generateSizeName, generateSizeValue } from "@/constants/sizes";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useFormPersist } from "@/hooks/use-form-persist";
@@ -294,6 +296,8 @@ interface ProductFormProps {
   activeOffers?: { id: string; name: string }[];
   /** Días por defecto de un apartado (Configuración). */
   reservationDefaultDays?: number;
+  /** Aumento sugerido por subcategoría (mediana o el definido por Paula); null en solo lectura. */
+  markups?: MarkupMap | null;
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -317,6 +321,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   storeUrl = null,
   activeOffers = [],
   reservationDefaultDays = 3,
+  markups = null,
 }) => {
   const canWrite = useCanWrite();
   const [reserveOpen, setReserveOpen] = useState(false);
@@ -554,9 +559,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const watchedMpn = form.watch("mpn");
   const watchedHasNoIdentifier = form.watch("hasNoProductIdentifier");
   // La calculadora vive fuera del formulario: no se guarda con el producto.
-  const [calculatorIncrease, setCalculatorIncrease] = useState<number>(
-    INITIAL_PERCENTAGE_INCREASE,
-  );
+  // null = el sugerido de la subcategoría; un número = lo que escribió Paula.
+  const [calculatorIncrease, setCalculatorIncrease] = useState<number | null>(null);
+  const calculatorCategoryId = form.watch("categoryId");
+  const resolvedMarkup = markups ? (calculatorCategoryId && markups.byCategory[calculatorCategoryId]) || markups.fallback : null;
+  const effectiveIncrease = calculatorIncrease ?? resolvedMarkup?.markupPct ?? INITIAL_PERCENTAGE_INCREASE;
   // Si la dueña no toca la casilla y deja GTIN y MPN vacíos al crear, el
   // servidor marca el producto «sin código» (como hasta ahora).
   const [identifierTouched, setIdentifierTouched] = useState(false);
@@ -585,22 +592,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     return ((price - cost) / price) * 100;
   }, [watchedPrice, watchedIsKit, kitComponentCost, watchedAcqPrice]);
 
-  // Precio sugerido = costo × (1 + incremento) + envío. Solo se escribe con
-  // el botón; el precio nunca se recalcula solo.
-  const suggestedPrice = useMemo(() => {
-    const cost = watchedIsKit ? kitComponentCost : Number(watchedAcqPrice) || 0;
-    if (cost <= 0) return 0;
-    const extra = Number(watchedTransportationCost) || 0;
-    return Math.round(
-      cost * (1 + (Number(calculatorIncrease) || 0) / 100) + extra,
-    );
-  }, [
-    watchedIsKit,
-    kitComponentCost,
-    watchedAcqPrice,
-    watchedTransportationCost,
-    calculatorIncrease,
-  ]);
+  // La misma función que el Copiloto: (costo + envío por unidad) × (1 + aumento), al peso.
+  // Solo se escribe con el botón; el precio nunca se recalcula solo.
+  const suggestedPrice = useMemo(
+    () =>
+      suggestStorePrice(
+        watchedIsKit ? kitComponentCost : landedCost(Number(watchedAcqPrice) || 0, watchedTransportationCost),
+        effectiveIncrease,
+      ),
+    [watchedIsKit, kitComponentCost, watchedAcqPrice, watchedTransportationCost, effectiveIncrease],
+  );
   const priceBelowCost = isPriceBelowCost(
     Number(watchedPrice) || 0,
     watchedIsKit ? kitComponentCost : Number(watchedAcqPrice) || 0,
@@ -1866,7 +1867,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         <PercentageInput
                           id="calculadora-incremento"
                           disabled={loading}
-                          value={calculatorIncrease}
+                          value={effectiveIncrease}
                           onChange={(value) =>
                             setCalculatorIncrease(value ?? 0)
                           }
@@ -1896,9 +1897,27 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         Usar como precio de venta
                       </Button>
                     </div>
+                    {resolvedMarkup && (
+                      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground" data-testid="calculator-markup-source">
+                        {calculatorIncrease === null ? (
+                          <span>Aumento sugerido: {resolvedMarkup.source}.</span>
+                        ) : (
+                          <>
+                            <span>Aumento escrito por ti.</span>
+                            <button
+                              type="button"
+                              className="font-medium text-primary underline-offset-2 hover:underline"
+                              onClick={() => setCalculatorIncrease(null)}
+                            >
+                              Usar el sugerido ({resolvedMarkup.markupPct.toLocaleString("es-CO")} %)
+                            </button>
+                          </>
+                        )}
+                      </p>
+                    )}
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Costo × (1 + incremento) + envío por unidad. El precio de
-                      venta solo cambia si pulsas el botón.
+                      (Costo + envío por unidad) × (1 + incremento), al peso. El
+                      precio de venta solo cambia si pulsas el botón.
                     </p>
                   </details>
                 )}

@@ -16,6 +16,8 @@ import {
   parseLowStockThreshold,
   parseReservationDefaultDays,
   parseMercadoLibreMinNetPerUnit,
+  parseOptionalMercadoLibrePesos,
+  parseStoreMinMarginPercent,
   parseMercadoLibreTargetMarginPercent,
 } from "@/lib/store-settings";
 
@@ -79,6 +81,9 @@ export async function PATCH(
       mercadoLibreTargetMarginPercent,
       mercadoLibreMinNetPerUnit,
       reservationDefaultDays,
+      storeMinMarginPercent,
+      mercadoLibreLowPriceFixedFee,
+      mercadoLibreFreeShippingMin,
     } = body;
 
     const normalizedFreeShippingThreshold = parseFreeShippingThreshold(
@@ -88,6 +93,9 @@ export async function PATCH(
     const normalizedTargetMargin = parseMercadoLibreTargetMarginPercent(mercadoLibreTargetMarginPercent);
     const normalizedMinNet = parseMercadoLibreMinNetPerUnit(mercadoLibreMinNetPerUnit);
     const normalizedReservationDays = parseReservationDefaultDays(reservationDefaultDays);
+    const normalizedMinMargin = parseStoreMinMarginPercent(storeMinMarginPercent);
+    const normalizedFixedFee = parseOptionalMercadoLibrePesos(mercadoLibreLowPriceFixedFee, "El cargo fijo de Mercado Libre");
+    const normalizedFreeShippingMin = parseOptionalMercadoLibrePesos(mercadoLibreFreeShippingMin, "El umbral de envío gratis de Mercado Libre");
 
     if (!name?.trim()) {
       throw ErrorFactory.InvalidRequest("El nombre de la tienda es requerido");
@@ -157,6 +165,9 @@ export async function PATCH(
         ...(normalizedTargetMargin === undefined ? {} : { mercadoLibreTargetMarginPercent: normalizedTargetMargin }),
         ...(normalizedMinNet === undefined ? {} : { mercadoLibreMinNetPerUnit: normalizedMinNet }),
         ...(normalizedReservationDays === undefined ? {} : { reservationDefaultDays: normalizedReservationDays }),
+        ...(normalizedMinMargin === undefined ? {} : { storeMinMarginPercent: normalizedMinMargin }),
+        ...(normalizedFixedFee === undefined ? {} : { mercadoLibreLowPriceFixedFee: normalizedFixedFee }),
+        ...(normalizedFreeShippingMin === undefined ? {} : { mercadoLibreFreeShippingMin: normalizedFreeShippingMin }),
       },
     });
 

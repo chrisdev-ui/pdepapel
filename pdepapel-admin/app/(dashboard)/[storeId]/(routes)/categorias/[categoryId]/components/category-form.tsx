@@ -57,6 +57,10 @@ const formSchema = z
     seoDescription: z.string().trim().max(SEO_DESCRIPTION_MAX, `Máximo ${SEO_DESCRIPTION_MAX} caracteres`),
     seoIntro: z.string().trim().max(SEO_INTRO_HARD_MAX, `Máximo ${SEO_INTRO_HARD_MAX} caracteres`),
     imageUrl: z.string().url("La portada debe ser una URL válida").or(z.literal("")),
+    markupOverridePercent: z
+      .string()
+      .trim()
+      .refine((value) => !value || (/^\d{1,4}([.,]\d)?$/.test(value) && Number(value.replace(",", ".")) <= 1000), "Escribe un porcentaje entre 0 y 1000, o déjalo vacío"),
   })
   .superRefine((values, context) => {
     if (!values.seoEnabled) return;
@@ -100,6 +104,8 @@ interface CategoryFormProps {
   siblings?: AttributeSibling[];
   /** `false` cuando el panel no tiene `OPENAI_API_KEY`: los botones de IA se ven deshabilitados. */
   coverConfigured: boolean;
+  /** Lo que daría la mediana sin el valor propio; null al crear. */
+  medianMarkup?: { markupPct: number; source: string } | null;
 }
 
 interface CoverResponse {
@@ -145,7 +151,7 @@ function Counter({ length, max, soft = false }: { length: number; max: number; s
   );
 }
 
-export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, usage, coverConfigured, siblings = [] }) => {
+export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, usage, coverConfigured, siblings = [], medianMarkup = null }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -165,6 +171,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
       seoDescription: initialData?.seoDescription ?? "",
       seoIntro: initialData?.seoIntro ?? "",
       imageUrl: initialData?.imageUrl ?? "",
+      markupOverridePercent: initialData?.markupOverridePercent != null ? String(initialData.markupOverridePercent) : "",
     }),
     [initialData],
   );
@@ -388,6 +395,31 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
                   Sale del nombre. Si renombras, la URL cambia y la anterior sigue redirigiendo (alias), así que los enlaces antiguos no se rompen.
                 </p>
               </div>
+            </SectionCard>
+
+            <SectionCard
+              id="precio-sugerido"
+              title="Precio sugerido"
+              description="El aumento sobre el costo con envío que usan la calculadora de la ficha y el Copiloto para esta subcategoría."
+            >
+              <FormField
+                control={form.control}
+                name="markupOverridePercent"
+                render={({ field }) => (
+                  <FormItem className="max-w-xs">
+                    <FormLabel>Aumento sugerido (%)</FormLabel>
+                    <FormControl>
+                      <Input inputMode="decimal" disabled={loading} placeholder="Usar la mediana" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <p className="text-xs text-muted-foreground" data-testid="category-median-markup">
+                {medianMarkup
+                  ? `Vacío usa la mediana: hoy ${medianMarkup.markupPct.toLocaleString("es-CO")} %, ${medianMarkup.source}.`
+                  : "Vacío usa la mediana de los productos de la subcategoría, o de su categoría si tiene menos de 5."}
+              </p>
             </SectionCard>
 
             <SectionCard
