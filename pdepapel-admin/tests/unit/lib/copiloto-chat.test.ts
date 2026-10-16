@@ -43,6 +43,26 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 
+// Los borradores de kits sin base de datos: solo importa qué herramientas ve el modelo en cada paso.
+vi.mock("@/lib/copiloto/skills/kits-tool", async () => {
+  const { tool } = await import("ai");
+  const { z } = await import("zod");
+  return {
+    kitsParaRotarTool: () =>
+      tool({
+        description: "Borradores de kits (prueba)",
+        inputSchema: z.object({}),
+        execute: async () => ({
+          datos: {
+            totalLentos: 1,
+            lentos: [],
+            kits: [{ nombreSugerido: "Kit Libretas Kawaii", n: 1, ocasion: null, piezas: [{ nombre: "Libreta", rol: "lento", categoria: "Libretas", precioEfectivo: 9000 }], kitsArmables: 2, sumaPreciosEfectivos: 9000, precioSugerido: 7900, ahorroPct: 12, margenPct: 50 }],
+          },
+        }),
+      }),
+  };
+});
+
 import { handleCopilotChat } from "@/lib/copiloto/chat";
 
 const CONVERSATION = "11111111-1111-4111-8111-111111111111";
@@ -321,5 +341,84 @@ describe("correcciones de Paula a las habilidades", () => {
     expect(eventsOf()).toEqual([expect.objectContaining({ action: "added", skillId: "descripciones" })]);
     const tools = (used.doStreamCalls[0] as unknown as { tools: { name: string }[] }).tools.map((tool) => tool.name);
     expect(tools).toContain("productoParaDescripcion");
+  });
+
+  describe("textosDeKits: solo en el paso que sigue a kitsParaRotar", () => {
+    const usage = {
+      inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: undefined },
+      outputTokens: { total: 5, text: 5, reasoning: undefined },
+    };
+    const toolCall = (toolName: string, input: unknown) => [
+      { type: "tool-call", toolCallId: `call-${toolName}`, toolName, input: JSON.stringify(input) },
+      { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, logprobs: undefined, usage },
+    ];
+    const text = [
+      { type: "text-start", id: "t1" },
+      { type: "text-delta", id: "t1", delta: "Listo." },
+      { type: "text-end", id: "t1" },
+      { type: "finish", finishReason: { unified: "stop", raw: undefined }, logprobs: undefined, usage },
+    ];
+    /** Un modelo que contesta en orden lo que se le da y guarda qué herramientas le ofrecieron en cada paso. */
+    const scripted = (steps: unknown[][]) => {
+      let index = 0;
+      return new MockLanguageModelV4({
+        doStream: async () => ({ stream: simulateReadableStream({ chunks: (steps[index++] ?? text) as never[] }) }),
+      });
+    };
+    const offered = (used: MockLanguageModelV4) =>
+      used.doStreamCalls.map((call) => ({ tools: (call.tools ?? []).map((entry) => entry.name), toolChoice: call.toolChoice }));
+    const kitsLoaded = [
+      {
+        id: "a0",
+        role: "assistant",
+        parts: [{ type: "step-start" }, { type: "tool-cargarHabilidad", toolCallId: "call-0", state: "output-available", input: { id: "kits" }, output: { ok: true, id: "kits", nombre: "Kits", instrucciones: "…", herramientas: ["kitsParaRotar"] } }],
+      },
+    ];
+    const TEXTS = { kits: [{ n: 1, nombreCorto: "Kit Libretas Kawaii", loQueAmaras: ["Ideas en orden", "Color para tus apuntes"], idealPara: null }] };
+
+    it("tras los borradores de kits se ofrece solo textosDeKits, obligada, y la respuesta termina ahí", async () => {
+      mocks.messages.mockResolvedValue(kitsLoaded);
+      const used = scripted([toolCall("kitsParaRotar", {}), toolCall("textosDeKits", TEXTS), text]);
+      const response = await handleCopilotChat(request(body("¿Qué kits puedo armar?")), "store-1", { budgetStore: budgetStore(), languageModel: () => used });
+      const streamed = await response.text();
+      const steps = offered(used);
+      expect(steps).toHaveLength(2);
+      expect(steps[0].tools).toContain("kitsParaRotar");
+      expect(steps[0].tools).not.toContain("textosDeKits");
+      expect(steps[1]).toEqual({ tools: ["textosDeKits"], toolChoice: { type: "tool", toolName: "textosDeKits" } });
+      expect(streamed).toContain("Kit Libretas Kawaii");
+      expect(streamed).not.toContain("Listo.");
+    });
+
+    it("en otra pregunta de la misma conversación (kits ya cargada), textosDeKits no se ofrece", async () => {
+      mocks.messages.mockResolvedValue([
+        ...kitsLoaded,
+        {
+          id: "a1",
+          role: "assistant",
+          parts: [
+            { type: "step-start" },
+            { type: "tool-kitsParaRotar", toolCallId: "call-k", state: "output-available", input: {}, output: { datos: { kits: [{}] } } },
+            { type: "tool-textosDeKits", toolCallId: "call-t", state: "output-available", input: TEXTS, output: { ok: true, recibidos: 1 } },
+          ],
+        },
+      ]);
+      const used = scripted([text]);
+      const response = await handleCopilotChat(request(body("¿Y cuánto vendí hoy?")), "store-1", { budgetStore: budgetStore(), languageModel: () => used });
+      await response.text();
+      const steps = offered(used);
+      expect(steps).toHaveLength(1);
+      expect(steps[0].tools).toContain("kitsParaRotar");
+      expect(steps[0].tools).not.toContain("textosDeKits");
+      expect(steps[0].toolChoice).not.toEqual({ type: "tool", toolName: "textosDeKits" });
+    });
+
+    it("una pregunta que no usa kitsParaRotar nunca ve textosDeKits, en ningún paso", async () => {
+      mocks.messages.mockResolvedValue(kitsLoaded);
+      const used = scripted([toolCall("cargarHabilidad", { id: "marketing" }), text]);
+      const response = await handleCopilotChat(request(body("Dame ideas de Reel")), "store-1", { budgetStore: budgetStore(), languageModel: () => used });
+      await response.text();
+      expect(offered(used).every((step) => !step.tools.includes("textosDeKits"))).toBe(true);
+    });
   });
 });
