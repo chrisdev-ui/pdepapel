@@ -303,7 +303,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - **Code that no longer re-creates it (fix/transporte-costos):**
   - «Duplicar» (`getProductSeed`) gives the copy a «no registrado» shipping.
   - Convert-to-variants copies the product's real value, never the legacy 1.000.
-  - A receipt with «actualizar costos» replaces an empty or legacy value with the order's real share instead of averaging them (`receive/route.ts`).
+  - A receipt with «actualizar costos» replaces an empty, 0 or legacy value with the order's real share instead of averaging them (`receive/route.ts`).
 - **Form:** `TransportCostField` offers «Por unidad» or «Toda la orden» (shipping of the whole order ÷ units, `perUnitFromOrder`; only the per-unit value is saved). It warns, without blocking, when shipping is ≥ the purchase cost or > 25 % of the price (`transportWarning`).
 - **List view «Transporte por revisar»:** active products at the legacy 1.000 or with that warning (`needsTransportReview`).
 - **Data correction:**
@@ -311,7 +311,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
   - `lib/transportation-cost-plan.ts` holds the rule, groups and exceptions; `tmp/transporte-plan.ts` (local, read-only) writes the plan to `output/audits/`; `scripts/fix-transportation-cost.ts` applies it.
   - The apply only goes through `prod:write`. It needs `--expect-rows N`, checks each product still holds its expected value, and writes nothing if anything differs.
   - Exceptions (copied after 09-18, averaged, shipping > 25 % of price, still below cost, margin goes down) wait for Paula's decision in a separate file.
-- **Known gap:** the column default is 0, and variants created through the product-groups API don't set it. They start with a «known zero» that a receipt with «actualizar costos» averages with, which dilutes the real shipping the same way the 1.000 inflated it. Not fixed in this batch.
+- **The 0 default:** the column default is 0. Variants created through the product-groups API now start at null («no registrado»), and `isKnownTransport` treats 0 like empty or the legacy 1.000. So a receipt with «actualizar costos» takes the order's real shipping instead of averaging it down with 0. The plan run counts active and archived products still at exactly 0.
 
 ### Product identifiers
 
