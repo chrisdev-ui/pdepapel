@@ -158,6 +158,31 @@ describe("pedidos de aprovisionamiento", () => {
     expect(closed.status).toBe(409);
   });
 
+  it("con «actualizar costos», un envío vacío o el 1.000 del relleno no se promedia: queda el envío real de esta compra", async () => {
+    for (const before of [1000, null]) {
+      const f = await setup();
+      await testPrisma.product.update({ where: { id: f.component.id }, data: { acqPrice: 4000, transportationCost: before, stock: 6 } });
+      const order = await createOrder(f, { status: RestockOrderStatus.ORDERED });
+      const { POST: receive } = await receiveRoute();
+      const response = await receive(
+        json("POST", { idempotencyKey: randomUUID(), lines: [{ restockOrderItemId: order.items[0].id, quantity: 2 }] }),
+        { params: { storeId: f.store.id, orderId: order.id as string } },
+      );
+      expect(response.status).toBe(200);
+      // 6000 de envío sobre 60000 de mercancía: 10 % de 30000 = 3000 por unidad, sin mezclarse con lo que había.
+      const product = await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id } });
+      expect(product.transportationCost).toBe(3000);
+      await testPrisma.restockOrderReceipt.deleteMany({ where: { storeId: f.store.id } });
+      const orders = await testPrisma.restockOrder.findMany({ where: { storeId: f.store.id }, select: { id: true } });
+      await testPrisma.restockOrderItem.deleteMany({ where: { restockOrderId: { in: orders.map((o) => o.id) } } });
+      await testPrisma.restockOrder.deleteMany({ where: { storeId: f.store.id } });
+      await testPrisma.product.updateMany({ where: { storeId: f.store.id }, data: { supplierId: null } });
+      await testPrisma.supplier.deleteMany({ where: { storeId: f.store.id } });
+      await deleteInventoryFixture(f);
+      fixture = undefined;
+    }
+  });
+
   it("no cancela con mercancía recibida, guarda notas aparte y fija las líneas al pedir", async () => {
     const f = await setup();
     const order = await createOrder(f, { status: RestockOrderStatus.ORDERED });

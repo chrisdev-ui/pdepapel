@@ -19,6 +19,7 @@ import {
   weightedAverageCost,
 } from "@/lib/restock-orders";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { isKnownTransport } from "@/lib/product-costs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -132,9 +133,10 @@ currentCost: hasCostHistory ? before?.acqPrice : null,
             incomingUnits: line.quantity,
             incomingCost: line.unitCost,
           });
+          // Un envío vacío o el 1.000 del relleno no es un dato: el de esta compra lo reemplaza en vez de promediarse con él.
           const transportationCost = weightedAverageCost({
             currentUnits,
-currentCost: hasCostHistory ? (before?.transportationCost ?? 0) : null,
+currentCost: hasCostHistory && isKnownTransport(before?.transportationCost) ? before!.transportationCost : null,
             incomingUnits: line.quantity,
             incomingCost: transportationShare(line.unitCost, order.totalAmount, order.shippingCost),
           });

@@ -231,6 +231,17 @@ describe("POST /api/[storeId]/products/[productId]/convert-to-variants/review", 
    * «disponible desde», opciones para clientes y ofertas, y el reparto se
    * registraba como ajuste manual suelto.
    */
+  it("la opción nueva no hereda el 1.000 del relleno de septiembre: nace con el envío «no registrado»", async () => {
+    const tx = transactionMocks();
+    vi.mocked(generateSemanticSKU).mockReturnValue("TER-FLO-ROS-U-1");
+    mocks.findProduct.mockResolvedValue({ ...product, transportationCost: 1000 });
+
+    const response = await submit(requestBody());
+
+    expect(response.status).toBe(200);
+    expect(tx.product.create.mock.calls[0][0].data.transportationCost).toBeNull();
+  });
+
   it("carries shipping fields, catalog options and offers to the new option and logs the split as a conversion", async () => {
     const tx = transactionMocks();
     vi.mocked(generateSemanticSKU).mockReturnValue("TER-FLO-ROS-U-1");

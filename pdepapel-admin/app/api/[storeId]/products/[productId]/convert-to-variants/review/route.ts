@@ -17,6 +17,7 @@ import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { verifyStoreOwner } from "@/lib/utils";
+import { isKnownTransport } from "@/lib/product-costs";
 
 const MAX_VARIANT_REVIEW_OPTIONS = 3;
 
@@ -383,7 +384,8 @@ export async function POST(
             productGroupId: group.id,
             // Lo que antes se perdía: envío por unidad, perfil de envío,
             // «disponible desde», opciones para clientes y ofertas vigentes.
-            transportationCost: product.transportationCost,
+            // Es el mismo producto: hereda su envío real, nunca el 1.000 del relleno.
+            transportationCost: isKnownTransport(product.transportationCost) ? product.transportationCost : null,
             shippingProfileId: product.shippingProfileId,
             availableAt: product.availableAt,
             images: { create: { url: variant.imageUrl, isMain: true } },

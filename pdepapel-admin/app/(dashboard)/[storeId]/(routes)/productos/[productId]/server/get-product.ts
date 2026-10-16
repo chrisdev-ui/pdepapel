@@ -231,7 +231,7 @@ export async function getProduct(id: string, storeId: string) {
 /**
  * «Duplicar»: los datos del original para sembrar el formulario de creación.
  * Sin fotos (las variantes comparten archivos por URL y borrar en una rompería
- * la otra), sin SKU, sin GTIN ni MPN, sin stock y sin grupo.
+ * la otra), sin SKU, sin GTIN ni MPN, sin stock, sin grupo y sin envío por unidad.
  */
 export async function getProductSeed(storeId: string, sourceId: string) {
   const access = await requireStoreRead(storeId);
@@ -261,7 +261,8 @@ export async function getProductSeed(storeId: string, sourceId: string) {
     description: source.description,
     price: source.price,
     acqPrice: source.acqPrice,
-    transportationCost: source.transportationCost,
+    // El envío por unidad es de cada compra, no del producto: la copia nace «no registrado».
+    transportationCost: null,
     categoryId: source.categoryId,
     colorId: source.colorId,
     sizeId: source.sizeId,
