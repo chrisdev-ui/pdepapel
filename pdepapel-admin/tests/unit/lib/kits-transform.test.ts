@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { kitMarker, kitsAnswerTransform } from "@/lib/copiloto/skills/kits-transform";
+import { kitMarker, kitsAnswerTransform, kitsModelTextTap } from "@/lib/copiloto/skills/kits-transform";
 
 type Part = Record<string, unknown> & { type: string };
 
@@ -79,5 +79,21 @@ describe("respuesta de kits: la arma el código al terminar", () => {
     expect(text).toContain("sin ventas en 120 días");
     expect(text).toContain("### ✏️ Segundo");
     expect(text).not.toContain("Primero");
+  });
+
+  it("registra solo la forma de lo que entregó el modelo (cuántos kits con marcador, nombre y texto), nunca el texto", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const seen: string[] = [];
+    kitsModelTextTap.current = (text) => seen.push(text);
+    try {
+      await run([toolResult(), { type: "text-delta", text: "[[KIT-1]] Kit escolar\nUna nota secreta" }, { type: "finish" }]);
+      const call = info.mock.calls.find(([label]) => label === "[COPILOTO] Kits armados");
+      expect(call?.[1]).toEqual({ kits: 1, conMarcador: 1, conNombre: 1, conTexto: 0, caracteres: 38 });
+      expect(JSON.stringify(info.mock.calls)).not.toContain("secreta");
+      expect(seen).toEqual(["[[KIT-1]] Kit escolar\nUna nota secreta"]);
+    } finally {
+      kitsModelTextTap.current = null;
+      info.mockRestore();
+    }
   });
 });

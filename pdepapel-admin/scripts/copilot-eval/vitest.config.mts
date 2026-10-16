@@ -15,6 +15,7 @@ const rootDir = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../.
 const local = loadEnv("", rootDir, "");
 
 export default defineConfig({
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: {
       "@": rootDir,

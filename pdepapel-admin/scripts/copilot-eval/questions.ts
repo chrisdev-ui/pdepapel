@@ -8,6 +8,11 @@
  * solo con todas las notas aprobadas (COPILOT_EVAL_NOTAS=borradores), porque
  * las de oficio piden citar notas.
  */
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { AnswerView } from "@/app/(dashboard)/[storeId]/(routes)/copiloto/components/answer-view";
+import { parseAnswer, type AnswerBlock } from "@/lib/copiloto/answer-blocks";
 import { extractDescriptionBlock } from "@/lib/copiloto/description-html";
 import { DESCRIPTION_MARKERS } from "@/lib/copiloto/skills/descripciones";
 
@@ -563,6 +568,8 @@ export const KITS_FIXTURE = {
 } as const;
 
 export const KITS_QUESTION = "¿Qué productos llevan más de 90 días sin venderse y qué kits podría armar con ellos?";
+/** Veces que se repite la pregunta de kits en la evaluación de formato: el modelo no contesta igual cada vez. */
+export const KITS_FORMAT_RUNS = 5;
 export const KITS_FOLLOW_UP = "Hazlo con 120 días";
 
 type KitsAnswers = { main: EvalAnswer; followUp: EvalAnswer; empty: EvalAnswer; expectedOccasion: string | null };
@@ -585,7 +592,72 @@ const amountsOf = (text: string) => Array.from(text.matchAll(AMOUNT), (match) =>
 export const JARGON = /kitsParaRotar|resumenDeHoy|resumenFinancieroMes|compararMeses|ventasDelDiaPuntoDeVenta|buscarProductos|detalleProducto|kardexProducto|porReponer|riesgoInventario|reporteTributario|saludMercadoLibre|productosParaPromocionar|cargarHabilidad|productoParaDescripcion|plataQuieta|nombreSugerido|precioSugerido|kitsArmables|margenPct|ahorroPct|precios? efectivos?|\((lento|se vende)\)/i;
 const mentions = (answer: EvalAnswer, name: string) => fold(answer.text).includes(fold(name).replace(/ eval$/, ""));
 
+/**
+ * Lo que Paula ve, no el texto: la respuesta pintada con el mismo componente
+ * del chat. Cada kit con su texto para la ficha (solo la plantilla), nada
+ * interno en pantalla y nombres cortos y distintos.
+ */
+export interface KitsFromTool {
+  kits: number;
+  /** El criterio que la herramienta usó para marcar `margenBajo`. */
+  margenCriterioPanelPct?: number;
+  conMargenBajo: number;
+}
+
+export function renderedKits(text: string, tool: KitsFromTool) {
+  const kitsFromTool = tool.kits;
+  const html = renderToStaticMarkup(createElement(AnswerView, { text, storeId: "eval" }));
+  const visible = html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
+  const blocks = parseAnswer(text);
+  const start = blocks.findIndex((block) => block.type === "heading" && block.level === 2 && /kits? sugeridos?/i.test(block.text));
+  const end = blocks.findIndex((block, index) => index > start && block.type === "heading" && block.level === 2);
+  const kitArea = start < 0 ? [] : blocks.slice(start + 1, end < 0 ? undefined : end);
+  const names = kitArea.filter((block): block is Extract<AnswerBlock, { type: "heading" }> => block.type === "heading" && block.level === 3).map((block) => block.text.replace(/^\S+\s/, "").trim());
+  const copies = kitArea.filter((block): block is Extract<AnswerBlock, { type: "copy" }> => block.type === "copy");
+  const marginTags = Array.from(html.matchAll(/data-tag="(margen bajo[^"]*)"/g), (match) => match[1].replace(/&nbsp;|\u00a0/g, " "));
+  const goal = tool.margenCriterioPanelPct === undefined ? null : `margen bajo (meta ${String(tool.margenCriterioPanelPct).replace(".", ",")} %)`;
+  const customerOnly = (copy: string) => copy.length > 0 && copy.split("\n").every((line) => /^(✨|📦|🎁|- )/.test(line) && !/\$\s?\d|\d\s?%|:::|\[\[/.test(line));
+  return {
+    kits: names.length,
+    copiaPorKit: kitsFromTool > 0 && names.length === kitsFromTool && copies.length === kitsFromTool && copies.every((copy) => customerOnly(copy.text)),
+    sinFugas: !/:::|\[\[KIT/i.test(visible),
+    nombresCortosYDistintos: names.length > 0 && names.every((name) => name.split(/\s+/).length <= 6) && new Set(names.map(fold)).size === names.length,
+    margenBajoConMeta: goal !== null && marginTags.length === tool.conMargenBajo && marginTags.every((label) => label === goal),
+    copiasDelModelo: copies.filter((copy) => copy.title === "Texto para la ficha").length,
+  };
+}
+export const kitsInTool = (answer: EvalAnswer): KitsFromTool => {
+  const outputs = (answer.toolOutputs ?? []).filter((item) => item.tool === "kitsParaRotar");
+  const last = outputs[outputs.length - 1]?.output as { datos?: { kits?: { margenBajo?: boolean | null }[]; criterios?: { margenCriterioPanelPct?: number } } } | undefined;
+  const kits = last?.datos?.kits ?? [];
+  return { kits: kits.length, margenCriterioPanelPct: last?.datos?.criterios?.margenCriterioPanelPct, conMargenBajo: kits.filter((kit) => kit.margenBajo === true).length };
+};
+
 export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa: (a: KitsAnswers) => boolean }[] = [
+  {
+    id: "kits-pantalla-copia-por-kit",
+    criterio: "Pintada: cada kit trae su «Texto para la ficha» y adentro solo va la plantilla (✨ / 📦 / 🎁 y viñetas), sin notas, montos ni «:::».",
+    estricto: true,
+    pasa: ({ main }) => renderedKits(main.text, kitsInTool(main)).copiaPorKit,
+  },
+  {
+    id: "kits-pantalla-sin-fugas",
+    criterio: "Pintada: ningún «:::» ni marcador [[KIT-n]] en pantalla.",
+    estricto: true,
+    pasa: ({ main, followUp }) => renderedKits(main.text, kitsInTool(main)).sinFugas && renderedKits(followUp.text, kitsInTool(followUp)).sinFugas,
+  },
+  {
+    id: "kits-pantalla-nombres",
+    criterio: "Pintada: nombres de kit de máximo 6 palabras y distintos entre sí.",
+    estricto: true,
+    pasa: ({ main }) => renderedKits(main.text, kitsInTool(main)).nombresCortosYDistintos,
+  },
+  {
+    id: "kits-pantalla-margen-meta",
+    criterio: "Pintada: cada kit que la herramienta marcó con margen bajo muestra «margen bajo (meta X %)», con X el mismo criterio que la herramienta usó; ningún otro kit la muestra.",
+    estricto: true,
+    pasa: ({ main }) => renderedKits(main.text, kitsInTool(main)).margenBajoConMeta,
+  },
   {
     id: "kits-lento-con-costo",
     criterio: "Usa kitsParaRotar y nombra el lento con su plata quieta a costo.",
@@ -713,10 +785,10 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
   },
   {
     id: "kits-valor-minimo",
-    criterio: "El lento de bajo valor no es pieza de ningún kit y sale en las notas («1 quieto de bajo valor…»).",
+    criterio: "El lento de bajo valor no es pieza de ningún kit y las notas dicen por qué («… no entra en kits porque su precio por unidad es muy bajo»).",
     estricto: true,
     pasa: ({ main }) =>
-      /1 quieto de bajo valor/i.test(main.text) &&
+      main.text.split("\n").some((line) => fold(line).includes(fold(KITS_FIXTURE.bajoValor).replace(/ eval$/, "")) && /no entra en kits porque su precio por unidad es muy bajo/i.test(line)) &&
       kitBlocks(main.text).every((block) => !fold(block).includes(fold(KITS_FIXTURE.bajoValor).replace(/ eval$/, ""))),
   },
   {
@@ -741,7 +813,7 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
             /^\*\*[^*]+\*\* · .*alcanza para \d+ kits?$/m.test(block) &&
             /^- .+ · \$[\d.]+.*\[\[tag:(quieto|se vende)\]\]$/m.test(block) &&
             /^:::detalle Por qué estos productos$/m.test(block) &&
-            /^:::copiar Texto para la ficha$/m.test(block),
+            /^:::copiar Texto para la ficha( \(base\))?$/m.test(block),
         )
       );
     },
@@ -794,12 +866,14 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
   },
   {
     id: "kits-margen-bajo",
-    criterio: "«margen bajo» aparece solo junto a un margen por debajo del criterio del panel.",
+    criterio: "«margen bajo (meta X %)» aparece solo junto a un margen por debajo del criterio del panel, y X es ese criterio.",
     estricto: true,
     pasa: ({ main }) => {
       const criterion = (main.toolOutputs ?? []).map((item) => (item.output as { datos?: { criterios?: { margenCriterioPanelPct?: number } } })?.datos?.criterios?.margenCriterioPanelPct).find((value) => typeof value === "number");
       if (criterion === undefined) return false;
-      return Array.from(main.text.matchAll(/margen (\d+(?:,\d+)?) %( \[\[tag:margen bajo\]\])?/g)).every((match) => Number(match[1].replace(",", ".")) < criterion === Boolean(match[2]));
+      return Array.from(main.text.matchAll(/margen (\d+(?:,\d+)?) %( \[\[tag:margen bajo \(meta ([\d,]+) %\)\]\])?/g)).every(
+        (match) => Number(match[1].replace(",", ".")) < criterion === Boolean(match[2]) && (!match[3] || Number(match[3].replace(",", ".")) === criterion),
+      );
     },
   },
   {

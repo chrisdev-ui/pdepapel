@@ -41,6 +41,14 @@ const HEADING = /^(#{2,3})\s+(.+)$/;
 const BULLET = /^( *)[-*•] (.*)$/;
 const NUMBERED = /^( *)(\d+)[.)] (.*)$/;
 
+/** Marcadores internos y restos de «:::» que no abren ni cierran un bloque: nunca se pintan. */
+export function stripInternalMarks(line: string): string {
+  const withoutMarkers = line.replace(/\[\[\s*KIT[^\]]*\]\]/gi, "");
+  if (/^\s*:::/.test(withoutMarkers)) return "";
+  const fence = withoutMarkers.indexOf(":::");
+  return (fence >= 0 ? withoutMarkers.slice(0, fence) : withoutMarkers).trimEnd();
+}
+
 interface LineItem {
   depth: number;
   ordered: boolean;
@@ -92,27 +100,38 @@ function parseLines(lines: string[], start: number, untilFence = false): { block
       if (fence[1] === "detalle") blocks.push({ type: "details", title, blocks: inner.blocks, closed: inner.closed });
       else {
         const end = inner.closed ? inner.next - 1 : lines.length;
-        blocks.push({ type: "copy", title, text: lines.slice(index + 1, end).join("\n").trim(), blocks: inner.blocks, closed: inner.closed });
+        const text = lines
+          .slice(index + 1, end)
+          .map(stripInternalMarks)
+          .join("\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+        blocks.push({ type: "copy", title, text, blocks: inner.blocks, closed: inner.closed });
       }
       index = inner.next;
       continue;
     }
-    const heading = HEADING.exec(line);
+    const clean = stripInternalMarks(line);
+    if (line.trim() && !clean.trim()) {
+      index += 1;
+      continue;
+    }
+    const heading = HEADING.exec(clean);
     if (heading) {
       flushList();
       blocks.push({ type: "heading", level: heading[1].length === 2 ? 2 : 3, text: heading[2].trim() });
       index += 1;
       continue;
     }
-    const bullet = BULLET.exec(line) ?? null;
-    const numbered = bullet ? null : NUMBERED.exec(line);
+    const bullet = BULLET.exec(clean) ?? null;
+    const numbered = bullet ? null : NUMBERED.exec(clean);
     if (bullet || numbered) {
       const indent = (bullet ?? numbered)![1].length;
       list.push({ depth: Math.floor(indent / 2), ordered: Boolean(numbered), text: (bullet ? bullet[2] : numbered![3]).trim() });
       index += 1;
       continue;
     }
-    if (!line.trim()) {
+    if (!clean.trim()) {
       flushList();
       if (blocks.length && blocks[blocks.length - 1].type !== "spacer") blocks.push({ type: "spacer" });
       index += 1;
@@ -120,12 +139,12 @@ function parseLines(lines: string[], start: number, untilFence = false): { block
     }
     // Una línea con sangría y sin viñeta sigue a la viñeta de arriba (el modelo a veces parte así un renglón).
     if (list.length && /^\s+\S/.test(raw)) {
-      list[list.length - 1].text += ` ${line.trim()}`;
+      list[list.length - 1].text += ` ${clean.trim()}`;
       index += 1;
       continue;
     }
     flushList();
-    blocks.push({ type: "paragraph", text: line.trim() });
+    blocks.push({ type: "paragraph", text: clean.trim() });
     index += 1;
   }
   flushList();
@@ -136,7 +155,7 @@ function parseLines(lines: string[], start: number, untilFence = false): { block
 /** Las piezas de una línea: texto con negrita y citas, o una etiqueta. */
 export type InlinePiece = { type: "text"; text: string } | { type: "tag"; label: string };
 
-const TAG = /\[\[tag:([^\]]{1,24})\]\]/g;
+const TAG = /\[\[tag:([^\]]{1,40})\]\]/g;
 
 export function splitTags(text: string): InlinePiece[] {
   const pieces: InlinePiece[] = [];
@@ -155,6 +174,9 @@ export function splitTags(text: string): InlinePiece[] {
 /** Lo que va al portapapeles: sin etiquetas (la negrita la resuelve quien lo convierte a HTML o a texto). */
 export function plainCopyText(text: string): string {
   return text
+    .split("\n")
+    .map(stripInternalMarks)
+    .join("\n")
     .replace(new RegExp(TAG.source, "g"), "")
     .replace(/[ \t]+$/gm, "")
     .trim();

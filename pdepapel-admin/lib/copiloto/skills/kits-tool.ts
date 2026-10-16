@@ -6,6 +6,7 @@ import { DEFAULT_BUSINESS_CASH_POLICY } from "@/lib/business-growth";
 import { withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import {
   DEFAULT_MIN_SELLER_VALUE,
+  DEFAULT_MIN_SLOW_VALUE,
   DEFAULT_TARGET_DISCOUNT_PCT,
   MAX_TARGET_DISCOUNT_PCT,
   MIN_TARGET_DISCOUNT_PCT,
@@ -243,6 +244,7 @@ export function kitsParaRotarTool(storeId: string) {
             margenMinimoPct: margenMinimo,
             descuentoObjetivoPct: descuentoObjetivo,
             precioMinimoPiezaQueSeVende: precioMinimoPieza,
+            precioMinimoPiezaLenta: DEFAULT_MIN_SLOW_VALUE,
             variedad: "una pieza por línea de producto, de líneas de la misma familia que se compran juntas más que por azar (no sustitutos ni kits)",
             lineasSinFamilia: result.lineasSinFamilia,
             precios: "efectivos: lista, oferta vigente y precio por cantidad, como en la tienda",
@@ -269,6 +271,7 @@ export function kitsParaRotarTool(storeId: string) {
           quietosDeBajoValor: {
             cantidad: result.bajoValor.length,
             nombres: result.bajoValor.slice(0, 5).map((row) => row.nombre),
+            productos: result.bajoValor.slice(0, 5),
             nota: `lentos con precio efectivo bajo para cargar un kit: no se proponen como pieza lenta`,
             linea: result.bajoValor.length > 0 ? lowValueLine(result.bajoValor.length) : null,
           },

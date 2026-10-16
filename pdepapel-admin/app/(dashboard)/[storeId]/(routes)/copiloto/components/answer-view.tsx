@@ -36,6 +36,12 @@ const TAG_TONES: Record<string, string> = {
   "margen bajo": "bg-destructive/10 text-destructive ring-1 ring-destructive/40",
 };
 
+// «margen bajo (meta 35 %)» toma el tono de «margen bajo».
+const toneOf = (label: string) => {
+  const key = Object.keys(TAG_TONES).find((tone) => label.toLowerCase().startsWith(tone));
+  return key ? TAG_TONES[key] : "bg-muted text-muted-foreground";
+};
+
 /** «[conocimiento: id]» se vuelve un enlace a la nota que Paula aprobó. */
 function TextWithCitations({ text, storeId }: { text: string; storeId: string }) {
   const pieces = text.split(/(\[conocimiento:\s*[a-z0-9-]+\])/gi);
@@ -66,7 +72,7 @@ function InlineText({ text, storeId }: { text: string; storeId: string }) {
           <span
             key={index}
             data-tag={piece.label}
-            className={cn("mx-0.5 inline-flex items-center whitespace-nowrap rounded-full px-1.5 align-[1px] text-[10px] font-semibold leading-4", TAG_TONES[piece.label.toLowerCase()] ?? "bg-muted text-muted-foreground")}
+            className={cn("mx-0.5 inline-flex items-center whitespace-nowrap rounded-full px-1.5 align-[1px] text-[10px] font-semibold leading-4", toneOf(piece.label))}
           >
             {piece.label}
           </span>

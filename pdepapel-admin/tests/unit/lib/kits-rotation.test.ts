@@ -8,6 +8,7 @@ import {
   risingProducts,
   roundDown900,
   roundUp900,
+  shortKitName,
   typeCoPurchaseCounts,
   type KitOptions,
   type KitPiece,
@@ -295,6 +296,17 @@ describe("borradores de kits", () => {
     const [kit] = run(products, fixed, { ...noSignals, occasions }, { ...OPTIONS, families }).kits;
     expect(kit.ocasion).toMatch(/^Día de la madre \(en 20 días\)$/);
     expect(kit.señales).toContain("temporada: Día de la madre el 2026-05-10");
+    expect(kit.nombreSugerido).toBe("Kit Día de la madre");
+  });
+
+  it("el nombre del borrador es corto (tema + línea, máximo 6 palabras), nunca el nombre completo del producto, y no se repite", () => {
+    const taken = new Set<string>();
+    const names = [1, 2, 3, 4].map(() => shortKitName("Útiles escolares", "Plumones", taken));
+    expect(names).toEqual(["Kit Útiles escolares con plumones", "Kit Útiles escolares", "Kit de plumones", "Kit Útiles escolares con plumones 2"]);
+    expect(names.every((name) => name.split(/\s+/).length <= 6)).toBe(true);
+    expect(shortKitName("Grados (en 40 días)", null, new Set())).toBe("Kit Grados");
+    const empty = new Set<string>();
+    expect([shortKitName(null, null, empty), shortKitName(null, null, empty)]).toEqual(["Kit surtido", "Kit surtido 2"]);
   });
 
   it("una pieza en oferta entra con su precio efectivo", () => {
@@ -414,7 +426,7 @@ describe("borradores de kits", () => {
       products[0] = { ...sobre, id: "Libreta lenta", name: "Sobre lento" };
       const cheap = run(products, rows);
       expect(cheap.kits).toEqual([]);
-      expect(cheap.bajoValor).toEqual([{ nombre: "Sobre lento", precioEfectivo: 500 }]);
+      expect(cheap.bajoValor).toEqual([{ nombre: "Sobre lento", precioEfectivo: 500, motivo: "precio unitario bajo" }]);
       expect(run(products, rows, noSignals, { ...OPTIONS, minSlowValue: 400, minSlowSharePct: 1 }).kits).toHaveLength(1);
 
       const { products: normal, rows: normalRows } = scenario();
@@ -422,7 +434,7 @@ describe("borradores de kits", () => {
       // Con un tope del 40 % de la suma, la libreta de 9.000 en un kit de unos 29.000 ya no carga el kit.
       const heavy = run(normal, normalRows, noSignals, { ...OPTIONS, minSlowSharePct: 40 });
       expect(heavy.kits).toEqual([]);
-      expect(heavy.bajoValor.map((row) => row.nombre)).toEqual(["Libreta lenta"]);
+      expect(heavy.bajoValor.map((row) => [row.nombre, row.motivo])).toEqual([["Libreta lenta", "pesa poco en el kit"]]);
     });
   });
 

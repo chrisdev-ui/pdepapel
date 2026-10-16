@@ -70,6 +70,49 @@ export const DEFAULT_MIN_SLOW_VALUE = 5000;
 export const DEFAULT_MIN_SELLER_VALUE = 1000;
 export const DEFAULT_MIN_SLOW_SHARE_PCT = 10;
 
+/** Un lento que no se propone como pieza lenta: barato por unidad, o pesa poco frente al resto del kit. */
+export interface LowValueSlow {
+  nombre: string;
+  precioEfectivo: number;
+  motivo: "precio unitario bajo" | "pesa poco en el kit";
+}
+
+export const KIT_NAME_MAX_WORDS = 6;
+const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+const foldName = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+/** ¿Ya hay un kit con este nombre en la respuesta? Sin tildes ni mayúsculas. */
+export function isNameTaken(name: string, taken: ReadonlySet<string>): boolean {
+  return taken.has(foldName(name));
+}
+
+export function takeName(name: string, taken: Set<string>): string {
+  taken.add(foldName(name));
+  return name;
+}
+
+/**
+ * Nombre corto (tema + línea, nunca el nombre completo del producto), de
+ * máximo 6 palabras y distinto de los ya usados: «Kit Grados con libretas».
+ */
+export function shortKitName(theme: string | null, line: string | null, taken: Set<string>): string {
+  const cleanTheme = theme?.replace(/\s*\(.*\)\s*$/, "").trim() || null;
+  const cleanLine = line?.trim() || null;
+  const candidates = [
+    cleanTheme && cleanLine && foldName(cleanTheme) !== foldName(cleanLine) ? `Kit ${cleanTheme} con ${lowerFirst(cleanLine)}` : null,
+    cleanTheme ? `Kit ${cleanTheme}` : null,
+    cleanLine ? `Kit de ${lowerFirst(cleanLine)}` : null,
+    cleanTheme || cleanLine ? null : "Kit surtido",
+  ].filter((name): name is string => name !== null && wordCount(name) <= KIT_NAME_MAX_WORDS);
+  const free = candidates.find((name) => !isNameTaken(name, taken));
+  if (free) return takeName(free, taken);
+  const base = (candidates[0] ?? "Kit surtido").split(/\s+/).slice(0, KIT_NAME_MAX_WORDS - 1).join(" ");
+  for (let n = 2; ; n += 1) {
+    if (!isNameTaken(`${base} ${n}`, taken)) return takeName(`${base} ${n}`, taken);
+  }
+}
+
 export interface KitPiece {
   productId: string;
   nombre: string;
@@ -298,7 +341,7 @@ export function proposeKits(input: {
   kits: KitDraft[];
   pocoAtractivos: WeakKit[];
   sinKit: { nombre: string; motivo: string }[];
-  bajoValor: { nombre: string; precioEfectivo: number }[];
+  bajoValor: LowValueSlow[];
   lineasSinFamilia: string[];
 } {
   const { products, history, together, signals, options } = input;
@@ -346,7 +389,8 @@ export function proposeKits(input: {
   let kits: KitDraft[] = [];
   const pocoAtractivos: WeakKit[] = [];
   const sinKit: { nombre: string; motivo: string }[] = [];
-  const bajoValor: { nombre: string; precioEfectivo: number }[] = [];
+  const bajoValor: LowValueSlow[] = [];
+  const takenNames = new Set<string>();
   const lineasSinFamilia = new Set<string>();
   const usedSlow = new Set<string>();
   const usedPartner = new Set<string>();
@@ -357,7 +401,7 @@ export function proposeKits(input: {
     const product = byId.get(slow.id)!;
     if (isBundle(product)) continue;
     if (product.effectivePrice < minSlowValue) {
-      bajoValor.push({ nombre: product.name, precioEfectivo: Math.round(product.effectivePrice) });
+      bajoValor.push({ nombre: product.name, precioEfectivo: Math.round(product.effectivePrice), motivo: "precio unitario bajo" });
       continue;
     }
     if (slow.available < options.minPerKit) {
@@ -451,7 +495,7 @@ export function proposeKits(input: {
       continue;
     }
     if (product.effectivePrice < (sumOf([...slowPieces, ...partnerProducts]) * minSlowShare) / 100) {
-      bajoValor.push({ nombre: product.name, precioEfectivo: Math.round(product.effectivePrice) });
+      bajoValor.push({ nombre: product.name, precioEfectivo: Math.round(product.effectivePrice), motivo: "pesa poco en el kit" });
       continue;
     }
 
@@ -459,7 +503,7 @@ export function proposeKits(input: {
     const pricing = priceKit(pieces, options.minMarginPct, options.targetDiscountPct);
     const everyday = EVERYDAY_USES.find((use) => pieces.some((p) => matchesOccasion(textsOf(byId.get(p.productId)!), use.palabras)));
     const ocasion = occasion ? `${occasion.nombre} (en ${occasion.enDias} ${occasion.enDias === 1 ? "día" : "días"})` : (everyday?.nombre ?? null);
-    const nombreSugerido = `Kit ${ocasion ? ocasion.replace(/ \(en .*\)$/, "") : (product.typeName ?? product.categoryName ?? "surtido")} con ${product.name}`;
+    const nombreSugerido = shortKitName(ocasion ? ocasion.replace(/ \(en .*\)$/, "") : null, product.typeName ?? product.categoryName, takenNames);
 
     if (pricing.estado === "poco atractivo" || pricing.estado === "no da el margen") {
       pocoAtractivos.push({

@@ -24,26 +24,29 @@ const clerkUserId = process.env.E2E_ADMIN_CLERK_USER_ID;
 const configured = Boolean(clerkSecretKey?.startsWith("sk_test_") && clerkUserId && process.env.COPILOT_DATABASE_URL);
 const SHOTS = path.resolve(__dirname, "../../tmp/copilot-shots");
 
+const piece = (nombre: string, rol: "lento" | "se vende", precioEfectivo: number) => ({ nombre, rol, precioEfectivo, precioDeLista: precioEfectivo, oferta: null });
 const datos: KitsAnswerData = {
-  criterios: { diasSinVenta: 90, lineasSinFamilia: [] },
-  totalLentos: 2,
-  plataQuietaACostoTotal: 42000,
+  criterios: { diasSinVenta: 90, lineasSinFamilia: [], margenCriterioPanelPct: 35, precioMinimoPiezaLenta: 5000 },
+  totalLentos: 4,
+  plataQuietaACostoTotal: 102000,
   lentosSinCosto: 0,
   lentos: [
     { nombre: "Libreta de prueba", disponible: 8, plataQuietaACosto: 24000, ultimaVenta: "hace 120 días" },
-    { nombre: "Carpeta de prueba", disponible: 6, plataQuietaACosto: 18000, ultimaVenta: "hace 100 días" },
+    { nombre: "Sobre de manila de prueba x unidad", disponible: 200, plataQuietaACosto: 30000, ultimaVenta: "hace 200 días" },
+    { nombre: "Set de plumones de prueba doble punta pincel y fina 24 colores", disponible: 6, plataQuietaACosto: 30000, ultimaVenta: "hace 110 días" },
+    { nombre: "Maleta conejito de prueba", disponible: 3, plataQuietaACosto: 18000, ultimaVenta: "hace 100 días" },
   ],
   nuevosSinDatosDeVenta: { cantidad: 3 },
-  quietosDeBajoValor: { cantidad: 0 },
+  quietosDeBajoValor: { cantidad: 1, nombres: ["Sobre de manila de prueba x unidad"], productos: [{ nombre: "Sobre de manila de prueba x unidad", precioEfectivo: 300, motivo: "precio unitario bajo" }] },
   kits: [
     {
-      nombreSugerido: "Kit Grados con Libreta de prueba",
-      ocasion: "grados",
+      nombreSugerido: "Kit Grados con libretas",
+      ocasion: "Grados",
       marcador: "[[KIT-1]]",
       piezas: [
-        { nombre: "Libreta de prueba", rol: "lento", precioEfectivo: 9000, precioDeLista: 9000, oferta: null },
+        piece("Libreta de prueba", "lento", 9000),
         { nombre: "Lápiz de prueba con un nombre largo para partir el renglón", rol: "se vende", precioEfectivo: 4000, precioDeLista: 5000, oferta: "20 %" },
-        { nombre: "Borrador de prueba", rol: "se vende", precioEfectivo: 3000, precioDeLista: 3000, oferta: null, comparteStockCon: ["Kit de carpetas"] },
+        { ...piece("Borrador de prueba", "se vende", 3000), comparteStockCon: ["Kit Útiles escolares con plumones"] },
       ],
       kitsArmables: 4,
       sumaPreciosEfectivos: 16000,
@@ -57,14 +60,56 @@ const datos: KitsAnswerData = {
         "Lápiz de prueba: su línea se compra junto con la de Libreta de prueba (3 pedidos en 180 días); en alza (6 en 30 días contra 1 antes)",
       ],
     },
+    {
+      nombreSugerido: "Kit Útiles escolares con plumones",
+      ocasion: "Útiles escolares",
+      marcador: "[[KIT-2]]",
+      piezas: [piece("Set de plumones de prueba doble punta pincel y fina 24 colores", "lento", 25000), piece("Cuaderno de prueba", "se vende", 6000), { ...piece("Borrador de prueba", "se vende", 3000), comparteStockCon: ["Kit Grados con libretas"] }],
+      kitsArmables: 3,
+      sumaPreciosEfectivos: 34000,
+      precioSugerido: 29900,
+      ahorroPct: 12.1,
+      margenPct: 28,
+      margenBajo: true,
+      estado: "listo",
+      señales: ["Set de plumones de prueba: 110 días sin venderse, $30.000 quietos a costo"],
+    },
+    {
+      nombreSugerido: "Kit Regalo con maletas",
+      ocasion: "Regalo",
+      marcador: "[[KIT-3]]",
+      piezas: [piece("Maleta conejito de prueba", "lento", 30000), piece("Libreta pequeña de prueba", "se vende", 7000), piece("Stickers de prueba", "se vende", 4000)],
+      kitsArmables: 3,
+      sumaPreciosEfectivos: 41000,
+      precioSugerido: 35900,
+      ahorroPct: 12.4,
+      margenPct: 40,
+      margenBajo: false,
+      estado: "listo",
+      señales: ["Maleta conejito de prueba: 100 días sin venderse, $18.000 quietos a costo"],
+    },
   ],
   pocoAtractivos: [],
   sinKit: [],
 };
 
+// El primer kit con la plantilla del modelo; los otros dos con la forma que dejó la respuesta real del 2026-10-16
+// (nombre largo tras el marcador, sin plantilla y una nota con «:::detalle» al final).
 const answer = composeKitsAnswer(
   datos,
-  ["[[KIT-1]] Kit de grados", "✨ Lo que amarás", "- Una libreta para tus ideas", "- Útiles para el día a día", "📦 Incluye: Libreta, Lápiz y Borrador de prueba", "🎁 Ideal para regalar a quien se gradúa."].join("\n"),
+  [
+    "[[KIT-1]] Kit de grados",
+    "✨ Lo que amarás",
+    "- Una libreta para tus ideas",
+    "- Útiles para el día a día",
+    "📦 Incluye: Libreta, Lápiz y Borrador de prueba",
+    "🎁 Ideal para regalar a quien se gradúa.",
+    "[[KIT-2]] Kit Útiles escolares con Set de plumones de prueba doble punta pincel y fina 24 colores",
+    "[[KIT-3]] Kit Regalo con Maleta conejito de prueba para niñas con ruedas y manija",
+    "La maleta conejito no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta",
+    "- Con 3 disponibles se arman solo 3 kits.",
+    ":::",
+  ].join("\n"),
 );
 
 const sse = [
@@ -116,27 +161,36 @@ test.describe("respuesta de kits en el teléfono", () => {
       }).toPass({ timeout: 60_000 });
       await page.getByRole("button", { name: "Enviar" }).click();
 
-      for (const name of ["Resumen", "Los 2 con más plata quieta", "1 kit sugerido", "🎓 Kit de grados", "Notas"]) {
+      for (const name of ["Resumen", "Los 4 con más plata quieta", "3 kits sugeridos", "🎓 Kit de grados", "✏️ Kit Útiles escolares con plumones", "🎁 Kit Regalo con maletas", "Notas"]) {
         await expect(page.getByRole("heading", { name })).toBeVisible();
       }
       await expect(page.getByText("alcanza para 4 kits")).toBeVisible();
-      await expect(page.locator('[data-tag="margen bajo"]')).toBeVisible();
+      await expect(page.locator('[data-tag="margen bajo (meta 35 %)"]')).toHaveCount(2);
+      await expect(page.locator('[data-tag="no va en kits"]')).toHaveCount(1);
+      await expect(page.getByText("su precio por unidad es muy bajo ($300; una pieza quieta debe valer al menos $5.000)")).toBeVisible();
       // Las piezas son una lista de verdad, cada una con su etiqueta, y lo que comparte stock cuelga de su pieza.
       const pieces = page.locator('ul[data-list-depth="0"]', { hasText: "Libreta de prueba · $9.000" }).locator(':scope > li[data-bullet-depth="0"]');
       await expect(pieces).toHaveCount(3);
       await expect(pieces.nth(0).locator('[data-tag="quieto"]')).toBeVisible();
       await expect(pieces.nth(1).locator('[data-tag="se vende"]')).toBeVisible();
-      await expect(pieces.nth(2).locator('li[data-bullet-depth="1"]')).toHaveText("comparte stock con «Kit de carpetas»");
-      // Plegados por defecto: «Por qué» y el texto para la ficha, con «Copiar» a la vista.
-      const why = page.getByTestId("details-block");
-      const copy = page.getByTestId("copy-block");
+      await expect(pieces.nth(2).locator('li[data-bullet-depth="1"]')).toHaveText("comparte stock con «Kit Útiles escolares con plumones»");
+      // Cada kit con su texto para la ficha, plegado, con «Copiar» a la vista; sin texto del modelo, uno base con sus piezas.
+      const why = page.getByTestId("details-block").first();
+      const copies = page.getByTestId("copy-block");
+      await expect(copies).toHaveCount(3);
+      await expect(copies.nth(0).locator("summary")).toContainText("Texto para la ficha");
+      await expect(copies.nth(1).locator("summary")).toContainText("Texto para la ficha (base)");
+      await expect(copies.nth(2).locator("summary")).toContainText("Texto para la ficha (base)");
+      for (let index = 0; index < 3; index += 1) {
+        await expect(copies.nth(index)).not.toHaveAttribute("open", "");
+        await expect(copies.nth(index).getByRole("button", { name: "Copiar" })).toBeVisible();
+      }
+      const copy = copies.nth(0);
       await expect(why).not.toHaveAttribute("open", "");
-      await expect(copy).not.toHaveAttribute("open", "");
-      await expect(copy.getByRole("button", { name: "Copiar" })).toBeVisible();
       await expect(page.getByText("120 días sin venderse, $24.000 quietos a costo")).toBeHidden();
-      // Sin jerga ni nombres de herramientas.
+      // Sin jerga, nombres de herramientas, marcadores ni «:::», ni la nota del modelo.
       const shown = await page.getByTestId("answer").innerText();
-      expect(shown).not.toMatch(/kitsParaRotar|precio efectivo|suma de precios|\((lento|se vende)\)/);
+      expect(shown).not.toMatch(/kitsParaRotar|precio efectivo|suma de precios|\((lento|se vende)\)|:::|\[\[KIT|no alcanza para armar tres kits/i);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);
       // «Copiar» va dentro del título del bloque: copia sin desplegarlo.
@@ -148,9 +202,12 @@ test.describe("respuesta de kits en el teléfono", () => {
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-kits.png`), fullPage: true });
 
       await why.locator("summary").click();
-      await copy.locator("summary").getByText("Texto para la ficha").click();
+      for (let index = 0; index < 3; index += 1) await copies.nth(index).locator("summary > span").click();
       await expect(page.getByText("120 días sin venderse, $24.000 quietos a costo")).toBeVisible();
       await expect(copy.getByText("✨ Lo que amarás")).toBeVisible();
+      await expect(copies.nth(1)).toContainText("📦 Incluye: Set de plumones de prueba doble punta pincel y fina 24 colores, Cuaderno de prueba y Borrador de prueba");
+      await expect(copies.nth(2)).toContainText("📦 Incluye: Maleta conejito de prueba, Libreta pequeña de prueba y Stickers de prueba");
+      await expect(copies.nth(2)).not.toContainText("no alcanza");
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-kits-abierto.png`), fullPage: true });
     });

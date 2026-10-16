@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bulletList, collapsible, copyBlock, heading, keyLine, numberedList, parseAnswer, plainCopyText, sections, splitTags, tag } from "@/lib/copiloto/answer-blocks";
+import { bulletList, collapsible, copyBlock, heading, keyLine, numberedList, parseAnswer, plainCopyText, sections, splitTags, stripInternalMarks, tag } from "@/lib/copiloto/answer-blocks";
 
 describe("formato de las respuestas del copiloto", () => {
   it("secciones, numeradas, viñetas anidadas por sangría y párrafos", () => {
@@ -75,5 +75,25 @@ describe("formato de las respuestas del copiloto", () => {
       "## Resumen\n\n**$21.900** · por separado $25.500 · ahorro 14,1 %\n\n1. a\n2. b\n\n- Libreta [[tag:quieto]]\n\n:::detalle Por qué estos productos\n- uno\n:::\n\n:::copiar Texto para la ficha\n✨ Lo que amarás\n:::",
     );
     expect(parseAnswer(text).map((block) => block.type)).toEqual(["heading", "spacer", "paragraph", "spacer", "list", "spacer", "list", "spacer", "details", "spacer", "copy"]);
+  });
+
+  it("marcadores internos y «:::» sueltos nunca llegan a la pantalla ni al portapapeles", () => {
+    expect(stripInternalMarks("Kit escolar [[KIT-1]] [[kit 2]]")).toBe("Kit escolar");
+    expect(stripInternalMarks("Una nota. :::detalle Para tener en cuenta")).toBe("Una nota.");
+    expect(stripInternalMarks(":::nota")).toBe("");
+    expect(stripInternalMarks("- Libreta [[tag:quieto]]")).toBe("- Libreta [[tag:quieto]]");
+    const blocks = parseAnswer(["[[KIT-1]]", "Una nota. :::detalle Ojo", ":::nota", ":::copiar Texto", "📦 Incluye: A [[KIT-2]]", "Nota :::detalle x", ":::"].join("\n"));
+    expect(blocks).toEqual([
+      { type: "paragraph", text: "Una nota." },
+      { type: "copy", title: "Texto", text: "📦 Incluye: A\nNota", blocks: [{ type: "paragraph", text: "📦 Incluye: A" }, { type: "paragraph", text: "Nota" }], closed: true },
+    ]);
+    expect(plainCopyText("📦 Incluye: A [[KIT-3]]\nOjo :::detalle x")).toBe("📦 Incluye: A\nOjo");
+  });
+
+  it("una etiqueta puede llevar su referencia: «margen bajo (meta 35 %)»", () => {
+    expect(splitTags(`margen 30 % ${tag("margen bajo (meta 35 %)")}`)).toEqual([
+      { type: "text", text: "margen 30 % " },
+      { type: "tag", label: "margen bajo (meta 35 %)" },
+    ]);
   });
 });

@@ -1,7 +1,9 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from "vitest";
 
 import { composeKitsAnswer, type KitData, type KitsAnswerData } from "../../../lib/copiloto/skills/kits-answer";
-import { KITS_CASES } from "../../../scripts/copilot-eval/questions";
+import { KITS_CASES, renderedKits } from "../../../scripts/copilot-eval/questions";
 
 /** Las comprobaciones de la evaluación de kits, sin llamar al modelo: también tienen que reprobar lo que deben reprobar. */
 const check = (id: string) => KITS_CASES.find((item) => item.id === id)!.pasa;
@@ -63,7 +65,7 @@ const kit = (name: string, slow: string, armables: number, shares: string): KitD
   señales: [`${slow}: 120 días sin venderse`],
 });
 const datos = (kits: KitData[], lowValue = 1): KitsAnswerData => ({
-  criterios: { diasSinVenta: 90 },
+  criterios: { diasSinVenta: 90, precioMinimoPiezaLenta: 5000 },
   totalLentos: 3,
   plataQuietaACostoTotal: 30000,
   lentosSinCosto: 0,
@@ -72,7 +74,11 @@ const datos = (kits: KitData[], lowValue = 1): KitsAnswerData => ({
     { nombre: "Sobre lento Eval", disponible: 40, plataQuietaACosto: 6000, ultimaVenta: "hace 150 días" },
   ],
   nuevosSinDatosDeVenta: { cantidad: 1 },
-  quietosDeBajoValor: { cantidad: lowValue, nombres: lowValue ? ["Sobre lento Eval"] : [] },
+  quietosDeBajoValor: {
+    cantidad: lowValue,
+    nombres: lowValue ? ["Sobre lento Eval"] : [],
+    productos: lowValue ? [{ nombre: "Sobre lento Eval", precioEfectivo: 150, motivo: "precio unitario bajo" }] : [],
+  },
   kits,
 });
 const MODEL = "[[KIT-1]] Kit de grados\n✨ Lo que amarás\n- Algo\n📦 Incluye: Libreta y Borrador\n[[KIT-2]] Kit de carpetas\n📦 Incluye: Carpeta y Borrador";
@@ -129,8 +135,84 @@ describe("kits-formato, kits-una-linea-nuevos, kits-sin-jerga y kits-montos-de-l
   it("«margen bajo» solo debajo del criterio del panel", () => {
     const tool = (pct: number) => ({ tool: "kitsParaRotar", output: { datos: { criterios: { margenCriterioPanelPct: pct } } } });
     const withTool = (body: string, pct: number) => ({ ...answer(body), main: { ...answer(body).main, toolOutputs: [tool(pct)] } });
-    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 30 % [[tag:margen bajo]] · alcanza para 4 kits", 35))).toBe(true);
-    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 50 % [[tag:margen bajo]] · alcanza para 4 kits", 35))).toBe(false);
+    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 30 % [[tag:margen bajo (meta 35 %)]] · alcanza para 4 kits", 35))).toBe(true);
+    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 50 % [[tag:margen bajo (meta 35 %)]] · alcanza para 4 kits", 35))).toBe(false);
+    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 30 % [[tag:margen bajo]] · alcanza para 4 kits", 35))).toBe(false);
+    expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 30 % [[tag:margen bajo (meta 40 %)]] · alcanza para 4 kits", 35))).toBe(false);
     expect(check("kits-margen-bajo")(withTool("**$10.900** · margen 30 % · alcanza para 4 kits", 35))).toBe(false);
   });
 });
+
+describe("respuesta de producción del 2026-10-16, pintada", () => {
+  // La forma que dejó la respuesta real: nombres largos copiados de la herramienta tras cada marcador, sin plantilla, y una nota con «:::detalle» al final.
+  const MODEL_OUTPUT = [
+    "[[KIT-1]] Kit Útiles escolares con Set de plumones Prueba doble punta pincel y fina 24 colores",
+    "[[KIT-2]] Kit Útiles escolares con Cartuchera Prueba de tres compartimentos con cremallera",
+    "[[KIT-3]] Kit Regalo con Maleta conejito Prueba para niñas con ruedas y manija",
+    "La maleta conejito Prueba no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta",
+    "- Con 2 disponibles se arman solo 2 kits.",
+    ":::",
+  ].join("\n");
+  const piece = (nombre: string, rol: string) => ({ nombre, rol, precioEfectivo: 9000 });
+  const kit = (nombreSugerido: string, ocasion: string, n: number, lenta: string): KitData => ({
+    nombreSugerido,
+    ocasion,
+    marcador: `[[KIT-${n}]]`,
+    piezas: [piece(lenta, "lento"), piece(`Cuaderno ${n}`, "se vende"), piece(`Lápiz ${n}`, "se vende")],
+    kitsArmables: 3,
+    sumaPreciosEfectivos: 27000,
+    precioSugerido: 23900,
+    ahorroPct: 11.5,
+    margenPct: 30,
+    margenBajo: true,
+  });
+  const datos: KitsAnswerData = {
+    criterios: { diasSinVenta: 90, margenCriterioPanelPct: 35, precioMinimoPiezaLenta: 5000 },
+    totalLentos: 3,
+    plataQuietaACostoTotal: 90000,
+    lentos: [],
+    kits: [
+      kit("Kit Útiles escolares con plumones", "Útiles escolares", 1, "Set de plumones Prueba"),
+      kit("Kit Útiles escolares", "Útiles escolares", 2, "Cartuchera Prueba"),
+      kit("Kit Regalo con maletas", "Regalo", 3, "Maleta conejito Prueba"),
+    ],
+  };
+  // Lo que se vio en el chat: solo el último kit con bloque, y adentro la nota del modelo con «:::detalle».
+  const BROKEN = [
+    "## 3 kits sugeridos",
+    "### ✏️ Kit Útiles escolares con Set de plumones Prueba doble punta pincel y fina 24 colores",
+    "**$23.900** · margen 30 % [[tag:margen bajo]] · alcanza para 3 kits",
+    "### ✏️ Kit Útiles escolares con Cartuchera Prueba de tres compartimentos con cremallera",
+    "**$23.900** · margen 30 % [[tag:margen bajo]] · alcanza para 3 kits",
+    "### 🎁 Kit Regalo con Maleta conejito Prueba para niñas con ruedas y manija",
+    "**$23.900** · margen 30 % [[tag:margen bajo]] · alcanza para 3 kits",
+    ":::copiar Texto para la ficha",
+    "La maleta conejito Prueba no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta",
+    "- Con 2 disponibles se arman solo 2 kits.",
+    ":::",
+  ].join("\n");
+
+  it("la respuesta rota de producción reprueba las tres comprobaciones de pantalla", () => {
+    const tool = { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 3 };
+    const result = renderedKits(BROKEN, tool);
+    expect(result.copiaPorKit).toBe(false);
+    expect(result.nombresCortosYDistintos).toBe(false);
+    expect(result.margenBajoConMeta).toBe(false);
+    expect(renderedKits(`${BROKEN}\n[[KIT-1]] suelto`, tool).sinFugas).toBe(true);
+  });
+
+  it("la misma salida del modelo, armada ahora, aprueba: un texto por kit con sus piezas, sin fugas y con nombres cortos", () => {
+    const text = composeKitsAnswer(datos, MODEL_OUTPUT);
+    expect(renderedKits(text, { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 3 })).toEqual({ kits: 3, copiaPorKit: true, sinFugas: true, nombresCortosYDistintos: true, margenBajoConMeta: true, copiasDelModelo: 0 });
+  });
+
+  it("la meta del tag tiene que ser el criterio que usó la herramienta, y solo en los kits marcados", () => {
+    const text = composeKitsAnswer(datos, MODEL_OUTPUT);
+    expect(renderedKits(text, { kits: 3, margenCriterioPanelPct: 40, conMargenBajo: 3 }).margenBajoConMeta).toBe(false);
+    expect(renderedKits(text, { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 2 }).margenBajoConMeta).toBe(false);
+    expect(renderedKits(text, { kits: 3, conMargenBajo: 3 }).margenBajoConMeta).toBe(false);
+    const withoutLow = composeKitsAnswer({ ...datos, kits: datos.kits!.map((kit) => ({ ...kit, margenPct: 50, margenBajo: false })) }, MODEL_OUTPUT);
+    expect(renderedKits(withoutLow, { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 0 }).margenBajoConMeta).toBe(true);
+  });
+});
+

@@ -20,12 +20,15 @@ import {
   KITS_CASES,
   KITS_FIXTURE,
   KITS_FOLLOW_UP,
+  KITS_FORMAT_RUNS,
   KITS_QUESTION,
   MARKETING_MODE_QUESTIONS,
   MARKETING_QUESTIONS,
   PAULA_SLOTS,
   QUESTIONS,
   ROUTING_QUESTIONS,
+  kitsInTool,
+  renderedKits,
   type EvalAnswer,
 } from "./questions";
 
@@ -636,9 +639,24 @@ describe("evaluación del copiloto", () => {
         session.userId = previous;
       }
     };
-    const main = await askAs(kitsFixture!, KITS_QUESTION);
+    // El modelo no es determinista: la misma pregunta varias veces, y cada vez se mira la respuesta pintada.
+    const { kitsModelTextTap } = await import("@/lib/copiloto/skills/kits-transform");
+    const rawModelTexts: string[] = [];
+    kitsModelTextTap.current = (text) => rawModelTexts.push(text);
+    const runs: Awaited<ReturnType<typeof askAs>>[] = [];
+    try {
+      for (let run = 0; run < KITS_FORMAT_RUNS; run += 1) runs.push(await askAs(kitsFixture!, KITS_QUESTION));
+    } finally {
+      kitsModelTextTap.current = null;
+    }
+    const main = runs[0];
     const followUp = await askAs(kitsFixture!, KITS_FOLLOW_UP, { conversationId: main.conversationId });
     const empty = await askAs(emptyFixture!, KITS_QUESTION);
+    const perRun = runs.map((answer, run) => ({
+      run: run + 1,
+      pantalla: renderedKits(answer.text, kitsInTool(answer)),
+      fallan: KITS_CASES.filter((kitsCase) => !kitsCase.pasa({ main: answer, followUp, empty, expectedOccasion: kitsContext.expectedOccasion })).map((kitsCase) => `${kitsCase.id}${kitsCase.estricto ? "" : " (no estricto)"}`),
+    }));
     const verdicts = KITS_CASES.map((kitsCase) => ({ id: kitsCase.id, estricto: kitsCase.estricto, pasa: kitsCase.pasa({ main, followUp, empty, expectedOccasion: kitsContext.expectedOccasion }) }));
 
     const store = fixture!.store.id;
@@ -650,10 +668,15 @@ describe("evaluación del copiloto", () => {
 
     const dir = path.join(ROOT, "tmp", "copilot-eval");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-formato.json`), JSON.stringify({ verdicts, others, main: main.text, followUp: followUp.text, empty: empty.text }, null, 2));
+    writeFileSync(
+      path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-formato.json`),
+      JSON.stringify({ verdicts, perRun, others, runs: runs.map((answer) => answer.text), rawModelTexts, followUp: followUp.text, empty: empty.text }, null, 2),
+    );
+    console.table(perRun.map(({ run, pantalla, fallan }) => ({ run, ...pantalla, fallan: fallan.join(", ") || "—" })));
     console.table([...verdicts.map(({ id, estricto, pasa }) => ({ id, estricto, pasa: pasa ? "sí" : "NO" })), ...others.map(({ pregunta, sinJerga, sinTablas }) => ({ id: pregunta, estricto: true, pasa: sinJerga && sinTablas ? "sí" : "NO" }))]);
-    expect(verdicts.filter((verdict) => verdict.estricto && !verdict.pasa).map((verdict) => verdict.id)).toEqual([]);
-    expect(verdicts.filter((verdict) => !verdict.pasa).length).toBeLessThanOrEqual(1);
+    expect(perRun.map(({ run, fallan }) => ({ run, estrictos: fallan.filter((id) => !id.endsWith("(no estricto)")) }))).toEqual(perRun.map(({ run }) => ({ run, estrictos: [] })));
+    expect(perRun.every(({ pantalla }) => pantalla.copiaPorKit && pantalla.sinFugas && pantalla.nombresCortosYDistintos && pantalla.margenBajoConMeta)).toBe(true);
+    expect(perRun.every(({ fallan }) => fallan.length <= 1)).toBe(true);
     expect(others.filter((row) => !row.sinJerga || !row.sinTablas).map((row) => row.pregunta)).toEqual([]);
   });
 });

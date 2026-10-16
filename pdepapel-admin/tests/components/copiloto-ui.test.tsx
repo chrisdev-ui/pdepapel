@@ -29,6 +29,7 @@ vi.mock("next/navigation", () => ({ useParams: () => ({ storeId: "store-1" }), u
 vi.mock("@/hooks/use-toast", () => ({ toast: mocks.toast }));
 
 import { AssistantText, CopilotChat } from "@/app/(dashboard)/[storeId]/(routes)/copiloto/components/copilot-chat";
+import { composeKitsAnswer } from "@/lib/copiloto/skills/kits-answer";
 import { KnowledgeList } from "@/app/(dashboard)/[storeId]/(routes)/copiloto/conocimiento/components/knowledge-list";
 
 beforeEach(() => {
@@ -304,5 +305,51 @@ describe("respuesta del copiloto con formato", () => {
     expect(Array.from(container.querySelectorAll("li[data-bullet-depth]")).map((node) => node.getAttribute("data-bullet-depth"))).toEqual(["0", "1", "1", "2"]);
     expect(container.querySelector("strong")?.textContent).toBe("Kit escolar");
     expect(container.textContent).toContain("Hay 2 lentos.");
+  });
+
+  it("la respuesta de kits de producción, armada otra vez: cada kit con su texto para la ficha y nada interno en pantalla ni al copiar", async () => {
+    const piece = (nombre: string, rol: string) => ({ nombre, rol, precioEfectivo: 9000 });
+    const text = composeKitsAnswer(
+      {
+        criterios: { diasSinVenta: 90, margenCriterioPanelPct: 35, precioMinimoPiezaLenta: 5000 },
+        totalLentos: 2,
+        plataQuietaACostoTotal: 50000,
+        lentos: [{ nombre: "Maleta conejito", disponible: 2, plataQuietaACosto: 40000, ultimaVenta: "hace 120 días" }],
+        kits: [
+          { nombreSugerido: "Kit Útiles escolares con plumones", ocasion: "Útiles escolares", marcador: "[[KIT-1]]", piezas: [piece("Plumones", "lento"), piece("Cuaderno", "se vende")], kitsArmables: 3, sumaPreciosEfectivos: 18000, precioSugerido: 15900, ahorroPct: 11.7, margenPct: 30, margenBajo: true },
+          { nombreSugerido: "Kit Regalo con maletas", ocasion: "Regalo", marcador: "[[KIT-2]]", piezas: [piece("Maleta conejito", "lento"), piece("Libreta", "se vende")], kitsArmables: 2, sumaPreciosEfectivos: 18000, precioSugerido: 15900, ahorroPct: 11.7, margenPct: 30, margenBajo: true },
+        ],
+      },
+      "[[KIT-1]] Kit Útiles escolares con Set de plumones doble punta pincel y fina 24 colores\n[[KIT-2]] Kit Regalo con Maleta conejito para niñas con ruedas y manija\nLa maleta conejito no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta\n- Solo 2.\n:::",
+    );
+    const { container } = render(<AssistantText text={text} storeId="store-1" />);
+    expect(container.textContent).not.toMatch(/:::|\[\[KIT/i);
+    expect(container.textContent).not.toContain("no alcanza para armar tres kits");
+    const copies = screen.getAllByTestId("copy-block");
+    expect(copies).toHaveLength(2);
+    expect(copies[0].textContent).toContain("📦 Incluye: Plumones y Cuaderno");
+    expect(copies[1].textContent).toContain("📦 Incluye: Maleta conejito y Libreta");
+    expect(Array.from(container.querySelectorAll("[data-tag^='margen bajo']")).map((node) => [node.textContent, node.className.includes("text-destructive")])).toEqual([
+      ["margen bajo (meta 35 %)", true],
+      ["margen bajo (meta 35 %)", true],
+    ]);
+
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { write, writeText: vi.fn() } });
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {
+      constructor(readonly items: Record<string, Blob>) {}
+    };
+    fireEvent.click(within(copies[1]).getByRole("button", { name: "Copiar" }));
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    const plain = await (write.mock.calls[0][0][0] as { items: Record<string, Blob> }).items["text/plain"].text();
+    expect(plain).toBe("✨ Ocasión: Regalo\n📦 Incluye: Maleta conejito y Libreta\n🎁 Ideal para regalar.");
+  });
+
+  it("una respuesta vieja con marcadores o «:::» sueltos no los muestra", () => {
+    const text = ["## Kits", "[[KIT-1]] Kit escolar", "Una nota. :::detalle Para tener en cuenta", ":::nota", ":::copiar Texto para la ficha", "📦 Incluye: Libreta [[KIT-2]]", "La libreta no alcanza. :::detalle Ojo", ":::"].join("\n");
+    const { container } = render(<AssistantText text={text} storeId="store-1" />);
+    expect(container.textContent).not.toMatch(/:::|\[\[KIT/i);
+    expect(container.textContent).toContain("Kit escolar");
+    expect(container.textContent).toContain("Una nota.");
   });
 });
