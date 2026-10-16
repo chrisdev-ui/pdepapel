@@ -17,6 +17,7 @@ const product = (overrides: Partial<PlanProduct> = {}): PlanProduct => ({
   reservedUnits: 0,
   createdAt: before,
   isArchived: false,
+  isKit: false,
   averagedAfterBackfill: false,
   convertedVariant: false,
   lastReceipt: null,
@@ -60,6 +61,11 @@ describe("corrección del envío por unidad", () => {
     expect(higher.exceptions).toEqual(["el margen baja: el envío real pasa de lo que tenía"]);
     const quiet = planRow(product({ price: 20000, acqPrice: 9000 }))!;
     expect(quiet).toMatchObject({ newTransport: null, source: "sin recepción: no registrado", exceptions: [], aprobado: true });
+  });
+
+  it("kits: su envío propio queda null sin revisión, aunque el costo de sus piezas los deje bajo costo", () => {
+    const kit = planRow(product({ isKit: true, price: 150, lastReceipt: { kind: "pedido", orderNumber: "PO-1", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 1000 } }))!;
+    expect(kit).toMatchObject({ newTransport: null, exceptions: [], aprobado: true, source: "kit: su costo es el de sus piezas" });
   });
 
   it("archivados: misma regla y sin revisión, aunque tengan algo que en uno activo sería excepción", () => {

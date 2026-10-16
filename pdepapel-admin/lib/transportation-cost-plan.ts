@@ -67,6 +67,8 @@ export interface PlanProduct {
   createdAt: Date;
   /** Archivado: misma regla, sin revisión (puede volver a activarse). */
   isArchived: boolean;
+  /** Un kit no se recibe por pedido: su costo es el de sus piezas y su envío propio queda null, sin revisión. */
+  isKit: boolean;
   averagedAfterBackfill: boolean;
   convertedVariant: boolean;
   lastReceipt: LastReceipt | null;
@@ -95,7 +97,7 @@ export interface PlanRow {
 export function planRow(product: PlanProduct): PlanRow | null {
   const grupo = transportGroup(product);
   if (!grupo) return null;
-  const newTransport = proposedTransport(product.lastReceipt);
+  const newTransport = product.isKit ? null : proposedTransport(product.lastReceipt);
   if (newTransport === product.transportationCost) return null;
   const available = Math.max(0, product.stock - product.reservedUnits);
   const costBefore = unitCost(product.acqPrice, product.transportationCost);
@@ -103,7 +105,7 @@ export function planRow(product: PlanProduct): PlanRow | null {
   const marginBefore = margin(product.price, costBefore);
   const marginAfter = margin(product.price, costAfter);
   // Que el margen suba al quitar un 1.000 inventado es lo esperado: no se revisa. Sí lo que sigue raro después de corregir.
-  const exceptions = product.isArchived
+  const exceptions = product.isArchived || product.isKit
     ? []
     : [
         ...(grupo === "b2-despues" ? [product.convertedVariant ? "1.000 copiado al convertir en variantes" : "1.000 después del 18 de septiembre: copiado al duplicar o escrito a mano"] : []),
@@ -121,7 +123,11 @@ export function planRow(product: PlanProduct): PlanRow | null {
     archivado: product.isArchived,
     expectedTransport: product.transportationCost,
     newTransport,
-    source: r ? `${r.kind === "recepcion" ? "recepción" : "pedido"} ${r.orderNumber ?? "sin número"} (${r.at.toISOString().slice(0, 10)})` : "sin recepción: no registrado",
+    source: product.isKit
+      ? "kit: su costo es el de sus piezas"
+      : r
+        ? `${r.kind === "recepcion" ? "recepción" : "pedido"} ${r.orderNumber ?? "sin número"} (${r.at.toISOString().slice(0, 10)})`
+        : "sin recepción: no registrado",
     price: product.price,
     acqPrice: product.acqPrice,
     available,
