@@ -114,6 +114,7 @@ describe("corrección del envío por unidad", () => {
         { id: "c", expectedTransport: 1000, newTransport: 2000, decision: "aplicar" },
         { id: "d", expectedTransport: 1000, newTransport: 1500, decision: "otro valor", otroValor: 120 },
         { id: "e", expectedTransport: 1000, newTransport: 50, decision: "dejar" },
+        { id: "g", expectedTransport: 1000, newTransport: 4561, decision: "no registrado" },
         { id: "f", expectedTransport: 1000, newTransport: 50, decision: "pendiente" },
       ],
     );
@@ -122,8 +123,9 @@ describe("corrección del envío por unidad", () => {
       { id: "b", expected: 1000, value: null },
       { id: "c", expected: 1000, value: 2000 },
       { id: "d", expected: 1000, value: 120 },
+      { id: "g", expected: 1000, value: null },
     ]);
-    expect(counts).toEqual({ reglaActivos: 1, reglaArchivados: 1, excepcionesAplicar: 1, excepcionesOtroValor: 1, excepcionesDejar: 1, excepcionesPendientes: 1 });
+    expect(counts).toEqual({ reglaActivos: 1, reglaArchivados: 1, excepcionesAplicar: 1, excepcionesOtroValor: 1, excepcionesNoRegistrado: 1, excepcionesDejar: 1, excepcionesPendientes: 1 });
   });
 
   it("un id repetido, un valor inválido o «otro valor» sin número detienen todo", () => {

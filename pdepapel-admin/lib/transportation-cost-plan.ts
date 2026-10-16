@@ -215,7 +215,8 @@ export interface ExceptionDecision {
   id: string;
   expectedTransport: number | null;
   newTransport: number | null;
-  decision: "pendiente" | "aplicar" | "dejar" | "otro valor";
+  /** «no registrado» deja el envío en null; «otro valor» exige un número. */
+  decision: "pendiente" | "aplicar" | "dejar" | "otro valor" | "no registrado";
   otroValor?: number | null;
 }
 
@@ -232,7 +233,7 @@ export interface TransportWrite {
  */
 export function buildTransportWrites(rule: RuleRow[], exceptions: ExceptionDecision[] = []) {
   const writes: TransportWrite[] = [];
-  const counts = { reglaActivos: 0, reglaArchivados: 0, excepcionesAplicar: 0, excepcionesOtroValor: 0, excepcionesDejar: 0, excepcionesPendientes: 0 };
+  const counts = { reglaActivos: 0, reglaArchivados: 0, excepcionesAplicar: 0, excepcionesOtroValor: 0, excepcionesNoRegistrado: 0, excepcionesDejar: 0, excepcionesPendientes: 0 };
   const seen = new Set<string>();
   const add = (write: TransportWrite) => {
     if (seen.has(write.id)) throw new Error(`${write.id}: aparece dos veces`);
@@ -254,6 +255,9 @@ export function buildTransportWrites(rule: RuleRow[], exceptions: ExceptionDecis
       if (typeof row.otroValor !== "number") throw new Error(`${row.id}: «otro valor» sin número`);
       add({ id: row.id, expected: row.expectedTransport, value: row.otroValor });
       counts.excepcionesOtroValor += 1;
+    } else if (row.decision === "no registrado") {
+      add({ id: row.id, expected: row.expectedTransport, value: null });
+      counts.excepcionesNoRegistrado += 1;
     } else if (row.decision === "dejar") counts.excepcionesDejar += 1;
     else counts.excepcionesPendientes += 1;
   }
