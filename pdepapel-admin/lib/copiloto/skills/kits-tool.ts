@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { tool } from "ai";
 import { z } from "zod";
 
+import { DEFAULT_BUSINESS_CASH_POLICY } from "@/lib/business-growth";
 import { withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import {
   DEFAULT_MIN_SELLER_VALUE,
@@ -9,7 +10,6 @@ import {
   MAX_TARGET_DISCOUNT_PCT,
   MIN_TARGET_DISCOUNT_PCT,
   coPurchaseCounts,
-  kitDetail,
   proposeKits,
   risingProducts,
   typeCoPurchaseCounts,
@@ -209,7 +209,12 @@ export function kitsParaRotarTool(storeId: string) {
       await requireStoreOwner(storeId);
       const { dias, kits, minimoPorKit, margenMinimo, descuentoObjetivo, precioMinimoPieza } = kitsInput.parse(input);
       const now = new Date();
-      const data = await withCopilotQuery((db) => loadKitData(db, storeId, dias, now));
+      const [data, policy] = await Promise.all([
+        withCopilotQuery((db) => loadKitData(db, storeId, dias, now)),
+        // El criterio de margen del panel (Crecimiento › Campañas): solo para marcar «margen bajo», no cambia el precio.
+        withCopilotQuery((db) => db.businessCashPolicy.findUnique({ where: { storeId }, select: { minimumCampaignMarginPct: true } })),
+      ]);
+      const panelMarginPct = policy ? Number(policy.minimumCampaignMarginPct) : DEFAULT_BUSINESS_CASH_POLICY.minimumCampaignMarginPct;
       const demand = await loadDemand(storeId, now);
       const signals = buildKitSignals(data.products, data.history, demand, now);
       const orders = data.history.ordersSince(CO_PURCHASE_DAYS);
@@ -242,6 +247,7 @@ export function kitsParaRotarTool(storeId: string) {
             lineasSinFamilia: result.lineasSinFamilia,
             precios: "efectivos: lista, oferta vigente y precio por cantidad, como en la tienda",
             costo: "compra más transporte, como en detalleProducto",
+            margenCriterioPanelPct: panelMarginPct,
           },
           totalLentos: result.lentos.length,
           plataQuietaACostoTotal: tiedTotal,
@@ -266,7 +272,7 @@ export function kitsParaRotarTool(storeId: string) {
             nota: `lentos con precio efectivo bajo para cargar un kit: no se proponen como pieza lenta`,
             linea: result.bajoValor.length > 0 ? lowValueLine(result.bajoValor.length) : null,
           },
-          kits: result.kits.map((kit, index) => ({ ...kit, marcador: kitMarker(index), detalle: kitDetail(kit) })),
+          kits: result.kits.map((kit, index) => ({ ...kit, marcador: kitMarker(index), margenBajo: kit.margenPct === null ? null : kit.margenPct < panelMarginPct })),
           pocoAtractivos: result.pocoAtractivos.slice(0, 5),
           sinKit: result.sinKit.slice(0, 5),
           señales: {

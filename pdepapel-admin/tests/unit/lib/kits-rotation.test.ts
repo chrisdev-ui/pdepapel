@@ -13,7 +13,6 @@ import {
   type KitPiece,
   type KitProduct,
   type KitSignals,
-  kitDetail,
 } from "@/lib/copiloto/kits-rotation";
 import { summarizeDemand } from "@/lib/copiloto/skills/kits-tool";
 import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
@@ -452,51 +451,3 @@ describe("demanda por WhatsApp (vista CopilotBotDemand)", () => {
   });
 });
 
-describe("detalle fijo de un borrador", () => {
-  const base = {
-    nombreSugerido: "Kit de grados con Libreta",
-    ocasion: null,
-    piezas: [
-      { productId: "a", nombre: "Libreta", rol: "lento" as const, disponible: 8, precioEfectivo: 6000, precioDeLista: 6000, oferta: null, costo: 3000 },
-      { productId: "b", nombre: "Lápiz", rol: "se vende" as const, disponible: 20, precioEfectivo: 4000, precioDeLista: 5000, oferta: "Regreso a clases", costo: 1000 },
-      { productId: "c", nombre: "Regla", rol: "se vende" as const, disponible: 9, precioEfectivo: 2500, precioDeLista: 2500, oferta: null, costo: 800 },
-    ],
-    kitsArmables: 8,
-    sumaPreciosEfectivos: 12500,
-    costoTotal: 4800,
-    precioMinimo: 5900,
-    precioSugerido: 10900,
-    ahorroParaLaClienta: 1600,
-    ahorroPct: 12.8,
-    descuentoObjetivoPct: 12,
-    margenPct: 56,
-    sinCostoDe: [],
-    estado: "listo" as const,
-    señales: ["Lápiz: «lapiz» se pidió 2 veces por WhatsApp en 30 días"],
-  };
-
-  it("trae cada pieza con su precio efectivo y la oferta, las cuentas y un porqué por pieza, sangrado bajo el nombre del kit", () => {
-    expect(kitDetail(base)).toBe(
-      [
-        "  - Libreta (lento): $6.000",
-        "  - Lápiz (se vende): $4.000 con la oferta «Regreso a clases» (antes $5.000)",
-        "  - Regla (se vende): $2.500",
-        "  - Se pueden armar 8 · suma de precios efectivos $12.500 · precio sugerido $10.900 · margen 56 % · ahorro $1.600 (12,8 %).",
-        "  - Por qué:",
-        "    - Lápiz: «lapiz» se pidió 2 veces por WhatsApp en 30 días",
-      ].join("\n"),
-    );
-  });
-
-  it("una pieza que comparte stock con otro borrador lo dice en su línea", () => {
-    const shared = { ...base, piezas: base.piezas.map((p) => (p.productId === "c" ? { ...p, comparteStockCon: ["Kit de oficina"] } : p)) };
-    expect(kitDetail(shared)).toContain("  - Regla (se vende): $2.500 · comparte stock con «Kit de oficina»");
-  });
-
-  it("sin costo no muestra margen y lo dice; el descuento limitado por costo también se explica", () => {
-    const sinCosto = kitDetail({ ...base, margenPct: null, costoTotal: null, precioMinimo: null, sinCostoDe: ["Regla"], estado: "sin costo" });
-    expect(sinCosto).not.toMatch(/margen \d/);
-    expect(sinCosto).toContain("Sin costo de Regla");
-    expect(kitDetail({ ...base, estado: "descuento limitado por costo" })).toContain("por debajo del 12 % porque el costo no deja bajar más");
-  });
-});

@@ -515,32 +515,5 @@ export function proposeKits(input: {
 }
 
 export const pesos = (value: number) => `$${Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
-const percent = (value: number) => `${String(value).replace(".", ",")} %`;
+export const percent = (value: number) => `${String(value).replace(".", ",")} %`;
 
-/**
- * El detalle fijo de un borrador (piezas con su precio, cuentas y por qué),
- * para copiarlo tal cual debajo del nombre del kit: cada línea va sangrada
- * para quedar como viñeta dentro de «- **Kit …**», y el porqué es una línea
- * por pieza. Con cinco piezas el modelo tiende a resumir y se pierden los
- * precios por pieza y las cuentas de WhatsApp.
- */
-export function kitDetail(kit: KitDraft): string {
-  const pieces = kit.piezas.map(
-    (piece) =>
-      `  - ${piece.nombre} (${piece.rol}): ${pesos(piece.precioEfectivo)}${piece.oferta ? ` con la oferta «${piece.oferta}» (antes ${pesos(piece.precioDeLista)})` : ""}${
-        piece.comparteStockCon?.length ? ` · comparte stock con ${piece.comparteStockCon.map((name) => `«${name}»`).join(" y ")}` : ""
-      }`,
-  );
-  const numbers = [
-    `Se pueden armar ${kit.kitsArmables}`,
-    `suma de precios efectivos ${pesos(kit.sumaPreciosEfectivos)}`,
-    ...(kit.precioSugerido !== null ? [`precio sugerido ${pesos(kit.precioSugerido)}`] : []),
-    ...(kit.margenPct !== null ? [`margen ${percent(kit.margenPct)}`] : []),
-    ...(kit.ahorroParaLaClienta !== null && kit.ahorroPct !== null ? [`ahorro ${pesos(kit.ahorroParaLaClienta)} (${percent(kit.ahorroPct)})`] : []),
-  ];
-  const notes = [
-    ...(kit.sinCostoDe.length ? [`Sin costo de ${kit.sinCostoDe.join(", ")}: no se calcula margen ni precio mínimo.`] : []),
-    ...(kit.estado === "descuento limitado por costo" ? [`El descuento quedó por debajo del ${kit.descuentoObjetivoPct} % porque el costo no deja bajar más.`] : []),
-  ];
-  return [...pieces, `  - ${numbers.join(" · ")}.`, ...notes.map((note) => `  - ${note}`), "  - Por qué:", ...kit.señales.map((line) => `    - ${line}`)].join("\n");
-}
