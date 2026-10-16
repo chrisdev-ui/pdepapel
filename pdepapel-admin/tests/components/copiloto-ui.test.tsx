@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /** El chat y la página de conocimiento del copiloto, con el modelo y la red simulados. */
@@ -237,22 +237,72 @@ describe("KnowledgeList", () => {
   });
 });
 
-describe("respuesta del copiloto con viñetas", () => {
-  it("cada viñeta lleva su nivel por la sangría y el texto queda igual; la negrita y las notas siguen funcionando", () => {
-    const text = ["Hay 2 lentos.", "", "- **Kit escolar** — útiles", "  - Libreta (lento): $9.000", "  - Por qué:", "    - Libreta: 120 días sin venderse [conocimiento: kits]"].join("\n");
-    const { container } = render(<AssistantText text={text} storeId="store-1" />);
-    const bullets = Array.from(container.querySelectorAll("[data-bullet-depth]"));
-    expect(bullets.map((node) => [node.getAttribute("data-bullet-depth"), node.textContent])).toEqual([
-      ["0", "• Kit escolar — útiles"],
-      ["1", "• Libreta (lento): $9.000"],
-      ["1", "• Por qué:"],
-      ["2", "• Libreta: 120 días sin venderse nota: kits"],
-    ]);
-    expect((bullets[1] as HTMLElement).style.paddingLeft).toBe("2.1em");
-    expect((bullets[1] as HTMLElement).style.textIndent).toBe("-1.1em");
-    expect(container.querySelector("strong")?.textContent).toBe("Kit escolar");
+describe("respuesta del copiloto con formato", () => {
+  const kitAnswer = [
+    "## Resumen",
+    "Hay **2 productos quietos** con **$32.000** quietos a costo.",
+    "",
+    "## 1 kit sugerido",
+    "### 🎓 Kit de grados",
+    "**$21.900** · por separado $25.500 · ahorro 14,1 % · margen 30,0 % [[tag:margen bajo]] · alcanza para 4 kits",
+    "- Libreta · $9.000 [[tag:quieto]]",
+    "  - comparte stock con «Kit escolar»",
+    "- Lápiz · $4.000 [[tag:se vende]]",
+    ":::detalle Por qué estos productos",
+    "- Libreta: 120 días sin venderse [conocimiento: kits]",
+    ":::",
+    ":::copiar Texto para la ficha",
+    "✨ Lo que amarás",
+    "- Una libreta para tus ideas",
+    "📦 Incluye: Libreta y **Lápiz** [[tag:quieto]]",
+    ":::",
+  ].join("\n");
+
+  it("secciones, viñetas anidadas de verdad, etiquetas y bloques plegados por defecto", () => {
+    const { container } = render(<AssistantText text={kitAnswer} storeId="store-1" />);
+    expect(screen.getByRole("heading", { name: "Resumen" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "🎓 Kit de grados" })).toBeInTheDocument();
+    const outer = container.querySelector('ul[data-list-depth="0"]')!;
+    expect(outer.children).toHaveLength(2);
+    expect(outer.querySelector('ul[data-list-depth="1"] > li')?.textContent).toBe("comparte stock con «Kit escolar»");
+    expect(Array.from(container.querySelectorAll("[data-tag]")).map((node) => node.getAttribute("data-tag"))).toEqual(["margen bajo", "quieto", "se vende", "quieto"]);
+    const details = screen.getByTestId("details-block") as HTMLDetailsElement;
+    const copy = screen.getByTestId("copy-block") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(copy.open).toBe(false);
     expect(screen.getByRole("link", { name: "nota: kits" }).getAttribute("href")).toBe("/store-1/copiloto/conocimiento#kits");
+    expect(container.querySelector("strong")?.textContent).toBe("2 productos quietos");
+  });
+
+  it("«Copiar» copia solo el texto para la clienta, sin etiquetas ni markdown", async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { write, writeText: vi.fn() } });
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = class {
+      constructor(readonly items: Record<string, Blob>) {}
+    };
+    render(<AssistantText text={kitAnswer} storeId="store-1" />);
+    fireEvent.click(within(screen.getByTestId("copy-block")).getByRole("button", { name: "Copiar" }));
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    const item = write.mock.calls[0][0][0] as { items: Record<string, Blob> };
+    const plain = await item.items["text/plain"].text();
+    expect(plain).toBe("✨ Lo que amarás\n• Una libreta para tus ideas\n📦 Incluye: Libreta y Lápiz");
+    expect(plain).not.toMatch(/\$|margen|Por qué|\[\[/);
+    expect(await item.items["text/html"].text()).toBe("<h3>✨ Lo que amarás</h3><ul><li>Una libreta para tus ideas</li></ul><p>📦 Incluye: Libreta y <strong>Lápiz</strong></p>");
+  });
+
+  it("mientras llega, un bloque sin cerrar se ve abierto con todo su texto y «Copiar» espera", () => {
+    render(<AssistantText text={":::copiar Texto para la ficha\n✨ Lo que amarás\n- Una libreta"} storeId="store-1" />);
+    const copy = screen.getByTestId("copy-block") as HTMLDetailsElement;
+    expect(copy.open).toBe(true);
+    expect(copy.textContent).toContain("Una libreta");
+    expect(within(copy).getByRole("button", { name: "Copiar" })).toBeDisabled();
+  });
+
+  it("una respuesta vieja del historial (solo viñetas y negrita) sigue anidada", () => {
+    const text = ["Hay 2 lentos.", "", "- **Kit escolar** — útiles", "  - Libreta (lento): $9.000", "  - Por qué:", "    - Libreta: 120 días sin venderse"].join("\n");
+    const { container } = render(<AssistantText text={text} storeId="store-1" />);
+    expect(Array.from(container.querySelectorAll("li[data-bullet-depth]")).map((node) => node.getAttribute("data-bullet-depth"))).toEqual(["0", "1", "1", "2"]);
+    expect(container.querySelector("strong")?.textContent).toBe("Kit escolar");
     expect(container.textContent).toContain("Hay 2 lentos.");
   });
 });
-

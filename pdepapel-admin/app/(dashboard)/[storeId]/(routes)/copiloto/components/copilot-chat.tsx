@@ -4,7 +4,6 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import axios from "axios";
 import { Brain, ClipboardCopy, Loader2, MessageSquarePlus, Plus, RotateCcw, Send, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
-import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ import { descriptionBlockToHtml, descriptionBlockToPlainText, extractDescription
 import { COPILOT_SKILL_CATALOG, COPILOT_SKILL_NAMES } from "@/lib/copiloto/skills/names";
 import { cn } from "@/lib/utils";
 
-import { BoldText } from "./bold-text";
+import { AnswerView, copyRichText } from "./answer-view";
 import { suggestionsFor, TOOL_LABELS } from "./suggestions";
 
 export interface ConversationSummary {
@@ -41,56 +40,8 @@ interface CopilotChatProps {
 
 const newId = () => crypto.randomUUID();
 
-/**
- * La respuesta línea por línea. Una viñeta («- », con o sin sangría de a dos
- * espacios) lleva sangría colgante: en el teléfono, cuando la línea se parte,
- * sigue alineada bajo su viñeta y se ve dentro de la de arriba.
- */
-export function AssistantText({ text, storeId }: { text: string; storeId: string }) {
-  return (
-    <>
-      {text.split("\n").map((line, index) => {
-        const bullet = /^( *)[-*] (.*)$/.exec(line);
-        if (!bullet) {
-          return (
-            <span key={index} className="block min-h-[1.5em]">
-              <TextWithCitations text={line} storeId={storeId} />
-            </span>
-          );
-        }
-        const depth = Math.floor(bullet[1].length / 2);
-        return (
-          <span key={index} data-bullet-depth={depth} className="block" style={{ paddingLeft: `${depth + 1.1}em`, textIndent: "-1.1em" }}>
-            <span aria-hidden="true">• </span>
-            <TextWithCitations text={bullet[2]} storeId={storeId} />
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
-/** «[conocimiento: id]» se vuelve un enlace a la nota que Paula aprobó. */
-function TextWithCitations({ text, storeId }: { text: string; storeId: string }) {
-  const pieces = text.split(/(\[conocimiento:\s*[a-z0-9-]+\])/gi);
-  return (
-    <>
-      {pieces.map((piece, index) => {
-        const match = /^\[conocimiento:\s*([a-z0-9-]+)\]$/i.exec(piece);
-        if (!match) return <BoldText key={index} text={piece} />;
-        return (
-          <Link
-            key={index}
-            href={`/${storeId}/copiloto/conocimiento#${match[1]}`}
-            className="mx-0.5 rounded bg-tint-lavender px-1.5 py-0.5 text-xs font-medium text-primary underline-offset-2 hover:underline"
-          >
-            nota: {match[1]}
-          </Link>
-        );
-      })}
-    </>
-  );
-}
+/** La respuesta del copiloto: el mismo componente para lo nuevo y para el historial. */
+export const AssistantText = AnswerView;
 
 type ToolPart = {
   type: string;
@@ -115,21 +66,7 @@ function loadedSkills(messages: UIMessage[]): string[] {
 /** HTML de la plantilla para pegar en la ficha, con el texto plano de respaldo. */
 async function copyForProductPage(text: string): Promise<boolean> {
   const block = extractDescriptionBlock(text);
-  if (!block) return false;
-  const html = descriptionBlockToHtml(block);
-  const plain = descriptionBlockToPlainText(block);
-  try {
-    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-      await navigator.clipboard.write([
-        new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([plain], { type: "text/plain" }) }),
-      ]);
-    } else {
-      await navigator.clipboard.writeText(plain);
-    }
-    return true;
-  } catch {
-    return false;
-  }
+  return block ? copyRichText(block) : false;
 }
 
 function ToolLine({ part }: { part: ToolPart }) {
@@ -460,9 +397,13 @@ export function CopilotChat({ storeId, screen, conversations: initialConversatio
               {message.parts.map((part, index) => {
                 if (part.type === "text") {
                   return (
-                    <p key={index} className="whitespace-pre-wrap break-words">
-                      {message.role === "assistant" ? <AssistantText text={part.text} storeId={storeId} /> : part.text}
-                    </p>
+                    message.role === "assistant" ? (
+                      <AssistantText key={index} text={part.text} storeId={storeId} />
+                    ) : (
+                      <p key={index} className="whitespace-pre-wrap break-words">
+                        {part.text}
+                      </p>
+                    )
                   );
                 }
                 if (part.type.startsWith("tool-")) return <ToolLine key={index} part={part as ToolPart} />;
