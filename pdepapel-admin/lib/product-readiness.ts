@@ -5,6 +5,7 @@
 
 import { TRESHOLD_LOW_STOCK } from "@/constants";
 import { isComingSoon } from "@/lib/product-availability";
+import { LEGACY_TRANSPORT_FILL, transportWarning } from "@/lib/product-costs";
 
 /**
  * Umbral por defecto de "stock crítico" cuando la tienda no fijó el suyo
@@ -63,6 +64,8 @@ export interface ReadinessInput {
   availableAt?: Date | string | null;
   /** Imágenes cuyo archivo ya no existe (cron de salud de imágenes). */
   brokenImages?: number | null;
+  /** «Envío y otros gastos» por unidad; la cuenta de solo lectura no lo recibe. */
+  transportationCost?: number | null;
 }
 
 export interface ReadinessCheck {
@@ -125,13 +128,25 @@ export function getProductShape(product: { isKit?: boolean | null; productGroupI
   return { id: "individual", label: "Individual" };
 }
 
-export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "imagen-rota" | "proximamente" | "stock-critico" | "agotados" | "en-oferta" | "archivados" | "todos";
+export type ProductView =
+  | "activos"
+  | "sin-completar"
+  | "sin-identificador"
+  | "imagen-rota"
+  | "transporte-por-revisar"
+  | "proximamente"
+  | "stock-critico"
+  | "agotados"
+  | "en-oferta"
+  | "archivados"
+  | "todos";
 
 export const PRODUCT_VIEWS: { id: ProductView; label: string }[] = [
   { id: "activos", label: "A la venta" },
   { id: "sin-completar", label: "Sin completar" },
   { id: "sin-identificador", label: "Sin identificador" },
   { id: "imagen-rota", label: "Imagen rota" },
+  { id: "transporte-por-revisar", label: "Transporte por revisar" },
   { id: "proximamente", label: "Próximamente" },
   { id: "stock-critico", label: "Stock crítico" },
   { id: "agotados", label: "Agotados" },
@@ -150,6 +165,11 @@ export function isProductView(value: string | null | undefined): value is Produc
  */
 export function productLacksIdentifier(product: Pick<ReadinessInput, "gtin" | "hasNoProductIdentifier">): boolean {
   return !product.gtin?.trim() && product.hasNoProductIdentifier !== true;
+}
+
+/** Envío por unidad que hay que mirar: el 1.000 del relleno de septiembre, o uno que parece el de toda una orden. */
+export function needsTransportReview(product: Pick<ReadinessInput, "transportationCost" | "acqPrice" | "price">): boolean {
+  return product.transportationCost === LEGACY_TRANSPORT_FILL || transportWarning({ transport: product.transportationCost, acqPrice: product.acqPrice, price: product.price }) !== null;
 }
 
 export function productMatchesView(
@@ -172,6 +192,8 @@ export function productMatchesView(
       return !product.isArchived && productLacksIdentifier(product);
     case "imagen-rota":
       return !product.isArchived && (product.brokenImages ?? 0) > 0;
+    case "transporte-por-revisar":
+      return !product.isArchived && needsTransportReview(product);
     case "proximamente":
       return !product.isArchived && isComingSoon(product);
     case "stock-critico":

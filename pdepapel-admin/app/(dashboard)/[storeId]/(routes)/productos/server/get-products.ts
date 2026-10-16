@@ -19,6 +19,7 @@ export async function getProducts(storeId: string) {
       name: true,
       price: true,
       acqPrice: true,
+      transportationCost: true,
       gtin: true,
       hasNoProductIdentifier: true,
       stock: true,

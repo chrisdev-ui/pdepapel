@@ -112,6 +112,7 @@ import { reservedSuffix } from "@/lib/reservation-labels";
 import { getProduct, getProductSeed } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
 import { ComponentSelector } from "./component-selector";
+import { TransportCostField } from "./transport-cost-field";
 import { computeKitStockLimit, sumKitComponentCost } from "@/lib/kit-pricing";
 import {
   imagesToSave,
@@ -1728,14 +1729,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Envío y otros gastos por unidad</FormLabel>
-                      <FormControl>
-                        <CurrencyInput
-                          placeholder="Sin registrar"
-                          disabled={loading}
-                          value={field.value ?? undefined}
-                          onChange={(value) => field.onChange(value ?? null)}
-                        />
-                      </FormControl>
+                      <TransportCostField
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={loading}
+                        acqPrice={watchedIsKit ? kitComponentCost : Number(watchedAcqPrice) || null}
+                        price={Number(watchedPrice) || null}
+                      />
                       <FormDescription>
                         Vacío = no registrado; no se rellena con un valor
                         inventado. Entra en el precio sugerido y en el piso de
