@@ -139,6 +139,11 @@ test.describe("respuesta de kits en el teléfono", () => {
       expect(shown).not.toMatch(/kitsParaRotar|precio efectivo|suma de precios|\((lento|se vende)\)/);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);
+      // «Copiar» va dentro del título del bloque: copia sin desplegarlo.
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await copy.getByRole("button", { name: "Copiar" }).click();
+      await expect(page.getByText("Texto copiado").first()).toBeVisible();
+      await expect(copy).not.toHaveAttribute("open", "");
       await page.getByRole("heading", { name: "🎓 Kit de grados" }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-kits.png`), fullPage: true });
 
