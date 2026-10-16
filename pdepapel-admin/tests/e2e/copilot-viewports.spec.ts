@@ -74,12 +74,15 @@ test.describe("copiloto en distintos tamaños", () => {
       const box = page.getByRole("textbox", { name: "Tu pregunta" });
       await expect(async () => {
         // Vaciar antes: si el primer «hola» llegó antes de hidratar, repetir el mismo texto no dispara onChange.
-    await box.fill("");
-    await box.fill("hola");
+        await box.fill("");
+        await box.fill("hola");
         await expect(page.getByRole("button", { name: "Enviar" })).toBeEnabled({ timeout: 1000 });
       }).toPass({ timeout: 60_000 });
       await box.fill("");
+      // La sugerencia se escribe en la caja sin mandarse: Paula la ajusta y pulsa «Enviar».
       await page.getByRole("button", { name: "¿Cómo voy hoy?" }).click();
+      await expect(box).toHaveValue("¿Cómo voy hoy?");
+      await page.getByRole("button", { name: "Enviar" }).click();
       await expect(page.getByText("Según el resumen de hoy llevas")).toBeVisible();
       await expect(page.locator("strong", { hasText: "$45.000" })).toBeVisible();
       await expect(page.getByRole("link", { name: "nota: marcadores-acrilicos" })).toBeVisible();

@@ -219,6 +219,25 @@ async function main() {
       isArchived: true,
     },
   });
+  // Segundo producto para las reservas de varios productos. Queda archivado: solo su spec lo activa, y las demás ven un solo producto activo.
+  const reserveProduct = {
+    storeId,
+    categoryId,
+    sizeId,
+    colorId,
+    designId,
+    name: "Libreta reservas E2E",
+    description: "Segundo producto para las pruebas E2E de reservas.",
+    slug: "libreta-reservas-e2e",
+    sku: "E2E-RESERVE-PRODUCT",
+    stock: 12,
+    reservedUnits: 0,
+    price: 8000,
+    acqPrice: 3000,
+    isArchived: true,
+  };
+  await prisma.product.upsert({ where: { id: "e2e-reserve-product" }, update: reserveProduct, create: { id: "e2e-reserve-product", ...reserveProduct } });
+  await prisma.catalogMigrationSuggestion.deleteMany({ where: { storeId, productId: "e2e-reserve-product" } });
   await prisma.category.deleteMany({ where: { id: legacyCategoryId } });
   await prisma.type.deleteMany({ where: { id: legacyTypeId } });
   await prisma.inventoryMovement.deleteMany({
