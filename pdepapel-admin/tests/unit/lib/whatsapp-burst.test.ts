@@ -114,6 +114,27 @@ describe("chooseFromBurst", () => {
     expect(parseOrderReply(choice.text)).toEqual({ quantity: 1, extra: { quantity: 2, query: "lapiceros" } });
   });
 
+  it("pedir a Paula gana a pedido, producto y saludo, escrito a mano o con otras mayúsculas", () => {
+    expect(burstIntentOf("hablar con paula", CTX)).toBe("handoff");
+    expect(burstIntentOf("Hablar con Paula ", CTX)).toBe("handoff");
+    expect(chooseFromBurst(messages("Hola", "Tienes el cuaderno Norma?", "Hablar con Paula"), CTX)).toMatchObject({ text: "Hablar con Paula", intent: "handoff", position: 3 });
+    expect(chooseFromBurst(messages("hablar con paula", "hola"), CTX)).toMatchObject({ text: "hablar con paula", intent: "handoff", position: 1 });
+    expect(chooseFromBurst(messages("sí", "Hablar con Paula"), { ...CTX, offerOpen: true })).toMatchObject({ intent: "handoff" });
+    expect(burstIntentOf("quiero hablar con paula sobre un pedido", CTX)).not.toBe("handoff");
+  });
+
+  it("un toque de «Hablar con Paula» cuyo aviso no salió entra en la ráfaga siguiente y gana; uno ya contestado no", () => {
+    const tap = row(0, "Hablar con Paula", { metadata: { tap: { id: "owner" } } } as Partial<BurstRow>);
+    const after = row(20, "Tienes el cuaderno Norma?");
+    const unanswered = assembleBurst([tap, after], after.id);
+    expect(unanswered.map((message) => message.text)).toEqual(["Hablar con Paula", "Tienes el cuaderno Norma?"]);
+    expect(chooseFromBurst(unanswered, CTX)).toMatchObject({ intent: "handoff", position: 1 });
+
+    const answeredTap = row(0, "Hablar con Paula", { metadata: { tap: { id: "owner" }, answered: "wamid.tap-ack" } } as Partial<BurstRow>);
+    const next = row(20, "Tienes el cuaderno Norma?");
+    expect(assembleBurst([answeredTap, next], next.id).map((message) => message.text)).toEqual(["Tienes el cuaderno Norma?"]);
+  });
+
   it("un «sí» sin oferta abierta no es pedido", () => {
     expect(burstIntentOf("sí", CTX)).toBe("filler");
     expect(burstIntentOf("sí", { ...CTX, offerOpen: true })).toBe("order");

@@ -7,7 +7,7 @@ import {
 
 import prismadb from "@/lib/prismadb";
 import { classifyBusinessFact, isWelcomeGreeting } from "@/lib/whatsapp/bot-facts";
-import { matchWhatsAppKeyword, type WhatsAppBotKeyword } from "@/lib/whatsapp/bot-matching";
+import { matchWhatsAppKeyword, normalizeBotText, type WhatsAppBotKeyword } from "@/lib/whatsapp/bot-matching";
 import {
   isOfferFresh,
   isShippingCostQuestion,
@@ -16,6 +16,7 @@ import {
   parseOrderReply,
 } from "@/lib/whatsapp/bot-order-request";
 import { looksLikeProductQuestion } from "@/lib/whatsapp/bot-products";
+import { TALK_TO_OWNER_BUTTON_TITLE } from "@/lib/whatsapp/bot-replies";
 import { latestOrderRequest } from "@/lib/whatsapp/order-request-store";
 import { isFillerText } from "@/lib/whatsapp/filler";
 import { detectWebOrigin, type WebOrigin } from "@/lib/whatsapp/web-origin";
@@ -122,9 +123,10 @@ export function assembleBurst(rows: BurstRow[], currentId: string): BurstMessage
   return recent;
 }
 
-export type BurstIntent = "order" | "product" | "fact" | "web" | "greeting" | "filler" | "other";
+export type BurstIntent = "handoff" | "order" | "product" | "fact" | "web" | "greeting" | "filler" | "other";
 
-const PRIORITY: BurstIntent[] = ["order", "product", "fact", "web", "greeting", "other", "filler"];
+// Pedir a Paula gana siempre: lo que vino antes o después en la ráfaga lo ve ella.
+const PRIORITY: BurstIntent[] = ["handoff", "order", "product", "fact", "web", "greeting", "other", "filler"];
 
 /** Orden de prioridad del modo ráfaga: 0 es lo más importante. */
 export const burstIntentRank = (intent: BurstIntent) => PRIORITY.indexOf(intent);
@@ -137,7 +139,11 @@ export interface BurstContext {
   keywords: WhatsAppBotKeyword[];
 }
 
+/** «Hablar con Paula» escrito a mano o el texto de su botón: el mismo reconocimiento que el paso 6 bis del bot. */
+export const isHandoffRequest = (text: string) => normalizeBotText(text) === normalizeBotText(TALK_TO_OWNER_BUTTON_TITLE);
+
 export function burstIntentOf(text: string, ctx: BurstContext): BurstIntent {
+  if (isHandoffRequest(text)) return "handoff";
   if ((ctx.offerOpen && parseOrderReply(text)) || (ctx.orderPending && parseAppendRequest(text))) return "order";
   if (looksLikeProductQuestion(text)) return "product";
   if (isShippingCostQuestion(text) || classifyBusinessFact(text) || matchWhatsAppKeyword(text, ctx.keywords)) return "fact";
@@ -157,7 +163,7 @@ export interface BurstChoice {
 }
 
 /**
- * Pedido > productos > datos del negocio y respuestas de Paula > botón de la
+ * Pedir a Paula > pedido > productos > datos del negocio y respuestas de Paula > botón de la
  * tienda web > saludo. Un pedido junta el «sí» con lo que le sigue («y
  * también 2 lapiceros»), como si viniera en un mensaje; varias preguntas de
  * productos se juntan igual. Sin nada reconocible, sigue con el último

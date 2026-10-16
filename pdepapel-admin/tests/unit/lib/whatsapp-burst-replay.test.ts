@@ -48,6 +48,11 @@ describe("judgeBurst + summarizeReplay", () => {
     });
   });
 
+  it("pedir a Paula y luego saludar: el bot contestó el saludo, el modo ráfaga atiende el pedido de Paula (lo arregla)", () => {
+    const rows = [row(0, "hablar con paula"), row(3, "hola")];
+    expect(replay(rows, [rows[1].id])[0]).toMatchObject({ answeredIntent: "greeting", chosenIntent: "handoff", chosenPosition: 1, comparison: "better", fixedByBurst: true });
+  });
+
   it("igual que hoy cuando el último ya era la pregunta", () => {
     const rows = [row(0, "Hola"), row(4, "Tienes el cuaderno Norma?")];
     expect(replay(rows, [rows[1].id])[0]).toMatchObject({ comparison: "same", lostEarlier: false });

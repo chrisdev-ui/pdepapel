@@ -256,6 +256,22 @@ describe.each([true, false])("modo ráfaga %s", (on) => {
     record("pregunta + relleno", on, sent.messages.length, outcomes[1]);
   });
 
+  it("«hablar con paula» escrito + «hola»: ráfaga le avisa que Paula escribe; el actual saluda", async () => {
+    const { TALK_TO_OWNER_ACKNOWLEDGEMENT } = await import("@/lib/whatsapp/bot-acknowledgements");
+    const { formatBotReply } = await import("@/lib/whatsapp/bot-matching");
+    const chat = await conversation();
+    const outcomes = await answerAll(chat, await burst(chat.id, ["hablar con paula", "hola"]));
+    expect(sent.messages).toHaveLength(1);
+    if (on) {
+      expect(outcomes[1]).toBe("escalated_owner_requested");
+      expect(sent.messages).toEqual([formatBotReply(TALK_TO_OWNER_ACKNOWLEDGEMENT)]);
+      await expect(testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { status: true } })).resolves.toEqual({ status: "NEEDS_OWNER" });
+    } else {
+      expect(outcomes[1]).not.toBe("escalated_owner_requested");
+    }
+    record("pedir a Paula + saludo", on, sent.messages.length, outcomes[1]);
+  });
+
   it("dos productos en dos líneas: ráfaga los pregunta juntos", async () => {
     const chat = await conversation();
     const outcomes = await answerAll(chat, await burst(chat.id, ["Tienes cuaderno Norma?", "y tienes lapiceros de gel?"]));

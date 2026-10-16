@@ -19,7 +19,7 @@ import {
  * (`WhatsAppBotShadowRun.inboundMessageId` con su `realCount`), nunca de la
  * cercanía de horas: lo que no tiene fila de sombra queda «sin vínculo».
  */
-const REAL_INTENTS: BurstIntent[] = ["order", "product", "fact", "web"];
+const REAL_INTENTS: BurstIntent[] = ["handoff", "order", "product", "fact", "web"];
 
 export interface ReplayBurst {
   /** Mensajes de la ráfaga, como los leería producción al llegar el último. */
