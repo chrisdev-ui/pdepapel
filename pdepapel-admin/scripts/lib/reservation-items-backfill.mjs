@@ -33,8 +33,17 @@ export function itemsFor(missing) {
 
 export async function applyReservationItemsBackfill(db, plan) {
   if (plan.missing.length === 0) return 0;
-  const result = await db.stockReservationItem.createMany({ data: itemsFor(plan.missing), skipDuplicates: true });
-  return result.count;
+  // Dos corridas a la vez pueden chocar en el índice único (deadlock): se reintenta, y `skipDuplicates` evita duplicar.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const result = await db.stockReservationItem.createMany({ data: itemsFor(plan.missing), skipDuplicates: true });
+      return result.count;
+    } catch (error) {
+      const deadlock = error?.code === "P2034" || (error?.code === "P2010" && String(error?.meta?.code) === "1213");
+      if (!deadlock || attempt >= 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 20 * attempt + Math.floor(Math.random() * 30)));
+    }
+  }
 }
 
 /**
