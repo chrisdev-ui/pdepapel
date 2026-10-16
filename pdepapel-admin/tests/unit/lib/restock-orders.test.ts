@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canTransitionRestockOrder,
+  planShippingCorrection,
   deriveRestockStatus,
   describeForbiddenRestockTransition,
   getAllowedRestockTransitions,
@@ -170,5 +171,67 @@ describe("input parsing", () => {
     it("redondea a dos decimales", () => {
       expect(weightedAverageCost({ currentUnits: 3, currentCost: 1000, incomingUnits: 4, incomingCost: 1500 })).toBe(1285.71);
     });
+  });
+});
+
+describe("corregir el envío de un pedido ya recibido", () => {
+  // Tres líneas: 10 × 4.000 + 5 × 7.000 + 20 × 1.000 = 95.000 de mercancía.
+  const order = {
+    id: "po-1",
+    totalAmount: 95000,
+    shippingCost: 0,
+    items: [
+      { productId: "sello", cost: 4000, quantityReceived: 10 },
+      { productId: "cartuchera", cost: 7000, quantityReceived: 5 },
+      { productId: "notas", cost: 1000, quantityReceived: 20 },
+    ],
+  };
+  const products = [
+    { id: "sello", name: "Sello", acqPrice: 4000, transportationCost: null, isKit: false },
+    { id: "cartuchera", name: "Cartuchera", acqPrice: 7000, transportationCost: null, isKit: false },
+    { id: "notas", name: "Notas", acqPrice: 1000, transportationCost: 0, isKit: false },
+  ];
+  const lastIsThis = new Map(products.map((product) => [product.id, { orderId: "po-1", orderNumber: "PO-0001" }]));
+
+  it("reparte el envío real por valor de la línea, como la recepción; las partes suman el envío del pedido", () => {
+    const plan = planShippingCorrection({ order, products, lastOrderByProduct: lastIsThis, newShipping: 19000 });
+    // 19.000 / 95.000 = 20 % del costo de cada unidad.
+    expect(plan.lines.map((line) => [line.productId, line.shareAfter, line.costAfter, line.skipped])).toEqual([
+      ["sello", 800, 4800, null],
+      ["cartuchera", 1400, 8400, null],
+      ["notas", 200, 1200, null],
+    ]);
+    const total = plan.lines.reduce((sum, line) => sum + (line.shareAfter ?? 0) * line.received, 0);
+    expect(total).toBe(19000);
+    expect(plan).toMatchObject({ shippingBefore: 0, shippingAfter: 19000, changed: 3 });
+  });
+
+  it("no se cambia lo que viene de una compra más reciente, un kit o lo que no tiene recepción en el kardex, y dice por qué", () => {
+    const lastOrders = new Map(lastIsThis);
+    lastOrders.set("cartuchera", { orderId: "po-2", orderNumber: "PO-2" });
+    lastOrders.delete("notas");
+    const withKit = products.map((product) => (product.id === "sello" ? { ...product, isKit: true, transportationCost: 300 } : product));
+    const plan = planShippingCorrection({ order, products: withKit, lastOrderByProduct: lastOrders, newShipping: 19000 });
+    expect(plan.lines.map((line) => [line.productId, line.shareBefore, line.shareAfter, line.skipped])).toEqual([
+      ["sello", 300, 300, "No se cambia: es un kit; su costo sale de sus piezas."],
+      ["cartuchera", null, null, "No se cambia: su costo actual viene de una compra más reciente (PO-0002)."],
+      ["notas", 0, 0, "No se cambia: no se encontró su recepción en el kardex."],
+    ]);
+    expect(plan.changed).toBe(0);
+  });
+
+  it("envío 0 deja 0 por unidad; lo no recibido no entra; un envío inválido se rechaza", () => {
+    const zero = planShippingCorrection({ order, products, lastOrderByProduct: lastIsThis, newShipping: 0 });
+    expect(zero.lines.every((line) => line.shareAfter === 0)).toBe(true);
+    expect(zero.changed).toBe(2);
+    const partial = planShippingCorrection({ order: { ...order, items: [...order.items.slice(0, 2), { productId: "notas", cost: 1000, quantityReceived: 0 }] }, products, lastOrderByProduct: lastIsThis, newShipping: 19000 });
+    expect(partial.lines.map((line) => line.productId)).toEqual(["sello", "cartuchera"]);
+    expect(() => planShippingCorrection({ order, products, lastOrderByProduct: lastIsThis, newShipping: -1 })).toThrow("de 0 en adelante");
+    expect(() => planShippingCorrection({ order, products, lastOrderByProduct: lastIsThis, newShipping: Number.NaN })).toThrow();
+  });
+
+  it("vista previa = confirmación: las mismas entradas dan exactamente el mismo plan", () => {
+    const input = { order, products, lastOrderByProduct: lastIsThis, newShipping: 19000 };
+    expect(planShippingCorrection(input)).toEqual(planShippingCorrection(input));
   });
 });

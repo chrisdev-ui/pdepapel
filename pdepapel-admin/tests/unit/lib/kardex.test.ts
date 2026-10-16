@@ -63,6 +63,8 @@ describe("summarizeKardex", () => {
         { type: "RESTOCK_RECEIVED", quantity: 50, createdAt: daysAgo(120) },
         { type: "DAMAGE", quantity: -2, createdAt: daysAgo(4) },
         { type: "MANUAL_ADJUSTMENT", quantity: 3, createdAt: daysAgo(6) },
+        // Corrección de envío: un ajuste de 0 unidades que solo deja el costo nuevo; no cuenta.
+        { type: "MANUAL_ADJUSTMENT", quantity: 0, createdAt: daysAgo(5) },
         { type: "LOST", quantity: -1, createdAt: daysAgo(7) },
         { type: "LOST", quantity: -4, createdAt: daysAgo(100) },
         { type: "FESTIVAL_ALLOCATION", quantity: -8, createdAt: daysAgo(2) },

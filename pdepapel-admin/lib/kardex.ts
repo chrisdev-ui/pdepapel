@@ -158,7 +158,8 @@ export function summarizeKardex(
       received90 += Math.max(0, movement.quantity);
       receipts90 += 1;
     }
-    if (ADJUSTMENT_TYPES.has(movement.type)) {
+    // Un ajuste de 0 unidades solo registra un costo (corrección de envío): no cuenta como ajuste.
+    if (ADJUSTMENT_TYPES.has(movement.type) && movement.quantity !== 0) {
       adjustmentsTotal += movement.quantity;
       byType[movement.type] = (byType[movement.type] ?? 0) + 1;
     }

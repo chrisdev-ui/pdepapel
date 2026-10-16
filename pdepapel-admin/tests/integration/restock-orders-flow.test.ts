@@ -184,6 +184,114 @@ describe("pedidos de aprovisionamiento", () => {
     }
   });
 
+  it("corregir el envío de un pedido recibido: la vista previa es lo que se escribe, en todas sus líneas, una sola vez y con guarda", async () => {
+    const f = await setup();
+    const base = await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id } });
+    const second = await testPrisma.product.create({
+      data: {
+        storeId: f.store.id,
+        name: `Segundo ${randomUUID()}`,
+        slug: `segundo-${randomUUID()}`,
+        sku: `SEG-${randomUUID().slice(0, 8)}`,
+        description: "Segundo producto del pedido",
+        price: 9000,
+        acqPrice: 1000,
+        stock: 0,
+        categoryId: base.categoryId,
+        sizeId: base.sizeId,
+        colorId: base.colorId,
+        designId: base.designId,
+      },
+    });
+    try {
+      const { POST: createOrderRoute } = await collectionRoute();
+      const created = await createOrderRoute(
+        json("POST", { supplierId, shippingCost: 0, status: RestockOrderStatus.ORDERED, items: [{ productId: f.component.id, quantity: 2, cost: 30000 }, { productId: second.id, quantity: 10, cost: 1000 }] }),
+        { params: { storeId: f.store.id } },
+      );
+      expect(created.status).toBe(200);
+      const order = await created.json();
+      const params = { params: { storeId: f.store.id, orderId: order.id as string } };
+      const correctionRoute = () => import("@/app/api/[storeId]/restock-orders/[orderId]/shipping-correction/route");
+      const { POST: correct } = await correctionRoute();
+
+      // Un pedido sin recibir no se corrige.
+      expect((await correct(json("POST", { shippingCost: 7000 }), params)).status).toBe(409);
+
+      const { POST: receive } = await receiveRoute();
+      const received = await receive(
+        json("POST", { idempotencyKey: randomUUID(), lines: order.items.map((item: { id: string; quantity: number }) => ({ restockOrderItemId: item.id, quantity: item.quantity })) }),
+        params,
+      );
+      expect(received.status).toBe(200);
+
+      // 70.000 de mercancía; 7.000 de envío = 10 % del costo de cada unidad.
+      const preview = await (await correct(json("POST", { shippingCost: 7000 }), params)).json();
+      expect(Object.fromEntries(preview.lines.map((line: { productId: string; shareAfter: number }) => [line.productId, line.shareAfter]))).toEqual({
+        [f.component.id]: 3000,
+        [second.id]: 100,
+      });
+      expect(preview.changed).toBe(2);
+      const expected = preview.lines.map((line: { productId: string; shareBefore: number | null }) => ({ productId: line.productId, transportationCost: line.shareBefore }));
+
+      const applied = await correct(json("POST", { shippingCost: 7000, confirm: true, expected }), params);
+      expect(applied.status).toBe(200);
+      expect((await applied.json()).changed).toBe(2);
+      const after = await testPrisma.product.findMany({ where: { id: { in: [f.component.id, second.id] } }, select: { id: true, transportationCost: true } });
+      expect(Object.fromEntries(after.map((row) => [row.id, row.transportationCost]))).toEqual({ [f.component.id]: 3000, [second.id]: 100 });
+      expect((await testPrisma.restockOrder.findUniqueOrThrow({ where: { id: order.id } })).shippingCost).toBe(7000);
+      const costRows = await testPrisma.inventoryMovement.findMany({ where: { referenceId: order.id, type: "MANUAL_ADJUSTMENT" }, orderBy: { productId: "asc" } });
+      expect(costRows.map((row) => [row.quantity, row.previousStock === row.newStock, row.reason])).toEqual([
+        [0, true, `Corrección de envío del pedido ${order.orderNumber}`],
+        [0, true, `Corrección de envío del pedido ${order.orderNumber}`],
+      ]);
+      const previewCost = new Map(preview.lines.map((line: { productId: string; costAfter: number }) => [line.productId, line.costAfter]));
+      expect(costRows.every((row) => row.cost === previewCost.get(row.productId))).toBe(true);
+
+      // Repetirla no vuelve a escribir.
+      const again = await correct(json("POST", { shippingCost: 7000, confirm: true, expected }), params);
+      expect((await again.json()).changed).toBe(0);
+      expect(await testPrisma.inventoryMovement.count({ where: { referenceId: order.id, type: "MANUAL_ADJUSTMENT" } })).toBe(2);
+
+      // Si un costo cambia entre la vista previa y la confirmación: 409 y nada escrito.
+      const preview2 = await (await correct(json("POST", { shippingCost: 14000 }), params)).json();
+      await testPrisma.product.update({ where: { id: second.id }, data: { transportationCost: 555 } });
+      const stale = await correct(
+        json("POST", { shippingCost: 14000, confirm: true, expected: preview2.lines.map((line: { productId: string; shareBefore: number | null }) => ({ productId: line.productId, transportationCost: line.shareBefore })) }),
+        params,
+      );
+      expect(stale.status).toBe(409);
+      expect((await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id } })).transportationCost).toBe(3000);
+      expect((await testPrisma.restockOrder.findUniqueOrThrow({ where: { id: order.id } })).shippingCost).toBe(7000);
+
+      // Con centavos (como los valores reales): la guarda compara bien, dos veces seguidas.
+      const roundTrip = async (shippingCost: number) => {
+        const shown = await (await correct(json("POST", { shippingCost }), params)).json();
+        const response = await correct(
+          json("POST", { shippingCost, confirm: true, expected: shown.lines.map((line: { productId: string; shareBefore: number | null }) => ({ productId: line.productId, transportationCost: line.shareBefore })) }),
+          params,
+        );
+        expect(response.status).toBe(200);
+        expect((await response.json()).changed).toBe(2);
+        const rows = await testPrisma.product.findMany({ where: { id: { in: [f.component.id, second.id] } }, select: { id: true, transportationCost: true } });
+        return Object.fromEntries(rows.map((row) => [row.id, row.transportationCost]));
+      };
+      expect(await roundTrip(7001)).toEqual({ [f.component.id]: 3000.43, [second.id]: 100.01 });
+      expect(await roundTrip(7002)).toEqual({ [f.component.id]: 3000.86, [second.id]: 100.03 });
+
+      // Sin ser la dueña de la tienda no se corrige.
+      session.userId = "otra-persona";
+      expect((await correct(json("POST", { shippingCost: 7000 }), params)).status).toBe(403);
+    } finally {
+      await testPrisma.restockOrderReceipt.deleteMany({ where: { storeId: f.store.id } });
+      const orders = await testPrisma.restockOrder.findMany({ where: { storeId: f.store.id }, select: { id: true } });
+      await testPrisma.restockOrderItem.deleteMany({ where: { restockOrderId: { in: orders.map((o) => o.id) } } });
+      await testPrisma.restockOrder.deleteMany({ where: { storeId: f.store.id } });
+      await testPrisma.inventoryMovement.deleteMany({ where: { productId: second.id } });
+      await testPrisma.product.delete({ where: { id: second.id } });
+    }
+  });
+
   it("no cancela con mercancía recibida, guarda notas aparte y fija las líneas al pedir", async () => {
     const f = await setup();
     const order = await createOrder(f, { status: RestockOrderStatus.ORDERED });

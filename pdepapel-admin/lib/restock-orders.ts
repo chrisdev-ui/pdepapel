@@ -453,3 +453,77 @@ export function planRestockScanUndo(lines: RestockDraftLine[], effect: RestockSc
   if (effect.kind === "add") return { type: "remove", index };
   return { type: "none" };
 }
+
+/* ── Corregir el envío de un pedido ya recibido ─────────────────────────── */
+
+export interface ShippingCorrectionInput {
+  order: { id: string; totalAmount: number; shippingCost: number; items: { productId: string; cost: number; quantityReceived: number }[] };
+  products: { id: string; name: string; acqPrice: number | null; transportationCost: number | null; isKit: boolean }[];
+  /** El pedido de la última recepción de cada producto (su movimiento RESTOCK_RECEIVED más reciente). */
+  lastOrderByProduct: ReadonlyMap<string, { orderId: string; orderNumber: string | null }>;
+  newShipping: number;
+}
+
+export interface ShippingCorrectionLine {
+  productId: string;
+  name: string;
+  received: number;
+  shareBefore: number | null;
+  shareAfter: number | null;
+  costBefore: number | null;
+  costAfter: number | null;
+  /** Por qué no se cambia, en una frase para Paula; null si se cambia (o ya tiene el valor). */
+  skipped: string | null;
+}
+
+/**
+ * El envío real de un pedido ya recibido, repartido entre sus líneas igual
+ * que la recepción (por valor de la línea, `transportationShare`). Solo cambia
+ * el envío por unidad de los productos cuya última recepción es este pedido:
+ * la misma regla de la corrección de datos del 2026-10-16. Puro: la vista
+ * previa y la confirmación llaman exactamente esto.
+ */
+export function planShippingCorrection(input: ShippingCorrectionInput) {
+  const { order, newShipping } = input;
+  if (!Number.isFinite(newShipping) || newShipping < 0) throw new Error("El envío debe ser un número de 0 en adelante.");
+  const productById = new Map(input.products.map((product) => [product.id, product]));
+  const received = new Map<string, { units: number; weighted: number }>();
+  for (const item of order.items) {
+    if (item.quantityReceived <= 0) continue;
+    const current = received.get(item.productId) ?? { units: 0, weighted: 0 };
+    current.units += item.quantityReceived;
+    current.weighted += item.quantityReceived * transportationShare(item.cost, order.totalAmount, newShipping);
+    received.set(item.productId, current);
+  }
+  const cost = (acqPrice: number | null, share: number | null) => (acqPrice === null ? null : round2(acqPrice + (share ?? 0)));
+  const lines: ShippingCorrectionLine[] = [];
+  for (const [productId, entry] of Array.from(received.entries())) {
+    const product = productById.get(productId);
+    if (!product) continue;
+    const last = input.lastOrderByProduct.get(productId);
+    const skipped = product.isKit
+      ? "No se cambia: es un kit; su costo sale de sus piezas."
+      : !last
+        ? "No se cambia: no se encontró su recepción en el kardex."
+        : last.orderId !== order.id
+          ? `No se cambia: su costo actual viene de una compra más reciente${last.orderNumber ? ` (${displayRestockOrderNumber(last.orderNumber)})` : ""}.`
+          : null;
+    const shareAfter = skipped ? product.transportationCost : round2(entry.weighted / entry.units);
+    lines.push({
+      productId,
+      name: product.name,
+      received: entry.units,
+      shareBefore: product.transportationCost,
+      shareAfter,
+      costBefore: cost(product.acqPrice, product.transportationCost),
+      costAfter: cost(product.acqPrice, shareAfter),
+      skipped,
+    });
+  }
+  return {
+    shippingBefore: order.shippingCost,
+    shippingAfter: round2(newShipping),
+    lines,
+    changed: lines.filter((line) => !line.skipped && line.shareAfter !== line.shareBefore).length,
+  };
+}
