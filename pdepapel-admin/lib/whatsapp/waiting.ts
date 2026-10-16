@@ -1,4 +1,5 @@
 import { isFillerText } from "@/lib/whatsapp/filler";
+import { isCustomerSignal } from "@/lib/whatsapp/message-kinds";
 
 /**
  * «Esperando a Paula» y lo que el bot puede hacer mientras tanto, como
@@ -43,7 +44,7 @@ export interface WaitMessage {
 /** Un mensaje de la clienta que pide respuesta: no reacción, no edición, no «ok/gracias». Una foto o un audio sí. */
 export function isRealCustomerMessage(message: WaitMessage): boolean {
   if (message.sentBy !== "CUSTOMER" || message.direction !== "INBOUND") return false;
-  if (message.mediaType === "reaction" || message.edit) return false;
+  if (isCustomerSignal(message.mediaType) || message.edit) return false;
   if (message.mediaType && !message.body?.trim()) return true;
   return !isFillerText(message.body);
 }
@@ -65,7 +66,8 @@ export function currentWait(messages: readonly WaitMessage[]): Wait | null {
   messages.forEach((message, index) => {
     if (message.direction === "OUTBOUND") lastOut = index;
   });
-  const after = messages.slice(lastOut + 1).filter((message) => message.direction === "INBOUND" && message.sentBy === "CUSTOMER");
+  // Sin reacciones ni borrados: no alargan la espera ni corren sus relojes.
+  const after = messages.slice(lastOut + 1).filter((message) => message.direction === "INBOUND" && message.sentBy === "CUSTOMER" && !isCustomerSignal(message.mediaType));
   const first = after.find(isRealCustomerMessage);
   if (!first) return null;
   const last = after[after.length - 1];

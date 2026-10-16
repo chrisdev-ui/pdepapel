@@ -25,6 +25,7 @@ import { assembleBurst, chooseFromBurst, claimBurst, loadBurstContext, loadBurst
 import { isFillerText, plainBotText } from "@/lib/whatsapp/filler";
 import { NO_MATCH_ACKNOWLEDGEMENT, TALK_TO_OWNER_ACKNOWLEDGEMENT, UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, UNREADABLE_MEDIA_ACKNOWLEDGEMENT } from "@/lib/whatsapp/bot-acknowledgements";
 import { acquireBotLease, claimBotLease, newBotLease, releaseBotLease, type BotLease } from "@/lib/whatsapp/bot-lease";
+import { realInboundWhere } from "@/lib/whatsapp/message-kinds";
 import { enqueueWhatsAppBotRerun } from "@/lib/whatsapp/queue";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
 import type { WebOrigin } from "@/lib/whatsapp/web-origin";
@@ -376,6 +377,8 @@ async function hasNewerInbound(
       direction: ConversationMessageDirection.INBOUND,
       sentBy: ConversationMessageSentBy.CUSTOMER,
       createdAt: { gt: inboundAt },
+      // Una reacción o un borrado no es «volvió a escribir».
+      ...realInboundWhere,
     },
     select: { id: true },
   });

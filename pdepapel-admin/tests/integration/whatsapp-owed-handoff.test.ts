@@ -40,7 +40,7 @@ async function conversation() {
 }
 
 /** Lo que llegó al webhook y todavía espera en la fila de esa clienta. */
-async function queuedEvent(phone: string, body: string, processed = false) {
+async function queuedEvent(phone: string, body: string, processed = false, message?: Record<string, unknown>) {
   const wamid = `wamid.q-${randomUUID()}`;
   const event = await testPrisma.marketplaceWebhookEvent.create({
     data: {
@@ -61,7 +61,7 @@ async function queuedEvent(phone: string, body: string, processed = false) {
                   messaging_product: "whatsapp",
                   metadata: { display_phone_number: "570000000000", phone_number_id: "621067881095773" },
                   contacts: [{ wa_id: phone, profile: { name: "Clienta Sintética" } }],
-                  messages: [{ from: phone, id: wamid, timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body } }],
+                  messages: [message ? { from: phone, id: wamid, timestamp: String(Math.floor(Date.now() / 1000)), ...message } : { from: phone, id: wamid, timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body } }],
                 },
               },
             ],
@@ -138,6 +138,43 @@ afterAll(async () => {
 beforeEach(async () => {
   sent.messages = [];
   await setBot(true);
+});
+
+describe("reacciones y borrados no son «volvió a escribir»", () => {
+  it("una reacción o un borrado en la fila o ya archivados no cancelan el aviso ni lo dejan debido", async () => {
+    const { NO_MATCH_ACKNOWLEDGEMENT } = await import("@/lib/whatsapp/bot");
+    const { formatBotReply } = await import("@/lib/whatsapp/bot-matching");
+    const chat = await conversation();
+    const first = await inbound(chat.id, "mmm oye");
+    const own = await queuedEvent(chat.phone, "mmm oye", true);
+    await queuedEvent(chat.phone, "", false, { type: "revoke" });
+    await queuedEvent(chat.phone, "", false, { type: "reaction", reaction: { message_id: "wamid.x", emoji: "👍" } });
+    await testPrisma.conversationMessage.create({ data: { conversationId: chat.id, direction: "INBOUND", sentBy: "CUSTOMER", body: null, mediaType: "reaction", createdAt: later(1_000) } });
+    await testPrisma.conversationMessage.create({ data: { conversationId: chat.id, direction: "INBOUND", sentBy: "CUSTOMER", body: null, mediaType: "revoke", createdAt: later(2_000) } });
+
+    const result = await answer(chat, first, own);
+    expect(result.outcome).toBe("escalated_no_match");
+    expect(sent.messages).toHaveLength(1);
+    expect(await botMessages(chat.id)).toEqual([{ body: formatBotReply(NO_MATCH_ACKNOWLEDGEMENT) }]);
+    const owed = await testPrisma.conversationMessage.findFirstOrThrow({ where: { conversationId: chat.id, externalId: first.externalId }, select: { metadata: true } });
+    expect((owed.metadata as Record<string, unknown> | null)?.handoffOwed).toBeUndefined();
+    await testPrisma.marketplaceWebhookEvent.updateMany({ where: { connectionId, processedAt: null }, data: { processedAt: new Date(), status: "PROCESSED" } });
+  });
+
+  it("archivar una reacción o un borrado no mueve lastInboundAt ni reabre la conversación", async () => {
+    const { fileInboundMessage } = await import("@/lib/whatsapp/conversation-sync");
+    const chat = await conversation();
+    const before = new Date("2026-10-15T12:00:00.000Z");
+    await testPrisma.conversation.update({ where: { id: chat.id }, data: { lastInboundAt: before, status: "RESOLVED" } });
+    for (const mediaType of ["reaction", "revoke"]) {
+      await fileInboundMessage(fixture.store.id, { externalId: `wamid.s-${randomUUID()}`, phone: chat.phone, bsuid: null, username: null, contactName: null, body: null, mediaType, kind: "signal", sentAt: later(1_000), interactiveReplyId: null, metadata: null }, "evt-signal");
+    }
+    await expect(testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { lastInboundAt: true, status: true } })).resolves.toEqual({ lastInboundAt: before, status: "RESOLVED" });
+    await fileInboundMessage(fixture.store.id, { externalId: `wamid.t-${randomUUID()}`, phone: chat.phone, bsuid: null, username: null, contactName: null, body: "hola", mediaType: null, sentAt: later(2_000), interactiveReplyId: null, metadata: null }, "evt-text");
+    const after = await testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { lastInboundAt: true, status: true } });
+    expect(after.status).toBe("OPEN");
+    expect(after.lastInboundAt!.getTime()).toBeGreaterThan(before.getTime());
+  });
 });
 
 describe("aviso de escalada debido", () => {

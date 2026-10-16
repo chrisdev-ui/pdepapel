@@ -57,6 +57,15 @@ const tapFrom = (from: string) =>
       },
     ],
   });
+const signalFrom = (from: string, type: "reaction" | "revoke") =>
+  metaPayload("messages", {
+    metadata: { phone_number_id: "PHONE-1" },
+    messages: [
+      type === "reaction"
+        ? { from, id: "wamid.reaction", timestamp: "1789300003", type, reaction: { message_id: "wamid.bot", emoji: "❤️" } }
+        : { from, id: "wamid.revoke", timestamp: "1789300003", type },
+    ],
+  });
 const echoTo = (to: string) =>
   metaPayload("smb_message_echoes", {
     message_echoes: [{ from: "573132582293", to, id: "wamid.echo", timestamp: "1789300002", type: "text", text: { body: "ya te escribo" } }],
@@ -96,6 +105,13 @@ describe("findPendingCustomerActivity", () => {
 
   it("su toque de «Hablar con Paula» en la fila", async () => {
     mocks.events.mockResolvedValue([{ payload: tapFrom(CUSTOMER) }]);
+    await expect(findPendingCustomerActivity(query)).resolves.toBe("customer_message");
+  });
+
+  it("una reacción o un borrado de la misma clienta en la fila no frenan la respuesta", async () => {
+    mocks.events.mockResolvedValue([{ payload: signalFrom(CUSTOMER, "reaction") }, { payload: signalFrom(CUSTOMER, "revoke") }]);
+    await expect(findPendingCustomerActivity(query)).resolves.toBeNull();
+    mocks.events.mockResolvedValue([{ payload: signalFrom(CUSTOMER, "revoke") }, { payload: textFrom(CUSTOMER) }]);
     await expect(findPendingCustomerActivity(query)).resolves.toBe("customer_message");
   });
 

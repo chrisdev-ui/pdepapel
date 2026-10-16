@@ -84,7 +84,8 @@ export async function findPendingCustomerActivity(
   for (const event of pending) {
     const extracted = extractWhatsAppEvents(event.payload as never);
     if (extracted.ownerEchoes.some(isThisCustomer)) return "owner_message";
-    if (extracted.messages.some(isThisCustomer)) return "customer_message";
+    // Reacciones y borrados quedan fuera: no reemplazan la respuesta pendiente.
+    if (extracted.messages.some((message) => isThisCustomer(message) && message.kind !== "signal")) return "customer_message";
   }
   return null;
 }

@@ -15,6 +15,7 @@ import { normalizePhone } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
 import { NO_MATCH_ACKNOWLEDGEMENT, runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
 import { isBurstModeOn } from "@/lib/whatsapp/bot-guards";
+import { inboundKindOf, type InboundKind } from "@/lib/whatsapp/message-kinds";
 import { isShadowCandidate } from "@/lib/whatsapp/shadow/candidate";
 import { runWhatsAppBotShadow } from "@/lib/whatsapp/shadow/run";
 import { detectWebOrigin, type WebOrigin } from "@/lib/whatsapp/web-origin";
@@ -88,6 +89,8 @@ export interface WhatsAppInboundMessage {
   interactiveReplyId: string | null;
   /** Extras estructurados; hoy solo el carrito de un mensaje `order`. */
   metadata: WhatsAppMessageMetadata | null;
+  /** Reacción o borrado: historial, no un mensaje nuevo (lib/whatsapp/message-kinds.ts). Sin valor se deduce del tipo. */
+  kind?: InboundKind;
 }
 
 /** Un renglón del carrito tal como lo manda Meta, sin resolver todavía. */
@@ -472,6 +475,7 @@ export function extractWhatsAppEvents(
             // Un carrito trae su nota en `order.text`; si no hay, queda sin cuerpo.
             body: getMessageBody(message) ?? metadata?.order?.note ?? null,
             mediaType: type && type !== "text" ? type : null,
+            kind: inboundKindOf(type && type !== "text" ? type : null),
             sentAt: parseMetaTimestamp(message.timestamp),
             interactiveReplyId: getInteractiveReplyId(message),
             metadata,
@@ -749,19 +753,20 @@ export async function fileInboundMessage(
   eventId: string,
   options: { reopen?: boolean } = {},
 ): Promise<{ conversationId: string; outcome: FiledInboundOutcome }> {
+  const signal = (message.kind ?? inboundKindOf(message.mediaType)) === "signal";
   const conversation = await resolveConversation(
     storeId,
     { phone: message.phone, bsuid: message.bsuid },
     {
       contactName: message.contactName,
       username: message.username,
-      lastInboundAt: message.sentAt ?? new Date(),
+      ...(signal ? {} : { lastInboundAt: message.sentAt ?? new Date() }),
     },
   );
   // Una conversación cerrada vuelve a abrirse con el siguiente mensaje; una
   // que espera a la dueña sigue esperándola. Un mensaje recuperado del atraso
-  // no la reabre.
-  if (options.reopen !== false) {
+  // no la reabre, y una reacción o un borrado tampoco.
+  if (options.reopen !== false && !signal) {
     await prismadb.conversation.updateMany({
       where: { id: conversation.id, status: ConversationStatus.RESOLVED },
       data: { status: ConversationStatus.OPEN },
@@ -987,7 +992,7 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
       // el bot no contesta algo viejo. En el atraso, ni siquiera pasa a Paula:
       // queda como historial.
       if (stale) {
-        if (!backlog) await escalateIfUnanswered(filed.conversationId, sentAt);
+        if (!backlog && message.kind !== "signal") await escalateIfUnanswered(filed.conversationId, sentAt);
         continue;
       }
       // Una foto o un audio sin pie van a Paula: lo que importa está dentro y

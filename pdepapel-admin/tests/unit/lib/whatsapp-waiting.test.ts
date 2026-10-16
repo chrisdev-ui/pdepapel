@@ -54,6 +54,14 @@ describe("la espera", () => {
     expect(currentWait([msg({ body: null, mediaType: "image", createdAt: ago(DAY, 20) })])).not.toBeNull();
   });
 
+  it("una reacción o un borrado no abren una espera ni mueven su último mensaje", () => {
+    expect(currentWait([out(ago(DAY, 30)), msg({ body: null, mediaType: "revoke", createdAt: ago(DAY, 20) })])).toBeNull();
+    const question = msg({ createdAt: ago(DAY, 20) });
+    const wait = currentWait([out(ago(DAY, 30)), question, msg({ body: null, mediaType: "reaction", createdAt: ago(DAY, 5) }), msg({ body: null, mediaType: "revoke", createdAt: ago(DAY, 2) })]);
+    expect(wait).toMatchObject({ startMessageId: question.id, lastCustomerAt: question.createdAt, lastCustomerMessageId: question.id });
+    expect(wait?.messages).toHaveLength(1);
+  });
+
   it("la cierra cualquier salida de Paula o del bot", () => {
     expect(currentWait([msg({ createdAt: ago(DAY, 20) }), out(ago(DAY, 10))])).toBeNull();
     expect(currentWait([msg({ createdAt: ago(DAY, 20) }), out(ago(DAY, 10), "BOT")])).toBeNull();
