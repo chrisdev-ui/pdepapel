@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   messageCreate: vi.fn(),
   messageFindUnique: vi.fn(),
   messageUpdateMany: vi.fn(),
+  executeRaw: vi.fn(),
   runBot: vi.fn(),
   shadow: vi.fn(),
   order: [] as string[],
@@ -57,6 +58,7 @@ vi.mock("@/lib/prismadb", () => ({
       delete: mocks.messageDelete,
       updateMany: mocks.messageUpdateMany,
     },
+    $executeRaw: mocks.executeRaw,
   },
 }));
 

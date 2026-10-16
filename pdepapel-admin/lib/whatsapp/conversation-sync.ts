@@ -847,6 +847,7 @@ export async function fileOwnerEcho(
     { username: echo.username, lastOutboundAt: sentAt },
   );
   await bumpLastOwnerAt(conversation.id, sentAt);
+  await dropOwedHandoffs(conversation.id, sentAt);
 
   // Un eco viejo (archivado tarde) no saca de la espera a una conversación
   // que quizá ya espera por un mensaje posterior.
@@ -893,6 +894,20 @@ export async function fileOwnerEcho(
     },
   });
   return true;
+}
+
+/**
+ * Paula escribió: un aviso de escalada que quedó debido (lib/whatsapp/bot.ts,
+ * `recordOwedHandoff`) ya no se manda nunca y queda «dropped». Solo los
+ * anotados antes de su mensaje; una sola sentencia, idempotente.
+ */
+async function dropOwedHandoffs(conversationId: string, ownerAt: Date): Promise<void> {
+  await prismadb.$executeRaw`
+    UPDATE \`ConversationMessage\`
+       SET \`metadata\` = JSON_SET(\`metadata\`, '$.handoffOwed.state', 'dropped')
+     WHERE \`conversationId\` = ${conversationId}
+       AND \`createdAt\` <= ${ownerAt}
+       AND JSON_UNQUOTE(JSON_EXTRACT(\`metadata\`, '$.handoffOwed.state')) = 'owed'`;
 }
 
 /** Un mensaje que llega al procesador con más de esto se archiva sin que conteste el bot. */

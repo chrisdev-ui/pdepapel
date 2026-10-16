@@ -243,6 +243,26 @@ describe("aviso de escalada debido", () => {
     expect(sent.messages).toHaveLength(0);
   });
 
+  it("cuando Paula escribe (su eco), el aviso debido pasa a «dropped» y no sale nunca después", async () => {
+    const { fileOwnerEcho } = await import("@/lib/whatsapp/conversation-sync");
+    const chat = await conversation();
+    await handoffCancelledByBurst(chat);
+    const owedState = async () => {
+      const rows = await testPrisma.conversationMessage.findMany({ where: { conversationId: chat.id, direction: "INBOUND" }, select: { metadata: true } });
+      return rows.map((row) => ((row.metadata as Record<string, { state?: string }> | null)?.handoffOwed?.state ?? null)).filter(Boolean);
+    };
+    expect(await owedState()).toEqual(["owed"]);
+
+    await fileOwnerEcho(fixture.store.id, { externalId: `wamid.echo-${randomUUID()}`, phone: chat.phone, bsuid: null, username: null, body: "Hola, ya te ayudo", mediaType: null, sentAt: later(5_000) }, "evt-echo");
+    expect(await owedState()).toEqual(["dropped"]);
+
+    // Aunque la pausa de 24 h de Paula se haya vencido, el aviso ya no sale.
+    await testPrisma.conversation.update({ where: { id: chat.id }, data: { lastOwnerAt: new Date(Date.now() - 2 * 86_400_000) } });
+    const next = await inbound(chat.id, "hola?", later(10_000));
+    expect((await answer(chat, next)).outcome).not.toBe("escalated_owed_notice");
+    expect(sent.messages.filter((message) => message.includes("Paula"))).toHaveLength(0);
+  });
+
   it("si Paula escribió desde el panel (sin pausa), tampoco", async () => {
     const chat = await conversation();
     await handoffCancelledByBurst(chat);
