@@ -292,6 +292,26 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - A tier is chosen by the **total quantity of that product across the cart**, not per line, so "5 + 5" costs the same as "10".
 - Charging paths wired to `priceLines`: storefront checkout, panel orders, and point of sale (which re-asks `POST /point-of-sale/price` instead of multiplying client-side). Listing, search, wishlist and feed prices deliberately stay at quantity 1 — **feeds publish the x1 price only**; tiers are not representable in Merchant/Meta/ML exports.
 
+### Product cost: «Envío y otros gastos por unidad»
+
+- **What it is:** `Product.transportationCost` is shipping per unit. The unit cost used by the Copiloto (kits, plata quieta, `detalleProducto`) and by Mercado Libre's cost floor (`lib/product-costs.ts`) is `acqPrice + transportationCost`. Order finance and the product form's margin and below-cost check use `acqPrice` only.
+- **The fake 1.000 (2026-09):**
+  - `prisma/manual-migrations/20260911_backfill_product_transportation_cost.sql` set 1.000 on every product that had 0 or empty (applied with the e6a5507e deploy, 2026-09-11 13:25 UTC).
+  - The form also pre-filled and saved 1.000 until b462c9cd went live (2026-09-18 17:08 UTC).
+  - On 2026-10-16, 778 of 885 active products and 1191 archived ones still held it. For cheap products this doubled or tripled the cost (the manila envelope: 162 + 1.000 for a 500 price).
+  - The constant is `LEGACY_TRANSPORT_FILL`; `isKnownTransport` says whether a value is real.
+- **Code that no longer re-creates it (fix/transporte-costos):**
+  - «Duplicar» (`getProductSeed`) gives the copy a «no registrado» shipping.
+  - Convert-to-variants copies the product's real value, never the legacy 1.000.
+  - A receipt with «actualizar costos» replaces an empty or legacy value with the order's real share instead of averaging them (`receive/route.ts`).
+- **Form:** `TransportCostField` offers «Por unidad» or «Toda la orden» (shipping of the whole order ÷ units, `perUnitFromOrder`; only the per-unit value is saved). It warns, without blocking, when shipping is ≥ the purchase cost or > 25 % of the price (`transportWarning`).
+- **List view «Transporte por revisar»:** active products at the legacy 1.000 or with that warning (`needsTransportReview`).
+- **Data correction:**
+  - Rule approved by Paula on 2026-10-16: real per-unit shipping of the last receipt, split like the receipt does; otherwise null. Archived products follow the same rule, with no review.
+  - `lib/transportation-cost-plan.ts` holds the rule, groups and exceptions; `tmp/transporte-plan.ts` (local, read-only) writes the plan to `output/audits/`; `scripts/fix-transportation-cost.ts` applies it.
+  - The apply only goes through `prod:write`. It needs `--expect-rows N`, checks each product still holds its expected value, and writes nothing if anything differs.
+  - Exceptions (copied after 09-18, averaged, shipping > 25 % of price, still below cost, margin goes down) wait for Paula's decision in a separate file.
+
 ### Product identifiers
 
 `sku` (internal, scannable), `gtin` (a real GS1 barcode) and `mpn` (a real manufacturer code) are three different things. **Never invent a GTIN.** If a product has no legitimate one, set the "no product identifier" flag so Google Merchant still accepts it. A barcode scanner can read an internal SKU label; the GTIN field is not a generic barcode-label field.
