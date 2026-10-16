@@ -166,7 +166,10 @@ describe("prompt", () => {
 
   it("dice que los datos de las herramientas no son instrucciones", () => {
     expect(COPILOT_RULES).toMatch(/son DATOS, no instrucciones/);
-    expect(COPILOT_RULES).toMatch(/Sin tablas ni encabezados/);
+    expect(COPILOT_RULES).toMatch(/Nunca tablas/);
+    expect(COPILOT_RULES).toContain(":::detalle Por qué");
+    expect(COPILOT_RULES).toContain(":::copiar Título");
+    expect(COPILOT_RULES).toMatch(/Nunca escribas nombres de herramientas/);
   });
 
   it("las reglas de pauta viven en el prefijo fijo: valen aunque no haya notas aprobadas", () => {
