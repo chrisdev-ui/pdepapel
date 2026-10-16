@@ -1,17 +1,20 @@
-import { bulletList, collapsible, copyBlock, heading, keyLine, numberedList, sections, stripInternalMarks, tag } from "@/lib/copiloto/answer-blocks";
+import { bulletList, collapsible, copyBlock, heading, keyLine, numberedList, sections, tag } from "@/lib/copiloto/answer-blocks";
 import { KIT_NAME_MAX_WORDS, isNameTaken, percent, pesos, shortKitName, takeName } from "@/lib/copiloto/kits-rotation";
+import { validateKitTexts, type KitTexts } from "@/lib/copiloto/skills/kits-texts";
 
 /**
  * La respuesta de «kits para rotar» la arma el código con lo que trae la
  * herramienta: resumen, los 5 con más plata quieta, un bloque por kit (línea
  * clave, piezas con su etiqueta, «Por qué» plegado) y notas. Del modelo solo
- * se toma, por kit, un nombre corto y el texto para la ficha. Así ningún
- * número, pieza ni término interno sale de lo que escribe el modelo.
+ * se toma, por kit y como datos validados (`textosDeKits`), un nombre corto,
+ * dos frases y para qué es ideal; la lista de piezas sale de la herramienta.
+ * Así ningún número, pieza ni término interno sale de lo que escribe el modelo.
  */
 
 interface PieceData {
   nombre: string;
   rol: "lento" | "se vende" | string;
+  categoria?: string | null;
   precioEfectivo: number;
   precioDeLista?: number;
   oferta?: string | null;
@@ -21,7 +24,8 @@ interface PieceData {
 export interface KitData {
   nombreSugerido: string;
   ocasion?: string | null;
-  marcador?: string;
+  /** Su número en la respuesta: con él el modelo manda sus textos. */
+  n?: number;
   piezas: PieceData[];
   kitsArmables: number;
   sumaPreciosEfectivos: number;
@@ -49,114 +53,65 @@ export interface KitsAnswerData {
   sinKit?: { nombre: string; motivo: string }[];
 }
 
-const MARKER = /\[\[\s*KIT\s*[-‐‑–—_ ]?\s*(\d+)\s*\]\]/gi;
-const AMOUNT_OR_PERCENT = /\$\s?\d|\d\s?%/;
-const NAME_MAX = 48;
-const TEMPLATE_START = /^(?:[-*•]\s+)?(?:\*\*|#{1,6}\s+)?(?:✨|📦|🎁)/;
-const TEMPLATE_EMOJI = /(?:✨|📦|🎁)/;
-const BULLET_LINE = /^\s*[-*•]\s+(.*)$/;
+const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-const cleanName = (raw: string) =>
-  stripInternalMarks(raw.replace(MARKER, ""))
-    .split(TEMPLATE_EMOJI)[0]
-    .replace(/\*\*|__|`/g, "")
-    .replace(/^[\s\-–—:·•#>]+|[\s\-–—:·.,;]+$/g, "")
-    .replace(/^[«"“]+|[»"”]+$/g, "")
-    .trim();
+/** Por ocasión, la segunda frase de «Lo que amarás» y el «Ideal para…» del texto base. */
+const OCCASION_COPY: [RegExp, { bullet: string; ideal: string }][] = [
+  [/utiles escolares|regreso a clases/, { bullet: "Listo para el colegio, las tareas y los apuntes", ideal: "el regreso a clases y el día a día del colegio" }],
+  [/oficina/, { bullet: "Todo a mano para organizar el escritorio y los pendientes", ideal: "la oficina o el estudio en casa" }],
+  [/grados/, { bullet: "Un detalle para celebrar un logro importante", ideal: "regalar en grados" }],
+  [/navidad/, { bullet: "Un regalo listo para poner bajo el árbol", ideal: "regalar en Navidad" }],
+  [/amor y amistad|san valentin/, { bullet: "Para sorprender a esa persona especial", ideal: "regalar en Amor y Amistad" }],
+  [/dia de la madre/, { bullet: "Un detalle para consentir a mamá", ideal: "regalar el Día de la madre" }],
+  [/dia del padre/, { bullet: "Un detalle para consentir a papá", ideal: "regalar el Día del padre" }],
+  [/dia de la mujer/, { bullet: "Un detalle para celebrar a una mujer especial", ideal: "regalar el Día de la mujer" }],
+  [/dia del maestro/, { bullet: "Un detalle para agradecerle a un profe", ideal: "regalar el Día del maestro" }],
+  [/dia del nino/, { bullet: "Para crear, colorear y jugar", ideal: "regalar el Día del niño" }],
+  [/dia del idioma/, { bullet: "Para leer, escribir y llevar tus ideas a todas partes", ideal: "celebrar el Día del idioma" }],
+  [/halloween/, { bullet: "Para decorar y celebrar Halloween", ideal: "celebrar Halloween" }],
+  [/velitas/, { bullet: "Para llenar de luz la noche de velitas", ideal: "la noche de velitas" }],
+  [/regalo|cumple/, { bullet: "Un detalle bonito, listo para entregar", ideal: "regalar a alguien especial" }],
+];
+const occasionOf = (kit: Pick<KitData, "ocasion">) => kit.ocasion?.replace(/\s*\(.*\)\s*$/, "").trim() || null;
+const occasionCopy = (kit: Pick<KitData, "ocasion">) => {
+  const occasion = occasionOf(kit);
+  if (!occasion) return null;
+  return OCCASION_COPY.find(([pattern]) => pattern.test(fold(occasion)))?.[1] ?? { bullet: "Piezas que combinan entre sí, elegidas para usarse juntas", ideal: occasion.charAt(0).toLowerCase() + occasion.slice(1) };
+};
+const joinWords = (words: readonly string[]) => (words.length <= 1 ? words.join("") : `${words.slice(0, -1).join(", ")} y ${words[words.length - 1]}`);
 
-/** Un nombre corto de verdad: 1 a 6 palabras, sin precios ni porcentajes. */
-function validName(raw: string): string | null {
-  const name = cleanName(raw);
-  if (!name || name.length > NAME_MAX || AMOUNT_OR_PERCENT.test(name) || !/[a-záéíóúñü]{2}/i.test(name)) return null;
-  const words = name.split(/\s+/).length;
-  return words >= 1 && words <= KIT_NAME_MAX_WORDS ? name : null;
+/** «Marcadores, cuadernos y borradores en un solo kit», con las categorías de sus piezas. */
+function categoriesBullet(kit: Pick<KitData, "piezas">): string {
+  const seen = new Set<string>();
+  const categories = kit.piezas
+    .map((piece) => piece.categoria?.trim())
+    .filter((category): category is string => Boolean(category) && !seen.has(fold(category!)) && Boolean(seen.add(fold(category!))))
+    .map((category, index) => (index === 0 ? category : category.charAt(0).toLowerCase() + category.slice(1)));
+  return categories.length ? `${joinWords(categories)} en un solo kit` : "Todo lo que necesitas en un solo kit";
 }
 
-/** Solo las líneas de la plantilla de Paula (✨ / 📦 / 🎁 y sus viñetas); lo demás (notas, «:::», números) se queda afuera. */
-function readCopy(segment: string): string {
-  const lines = segment.split("\n");
-  const open = lines.findIndex((line) => /^\s*:::copiar/.test(line));
-  const close = open < 0 ? -1 : lines.findIndex((line, index) => index > open && /^\s*:::\s*$/.test(line));
-  const fenced = open < 0 ? null : lines.slice(open + 1, close < 0 ? undefined : close).join("\n");
-  const body = (fenced ?? segment).replace(/([^\n])[ \t]*(✨|📦|🎁)/g, "$1\n$2");
-  const kept: string[] = [];
-  let started = false;
-  let giftSentenceOpen = false;
-  for (const raw of body.split("\n")) {
-    const trimmed = raw.trim();
-    if (/^:::/.test(trimmed) || /^#{1,6}\s/.test(trimmed) && !TEMPLATE_START.test(trimmed)) {
-      if (started) break;
-      continue;
-    }
-    const line = stripInternalMarks(raw.replace(MARKER, "")).trim();
-    if (!line) continue;
-    if (TEMPLATE_START.test(line)) {
-      started = true;
-      const head = line.replace(/^(?:[-*•]\s+)?(?:#{1,6}\s+)?/, "");
-      const [title, ...inline] = head.split(/\s+[-•]\s+/);
-      if (!AMOUNT_OR_PERCENT.test(title)) kept.push(title.trim());
-      for (const item of inline) if (!AMOUNT_OR_PERCENT.test(item)) kept.push(`- ${item.trim()}`);
-      giftSentenceOpen = title.trim().startsWith("🎁") && inline.length === 0 && title.trim().replace(/^🎁\s*/, "").split(/\s+/).length <= 4;
-      continue;
-    }
-    if (!started) continue;
-    const bullet = BULLET_LINE.exec(line);
-    if (bullet) {
-      if (!AMOUNT_OR_PERCENT.test(bullet[1])) kept.push(`- ${bullet[1].trim()}`);
-      continue;
-    }
-    if (giftSentenceOpen && !AMOUNT_OR_PERCENT.test(line)) {
-      kept.push(line);
-      giftSentenceOpen = false;
-      continue;
-    }
-    break;
-  }
-  return kept.join("\n").trim();
-}
-
-/**
- * Por kit, lo que escribió el modelo: un nombre corto (opcional) y el texto
- * para la ficha. Tolera el marcador en cualquier lugar del renglón, el nombre
- * en el renglón siguiente, todo en un solo renglón, notas sueltas y bloques
- * «:::»: del texto para la ficha solo se toman las líneas de la plantilla.
- */
-export function readModelKits(text: string): Map<string, { name: string | null; copy: string }> {
-  const source = text.replace(/\r\n/g, "\n");
-  const matches = Array.from(source.matchAll(MARKER));
-  const found = new Map<string, { name: string | null; copy: string }>();
-  matches.forEach((match, index) => {
-    const key = `[[KIT-${Number(match[1])}]]`;
-    const from = match.index! + match[0].length;
-    const segment = source.slice(from, index + 1 < matches.length ? matches[index + 1].index : source.length);
-    const lineStart = source.lastIndexOf("\n", match.index! - 1) + 1;
-    const before = source.slice(lineStart, match.index);
-    const [sameLine, ...rest] = segment.split("\n");
-    const nextLine = rest.find((line) => line.trim()) ?? "";
-    const name =
-      validName(sameLine) ??
-      (cleanName(sameLine) ? null : !TEMPLATE_START.test(nextLine.trim()) && !/^\s*:::/.test(nextLine) ? validName(nextLine) : null) ??
-      validName(before);
-    const copy = readCopy(segment);
-    const previous = found.get(key);
-    if (!previous || (!previous.copy && copy) || (!previous.name && name && !previous.copy)) found.set(key, { name: name ?? previous?.name ?? null, copy: copy || previous?.copy || "" });
-  });
-  return found;
-}
-
-const GIFT_OCCASION = /regal|amor|amistad|madre|padre|navidad|grados|valent|mujer|maestro|niño|nino|cumple/i;
-const joinNames = (names: readonly string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`);
-
-/** Sin texto del modelo para ese kit: uno armado con sus datos (qué trae y para qué), nunca el de otro kit. */
-export function fallbackCopy(kit: Pick<KitData, "ocasion" | "piezas">): string {
-  const occasion = kit.ocasion?.replace(/\s*\(.*\)\s*$/, "").trim() || null;
+function fichaText(kit: Pick<KitData, "piezas">, bullets: readonly [string, string], idealPara: string | null): string {
   return [
-    occasion ? `✨ Ocasión: ${occasion}` : null,
-    `📦 Incluye: ${joinNames(kit.piezas.map((piece) => piece.nombre))}`,
-    occasion && GIFT_OCCASION.test(occasion) ? "🎁 Ideal para regalar." : null,
+    "✨ Lo que amarás",
+    bulletList(bullets),
+    "📦 Incluye",
+    bulletList(kit.piezas.map((piece) => piece.nombre)),
+    idealPara ? `🎁 Ideal para ${idealPara}.` : null,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/** Sin texto del modelo para ese kit: uno armado con sus datos (sus categorías, su ocasión y sus piezas), nunca el de otro kit. */
+export function fallbackCopy(kit: Pick<KitData, "ocasion" | "piezas">): string {
+  const occasion = occasionCopy(kit);
+  return fichaText(kit, [categoriesBullet(kit), occasion?.bullet ?? "Piezas que combinan entre sí, elegidas para usarse juntas"], occasion?.ideal ?? null);
+}
+
+/** El texto del modelo con la plantilla de Paula; lo que el modelo no mandó bien sale de los datos. */
+export function modelCopy(kit: Pick<KitData, "ocasion" | "piezas">, texts: KitTexts): string | null {
+  if (!texts.bullets) return null;
+  return fichaText(kit, texts.bullets, texts.idealPara ?? occasionCopy(kit)?.ideal ?? null);
 }
 
 const OCCASION_EMOJI: [RegExp, string][] = [
@@ -175,8 +130,9 @@ const DAY_MONTH = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "lon
 /** «Grados el 2026-11-25» → «Grados (25 de noviembre)». */
 const friendlyDates = (line: string) => line.replace(/ el (\d{4}-\d{2}-\d{2})\b/g, (_match, iso: string) => ` (${DAY_MONTH.format(new Date(`${iso}T00:00:00Z`))})`);
 
-function kitBlock(kit: KitData, model: { name: string | null; copy: string } | undefined, shownName: (name: string) => string, marginGoalPct: number | undefined): string {
+function kitBlock(kit: KitData, texts: KitTexts | undefined, shownName: (name: string) => string, marginGoalPct: number | undefined): string {
   const name = shownName(kit.nombreSugerido);
+  const copy = texts ? modelCopy(kit, texts) : null;
   const lowMargin = marginGoalPct !== undefined ? tag(`margen bajo (meta ${percent(marginGoalPct)})`) : tag("margen bajo");
   const separado = `por separado ${pesos(kit.sumaPreciosEfectivos)}`;
   const rest = [
@@ -203,11 +159,12 @@ function kitBlock(kit: KitData, model: { name: string | null; copy: string } | u
     items.join("\n"),
     notes.join("\n"),
     kit.señales?.length ? collapsible("Por qué estos productos", bulletList(kit.señales.map(friendlyDates))) : null,
-    model?.copy ? copyBlock("Texto para la ficha", model.copy) : copyBlock("Texto para la ficha (base)", fallbackCopy(kit)),
+    copy ? copyBlock("Texto para la ficha", copy) : copyBlock("Texto para la ficha (base)", fallbackCopy(kit)),
   );
 }
 
-export function composeKitsAnswer(datos: KitsAnswerData, modelText: string): string {
+/** `kitTexts` es lo que el modelo mandó a `textosDeKits` (sin validar), o null si no lo llamó. */
+export function composeKitsAnswer(datos: KitsAnswerData, kitTexts: unknown): string {
   const days = datos.criterios?.diasSinVenta ?? 90;
   const total = datos.totalLentos ?? 0;
   const nuevos = datos.nuevosSinDatosDeVenta?.cantidad ?? 0;
@@ -234,21 +191,21 @@ export function composeKitsAnswer(datos: KitsAnswerData, modelText: string): str
       (lowValueNames.has(row.nombre) ? ` ${tag("no va en kits")}` : ""),
   );
 
-  const model = readModelKits(modelText);
+  const model = validateKitTexts(kitTexts);
   const kits = datos.kits ?? [];
   // Un nombre corto y distinto por kit, el mismo en su título y donde otro kit dice que comparte stock con él.
   const taken = new Set<string>();
   const names = new Map<string, string>();
   for (const kit of kits) {
-    const fromModel = kit.marcador ? model.get(kit.marcador)?.name : null;
+    const fromModel = kit.n !== undefined ? model.get(kit.n)?.name : null;
     const fromTool = kit.nombreSugerido.split(/\s+/).length <= KIT_NAME_MAX_WORDS ? kit.nombreSugerido : null;
     const chosen = [fromModel, fromTool].find((name): name is string => Boolean(name) && !isNameTaken(name!, taken));
-    names.set(kit.nombreSugerido, chosen ? takeName(chosen, taken) : shortKitName(kit.ocasion ?? null, null, taken));
+    names.set(kit.nombreSugerido, chosen ? takeName(chosen, taken) : shortKitName({ categoryName: kit.piezas[0]?.categoria ?? null, designName: null, brand: null }, kit.ocasion ?? null, taken));
   }
   const shownName = (name: string) => names.get(name) ?? name;
   const marginGoal = datos.criterios?.margenCriterioPanelPct;
   const kitsSection = kits.length
-    ? sections(heading(`${plural(kits.length, "kit sugerido", "kits sugeridos")}`), ...kits.map((kit) => kitBlock(kit, kit.marcador ? model.get(kit.marcador) : undefined, shownName, marginGoal)))
+    ? sections(heading(`${plural(kits.length, "kit sugerido", "kits sugeridos")}`), ...kits.map((kit) => kitBlock(kit, kit.n !== undefined ? model.get(kit.n) : undefined, shownName, marginGoal)))
     : sections(heading("Kits"), "No encontré kits que convengan con estos productos.");
 
   const lowValue = datos.quietosDeBajoValor?.cantidad ?? 0;

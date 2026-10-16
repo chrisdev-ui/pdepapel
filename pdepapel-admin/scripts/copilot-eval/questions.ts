@@ -621,7 +621,11 @@ export function renderedKits(text: string, tool: KitsFromTool) {
     kits: names.length,
     copiaPorKit: kitsFromTool > 0 && names.length === kitsFromTool && copies.length === kitsFromTool && copies.every((copy) => customerOnly(copy.text)),
     sinFugas: !/:::|\[\[KIT/i.test(visible),
-    nombresCortosYDistintos: names.length > 0 && names.every((name) => name.split(/\s+/).length <= 6) && new Set(names.map(fold)).size === names.length,
+    nombresCortosYDistintos:
+      names.length > 0 &&
+      names.every((name) => name.split(/\s+/).length <= 6) &&
+      new Set(names.map(fold)).size === names.length &&
+      new Set(names.map((name) => fold(name).split(/\s+/).slice(0, 3).join(" "))).size === names.length,
     margenBajoConMeta: goal !== null && marginTags.length === tool.conMargenBajo && marginTags.every((label) => label === goal),
     copiasDelModelo: copies.filter((copy) => copy.title === "Texto para la ficha").length,
   };
@@ -648,7 +652,7 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
   },
   {
     id: "kits-pantalla-nombres",
-    criterio: "Pintada: nombres de kit de máximo 6 palabras y distintos entre sí.",
+    criterio: "Pintada: nombres de kit de máximo 6 palabras, distintos entre sí y sin repetir sus 3 primeras palabras.",
     estricto: true,
     pasa: ({ main }) => renderedKits(main.text, kitsInTool(main)).nombresCortosYDistintos,
   },

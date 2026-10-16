@@ -5,6 +5,7 @@ import {
   createIdGenerator,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  hasToolCall,
   isStepCount,
   streamText,
   toUIMessageStream,
@@ -40,6 +41,7 @@ import {
 import { activeToolNames, getCopilotSkill } from "@/lib/copiloto/skills";
 import { plainWordsTransform } from "@/lib/copiloto/plain-words";
 import { kitsAnswerTransform } from "@/lib/copiloto/skills/kits-transform";
+import { KITS_TEXTS_TOOL, kitsTextsStep } from "@/lib/copiloto/skills/kits-texts";
 import { specCheckTransform } from "@/lib/copiloto/skills/specs";
 import { buildSkillTools } from "@/lib/copiloto/skills/tools";
 import { COPILOT_TOOL_NAMES, buildCopilotTools } from "@/lib/copiloto/tools";
@@ -286,6 +288,9 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
     activeTools: activeToolNames(COPILOT_TOOL_NAMES, loaded) as (keyof typeof tools)[],
     // Una habilidad cargada en este mismo turno activa sus herramientas desde el paso siguiente.
     prepareStep: ({ steps }) => {
+      // Tras los borradores de kits, el modelo solo puede mandar sus textos como datos (lib/copiloto/skills/kits-texts.ts).
+      const kitsTexts = kitsTextsStep(steps);
+      if (kitsTexts) return kitsTexts as { activeTools: (keyof typeof tools)[]; toolChoice: { type: "tool"; toolName: keyof typeof tools } };
       for (const step of steps) {
         for (const toolResult of step.toolResults ?? []) {
           const output = toolResult.output as { ok?: boolean; id?: string } | undefined;
@@ -296,7 +301,7 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
     },
     // Al final, sin otra llamada: aviso de especificaciones que faltan, la respuesta de kits armada por el código y, para toda respuesta, palabras simples en vez de nombres internos.
     experimental_transform: [specCheckTransform(), kitsAnswerTransform(), plainWordsTransform()],
-    stopWhen: isStepCount(COPILOT_MAX_STEPS),
+    stopWhen: [isStepCount(COPILOT_MAX_STEPS), hasToolCall(KITS_TEXTS_TOOL)],
     abortSignal: AbortSignal.timeout(COPILOT_TIMEOUT_MS),
     maxRetries: 0,
     providerOptions: {

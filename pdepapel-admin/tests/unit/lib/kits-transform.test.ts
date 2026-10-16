@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { kitMarker, kitsAnswerTransform, kitsModelTextTap } from "@/lib/copiloto/skills/kits-transform";
+import { kitsAnswerTransform, kitsModelTextTap } from "@/lib/copiloto/skills/kits-transform";
 
 type Part = Record<string, unknown> & { type: string };
 
@@ -30,10 +30,10 @@ const datos = {
   quietosDeBajoValor: { cantidad: 0 },
   kits: [
     {
-      nombreSugerido: "Kit escolar Prueba",
+      nombreSugerido: "Kit Libretas Kawaii",
       ocasion: null,
-      marcador: kitMarker(0),
-      piezas: [{ nombre: "Libreta Prueba", rol: "lento", precioEfectivo: 9000 }],
+      n: 1,
+      piezas: [{ nombre: "Libreta Prueba", rol: "lento", categoria: "Libretas", precioEfectivo: 9000 }],
       kitsArmables: 2,
       sumaPreciosEfectivos: 12000,
       precioSugerido: 10900,
@@ -45,52 +45,65 @@ const datos = {
   ],
 };
 const toolResult = (output: unknown = { datos }) => ({ type: "tool-result", toolName: "kitsParaRotar", output });
+const textsCall = (input: unknown) => ({ type: "tool-call", toolName: "textosDeKits", input });
+const TEXTS = { kits: [{ n: 1, nombreCorto: "Kit escolar", loQueAmaras: ["Ideas en orden", "Color para tus apuntes"], idealPara: "el colegio" }] };
 
-describe("respuesta de kits: la arma el código al terminar", () => {
-  it("lo que escribe el modelo se guarda y sale una sola vez, armado con la herramienta", async () => {
+describe("respuesta de kits: la arma el código con los textos que el modelo manda como datos", () => {
+  it("toma nombre y frases de textosDeKits, descarta el texto libre y sale una sola vez", async () => {
     const { text, types } = await run([
       toolResult(),
       { type: "text-start", id: "t" },
-      { type: "text-delta", text: "Según kitsParaRotar… " },
-      { type: "text-delta", text: "[[KIT-1]] Kit escolar\n✨ Lo que amarás\n- Algo" },
+      { type: "text-delta", text: "Según kitsParaRotar… [[KIT-1]] nota suelta :::detalle x" },
       { type: "text-end", id: "t" },
+      textsCall(TEXTS),
       { type: "finish" },
     ]);
-    expect(types).toEqual(["tool-result", "text-start", "text-delta", "text-end", "finish"]);
-    expect(text).toContain("## Resumen");
-    expect(text).toContain("### ✏️ Kit escolar");
-    expect(text).toContain(":::copiar Texto para la ficha\n✨ Lo que amarás\n- Algo\n:::");
-    expect(text).not.toContain("kitsParaRotar");
+    expect(types).toEqual(["tool-result", "tool-call", "text-start", "text-delta", "text-end", "finish"]);
+    expect(text).toContain("### 🧺 Kit escolar");
+    expect(text).toContain(":::copiar Texto para la ficha\n✨ Lo que amarás\n- Ideas en orden\n- Color para tus apuntes\n📦 Incluye\n- Libreta Prueba\n🎁 Ideal para el colegio.\n:::");
+    expect(text).not.toMatch(/kitsParaRotar|nota suelta|\[\[KIT/);
   });
 
-  it("sin la herramienta de kits, el texto pasa tal cual", async () => {
+  it("sin la llamada a textosDeKits (o con datos que no sirven): texto base del kit", async () => {
+    expect((await run([toolResult(), { type: "finish" }])).text).toContain(":::copiar Texto para la ficha (base)");
+    expect((await run([toolResult(), textsCall({ kits: "no" }), { type: "finish" }])).text).toContain(":::copiar Texto para la ficha (base)");
+  });
+
+  it("sin la herramienta de kits, el texto pasa tal cual y textosDeKits no hace nada", async () => {
     expect((await run([{ type: "text-delta", text: "Hola" }, { type: "finish" }])).text).toBe("Hola");
     expect((await run([toolResult({}), { type: "text-delta", text: "Hola" }, { type: "finish" }])).text).toBe("Hola");
+    expect((await run([textsCall(TEXTS), { type: "text-delta", text: "Hola" }, { type: "finish" }])).text).toBe("Hola");
   });
 
   it("si el flujo se corta sin «finish», la respuesta sale igual", async () => {
-    const { text } = await run([toolResult(), { type: "text-delta", text: "[[KIT-1]] Kit escolar" }]);
-    expect(text).toContain("### ✏️ Kit escolar");
+    const { text } = await run([toolResult(), textsCall(TEXTS)]);
+    expect(text).toContain("### 🧺 Kit escolar");
   });
 
-  it("si la herramienta corre dos veces (otro número de días), vale la última y su texto", async () => {
+  it("si la herramienta corre dos veces (otro número de días), valen la última y sus textos", async () => {
     const second = { datos: { ...datos, criterios: { diasSinVenta: 120 } } };
-    const { text } = await run([toolResult(), { type: "text-delta", text: "[[KIT-1]] Primero" }, toolResult(second), { type: "text-delta", text: "[[KIT-1]] Segundo" }, { type: "finish" }]);
+    const { text } = await run([
+      toolResult(),
+      textsCall({ kits: [{ ...TEXTS.kits[0], nombreCorto: "Kit Primero" }] }),
+      toolResult(second),
+      textsCall({ kits: [{ ...TEXTS.kits[0], nombreCorto: "Kit Segundo" }] }),
+      { type: "finish" },
+    ]);
     expect(text).toContain("sin ventas en 120 días");
-    expect(text).toContain("### ✏️ Segundo");
+    expect(text).toContain("### 🧺 Kit Segundo");
     expect(text).not.toContain("Primero");
   });
 
-  it("registra solo la forma de lo que entregó el modelo (cuántos kits con marcador, nombre y texto), nunca el texto", async () => {
+  it("registra solo cuentas (kits, si llamó, con nombre, con texto, base), nunca el texto", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    const seen: string[] = [];
-    kitsModelTextTap.current = (text) => seen.push(text);
+    const seen: unknown[] = [];
+    kitsModelTextTap.current = (sent) => seen.push(sent);
     try {
-      await run([toolResult(), { type: "text-delta", text: "[[KIT-1]] Kit escolar\nUna nota secreta" }, { type: "finish" }]);
+      await run([toolResult(), { type: "text-delta", text: "Una nota secreta" }, textsCall({ kits: [{ ...TEXTS.kits[0], loQueAmaras: ["Solo una"] }] }), { type: "finish" }]);
       const call = info.mock.calls.find(([label]) => label === "[COPILOTO] Kits armados");
-      expect(call?.[1]).toEqual({ kits: 1, conMarcador: 1, conNombre: 1, conTexto: 0, caracteres: 38 });
-      expect(JSON.stringify(info.mock.calls)).not.toContain("secreta");
-      expect(seen).toEqual(["[[KIT-1]] Kit escolar\nUna nota secreta"]);
+      expect(call?.[1]).toEqual({ kits: 1, llamoTextos: true, conNombreDelModelo: 1, conTextoDelModelo: 0, base: 1 });
+      expect(JSON.stringify(info.mock.calls)).not.toMatch(/secreta|Kit escolar/);
+      expect(seen).toEqual([{ texts: { kits: [{ ...TEXTS.kits[0], loQueAmaras: ["Solo una"] }] }, text: "Una nota secreta" }]);
     } finally {
       kitsModelTextTap.current = null;
       info.mockRestore();

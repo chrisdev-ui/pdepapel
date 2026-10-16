@@ -21,6 +21,9 @@ export interface KitProduct {
   categoryName: string | null;
   typeId: string | null;
   typeName: string | null;
+  brand: string | null;
+  /** Diseño, licencia o tema («Primavera», «Snoopy»). */
+  designName: string | null;
   isKit: boolean;
   isArchived: boolean;
   stock: number;
@@ -82,9 +85,18 @@ const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).len
 const foldName = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
-/** ¿Ya hay un kit con este nombre en la respuesta? Sin tildes ni mayúsculas. */
+const firstWords = (text: string) => foldName(text).split(" ").slice(0, 3).join(" ");
+/** Un diseño que no dice nada («Liso», «Sin diseño», «Surtido») no sirve para nombrar. */
+const GENERIC_DESIGN = /^(sin\b|lis[oa]s?\b|surtid|vari[oa]s\b|ningun|n\/?a$|generic|basic|unic[oa]s?\b|default|otr[oa]s?\b|estandar|normal\b|-+$)/;
+const usable = (value: string | null | undefined) => {
+  const text = value?.replace(/\s+/g, " ").trim();
+  return text && !GENERIC_DESIGN.test(foldName(text)) ? text : null;
+};
+
+/** ¿El nombre choca con uno ya usado, entero o en sus 3 primeras palabras? */
 export function isNameTaken(name: string, taken: ReadonlySet<string>): boolean {
-  return taken.has(foldName(name));
+  const folded = foldName(name);
+  return Array.from(taken).some((other) => other === folded || firstWords(other) === firstWords(folded));
 }
 
 export function takeName(name: string, taken: Set<string>): string {
@@ -93,23 +105,31 @@ export function takeName(name: string, taken: Set<string>): string {
 }
 
 /**
- * Nombre corto (tema + línea, nunca el nombre completo del producto), de
- * máximo 6 palabras y distinto de los ya usados: «Kit Grados con libretas».
+ * Nombre corto por la pieza estrella (la lenta): su categoría con su diseño o
+ * marca («Kit Colores Primavera», «Kit Marcadores Eterna»), o el tema con el
+ * diseño («Kit Regalo Snoopy»). Máximo 6 palabras, nunca el nombre completo
+ * del producto, y distinto de los otros kits también en sus 3 primeras palabras.
  */
-export function shortKitName(theme: string | null, line: string | null, taken: Set<string>): string {
+export function shortKitName(hero: { categoryName: string | null; designName: string | null; brand: string | null }, theme: string | null, taken: Set<string>): string {
+  const category = usable(hero.categoryName);
+  const design = usable(hero.designName);
+  const brand = usable(hero.brand);
   const cleanTheme = theme?.replace(/\s*\(.*\)\s*$/, "").trim() || null;
-  const cleanLine = line?.trim() || null;
   const candidates = [
-    cleanTheme && cleanLine && foldName(cleanTheme) !== foldName(cleanLine) ? `Kit ${cleanTheme} con ${lowerFirst(cleanLine)}` : null,
+    category && design ? `Kit ${category} ${design}` : null,
+    category && brand ? `Kit ${category} ${brand}` : null,
+    cleanTheme && (design ?? brand) ? `Kit ${cleanTheme} ${design ?? brand}` : null,
+    category && cleanTheme ? `Kit ${category} para ${lowerFirst(cleanTheme)}` : null,
+    category ? `Kit ${category}` : null,
     cleanTheme ? `Kit ${cleanTheme}` : null,
-    cleanLine ? `Kit de ${lowerFirst(cleanLine)}` : null,
-    cleanTheme || cleanLine ? null : "Kit surtido",
+    "Kit surtido",
   ].filter((name): name is string => name !== null && wordCount(name) <= KIT_NAME_MAX_WORDS);
   const free = candidates.find((name) => !isNameTaken(name, taken));
   if (free) return takeName(free, taken);
-  const base = (candidates[0] ?? "Kit surtido").split(/\s+/).slice(0, KIT_NAME_MAX_WORDS - 1).join(" ");
+  const base = candidates[0].split(/\s+/).slice(0, KIT_NAME_MAX_WORDS - 1).join(" ");
   for (let n = 2; ; n += 1) {
-    if (!isNameTaken(`${base} ${n}`, taken)) return takeName(`${base} ${n}`, taken);
+    const numbered = `${n}. ${base}`.replace(/^(\d+)\. Kit/, "Kit $1");
+    if (!isNameTaken(numbered, taken)) return takeName(numbered, taken);
   }
 }
 
@@ -117,6 +137,8 @@ export interface KitPiece {
   productId: string;
   nombre: string;
   rol: "lento" | "se vende";
+  /** Su categoría («Marcadores»): con ella se arma el texto base del kit. */
+  categoria: string | null;
   disponible: number;
   precioEfectivo: number;
   precioDeLista: number;
@@ -285,6 +307,7 @@ const piece = (product: KitProduct, rol: KitPiece["rol"]): KitPiece => ({
   productId: product.id,
   nombre: product.name,
   rol,
+  categoria: product.categoryName,
   disponible: availableStock(product),
   precioEfectivo: Math.round(product.effectivePrice),
   precioDeLista: Math.round(product.listPrice),
@@ -503,7 +526,7 @@ export function proposeKits(input: {
     const pricing = priceKit(pieces, options.minMarginPct, options.targetDiscountPct);
     const everyday = EVERYDAY_USES.find((use) => pieces.some((p) => matchesOccasion(textsOf(byId.get(p.productId)!), use.palabras)));
     const ocasion = occasion ? `${occasion.nombre} (en ${occasion.enDias} ${occasion.enDias === 1 ? "día" : "días"})` : (everyday?.nombre ?? null);
-    const nombreSugerido = shortKitName(ocasion ? ocasion.replace(/ \(en .*\)$/, "") : null, product.typeName ?? product.categoryName, takenNames);
+    const nombreSugerido = shortKitName(product, ocasion, takenNames);
 
     if (pricing.estado === "poco atractivo" || pricing.estado === "no da el margen") {
       pocoAtractivos.push({

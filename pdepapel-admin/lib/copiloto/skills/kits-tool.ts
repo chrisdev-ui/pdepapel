@@ -17,7 +17,6 @@ import {
   type KitProduct,
   type KitSignals,
 } from "@/lib/copiloto/kits-rotation";
-import { kitMarker } from "@/lib/copiloto/skills/kits-transform";
 import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
 import { DEFAULT_SLOW_DAYS, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf, type SalesHistory } from "@/lib/sales-velocity";
 import { foldWords, upcomingOccasions } from "@/lib/season-calendar";
@@ -137,6 +136,8 @@ export async function loadKitData(db: CopilotDb, storeId: string, days: number, 
         acqPrice: true,
         transportationCost: true,
         price: true,
+        brand: true,
+        design: { select: { name: true } },
         category: { select: { name: true, typeId: true, type: { select: { name: true } } } },
       },
       take: PRODUCT_CAP,
@@ -173,6 +174,8 @@ export async function loadKitData(db: CopilotDb, storeId: string, days: number, 
       categoryName: row.category?.name ?? null,
       typeId: row.category?.typeId ?? null,
       typeName: row.category?.type?.name ?? null,
+      brand: row.brand?.trim() || null,
+      designName: row.design?.name?.trim() || null,
       isKit: row.isKit,
       isArchived: row.isArchived,
       stock: row.stock,
@@ -275,7 +278,7 @@ export function kitsParaRotarTool(storeId: string) {
             nota: `lentos con precio efectivo bajo para cargar un kit: no se proponen como pieza lenta`,
             linea: result.bajoValor.length > 0 ? lowValueLine(result.bajoValor.length) : null,
           },
-          kits: result.kits.map((kit, index) => ({ ...kit, marcador: kitMarker(index), margenBajo: kit.margenPct === null ? null : kit.margenPct < panelMarginPct })),
+          kits: result.kits.map((kit, index) => ({ ...kit, n: index + 1, margenBajo: kit.margenPct === null ? null : kit.margenPct < panelMarginPct })),
           pocoAtractivos: result.pocoAtractivos.slice(0, 5),
           sinKit: result.sinKit.slice(0, 5),
           señales: {

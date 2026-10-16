@@ -641,8 +641,8 @@ describe("evaluación del copiloto", () => {
     };
     // El modelo no es determinista: la misma pregunta varias veces, y cada vez se mira la respuesta pintada.
     const { kitsModelTextTap } = await import("@/lib/copiloto/skills/kits-transform");
-    const rawModelTexts: string[] = [];
-    kitsModelTextTap.current = (text) => rawModelTexts.push(text);
+    const rawModelTexts: { texts: unknown; text: string }[] = [];
+    kitsModelTextTap.current = (sent) => rawModelTexts.push(sent);
     const runs: Awaited<ReturnType<typeof askAs>>[] = [];
     try {
       for (let run = 0; run < KITS_FORMAT_RUNS; run += 1) runs.push(await askAs(kitsFixture!, KITS_QUESTION));
@@ -654,6 +654,7 @@ describe("evaluación del copiloto", () => {
     const empty = await askAs(emptyFixture!, KITS_QUESTION);
     const perRun = runs.map((answer, run) => ({
       run: run + 1,
+      llamoTextos: answer.tools.includes("textosDeKits"),
       pantalla: renderedKits(answer.text, kitsInTool(answer)),
       fallan: KITS_CASES.filter((kitsCase) => !kitsCase.pasa({ main: answer, followUp, empty, expectedOccasion: kitsContext.expectedOccasion })).map((kitsCase) => `${kitsCase.id}${kitsCase.estricto ? "" : " (no estricto)"}`),
     }));
@@ -666,16 +667,23 @@ describe("evaluación del copiloto", () => {
       others.push({ pregunta: question, sinJerga: !JARGON.test(answer.text), sinTablas: !/^\s*\|.*\|\s*$/m.test(answer.text) });
     }
 
+    // Texto del modelo (no el base) en al menos el 90 % de los kits de todas las corridas.
+    const kitsShown = perRun.reduce((total, row) => total + row.pantalla.kits, 0);
+    const fromModel = perRun.reduce((total, row) => total + row.pantalla.copiasDelModelo, 0);
+    const modelCopyRate = kitsShown ? fromModel / kitsShown : 0;
     const dir = path.join(ROOT, "tmp", "copilot-eval");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       path.join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${NOTES_MODE}-formato.json`),
-      JSON.stringify({ verdicts, perRun, others, runs: runs.map((answer) => answer.text), rawModelTexts, followUp: followUp.text, empty: empty.text }, null, 2),
+      JSON.stringify({ verdicts, perRun, modelCopyRate, others, runs: runs.map((answer) => answer.text), rawModelTexts, followUp: followUp.text, empty: empty.text }, null, 2),
     );
-    console.table(perRun.map(({ run, pantalla, fallan }) => ({ run, ...pantalla, fallan: fallan.join(", ") || "—" })));
+    console.table(perRun.map(({ run, llamoTextos, pantalla, fallan }) => ({ run, llamoTextos, ...pantalla, fallan: fallan.join(", ") || "—" })));
+    console.info(`[EVAL] Texto del modelo en ${fromModel} de ${kitsShown} kits (${Math.round(modelCopyRate * 100)} %), notas: ${NOTES_MODE}`);
     console.table([...verdicts.map(({ id, estricto, pasa }) => ({ id, estricto, pasa: pasa ? "sí" : "NO" })), ...others.map(({ pregunta, sinJerga, sinTablas }) => ({ id: pregunta, estricto: true, pasa: sinJerga && sinTablas ? "sí" : "NO" }))]);
     expect(perRun.map(({ run, fallan }) => ({ run, estrictos: fallan.filter((id) => !id.endsWith("(no estricto)")) }))).toEqual(perRun.map(({ run }) => ({ run, estrictos: [] })));
     expect(perRun.every(({ pantalla }) => pantalla.copiaPorKit && pantalla.sinFugas && pantalla.nombresCortosYDistintos && pantalla.margenBajoConMeta)).toBe(true);
+    expect(perRun.every(({ llamoTextos }) => llamoTextos)).toBe(true);
+    expect(modelCopyRate).toBeGreaterThanOrEqual(0.9);
     expect(perRun.every(({ fallan }) => fallan.length <= 1)).toBe(true);
     expect(others.filter((row) => !row.sinJerga || !row.sinTablas).map((row) => row.pregunta)).toEqual([]);
   });

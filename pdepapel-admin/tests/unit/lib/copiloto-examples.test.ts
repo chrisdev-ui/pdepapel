@@ -8,6 +8,7 @@ vi.mock("@/lib/prismadb", () => ({ default: {} }));
 import { TOOL_LABELS } from "@/app/(dashboard)/[storeId]/(routes)/copiloto/components/suggestions";
 import { COPILOT_EXAMPLE_TOPICS, COPILOT_EXAMPLES, copilotSuggestions } from "@/lib/copiloto/examples";
 import { SKILL_TOOL_NAMES } from "@/lib/copiloto/skills";
+import { KITS_TEXTS_TOOL } from "@/lib/copiloto/skills/kits-texts";
 import { COPILOT_TOOL_NAMES } from "@/lib/copiloto/tools";
 
 const ROOT = path.resolve(__dirname, "../../..");
@@ -26,7 +27,8 @@ describe("ejemplos del copiloto", () => {
 
   it("cada herramienta de datos tiene al menos un ejemplo", () => {
     const covered = new Set(COPILOT_EXAMPLES.map((example) => example.herramienta));
-    for (const tool of [...COPILOT_TOOL_NAMES, ...SKILL_TOOL_NAMES]) expect(covered.has(tool), tool).toBe(true);
+    // textosDeKits no se pregunta: el chat la llama sola después de kitsParaRotar.
+    for (const tool of [...COPILOT_TOOL_NAMES, ...SKILL_TOOL_NAMES].filter((name) => name !== KITS_TEXTS_TOOL)) expect(covered.has(tool), tool).toBe(true);
   });
 
   it("las pantallas son rutas del panel y cada tema tiene ejemplos", () => {

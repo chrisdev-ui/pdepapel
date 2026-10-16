@@ -23,6 +23,7 @@ const TOOL_WORDS: Record<string, string> = {
   cargarHabilidad: "la habilidad",
   productoParaDescripcion: "la ficha del producto",
   kitsParaRotar: "el inventario",
+  textosDeKits: "los textos de los kits",
 };
 
 const FIELD_WORDS: Record<string, string> = {

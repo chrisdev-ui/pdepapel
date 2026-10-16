@@ -51,7 +51,7 @@ describe("kits-en-alza", () => {
 const kit = (name: string, slow: string, armables: number, shares: string): KitData => ({
   nombreSugerido: name,
   ocasion: null,
-  marcador: name === "Kit de grados" ? "[[KIT-1]]" : "[[KIT-2]]",
+  n: name === "Kit de grados" ? 1 : 2,
   piezas: [
     { nombre: slow, rol: "lento", precioEfectivo: 9000 },
     { nombre: "Borrador Eval", rol: "se vende", precioEfectivo: 3000, comparteStockCon: [shares] },
@@ -81,7 +81,13 @@ const datos = (kits: KitData[], lowValue = 1): KitsAnswerData => ({
   },
   kits,
 });
-const MODEL = "[[KIT-1]] Kit de grados\n✨ Lo que amarás\n- Algo\n📦 Incluye: Libreta y Borrador\n[[KIT-2]] Kit de carpetas\n📦 Incluye: Carpeta y Borrador";
+/** Lo que el modelo manda a `textosDeKits`. */
+const MODEL = {
+  kits: [
+    { n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Algo bonito", "Algo útil"], idealPara: null },
+    { n: 2, nombreCorto: "Kit de carpetas", loQueAmaras: ["Orden", "Color"], idealPara: null },
+  ],
+};
 const kitA = kit("Kit de grados", "Libreta lenta Eval", 4, "Kit de carpetas");
 const kitB = (armables: number) => kit("Kit de carpetas", "Carpeta lenta Eval", armables, "Kit de grados");
 
@@ -144,20 +150,13 @@ describe("kits-formato, kits-una-linea-nuevos, kits-sin-jerga y kits-montos-de-l
 });
 
 describe("respuesta de producción del 2026-10-16, pintada", () => {
-  // La forma que dejó la respuesta real: nombres largos copiados de la herramienta tras cada marcador, sin plantilla, y una nota con «:::detalle» al final.
-  const MODEL_OUTPUT = [
-    "[[KIT-1]] Kit Útiles escolares con Set de plumones Prueba doble punta pincel y fina 24 colores",
-    "[[KIT-2]] Kit Útiles escolares con Cartuchera Prueba de tres compartimentos con cremallera",
-    "[[KIT-3]] Kit Regalo con Maleta conejito Prueba para niñas con ruedas y manija",
-    "La maleta conejito Prueba no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta",
-    "- Con 2 disponibles se arman solo 2 kits.",
-    ":::",
-  ].join("\n");
+  // La respuesta real: el modelo no dejó textos que sirvieran para ningún kit.
+  const MODEL_OUTPUT = null;
   const piece = (nombre: string, rol: string) => ({ nombre, rol, precioEfectivo: 9000 });
   const kit = (nombreSugerido: string, ocasion: string, n: number, lenta: string): KitData => ({
     nombreSugerido,
     ocasion,
-    marcador: `[[KIT-${n}]]`,
+    n,
     piezas: [piece(lenta, "lento"), piece(`Cuaderno ${n}`, "se vende"), piece(`Lápiz ${n}`, "se vende")],
     kitsArmables: 3,
     sumaPreciosEfectivos: 27000,
@@ -172,9 +171,9 @@ describe("respuesta de producción del 2026-10-16, pintada", () => {
     plataQuietaACostoTotal: 90000,
     lentos: [],
     kits: [
-      kit("Kit Útiles escolares con plumones", "Útiles escolares", 1, "Set de plumones Prueba"),
-      kit("Kit Útiles escolares", "Útiles escolares", 2, "Cartuchera Prueba"),
-      kit("Kit Regalo con maletas", "Regalo", 3, "Maleta conejito Prueba"),
+      kit("Kit Plumones Primavera", "Útiles escolares", 1, "Set de plumones Prueba"),
+      kit("Kit Cartucheras Totto", "Útiles escolares", 2, "Cartuchera Prueba"),
+      kit("Kit Regalo Snoopy", "Regalo", 3, "Maleta conejito Prueba"),
     ],
   };
   // Lo que se vio en el chat: solo el último kit con bloque, y adentro la nota del modelo con «:::detalle».
@@ -214,5 +213,14 @@ describe("respuesta de producción del 2026-10-16, pintada", () => {
     const withoutLow = composeKitsAnswer({ ...datos, kits: datos.kits!.map((kit) => ({ ...kit, margenPct: 50, margenBajo: false })) }, MODEL_OUTPUT);
     expect(renderedKits(withoutLow, { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 0 }).margenBajoConMeta).toBe(true);
   });
-});
 
+  it("nombres de la re-prueba en vivo (dos empiezan igual) reprueban; armados ahora, el código los separa", () => {
+    const tool = { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 3 };
+    const liveRecheck = ["## 3 kits sugeridos", "### ✏️ Kit Útiles escolares con escritura", "### ✏️ Kit Útiles escolares", "### 🎁 Kit Regalo con accesorios"].join("\n");
+    expect(renderedKits(liveRecheck, tool).nombresCortosYDistintos).toBe(false);
+    const recomposed = composeKitsAnswer({ ...datos, kits: [kit("Kit Útiles escolares con escritura", "Útiles escolares", 1, "A"), kit("Kit Útiles escolares", "Útiles escolares", 2, "B"), kit("Kit Regalo con accesorios", "Regalo", 3, "C")] }, null);
+    expect(renderedKits(recomposed, tool).nombresCortosYDistintos).toBe(true);
+    const fromModel = composeKitsAnswer(datos, { kits: [1, 2, 3].map((n) => ({ n, nombreCorto: `Kit número ${n}`, loQueAmaras: ["Uno", "Dos"], idealPara: null })) });
+    expect(renderedKits(fromModel, { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 3 }).copiasDelModelo).toBe(3);
+  });
+});

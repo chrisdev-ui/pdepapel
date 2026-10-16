@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import { parseAnswer } from "@/lib/copiloto/answer-blocks";
-import { composeKitsAnswer, readModelKits, type KitData, type KitsAnswerData } from "@/lib/copiloto/skills/kits-answer";
+import { composeKitsAnswer, fallbackCopy, type KitData, type KitsAnswerData } from "@/lib/copiloto/skills/kits-answer";
 
 /** Valores de prueba con la forma real de `kitsParaRotar`. */
 const kit = (overrides: Partial<KitData> = {}): KitData => ({
   nombreSugerido: "Kit Grados con Libreta lenta Prueba",
   ocasion: "grados",
-  marcador: "[[KIT-1]]",
+  n: 1,
   piezas: [
-    { nombre: "Libreta lenta Prueba", rol: "lento", precioEfectivo: 9000, precioDeLista: 9000, oferta: null },
-    { nombre: "Lápiz Prueba", rol: "se vende", precioEfectivo: 4000, precioDeLista: 5000, oferta: "20 %" },
-    { nombre: "Borrador Prueba", rol: "se vende", precioEfectivo: 3000, precioDeLista: 3000, oferta: null, comparteStockCon: ["Kit Útiles con Carpeta"] },
+    { nombre: "Libreta lenta Prueba", rol: "lento", categoria: "Libretas", precioEfectivo: 9000, precioDeLista: 9000, oferta: null },
+    { nombre: "Lápiz Prueba", rol: "se vende", categoria: "Lápices", precioEfectivo: 4000, precioDeLista: 5000, oferta: "20 %" },
+    { nombre: "Borrador Prueba", rol: "se vende", categoria: "Borradores", precioEfectivo: 3000, precioDeLista: 3000, oferta: null, comparteStockCon: ["Kit Útiles con Carpeta"] },
   ],
   kitsArmables: 4,
   sumaPreciosEfectivos: 16000,
@@ -44,20 +44,15 @@ const datos = (overrides: Partial<KitsAnswerData> = {}): KitsAnswerData => ({
   ...overrides,
 });
 
-const MODEL = [
-  "¡Claro! Según kitsParaRotar hay 3 lentos y la suma de precios efectivos es $16.000.",
-  "[[KIT-1]] Kit de grados",
-  "✨ Lo que amarás",
-  "- Una libreta para tus ideas",
-  "- Útiles para el día a día",
-  "📦 Incluye: Libreta lenta Prueba, Lápiz Prueba y Borrador Prueba",
-  "🎁 Ideal para regalar a quien se gradúa.",
-  "Precio especial: $13.900",
-].join("\n");
+/** Lo que el modelo manda a `textosDeKits`. */
+const TEXTS = {
+  kits: [{ n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Una libreta para tus ideas", "Útiles para el día a día"], idealPara: "regalar a quien se gradúa" }],
+};
+const textsFor = (...kits: { n: number; nombreCorto: string; loQueAmaras: string[]; idealPara: string | null }[]) => ({ kits });
 
 describe("respuesta de kits armada por el código", () => {
   it("resumen, los 5 con más plata quieta, el kit en su bloque y las notas", () => {
-    expect(composeKitsAnswer(datos(), MODEL)).toBe(
+    expect(composeKitsAnswer(datos(), TEXTS)).toBe(
       [
         "## Resumen",
         "",
@@ -89,7 +84,10 @@ describe("respuesta de kits armada por el código", () => {
         "✨ Lo que amarás",
         "- Una libreta para tus ideas",
         "- Útiles para el día a día",
-        "📦 Incluye: Libreta lenta Prueba, Lápiz Prueba y Borrador Prueba",
+        "📦 Incluye",
+        "- Libreta lenta Prueba",
+        "- Lápiz Prueba",
+        "- Borrador Prueba",
         "🎁 Ideal para regalar a quien se gradúa.",
         ":::",
         "",
@@ -101,108 +99,96 @@ describe("respuesta de kits armada por el código", () => {
     );
   });
 
-  it("nada de lo que el modelo escribe fuera de su kit se muestra: ni nombres de herramientas, ni jerga, ni montos", () => {
-    const text = composeKitsAnswer(datos(), MODEL);
-    expect(text).not.toMatch(/kitsParaRotar|suma de precios efectivos|precio efectivo|\(lento\)|\(se vende\)|Precio especial|¡Claro!/);
+  it("sin jerga ni nombres de herramientas, y un texto del modelo con montos o «:::» no se usa", () => {
+    const text = composeKitsAnswer(datos(), TEXTS);
+    expect(text).not.toMatch(/kitsParaRotar|textosDeKits|suma de precios efectivos|precio efectivo|\(lento\)|\(se vende\)/);
+    const bad = composeKitsAnswer(datos(), textsFor({ n: 1, nombreCorto: "Kit $9.900", loQueAmaras: ["Ahorra 13 %", "Algo"], idealPara: "ver :::detalle" }));
+    expect(bad).not.toMatch(/\$9\.900|Ahorra 13 %|ver :::/);
+    expect(bad).toContain(":::copiar Texto para la ficha (base)");
     // La lista de piezas aparece una vez fuera del texto para la ficha.
     const outsideCopy = text.replace(/:::copiar[\s\S]*?:::/g, "");
     expect(outsideCopy.match(/Lápiz Prueba · \$4\.000/g)).toHaveLength(1);
   });
 
   it("cada número sale de la herramienta, con su mismo formato", () => {
-    const text = composeKitsAnswer(datos(), MODEL);
+    const text = composeKitsAnswer(datos(), TEXTS);
     const amounts = Array.from(text.matchAll(/\$\d{1,3}(?:\.\d{3})*/g), (match) => match[0]);
     expect(new Set(amounts)).toEqual(new Set(["$50.000", "$24.000", "$18.000", "$13.900", "$16.000", "$9.000", "$4.000", "$5.000", "$3.000"]));
   });
 
   it("dos kits que comparten pieza se nombran igual en su título y en «comparte stock con»; la fecha de temporada se lee", () => {
-    const other = kit({ nombreSugerido: "Kit Útiles con Carpeta", ocasion: "útiles escolares", marcador: "[[KIT-2]]", señales: ["temporada: Grados el 2026-11-25"] });
-    const text = composeKitsAnswer(datos({ kits: [kit(), other] }), `${MODEL}\n[[KIT-2]] Kit de útiles\n📦 Incluye: Carpeta`);
-    expect(text).toContain("### ✏️ Kit de útiles");
-    expect(text).toContain("  - comparte stock con «Kit de útiles»");
+    const other = kit({ nombreSugerido: "Kit Útiles con Carpeta", ocasion: "útiles escolares", n: 2, señales: ["temporada: Grados el 2026-11-25"] });
+    const text = composeKitsAnswer(datos({ kits: [kit(), other] }), textsFor(TEXTS.kits[0], { n: 2, nombreCorto: "Kit Carpetas Kawaii", loQueAmaras: ["Uno", "Dos"], idealPara: null }));
+    expect(text).toContain("### ✏️ Kit Carpetas Kawaii");
+    expect(text).toContain("  - comparte stock con «Kit Carpetas Kawaii»");
     expect(text).toContain("- temporada: Grados (25 de noviembre)");
   });
 
   it("margen por debajo del criterio del panel: etiqueta «margen bajo» junto al margen", () => {
-    const text = composeKitsAnswer(datos({ kits: [kit({ margenPct: 30, margenBajo: true })] }), MODEL);
-    expect(text).toContain("margen 30 % [[tag:margen bajo]]");
+    expect(composeKitsAnswer(datos({ kits: [kit({ margenPct: 30, margenBajo: true })] }), TEXTS)).toContain("margen 30 % [[tag:margen bajo]]");
+    const withGoal = datos({ criterios: { diasSinVenta: 90, margenCriterioPanelPct: 35 }, kits: [kit({ margenPct: 30, margenBajo: true })] });
+    expect(composeKitsAnswer(withGoal, TEXTS)).toContain("margen 30 % [[tag:margen bajo (meta 35 %)]]");
   });
 
   it("sin costo: sin margen, la línea clave empieza por el precio por separado y lo dice", () => {
-    const text = composeKitsAnswer(datos({ kits: [kit({ precioSugerido: null, margenPct: null, margenBajo: null, ahorroPct: null, sinCostoDe: ["Borrador Prueba"], estado: "sin costo" })] }), MODEL);
+    const text = composeKitsAnswer(datos({ kits: [kit({ precioSugerido: null, margenPct: null, margenBajo: null, ahorroPct: null, sinCostoDe: ["Borrador Prueba"], estado: "sin costo" })] }), TEXTS);
     expect(text).toContain("**por separado $16.000** · alcanza para 4 kits");
     expect(text).toContain("Sin costo de Borrador Prueba: no se calcula margen ni precio mínimo.");
     expect(text).not.toMatch(/margen \d/);
   });
 
-  it("sin nombre corto ni texto del modelo: queda el nombre de la herramienta y un texto base con sus propias piezas", () => {
-    const text = composeKitsAnswer(datos(), "");
+  it("sin textos del modelo: queda el nombre de la herramienta y un texto base con sus categorías, su ocasión y sus piezas", () => {
+    const text = composeKitsAnswer(datos(), null);
     expect(text).toContain("### 🎓 Kit Grados con Libreta lenta Prueba");
-    expect(text).toContain(":::copiar Texto para la ficha (base)\n✨ Ocasión: grados\n📦 Incluye: Libreta lenta Prueba, Lápiz Prueba y Borrador Prueba\n🎁 Ideal para regalar.\n:::");
+    expect(text).toContain(
+      [
+        ":::copiar Texto para la ficha (base)",
+        "✨ Lo que amarás",
+        "- Libretas, lápices y borradores en un solo kit",
+        "- Un detalle para celebrar un logro importante",
+        "📦 Incluye",
+        "- Libreta lenta Prueba",
+        "- Lápiz Prueba",
+        "- Borrador Prueba",
+        "🎁 Ideal para regalar en grados.",
+        ":::",
+      ].join("\n"),
+    );
+  });
+
+  it("texto base: frases según la ocasión, y sin ocasión no inventa para qué es", () => {
+    expect(fallbackCopy(kit({ ocasion: "Útiles escolares" }))).toContain("- Listo para el colegio, las tareas y los apuntes\n");
+    expect(fallbackCopy(kit({ ocasion: "Útiles escolares" }))).toContain("🎁 Ideal para el regreso a clases y el día a día del colegio.");
+    expect(fallbackCopy(kit({ ocasion: "Navidad (en 30 días)" }))).toContain("🎁 Ideal para regalar en Navidad.");
+    expect(fallbackCopy(kit({ ocasion: "Día del amigo secreto" }))).toContain("🎁 Ideal para día del amigo secreto.");
+    const plain = fallbackCopy(kit({ ocasion: null }));
+    expect(plain).toContain("- Piezas que combinan entre sí, elegidas para usarse juntas");
+    expect(plain).not.toContain("🎁");
+    expect(fallbackCopy(kit({ piezas: [{ nombre: "A", rol: "lento", precioEfectivo: 1 }] }))).toContain("- Todo lo que necesitas en un solo kit");
+  });
+
+  it("cada campo del modelo se valida solo: un nombre largo cae al de la herramienta, sin perder sus frases; sin «para qué» se usa el de la ocasión", () => {
+    const text = composeKitsAnswer(datos(), textsFor({ n: 1, nombreCorto: "Kit de grados con libreta lenta prueba y lápiz", loQueAmaras: ["Uno", "Dos"], idealPara: null }));
+    expect(text).toContain("### 🎓 Kit Grados con Libreta lenta Prueba");
+    expect(text).toContain(":::copiar Texto para la ficha\n✨ Lo que amarás\n- Uno\n- Dos\n📦 Incluye");
+    expect(text).toContain("🎁 Ideal para regalar en grados.");
+    const oneBullet = composeKitsAnswer(datos(), textsFor({ n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Solo una"], idealPara: null }));
+    expect(oneBullet).toContain("### 🎓 Kit de grados");
+    expect(oneBullet).toContain(":::copiar Texto para la ficha (base)");
   });
 
   it("sin productos quietos: solo el resumen", () => {
-    expect(composeKitsAnswer(datos({ totalLentos: 0, lentos: [], kits: [], nuevosSinDatosDeVenta: { cantidad: 0 } }), "")).toBe("## Resumen\n\nNo hay productos con disponible y sin ventas en 90 días.");
+    expect(composeKitsAnswer(datos({ totalLentos: 0, lentos: [], kits: [], nuevosSinDatosDeVenta: { cantidad: 0 } }), null)).toBe("## Resumen\n\nNo hay productos con disponible y sin ventas en 90 días.");
   });
 
   it("quietos sin kits que convengan: lo dice y explica en las notas", () => {
-    const text = composeKitsAnswer(datos({ kits: [], sinKit: [{ nombre: "Carpeta lenta Prueba", motivo: "no hay piezas que se vendan en su familia" }] }), "");
+    const text = composeKitsAnswer(datos({ kits: [], sinKit: [{ nombre: "Carpeta lenta Prueba", motivo: "no hay piezas que se vendan en su familia" }] }), null);
     expect(text).toContain("## Kits\n\nNo encontré kits que convengan con estos productos.");
     expect(text).toContain("- Sin kit: Carpeta lenta Prueba — no hay piezas que se vendan en su familia.");
   });
 
-  it("el texto del modelo: nombre corto válido, sin precios ni porcentajes; un nombre con monto no se usa", () => {
-    const model = readModelKits("[[KIT-1]] **Kit $9.900**\n✨ Lo que amarás\n- Algo\n- Ahorra 13 %\n[[KIT-2]] — Kit de oficina —\n📦 Incluye: A y B");
-    expect(model.get("[[KIT-1]]")).toEqual({ name: null, copy: "✨ Lo que amarás\n- Algo" });
-    expect(model.get("[[KIT-2]]")).toEqual({ name: "Kit de oficina", copy: "📦 Incluye: A y B" });
-    expect(readModelKits("Según la herramienta… [[KIT-1]] Kit escolar").get("[[KIT-1]]")?.name).toBe("Kit escolar");
-  });
-
-  describe("lo que el modelo escribe de verdad (formas raras)", () => {
-    const TEMPLATE = "✨ Lo que amarás\n- Algo bonito\n- Algo útil\n📦 Incluye: A y B\n🎁 Ideal para regalar a tu amiga.";
-    const read = (text: string, marker = "[[KIT-1]]") => readModelKits(text).get(marker);
-
-    it("el nombre en el renglón siguiente al marcador", () => {
-      expect(read(`[[KIT-1]]\nKit de grados\n${TEMPLATE}`)).toEqual({ name: "Kit de grados", copy: TEMPLATE });
-    });
-
-    it("todo en un solo renglón: nombre y plantilla se separan", () => {
-      expect(read("[[KIT-1]] Kit de grados ✨ Lo que amarás - Algo bonito - Algo útil 📦 Incluye: A y B")).toEqual({
-        name: "Kit de grados",
-        copy: "✨ Lo que amarás\n- Algo bonito\n- Algo útil\n📦 Incluye: A y B",
-      });
-    });
-
-    it("el marcador al final de un encabezado: el nombre es lo de antes", () => {
-      expect(read(`### **Kit de grados** [[KIT-1]]\n${TEMPLATE}`)?.name).toBe("Kit de grados");
-    });
-
-    it("una nota y un «:::detalle» después de la plantilla nunca entran al texto para la ficha", () => {
-      const result = read(`[[KIT-1]] Kit de grados\n${TEMPLATE}\nLa libreta no alcanza para armar tres kits. :::detalle Para tener en cuenta\n- Solo hay 2.\n:::`);
-      expect(result?.copy).toBe(TEMPLATE);
-    });
-
-    it("su propio bloque «:::copiar»: solo las líneas de la plantilla de adentro", () => {
-      const result = read(`[[KIT-1]] Kit de grados\n:::copiar Texto para la ficha\n${TEMPLATE}\nPrecio especial: $9.900\n:::\nNota para Paula: revisa el stock.`);
-      expect(result?.copy).toBe(TEMPLATE);
-    });
-
-    it("sin plantilla, solo una nota: no hay texto para la ficha", () => {
-      expect(read("[[KIT-1]] Kit de grados\nLa libreta no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta")?.copy).toBe("");
-    });
-
-    it("un nombre largo (el del producto completo) no se usa", () => {
-      expect(read(`[[KIT-1]] Kit Útiles escolares con Set de plumones doble punta pincel y fina 24 colores\n${TEMPLATE}`)?.name).toBeNull();
-    });
-
-    it("marcadores escritos de otra forma ([[KIT 2]], [[kit-2]]) se reconocen", () => {
-      expect(read(`[[KIT 2]] Kit de oficina\n${TEMPLATE}`, "[[KIT-2]]")?.name).toBe("Kit de oficina");
-      expect(read(`[[kit-2]] Kit de oficina\n${TEMPLATE}`, "[[KIT-2]]")?.copy).toBe(TEMPLATE);
-    });
-  });
-
   it("el chat lo pinta en secciones, con la lista de piezas anidada y los bloques plegables", () => {
-    const blocks = parseAnswer(composeKitsAnswer(datos(), MODEL));
+    const blocks = parseAnswer(composeKitsAnswer(datos(), TEXTS));
     expect(blocks.filter((block) => block.type === "heading").map((block) => (block as { text: string }).text)).toEqual([
       "Resumen",
       "Los 3 con más plata quieta",
@@ -214,19 +200,11 @@ describe("respuesta de kits armada por el código", () => {
   });
 
   describe("réplica de la respuesta de producción del 2026-10-16", () => {
-    // La forma que dejó la respuesta real: el modelo copió los nombres largos de la herramienta detrás de cada marcador, no escribió ninguna plantilla y dejó una nota con «:::detalle» al final.
-    const PRODUCTION_SHAPE = [
-      "[[KIT-1]] Kit Útiles escolares con Set de plumones Prueba doble punta pincel y fina 24 colores",
-      "[[KIT-2]] Kit Útiles escolares con Cartuchera Prueba de tres compartimentos con cremallera",
-      "[[KIT-3]] Kit Regalo con Maleta conejito Prueba para niñas con ruedas y manija",
-      "La maleta conejito Prueba no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta",
-      "- Con 2 disponibles se arman solo 2 kits.",
-      ":::",
-    ].join("\n");
-    const piezas = (lenta: string, otra: string) => [
-      { nombre: lenta, rol: "lento", precioEfectivo: 20000 },
-      { nombre: otra, rol: "se vende", precioEfectivo: 6000 },
-      { nombre: `Borrador ${otra}`, rol: "se vende", precioEfectivo: 3000 },
+    // La respuesta real: el modelo no mandó textos para ningún kit y los nombres de la herramienta eran el producto completo.
+    const piezas = (lenta: string, categoria: string, otra: string) => [
+      { nombre: lenta, rol: "lento", categoria, precioEfectivo: 20000 },
+      { nombre: otra, rol: "se vende", categoria: "Cuadernos", precioEfectivo: 6000 },
+      { nombre: `Borrador ${otra}`, rol: "se vende", categoria: "Borradores", precioEfectivo: 3000 },
     ];
     const production = datos({
       criterios: { diasSinVenta: 90, lineasSinFamilia: [], margenCriterioPanelPct: 35, precioMinimoPiezaLenta: 5000 },
@@ -236,18 +214,19 @@ describe("respuesta de kits armada por el código", () => {
       ],
       quietosDeBajoValor: { cantidad: 1, nombres: ["Sobre de manila oficio Prueba x unidad"], productos: [{ nombre: "Sobre de manila oficio Prueba x unidad", precioEfectivo: 300, motivo: "precio unitario bajo" }] },
       kits: [
-        kit({ nombreSugerido: "Kit Útiles escolares con plumones", ocasion: "Útiles escolares", marcador: "[[KIT-1]]", piezas: piezas("Set de plumones Prueba doble punta pincel y fina 24 colores", "Cuaderno Prueba"), margenPct: 30, margenBajo: true }),
-        kit({ nombreSugerido: "Kit Útiles escolares", ocasion: "Útiles escolares", marcador: "[[KIT-2]]", piezas: piezas("Cartuchera Prueba de tres compartimentos con cremallera", "Regla Prueba"), margenPct: 28, margenBajo: true }),
-        kit({ nombreSugerido: "Kit Regalo con maletas", ocasion: "Regalo", marcador: "[[KIT-3]]", piezas: piezas("Maleta conejito Prueba para niñas con ruedas y manija", "Libreta Prueba"), margenPct: 25, margenBajo: true }),
+        kit({ nombreSugerido: "Kit Plumones Primavera", ocasion: "Útiles escolares", n: 1, piezas: piezas("Set de plumones Prueba doble punta pincel y fina 24 colores", "Plumones", "Cuaderno Prueba"), margenPct: 30, margenBajo: true }),
+        kit({ nombreSugerido: "Kit Cartucheras Totto", ocasion: "Útiles escolares", n: 2, piezas: piezas("Cartuchera Prueba de tres compartimentos con cremallera", "Cartucheras", "Regla Prueba"), margenPct: 28, margenBajo: true }),
+        kit({ nombreSugerido: "Kit Regalo Snoopy", ocasion: "Regalo", n: 3, piezas: piezas("Maleta conejito Prueba para niñas con ruedas y manija", "Maletas", "Libreta Prueba"), margenPct: 25, margenBajo: true }),
       ],
     });
-    const text = composeKitsAnswer(production, PRODUCTION_SHAPE);
+    const text = composeKitsAnswer(production, null);
     const blocks = parseAnswer(text);
     const kitTitles = blocks.filter((block) => block.type === "heading" && block.level === 3).map((block) => (block as { text: string }).text.replace(/^\S+\s/, ""));
     const copies = blocks.filter((block): block is Extract<typeof block, { type: "copy" }> => block.type === "copy");
 
-    it("cada kit trae su texto para la ficha, solo con su plantilla y sus propias piezas", () => {
+    it("cada kit trae su texto base, solo con su plantilla y sus propias piezas", () => {
       expect(copies).toHaveLength(3);
+      expect(copies.every((copy) => copy.title === "Texto para la ficha (base)")).toBe(true);
       copies.forEach((copy, index) => {
         expect(copy.text.split("\n").every((line) => /^(✨|📦|🎁|- )/.test(line))).toBe(true);
         expect(copy.text).toContain(production.kits![index].piezas[0].nombre);
@@ -263,7 +242,7 @@ describe("respuesta de kits armada por el código", () => {
     });
 
     it("nombres cortos (máximo 6 palabras) y distintos", () => {
-      expect(kitTitles).toEqual(["Kit Útiles escolares con plumones", "Kit Útiles escolares", "Kit Regalo con maletas"]);
+      expect(kitTitles).toEqual(["Kit Plumones Primavera", "Kit Cartucheras Totto", "Kit Regalo Snoopy"]);
       expect(new Set(kitTitles).size).toBe(3);
       expect(kitTitles.every((title) => title.split(/\s+/).length <= 6)).toBe(true);
     });
@@ -275,20 +254,20 @@ describe("respuesta de kits armada por el código", () => {
     });
   });
 
-  it("dos kits con el mismo nombre del modelo: el segundo toma el de la herramienta", () => {
-    const other = kit({ nombreSugerido: "Kit Útiles con Carpeta", marcador: "[[KIT-2]]" });
-    const text = composeKitsAnswer(datos({ kits: [kit(), other] }), "[[KIT-1]] Kit de grados\n📦 Incluye: A\n[[KIT-2]] Kit de grados\n📦 Incluye: B");
-    expect(text).toContain("### 🎓 Kit de grados");
-    expect(text).toContain("### 🎓 Kit Útiles con Carpeta");
+  it("dos kits con el mismo nombre del modelo, o que empiezan igual: el segundo toma el de la herramienta", () => {
+    const other = kit({ nombreSugerido: "Kit Carpetas Kawaii", n: 2 });
+    const same = composeKitsAnswer(datos({ kits: [kit(), other] }), textsFor(TEXTS.kits[0], { ...TEXTS.kits[0], n: 2 }));
+    expect(same).toContain("### 🎓 Kit de grados");
+    expect(same).toContain("### 🎓 Kit Carpetas Kawaii");
+    const prefix = composeKitsAnswer(datos({ kits: [kit(), other] }), textsFor(TEXTS.kits[0], { ...TEXTS.kits[0], n: 2, nombreCorto: "Kit de grados escolares" }));
+    expect(prefix).toContain("### 🎓 Kit Carpetas Kawaii");
   });
 
-  it("un kit sin marcador nunca toma el texto de otro: va el texto base con sus piezas", () => {
-    const other = kit({ nombreSugerido: "Kit Útiles con Carpeta", marcador: "[[KIT-2]]", piezas: [{ nombre: "Carpeta Prueba", rol: "lento", precioEfectivo: 9000 }] });
-    const text = composeKitsAnswer(datos({ kits: [kit(), other] }), "[[KIT-1]] Kit de grados\n📦 Incluye: Libreta lenta Prueba");
+  it("un kit sin textos del modelo nunca toma los de otro: va el texto base con sus piezas", () => {
+    const other = kit({ nombreSugerido: "Kit Carpetas Kawaii", n: 2, ocasion: null, piezas: [{ nombre: "Carpeta Prueba", rol: "lento", categoria: "Carpetas", precioEfectivo: 9000 }] });
+    const text = composeKitsAnswer(datos({ kits: [kit(), other] }), TEXTS);
     const copies = parseAnswer(text).filter((block) => block.type === "copy") as { title: string; text: string }[];
-    expect(copies.map((copy) => [copy.title, copy.text])).toEqual([
-      ["Texto para la ficha", "📦 Incluye: Libreta lenta Prueba"],
-      ["Texto para la ficha (base)", "✨ Ocasión: grados\n📦 Incluye: Carpeta Prueba\n🎁 Ideal para regalar."],
-    ]);
+    expect(copies.map((copy) => copy.title)).toEqual(["Texto para la ficha", "Texto para la ficha (base)"]);
+    expect(copies[1].text).toBe("✨ Lo que amarás\n- Carpetas en un solo kit\n- Piezas que combinan entre sí, elegidas para usarse juntas\n📦 Incluye\n- Carpeta Prueba");
   });
 });

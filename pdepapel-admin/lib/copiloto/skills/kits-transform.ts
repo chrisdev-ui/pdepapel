@@ -1,38 +1,38 @@
 import type { StreamTextTransform, TextStreamPart, ToolSet } from "ai";
 
-import { composeKitsAnswer, readModelKits, type KitsAnswerData } from "@/lib/copiloto/skills/kits-answer";
+import { composeKitsAnswer, type KitsAnswerData } from "@/lib/copiloto/skills/kits-answer";
+import { KITS_TEXTS_TOOL, validateKitTexts } from "@/lib/copiloto/skills/kits-texts";
 
-/** Lo que el modelo escribe al empezar cada kit; el chat arma el bloque del kit con la herramienta. */
-export const kitMarker = (index: number) => `[[KIT-${index + 1}]]`;
-
-/** Solo para la evaluación: recibe el texto crudo del modelo (nunca se guarda ni se registra en producción). */
-export const kitsModelTextTap: { current: ((text: string) => void) | null } = { current: null };
+/** Solo para la evaluación: recibe lo que el modelo mandó a `textosDeKits` y su texto libre (nunca se guarda ni se registra en producción). */
+export const kitsModelTextTap: { current: ((sent: { texts: unknown; text: string }) => void) | null } = { current: null };
 
 /**
  * Cuando corre `kitsParaRotar`, la respuesta la arma el código
- * (lib/copiloto/skills/kits-answer.ts): el texto que el modelo escribe después
- * de la herramienta se guarda y, al terminar, de él solo se toman el nombre
- * corto y el texto para la ficha de cada kit. Por eso una respuesta de kits no
- * llega de a poco: sale entera al final, sin otra llamada al modelo.
+ * (lib/copiloto/skills/kits-answer.ts) con los datos de la herramienta y lo
+ * que el modelo mandó a `textosDeKits` (nombre corto, dos frases, para qué es
+ * ideal). Su texto libre se descarta. Por eso una respuesta de kits no llega
+ * de a poco: sale entera al final, sin otra llamada al modelo.
  */
 export function kitsAnswerTransform<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
   return () => {
     let held = "";
+    let texts: unknown = null;
     let datos: KitsAnswerData | null = null;
     let done = false;
     const emit = (controller: TransformStreamDefaultController<TextStreamPart<TOOLS>>) => {
       done = true;
-      const text = composeKitsAnswer(datos!, held);
-      kitsModelTextTap.current?.(held);
-      const read = readModelKits(held);
+      const text = composeKitsAnswer(datos!, texts);
+      kitsModelTextTap.current?.({ texts, text: held });
+      const valid = validateKitTexts(texts);
       const kits = datos!.kits ?? [];
+      const fromModel = kits.map((kit) => (kit.n !== undefined ? valid.get(kit.n) : undefined));
       // Solo la forma, nunca el texto: para saber qué entregó el modelo cuando una respuesta sale rara.
       console.info("[COPILOTO] Kits armados", {
         kits: kits.length,
-        conMarcador: kits.filter((kit) => kit.marcador && read.has(kit.marcador)).length,
-        conNombre: kits.filter((kit) => kit.marcador && read.get(kit.marcador)?.name).length,
-        conTexto: kits.filter((kit) => kit.marcador && read.get(kit.marcador)?.copy).length,
-        caracteres: held.length,
+        llamoTextos: texts !== null,
+        conNombreDelModelo: fromModel.filter((item) => item?.name).length,
+        conTextoDelModelo: fromModel.filter((item) => item?.bullets).length,
+        base: fromModel.filter((item) => !item?.bullets).length,
       });
       const id = "kits-fijo";
       controller.enqueue({ type: "text-start", id } as TextStreamPart<TOOLS>);
@@ -46,8 +46,10 @@ export function kitsAnswerTransform<TOOLS extends ToolSet>(): StreamTextTransfor
           if (output?.datos) {
             datos = output.datos;
             held = "";
+            texts = null;
           }
         }
+        if (part.type === "tool-call" && part.toolName === KITS_TEXTS_TOOL && datos) texts = (part as { input?: unknown }).input ?? null;
         if (datos && (part.type === "text-start" || part.type === "text-end")) return;
         if (part.type === "text-delta" && datos) {
           held += part.text;

@@ -307,8 +307,8 @@ describe("respuesta del copiloto con formato", () => {
     expect(container.textContent).toContain("Hay 2 lentos.");
   });
 
-  it("la respuesta de kits de producción, armada otra vez: cada kit con su texto para la ficha y nada interno en pantalla ni al copiar", async () => {
-    const piece = (nombre: string, rol: string) => ({ nombre, rol, precioEfectivo: 9000 });
+  it("respuesta de kits: el texto del modelo y el base, cada uno con su kit, y nada interno en pantalla ni al copiar", async () => {
+    const piece = (nombre: string, rol: string, categoria: string) => ({ nombre, rol, categoria, precioEfectivo: 9000 });
     const text = composeKitsAnswer(
       {
         criterios: { diasSinVenta: 90, margenCriterioPanelPct: 35, precioMinimoPiezaLenta: 5000 },
@@ -316,19 +316,22 @@ describe("respuesta del copiloto con formato", () => {
         plataQuietaACostoTotal: 50000,
         lentos: [{ nombre: "Maleta conejito", disponible: 2, plataQuietaACosto: 40000, ultimaVenta: "hace 120 días" }],
         kits: [
-          { nombreSugerido: "Kit Útiles escolares con plumones", ocasion: "Útiles escolares", marcador: "[[KIT-1]]", piezas: [piece("Plumones", "lento"), piece("Cuaderno", "se vende")], kitsArmables: 3, sumaPreciosEfectivos: 18000, precioSugerido: 15900, ahorroPct: 11.7, margenPct: 30, margenBajo: true },
-          { nombreSugerido: "Kit Regalo con maletas", ocasion: "Regalo", marcador: "[[KIT-2]]", piezas: [piece("Maleta conejito", "lento"), piece("Libreta", "se vende")], kitsArmables: 2, sumaPreciosEfectivos: 18000, precioSugerido: 15900, ahorroPct: 11.7, margenPct: 30, margenBajo: true },
+          { nombreSugerido: "Kit Plumones Primavera", ocasion: "Útiles escolares", n: 1, piezas: [piece("Plumones", "lento", "Plumones"), piece("Cuaderno", "se vende", "Cuadernos")], kitsArmables: 3, sumaPreciosEfectivos: 18000, precioSugerido: 15900, ahorroPct: 11.7, margenPct: 30, margenBajo: true },
+          { nombreSugerido: "Kit Regalo Snoopy", ocasion: "Regalo", n: 2, piezas: [piece("Maleta conejito", "lento", "Maletas"), piece("Libreta", "se vende", "Libretas")], kitsArmables: 2, sumaPreciosEfectivos: 18000, precioSugerido: 15900, ahorroPct: 11.7, margenPct: 30, margenBajo: true },
         ],
       },
-      "[[KIT-1]] Kit Útiles escolares con Set de plumones doble punta pincel y fina 24 colores\n[[KIT-2]] Kit Regalo con Maleta conejito para niñas con ruedas y manija\nLa maleta conejito no alcanza para armar tres kits con el mínimo de unidades. :::detalle Para tener en cuenta\n- Solo 2.\n:::",
+      { kits: [{ n: 1, nombreCorto: "Kit Colores de clase", loQueAmaras: ["Trazos que se ven en todo el cuaderno", "Listo para tus apuntes"], idealPara: "el colegio" }] },
     );
     const { container } = render(<AssistantText text={text} storeId="store-1" />);
     expect(container.textContent).not.toMatch(/:::|\[\[KIT/i);
-    expect(container.textContent).not.toContain("no alcanza para armar tres kits");
+    expect(screen.getByRole("heading", { name: "✏️ Kit Colores de clase" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "🎁 Kit Regalo Snoopy" })).toBeInTheDocument();
     const copies = screen.getAllByTestId("copy-block");
-    expect(copies).toHaveLength(2);
-    expect(copies[0].textContent).toContain("📦 Incluye: Plumones y Cuaderno");
-    expect(copies[1].textContent).toContain("📦 Incluye: Maleta conejito y Libreta");
+    expect(copies.map((copy) => copy.querySelector("summary")?.textContent)).toEqual(["Texto para la fichaCopiar", "Texto para la ficha (base)Copiar"]);
+    expect(copies[0].textContent).toContain("Trazos que se ven en todo el cuaderno");
+    expect(copies[0].textContent).not.toContain("Maleta conejito");
+    expect(copies[1].textContent).toContain("Maleta conejito");
+    expect(copies[1].textContent).not.toContain("Plumones");
     expect(Array.from(container.querySelectorAll("[data-tag^='margen bajo']")).map((node) => [node.textContent, node.className.includes("text-destructive")])).toEqual([
       ["margen bajo (meta 35 %)", true],
       ["margen bajo (meta 35 %)", true],
@@ -342,7 +345,9 @@ describe("respuesta del copiloto con formato", () => {
     fireEvent.click(within(copies[1]).getByRole("button", { name: "Copiar" }));
     await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
     const plain = await (write.mock.calls[0][0][0] as { items: Record<string, Blob> }).items["text/plain"].text();
-    expect(plain).toBe("✨ Ocasión: Regalo\n📦 Incluye: Maleta conejito y Libreta\n🎁 Ideal para regalar.");
+    expect(plain).toBe(
+      "✨ Lo que amarás\n• Maletas y libretas en un solo kit\n• Un detalle bonito, listo para entregar\n📦 Incluye\n• Maleta conejito\n• Libreta\n🎁 Ideal para regalar a alguien especial.",
+    );
   });
 
   it("una respuesta vieja con marcadores o «:::» sueltos no los muestra", () => {

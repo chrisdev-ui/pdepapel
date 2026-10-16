@@ -20,4 +20,5 @@ export const TOOL_LABELS: Record<string, string> = {
   cargarHabilidad: "Preparando la habilidad",
   productoParaDescripcion: "Leyendo la ficha del producto",
   kitsParaRotar: "Buscando productos quietos para kits",
+  textosDeKits: "Escribiendo los textos de los kits",
 };

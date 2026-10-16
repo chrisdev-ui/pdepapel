@@ -28,6 +28,8 @@ const product = (id: string, overrides: Partial<KitProduct> = {}): KitProduct =>
   name: id,
   categoryId: "cat-utiles",
   categoryName: "Útiles",
+  brand: null,
+  designName: null,
   typeId: "type-papeleria",
   typeName: "Papelería",
   isKit: false,
@@ -144,7 +146,7 @@ describe("calendario de Colombia", () => {
 
 describe("precio del kit", () => {
   const pieces = (costs: (number | null)[], prices: number[]): KitPiece[] =>
-    prices.map((price, index) => ({ productId: `p${index}`, nombre: `Pieza ${index}`, rol: "se vende", disponible: 5, precioEfectivo: price, precioDeLista: price, oferta: null, costo: costs[index] }));
+    prices.map((price, index) => ({ productId: `p${index}`, nombre: `Pieza ${index}`, rol: "se vende", categoria: null, disponible: 5, precioEfectivo: price, precioDeLista: price, oferta: null, costo: costs[index] }));
 
   it("redondea hacia abajo a un precio terminado en 900", () => {
     expect(roundDown900(117656)).toBe(116900);
@@ -296,17 +298,35 @@ describe("borradores de kits", () => {
     const [kit] = run(products, fixed, { ...noSignals, occasions }, { ...OPTIONS, families }).kits;
     expect(kit.ocasion).toMatch(/^Día de la madre \(en 20 días\)$/);
     expect(kit.señales).toContain("temporada: Día de la madre el 2026-05-10");
-    expect(kit.nombreSugerido).toBe("Kit Día de la madre");
+    expect(kit.nombreSugerido).toBe("Kit Útiles");
   });
 
-  it("el nombre del borrador es corto (tema + línea, máximo 6 palabras), nunca el nombre completo del producto, y no se repite", () => {
+  it("el nombre sale de la pieza estrella: su categoría con su diseño o marca, o el tema con el diseño; máximo 6 palabras", () => {
+    const hero = (categoryName: string | null, designName: string | null = null, brand: string | null = null) => ({ categoryName, designName, brand });
+    expect(shortKitName(hero("Colores", "Primavera", "Faber"), "Útiles escolares", new Set())).toBe("Kit Colores Primavera");
+    expect(shortKitName(hero("Marcadores", null, "ETERNA"), null, new Set())).toBe("Kit Marcadores ETERNA");
+    expect(shortKitName(hero("Marcadores", "Liso", "ETERNA"), null, new Set())).toBe("Kit Marcadores ETERNA");
+    expect(shortKitName(hero("Maletas", "Sin diseño"), "Regalo", new Set())).toBe("Kit Maletas para regalo");
+    expect(shortKitName(hero(null, "Snoopy"), "Regalo (en 10 días)", new Set())).toBe("Kit Regalo Snoopy");
+    expect(shortKitName(hero(null), null, new Set())).toBe("Kit surtido");
+  });
+
+  it("nunca repite un nombre ni sus 3 primeras palabras dentro de la misma respuesta", () => {
     const taken = new Set<string>();
-    const names = [1, 2, 3, 4].map(() => shortKitName("Útiles escolares", "Plumones", taken));
-    expect(names).toEqual(["Kit Útiles escolares con plumones", "Kit Útiles escolares", "Kit de plumones", "Kit Útiles escolares con plumones 2"]);
+    const colores = (designName: string | null) => ({ categoryName: "Colores", designName, brand: null });
+    const names = [
+      shortKitName(colores("Primavera"), "Útiles escolares", taken),
+      shortKitName(colores("Primavera"), "Útiles escolares", taken),
+      shortKitName(colores(null), "Útiles escolares", taken),
+      shortKitName(colores(null), "Útiles escolares", taken),
+    ];
+    expect(names).toEqual(["Kit Colores Primavera", "Kit Útiles escolares Primavera", "Kit Colores para útiles escolares", "Kit Colores"]);
+    const firsts = names.map((name) => name.toLowerCase().split(" ").slice(0, 3).join(" "));
+    expect(new Set(firsts).size).toBe(names.length);
     expect(names.every((name) => name.split(/\s+/).length <= 6)).toBe(true);
-    expect(shortKitName("Grados (en 40 días)", null, new Set())).toBe("Kit Grados");
-    const empty = new Set<string>();
-    expect([shortKitName(null, null, empty), shortKitName(null, null, empty)]).toEqual(["Kit surtido", "Kit surtido 2"]);
+    const plain = new Set<string>();
+    const only = { categoryName: "Colores", designName: null, brand: null };
+    expect([shortKitName(only, null, plain), shortKitName(only, null, plain), shortKitName(only, null, plain)]).toEqual(["Kit Colores", "Kit surtido", "Kit 2 Colores"]);
   });
 
   it("una pieza en oferta entra con su precio efectivo", () => {
