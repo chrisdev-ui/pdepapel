@@ -298,7 +298,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - **The fake 1.000 (2026-09):**
   - `prisma/manual-migrations/20260911_backfill_product_transportation_cost.sql` set 1.000 on every product that had 0 or empty (applied with the e6a5507e deploy, 2026-09-11 13:25 UTC).
   - The form also pre-filled and saved 1.000 until b462c9cd went live (2026-09-18 17:08 UTC).
-  - On 2026-10-16, 778 of 885 active products and 1191 archived ones still held it. For cheap products this doubled or tripled the cost (the manila envelope: 162 + 1.000 for a 500 price).
+  - On 2026-10-16, 778 of 885 active products and 1191 archived ones still held it. For cheap products it pushed the unit cost above the selling price.
   - The constant is `LEGACY_TRANSPORT_FILL`; `isKnownTransport` says whether a value is real.
 - **Code that no longer re-creates it (fix/transporte-costos):**
   - «Duplicar» (`getProductSeed`) gives the copy a «no registrado» shipping.
@@ -311,6 +311,7 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
   - `lib/transportation-cost-plan.ts` holds the rule, groups and exceptions; `tmp/transporte-plan.ts` (local, read-only) writes the plan to `output/audits/`; `scripts/fix-transportation-cost.ts` applies it.
   - The apply only goes through `prod:write`. It needs `--expect-rows N`, checks each product still holds its expected value, and writes nothing if anything differs.
   - Exceptions (copied after 09-18, averaged, shipping > 25 % of price, still below cost, margin goes down) wait for Paula's decision in a separate file.
+- **Known gap:** the column default is 0, and variants created through the product-groups API don't set it. They start with a «known zero» that a receipt with «actualizar costos» averages with, which dilutes the real shipping the same way the 1.000 inflated it. Not fixed in this batch.
 
 ### Product identifiers
 
