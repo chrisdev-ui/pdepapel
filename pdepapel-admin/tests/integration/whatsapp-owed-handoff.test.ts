@@ -9,14 +9,15 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
  * siguió escribiendo durante la pausa. Bot real, base local y envío a WhatsApp
  * simulado; cada caso cuenta los mensajes que salieron. Datos sintéticos.
  */
-const sent = vi.hoisted(() => ({ messages: [] as string[] }));
+const sent = vi.hoisted(() => ({ messages: [] as string[], typing: 0 }));
 vi.mock("@/lib/whatsapp/send", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("@/lib/whatsapp/send");
   const stubs: Record<string, unknown> = { ...actual };
   for (const [name, value] of Object.entries(actual)) {
     if (typeof value !== "function" || !name.startsWith("sendWhatsApp")) continue;
     stubs[name] = async (_to: unknown, body: unknown) => {
-      if (name !== "sendWhatsAppTypingIndicator") sent.messages.push(typeof body === "string" ? body : JSON.stringify(body));
+      if (name === "sendWhatsAppTypingIndicator") sent.typing += 1;
+      else sent.messages.push(typeof body === "string" ? body : JSON.stringify(body));
       return { ok: true, messageId: `wamid.sim-${randomUUID()}` };
     };
   }
@@ -137,7 +138,43 @@ afterAll(async () => {
 
 beforeEach(async () => {
   sent.messages = [];
+  sent.typing = 0;
   await setBot(true);
+});
+
+describe("acuse de «Hablar con Paula»", () => {
+  it("un toque se confirma enseguida: sin «escribiendo…» ni pausa humana, y la conversación pasa a Paula", async () => {
+    const { TALK_TO_OWNER_ACKNOWLEDGEMENT, getHumanPauseMs } = await import("@/lib/whatsapp/bot");
+    const { formatBotReply } = await import("@/lib/whatsapp/bot-matching");
+    const { runWhatsAppBot } = await import("@/lib/whatsapp/bot");
+    const chat = await conversation();
+    const tap = await inbound(chat.id, "Hablar con Paula");
+    const started = Date.now();
+    const result = await runWhatsAppBot({ conversationId: chat.id, recipient: chat.phone, body: tap.body, interactiveReplyId: "owner", inboundAt: tap.at, inboundMessageId: tap.externalId, keywords: [] });
+    const elapsed = Date.now() - started;
+    expect(result.outcome).toBe("escalated_owner_requested");
+    expect(sent.messages).toEqual([formatBotReply(TALK_TO_OWNER_ACKNOWLEDGEMENT)]);
+    expect(sent.typing).toBe(0);
+    expect(getHumanPauseMs(formatBotReply(TALK_TO_OWNER_ACKNOWLEDGEMENT))).toBeGreaterThan(1_500);
+    expect(elapsed).toBeLessThan(1_500);
+    await expect(testPrisma.conversation.findUniqueOrThrow({ where: { id: chat.id }, select: { status: true } })).resolves.toEqual({ status: "NEEDS_OWNER" });
+  });
+
+  it("escrito a mano también, y las demás respuestas conservan su «escribiendo…»", async () => {
+    const { runWhatsAppBot } = await import("@/lib/whatsapp/bot");
+    const chat = await conversation();
+    const typed = await inbound(chat.id, "hablar con paula");
+    const started = Date.now();
+    const result = await runWhatsAppBot({ conversationId: chat.id, recipient: chat.phone, body: typed.body, inboundAt: typed.at, inboundMessageId: typed.externalId, keywords: [] });
+    expect(result.outcome).toBe("escalated_owner_requested");
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(sent.typing).toBe(0);
+
+    const other = await conversation();
+    const question = await inbound(other.id, "mmm oye");
+    await runWhatsAppBot({ conversationId: other.id, recipient: other.phone, body: question.body, inboundAt: question.at, inboundMessageId: question.externalId, keywords: [], skipHumanPause: true });
+    expect(sent.typing).toBe(1);
+  });
 });
 
 describe("reacciones y borrados no son «volvió a escribir»", () => {

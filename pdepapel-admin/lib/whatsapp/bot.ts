@@ -616,7 +616,7 @@ async function decideAndAnswer(input: {
       input.recipient,
       TALK_TO_OWNER_ACKNOWLEDGEMENT,
       [],
-      pacing(input),
+      immediatePacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
       { omitOwnerButton: true, handoff: "owner_requested" },
@@ -1146,7 +1146,7 @@ async function decideAndAnswer(input: {
       input.recipient,
       TALK_TO_OWNER_ACKNOWLEDGEMENT,
       [],
-      pacing(input),
+      immediatePacing(input),
       // Sin el botón de «Hablar con Paula»: este mensaje ya dice que ella
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
       { omitOwnerButton: true, handoff: "owner_requested" },
@@ -1443,7 +1443,12 @@ interface Pacing {
   customerBsuid: string | null;
   /** Respuesta de espera (lib/whatsapp/wait-assist.ts): Paula se mira desde que empezó la espera, no las 24 h. */
   assist: { waitStartedAt: Date } | null;
+  /** Sale ya: sin «escribiendo…» ni pausa humana. Solo el acuse de «Hablar con Paula». */
+  immediate?: boolean;
 }
+
+/** El acuse de «Hablar con Paula» no se hace esperar: es una confirmación, no una respuesta pensada. */
+const immediatePacing = (input: Parameters<typeof pacing>[0]): Pacing => ({ ...pacing(input), immediate: true });
 
 function pacing(input: {
   inboundMessageId?: string | null;
@@ -1683,7 +1688,7 @@ async function deliver(
 
   // «Escribiendo…» primero y después la espera. Si el indicador falla no se
   // interrumpe nada: es adorno, la respuesta es lo que importa.
-  if (pace.inboundMessageId) {
+  if (pace.inboundMessageId && !pace.immediate) {
     const typing = await sendWhatsAppTypingIndicator(pace.inboundMessageId);
     if (!typing.ok) {
       console.warn("[WHATSAPP_BOT] No se pudo mostrar «escribiendo…»", {
@@ -1691,7 +1696,7 @@ async function deliver(
       });
     }
   }
-  if (!pace.skip) await sleep(Math.max(0, getHumanPauseMs(reply) - pace.waitedMs));
+  if (!pace.skip && !pace.immediate) await sleep(Math.max(0, getHumanPauseMs(reply) - pace.waitedMs));
 
   // Volver a decidir DESPUÉS de la pausa. Esta es la corrección de fondo: el
   // freno de 24 h se miraba una sola vez, al entrar, y entre esa mirada y este
@@ -1798,6 +1803,14 @@ async function deliver(
   }
 
   const now = new Date();
+  if (pace.immediate) {
+    // Para medir lo que sí es nuestro: desde que el evento llegó al webhook hasta que Meta aceptó el envío.
+    console.info("[WHATSAPP_BOT] Acuse de «Hablar con Paula» enviado", {
+      conversationId,
+      msDesdeEvento: pace.eventCreatedAt ? now.getTime() - pace.eventCreatedAt.getTime() : null,
+      msDesdeMensaje: pace.inboundAt ? now.getTime() - pace.inboundAt.getTime() : null,
+    });
+  }
   await prismadb.conversationMessage.create({
     data: {
       conversationId,
