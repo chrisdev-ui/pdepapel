@@ -214,7 +214,15 @@ describe("handleCopilotChat", () => {
     const response = await handleCopilotChat(request(body()), "store-1", { budgetStore: store, languageModel: model });
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     const stream = await response.text();
-    expect(stream).toContain("Para tela, un marcador acrílico");
+    // El texto llega en pedazos (el cambio de palabras guarda la cola de cada uno): se junta antes de mirarlo.
+    const streamed = stream
+      .split("\n")
+      .filter((line) => line.startsWith("data: {"))
+      .map((line) => JSON.parse(line.slice(6)) as { type: string; delta?: string })
+      .filter((chunk) => chunk.type === "text-delta")
+      .map((chunk) => chunk.delta)
+      .join("");
+    expect(streamed).toContain("Para tela, un marcador acrílico");
     await vi.waitFor(() => expect(mocks.upsertMessage).toHaveBeenCalledTimes(2));
 
     expect(mocks.createConversation).toHaveBeenCalledWith({

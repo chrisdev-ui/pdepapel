@@ -38,6 +38,7 @@ import {
   type SkillState,
 } from "@/lib/copiloto/skill-state";
 import { activeToolNames, getCopilotSkill } from "@/lib/copiloto/skills";
+import { plainWordsTransform } from "@/lib/copiloto/plain-words";
 import { kitsAnswerTransform } from "@/lib/copiloto/skills/kits-transform";
 import { specCheckTransform } from "@/lib/copiloto/skills/specs";
 import { buildSkillTools } from "@/lib/copiloto/skills/tools";
@@ -293,8 +294,8 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
       }
       return { activeTools: activeToolNames(COPILOT_TOOL_NAMES, loaded) as (keyof typeof tools)[] };
     },
-    // Al final, sin otra llamada: aviso de especificaciones que faltan en una descripción y la línea de productos nuevos de los kits.
-    experimental_transform: [specCheckTransform(), kitsAnswerTransform()],
+    // Al final, sin otra llamada: aviso de especificaciones que faltan, la respuesta de kits armada por el código y, para toda respuesta, palabras simples en vez de nombres internos.
+    experimental_transform: [specCheckTransform(), kitsAnswerTransform(), plainWordsTransform()],
     stopWhen: isStepCount(COPILOT_MAX_STEPS),
     abortSignal: AbortSignal.timeout(COPILOT_TIMEOUT_MS),
     maxRetries: 0,
