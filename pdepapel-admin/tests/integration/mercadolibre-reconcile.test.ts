@@ -15,7 +15,13 @@ import {
  * falsos. Solo arregla el stock (encolando), el estado local y el producto
  * de usuario que falte, y avisa lo demás una sola vez.
  */
-const ml = vi.hoisted(() => ({ items: [] as Record<string, unknown>[], sellerIds: [] as string[], orders: [] as string[], failItems: false }));
+const ml = vi.hoisted(() => ({
+  items: [] as Record<string, unknown>[],
+  sellerIds: [] as string[],
+  orders: [] as string[],
+  failItems: false as false | "503" | "timeout" | "401",
+  resources: [] as string[],
+}));
 const resendSend = vi.hoisted(() => vi.fn());
 const enqueue = vi.hoisted(() => vi.fn());
 
@@ -38,7 +44,7 @@ vi.mock("@/lib/mercadolibre/client", async (importOriginal) => {
   const respond = (resource: string) => {
     if (resource.includes("/items/search")) return { results: ml.sellerIds, paging: { total: ml.sellerIds.length } };
     if (resource.startsWith("/orders/search")) return { results: ml.orders.map((id) => ({ id: Number(id) })) };
-    if (resource.startsWith("/sites/MCO/listing_prices")) return { sale_fee_amount: Number(new URLSearchParams(resource.split("?")[1]).get("price")) * 0.16 };
+    if (/^\/sites\/\w+\/listing_prices/.test(resource)) return { sale_fee_amount: Number(new URLSearchParams(resource.split("?")[1]).get("price")) * 0.16 };
     if (resource.includes("/shipping_options/free")) return { coverage: { all_country: { list_cost: 8200 } } };
     if (resource.startsWith("/items?ids=")) {
       const ids = decodeURIComponent(resource.slice("/items?ids=".length).split("&")[0]).split(",");
@@ -49,10 +55,15 @@ vi.mock("@/lib/mercadolibre/client", async (importOriginal) => {
   return {
     ...actual,
     getMercadoLibreJson: async (_c: string, resource: string) => respond(resource),
-    requestMercadoLibreJson: async (_c: string, resource: string) =>
-      ml.failItems && resource.startsWith("/items?ids=")
-        ? { ok: false, status: 503, payload: null }
-        : { ok: true, status: 200, payload: respond(resource) },
+    requestMercadoLibreJson: async (_c: string, resource: string) => {
+      ml.resources.push(resource);
+      if (ml.failItems && resource.startsWith("/items?ids=")) {
+        if (ml.failItems === "401") throw new actual.MercadoLibreReauthError();
+        if (ml.failItems === "timeout") throw new Error("The operation was aborted due to timeout");
+        return { ok: false, status: 503, payload: null };
+      }
+      return { ok: true, status: 200, payload: respond(resource) };
+    },
   };
 });
 
@@ -75,6 +86,7 @@ describe("Revisión diaria contra Mercado Libre (MySQL)", () => {
     ml.sellerIds = [];
     ml.orders = [];
     ml.failItems = false;
+    ml.resources = [];
   });
   afterEach(async () => {
     if (connectionId) {
@@ -174,7 +186,7 @@ describe("Revisión diaria contra Mercado Libre (MySQL)", () => {
     await processMercadoLibreHealthChecks();
     resendSend.mockClear();
     await testPrisma.marketplaceOutboxEvent.deleteMany({ where: { connectionId } });
-    ml.failItems = true;
+    ml.failItems = "503";
 
     const run = await processMercadoLibreHealthChecks();
 
@@ -200,6 +212,63 @@ describe("Revisión diaria contra Mercado Libre (MySQL)", () => {
     expect(resendSend).not.toHaveBeenCalled();
     expect(await openKinds()).toEqual([]);
     expect(await countOpenMercadoLibreAlerts(fixture!.store.id)).toBe(0);
+  });
+
+  describe("tipo de publicación y categoría al día con Mercado Libre", () => {
+    const listingNow = (id: string) => testPrisma.marketplaceListing.findUniqueOrThrow({ where: { id } });
+
+    it("sin cambios no escribe; un tipo distinto se pone al día y se cuenta", async () => {
+      const { listing } = await seed();
+      await testPrisma.marketplaceListing.update({ where: { id: listing.id }, data: { listingType: "gold_special" } });
+      ml.items[0] = { ...ml.items[0], listing_type_id: "gold_special", category_id: "MCO1" };
+
+      const same = await processMercadoLibreHealthChecks();
+      expect(same.processed[0]).toMatchObject({ applied: { typeRefreshed: 0, siteFallback: 0 } });
+      expect(ml.resources.find((resource) => resource.startsWith("/items?ids="))).toContain("listing_type_id,category_id");
+      const unchanged = await listingNow(listing.id);
+      expect([unchanged.listingType, unchanged.categoryId]).toEqual(["gold_special", "MCO1"]);
+
+      await testPrisma.marketplaceAlertState.deleteMany({ where: { connectionId } });
+      ml.items[0] = { ...ml.items[0], listing_type_id: "gold_pro", category_id: "MCO2" };
+      const changed = await processMercadoLibreHealthChecks();
+      expect(changed.processed[0]).toMatchObject({ applied: { typeRefreshed: 1 } });
+      expect(await listingNow(listing.id)).toMatchObject({ listingType: "gold_pro", categoryId: "MCO2" });
+    });
+
+    for (const failure of ["401", "timeout"] as const) {
+      it(`con ${failure === "401" ? "un 401" : "una demora"} al leer las publicaciones no escribe nada`, async () => {
+        const { listing } = await seed();
+        await testPrisma.marketplaceListing.update({ where: { id: listing.id }, data: { listingType: "gold_special" } });
+        ml.items[0] = { ...ml.items[0], listing_type_id: "gold_pro", category_id: "MCO2" };
+        ml.failItems = failure;
+
+        const run = await processMercadoLibreHealthChecks();
+
+        expect(run.processed[0].reconcile).toBe(failure === "401" ? "reauth" : "ok");
+        if (failure === "timeout") expect(run.processed[0]).toMatchObject({ applied: { typeRefreshed: 0 } });
+        expect(await listingNow(listing.id)).toMatchObject({ listingType: "gold_special", categoryId: "MCO1" });
+      });
+    }
+
+    it("la comisión se pide al sitio de la conexión; sin sitio usa MCO y lo cuenta", async () => {
+      const { listing } = await seed();
+      await testPrisma.marketplaceListing.update({ where: { id: listing.id }, data: { syncPrice: false } });
+      ml.items[0] = { ...ml.items[0], price: 60000 };
+      await testPrisma.marketplaceConnection.update({ where: { id: connectionId }, data: { siteId: "MLA" } });
+
+      const other = await processMercadoLibreHealthChecks();
+      expect(other.processed[0]).toMatchObject({ applied: { siteFallback: 0 } });
+      expect(ml.resources.some((resource) => resource.startsWith("/sites/MLA/listing_prices"))).toBe(true);
+      expect(ml.resources.some((resource) => resource.startsWith("/sites/MCO/"))).toBe(false);
+
+      await testPrisma.marketplaceListing.update({ where: { id: listing.id }, data: { marketplacePrice: 39900 } });
+      await testPrisma.marketplaceAlertState.deleteMany({ where: { connectionId } });
+      await testPrisma.marketplaceConnection.update({ where: { id: connectionId }, data: { siteId: "" } });
+      ml.resources = [];
+      const fallback = await processMercadoLibreHealthChecks();
+      expect(fallback.processed[0]).toMatchObject({ applied: { siteFallback: 1 } });
+      expect(ml.resources.some((resource) => resource.startsWith("/sites/MCO/listing_prices"))).toBe(true);
+    });
   });
 
   it("con la sincronización de precio apagada copia el precio de Mercado Libre en silencio si cumple el margen", async () => {

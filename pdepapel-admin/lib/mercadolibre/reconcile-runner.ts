@@ -11,12 +11,16 @@ import { synchronizeMercadoLibreItemStatus } from "./item-sync";
 import { enqueuePendingMarketplaceOutboxEvents, queueMarketplaceStockSyncEvents } from "./outbox";
 import { getUnitCostFloor } from "@/lib/product-costs";
 
-import { MERCADOLIBRE_FEE_RATE_ESTIMATE, MERCADOLIBRE_SHIPPING_ESTIMATE } from "./listing-margin";
+import { feeSourceFromQuote, type SaleFeeSource } from "@/lib/pricing/mercadolibre-fees";
+
+import { MERCADOLIBRE_SHIPPING_ESTIMATE } from "./listing-margin";
+import { parseMercadoLibreListingPriceEstimate } from "./listing-pricing";
 import {
   computeReconcile,
   decidePriceMirror,
   describeReconcileIssue,
   isReconcileKind,
+  listingTypeRefreshes,
   type ReconcileListing,
   type ReconcileRemoteItem,
 } from "./reconcile";
@@ -30,14 +34,26 @@ const ORDER_WINDOW_MS = 48 * 60 * 60 * 1000;
 const ORDER_GRACE_MS = 15 * 60 * 1000;
 /** Lo que la revisión puede gastar leyendo Mercado Libre dentro de los 60 s de la función. */
 export const RECONCILE_READ_BUDGET_MS = 30_000;
-const ITEM_ATTRIBUTES = "id,status,sub_status,price,original_price,available_quantity,user_product_id,permalink";
+const ITEM_ATTRIBUTES = "id,status,sub_status,price,original_price,available_quantity,user_product_id,permalink,listing_type_id,category_id";
+
+/** `siteId` viene de la conexión; sin él se usa MCO y se cuenta en `applied.siteFallback`. */
+export type ReconcileConnection = { id: string; sellerId: string | null; storeId?: string; siteId?: string | null };
 
 export type ReconcileRun =
   | { outcome: "ok"; issues: MercadoLibreHealthIssue[]; unavailableItemIds: string[]; applied: ReconcileApplied }
   | { outcome: "reauth" }
   | { outcome: "failed"; error: string };
 
-export type ReconcileApplied = { stockResync: number; statusUpdates: number; userProductBackfill: number; priceMirrored: number };
+export type ReconcileApplied = {
+  stockResync: number;
+  statusUpdates: number;
+  userProductBackfill: number;
+  priceMirrored: number;
+  /** Publicaciones cuyo tipo o categoría se puso al día con Mercado Libre. */
+  typeRefreshed: number;
+  /** 1 si la conexión no tenía sitio y se usó MCO. */
+  siteFallback: number;
+};
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -56,6 +72,8 @@ export function parseReconcileItem(body: Record<string, unknown>): ReconcileRemo
     availableQuantity: toNumber(body.available_quantity),
     userProductId: toText(body.user_product_id),
     permalink: toText(body.permalink),
+    listingType: toText(body.listing_type_id),
+    categoryId: toText(body.category_id),
   };
 }
 
@@ -112,26 +130,28 @@ async function readRecentPaidOrderIds(connectionId: string, sellerId: string, no
 
 /**
  * Comisión y envío reales del precio que tiene Mercado Libre, para decidir
- * si copiarlo. Si Mercado Libre no responde, se usan los estimados del
- * asistente (16 % y el envío de un paquete liviano).
+ * si copiarlo. Sin respuesta de Mercado Libre, la comisión es la del tipo de
+ * publicación y el envío, el estimado de un paquete liviano: la misma regla
+ * compartida de `lib/pricing/mercadolibre-fees.ts`.
  */
 async function readSaleCosts(
   connection: { id: string; sellerId: string | null },
+  siteId: string,
   itemId: string,
   price: number,
   categoryId: string | null,
   listingType: string | null,
-) {
-  let feeAmount = price * MERCADOLIBRE_FEE_RATE_ESTIMATE;
+): Promise<{ fee: SaleFeeSource; shippingCost: number }> {
+  let fee: SaleFeeSource = { kind: "tipo", listingType };
   let shippingCost = MERCADOLIBRE_SHIPPING_ESTIMATE;
   try {
     if (categoryId) {
-      const fee = await requestMercadoLibreJson(
+      const quote = await requestMercadoLibreJson(
         connection.id,
-        `/sites/MCO/listing_prices?price=${price}&category_id=${encodeURIComponent(categoryId)}&listing_type_id=${encodeURIComponent(listingType || "gold_special")}`,
+        `/sites/${encodeURIComponent(siteId)}/listing_prices?price=${price}&category_id=${encodeURIComponent(categoryId)}&listing_type_id=${encodeURIComponent(listingType || "gold_special")}`,
       );
-      const amount = toNumber(asRecord(fee.payload)?.sale_fee_amount);
-      if (fee.ok && amount !== null) feeAmount = amount;
+      const real = quote.ok ? feeSourceFromQuote(parseMercadoLibreListingPriceEstimate(quote.payload), price) : null;
+      if (real) fee = real;
     }
     if (connection.sellerId) {
       const shipping = await requestMercadoLibreJson(
@@ -144,7 +164,7 @@ async function readSaleCosts(
   } catch (error) {
     if (error instanceof MercadoLibreReauthError) throw error;
   }
-  return { feeAmount, shippingCost };
+  return { fee, shippingCost };
 }
 
 /**
@@ -176,7 +196,7 @@ function rateLimitWaitMs(error: unknown): number | null {
  * presupuesto de lectura. Un segundo 429 la deja como fallida, como antes.
  */
 export async function runMercadoLibreReconcile(
-  connection: { id: string; sellerId: string | null; storeId?: string },
+  connection: ReconcileConnection,
   options: { now?: Date; budgetMs?: number; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<ReconcileRun> {
   const startedAt = Date.now();
@@ -199,11 +219,13 @@ function stripRetryHint(run: ReconcileAttempt): ReconcileRun {
 }
 
 async function runReconcileOnce(
-  connection: { id: string; sellerId: string | null; storeId?: string },
+  connection: ReconcileConnection,
   { now = new Date(), budgetMs = RECONCILE_READ_BUDGET_MS }: { now?: Date; budgetMs?: number } = {},
 ): Promise<ReconcileAttempt> {
   if (!connection.sellerId) return { outcome: "failed", error: "La conexión no tiene vendedor." };
   const deadline = Date.now() + budgetMs;
+  const siteId = connection.siteId || "MCO";
+  const siteFallback = connection.siteId ? 0 : 1;
   try {
     const rows = await prismadb.marketplaceListing.findMany({
       where: { connectionId: connection.id, externalItemId: { not: null } },
@@ -258,6 +280,24 @@ async function runReconcileOnce(
         ).map((order) => order.externalOrderId)
       : [];
 
+    // Tipo y categoría al día: solo de lo que Mercado Libre devolvió, y solo si nadie los cambió entretanto.
+    let typeRefreshed = 0;
+    for (const refresh of listingTypeRefreshes(
+      rows.map((row) => ({ id: row.id, externalItemId: row.externalItemId!, listingType: row.listingType, categoryId: row.categoryId })),
+      items,
+    )) {
+      const written = await prismadb.marketplaceListing.updateMany({
+        where: { id: refresh.listingId, listingType: refresh.from.listingType, categoryId: refresh.from.categoryId },
+        data: refresh.data,
+      });
+      typeRefreshed += written.count;
+      if (written.count) {
+        const row = rows.find((candidate) => candidate.id === refresh.listingId)!;
+        row.listingType = refresh.data.listingType ?? row.listingType;
+        row.categoryId = refresh.data.categoryId ?? row.categoryId;
+      }
+    }
+
     const unavailableSet = new Set(unavailable);
     const result = computeReconcile({
       listings: listings.filter((listing) => !unavailableSet.has(listing.externalItemId)),
@@ -274,18 +314,25 @@ async function runReconcileOnce(
       const store = connection.storeId
         ? await prismadb.store.findUnique({
             where: { id: connection.storeId },
-            select: { mercadoLibreTargetMarginPercent: true, mercadoLibreMinNetPerUnit: true },
+            select: {
+              mercadoLibreTargetMarginPercent: true,
+              mercadoLibreMinNetPerUnit: true,
+              mercadoLibreLowPriceFixedFee: true,
+              mercadoLibreFreeShippingMin: true,
+            },
           })
         : null;
       const targets = {
         targetMarginPercent: store?.mercadoLibreTargetMarginPercent ?? 20,
         minNetPerUnit: store?.mercadoLibreMinNetPerUnit ?? 10_000,
+        lowPriceFixedFee: store?.mercadoLibreLowPriceFixedFee ?? null,
+        freeShippingMin: store?.mercadoLibreFreeShippingMin ?? null,
       };
       const rowById = new Map(rows.map((row) => [row.id, row]));
       for (const mirror of result.priceMirrors) {
         const row = rowById.get(mirror.listingId)!;
-        const { feeAmount, shippingCost } = await readSaleCosts(connection, mirror.externalItemId, mirror.to, row.categoryId, row.listingType);
-        const decision = decidePriceMirror({ price: mirror.to, unitCost: getUnitCostFloor(row.product), feeAmount, shippingCost, targets });
+        const { fee, shippingCost } = await readSaleCosts(connection, siteId, mirror.externalItemId, mirror.to, row.categoryId, row.listingType);
+        const decision = decidePriceMirror({ price: mirror.to, unitCost: getUnitCostFloor(row.product), fee, shippingCost, targets });
         if (decision === "mirror") {
           const written = await prismadb.marketplaceListing.updateMany({
             where: { id: mirror.listingId, marketplacePrice: mirror.from },
@@ -329,6 +376,8 @@ async function runReconcileOnce(
         statusUpdates: result.statusUpdates.length,
         userProductBackfill: result.userProductBackfill.length,
         priceMirrored,
+        typeRefreshed,
+        siteFallback,
       },
     };
   } catch (error) {

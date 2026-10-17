@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeReconcile,
   decidePriceMirror,
+  listingTypeRefreshes,
   type ReconcileListing,
   type ReconcileRemoteItem,
 } from "@/lib/mercadolibre/reconcile";
@@ -33,6 +34,8 @@ const item = (overrides: Partial<ReconcileRemoteItem> = {}): ReconcileRemoteItem
   availableQuantity: 2,
   userProductId: "MCOU1",
   permalink: "https://ml/MCO1",
+  listingType: null,
+  categoryId: null,
   ...overrides,
 });
 
@@ -166,16 +169,51 @@ describe("computeReconcile", () => {
 
 describe("decidePriceMirror", () => {
   const targets = { targetMarginPercent: 20, minNetPerUnit: 10_000 };
+  const real16 = { kind: "real" as const, percentageFee: 16, fixedFee: 0, listingType: "gold_special" };
 
   it("copia el precio si deja al menos el mayor entre el 20 % y 10.000 de neto", () => {
-    expect(decidePriceMirror({ price: 60_000, unitCost: 20_000, feeAmount: 9_600, shippingCost: 8_200, targets })).toBe("mirror");
+    expect(decidePriceMirror({ price: 60_000, unitCost: 20_000, fee: real16, shippingCost: 8_200, targets })).toBe("mirror");
   });
 
   it("por debajo del piso no se copia: queda la alerta", () => {
-    expect(decidePriceMirror({ price: 32_000, unitCost: 15_000, feeAmount: 5_120, shippingCost: 8_200, targets })).toBe("below_margin");
+    expect(decidePriceMirror({ price: 32_000, unitCost: 15_000, fee: real16, shippingCost: 8_200, targets })).toBe("below_margin");
   });
 
   it("sin costo registrado no hay piso que medir: se copia", () => {
-    expect(decidePriceMirror({ price: 32_000, unitCost: null, feeAmount: 5_120, shippingCost: 8_200, targets })).toBe("mirror");
+    expect(decidePriceMirror({ price: 32_000, unitCost: null, fee: real16, shippingCost: 8_200, targets })).toBe("mirror");
+  });
+
+  it("sin cotización usa la comisión del tipo de publicación: Premium deja menos que Clásica", () => {
+    const loose = { targetMarginPercent: 20, minNetPerUnit: 5_000 };
+    // 30.000 − 16 % − 8.200 − 1,5 % − 10.000 = 6.550 ≥ 6.000; con 19 % queda 5.650.
+    expect(decidePriceMirror({ price: 30_000, unitCost: 10_000, fee: { kind: "tipo", listingType: "gold_special" }, shippingCost: 8_200, targets: loose })).toBe("mirror");
+    expect(decidePriceMirror({ price: 30_000, unitCost: 10_000, fee: { kind: "tipo", listingType: "gold_pro" }, shippingCost: 8_200, targets: loose })).toBe("below_margin");
+  });
+
+  it("hasta el precio límite cobra el cargo fijo en vez del envío, como el Copiloto y el asistente", () => {
+    const base = { targetMarginPercent: 20, minNetPerUnit: 5_000 };
+    // Sin los ajustes: 25.000 − 4.000 − 8.200 − 375 − 10.000 = 2.425. Con ellos: 25.000 − 4.000 − 2.700 − 375 − 10.000 = 7.925.
+    expect(decidePriceMirror({ price: 25_000, unitCost: 10_000, fee: real16, shippingCost: 8_200, targets: base })).toBe("below_margin");
+    expect(decidePriceMirror({ price: 25_000, unitCost: 10_000, fee: real16, shippingCost: 8_200, targets: { ...base, lowPriceFixedFee: 2_700, freeShippingMin: 30_000 } })).toBe("mirror");
+  });
+});
+
+describe("listingTypeRefreshes", () => {
+  const row = { id: "L1", externalItemId: "MCO1", listingType: "gold_special", categoryId: "MCO100" };
+
+  it("sin cambios en Mercado Libre no hay nada que escribir", () => {
+    expect(listingTypeRefreshes([row], [item({ listingType: "gold_special", categoryId: "MCO100" })])).toEqual([]);
+  });
+
+  it("un tipo o una categoría distinta se pone al día con el valor anterior para el WHERE", () => {
+    expect(listingTypeRefreshes([row], [item({ listingType: "gold_pro", categoryId: "MCO100" })])).toEqual([
+      { listingId: "L1", from: { listingType: "gold_special", categoryId: "MCO100" }, data: { listingType: "gold_pro" } },
+    ]);
+    expect(listingTypeRefreshes([row], [item({ listingType: "gold_pro", categoryId: "MCO200" })])[0].data).toEqual({ listingType: "gold_pro", categoryId: "MCO200" });
+  });
+
+  it("lo que Mercado Libre no devolvió no borra nada, y un ítem que no llegó no se toca", () => {
+    expect(listingTypeRefreshes([row], [item({ listingType: null, categoryId: null })])).toEqual([]);
+    expect(listingTypeRefreshes([row], [])).toEqual([]);
   });
 });

@@ -41,7 +41,7 @@ export async function processMercadoLibreHealthChecks(): Promise<MercadoLibreHea
           in: [MarketplaceConnectionStatus.CONNECTED, MarketplaceConnectionStatus.REAUTH_REQUIRED],
         },
       },
-      select: { id: true, storeId: true, sellerId: true, status: true },
+      select: { id: true, storeId: true, sellerId: true, status: true, siteId: true },
     });
 
     const results = await Promise.allSettled(

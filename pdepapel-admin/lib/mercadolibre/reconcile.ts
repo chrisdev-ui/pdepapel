@@ -1,7 +1,7 @@
 import type { MarketplaceListingStatus } from "@prisma/client";
 
 import type { MercadoLibreHealthIssue } from "./health";
-import { getMercadoLibreMarginBreakdown } from "./listing-margin";
+import { lowPriceRuleOf, mercadoLibreNetAt, type MercadoLibrePricingTargets, type SaleFeeSource } from "@/lib/pricing/mercadolibre-fees";
 
 /**
  * Revisión diaria contra Mercado Libre (#11). Compara cada publicación
@@ -37,7 +37,30 @@ export type ReconcileRemoteItem = {
   availableQuantity: number | null;
   userProductId: string | null;
   permalink: string | null;
+  /** Tipo de publicación y categoría actuales en Mercado Libre; null si no vinieron. */
+  listingType: string | null;
+  categoryId: string | null;
 };
+
+/**
+ * Tipo de publicación y categoría que cambiaron en Mercado Libre (por ejemplo
+ * desde su propio panel). Solo lo que vino y es distinto; lo que no vino no
+ * borra nada. Quien escribe lo hace con el valor anterior en el WHERE.
+ */
+export function listingTypeRefreshes(
+  listings: readonly { id: string; externalItemId: string; listingType: string | null; categoryId: string | null }[],
+  remote: readonly ReconcileRemoteItem[],
+) {
+  const byId = new Map(remote.map((item) => [item.id, item]));
+  return listings.flatMap((listing) => {
+    const item = byId.get(listing.externalItemId);
+    if (!item) return [];
+    const data: { listingType?: string; categoryId?: string } = {};
+    if (item.listingType && item.listingType !== listing.listingType) data.listingType = item.listingType;
+    if (item.categoryId && item.categoryId !== listing.categoryId) data.categoryId = item.categoryId;
+    return Object.keys(data).length ? [{ listingId: listing.id, from: { listingType: listing.listingType, categoryId: listing.categoryId }, data }] : [];
+  });
+}
 
 export type ReconcileListing = {
   id: string;
@@ -272,22 +295,23 @@ export function computeReconcile({
 /**
  * ¿Se copia el precio de Mercado Libre al panel? Sí, salvo que deje menos
  * del mayor entre el margen objetivo y la ganancia mínima por unidad; ahí
- * queda una alerta. Sin costo registrado no hay piso que medir.
+ * queda una alerta. Sin costo registrado no hay piso que medir. El neto sale
+ * de la misma regla que el Copiloto y el asistente (`mercadoLibreNetAt`).
  */
 export function decidePriceMirror({
   price,
   unitCost,
-  feeAmount,
+  fee,
   shippingCost,
   targets,
 }: {
   price: number;
   unitCost: number | null;
-  feeAmount: number;
+  fee: SaleFeeSource;
   shippingCost: number;
-  targets: { targetMarginPercent: number; minNetPerUnit: number };
+  targets: MercadoLibrePricingTargets;
 }): "mirror" | "below_margin" {
-  const { net } = getMercadoLibreMarginBreakdown({ price, feeAmount, shippingCost, unitCost });
+  const { net } = mercadoLibreNetAt({ price, unitCost, fee, rule: lowPriceRuleOf(targets), shippingCost });
   if (net === null) return "mirror";
   const required = Math.max(targets.minNetPerUnit, (targets.targetMarginPercent / 100) * price);
   return net >= required ? "mirror" : "below_margin";
