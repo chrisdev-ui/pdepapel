@@ -303,6 +303,40 @@ export async function requestMercadoLibreJson(
   };
 }
 
+/**
+ * Consulta de solo lectura que nunca escribe en la base: usa el token guardado
+ * solo si sigue vigente (con el mismo margen de un minuto); vencido, por vencer,
+ * sin token o con la conexión no conectada devuelve null. Un 401 también
+ * devuelve null: no renueva el token ni marca la conexión para reconectar
+ * (eso queda en las rutas del panel, la conciliación y el cron). Para el
+ * Copiloto, que solo lee.
+ */
+export async function requestMercadoLibreJsonWithoutRefresh(
+  connectionId: string,
+  resource: string,
+  request: typeof fetch = mercadoLibreFetch,
+): Promise<{ ok: boolean; status: number; payload: unknown } | null> {
+  const connection = await prismadb.marketplaceConnection.findUnique({
+    where: { id: connectionId },
+    select: { status: true, encryptedAccessToken: true, accessTokenExpiresAt: true },
+  });
+  if (!connection?.encryptedAccessToken || connection.status !== MarketplaceConnectionStatus.CONNECTED) return null;
+  if (!connection.accessTokenExpiresAt || connection.accessTokenExpiresAt.getTime() <= Date.now() + ACCESS_TOKEN_REFRESH_MARGIN_MS) return null;
+  const accessToken = decryptMercadoLibreToken(connection.encryptedAccessToken, getMercadoLibreConfig().tokenEncryptionKey);
+  const response = await withRateLimitRetry(() =>
+    request(normalizeMercadoLibreResource(resource), { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }),
+  );
+  if (response.status === 401) return null;
+  const body = await response.text();
+  let payload: unknown;
+  try {
+    payload = body ? JSON.parse(body) : null;
+  } catch {
+    payload = null;
+  }
+  return { ok: response.ok && payload !== null, status: response.status, payload };
+}
+
 export async function mutateMercadoLibreJson(
   connectionId: string,
   resource: string,

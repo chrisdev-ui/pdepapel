@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requestMercadoLibreJson } from "@/lib/mercadolibre/client";
+import { requestMercadoLibreJsonWithoutRefresh } from "@/lib/mercadolibre/client";
 import { parseMercadoLibreListingPriceEstimate } from "@/lib/mercadolibre/listing-pricing";
 import { feeSourceFromQuote, type SaleFeeSource } from "@/lib/pricing/mercadolibre-fees";
 
@@ -26,10 +26,11 @@ const quoteFetch: typeof fetch = (input, init) => fetch(input, { ...init, signal
 /**
  * La comisión exacta de Mercado Libre para un precio, categoría y tipo de
  * publicación (`/sites/{site}/listing_prices`), con el token de la tienda.
- * Solo lectura: usa `requestMercadoLibreJson`, que no marca la conexión con
- * error (una pregunta del Copiloto no puede dejarla «fallando»). Guarda el
- * resultado 6 horas en memoria y, ante cualquier falla o demora, devuelve null
- * para que quien llama use el estimado del tipo de publicación.
+ * Nunca escribe en la base: `requestMercadoLibreJsonWithoutRefresh` no renueva
+ * un token vencido, no marca la conexión ante un 401 y no guarda errores en
+ * ella. Guarda el resultado 6 horas en memoria y, ante cualquier falla, token
+ * vencido o demora, devuelve null para que quien llama use el estimado del tipo
+ * de publicación. Lo único que registra es un aviso corto, sin el token.
  */
 export const quoteMercadoLibreSaleFee: FeeQuoter = async (request) => {
   const key = `${request.siteId}|${request.categoryId}|${request.listingType}|${Math.round(request.price)}`;
@@ -38,7 +39,7 @@ export const quoteMercadoLibreSaleFee: FeeQuoter = async (request) => {
   const path = `/sites/${encodeURIComponent(request.siteId)}/listing_prices?price=${Math.round(request.price)}&category_id=${encodeURIComponent(request.categoryId)}&listing_type_id=${encodeURIComponent(request.listingType)}`;
   try {
     const result = await Promise.race([
-      requestMercadoLibreJson(request.connectionId, path, quoteFetch),
+      requestMercadoLibreJsonWithoutRefresh(request.connectionId, path, quoteFetch),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), QUOTE_BUDGET_MS)),
     ]);
     const source = result && result.ok ? feeSourceFromQuote(parseMercadoLibreListingPriceEstimate(result.payload)) : null;
