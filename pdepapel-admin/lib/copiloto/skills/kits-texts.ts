@@ -19,7 +19,11 @@ export const kitsTextsInput = z.object({
     z.object({
       n: z.number().int().describe("El número del borrador (campo n de kitsParaRotar)"),
       nombreCorto: z.string().describe("Nombre corto del kit: máximo 6 palabras, sin precios ni el nombre completo de un producto, distinto del de los otros kits"),
-      loQueAmaras: z.array(z.string()).describe("Exactamente 2 frases cortas para la clienta: qué va a disfrutar del kit. Sin precios, porcentajes ni promociones"),
+      loQueAmaras: z
+        .array(z.string())
+        .describe(
+          "Exactamente 2 frases cortas para la clienta que nombran las piezas reales de ese borrador (por su tipo o su nombre, como vienen en piezas) y para qué sirve cada una. Nada que no esté en sus piezas: ni otras piezas, ni funciones, personajes o marcas que sus nombres no digan. Sin precios, porcentajes ni promociones",
+        ),
       idealPara: z.string().nullable().describe("Para qué o para quién es ideal, sin «Ideal para» al inicio («regalar en grados»); null si no aplica"),
     }),
   ),
@@ -48,7 +52,7 @@ export function kitsTextsStep(steps: readonly { toolResults?: readonly { toolNam
   return { activeTools: [KITS_TEXTS_TOOL], toolChoice: { type: "tool" as const, toolName: KITS_TEXTS_TOOL } };
 }
 
-const BULLET_MAX = 110;
+const BULLET_MAX = 130;
 const IDEAL_MAX = 90;
 const FORBIDDEN = /\$\s?\d|\d\s?%|\[\[|:::|https?:\/\/|<[a-z]/i;
 const clean = (value: string) =>

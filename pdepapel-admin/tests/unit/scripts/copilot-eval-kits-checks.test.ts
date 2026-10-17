@@ -220,7 +220,51 @@ describe("respuesta de producción del 2026-10-16, pintada", () => {
     expect(renderedKits(liveRecheck, tool).nombresCortosYDistintos).toBe(false);
     const recomposed = composeKitsAnswer({ ...datos, kits: [kit("Kit Útiles escolares con escritura", "Útiles escolares", 1, "A"), kit("Kit Útiles escolares", "Útiles escolares", 2, "B"), kit("Kit Regalo con accesorios", "Regalo", 3, "C")] }, null);
     expect(renderedKits(recomposed, tool).nombresCortosYDistintos).toBe(true);
-    const fromModel = composeKitsAnswer(datos, { kits: [1, 2, 3].map((n) => ({ n, nombreCorto: `Kit número ${n}`, loQueAmaras: ["Uno", "Dos"], idealPara: null })) });
+    const fromModel = composeKitsAnswer(datos, { kits: [1, 2, 3].map((n) => ({ n, nombreCorto: `Kit número ${n}`, loQueAmaras: [`El cuaderno ${n} para tus apuntes`, `El lápiz ${n} para escribir y dibujar`], idealPara: null })) });
     expect(renderedKits(fromModel, { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 3 }).copiasDelModelo).toBe(3);
+    // Frases que no nombran ninguna pieza: van al texto base.
+    const generic = composeKitsAnswer(datos, { kits: [1, 2, 3].map((n) => ({ n, nombreCorto: `Kit número ${n}`, loQueAmaras: ["Uno", "Dos"], idealPara: null })) });
+    expect(renderedKits(generic, { kits: 3, margenCriterioPanelPct: 35, conMargenBajo: 3 }).copiasDelModelo).toBe(0);
+  });
+});
+
+describe("kits-ficha-nombra-piezas y kits-ficha-sin-inventos", () => {
+  const names = check("kits-ficha-nombra-piezas");
+  const clean = check("kits-ficha-sin-inventos");
+  const pieces = [
+    [{ nombre: "Libreta lenta Eval", categoria: "Cuadernos Eval" }, { nombre: "Borrador Eval", categoria: "Útiles Eval" }],
+    [{ nombre: "Carpeta lenta Eval", categoria: "Carpetas Eval" }, { nombre: "Borrador Eval", categoria: "Útiles Eval" }],
+  ];
+  const withTool = (text: string) => {
+    const base = answer(text);
+    return { ...base, main: { ...base.main, toolOutputs: [{ tool: "kitsParaRotar", output: { datos: { kits: pieces.map((piezas) => ({ piezas })) } } }] } };
+  };
+  const ficha = (bullets: [string, string][]) =>
+    [
+      "## 2 kits sugeridos",
+      ...bullets.flatMap(([a, b], index) => [`### 🎁 Kit ${index + 1}`, ":::copiar Texto para la ficha", "✨ Lo que amarás", `- ${a}`, `- ${b}`, "📦 Incluye", ...pieces[index].map((piece) => `- ${piece.nombre}`), ":::"]),
+    ].join("\n");
+
+  it("reprueba el relleno genérico aunque «📦 Incluye» nombre las piezas", () => {
+    expect(names(withTool(ficha([["Algo bonito", "Algo útil"], ["Orden", "Color"]])))).toBe(false);
+  });
+
+  it("aprueba frases que nombran las piezas del kit", () => {
+    const text = ficha([["La libreta para tus apuntes", "El borrador para corregir"], ["La carpeta guarda tus hojas", "Con borrador para corregir"]]);
+    expect(names(withTool(text))).toBe(true);
+    expect(clean(withTool(text))).toBe(true);
+  });
+
+  it("reprueba una pieza que el kit no trae", () => {
+    expect(clean(withTool(ficha([["La libreta y unas tijeras para recortar", "El borrador para corregir"], ["La carpeta para tus hojas", "El borrador"]])))).toBe(false);
+  });
+
+  it("las respuestas que arma el código, con texto del modelo o el base, aprueban las dos", () => {
+    const kits = pieces.map((piezas, index): KitData => ({ ...kitA, nombreSugerido: `Kit ${index + 1}`, n: index + 1, piezas: piezas.map((piece) => ({ ...piece, rol: "se vende", precioEfectivo: 3000 })) }));
+    for (const model of [MODEL, null, { kits: [{ n: 1, nombreCorto: "Kit apuntes", loQueAmaras: ["La libreta para tus apuntes", "El borrador para corregir"], idealPara: null }] }]) {
+      const text = composeKitsAnswer(datos(kits), model);
+      expect(names(withTool(text))).toBe(true);
+      expect(clean(withTool(text))).toBe(true);
+    }
   });
 });

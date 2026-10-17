@@ -46,7 +46,7 @@ const datos = {
 };
 const toolResult = (output: unknown = { datos }) => ({ type: "tool-result", toolName: "kitsParaRotar", output });
 const textsCall = (input: unknown) => ({ type: "tool-call", toolName: "textosDeKits", input });
-const TEXTS = { kits: [{ n: 1, nombreCorto: "Kit escolar", loQueAmaras: ["Ideas en orden", "Color para tus apuntes"], idealPara: "el colegio" }] };
+const TEXTS = { kits: [{ n: 1, nombreCorto: "Kit escolar", loQueAmaras: ["La libreta para tus ideas en orden", "Sus hojas para tus apuntes de cada día"], idealPara: "el colegio" }] };
 
 describe("respuesta de kits: la arma el código con los textos que el modelo manda como datos", () => {
   it("toma nombre y frases de textosDeKits, descarta el texto libre y sale una sola vez", async () => {
@@ -60,7 +60,7 @@ describe("respuesta de kits: la arma el código con los textos que el modelo man
     ]);
     expect(types).toEqual(["tool-result", "tool-call", "text-start", "text-delta", "text-end", "finish"]);
     expect(text).toContain("### 🧺 Kit escolar");
-    expect(text).toContain(":::copiar Texto para la ficha\n✨ Lo que amarás\n- Ideas en orden\n- Color para tus apuntes\n📦 Incluye\n- Libreta Prueba\n🎁 Ideal para el colegio.\n:::");
+    expect(text).toContain(":::copiar Texto para la ficha\n✨ Lo que amarás\n- La libreta para tus ideas en orden\n- Sus hojas para tus apuntes de cada día\n📦 Incluye\n- Libreta Prueba\n🎁 Ideal para el colegio.\n:::");
     expect(text).not.toMatch(/kitsParaRotar|nota suelta|\[\[KIT/);
   });
 

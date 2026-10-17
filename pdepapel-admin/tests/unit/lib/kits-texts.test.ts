@@ -50,7 +50,7 @@ describe("textos de los kits como datos", () => {
   });
 
   it("frases demasiado largas, enlaces o HTML no pasan; datos con otra forma no dejan nada", () => {
-    const long = "x".repeat(111);
+    const long = "x".repeat(131);
     expect(validateKitTexts({ kits: [{ n: 1, nombreCorto: "Kit A", loQueAmaras: [long, "b"], idealPara: "https://tienda.co" }] }).get(1)).toEqual({ name: "Kit A", bullets: null, idealPara: null });
     expect(validateKitTexts({ kits: [{ n: 1, nombreCorto: "Kit A", loQueAmaras: ["<b>a</b>", "b"], idealPara: null }] }).get(1)?.bullets).toBeNull();
     expect(validateKitTexts(null).size).toBe(0);

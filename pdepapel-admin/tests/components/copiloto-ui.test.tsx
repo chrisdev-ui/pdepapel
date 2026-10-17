@@ -93,6 +93,22 @@ describe("CopilotChat", () => {
     expect(screen.getByText("Datos: lo que me diste")).toBeInTheDocument();
   });
 
+  it("los textos de los kits no salen como fuente de datos: «kitsParaRotar» sí", () => {
+    mocks.chat.messages = [
+      {
+        id: "kit-1",
+        role: "assistant",
+        parts: [
+          { type: "tool-kitsParaRotar", state: "output-available", output: { fuente: "kitsParaRotar" } },
+          { type: "tool-textosDeKits", state: "output-available", output: { ok: true, recibidos: 1 } },
+        ],
+      },
+    ];
+    render(<CopilotChat storeId="store-1" screen={null} conversations={[]} />);
+    expect(screen.queryByText(/textos de los kits/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/^Datos: /)).toHaveLength(1);
+  });
+
   it("«Copiar para la ficha» copia el HTML de la plantilla y el texto plano", async () => {
     const write = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { write, writeText: vi.fn() } });
@@ -320,7 +336,7 @@ describe("respuesta del copiloto con formato", () => {
           { nombreSugerido: "Kit Regalo Snoopy", ocasion: "Regalo", n: 2, piezas: [piece("Maleta conejito", "lento", "Maletas"), piece("Libreta", "se vende", "Libretas")], kitsArmables: 2, sumaPreciosEfectivos: 18000, precioSugerido: 15900, ahorroPct: 11.7, margenPct: 30, margenBajo: true },
         ],
       },
-      { kits: [{ n: 1, nombreCorto: "Kit Colores de clase", loQueAmaras: ["Trazos que se ven en todo el cuaderno", "Listo para tus apuntes"], idealPara: "el colegio" }] },
+      { kits: [{ n: 1, nombreCorto: "Kit Colores de clase", loQueAmaras: ["Plumones con trazos que se ven en todo el cuaderno", "El cuaderno listo para tus apuntes"], idealPara: "el colegio" }] },
     );
     const { container } = render(<AssistantText text={text} storeId="store-1" />);
     expect(container.textContent).not.toMatch(/:::|\[\[KIT/i);
@@ -328,7 +344,7 @@ describe("respuesta del copiloto con formato", () => {
     expect(screen.getByRole("heading", { name: "🎁 Kit Regalo Snoopy" })).toBeInTheDocument();
     const copies = screen.getAllByTestId("copy-block");
     expect(copies.map((copy) => copy.querySelector("summary")?.textContent)).toEqual(["Texto para la fichaCopiar", "Texto para la ficha (base)Copiar"]);
-    expect(copies[0].textContent).toContain("Trazos que se ven en todo el cuaderno");
+    expect(copies[0].textContent).toContain("Plumones con trazos que se ven en todo el cuaderno");
     expect(copies[0].textContent).not.toContain("Maleta conejito");
     expect(copies[1].textContent).toContain("Maleta conejito");
     expect(copies[1].textContent).not.toContain("Plumones");
@@ -346,7 +362,7 @@ describe("respuesta del copiloto con formato", () => {
     await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
     const plain = await (write.mock.calls[0][0][0] as { items: Record<string, Blob> }).items["text/plain"].text();
     expect(plain).toBe(
-      "✨ Lo que amarás\n• Maletas y libretas en un solo kit\n• Un detalle bonito, listo para entregar\n📦 Incluye\n• Maleta conejito\n• Libreta\n🎁 Ideal para regalar a alguien especial.",
+      "✨ Lo que amarás\n• Maleta para llevar tus cosas y libreta para tus notas\n• Un detalle bonito, listo para entregar\n📦 Incluye\n• Maleta conejito\n• Libreta\n🎁 Ideal para regalar a alguien especial.",
     );
   });
 

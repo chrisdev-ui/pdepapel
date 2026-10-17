@@ -638,6 +638,48 @@ export const kitsInTool = (answer: EvalAnswer): KitsFromTool => {
   return { kits: kits.length, margenCriterioPanelPct: last?.datos?.criterios?.margenCriterioPanelPct, conMargenBajo: kits.filter((kit) => kit.margenBajo === true).length };
 };
 
+/** Piezas de cada borrador, en el orden en que la respuesta pinta los kits. */
+const kitPiecesInTool = (answer: EvalAnswer): { nombre: string; categoria?: string | null }[][] => {
+  const outputs = (answer.toolOutputs ?? []).filter((item) => item.tool === "kitsParaRotar");
+  const last = outputs[outputs.length - 1]?.output as { datos?: { kits?: { piezas?: { nombre: string; categoria?: string | null }[] }[] } } | undefined;
+  return (last?.datos?.kits ?? []).map((kit) => kit.piezas ?? []);
+};
+/** Las frases de «Lo que amarás» de cada texto para la ficha (sin «📦 Incluye», que siempre nombra las piezas). */
+const fichaBullets = (text: string): string[][] => {
+  const blocks = parseAnswer(text);
+  const start = blocks.findIndex((block) => block.type === "heading" && block.level === 2 && /kits? sugeridos?/i.test(block.text));
+  const end = blocks.findIndex((block, index) => index > start && block.type === "heading" && block.level === 2);
+  const area = start < 0 ? [] : blocks.slice(start + 1, end < 0 ? undefined : end);
+  return area
+    .filter((block): block is Extract<AnswerBlock, { type: "copy" }> => block.type === "copy")
+    .map((copy) => {
+      const lines = copy.text.split("\n");
+      const from = lines.findIndex((line) => line.startsWith("✨"));
+      const to = lines.findIndex((line) => line.startsWith("📦"));
+      return from < 0 ? [] : lines.slice(from + 1, to < 0 ? undefined : to).map((line) => line.replace(/^-\s*/, ""));
+    });
+};
+const EVAL_STOP = new Set(["para", "con", "eval", "lento", "lenta", "alza", "costo", "sin"]);
+const evalWords = (text: string) => (fold(text).match(/[a-zñ]+/g) ?? []).filter((word) => word.length >= 4 && !EVAL_STOP.has(word)).map((word) => word.replace(/(es|s)$/, ""));
+/** Tipos de papelería que una frase podría inventar; propios del eval, no los del código. */
+const STATIONERY = ["cuaderno", "libreta", "agenda", "lapiz", "lapicero", "boligrafo", "marcador", "resaltador", "borrador", "corrector", "regla", "colores", "tijera", "pegante", "sticker", "washi", "carpeta", "estuche", "cartuchera", "sacapuntas", "mochila", "termo", "acuarela", "pincel", "clip"];
+/** Por kit: sus frases nombran al menos una pieza y no traen un tipo de papelería que no esté en sus piezas. */
+export function fichaDescribesPieces(answer: EvalAnswer): { nombraPiezas: boolean; sinInventos: boolean } {
+  const pieces = kitPiecesInTool(answer);
+  const bullets = fichaBullets(answer.text);
+  if (!pieces.length || bullets.length !== pieces.length) return { nombraPiezas: false, sinInventos: false };
+  let names = true;
+  let clean = true;
+  bullets.forEach((lines, index) => {
+    const own = new Set(pieces[index].flatMap((piece) => evalWords(`${piece.nombre} ${piece.categoria ?? ""}`)));
+    const said = evalWords(lines.join(" "));
+    if (!said.some((word) => own.has(word))) names = false;
+    const ownText = fold(pieces[index].map((piece) => `${piece.nombre} ${piece.categoria ?? ""}`).join(" "));
+    if (STATIONERY.some((type) => new RegExp(`\\b${type}`).test(fold(lines.join(" "))) && !new RegExp(`\\b${type.slice(0, 5)}`).test(ownText))) clean = false;
+  });
+  return { nombraPiezas: names, sinInventos: clean };
+}
+
 export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa: (a: KitsAnswers) => boolean }[] = [
   {
     id: "kits-pantalla-copia-por-kit",
@@ -822,6 +864,18 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
         )
       );
     },
+  },
+  {
+    id: "kits-ficha-nombra-piezas",
+    criterio: "Cada «Texto para la ficha» describe sus piezas reales: sus frases de «Lo que amarás» nombran al menos una pieza de ese kit (no relleno genérico).",
+    estricto: true,
+    pasa: ({ main }) => fichaDescribesPieces(main).nombraPiezas,
+  },
+  {
+    id: "kits-ficha-sin-inventos",
+    criterio: "Ninguna frase de «Lo que amarás» menciona un tipo de pieza que no está en ese kit.",
+    estricto: true,
+    pasa: ({ main, followUp }) => fichaDescribesPieces(main).sinInventos && (kitPiecesInTool(followUp).length === 0 || fichaDescribesPieces(followUp).sinInventos),
   },
   {
     id: "kits-sin-marcadores",

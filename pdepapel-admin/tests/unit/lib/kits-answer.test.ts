@@ -46,7 +46,7 @@ const datos = (overrides: Partial<KitsAnswerData> = {}): KitsAnswerData => ({
 
 /** Lo que el modelo manda a `textosDeKits`. */
 const TEXTS = {
-  kits: [{ n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Una libreta para tus ideas", "Útiles para el día a día"], idealPara: "regalar a quien se gradúa" }],
+  kits: [{ n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Una libreta para tus ideas y un lápiz para escribirlas", "El borrador para corregir sin estrés"], idealPara: "regalar a quien se gradúa" }],
 };
 const textsFor = (...kits: { n: number; nombreCorto: string; loQueAmaras: string[]; idealPara: string | null }[]) => ({ kits });
 
@@ -82,8 +82,8 @@ describe("respuesta de kits armada por el código", () => {
         "",
         ":::copiar Texto para la ficha",
         "✨ Lo que amarás",
-        "- Una libreta para tus ideas",
-        "- Útiles para el día a día",
+        "- Una libreta para tus ideas y un lápiz para escribirlas",
+        "- El borrador para corregir sin estrés",
         "📦 Incluye",
         "- Libreta lenta Prueba",
         "- Lápiz Prueba",
@@ -144,7 +144,7 @@ describe("respuesta de kits armada por el código", () => {
       [
         ":::copiar Texto para la ficha (base)",
         "✨ Lo que amarás",
-        "- Libretas, lápices y borradores en un solo kit",
+        "- Libreta para tus notas, lápiz para escribir o dibujar y borrador para corregir",
         "- Un detalle para celebrar un logro importante",
         "📦 Incluye",
         "- Libreta lenta Prueba",
@@ -168,9 +168,9 @@ describe("respuesta de kits armada por el código", () => {
   });
 
   it("cada campo del modelo se valida solo: un nombre largo cae al de la herramienta, sin perder sus frases; sin «para qué» se usa el de la ocasión", () => {
-    const text = composeKitsAnswer(datos(), textsFor({ n: 1, nombreCorto: "Kit de grados con libreta lenta prueba y lápiz", loQueAmaras: ["Uno", "Dos"], idealPara: null }));
+    const text = composeKitsAnswer(datos(), textsFor({ n: 1, nombreCorto: "Kit de grados con libreta lenta prueba y lápiz", loQueAmaras: ["La libreta para tus ideas", "El lápiz y el borrador para tus tareas"], idealPara: null }));
     expect(text).toContain("### 🎓 Kit Grados con Libreta lenta Prueba");
-    expect(text).toContain(":::copiar Texto para la ficha\n✨ Lo que amarás\n- Uno\n- Dos\n📦 Incluye");
+    expect(text).toContain(":::copiar Texto para la ficha\n✨ Lo que amarás\n- La libreta para tus ideas\n- El lápiz y el borrador para tus tareas\n📦 Incluye");
     expect(text).toContain("🎁 Ideal para regalar en grados.");
     const oneBullet = composeKitsAnswer(datos(), textsFor({ n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Solo una"], idealPara: null }));
     expect(oneBullet).toContain("### 🎓 Kit de grados");
@@ -268,6 +268,6 @@ describe("respuesta de kits armada por el código", () => {
     const text = composeKitsAnswer(datos({ kits: [kit(), other] }), TEXTS);
     const copies = parseAnswer(text).filter((block) => block.type === "copy") as { title: string; text: string }[];
     expect(copies.map((copy) => copy.title)).toEqual(["Texto para la ficha", "Texto para la ficha (base)"]);
-    expect(copies[1].text).toBe("✨ Lo que amarás\n- Carpetas en un solo kit\n- Piezas que combinan entre sí, elegidas para usarse juntas\n📦 Incluye\n- Carpeta Prueba");
+    expect(copies[1].text).toBe("✨ Lo que amarás\n- Carpeta para guardar tus hojas\n- Piezas que combinan entre sí, elegidas para usarse juntas\n📦 Incluye\n- Carpeta Prueba");
   });
 });

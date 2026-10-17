@@ -1,3 +1,4 @@
+import { describesPieces, piecesPurposeBullet } from "@/lib/copiloto/skills/kit-pieces-copy";
 import { bulletList, collapsible, copyBlock, heading, keyLine, numberedList, sections, tag } from "@/lib/copiloto/answer-blocks";
 import { KIT_NAME_MAX_WORDS, isNameTaken, percent, pesos, shortKitName, takeName } from "@/lib/copiloto/kits-rotation";
 import { validateKitTexts, type KitTexts } from "@/lib/copiloto/skills/kits-texts";
@@ -102,15 +103,15 @@ function fichaText(kit: Pick<KitData, "piezas">, bullets: readonly [string, stri
     .join("\n");
 }
 
-/** Sin texto del modelo para ese kit: uno armado con sus datos (sus categorías, su ocasión y sus piezas), nunca el de otro kit. */
+/** Sin texto del modelo para ese kit: uno armado con sus datos (cada pieza y para qué sirve, su ocasión), nunca el de otro kit. */
 export function fallbackCopy(kit: Pick<KitData, "ocasion" | "piezas">): string {
   const occasion = occasionCopy(kit);
-  return fichaText(kit, [categoriesBullet(kit), occasion?.bullet ?? "Piezas que combinan entre sí, elegidas para usarse juntas"], occasion?.ideal ?? null);
+  return fichaText(kit, [piecesPurposeBullet(kit.piezas) ?? categoriesBullet(kit), occasion?.bullet ?? "Piezas que combinan entre sí, elegidas para usarse juntas"], occasion?.ideal ?? null);
 }
 
-/** El texto del modelo con la plantilla de Paula; lo que el modelo no mandó bien sale de los datos. */
+/** El texto del modelo con la plantilla de Paula, solo si habla de las piezas reales del kit; si no, el texto base. */
 export function modelCopy(kit: Pick<KitData, "ocasion" | "piezas">, texts: KitTexts): string | null {
-  if (!texts.bullets) return null;
+  if (!texts.bullets || !describesPieces(texts.bullets, kit.piezas)) return null;
   return fichaText(kit, texts.bullets, texts.idealPara ?? occasionCopy(kit)?.ideal ?? null);
 }
 

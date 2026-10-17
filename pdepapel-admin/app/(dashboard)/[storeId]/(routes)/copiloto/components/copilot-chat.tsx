@@ -73,6 +73,8 @@ function ToolLine({ part }: { part: ToolPart }) {
   const name = part.type.replace(/^tool-/, "");
   // Las habilidades cargadas se ven como chips arriba, no como una línea más.
   if (name === "cargarHabilidad" && part.state === "output-available") return null;
+  // Los textos de los kits son parte de la respuesta, no una fuente de datos.
+  if (name === "textosDeKits" && part.state === "output-available") return null;
   // La fuente es la ficha solo si de verdad encontró el producto.
   if (name === "productoParaDescripcion" && part.state === "output-available") {
     const sku = part.output?.encontrado ? part.output.datos?.sku : null;
