@@ -1,6 +1,5 @@
 import { bulletList, collapsible, heading, keyLine, numberedList, sections, tag } from "@/lib/copiloto/answer-blocks";
 import { percent } from "@/lib/copiloto/kits-rotation";
-import { MERCADOLIBRE_FEE_RATE_ESTIMATE } from "@/lib/mercadolibre/listing-margin";
 import type { MercadoLibreEstimate } from "@/lib/pricing/price-calculator";
 
 import type { BelowMarginResult, PacksResult, PriceResult } from "./precios-tool";
@@ -14,10 +13,11 @@ import type { BelowMarginResult, PacksResult, PriceResult } from "./precios-tool
 const money = (value: number) => `${value < 0 ? "−" : ""}$${Math.abs(Math.round(value)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
 const units = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 const GROSS = "Es margen bruto, antes de la comisión de la pasarela de pago.";
-const ML_HOW = `Mercado Libre: comisión estimada del ${percent(MERCADOLIBRE_FEE_RATE_ESTIMATE * 100)} (más si ofreces cuotas extra) y envío estimado, no la cotización real; hasta el umbral de Configuración se cobra el cargo fijo en vez del envío.`;
+const ML_RULE = "Hasta el precio límite de Configuración se cobra el cargo fijo en vez del envío; por encima, el envío estimado.";
+const ML_TYPES_HOW = "Mercado Libre: comisión estimada por tipo de publicación, 16 % sin cuotas extra (Clásica) y 19 % con cuotas extra (Premium), no la cotización real.";
 
 function mercadoLibreLine(estimate: MercadoLibreEstimate) {
-  const parts = [`comisión ${money(estimate.commission)}`];
+  const parts = [`comisión ${money(estimate.commission)} (${percent(estimate.commissionPct)})`];
   if (estimate.fixedFee > 0) parts.push(`cargo fijo ${money(estimate.fixedFee)}`);
   if (estimate.shipping > 0) parts.push(`envío ${money(estimate.shipping)}`);
   parts.push(`retención ${money(estimate.withholding)}`);
@@ -25,7 +25,8 @@ function mercadoLibreLine(estimate: MercadoLibreEstimate) {
   return parts;
 }
 
-const estimateTag = (estimate: MercadoLibreEstimate) => tag(estimate.withoutFixedFee ? "estimado, sin cargo fijo" : "estimado");
+const estimateTag = (estimate: MercadoLibreEstimate) =>
+  estimate.commissionKind === "real" && !estimate.withoutFixedFee ? tag("comisión real") : tag(estimate.withoutFixedFee ? "estimado, sin cargo fijo" : "estimado");
 
 export function composePriceAnswer(result: PriceResult): string {
   const { entradas, tienda, mercadolibre, mercado, parecidos, parecidosPor } = result.datos;
@@ -57,14 +58,21 @@ export function composePriceAnswer(result: PriceResult): string {
     mercadolibre &&
     [
       heading("Mercado Libre"),
-      mercadolibre.precioSugerido === null || !mercadolibre.estimado
-        ? `Con tus metas (${percent(mercadolibre.metas.margenPct)} y ${money(mercadolibre.metas.gananciaMinima)} por unidad) no hay un precio que las cumpla.`
-        : [
-            `${keyLine(money(mercadolibre.precioSugerido), mercadoLibreLine(mercadolibre.estimado))} ${estimateTag(mercadolibre.estimado)}`,
-            mercadolibre.muyPorEncimaDeLaTienda ? bulletList(["Es más de 1,8 veces el precio de la tienda: en Mercado Libre conviene venderlo en pack o kit."]) : null,
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
+      mercadolibre.vinculado
+        ? `Su publicación es ${mercadolibre.opciones[0]?.nombre ?? mercadolibre.vinculado.tipo}${mercadolibre.opciones[0]?.cuotas ? ` (${mercadolibre.opciones[0].cuotas})` : ""}${mercadolibre.comisionReal ? ", con la comisión real de Mercado Libre." : "; no pude consultar la comisión real, va la estimada."}`
+        : "No tiene publicación vinculada: van las dos opciones, según ofrezcas cuotas extra o no.",
+      ...mercadolibre.opciones.map((option) => {
+        const title = mercadolibre.opciones.length > 1 ? `${option.nombre}, ${option.cuotas}` : null;
+        if (option.precioSugerido === null || !option.estimado) {
+          return `${title ? `${title}: ` : ""}con tus metas (${percent(mercadolibre.metas.margenPct)} y ${money(mercadolibre.metas.gananciaMinima)} por unidad) no hay un precio que las cumpla.`;
+        }
+        return [
+          `${title ? `${title}: ` : ""}${keyLine(money(option.precioSugerido), mercadoLibreLine(option.estimado))} ${estimateTag(option.estimado)}`,
+          option.muyPorEncimaDeLaTienda ? bulletList(["Es más de 1,8 veces el precio de la tienda: en Mercado Libre conviene venderlo en pack o kit."]) : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+      }),
     ].join("\n\n");
 
   const marketBlock =
@@ -94,8 +102,9 @@ export function composePriceAnswer(result: PriceResult): string {
         entradas.subcategoriaPedidaSinCoincidencia ? "No encontré la subcategoría que nombraste: usé el aumento de la tienda." : null,
         tienda ? "Tienda: costo × (1 + aumento), redondeado al peso. Margen sobre el precio: (precio − costo) ÷ precio." : null,
         tienda ? GROSS : null,
-        mercadolibre ? ML_HOW : null,
-        mercadolibre?.estimado?.withoutFixedFee ? "Sin el cargo fijo ni su precio límite de Mercado Libre en Configuración: se estima con envío en cualquier precio." : null,
+        mercadolibre ? (mercadolibre.comisionReal ? "Mercado Libre: la comisión real para el tipo y la categoría de su publicación." : ML_TYPES_HOW) : null,
+        mercadolibre ? ML_RULE : null,
+        mercadolibre?.opciones[0]?.estimado?.withoutFixedFee ? "Sin el cargo fijo ni su precio límite de Mercado Libre en Configuración: se estima con envío en cualquier precio." : null,
       ].filter(Boolean) as string[],
     ),
   );
@@ -133,8 +142,13 @@ export function composePacksAnswer(result: PacksResult): string {
     ...(canal === "tienda"
       ? []
       : tamanos
-          .filter((row) => row.mercadolibre?.debajoDelPiso)
-          .map((row) => `En Mercado Libre x${row.size} queda por debajo de tus metas: ${mercadoLibreLine(row.mercadolibre!).join(" · ")}. ${estimateTag(row.mercadolibre!)}`)),
+          .filter((row) => row.mercadolibre?.some((option) => option.debajoDelPiso))
+          .map(
+            (row) =>
+              `En Mercado Libre x${row.size} queda por debajo de tus metas: ${row
+                .mercadolibre!.map((option) => `te quedan ${option.net === null ? "—" : money(option.net)} con ${percent(option.commissionPct)}`)
+                .join(" o ")}. ${estimateTag(row.mercadolibre![0])}`,
+          )),
     "Revisa en 2 a 3 semanas con lo que se haya vendido.",
   ].filter(Boolean) as string[];
 
@@ -153,7 +167,8 @@ export function composePacksAnswer(result: PacksResult): string {
           ? `Envío típico: la mediana de lo que pagaron de envío ${units(envioTipico.pedidos, "pedido pagado", "pedidos pagados")} de 90 días (sin envío gratis).`
           : "Envío típico: no hay pedidos pagados con envío en 90 días.",
         GROSS,
-        canal === "tienda" ? null : ML_HOW,
+        canal === "tienda" ? null : ML_TYPES_HOW,
+        canal === "tienda" ? null : ML_RULE,
       ].filter(Boolean) as string[],
     ),
   );

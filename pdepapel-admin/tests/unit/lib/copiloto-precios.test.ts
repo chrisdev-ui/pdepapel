@@ -5,7 +5,8 @@ vi.mock("@/lib/store-access", () => ({ requireStoreOwner: vi.fn() }));
 
 import type { CopilotDb } from "@/lib/copiloto/db";
 import { composeBelowMarginAnswer, composePacksAnswer, composePriceAnswer } from "@/lib/copiloto/skills/precios-answer";
-import { computeBelowMargin, computePacks, computePrice } from "@/lib/copiloto/skills/precios-tool";
+import { computeBelowMargin, computePacks, computePrice, withRealFee } from "@/lib/copiloto/skills/precios-tool";
+import type { FeeQuoter } from "@/lib/mercadolibre/fee-quote";
 import { pricingAnswerTransform } from "@/lib/copiloto/skills/precios-transform";
 
 /** Valores de prueba: ninguna cifra del negocio. */
@@ -41,8 +42,11 @@ const CATEGORIES = [
   { id: "stickers", name: "Stickers", typeId: "decoracion", markupOverridePercent: null, type: { name: "Decoración" } },
 ];
 
-function fakeDb(store = STORE, shippingCosts = [8000, 9000, 12000, 0]): CopilotDb {
+type Linked = { listingType: string; categoryId: string; connectionId: string; connection: { siteId: string } } | null;
+
+function fakeDb(store = STORE, shippingCosts = [8000, 9000, 12000, 0], linked: Linked = null): CopilotDb {
   return {
+    marketplaceListing: { findFirst: async () => linked },
     store: { findUnique: async () => store },
     product: { findMany: async () => PRODUCTS },
     category: { findMany: async () => CATEGORIES },
@@ -51,6 +55,9 @@ function fakeDb(store = STORE, shippingCosts = [8000, 9000, 12000, 0]): CopilotD
     orderItem: { findMany: async () => [{ productId: "c1", quantity: 4 }, { productId: "c1", quantity: 2 }] },
   } as unknown as CopilotDb;
 }
+
+const noQuote: FeeQuoter = async () => null;
+const price = async (db: CopilotDb, input: Parameters<typeof computePrice>[2], quote: FeeQuoter = noQuote) => withRealFee(await computePrice(db, "store", input), quote);
 
 /** Cada monto «$N» de la respuesta es un número de la salida de la herramienta. */
 function amountsComeFromTool(text: string, output: unknown) {
@@ -98,7 +105,7 @@ describe("compararPacks: el caso de 150 unidades a 150", () => {
 
 describe("calcularPrecio", () => {
   it("usa la mediana de la subcategoría del producto parecido, compara con el mínimo y trae los parecidos con sus ventas", async () => {
-    const result = await computePrice(fakeDb(), "store", { costoUnitario: 4500, parecidoA: "cuaderno argollado" });
+    const result = await price(fakeDb(), { costoUnitario: 4500, parecidoA: "cuaderno argollado" });
     expect(result.datos.tienda).toMatchObject({ precioSugerido: 8100, aumentoPct: 80, fuente: "mediana de Cuadernos (5 productos)", margenPct: 44.4, minimo: { margenPct: 35, precio: 6924 } });
     const text = composePriceAnswer(result);
     expect(text).toContain("el precio sugerido para la tienda es **$8.100**, con margen del 44,4 % sobre el precio.");
@@ -112,24 +119,65 @@ describe("calcularPrecio", () => {
   });
 
   it("con los ajustes de Mercado Libre: hasta el límite cargo fijo sin envío; por encima envío sin cargo fijo; ya no dice «sin cargo fijo»", async () => {
-    const low = await computePrice(fakeDb({ ...STORE, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 60000 }), "store", { costoUnitario: 4500, canal: "mercadolibre" });
+    const low = await price(fakeDb({ ...STORE, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 60000 }), { costoUnitario: 4500, canal: "mercadolibre" });
     expect(low.datos.tienda).toBeNull();
-    expect(low.datos.mercadolibre?.estimado).toMatchObject({ fixedFee: 900, shipping: 0, withoutFixedFee: false });
+    expect(low.datos.mercadolibre?.opciones.map((option) => option.estimado)).toMatchObject([
+      { fixedFee: 900, shipping: 0, withoutFixedFee: false, commissionPct: 16 },
+      { fixedFee: 900, shipping: 0, withoutFixedFee: false, commissionPct: 19 },
+    ]);
     const lowText = composePriceAnswer(low);
     expect(lowText).toContain("cargo fijo $900");
     expect(lowText).not.toMatch(/envío \$/);
     expect(lowText).toContain("[[tag:estimado]]");
     expect(lowText).not.toContain("sin cargo fijo");
 
-    const high = await computePrice(fakeDb({ ...STORE, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 10000 }), "store", { costoUnitario: 4500, canal: "mercadolibre" });
-    expect(high.datos.mercadolibre?.estimado).toMatchObject({ fixedFee: 0, shipping: 8100 });
+    const high = await price(fakeDb({ ...STORE, mercadoLibreLowPriceFixedFee: 900, mercadoLibreFreeShippingMin: 10000 }), { costoUnitario: 4500, canal: "mercadolibre" });
+    expect(high.datos.mercadolibre?.opciones[0].estimado).toMatchObject({ fixedFee: 0, shipping: 8100 });
     expect(composePriceAnswer(high)).toContain("envío $8.100");
     expect(composePriceAnswer(high)).not.toContain("cargo fijo $");
     amountsComeFromTool(composePriceAnswer(low), low);
   });
 
+  it("sin publicación vinculada muestra las dos comisiones, 16 % sin cuotas extra y 19 % con cuotas extra", async () => {
+    const result = await price(fakeDb(), { costoUnitario: 6000, canal: "mercadolibre" });
+    expect(result.datos.mercadolibre?.vinculado).toBeNull();
+    expect(result.datos.mercadolibre?.opciones.map((option) => [option.tipo, option.estimado?.commissionPct])).toEqual([
+      ["gold_special", 16],
+      ["gold_pro", 19],
+    ]);
+    const text = composePriceAnswer(result);
+    expect(text).toContain("No tiene publicación vinculada: van las dos opciones, según ofrezcas cuotas extra o no.");
+    expect(text).toMatch(/Clásica, sin cuotas extra: \*\*\$[\d.]+\*\* · comisión \$[\d.]+ \(16 %\)/);
+    expect(text).toMatch(/Premium, con cuotas extra: \*\*\$[\d.]+\*\* · comisión \$[\d.]+ \(19 %\)/);
+    expect(text).toContain("16 % sin cuotas extra (Clásica) y 19 % con cuotas extra (Premium)");
+    amountsComeFromTool(text, result);
+  });
+
+  it("con publicación vinculada usa su tipo y, si Mercado Libre responde, la comisión real; si no, el estimado y lo dice", async () => {
+    const linked = { listingType: "gold_pro", categoryId: "MCO1", connectionId: "conn", connection: { siteId: "MCO" } };
+    const asked: unknown[] = [];
+    const real: FeeQuoter = async (request) => {
+      asked.push(request);
+      return { kind: "real", percentageFee: 17.5, fixedFee: 0, listingType: "gold_pro" };
+    };
+    const withQuote = await price(fakeDb(STORE, undefined, linked), { costoUnitario: 6000, parecidoA: "cuaderno argollado azul", canal: "mercadolibre" }, real);
+    expect(asked).toEqual([expect.objectContaining({ connectionId: "conn", siteId: "MCO", categoryId: "MCO1", listingType: "gold_pro" })]);
+    expect(withQuote.datos.mercadolibre).toMatchObject({ comisionReal: true, vinculado: { tipo: "gold_pro" } });
+    expect(withQuote.datos.mercadolibre?.opciones).toHaveLength(1);
+    expect(withQuote.datos.mercadolibre?.opciones[0].estimado).toMatchObject({ commissionPct: 17.5, commissionKind: "real" });
+    expect(withQuote.datos).not.toHaveProperty("cotizar");
+    const text = composePriceAnswer(withQuote);
+    expect(text).toContain("Su publicación es Premium (con cuotas extra), con la comisión real de Mercado Libre.");
+    expect(text).toContain("(17,5 %)");
+
+    const failed = await price(fakeDb(STORE, undefined, linked), { costoUnitario: 6000, parecidoA: "cuaderno argollado azul", canal: "mercadolibre" });
+    expect(failed.datos.mercadolibre).toMatchObject({ comisionReal: false });
+    expect(failed.datos.mercadolibre?.opciones[0].estimado).toMatchObject({ commissionPct: 19, commissionKind: "tipo" });
+    expect(composePriceAnswer(failed)).toContain("no pude consultar la comisión real, va la estimada.");
+  });
+
   it("sin margen mínimo lo dice; los precios de mercado de Paula dan la posición", async () => {
-    const result = await computePrice(fakeDb({ ...STORE, storeMinMarginPercent: null }), "store", { costoUnitario: 4500, subcategoria: "cuadernos", preciosMercado: [9000, 7000], canal: "tienda" });
+    const result = await price(fakeDb({ ...STORE, storeMinMarginPercent: null }), { costoUnitario: 4500, subcategoria: "cuadernos", preciosMercado: [9000, 7000], canal: "tienda" });
     const text = composePriceAnswer(result);
     expect(text).toContain("No tienes un margen mínimo configurado en Configuración.");
     expect(text).toContain("Los precios que me diste van de $7.000 a $9.000. **$8.100 queda dentro.**");

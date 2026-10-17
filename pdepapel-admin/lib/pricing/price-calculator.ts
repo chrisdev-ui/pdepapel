@@ -1,13 +1,8 @@
 // Sin dependencias de servidor: lo usan la ficha de producto (navegador) y el Copiloto.
 import { INITIAL_PERCENTAGE_INCREASE } from "@/constants";
 import { isKnownTransport } from "@/lib/product-costs";
-import {
-  getMercadoLibreMarginBreakdown,
-  MERCADOLIBRE_FEE_RATE_ESTIMATE,
-  MERCADOLIBRE_SHIPPING_ESTIMATE,
-  suggestMercadoLibrePrice,
-} from "@/lib/mercadolibre/listing-margin";
 
+import { mercadoLibreNetAt, suggestMercadoLibrePriceWithRule, type LowPriceRule, type MercadoLibreEstimate, type SaleFeeSource } from "./mercadolibre-fees";
 import { ceilPeso } from "./rounding";
 
 /** Aumento cuando no hay ningún producto con costo para comparar. */
@@ -87,57 +82,35 @@ export function productMargin({
   return { cost, shippingIncluded, marginPct, profit: Math.round((price - cost) * 100) / 100, minimum };
 }
 
-export interface MercadoLibreFeeSettings {
-  /** Cargo fijo por unidad en precios bajos (en vez del envío); null = no registrado. */
-  lowPriceFixedFee: number | null;
-  /** Precio hasta el cual se cobra el cargo fijo en vez del envío; null = no registrado. */
-  freeShippingMin: number | null;
-}
-
-export interface MercadoLibreEstimate {
-  price: number;
-  commission: number;
-  fixedFee: number;
-  shipping: number;
-  withholding: number;
-  net: number | null;
-  marginPct: number | null;
-  /** Sin los dos ajustes de Mercado Libre: el cargo fijo no se pudo incluir. */
-  withoutFixedFee: boolean;
-}
+/** Los dos ajustes de precios bajos de Configuración, con el nombre de siempre. */
+export type MercadoLibreFeeSettings = LowPriceRule;
+export type { MercadoLibreEstimate } from "./mercadolibre-fees";
 
 /**
- * Lo que deja una venta en Mercado Libre, siempre como estimado. Por encima del
- * umbral se paga la comisión estimada y el envío estimado. Hasta el umbral (con
- * los dos ajustes registrados) no hay envío a cargo de la vendedora: se cobra el
- * cargo fijo por unidad, que en precios muy bajos no pasa de la mitad del
- * precio (lo que mostraron las ventas y el simulador de la cuenta, 2026-10-17).
+ * Lo que deja una venta en Mercado Libre, siempre con la regla compartida
+ * (`lib/pricing/mercadolibre-fees.ts`). Sin fuente de comisión, la de
+ * Clásica sin cuotas extra.
  */
-export function mercadoLibreEstimate(price: number, unitCost: number | null, settings: MercadoLibreFeeSettings): MercadoLibreEstimate {
-  const configured = settings.lowPriceFixedFee !== null && settings.freeShippingMin !== null;
-  const lowPrice = configured && price <= (settings.freeShippingMin as number);
-  const fixedFee = lowPrice ? Math.min(settings.lowPriceFixedFee as number, Math.round(price / 2)) : 0;
-  const commission = Math.round(price * MERCADOLIBRE_FEE_RATE_ESTIMATE);
-  const breakdown = getMercadoLibreMarginBreakdown({ price, feeAmount: commission + fixedFee, shippingCost: lowPrice ? 0 : MERCADOLIBRE_SHIPPING_ESTIMATE, unitCost });
-  return {
-    price,
-    commission,
-    fixedFee,
-    shipping: breakdown.shipping,
-    withholding: breakdown.withholding,
-    net: breakdown.net === null ? null : Math.round(breakdown.net),
-    marginPct: breakdown.marginRate === null ? null : round1(breakdown.marginRate * 100),
-    withoutFixedFee: !configured,
-  };
+export function mercadoLibreEstimate(
+  price: number,
+  unitCost: number | null,
+  settings: MercadoLibreFeeSettings,
+  fee: SaleFeeSource = { kind: "tipo", listingType: "gold_special" },
+): MercadoLibreEstimate {
+  return mercadoLibreNetAt({ price, unitCost, fee, rule: settings });
 }
 
-/** Precio sugerido en Mercado Libre (…900) con las metas de la tienda; null si no hay precio que las cumpla. */
-export function suggestMercadoLibreStorePrice(unitCost: number, targets: { targetMarginPercent: number; minNetPerUnit: number }) {
-  return suggestMercadoLibrePrice({
+/** Precio sugerido en Mercado Libre (…900) con las metas de la tienda y la misma regla; null si no hay precio que las cumpla. */
+export function suggestMercadoLibreStorePrice(
+  unitCost: number,
+  targets: { targetMarginPercent: number; minNetPerUnit: number },
+  settings: MercadoLibreFeeSettings = { lowPriceFixedFee: null, freeShippingMin: null },
+  fee: SaleFeeSource = { kind: "tipo", listingType: "gold_special" },
+) {
+  return suggestMercadoLibrePriceWithRule({
     unitCost,
-    shippingCost: MERCADOLIBRE_SHIPPING_ESTIMATE,
-    feeRate: MERCADOLIBRE_FEE_RATE_ESTIMATE,
-    targetNet: targets.minNetPerUnit,
-    targetMarginRate: targets.targetMarginPercent / 100,
+    fee,
+    rule: settings,
+    targets: { targetNet: targets.minNetPerUnit, targetMarginRate: targets.targetMarginPercent / 100 },
   });
 }

@@ -174,7 +174,19 @@ describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada m
       (tools[name] as unknown as { execute: (input: unknown, options: unknown) => Promise<{ datos: Record<string, unknown> }> }).execute(input, { toolCallId: name, messages: [] });
 
     const price = await run("calcularPrecio", { costoUnitario: 4500, parecidoA: "componente" });
-    expect(price.datos).toMatchObject({ tienda: { minimo: { margenPct: 35 } }, mercadolibre: { estimado: { withoutFixedFee: true } } });
+    expect(price.datos).toMatchObject({ tienda: { minimo: { margenPct: 35 } }, mercadolibre: { vinculado: null } });
+    expect((price.datos.mercadolibre as { opciones: { tipo: string; estimado: { withoutFixedFee: boolean } }[] }).opciones.map((option) => [option.tipo, option.estimado.withoutFixedFee])).toEqual([
+      ["gold_special", true],
+      ["gold_pro", true],
+    ]);
+
+    // Con publicación vinculada (tipo y categoría), la consulta de la publicación también corre como copilot_ro.
+    await testPrisma.marketplaceListing.updateMany({ where: { productId: fixture!.component.id }, data: { listingType: "gold_pro", categoryId: "MCO1672" } });
+    const { computePrice } = await import("@/lib/copiloto/skills/precios-tool");
+    const { withCopilotQuery } = await import("@/lib/copiloto/db");
+    const linked = await withCopilotQuery((db) => computePrice(db, store, { costoUnitario: 4500, parecidoA: "componente", canal: "mercadolibre" }));
+    expect(linked.datos.mercadolibre).toMatchObject({ vinculado: { tipo: "gold_pro" } });
+    expect(linked.datos.cotizar).toMatchObject({ listingType: "gold_pro", categoryId: "MCO1672", siteId: "MCO" });
     expect((price.datos.parecidos as { vendidas30Dias: number }[])[0].vendidas30Dias).toBe(3);
 
     const packs = await run("compararPacks", { costoUnitario: 150, disponible: 150, tamanos: [10, 20, 30], preciosPorPack: [{ tamano: 10, precio: 8000 }] });

@@ -17,6 +17,8 @@ import {
   suggestStorePrice,
   type MercadoLibreFeeSettings,
 } from "@/lib/pricing/price-calculator";
+import { quoteMercadoLibreSaleFee, type FeeQuoter } from "@/lib/mercadolibre/fee-quote";
+import { MERCADOLIBRE_LISTING_TYPE_RATES, type KnownListingType, type SaleFeeSource } from "@/lib/pricing/mercadolibre-fees";
 import { requireStoreOwner } from "@/lib/store-access";
 
 export const PRICE_TOOL = "calcularPrecio";
@@ -157,6 +159,35 @@ async function soldLast30(db: CopilotDb, storeId: string, productIds: string[], 
 
 const markupOut = (markup: ResolvedMarkup) => ({ aumentoPct: markup.markupPct, fuente: markup.source });
 
+const LISTING_LABELS: Record<string, string> = { gold_special: "Clásica", gold_pro: "Premium" };
+
+/** La publicación vinculada a un producto (su tipo y categoría), para pedir la comisión real. */
+async function loadLinkedListing(db: CopilotDb, storeId: string, productId: string) {
+  const listing = await db.marketplaceListing.findFirst({
+    where: { productId, listingType: { not: null }, categoryId: { not: null }, connection: { storeId, provider: "MERCADOLIBRE" } },
+    select: { listingType: true, categoryId: true, connectionId: true, connection: { select: { siteId: true } } },
+  });
+  return listing ? { listingType: listing.listingType as string, categoryId: listing.categoryId as string, connectionId: listing.connectionId, siteId: listing.connection.siteId } : null;
+}
+
+type Targets = { targetMarginPercent: number; minNetPerUnit: number };
+
+/** Una opción de Mercado Libre (un tipo de publicación): precio sugerido con la regla compartida y lo que deja. */
+export function mercadoLibreOption(listingType: string, fee: SaleFeeSource, unitCost: number, storePrice: number, settings: PricingSettings) {
+  const targets: Targets = { targetMarginPercent: settings.mercadoLibreTargetMarginPercent, minNetPerUnit: settings.mercadoLibreMinNetPerUnit };
+  const price = suggestMercadoLibreStorePrice(unitCost, targets, settings, fee);
+  const rate = MERCADOLIBRE_LISTING_TYPE_RATES[listingType as KnownListingType];
+  return {
+    tipo: listingType,
+    nombre: LISTING_LABELS[listingType] ?? listingType,
+    cuotas: rate?.label ?? null,
+    fuente: fee.kind,
+    precioSugerido: price,
+    estimado: price === null ? null : mercadoLibreEstimate(price, unitCost, settings, fee),
+    muyPorEncimaDeLaTienda: price !== null && storePrice > 0 && isLowPriceForMercadoLibre(price, storePrice),
+  };
+}
+
 /** Todo el cálculo de `calcularPrecio`, sin la sesión: lo usan la herramienta y las pruebas con `copilot_ro`. */
 export async function computePrice(db: CopilotDb, storeId: string, rawInput: z.input<typeof priceInput>, now = new Date()) {
   const input = priceInput.parse(rawInput);
@@ -177,7 +208,8 @@ export async function computePrice(db: CopilotDb, storeId: string, rawInput: z.i
   const minimum = settings.minMarginPct === null ? null : priceToReachMargin(unitCost, settings.minMarginPct);
   const comparableRows = similar.length ? similar : categoryId ? candidates.filter((product) => product.categoryId === categoryId).slice(0, COMPARABLES) : [];
   const sold = await soldLast30(db, storeId, comparableRows.map((product) => product.id), now);
-  const mlPrice = input.canal === "tienda" ? null : suggestMercadoLibreStorePrice(unitCost, { targetMarginPercent: settings.mercadoLibreTargetMarginPercent, minNetPerUnit: settings.mercadoLibreMinNetPerUnit });
+  // Con publicación vinculada, su tipo (y luego la comisión real); sin publicación, las dos opciones: nunca una sola a escondidas.
+  const linked = input.canal === "tienda" || !similar[0] ? null : await loadLinkedListing(db, storeId, similar[0].id);
   const market = input.preciosMercado?.length ? [...input.preciosMercado].sort((a, b) => a - b) : null;
 
   return {
@@ -206,11 +238,12 @@ export async function computePrice(db: CopilotDb, storeId: string, rawInput: z.i
         input.canal === "tienda"
           ? null
           : {
-              precioSugerido: mlPrice,
-              estimado: mlPrice === null ? null : mercadoLibreEstimate(mlPrice, unitCost, settings),
+              vinculado: linked ? { producto: similar[0].name, tipo: linked.listingType } : null,
+              opciones: (linked ? [linked.listingType] : ["gold_special", "gold_pro"]).map((type) => mercadoLibreOption(type, { kind: "tipo", listingType: type }, unitCost, storePrice, settings)),
               metas: { margenPct: settings.mercadoLibreTargetMarginPercent, gananciaMinima: settings.mercadoLibreMinNetPerUnit },
-              muyPorEncimaDeLaTienda: mlPrice !== null && storePrice > 0 && isLowPriceForMercadoLibre(mlPrice, storePrice),
             },
+      // Para pedir la comisión real fuera de la transacción de solo lectura; no viaja al modelo.
+      cotizar: linked && input.canal !== "tienda" ? { ...linked, unitCost, storePrice, settings } : null,
       mercado: market
         ? {
             minimo: market[0],
@@ -254,14 +287,20 @@ export async function computePacks(db: CopilotDb, storeId: string, rawInput: z.i
         precioBase: base === null ? null : { tamano: base, ...markupOut(markup) },
       },
       tamanos: scenarios.map((scenario) => {
-        const ml = input.canal === "tienda" ? null : mercadoLibreEstimate(scenario.price, scenario.packCost, settings);
+        const ml =
+          input.canal === "tienda"
+            ? null
+            : (["gold_special", "gold_pro"] as const).map((type) => {
+                const estimate = mercadoLibreEstimate(scenario.price, scenario.packCost, settings, { kind: "tipo", listingType: type });
+                return { ...estimate, debajoDelPiso: estimate.net === null || estimate.net < floorNet(scenario.price) };
+              });
         return {
           ...scenario,
           sugerido: scenario.fromLadder,
           minimoTienda: settings.minMarginPct === null ? null : { margenPct: settings.minMarginPct, debajo: scenario.profitPct < settings.minMarginPct },
           complemento: shipping.mediana !== null && scenario.price < shipping.mediana,
           packsParaEnvioGratis: settings.freeShippingThreshold ? Math.ceil(settings.freeShippingThreshold / scenario.price) : null,
-          mercadolibre: ml ? { ...ml, debajoDelPiso: ml.net === null || ml.net < floorNet(scenario.price) } : null,
+          mercadolibre: ml,
         };
       }),
       recomendados: recommended,
@@ -308,18 +347,33 @@ export async function computeBelowMargin(db: CopilotDb, storeId: string, rawInpu
   };
 }
 
-export type PriceResult = Awaited<ReturnType<typeof computePrice>>;
+/**
+ * Con publicación vinculada, la comisión real de `listing_prices` reemplaza el
+ * estimado de su tipo; si no responde, se queda el estimado (y lo dice).
+ */
+export async function withRealFee(result: Awaited<ReturnType<typeof computePrice>>, quote: FeeQuoter) {
+  const { cotizar, ...datos } = result.datos;
+  const output = { ...result, datos: { ...datos, mercadolibre: datos.mercadolibre ? { ...datos.mercadolibre, comisionReal: false } : null } };
+  if (!cotizar || !output.datos.mercadolibre) return output;
+  const first = output.datos.mercadolibre.opciones[0];
+  const real = await quote({ connectionId: cotizar.connectionId, siteId: cotizar.siteId, categoryId: cotizar.categoryId, listingType: cotizar.listingType, price: first?.precioSugerido ?? cotizar.storePrice });
+  if (!real) return output;
+  output.datos.mercadolibre = { ...output.datos.mercadolibre, comisionReal: true, opciones: [mercadoLibreOption(cotizar.listingType, real, cotizar.unitCost, cotizar.storePrice, cotizar.settings)] };
+  return output;
+}
+
+export type PriceResult = Awaited<ReturnType<typeof withRealFee>>;
 export type PacksResult = Awaited<ReturnType<typeof computePacks>>;
 export type BelowMarginResult = Awaited<ReturnType<typeof computeBelowMargin>>;
 
-export function calcularPrecioTool(storeId: string) {
+export function calcularPrecioTool(storeId: string, quote: FeeQuoter = quoteMercadoLibreSaleFee) {
   return tool({
     description:
       "Precio sugerido de un producto para la tienda y Mercado Libre a partir de su costo: aumento de su subcategoría (mediana o el definido por Paula), margen, mínimo de la tienda, estimado de Mercado Libre, posición frente a los precios de mercado que dio Paula y productos parecidos de la tienda. Todo calculado en código; solo lectura.",
     inputSchema: priceInput,
     execute: async (input) => {
       await requireStoreOwner(storeId);
-      return withCopilotQuery((db) => computePrice(db, storeId, input));
+      return withRealFee(await withCopilotQuery((db) => computePrice(db, storeId, input)), quote);
     },
   });
 }

@@ -54,6 +54,9 @@ describe("Mercado Libre, siempre estimado", () => {
     expect(mercadoLibreEstimate(8000, 1500, { lowPriceFixedFee: null, freeShippingMin: null })).toEqual({
       price: 8000,
       commission: 1280,
+      commissionPct: 16,
+      commissionKind: "tipo",
+      listingType: "gold_special",
       fixedFee: 0,
       shipping: 8100,
       withholding: 120,
@@ -69,6 +72,9 @@ describe("Mercado Libre, siempre estimado", () => {
     expect(mercadoLibreEstimate(9000, 1000, settings)).toEqual({
       price: 9000,
       commission: 1440,
+      commissionPct: 16,
+      commissionKind: "tipo",
+      listingType: "gold_special",
       fixedFee: 2000,
       shipping: 0,
       withholding: 135,
