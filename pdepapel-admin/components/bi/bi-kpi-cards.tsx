@@ -111,10 +111,13 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
             </span>
           }
           value={currencyFormatter(currentMonth.total_net_profit)}
-          note={
-            currentMonth.shipping_missing_orders > 0
-              ? `frente al mes anterior · envío no registrado en ${currentMonth.shipping_missing_orders} ${currentMonth.shipping_missing_orders === 1 ? "venta" : "ventas"}: puede ser menos`
-              : "frente al mes anterior"
+          note="frente al mes anterior"
+          action={
+            currentMonth.shipping_missing_orders > 0 ? (
+              <p className="text-xs font-medium text-amber-800" data-testid="shipping-missing-note">
+                Envío no registrado en {currentMonth.shipping_missing_orders} {currentMonth.shipping_missing_orders === 1 ? "venta" : "ventas"}: lo que te quedó libre puede ser menor.
+              </p>
+            ) : undefined
           }
           icon={<Activity className="h-4 w-4" aria-hidden="true" />}
           tint="bg-tint-mint"

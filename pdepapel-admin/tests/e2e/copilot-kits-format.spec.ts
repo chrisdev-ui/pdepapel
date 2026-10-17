@@ -99,7 +99,7 @@ const datos: KitsAnswerData = {
 
 // El primer kit con los textos que el modelo manda a textosDeKits; los otros dos sin textos (la respuesta real del 2026-10-16): texto base.
 const answer = composeKitsAnswer(datos, {
-  kits: [{ n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Una libreta para tus ideas", "Útiles para el día a día"], idealPara: "regalar a quien se gradúa" }],
+  kits: [{ n: 1, nombreCorto: "Kit de grados", loQueAmaras: ["Una libreta para tus ideas y un lápiz para escribirlas", "Todo listo para el día a día"], idealPara: "regalar a quien se gradúa" }],
 });
 
 const sse = [
@@ -195,7 +195,7 @@ test.describe("respuesta de kits en el teléfono", () => {
       for (let index = 0; index < 3; index += 1) await copies.nth(index).locator("summary > span").click();
       await expect(page.getByText("120 días sin venderse, $24.000 quietos a costo")).toBeVisible();
       await expect(copy.getByText("✨ Lo que amarás")).toBeVisible();
-      await expect(copies.nth(1)).toContainText("Plumones, cuadernos y borradores en un solo kit");
+      await expect(copies.nth(1)).toContainText("Plumones para dar color, cuaderno para tus apuntes y borrador para corregir");
       await expect(copies.nth(1).locator("li")).toContainText(["Set de plumones de prueba doble punta pincel y fina 24 colores", "Cuaderno de prueba", "Borrador de prueba"]);
       await expect(copies.nth(2)).toContainText("Ideal para regalar a alguien especial");
       await expect(copies.nth(2)).not.toContainText("Plumones");
