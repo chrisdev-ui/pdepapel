@@ -1,3 +1,4 @@
+import { inheritedTransport } from "@/lib/product-costs";
 import { scrubProductGroup } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
@@ -290,6 +291,15 @@ export async function PATCH(
       // 5. Altas y cambios, fila por fila (una transacción serializable no
       //    gana nada con Promise.all y sí pierde el orden de los errores).
       const nextArchived = new Map<string, boolean | undefined>();
+      // Una variante nueva hereda el único envío real de sus hermanas activas; si no hay uno solo, «no registrado».
+      const inheritedShipping = inheritedTransport(
+        (
+          await tx.product.findMany({
+            where: { productGroupId: params.productGroupId, storeId: params.storeId, isArchived: false, isKit: false },
+            select: { transportationCost: true },
+          })
+        ).map((row) => row.transportationCost),
+      );
       for (const variant of variants) {
         const ids = variantAttributeIds(variant) as {
           sizeId: string;
@@ -380,8 +390,8 @@ export async function PATCH(
               storeId: params.storeId,
               productGroupId: params.productGroupId,
               categoryId: data.categoryId ?? attributes.categoryFallback(),
-              // Sin compra todavía: el envío por unidad nace «no registrado», no en 0.
-              transportationCost: null,
+              // Sin compra todavía: el envío de sus hermanas si tienen uno solo; si no, «no registrado», nunca 0.
+              transportationCost: inheritedShipping,
               isArchived: data.isArchived ?? false,
               isFeatured: data.isFeatured ?? false,
               price: data.price ?? 0,

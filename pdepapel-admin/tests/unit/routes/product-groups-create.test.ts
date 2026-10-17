@@ -216,6 +216,26 @@ describe("POST /product-groups", () => {
     });
   });
 
+  it("a new variant starts with the single real shipping of the adopted products, and with none on a conflict", async () => {
+    mocks.findMany.mockResolvedValue([]);
+    tx.design.findMany.mockResolvedValue([attribute("d1", "Panda"), attribute("d2", "Gato"), attribute("d3", "Oso")]);
+    const adoptable = (shipping: Record<string, number | null>) =>
+      tx.product.findMany.mockImplementationOnce(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.map((id: string) => ({ id, storeId: "store-1", name: `Cartuchera ${id}`, slug: id, sku: id, isKit: false, isArchived: false, productGroupId: null, createdAt: new Date(), transportationCost: shipping[id] ?? null })),
+      );
+    const rows = [variant({ id: "p-a", name: "Cartuchera p-a", sku: "A" }), variant({ id: "p-b", name: "Cartuchera p-b", sku: "B", designId: "d2" }), variant({ name: "Cartuchera nueva", sku: "N", designId: "d3" })];
+
+    adoptable({ "p-a": 120, "p-b": 1000 });
+    expect((await call(rows)).status).toBe(200);
+    expect(mocks.productCreate.mock.calls[0][0].data.transportationCost).toBe(120);
+
+    mocks.productCreate.mockClear();
+    adoptable({ "p-a": 120, "p-b": 150 });
+    expect((await call(rows)).status).toBe(200);
+    expect(mocks.productCreate.mock.calls[0][0].data.transportationCost).toBeNull();
+    tx.design.findMany.mockResolvedValue([attribute("d1", "Panda")]);
+  });
+
   it("writes the group photos with their scope and each variant's own photos through the gallery helpers", async () => {
     mocks.findMany.mockResolvedValue([]);
 

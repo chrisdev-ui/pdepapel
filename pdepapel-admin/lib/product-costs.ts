@@ -60,3 +60,13 @@ export function transportWarning({ transport, acqPrice, price }: { transport: nu
   return null;
 }
 
+
+/**
+ * El envío por unidad que hereda una variante de su grupo: el único valor real
+ * (ni vacío, ni 0, ni el 1.000 del relleno) entre sus hermanas activas que no
+ * son kits. Con dos valores reales distintos no se adivina: null.
+ */
+export function inheritedTransport(siblingValues: readonly (number | null | undefined)[]): number | null {
+  const real = new Set(siblingValues.filter(isKnownTransport));
+  return real.size === 1 ? Array.from(real)[0] : null;
+}

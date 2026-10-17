@@ -247,6 +247,30 @@ describe("product group integrity with MySQL", () => {
     expect(created.slug).not.toBe("");
   });
 
+  it("a new variant inherits the single real shipping of its active siblings, and none when they disagree", async () => {
+    const f = await setup();
+    const { PATCH } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");
+    const a = await createProduct(f, "Hermana A", { transportationCost: 120 });
+    const b = await createProduct(f, "Hermana B", { transportationCost: null });
+    const group = await createGroup(f, [a.id, b.id]);
+    const params = { params: { storeId: f.store.id, productGroupId: group.id } };
+    const addRow = async (name: string) => {
+      const color = await testPrisma.color.create({ data: { name, value: `${name.toLowerCase()}-${suffix()}`, storeId: f.store.id } });
+      return { color, row: { sizeId: a.sizeId, colorId: color.id, designId: a.designId, sku: `NEW-${suffix()}`, name: `Hermana ${name}`, price: "15000" } };
+    };
+
+    const first = await addRow("Lila");
+    expect((await PATCH(json("PATCH", patchBody(f, [row(a), row(b), first.row])), params)).status).toBe(200);
+    const inherited = await testPrisma.product.findFirstOrThrow({ where: { productGroupId: group.id, colorId: first.color.id } });
+    expect(inherited.transportationCost).toBe(120);
+
+    await testPrisma.product.update({ where: { id: b.id }, data: { transportationCost: 150 } });
+    const second = await addRow("Menta");
+    expect((await PATCH(json("PATCH", patchBody(f, [row(a), row(b), row(inherited), second.row])), params)).status).toBe(200);
+    const conflict = await testPrisma.product.findFirstOrThrow({ where: { productGroupId: group.id, colorId: second.color.id } });
+    expect(conflict.transportationCost).toBeNull();
+  });
+
   it("removing a variant runs the product delete guard: blocked rows are archived and named, free rows are deleted with a redirect", async () => {
     const f = await setup();
     const { PATCH } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");

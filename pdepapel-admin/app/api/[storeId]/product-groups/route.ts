@@ -1,3 +1,4 @@
+import { inheritedTransport } from "@/lib/product-costs";
 import { scrubProductGroups } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
 import { NextResponse } from "next/server";
@@ -165,6 +166,8 @@ export async function POST(
       // 2. Variantes: adoptadas (solo cambia lo que trae la fila) y nuevas
       //    (con 0 unidades; las existencias entran por Inventario).
       const archivedNow: string[] = [];
+      // Las variantes nuevas heredan el único envío real de los productos que se adoptan; si no, «no registrado».
+      const inheritedShipping = inheritedTransport(Array.from(adopted.values(), (product) => product.transportationCost));
       for (const variant of variants) {
         const ids = variantAttributeIds(variant) as {
           sizeId: string;
@@ -251,8 +254,8 @@ export async function POST(
               storeId: params.storeId,
               productGroupId: group.id,
               categoryId,
-              // Sin compra todavía: el envío por unidad nace «no registrado», no en 0.
-              transportationCost: null,
+              // Sin compra todavía: el envío de los adoptados si tienen uno solo; si no, «no registrado», nunca 0.
+              transportationCost: inheritedShipping,
               isArchived: data.isArchived ?? false,
               isFeatured: data.isFeatured ?? false,
               price: data.price ?? 0,

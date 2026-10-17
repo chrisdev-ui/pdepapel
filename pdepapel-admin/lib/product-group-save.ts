@@ -59,6 +59,7 @@ export type AdoptableClient = Pick<Prisma.TransactionClient, "product">;
 
 export const ADOPTABLE_SELECT = {
   id: true,
+  transportationCost: true,
   storeId: true,
   name: true,
   slug: true,
