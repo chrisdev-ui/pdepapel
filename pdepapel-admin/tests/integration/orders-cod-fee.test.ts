@@ -10,7 +10,7 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
 /**
  * Recaudo contra entrega (decisión 2026-10-15: lo paga la clienta, aparte
  * del envío). La tienda manda los pedidos contra entrega a POST /orders:
- * - tienda de antes (sin `codFeeShown`): se guarda como siempre, sin recaudo;
+ * - tienda de antes (sin `codFeeShown`): sin recaudo, pero el flete lo cotiza el servidor (2026-10-17);
  * - tienda nueva con el recaudo que mostró: el servidor lo recalcula con dos
  *   cotizaciones con recaudo y lo cobra; si no coincide, 409 con el total nuevo;
  * - envío gratis + contra entrega: envío 0 y recaudo aparte;
@@ -122,13 +122,76 @@ describe("recaudo contra entrega en POST /orders (MySQL)", () => {
     return order;
   };
 
-  it("tienda de antes (sin recaudo mostrado): se guarda la tarifa que mandó, sin recaudo y sin re-cotizar", async () => {
+  it("contra entrega sin recaudo mostrado: sin recaudo, con el flete y la tarifa que cotiza el servidor con recaudo", async () => {
     const f = await setup();
     const response = await post(storeOrder(f, { cost: FREIGHT }, price + FREIGHT));
     expect(response.status).toBe(200);
     const order = await saved(response);
-    expect(order).toMatchObject({ total: price + FREIGHT, shipping: { envioClickIdRate: 777, isCOD: true, cost: FREIGHT, codFee: null } });
-    expect(envioclick.quoteShipment).not.toHaveBeenCalled();
+    expect(order).toMatchObject({ total: price + FREIGHT, shipping: { envioClickIdRate: 5000 + price, isCOD: true, cost: FREIGHT, codFee: null } });
+    expect(envioclick.quoteShipment).toHaveBeenCalledTimes(1);
+    expect(envioclick.quoteShipment.mock.calls[0][0]).toMatchObject({ codValue: price });
+  });
+
+  describe("transferencia desde la tienda: el flete nunca es el que manda el cliente", () => {
+    const transfer = (f: InventoryFixture, cost: number, total: number) => ({ ...storeOrder(f, { cost, isCOD: false }, total, PaymentMethod.BankTransfer) });
+
+    it("normal: se cotiza, se guarda la tarifa del servidor y el total cuadra", async () => {
+      const f = await setup();
+      const response = await post(transfer(f, FREIGHT, price + FREIGHT));
+      expect(response.status).toBe(200);
+      const order = await saved(response);
+      expect(order).toMatchObject({ total: price + FREIGHT, shipping: { envioClickIdRate: 5000, isCOD: false, cost: FREIGHT, codFee: null } });
+      expect(envioclick.quoteShipment.mock.calls[0][0].codValue).toBeUndefined();
+    });
+
+    it("flete alterado y total a juego: 409 con la tarifa real y ningún pedido", async () => {
+      const f = await setup();
+      const response = await post(transfer(f, 1000, price + 1000));
+      expect(response.status).toBe(409);
+      const body = (await response.json()) as { details: { code: string; rate: { totalCost: number }; previousCost: number } };
+      expect(body.details).toMatchObject({ code: "SHIPPING_RATE_CHANGED", previousCost: 1000, rate: { totalCost: FREIGHT } });
+      await expect(testPrisma.order.count({ where: { storeId: f.store.id } })).resolves.toBe(0);
+    });
+
+    it("con la tarifa en una cotización vigente, un flete distinto al de esa cotización se rechaza", async () => {
+      const f = await setup();
+      await testPrisma.shippingQuote.create({
+        data: {
+          storeId: f.store.id,
+          originDaneCode: "05001000",
+          destDaneCode: customer.daneCode,
+          weight: 1,
+          declaredValue: price,
+          quotesData: [{ idRate: 777, idCarrier: 1, idProduct: 1, carrier: "ENVIA", product: "Normal", flete: FREIGHT, minimumInsurance: 0, totalCost: FREIGHT, deliveryDays: 3, isCOD: false, codCost: null }],
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      });
+      const tampered = await post(transfer(f, 1000, price + 1000));
+      expect(tampered.status).toBe(400);
+      await expect(testPrisma.order.count({ where: { storeId: f.store.id } })).resolves.toBe(0);
+
+      const honest = await post({ ...transfer(f, FREIGHT, price + FREIGHT), guestId: `guest_${randomUUID()}` });
+      expect(honest.status).toBe(200);
+      expect((await saved(honest)).shipping).toMatchObject({ envioClickIdRate: 777, cost: FREIGHT });
+      expect(envioclick.quoteShipment).not.toHaveBeenCalled();
+    });
+
+    it("envío gratis: el servidor lo aplica aunque el cliente mande un flete", async () => {
+      const f = await setup();
+      await testPrisma.store.update({ where: { id: f.store.id }, data: { freeShippingThreshold: price } });
+      const response = await post(transfer(f, 0, price));
+      expect(response.status).toBe(200);
+      expect((await saved(response)).shipping).toMatchObject({ cost: 0 });
+    });
+
+    it("«se acuerda por WhatsApp»: el pedido no cobra envío aunque el cuerpo traiga uno", async () => {
+      const f = await setup();
+      const body = { ...transfer(f, 50_000, price), shippingProvider: "MANUAL", envioClickIdRate: 0 };
+      const response = await post(body);
+      expect(response.status).toBe(200);
+      expect((await saved(response)).shipping).toMatchObject({ cost: 0 });
+      expect(envioclick.quoteShipment).not.toHaveBeenCalled();
+    });
   });
 
   it("una clienta no puede ponerse el recaudo: un `codFee` que llega de la tienda no cuenta", async () => {

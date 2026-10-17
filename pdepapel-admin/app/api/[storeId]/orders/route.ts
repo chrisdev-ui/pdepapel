@@ -10,6 +10,8 @@ import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
 import { resolveStoreCodShipping, type StoreCodShipping } from "@/lib/cod-shipping";
+import { resolveStoreShippingRate } from "@/lib/store-shipping-quote";
+
 import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -78,6 +80,19 @@ import {
 } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
+
+type StoreFreight = {
+  idRate: number;
+  idCarrier: number | null;
+  idProduct: number | null;
+  carrier: string;
+  product: string;
+  flete: number;
+  minimumInsurance: number;
+  deliveryDays: number;
+  isCOD: boolean;
+  cost: number;
+};
 
 type OrderData = {
   storeId: string;
@@ -423,32 +438,77 @@ async function createOrder(
         ? Math.round(sentCodFee)
         : null;
     let storeCod: StoreCodShipping | null = null;
-    if (
-      !isStoreOwner &&
+    // Pedido de la tienda con EnvioClick (transferencia, o contra entrega sin
+    // `codFeeShown`): el flete sale de una cotización vigente o nueva, nunca
+    // del monto que manda quien compra (`resolveStoreShippingRate`, el mismo
+    // de /checkout). El total que mandó se compara después con ese flete.
+    let storeFreight: StoreFreight | null = null;
+    const storeEnvioClick = !isStoreOwner && normalizedShippingProvider === ShippingProvider.ENVIOCLICK;
+    const storeCodWithFee =
+      storeEnvioClick &&
       payment?.method === PaymentMethod.COD &&
-      normalizedShippingProvider === ShippingProvider.ENVIOCLICK &&
       typeof sentCodFeeShown === "number" &&
       Number.isFinite(sentCodFeeShown) &&
-      sentCodFeeShown >= 0
-    ) {
-      const lines = orderItems
+      sentCodFeeShown >= 0;
+    const storeLines = (): { productId: string; quantity: number }[] =>
+      orderItems
         .filter((item: { productId: string | null }) => Boolean(item.productId))
         .map((item: { productId: string; quantity?: number }) => ({ productId: item.productId, quantity: Number(item.quantity) || 1 }));
+    const storePricing = async (lines: { productId: string; quantity: number }[]) => {
       const products = await processOrderItemsInBatches(lines, params.storeId, BATCH_SIZE);
       const priceOf = new Map(products.map((product) => [product.id, Number(product.price)]));
       const priced = await priceLines(params.storeId, lines, products);
-      const pricedItems = lines.map((line: { productId: string; quantity: number }) => ({
+      const pricedItems = lines.map((line) => ({
         product: { price: priced.get(line.productId)?.unitPrice ?? priceOf.get(line.productId) ?? 0 },
         quantity: line.quantity,
       }));
-      const couponConfig = coupon ? { type: coupon.type as DiscountType, amount: coupon.amount } : undefined;
       const storeSettings = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { freeShippingThreshold: true } });
+      return { pricedItems, freeShipping: qualifiesForFreeShipping(calculateOrderTotals(pricedItems).subtotal, storeSettings?.freeShippingThreshold) };
+    };
+    if (storeEnvioClick && !storeCodWithFee) {
+      const rateId = Number(envioClickIdRate || shippingFields.idRate) || 0;
+      if (!rateId) throw ErrorFactory.InvalidRequest("Debe seleccionar un método de envío");
+      const lines = storeLines();
+      const { pricedItems, freeShipping } = await storePricing(lines);
+      const rate = await resolveStoreShippingRate({
+        storeId: params.storeId,
+        items: lines,
+        daneCode,
+        address,
+        contentValue: calculateOrderTotals(pricedItems).subtotal,
+        rateId,
+        wantsCOD: payment?.method === PaymentMethod.COD,
+        freeShipping,
+        previous: {
+          cost: typeof shippingFields.cost === "number" ? shippingFields.cost : null,
+          carrier: (shippingFields.carrierName as string) || (shippingFields.courier as string),
+          product: shippingFields.productName as string,
+        },
+        logTag: "[ORDERS_POST]",
+      });
+      storeFreight = {
+        idRate: rate.idRate,
+        idCarrier: rate.idCarrier ?? null,
+        idProduct: rate.idProduct ?? null,
+        carrier: rate.carrier,
+        product: rate.product,
+        flete: freeShipping ? 0 : rate.flete,
+        minimumInsurance: freeShipping ? 0 : rate.minimumInsurance,
+        deliveryDays: Number(rate.deliveryDays) || 0,
+        isCOD: Boolean(rate.isCOD),
+        cost: freeShipping ? 0 : rate.totalCost,
+      };
+    }
+    if (storeCodWithFee) {
+      const lines = storeLines();
+      const { pricedItems, freeShipping } = await storePricing(lines);
+      const couponConfig = coupon ? { type: coupon.type as DiscountType, amount: coupon.amount } : undefined;
       storeCod = await resolveStoreCodShipping({
         storeId: params.storeId,
         items: lines,
         destination: { daneCode, address },
         amountBeforeShipping: calculateOrderTotals(pricedItems, { coupon: couponConfig }).total,
-        freeShipping: qualifiesForFreeShipping(calculateOrderTotals(pricedItems).subtotal, storeSettings?.freeShippingThreshold),
+        freeShipping,
         chosen: {
           carrier: (shippingFields.carrierName as string) || (shippingFields.courier as string),
           product: shippingFields.productName as string,
@@ -458,7 +518,15 @@ async function createOrder(
       });
     }
     const codFee = storeCod?.codFee ?? ownerCodFee;
-    const shippingCostCharged = storeCod ? storeCod.cost : Number(shippingFields.cost) || 0;
+    // Envío «se acuerda por WhatsApp» desde la tienda: no se cobra en el pedido, diga lo que diga el cuerpo.
+    const storeManualShipping = !isStoreOwner && normalizedShippingProvider === ShippingProvider.MANUAL;
+    const shippingCostCharged = storeCod
+      ? storeCod.cost
+      : storeFreight
+        ? storeFreight.cost
+        : storeManualShipping
+          ? 0
+          : Number(shippingFields.cost) || 0;
 
     let issuedGiftCard: IssuedGiftCard | null = null;
     // La caché se purga después del commit (ver b433abe4): dentro de la
@@ -708,6 +776,19 @@ async function createOrder(
         orderData.shipping = {
           create: {
             ...shippingFields,
+            ...(storeManualShipping && { cost: 0, flete: 0 }),
+            ...(storeFreight && {
+              carrierId: storeFreight.idCarrier,
+              carrierName: storeFreight.carrier,
+              courier: storeFreight.carrier,
+              productId: storeFreight.idProduct,
+              productName: storeFreight.product,
+              flete: storeFreight.flete,
+              minimumInsurance: storeFreight.minimumInsurance,
+              deliveryDays: storeFreight.deliveryDays,
+              isCOD: storeFreight.isCOD,
+              cost: storeFreight.cost,
+            }),
             ...(storeCod && {
               carrierId: storeCod.idCarrier,
               carrierName: storeCod.carrier,
@@ -723,7 +804,7 @@ async function createOrder(
             codFee: codShipment ? codFee : null,
             status: ShippingStatus.Preparing, // Always start with Preparing
             provider: normalizedShippingProvider,
-            envioClickIdRate: storeCod?.idRate ?? (envioClickIdRate || null),
+            envioClickIdRate: storeCod?.idRate ?? storeFreight?.idRate ?? (envioClickIdRate || null),
             storeId: params.storeId,
           },
         };

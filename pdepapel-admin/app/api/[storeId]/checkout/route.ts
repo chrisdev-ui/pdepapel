@@ -23,18 +23,7 @@ import {
 import { priceLines } from "@/lib/product-pricing";
 import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
-import {
-  requoteCartShipping,
-  type RequotedRate,
-} from "@/lib/shipping-helpers";
-import {
-  SHIPPING_RATE_INCIDENT,
-  countIncident,
-} from "@/lib/incident-counter";
-import {
-  readCachedRates,
-  reconcileShippingRate,
-} from "@/lib/shipping-rate-reconcile";
+import { resolveStoreShippingRate } from "@/lib/store-shipping-quote";
 import { verifyEarlyAccessToken } from "@/lib/early-access";
 import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
 import {
@@ -123,82 +112,6 @@ export async function OPTIONS(req: Request) {
 }
 
 /** A retried checkout (timeout, double tap) replays the order it already created. */
-/**
- * Qué hacer con la tarifa después de re-cotizar.
- *
- * Antes se buscaba por `idRate` y, si no aparecía, se caía la compra entera.
- * El `idRate` cambia cuando cambian las medidas del paquete, así que bastaba
- * que la re-cotización calculara un peso ligeramente distinto al de la
- * cotización original para dejar a la clienta sin salida.
- *
- * Ahora manda el servicio: misma transportadora y mismo producto. Si el precio
- * es el de antes (o casi), se sigue sin interrumpir. Si cambió de verdad, se
- * devuelve 409 con la tarifa nueva para que la tienda la enseñe y la clienta
- * decida —una subida de precio no se cuela sin que la vea—.
- */
-function resolveRequotedRate(input: {
-  rateId: number;
-  freshRates: RequotedRate[];
-  previousCost: number | null;
-  previousCarrier?: string | null;
-  previousProduct?: string | null;
-  storeId: string;
-  daneCode: string;
-  /** Contra entrega: `freshRates` ya trae solo tarifas que recaudan. */
-  codRequired?: boolean;
-}): RequotedRate {
-  const result = reconcileShippingRate(input);
-
-  if (result.outcome === "same") {
-    console.log(
-      `✅ Re-cotizado ${input.rateId} → ${result.rate.idRate}: ${result.rate.carrier}, ${currencyFormatter(result.rate.totalCost)}`,
-    );
-    return result.rate;
-  }
-
-  // No se espera: si empieza a pasar seguido, que se note en el log.
-  void countIncident({
-    ...SHIPPING_RATE_INCIDENT,
-    context: { daneCode: input.daneCode, outcome: result.outcome },
-  });
-
-  if (result.outcome === "price_changed") {
-    console.warn("[ORDER_CHECKOUT] El envío cambió de precio al re-cotizar", {
-      storeId: input.storeId,
-      daneCode: input.daneCode,
-      carrier: result.rate.carrier,
-      antes: result.previousCost,
-      ahora: result.rate.totalCost,
-    });
-    throw new AppError(
-      `El envío con ${result.rate.carrier} cambió a ${currencyFormatter(result.rate.totalCost)}. Confírmalo para continuar.`,
-      409,
-      {
-        code: "SHIPPING_RATE_CHANGED",
-        rate: result.rate,
-        previousCost: result.previousCost,
-      },
-    );
-  }
-
-  console.error("[ORDER_CHECKOUT] La transportadora elegida ya no cubre el destino", {
-    storeId: input.storeId,
-    daneCode: input.daneCode,
-    rateId: input.rateId,
-    alternativas: result.alternatives.length,
-  });
-  throw new AppError(
-    input.codRequired
-      ? COD_UNAVAILABLE_MESSAGE
-      : "Esa transportadora ya no tiene cobertura para tu dirección. Elige otra opción de envío.",
-    409,
-    { code: "SHIPPING_RATE_UNAVAILABLE", alternatives: result.alternatives },
-  );
-}
-
-/** Contra entrega y la transportadora elegida no recauda en ese destino. */
-const COD_UNAVAILABLE_MESSAGE =
-  "La transportadora que elegiste no recibe pago contra entrega en tu ciudad. Elige otra que sí lo haga o paga en línea.";
 
 export async function POST(
   req: Request,
@@ -443,19 +356,6 @@ async function createCheckout(
     if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
       throw ErrorFactory.OrderLimit();
 
-    // ⭐ Unified System: Fetch Existing Quote Early (if applicable)
-    // Try to validate against cache (security check)
-    const shippingCaches = await prismadb.shippingQuote.findMany({
-      where: {
-        storeId: params.storeId,
-        destDaneCode: daneCode,
-        expiresAt: { gte: new Date() },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
     const fallbackQuote = {
       ...shipping,
       provider: isCustomShipping ? "CUSTOM" : ShippingProvider.ENVIOCLICK,
@@ -474,71 +374,24 @@ async function createCheckout(
 
     let selectedQuote: any = fallbackQuote; // Default to provided shipping data (normalized)
 
-    // If we have active caches, try to validate (only for ENVIOCLICK rates)
+    // La tarifa sale de una cotización vigente o de una nueva (`resolveStoreShippingRate`), nunca del cliente.
     // Contra entrega: la guía solo sale con un idRate cotizado con recaudo
     // (EnvioClick rechaza el resto con «idRate no válido para COD»). La caché
     // solo guarda cotizaciones sin recaudo, así que no sirve aquí: se
     // re-cotiza con recaudo y se queda una tarifa que recaude. Lo que paga la
     // clienta sigue siendo flete + seguro.
     const wantsCOD = payment.method === PaymentMethod.COD && !isCustomShipping;
-    const requoteForCheckout = async () => {
-      let freshRates: Awaited<ReturnType<typeof requoteCartShipping>>;
-      try {
-        freshRates = await requoteCartShipping({
-          storeId: params.storeId,
-          items: typedOrderItems,
-          destination: { daneCode, address },
-          contentValue: Number(subtotal) || 0,
-          ...(wantsCOD && { cod: { value: Number(subtotal) || 0 } }),
-        });
-      } catch (quoteError) {
-        console.error("[ORDER_CHECKOUT] Re-cotización fallida:", quoteError);
-        throw ErrorFactory.InvalidRequest(
-          "No pudimos confirmar el costo de envío en este momento. Solicita una nueva cotización e inténtalo de nuevo.",
-        );
-      }
-      return resolveRequotedRate({
-        rateId,
-        freshRates: wantsCOD ? freshRates.filter((rate) => rate.isCOD) : freshRates,
-        previousCost: shipping.cost ?? null,
-        previousCarrier: shipping.carrierName || shipping.courier,
-        previousProduct: shipping.productName,
+    if (!isCustomShipping) {
+      selectedQuote = await resolveStoreShippingRate({
         storeId: params.storeId,
+        items: typedOrderItems,
         daneCode,
-        codRequired: wantsCOD,
+        address,
+        contentValue: Number(subtotal) || 0,
+        rateId,
+        wantsCOD,
+        previous: { cost: shipping.cost ?? null, carrier: shipping.carrierName || shipping.courier, product: shipping.productName },
       });
-    };
-
-    if (!isCustomShipping && shippingCaches && shippingCaches.length > 0) {
-      for (const cache of shippingCaches) {
-        const quotes = readCachedRates(cache.quotesData);
-        const found = quotes.find((q) => q.idRate === rateId);
-
-        if (found && (!wantsCOD || found.isCOD)) {
-          selectedQuote = found;
-          break;
-        }
-      }
-
-      // La tarifa no está en la caché (cotización vencida, o alguien mandando
-      // un número inventado). Se cotiza contra la transportadora en vez de
-      // creerle al cliente: el costo de envío no lo pone quien compra.
-      if (selectedQuote === fallbackQuote) {
-        console.warn(
-          `⚠️ Rate ID ${rateId} not found in active caches for store ${params.storeId}. Re-cotizando.`,
-        );
-        selectedQuote = await requoteForCheckout();
-      } else {
-        console.log(
-          `✅ Using cached quote for rate ID ${rateId}, carrier: ${selectedQuote.carrier}, cost: ${currencyFormatter(selectedQuote.totalCost)}`,
-        );
-      }
-    } else if (!isCustomShipping) {
-      // Sin ninguna caché para ese destino: mismo criterio, se cotiza.
-      console.warn(
-        `⚠️ No active shipping caches for daneCode ${daneCode}, store ${params.storeId}. Re-cotizando.`,
-      );
-      selectedQuote = await requoteForCheckout();
     }
 
     // Ensure selectedQuote has required fields
