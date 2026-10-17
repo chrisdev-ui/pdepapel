@@ -45,6 +45,48 @@ export function priceToReachMargin(cost: number, marginPct: number): number | nu
   return ceilPeso(cost / (1 - marginPct / 100));
 }
 
+export interface ProductMargin {
+  /** Costo por unidad usado: compra (o piezas del kit) + envío por unidad si es real. */
+  cost: number;
+  /** El envío por unidad entró al costo; false si no está registrado (el margen real puede ser menor). */
+  shippingIncluded: boolean;
+  marginPct: number;
+  profit: number;
+  /** Margen mínimo de la tienda; null si no hay mínimo configurado. */
+  minimum: { marginPct: number; price: number | null; below: boolean } | null;
+}
+
+/**
+ * Margen bruto de un producto sobre su precio, con la misma definición que el
+ * precio sugerido y el Copiloto: (precio − compra − envío por unidad) ÷ precio.
+ * Un kit usa el costo de sus piezas. Sin costo de compra no hay margen (null).
+ */
+export function productMargin({
+  price,
+  acqPrice,
+  transportationCost,
+  kitCost = null,
+  minMarginPct = null,
+}: {
+  price: number;
+  acqPrice: number | null | undefined;
+  transportationCost: number | null | undefined;
+  kitCost?: number | null;
+  minMarginPct?: number | null;
+}): ProductMargin | null {
+  if (!(price > 0)) return null;
+  const purchase = kitCost ?? acqPrice ?? null;
+  if (typeof purchase !== "number" || !(purchase > 0)) return null;
+  const shippingIncluded = kitCost === null && isKnownTransport(transportationCost);
+  const cost = purchase + (shippingIncluded ? (transportationCost as number) : 0);
+  const marginPct = marginOnPrice(price, cost) as number;
+  const minimum =
+    typeof minMarginPct === "number" && Number.isFinite(minMarginPct)
+      ? { marginPct: minMarginPct, price: priceToReachMargin(cost, minMarginPct), below: (price - cost) / price < minMarginPct / 100 }
+      : null;
+  return { cost, shippingIncluded, marginPct, profit: Math.round((price - cost) * 100) / 100, minimum };
+}
+
 export interface MercadoLibreFeeSettings {
   /** Cargo fijo por unidad en precios bajos (en vez del envío); null = no registrado. */
   lowPriceFixedFee: number | null;

@@ -97,7 +97,7 @@ import {
 } from "@/components/ui/tooltip";
 import { INITIAL_PERCENTAGE_INCREASE, Models } from "@/constants";
 import type { MarkupMap } from "@/lib/pricing/category-markup";
-import { landedCost, suggestStorePrice } from "@/lib/pricing/price-calculator";
+import { landedCost, productMargin, suggestStorePrice } from "@/lib/pricing/price-calculator";
 import { generateSizeName, generateSizeValue } from "@/constants/sizes";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useFormPersist } from "@/hooks/use-form-persist";
@@ -298,6 +298,8 @@ interface ProductFormProps {
   reservationDefaultDays?: number;
   /** Aumento sugerido por subcategoría (mediana o el definido por Paula); null en solo lectura. */
   markups?: MarkupMap | null;
+  /** Margen mínimo de la tienda (Configuración); null = sin mínimo. */
+  storeMinMarginPercent?: number | null;
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -322,6 +324,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   activeOffers = [],
   reservationDefaultDays = 3,
   markups = null,
+  storeMinMarginPercent = null,
 }) => {
   const canWrite = useCanWrite();
   const [reserveOpen, setReserveOpen] = useState(false);
@@ -584,13 +587,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     [watchedComponents],
   );
 
-  /** Margen real sobre el precio de venta. */
-  const marginPct = useMemo(() => {
-    const price = Number(watchedPrice) || 0;
-    if (price <= 0) return null;
-    const cost = watchedIsKit ? kitComponentCost : Number(watchedAcqPrice) || 0;
-    return ((price - cost) / price) * 100;
-  }, [watchedPrice, watchedIsKit, kitComponentCost, watchedAcqPrice]);
+  // El mismo margen que el precio sugerido y el Copiloto: compra + envío por unidad.
+  const margin = useMemo(
+    () =>
+      productMargin({
+        price: Number(watchedPrice) || 0,
+        acqPrice: Number(watchedAcqPrice) || null,
+        transportationCost: watchedTransportationCost,
+        kitCost: watchedIsKit ? kitComponentCost : null,
+        minMarginPct: storeMinMarginPercent,
+      }),
+    [watchedPrice, watchedAcqPrice, watchedTransportationCost, watchedIsKit, kitComponentCost, storeMinMarginPercent],
+  );
 
   // La misma función que el Copiloto: (costo + envío por unidad) × (1 + aumento), al peso.
   // Solo se escribe con el botón; el precio nunca se recalcula solo.
@@ -1760,17 +1768,24 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           onChange={field.onChange}
                         />
                       </FormControl>
-                      {marginPct !== null && !priceBelowCost && (
-                        <FormDescription className="font-semibold text-primary">
-                          Margen {marginPct.toFixed(1)} % ·{" "}
-                          {currencyFormatter(
-                            (Number(watchedPrice) || 0) -
-                              (watchedIsKit
-                                ? kitComponentCost
-                                : Number(watchedAcqPrice) || 0),
-                          )}{" "}
-                          por unidad
-                        </FormDescription>
+                      {margin && !priceBelowCost && (
+                        <div className="space-y-1" data-testid="product-margin">
+                          <FormDescription className={cn("font-semibold", margin.profit < 0 ? "text-destructive" : "text-primary")}>
+                            {margin.profit < 0
+                              ? `Con el envío pierdes ${currencyFormatter(-margin.profit)} por unidad`
+                              : `Margen ${margin.marginPct.toLocaleString("es-CO")} % · ganas ${currencyFormatter(margin.profit)} por unidad`}
+                            {margin.shippingIncluded ? " (con envío)" : ""}
+                          </FormDescription>
+                          {!margin.shippingIncluded && !watchedIsKit && (
+                            <FormDescription className="text-xs">Envío no registrado: el margen real puede ser menor.</FormDescription>
+                          )}
+                          {margin.minimum?.below && margin.profit >= 0 && (
+                            <FormDescription className="text-xs font-medium text-amber-800">
+                              Por debajo del margen mínimo de la tienda ({margin.minimum.marginPct.toLocaleString("es-CO")} %)
+                              {margin.minimum.price !== null ? `: para llegar, ${currencyFormatter(margin.minimum.price)}.` : "."}
+                            </FormDescription>
+                          )}
+                        </div>
                       )}
                       {priceBelowCost && (
                         <FormDescription className="font-semibold text-destructive">

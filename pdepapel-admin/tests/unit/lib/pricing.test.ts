@@ -9,6 +9,7 @@ import {
   marginOnPrice,
   mercadoLibreEstimate,
   priceToReachMargin,
+  productMargin,
   suggestStorePrice,
 } from "@/lib/pricing/price-calculator";
 import { roundDown900, roundUp900 } from "@/lib/pricing/rounding";
@@ -229,3 +230,30 @@ describe("productos por debajo de un margen", () => {
     ]);
   });
 });
+
+describe("margen de la ficha: la misma definición que el precio sugerido", () => {
+  it("costo = compra + envío por unidad; el mínimo de la tienda dice si queda debajo y a qué precio llega", () => {
+    expect(productMargin({ price: 1000, acqPrice: 500, transportationCost: 100, minMarginPct: 40 })).toEqual({
+      cost: 600,
+      shippingIncluded: true,
+      marginPct: 40,
+      profit: 400,
+      minimum: { marginPct: 40, price: 1000, below: false },
+    });
+    expect(productMargin({ price: 900, acqPrice: 500, transportationCost: 100, minMarginPct: 40 })).toMatchObject({ marginPct: 33.3, profit: 300, minimum: { below: true, price: 1000 } });
+  });
+
+  it("sin envío registrado (null, 0 o el 1.000 heredado) calcula con la compra y lo dice", () => {
+    for (const transportationCost of [null, 0, 1000, undefined]) {
+      expect(productMargin({ price: 1000, acqPrice: 500, transportationCost })).toMatchObject({ cost: 500, shippingIncluded: false, marginPct: 50, minimum: null });
+    }
+  });
+
+  it("un kit usa el costo de sus piezas; sin costo o sin precio no hay margen; con pérdida el margen es negativo", () => {
+    expect(productMargin({ price: 1000, acqPrice: null, transportationCost: 100, kitCost: 700 })).toMatchObject({ cost: 700, shippingIncluded: false, marginPct: 30 });
+    expect(productMargin({ price: 1000, acqPrice: null, transportationCost: null })).toBeNull();
+    expect(productMargin({ price: 0, acqPrice: 500, transportationCost: null })).toBeNull();
+    expect(productMargin({ price: 550, acqPrice: 500, transportationCost: 100 })).toMatchObject({ profit: -50, marginPct: -9.1 });
+  });
+});
+

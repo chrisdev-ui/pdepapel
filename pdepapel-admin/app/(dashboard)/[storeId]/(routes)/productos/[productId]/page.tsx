@@ -40,7 +40,7 @@ export default async function ProductPage({
   } = await getProduct(params.productId, params.storeId);
 
   if (!product && params.productId !== NEW_PRODUCT_SEGMENT) notFound();
-  const store = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { reservationDefaultDays: true } });
+  const store = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { reservationDefaultDays: true, storeMinMarginPercent: true } });
 
   // «Duplicar» desde la lista o la ficha: siembra el formulario de creación.
   const seed =
@@ -71,6 +71,7 @@ export default async function ProductPage({
             storeUrl={env.FRONTEND_STORE_URL}
             reservationDefaultDays={store?.reservationDefaultDays ?? 3}
             markups={markups}
+            storeMinMarginPercent={store?.storeMinMarginPercent ?? null}
           />
         </div>
         <ProductWorkspaceAside product={product} storeId={params.storeId} />
