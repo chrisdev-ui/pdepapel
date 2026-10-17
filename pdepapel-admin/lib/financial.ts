@@ -167,6 +167,8 @@ export async function calculateOrderFinancials(
   paymentMethod: PaymentMethod | string | undefined,
   shippingCost: number,
   prismadb: any,
+  /** `purchaseOnly`: costo solo de compra (el relleno de pedidos viejos, `lib/order-financials-backfill.ts`). */
+  options: { purchaseOnly?: boolean } = {},
 ): Promise<FinancialMetrics> {
   // La pasarela cobra sobre lo que pasó por ella: el total menos lo que
   // cubrió una tarjeta de regalo.
@@ -189,6 +191,7 @@ export async function calculateOrderFinancials(
   }
 
   const costs = await calculateProductCosts(order.orderItems, prismadb);
+  if (options.purchaseOnly) Object.assign(costs, { shipping: 0, shippingMissing: true });
   const totalProductCost = costs.purchase + costs.shipping;
 
   // order.total is the gross amount paid by the customer (subtotal - discount + shipping)
@@ -213,12 +216,10 @@ export async function calculateOrderFinancials(
  * Falls back to dynamic calculation if netProfit is null or missing in DB.
  */
 export function getOrderNetProfit(order: any): number {
-  if (
-    order.netProfit !== null &&
-    order.netProfit !== undefined &&
-    !isNaN(Number(order.netProfit)) &&
-    Number(order.netProfit) !== 0
-  ) {
+  const stored = order.netProfit !== null && order.netProfit !== undefined && !isNaN(Number(order.netProfit));
+  // Un 0 guardado junto con su costo es un pedido sin ganancia, no un dato faltante.
+  const costSaved = order.totalProductCost !== null && order.totalProductCost !== undefined;
+  if (stored && (Number(order.netProfit) !== 0 || costSaved)) {
     return Number(order.netProfit);
   }
 

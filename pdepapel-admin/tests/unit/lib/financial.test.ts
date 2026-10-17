@@ -184,6 +184,34 @@ describe("financial helpers", () => {
     expect(getProductUnitShipping(kit(null))).toBeNull();
   });
 
+  it("una ganancia guardada de 0 con su costo es un pedido sin ganancia; NULL es lo único que falta", () => {
+    const base = {
+      total: 100000,
+      payment: { method: PaymentMethod.BankTransfer },
+      shipping: { cost: 10000 },
+      orderItems: [{ product: { acqPrice: 20000 }, quantity: 2 }],
+    };
+    // Con costo guardado, el 0 vale tal cual: no se recalcula con el costo de hoy.
+    expect(getOrderNetProfit({ ...base, netProfit: 0, totalProductCost: 90000 })).toBe(0);
+    // Sin ganancia guardada: se calcula con el costo guardado, o con el de los productos si tampoco está.
+    expect(getOrderNetProfit({ ...base, netProfit: null, totalProductCost: 50000 })).toBe(40000);
+    expect(getOrderNetProfit({ ...base, netProfit: null, totalProductCost: null })).toBe(50000);
+    // Un 0 sin costo guardado sigue siendo un dato faltante (pedidos viejos).
+    expect(getOrderNetProfit({ ...base, netProfit: 0, totalProductCost: null })).toBe(50000);
+  });
+
+  it("solo compra (el relleno de pedidos viejos): no suma el envío por unidad", async () => {
+    const prismadb = {
+      product: { findMany: vi.fn().mockResolvedValue([{ id: "p", acqPrice: 10000, transportationCost: 500, isKit: false, kitComponents: [] }]) },
+    };
+    const order = { total: 40000, orderItems: [{ productId: "p", quantity: 2 }] } as any;
+    await expect(calculateOrderFinancials(order, PaymentMethod.BankTransfer, 5000, prismadb, { purchaseOnly: true })).resolves.toMatchObject({
+      totalProductCost: 20000,
+      productShippingCost: 0,
+      netProfit: 15000,
+    });
+  });
+
   it("uses stored profit when available and computes a reliable fallback otherwise", () => {
     expect(getOrderNetProfit({ netProfit: "24000" })).toBe(24000);
     expect(
