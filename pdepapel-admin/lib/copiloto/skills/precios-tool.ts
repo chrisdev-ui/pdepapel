@@ -163,10 +163,16 @@ const LISTING_LABELS: Record<string, string> = { gold_special: "Clásica", gold_
 
 /** La publicación vinculada a un producto (su tipo y categoría), para pedir la comisión real. */
 async function loadLinkedListing(db: CopilotDb, storeId: string, productId: string) {
-  const listing = await db.marketplaceListing.findFirst({
-    where: { productId, listingType: { not: null }, categoryId: { not: null }, connection: { storeId, provider: "MERCADOLIBRE" } },
-    select: { listingType: true, categoryId: true, connectionId: true, connection: { select: { siteId: true } } },
-  });
+  // Sin el permiso de esas columnas (archivo de permisos aún sin aplicar) se responde como sin publicación: las dos opciones.
+  const listing = await db.marketplaceListing
+    .findFirst({
+      where: { productId, listingType: { not: null }, categoryId: { not: null }, connection: { storeId, provider: "MERCADOLIBRE" } },
+      select: { listingType: true, categoryId: true, connectionId: true, connection: { select: { siteId: true } } },
+    })
+    .catch((error: unknown) => {
+      console.warn("[COPILOTO_PRECIOS] publicación vinculada no disponible", error instanceof Error ? error.message.slice(0, 120) : "error");
+      return null;
+    });
   return listing ? { listingType: listing.listingType as string, categoryId: listing.categoryId as string, connectionId: listing.connectionId, siteId: listing.connection.siteId } : null;
 }
 

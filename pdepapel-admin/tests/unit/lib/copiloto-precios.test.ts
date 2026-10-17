@@ -176,6 +176,16 @@ describe("calcularPrecio", () => {
     expect(composePriceAnswer(failed)).toContain("no pude consultar la comisión real, va la estimada.");
   });
 
+  it("si la consulta de la publicación falla (permiso sin aplicar), responde con las dos opciones en vez de fallar", async () => {
+    const db = fakeDb();
+    (db as unknown as { marketplaceListing: { findFirst: () => Promise<never> } }).marketplaceListing.findFirst = async () => {
+      throw new Error("SELECT command denied to user 'copilot_ro'");
+    };
+    const result = await price(db, { costoUnitario: 6000, parecidoA: "cuaderno argollado azul", canal: "mercadolibre" });
+    expect(result.datos.mercadolibre?.vinculado).toBeNull();
+    expect(result.datos.mercadolibre?.opciones.map((option) => option.tipo)).toEqual(["gold_special", "gold_pro"]);
+  });
+
   it("sin margen mínimo lo dice; los precios de mercado de Paula dan la posición", async () => {
     const result = await price(fakeDb({ ...STORE, storeMinMarginPercent: null }), { costoUnitario: 4500, subcategoria: "cuadernos", preciosMercado: [9000, 7000], canal: "tienda" });
     const text = composePriceAnswer(result);
