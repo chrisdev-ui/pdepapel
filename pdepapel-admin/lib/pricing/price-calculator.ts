@@ -49,6 +49,12 @@ export interface ProductMargin {
   profit: number;
   /** Margen mínimo de la tienda; null si no hay mínimo configurado. */
   minimum: { marginPct: number; price: number | null; below: boolean } | null;
+  /**
+   * Regla del guardado (aprobada 2026-10-17): por debajo de la compra se
+   * bloquea (`isPriceBelowCost`); entre la compra y compra + envío es solo un
+   * aviso («Con el envío, este precio queda por debajo del costo»).
+   */
+  belowCostWithShipping: boolean;
 }
 
 /**
@@ -79,7 +85,7 @@ export function productMargin({
     typeof minMarginPct === "number" && Number.isFinite(minMarginPct)
       ? { marginPct: minMarginPct, price: priceToReachMargin(cost, minMarginPct), below: (price - cost) / price < minMarginPct / 100 }
       : null;
-  return { cost, shippingIncluded, marginPct, profit: Math.round((price - cost) * 100) / 100, minimum };
+  return { cost, shippingIncluded, marginPct, profit: Math.round((price - cost) * 100) / 100, minimum, belowCostWithShipping: price >= purchase && price < cost };
 }
 
 /** Los dos ajustes de precios bajos de Configuración, con el nombre de siempre. */

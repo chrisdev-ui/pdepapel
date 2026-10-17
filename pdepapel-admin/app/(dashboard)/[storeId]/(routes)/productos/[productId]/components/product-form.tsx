@@ -1770,12 +1770,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </FormControl>
                       {margin && !priceBelowCost && (
                         <div className="space-y-1" data-testid="product-margin">
-                          <FormDescription className={cn("font-semibold", margin.profit < 0 ? "text-destructive" : "text-primary")}>
-                            {margin.profit < 0
-                              ? `Con el envío pierdes ${currencyFormatter(-margin.profit)} por unidad`
-                              : `Margen ${margin.marginPct.toLocaleString("es-CO")} % · ganas ${currencyFormatter(margin.profit)} por unidad`}
-                            {margin.shippingIncluded ? " (con envío)" : ""}
-                          </FormDescription>
+                          {margin.belowCostWithShipping ? (
+                            <FormDescription className="font-semibold text-amber-800">
+                              Con el envío, este precio queda por debajo del costo: pierdes {currencyFormatter(-margin.profit)} por unidad. Puedes guardarlo.
+                            </FormDescription>
+                          ) : (
+                            <FormDescription className={cn("font-semibold", margin.profit < 0 ? "text-destructive" : "text-primary")}>
+                              {`Margen ${margin.marginPct.toLocaleString("es-CO")} % · ganas ${currencyFormatter(margin.profit)} por unidad`}
+                              {margin.shippingIncluded ? " (con envío)" : ""}
+                            </FormDescription>
+                          )}
                           {!margin.shippingIncluded && !watchedIsKit && (
                             <FormDescription className="text-xs">Envío no registrado: el margen real puede ser menor.</FormDescription>
                           )}

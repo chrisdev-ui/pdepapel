@@ -245,6 +245,7 @@ describe("margen de la ficha: la misma definición que el precio sugerido", () =
       marginPct: 40,
       profit: 400,
       minimum: { marginPct: 40, price: 1000, below: false },
+      belowCostWithShipping: false,
     });
     expect(productMargin({ price: 900, acqPrice: 500, transportationCost: 100, minMarginPct: 40 })).toMatchObject({ marginPct: 33.3, profit: 300, minimum: { below: true, price: 1000 } });
   });
@@ -260,6 +261,16 @@ describe("margen de la ficha: la misma definición que el precio sugerido", () =
     expect(productMargin({ price: 1000, acqPrice: null, transportationCost: null })).toBeNull();
     expect(productMargin({ price: 0, acqPrice: 500, transportationCost: null })).toBeNull();
     expect(productMargin({ price: 550, acqPrice: 500, transportationCost: 100 })).toMatchObject({ profit: -50, marginPct: -9.1 });
+  });
+
+  it("entre la compra y compra + envío es un aviso; debajo de la compra es el bloqueo de siempre", () => {
+    expect(productMargin({ price: 550, acqPrice: 500, transportationCost: 100 })?.belowCostWithShipping).toBe(true);
+    expect(productMargin({ price: 500, acqPrice: 500, transportationCost: 100 })?.belowCostWithShipping).toBe(true);
+    expect(productMargin({ price: 600, acqPrice: 500, transportationCost: 100 })?.belowCostWithShipping).toBe(false);
+    // Debajo de la compra no es «con el envío»: lo bloquea isPriceBelowCost.
+    expect(productMargin({ price: 450, acqPrice: 500, transportationCost: 100 })?.belowCostWithShipping).toBe(false);
+    // Sin envío registrado no hay aviso de envío.
+    expect(productMargin({ price: 550, acqPrice: 500, transportationCost: null })?.belowCostWithShipping).toBe(false);
   });
 });
 

@@ -102,10 +102,16 @@ test.describe("margen en la ficha", () => {
       expect(await centeredAndUncovered(margin)).toBe(true);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-con-envio.png`), fullPage: false });
 
-      // Con el envío, perder plata se dice con el monto.
+      // Entre la compra y compra + envío: aviso con el monto, no bloqueo (sin la casilla de «Vender con pérdida»).
       await price.fill(String(acq + Math.round(perUnit / 2)));
-      await expect(margin).toContainText("Con el envío pierdes");
+      await expect(margin).toContainText("Con el envío, este precio queda por debajo del costo: pierdes");
+      await expect(page.getByText("Vender con pérdida a propósito")).toHaveCount(0);
       expect(await centeredAndUncovered(margin)).toBe(true);
+      await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-aviso-envio.png`), fullPage: false });
+
+      // Debajo de la compra: el bloqueo de siempre.
+      await price.fill(String(Math.max(1, acq - 100)));
+      await expect(page.getByText("Vender con pérdida a propósito")).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       expect(writes).toEqual([]);
