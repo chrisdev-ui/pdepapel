@@ -68,7 +68,7 @@ async function main() {
       );
       const file = record("plan", { fromSibling: plan.fromSibling, toNull: plan.toNull });
       console.log(`plan: ${file}`);
-      console.log(`Ensayo: se escribirían ${total} productos. Para aplicar: --apply --plan ${file} --expect-rows ${total}`);
+      console.log(`Ensayo: se escribirían ${total} productos. Para aplicar: --apply --plan "${file}" --expect-rows ${total}`);
       console.log("PROD_WRITE_ROWS=0");
       return;
     }
