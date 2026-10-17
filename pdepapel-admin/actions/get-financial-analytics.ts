@@ -22,6 +22,8 @@ export interface MonthlySummary {
   total_net_profit: number;
   average_margin: number;
   total_orders: number;
+  /** Ventas cuyo costo no lleva el envío por unidad: pagadas antes del 2026-10-17, con alguna línea sin envío registrado, o de Mercado Libre. */
+  shipping_missing_orders: number;
   /** El mismo dinero, repartido por canal. Los cuatro suman `total_revenue`. */
   byChannel: ChannelSummary[];
 }
@@ -201,6 +203,7 @@ export async function getMonthlyFinancialSummary(
     total_net_profit,
     average_margin,
     total_orders,
+    shipping_missing_orders: orders.filter((order) => order.productShippingMissing !== false).length + marketplaceOrders.length,
     byChannel,
   };
 }

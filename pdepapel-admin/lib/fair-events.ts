@@ -1,3 +1,4 @@
+import { getProductUnitShipping } from "@/lib/financial";
 import { availableStock } from "@/lib/available-stock";
 import {
   FairCapsuleStatus,
@@ -56,6 +57,8 @@ type FairSaleLine = {
   imageUrl: string;
   price: number;
   cost: number;
+  /** Envío por unidad conocido; null si no está registrado. */
+  shipping: number | null;
 };
 
 export { getFairStockAvailability } from "@/lib/fair-phases";
@@ -214,12 +217,12 @@ async function loadKitComponentProducts(
   if (ids.length === 0) {
     return new Map<
       string,
-      { id: string; name: string; sku: string; acqPrice: unknown; price: unknown }
+      { id: string; name: string; sku: string; acqPrice: unknown; price: unknown; transportationCost: number | null }
     >();
   }
   const products = await tx.product.findMany({
     where: { id: { in: ids } },
-    select: { id: true, name: true, sku: true, acqPrice: true, price: true },
+    select: { id: true, name: true, sku: true, acqPrice: true, price: true, transportationCost: true },
   });
   return new Map(products.map((product) => [product.id, product]));
 }
@@ -233,6 +236,14 @@ export function kitLineCost(
       total + Number(line.component.acqPrice || 0) * line.quantityPerKit,
     0,
   );
+}
+
+/** Envío por unidad de un kit: la suma del de sus piezas; null si a una le falta (`getProductUnitShipping`). */
+export function kitLineShipping(lines: { quantityPerKit: number; component: { transportationCost?: number | null } }[]): number | null {
+  return getProductUnitShipping({
+    isKit: true,
+    kitComponents: lines.map((line) => ({ quantity: line.quantityPerKit, component: line.component })),
+  });
 }
 
 /**
@@ -994,6 +1005,14 @@ export async function createFairSale({
                 })),
               )
             : Number(eventItem.product.acqPrice || 0),
+          shipping: eventItem.product.isKit
+            ? kitLineShipping(
+                (eventItem.kitComponents ?? []).map((line) => ({
+                  quantityPerKit: line.quantityPerKit,
+                  component: kitComponentProducts.get(line.componentId) ?? { transportationCost: null },
+                })),
+              )
+            : getProductUnitShipping(eventItem.product),
         };
       },
     );
@@ -1006,16 +1025,17 @@ export async function createFairSale({
       imageUrl: capsule.product.images[0]?.url || "",
       price: capsule.salePrice,
       cost: capsule.productCost,
+      shipping: getProductUnitShipping(capsule.product),
     }));
     const saleLines: FairSaleLine[] = [...directLines, ...capsuleLines];
     const subtotal = saleLines.reduce(
       (total, line) => total + line.price * line.quantity,
       0,
     );
-    const totalProductCost = saleLines.reduce(
-      (total, line) => total + line.cost * line.quantity,
-      0,
-    );
+    // Compra + envío por unidad conocido, como un pedido de la tienda (`calculateOrderFinancials`).
+    const productShippingCost = saleLines.reduce((total, line) => total + (line.shipping ?? 0) * line.quantity, 0);
+    const totalProductCost =
+      saleLines.reduce((total, line) => total + line.cost * line.quantity, 0) + productShippingCost;
 
     for (const [productId, quantities] of Array.from(
       saleQuantities.entries(),
@@ -1053,6 +1073,8 @@ export async function createFairSale({
         subtotal,
         total: subtotal,
         totalProductCost,
+        productShippingCost,
+        productShippingMissing: saleLines.some((line) => line.shipping === null),
         netProfit: subtotal - totalProductCost,
         profitMarginPct: subtotal
           ? ((subtotal - totalProductCost) / subtotal) * 100

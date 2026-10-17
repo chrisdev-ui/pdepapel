@@ -91,6 +91,19 @@ describe("point of sale flow with MySQL", () => {
     ]);
   });
 
+  it("el costo de la venta suma el envío por unidad de las piezas; sin él, el pedido lo dice", async () => {
+    fixture = await createInventoryFixture();
+    await recalculateKitStock(testPrisma, [fixture.kit.id]);
+    const sell = (key: string) =>
+      createPointOfSaleSale({ storeId: fixture!.store.id, items: [{ productId: fixture!.kit.id, quantity: 1 }], paymentMethod: PaymentMethod.CASH, idempotencyKey: key, userId: fixture!.store.userId });
+
+    expect((await sell("pos-envio-sin-dato")).order).toMatchObject({ totalProductCost: 8000, productShippingCost: 0, productShippingMissing: true });
+
+    await testPrisma.product.update({ where: { id: fixture.component.id }, data: { transportationCost: 500 } });
+    // 2 piezas × (4.000 + 500) = 9.000.
+    expect((await sell("pos-envio-con-dato")).order).toMatchObject({ totalProductCost: 9000, productShippingCost: 1000, productShippingMissing: false, netProfit: 1000 });
+  });
+
   it("rejects insufficient combined product and kit stock without a partial sale", async () => {
     fixture = await createInventoryFixture();
     await recalculateKitStock(testPrisma, [fixture.kit.id]);

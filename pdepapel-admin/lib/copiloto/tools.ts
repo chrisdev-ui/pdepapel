@@ -80,6 +80,7 @@ const ORDER_MONEY_SELECT = {
   subtotal: true,
   netProfit: true,
   totalProductCost: true,
+  productShippingMissing: true,
   payment: { select: { method: true } },
   shipping: { select: { cost: true } },
   orderItems: { select: { quantity: true, product: { select: { acqPrice: true } } } },
@@ -116,8 +117,14 @@ async function monthSummary(db: CopilotDb, storeId: string, year: number, month:
   }
   const ingresos = Object.values(byChannel).reduce((sum, row) => sum + row.ingresos, 0);
   const utilidad = Object.values(byChannel).reduce((sum, row) => sum + row.utilidad, 0);
+  // Pagados antes del 2026-10-17 (null), con alguna línea sin envío por unidad (true) y Mercado Libre: su costo no lleva el envío.
+  const withoutShipping = orders.filter((order) => order.productShippingMissing !== false).length + marketplace.length;
+  const total = orders.length + marketplace.length;
   return {
     ingresos: round(ingresos),
+    ...(withoutShipping > 0
+      ? { envioNoRegistrado: { pedidos: withoutShipping, nota: `Envío no registrado en ${withoutShipping} de ${total} pedidos: la ganancia real puede ser menor.` } }
+      : {}),
     utilidadNeta: round(utilidad),
     margenPct: ingresos > 0 ? Math.round((utilidad / ingresos) * 1000) / 10 : 0,
     pedidos: Object.values(byChannel).reduce((sum, row) => sum + row.pedidos, 0),
@@ -397,7 +404,8 @@ export function buildCopilotTools(storeId: string) {
     }),
 
     resumenFinancieroMes: tool({
-      description: "Ingresos, utilidad neta, margen y pedidos de un mes, por canal (tienda, presencial, feria, Mercado Libre).",
+      description:
+        "Ingresos, utilidad neta, margen y pedidos de un mes, por canal (tienda, presencial, feria, Mercado Libre). Si trae envioNoRegistrado, di su nota tal cual al final.",
       inputSchema: monthInput,
       execute: async ({ anio, mes }) => {
         assertRecentMonth(anio, mes);
@@ -406,7 +414,8 @@ export function buildCopilotTools(storeId: string) {
     }),
 
     compararMeses: tool({
-      description: "Compara un mes con el anterior: ingresos, utilidad, margen y pedidos, con la variación en porcentaje.",
+      description:
+        "Compara un mes con el anterior: ingresos, utilidad, margen y pedidos, con la variación en porcentaje. Si un mes trae envioNoRegistrado, di su nota al final.",
       inputSchema: monthInput,
       execute: async ({ anio, mes }) => {
         assertRecentMonth(anio, mes);

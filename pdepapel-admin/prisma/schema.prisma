@@ -848,11 +848,15 @@ model Order {
   analyticsConsent           Boolean?
 
   // -- BI Financial Fields --
-  totalProductCost Float?
-  gatewayFee       Float?
-  shippingCost     Float?
-  netProfit        Float?
-  profitMarginPct  Float?
+  totalProductCost       Float?
+  gatewayFee             Float?
+  shippingCost           Float?
+  netProfit              Float?
+  profitMarginPct        Float?
+  /// Envío por unidad de los productos (de su compra), ya sumado en totalProductCost. Null: pedido pagado antes del 2026-10-17, con costo solo de compra.
+  productShippingCost    Float?
+  /// true si a alguna línea le faltaba el envío por unidad («envío no registrado»). Null en pedidos anteriores.
+  productShippingMissing Boolean?
 
   // Custom/Manual Order Fields
   adminNotes     String? @db.Text

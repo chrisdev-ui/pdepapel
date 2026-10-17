@@ -4,6 +4,7 @@ import {
   calculateTotalProductCost,
   getOrderNetProfit,
   getProductUnitCost,
+  getProductUnitShipping,
 } from "@/lib/financial";
 import { PaymentMethod } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
@@ -58,9 +59,10 @@ describe("financial helpers", () => {
       select: {
         id: true,
         acqPrice: true,
+        transportationCost: true,
         isKit: true,
         kitComponents: {
-          select: { quantity: true, component: { select: { acqPrice: true } } },
+          select: { quantity: true, component: { select: { acqPrice: true, transportationCost: true } } },
         },
       },
     });
@@ -132,11 +134,54 @@ describe("financial helpers", () => {
       ),
     ).resolves.toEqual({
       totalProductCost: 20000,
+      productShippingCost: 0,
+      productShippingMissing: true,
       gatewayFee: 0,
       shippingCost: 5000,
       netProfit: 15000,
       profitMarginPct: 37.5,
     });
+  });
+
+  it("el costo de un pedido nuevo suma el envío por unidad conocido y dice si faltó", async () => {
+    const prismadb = {
+      product: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "con-envio", acqPrice: 10000, transportationCost: 500, isKit: false, kitComponents: [] },
+          { id: "sin-envio", acqPrice: 4000, transportationCost: null, isKit: false, kitComponents: [] },
+        ]),
+      },
+    };
+    const order = (items: { productId: string; quantity: number }[]) => ({ total: 40000, orderItems: items }) as any;
+
+    // 2 × (10.000 + 500) = 21.000; ganancia 40.000 − 21.000 − 5.000 de envío al cliente.
+    await expect(calculateOrderFinancials(order([{ productId: "con-envio", quantity: 2 }]), PaymentMethod.BankTransfer, 5000, prismadb)).resolves.toMatchObject({
+      totalProductCost: 21000,
+      productShippingCost: 1000,
+      productShippingMissing: false,
+      netProfit: 14000,
+    });
+    // La línea sin envío entra solo con la compra y el pedido queda marcado.
+    await expect(
+      calculateOrderFinancials(order([{ productId: "con-envio", quantity: 1 }, { productId: "sin-envio", quantity: 1 }]), PaymentMethod.BankTransfer, 0, prismadb),
+    ).resolves.toMatchObject({ totalProductCost: 14500, productShippingCost: 500, productShippingMissing: true });
+  });
+
+  it("envío por unidad: 0, vacío y el 1.000 heredado no son valores; un kit suma el de sus piezas", () => {
+    expect(getProductUnitShipping({ transportationCost: 700 })).toBe(700);
+    expect(getProductUnitShipping({ transportationCost: 0 })).toBeNull();
+    expect(getProductUnitShipping({ transportationCost: 1000 })).toBeNull();
+    expect(getProductUnitShipping({ transportationCost: null })).toBeNull();
+    const kit = (second: number | null) => ({
+      isKit: true,
+      transportationCost: 9999,
+      kitComponents: [
+        { quantity: 2, component: { transportationCost: 300 } },
+        { quantity: 1, component: { transportationCost: second } },
+      ],
+    });
+    expect(getProductUnitShipping(kit(400))).toBe(1000);
+    expect(getProductUnitShipping(kit(null))).toBeNull();
   });
 
   it("uses stored profit when available and computes a reliable fallback otherwise", () => {

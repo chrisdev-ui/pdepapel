@@ -141,6 +141,8 @@ export const INTERNAL_ORDER_FIELDS = [
   "shippingCost",
   "netProfit",
   "profitMarginPct",
+  "productShippingCost",
+  "productShippingMissing",
   "createdBy",
   "analyticsClientId",
   "analyticsSessionId",

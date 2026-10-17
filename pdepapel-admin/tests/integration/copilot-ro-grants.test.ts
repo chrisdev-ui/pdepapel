@@ -152,6 +152,10 @@ describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada m
     expect(Object.keys(results)).toHaveLength(12);
     expect(JSON.stringify(results)).not.toMatch(/Clienta Ficticia|ficticia@prueba\.test|3000000000|Calle Falsa|Comprador ficticio|texto libre|Proveedor ficticio/);
     expect((results.resumenDeHoy as { datos: { porCanal: Record<string, { ventas: number }> } }).datos.porCanal.tienda.ventas).toBe(30000);
+    // Pedidos de prueba sin envío por unidad en su costo: la nota sale con la cuenta.
+    const month = (results.resumenFinancieroMes as { datos: { pedidos: number; envioNoRegistrado?: { pedidos: number; nota: string } } }).datos;
+    expect(month.envioNoRegistrado?.pedidos).toBe(month.pedidos);
+    expect(month.envioNoRegistrado?.nota).toBe(`Envío no registrado en ${month.pedidos} de ${month.pedidos} pedidos: la ganancia real puede ser menor.`);
     expect((results.buscarProductos as { datos: unknown[] }).datos.length).toBeGreaterThan(0);
     expect((results.saludMercadoLibre as { datos: { conectado: boolean } }).datos.conectado).toBe(true);
     const promotion = (results.productosParaPromocionar as {

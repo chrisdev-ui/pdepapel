@@ -1,3 +1,4 @@
+import { getProductUnitShipping } from "@/lib/financial";
 import { availableStock } from "@/lib/available-stock";
 import {
   InventoryMovementType,
@@ -153,6 +154,7 @@ export async function createPointOfSaleSale({
                 name: true,
                 stock: true,
                 acqPrice: true,
+                transportationCost: true,
                 isArchived: true,
                 isKit: true,
                 storeId: true,
@@ -277,6 +279,7 @@ export async function createPointOfSaleSale({
           price,
           listPrice,
           cost,
+          shipping: getProductUnitShipping(product),
         };
       },
     );
@@ -288,10 +291,12 @@ export async function createPointOfSaleSale({
       (total, line) => total + (line.listPrice - line.price) * line.quantity,
       0,
     );
+    // Compra + envío por unidad conocido, como un pedido de la tienda (`calculateOrderFinancials`).
+    const productShippingCost = selectedLines.reduce((total, line) => total + (line.shipping ?? 0) * line.quantity, 0);
     const totalProductCost = selectedLines.reduce(
       (total, line) => total + line.cost * line.quantity,
       0,
-    );
+    ) + productShippingCost;
 
     const savingsNote = savings > 0 ? ` · ofertas aplicadas: $ ${Math.round(savings).toLocaleString("es-CO")}` : "";
     const order = await tx.order.create({
@@ -307,6 +312,8 @@ export async function createPointOfSaleSale({
         subtotal,
         total: subtotal,
         totalProductCost,
+        productShippingCost,
+        productShippingMissing: selectedLines.some((line) => line.shipping === null),
         netProfit: subtotal - totalProductCost,
         profitMarginPct: subtotal
           ? ((subtotal - totalProductCost) / subtotal) * 100

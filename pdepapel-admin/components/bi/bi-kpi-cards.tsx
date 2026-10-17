@@ -103,14 +103,19 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
             <span className="inline-flex items-center">
               Te quedó libre
               <Ayuda label="Cómo se calcula lo que te queda libre">
-                Dinero real ganado. Se calcula restando los costos del producto,
-                la tarifa de envío y la comisión del pago en línea al ingreso
+                Dinero real ganado. Se calcula restando el costo del producto
+                (su compra y, si está registrado, su envío por unidad), la
+                tarifa de envío y la comisión del pago en línea al ingreso
                 recibido.
               </Ayuda>
             </span>
           }
           value={currencyFormatter(currentMonth.total_net_profit)}
-          note="frente al mes anterior"
+          note={
+            currentMonth.shipping_missing_orders > 0
+              ? `frente al mes anterior · envío no registrado en ${currentMonth.shipping_missing_orders} ${currentMonth.shipping_missing_orders === 1 ? "venta" : "ventas"}: puede ser menos`
+              : "frente al mes anterior"
+          }
           icon={<Activity className="h-4 w-4" aria-hidden="true" />}
           tint="bg-tint-mint"
           valueAdornment={<Variacion value={percentageChange.net_profit} />}

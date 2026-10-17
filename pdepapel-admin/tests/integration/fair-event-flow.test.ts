@@ -470,7 +470,8 @@ describe("fair event flow with MySQL", () => {
     expect(sale.order.orderItems).toEqual([
       expect.objectContaining({ productId: fixture.kit.id, name: "Kit", quantity: 1, price: 10000 }),
     ]);
-    expect(sale.order).toMatchObject({ total: 10000, totalProductCost: 8000 });
+    // Las piezas no tienen envío por unidad registrado: el costo es solo de compra y el pedido lo dice.
+    expect(sale.order).toMatchObject({ total: 10000, totalProductCost: 8000, productShippingCost: 0, productShippingMissing: true });
     await expect(
       testPrisma.fairEventInventoryItem.findUniqueOrThrow({ where: { id: kitRow.id } }),
     ).resolves.toMatchObject({ soldQuantity: 1 });
