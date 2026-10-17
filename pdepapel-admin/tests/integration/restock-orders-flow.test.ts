@@ -184,6 +184,57 @@ describe("pedidos de aprovisionamiento", () => {
     }
   });
 
+  it("recibir un pedido sin envío conserva el envío real del producto y deja «no registrado» al que no tenía; nunca escribe 0", async () => {
+    const f = await setup();
+    const base = await testPrisma.product.update({ where: { id: f.component.id }, data: { transportationCost: 300 } });
+    const second = await testPrisma.product.create({
+      data: {
+        storeId: f.store.id,
+        name: `Sin envío ${randomUUID()}`,
+        slug: `sin-envio-${randomUUID()}`,
+        sku: `SINENV-${randomUUID().slice(0, 8)}`,
+        description: "Producto sin envío registrado",
+        price: 9000,
+        acqPrice: 1000,
+        stock: 0,
+        transportationCost: null,
+        categoryId: base.categoryId,
+        sizeId: base.sizeId,
+        colorId: base.colorId,
+        designId: base.designId,
+      },
+    });
+    try {
+      const order = await createOrder(f, {
+        shippingCost: 0,
+        status: RestockOrderStatus.ORDERED,
+        items: [
+          { productId: f.component.id, quantity: 2, cost: 30000 },
+          { productId: second.id, quantity: 3, cost: 1200 },
+        ],
+      });
+      const { POST: receive } = await receiveRoute();
+      const response = await receive(
+        json("POST", { idempotencyKey: randomUUID(), updateCosts: true, lines: order.items.map((item: { id: string; quantity: number }) => ({ restockOrderItemId: item.id, quantity: item.quantity })) }),
+        { params: { storeId: f.store.id, orderId: order.id as string } },
+      );
+      expect(response.status).toBe(200);
+      const after = await testPrisma.product.findMany({ where: { id: { in: [f.component.id, second.id] } }, select: { id: true, transportationCost: true, acqPrice: true } });
+      const byId = Object.fromEntries(after.map((row) => [row.id, row]));
+      expect(byId[f.component.id].transportationCost).toBe(300);
+      expect(byId[second.id].transportationCost).toBeNull();
+      // El costo de compra sí se actualiza como siempre.
+      expect(byId[second.id].acqPrice).toBe(1200);
+    } finally {
+      await testPrisma.restockOrderReceipt.deleteMany({ where: { storeId: f.store.id } });
+      const orders = await testPrisma.restockOrder.findMany({ where: { storeId: f.store.id }, select: { id: true } });
+      await testPrisma.restockOrderItem.deleteMany({ where: { restockOrderId: { in: orders.map((o) => o.id) } } });
+      await testPrisma.restockOrder.deleteMany({ where: { storeId: f.store.id } });
+      await testPrisma.inventoryMovement.deleteMany({ where: { productId: second.id } });
+      await testPrisma.product.delete({ where: { id: second.id } });
+    }
+  });
+
   it("corregir el envío de un pedido recibido: la vista previa es lo que se escribe, en todas sus líneas, una sola vez y con guarda", async () => {
     const f = await setup();
     const base = await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id } });

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { FormPageHeader, FormStickyFooter } from "@/components/ui/form-page-chrome";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { SectionCard } from "@/components/ui/section-card";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
@@ -265,6 +265,7 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
                         <FormControl>
                           <CurrencyInput disabled={loading} value={field.value} onChange={(value) => field.onChange(value ?? 0)} aria-label="Costo de envío" />
                         </FormControl>
+                        <FormDescription>Si el envío fue gratis o no lo sabes, déjalo en 0: los productos conservan su envío anterior.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

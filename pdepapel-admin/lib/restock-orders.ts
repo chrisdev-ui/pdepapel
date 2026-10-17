@@ -1,6 +1,8 @@
 import { RestockOrderStatus } from "@prisma/client";
 import { z } from "zod";
 
+import { isKnownTransport } from "@/lib/product-costs";
+
 /**
  * Reglas puras de los pedidos de aprovisionamiento: ciclo de vida, número de
  * pedido, cantidades por recibir y costo puesto en bodega. La API las hace
@@ -374,6 +376,30 @@ export function weightedAverageCost(input: WeightedCostInput): number {
   return round2((currentUnits * currentCost + incomingUnits * incomingCost) / (currentUnits + incomingUnits));
 }
 
+/**
+ * Envío por unidad de un producto al recibir (regla aprobada el 2026-10-17):
+ * un envío de 0 en el pedido, o una parte de 0 para esta línea, no es un dato.
+ * Entonces se conserva el envío real que ya tenía el producto o queda null
+ * («no registrado»): nunca se escribe 0 ni se promedia hacia 0. Con una parte
+ * real, el promedio ponderado de siempre (y un envío desconocido no entra).
+ */
+export function receivedTransportationCost(input: {
+  current: number | null | undefined;
+  hasCostHistory: boolean;
+  currentUnits: number;
+  incomingUnits: number;
+  incomingShare: number;
+}): number | null {
+  const known = isKnownTransport(input.current) ? (input.current as number) : null;
+  if (!(input.incomingShare > 0)) return known;
+  return weightedAverageCost({
+    currentUnits: input.currentUnits,
+    currentCost: input.hasCostHistory ? known : null,
+    incomingUnits: input.incomingUnits,
+    incomingCost: input.incomingShare,
+  });
+}
+
 /** Una línea del borrador tal como la guarda el formulario. */
 export interface RestockDraftLine {
   productId: string;
@@ -507,7 +533,12 @@ export function planShippingCorrection(input: ShippingCorrectionInput) {
         ? "No se cambia: no se encontró su recepción en el kardex."
         : last.orderId !== order.id
           ? `No se cambia: su costo actual viene de un pedido más reciente${last.orderNumber ? ` (${displayRestockOrderNumber(last.orderNumber)})` : ""}.`
-          : null;
+          : !(entry.weighted / entry.units > 0)
+            ? // Un envío de 0 no es un dato: el producto conserva su envío (regla de la recepción).
+              newShipping > 0
+              ? "No se cambia: su línea no tiene costo, así que no le toca envío."
+              : "No se cambia: el pedido no tiene envío registrado."
+            : null;
     const shareAfter = skipped ? product.transportationCost : round2(entry.weighted / entry.units);
     lines.push({
       productId,

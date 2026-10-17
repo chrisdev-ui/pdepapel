@@ -217,6 +217,9 @@ export function ReceiveDialog({ order, open, onOpenChange }: ReceiveDialogProps)
                 <strong className="font-semibold text-primary">{nextStatusLabel}</strong>
                 {pendingAfter > 0 ? `: quedarían ${pendingAfter} ${pendingAfter === 1 ? "unidad" : "unidades"} por recibir.` : ": no quedaría nada pendiente."}
               </li>
+              {updateCosts && !(order.shippingCost > 0) && (
+                <li>El pedido no tiene envío registrado: los productos conservan su envío anterior.</li>
+              )}
               {updateCosts && costChanges > 0 && (
                 <li>
                   Se recalcula el costo de {costChanges} {costChanges === 1 ? "producto" : "productos"} como promedio ponderado entre lo que ya

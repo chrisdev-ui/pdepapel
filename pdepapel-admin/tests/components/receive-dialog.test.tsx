@@ -99,4 +99,10 @@ describe("ReceiveDialog", () => {
     });
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
+
+  it("sin envío en el pedido avisa que los productos conservan su envío anterior", () => {
+    render(<ReceiveDialog order={{ ...order, shippingCost: 0 }} open onOpenChange={vi.fn()} />);
+    expect(bullet(/el pedido no tiene envío registrado: los productos conservan su envío anterior/i)).toBeInTheDocument();
+  });
 });
+

@@ -127,6 +127,7 @@ export function ShippingCorrectionDialog({ order, open, onOpenChange }: Shipping
               }}
             />
             <span className="text-xs text-muted-foreground">Registrado hoy: {currencyFormatter(order.shippingCost)}</span>
+            <span className="text-xs text-muted-foreground">Si el envío fue gratis o no lo sabes, déjalo en 0: los productos conservan su envío anterior.</span>
           </div>
           <Button type="button" variant="outline" onClick={preview} disabled={shipping === undefined || loading || saving} isLoading={loading} loadingText="Calculando…" className="sm:mb-6">
             Ver cambios

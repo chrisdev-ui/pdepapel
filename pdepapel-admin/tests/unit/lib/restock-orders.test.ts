@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  receivedTransportationCost,
   canTransitionRestockOrder,
   planShippingCorrection,
   deriveRestockStatus,
@@ -220,10 +221,17 @@ describe("corregir el envío de un pedido ya recibido", () => {
     expect(plan.changed).toBe(0);
   });
 
-  it("envío 0 deja 0 por unidad; lo no recibido no entra; un envío inválido se rechaza", () => {
-    const zero = planShippingCorrection({ order, products, lastOrderByProduct: lastIsThis, newShipping: 0 });
-    expect(zero.lines.every((line) => line.shareAfter === 0)).toBe(true);
-    expect(zero.changed).toBe(2);
+  it("envío 0 no es un dato: nadie cambia, con su motivo; lo no recibido no entra; un envío inválido se rechaza", () => {
+    const withReal = products.map((product) => (product.id === "sello" ? { ...product, transportationCost: 300 } : product));
+    const zero = planShippingCorrection({ order, products: withReal, lastOrderByProduct: lastIsThis, newShipping: 0 });
+    // Con envío real se conserva; sin envío sigue «no registrado» (null) o como estaba; nunca 0 nuevo.
+    expect(zero.lines.map((line) => [line.productId, line.shareBefore, line.shareAfter, line.skipped])).toEqual([
+      ["sello", 300, 300, "No se cambia: el pedido no tiene envío registrado."],
+      ["cartuchera", null, null, "No se cambia: el pedido no tiene envío registrado."],
+      ["notas", 0, 0, "No se cambia: el pedido no tiene envío registrado."],
+    ]);
+    expect(zero.changed).toBe(0);
+    expect(zero.shippingAfter).toBe(0);
     const partial = planShippingCorrection({ order: { ...order, items: [...order.items.slice(0, 2), { productId: "notas", cost: 1000, quantityReceived: 0 }] }, products, lastOrderByProduct: lastIsThis, newShipping: 19000 });
     expect(partial.lines.map((line) => line.productId)).toEqual(["sello", "cartuchera"]);
     expect(() => planShippingCorrection({ order, products, lastOrderByProduct: lastIsThis, newShipping: -1 })).toThrow("de 0 en adelante");
@@ -235,3 +243,22 @@ describe("corregir el envío de un pedido ya recibido", () => {
     expect(planShippingCorrection(input)).toEqual(planShippingCorrection(input));
   });
 });
+
+describe("envío por unidad al recibir (regla del envío en 0, 2026-10-17)", () => {
+  const base = { hasCostHistory: true, currentUnits: 4, incomingUnits: 6 };
+
+  it("pedido sin envío y producto con envío real: se conserva, sin promediar hacia 0", () => {
+    expect(receivedTransportationCost({ ...base, current: 300, incomingShare: 0 })).toBe(300);
+  });
+
+  it("pedido sin envío y producto sin envío real (null, 0 o el 1.000 heredado): queda null, nunca 0", () => {
+    for (const current of [null, 0, 1000, undefined]) expect(receivedTransportationCost({ ...base, current, incomingShare: 0 })).toBeNull();
+  });
+
+  it("con envío real, lo de siempre: promedia con un envío real y reemplaza uno desconocido", () => {
+    expect(receivedTransportationCost({ ...base, current: 300, incomingShare: 100 })).toBe(180);
+    expect(receivedTransportationCost({ ...base, current: 1000, incomingShare: 100 })).toBe(100);
+    expect(receivedTransportationCost({ ...base, current: 300, incomingShare: 100, hasCostHistory: false })).toBe(100);
+  });
+});
+
