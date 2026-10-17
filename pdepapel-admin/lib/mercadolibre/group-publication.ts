@@ -1,13 +1,15 @@
 // Sin dependencias de servidor: lo usan la ruta y el diálogo «Publicar grupo».
+import {
+  lowPriceRuleOf,
+  mercadoLibreNetAt,
+  suggestMercadoLibrePriceWithRule,
+  type MercadoLibrePricingTargets,
+  type SaleFeeSource,
+} from "@/lib/pricing/mercadolibre-fees";
 import { getUnitCostFloor } from "@/lib/product-costs";
 
 import type { MercadoLibreAttribute } from "./listing-metadata";
-import {
-  getMercadoLibreMarginBreakdown,
-  getMercadoLibreMarginWarning,
-  suggestMercadoLibrePrice,
-  type MercadoLibreMarginBreakdown,
-} from "./listing-margin";
+import { getMercadoLibreMarginWarning, type MercadoLibreMarginBreakdown } from "./listing-margin";
 import {
   prefillListingAttributes,
   type ListingWizardCategoryAttribute,
@@ -138,38 +140,48 @@ export type GroupVariantEconomics = {
   suggestedPrice: number | null;
 };
 
-/** Neto por unidad de una variante con la comisión y el envío cotizados para el grupo. */
+/** Neto por unidad de una variante con la comisión y el envío cotizados para el grupo, con la regla compartida. */
 export function getGroupVariantEconomics({
   price,
   product,
-  feeRate,
+  fee,
   shippingCost,
   pricingTargets,
 }: {
   price: number;
   product: { acqPrice?: number | null; transportationCost?: number | null };
-  feeRate: number;
+  /** La comisión del grupo: la real de su tipo y categoría (porcentaje y parte fija) o la del tipo. */
+  fee: SaleFeeSource;
   shippingCost: number;
-  pricingTargets: { targetMarginPercent: number; minNetPerUnit: number } | null;
+  pricingTargets: MercadoLibrePricingTargets | null;
 }): GroupVariantEconomics {
   const unitCost = getUnitCostFloor(product);
-  const breakdown = getMercadoLibreMarginBreakdown({ price, feeAmount: price * feeRate, shippingCost, unitCost });
+  const rule = lowPriceRuleOf(pricingTargets);
+  const estimate = mercadoLibreNetAt({ price, unitCost, fee, rule, shippingCost });
+  const breakdown: MercadoLibreMarginBreakdown = {
+    price: estimate.price,
+    fee: estimate.commission + estimate.fixedFee,
+    shipping: estimate.shipping,
+    withholding: estimate.withholding,
+    net: estimate.net,
+    marginRate: estimate.marginPct === null ? null : estimate.marginPct / 100,
+  };
   const targetMarginRate = pricingTargets ? pricingTargets.targetMarginPercent / 100 : null;
   const minNetPerUnit = pricingTargets?.minNetPerUnit ?? null;
   const breakevenPrice =
-    unitCost === null ? null : suggestMercadoLibrePrice({ unitCost, shippingCost, feeRate, targetNet: 0 });
+    unitCost === null ? null : suggestMercadoLibrePriceWithRule({ unitCost, fee, rule, shippingCost, targets: { targetNet: 0, targetMarginRate: 0 } });
   return {
     breakdown,
     warning: getMercadoLibreMarginWarning(breakdown, { breakevenPrice, targetMarginRate, minNetPerUnit }),
     suggestedPrice:
       unitCost === null || !pricingTargets
         ? null
-        : suggestMercadoLibrePrice({
+        : suggestMercadoLibrePriceWithRule({
             unitCost,
+            fee,
+            rule,
             shippingCost,
-            feeRate,
-            targetNet: pricingTargets.minNetPerUnit,
-            targetMarginRate: pricingTargets.targetMarginPercent / 100,
+            targets: { targetNet: pricingTargets.minNetPerUnit, targetMarginRate: pricingTargets.targetMarginPercent / 100 },
           }),
   };
 }

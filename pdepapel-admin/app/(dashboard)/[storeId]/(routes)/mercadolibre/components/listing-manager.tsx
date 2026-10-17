@@ -1,5 +1,6 @@
 "use client";
 
+import { lowPriceRuleOf, suggestMercadoLibrePriceWithRule, type MercadoLibrePricingTargets } from "@/lib/pricing/mercadolibre-fees";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,11 +40,6 @@ import {
   type ListingWizardStep,
 } from "@/lib/mercadolibre/listing-wizard";
 import type { MercadoLibreValidationResult } from "@/lib/mercadolibre/publication-error";
-import {
-  MERCADOLIBRE_FEE_RATE_ESTIMATE,
-  MERCADOLIBRE_SHIPPING_ESTIMATE,
-  suggestMercadoLibrePrice,
-} from "@/lib/mercadolibre/listing-margin";
 import type { MercadoLibreCategorySearchResponse } from "@/lib/mercadolibre/categories";
 import { ProductVideoLibrary } from "./product-video-library";
 import {
@@ -399,7 +395,7 @@ export function MercadoLibreListingManager({
   storeId: string;
   canPublish: boolean;
   /** Objetivos de precio de la tienda; sin ellos se sugiere la misma ganancia que la tienda. */
-  pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
+  pricingTargets?: MercadoLibrePricingTargets | null;
   /** Listing id from the daily email link; scrolled into view and outlined. */
   highlightedListingId?: string | null;
 }) {
@@ -1567,13 +1563,13 @@ export function MercadoLibreListingManager({
         : selected.acqPrice + (selected.transportationCost ?? 0);
     const estimatedPrice =
       selected && unitCost !== null
-        ? suggestMercadoLibrePrice({
+        ? suggestMercadoLibrePriceWithRule({
             unitCost,
-            shippingCost: MERCADOLIBRE_SHIPPING_ESTIMATE,
-            feeRate: MERCADOLIBRE_FEE_RATE_ESTIMATE,
-            ...(pricingTargets
+            fee: { kind: "tipo", listingType: "gold_special" },
+            rule: lowPriceRuleOf(pricingTargets),
+            targets: pricingTargets
               ? { targetNet: pricingTargets.minNetPerUnit, targetMarginRate: pricingTargets.targetMarginPercent / 100 }
-              : { targetNet: Math.max(0, selected.price - unitCost) }),
+              : { targetNet: Math.max(0, selected.price - unitCost), targetMarginRate: 0 },
           })
         : null;
     const initialMarketplacePrice = estimatedPrice ? String(estimatedPrice) : "";

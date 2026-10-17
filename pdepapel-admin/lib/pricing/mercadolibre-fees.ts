@@ -34,9 +34,19 @@ export function saleFeeAt(price: number, source: SaleFeeSource) {
 }
 
 /** Lo que devolvió `listing_prices` como fuente reutilizable a otros precios; null si no trae el porcentaje. */
-export function feeSourceFromQuote(quote: { percentageFee: number | null; fixedFee: number | null; listingTypeId: string | null } | null): SaleFeeSource | null {
-  if (!quote || typeof quote.percentageFee !== "number" || !Number.isFinite(quote.percentageFee)) return null;
-  return { kind: "real", percentageFee: quote.percentageFee, fixedFee: quote.fixedFee ?? 0, listingType: quote.listingTypeId };
+export function feeSourceFromQuote(
+  quote: { percentageFee?: number | null; fixedFee?: number | null; listingTypeId?: string | null; saleFeeAmount?: number | null } | null,
+  quotedPrice?: number,
+): SaleFeeSource | null {
+  if (!quote) return null;
+  if (typeof quote.percentageFee === "number" && Number.isFinite(quote.percentageFee)) {
+    return { kind: "real", percentageFee: quote.percentageFee, fixedFee: quote.fixedFee ?? 0, listingType: quote.listingTypeId ?? null };
+  }
+  // Sin el desglose, el total de la comisión a ese precio como porcentaje.
+  if (typeof quote.saleFeeAmount === "number" && quotedPrice && quotedPrice > 0) {
+    return { kind: "real", percentageFee: (quote.saleFeeAmount / quotedPrice) * 100, fixedFee: 0, listingType: quote.listingTypeId ?? null };
+  }
+  return null;
 }
 
 export interface LowPriceRule {
@@ -104,6 +114,19 @@ export function mercadoLibreNetAt({
     withoutFixedFee: !configured,
   };
 }
+
+/** Lo que el panel de Mercado Libre recibe de Configuración: metas y los dos ajustes de precios bajos. */
+export interface MercadoLibrePricingTargets {
+  targetMarginPercent: number;
+  minNetPerUnit: number;
+  lowPriceFixedFee?: number | null;
+  freeShippingMin?: number | null;
+}
+
+export const lowPriceRuleOf = (targets: MercadoLibrePricingTargets | null | undefined): LowPriceRule => ({
+  lowPriceFixedFee: targets?.lowPriceFixedFee ?? null,
+  freeShippingMin: targets?.freeShippingMin ?? null,
+});
 
 export interface MercadoLibreTargets {
   /** Ganancia neta mínima por unidad, en COP. */

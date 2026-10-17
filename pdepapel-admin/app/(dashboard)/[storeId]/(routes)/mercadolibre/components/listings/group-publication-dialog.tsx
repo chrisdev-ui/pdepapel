@@ -1,5 +1,6 @@
 "use client";
 
+import { feeSourceFromQuote, type MercadoLibrePricingTargets, type SaleFeeSource } from "@/lib/pricing/mercadolibre-fees";
 import { Layers, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -26,7 +27,7 @@ import type { GroupPublicationPlan } from "@/lib/mercadolibre/group-publication-
 import { MERCADOLIBRE_SHIPPING_ESTIMATE } from "@/lib/mercadolibre/listing-margin";
 import type { ListingWizardCategoryAttribute } from "@/lib/mercadolibre/listing-wizard";
 
-type PricingTargets = { targetMarginPercent: number; minNetPerUnit: number } | null;
+type PricingTargets = MercadoLibrePricingTargets | null;
 
 type DraftResult = {
   created: { listingId: string; productId: string }[];
@@ -85,7 +86,7 @@ export function GroupPublicationDialog({
 }) {
   const [plan, setPlan] = useState<GroupPublicationPlan | null>(null);
   const [categoryAttributes, setCategoryAttributes] = useState<ListingWizardCategoryAttribute[]>([]);
-  const [feeRate, setFeeRate] = useState<number | null>(null);
+  const [fee, setFee] = useState<SaleFeeSource | null>(null);
   const [shipping, setShipping] = useState<{ cost: number; quoted: boolean } | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [prices, setPrices] = useState<Record<string, string>>({});
@@ -128,8 +129,9 @@ export function GroupPublicationDialog({
       if (!attributesResponse.ok) throw new Error(await readError(attributesResponse));
       setCategoryAttributes((await attributesResponse.json()) as ListingWizardCategoryAttribute[]);
       if (feeResponse?.ok && marketplacePrice) {
-        const fee = (await feeResponse.json()) as { saleFeeAmount: number };
-        setFeeRate(fee.saleFeeAmount / marketplacePrice);
+        // Su porcentaje y su parte fija, no una tasa promedio: así vale para el precio de cada variante.
+        const quote = (await feeResponse.json()) as { percentageFee?: number | null; fixedFee?: number | null; listingTypeId?: string | null; saleFeeAmount?: number | null };
+        setFee(feeSourceFromQuote(quote, marketplacePrice) ?? { kind: "tipo", listingType });
       }
 
       const dimensions = saleConditions?.packageDimensions;
@@ -168,7 +170,7 @@ export function GroupPublicationDialog({
     if (listingId) void load(listingId);
     else {
       setPlan(null);
-      setFeeRate(null);
+      setFee(null);
       setShipping(null);
       setResult(null);
       setError(null);
@@ -181,18 +183,18 @@ export function GroupPublicationDialog({
       const price = Number(prices[variant.productId]);
       const hasPrice = Number.isFinite(price) && price > 0;
       const economics =
-        hasPrice && feeRate !== null && shipping
+        hasPrice && fee !== null && shipping
           ? getGroupVariantEconomics({
               price,
               product: variant,
-              feeRate,
+              fee,
               shippingCost: shipping.cost,
               pricingTargets,
             })
           : null;
       return { variant, price, hasPrice, economics };
     });
-  }, [plan, prices, feeRate, shipping, pricingTargets]);
+  }, [plan, prices, fee, shipping, pricingTargets]);
 
   const chosen = rows.filter((row) => row.variant.state.kind === "ready" && selected[row.variant.productId]);
   const canCreate = chosen.length > 0 && chosen.every((row) => row.hasPrice) && !isCreating;

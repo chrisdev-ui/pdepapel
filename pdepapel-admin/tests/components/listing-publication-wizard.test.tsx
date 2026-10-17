@@ -770,7 +770,8 @@ describe("ListingPublicationWizard", () => {
 
     it("warns in plain Spanish below break-even and offers the suggested price", () => {
       render(<WizardHarness onPublish={async () => undefined} initialStep={4} initialPrice="15000" />);
-      expect(screen.getByText(/Con este precio pierdes \$ 4\.885 por unidad/)).toBeVisible();
+      // La comisión cotizada a $ 24.000 (19 %) se aplica con su porcentaje a $ 15.000: $ 2.850, no 4.560 ÷ 15.000.
+      expect(screen.getByText(/Con este precio pierdes \$ 3\.175 por unidad/)).toBeVisible();
       const use = screen.getByRole("button", { name: /^Usar \$/ });
       const suggested = use.textContent!.replace("Usar ", "").replace(/\s/g, " ");
       fireEvent.click(use);

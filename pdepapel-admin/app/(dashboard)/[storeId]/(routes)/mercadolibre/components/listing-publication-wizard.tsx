@@ -44,13 +44,18 @@ import {
   type ListingWizardStep,
 } from "@/lib/mercadolibre/listing-wizard";
 import {
-  MERCADOLIBRE_FEE_RATE_ESTIMATE,
   MERCADOLIBRE_SHIPPING_ESTIMATE,
-  getMercadoLibreMarginBreakdown,
   getMercadoLibreMarginWarning,
   isLowPriceForMercadoLibre,
-  suggestMercadoLibrePrice,
 } from "@/lib/mercadolibre/listing-margin";
+import {
+  feeSourceFromQuote,
+  lowPriceRuleOf,
+  mercadoLibreNetAt,
+  suggestMercadoLibrePriceWithRule,
+  type MercadoLibrePricingTargets,
+  type SaleFeeSource,
+} from "@/lib/pricing/mercadolibre-fees";
 import { usePictureChecks } from "./use-picture-checks";
 import {
   Check,
@@ -294,7 +299,7 @@ type ListingPublicationWizardProps = {
   onSearchCategories: (query?: string) => Promise<void>;
   validation?: ListingPublicationValidation | null;
   /** Objetivos de precio de la tienda (Configuración); sin ellos, la misma ganancia que la tienda. */
-  pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
+  pricingTargets?: MercadoLibrePricingTargets | null;
   isValidating?: boolean;
   onValidate?: () => Promise<void>;
   onCategoryChange: (categoryId: string) => void;
@@ -538,20 +543,26 @@ export function ListingPublicationWizard({
   const baseMarketplaceFee = priceEstimate
     ? Math.max(priceEstimate.saleFeeAmount - financingCost, 0)
     : null;
-  // Desglose por unidad: comisión real (o estimada), envío cotizado (o
-  // estimado), retenciones estimadas y costo. Sin costo no hay neto.
-  const feeRate =
-    priceEstimate && hasMarketplacePrice
-      ? priceEstimate.saleFeeAmount / marketplacePrice
-      : MERCADOLIBRE_FEE_RATE_ESTIMATE;
+  // Desglose por unidad con la regla compartida (lib/pricing/mercadolibre-fees.ts):
+  // comisión real (su porcentaje y su parte fija, no una tasa promedio) o la del
+  // tipo de publicación; cargo fijo hasta el precio límite en vez del envío;
+  // envío cotizado (o estimado) por encima; retenciones estimadas y costo.
+  const feeSource: SaleFeeSource = feeSourceFromQuote(priceEstimate, hasMarketplacePrice ? marketplacePrice : undefined) ?? { kind: "tipo", listingType: form.listingType };
+  const lowPriceRule = lowPriceRuleOf(pricingTargets);
   const marginShipping = estimatedSellerShippingCost ?? MERCADOLIBRE_SHIPPING_ESTIMATE;
-  const marginBreakdown = hasMarketplacePrice
-    ? getMercadoLibreMarginBreakdown({
-        price: marketplacePrice,
-        feeAmount: priceEstimate?.saleFeeAmount ?? marketplacePrice * feeRate,
-        shippingCost: marginShipping,
-        unitCost: costFloor,
-      })
+  const marginEstimate = hasMarketplacePrice
+    ? mercadoLibreNetAt({ price: marketplacePrice, unitCost: costFloor, fee: feeSource, rule: lowPriceRule, shippingCost: marginShipping })
+    : null;
+  const marginBreakdown = marginEstimate
+    ? {
+        price: marginEstimate.price,
+        fee: marginEstimate.commission,
+        fixedFee: marginEstimate.fixedFee,
+        shipping: marginEstimate.shipping,
+        withholding: marginEstimate.withholding,
+        net: marginEstimate.net,
+        marginRate: marginEstimate.marginPct === null ? null : marginEstimate.marginPct / 100,
+      }
     : null;
   const storeProfitPerUnit =
     selectedProduct && costFloor !== null ? Math.max(0, selectedProduct.price - costFloor) : null;
@@ -566,12 +577,12 @@ export function ListingPublicationWizard({
   const suggestionTarget = pricingTargets ? minNetPerUnit : hasTargetProfit ? targetProfit : storeProfitPerUnit;
   const suggestedPrice =
     costFloor !== null && suggestionTarget !== null
-      ? suggestMercadoLibrePrice({
+      ? suggestMercadoLibrePriceWithRule({
           unitCost: costFloor,
+          fee: feeSource,
+          rule: lowPriceRule,
           shippingCost: marginShipping,
-          feeRate,
-          targetNet: suggestionTarget,
-          targetMarginRate: targetMarginRate ?? 0,
+          targets: { targetNet: suggestionTarget, targetMarginRate: targetMarginRate ?? 0 },
         })
       : null;
   const lowPriceProduct = Boolean(
@@ -579,7 +590,7 @@ export function ListingPublicationWizard({
   );
   const breakevenPrice =
     costFloor !== null
-      ? suggestMercadoLibrePrice({ unitCost: costFloor, shippingCost: marginShipping, feeRate, targetNet: 0 })
+      ? suggestMercadoLibrePriceWithRule({ unitCost: costFloor, fee: feeSource, rule: lowPriceRule, shippingCost: marginShipping, targets: { targetNet: 0, targetMarginRate: 0 } })
       : null;
   const marginWarning = marginBreakdown
     ? getMercadoLibreMarginWarning(marginBreakdown, { breakevenPrice, targetMarginRate, minNetPerUnit })
@@ -2303,10 +2314,16 @@ export function ListingPublicationWizard({
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
-                    Comisión{priceEstimate ? "" : " (estimada 16 %)"}
+                    Comisión{marginEstimate?.commissionKind === "real" ? "" : ` (estimada ${marginEstimate?.commissionPct ?? 16} %)`}
                   </dt>
                   <dd className="font-semibold">−{currencyFormatter.format(marginBreakdown.fee)}</dd>
                 </div>
+                {marginBreakdown.fixedFee > 0 ? (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Cargo fijo (en vez del envío)</dt>
+                    <dd className="font-semibold">−{currencyFormatter.format(marginBreakdown.fixedFee)}</dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="text-xs text-muted-foreground">
                     Envío que pagas{estimatedSellerShippingCost === null ? " (estimado)" : ""}

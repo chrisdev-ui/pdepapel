@@ -129,7 +129,7 @@ describe("getGroupVariantEconomics", () => {
     const ok = getGroupVariantEconomics({
       price: 60_000,
       product: { acqPrice: 20_000, transportationCost: 0 },
-      feeRate: 0.15,
+      fee: { kind: "real", percentageFee: 15, fixedFee: 0, listingType: "gold_special" },
       shippingCost: 9_000,
       pricingTargets: targets,
     });
@@ -139,7 +139,7 @@ describe("getGroupVariantEconomics", () => {
     const short = getGroupVariantEconomics({
       price: 60_000,
       product: { acqPrice: 30_000, transportationCost: 0 },
-      feeRate: 0.15,
+      fee: { kind: "real", percentageFee: 15, fixedFee: 0, listingType: "gold_special" },
       shippingCost: 9_000,
       pricingTargets: targets,
     });
@@ -148,7 +148,7 @@ describe("getGroupVariantEconomics", () => {
     const atSuggested = getGroupVariantEconomics({
       price: short.suggestedPrice!,
       product: { acqPrice: 30_000, transportationCost: 0 },
-      feeRate: 0.15,
+      fee: { kind: "real", percentageFee: 15, fixedFee: 0, listingType: "gold_special" },
       shippingCost: 9_000,
       pricingTargets: targets,
     });
@@ -156,7 +156,7 @@ describe("getGroupVariantEconomics", () => {
   });
 
   it("sin costo registrado no hay neto ni aviso", () => {
-    const economics = getGroupVariantEconomics({ price: 50_000, product: {}, feeRate: 0.15, shippingCost: 9_000, pricingTargets: targets });
+    const economics = getGroupVariantEconomics({ price: 50_000, product: {}, fee: { kind: "real", percentageFee: 15, fixedFee: 0, listingType: "gold_special" }, shippingCost: 9_000, pricingTargets: targets });
     expect(economics.breakdown.net).toBeNull();
     expect(economics.warning).toBeNull();
     expect(economics.suggestedPrice).toBeNull();

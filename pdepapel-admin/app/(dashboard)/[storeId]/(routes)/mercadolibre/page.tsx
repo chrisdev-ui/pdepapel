@@ -46,7 +46,7 @@ export default async function MercadoLibrePage({
   });
   const store = await prismadb.store.findUnique({
     where: { id: params.storeId },
-    select: { mercadoLibreTargetMarginPercent: true, mercadoLibreMinNetPerUnit: true },
+    select: { mercadoLibreTargetMarginPercent: true, mercadoLibreMinNetPerUnit: true, mercadoLibreLowPriceFixedFee: true, mercadoLibreFreeShippingMin: true },
   });
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
@@ -56,7 +56,12 @@ export default async function MercadoLibrePage({
         connection={connection}
         pricingTargets={
           store
-            ? { targetMarginPercent: store.mercadoLibreTargetMarginPercent, minNetPerUnit: store.mercadoLibreMinNetPerUnit }
+            ? {
+                targetMarginPercent: store.mercadoLibreTargetMarginPercent,
+                minNetPerUnit: store.mercadoLibreMinNetPerUnit,
+                lowPriceFixedFee: store.mercadoLibreLowPriceFixedFee,
+                freeShippingMin: store.mercadoLibreFreeShippingMin,
+              }
             : null
         }
       />

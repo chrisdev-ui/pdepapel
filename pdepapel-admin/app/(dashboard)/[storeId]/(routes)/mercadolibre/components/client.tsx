@@ -1,5 +1,6 @@
 "use client";
 
+import type { MercadoLibrePricingTargets } from "@/lib/pricing/mercadolibre-fees";
 import { AlertCircle, CheckCircle2, ExternalLink, Link2, ListOrdered } from "lucide-react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
@@ -30,7 +31,7 @@ type MarketplaceConnection = {
 
 type MercadoLibreClientProps = {
   /** Objetivos de precio de la tienda (Configuración › Precios en Mercado Libre). */
-  pricingTargets?: { targetMarginPercent: number; minNetPerUnit: number } | null;
+  pricingTargets?: MercadoLibrePricingTargets | null;
   configuration: { configured: boolean; missing: readonly string[] };
   queueConfiguration: { configured: boolean; missing: readonly string[] };
   connection: MarketplaceConnection;
