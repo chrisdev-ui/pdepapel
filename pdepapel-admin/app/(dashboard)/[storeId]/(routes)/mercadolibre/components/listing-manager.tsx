@@ -1446,10 +1446,11 @@ export function MercadoLibreListingManager({
     setIsSuggestingPrice(true);
     try {
       const recommendation = await recommendMercadoLibreListingPrice({
-        acquisitionCost: product.acqPrice,
+        unitCost: product.acqPrice + Math.max(0, product.transportationCost ?? 0),
         targetProfit: profile.minimumMarginAmount,
-        additionalCosts: Math.max(0, product.transportationCost ?? 0),
         initialPrice: product.price,
+        listingType: form.listingType,
+        rule: lowPriceRuleOf(pricingTargets),
         getFeeQuote: (price) => getPriceEstimate(price, profile.categoryId),
       });
       if (!recommendation) return;
@@ -1502,22 +1503,24 @@ export function MercadoLibreListingManager({
         return;
       }
       // Solo el envío que paga la tienda entra al costo: si lo paga el
-      // comprador, no se descuenta de la ganancia.
-      const estimatedShippingCost =
+      // comprador, no se descuenta de la ganancia. Hasta el precio límite la
+      // regla compartida cobra el cargo fijo en su lugar.
+      const sellerShipping =
         shippingComparison && form.freeShipping
           ? shippingComparison.sellerOffersFree.sellerCost
           : 0;
-      // Envío y otros gastos por unidad del producto: parte del costo real.
-      const unitExtraCosts = Math.max(0, selectedProduct.transportationCost ?? 0);
       const initialPrice = Number(form.marketplacePrice);
       const recommendation = await recommendMercadoLibreListingPrice({
-        acquisitionCost: selectedProduct.acqPrice,
+        // Envío y otros gastos por unidad del producto: parte del costo real.
+        unitCost: selectedProduct.acqPrice + Math.max(0, selectedProduct.transportationCost ?? 0),
         targetProfit,
-        additionalCosts: estimatedShippingCost + unitExtraCosts,
         initialPrice:
           Number.isFinite(initialPrice) && initialPrice > 0
             ? initialPrice
             : selectedProduct.price,
+        listingType: form.listingType,
+        rule: lowPriceRuleOf(pricingTargets),
+        shippingCost: sellerShipping,
         getFeeQuote: (price) => getPriceEstimate(price, form.categoryId),
       });
       if (!recommendation) {

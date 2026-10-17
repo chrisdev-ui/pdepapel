@@ -1,16 +1,29 @@
+import {
+  feeSourceFromQuote,
+  mercadoLibreNetAt,
+  suggestMercadoLibrePriceWithRule,
+  type LowPriceRule,
+  type SaleFeeSource,
+} from "@/lib/pricing/mercadolibre-fees";
+
 export type MercadoLibreListingFeeQuote = {
   saleFeeAmount: number;
   percentageFee?: number | null;
   fixedFee?: number | null;
   /** Costo fijo de publicar (algunos tipos lo cobran); también sale del neto. */
   listingFeeAmount?: number | null;
+  listingTypeId?: string | null;
 };
 
 type PriceRecommendationInput = {
-  acquisitionCost: number | null;
+  /** Costo de compra + envío por unidad. */
+  unitCost: number | null;
   targetProfit: number | null;
   initialPrice: number;
-  additionalCosts?: number;
+  listingType: string | null;
+  rule: LowPriceRule;
+  /** Envío que paga la tienda por encima del precio límite; sin él, el estimado del módulo compartido. */
+  shippingCost?: number;
   getFeeQuote: (price: number) => Promise<MercadoLibreListingFeeQuote>;
 };
 
@@ -20,77 +33,49 @@ export type MercadoLibreListingPriceRecommendation = {
   expectedProfit: number;
 };
 
-function toPositiveInteger(value: number) {
-  return Math.max(1, Math.ceil(value));
-}
+const MAX_QUOTE_ROUNDS = 3;
 
+/**
+ * El menor precio terminado en 900 que deja la ganancia objetivo, con la
+ * misma regla que el Copiloto y el asistente de publicación
+ * (`lib/pricing/mercadolibre-fees.ts`): comisión de `listing_prices` (o la del
+ * tipo de publicación si no responde), cargo fijo en vez del envío hasta el
+ * precio límite, envío por encima y la retención estimada. La comisión se
+ * vuelve a pedir al precio sugerido, por si cambia de tramo.
+ */
 export async function recommendMercadoLibreListingPrice({
-  acquisitionCost,
+  unitCost,
   targetProfit,
   initialPrice,
-  additionalCosts = 0,
+  listingType,
+  rule,
+  shippingCost,
   getFeeQuote,
 }: PriceRecommendationInput): Promise<MercadoLibreListingPriceRecommendation | null> {
-  if (
-    acquisitionCost === null ||
-    !Number.isFinite(acquisitionCost) ||
-    acquisitionCost < 0 ||
-    targetProfit === null ||
-    !Number.isFinite(targetProfit) ||
-    targetProfit < 0 ||
-    !Number.isFinite(additionalCosts) ||
-    additionalCosts < 0
-  ) {
+  if (unitCost === null || !Number.isFinite(unitCost) || unitCost < 0 || targetProfit === null || !Number.isFinite(targetProfit) || targetProfit < 0) {
     return null;
   }
 
-  const requiredNetAmount = acquisitionCost + targetProfit + additionalCosts;
-  let price = toPositiveInteger(Math.max(initialPrice, requiredNetAmount));
-  let quote: MercadoLibreListingFeeQuote | null = null;
-
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    quote = await getFeeQuote(price);
+  let quotedAt = Math.max(1, Math.round(initialPrice));
+  let quote = await getFeeQuote(quotedAt);
+  let price: number | null = null;
+  for (let round = 0; round < MAX_QUOTE_ROUNDS; round += 1) {
+    const fee: SaleFeeSource = feeSourceFromQuote({ ...quote, listingTypeId: quote.listingTypeId ?? listingType }, quotedAt) ?? { kind: "tipo", listingType };
     const listingFee = Math.max(0, quote.listingFeeAmount ?? 0);
-    const percentageFee = quote.percentageFee ?? null;
-    const fixedFee = (quote.fixedFee ?? 0) + listingFee;
-    const percentageMultiplier =
-      percentageFee !== null && percentageFee >= 0 && percentageFee < 100
-        ? 1 - percentageFee / 100
-        : null;
-    const priceFromPercentage = percentageMultiplier
-      ? toPositiveInteger((requiredNetAmount + fixedFee) / percentageMultiplier)
-      : 0;
-    const nextPrice = Math.max(
-      price,
-      toPositiveInteger(requiredNetAmount + quote.saleFeeAmount + listingFee),
-      priceFromPercentage,
-    );
-    if (nextPrice <= price) {
-      return {
-        price,
-        saleFeeAmount: quote.saleFeeAmount,
-        expectedProfit:
-          price -
-          quote.saleFeeAmount -
-          listingFee -
-          acquisitionCost -
-          additionalCosts,
-      };
-    }
-    price = nextPrice;
+    price = suggestMercadoLibrePriceWithRule({
+      unitCost: unitCost + listingFee,
+      fee,
+      rule,
+      shippingCost,
+      targets: { targetNet: targetProfit, targetMarginRate: 0 },
+    });
+    if (price === null || price === quotedAt) break;
+    quotedAt = price;
+    quote = await getFeeQuote(price);
   }
+  if (price === null) return null;
 
-  if (!quote) return null;
-  const finalQuote = await getFeeQuote(price);
-  const finalListingFee = Math.max(0, finalQuote.listingFeeAmount ?? 0);
-  return {
-    price,
-    saleFeeAmount: finalQuote.saleFeeAmount,
-    expectedProfit:
-      price -
-      finalQuote.saleFeeAmount -
-      finalListingFee -
-      acquisitionCost -
-      additionalCosts,
-  };
+  const fee: SaleFeeSource = feeSourceFromQuote({ ...quote, listingTypeId: quote.listingTypeId ?? listingType }, quotedAt) ?? { kind: "tipo", listingType };
+  const estimate = mercadoLibreNetAt({ price, unitCost: unitCost + Math.max(0, quote.listingFeeAmount ?? 0), fee, rule, shippingCost });
+  return { price, saleFeeAmount: estimate.commission, expectedProfit: estimate.net ?? 0 };
 }
