@@ -796,6 +796,19 @@ describe("ListingPublicationWizard", () => {
       expect(margin).toHaveTextContent("Deja al menos 20 % neto o $ 10.000 por unidad, lo que sea mayor.");
     });
 
+    it("up to the low-price limit it charges the fixed fee instead of shipping; above it, shipping and no fixed fee", () => {
+      const rule = { ...targets, lowPriceFixedFee: 2000, freeShippingMin: 20000 };
+      const { unmount } = render(<WizardHarness onPublish={async () => undefined} initialStep={4} initialPrice="15000" pricingTargets={rule} listingTargetProfit="" />);
+      const low = document.getElementById("mercadolibre-margin")!;
+      expect(low).toHaveTextContent("Cargo fijo (en vez del envío)−$ 2.000");
+      expect(low).toHaveTextContent("Envío que pagas (estimado)−$ 0");
+      unmount();
+      render(<WizardHarness onPublish={async () => undefined} initialStep={4} initialPrice="25000" pricingTargets={rule} listingTargetProfit="" />);
+      const high = document.getElementById("mercadolibre-margin")!;
+      expect(high).not.toHaveTextContent("Cargo fijo");
+      expect(high).toHaveTextContent("Envío que pagas (estimado)−$ 8.100");
+    });
+
     it("warns below the store target and hints at packs for a low-price product", () => {
       render(<WizardHarness onPublish={async () => undefined} initialStep={4} pricingTargets={targets} listingTargetProfit="" />);
       expect(screen.getByText(/Te quedan \$ 3\.980 por unidad \(16\.6 %\), por debajo del objetivo de la tienda: al menos 20 % o \$ 10\.000 por unidad\./)).toBeVisible();

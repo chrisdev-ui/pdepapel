@@ -951,7 +951,8 @@ export const PRICING_CASES: PricingCase[] = [
     id: "precios-mercadolibre",
     pregunta: "¿A cuánto tendría que venderla en Mercado Libre si me costó $6.000?",
     herramienta: "calcularPrecio",
-    pasa: (answer, input) => input?.costoUnitario === 6000 && has(answer.text, "## Mercado Libre", "[[tag:estimado"),
+    // Sin publicación vinculada: las dos comisiones, nunca una sola.
+    pasa: (answer, input) => input?.costoUnitario === 6000 && has(answer.text, "## Mercado Libre", "[[tag:estimado", "Clásica, sin cuotas extra", "(16 %)", "Premium, con cuotas extra", "(19 %)"),
   },
   {
     id: "precios-empaque",
