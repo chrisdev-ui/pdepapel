@@ -48,8 +48,12 @@ export type LastReceipt =
 /** El envío real por unidad de esa recepción, como lo calcula la recepción; sin recepción, null. */
 export function proposedTransport(receipt: LastReceipt | null): number | null {
   if (!receipt) return null;
-  if (receipt.kind === "recepcion") return Math.max(0, Math.round((receipt.landedUnitCost - receipt.unitCost) * 100) / 100);
-  return transportationShare(receipt.unitCost, receipt.totalAmount, receipt.shippingCost);
+  const value =
+    receipt.kind === "recepcion"
+      ? Math.round((receipt.landedUnitCost - receipt.unitCost) * 100) / 100
+      : transportationShare(receipt.unitCost, receipt.totalAmount, receipt.shippingCost);
+  // Una recepción sin envío no es un envío de 0: «no registrado».
+  return value > 0 ? value : null;
 }
 
 const unitCost = (acqPrice: number | null, transport: number | null) => (acqPrice === null ? null : acqPrice + (transport ?? 0));

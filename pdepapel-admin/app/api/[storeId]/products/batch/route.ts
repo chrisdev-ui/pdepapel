@@ -220,7 +220,8 @@ export async function POST(
               // Parte del envío que le toca a este producto, como en la
               // recepción: `acqPrice + transportationCost` es el costo puesto
               // en bodega.
-              transportationCost: transportationShare(product.acqPrice || 0, totalRestockAmount, importShippingCost),
+              // Sin envío en la importación no hay dato: «no registrado», nunca 0.
+              transportationCost: transportationShare(product.acqPrice || 0, totalRestockAmount, importShippingCost) || null,
               stock: product.stock || 0,
               sku,
               categoryId: category.id,

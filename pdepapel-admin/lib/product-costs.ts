@@ -5,7 +5,8 @@
 export function parseTransportationCost(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
   const cost = Number(value);
-  if (!Number.isFinite(cost) || cost < 0) return null;
+  // 0 no es un dato de envío (decisión del 2026-10-17): se guarda «no registrado».
+  if (!Number.isFinite(cost) || cost <= 0) return null;
   return Math.round(cost * 100) / 100;
 }
 
@@ -42,7 +43,7 @@ export const TRANSPORT_SHARE_OF_PRICE_WARNING = 0.25;
 
 /** «Envío de la compra (solo este producto)»: el envío de la compra repartido entre las unidades que trajo. */
 export function perUnitFromOrder(orderTotal: number | null | undefined, units: number | null | undefined): number | null {
-  if (typeof orderTotal !== "number" || !Number.isFinite(orderTotal) || orderTotal < 0) return null;
+  if (typeof orderTotal !== "number" || !Number.isFinite(orderTotal) || orderTotal <= 0) return null;
   if (typeof units !== "number" || !Number.isInteger(units) || units <= 0) return null;
   return Math.round((orderTotal / units) * 100) / 100;
 }

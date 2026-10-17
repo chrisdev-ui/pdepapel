@@ -1,0 +1,21 @@
+-- «Envío y otros gastos por unidad» (`Product.transportationCost`): el valor por
+-- defecto de la columna pasa de 0 a NULL («no registrado»). Decisión de Christian
+-- del 2026-10-17: un 0 no es un dato de envío. Con el 0 por defecto, toda
+-- creación que no mandaba el campo (convertir un ítem manual en producto, las
+-- semillas) nacía con 0. No cambia ninguna fila: los 0 que ya existen los
+-- corrige `scripts/fix-transportation-zero.ts`, después del despliegue.
+-- Solo cambia el valor por defecto: en MySQL 8 es instantáneo (sin reescribir la tabla).
+-- SET DEFAULT NULL, nunca DROP DEFAULT: sin valor por defecto, con STRICT_TRANS_TABLES
+-- toda creación que no manda el campo falla (error 1364). `prisma db push` sobre una
+-- base existente hace DROP DEFAULT: recrea la base de pruebas en vez de empujar encima.
+--
+-- Se aplica con el flujo guardado (queda en ops/prod-writes.log):
+--   npm run prod:approve -- "<motivo>"
+--   npm run prod:migrate -- prisma/manual-migrations/20261017_product_transportation_default_null.sql --expect new
+--
+-- VERIFICACIÓN (solo lectura): SHOW CREATE TABLE `Product`; la línea de
+-- `transportationCost` dice DEFAULT '0' antes y DEFAULT NULL después
+-- (information_schema.COLUMN_DEFAULT da NULL también sin valor por defecto: no sirve).
+
+-- AlterTable
+ALTER TABLE `Product` ALTER COLUMN `transportationCost` SET DEFAULT NULL;

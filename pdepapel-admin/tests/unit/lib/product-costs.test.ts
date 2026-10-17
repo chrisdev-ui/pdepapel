@@ -8,6 +8,9 @@ describe("product unit costs", () => {
     expect(parseTransportationCost(1000.555)).toBe(1000.56);
     expect(parseTransportationCost("")).toBeNull();
     expect(parseTransportationCost(-1)).toBeNull();
+    // 0 no es un dato de envío: se guarda «no registrado».
+    expect(parseTransportationCost(0)).toBeNull();
+    expect(parseTransportationCost("0")).toBeNull();
     expect(parseTransportationCost("abc")).toBeNull();
   });
 

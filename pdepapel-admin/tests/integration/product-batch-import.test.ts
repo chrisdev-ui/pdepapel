@@ -130,7 +130,8 @@ describe("importación masiva de productos", () => {
     expect(await testPrisma.restockOrder.count({ where: { storeId: f.store.id } })).toBe(0);
 
     const borrador = await testPrisma.product.findFirstOrThrow({ where: { storeId: f.store.id, name: "Borrador importado" } });
-    expect(borrador.transportationCost).toBe(0);
+    // Sin envío en la importación no hay dato: «no registrado», nunca 0.
+    expect(borrador.transportationCost).toBeNull();
     const movement = await testPrisma.inventoryMovement.findFirstOrThrow({ where: { productId: borrador.id } });
     expect(movement.type).toBe("INITIAL_MIGRATION");
     expect(movement.cost).toBe(2000);

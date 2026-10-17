@@ -40,7 +40,9 @@ describe("corrección del envío por unidad", () => {
     expect(proposedTransport({ kind: "recepcion", orderNumber: "PO-0004", at: after, unitCost: 160, landedUnitCost: 170.13 })).toBe(10.13);
     // Pedido de 100 × 160 = 16.000 con 1.000 de envío: 1.000 / 16.000 × 160 = 10 por unidad.
     expect(proposedTransport({ kind: "pedido", orderNumber: "PO-0004", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 1000 })).toBe(10);
-    expect(proposedTransport({ kind: "pedido", orderNumber: "PO-1", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 0 })).toBe(0);
+    // Sin envío en el pedido o en la recepción: «no registrado», nunca 0.
+    expect(proposedTransport({ kind: "pedido", orderNumber: "PO-1", at: after, unitCost: 160, totalAmount: 16000, shippingCost: 0 })).toBeNull();
+    expect(proposedTransport({ kind: "recepcion", orderNumber: "PO-1", at: after, unitCost: 160, landedUnitCost: 160 })).toBeNull();
   });
 
   it("un producto barato con el 1.000: de 1.160 a 170 por unidad; que el margen suba no es excepción, se aplica con la regla", () => {

@@ -58,6 +58,7 @@ export async function createProductFromManualItem(data: CreateProductParams) {
       sku: `MAN-${Date.now()}`,
       price: data.price,
       acqPrice: data.cost, // Map cost to acqPrice
+      transportationCost: null,
       categoryId: data.categoryId,
       stock: 0, // Initial stock set to 0, movement will update it
       description: data.description || "Converted from Manual Item",

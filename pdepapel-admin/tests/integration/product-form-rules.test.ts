@@ -127,4 +127,35 @@ describe("product form rules with MySQL", () => {
     expect(response.status).toBe(200);
     await expect(testPrisma.product.findUniqueOrThrow({ where: { id: fixture.component.id } })).resolves.toMatchObject({ transportationCost: null });
   });
+
+  it("a shipping cost of 0 is stored as «no registrado», and the column default is no longer 0", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const { PATCH } = await import("@/app/api/[storeId]/products/[productId]/route");
+    const params = { params: { storeId: fixture.store.id, productId: fixture.component.id } };
+    expect((await PATCH(json("PATCH", await patchBody({ transportationCost: 0 })), params)).status).toBe(200);
+    await expect(testPrisma.product.findUniqueOrThrow({ where: { id: fixture.component.id } })).resolves.toMatchObject({ transportationCost: null });
+
+    // Una creación que no manda el campo (semillas, ítem manual) nace sin registrar.
+    const base = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture.component.id } });
+    const bare = await testPrisma.product.create({
+      data: {
+        storeId: fixture.store.id,
+        name: "Sin envío por defecto",
+        slug: `sin-envio-${Date.now()}`,
+        sku: `SIN-ENVIO-${Date.now()}`,
+        description: "Prueba del valor por defecto",
+        price: 1000,
+        categoryId: base.categoryId,
+        sizeId: base.sizeId,
+        colorId: base.colorId,
+        designId: base.designId,
+      },
+    });
+    try {
+      expect(bare.transportationCost).toBeNull();
+    } finally {
+      await testPrisma.product.delete({ where: { id: bare.id } });
+    }
+  });
 });

@@ -7,7 +7,8 @@ describe("envío por unidad", () => {
   it("«Envío de la compra (solo este producto)»: el envío de la compra entre las unidades, a dos decimales; sin datos válidos, nada", () => {
     expect(perUnitFromOrder(1000, 100)).toBe(10);
     expect(perUnitFromOrder(1000, 3)).toBe(333.33);
-    expect(perUnitFromOrder(0, 10)).toBe(0);
+    // Una compra sin envío no es un envío de 0: no se guarda nada.
+    expect(perUnitFromOrder(0, 10)).toBeNull();
     expect(perUnitFromOrder(1000, 0)).toBeNull();
     expect(perUnitFromOrder(1000, 2.5)).toBeNull();
     expect(perUnitFromOrder(null, 10)).toBeNull();
