@@ -12,6 +12,9 @@
 -- Solo agrega columnas. Sin llaves foráneas (relationMode = "prisma").
 --
 -- Se aplica ANTES de desplegar el código: el panel lee Store y Category completos.
+-- Solo con el flujo guardado (queda en ops/prod-writes.log):
+--   npm run prod:approve -- "<motivo>"
+--   npm run prod:migrate -- prisma/manual-migrations/20261017_add_pricing_settings.sql --expect new
 --
 -- VERIFICACIÓN PREVIA (debe devolver 0):
 --   SELECT COUNT(*) FROM information_schema.COLUMNS

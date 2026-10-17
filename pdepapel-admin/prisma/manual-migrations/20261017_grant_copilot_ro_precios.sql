@@ -1,7 +1,9 @@
 -- Permisos nuevos de `copilot_ro` para la habilidad «Precios» del Copiloto
 -- (lib/copiloto/skills/precios-*.ts). Va DESPUÉS de 20261017_add_pricing_settings.sql
--- (las columnas tienen que existir). Lo corre Christian en la consola de MySQL de
--- Railway con su usuario administrador; no pasa por `prod:migrate` ni por Claude.
+-- (las columnas tienen que existir). Lo aplica Christian con el flujo guardado,
+-- nunca desde la consola de Railway ni Claude:
+--   npm run prod:approve -- "<motivo>"
+--   npm run prod:migrate -- prisma/manual-migrations/20261017_grant_copilot_ro_precios.sql --expect new
 -- No hace falta redeploy: MySQL los aplica en la siguiente consulta.
 -- Product y Category ya se leen completos (20261010); Shipping.cost, Order y
 -- PaymentDetails ya alcanzan para el envío típico. Nada de datos de clientas.
