@@ -1907,7 +1907,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       <MobileSectionNav sections={sectionLinks} />
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full flex-col gap-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          // Como la ficha: valida Zod, y un límite nativo en un campo plegado no frena el envío sin avisar.
+          noValidate
+          className="flex w-full flex-col gap-4"
+        >
           <UnassignedPhotosBanner
             count={unassignedUrls.length}
             blocked={blockedSave}
