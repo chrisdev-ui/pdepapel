@@ -33,6 +33,7 @@ import {
   isRecentlyCreated,
 } from "@/lib/product-card";
 import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
+import { publicProductBrand } from "@/lib/product-brand";
 import { productPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { useCartPreview } from "@/providers/cart-preview-provider";
@@ -52,6 +53,10 @@ interface ProductCardProps {
   /** Ancho de imagen que pide el navegador; cambia según la cuadrícula. */
   sizes?: string;
   className?: string;
+  /** Sin la línea de marca: en la página de la marca y con el catálogo filtrado por una sola. */
+  hideBrand?: boolean;
+  /** Cuadrícula del catálogo: la línea de marca ocupa su alto aunque el producto no tenga marca, como el esqueleto. */
+  reserveBrandLine?: boolean;
 }
 
 const BADGE_TONES: Record<CardBadge["tone"], string> = {
@@ -85,6 +90,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
   loading,
   sizes = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw",
   className,
+  hideBrand = false,
+  reserveBrandLine = false,
 }) => {
   const [isMounted, setIsMounted] = useState(false);
   /**
@@ -145,6 +152,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const canBuy =
     !soldOut && (Boolean(presale) || !comingSoon) && !product.isArchived;
   const href = productPath(product.slug || product.id);
+  const brandName = hideBrand ? null : (publicProductBrand(product)?.name ?? null);
 
   const stop = (event: React.SyntheticEvent) => {
     event.preventDefault();
@@ -368,7 +376,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-1 flex-col gap-1.5">
+        {(brandName || (reserveBrandLine && !hideBrand)) && (
+          <p className="card-brand">
+            {brandName}
+          </p>
+        )}
         <Link
           href={href}
           className="line-clamp-2 min-h-[2.7em] font-sans text-[15px] font-semibold leading-[1.35] text-blue-yankees sm:text-[17px]"
@@ -429,7 +442,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             </span>
           )}
         </div>
-        <div className="flex h-12 items-center justify-between gap-2">
+        <div className="mt-auto flex h-12 items-center justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5 font-quicksand">
             <span className="flex items-baseline gap-2 whitespace-nowrap">
               <span className="text-[17px] font-bold tracking-tight text-blue-yankees sm:text-[22px]">

@@ -82,6 +82,8 @@ model Store {
   offers                          Offer[]                         @relation("StoreToOffer")
   boxes                           Box[]                           @relation("StoreToBox")
   productGroups                   ProductGroup[]                  @relation("StoreToProductGroup")
+  brands                          Brand[]
+  brandSlugRedirects              BrandSlugRedirect[]
   inventoryMovements              InventoryMovement[]             @relation("StoreToInventoryMovement")
   restockOrders                   RestockOrder[]                  @relation("StoreToRestockOrder")
   restockOrderReceipts            RestockOrderReceipt[]           @relation("StoreToRestockOrderReceipt")
@@ -404,7 +406,11 @@ model ProductGroup {
   name                        String
   slug                        String                       @default("")
   description                 String                       @db.Text
+  /// Texto libre anterior a Brand: ya no se escribe; se lee solo como respaldo de Mercado Libre hasta verificar la migración de datos.
   brand                       String?                      @db.VarChar(120)
+  /// Marca del grupo; todas sus variantes llevan la misma (lib/brand-consistency.ts).
+  brandId                     String?
+  brandRef                    Brand?                       @relation(fields: [brandId], references: [id], onDelete: Restrict)
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
   products                    Product[]
@@ -415,6 +421,7 @@ model ProductGroup {
   @@index([storeId])
   @@index([storeId, slug])
   @@index([createdAt])
+  @@index([brandId])
   @@fulltext([name])
   @@fulltext([name, description])
 }
@@ -447,7 +454,11 @@ model Product {
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
   sku                         String                       @unique
+  /// Texto libre anterior a Brand: ya no se escribe; se lee solo como respaldo de Mercado Libre hasta verificar la migración de datos.
   brand                       String?                      @db.VarChar(120)
+  /// Marca (fabricante). En un grupo, siempre igual a la del grupo.
+  brandId                     String?
+  brandRef                    Brand?                       @relation(fields: [brandId], references: [id], onDelete: Restrict)
   gtin                        String?                      @db.VarChar(14)
   mpn                         String?                      @db.VarChar(70)
   hasNoProductIdentifier      Boolean                      @default(false)
@@ -523,6 +534,8 @@ model Product {
   @@index([storeId, id, isArchived])
   @@index([id, stock])
   @@index([productGroupId])
+  @@index([brandId])
+  @@index([storeId, brandId, isArchived])
   @@fulltext([name])
   @@fulltext([name, description])
 }
@@ -565,6 +578,69 @@ model ProductSlugAlias {
   @@unique([storeId, slug])
   @@index([productId])
   @@index([storeId, createdAt])
+}
+
+enum BrandLogoPermission {
+  UNKNOWN
+  ALLOWED
+  PENDING
+  DENIED
+}
+
+/// Marca o fabricante de lo que se vende. Visible en la tienda solo si
+/// `isVisible` y no `isArchived` (lib/brand-rules.ts); el nombre se usa en los
+/// datos (JSON-LD, feeds, GA4, Mercado Libre) mientras no esté archivada.
+model Brand {
+  id                String              @id @default(uuid())
+  storeId           String
+  name              String              @db.VarChar(120)
+  slug              String              @db.VarChar(140)
+  /// Otras formas de escribirla (lista de textos). Sirven para sugerir la marca por el nombre del producto.
+  aliases           Json
+  manufacturerName  String?             @db.VarChar(120)
+  logoUrl           String?             @db.VarChar(500)
+  logoPublicId      String?             @db.VarChar(255)
+  logoWidth         Int?
+  logoHeight        Int?
+  logoHasBackground Boolean             @default(false)
+  logoInverseUrl    String?             @db.VarChar(500)
+  /// Hex «#RRGGBB» para teñir el encabezado de su página.
+  color             String?             @db.VarChar(7)
+  seoText           String?             @db.VarChar(160)
+  website           String?             @db.VarChar(500)
+  logoSourceUrl     String?             @db.VarChar(500)
+  logoPermission    BrandLogoPermission @default(UNKNOWN)
+  isVisible         Boolean             @default(true)
+  /// Para el carrusel «Compra por marca» (fase 2); hoy solo se guarda.
+  isFeatured        Boolean             @default(false)
+  sortOrder         Int                 @default(0)
+  isArchived        Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         String?
+
+  store         Store               @relation(fields: [storeId], references: [id])
+  products      Product[]
+  productGroups ProductGroup[]
+  slugRedirects BrandSlugRedirect[]
+
+  @@unique([storeId, slug])
+  @@index([storeId, isVisible, isArchived, sortOrder])
+}
+
+/// Dirección anterior de una marca («Cambiar dirección» o una fusión): /marcas/<oldSlug> redirige a la marca.
+model BrandSlugRedirect {
+  id        String   @id @default(uuid())
+  storeId   String
+  oldSlug   String   @db.VarChar(140)
+  brandId   String
+  createdAt DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, oldSlug])
+  @@index([brandId])
 }
 
 /// URL de un producto borrado de verdad (no archivado). La fila del producto
@@ -1147,11 +1223,13 @@ model OrderItem {
   quantity  Int
 
   // Snapshot Fields (To support Manual Items & Historical Fidelity)
-  name     String  @default("")
-  sku      String? @default("")
-  price    Float   @default(0)
-  imageUrl String? @default("")
-  isCustom Boolean @default(false)
+  name      String  @default("")
+  sku       String? @default("")
+  price     Float   @default(0)
+  imageUrl  String? @default("")
+  isCustom  Boolean @default(false)
+  /// Nombre de la marca al crear la línea (lib/order-item-brand.ts). NULL: sin marca o línea anterior a las marcas.
+  brandName String? @db.VarChar(120)
 
   /// Esta línea se vendió por adelantado: al pagarse NO descontó inventario.
   isPreorder         Boolean   @default(false)

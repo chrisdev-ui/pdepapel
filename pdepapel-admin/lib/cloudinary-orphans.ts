@@ -19,7 +19,8 @@ export type ReferenceSource =
   | "Shipping"
   | "Product.description"
   | "ProductGroup.description"
-  | "ConversationMessage.mediaUrl";
+  | "ConversationMessage.mediaUrl"
+  | "Brand";
 
 export type ReferenceDb = Pick<
   PrismaClient,
@@ -33,6 +34,7 @@ export type ReferenceDb = Pick<
   | "product"
   | "productGroup"
   | "conversationMessage"
+  | "brand"
 >;
 
 const URL_PATTERN = /https?:\/\/res\.cloudinary\.com\/[^\s"')<>]+/g;
@@ -49,7 +51,7 @@ export async function collectReferencedPublicIds(db: ReferenceDb): Promise<Map<s
     }
   };
 
-  const [images, orderItems, videos, categories, homeContents, stores, shippings, products, groups, messages] =
+  const [images, orderItems, videos, categories, homeContents, stores, shippings, products, groups, messages, brands] =
     await Promise.all([
       db.image.findMany({ select: { url: true } }),
       db.orderItem.findMany({ where: { imageUrl: { not: null } }, select: { imageUrl: true } }),
@@ -61,6 +63,7 @@ export async function collectReferencedPublicIds(db: ReferenceDb): Promise<Map<s
       db.product.findMany({ select: { description: true } }),
       db.productGroup.findMany({ select: { description: true } }),
       db.conversationMessage.findMany({ where: { mediaUrl: { not: null } }, select: { mediaUrl: true } }),
+      db.brand.findMany({ select: { logoUrl: true, logoInverseUrl: true } }),
     ]);
 
   images.forEach((row) => add(row.url, "Image"));
@@ -83,6 +86,10 @@ export async function collectReferencedPublicIds(db: ReferenceDb): Promise<Map<s
   products.forEach((row) => add(row.description, "Product.description"));
   groups.forEach((row) => add(row.description, "ProductGroup.description"));
   messages.forEach((row) => add(row.mediaUrl, "ConversationMessage.mediaUrl"));
+  brands.forEach((row) => {
+    add(row.logoUrl, "Brand");
+    add(row.logoInverseUrl, "Brand");
+  });
 
   return refs;
 }

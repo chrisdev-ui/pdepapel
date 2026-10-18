@@ -32,8 +32,45 @@ const base = {
   reviews: [{ id: "r1", userId: "u", name: "Ana", rating: 5, comment: "" }],
 } as unknown as Product;
 
+const brand = (isPublic: boolean) => ({
+  name: "Marca de prueba",
+  slug: "marca-de-prueba",
+  logoUrl: "https://res.cloudinary.com/demo/logo.png",
+  logoHasBackground: false,
+  logoPermission: "ALLOWED" as const,
+  color: null,
+  isPublic,
+});
+
 describe("ProductCard", () => {
   afterEach(cleanup);
+
+  describe("línea de marca (variante B)", () => {
+    it("muestra el nombre de una marca pública sobre el título, sin logo", () => {
+      render(<ProductCard product={{ ...base, brand: brand(true) }} />);
+      expect(screen.getByText("Marca de prueba")).toBeTruthy();
+      expect(screen.queryByRole("img", { name: "Marca de prueba" })).toBeNull();
+    });
+
+    it("no dice nada de una marca oculta", () => {
+      render(<ProductCard product={{ ...base, brand: brand(false) }} />);
+      expect(screen.queryByText("Marca de prueba")).toBeNull();
+    });
+
+    it("toma la marca del grupo y la calla en la página de la marca", () => {
+      const grouped = { ...base, brand: null, productGroup: { id: "g", name: "Grupo", brand: brand(true) } } as Product;
+      render(<ProductCard product={grouped} />);
+      expect(screen.getByText("Marca de prueba")).toBeTruthy();
+      cleanup();
+      render(<ProductCard product={grouped} hideBrand />);
+      expect(screen.queryByText("Marca de prueba")).toBeNull();
+    });
+
+    it("ignora un texto de marca viejo guardado en el navegador", () => {
+      render(<ProductCard product={{ ...base, brand: "Texto viejo" as unknown as Product["brand"] }} />);
+      expect(screen.queryByText("Texto viejo")).toBeNull();
+    });
+  });
 
   const lastButton = (name: string | RegExp) => screen.getAllByRole("button", { name }).at(-1)!;
 

@@ -210,23 +210,24 @@
     <ol>
       <li><a href="#productos">13. Productos</a></li>
       <li><a href="#atributos">14. Atributos</a></li>
-      <li><a href="#proveedores">15. Proveedores y aprovisionamiento</a></li>
-      <li><a href="#contenido">16. Contenido de la tienda</a></li>
+      <li><a href="#marcas">15. Marcas</a></li>
+      <li><a href="#proveedores">16. Proveedores y aprovisionamiento</a></li>
+      <li><a href="#contenido">17. Contenido de la tienda</a></li>
     </ol>
     <div class="group">Inventario y marketing</div>
     <ol>
-      <li><a href="#inventario">17. Inventario y movimientos</a></li>
-      <li><a href="#promociones">18. Promociones</a></li>
-      <li><a href="#boletin">19. Boletín</a></li>
+      <li><a href="#inventario">18. Inventario y movimientos</a></li>
+      <li><a href="#promociones">19. Promociones</a></li>
+      <li><a href="#boletin">20. Boletín</a></li>
     </ol>
     <div class="group">Reportes y ajustes</div>
     <ol>
-      <li><a href="#reportes">20. Rendimiento y tributarios</a></li>
-      <li><a href="#ajustes">21. Ajustes</a></li>
-      <li><a href="#copiloto">22. Copiloto</a></li>
-      <li><a href="#estados">23. Estados y vocabulario</a></li>
-      <li><a href="#problemas">24. Si algo no cuadra</a></li>
-      <li><a href="#primer-dia">25. Primer día en el equipo</a></li>
+      <li><a href="#reportes">21. Rendimiento y tributarios</a></li>
+      <li><a href="#ajustes">22. Ajustes</a></li>
+      <li><a href="#copiloto">23. Copiloto</a></li>
+      <li><a href="#estados">24. Estados y vocabulario</a></li>
+      <li><a href="#problemas">25. Si algo no cuadra</a></li>
+      <li><a href="#primer-dia">26. Primer día en el equipo</a></li>
     </ol>
   </nav>
 
@@ -234,7 +235,7 @@
     <div class="toc-inline">
       <div class="eyebrow">Contenido</div>
       <ol>
-        <li><a href="#acceso">Antes de empezar</a></li><li><a href="#recorrido">Cómo se recorre el panel</a></li><li><a href="#inicio">Inicio</a></li><li><a href="#pedidos">Pedidos</a></li><li><a href="#tarjetas-regalo">Tarjetas de regalo</a></li><li><a href="#pos">Punto de venta</a></li><li><a href="#ferias">Ferias</a></li><li><a href="#ml">Mercado Libre</a></li><li><a href="#envios">Envíos</a></li><li><a href="#clientes">Clientes y reseñas</a></li><li><a href="#reservas">Reservas</a></li><li><a href="#productos">Productos</a></li><li><a href="#atributos">Atributos</a></li><li><a href="#proveedores">Proveedores</a></li><li><a href="#contenido">Contenido de la tienda</a></li><li><a href="#inventario">Inventario</a></li><li><a href="#promociones">Promociones</a></li><li><a href="#boletin">Boletín</a></li><li><a href="#reportes">Reportes</a></li><li><a href="#ajustes">Ajustes</a></li><li><a href="#copiloto">Copiloto</a></li><li><a href="#estados">Estados</a></li><li><a href="#problemas">Si algo no cuadra</a></li><li><a href="#primer-dia">Primer día</a></li>
+        <li><a href="#acceso">Antes de empezar</a></li><li><a href="#recorrido">Cómo se recorre el panel</a></li><li><a href="#inicio">Inicio</a></li><li><a href="#pedidos">Pedidos</a></li><li><a href="#tarjetas-regalo">Tarjetas de regalo</a></li><li><a href="#pos">Punto de venta</a></li><li><a href="#ferias">Ferias</a></li><li><a href="#ml">Mercado Libre</a></li><li><a href="#envios">Envíos</a></li><li><a href="#clientes">Clientes y reseñas</a></li><li><a href="#reservas">Reservas</a></li><li><a href="#productos">Productos</a></li><li><a href="#atributos">Atributos</a></li><li><a href="#marcas">Marcas</a></li><li><a href="#proveedores">Proveedores</a></li><li><a href="#contenido">Contenido de la tienda</a></li><li><a href="#inventario">Inventario</a></li><li><a href="#promociones">Promociones</a></li><li><a href="#boletin">Boletín</a></li><li><a href="#reportes">Reportes</a></li><li><a href="#ajustes">Ajustes</a></li><li><a href="#copiloto">Copiloto</a></li><li><a href="#estados">Estados</a></li><li><a href="#problemas">Si algo no cuadra</a></li><li><a href="#primer-dia">Primer día</a></li>
       </ol>
     </div>
 
@@ -906,8 +907,50 @@
     </section>
 
     <!-- 12 -->
+    <section class="chapter" id="marcas" style="--dot:#A4C3FE">
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>15. Marcas</h2></div>
+      <div class="route">Ruta: <code>/marcas</code> · <code>/marcas/sugerencias</code> · en cada ficha de producto y de grupo, el campo <strong>Marca</strong></div>
+      <p>Una marca es la del fabricante del producto (Kiut, Norma, Scribe…). En la tienda cada marca visible tiene su página (<code>/marcas/kiut</code>), una fila de marcas encima del catálogo, una sección <strong>Marca</strong> en los filtros, la línea con el nombre en la tarjeta del producto y, en la ficha, <strong>«Original Kiut ›»</strong> junto al título y el carril <strong>«Más de Kiut»</strong>. La marca también viaja a Google (ficha y feed), al catálogo de Meta, a Mercado Libre (atributo Marca) y a cada línea de pedido. Un producto genérico o hecho a mano va <strong>Sin marca</strong>.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/marcas" alt="La lista de Marcas: logo, nombre, productos activos, interruptores En la tienda y En Compra por marca, flechas para ordenar y el menú de cada marca." loading="lazy" width="1440" height="900"></div><figcaption>La lista de Marcas: logo, nombre, productos activos, interruptores En la tienda y En Compra por marca, flechas para ordenar y el menú de cada marca.</figcaption></figure>
+      <h3>La lista</h3>
+      <ul class="list">
+        <li><strong>Productos</strong>: los activos de la marca; el total con archivados sale al pasar el cursor.</li>
+        <li><strong>En la tienda</strong>: apagado, la marca queda <strong>oculta</strong>: su página no existe, no sale en la fila, los filtros, el menú ni la ficha. Sus productos se siguen vendiendo y la marca sigue yendo a Google, Meta y Mercado Libre, porque es un dato del producto.</li>
+        <li><strong>En Compra por marca</strong>: la marca entra en el menú y, más adelante, en el carrusel de logos del inicio.</li>
+        <li>Cada interruptor muestra un aviso con <strong>Deshacer</strong> durante unos segundos. El orden se cambia arrastrando o con las flechas <strong>Subir</strong>/<strong>Bajar</strong>; es el orden de la fila, el menú y los filtros de la tienda.</li>
+        <li><strong>Menú de la marca</strong>: Editar · Fusionar con otra marca… · Archivar. <strong>Eliminar</strong> solo aparece cuando la marca no tiene productos ni grupos.</li>
+      </ul>
+      <h3>Crear o editar una marca</h3>
+      <ol class="steps">
+        <li><strong>Nueva marca</strong> (o el nombre en la lista). Escribe el <strong>Nombre</strong> tal como lo escribe la marca; la dirección de su página sale del nombre.</li>
+        <li><strong>Alias</strong>: otras formas en que aparece en los nombres de producto (KIUT, Kiut by Norma, o una línea de producto como Incolors para Scribe). Sirven para las sugerencias.</li>
+        <li><strong>Logo</strong>: PNG o SVG, de 400 px de ancho o más y con fondo transparente; la ficha avisa si el fondo no es transparente o la resolución es baja. Hay un espacio aparte para el logo en blanco (fondo oscuro).</li>
+        <li><strong>Permiso de uso del logo</strong>: Sin revisar, Permitido, Pendiente o Negado. Con Pendiente o Negado la tienda muestra el <strong>nombre</strong> en una píldora en vez del logo.</li>
+        <li><strong>Color</strong> (opcional): el fondo del encabezado de su página. Si el texto no se leería encima, sale «Muy oscuro» y no deja guardar.</li>
+        <li><strong>Fabricante</strong>, <strong>sitio oficial</strong> y <strong>fuente del logo</strong> son solo para ti. El <strong>texto corto</strong> (hasta 160 caracteres) es la descripción de su página en Google.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/marcas-ficha" alt="La ficha de una marca: nombre, alias, fabricante, logo con sus avisos, permiso de uso, color con la revisión de contraste y la vista previa de cómo se verá en la tienda." loading="lazy" width="1440" height="900"></div><figcaption>La ficha de una marca: nombre, alias, fabricante, logo con sus avisos, permiso de uso, color con la revisión de contraste y la vista previa de cómo se verá en la tienda.</figcaption></figure>
+      <div class="note rule"><strong>La dirección es estable</strong><p>La dirección de la página (<code>/marcas/kiut</code>) no cambia al renombrar la marca. Si de verdad hace falta otra, <strong>Cambiar dirección</strong>: la anterior sigue abriendo y lleva a la nueva, así los enlaces compartidos no se rompen.</p></div>
+      <h3>Asignar la marca a los productos</h3>
+      <ul class="list">
+        <li><strong>En la ficha</strong>: el campo <strong>Marca</strong> (en el teléfono se abre una hoja desde abajo con buscador, «Sin marca» y «Crear marca nueva»). Si el nombre dice una marca, aparece <strong>«¿Es de la marca Kiut? Usar Kiut»</strong>.</li>
+        <li><strong>En un grupo</strong>: la marca es una sola para todas sus variantes; se elige en la ficha del grupo y las variantes la muestran como «viene del grupo».</li>
+        <li><strong>En lote</strong>: en Productos, filtra por <strong>Marca → Sin marca</strong>, marca las filas y usa <strong>Asignar marca</strong>. Si eliges una variante, cambia todo su grupo; los que ya tienen otra marca se listan aparte y no se tocan salvo que los incluyas.</li>
+        <li><strong>Sugerencias automáticas</strong> (<strong>Revisar sugerencias</strong> en la lista): por cada marca, los productos sin marca cuyo nombre dice la marca o uno de sus alias, ya marcados; los que tienen otra marca salen aparte como conflicto. Revisa y pulsa <strong>Asignar Kiut a N productos</strong>.</li>
+      </ul>
+      <figure class="screen phone"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/marcas-sugerencias" alt="Sugerencias automáticas en el teléfono: la marca elegida arriba, los productos que la dicen en el nombre con su casilla y el botón para asignarla." loading="lazy" width="390" height="844"></div><figcaption>Sugerencias automáticas en el teléfono: la marca elegida arriba, los productos que la dicen en el nombre con su casilla y el botón para asignarla.</figcaption></figure>
+      <h3>Fusionar dos marcas que son la misma</h3>
+      <ol class="steps">
+        <li>En el menú de la marca que sobra, <strong>Fusionar con otra marca…</strong> y elige la que <strong>se queda</strong>.</li>
+        <li>La ventana resume lo que pasa: cuántos productos y grupos se mueven, que el nombre de la que sobra queda como alias de la que se queda y que su dirección redirige a la de la que se queda.</li>
+        <li>Al confirmar, la que sobra queda <strong>archivada</strong>, no borrada, y se abre la ficha de la que se queda.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/marcas-fusionar" alt="La ventana Fusionar: la marca que se queda y el resumen de lo que pasa al fusionar." loading="lazy" width="576" height="484"></div><figcaption>La ventana Fusionar: la marca que se queda y el resumen de lo que pasa al fusionar.</figcaption></figure>
+      <div class="note care"><strong>Mercado Libre</strong><p>Asignar una marca no cambia las publicaciones que ya están activas en Mercado Libre; la marca se envía al publicar o al actualizar una publicación. Los precios nunca se tocan.</p></div>
+    </section>
+
     <section class="chapter" id="proveedores" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>15. Proveedores y aprovisionamiento</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>16. Proveedores y aprovisionamiento</h2></div>
       <div class="route">Rutas: <code>/proveedores</code> y <code>/aprovisionamiento</code></div>
       <p><strong>Proveedores</strong> es la lista de a quién se le compra; cada producto puede tener el suyo. <strong>Aprovisionamiento</strong> registra los pedidos a proveedores: qué se encargó, cuánto se espera pagar y, al recibir, cuántas unidades entraron. Al recibir un pedido de aprovisionamiento, el inventario sube y queda un movimiento «Reposición recibida» con el costo.</p>
       <div class="screens">
@@ -919,12 +962,12 @@
       <p>La lista abre con cuatro cifras —esperando mercancía, unidades en camino, comprometido a costo y con retraso— y pestañas por estado (Todo, Borradores, Al proveedor, Recibiendo, Completados, Cancelados) que quedan en el enlace. La columna <strong>Cuándo llega</strong> suma el plazo del proveedor a la fecha del pedido; si el proveedor no tiene «Días de entrega» registrados dice «Sin plazo del proveedor» en vez de inventar una fecha.</p>
       <p>En el pedido, <strong>Recibir mercancía</strong> propone en cada línea lo que falta; recibir de más hay que confirmarlo, y antes de aceptar el bloque <strong>Al confirmar</strong> dice cuántas unidades entran, en cuántos movimientos, en qué estado queda el pedido y que no se puede deshacer desde ahí (se corrige con un movimiento en Movimientos de inventario).</p>
       <div class="note tip"><strong>El costo se promedia</strong><p>Con «Actualizar el costo» encendido, el costo del producto queda en el promedio ponderado por unidades entre lo que ya había en bodega y lo que entra, no en el precio de la última compra: recibir 2 unidades más caras ya no revalúa las 100 que estaban guardadas.</p></div>
-      <div class="note tip"><strong>Facturas de compra</strong><p>Un pedido de aprovisionamiento no es una factura. Las facturas reales de proveedores se registran para los reportes tributarios (capítulo 20) con su número de factura.</p></div>
+      <div class="note tip"><strong>Facturas de compra</strong><p>Un pedido de aprovisionamiento no es una factura. Las facturas reales de proveedores se registran para los reportes tributarios (capítulo 21) con su número de factura.</p></div>
     </section>
 
     <!-- 13 -->
     <section class="chapter" id="contenido" style="--dot:#FEA4C3">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>16. Contenido de la tienda</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>17. Contenido de la tienda</h2></div>
       <div class="route">Ruta: <code>/contenido</code> · pestañas Portada y Redes en la tienda</div>
       <p>Lo que la gente ve al entrar a la tienda. <strong>Portada</strong> tiene dos ubicaciones: el <strong>hero</strong> (el primer pantallazo: título, texto, botones e imagen) y el <strong>banner de campaña</strong>, un bloque promocional que solo aparece mientras está vigente. <strong>Redes en la tienda</strong> son las publicaciones de Instagram u otras redes que se muestran en la página.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/contenido" alt="La pestaña Portada con el hero y las campañas." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Portada con el hero y las campañas, cada una con su estado.</figcaption></figure>
@@ -943,7 +986,7 @@
 
     <!-- 14 -->
     <section class="chapter" id="inventario" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Inventario</span><h2>17. Inventario y movimientos</h2></div>
+      <div class="chapter-head"><span class="area">Inventario</span><h2>18. Inventario y movimientos</h2></div>
       <div class="route">Rutas: <code>/inventario</code> y <code>/movimientos-inventario</code></div>
       <p><strong>Inventario</strong> es una sola lista con todo el stock activo valorado al costo de compra. Las tarjetas resumen el valor a costo, los productos activos, el stock crítico y los productos sin costo registrado (que no entran en la valorización). Las vistas separan <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Sin costo</strong> y <strong>Kits</strong>.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/inventario" alt="La lista de inventario valorada al costo, con el último movimiento de cada producto." loading="lazy" width="1440" height="900"></div><figcaption>La lista de inventario valorada al costo, con el último movimiento de cada producto.</figcaption></figure>
@@ -961,7 +1004,7 @@
 
     <!-- 15 -->
     <section class="chapter" id="promociones" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Marketing</span><h2>18. Promociones</h2></div>
+      <div class="chapter-head"><span class="area">Marketing</span><h2>19. Promociones</h2></div>
       <div class="route">Ruta: <code>/promociones</code> · pestañas Ofertas y Cupones</div>
       <p>Una <strong>oferta</strong> rebaja el precio de productos, subcategorías o grupos durante un periodo y se ve en la tienda como etiqueta («15 % OFF»). Un <strong>cupón</strong> es un código que la persona escribe al pagar. Las tarjetas cuentan cuántas están <strong>vigentes</strong>, <strong>programadas</strong>, <strong>vencidas</strong> y <strong>desactivadas</strong>; las vigencias se recalculan solas cada día.</p>
       <h3>Ofertas</h3>
@@ -994,7 +1037,7 @@
 
     <!-- 16 -->
     <section class="chapter" id="boletin" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Marketing</span><h2>19. Boletín</h2></div>
+      <div class="chapter-head"><span class="area">Marketing</span><h2>20. Boletín</h2></div>
       <div class="route">Ruta: <code>/boletin</code></div>
       <p>Las personas que pidieron novedades desde la tienda. Solo las <strong>confirmadas</strong> (abrieron el correo de confirmación) reciben correos. <strong>Exportar confirmados</strong> descarga la lista y <strong>Dar de baja</strong> retira a alguien que lo pida.</p>
 
@@ -1018,7 +1061,7 @@
 
     <!-- 17 -->
     <section class="chapter" id="reportes" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Reportes</span><h2>20. Rendimiento y tributarios</h2></div>
+      <div class="chapter-head"><span class="area">Reportes</span><h2>21. Rendimiento y tributarios</h2></div>
       <div class="route">Rutas: <code>/rendimiento</code> (pestañas Resumen y caja, Productos y riesgos, Envíos) y <code>/reportes-tributarios</code></div>
       <p><strong>Rendimiento</strong> responde cuánto vendes, cuánto te cuesta y cuánto te queda, por mes. La pestaña <strong>Resumen y caja</strong> sugiere reserva para impuestos, reinversión y retiro; <strong>Productos y riesgos</strong> muestra ingresos contra ganancia, los productos sin rotación, los que se agotan pronto, los clientes que no vuelven y los mejores; <strong>Envíos</strong> muestra cuántos salieron, en qué punto están y con qué transportadora, con lo que te cobró cada una.</p>
       <div class="note"><strong>El mes que elijas manda en las tres pestañas</strong><p>El selector de mes está arriba a la derecha. Antes la pestaña de <strong>Envíos</strong> se lo saltaba: eligieras el mes que eligieras, te mostraba el actual y no lo decía. Ahora las tres enseñan el mismo mes, y Envíos lo escribe encima de las cifras para que no quede duda.</p></div>
@@ -1037,7 +1080,7 @@
 
     <!-- 18 -->
     <section class="chapter" id="ajustes" style="--dot:#FEA4C3">
-      <div class="chapter-head"><span class="area">Ajustes</span><h2>21. Ajustes</h2></div>
+      <div class="chapter-head"><span class="area">Ajustes</span><h2>22. Ajustes</h2></div>
       <div class="route">Ruta: <code>/configuracion</code> · pestañas Tienda, Envíos y empaques, Pagos, Integraciones, Avanzado</div>
       <ul class="list">
         <li><strong>Tienda</strong>: logo, nombre, contacto, redes sociales y políticas.</li>
@@ -1056,7 +1099,7 @@
 
     <!-- 22 -->
     <section class="chapter" id="copiloto" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Ajustes</span><h2>22. Copiloto</h2></div>
+      <div class="chapter-head"><span class="area">Ajustes</span><h2>23. Copiloto</h2></div>
       <div class="route">Ruta: <code>/copiloto</code> · botón <strong>Copiloto</strong> arriba a la derecha, en cualquier pantalla</div>
       <p>El copiloto es un chat que <strong>consulta tus datos y te responde con cifras de la tienda</strong>: ventas, margen, inventario, Mercado Libre, qué promocionar. Debajo de cada respuesta dice de dónde salieron los datos y de qué fecha son. También redacta descripciones de producto y textos para redes.</p>
       <div class="note rule"><strong>Solo lee, nunca cambia nada</strong><p>El copiloto no puede crear, editar ni borrar: ni productos, ni precios, ni pedidos, ni publicaciones. Si le pides algo así, te dice en qué pantalla del panel hacerlo. Tampoco da teléfonos ni correos de clientas.</p></div>
@@ -1097,7 +1140,7 @@
 
     <!-- 19 -->
     <section class="chapter" id="estados" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>23. Estados y vocabulario</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>24. Estados y vocabulario</h2></div>
       <h3>Estados de pago de un pedido</h3>
       <div class="table-wrap"><table class="states">
         <tr><th>Insignia</th><th>Significa</th><th>Siguiente paso</th></tr>
@@ -1118,7 +1161,7 @@
 
     <!-- 20 -->
     <section class="chapter" id="problemas" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>24. Si algo no cuadra</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>25. Si algo no cuadra</h2></div>
       <div class="table-wrap"><table class="states">
         <tr><th>Lo que ves</th><th>Qué revisar</th></tr>
         <tr><td>Cambié un producto y la tienda sigue mostrando lo anterior.</td><td>Espera unos segundos y recarga. Si persiste, Ajustes › Avanzado › limpiar caché de la tienda.</td></tr>
@@ -1139,7 +1182,7 @@
 
     <!-- 21 -->
     <section class="chapter" id="primer-dia" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>25. Primer día en el equipo</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>26. Primer día en el equipo</h2></div>
       <p>Una lista corta para quien empieza. Al terminarla ya puedes atender la tienda un día completo.</p>
       <ul class="checklist">
         <li>Entrar al panel con tu cuenta y confirmar que ves la tienda P de Papel.</li>

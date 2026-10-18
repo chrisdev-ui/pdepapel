@@ -31,7 +31,8 @@ function product(
     description: "<p>Cuaderno <strong>A5</strong>, tapa dura</p>",
     price: 18000,
     stock: 3,
-    brand: "P de Papel",
+    brand: null,
+    brandRef: { name: "Marca de prueba", isArchived: false },
     gtin: null,
     mpn: null,
     hasNoProductIdentifier: false,
@@ -84,7 +85,7 @@ describe("buildGoogleMerchantFeed", () => {
       price: "18000 COP",
       condition: "new",
       availability: "in_stock",
-      brand: "P de Papel",
+      brand: "Marca de prueba",
       identifier_exists: "no",
       product_type: "Papelería > Cuadernos",
       excluded_destination: "Local_inventory_ads,Free_local_listings",
@@ -237,6 +238,19 @@ describe("Google Merchant feed access token", () => {
       feed: "store:store-1:google-merchant:feed:v2",
       report: "store:store-1:google-merchant:report:v2",
     });
+  });
+});
+
+describe("buildGoogleMerchantFeed: marca enlazada", () => {
+  it("usa la marca enlazada (también oculta, nunca archivada) y nunca el texto anterior", () => {
+    const rows = rowsOf(
+      buildGoogleMerchantFeed([
+        product({ id: "1", brand: "Texto viejo", brandRef: null }),
+        product({ id: "2", brandRef: { name: "Archivada", isArchived: true } }),
+        product({ id: "3", brandRef: null, productGroup: { brandRef: { name: "Del grupo", isArchived: false } } as never }),
+      ]).tsv,
+    );
+    expect(rows.map((row) => row.brand)).toEqual(["", "", "Del grupo"]);
   });
 });
 

@@ -38,6 +38,7 @@ import { learnFromPublishedListing } from "./category-learning";
 import { findItemFromAttempt, readPublishAttempt, withPublishAttempt } from "./publish-attempt";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
+import { MERCADOLIBRE_BRAND_SELECT } from "@/lib/mercadolibre/brand";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
 const FINANCIALS_PENDING_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
@@ -579,7 +580,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               stock: true,
               reservedUnits: true,
               sku: true,
-              brand: true,
+              ...MERCADOLIBRE_BRAND_SELECT,
               gtin: true,
               mpn: true,
               isArchived: true,

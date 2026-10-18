@@ -11,14 +11,17 @@ interface ProductListProps {
   /** Texto pequeño sobre el título, por ejemplo «Completa tu set». */
   eyebrow?: string;
   /** Enlace a la derecha del título. */
-  action?: { label: string; href: string };
+  action?: { label: string; href: string; prefetch?: boolean };
   /** Sin resultados: no pintar nada en vez del mensaje. */
   hideWhenEmpty?: boolean;
+  /** Con menos productos que esto no se pinta la sección (requiere `hideWhenEmpty`). */
+  minProducts?: number;
+  hideBrand?: boolean;
 }
 
 /** Cuadrícula de productos con la misma tarjeta, separación y columnas que el catálogo. */
-export const ProductList: React.FC<ProductListProps> = ({ title, products, eyebrow, action, hideWhenEmpty = false }) => {
-  if (products.length === 0 && hideWhenEmpty) return null;
+export const ProductList: React.FC<ProductListProps> = ({ title, products, eyebrow, action, hideWhenEmpty = false, minProducts = 1, hideBrand = false }) => {
+  if (hideWhenEmpty && products.length < Math.max(1, minProducts)) return null;
 
   return (
     <section aria-label={title} className="flex flex-col gap-4">
@@ -28,7 +31,7 @@ export const ProductList: React.FC<ProductListProps> = ({ title, products, eyebr
           <h2 className="font-serif text-2xl font-bold text-blue-yankees sm:text-3xl">{title}</h2>
         </div>
         {action && (
-          <Link href={action.href} className="font-sans text-sm font-semibold text-blue-yankees underline underline-offset-4">
+          <Link href={action.href} prefetch={action.prefetch} className="font-sans text-sm font-semibold text-blue-yankees underline underline-offset-4">
             {action.label}
           </Link>
         )}
@@ -38,7 +41,7 @@ export const ProductList: React.FC<ProductListProps> = ({ title, products, eyebr
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
           {products.map((product) => (
-            <ProductCard key={product.id} product={product} sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw" />
+            <ProductCard key={product.id} product={product} hideBrand={hideBrand} sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw" />
           ))}
         </div>
       )}

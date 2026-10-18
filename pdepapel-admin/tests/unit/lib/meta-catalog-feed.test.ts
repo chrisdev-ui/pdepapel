@@ -34,7 +34,8 @@ function product(
     description: "<p>Cuaderno <strong>A5</strong>, tapa dura</p>",
     price: 15000,
     stock: 3,
-    brand: "P de Papel",
+    brand: null,
+    brandRef: null,
     gtin: null,
     mpn: null,
     hasNoProductIdentifier: false,
@@ -97,8 +98,8 @@ describe("buildMetaCatalogFeed", () => {
       buildMetaCatalogFeed([
         product({ id: "1" }),
         product({ id: "2", gtin: "7701234567890" }),
-        product({ id: "3", brand: "Swag", mpn: "SW-9" }),
-        product({ id: "4", mpn: "PDP-9", brand: "" }),
+        product({ id: "3", brandRef: { name: "Swag", isArchived: false }, mpn: "SW-9" }),
+        product({ id: "4", mpn: "PDP-9", brand: "Texto viejo" }),
         product({ id: "5", gtin: "7701234567890", hasNoProductIdentifier: true }),
       ]).tsv,
     );
@@ -109,12 +110,13 @@ describe("buildMetaCatalogFeed", () => {
   it("fills the brand Meta requires without inventing a product identifier", () => {
     const rows = rowsOf(
       buildMetaCatalogFeed([
-        product({ id: "1", brand: "" }),
-        product({ id: "2", brand: "Swag" }),
-        product({ id: "3", brand: "", productGroup: { brand: "Shein" } as never }),
+        product({ id: "1" }),
+        product({ id: "2", brandRef: { name: "Swag", isArchived: false } }),
+        product({ id: "3", productGroup: { brandRef: { name: "Shein", isArchived: false } } as never }),
         // Con MPN pero sin marca real: la marca de respaldo llena la columna,
         // pero el par «marca + MPN» NO cuenta como identificador.
-        product({ id: "4", brand: "", mpn: "PDP-9" }),
+        product({ id: "4", brand: "Texto viejo", mpn: "PDP-9" }),
+        product({ id: "5", brandRef: { name: "Archivada", isArchived: true } }),
       ]).tsv,
     );
 
@@ -122,6 +124,7 @@ describe("buildMetaCatalogFeed", () => {
       META_CATALOG_DEFAULT_BRAND,
       "Swag",
       "Shein",
+      META_CATALOG_DEFAULT_BRAND,
       META_CATALOG_DEFAULT_BRAND,
     ]);
     expect(rows[3].identifier_exists).toBe("no");

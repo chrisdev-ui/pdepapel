@@ -18,12 +18,17 @@ type ReferenceDb = {
     }) => Promise<number>;
   };
   store?: { count: (args: { where: { logoUrl: string } }) => Promise<number> };
+  brand?: {
+    count: (args: {
+      where: { OR: { logoUrl?: string; logoInverseUrl?: string }[] };
+    }) => Promise<number>;
+  };
 };
 
 /**
  * URLs que otra fila sigue usando: las variantes de un grupo comparten la
  * misma foto por URL, los pedidos guardan la foto como historial y las
- * portadas de categoría, del inicio y el logo viven en otras tablas. Borrar
+ * portadas de categoría, del inicio, el logo y los logos de marca viven en otras tablas. Borrar
  * el archivo por quitarlo de UNA fila rompía a las demás.
  */
 export async function filterUnreferencedImageUrls(
@@ -48,6 +53,9 @@ export async function filterUnreferencedImageUrls(
           : 0,
         typeof db.store?.count === "function"
           ? db.store.count({ where: { logoUrl: url } })
+          : 0,
+        typeof db.brand?.count === "function"
+          ? db.brand.count({ where: { OR: [{ logoUrl: url }, { logoInverseUrl: url }] } })
           : 0,
       ]);
       return counts.every((count) => count === 0) ? url : null;

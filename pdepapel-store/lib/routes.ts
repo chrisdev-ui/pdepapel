@@ -19,6 +19,7 @@ export const STOREFRONT_ROUTES = {
   comingSoon: "/proximamente",
   giftCard: "/tarjeta-regalo",
   earlyAccess: "/acceso-anticipado",
+  brands: "/marcas",
 } as const;
 
 const STOREFRONT_ORIGIN = "https://papeleriapdepapel.com";
@@ -81,6 +82,8 @@ export const productPath = (slug: string) => `/producto/${slug}`;
 
 export const categoryPath = (slug: string) => `/categoria/${slug}`;
 
+export const brandPath = (slug: string) => `${STOREFRONT_ROUTES.brands}/${slug}`;
+
 const ACCOUNT_GROUP_PATHS: string[] = [
   STOREFRONT_ROUTES.signIn,
   STOREFRONT_ROUTES.signUp,
@@ -96,13 +99,13 @@ export function isAccountGroupPath(href: string): boolean {
 }
 
 /**
- * Copia en caché ISR de `/tienda` y `/categoria/<slug>` sin filtros. El
+ * Copia en caché ISR de `/tienda`, `/categoria/<slug>` y `/marcas/<slug>` sin filtros. El
  * middleware reescribe ahí las visitas sin parámetros de catálogo; quien entra
  * directo a este prefijo vuelve a la URL pública.
  */
 export const CACHED_LISTING_PREFIX = "/catalogo-cache";
 
-const CACHED_LISTING_PATTERN = /^\/(tienda|categoria\/[^/]+)$/;
+const CACHED_LISTING_PATTERN = /^\/(tienda|categoria\/[^/]+|marcas\/[^/]+)$/;
 
 /** La ruta en caché que corresponde a una URL pública de listado, o null. */
 export function cachedListingPath(pathname: string): string | null {

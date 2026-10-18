@@ -8,6 +8,9 @@ describe("cached listing paths", () => {
     expect(cachedListingPath("/categoria/stickers")).toBe("/catalogo-cache/categoria/stickers");
     expect(cachedListingPath("/categoria/stickers/x")).toBeNull();
     expect(cachedListingPath("/producto/agenda")).toBeNull();
+    expect(cachedListingPath("/marcas/kiut")).toBe("/catalogo-cache/marcas/kiut");
+    expect(cachedListingPath("/marcas")).toBeNull();
+    expect(cachedListingPath("/marcas/kiut/x")).toBeNull();
   });
 
   it("sends a cached path back to its public URL, anything unknown to /tienda", () => {
@@ -19,6 +22,8 @@ describe("cached listing paths", () => {
   it("shows components the public path, so active links match between server and browser", () => {
     expect(publicPathname("/catalogo-cache/tienda")).toBe("/tienda");
     expect(publicPathname("/catalogo-cache/categoria/stickers")).toBe("/categoria/stickers");
+    expect(publicPathname("/catalogo-cache/marcas/kiut")).toBe("/marcas/kiut");
+    expect(publicListingPath("/catalogo-cache/marcas/kiut")).toBe("/marcas/kiut");
     expect(publicPathname("/tienda")).toBe("/tienda");
     expect(publicPathname("/catalogo-cachex")).toBe("/catalogo-cachex");
   });

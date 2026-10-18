@@ -10,6 +10,7 @@ import { netPublicProduct } from "@/lib/available-stock";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
   computeCardFacets,
+  toBrandFacets,
   priceInRange,
   type FacetRow,
   type ProductFacets,
@@ -60,6 +61,8 @@ import {
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
 import { recordDeletedProductUrls } from "@/lib/deleted-product-urls";
+import { resolveProductBrandId } from "@/lib/brand-consistency";
+import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
 
 import { getActiveOffers, getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs/server";
@@ -67,6 +70,13 @@ import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 
 import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
+import {
+  BRAND_FILTER_PARAM,
+  getPublicBrandsForFacets,
+  parseBrandSlugsParam,
+  resolvePublicBrandIds,
+} from "@/lib/brand-catalog";
+import { PUBLIC_BRAND_SELECT, type PublicBrand } from "@/lib/public-brand";
 import {
   syncProductCatalogAttributes,
   visualCatalogAttributesSchema,
@@ -78,6 +88,7 @@ import {
  */
 interface UnifiedProduct {
   id: string;
+  brand?: PublicBrand | null;
   /** Solo para ordenar «más vendidos»; se quita antes de responder. */
   soldCount?: number;
   slug?: string;
@@ -161,7 +172,7 @@ export async function POST(
       sizeId,
       designId,
       supplierId,
-      brand,
+      brandId,
       gtin,
       mpn,
       hasNoProductIdentifier,
@@ -260,15 +271,25 @@ export async function POST(
       if (!supplier) throw ErrorFactory.NotFound("Proveedor no encontrado");
     }
 
+    const requestedBrandId = readBrandIdInput(brandId);
+    let groupBrandId: string | null = null;
     if (normalizedProductGroupId) {
       const productGroup = await prismadb.productGroup.findFirst({
         where: { id: normalizedProductGroupId, storeId: params.storeId },
-        select: { id: true },
+        select: { id: true, brandId: true },
       });
       if (!productGroup) {
         throw ErrorFactory.NotFound("Grupo de productos no encontrado");
       }
+      groupBrandId = productGroup.brandId;
+    } else {
+      await assertAssignableBrand(prismadb, params.storeId, requestedBrandId);
     }
+    const productBrandId = resolveProductBrandId({
+      requestedBrandId,
+      productGroupId: normalizedProductGroupId,
+      groupBrandId,
+    });
 
     // Atributos acotados a la tienda: un id de otra tienda no se puede colgar de un producto.
     const { category, design, color, size } = await loadProductAttributes(prismadb, {
@@ -308,7 +329,7 @@ export async function POST(
         colorId,
         designId,
         supplierId: normalizedSupplierId,
-        brand: typeof brand === "string" ? brand.trim() || null : null,
+        brandId: productBrandId,
         ...productIdentifiers,
         productGroupId: normalizedProductGroupId,
         sku,
@@ -419,6 +440,7 @@ export async function GET(
     const designId = searchParams.get("designId")?.split(",") || [];
     const optionValueId =
       searchParams.get("optionValueId")?.split(",").filter(Boolean) || [];
+    const brandSlugs = parseBrandSlugsParam(searchParams.get(BRAND_FILTER_PARAM));
     const isFeatured = searchParams.get("isFeatured");
     const onlyNew = searchParams.get("onlyNew") || undefined;
     const fromShop = searchParams.get("fromShop") || undefined;
@@ -567,6 +589,7 @@ export async function GET(
         sizeId: sizeId.sort(),
         designId: designId.sort(),
         optionValueId: optionValueId.sort(),
+        marca: brandSlugs,
         isFeatured,
         onlyNew,
         fromShop,
@@ -581,7 +604,7 @@ export async function GET(
         productGroupId,
         isOnSale,
         availability,
-        v: "11",
+        v: "12",
       },
     )}`;
 
@@ -715,6 +738,19 @@ export async function GET(
       catalogOptionConditions.push({ id: "INVALID_CATALOG_OPTION_VALUE" });
     }
 
+    // Marcas por slug (o una dirección anterior): solo las que se muestran en
+    // la tienda. Varias marcas se suman entre sí (O) y se cruzan con lo demás (Y).
+    const filterBrandIds =
+      brandSlugs.length > 0
+        ? await resolvePublicBrandIds(params.storeId, brandSlugs)
+        : [];
+    const brandFilter: Prisma.ProductWhereInput["brandId"] =
+      brandSlugs.length === 0
+        ? undefined
+        : filterBrandIds.length > 0
+          ? { in: filterBrandIds }
+          : "NO_MATCHING_BRAND";
+
     // Common Price Filter
     let priceFilter: any = undefined;
     if (minPrice !== undefined || maxPrice !== undefined) {
@@ -797,6 +833,7 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
+        brandId: brandFilter,
         AND:
           catalogOptionConditions.length > 0
             ? catalogOptionConditions
@@ -855,6 +892,7 @@ export async function GET(
             name: true,
             description: true,
             createdAt: true,
+            brandRef: { select: PUBLIC_BRAND_SELECT },
             images: PUBLIC_GALLERY,
             products: {
               where: productFilters,
@@ -910,6 +948,7 @@ export async function GET(
           slug: primaryProduct?.slug,
           name: g.name,
           description: g.description,
+          brand: g.brand ?? null,
           images: g.images,
           price: minP,
           originalPrice: minP,
@@ -940,6 +979,7 @@ export async function GET(
           productGroupId: null,
           name: p.name,
           description: p.description,
+          brand: p.brand ?? null,
           images: p.images,
           price: Number(p.price),
           originalPrice: Number(p.price),
@@ -1183,6 +1223,7 @@ export async function GET(
             colorId: undefined,
             sizeId: undefined,
             designId: undefined,
+            brandId: undefined,
             AND: universeConditions.length > 0 ? universeConditions : undefined,
           },
           select: {
@@ -1192,6 +1233,7 @@ export async function GET(
             colorId: true,
             sizeId: true,
             designId: true,
+            brandId: true,
             price: true,
             catalogOptionValues: { select: { optionId: true, optionValueId: true } },
           },
@@ -1214,18 +1256,25 @@ export async function GET(
           colorId: product.colorId,
           sizeId: product.sizeId,
           designId: product.designId,
+          brandId: product.brandId,
           optionValues: product.catalogOptionValues ?? [],
           effectivePrice: pricing?.price ?? Number(product.price),
           hasDiscount: Boolean(pricing && pricing.discount > 0),
         };
       });
-      const groupFacets: ProductFacets = computeCardFacets(
+      const { brandIds: brandCounts, ...cardFacets } = computeCardFacets(
         facetRows,
         {
           categoryScope,
           colorIds: colorId,
           sizeIds: sizeId,
           designIds: designId,
+          brandIds:
+            brandSlugs.length === 0
+              ? undefined
+              : filterBrandIds.length > 0
+                ? filterBrandIds
+                : ["NO_MATCHING_BRAND"],
           optionValuesByOption,
           minPrice,
           maxPrice,
@@ -1233,6 +1282,10 @@ export async function GET(
         },
         storeCategories,
       );
+      const groupFacets: ProductFacets = {
+        ...cardFacets,
+        brands: toBrandFacets(brandCounts, await getPublicBrandsForFacets(params.storeId)),
+      };
 
       const response = {
         products: finalResponse,
@@ -1301,6 +1354,7 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
+        brandId: brandFilter,
         AND: baseConditions,
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
@@ -1430,6 +1484,7 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
+        brandId: brandFilter,
         // Búsqueda y disponibilidad en el mismo `AND`. El `name: { search }`
         // de texto completo se fue: con «cuaderno kuromi» traía cualquier
         // producto con UNA de las dos palabras, y las condiciones por palabra

@@ -24,6 +24,7 @@ import {
   isGoogleMerchantFormatRewrite,
 } from "@/lib/google-merchant";
 import prismadb from "@/lib/prismadb";
+import { brandDataName } from "@/lib/brand-rules";
 
 /**
  * Hosted Google Merchant feed.
@@ -81,9 +82,15 @@ export const GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE = {
   color: true,
   design: true,
   size: true,
-  productGroup: true,
+  productGroup: { include: { brandRef: { select: { name: true, isArchived: true } } } },
+  brandRef: { select: { name: true, isArchived: true } },
   images: { orderBy: GALLERY_ORDER },
 } satisfies Prisma.ProductInclude;
+
+/** Marca de los feeds: la enlazada (aunque esté oculta en la tienda), nunca una archivada ni el texto anterior. */
+export function feedBrandName(product: Pick<GoogleMerchantFeedProduct, "brandRef" | "productGroup">) {
+  return brandDataName(product.brandRef ?? product.productGroup?.brandRef ?? null) ?? "";
+}
 
 export type GoogleMerchantFeedProduct = Prisma.ProductGetPayload<{
   include: typeof GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE;
@@ -171,7 +178,7 @@ export function buildGoogleMerchantFeed(
       }
     });
 
-    const brand = product.brand || product.productGroup?.brand || "";
+    const brand = feedBrandName(product);
     const productType = [product.category?.type?.name, product.category?.name]
       .filter(Boolean)
       .join(" > ");

@@ -134,6 +134,18 @@ describe("cached listings", () => {
     }
   });
 
+  it("keeps a brand filter on the dynamic route instead of the unfiltered cached copy", async () => {
+    for (const path of ["/tienda?marca=kiut", "/tienda?marca=kiut,norma&utm_source=x", "/categoria/stickers?marca=kiut", "/marcas/kiut?categoryId=c1"]) {
+      expect(await rewriteOf(path), path).toBeNull();
+    }
+  });
+
+  it("serves a brand page without catalog params from its cached copy, but not the brand index", async () => {
+    expect(await rewriteOf("/marcas/kiut")).toBe("https://papeleriapdepapel.com/catalogo-cache/marcas/kiut");
+    expect(await rewriteOf("/marcas/kiut?utm_source=instagram")).toBe("https://papeleriapdepapel.com/catalogo-cache/marcas/kiut");
+    expect(await rewriteOf("/marcas")).toBeNull();
+  });
+
   it("does not touch other routes", async () => {
     expect(await rewriteOf("/producto/agenda")).toBeNull();
     expect(await rewriteOf("/categoria/stickers/otra")).toBeNull();

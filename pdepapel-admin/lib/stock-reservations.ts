@@ -19,6 +19,7 @@ import {
 import { recordReservationEvents, type ReservationEventInput } from "@/lib/reservation-events";
 import { headerMirror, RESERVATION_LINES_SELECT } from "@/lib/reservation-header";
 import { generateOrderNumber } from "@/lib/utils";
+import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 
 type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -410,6 +411,7 @@ export async function convertReservation(storeId: string, id: string, createdBy:
   const { orderLines, totals } = await priceReservation(storeId, reservationLines(found));
 
   return prismadb.$transaction(async (tx) => {
+    const brandNames = await getOrderItemBrandNames(tx, orderLines.map((line) => line.productId));
     const order = await tx.order.create({
       data: {
         storeId,
@@ -423,7 +425,9 @@ export async function convertReservation(storeId: string, id: string, createdBy:
         subtotal: totals.subtotal,
         total: totals.total,
         internalNotes: [`Pedido creado desde una reserva de ${found.customerName}.`, found.note].filter(Boolean).join(" "),
-        orderItems: { create: orderLines },
+        orderItems: {
+          create: orderLines.map((line) => ({ ...line, brandName: orderItemBrandName(brandNames, line.productId) })),
+        },
         payment: { create: { method: PaymentMethod.BankTransfer, storeId } },
       },
       select: { id: true },

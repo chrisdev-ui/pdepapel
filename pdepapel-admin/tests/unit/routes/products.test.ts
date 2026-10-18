@@ -39,6 +39,8 @@ vi.mock("@/lib/prismadb", () => ({
     productGroup: { findMany: mocks.findProductGroups },
     productCatalogOptionValue: { groupBy: mocks.groupOptionValues },
     category: { findMany: mocks.findCategories },
+    brand: { findMany: vi.fn().mockResolvedValue([]) },
+    brandSlugRedirect: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 vi.mock("@/lib/utils", () => ({

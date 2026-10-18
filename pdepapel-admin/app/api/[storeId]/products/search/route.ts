@@ -11,6 +11,7 @@ import { verifyStoreOwner } from "@/lib/utils";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { rankSaleCandidates, type SaleCandidate } from "@/lib/sale-search";
 import { readScannedProductId } from "@/lib/scanned-code";
+import { mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
 
 // Cache Headers
 const corsHeaders = {
@@ -105,6 +106,8 @@ export async function GET(
         acqPrice: true,
         transportationCost: true,
         brand: true,
+        brandId: true,
+        brandRef: { select: { name: true, isArchived: true } },
         mpn: true,
         hasNoProductIdentifier: true,
         color: { select: { name: true } },
@@ -114,7 +117,13 @@ export async function GET(
         // y cuántas variantes vivas tiene (la fila «todas las variantes»).
         productGroupId: true,
         productGroup: {
-          select: { id: true, name: true, _count: { select: { products: { where: { isArchived: false } } } } },
+          select: {
+            id: true,
+            name: true,
+            brand: true,
+            brandRef: { select: { name: true, isArchived: true } },
+            _count: { select: { products: { where: { isArchived: false } } } },
+          },
         },
         isKit: true,
         category: {
@@ -134,7 +143,17 @@ export async function GET(
     });
 
     const hasMore = products.length > limit;
-    const page1 = hasMore ? products.slice(0, limit) : products;
+    // `brand` sale ya resuelto (la marca enlazada; el texto anterior solo como
+    // respaldo de Mercado Libre) y sin las filas de marca.
+    const page1 = (hasMore ? products.slice(0, limit) : products).map(
+      ({ brandRef: _brandRef, productGroup, ...product }) => ({
+        ...product,
+        brand: mercadoLibreBrandName({ ...product, brandRef: _brandRef, productGroup }),
+        productGroup: productGroup
+          ? { id: productGroup.id, name: productGroup.name, _count: productGroup._count }
+          : null,
+      }),
+    );
     // Solo lectura: sin costo de compra ni transporte.
     const data = access.role === "viewer" ? scrubProducts(page1 as any[]) : page1;
 

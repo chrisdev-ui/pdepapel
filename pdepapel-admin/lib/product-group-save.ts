@@ -53,6 +53,8 @@ export interface GroupDefaults {
   isFeatured?: boolean;
   /** Booleano solo cuando el formulario eligió «todas»; ausente = por variante. */
   isArchived?: boolean;
+  /** La marca del grupo: toda variante la lleva, también las existentes y adoptadas. */
+  brandId?: string | null;
 }
 
 export type AdoptableClient = Pick<Prisma.TransactionClient, "product">;
@@ -290,6 +292,7 @@ export function buildVariantData({
         ? defaults.isArchived
         : provided(variant.isArchived, false),
     ...(identifiers ?? {}),
+    ...(defaults.brandId !== undefined ? { brandId: defaults.brandId } : {}),
     ...(variant.sku ? { sku: variant.sku } : {}),
   };
 }

@@ -1,7 +1,7 @@
 import type { ProductFilters } from "@/hooks/use-product-filters";
 
-/** Tipo, subcategoría y página son navegaciones que «Atrás» debe deshacer; el resto de ajustes no. */
-const NAVIGATION_KEYS = ["typeId", "categoryId"] as const;
+/** Tipo, subcategoría, marca y página son navegaciones que «Atrás» debe deshacer; el resto de ajustes no. */
+const NAVIGATION_KEYS = ["typeId", "categoryId", "marca"] as const;
 
 const sameSet = (a: unknown, b: unknown) => {
   const left = Array.isArray(a) ? [...a].sort().join("|") : "";

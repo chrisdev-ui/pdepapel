@@ -28,6 +28,7 @@ import {
 import { evaluateListingPrice } from "./listing-price-guard";
 import { MERCADOLIBRE_MAX_LISTING_PICTURES } from "./listings";
 import { findSellerItemsBySku } from "./publish-attempt";
+import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
 
 export type RemoteSkuLookup = (connectionId: string, sku: string) => Promise<GroupVariantRemoteItem[]>;
 
@@ -45,7 +46,7 @@ const variantSelect = {
   transportationCost: true,
   isArchived: true,
   isKit: true,
-  brand: true,
+  ...MERCADOLIBRE_BRAND_SELECT,
   gtin: true,
   mpn: true,
   hasNoProductIdentifier: true,
@@ -73,7 +74,7 @@ async function loadMaster(storeId: string, listingId: string) {
       minimumMarginAmount: true,
       metadata: true,
       connection: { select: { status: true } },
-      product: { select: { productGroupId: true, productGroup: { select: { id: true, name: true, brand: true } } } },
+      product: { select: { productGroupId: true, productGroup: { select: { id: true, name: true, brand: true, brandRef: { select: { name: true, isArchived: true } } } } } },
     },
   });
   if (!master) throw ErrorFactory.NotFound("Publicación no encontrada");
@@ -81,7 +82,10 @@ async function loadMaster(storeId: string, listingId: string) {
   if (!master.product.productGroupId || !group) {
     throw ErrorFactory.InvalidRequest("Este producto no pertenece a un grupo de variantes");
   }
-  return { ...master, group };
+  return {
+    ...master,
+    group: { id: group.id, name: group.name, brand: mercadoLibreBrandName({ productGroup: group }) },
+  };
 }
 
 async function lookupRemote(lookup: RemoteSkuLookup, connectionId: string, sku: string) {
@@ -198,7 +202,7 @@ export async function loadGroupPublicationPlan(
         acqPrice: variant.acqPrice,
         transportationCost: variant.transportationCost,
         isKit: variant.isKit,
-        brand: variant.brand,
+        brand: mercadoLibreBrandName(variant),
         gtin: variant.gtin,
         mpn: variant.mpn,
         hasNoProductIdentifier: variant.hasNoProductIdentifier,

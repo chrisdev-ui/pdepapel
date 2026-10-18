@@ -3,6 +3,7 @@ import {
   canonicalStorefrontHref,
   getSafeStorefrontRedirectPath,
   STOREFRONT_ROUTES,
+  brandPath,
   categoryPath,
   orderPath,
   productPath,
@@ -28,6 +29,11 @@ describe("customer-facing routes", () => {
       "/categoria/boligrafos-lapiceros",
     );
     expect(orderPath("order-123")).toBe("/pedido/order-123");
+  });
+
+  it("builds brand paths in Spanish", () => {
+    expect(STOREFRONT_ROUTES.brands).toBe("/marcas");
+    expect(brandPath("kiut")).toBe("/marcas/kiut");
   });
 
   it("normalizes legacy shop calls to action without changing external links", () => {

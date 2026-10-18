@@ -36,7 +36,7 @@ const PRIVATE_PATHS = [
  * Con el catálogo canónico en el sitemap, las variantes con query no aportan
  * nada al índice y sí cuestan CPU en Vercel.
  */
-const FILTERED_PATHS = ["/tienda?", "/categoria/*?", "/shop?"];
+const FILTERED_PATHS = ["/tienda?", "/categoria/*?", "/marcas/*?", "/shop?"];
 
 /**
  * Rastreadores SEO de terceros que descargan todas las fotos del catálogo

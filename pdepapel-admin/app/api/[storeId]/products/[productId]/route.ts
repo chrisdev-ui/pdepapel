@@ -61,6 +61,8 @@ import { auth } from "@clerk/nextjs/server";
 import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { findArchivedProductRedirect } from "@/lib/archived-product-redirect";
+import { resolveProductBrandId } from "@/lib/brand-consistency";
+import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json(
@@ -237,7 +239,7 @@ export async function PATCH(
       sizeId,
       designId,
       supplierId,
-      brand,
+      brandId,
       gtin,
       mpn,
       hasNoProductIdentifier,
@@ -338,14 +340,17 @@ export async function PATCH(
       if (!supplier) throw ErrorFactory.NotFound("Proveedor no encontrado");
     }
 
+    const requestedBrandId = readBrandIdInput(brandId);
+    let groupBrandId: string | null = null;
     if (normalizedProductGroupId) {
       const productGroup = await prismadb.productGroup.findFirst({
         where: { id: normalizedProductGroupId, storeId: params.storeId },
-        select: { id: true },
+        select: { id: true, brandId: true },
       });
       if (!productGroup) {
         throw ErrorFactory.NotFound("Grupo de productos no encontrado");
       }
+      groupBrandId = productGroup.brandId;
     }
 
     const productToUpdate = await prismadb.product.findUnique({
@@ -357,6 +362,21 @@ export async function PATCH(
       throw ErrorFactory.NotFound(
         `El Producto ${params.productId} no existe en esta tienda`,
       );
+
+    // En un grupo la marca es la del grupo; suelto, la elegida (sin `brandId` en el cuerpo no se toca).
+    if (!normalizedProductGroupId) {
+      await assertAssignableBrand(prismadb, params.storeId, requestedBrandId, {
+        currentBrandId: productToUpdate.brandId,
+      });
+    }
+    const nextBrandId =
+      normalizedProductGroupId || requestedBrandId !== undefined
+        ? resolveProductBrandId({
+            requestedBrandId,
+            productGroupId: normalizedProductGroupId,
+            groupBrandId,
+          })
+        : undefined;
 
     if (isKit) {
       await assertValidKitComponents(prismadb, {
@@ -450,7 +470,7 @@ export async function PATCH(
           sizeId,
           designId,
           supplierId: normalizedSupplierId,
-          brand: typeof brand === "string" ? brand.trim() || null : null,
+          ...(nextBrandId !== undefined ? { brandId: nextBrandId } : {}),
           ...productIdentifiers,
           isArchived,
           isFeatured,

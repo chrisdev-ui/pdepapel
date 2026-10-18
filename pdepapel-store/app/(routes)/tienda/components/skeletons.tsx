@@ -5,6 +5,7 @@ export const ProductCardSkeleton: React.FC = () => (
   <div className="flex flex-col gap-2 rounded-xl border border-blue-baby bg-white p-2 sm:p-3" aria-hidden="true">
     <Skeleton className="aspect-square w-full rounded-xl" />
     <div className="flex flex-col gap-1.5 pt-1">
+      <Skeleton className="h-4 w-16" />
       <Skeleton className="h-[2.7em] w-11/12 text-[15px] sm:text-[17px]" />
       <Skeleton className="h-4 w-1/2" />
       <div className="h-[22px]" />
@@ -90,18 +91,30 @@ export const ToolbarSkeleton: React.FC = () => (
   </>
 );
 
-export const PageHeaderSkeleton: React.FC = () => (
-  <div className="flex items-center gap-4 rounded-2xl bg-kawaii-lavender-light/60 px-4 py-5 sm:px-6 lg:gap-10 lg:rounded-3xl lg:px-10 lg:py-8" aria-hidden="true">
-    <div className="flex flex-1 flex-col gap-3">
-      <Skeleton className="h-3 w-28" />
-      <div className="flex items-center gap-3.5">
-        <Skeleton className="h-9 w-56 lg:h-11 lg:w-80" />
-        <Skeleton className="h-8 w-28 rounded-full lg:h-9" />
+export const PageHeaderSkeleton: React.FC<{ withBrands?: boolean }> = ({ withBrands = false }) => (
+  <div className="flex flex-col rounded-2xl bg-kawaii-lavender-light/60 px-4 py-5 sm:px-6 lg:rounded-3xl lg:px-10 lg:py-8" aria-hidden="true">
+    <div className="flex items-center gap-4 lg:gap-10">
+      <div className="flex flex-1 flex-col gap-3">
+        <Skeleton className="h-3 w-28" />
+        <div className="flex items-center gap-3.5">
+          <Skeleton className="h-9 w-56 lg:h-11 lg:w-80" />
+          <Skeleton className="h-8 w-28 rounded-full lg:h-9" />
+        </div>
+        <Skeleton className="h-4 w-full max-w-[52ch]" />
+        <Skeleton className="hidden h-4 w-2/3 lg:block" />
       </div>
-      <Skeleton className="h-4 w-full max-w-[52ch]" />
-      <Skeleton className="hidden h-4 w-2/3 lg:block" />
+      <Skeleton className="h-24 w-24 shrink-0 rounded-full lg:h-[200px] lg:w-[200px]" />
     </div>
-    <Skeleton className="h-24 w-24 shrink-0 rounded-full lg:h-[200px] lg:w-[200px]" />
+    {withBrands && (
+      <div className="mt-4 flex flex-col gap-2 overflow-hidden lg:mt-5 lg:flex-row lg:items-center lg:gap-3">
+        <Skeleton className="h-3 w-16" />
+        <div className="flex gap-2">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-11 w-32 shrink-0 rounded-full" />
+          ))}
+        </div>
+      </div>
+    )}
   </div>
 );
 

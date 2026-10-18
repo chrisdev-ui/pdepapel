@@ -2,8 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  // El proyecto local crea pedidos de verdad y los filtros usan WebKit: cada uno vive en su propia configuración.
-  testIgnore: ["**/local/**", "**/filters/**"],
+  // El proyecto local crea pedidos de verdad, los filtros usan WebKit y las marcas dependen de sus datos: cada uno vive en su propia configuración.
+  testIgnore: ["**/local/**", "**/filters/**", "**/brands/**"],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,

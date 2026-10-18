@@ -5,6 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createMercadoLibreContentReview } from "@/lib/mercadolibre/content-assistant";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
 
 export async function GET(
   _request: Request,
@@ -22,7 +23,7 @@ export async function GET(
           select: {
             name: true,
             description: true,
-            brand: true,
+            ...MERCADOLIBRE_BRAND_SELECT,
             gtin: true,
             mpn: true,
             images: { select: { url: true } },
@@ -31,9 +32,17 @@ export async function GET(
       },
     });
     if (!listing) throw ErrorFactory.NotFound("Publicación no encontrada");
-    return NextResponse.json(createMercadoLibreContentReview(listing), {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(
+      createMercadoLibreContentReview({
+        ...listing,
+        product: listing.product
+          ? { ...listing.product, brand: mercadoLibreBrandName(listing.product) }
+          : listing.product,
+      }),
+      {
+        headers: CACHE_HEADERS.NO_CACHE,
+      },
+    );
   } catch (error) {
     return handleErrorResponse(
       error,

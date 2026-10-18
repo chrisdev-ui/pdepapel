@@ -14,6 +14,15 @@ export interface ProductFacets {
   optionValues?: FacetCount[];
   /** Rangos de precio fijos de la tienda; `id` es la clave del preset. */
   priceRanges?: FacetCount[];
+  /** Marcas que se muestran en la tienda; `id` es el slug. Sin las de 0. */
+  brands?: BrandFacetCount[];
+}
+
+export interface BrandFacetCount extends FacetCount {
+  name: string;
+  logoUrl: string | null;
+  logoHasBackground: boolean;
+  logoPermission: "UNKNOWN" | "ALLOWED" | "PENDING" | "DENIED";
 }
 
 /** Mismos cortes que los presets del filtro de precio en la tienda. */
@@ -52,6 +61,7 @@ export interface FacetRow {
   colorId: string;
   sizeId: string;
   designId: string;
+  brandId?: string | null;
   optionValues: { optionId: string; optionValueId: string }[];
   /** Precio con ofertas: el que ve la clienta. */
   effectivePrice: number;
@@ -64,13 +74,15 @@ export interface FacetSelection {
   colorIds: string[];
   sizeIds: string[];
   designIds: string[];
+  /** Marcas elegidas (ids ya resueltos desde los slugs). */
+  brandIds?: string[];
   optionValuesByOption: Map<string, string[]>;
   minPrice?: number;
   maxPrice?: number;
   isOnSale: boolean;
 }
 
-type FacetDimension = "category" | "color" | "size" | "design" | "option" | "price";
+type FacetDimension = "category" | "color" | "size" | "design" | "brand" | "option" | "price";
 
 /** Rango de precio semiabierto `[min, max)`, igual que los rangos fijos. */
 export function priceInRange(price: number, minPrice?: number, maxPrice?: number) {
@@ -82,6 +94,7 @@ function passes(row: FacetRow, selection: FacetSelection, except: FacetDimension
   if (except !== "color" && selection.colorIds.length > 0 && !selection.colorIds.includes(row.colorId)) return false;
   if (except !== "size" && selection.sizeIds.length > 0 && !selection.sizeIds.includes(row.sizeId)) return false;
   if (except !== "design" && selection.designIds.length > 0 && !selection.designIds.includes(row.designId)) return false;
+  if (except !== "brand" && selection.brandIds && selection.brandIds.length > 0 && !(row.brandId && selection.brandIds.includes(row.brandId))) return false;
   if (except !== "option") {
     for (const [optionId, valueIds] of Array.from(selection.optionValuesByOption)) {
       if (!row.optionValues.some((value) => value.optionId === optionId && valueIds.includes(value.optionValueId))) return false;
@@ -115,7 +128,7 @@ export function computeCardFacets(
   rows: FacetRow[],
   selection: FacetSelection,
   categories: { id: string; typeId: string }[],
-): ProductFacets {
+): ProductFacets & { brandIds: FacetCount[] } {
   const typeByCategory = new Map(categories.map((category) => [category.id, category.typeId]));
   const without = (except: FacetDimension) => rows.filter((row) => passes(row, selection, except));
   const byCategory = without("category");
@@ -130,6 +143,7 @@ export function computeCardFacets(
       return typeId ? [typeId] : [];
     }),
     optionValues: countCards(without("option"), (row) => row.optionValues.map((value) => value.optionValueId)),
+    brandIds: countCards(without("brand"), (row) => (row.brandId ? [row.brandId] : [])),
     priceRanges: PRICE_RANGE_BUCKETS.map((bucket) => ({
       id: bucket.id,
       count: new Set(
@@ -137,4 +151,34 @@ export function computeCardFacets(
       ).size,
     })),
   };
+}
+
+/**
+ * Conteos por marca con la forma de la tienda: solo marcas públicas, sin las
+ * de 0 y en el orden del panel. `brands` trae las marcas públicas de la tienda.
+ */
+export function toBrandFacets(
+  counts: FacetCount[],
+  brands: {
+    id: string;
+    slug: string;
+    name: string;
+    logoUrl: string | null;
+    logoHasBackground: boolean;
+    logoPermission: BrandFacetCount["logoPermission"];
+    sortOrder: number;
+  }[],
+): BrandFacetCount[] {
+  const countById = new Map(counts.map((facet) => [facet.id, facet.count]));
+  return brands
+    .filter((brand) => (countById.get(brand.id) ?? 0) > 0)
+    .sort((first, second) => first.sortOrder - second.sortOrder || first.name.localeCompare(second.name, "es"))
+    .map((brand) => ({
+      id: brand.slug,
+      count: countById.get(brand.id) ?? 0,
+      name: brand.name,
+      logoUrl: brand.logoUrl,
+      logoHasBackground: brand.logoHasBackground,
+      logoPermission: brand.logoPermission,
+    }));
 }

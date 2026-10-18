@@ -10,6 +10,9 @@
  * - `page=1`, un `page` no válido o cualquier otro parámetro (filtros, orden,
  *   búsqueda): canónica a la base y `noindex`, sin cambios.
  */
+import { parseBrandParam } from "@/lib/brand-display";
+import { brandPath } from "@/lib/routes";
+
 export type ListingSearchParams = Record<string, string | string[] | undefined>;
 
 export type ListingIndexing = {
@@ -62,4 +65,23 @@ export function outOfRangePageTarget(
   const entries = Array.from(params.entries()).sort(([a], [b]) => (a === "page" ? -1 : b === "page" ? 1 : 0));
   const query = new URLSearchParams(entries).toString();
   return query ? `${basePath}?${query}` : basePath;
+}
+
+/**
+ * `/tienda?marca=<una sola>` sin ningún otro parámetro muestra lo mismo que
+ * `/marcas/<slug>`: esa es la canónica (y la de la tienda queda `noindex`).
+ * Varias marcas o más filtros siguen las reglas de arriba.
+ */
+export function singleBrandCanonical(searchParams: ListingSearchParams): string | null {
+  const keys = Object.keys(searchParams).filter((key) => hasValue(searchParams[key]));
+  if (keys.length !== 1 || keys[0] !== "marca") return null;
+  const slugs = parseBrandParam(searchParams.marca);
+  return slugs.length === 1 ? brandPath(slugs[0]) : null;
+}
+
+/** Canónica e indexación de `/tienda`, con el caso de una sola marca. */
+export function getShopIndexing(basePath: string, searchParams: ListingSearchParams): ListingIndexing {
+  const brandCanonical = singleBrandCanonical(searchParams);
+  if (brandCanonical) return { canonical: brandCanonical, index: false };
+  return getListingIndexing(basePath, searchParams, true);
 }

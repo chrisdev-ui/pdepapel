@@ -1,3 +1,5 @@
+import { withPublicBrand } from "@/lib/public-brand";
+
 /**
  * Lo que se puede vender: el stock físico menos lo apartado para clientas.
  * Es la única regla de disponibilidad del catálogo, el checkout, el punto de
@@ -57,6 +59,7 @@ export function netPublicProduct<T>(row: T): T {
     out.stock = availableStock(source as unknown as StockCounts);
   }
   delete out.reservedUnits;
+  withPublicBrand(out);
   if (Array.isArray(source.kitComponents)) {
     out.kitComponents = source.kitComponents.map((item: Record<string, unknown>) =>
       item && item.component ? { ...item, component: netPublicProduct(item.component) } : item,

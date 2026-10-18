@@ -35,6 +35,48 @@ export interface KitComponent {
   quantity: number;
 }
 
+export type BrandLogoPermission = "UNKNOWN" | "ALLOWED" | "PENDING" | "DENIED";
+
+/** La marca tal como sale en el producto. `isPublic` en false = solo para datos (JSON-LD, GA4), nunca en la interfaz. */
+export interface PublicBrand {
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  logoHasBackground: boolean;
+  logoPermission: BrandLogoPermission;
+  color: string | null;
+  isPublic: boolean;
+}
+
+/** Marca visible de `GET /brands` (lista) o `GET /brands/{slug}` (página). */
+export interface BrandSummary {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  logoHasBackground: boolean;
+  logoPermission: BrandLogoPermission;
+  color: string | null;
+  seoText: string | null;
+  isFeatured: boolean;
+  sortOrder: number;
+  productCount: number;
+}
+
+export interface BrandPageData extends BrandSummary {
+  categories: { id: string; name: string; slug: string; count: number }[];
+}
+
+export interface BrandFacet {
+  /** Slug de la marca: el valor de `?marca=`. */
+  id: string;
+  count: number;
+  name: string;
+  logoUrl: string | null;
+  logoHasBackground: boolean;
+  logoPermission: BrandLogoPermission;
+}
+
 export interface Product {
   id: string;
   slug?: string;
@@ -51,7 +93,7 @@ export interface Product {
   images: Image[];
   reviews: Review[];
   sku: string;
-  brand?: string | null;
+  brand?: PublicBrand | null;
   gtin?: string | null;
   mpn?: string | null;
   hasNoProductIdentifier?: boolean;
@@ -82,7 +124,7 @@ export interface Product {
   productGroup?: {
     id: string;
     name: string;
-    brand?: string | null;
+    brand?: PublicBrand | null;
   } | null;
   hasDiscount?: boolean;
   minPrice?: number;
@@ -383,6 +425,7 @@ export interface ProductsResponse {
     types?: { id: string; count: number }[];
     optionValues?: { id: string; count: number }[];
     priceRanges?: { id: string; count: number }[];
+    brands?: BrandFacet[];
   };
 }
 

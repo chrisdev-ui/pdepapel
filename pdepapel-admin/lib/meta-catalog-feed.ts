@@ -17,6 +17,7 @@ import {
   toGoogleMerchantImageUrl,
 } from "@/lib/google-merchant";
 import {
+  feedBrandName,
   getGoogleMerchantFeedProductArgs,
   type GoogleMerchantFeedProduct,
 } from "@/lib/google-merchant-feed";
@@ -172,7 +173,7 @@ export function buildMetaCatalogFeed(
     // marca de fabricante, así que el vacío se llena con el nombre de la
     // tienda. `identifierExists` sigue mirando la marca REAL: un respaldo no
     // convierte a «marca + MPN» en un identificador de producto legítimo.
-    const realBrand = product.brand || product.productGroup?.brand || "";
+    const realBrand = feedBrandName(product);
     const brand = realBrand || defaultBrand;
     const productType = [product.category?.type?.name, product.category?.name]
       .filter(Boolean)

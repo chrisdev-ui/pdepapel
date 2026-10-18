@@ -56,7 +56,7 @@ const product = {
   storeId: "store-id",
   name: "Termo pastel rosa",
   description: "Termo de acero",
-  brand: "P de Papel",
+  brandId: "brand-test",
   productGroupId: null,
   isArchived: false,
   isKit: false,
@@ -106,7 +106,7 @@ describe("POST /api/[storeId]/products/[productId]/convert-to-variants", () => {
         name: "Termo pastel",
         slug: "termo-pastel",
         description: product.description,
-        brand: product.brand,
+        brandId: product.brandId,
         images: {
           createMany: {
             data: product.images,

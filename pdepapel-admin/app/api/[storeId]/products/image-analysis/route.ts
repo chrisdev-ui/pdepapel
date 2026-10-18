@@ -111,7 +111,7 @@ export async function POST(
       );
     }
 
-    const [categories, sizes, colors, designs] = await Promise.all([
+    const [categories, sizes, colors, designs, brands] = await Promise.all([
       prismadb.category.findMany({
         where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
         orderBy: { name: "asc" },
@@ -135,6 +135,10 @@ export async function POST(
         where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
+      }),
+      prismadb.brand.findMany({
+        where: { storeId: params.storeId, isArchived: false },
+        select: { id: true, name: true, aliases: true },
       }),
     ]);
 
@@ -186,6 +190,7 @@ export async function POST(
             name: payload.currentName,
             categoryName: payload.categoryName,
           },
+          brands,
         }),
         analyzedWith: run.analyzedWith ?? ["gemini"],
         photoCount: payload.imageUrls.length,

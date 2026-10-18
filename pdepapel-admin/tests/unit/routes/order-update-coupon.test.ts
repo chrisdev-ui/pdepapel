@@ -42,9 +42,11 @@ const mocks = vi.hoisted(() => {
   const orderUpdate = vi.fn();
   const transactionClient = {
     orderItem: {
+      findMany: vi.fn().mockResolvedValue([]),
       deleteMany: vi.fn(),
       create: vi.fn(),
     },
+    product: { findMany: vi.fn().mockResolvedValue([]) },
     order: { update: orderUpdate },
     coupon: {
       update: vi.fn(),

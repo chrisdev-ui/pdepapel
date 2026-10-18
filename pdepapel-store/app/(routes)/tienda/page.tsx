@@ -5,6 +5,7 @@ import { LayoutGrid } from "lucide-react";
 import { Metadata } from "next";
 import { Suspense } from "react";
 
+import { getBrands } from "@/actions/get-brands";
 import { getCategories } from "@/actions/get-categories";
 import { getCatalogOptions } from "@/actions/get-catalog-options";
 import { getColors } from "@/actions/get-colors";
@@ -12,13 +13,15 @@ import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getTypes } from "@/actions/get-types";
 import { Newsletter } from "@/components/newsletter";
+import { BrandChipRow } from "@/components/brands/brand-chip-row";
 import { PageHeader } from "@/components/shop/page-header";
 import { ShopContent } from "@/components/shop-content";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, DEFAULT_SHARE_IMAGE, LIMIT_SHOP_ITEMS } from "@/constants";
 import { buildNavigationTypes, toFilterType, toNavigationCategory, withProducts } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
-import { getListingIndexing, outOfRangePageTarget, type ListingSearchParams } from "@/lib/listing-seo";
+import { parseBrandParam } from "@/lib/brand-display";
+import { getShopIndexing, outOfRangePageTarget, type ListingSearchParams } from "@/lib/listing-seo";
 import { categoryPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
 
@@ -31,13 +34,13 @@ const HEADER_TYPES = 7;
 const HEADER_IMAGES = 3;
 
 export async function generateMetadata({ searchParams }: ShopPageProps): Promise<Metadata> {
-  const { typeId, categoryId, search, minPrice, maxPrice } = searchParams;
+  const { typeId, categoryId, search, minPrice, maxPrice, marca } = searchParams;
   // Next entrega cada parámetro como texto aunque el tipo diga `number`.
-  const { canonical: canonicalPath, index: shouldIndex } = getListingIndexing(
+  const { canonical: canonicalPath, index: shouldIndex } = getShopIndexing(
     STOREFRONT_ROUTES.shop,
     searchParams as unknown as ListingSearchParams,
-    true,
   );
+  const brandSlugs = parseBrandParam(marca);
   let title = "Tienda en línea";
   let description =
     "Explora nuestra tienda online en Papelería P de Papel. Un mundo de artículos bonitos, suministros de oficina y papelería general te espera.";
@@ -52,6 +55,9 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
     const types = await getTypes();
     const type = types.find((t) => t.id === typeId || t.slug === typeId);
     if (type) title = stripTaxonomyIcon(type.name);
+  } else if (brandSlugs.length === 1) {
+    const brand = (await getBrands()).find((item) => item.slug === brandSlugs[0]);
+    if (brand) title = `Productos ${brand.name}`;
   }
 
   if (minPrice || maxPrice) {
@@ -91,6 +97,8 @@ interface ShopPageProps {
     optionValueId: string;
     categoryId: string;
     designId: string;
+    /** Slugs de marca separados por coma. */
+    marca?: string;
     sortOption: string;
     isOnSale: string;
     minPrice: string;
@@ -102,11 +110,11 @@ interface ShopPageProps {
   };
 }
 
-const FILTER_PARAMS = ["typeId", "categoryId", "colorId", "sizeId", "optionValueId", "designId", "isOnSale", "minPrice", "maxPrice", "search"] as const;
+const FILTER_PARAMS = ["typeId", "categoryId", "colorId", "sizeId", "optionValueId", "designId", "marca", "isOnSale", "minPrice", "maxPrice", "search"] as const;
 
 async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProps["searchParams"] }) {
   const hasFilters = FILTER_PARAMS.some((key) => searchParams[key] !== undefined && searchParams[key] !== "");
-  const [{ products, totalPages, totalItems, facets, searchCorrection }, types, catalogOptions, colors, designs, categories, catalogTotal] = await Promise.all([
+  const [{ products, totalPages, totalItems, facets, searchCorrection }, types, catalogOptions, colors, designs, categories, catalogTotal, brands] = await Promise.all([
     getProducts({
       typeId: searchParams.typeId,
       categoryId: searchParams.categoryId,
@@ -114,6 +122,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
       sizeId: searchParams.sizeId,
       optionValueId: searchParams.optionValueId,
       designId: searchParams.designId,
+      marca: searchParams.marca,
       sortOption: searchParams.sortOption,
       minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : null,
       maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : null,
@@ -131,6 +140,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
     getDesigns(),
     getCategories(),
     hasFilters ? getProducts({ fromShop: true, page: 1, itemsPerPage: 1, groupBy: "parents" }).then((response) => response.totalItems) : null,
+    getBrands(),
   ]);
 
   const pageTarget = outOfRangePageTarget(STOREFRONT_ROUTES.shop, searchParams as unknown as ListingSearchParams, totalPages);
@@ -159,6 +169,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
         images={headerImages}
         tintKey="tienda"
         chips={navigationTypes.slice(0, HEADER_TYPES).map((type) => ({ label: type.label, href: typePath(type), icon: <TypeIcon type={type} className="h-4 w-4" /> }))}
+        brandsSlot={brands.length > 0 ? <BrandChipRow brands={brands} searchParams={searchParams as unknown as ListingSearchParams} /> : null}
       />
       <ShopContent
         initialProducts={products}
@@ -172,6 +183,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
         colors={colors}
         designs={designs}
         suggestions={suggestions}
+        brands={brands.map((brand) => ({ id: brand.slug, name: brand.name }))}
       />
     </>
   );
@@ -184,7 +196,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
         <Suspense
           fallback={
             <>
-              <PageHeaderSkeleton />
+              <PageHeaderSkeleton withBrands />
               <ShopContentSkeleton />
             </>
           }

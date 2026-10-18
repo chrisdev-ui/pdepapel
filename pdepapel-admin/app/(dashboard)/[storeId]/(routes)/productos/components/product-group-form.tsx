@@ -116,10 +116,16 @@ import { ProductTintBadge } from "./product-badges";
 import { mergeAdoptedVariants } from "@/lib/product-group-variants";
 import { VariantGrid } from "./variant-grid";
 import { VariantMatrix } from "./variant-matrix";
+import {
+  BrandPicker,
+  BrandSuggestion,
+  type AiBrandSuggestion,
+  type BrandOption,
+} from "@/components/brands/brand-picker";
 
 const formSchema = z.object({
   name: z.string().min(1, "El nombre del grupo es requerido"),
-  brand: z.string().max(120).optional(),
+  brandId: z.string().nullable().optional(),
   description: z.string().optional(),
   images: z
     .object({ url: z.string(), isMain: z.boolean().optional() })
@@ -293,6 +299,7 @@ export interface ImportedProduct {
   mpn?: string | null;
   hasNoProductIdentifier?: boolean;
   slug?: string;
+  brandId?: string | null;
 }
 
 interface ProductGroupFormProps {
@@ -306,6 +313,8 @@ interface ProductGroupFormProps {
   storeUrl?: string | null;
   /** Producto suelto que se convierte en grupo: llega ya traído, como con «Traer existentes». */
   adoptOnLoad?: ImportedProduct | null;
+  /** Marcas sin archivar, más la archivada que el grupo ya tenga. */
+  brands?: BrandOption[];
 }
 
 export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
@@ -317,6 +326,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   initialData,
   storeUrl = null,
   adoptOnLoad = null,
+  brands = [],
 }) => {
   const params = useParams();
   // «Escanear y abrir» en Productos llega aquí con la variante leída para resaltarla.
@@ -632,7 +642,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const defaultValues: ProductGroupFormValues = initialData
     ? {
         name: initialData.name,
-        brand: initialData.brand || "",
+        brandId: initialData.brandId ?? null,
         description: initialData.description || "",
         images: groupGallery(),
         categoryId: initialData.products?.[0]?.categoryId || "",
@@ -690,7 +700,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       }
     : {
         name: "",
-        brand: "",
+        brandId: adoptOnLoad?.brandId ?? null,
         description: "",
         images: [],
         categoryId: "",
@@ -827,7 +837,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const watchedDesignIds = form.watch("designIds");
   const watchedCategoryId = form.watch("categoryId");
   const watchedName = form.watch("name");
-  const watchedBrand = form.watch("brand");
+  const watchedBrandId = form.watch("brandId") ?? null;
+  const [createdBrands, setCreatedBrands] = useState<BrandOption[]>([]);
+  const brandOptions = useMemo(() => [...brands, ...createdBrands], [brands, createdBrands]);
+  const watchedBrandName = brandOptions.find((brand) => brand.id === watchedBrandId)?.name;
+  const [aiBrand, setAiBrand] = useState<AiBrandSuggestion | null>(null);
 
   // GENERACIÓN AUTOMÁTICA (interruptor en «Variantes»): al elegir atributos
   // crea las combinaciones que falten sin quitar nada. Antes el efecto salía
@@ -1443,6 +1457,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     if (!adoptOnLoad || initialData || adoptedOnLoad.current) return;
     adoptedOnLoad.current = true;
     if (!form.getValues("name")?.trim()) form.setValue("name", adoptOnLoad.name, { shouldDirty: true });
+    if (adoptOnLoad.brandId && !form.getValues("brandId")) form.setValue("brandId", adoptOnLoad.brandId, { shouldDirty: true });
     handleImport([adoptOnLoad]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adoptOnLoad, initialData]);
@@ -2026,14 +2041,38 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               />
               <FormField
                 control={form.control}
-                name="brand"
+                name="brandId"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Marca o fabricante</FormLabel>
+                  <FormItem className="flex flex-col gap-2">
+                    <FormLabel>Marca</FormLabel>
                     <FormControl>
-                      <Input disabled={loading} placeholder="Ej. Sanrio, Stabilo" {...field} />
+                      <BrandPicker
+                        storeId={String(params.storeId)}
+                        brands={brandOptions}
+                        value={field.value ?? null}
+                        onBrandCreated={(brand) => setCreatedBrands((current) => [...current, brand])}
+                        disabled={loading}
+                        onChange={(brandId) => {
+                          field.onChange(brandId);
+                          if (aiBrand?.brandId === brandId) setAiBrand(null);
+                        }}
+                      />
                     </FormControl>
-                    <FormDescription>Se aplica a todas las variantes en Google Merchant.</FormDescription>
+                    <BrandSuggestion
+                      productName={watchedName}
+                      brands={brandOptions}
+                      value={field.value ?? null}
+                      aiSuggestion={aiBrand}
+                      disabled={loading}
+                      onDismissAi={() => setAiBrand(null)}
+                      onUse={(brandId) => {
+                        field.onChange(brandId);
+                        setAiBrand(null);
+                      }}
+                    />
+                    <FormDescription>
+                      Se guarda en el grupo y en todas sus variantes; en cada variante se ve como «{watchedBrandName ?? "Sin marca"} · viene del grupo».
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -2195,7 +2234,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               currentName={watchedName}
               currentDescription={form.watch("description")}
               categoryName={categories.find((category) => category.id === watchedCategoryId)?.name}
-              brand={watchedBrand}
+              brand={watchedBrandName}
               includeVariantAttributes={false}
               disabled={loading}
               storeId={params.storeId}
@@ -2211,7 +2250,14 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               onApply={(name) => form.setValue("name", name, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
               onApplyVisualAnalysis={(analysis) => {
                 const options = { shouldDirty: true, shouldTouch: true, shouldValidate: true };
-                if (analysis.brand) form.setValue("brand", analysis.brand, options);
+                // La marca de la IA queda como sugerencia junto al campo: se elige con «Usar».
+                if (analysis.brand) {
+                  setAiBrand({
+                    brandId: analysis.brandId ?? null,
+                    brandName: analysis.brand,
+                    brandSource: analysis.brandSource ?? "not_found",
+                  });
+                }
                 if (analysis.categoryId && !currentVariants?.some((variant) => variant.id)) {
                   form.setValue("categoryId", analysis.categoryId, options);
                 }

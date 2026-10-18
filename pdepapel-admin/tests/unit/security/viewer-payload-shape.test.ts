@@ -216,8 +216,9 @@ describe("la forma pública de un color (#3)", () => {
   });
 
   it("cambió la forma de GET /products, así que la caché Redis cambió de versión", () => {
-    // v4 guardaba colores sin `swatchType`; v7: el stock sale neto de apartados.
+    // v4 guardaba colores sin `swatchType`; v7: el stock sale neto de apartados;
+    // v8: `brand` es la marca enlazada (objeto) en vez del texto libre.
     // Leer una entrada vieja serviría la forma anterior hasta 15 minutos.
-    expect(PUBLIC_PRODUCTS_CACHE_VERSION).toBe("v7");
+    expect(PUBLIC_PRODUCTS_CACHE_VERSION).toBe("v8");
   });
 });

@@ -29,6 +29,8 @@ interface PageHeaderProps {
   tintKey: string;
   chipsLabel?: string;
   chips?: HeaderChip[];
+  /** Fila de marcas (enlaces del servidor), a todo el ancho bajo la cabecera. */
+  brandsSlot?: ReactNode;
 }
 
 const BLOB_PATHS = [
@@ -71,7 +73,7 @@ function Blob({ image, index, sizes, className }: { image: HeaderImage; index: n
  * Banda de cabecera de la tienda y las categorías: tono pastel, título serif,
  * chip de conteo, intro plegable, atajos y la foto recortada en burbuja.
  */
-export function PageHeader({ title, count, eyebrow, intro, images, tintKey, chipsLabel, chips = [] }: PageHeaderProps) {
+export function PageHeader({ title, count, eyebrow, intro, images, tintKey, chipsLabel, chips = [], brandsSlot }: PageHeaderProps) {
   const tint = tintForKey(tintKey);
   const [cover, ...extra] = images;
 
@@ -139,6 +141,7 @@ export function PageHeader({ title, count, eyebrow, intro, images, tintKey, chip
           </div>
         )}
       </div>
+      {brandsSlot && <div className="relative mt-4 lg:mt-5">{brandsSlot}</div>}
     </section>
   );
 }

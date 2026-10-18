@@ -19,6 +19,11 @@ describe("catalog cache tags", () => {
     expect(catalogListingTags({ isFeatured: false })).toEqual(["products", "products:list"]);
   });
 
+  it("keeps brand listings on the general list tag, which a brand assignment purges", () => {
+    expect(catalogListingTags({ marca: "kiut", fromShop: true })).toEqual(["products", "products:list"]);
+    expect(catalogListingTags({ marca: "kiut", categoryId: "cat-1" })).toEqual(["products", "products:category:cat-1", "products:list"]);
+  });
+
   it("names a product by the key the page asked for (slug or alias)", () => {
     expect(productTag("cuaderno-rosa")).toBe("product:cuaderno-rosa");
   });

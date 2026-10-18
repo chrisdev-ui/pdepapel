@@ -22,6 +22,7 @@ import {
 } from "@/lib/coupon-availability";
 import { priceLines } from "@/lib/product-pricing";
 import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
+import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 import prismadb from "@/lib/prismadb";
 import { resolveStoreShippingRate } from "@/lib/store-shipping-quote";
 import { verifyEarlyAccessToken } from "@/lib/early-access";
@@ -548,6 +549,10 @@ async function createCheckout(
 
     const errors: string[] = [];
     const orderItemsData: Prisma.OrderItemCreateWithoutOrderInput[] = [];
+    const brandNames = await getOrderItemBrandNames(
+      prismadb,
+      orderItems.map(({ productId }: { productId: string }) => productId),
+    );
 
     for (const { productId, quantity = 1 } of orderItems) {
       const product = productMap.get(productId);
@@ -583,6 +588,7 @@ async function createCheckout(
           product.images[0]?.url ||
           "",
         isCustom: false,
+        brandName: orderItemBrandName(brandNames, productId),
         // Marca de preventa: esta línea NO descuenta inventario hoy, y mientras
         // no se libere frena el despacho del pedido COMPLETO.
         ...(activePresales.has(productId)

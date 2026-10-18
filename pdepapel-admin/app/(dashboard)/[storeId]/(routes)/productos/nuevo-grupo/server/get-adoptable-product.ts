@@ -31,6 +31,7 @@ export async function loadAdoptableProduct(storeId: string, productId: string): 
       gtin: true,
       mpn: true,
       hasNoProductIdentifier: true,
+      brandId: true,
       category: { select: { id: true, name: true } },
       size: { select: { id: true, name: true, value: true } },
       color: { select: { id: true, name: true, value: true } },

@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getCategory: vi.fn(),
   getCategories: vi.fn(async () => []),
   getTypes: vi.fn(async () => []),
+  getBrands: vi.fn(async () => [{ id: "b1", name: "Kiut", slug: "kiut" }]),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store" } }));
@@ -15,11 +16,12 @@ vi.mock("@/actions/get-catalog-options", () => ({ getCatalogOptions: vi.fn() }))
 vi.mock("@/actions/get-colors", () => ({ getColors: vi.fn() }));
 vi.mock("@/actions/get-designs", () => ({ getDesigns: vi.fn() }));
 vi.mock("@/actions/get-products", () => ({ getProducts: vi.fn() }));
+vi.mock("@/actions/get-brands", () => ({ getBrands: mocks.getBrands, getBrand: vi.fn() }));
 
 import { generateMetadata as categoryMetadata } from "@/app/(routes)/categoria/[slug]/page";
 import { generateMetadata as shopMetadata } from "@/app/(routes)/tienda/page";
 import { BASE_URL } from "@/constants";
-import { getListingIndexing, getPaginationOnlyPage } from "@/lib/listing-seo";
+import { getListingIndexing, getPaginationOnlyPage, singleBrandCanonical } from "@/lib/listing-seo";
 
 type Params = Record<string, string>;
 const shop = (searchParams: Params) =>
@@ -51,6 +53,11 @@ describe("listing canonical and robots per url pattern", () => {
     [{ search: "agenda" }, "/tienda", false],
     [{ isOnSale: "true" }, "/tienda", false],
     [{ typeId: "escritura" }, "/tienda", false],
+    // Una sola marca y nada más: la página de la marca es la canónica.
+    [{ marca: "kiut" }, "/marcas/kiut", false],
+    [{ marca: "kiut,norma" }, "/tienda", false],
+    [{ marca: "kiut", colorId: "rosa" }, "/tienda", false],
+    [{ marca: "kiut", page: "2" }, "/tienda", false],
   ])("/tienda %j → canonical %s, index %s", async (params, canonical, index) => {
     const metadata = await shop(params);
     expect(metadata.alternates?.canonical).toBe(`${BASE_URL}${canonical}`);
@@ -79,5 +86,18 @@ describe("listing canonical and robots per url pattern", () => {
     expect(getListingIndexing("/tienda", { colorId: "", page: "2" }, true)).toEqual({ canonical: "/tienda?page=2", index: false });
     expect(getListingIndexing("/tienda", { colorId: undefined }, true)).toEqual({ canonical: "/tienda", index: true });
     expect(getPaginationOnlyPage({ page: ["2", "3"] })).toBeNull();
+  });
+
+  it("sends only a single-brand shop url to the brand page", () => {
+    expect(singleBrandCanonical({ marca: "kiut" })).toBe("/marcas/kiut");
+    expect(singleBrandCanonical({ marca: " kiut ," })).toBe("/marcas/kiut");
+    expect(singleBrandCanonical({ marca: "kiut,norma" })).toBeNull();
+    expect(singleBrandCanonical({ marca: "kiut", sortOption: "priceAsc" })).toBeNull();
+    expect(singleBrandCanonical({ marca: "" })).toBeNull();
+  });
+
+  it("titles a single-brand shop url with the brand name", async () => {
+    const metadata = await shop({ marca: "kiut" });
+    expect(metadata.title).toBe("Productos Kiut");
   });
 });

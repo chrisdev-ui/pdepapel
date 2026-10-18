@@ -66,7 +66,15 @@ describe("createOrderFromConversationCart", () => {
     mocks.orderCreate.mockResolvedValue({ id: "order-1" });
     mocks.conversationUpdate.mockResolvedValue({});
     mocks.transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn({ order: { create: mocks.orderCreate }, conversation: { update: mocks.conversationUpdate } }),
+      fn({
+        order: { create: mocks.orderCreate },
+        conversation: { update: mocks.conversationUpdate },
+        product: {
+          findMany: vi.fn().mockResolvedValue([
+            { id: "p1", brandRef: { name: "Marca de prueba", isArchived: false }, productGroup: null },
+          ]),
+        },
+      }),
     );
   });
 
@@ -103,6 +111,7 @@ describe("createOrderFromConversationCart", () => {
         sku: "AGE-CLS-AZU-XS-L-2868",
         price: 13000,
         imageUrl: "https://img/a.jpg",
+        brandName: "Marca de prueba",
       },
       {
         productId: "p2",
@@ -112,6 +121,7 @@ describe("createOrderFromConversationCart", () => {
         price: 5000,
         // Sin imagen registrada: queda vacío en vez de romper.
         imageUrl: "",
+        brandName: null,
       },
     ]);
   });

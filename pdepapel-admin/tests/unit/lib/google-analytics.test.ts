@@ -86,6 +86,21 @@ describe("Google Analytics purchase tracking", () => {
     expect("session_id" in buildGoogleAnalyticsPurchasePayload(base).events[0].params).toBe(false);
   });
 
+  it("toma la marca de la línea del pedido y no la manda si la línea no tiene", () => {
+    const payload = buildGoogleAnalyticsPurchasePayload({
+      clientId: "1.2",
+      items: [
+        { name: "Con marca", price: 1000, brandName: "Marca de prueba", productId: "a", quantity: 1, sku: "A" },
+        { name: "Sin marca", price: 1000, brandName: null, productId: "b", quantity: 1, sku: "B" },
+      ],
+      orderNumber: "ORD-1",
+      total: 2000,
+    });
+    const items = payload.events[0].params.items;
+    expect(items[0].item_brand).toBe("Marca de prueba");
+    expect("item_brand" in items[1] && items[1].item_brand !== undefined).toBe(false);
+  });
+
   it("builds a purchase payload without customer data", () => {
     const payload = buildGoogleAnalyticsPurchasePayload({
       clientId: "123456789.987654321",
@@ -94,8 +109,8 @@ describe("Google Analytics purchase tracking", () => {
         {
           name: "Agenda floral",
           price: 18000,
+          brandName: "Marca de prueba",
           product: {
-            brand: "P de Papel",
             category: { name: "Agendas" },
             sku: "AGENDA-001",
           },
@@ -121,7 +136,7 @@ describe("Google Analytics purchase tracking", () => {
             engagement_time_msec: 1,
             items: [
               {
-                item_brand: "P de Papel",
+                item_brand: "Marca de prueba",
                 item_category: "Agendas",
                 item_id: "AGENDA-001",
                 item_name: "Agenda floral",

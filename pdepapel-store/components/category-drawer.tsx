@@ -4,7 +4,7 @@ import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { ArrowRight, Bookmark, Heart, LayoutGrid, Mail, Menu, PackageOpen, Store, Tag, User, X, Gift } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 import {
   Accordion,
@@ -42,6 +42,8 @@ interface CategoryDrawerProps {
    */
   featuredSubcategories: NavigationCategory[];
   logoSrc: string;
+  /** Marcas (enlaces del servidor) justo debajo de «Todos los productos». */
+  brandsSlot?: ReactNode;
 }
 
 const rowClass =
@@ -52,7 +54,7 @@ const rowClass =
  * with its subcategories (accordion), the offers and info pages, and the
  * account shortcuts. Replaces the old five-link dropdown.
  */
-export function CategoryDrawer({ types, featuredSubcategories, logoSrc }: CategoryDrawerProps) {
+export function CategoryDrawer({ types, featuredSubcategories, logoSrc, brandsSlot }: CategoryDrawerProps) {
   const pathname = useStorefrontPathname();
   const [open, setOpen] = useState(false);
 
@@ -106,6 +108,8 @@ export function CategoryDrawer({ types, featuredSubcategories, logoSrc }: Catego
             <span className="flex-1">Todos los productos</span>
             <ArrowRight aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
           </Link>
+
+          {brandsSlot}
 
           {/*
             Atajo fijo, fuera de los acordeones: antes llegar a «Agendas»

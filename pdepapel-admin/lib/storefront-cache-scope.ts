@@ -13,6 +13,12 @@ export const productTag = (key: string) => `product:${key}`;
 export const productGroupTag = (groupId: string) => `products:group:${groupId}`;
 export const productCategoryTag = (category: string) => `products:category:${category}`;
 export const productTypeTag = (type: string) => `products:type:${type}`;
+/** Lista de marcas (menú, índice /marcas, sitemap). */
+export const BRANDS_TAG = "brands";
+/** Página de una marca (/marcas/<slug>). */
+export const brandTag = (slug: string) => `brand:${slug}`;
+export const brandPagePath = (slug: string) => `/marcas/${slug}`;
+export const BRANDS_INDEX_PATH = "/marcas";
 
 /** Topes de la tienda; por encima se manda la purga completa. */
 export const MAX_SCOPE_TAGS = 200;

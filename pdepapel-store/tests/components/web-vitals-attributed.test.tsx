@@ -129,6 +129,15 @@ describe("WebVitalsReporter: LCP and INP with attribution", () => {
     expect(mocks.trackGoogleEvent).not.toHaveBeenCalled();
   });
 
+  it("the cached copy of a brand page reports its public path", async () => {
+    mocks.pathname = "/catalogo-cache/marcas/marca-de-prueba";
+    render(<WebVitalsReporter sampleRate={0} />);
+    const { lcp } = await registered();
+    lcp(lcpMetric());
+    expect(mocks.trackGoogleEvent).toHaveBeenCalledWith(WEB_VITALS_LCP_EVENT, expect.objectContaining({ lcp_page: "/marcas/marca-de-prueba" }));
+    mocks.pathname = "/producto/agenda-rosa";
+  });
+
   it("a throwing report never escapes into the page", async () => {
     mocks.trackGoogleEvent.mockImplementation(() => {
       throw new Error("Java object is gone");

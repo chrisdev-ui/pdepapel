@@ -14,6 +14,7 @@ import { resolveStoreShippingRate } from "@/lib/store-shipping-quote";
 
 import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import { sendOrderEmail } from "@/lib/email";
+import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { qualifiesForFreeShipping } from "@/lib/order-totals";
@@ -705,6 +706,11 @@ async function createOrder(
         expiresAt.setDate(expiresAt.getDate() + daysValid);
       }
 
+      const brandNames = await getOrderItemBrandNames(
+        tx,
+        itemsWithPrices.map((item: any) => item.productId),
+      );
+
       const orderData: OrderData = {
         storeId: params.storeId,
         userId: authenticatedUserId,
@@ -758,6 +764,7 @@ async function createOrder(
             imageUrl: item.imageUrl,
             isCustom: item.isCustom,
             productId: item.productId || null,
+            brandName: orderItemBrandName(brandNames, item.productId),
           })),
         },
       };

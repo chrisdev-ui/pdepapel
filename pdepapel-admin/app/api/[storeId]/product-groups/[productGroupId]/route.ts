@@ -43,6 +43,7 @@ import {
   assertStoreCategory,
   loadVariantAttributes,
 } from "@/lib/product-group-attributes";
+import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,7 +112,7 @@ export async function PATCH(
 
     const {
       name,
-      brand,
+      brandId,
       description,
       images,
       imageMapping,
@@ -191,18 +192,25 @@ export async function PATCH(
     const updatedGroup = await prismadb.$transaction(async (tx) => {
       const existingGroup = await tx.productGroup.findFirst({
         where: { id: params.productGroupId, storeId: params.storeId },
-        select: { id: true, slug: true },
+        select: { id: true, slug: true, brandId: true },
       });
       if (!existingGroup) {
         throw ErrorFactory.NotFound("Grupo de productos no encontrado");
       }
+      // Sin `brandId` en el cuerpo se conserva la del grupo; igual se reescribe en todas sus variantes.
+      const requestedBrandId = readBrandIdInput(brandId);
+      const groupBrandId =
+        requestedBrandId === undefined ? existingGroup.brandId : requestedBrandId;
+      await assertAssignableBrand(tx, params.storeId, groupBrandId, {
+        currentBrandId: existingGroup.brandId,
+      });
 
       // 1. Datos del grupo
       const group = await tx.productGroup.update({
         where: { id: params.productGroupId },
         data: {
           name,
-          brand: typeof brand === "string" ? brand.trim() || null : null,
+          brandId: groupBrandId,
           slug: preserveSlug ? existingGroup.slug : slugify(name),
           description: sanitizedDescription,
         },
@@ -321,6 +329,7 @@ export async function PATCH(
             supplierId: defaultSupplier,
             isFeatured,
             isArchived,
+            brandId: groupBrandId,
           },
           isNew,
           attributes: ids,
@@ -409,6 +418,12 @@ export async function PATCH(
         ...transitions,
         ...archivedByRemoval,
       ]);
+
+      // También las variantes que quedan en el grupo sin venir en el formulario (las archivadas por baja).
+      await tx.product.updateMany({
+        where: { productGroupId: params.productGroupId, storeId: params.storeId },
+        data: { brandId: groupBrandId },
+      });
 
       if (!preserveSlug) {
         await synchronizeProductGroupSlugs(

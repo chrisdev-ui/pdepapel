@@ -21,7 +21,7 @@ import {
 import { Product } from "@/types";
 
 const baseProduct = {
-  brand: "",
+  brand: null,
   category: { id: "category-id", name: "Agendas", typeId: "type-id" },
   description: "Agenda",
   id: "product-id",

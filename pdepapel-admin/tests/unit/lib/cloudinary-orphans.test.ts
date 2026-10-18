@@ -26,6 +26,7 @@ function fakeDb(rows: {
   products?: (string | null)[];
   groups?: (string | null)[];
   messages?: string[];
+  brands?: { logoUrl?: string | null; logoInverseUrl?: string | null }[];
 }): ReferenceDb {
   const many = <T>(list: T[]) => ({ findMany: async () => list });
   return {
@@ -41,6 +42,7 @@ function fakeDb(rows: {
     conversationMessage: many(
       (rows.messages ?? []).map((u) => ({ mediaUrl: u })),
     ),
+    brand: many(rows.brands ?? []),
   } as unknown as ReferenceDb;
 }
 
@@ -64,6 +66,7 @@ describe("collectReferencedPublicIds", () => {
         products: [`<p>Mira <img src="${url("desc-prod")}"></p>`],
         groups: [`texto ${url("desc-grupo", "")}`.replace("//desc", "/desc")],
         messages: [url("wa-media")],
+        brands: [{ logoUrl: url("marca-logo"), logoInverseUrl: url("marca-logo-blanco") }],
       }),
     );
     const ids = Array.from(refs.keys()).sort();
@@ -77,6 +80,8 @@ describe("collectReferencedPublicIds", () => {
         "home-2",
         "home-hero",
         "logo",
+        "marca-logo",
+        "marca-logo-blanco",
         "politica",
         "portada-cat",
         "productos/foto-a",

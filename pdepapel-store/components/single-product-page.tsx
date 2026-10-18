@@ -1,7 +1,7 @@
 "use client";
 
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Gallery } from "@/components/gallery";
 import { KitContents } from "@/components/kit-contents";
@@ -25,9 +25,11 @@ import { Product, ProductVariant } from "@/types";
 interface SingleProductPageProps {
   product: Product;
   siblings?: ProductVariant[];
+  /** «Original <Marca> ›» del servidor; la marca es la misma en todas las variantes del grupo. */
+  brandSlot?: ReactNode;
 }
 
-export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, siblings }) => {
+export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, siblings, brandSlot }) => {
   const earlyAccess = useEarlyAccess();
   const [selectedProduct, setSelectedProduct] = useState(product);
   const [isVariantLoading, setIsVariantLoading] = useState(false);
@@ -130,6 +132,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
               quantity={quantity}
               onQuantityChange={setQuantity}
               ctaRef={ctaRef}
+              brandSlot={brandSlot}
             />
           </div>
         </div>

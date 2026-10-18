@@ -249,7 +249,7 @@ export async function POST(
           name: body.name,
           slug: slugify(body.name),
           description: product.description || "",
-          brand: product.brand,
+          brandId: product.brandId,
           images: {
             createMany: {
               data: product.images.map((image) => ({
@@ -377,7 +377,7 @@ export async function POST(
             colorId: variant.color.id,
             designId: variant.design.id,
             sku,
-            brand: product.brand,
+            brandId: product.brandId,
             // El GTIN es de un solo producto: la opción nueva nace sin código.
             hasNoProductIdentifier: true,
             supplierId: product.supplierId,

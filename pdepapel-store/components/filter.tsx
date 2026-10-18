@@ -6,6 +6,7 @@ import { ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColorSwatch } from "@/components/ui/color-swatch";
 import { LIMIT } from "@/constants";
+import { getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
 import { ProductFilters } from "@/hooks/use-product-filters";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
@@ -85,6 +86,8 @@ interface FilterItem {
   count?: number;
   icon?: string | null;
   slug?: string;
+  /** Solo marcas: logo ya permitido (sin él va solo el nombre). */
+  logoUrl?: string | null;
 }
 
 interface FilterProps {
@@ -93,12 +96,14 @@ interface FilterProps {
   emptyMessage?: string;
   data: FilterItem[];
   defaultOpen?: boolean;
+  /** Respeta el orden recibido (marcas: el orden del panel) en vez del alfabético. */
+  keepOrder?: boolean;
 }
 
 const SEARCH_FROM = 8;
 
 /** Lista de casillas de una faceta: iconos Lucide para tipos, muestra de color, conteo a la derecha. */
-const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, defaultOpen = true }) => {
+const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, defaultOpen = true, keepOrder = false }) => {
   const filterInstanceId = useId();
   const { filters, toggleFilter, setFilter } = useFilterState();
   const [showAll, setShowAll] = useState(false);
@@ -116,7 +121,10 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
   const selectedValueOf = (item: FilterItem) =>
     selected.find((value) => value === item.id || (item.slug !== undefined && value === item.slug));
 
-  const sorted = useMemo(() => [...data].sort((a, b) => stripTaxonomyIcon(a.name).localeCompare(stripTaxonomyIcon(b.name), "es")), [data]);
+  const sorted = useMemo(
+    () => (keepOrder ? data : [...data].sort((a, b) => stripTaxonomyIcon(a.name).localeCompare(stripTaxonomyIcon(b.name), "es"))),
+    [data, keepOrder],
+  );
   const filtered = useMemo(() => {
     if (!searchQuery) return sorted;
     const needle = searchQuery.toLocaleLowerCase("es-CO");
@@ -170,7 +178,7 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
           const label = stripTaxonomyIcon(item.name);
           const dimmed = item.count === 0 && !checked;
           return (
-            <div key={item.id} className={cn("flex min-h-10 items-center gap-2.5 lg:min-h-9", dimmed && "opacity-60")}>
+            <div key={item.id} className={cn("flex min-h-[2.75rem] items-center gap-2.5 lg:min-h-[2.25rem]", dimmed && "opacity-60")}>
               <Checkbox
                 id={inputId}
                 checked={checked}
@@ -181,6 +189,10 @@ const Filter: React.FC<FilterProps> = ({ valueKey, name, data, emptyMessage, def
                 <ColorSwatch color={{ value: item.value, swatchType: item.swatchType }} size="sm" />
               )}
               {valueKey === "typeId" && <TypeIcon type={item} className="h-[18px] w-[18px] shrink-0 text-muted-foreground" />}
+              {item.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element -- una sola URL (w_128 ≥ 2× la caja), como BrandLogo
+                <img src={getCloudinaryImageUrl(item.logoUrl, 128)} alt="" width={36} height={24} loading="lazy" className="h-6 w-9 shrink-0 rounded object-contain" />
+              )}
               <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer truncate font-sans text-sm font-medium text-blue-yankees">
                 {label}
               </label>

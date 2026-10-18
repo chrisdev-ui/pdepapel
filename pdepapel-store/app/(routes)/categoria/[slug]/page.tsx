@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 
+import { getBrands } from "@/actions/get-brands";
 import { getCategory } from "@/actions/get-category";
 import { getCatalogOptions } from "@/actions/get-catalog-options";
 import { getCategories } from "@/actions/get-categories";
@@ -30,6 +31,8 @@ interface CategoryPageProps {
     sizeId?: string;
     optionValueId?: string;
     designId?: string;
+    /** Slugs de marca separados por coma. */
+    marca?: string;
     sortOption?: string;
     minPrice?: string;
     maxPrice?: string;
@@ -83,13 +86,14 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const name = stripTaxonomyIcon(category.name);
   const hasFilters = Object.entries(searchParams).some(([key, value]) => key !== "sortOption" && key !== "page" && value !== undefined && value !== "");
 
-  const [{ products, totalPages, totalItems, facets, searchCorrection }, catalogOptions, colors, designs, cover, categoryTotal] = await Promise.all([
+  const [{ products, totalPages, totalItems, facets, searchCorrection }, catalogOptions, colors, designs, cover, categoryTotal, brands] = await Promise.all([
     getProducts({
       categoryId: category.id,
       colorId: searchParams.colorId,
       sizeId: searchParams.sizeId,
       optionValueId: searchParams.optionValueId,
       designId: searchParams.designId,
+      marca: searchParams.marca,
       sortOption: searchParams.sortOption,
       minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice, 10) : null,
       maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice, 10) : null,
@@ -106,6 +110,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     getDesigns(),
     resolveCover(category.id, category.imageUrl, name),
     hasFilters ? getProducts({ categoryId: category.id, fromShop: true, page: 1, itemsPerPage: 1, groupBy: "parents" }).then((response) => response.totalItems) : null,
+    getBrands(),
   ]);
 
   const pageTarget = outOfRangePageTarget(categoryPath(canonicalSlug), searchParams as Record<string, string | undefined>, totalPages);
@@ -177,6 +182,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           heading={`Productos de ${name}`}
           searchPlaceholder={`Buscar en ${name}`}
           suggestions={suggestions}
+          brands={brands.map((brand) => ({ id: brand.slug, name: brand.name }))}
         />
       </Container>
       <CategoryRail categories={relatedCategories} title="Sigue explorando" moreHref={null} />

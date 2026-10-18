@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
 
+import { PUBLIC_BRAND_SELECT } from "@/lib/public-brand";
 import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 
 /**
@@ -33,7 +34,9 @@ export const PUBLIC_PRODUCT_GROUP_SELECT = {
   id: true,
   name: true,
   slug: true,
-  brand: true,
+  // `brandRef` sale como `brand` (forma pública) por `netPublicProduct`; el
+  // texto libre anterior (`brand`) ya no sale.
+  brandRef: { select: PUBLIC_BRAND_SELECT },
   description: true,
 } satisfies Prisma.ProductGroupSelect;
 
@@ -112,7 +115,7 @@ export const PUBLIC_PRODUCT_SELECT = {
   },
   createdAt: true,
   sku: true,
-  brand: true,
+  brandRef: { select: PUBLIC_BRAND_SELECT },
   gtin: true,
   mpn: true,
   categoryId: true,
@@ -153,7 +156,7 @@ export type PublicProductDetailRecord = Prisma.ProductGetPayload<{
  * cuando cambie lo que se devuelve: las entradas viejas dejan de leerse en el
  * acto y caducan solas (máximo 15 minutos) sin ningún paso manual.
  */
-export const PUBLIC_PRODUCTS_CACHE_VERSION = "v7";
+export const PUBLIC_PRODUCTS_CACHE_VERSION = "v8";
 
 /** Campos de `Product` que nunca deben salir por una ruta pública (para pruebas). */
 export const INTERNAL_PRODUCT_FIELDS = [

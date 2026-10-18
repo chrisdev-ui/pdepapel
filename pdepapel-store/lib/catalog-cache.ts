@@ -15,6 +15,10 @@ export const productTag = (key: string) => `product:${key}`;
 export const productGroupTag = (groupId: string) => `products:group:${groupId}`;
 export const productCategoryTag = (category: string) => `products:category:${category}`;
 export const productTypeTag = (type: string) => `products:type:${type}`;
+/** Lista de marcas visibles (menú, /marcas, filtros, sitemap). */
+export const BRANDS_TAG = "brands";
+/** Una página de marca (`GET /brands/{slug}`). */
+export const brandTag = (slug: string) => `brand:${slug}`;
 
 /**
  * Las listas acotadas a un grupo, categoría o tipo llevan solo esa etiqueta,
@@ -27,7 +31,8 @@ export function catalogListingTags(query: CatalogQuery): string[] {
   if (query.categoryId) tags.push(productCategoryTag(query.categoryId));
   if (query.typeId) tags.push(productTypeTag(query.typeId));
   if (query.isFeatured) tags.push(FEATURED_PRODUCTS_TAG);
-  if (tags.length === 1) tags.push(PRODUCT_LIST_TAG);
+  // Asignar una marca purga `products:list`: una lista por marca debe llevarla aunque vaya acotada.
+  if (tags.length === 1 || query.marca) tags.push(PRODUCT_LIST_TAG);
   return tags;
 }
 

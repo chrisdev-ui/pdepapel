@@ -65,7 +65,7 @@ export async function POST(
           name: groupName,
           slug: slugify(groupName),
           description: product.description || "",
-          brand: product.brand,
+          brandId: product.brandId,
           images: {
             createMany: {
               data: product.images.map((image) => ({

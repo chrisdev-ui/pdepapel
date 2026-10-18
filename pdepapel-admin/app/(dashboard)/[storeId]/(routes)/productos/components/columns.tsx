@@ -13,6 +13,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { getProducts } from "../server/get-products";
 import { CellAction } from "./cell-action";
+import { BrandLogoCell } from "@/components/brands/brand-picker";
 import {
   FeaturedBadge,
   OfferBadge,
@@ -23,6 +24,9 @@ import {
 } from "./product-badges";
 
 export type ProductColumn = Awaited<ReturnType<typeof getProducts>>[number];
+
+/** Valor del filtro «Marca» para los productos sin marca. */
+export const NO_BRAND_FILTER_VALUE = "__none__";
 
 export const productImage = (row: ProductColumn) =>
   row.images.find((image) => image.isMain)?.url ??
@@ -51,7 +55,7 @@ export const buildColumns = (
   {
     id: "name",
     accessorFn: (row) =>
-      [row.name, row.sku, row.gtin, row.productGroup?.name]
+      [row.name, row.sku, row.gtin, row.productGroup?.name, row.brandRef?.name]
         .filter(Boolean)
         .join(" "),
     header: ({ column }) => (
@@ -105,6 +109,19 @@ export const buildColumns = (
       !filterValue?.length || filterValue.includes(row.getValue(id) as string),
     enableHiding: false,
     enableSorting: false,
+    enableGlobalFilter: false,
+  },
+  {
+    id: "brand",
+    accessorFn: (row) => row.brandRef?.id ?? NO_BRAND_FILTER_VALUE,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Marca" />
+    ),
+    cell: ({ row }) => <ProductBrandCell brand={row.original.brandRef} />,
+    filterFn: (row, id, filterValue: string[]) =>
+      !filterValue?.length || filterValue.includes(row.getValue(id) as string),
+    sortingFn: (a, b) =>
+      (a.original.brandRef?.name ?? "").localeCompare(b.original.brandRef?.name ?? "", "es"),
     enableGlobalFilter: false,
   },
   {
@@ -216,3 +233,21 @@ export const buildColumns = (
     enableGlobalFilter: false,
   },
 ];
+
+/** Logo pequeño y nombre de la marca, o «Sin marca» con tinte. */
+export function ProductBrandCell({
+  brand,
+}: {
+  brand: ProductColumn["brandRef"];
+}) {
+  if (!brand) return <ProductTintBadge label="Sin marca" tone="slate" />;
+  return (
+    <span className="flex min-w-0 max-w-[180px] items-center gap-2">
+      <BrandLogoCell brand={brand} className="h-6 w-8" />
+      <span className="truncate text-sm">
+        {brand.name}
+        {brand.isArchived && <span className="text-muted-foreground"> · archivada</span>}
+      </span>
+    </span>
+  );
+}

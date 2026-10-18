@@ -21,6 +21,7 @@ import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer
 import { DEFAULT_SLOW_DAYS, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf, type SalesHistory } from "@/lib/sales-velocity";
 import { foldWords, upcomingOccasions } from "@/lib/season-calendar";
 import { requireStoreOwner } from "@/lib/store-access";
+import { brandDataName } from "@/lib/brand-rules";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CO_PURCHASE_DAYS = 180;
@@ -136,7 +137,8 @@ export async function loadKitData(db: CopilotDb, storeId: string, days: number, 
         acqPrice: true,
         transportationCost: true,
         price: true,
-        brand: true,
+        brandRef: { select: { name: true, isArchived: true } },
+        productGroup: { select: { brandRef: { select: { name: true, isArchived: true } } } },
         design: { select: { name: true } },
         category: { select: { name: true, typeId: true, type: { select: { name: true } } } },
       },
@@ -174,7 +176,7 @@ export async function loadKitData(db: CopilotDb, storeId: string, days: number, 
       categoryName: row.category?.name ?? null,
       typeId: row.category?.typeId ?? null,
       typeName: row.category?.type?.name ?? null,
-      brand: row.brand?.trim() || null,
+      brand: brandDataName(row.brandRef ?? row.productGroup?.brandRef ?? null),
       designName: row.design?.name?.trim() || null,
       isKit: row.isKit,
       isArchived: row.isArchived,

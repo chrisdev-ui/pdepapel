@@ -1,3 +1,4 @@
+import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { requireStoreRead } from "@/lib/store-access";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
@@ -54,6 +55,8 @@ export default async function ProductGroupPage({
     select: SUPPLIER_PICKER_SELECT,
   });
 
+  const brands = await loadBrandOptions(params.storeId);
+
   return (
     <div className="flex-col">
       <div className="flex flex-1 flex-col gap-4 p-4 sm:p-8 sm:pt-6">
@@ -65,6 +68,7 @@ export default async function ProductGroupPage({
           suppliers={suppliers}
           storeUrl={env.FRONTEND_STORE_URL}
           adoptOnLoad={adoptOnLoad}
+          brands={brands}
         />
       </div>
     </div>

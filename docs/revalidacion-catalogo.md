@@ -16,9 +16,12 @@ Cada cambio purga solo lo que toca. El panel resuelve los productos afectados (`
 | `products:list` | `/tienda`, rieles del inicio, carrito, próximamente, mapa del sitio | cambia cualquier producto |
 | `products` | todas las anteriores | solo en purgas completas |
 | `catalog` | árbol de tipos y categorías del encabezado | cambian categorías, tipos o atributos |
+| `brands` | lista de marcas (menú, índice `/marcas`, mapa del sitio) | se edita, oculta, archiva, ordena o fusiona una marca, o se asignan marcas a productos |
+| `brand:<slug>` | la página `/marcas/<slug>` | cambia esa marca (también sus direcciones anteriores y, en una fusión, las de las dos marcas) |
 
 - Pedidos, pagos (Bold, Wompi), punto de venta, ferias, inventario, recepciones y Mercado Libre purgan los productos de sus líneas, incluidos los kits que los contienen.
 - Guardar, mover o borrar un producto o grupo purga también el alcance que tenía antes (categoría, grupo o destacado anteriores).
+- Un cambio de marca (`lib/brand-cache.ts › brandStorefrontTarget`) purga `brands`, `products:list`, `brand:<slug>` de cada dirección actual y anterior, las rutas `/marcas` y `/marcas/<slug>`, y los productos y grupos de la marca; una fusión, los de las dos marcas. No es una purga completa.
 - Siguen siendo purgas completas, a propósito: ofertas, categorías, tipos, colores, tallas, diseños, atributos, portadas de categoría, migración del catálogo y ajustes de la tienda. `tests/unit/security/storefront-purge-scope-scan.test.ts` falla si aparece otra llamada sin alcance fuera de esa lista.
 - Si el alcance no se puede resolver (error, nada resuelto o más de los topes), el panel manda la purga completa: nunca se queda una página vieja, a lo sumo se purga de más.
 - Una petición sin `version` sigue haciendo la purga completa de antes, para que un panel y una tienda de despliegues distintos convivan.

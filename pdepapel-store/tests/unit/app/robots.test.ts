@@ -44,6 +44,14 @@ describe("storefront robots policy", () => {
     );
   });
 
+  it("keeps filtered brand pages out of crawling but lets the brand pages themselves in", () => {
+    const policy = robots();
+    const rules = Array.isArray(policy.rules) ? policy.rules : [policy.rules];
+    const publicRule = rules.find((rule) => rule.userAgent === "*");
+    expect(publicRule?.disallow).toEqual(expect.arrayContaining(["/marcas/*?", "/tienda?"]));
+    expect(publicRule?.disallow).not.toContain("/marcas");
+  });
+
   /** AhrefsBot descargaba el catálogo entero de fotos (6 % del ancho de banda de Cloudinary). */
   it("blocks AhrefsBot entirely and leaves Googlebot-Image on the public rule", () => {
     const policy = robots();

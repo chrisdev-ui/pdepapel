@@ -21,7 +21,7 @@ import { useProductFilters } from "@/hooks/use-product-filters";
 beforeEach(() => {
   mocks.setRaw.mockReset();
   mocks.state = {
-    typeId: [], categoryId: [], colorId: [], sizeId: [], designId: [], optionValueId: [],
+    typeId: [], categoryId: [], colorId: [], sizeId: [], designId: [], optionValueId: [], marca: [],
     minPrice: null, maxPrice: null, sortOption: "", page: 3, search: "", isOnSale: false, exact: false,
   };
 });

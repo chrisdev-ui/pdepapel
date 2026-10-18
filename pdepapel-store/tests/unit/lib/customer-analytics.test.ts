@@ -9,8 +9,18 @@ import {
 } from "@/lib/customer-analytics";
 import { Product } from "@/types";
 
+const testBrand = (isPublic: boolean) => ({
+  name: "Marca de prueba",
+  slug: "marca-de-prueba",
+  logoUrl: null,
+  logoHasBackground: false,
+  logoPermission: "UNKNOWN" as const,
+  color: null,
+  isPublic,
+});
+
 const product = {
-  brand: "P de Papel",
+  brand: testBrand(true),
   category: { id: "category-id", name: "Agendas", typeId: "type-id" },
   color: { id: "color-id", name: "Lila", value: "#c9b6e4" },
   description: "Agenda con flores",
@@ -29,7 +39,7 @@ const product = {
 describe("customer analytics items", () => {
   it("uses catalog metadata without customer information", () => {
     expect(toAnalyticsItem(product, 2)).toEqual({
-      item_brand: "P de Papel",
+      item_brand: "Marca de prueba",
       item_category: "Agendas",
       item_id: "AGENDA-001",
       item_name: "Agenda floral",
@@ -37,6 +47,20 @@ describe("customer analytics items", () => {
       price: 18000,
       quantity: 2,
     });
+  });
+
+  it("sends the brand name even when the brand is hidden in the store", () => {
+    expect(toAnalyticsItem({ ...product, brand: testBrand(false) }).item_brand).toBe("Marca de prueba");
+  });
+
+  it("never sends an old brand text kept in a stored cart", () => {
+    expect(toAnalyticsItem({ ...product, brand: "Texto viejo" as unknown as Product["brand"] }).item_brand).toBeUndefined();
+    expect(toAnalyticsItem({ ...product, brand: null }).item_brand).toBeUndefined();
+  });
+
+  it("takes the group brand when the product carries none", () => {
+    const grouped = { ...product, brand: null, productGroup: { id: "g", name: "Grupo", brand: testBrand(true) } } as Product;
+    expect(toAnalyticsItem(grouped).item_brand).toBe("Marca de prueba");
   });
 
   it("calculates event value from item prices and quantities", () => {

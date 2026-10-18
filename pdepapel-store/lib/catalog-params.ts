@@ -8,6 +8,8 @@ export interface CatalogQuery {
   sizeId?: string;
   designId?: string;
   optionValueId?: string;
+  /** Slugs de marca separados por coma (OR entre marcas). */
+  marca?: string;
   isFeatured?: boolean;
   onlyNew?: boolean;
   fromShop?: boolean;
@@ -51,6 +53,7 @@ export function buildCatalogSearchParams(query: CatalogQuery): URLSearchParams {
   if (query.sizeId) params.append("sizeId", query.sizeId);
   if (query.designId) params.append("designId", query.designId);
   if (query.optionValueId) params.append("optionValueId", query.optionValueId);
+  if (query.marca) params.append("marca", query.marca);
   if (query.groupBy) params.append("groupBy", query.groupBy);
   if (query.productGroupId) params.append("productGroupId", query.productGroupId);
   if (query.isFeatured !== undefined)
@@ -85,6 +88,7 @@ const STRING_KEYS = [
   "sizeId",
   "designId",
   "optionValueId",
+  "marca",
   "sortOption",
   "excludeProducts",
   "search",

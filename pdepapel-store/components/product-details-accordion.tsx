@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { RichTextDisplay } from "@/components/ui/rich-text-display";
 import { getCustomerFacingProductOptions, getStructuredProductSize } from "@/lib/product-options";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { brandPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { publicProductBrand } from "@/lib/product-brand";
 import { currencyFormatter } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 import { Product } from "@/types";
@@ -20,9 +21,10 @@ const TRIGGER = "py-4 font-sans text-base font-bold text-blue-yankees hover:no-u
 export function ProductDetailsAccordion({ product }: ProductDetailsAccordionProps) {
   const { freeShippingThreshold, deliveryEstimate } = useStorefrontSettings();
   const size = getStructuredProductSize(product);
-  const details: { label: string; value: string }[] = [
+  const brand = publicProductBrand(product);
+  const details: { label: string; value: string; href?: string }[] = [
     ...(product.sku ? [{ label: "Referencia", value: product.sku }] : []),
-    ...(product.brand || product.productGroup?.brand ? [{ label: "Marca", value: (product.brand || product.productGroup?.brand) as string }] : []),
+    ...(brand ? [{ label: "Marca", value: brand.name, href: brandPath(brand.slug) }] : []),
     ...(product.category?.name ? [{ label: "Categoría", value: product.category.name }] : []),
     ...(product.design?.name ? [{ label: "Diseño", value: product.design.name }] : []),
     ...(product.color?.name ? [{ label: "Color", value: product.color.name }] : []),
@@ -51,7 +53,15 @@ export function ProductDetailsAccordion({ product }: ProductDetailsAccordionProp
               {details.map((detail) => (
                 <div key={detail.label} className="contents">
                   <dt className="text-gray-500">{detail.label}</dt>
-                  <dd className="text-blue-yankees">{detail.value}</dd>
+                  <dd className="text-blue-yankees">
+                    {detail.href ? (
+                      <Link href={detail.href} prefetch={false} className="font-semibold underline underline-offset-2">
+                        {detail.value}
+                      </Link>
+                    ) : (
+                      detail.value
+                    )}
+                  </dd>
                 </div>
               ))}
             </dl>

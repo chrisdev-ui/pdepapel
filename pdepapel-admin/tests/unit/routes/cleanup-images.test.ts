@@ -47,6 +47,7 @@ vi.mock("@/lib/prismadb", () => {
       product: empty,
       productGroup: empty,
       conversationMessage: empty,
+      brand: empty,
     },
   };
 });

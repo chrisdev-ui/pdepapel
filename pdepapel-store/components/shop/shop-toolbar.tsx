@@ -48,6 +48,8 @@ interface ShopToolbarProps {
   onRemoveChip: (chip: ActiveFilterChip) => void;
   onClearAll: () => void;
   rangeText: string;
+  /** Con marcas elegidas: «N productos de Kiut · Quitar» en lugar del rango. */
+  brandLine?: ReactNode;
   /** Campo de búsqueda dentro de la categoría (solo en categorías). */
   searchSlot?: ReactNode;
   /** Acción contextual, como guardar la búsqueda (solo con filtros activos). */
@@ -55,12 +57,12 @@ interface ShopToolbarProps {
 }
 
 /** Escritorio: rango (y chips si hay filtros) a la izquierda, búsqueda de categoría y orden a la derecha. */
-export function ShopToolbar({ chips, onRemoveChip, onClearAll, rangeText, searchSlot, actionSlot }: ShopToolbarProps) {
+export function ShopToolbar({ chips, onRemoveChip, onClearAll, rangeText, brandLine, searchSlot, actionSlot }: ShopToolbarProps) {
   return (
     <div className="hidden min-h-11 items-center justify-between gap-4 lg:flex">
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <p className="font-sans text-sm font-medium text-muted-foreground" aria-live="polite">
-          {rangeText}
+          {brandLine ?? rangeText}
         </p>
         {chips.length > 0 && (
           <ActiveFilterChips chips={chips} onRemove={onRemoveChip} onClearAll={onClearAll} className="flex-wrap" />
@@ -81,10 +83,11 @@ interface MobileToolbarProps {
   onRemoveChip: (chip: ActiveFilterChip) => void;
   onClearAll: () => void;
   rangeText: string;
+  brandLine?: ReactNode;
 }
 
 /** Teléfono y tableta: barra «Filtros / Ordenar» pegajosa bajo la cabecera, chips debajo. */
-export function MobileToolbar({ filtersSlot, chips, onRemoveChip, onClearAll, rangeText }: MobileToolbarProps) {
+export function MobileToolbar({ filtersSlot, chips, onRemoveChip, onClearAll, rangeText, brandLine }: MobileToolbarProps) {
   // Ambos bloques son hijos directos de la columna de resultados: así la barra
   // pegajosa acompaña toda la lista y no solo a su propio envoltorio.
   return (
@@ -93,7 +96,12 @@ export function MobileToolbar({ filtersSlot, chips, onRemoveChip, onClearAll, ra
         {filtersSlot}
         <SortSheet />
       </div>
-      <div className="-mt-1 flex min-h-9 items-center lg:hidden">
+      {brandLine && (
+        <p className="-mt-1 font-sans text-sm font-medium text-muted-foreground lg:hidden" aria-live="polite">
+          {brandLine}
+        </p>
+      )}
+      <div className={cn("-mt-1 flex min-h-9 items-center lg:hidden", brandLine && chips.length === 0 && "hidden")}>
         {chips.length > 0 ? (
           <ActiveFilterChips chips={chips} onRemove={onRemoveChip} onClearAll={onClearAll} className="category-chips -mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6" />
         ) : (

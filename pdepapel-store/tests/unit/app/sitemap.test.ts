@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getCategories: vi.fn(),
   getSitemapProducts: vi.fn(),
   getProducts: vi.fn(),
+  getBrands: vi.fn(),
 }));
 
 vi.mock("@/actions/get-categories", () => ({
@@ -15,6 +16,9 @@ vi.mock("@/actions/get-sitemap-products", () => ({
 vi.mock("@/actions/get-products", () => ({
   getProducts: mocks.getProducts,
 }));
+vi.mock("@/actions/get-brands", () => ({
+  getBrands: mocks.getBrands,
+}));
 
 import sitemap from "@/app/sitemap";
 
@@ -23,6 +27,23 @@ describe("storefront sitemap", () => {
     vi.clearAllMocks();
     mocks.getCategories.mockResolvedValue([]);
     mocks.getProducts.mockResolvedValue({ products: [] });
+    mocks.getBrands.mockResolvedValue([]);
+  });
+
+  /** `getBrands` ya trae solo marcas visibles con productos; con menos del umbral la página es noindex. */
+  it("lists /marcas and only the brand pages that are indexable", async () => {
+    mocks.getSitemapProducts.mockResolvedValue([{ id: "p", slug: "producto", isArchived: false }]);
+    const none = (await sitemap()).map((entry) => entry.url);
+    expect(none.some((url) => url.includes("/marcas"))).toBe(false);
+
+    mocks.getBrands.mockResolvedValue([
+      { id: "b1", slug: "marca-grande", productCount: 3 },
+      { id: "b2", slug: "marca-chica", productCount: 1 },
+    ]);
+    const urls = (await sitemap()).map((entry) => entry.url);
+    expect(urls).toContain("https://papeleriapdepapel.com/marcas");
+    expect(urls).toContain("https://papeleriapdepapel.com/marcas/marca-grande");
+    expect(urls).not.toContain("https://papeleriapdepapel.com/marcas/marca-chica");
   });
 
   /** Sin productos por llegar, /proximamente es noindex y no va en el sitemap. */

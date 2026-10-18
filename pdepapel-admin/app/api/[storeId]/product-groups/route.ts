@@ -32,6 +32,7 @@ import {
   assertStoreCategory,
   loadVariantAttributes,
 } from "@/lib/product-group-attributes";
+import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,7 +61,7 @@ export async function POST(
 
     const {
       name,
-      brand,
+      brandId,
       description,
       images,
       imageMapping, // { url: string, scope: string }[]
@@ -139,9 +140,12 @@ export async function POST(
       : [];
     const previousImageUrls = adoptedImages.map((image) => image.url);
 
+    const groupBrandId = readBrandIdInput(brandId) ?? null;
+
     let pausedListings = 0;
     const productGroup = await prismadb.$transaction(async (tx) => {
       await assertStoreCategory(tx, params.storeId, categoryId);
+      await assertAssignableBrand(tx, params.storeId, groupBrandId);
       // Los productos que se adoptan tienen que ser de la tienda, estar
       // sueltos, no ser kits ni estar archivados.
       const adopted = await loadAdoptableProducts(tx, {
@@ -156,7 +160,7 @@ export async function POST(
         data: {
           storeId: params.storeId,
           name,
-          brand: typeof brand === "string" ? brand.trim() || null : null,
+          brandId: groupBrandId,
           slug: slugify(name),
           description: sanitizedDescription,
         },
@@ -187,6 +191,7 @@ export async function POST(
             supplierId: defaultSupplier,
             isFeatured,
             isArchived,
+            brandId: groupBrandId,
           },
           isNew: !existing,
           attributes: ids,

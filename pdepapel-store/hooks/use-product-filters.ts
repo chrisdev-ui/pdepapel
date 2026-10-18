@@ -15,6 +15,7 @@ const filterParsers = {
   sizeId: parseAsArrayOf(parseAsString).withDefault([]),
   designId: parseAsArrayOf(parseAsString).withDefault([]),
   optionValueId: parseAsArrayOf(parseAsString).withDefault([]),
+  marca: parseAsArrayOf(parseAsString).withDefault([]),
   minPrice: parseAsInteger,
   maxPrice: parseAsInteger,
   sortOption: parseAsString.withDefault(""),
@@ -32,6 +33,8 @@ export interface ProductFilters {
   sizeId: string[];
   designId: string[];
   optionValueId: string[];
+  /** Slugs de marca. */
+  marca: string[];
   minPrice: number | null;
   maxPrice: number | null;
   sortOption: string | null;

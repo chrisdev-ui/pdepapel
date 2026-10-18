@@ -1,8 +1,10 @@
+import { getBrands } from "@/actions/get-brands";
 import { getCategoriesOrThrow } from "@/actions/get-categories";
 import { getProducts } from "@/actions/get-products";
 import { getSitemapProducts } from "@/actions/get-sitemap-products";
 import { BASE_URL } from "@/constants";
-import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { BRAND_PAGE_INDEX_MIN_PRODUCTS } from "@/lib/brand-display";
+import { brandPath, categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { MetadataRoute } from "next";
 
 const getLastModified = (updatedAt?: string) => {
@@ -51,6 +53,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("Failed to check coming-soon products for sitemap:", error);
   }
 
+  // Solo marcas que se indexan: con menos productos la página es `noindex`
+  // (igual que /proximamente vacía). `getBrands` ya trae solo visibles con productos.
+  const brands = await getBrands();
+  const brandUrls: MetadataRoute.Sitemap =
+    brands.length > 0
+      ? [
+          { url: `${BASE_URL}${STOREFRONT_ROUTES.brands}` },
+          ...brands
+            .filter((brand) => brand.productCount >= BRAND_PAGE_INDEX_MIN_PRODUCTS)
+            .map((brand) => ({ url: `${BASE_URL}${brandPath(brand.slug)}` })),
+        ]
+      : [];
+
   return [
     {
       url: BASE_URL,
@@ -78,6 +93,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     ...comingSoonUrls,
     ...categoryUrls,
+    ...brandUrls,
     ...productsUrls,
   ];
 }

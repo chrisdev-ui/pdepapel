@@ -3,6 +3,7 @@
 import {
   Archive,
   ArchiveRestore,
+  Award,
   Barcode,
   CalendarClock,
   CalendarX2,
@@ -15,6 +16,7 @@ import {
   Star,
   StarOff,
   Tag,
+  X,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -57,6 +59,8 @@ import { localDateToPromotionDay } from "@/lib/promotion-window";
 import { cn, currencyFormatter } from "@/lib/utils";
 
 import type { ProductColumn } from "./columns";
+import { BrandAssignDialog } from "./brand-assign-dialog";
+import type { BrandOption } from "@/lib/brand-options";
 
 type BulkField =
   | "isArchived"
@@ -235,9 +239,11 @@ const plural = (count: number) =>
 export function ProductBulkActions({
   table,
   taxonomies,
+  brands = [],
 }: {
   table: Table<ProductColumn>;
   taxonomies: BulkTaxonomies;
+  brands?: BrandOption[];
 }) {
   const params = useParams();
   const router = useRouter();
@@ -251,6 +257,7 @@ export function ProductBulkActions({
     archived: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [brandMode, setBrandMode] = useState<"assign" | "remove" | null>(null);
 
   const selected = table
     .getFilteredSelectedRowModel()
@@ -378,6 +385,30 @@ export function ProductBulkActions({
   return (
     <>
       <div className="flex flex-wrap items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="min-h-11 sm:min-h-9"
+          disabled={loading}
+          onClick={() => setBrandMode("assign")}
+        >
+          <Award className="mr-2 h-4 w-4" aria-hidden="true" />
+          Asignar marca
+        </Button>
+        {selected.some((row) => row.brandId) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11 sm:min-h-9"
+            disabled={loading}
+            onClick={() => setBrandMode("remove")}
+          >
+            <X className="mr-2 h-4 w-4" aria-hidden="true" />
+            Quitar marca
+          </Button>
+        )}
         {ACTIONS.filter((action) => action.show(selected)).map((action) => (
           <Button
             key={`${action.field}-${String(action.value)}`}
@@ -410,6 +441,22 @@ export function ProductBulkActions({
           Exportar CSV
         </Button>
       </div>
+      <BrandAssignDialog
+        open={brandMode !== null}
+        mode={brandMode ?? "assign"}
+        storeId={String(params.storeId)}
+        products={(brandMode === "remove" ? selected.filter((row) => row.brandId) : selected).map((row) => ({
+          id: row.id,
+          name: row.name,
+        }))}
+        brands={brands}
+        onOpenChange={(open) => !open && setBrandMode(null)}
+        onDone={() => {
+          setBrandMode(null);
+          table.resetRowSelection();
+          router.refresh();
+        }}
+      />
       <AlertDialog
         open={pending !== null}
         onOpenChange={(open) => !open && !loading && closeDialog()}

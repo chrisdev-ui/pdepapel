@@ -18,6 +18,7 @@ import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 const FILTER_LABELS: Record<string, string> = {
   typeId: "tipo",
   categoryId: "categoría",
+  marca: "marca",
   colorId: "color",
   sizeId: "tamaño",
   optionValueId: "opción",

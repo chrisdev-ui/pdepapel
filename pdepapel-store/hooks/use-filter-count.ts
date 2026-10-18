@@ -8,7 +8,7 @@ import { fetchCatalogFromClient } from "@/lib/catalog-client";
 const join = (values: string[]) => (values.length ? values.join(",") : undefined);
 
 /** Parámetros de la API para un conjunto de filtros; una categoría fija manda sobre la URL. */
-export function filtersToQuery(filters: ProductFilters, fixedCategoryId?: string) {
+export function filtersToQuery(filters: ProductFilters, fixedCategoryId?: string, fixedBrandSlug?: string) {
   return {
     typeId: fixedCategoryId ? undefined : join(filters.typeId),
     categoryId: fixedCategoryId ?? join(filters.categoryId),
@@ -16,6 +16,7 @@ export function filtersToQuery(filters: ProductFilters, fixedCategoryId?: string
     sizeId: join(filters.sizeId),
     designId: join(filters.designId),
     optionValueId: join(filters.optionValueId),
+    marca: fixedBrandSlug ?? join(filters.marca ?? []),
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,
     search: filters.search || undefined,

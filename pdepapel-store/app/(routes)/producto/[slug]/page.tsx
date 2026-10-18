@@ -6,6 +6,7 @@ import { getProductRoute } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import Newsletter from "@/components/newsletter";
+import { BrandPill } from "@/components/brands/brand-pill";
 import { RelatedProducts } from "@/components/related-products";
 import { RelatedProductsSkeleton } from "@/components/related-products-skeleton";
 import { SingleProductPage } from "@/components/single-product-page";
@@ -16,7 +17,8 @@ import { buildProductMetaDescription, buildProductMetaTitle } from "@/lib/produc
 import { withSanitizedDescription } from "@/lib/product-description";
 import { getVariantMainImageUrl } from "@/lib/product-variants";
 import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
-import { categoryPath, productPath } from "@/lib/routes";
+import { publicProductBrand } from "@/lib/brand-display";
+import { brandPath, categoryPath, productPath } from "@/lib/routes";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { archivedProductRedirectPath } from "@/lib/archived-product-redirect";
 
@@ -89,6 +91,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const siblingsPromise = product.productGroupId ? getProducts({ productGroupId: product.productGroupId }) : Promise.resolve({ products: [] });
   const suggestedProductsPromise = getProducts({ categoryId: product.category?.id, excludeProducts: product.id, groupBy: "parents", limit: 4 });
+  // Una marca oculta no se ve en la ficha: ni la píldora, ni la fila, ni el carril.
+  const brand = publicProductBrand(product);
+  const brandProductsPromise = brand ? getProducts({ marca: brand.slug, excludeProducts: product.id, groupBy: "parents", limit: 4 }) : null;
   const [siblingsResponse, storefrontSettings] = await Promise.all([siblingsPromise, getStorefrontSettings()]);
   const siblings = siblingsResponse.products.map((variant) => ({
     id: variant.id,
@@ -111,8 +116,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductBreadcrumbJsonLd(product)) }} />
         </>
       )}
-      <SingleProductPage product={product} siblings={siblings} />
-      <Container className="max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+      <SingleProductPage product={product} siblings={siblings} brandSlot={brand ? <BrandPill brand={brand} /> : null} />
+      <Container className="flex max-w-7xl flex-col gap-12 px-4 pb-12 sm:px-6 lg:px-8">
         <Suspense fallback={<RelatedProductsSkeleton />}>
           <RelatedProducts
             productsPromise={suggestedProductsPromise}
@@ -121,6 +126,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
             action={product.category ? { label: `Ver ${categoryName}`, href: categoryPath(product.category.slug || product.category.id) } : undefined}
           />
         </Suspense>
+        {brand && brandProductsPromise && (
+          <Suspense fallback={null}>
+            <RelatedProducts
+              productsPromise={brandProductsPromise}
+              title={`Más de ${brand.name}`}
+              action={{ label: "Ver todo", href: brandPath(brand.slug), prefetch: false }}
+              minProducts={2}
+              hideBrand
+            />
+          </Suspense>
+        )}
       </Container>
       <Newsletter />
     </>

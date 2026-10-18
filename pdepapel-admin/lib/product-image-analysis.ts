@@ -1,5 +1,7 @@
 import { isValidGtin } from "@/lib/product-identifiers";
 import { createHash } from "node:crypto";
+import { buildBrandMatcher, singleBrandMatch, type MatchableBrand } from "@/lib/brand-matcher";
+import { brandKey, readStoredAliases } from "@/lib/brand-rules";
 
 import {
   formatProductQuantity,
@@ -226,7 +228,37 @@ export type ProductImageAnalysis = Omit<
   catalogAttributes: ProductCatalogAttribute[];
   /** La IA propone otro tipo de producto que el nombre o la subcategoría actuales. */
   typeWarning: string | null;
+  /** La marca leída, buscada en las marcas de la tienda. Solo se sugiere; la IA nunca crea una. */
+  brandId?: string | null;
+  brandSource?: ProductImageBrandSource;
 };
+
+export type ProductImageBrandSource = "existing" | "not_found" | null;
+
+/**
+ * La marca que leyó la IA, buscada en las marcas de la tienda por nombre o
+ * alias: primero igual a una marca, después contenida en el texto leído
+ * («Kiut Colombia» → Kiut). Con dos candidatas no se elige ninguna.
+ */
+export function matchAnalysisBrand(
+  brandText: string | null,
+  brands: MatchableBrand[],
+): { brandId: string | null; brandName: string | null; brandSource: ProductImageBrandSource } {
+  if (!brandText) return { brandId: null, brandName: null, brandSource: null };
+  const key = brandKey(brandText);
+  const exact = brands.filter(
+    (brand) => brandKey(brand.name) === key || readStoredAliases(brand.aliases).some((alias) => brandKey(alias) === key),
+  );
+  const match =
+    exact.length === 1
+      ? { brandId: exact[0].id, brandName: exact[0].name }
+      : exact.length === 0
+        ? singleBrandMatch(buildBrandMatcher(brands)(brandText))
+        : null;
+  return match
+    ? { brandId: match.brandId, brandName: match.brandName, brandSource: "existing" }
+    : { brandId: null, brandName: null, brandSource: "not_found" };
+}
 
 type TaxonomyOption = {
   id: string;
@@ -736,6 +768,12 @@ function getExtraCatalogAttributes(
   });
 }
 
+function readBrand(brand: string | null, brands: MatchableBrand[] | undefined) {
+  if (!brands) return { brand };
+  const match = matchAnalysisBrand(brand, brands);
+  return { brand: match.brandName ?? brand, brandId: match.brandId, brandSource: match.brandSource };
+}
+
 export function sanitizeProductImageAnalysis(
   output: ProductImageAnalysisOutput,
   options: {
@@ -747,6 +785,8 @@ export function sanitizeProductImageAnalysis(
     photoCount?: number;
     /** Lo que el producto ya tiene, para avisar si la IA cambia el tipo. */
     current?: { name?: string | null; categoryName?: string | null };
+    /** Marcas de la tienda sin archivar: la marca leída se propone como una de ellas. */
+    brands?: MatchableBrand[];
   },
 ): ProductImageAnalysis {
   const photoCount = options.photoCount ?? MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES;
@@ -800,7 +840,7 @@ export function sanitizeProductImageAnalysis(
     suggestedBaseName: fixedNameOptions[0] ?? null,
     suggestedNameOptions: fixedNameOptions,
     suggestedDescription: cleanDescription(output.suggestedDescription),
-    brand: brandIsLicence ? null : normalizeBrandName(rawBrand),
+    ...readBrand(brandIsLicence ? null : normalizeBrandName(rawBrand), options.brands),
     categoryName: category?.name ?? suggestedCategoryName,
     categoryIsDeterministic: Boolean(suggestedCategoryName),
     categoryId: category?.id ?? null,

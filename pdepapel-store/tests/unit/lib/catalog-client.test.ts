@@ -95,6 +95,7 @@ describe("parámetros del catálogo", () => {
       sizeId: "s1",
       designId: "d1",
       optionValueId: "ov1",
+      marca: "kiut,norma",
       page: 3,
       itemsPerPage: 24,
       limit: 5,

@@ -372,3 +372,30 @@
 .category-chips::-webkit-scrollbar {
   display: none;
 }
+
+/* Marcas: clases cortas porque la fila y el menú van en el HTML (y en la carga de React) de cada página. */
+@layer components {
+  .brand-focus {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2;
+  }
+  .brand-chip {
+    @apply flex h-11 items-center gap-2 whitespace-nowrap rounded-full border-[1.5px] border-blue-yankees/[0.15] bg-white font-sans text-sm font-semibold text-blue-yankees transition-colors hover:border-blue-yankees/40 aria-[current=true]:border-blue-yankees;
+  }
+  .brand-menu-link {
+    @apply flex min-h-[2.75rem] items-center rounded-full border border-border bg-white px-4 font-sans text-sm font-semibold text-blue-yankees;
+  }
+  .brand-strip-link {
+    @apply flex h-8 items-center gap-1.5 rounded-full border border-border bg-white px-3 font-sans text-[13px] font-semibold text-blue-yankees transition-colors hover:border-blue-yankees/40;
+  }
+}
+@layer components {
+  .brand-chip[aria-current="true"]::after {
+    content: "";
+    @apply h-4 w-4 shrink-0 bg-current;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  .card-brand {
+    @apply h-4 truncate font-sans text-[11px] font-bold uppercase leading-4 tracking-[0.08em] text-gray-500 sm:text-xs;
+  }
+}

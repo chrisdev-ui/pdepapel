@@ -80,6 +80,22 @@ describe("scoped revalidation (version 2)", () => {
     ]);
   });
 
+  it("accepts the brand tags and refreshes the cached copy of a brand page", async () => {
+    process.env.REVALIDATION_SECRET = "shared-secret";
+    const { revalidatePath } = await import("next/cache");
+    const response = await scopedRequest({ tags: ["brands", "brand:kiut"], paths: ["/marcas", "/marcas/kiut"] });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag)).toEqual(["brands", "brand:kiut"]);
+    expect(vi.mocked(revalidatePath).mock.calls.map(([path]) => path)).toEqual(["/marcas", "/marcas/kiut", "/catalogo-cache/marcas/kiut"]);
+  });
+
+  it("rejects a brand tag with a path inside", async () => {
+    process.env.REVALIDATION_SECRET = "shared-secret";
+    expect((await scopedRequest({ tags: ["brand:a/b"] })).status).toBe(400);
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
   it("rejects unknown tags and purges nothing", async () => {
     process.env.REVALIDATION_SECRET = "shared-secret";
     const response = await scopedRequest({ tags: ["product:ok", "anything-else"] });

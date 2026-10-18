@@ -7,6 +7,7 @@ import { calculateOrderTotals } from "@/lib/order-totals";
 import prismadb from "@/lib/prismadb";
 import { priceLines } from "@/lib/product-pricing";
 import { currencyFormatter, generateOrderNumber } from "@/lib/utils";
+import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 
 /**
  * Convierte el carrito que una clienta armó desde el catálogo de WhatsApp en
@@ -190,6 +191,7 @@ export async function createOrderFromConversationCart(input: {
   );
 
   const order = await prismadb.$transaction(async (tx) => {
+    const brandNames = await getOrderItemBrandNames(tx, usable.map((line) => line.product!.id));
     const created = await tx.order.create({
       data: {
         storeId: input.storeId,
@@ -217,6 +219,7 @@ export async function createOrderFromConversationCart(input: {
             sku: line.sku,
             price: line.unitPrice!,
             imageUrl: mainImage.get(line.product!.id) ?? "",
+            brandName: orderItemBrandName(brandNames, line.product!.id),
           })),
         },
       },

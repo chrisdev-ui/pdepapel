@@ -15,7 +15,8 @@ import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { filtersToQuery } from "@/hooks/use-filter-count";
 import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
-import { buildActiveFilterChips, countActiveFilters, EMPTY_FILTERS, formatResultRange, removeFilterChip } from "@/lib/shop-filters";
+import { brandLogoUrl, brandToggleHref, joinBrandNames } from "@/lib/brand-display";
+import { buildActiveFilterChips, countActiveFilters, EMPTY_FILTERS, formatProductCount, formatResultRange, removeFilterChip } from "@/lib/shop-filters";
 import type { FilterType, NavigationCategory } from "@/lib/catalog-navigation";
 import { CatalogOption, Color, Design, Product, ProductsResponse } from "@/types";
 
@@ -43,6 +44,12 @@ interface ShopContentProps {
   searchPlaceholder?: string;
   /** Categorías sugeridas cuando no hay resultados. */
   suggestions?: SuggestionChip[];
+  /** Marcas visibles (`id` = slug) para nombrar los filtros aunque la faceta no las traiga. */
+  brands?: { id: string; name: string }[];
+  /** Página de una marca: la marca va fija y las tarjetas no la repiten. */
+  fixedBrandSlug?: string;
+  /** Sin barra lateral ni botón de filtros (página de marca). */
+  showFilters?: boolean;
 }
 
 function mergeCounts<T extends { id: string }>(data: T[], facetCounts: { id: string; count: number }[] | undefined): (T & { count?: number })[] {
@@ -66,6 +73,9 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   heading = "Todos los productos",
   searchPlaceholder,
   suggestions = [],
+  brands = [],
+  fixedBrandSlug,
+  showFilters = true,
 }) => {
   const { filters, setFilters } = useProductFilters();
   const [isMounted, setIsMounted] = useState(false);
@@ -73,17 +83,22 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const viewedListRef = useRef<string>();
 
   const effectiveFilters = useMemo<ProductFilters>(
-    () => ({ ...filters, typeId: fixedCategoryId ? [] : filters.typeId, categoryId: fixedCategoryId ? [fixedCategoryId] : filters.categoryId }),
-    [filters, fixedCategoryId],
+    () => ({
+      ...filters,
+      typeId: fixedCategoryId ? [] : filters.typeId,
+      categoryId: fixedCategoryId ? [fixedCategoryId] : filters.categoryId,
+      marca: fixedBrandSlug ? [fixedBrandSlug] : (filters.marca ?? []),
+    }),
+    [filters, fixedCategoryId, fixedBrandSlug],
   );
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ["products", fixedCategoryId, effectiveFilters],
-    queryFn: ({ signal }) => fetchCatalogFromClient({ ...filtersToQuery(effectiveFilters, fixedCategoryId), page: effectiveFilters.page, itemsPerPage: LIMIT_SHOP_ITEMS }, signal),
+    queryFn: ({ signal }) => fetchCatalogFromClient({ ...filtersToQuery(effectiveFilters, fixedCategoryId, fixedBrandSlug), page: effectiveFilters.page, itemsPerPage: LIMIT_SHOP_ITEMS }, signal),
     initialData: isMounted ? undefined : { products: initialProducts, totalPages: initialTotalPages, totalItems: initialTotalItems, facets: initialFacets, searchCorrection: initialSearchCorrection },
     initialDataUpdatedAt: isMounted ? undefined : Date.now(),
     staleTime: 60_000,
@@ -136,7 +151,24 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     }))
     .filter((option) => option.values.length > 0);
 
-  const ignoredKeys = useMemo<(keyof ProductFilters)[]>(() => (fixedCategoryId ? ["categoryId", "typeId"] : []), [fixedCategoryId]);
+  const selectedBrands = effectiveFilters.marca;
+  // Una marca elegida se queda en la lista aunque con los demás filtros cuente 0: si no, no se podría quitar.
+  const brandFilterItems = fixedBrandSlug
+    ? []
+    : [
+        ...(facets?.brands ?? []).map((facet) => ({ id: facet.id, name: facet.name, count: facet.count, logoUrl: brandLogoUrl(facet) })),
+        ...selectedBrands
+          .filter((slug) => !(facets?.brands ?? []).some((facet) => facet.id === slug))
+          .map((slug) => ({ id: slug, name: brands.find((brand) => brand.id === slug)?.name ?? slug, count: 0, logoUrl: null })),
+      ];
+  const brandLookup = [...brands, ...(facets?.brands ?? []).map((facet) => ({ id: facet.id, name: facet.name }))];
+  const selectedBrandNames = selectedBrands.map((slug) => brandLookup.find((brand) => brand.id === slug)?.name ?? slug);
+
+  // La marca no va como chip: la nombra la línea de resultados («N productos de Kiut · Quitar»).
+  const ignoredKeys = useMemo<(keyof ProductFilters)[]>(
+    () => [...(fixedCategoryId ? (["categoryId", "typeId"] as const) : []), "marca"],
+    [fixedCategoryId],
+  );
   const chips = useMemo(
     () =>
       buildActiveFilterChips(
@@ -147,12 +179,13 @@ export const ShopContent: React.FC<ShopContentProps> = ({
           colors,
           designs,
           optionValues: catalogOptions.flatMap((option) => option.values.map((value) => ({ id: value.id, name: `${option.name}: ${value.name}` }))),
+          brands,
         },
         ignoredKeys,
       ),
-    [filters, types, categories, colors, designs, catalogOptions, ignoredKeys],
+    [filters, types, categories, colors, designs, catalogOptions, brands, ignoredKeys],
   );
-  const activeCount = countActiveFilters(filters, ignoredKeys);
+  const activeCount = countActiveFilters(filters, fixedCategoryId ? ["categoryId", "typeId"] : []);
   const totalItems = data?.totalItems ?? initialTotalItems;
   const isCatalogUnavailable = Boolean(data?.isUnavailable);
   const products = data?.products ?? [];
@@ -169,22 +202,71 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const loadPage = useCallback(
     async (page: number) => {
       const response = await fetchCatalogFromClient({
-        ...filtersToQuery(effectiveFilters, fixedCategoryId),
+        ...filtersToQuery(effectiveFilters, fixedCategoryId, fixedBrandSlug),
         page,
         itemsPerPage: LIMIT_SHOP_ITEMS,
       });
       return response.isUnavailable ? null : response.products;
     },
-    [effectiveFilters, fixedCategoryId],
+    [effectiveFilters, fixedCategoryId, fixedBrandSlug],
   );
   const rangeText = formatResultRange(filters.page, LIMIT_SHOP_ITEMS, totalItems);
+  const clearBrands = () => setFilters({ marca: [], page: 1 });
+  const brandLine =
+    !fixedBrandSlug && selectedBrands.length > 0 ? (
+      <>
+        {/* Mientras llega la lista nueva, el total es el de la anterior: no se pega al nombre de la marca. */}
+        {isPlaceholderData ? "Buscando productos" : formatProductCount(totalItems)} de {joinBrandNames(selectedBrandNames)} ·{" "}
+        <button type="button" onClick={clearBrands} className="font-semibold text-blue-yankees underline underline-offset-4">
+          Quitar
+        </button>
+      </>
+    ) : null;
   const correction = data?.searchCorrection ?? null;
 
-  const canSaveSearch = activeCount > 0 || Boolean(filters.search);
-  const suggestedSearchName = chips.map((chip) => (chip.key === "search" ? `«${filters.search}»` : chip.label)).join(" · ") || heading;
+  const canSaveSearch = showFilters && (activeCount > 0 || Boolean(filters.search));
+  const suggestedSearchName =
+    [...selectedBrandNames, ...chips.map((chip) => (chip.key === "search" ? `«${filters.search}»` : chip.label))].join(" · ") || heading;
   const saveSearchSlot = canSaveSearch ? <SaveSearchButton suggestedName={suggestedSearchName} fixedCategoryId={fixedCategoryId} /> : null;
 
   const clearFilters = () => setFilters({ ...EMPTY_FILTERS, sortOption: filters.sortOption, page: 1 });
+
+  /*
+   * La fila de marcas de /tienda son enlaces pintados en el servidor (sin JS
+   * propio). Aquí solo se mantienen al día con la URL: marca y enlace de cada
+   * chip, y un clic normal cambia el filtro en el sitio como las casillas, sin
+   * recargar ni pasar por loading.tsx. Clic con modificador: el enlace normal.
+   */
+  const brandKey = selectedBrands.join(",");
+  useEffect(() => {
+    if (!isMounted || fixedBrandSlug) return;
+    const params = Object.fromEntries(new URLSearchParams(window.location.search));
+    document.querySelectorAll<HTMLAnchorElement>("a[data-brand-chip]").forEach((chip) => {
+      const slug = chip.dataset.brandChip as string;
+      if (selectedBrands.includes(slug)) chip.setAttribute("aria-current", "true");
+      else chip.removeAttribute("aria-current");
+      chip.setAttribute("href", brandToggleHref(window.location.pathname, params, slug));
+    });
+    // `filters` entra para rehacer los enlaces con los demás filtros vigentes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMounted, fixedBrandSlug, brandKey, filters]);
+
+  useEffect(() => {
+    if (fixedBrandSlug) return;
+    const onClick = (event: MouseEvent) => {
+      const chip = (event.target as Element | null)?.closest?.<HTMLAnchorElement>("a[data-brand-chip]");
+      if (!chip || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      const slug = chip.dataset.brandChip as string;
+      setFilters((previous) => {
+        const current = previous.marca ?? [];
+        return { ...previous, marca: current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug], page: 1 };
+      });
+    };
+    // En captura: los chips son `<a>` del servidor; sin esto navegarían con carga completa.
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [fixedBrandSlug, setFilters]);
   const removeChip = (chip: (typeof chips)[number]) => setFilters(removeFilterChip(filters, chip));
 
   useEffect(() => {
@@ -206,11 +288,11 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     if (viewedListRef.current === listKey) return;
     viewedListRef.current = listKey;
     trackCustomerEvent("view_item_list", {
-      item_list_id: fixedCategoryId || "shop",
+      item_list_id: fixedCategoryId || (fixedBrandSlug ? `marca:${fixedBrandSlug}` : "shop"),
       item_list_name: heading,
       items: data.products.map((product) => toAnalyticsItem(product, 1)),
     });
-  }, [data, effectiveFilters.page, fixedCategoryId, heading, isFetching, isMounted]);
+  }, [data, effectiveFilters.page, fixedBrandSlug, fixedCategoryId, heading, isFetching, isMounted]);
 
   const filterGroups = {
     types: typesWithCounts,
@@ -218,19 +300,21 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     catalogOptions: visibleCatalogOptions,
     colors: colorsWithCounts,
     designs: designsWithCounts,
+    brands: brandFilterItems,
     hideCategoryFilters: Boolean(fixedCategoryId),
   };
 
   return (
-    <div className="lg:grid lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-10">
-      <ShopSidebar {...filterGroups} activeCount={activeCount} onClearAll={clearFilters} />
+    <div className={showFilters ? "lg:grid lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-10" : undefined}>
+      {showFilters && <ShopSidebar {...filterGroups} activeCount={activeCount} onClearAll={clearFilters} />}
       <div className="flex min-w-0 flex-col gap-4 lg:gap-5">
         <MobileToolbar
-          filtersSlot={<MobileFilters {...filterGroups} fixedCategoryId={fixedCategoryId} />}
+          filtersSlot={showFilters ? <MobileFilters {...filterGroups} fixedCategoryId={fixedCategoryId} /> : null}
           chips={chips}
           onRemoveChip={removeChip}
           onClearAll={clearFilters}
           rangeText={rangeText}
+          brandLine={brandLine}
         />
         {fixedCategoryId && <ShopSearchBar className="lg:hidden" placeholder={searchPlaceholder} />}
         <ShopToolbar
@@ -238,6 +322,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
           onRemoveChip={removeChip}
           onClearAll={clearFilters}
           rangeText={rangeText}
+          brandLine={brandLine}
           searchSlot={fixedCategoryId ? <ShopSearchBar className="w-60 xl:w-72" placeholder={searchPlaceholder} /> : null}
           actionSlot={saveSearchSlot}
         />
@@ -278,6 +363,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
               totalPages={data?.totalPages ?? 0}
               currentPage={effectiveFilters.page ?? 1}
               loadPage={loadPage}
+              hideBrand={Boolean(fixedBrandSlug) || selectedBrands.length === 1}
             />
           )}
         </section>

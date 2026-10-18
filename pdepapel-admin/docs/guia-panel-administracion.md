@@ -475,6 +475,52 @@ colores y diseños; no para categorías.
 «Rosado», incluidos los archivados») y el botón «Quitar filtro». Mientras el
 filtro está puesto, las vistas de Productos no aplican.
 
+## 11b. Marcas (`/marcas`, `/marcas/<id>`, `/marcas/sugerencias`)
+
+Las marcas son los fabricantes de lo que se vende (Norma, Kiut, Scribe…). Cada
+marca tiene su página en la tienda (`/marcas/<dirección>`), sale en el filtro
+«Marca» del catálogo y su nombre viaja a Google, Meta, Mercado Libre y Google
+Analytics.
+
+- **Lista.** Logo (o «Sin logo»), nombre con su dirección debajo, productos
+  activos (al pasar por encima: activos y total), los interruptores «Visible» y
+  «Compra por marca» con «Deshacer» en el aviso, y el orden: se arrastra o se
+  usan ↑ ↓. El orden es el del filtro y el menú de la tienda. El aviso de arriba
+  dice cuántos productos activos no tienen marca y lleva a «Revisar
+  sugerencias».
+- **Visible.** Una marca oculta no sale en la tienda (ni filtro, ni página, ni
+  enlace en la ficha), pero su nombre sigue yendo a Google, Meta, Mercado Libre y
+  a las líneas de los pedidos. Archivada no sale en ninguna parte.
+- **Compra por marca.** Marca la marca para el carrusel del inicio, que llega en
+  una segunda fase; hoy solo se guarda.
+- **Editar.** Nombre, dirección fija («Cambiar dirección»: la anterior sigue
+  funcionando y lleva a la nueva), logo oficial (PNG o SVG sin fondo, de al
+  menos 400 px de ancho; el panel avisa si trae fondo o si es pequeño), logo
+  claro para fondos oscuros, color con revisión de contraste, texto para
+  Google (160 caracteres), alias (otras formas de escribirla: sirven para las
+  sugerencias), fabricante, sitio oficial, fuente del logo y «Permiso de uso del
+  logo». Con «Pendiente» o «Negado» la tienda muestra el nombre en vez del logo.
+  El logo se sube tal cual lo entrega la marca: sin recortarlo ni cambiarle
+  colores.
+- **Fusionar con otra marca…** Para una marca repetida o que en realidad es una
+  línea de otra (por ejemplo «Incolors» es una línea de Scribe). Todos los
+  productos pasan a la otra marca, la dirección anterior redirige, el nombre y
+  los alias se suman como alias y la marca queda archivada. No se puede
+  deshacer.
+- **Archivar / Eliminar.** Con productos solo se archiva o se fusiona; eliminar
+  solo aparece cuando no tiene ninguno.
+- **Sugerencias automáticas.** Por cada marca, los productos activos cuyo
+  nombre dice la marca o uno de sus alias («coincide por el alias «Incolors»»).
+  Los que no tienen marca van marcados; los que ya tienen otra salen aparte, sin
+  marcar. «Asignar X a N productos» asigna; en un grupo la marca es una sola y
+  pasa a todas sus variantes.
+- **En Productos.** El campo «Marca» de la ficha (en el teléfono abre una hoja
+  desde abajo), con una sola sugerencia: «¿Es de la marca X? Usar X» cuando el
+  nombre la dice. En un grupo la marca se elige en el grupo y las variantes
+  muestran «X · viene del grupo». La lista tiene la columna y el filtro «Marca»
+  (incluye «Sin marca») y la acción en lote «Asignar marca», que avisa cuáles ya
+  tienen otra marca: esos solo cambian si se marcan.
+
 ## 12. Proveedores y aprovisionamiento (`/proveedores`, `/aprovisionamiento`)
 
 Proveedores: a quién se compra. Aprovisionamiento: pedidos a proveedores; al

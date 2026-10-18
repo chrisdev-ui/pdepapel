@@ -6,7 +6,7 @@ import { cn, currencyFormatter } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 import { CellAction } from "./cell-action";
-import { ProductColumn, productImage } from "./columns";
+import { ProductBrandCell, ProductColumn, productImage } from "./columns";
 import {
   FeaturedBadge,
   OfferBadge,
@@ -98,6 +98,7 @@ export function ProductMobileCard({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          <ProductBrandCell brand={product.brandRef} />
           <ShapeBadge shape={getProductShape(product)} />
           <StockBadge
             stock={product.stock}

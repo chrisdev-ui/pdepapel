@@ -3,6 +3,7 @@
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { AccountMenu } from "@/components/account-menu";
 import { AnnouncementBar } from "@/components/announcement-bar";
@@ -29,6 +30,11 @@ interface NavbarProps {
   /** Atajo fijo a las subcategorías destacadas, en el menú y en el cajón. */
   featuredSubcategories: NavigationCategory[];
   freeShippingThreshold: number | null;
+  /** Hay marcas visibles con productos: enlace «Marcas» en la fila de escritorio. */
+  hasBrands?: boolean;
+  /** Marcas del cajón y del menú de escritorio, pintadas en el servidor. */
+  brandsDrawerSlot?: ReactNode;
+  brandsMegaSlot?: ReactNode;
 }
 
 /** Desktop category row shows this many types before "Ofertas". */
@@ -48,6 +54,9 @@ const Navbar: React.FC<NavbarProps> = ({
   featuredSubcategories,
   featuredByType,
   freeShippingThreshold,
+  hasBrands = false,
+  brandsDrawerSlot,
+  brandsMegaSlot,
 }) => {
   const scrollPosition = useScrollPosition(8);
   const pathname = useStorefrontPathname();
@@ -75,6 +84,7 @@ const Navbar: React.FC<NavbarProps> = ({
               types={types}
               featuredSubcategories={featuredSubcategories}
               logoSrc={seasonConfig.navbarText}
+              brandsSlot={brandsDrawerSlot}
             />
           </div>
           {/* Los dos logos —teléfono y escritorio— viven siempre en el DOM.
@@ -169,6 +179,7 @@ const Navbar: React.FC<NavbarProps> = ({
           types={types}
           featuredByType={featuredByType}
           featuredSubcategories={featuredSubcategories}
+          brandsSlot={brandsMegaSlot}
         />
         <ul className="flex items-center gap-6 whitespace-nowrap font-sans text-[15px] font-semibold">
           <li>
@@ -185,6 +196,14 @@ const Navbar: React.FC<NavbarProps> = ({
               <NavigationLink href={typePath(type)}>{type.label}</NavigationLink>
             </li>
           ))}
+          {hasBrands && (
+            // Desde 2xl: en 1280 empujaba «Tarjeta de regalo» fuera de la fila; ahí las marcas están en el menú de categorías.
+            <li className="hidden 2xl:block">
+              <NavigationLink href={STOREFRONT_ROUTES.brands} prefetch={false} matchPrefix>
+                Marcas
+              </NavigationLink>
+            </li>
+          )}
           <li>
             <Link
               href={offersPath}

@@ -3,7 +3,7 @@
 import { ArrowRight, ChevronDown, ChevronRight, Menu } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Currency } from "@/components/ui/currency";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
@@ -22,13 +22,15 @@ interface MegaMenuProps {
    * del tipo que se esté señalando, para que estén siempre a un clic.
    */
   featuredSubcategories: NavigationCategory[];
+  /** Franja de marcas (enlaces del servidor). */
+  brandsSlot?: ReactNode;
 }
 
 /**
  * Desktop "Todas las categorías" panel: hover or focus a type on the left,
  * its subcategories and a featured product appear on the right.
  */
-export function MegaMenu({ types, featuredByType, featuredSubcategories }: MegaMenuProps) {
+export function MegaMenu({ types, featuredByType, featuredSubcategories, brandsSlot }: MegaMenuProps) {
   const pathname = useStorefrontPathname();
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -123,6 +125,8 @@ export function MegaMenu({ types, featuredByType, featuredSubcategories }: MegaM
               </ul>
             </div>
           ) : null}
+
+          {brandsSlot}
 
           <div className="flex min-h-0">
           <ul className="flex w-[276px] shrink-0 flex-col border-r border-border bg-slate-50 p-2 font-sans text-[15px] font-medium">

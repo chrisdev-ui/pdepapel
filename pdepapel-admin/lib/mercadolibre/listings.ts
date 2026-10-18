@@ -37,6 +37,7 @@ import {
   getMercadoLibreListingMetadata,
   type MercadoLibreAttribute,
 } from "./listing-metadata";
+import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName, type MercadoLibreBrandSource } from "@/lib/mercadolibre/brand";
 
 export { MERCADOLIBRE_MAX_LISTING_PICTURES } from "./listing-wizard";
 
@@ -57,7 +58,7 @@ export const LISTING_FOR_PUBLICATION_SELECT = {
       stock: true,
       reservedUnits: true,
       sku: true,
-      brand: true,
+      ...MERCADOLIBRE_BRAND_SELECT,
       gtin: true,
       mpn: true,
       isArchived: true,
@@ -90,6 +91,8 @@ export type ListingForPublication = {
     reservedUnits?: number;
     sku: string;
     brand: string | null;
+    brandRef?: MercadoLibreBrandSource["brandRef"];
+    productGroup?: MercadoLibreBrandSource["productGroup"];
     gtin: string | null;
     mpn: string | null;
     isArchived: boolean;
@@ -262,8 +265,9 @@ function addProductIdentifiers(
   const configuredIds = new Set(attributes.map((attribute) => attribute.id));
   const result = [...attributes];
 
-  if (product.brand && !configuredIds.has("BRAND")) {
-    result.push({ id: "BRAND", value_name: product.brand });
+  const brand = mercadoLibreBrandName(product);
+  if (brand && !configuredIds.has("BRAND")) {
+    result.push({ id: "BRAND", value_name: brand });
   }
   if (product.mpn && !configuredIds.has("MPN")) {
     result.push({ id: "MPN", value_name: product.mpn });

@@ -1,3 +1,4 @@
+import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { requireStoreRead } from "@/lib/store-access";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
@@ -98,6 +99,7 @@ const ProductGroupPage = async ({
     ]);
 
   if (!productGroup) notFound();
+  const brands = await loadBrandOptions(params.storeId, [productGroup.brandId]);
 
   const threshold = resolveLowStockThreshold(store?.lowStockThreshold ?? null);
 
@@ -114,6 +116,7 @@ const ProductGroupPage = async ({
             suppliers={suppliers}
             initialData={productGroup}
             storeUrl={env.FRONTEND_STORE_URL}
+            brands={brands}
           />
         </div>
         <GroupWorkspaceAside

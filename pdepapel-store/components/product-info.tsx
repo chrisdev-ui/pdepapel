@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MouseEvent, RefObject, useEffect, useMemo, useState } from "react";
+import { MouseEvent, ReactNode, RefObject, useEffect, useMemo, useState } from "react";
 
 import { DesignOption } from "@/components/design-option";
 import { ProductDetailsAccordion } from "@/components/product-details-accordion";
@@ -60,6 +60,8 @@ interface ProductInfoProps {
   onQuantityChange?: (quantity: number) => void;
   /** Fila del botón principal; la barra fija aparece cuando sale de pantalla. */
   ctaRef?: RefObject<HTMLDivElement>;
+  /** «Original <Marca> ›», pintado en el servidor. */
+  brandSlot?: ReactNode;
 }
 
 const CTA_CLASS =
@@ -82,6 +84,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   quantity: controlledQuantity,
   onQuantityChange,
   ctaRef,
+  brandSlot,
 }) => {
   const router = useRouter();
   const addProductToCart = useAddProductToCart("product_detail");
@@ -273,6 +276,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
+        {brandSlot}
         <div className="flex items-center justify-between gap-3">
           {eyebrow ? (
             <p className="font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">

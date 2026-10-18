@@ -26,6 +26,7 @@ import {
 } from "@/lib/mercadolibre/listing-price-guard";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
 
 function parseOptionalPrice(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
@@ -221,7 +222,7 @@ export async function GET(
             acqPrice: true,
             transportationCost: true,
             gtin: true,
-            brand: true,
+            ...MERCADOLIBRE_BRAND_SELECT,
             mpn: true,
             hasNoProductIdentifier: true,
             productGroupId: true,
@@ -241,7 +242,14 @@ export async function GET(
       orderBy: { updatedAt: "desc" },
     });
 
-    return NextResponse.json(access.role === "viewer" ? scrubMargins(listings) : listings, { headers: CACHE_HEADERS.NO_CACHE });
+    // `brand` sale resuelto para el asistente (marca enlazada; el texto anterior
+    // solo como respaldo) y sin las filas de marca.
+    const withBrand = listings.map((listing) => {
+      if (!listing.product) return listing;
+      const { brandRef: _brandRef, productGroup: _productGroup, ...product } = listing.product;
+      return { ...listing, product: { ...product, brand: mercadoLibreBrandName(listing.product) } };
+    });
+    return NextResponse.json(access.role === "viewer" ? scrubMargins(withBrand) : withBrand, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "MERCADOLIBRE_LISTINGS_GET", {
       headers: CACHE_HEADERS.NO_CACHE,

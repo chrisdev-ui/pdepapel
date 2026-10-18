@@ -32,6 +32,7 @@ vi.mock("@/lib/prismadb", () => ({
     size: { findMany: mocks.sizeFindMany },
     color: { findMany: mocks.colorFindMany },
     design: { findMany: mocks.designFindMany },
+    brand: { findMany: vi.fn().mockResolvedValue([]) },
     image: { findMany: mocks.imageFindMany },
   },
 }));

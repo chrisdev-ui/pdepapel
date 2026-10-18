@@ -10,6 +10,7 @@ const base: ProductFilters = {
   sizeId: [],
   designId: [],
   optionValueId: [],
+  marca: [],
   minPrice: null,
   maxPrice: null,
   sortOption: "",

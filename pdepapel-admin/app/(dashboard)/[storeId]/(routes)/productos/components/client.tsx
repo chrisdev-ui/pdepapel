@@ -46,7 +46,8 @@ import {
   useSearchParams,
 } from "next/navigation";
 import React, { useCallback, useMemo, useState } from "react";
-import { ProductColumn, buildColumns } from "./columns";
+import { NO_BRAND_FILTER_VALUE, ProductColumn, buildColumns } from "./columns";
+import type { BrandOption } from "@/lib/brand-options";
 import {
   ProductBulkActions,
   type BulkTaxonomies,
@@ -61,6 +62,8 @@ interface ProductClientProps {
   lowStockThreshold: number | null;
   /** URL pública de la tienda, para «Ver en la tienda». */
   storeUrl?: string | null;
+  /** Marcas sin archivar, para «Asignar marca». */
+  brands?: BrandOption[];
 }
 
 const VIEW_PARAM = "vista";
@@ -93,6 +96,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
   taxonomies,
   lowStockThreshold,
   storeUrl,
+  brands = [],
 }) => {
   const canWrite = useCanWrite();
   const router = useRouter();
@@ -159,6 +163,19 @@ const ProductClient: React.FC<ProductClientProps> = ({
     return Array.from(names)
       .sort()
       .map((name) => ({ label: name, value: name }));
+  }, [data]);
+
+  const brandFilterOptions = useMemo(() => {
+    const unique = new Map<string, string>();
+    let withoutBrand = false;
+    data.forEach((item) => {
+      if (item.brandRef) unique.set(item.brandRef.id, item.brandRef.name);
+      else withoutBrand = true;
+    });
+    const options = Array.from(unique, ([value, label]) => ({ label, value })).sort((a, b) =>
+      a.label.localeCompare(b.label, "es"),
+    );
+    return withoutBrand ? [{ label: "Sin marca", value: NO_BRAND_FILTER_VALUE }, ...options] : options;
   }, [data]);
 
   const handleFiltersChange = useCallback((filters: ColumnFiltersState) => {
@@ -405,6 +422,15 @@ const ProductClient: React.FC<ProductClientProps> = ({
               { label: "Kit", value: "Kit" },
             ],
           },
+          ...(brandFilterOptions.length
+            ? [
+                {
+                  columnKey: "brand",
+                  title: "Marca",
+                  options: brandFilterOptions,
+                },
+              ]
+            : []),
           ...(categoryFilterOptions.length
             ? [
                 {
@@ -426,7 +452,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
         ]}
         onColumnFiltersChange={handleFiltersChange}
         bulkActions={(table) => (
-          <ProductBulkActions table={table} taxonomies={taxonomies} />
+          <ProductBulkActions table={table} taxonomies={taxonomies} brands={brands} />
         )}
         emptyState={
           view === "todos" || view === "activos"

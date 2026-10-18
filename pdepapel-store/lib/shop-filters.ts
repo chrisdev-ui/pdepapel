@@ -15,9 +15,9 @@ export const PRICE_PRESETS = [
   { id: "[50000,99999999]", label: "Más de $ 50.000", min: 50_000, max: PRICE_MAX },
 ] as const;
 
-export type FilterListKey = "typeId" | "categoryId" | "colorId" | "sizeId" | "designId" | "optionValueId";
+export type FilterListKey = "typeId" | "categoryId" | "marca" | "colorId" | "sizeId" | "designId" | "optionValueId";
 
-export const FILTER_LIST_KEYS: FilterListKey[] = ["typeId", "categoryId", "colorId", "sizeId", "designId", "optionValueId"];
+export const FILTER_LIST_KEYS: FilterListKey[] = ["typeId", "categoryId", "marca", "colorId", "sizeId", "designId", "optionValueId"];
 
 export interface ActiveFilterChip {
   key: keyof ProductFilters;
@@ -34,11 +34,14 @@ export interface FilterLookups {
   sizes?: { id: string; name: string }[];
   designs?: { id: string; name: string }[];
   optionValues?: { id: string; name: string }[];
+  /** `id` = slug de la marca. */
+  brands?: { id: string; name: string }[];
 }
 
 const LOOKUP_BY_KEY: Record<FilterListKey, keyof FilterLookups> = {
   typeId: "types",
   categoryId: "categories",
+  marca: "brands",
   colorId: "colors",
   sizeId: "sizes",
   designId: "designs",
@@ -57,7 +60,7 @@ export function countActiveFilters(filters: ProductFilters, ignore: (keyof Produ
   let total = 0;
   for (const key of FILTER_LIST_KEYS) {
     if (ignore.includes(key)) continue;
-    total += filters[key].length;
+    total += (filters[key] ?? []).length;
   }
   if (!ignore.includes("minPrice") && (filters.minPrice !== null || filters.maxPrice !== null)) total += 1;
   if (!ignore.includes("isOnSale") && filters.isOnSale) total += 1;
@@ -78,7 +81,7 @@ export function buildActiveFilterChips(
   for (const key of FILTER_LIST_KEYS) {
     if (ignore.includes(key)) continue;
     const items = lookups[LOOKUP_BY_KEY[key]] ?? [];
-    for (const value of filters[key]) {
+    for (const value of filters[key] ?? []) {
       const name = items.find((item) => item.id === value || ("slug" in item && item.slug === value))?.name;
       if (name) chips.push({ key, value, label: stripTaxonomyIcon(name) });
     }
@@ -105,7 +108,7 @@ export function removeFilterChip(filters: ProductFilters, chip: ActiveFilterChip
     next.exact = false;
   } else if (chip.value !== null) {
     const key = chip.key as FilterListKey;
-    next[key] = filters[key].filter((value) => value !== chip.value);
+    next[key] = (filters[key] ?? []).filter((value) => value !== chip.value);
   }
   return next;
 }
@@ -117,6 +120,7 @@ export const EMPTY_FILTERS: ProductFilters = {
   sizeId: [],
   designId: [],
   optionValueId: [],
+  marca: [],
   minPrice: null,
   maxPrice: null,
   sortOption: null,

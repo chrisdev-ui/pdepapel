@@ -20,6 +20,7 @@ import {
   assertCouponMinimumOrderValue,
   resolveCouponForOrderUpdate,
 } from "@/lib/order-coupons";
+import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 import prismadb from "@/lib/prismadb";
 import {
   CUSTOMER_ORDER_SELECT,
@@ -703,6 +704,21 @@ export async function PATCH(
       }
 
       if (rewriteItems) {
+        // Las líneas que ya existían conservan la marca con la que se
+        // vendieron; solo las nuevas toman la de hoy.
+        const previousBrandNames = new Map(
+          (
+            await tx.orderItem.findMany({
+              where: { orderId: order.id, productId: { not: null } },
+              select: { productId: true, brandName: true },
+            })
+          ).map((row) => [row.productId as string, row.brandName]),
+        );
+        const currentBrandNames = await getOrderItemBrandNames(
+          tx,
+          itemsWithPrices.map((item: any) => item.productId),
+        );
+
         // Delete existing order items in batches
         await tx.orderItem.deleteMany({
           where: { orderId: order.id },
@@ -725,6 +741,9 @@ export async function PATCH(
                   imageUrl: item.imageUrl,
                   isCustom: item.isCustom,
                   productId: item.productId || null,
+                  brandName: previousBrandNames.has(item.productId)
+                    ? previousBrandNames.get(item.productId)
+                    : orderItemBrandName(currentBrandNames, item.productId),
                 },
               }),
             ),

@@ -1,6 +1,7 @@
 import { track as trackVercelEvent } from "@vercel/analytics/react";
 
 import { hasAnalyticsConsent } from "@/lib/analytics-consent";
+import { brandDataName } from "@/lib/product-brand";
 import { trackMicrosoftClarityEvent } from "@/lib/microsoft-clarity";
 import { getStructuredProductSize } from "@/lib/product-options";
 import { Product } from "@/types";
@@ -97,7 +98,7 @@ export function toAnalyticsItem(
   return {
     item_id: product.sku || product.id,
     item_name: product.name,
-    item_brand: product.brand || undefined,
+    item_brand: brandDataName(product),
     item_category: product.category?.name,
     item_variant: getProductVariant(product),
     price: getProductPrice(product),

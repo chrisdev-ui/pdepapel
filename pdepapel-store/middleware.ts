@@ -17,6 +17,7 @@ const CATALOG_PARAMS = new Set([
   "sizeId",
   "optionValueId",
   "designId",
+  "marca",
   "sortOption",
   "isOnSale",
   "minPrice",

@@ -17,6 +17,7 @@ import { SALE_UNDO_WINDOW_MS, undoTimeLeft } from "@/lib/sell-cart";
 import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
 import { generateOrderNumber } from "@/lib/utils";
+import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 
 export type PointOfSaleItemInput = {
   productId: string;
@@ -331,6 +332,7 @@ export async function createPointOfSaleSale({
       },
     });
 
+    const brandNames = await getOrderItemBrandNames(tx, selectedLines.map((line) => line.productId));
     await tx.orderItem.createMany({
       data: selectedLines.map((line) => ({
         orderId: order.id,
@@ -340,6 +342,7 @@ export async function createPointOfSaleSale({
         sku: line.sku,
         imageUrl: line.imageUrl,
         price: line.price,
+        brandName: orderItemBrandName(brandNames, line.productId),
       })),
     });
 

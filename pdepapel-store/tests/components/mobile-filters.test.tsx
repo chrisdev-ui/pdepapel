@@ -19,6 +19,8 @@ vi.mock("@/hooks/use-product-filters", () => ({
 vi.mock("@/hooks/use-filter-count", () => ({ useFilterCount: mocks.count }));
 vi.mock("@/lib/customer-analytics", () => ({ trackCustomerEvent: vi.fn() }));
 vi.mock("@/components/price-filter", () => ({ default: () => <div>Precio</div> }));
+// Los logos de marca no importan aquí; sin `next/image` la hoja carga a tiempo con la suite en paralelo.
+vi.mock("@/components/ui/cloudinary-image", () => ({ CloudinaryImage: () => null }));
 
 import MobileFilters from "@/components/mobile-filters";
 

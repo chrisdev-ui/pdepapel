@@ -16,6 +16,7 @@ vi.mock("@/actions/get-types", () => ({ getTypes: vi.fn(async () => types) }));
 vi.mock("@/actions/get-catalog-options", () => ({ getCatalogOptions: vi.fn(async () => []) }));
 vi.mock("@/actions/get-colors", () => ({ getColors: vi.fn(async () => []) }));
 vi.mock("@/actions/get-designs", () => ({ getDesigns: vi.fn(async () => []) }));
+vi.mock("@/actions/get-brands", () => ({ getBrands: vi.fn(async () => []), getBrand: vi.fn() }));
 vi.mock("@/actions/get-products", () => ({ getProducts: vi.fn(async () => ({ products: [], totalPages: 1, totalItems: 0 })) }));
 
 import CategoryPage from "@/app/(routes)/categoria/[slug]/page";

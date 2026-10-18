@@ -32,6 +32,18 @@ describe("slimStoredProduct", () => {
   });
 });
 
+describe("slimStoredProduct brand", () => {
+  const brand = { name: "Marca de prueba", slug: "marca-de-prueba", logoUrl: null, logoHasBackground: false, logoPermission: "UNKNOWN", color: null, isPublic: false };
+
+  it("keeps the brand object so begin_checkout can send item_brand", () => {
+    expect(slimStoredProduct({ ...full, brand } as unknown as Product).brand).toEqual(brand);
+  });
+
+  it("drops an old brand text", () => {
+    expect(slimStoredProduct({ ...full, brand: "Texto viejo" } as unknown as Product).brand).toBeNull();
+  });
+});
+
 describe("shared favorites link", () => {
   it("round-trips product ids and ignores anything that is not an id", () => {
     const ids = ["5a2e2b1c-3c1e-4f1a-9d2e-1a2b3c4d5e6f", "6b3f3c2d-4d2f-4a2b-8e3f-2b3c4d5e6f7a"];

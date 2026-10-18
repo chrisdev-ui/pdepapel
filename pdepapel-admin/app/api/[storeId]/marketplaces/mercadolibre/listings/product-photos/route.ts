@@ -6,6 +6,7 @@ import { MERCADOLIBRE_MAX_LISTING_PICTURES } from "@/lib/mercadolibre/listings";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
+import { mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
 
 /**
  * Todas las fotos del producto para el asistente de publicación, en el orden
@@ -29,7 +30,8 @@ export async function GET(
         id: true,
         isKit: true,
         brand: true,
-        productGroup: { select: { name: true } },
+        brandRef: { select: { name: true, isArchived: true } },
+        productGroup: { select: { name: true, brand: true, brandRef: { select: { name: true, isArchived: true } }, } },
         images: {
           select: { url: true, isMain: true },
           orderBy: GALLERY_ORDER,
@@ -43,7 +45,7 @@ export async function GET(
       {
         productId: product.id,
         isKit: product.isKit,
-        brand: product.brand,
+        brand: mercadoLibreBrandName(product),
         productGroupName: product.productGroup?.name?.trim() || null,
         images: product.images,
       },

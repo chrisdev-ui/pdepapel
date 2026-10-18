@@ -3,6 +3,7 @@
 import { requireStoreRead } from "@/lib/store-access";
 
 import prismadb from "@/lib/prismadb";
+import { brandDataName } from "@/lib/brand-rules";
 
 export async function getProductNamingCandidates(storeId: string) {
   await requireStoreRead(storeId);
@@ -13,7 +14,7 @@ export async function getProductNamingCandidates(storeId: string) {
         id: true,
         name: true,
         sku: true,
-        brand: true,
+        brandRef: { select: { name: true, isArchived: true } },
         productGroup: { select: { name: true } },
         category: { select: { name: true } },
         color: { select: { name: true } },
@@ -35,7 +36,7 @@ export async function getProductNamingCandidates(storeId: string) {
       select: {
         id: true,
         name: true,
-        brand: true,
+        brandRef: { select: { name: true, isArchived: true } },
         images: {
           select: { url: true },
           orderBy: { isMain: "desc" },
@@ -71,7 +72,7 @@ export async function getProductNamingCandidates(storeId: string) {
       id: product.id,
       name: product.name,
       sku: product.sku,
-      brand: product.brand,
+      brand: brandDataName(product.brandRef),
       categoryName: product.category.name,
       colorName: product.color.name,
       sizeName: product.size.name,
@@ -83,7 +84,7 @@ export async function getProductNamingCandidates(storeId: string) {
     groups: groups.map((group) => ({
       id: group.id,
       name: group.name,
-      brand: group.brand,
+      brand: brandDataName(group.brandRef),
       categoryName: group.products[0]?.category.name ?? null,
       imageUrl: group.images[0]?.url ?? null,
     })),

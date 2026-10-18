@@ -81,7 +81,7 @@ const product = {
   name: "Termo pastel rosa",
   description: "Termo de acero",
   categoryId: "category-id",
-  brand: "P de Papel",
+  brandId: "brand-test",
   price: 17500,
   acqPrice: 11000,
   transportationCost: 1200,
@@ -260,6 +260,7 @@ describe("POST /api/[storeId]/products/[productId]/convert-to-variants/review", 
       shippingProfileId: "profile-id",
       availableAt: product.availableAt,
       supplierId: "supplier-id",
+      brandId: "brand-test",
       hasNoProductIdentifier: true,
       productGroupId: "group-id",
       catalogOptionValues: {
@@ -268,6 +269,8 @@ describe("POST /api/[storeId]/products/[productId]/convert-to-variants/review", 
       offers: { createMany: { data: [{ offerId: "offer-id" }] } },
     });
     expect(created).not.toHaveProperty("gtin");
+    expect(created).not.toHaveProperty("brand");
+    expect(tx.productGroup.create.mock.calls[0][0].data.brandId).toBe("brand-test");
     // Nunca nace con slug vacío: uno único con la forma de la variante.
     expect(created.slug).toEqual(expect.stringMatching(/\S+-unico$/));
     expect(vi.mocked(getUniqueProductSlug).mock.calls[0][1]).toMatchObject({ storeId: "store-id" });

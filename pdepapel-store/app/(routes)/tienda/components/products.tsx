@@ -16,6 +16,8 @@ interface ProductsProps {
   currentPage?: number;
   /** Trae otra página con los filtros vigentes; la pone quien tiene los filtros. */
   loadPage?: (page: number) => Promise<Product[] | null>;
+  /** Sin la línea de marca en las tarjetas. */
+  hideBrand?: boolean;
 }
 
 /**
@@ -31,7 +33,7 @@ const INITIAL_VISIBLE = 12;
 const REVEAL_STEP = 12;
 
 /** Cuadrícula del catálogo: 2 columnas en teléfono, 3 en tableta y portátil, 4 desde 1280 px. */
-const Products: React.FC<ProductsProps> = ({ products, totalPages, currentPage = 1, loadPage }) => {
+const Products: React.FC<ProductsProps> = ({ products, totalPages, currentPage = 1, loadPage, hideBrand = false }) => {
   // Solo al volver con «Atrás»: en una carga normal coincide con el servidor.
   const [restored] = useState<ListingState | null>(() =>
     typeof window !== "undefined" && consumeBackNavigation() ? readListingState() : null,
@@ -141,6 +143,8 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages, currentPage =
             // compitiendo con la tarjeta LCP en móvil.
             priority={index < 2}
             sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 22vw"
+            hideBrand={hideBrand}
+            reserveBrandLine
           />
         ))}
       </div>

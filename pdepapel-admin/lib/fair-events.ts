@@ -63,6 +63,7 @@ type FairSaleLine = {
 
 export { getFairStockAvailability } from "@/lib/fair-phases";
 import { canRegisterFairSale, getFairStockAvailability } from "@/lib/fair-phases";
+import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 
 export const getCapsuleMargin = (salePrice: number, productCost: number) => {
   if (salePrice <= 0) return -Infinity;
@@ -1093,6 +1094,7 @@ export async function createFairSale({
       },
     });
 
+    const brandNames = await getOrderItemBrandNames(tx, saleLines.map((line) => line.productId));
     for (const line of saleLines) {
       const orderItem = await tx.orderItem.create({
         data: {
@@ -1103,6 +1105,7 @@ export async function createFairSale({
           sku: line.sku,
           imageUrl: line.imageUrl,
           price: line.price,
+          brandName: orderItemBrandName(brandNames, line.productId),
         },
       });
       if (line.capsuleId) {

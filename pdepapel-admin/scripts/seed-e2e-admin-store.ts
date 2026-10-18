@@ -238,6 +238,36 @@ async function main() {
   };
   await prisma.product.upsert({ where: { id: "e2e-reserve-product" }, update: reserveProduct, create: { id: "e2e-reserve-product", ...reserveProduct } });
   await prisma.catalogMigrationSuggestion.deleteMany({ where: { storeId, productId: "e2e-reserve-product" } });
+  // Productos de tests/e2e/brands.spec.ts, archivados como el de reservas; la tienda E2E arranca sin marcas.
+  await prisma.product.updateMany({ where: { storeId }, data: { brandId: null } });
+  await prisma.productGroup.updateMany({ where: { storeId }, data: { brandId: null } });
+  await prisma.brandSlugRedirect.deleteMany({ where: { storeId } });
+  await prisma.brand.deleteMany({ where: { storeId } });
+  for (const [id, name, sku] of [
+    ["e2e-brand-kiut-1", "Cuaderno Kiut E2E", "E2E-BRAND-KIUT-1"],
+    ["e2e-brand-kiut-2", "Lapicero Kiut E2E", "E2E-BRAND-KIUT-2"],
+    ["e2e-brand-plain", "Borrador blanco E2E", "E2E-BRAND-PLAIN"],
+  ] as const) {
+    const brandProduct = {
+      storeId,
+      categoryId,
+      sizeId,
+      colorId,
+      designId,
+      name,
+      description: "Producto para las pruebas E2E de marcas.",
+      slug: id,
+      sku,
+      stock: 6,
+      price: 9000,
+      acqPrice: 3000,
+      isArchived: true,
+    };
+    await prisma.product.upsert({ where: { id }, update: brandProduct, create: { id, ...brandProduct } });
+    // La ficha no guarda sin una foto principal.
+    await prisma.image.deleteMany({ where: { productId: id } });
+    await prisma.image.create({ data: { productId: id, url: "https://res.cloudinary.com/demo/image/upload/sample.jpg", isMain: true } });
+  }
   await prisma.category.deleteMany({ where: { id: legacyCategoryId } });
   await prisma.type.deleteMany({ where: { id: legacyTypeId } });
   await prisma.inventoryMovement.deleteMany({

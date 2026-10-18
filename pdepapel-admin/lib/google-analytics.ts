@@ -61,8 +61,8 @@ export function buildGoogleAnalyticsPurchasePayload(input: {
   items: Array<{
     name: string;
     price: number;
+    brandName?: string | null;
     product?: {
-      brand?: string | null;
       category?: { name: string } | null;
       sku: string;
     } | null;
@@ -83,7 +83,8 @@ export function buildGoogleAnalyticsPurchasePayload(input: {
           items: input.items.map((item) => ({
             item_id: item.sku || item.product?.sku || item.productId || "manual",
             item_name: item.name,
-            item_brand: item.product?.brand || undefined,
+            // La marca que tenía la línea al venderse (`OrderItem.brandName`).
+            item_brand: item.brandName || undefined,
             item_category: item.product?.category?.name,
             price: Number(item.price),
             quantity: item.quantity,
@@ -119,9 +120,9 @@ export async function recordPaidOrderInGoogleAnalytics(
         select: {
           name: true,
           price: true,
+          brandName: true,
           product: {
             select: {
-              brand: true,
               category: { select: { name: true } },
               sku: true,
             },

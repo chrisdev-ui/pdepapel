@@ -4,10 +4,12 @@ import { Analytics } from "@vercel/analytics/react";
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
+import { getBrands } from "@/actions/get-brands";
 import { getCategories } from "@/actions/get-categories";
 import { getProducts } from "@/actions/get-products";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { getTypes } from "@/actions/get-types";
+import { BrandMenuStrip, BrandMenuTiles, toMenuBrands } from "@/components/brands/brand-menu";
 import { ClarityPrivacyBoundary } from "@/components/clarity-privacy-boundary";
 import { Footer } from "@/components/footer";
 import Navbar from "@/components/navbar";
@@ -43,12 +45,14 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
   const currentSeason = getCurrentSeason();
   // Header data: catalog tree for the drawer/mega menu, featured products for
   // the mega menu tile, and the public store settings for the announcement bar.
-  const [types, categories, settings, featured] = await Promise.all([
+  const [types, categories, settings, featured, brands] = await Promise.all([
     getTypes(),
     getCategories(),
     getStorefrontSettings(),
     getProducts({ isFeatured: true, limit: 60 }),
+    getBrands(),
   ]);
+  const menuBrands = toMenuBrands(brands);
   const navigationTypes = buildNavigationTypes(types, categories);
   const featuredByType = buildFeaturedByType(featured.products);
   const featuredSubcategories = buildFeaturedSubcategories(categories);
@@ -81,6 +85,9 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
               featuredByType={featuredByType}
               featuredSubcategories={featuredSubcategories}
               freeShippingThreshold={settings.freeShippingThreshold}
+              hasBrands={menuBrands.length > 0}
+              brandsDrawerSlot={menuBrands.length > 0 ? <BrandMenuTiles brands={menuBrands} /> : null}
+              brandsMegaSlot={menuBrands.length > 0 ? <BrandMenuStrip brands={menuBrands} /> : null}
             />
             <ClarityPrivacyBoundary>{children}</ClarityPrivacyBoundary>
             <Footer season={currentSeason} openingHoursLabel={settings.openingHoursLabel} />

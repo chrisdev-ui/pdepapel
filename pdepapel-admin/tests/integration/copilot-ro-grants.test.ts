@@ -100,6 +100,7 @@ afterAll(async () => {
     await testPrisma.productKit.deleteMany({ where: { kitId: { in: synthetic.map((row) => row.id) } } });
     await testPrisma.product.deleteMany({ where: { id: { in: synthetic.map((row) => row.id) } } });
     await testPrisma.productGroup.deleteMany({ where: { storeId: fixture.store.id } });
+    await testPrisma.brand.deleteMany({ where: { storeId: fixture.store.id } });
     await testPrisma.category.deleteMany({ where: { storeId: fixture.store.id, id: { not: fixture.category.id } } });
     await testPrisma.type.deleteMany({ where: { storeId: fixture.store.id, id: { not: fixture.category.typeId } } });
   }
@@ -247,7 +248,9 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
       testPrisma.product.create({
         data: { storeId: store, ...attributes, slug: `prueba-${randomBytes(4).toString("hex")}`, sku: `DES-${randomBytes(3).toString("hex").toUpperCase()}`, price: 9000, stock: 3, acqPrice: 4000, transportationCost: 300, ...data } as never,
       });
-    const group = await testPrisma.productGroup.create({ data: { storeId: store, name: "Libretas Prueba", description: "<p>Base del grupo SINTETICO-DESC</p>", brand: "Marca Grupo" } as never });
+    // La marca enlazada (tabla Brand): también prueba el permiso de copilot_ro sobre ella.
+    const brand = await testPrisma.brand.create({ data: { storeId: store, name: "Marca Grupo", slug: `marca-grupo-${store.slice(0, 8)}`, aliases: [] } });
+    const group = await testPrisma.productGroup.create({ data: { storeId: store, name: "Libretas Prueba", description: "<p>Base del grupo SINTETICO-DESC</p>", brand: "Texto viejo", brandId: brand.id } });
     variantId = (await product({ name: "Libreta Prueba Rosa", description: "<p>Libreta rosada SINTETICO-DESC</p>", productGroupId: group.id, abcClassification: "A" })).id;
     await product({ name: "Libreta Prueba Azul", description: "<p>SINTETICO-DESC</p>", productGroupId: group.id });
     const kit = await product({ name: "Kit Prueba Escolar", description: "<p>Kit SINTETICO-DESC</p>", isKit: true });
@@ -270,8 +273,9 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
     expect(result.encontrado).toBe(true);
     expect(result.datos).toMatchObject({
       nombre: "Libreta Prueba Rosa",
-      marca: null,
-      marcaVaciaEnFicha: true,
+      // En un grupo la marca es la del grupo; el texto libre anterior no se lee.
+      marca: "Marca Grupo",
+      marcaVaciaEnFicha: false,
       grupo: { nombre: "Libretas Prueba", marca: "Marca Grupo", descripcionBase: "Base del grupo SINTETICO-DESC" },
       variantesHermanas: [expect.objectContaining({ nombre: "Libreta Prueba Azul" })],
       opcionesDeCatalogo: [{ opcion: "Punta", valor: "Fina" }],

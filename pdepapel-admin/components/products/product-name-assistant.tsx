@@ -1396,17 +1396,25 @@ export function ProductNameAssistant({
                         photoUrls={evidenceThumbnails}
                       />
                     }
-                    label="Marca o fabricante"
+                    label="Marca"
                     value={visualAnalysis.brand}
                     current={brand}
-                    status="Visible en foto"
+                    status={
+                      visualAnalysis.brandSource === "existing"
+                        ? "Está en tus marcas"
+                        : visualAnalysis.brandSource === "not_found"
+                          ? "No está en tus marcas"
+                          : "Visible en foto"
+                    }
                     checked={reviewSelection.brand}
                     canApply={fieldAvailability.brand}
                     disabled={disabled}
                     helper={
-                      fieldAvailability.brand
-                        ? "Se cargará en Marca o fabricante."
-                        : "Este formulario no permite cambiar la marca desde esta propuesta."
+                      !fieldAvailability.brand
+                        ? "Este formulario no permite cambiar la marca desde esta propuesta."
+                        : visualAnalysis.brandSource === "not_found"
+                          ? "Queda como aviso junto a Marca. La IA no crea marcas: si es correcta, créala tú."
+                          : "Queda como sugerencia junto a Marca; se elige con «Usar»."
                     }
                     onCheckedChange={(checked) =>
                       updateReviewSelection("brand", checked)

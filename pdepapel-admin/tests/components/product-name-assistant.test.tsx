@@ -123,7 +123,7 @@ describe("ProductNameAssistant visual analysis", () => {
       screen.getByRole("radio", { name: /Cuaderno argollado A5/ }),
     ).toBeChecked();
     expect(
-      screen.getByRole("checkbox", { name: "Marca o fabricante" }),
+      screen.getByRole("checkbox", { name: "Marca" }),
     ).toBeChecked();
     expect(
       screen.queryByRole("button", { name: "Cargar propuesta" }),
@@ -864,7 +864,7 @@ describe("ProductNameAssistant con todas las fotos", () => {
       screen.getByRole("checkbox", { name: "Nombre del producto" }),
     ).not.toBeChecked();
     expect(
-      screen.getByRole("checkbox", { name: "Marca o fabricante" }),
+      screen.getByRole("checkbox", { name: "Marca" }),
     ).not.toBeChecked();
     expect(
       screen.getByRole("checkbox", { name: "Descripción enriquecida" }),

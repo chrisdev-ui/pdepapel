@@ -8,6 +8,7 @@ import { resolveLowStockThreshold } from "@/lib/product-readiness";
 import { MIN_FACTS_TO_WRITE, countConcreteFacts, decideProduct, foldText, matchTokens, skuLikeTokens } from "@/lib/copiloto/skills/product-match";
 import { buildSpecs } from "@/lib/copiloto/skills/specs";
 import { requireStoreOwner } from "@/lib/store-access";
+import { brandDataName } from "@/lib/brand-rules";
 
 /**
  * Los datos de un producto para escribir su descripción. `select` cerrado:
@@ -39,7 +40,7 @@ const PRODUCT_SELECT = {
   id: true,
   name: true,
   sku: true,
-  brand: true,
+  brandRef: { select: { name: true, isArchived: true } },
   description: true,
   isKit: true,
   productGroupId: true,
@@ -54,7 +55,7 @@ interface FoundProduct {
   id: string;
   name: string;
   sku: string;
-  brand: string | null;
+  brandRef: { name: string; isArchived: boolean } | null;
   description: string;
   isKit: boolean;
   productGroupId: string | null;
@@ -168,7 +169,7 @@ async function readAttributes(db: CopilotDb, storeId: string, productId: string,
       size: { select: { name: true } },
       design: { select: { name: true } },
       category: { select: { type: { select: { name: true } } } },
-      productGroup: { select: { name: true, description: true, brand: true } },
+      productGroup: { select: { name: true, description: true, brandRef: { select: { name: true, isArchived: true } } } },
       catalogOptionValues: { select: { option: { select: { name: true } }, optionValue: { select: { name: true } } } },
       kitComponents: { select: { quantity: true, component: { select: { name: true } } } },
     },
@@ -261,12 +262,15 @@ export function productoParaDescripcionTool(storeId: string) {
         .sort((a, b) => b.texto.length - a.texto.length)
         .slice(0, 3);
 
+      // La marca enlazada (la del grupo si el producto no tiene); nunca el texto libre anterior.
+      const productBrand = brandDataName(product.brandRef);
+      const brandName = productBrand ?? brandDataName(row?.productGroup?.brandRef);
       const size = row ? getCustomerFacingSizeName({ categoryName: product.category?.name, sizeName: row.size?.name }) || null : null;
       const { specs, conflicts } = buildSpecs({
         name: product.name,
         description: product.description,
         fields: [
-          { clave: "Marca", valor: product.brand ?? row?.productGroup?.brand ?? null },
+          { clave: "Marca", valor: brandName },
           { clave: "Color", valor: row?.color?.name ?? null },
           { clave: "Tamaño", valor: size },
           { clave: "Diseño", valor: row?.design?.name ?? null },
@@ -280,7 +284,7 @@ export function productoParaDescripcionTool(storeId: string) {
       const doubted = new Set(conflicts.filter((conflict) => !conflict.descripcion).map((conflict) => conflict.clave));
       const facts = countConcreteFacts({
         texts: [product.name, product.description, row?.productGroup?.description, doubted.has("Color") ? null : row?.color?.name],
-        brand: product.brand ?? row?.productGroup?.brand ?? null,
+        brand: brandName,
         kitPieces: row?.kitComponents.length ?? 0,
       });
       return {
@@ -293,8 +297,8 @@ export function productoParaDescripcionTool(storeId: string) {
           sku: product.sku,
           categoria: product.category?.name ?? null,
           linea: row?.category?.type?.name ?? null,
-          marca: product.brand?.trim() || null,
-          marcaVaciaEnFicha: !product.brand?.trim(),
+          marca: brandName,
+          marcaVaciaEnFicha: !brandName,
           atributosInternos: row
             ? {
                 color: doubted.has("Color") ? null : row.color?.name ?? null,
@@ -306,7 +310,7 @@ export function productoParaDescripcionTool(storeId: string) {
           esKit: product.isKit,
           kitIncluye: row?.kitComponents.map((piece) => ({ producto: piece.component.name.trim(), cantidad: piece.quantity })) ?? [],
           grupo: row?.productGroup
-            ? { nombre: row.productGroup.name, marca: row.productGroup.brand?.trim() || null, descripcionBase: descriptionToLines(row.productGroup.description) }
+            ? { nombre: row.productGroup.name, marca: brandDataName(row.productGroup.brandRef), descripcionBase: descriptionToLines(row.productGroup.description) }
             : null,
           variantesHermanas:
             attributes?.siblings.map((sibling) => ({ nombre: sibling.name.trim(), color: sibling.color?.name ?? null, talla: sibling.size?.name ?? null, diseno: sibling.design?.name ?? null })) ?? [],

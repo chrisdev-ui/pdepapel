@@ -34,8 +34,9 @@ describe("organization structured data", () => {
 
 describe("ProductGroup brand", () => {
   const base = { description: "", price: "8000", stock: 3, images: [], reviews: [], productGroupId: "g" } as unknown as Product;
-  const variant = (id: string, color: string, brand?: string) =>
-    ({ ...base, id, slug: id, name: `Carpeta ${color}`, sku: id, brand, color: { id: color, name: color, value: "#000" } }) as unknown as Product;
+  const brandOf = (name: string, isPublic = true) => ({ name, slug: name.toLowerCase(), logoUrl: null, logoHasBackground: false, logoPermission: "UNKNOWN", color: null, isPublic });
+  const variant = (id: string, color: string, brand?: string, isPublic = true) =>
+    ({ ...base, id, slug: id, name: `Carpeta ${color}`, sku: id, brand: brand ? brandOf(brand, isPublic) : null, color: { id: color, name: color, value: "#000" } }) as unknown as Product;
 
   it("names the brand only when every variant shares it", () => {
     const shared = [variant("a", "Verde", "Klipp"), variant("b", "Azul", "Klipp")];
@@ -43,5 +44,16 @@ describe("ProductGroup brand", () => {
 
     const mixed = [variant("a", "Verde", "Klipp"), variant("b", "Azul", "Norma")];
     expect((buildProductJsonLd(mixed[0], mixed) as Record<string, unknown>).brand).toBeUndefined();
+  });
+
+  it("names a hidden brand too: JSON-LD is data, not the store UI", () => {
+    const hidden = [variant("a", "Verde", "Klipp", false), variant("b", "Azul", "Klipp", false)];
+    expect(buildProductJsonLd(hidden[0], hidden)).toMatchObject({ brand: { "@type": "Brand", name: "Klipp" } });
+    expect(buildProductJsonLd(hidden[0], [hidden[0]])).toMatchObject({ "@type": "Product", brand: { "@type": "Brand", name: "Klipp" } });
+  });
+
+  it("never prints an old brand text", () => {
+    const legacy = { ...variant("a", "Verde"), brand: "Texto viejo" } as unknown as Product;
+    expect((buildProductJsonLd(legacy, [legacy]) as Record<string, unknown>).brand).toBeUndefined();
   });
 });

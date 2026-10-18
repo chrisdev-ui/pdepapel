@@ -19,6 +19,8 @@ describe("canonical per template", () => {
     ["(routes)/page.tsx", /canonical: "\/"/],
     ["(routes)/tienda/page.tsx", /alternates: \{ canonical: canonicalUrl \}/],
     ["(routes)/categoria/[slug]/page.tsx", /canonical/],
+    ["(routes)/marcas/page.tsx", /alternates: \{ canonical \}/],
+    ["(routes)/marcas/[slug]/page.tsx", /alternates: \{ canonical \}/],
     ["(routes)/producto/[slug]/page.tsx", /alternates: \{ canonical: canonicalPath \}/],
     ["(routes)/nosotros/page.tsx", /canonical: STOREFRONT_ROUTES\.about/],
     ["(routes)/contacto/page.tsx", /canonical/],

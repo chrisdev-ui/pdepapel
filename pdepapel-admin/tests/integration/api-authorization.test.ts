@@ -104,6 +104,15 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "copiloto/conversaciones/[conversationId]/habilidades", methods: ["GET", "POST"], params: { conversationId: "x" } },
   { path: "copiloto/mensajes/[messageId]/valoracion", methods: ["POST"], params: { messageId: "x" } },
   { path: "copiloto/conocimiento/[noteId]", methods: ["PUT", "POST", "DELETE"], params: { noteId: "adhesivos" } },
+  // Marcas (2026-10-17). GET /brands y GET /brands/[brandId] (por slug) son de la tienda.
+  { path: "brands", methods: ["POST"] },
+  { path: "brands/[brandId]", methods: ["PATCH", "DELETE"], params: { brandId: "x" } },
+  { path: "brands/[brandId]/slug", methods: ["POST"], params: { brandId: "x" } },
+  { path: "brands/[brandId]/archive", methods: ["POST"], params: { brandId: "x" } },
+  { path: "brands/[brandId]/merge", methods: ["POST"], params: { brandId: "x" } },
+  { path: "brands/[brandId]/suggestions", methods: ["GET"], params: { brandId: "x" } },
+  { path: "brands/reorder", methods: ["POST"] },
+  { path: "brands/assign", methods: ["POST"] },
 ];
 // Bulk handlers (products PATCH, orders PATCH/DELETE, coupons PATCH/DELETE)
 // validate the id list before authorizing, so an empty body answers 400

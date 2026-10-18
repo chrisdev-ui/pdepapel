@@ -59,6 +59,15 @@ describe("shop filters", () => {
     expect(removeFilterChip(filters, { key: "isOnSale", value: null, label: "" })).toMatchObject({ isOnSale: false });
   });
 
+  it("counts, names and removes brands like any other list filter", () => {
+    const filters = { ...EMPTY_FILTERS, marca: ["kiut", "norma"], page: 2 };
+    expect(countActiveFilters(filters)).toBe(2);
+    const chips = buildActiveFilterChips(filters, { brands: [{ id: "kiut", name: "Kiut" }] });
+    expect(chips).toEqual([{ key: "marca", value: "kiut", label: "Kiut" }]);
+    expect(removeFilterChip(filters, chips[0])).toMatchObject({ marca: ["norma"], page: 1 });
+    expect(EMPTY_FILTERS.marca).toEqual([]);
+  });
+
   it("describes the visible range", () => {
     expect(formatResultRange(1, 24, 1980)).toBe("Mostrando 1–24 de 1.980 productos");
     expect(formatResultRange(83, 24, 1980)).toBe("Mostrando 1969–1980 de 1.980 productos");

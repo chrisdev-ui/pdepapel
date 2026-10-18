@@ -1,5 +1,6 @@
 "use server";
 
+import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { requireStoreRead } from "@/lib/store-access";
@@ -144,6 +145,8 @@ export async function getProduct(id: string, storeId: string) {
       select: {
         id: true,
         name: true,
+        brandId: true,
+        brandRef: { select: { name: true, logoUrl: true } },
         products: {
           select: {
             id: true,
@@ -193,6 +196,7 @@ export async function getProduct(id: string, storeId: string) {
 
   // Las medianas salen de los costos: solo lectura no las recibe.
   const markups = access.role === "viewer" ? null : await loadMarkupMap(prismadb, storeId);
+  const brands = await loadBrandOptions(storeId, [product?.brandId]);
 
   return {
     // Solo lectura: la ficha se ve sin costo de compra, transporte ni proveedor.
@@ -230,6 +234,7 @@ export async function getProduct(id: string, storeId: string) {
     reviews,
     productGroup,
     productGroups,
+    brands,
   };
 }
 
@@ -243,6 +248,7 @@ export async function getProductSeed(storeId: string, sourceId: string) {
   const source = await prismadb.product.findFirst({
     where: { id: sourceId, storeId },
     include: {
+      brandRef: { select: { isArchived: true } },
       catalogOptionValues: { include: { option: true, optionValue: true } },
       kitComponents: {
         include: {
@@ -273,7 +279,8 @@ export async function getProductSeed(storeId: string, sourceId: string) {
     sizeId: source.sizeId,
     designId: source.designId,
     supplierId: source.supplierId,
-    brand: source.brand,
+    // Una marca archivada no se puede poner en un producto nuevo.
+    brandId: source.brandRef && !source.brandRef.isArchived ? source.brandId : null,
     isKit: source.isKit,
     kitComponents: source.kitComponents,
     catalogOptionValues: source.catalogOptionValues,

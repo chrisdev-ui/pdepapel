@@ -6,6 +6,13 @@ import { useCanWrite } from "@/components/shell/viewer-access";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
 import {
+  BrandFromGroup,
+  BrandPicker,
+  BrandSuggestion,
+  type AiBrandSuggestion,
+  type BrandOption,
+} from "@/components/brands/brand-picker";
+import {
   CatalogAttributesEditor,
   type CatalogOptionSuggestion,
 } from "@/components/products/catalog-attributes-editor";
@@ -192,7 +199,7 @@ const formSchema = z
       })
       .default([]),
     supplierId: z.string().optional(),
-    brand: z.string().max(120).optional(),
+    brandId: z.string().nullable().optional(),
     gtin: z
       .string()
       .superRefine((value, ctx) => {
@@ -300,6 +307,8 @@ interface ProductFormProps {
   markups?: MarkupMap | null;
   /** Margen mínimo de la tienda (Configuración); null = sin mínimo. */
   storeMinMarginPercent?: number | null;
+  /** Marcas sin archivar, más la archivada que el producto ya tenga. */
+  brands?: BrandOption[];
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -325,6 +334,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   reservationDefaultDays = 3,
   markups = null,
   storeMinMarginPercent = null,
+  brands = [],
 }) => {
   const canWrite = useCanWrite();
   const [reserveOpen, setReserveOpen] = useState(false);
@@ -405,7 +415,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 )
               : initialData.acqPrice || 0,
             supplierId: initialData.supplierId || "",
-            brand: initialData.brand || "",
+            brandId: initialData.brandId ?? null,
             gtin: initialData.gtin || "",
             mpn: initialData.mpn || "",
             hasNoProductIdentifier: initialData.hasNoProductIdentifier || false,
@@ -459,7 +469,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             sizeId: seed?.sizeId ?? "",
             designId: seed?.designId ?? "",
             supplierId: seed?.supplierId ?? "",
-            brand: seed?.brand ?? "",
+            brandId: seed?.brandId ?? null,
             gtin: "",
             mpn: "",
             // GTIN, MPN y el escáner quedan habilitados desde el inicio. Si no
@@ -640,7 +650,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const watchedColorId = form.watch("colorId");
   const watchedSizeId = form.watch("sizeId");
   const watchedDesignId = form.watch("designId");
-  const watchedBrand = form.watch("brand");
+  const watchedBrandId = form.watch("brandId") ?? null;
+  const [createdBrands, setCreatedBrands] = useState<BrandOption[]>([]);
+  const brandOptions = useMemo(() => [...brands, ...createdBrands], [brands, createdBrands]);
+  const [aiBrand, setAiBrand] = useState<AiBrandSuggestion | null>(null);
+  const inGroup = Boolean(watchedGroupId) && watchedGroupId !== "none";
+  const selectedGroupBrand = inGroup
+    ? productGroups?.find((group) => group.id === watchedGroupId)?.brandRef ?? null
+    : null;
+  const watchedBrandName = inGroup
+    ? selectedGroupBrand?.name
+    : brandOptions.find((brand) => brand.id === watchedBrandId)?.name;
   const watchedImages = form.watch("images");
   const watchedStock = form.watch("stock");
   const watchedCatalogAttributes = form.watch("catalogAttributes") || [];
@@ -1466,7 +1486,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         (category) => category.id === watchedCategoryId,
                       )?.name
                     }
-                    brand={watchedBrand}
+                    brand={watchedBrandName}
                     designName={
                       availableDesigns.find(
                         (design) => design.id === watchedDesignId,
@@ -1510,8 +1530,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         shouldValidate: true,
                       };
 
+                      // La marca de la IA queda como sugerencia junto al campo: se elige con «Usar».
                       if (analysis.brand) {
-                        form.setValue("brand", analysis.brand, options);
+                        setAiBrand({
+                          brandId: analysis.brandId ?? null,
+                          brandName: analysis.brand,
+                          brandSource: analysis.brandSource ?? "not_found",
+                        });
                       }
 
                       if (!watchedGroupId || watchedGroupId === "none") {
@@ -1683,19 +1708,45 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 </div>
                 <FormField
                   control={form.control}
-                  name="brand"
+                  name="brandId"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Marca o fabricante</FormLabel>
-                      <FormControl>
-                        <Input
+                    <FormItem className="col-span-full flex flex-col gap-2 sm:col-span-1 xl:col-span-2">
+                      <FormLabel>Marca</FormLabel>
+                      {inGroup ? (
+                        <BrandFromGroup brand={selectedGroupBrand} />
+                      ) : (
+                        <FormControl>
+                          <BrandPicker
+                            storeId={String(params.storeId)}
+                            brands={brandOptions}
+                            value={field.value ?? null}
+                            onBrandCreated={(brand) => setCreatedBrands((current) => [...current, brand])}
+                            disabled={loading || !canWrite}
+                            onChange={(brandId) => {
+                              field.onChange(brandId);
+                              if (aiBrand?.brandId === brandId) setAiBrand(null);
+                            }}
+                          />
+                        </FormControl>
+                      )}
+                      {!inGroup && canWrite && (
+                        <BrandSuggestion
+                          productName={watchedName}
+                          brands={brandOptions}
+                          value={field.value ?? null}
+                          aiSuggestion={aiBrand}
                           disabled={loading}
-                          placeholder="Ej. Sanrio, Stabilo"
-                          {...field}
+                          onDismissAi={() => setAiBrand(null)}
+                          onUse={(brandId) => {
+                            field.onChange(brandId);
+                            setAiBrand(null);
+                          }}
                         />
-                      </FormControl>
+                      )}
                       <FormDescription>
-                        Se usa en Google Merchant y datos estructurados.
+                        {inGroup
+                          ? "En un grupo la marca se elige una vez, en el grupo."
+                          : "Sale en la tienda, en Google Merchant y en Mercado Libre."}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

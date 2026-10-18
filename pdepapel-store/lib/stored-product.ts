@@ -21,6 +21,8 @@ export function slimStoredProduct(product: Product): Product {
     presales: product.presales,
     quantity: product.quantity,
     sku: product.sku,
+    // GA4 `item_brand` de begin_checkout sale del carrito guardado.
+    brand: product.brand && typeof product.brand === "object" ? product.brand : null,
     isFeatured: product.isFeatured,
     isArchived: product.isArchived,
     availableAt: product.availableAt,

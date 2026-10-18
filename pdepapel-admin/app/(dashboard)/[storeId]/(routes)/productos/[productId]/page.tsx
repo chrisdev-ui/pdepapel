@@ -37,6 +37,7 @@ export default async function ProductPage({
     productGroup,
     productGroups,
     markups,
+    brands,
   } = await getProduct(params.productId, params.storeId);
 
   if (!product && params.productId !== NEW_PRODUCT_SEGMENT) notFound();
@@ -65,6 +66,7 @@ export default async function ProductPage({
             catalogOptions={catalogOptions}
             productGroup={productGroup}
             productGroups={productGroups}
+            brands={brands}
             activePresale={activePresale}
             activeOffers={activeOffers}
             seed={seed}

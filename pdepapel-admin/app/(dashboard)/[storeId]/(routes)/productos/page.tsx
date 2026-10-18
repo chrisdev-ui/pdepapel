@@ -1,3 +1,4 @@
+import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { requireStoreRead } from "@/lib/store-access";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
@@ -27,7 +28,7 @@ export default async function ProductsPage({
   };
 }) {
   await requireStoreRead(params.storeId);
-  const [products, suppliers, store, categories, sizes, colors, designs] =
+  const [products, suppliers, store, categories, sizes, colors, designs, brands] =
     await Promise.all([
       getProducts(params.storeId),
       prismadb.supplier.findMany({
@@ -62,6 +63,7 @@ export default async function ProductsPage({
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
+      loadBrandOptions(params.storeId),
     ]);
 
   return (
@@ -70,6 +72,7 @@ export default async function ProductsPage({
         data={products}
         suppliers={suppliers}
         taxonomies={{ categories, sizes, colors, designs }}
+        brands={brands}
         lowStockThreshold={store?.lowStockThreshold ?? null}
         storeUrl={env.FRONTEND_STORE_URL}
       />
