@@ -22,6 +22,8 @@ import { brandKey } from "@/lib/brand-rules";
 import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
 import { decryptMercadoLibreToken } from "@/lib/mercadolibre/crypto";
 
+import { assertReadOnlyUser } from "./lib/read-only-user";
+
 const PRODUCTION_STORE_ID = "f23ee5bc-1f6f-4c10-9872-9e6217cc17fd";
 const BATCH = 20;
 const TOKEN_MARGIN_MS = 5 * 60 * 1000;
@@ -71,6 +73,7 @@ async function main() {
   if (process.env.PROD_WRITE_APPROVED === "1") throw new Error("Este guion es solo de lectura: córrelo con --env-file=.env, no con prod:write.");
   const db = new PrismaClient();
   try {
+    await assertReadOnlyUser(db);
     const connection = await db.marketplaceConnection.findUniqueOrThrow({
       where: { storeId_provider: { storeId: PRODUCTION_STORE_ID, provider: "MERCADOLIBRE" } },
       select: { id: true, status: true, encryptedAccessToken: true, accessTokenExpiresAt: true },

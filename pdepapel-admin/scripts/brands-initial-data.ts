@@ -26,6 +26,7 @@ import {
   type BrandInitialPlan,
 } from "../lib/brand-initial-data";
 import { normalizeBrandName } from "../lib/product-naming";
+import { assertReadOnlyUser } from "./lib/read-only-user";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -76,6 +77,7 @@ async function main() {
   const db = await client();
   try {
     if (!apply) {
+      if (process.env.PROD_WRITE_APPROVED !== "1") await assertReadOnlyUser(db);
       const plan = await loadBrandInitialPlan(db, config, normalizeBrandName);
       console.log(JSON.stringify(summary(plan), null, 2));
       const file = record("plan", plan);
