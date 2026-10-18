@@ -138,7 +138,7 @@ export async function POST(
       }),
       prismadb.brand.findMany({
         where: { storeId: params.storeId, isArchived: false },
-        select: { id: true, name: true, aliases: true },
+        select: { id: true, name: true, aliases: true, parentBrandId: true },
       }),
     ]);
 

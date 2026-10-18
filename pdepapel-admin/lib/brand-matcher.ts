@@ -4,13 +4,15 @@ export interface MatchableBrand {
   id: string;
   name: string;
   aliases: unknown;
+  /** Si es una línea, su marca madre: cuando el texto dice las dos, gana la línea (más específica). */
+  parentBrandId?: string | null;
 }
 
 export interface BrandMatch {
   brandId: string;
   brandName: string;
   via: "name" | "alias";
-  /** El texto que coincidió, tal como está escrito en la marca («Incolors»). */
+  /** El texto que coincidió, tal como está escrito en la marca («Fashion»). */
   term: string;
 }
 
@@ -24,10 +26,12 @@ interface Term {
 
 /**
  * Busca marcas en un texto por su nombre o sus alias, como palabras completas
- * y sin importar tildes ni mayúsculas: «Cuaderno INCOLORS 50 h» coincide con
- * Scribe por el alias «Incolors»; «Normandía» no coincide con Norma.
+ * y sin importar tildes ni mayúsculas: «Morral FASHION» coincide con Klipp por
+ * el alias «Fashion»; «Normandía» no coincide con Norma. Si el texto dice una
+ * línea y su marca madre («Colores Scribe Incolors»), queda solo la línea.
  */
 export function buildBrandMatcher(brands: MatchableBrand[]) {
+  const parentOf = new Map(brands.map((brand) => [brand.id, brand.parentBrandId ?? null]));
   const terms: Term[] = [];
   for (const brand of brands) {
     const nameKey = brandKey(brand.name);
@@ -48,8 +52,16 @@ export function buildBrandMatcher(brands: MatchableBrand[]) {
       if (current && current.via === "name") continue;
       byBrand.set(term.brandId, { brandId: term.brandId, brandName: term.brandName, via: term.via, term: term.term });
     }
-    return Array.from(byBrand.values());
+    return preferLines(Array.from(byBrand.values()), parentOf);
   };
+}
+
+/** Quita la marca madre cuando también coincidió una de sus líneas. */
+export function preferLines<T extends { brandId: string }>(matches: T[], parentOf: Map<string, string | null>): T[] {
+  const parentsWithLineHit = new Set(
+    matches.map((match) => parentOf.get(match.brandId)).filter((parent): parent is string => Boolean(parent)),
+  );
+  return matches.filter((match) => !parentsWithLineHit.has(match.brandId));
 }
 
 /** La única marca sugerida por el texto, o null si no hay ninguna o hay más de una. */

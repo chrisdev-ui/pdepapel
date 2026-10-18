@@ -7,6 +7,9 @@
 -- todas las variantes llevan la del grupo); `OrderItem.brandName` guarda el
 -- nombre de la marca al crear cada línea de pedido (sin relleno de líneas
 -- anteriores: NULL = sin marca o anterior a las marcas).
+-- `Brand.parentBrandId` marca una línea de otra marca (Flower Power es una
+-- línea de Primavera; Incolors, de Scribe): un solo nivel, sin FK (relationMode
+-- prisma) y con un CHECK que impide que una marca sea línea de sí misma.
 -- Los textos libres `Product.brand` y `ProductGroup.brand` NO se tocan: el
 -- código desplegado hoy los sigue leyendo y escribiendo, así que este cambio
 -- es solo aditivo y compatible con él.
@@ -20,6 +23,9 @@
 --
 -- VERIFICACIÓN (solo lectura):
 --   SHOW TABLES LIKE 'Brand%';                                  -- Brand y BrandSlugRedirect
+--   SHOW COLUMNS FROM `Brand` LIKE 'parentBrandId';             -- Null = YES
+--   SELECT CONSTRAINT_NAME FROM information_schema.CHECK_CONSTRAINTS
+--     WHERE CONSTRAINT_NAME = 'Brand_parentBrandId_not_self';    -- 1 fila
 --   SHOW COLUMNS FROM `Product` LIKE 'brandId';                 -- Null = YES
 --   SHOW COLUMNS FROM `ProductGroup` LIKE 'brandId';            -- Null = YES
 --   SHOW COLUMNS FROM `OrderItem` LIKE 'brandName';             -- Null = YES
@@ -58,13 +64,18 @@ CREATE TABLE `Brand` (
     `isFeatured` BOOLEAN NOT NULL DEFAULT false,
     `sortOrder` INTEGER NOT NULL DEFAULT 0,
     `isArchived` BOOLEAN NOT NULL DEFAULT false,
+    `parentBrandId` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
     `createdBy` VARCHAR(191) NULL,
 
     INDEX `Brand_storeId_isVisible_isArchived_sortOrder_idx`(`storeId`, `isVisible`, `isArchived`, `sortOrder`),
+    INDEX `Brand_parentBrandId_idx`(`parentBrandId`),
     UNIQUE INDEX `Brand_storeId_slug_key`(`storeId`, `slug`),
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    -- A mano (Prisma no modela CHECK): una marca no es línea de sí misma. El
+    -- resto (un solo nivel, misma tienda, padre sin archivar) lo valida el panel.
+    CONSTRAINT `Brand_parentBrandId_not_self` CHECK (`parentBrandId` IS NULL OR `parentBrandId` <> `id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable

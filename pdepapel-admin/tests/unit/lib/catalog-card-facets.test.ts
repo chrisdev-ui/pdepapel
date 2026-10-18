@@ -64,3 +64,31 @@ describe("priceInRange", () => {
     expect(priceInRange(10_000, 10_000)).toBe(true);
   });
 });
+
+describe("marcas con líneas", () => {
+  const rows = [
+    row("primavera-1", { brandId: "primavera" }),
+    row("flower-1", { brandId: "flower" }),
+    row("flower-2", { brandId: "flower", colorId: "azul" }),
+    row("kiut-1", { brandId: "kiut" }),
+  ];
+  const parents = new Map([["flower", "primavera"]]);
+
+  it("la madre cuenta sus productos más los de sus líneas; la línea solo los suyos", () => {
+    const facets = computeCardFacets(rows, none, categories, parents);
+    expect(count(facets.brandIds, "primavera")).toBe(3);
+    expect(count(facets.brandIds, "flower")).toBe(2);
+    expect(count(facets.brandIds, "kiut")).toBe(1);
+  });
+
+  it("elegir la madre (ya expandida a sus líneas) deja pasar los productos de la línea", () => {
+    const facets = computeCardFacets(rows, { ...none, brandIds: ["primavera", "flower"] }, categories, parents);
+    expect(count(facets.colors, "rojo")).toBe(2);
+    expect(count(facets.colors, "azul")).toBe(1);
+  });
+
+  it("elegir la línea deja fuera los de la madre", () => {
+    const facets = computeCardFacets(rows, { ...none, brandIds: ["flower"] }, categories, parents);
+    expect(count(facets.colors, "rojo")).toBe(1);
+  });
+});

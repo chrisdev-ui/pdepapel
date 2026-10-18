@@ -32,7 +32,7 @@ function product(
     price: 18000,
     stock: 3,
     brand: null,
-    brandRef: { name: "Marca de prueba", isArchived: false },
+    brandRef: { name: "Marca de prueba", isArchived: false, parent: null },
     gtin: null,
     mpn: null,
     hasNoProductIdentifier: false,
@@ -246,8 +246,8 @@ describe("buildGoogleMerchantFeed: marca enlazada", () => {
     const rows = rowsOf(
       buildGoogleMerchantFeed([
         product({ id: "1", brand: "Texto viejo", brandRef: null }),
-        product({ id: "2", brandRef: { name: "Archivada", isArchived: true } }),
-        product({ id: "3", brandRef: null, productGroup: { brandRef: { name: "Del grupo", isArchived: false } } as never }),
+        product({ id: "2", brandRef: { name: "Archivada", isArchived: true, parent: null } }),
+        product({ id: "3", brandRef: null, productGroup: { brandRef: { name: "Del grupo", isArchived: false, parent: null } } as never }),
       ]).tsv,
     );
     expect(rows.map((row) => row.brand)).toEqual(["", "", "Del grupo"]);

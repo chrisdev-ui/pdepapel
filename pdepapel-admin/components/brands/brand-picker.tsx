@@ -138,6 +138,8 @@ export function BrandPicker({
         logoPermission: data.logoPermission ?? "UNKNOWN",
         aliases: [],
         isArchived: false,
+        parentBrandId: null,
+        parentName: null,
       };
       setCreated((current) => [...current, brand]);
       onBrandCreated?.(brand);
@@ -243,6 +245,7 @@ export function BrandPicker({
                       <BrandLogoCell brand={brand} className="h-10 w-14" />
                       <span className="min-w-0 flex-1 truncate">
                         {brand.name}
+                        {brand.parentName && <span className="text-sm text-muted-foreground"> · línea de {brand.parentName}</span>}
                         {brand.aliases.length > 0 && (
                           <span className="text-sm text-muted-foreground"> · {brand.aliases.slice(0, 2).join(", ")}</span>
                         )}
@@ -315,6 +318,7 @@ export function BrandPicker({
                       <BrandLogoCell brand={brand} />
                       <span className="min-w-0 flex-1 truncate">
                         {brand.name}
+                        {brand.parentName && <span className="text-xs text-muted-foreground"> · línea de {brand.parentName}</span>}
                         {brand.aliases.length > 0 && (
                           <span className="text-xs text-muted-foreground"> · {brand.aliases.slice(0, 2).join(", ")}</span>
                         )}

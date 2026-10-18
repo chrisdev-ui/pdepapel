@@ -52,6 +52,14 @@ export function BrandHeader({ brand, count, activeCategoryId }: BrandHeaderProps
               {count === null ? "Sin productos por ahora" : formatProductCount(count)}
             </span>
           </div>
+          {brand.parent && (
+            <p className="font-sans text-sm font-semibold text-blue-yankees lg:text-base">
+              Una línea de{" "}
+              <a href={brandPath(brand.parent.slug)} className="brand-focus rounded-sm underline underline-offset-2">
+                {brand.parent.name}
+              </a>
+            </p>
+          )}
         </div>
         {(brand.seoText || categories.length > 1) && (
           <div className={cn("col-span-2 flex min-w-0 flex-col gap-3 lg:self-start", logoUrl && "lg:col-span-1 lg:col-start-2")}>

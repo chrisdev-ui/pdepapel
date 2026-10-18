@@ -7,7 +7,8 @@ import { createTestPrismaClient } from "./helpers/test-database";
 /**
  * Marcas en el panel a 390 y 1280 px: crear una marca, asignarla desde
  * «Sugerencias automáticas», desde la ficha («¿Es de la marca…? Usar…»), en
- * lote desde Productos y fusionar dos marcas. Escribe en la base de pruebas;
+ * lote desde Productos, fusionar dos marcas y hacer de una marca una línea
+ * de otra (la madre no se deja archivar mientras tenga líneas). Escribe en la base de pruebas;
  * cada vuelta deja la tienda E2E sin marcas y sus productos de marca
  * archivados, como los deja el seed.
  *
@@ -48,6 +49,8 @@ async function resetBrands(active: boolean) {
     await db.product.updateMany({ where: { storeId }, data: { brandId: null } });
     await db.productGroup.updateMany({ where: { storeId }, data: { brandId: null } });
     await db.brandSlugRedirect.deleteMany({ where: { storeId } });
+    // La relación madre → línea es Restrict: se suelta antes de borrar.
+    await db.brand.updateMany({ where: { storeId }, data: { parentBrandId: null } });
     await db.brand.deleteMany({ where: { storeId } });
     await db.product.updateMany({ where: { id: { in: BRAND_PRODUCTS } }, data: { isArchived: !active } });
   } finally {
@@ -116,6 +119,7 @@ test.describe("marcas en el panel", () => {
       await page.getByLabel(/^Nombre/).first().fill("Kiut");
       await page.getByRole("button", { name: "Crear marca" }).click();
       await expect(page).toHaveURL(new RegExp(`/${storeId}/marcas/(?!nueva)[\\w-]+$`), { timeout: 60_000 });
+      const kiutId = new URL(page.url()).pathname.split("/").pop()!;
       expect((await page.evaluate(() => document.documentElement.scrollWidth)) <= viewport.width).toBe(true);
 
       // 2. Sugerencias automáticas: los dos productos que dicen «Kiut», ya marcados.
@@ -177,6 +181,43 @@ test.describe("marcas en el panel", () => {
       await check.$disconnect();
       expect(norma?.isArchived).toBe(true);
       expect(redirect).not.toBeNull();
+
+      // 6. «Es una línea de»: Flower pasa a ser una línea de Kiut.
+      const { Flower: flowerId } = await createBrandRows(["Flower"]);
+      await page.goto(`/${storeId}/marcas/${flowerId}`, { waitUntil: "domcontentloaded" });
+      const parentField = page.getByRole("combobox", { name: "Es una línea de" });
+      await expect(parentField).toBeVisible({ timeout: 60_000 });
+      await parentField.click();
+      await visible(page.getByRole("option", { name: "Kiut" })).click();
+      await expect(parentField).toHaveText(/Kiut/);
+      await page.getByRole("button", { name: "Guardar marca" }).click();
+      await expect
+        .poll(
+          async () => {
+            const read = createTestPrismaClient("brands-e2e");
+            try {
+              return (await read.brand.findUnique({ where: { id: flowerId }, select: { parentBrandId: true } }))?.parentBrandId;
+            } finally {
+              await read.$disconnect();
+            }
+          },
+          { timeout: 30_000 },
+        )
+        .toBe(kiutId);
+
+      // 7. La lista la muestra debajo de Kiut y Kiut no se deja archivar mientras tenga líneas.
+      await page.goto(`/${storeId}/marcas`, { waitUntil: "domcontentloaded" });
+      await expect(visible(page.getByText("línea de Kiut"))).toBeVisible({ timeout: 60_000 });
+      await visible(page.getByRole("button", { name: "Acciones de la marca Kiut" })).click();
+      await page.getByRole("menuitem", { name: "Archivar" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Archivar" }).click();
+      // El aviso de error vive en la región de notificaciones de Radix («Notifications (F8)»).
+      await expect(page.getByRole("region", { name: /Notifications/ }).getByText(/líneas/).first()).toBeVisible({ timeout: 30_000 });
+      const after = createTestPrismaClient("brands-e2e");
+      const kiut = await after.brand.findUnique({ where: { id: kiutId }, select: { isArchived: true } });
+      await after.$disconnect();
+      expect(kiut?.isArchived).toBe(false);
+      expect((await page.evaluate(() => document.documentElement.scrollWidth)) <= viewport.width).toBe(true);
     });
   }
 });

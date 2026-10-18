@@ -11,7 +11,7 @@ import { verifyStoreOwner } from "@/lib/utils";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { rankSaleCandidates, type SaleCandidate } from "@/lib/sale-search";
 import { readScannedProductId } from "@/lib/scanned-code";
-import { mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
+import { mercadoLibreBrandName, mercadoLibreLineName } from "@/lib/mercadolibre/brand";
 
 // Cache Headers
 const corsHeaders = {
@@ -107,7 +107,7 @@ export async function GET(
         transportationCost: true,
         brand: true,
         brandId: true,
-        brandRef: { select: { name: true, isArchived: true } },
+        brandRef: { select: { name: true, isArchived: true, parent: { select: { name: true, isArchived: true } } } },
         mpn: true,
         hasNoProductIdentifier: true,
         color: { select: { name: true } },
@@ -121,7 +121,7 @@ export async function GET(
             id: true,
             name: true,
             brand: true,
-            brandRef: { select: { name: true, isArchived: true } },
+            brandRef: { select: { name: true, isArchived: true, parent: { select: { name: true, isArchived: true } } } },
             _count: { select: { products: { where: { isArchived: false } } } },
           },
         },
@@ -149,6 +149,7 @@ export async function GET(
       ({ brandRef: _brandRef, productGroup, ...product }) => ({
         ...product,
         brand: mercadoLibreBrandName({ ...product, brandRef: _brandRef, productGroup }),
+        brandLine: mercadoLibreLineName({ brandRef: _brandRef, productGroup }),
         productGroup: productGroup
           ? { id: productGroup.id, name: productGroup.name, _count: productGroup._count }
           : null,

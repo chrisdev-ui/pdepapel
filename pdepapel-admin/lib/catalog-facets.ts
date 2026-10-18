@@ -1,3 +1,5 @@
+import { placeLinesAfterParents } from "@/lib/brand-rules";
+
 export interface FacetCount {
   id: string;
   count: number;
@@ -128,6 +130,8 @@ export function computeCardFacets(
   rows: FacetRow[],
   selection: FacetSelection,
   categories: { id: string; typeId: string }[],
+  /** Línea → marca madre: un producto de Flower Power cuenta también para Primavera. */
+  brandParents: Map<string, string> = new Map(),
 ): ProductFacets & { brandIds: FacetCount[] } {
   const typeByCategory = new Map(categories.map((category) => [category.id, category.typeId]));
   const without = (except: FacetDimension) => rows.filter((row) => passes(row, selection, except));
@@ -143,7 +147,11 @@ export function computeCardFacets(
       return typeId ? [typeId] : [];
     }),
     optionValues: countCards(without("option"), (row) => row.optionValues.map((value) => value.optionValueId)),
-    brandIds: countCards(without("brand"), (row) => (row.brandId ? [row.brandId] : [])),
+    brandIds: countCards(without("brand"), (row) => {
+      if (!row.brandId) return [];
+      const parent = brandParents.get(row.brandId);
+      return parent ? [row.brandId, parent] : [row.brandId];
+    }),
     priceRanges: PRICE_RANGE_BUCKETS.map((bucket) => ({
       id: bucket.id,
       count: new Set(
@@ -167,12 +175,14 @@ export function toBrandFacets(
     logoHasBackground: boolean;
     logoPermission: BrandFacetCount["logoPermission"];
     sortOrder: number;
+    parentBrandId?: string | null;
   }[],
 ): BrandFacetCount[] {
   const countById = new Map(counts.map((facet) => [facet.id, facet.count]));
-  return brands
+  const sorted = brands
     .filter((brand) => (countById.get(brand.id) ?? 0) > 0)
-    .sort((first, second) => first.sortOrder - second.sortOrder || first.name.localeCompare(second.name, "es"))
+    .sort((first, second) => first.sortOrder - second.sortOrder || first.name.localeCompare(second.name, "es"));
+  return placeLinesAfterParents(sorted)
     .map((brand) => ({
       id: brand.slug,
       count: countById.get(brand.id) ?? 0,

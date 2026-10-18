@@ -1,4 +1,4 @@
-import { brandDataName } from "@/lib/brand-rules";
+import { brandDataName, topLevelBrandName } from "@/lib/brand-rules";
 
 /**
  * Mientras no esté verificada la migración de datos de marcas (texto libre →
@@ -8,7 +8,9 @@ import { brandDataName } from "@/lib/brand-rules";
  */
 export const MERCADOLIBRE_LEGACY_BRAND_FALLBACK = true;
 
-const BRAND_NAME = { select: { name: true, isArchived: true } } as const;
+const BRAND_NAME = {
+  select: { name: true, isArchived: true, parent: { select: { name: true, isArchived: true } } },
+} as const;
 
 /** Lo que hay que leer de un producto para saber su marca en Mercado Libre. */
 export const MERCADOLIBRE_BRAND_SELECT = {
@@ -17,7 +19,10 @@ export const MERCADOLIBRE_BRAND_SELECT = {
   productGroup: { select: { brand: true, brandRef: BRAND_NAME } },
 } as const;
 
-type BrandRow = { name: string; isArchived: boolean } | null | undefined;
+type BrandRow =
+  | { name: string; isArchived: boolean; parent?: { name: string; isArchived: boolean } | null }
+  | null
+  | undefined;
 
 export interface MercadoLibreBrandSource {
   brand?: string | null;
@@ -25,13 +30,24 @@ export interface MercadoLibreBrandSource {
   productGroup?: { brand?: string | null; brandRef?: BrandRow } | null;
 }
 
-/** Marca que se manda como BRAND: la enlazada (aunque esté oculta, nunca archivada) y, por ahora, el texto anterior. */
+/**
+ * Marca que se manda como BRAND: la de primer nivel de la enlazada (Primavera
+ * para un producto de Flower Power; oculta vale, archivada no) y, por ahora,
+ * el texto anterior.
+ */
 export function mercadoLibreBrandName(product: MercadoLibreBrandSource | null | undefined): string | null {
   if (!product) return null;
-  const linked = brandDataName(product.brandRef ?? product.productGroup?.brandRef ?? null);
+  const linked = topLevelBrandName(product.brandRef ?? product.productGroup?.brandRef ?? null);
   if (linked) return linked;
   if (product.brandRef || product.productGroup?.brandRef) return null;
   if (!MERCADOLIBRE_LEGACY_BRAND_FALLBACK) return null;
   const legacy = (product.brand || product.productGroup?.brand || "").trim();
   return legacy || null;
+}
+
+/** Atributo LINE de Mercado Libre: el nombre de la línea (Flower Power) cuando la marca enlazada es una línea. */
+export function mercadoLibreLineName(product: MercadoLibreBrandSource | null | undefined): string | null {
+  const brand = product?.brandRef ?? product?.productGroup?.brandRef ?? null;
+  if (!brand?.parent || brand.parent.isArchived) return null;
+  return brandDataName(brand);
 }

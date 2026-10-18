@@ -1,4 +1,4 @@
-import { brandDataName } from "@/lib/product-brand";
+import { topLevelBrandName } from "@/lib/brand-display";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { CLOUDINARY_MAX_WIDTH, getCloudinaryImageUrl } from "@/lib/cloudinary-loader";
 
@@ -56,7 +56,7 @@ export function buildProductSchema(
 ) {
   const slug = product.slug || product.id;
   const path = productPath(slug);
-  const brand = brandDataName(product);
+  const brand = topLevelBrandName(product);
   const size = getStructuredProductSize(product);
   const price = Number(product.price);
   const shippingDetails = buildShippingDetails(price, options.freeShippingThreshold);

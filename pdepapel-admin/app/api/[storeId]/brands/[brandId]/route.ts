@@ -51,12 +51,19 @@ export async function PATCH(req: Request, { params }: { params: { storeId: strin
       return NextResponse.json(brand, { headers: CACHE_HEADERS.NO_CACHE });
     }
 
-    const { brand, replacedLogos } = await updateBrand(params.storeId, params.brandId, brandInputSchema.parse(body));
+    const { brand, replacedLogos, previousParentBrandId } = await updateBrand(
+      params.storeId,
+      params.brandId,
+      brandInputSchema.parse(body),
+    );
     // Después del commit y con tope: nombre, logo, color o visibilidad cambian
-    // lo que la tienda muestra de todos sus productos.
+    // lo que la tienda muestra de todos sus productos (y la madre anterior, si
+    // la línea cambió de marca madre).
     await invalidateStoreProductsCache(
       params.storeId,
-      await brandStorefrontTarget(params.storeId, { brandIds: [brand.id] }),
+      await brandStorefrontTarget(params.storeId, {
+        brandIds: [brand.id, ...(previousParentBrandId ? [previousParentBrandId] : [])],
+      }),
     );
     if (replacedLogos.length > 0) await deleteCloudinaryImages(replacedLogos, "BRAND_PATCH");
     return NextResponse.json(brand, { headers: CACHE_HEADERS.NO_CACHE });

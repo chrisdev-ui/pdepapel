@@ -1,4 +1,5 @@
-import type { BrandLogoPermission } from "@/types";
+import { productBrand } from "@/lib/product-brand";
+import type { BrandLogoPermission, Product } from "@/types";
 
 /** Menos productos activos que esto: la página de la marca queda `noindex, follow` (contenido demasiado delgado). */
 export const BRAND_PAGE_INDEX_MIN_PRODUCTS = 3;
@@ -14,6 +15,12 @@ export function brandLogoUrl(brand: { logoUrl: string | null; logoPermission: Br
 }
 
 export { brandDataName, productBrand, publicProductBrand } from "@/lib/product-brand";
+
+/** Nombre para JSON-LD: la marca madre si es una línea (también si la madre está oculta). */
+export function topLevelBrandName(product: Pick<Product, "brand" | "productGroup">): string | undefined {
+  const brand = productBrand(product);
+  return brand?.parent?.name || brand?.name || undefined;
+}
 
 /** Lista de nombres en español: «Kiut», «Kiut y Norma», «Kiut, Norma y Scribe». */
 export function joinBrandNames(names: string[]): string {

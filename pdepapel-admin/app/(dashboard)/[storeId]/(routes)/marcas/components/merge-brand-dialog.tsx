@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { brandsApi, canOfferLogoCopy, mergeSummaryLines, plural } from "@/lib/brand-admin";
+import { brandsApi, canOfferLogoCopy, mergeCandidates, mergeSummaryLines, plural } from "@/lib/brand-admin";
 import type { MergeSummary } from "@/lib/brands";
 
 import type { BrandRow } from "../server/get-brands";
@@ -37,7 +37,7 @@ export function useIsNarrow() {
 interface MergeBrandDialogProps {
   storeId: string;
   source: BrandRow;
-  /** Todas las marcas de la lista: se ofrecen las activas distintas de la de origen. */
+  /** Todas las marcas de la lista: se ofrecen las activas que pueden recibirla (`mergeCandidates`). */
   brands: BrandRow[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,10 +52,7 @@ export function MergeBrandDialog({ storeId, source, brands, open, onOpenChange }
   const [copyLogo, setCopyLogo] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const candidates = useMemo(
-    () => brands.filter((brand) => brand.id !== source.id && !brand.isArchived),
-    [brands, source.id],
-  );
+  const candidates = useMemo(() => mergeCandidates(source, brands), [brands, source]);
   const target = candidates.find((brand) => brand.id === targetId) ?? null;
   const offerLogo = canOfferLogoCopy(source, target);
 
@@ -86,7 +83,7 @@ export function MergeBrandDialog({ storeId, source, brands, open, onOpenChange }
   };
 
   const title = `Fusionar «${source.name}» en…`;
-  const description = "Para una marca repetida o que en realidad es una línea de otra marca.";
+  const description = "Para una marca repetida o un nombre que es otra forma de escribirla. Si es una línea de otra marca, usa «Es una línea de» en su ficha.";
 
   const body = (
     <div className="flex flex-col gap-4">
@@ -99,6 +96,7 @@ export function MergeBrandDialog({ storeId, source, brands, open, onOpenChange }
           options={candidates.map((brand) => ({
             value: brand.id,
             label: brand.name,
+            description: brand.parentName ? `línea de ${brand.parentName}` : undefined,
             keywords: brand.aliases,
             icon: <BrandLogoTile logoUrl={brand.logoUrl} size="sm" className="h-8 w-8 p-0.5 text-[8px]" />,
           }))}
@@ -116,7 +114,7 @@ export function MergeBrandDialog({ storeId, source, brands, open, onOpenChange }
           <p className="text-sm font-bold text-primary">Al fusionar:</p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-primary">
             {mergeSummaryLines(
-              { name: source.name, slug: source.slug, productCount: source.totalProducts },
+              { name: source.name, slug: source.slug, productCount: source.totalProducts, lineCount: source.lines },
               target,
             ).map((line) => (
               <li key={line}>{line}</li>

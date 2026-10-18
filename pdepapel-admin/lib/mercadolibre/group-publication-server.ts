@@ -28,7 +28,7 @@ import {
 import { evaluateListingPrice } from "./listing-price-guard";
 import { MERCADOLIBRE_MAX_LISTING_PICTURES } from "./listings";
 import { findSellerItemsBySku } from "./publish-attempt";
-import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName } from "@/lib/mercadolibre/brand";
+import { MERCADOLIBRE_BRAND_SELECT, mercadoLibreBrandName, mercadoLibreLineName } from "@/lib/mercadolibre/brand";
 
 export type RemoteSkuLookup = (connectionId: string, sku: string) => Promise<GroupVariantRemoteItem[]>;
 
@@ -74,7 +74,7 @@ async function loadMaster(storeId: string, listingId: string) {
       minimumMarginAmount: true,
       metadata: true,
       connection: { select: { status: true } },
-      product: { select: { productGroupId: true, productGroup: { select: { id: true, name: true, brand: true, brandRef: { select: { name: true, isArchived: true } } } } } },
+      product: { select: { productGroupId: true, productGroup: { select: { id: true, name: true, brand: true, brandRef: { select: { name: true, isArchived: true, parent: { select: { name: true, isArchived: true } } } } } } } },
     },
   });
   if (!master) throw ErrorFactory.NotFound("Publicación no encontrada");
@@ -203,6 +203,7 @@ export async function loadGroupPublicationPlan(
         transportationCost: variant.transportationCost,
         isKit: variant.isKit,
         brand: mercadoLibreBrandName(variant),
+        brandLine: mercadoLibreLineName(variant),
         gtin: variant.gtin,
         mpn: variant.mpn,
         hasNoProductIdentifier: variant.hasNoProductIdentifier,

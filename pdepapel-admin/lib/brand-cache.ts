@@ -12,14 +12,29 @@ import {
  * Purga acotada de un cambio de marca (editar, ocultar, archivar, fusionar,
  * cambiar dirección, ordenar): la lista de marcas, la página de cada marca
  * (direcciones actuales, anteriores y nuevas), los listados y las fichas de
- * sus productos. Si no cabe en una purga acotada, `invalidateStoreProductsCache`
+ * sus productos. Va la familia entera: la madre y sus líneas, porque la página
+ * de la madre lista los productos de sus líneas y la ficha de una línea nombra
+ * a la madre. Si no cabe en una purga acotada, `invalidateStoreProductsCache`
  * cae sola a la completa.
  */
 export async function brandStorefrontTarget(
   storeId: string,
   input: { brandIds: string[]; slugs?: string[] },
 ): Promise<StorefrontTarget> {
-  const brandIds = Array.from(new Set(input.brandIds));
+  const requested = Array.from(new Set(input.brandIds));
+  const family = requested.length
+    ? await prismadb.brand.findMany({
+        where: { storeId, OR: [{ id: { in: requested } }, { parentBrandId: { in: requested } }] },
+        select: { id: true, parentBrandId: true },
+      })
+    : [];
+  const brandIds = Array.from(
+    new Set([
+      ...requested,
+      ...family.map((brand) => brand.id),
+      ...family.map((brand) => brand.parentBrandId).filter((id): id is string => Boolean(id)),
+    ]),
+  );
   const [products, groups, brands, redirects] = brandIds.length
     ? await Promise.all([
         prismadb.product.findMany({ where: { storeId, brandId: { in: brandIds } }, select: { id: true } }),

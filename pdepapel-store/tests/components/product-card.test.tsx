@@ -40,6 +40,7 @@ const brand = (isPublic: boolean) => ({
   logoPermission: "ALLOWED" as const,
   color: null,
   isPublic,
+  parent: null,
 });
 
 describe("ProductCard", () => {

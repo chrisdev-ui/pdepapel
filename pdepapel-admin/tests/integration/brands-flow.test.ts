@@ -6,6 +6,7 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
 vi.mock("@/lib/prismadb", async () => ({ default: (await import("./helpers/database")).testPrisma }));
 
 import { brandStorefrontTarget } from "@/lib/brand-cache";
+import { resolvePublicBrandIds } from "@/lib/brand-catalog";
 import { findPublicBrand, listPublicBrands } from "@/lib/brand-public";
 import { applyBrandInitialPlan, loadBrandInitialPlan, type BrandInitialConfig } from "@/lib/brand-initial-data";
 import {
@@ -16,6 +17,7 @@ import {
   getBrandSuggestions,
   mergeBrands,
   setBrandArchived,
+  updateBrand,
 } from "@/lib/brands";
 import { getOrderItemBrandNames } from "@/lib/order-item-brand";
 import { normalizeBrandName } from "@/lib/product-naming";
@@ -41,6 +43,7 @@ const input = (name: string, extra: Record<string, unknown> = {}) => ({
   logoPermission: "UNKNOWN" as const,
   isVisible: true,
   isFeatured: false,
+  parentBrandId: null as string | null,
   ...extra,
 });
 
@@ -74,6 +77,8 @@ afterAll(async () => {
   await testPrisma.product.deleteMany({ where: { id: { in: created } } });
   await testPrisma.productGroup.deleteMany({ where: { storeId } });
   await testPrisma.brandSlugRedirect.deleteMany({ where: { storeId } });
+  // Las líneas primero: una madre con líneas no se puede borrar (Restrict).
+  await testPrisma.brand.updateMany({ where: { storeId }, data: { parentBrandId: null } });
   await testPrisma.brand.deleteMany({ where: { storeId } });
   await deleteInventoryFixture(fixture);
 });
@@ -102,15 +107,60 @@ describe("marcas", () => {
   });
 
   it("sugiere por nombre o alias: sin marca preseleccionados, con otra marca aparte", async () => {
-    const scribe = await createBrand(fixture.store.id, "user", input("Scribe Prueba", { aliases: ["Incolors Prueba"] }));
+    const klipp = await createBrand(fixture.store.id, "user", input("Klipp Prueba", { aliases: ["Fashion Prueba"] }));
     const other = await createBrand(fixture.store.id, "user", input("Otra Prueba"));
-    const clean = await product("Cuaderno Incolors Prueba tapa dura");
-    const conflict = await product("Colores Scribe Prueba x15");
+    const clean = await product("Morral Fashion Prueba estampado");
+    const conflict = await product("Cartuchera Klipp Prueba");
     await testPrisma.product.update({ where: { id: conflict.id }, data: { brandId: other.id } });
-    await product("Cuaderno Incolors Prueba viejo", { isArchived: true });
-    const suggestions = await getBrandSuggestions(fixture.store.id, scribe.id);
-    expect(suggestions.clean.map((row) => [row.id, row.reason])).toEqual([[clean.id, "coincide por el alias «Incolors Prueba»"]]);
+    await product("Morral Fashion Prueba viejo", { isArchived: true });
+    const suggestions = await getBrandSuggestions(fixture.store.id, klipp.id);
+    expect(suggestions.clean.map((row) => [row.id, row.reason])).toEqual([[clean.id, "coincide por el alias «Fashion Prueba»"]]);
     expect(suggestions.conflicts.map((row) => [row.id, row.currentBrandName])).toEqual([[conflict.id, "Otra Prueba"]]);
+  });
+
+  it("líneas: un solo nivel, y la madre con líneas no se archiva, no se borra ni se fusiona en su línea", async () => {
+    const madre = await createBrand(fixture.store.id, "user", input("Madre Línea"));
+    const linea = await createBrand(fixture.store.id, "user", input("Hija Línea", { parentBrandId: madre.id }));
+    expect(linea.parentBrandId).toBe(madre.id);
+    await expect(createBrand(fixture.store.id, "user", input("Nieta Línea", { parentBrandId: linea.id }))).rejects.toThrow(/ya es una línea/);
+    await expect(updateBrand(fixture.store.id, madre.id, input("Madre Línea", { parentBrandId: madre.id }))).rejects.toThrow(/sí misma/);
+    const otra = await createBrand(fixture.store.id, "user", input("Otra Madre Línea"));
+    await expect(updateBrand(fixture.store.id, madre.id, input("Madre Línea", { parentBrandId: otra.id }))).rejects.toThrow(/tiene líneas/);
+    await expect(setBrandArchived(fixture.store.id, madre.id, true)).rejects.toThrow(/líneas sin archivar/);
+    await expect(mergeBrands(fixture.store.id, madre.id, linea.id, { copyLogo: false }, testPrisma)).rejects.toThrow(/una de sus líneas/);
+    await expect(deleteBrand(fixture.store.id, madre.id)).rejects.toThrow(/Tiene líneas/);
+
+    // Fusionar la madre en otra marca de primer nivel: sus líneas pasan a la otra.
+    await mergeBrands(fixture.store.id, madre.id, otra.id, { copyLogo: false }, testPrisma);
+    expect((await testPrisma.brand.findUnique({ where: { id: linea.id } }))?.parentBrandId).toBe(otra.id);
+  });
+
+  it("elegir la madre trae sus líneas; su página cuenta y lista las líneas; sugiere la línea, no la madre", async () => {
+    const madre = await createBrand(fixture.store.id, "user", input("Madre Catálogo"));
+    const linea = await createBrand(fixture.store.id, "user", input("Linea Catalogo", { parentBrandId: madre.id }));
+    const propio = await product("Block Madre Catálogo");
+    const deLinea = await product("Libreta Linea Catalogo");
+    await testPrisma.product.update({ where: { id: propio.id }, data: { brandId: madre.id } });
+    await testPrisma.product.update({ where: { id: deLinea.id }, data: { brandId: linea.id } });
+
+    expect((await resolvePublicBrandIds(fixture.store.id, [madre.slug])).sort()).toEqual([madre.id, linea.id].sort());
+    expect(await resolvePublicBrandIds(fixture.store.id, [linea.slug])).toEqual([linea.id]);
+
+    const page = await findPublicBrand(fixture.store.id, madre.slug);
+    expect(page.kind).toBe("brand");
+    if (page.kind === "brand") {
+      expect(page.brand.productCount).toBe(2);
+      expect(page.brand.lines.map((line) => [line.slug, line.productCount])).toEqual([[linea.slug, 1]]);
+      expect(page.brand.parent).toBeNull();
+    }
+    const linePage = await findPublicBrand(fixture.store.id, linea.slug);
+    if (linePage.kind === "brand") expect(linePage.brand.parent).toEqual({ name: "Madre Catálogo", slug: madre.slug });
+
+    const sinMarca = await product("Agenda Madre Catálogo Linea Catalogo");
+    const madreSugiere = await getBrandSuggestions(fixture.store.id, madre.id);
+    expect(madreSugiere.clean.map((row) => row.id)).not.toContain(sinMarca.id);
+    const lineaSugiere = await getBrandSuggestions(fixture.store.id, linea.id);
+    expect(lineaSugiere.clean.map((row) => row.id)).toContain(sinMarca.id);
   });
 
   it("fusiona A en B: productos, direcciones, alias, logo opcional y A archivada", async () => {
@@ -183,13 +233,17 @@ describe("marcas", () => {
   it("datos iniciales: el ensayo y la escritura dan lo mismo y una segunda corrida no encuentra nada", async () => {
     const config: BrandInitialConfig = {
       storeId: fixture.store.id,
-      brands: [{ name: "Inicial Uno", aliases: ["Alias Inicial"] }],
+      brands: [
+        { name: "Inicial Línea", parent: "Inicial Uno" },
+        { name: "Inicial Uno", aliases: ["Alias Inicial"] },
+        { name: "Inicial Oculta", isVisible: false },
+      ],
       textMapping: { "Texto Inicial": { brand: "Inicial Uno" } },
     };
     const byText = await product("Libreta lisa", { brand: "texto inicial" });
     const byAlias = await product("Cuaderno Alias Inicial");
     const plan = await loadBrandInitialPlan(testPrisma, config, normalizeBrandName);
-    expect(plan.createBrands.map((brand) => brand.name)).toEqual(["Inicial Uno"]);
+    expect(plan.createBrands.map((brand) => brand.name)).toEqual(["Inicial Uno", "Inicial Oculta", "Inicial Línea"]);
     // Las marcas que dejaron las pruebas anteriores también sugieren: aquí solo se miran estos dos.
     expect(plan.productAssignments.filter((row) => [byText.id, byAlias.id].includes(row.productId))).toEqual(
       expect.arrayContaining([
@@ -199,6 +253,10 @@ describe("marcas", () => {
     );
     const result = await testPrisma.$transaction((tx) => applyBrandInitialPlan(tx, config, normalizeBrandName, plan, plan.rows, "test"));
     expect(result.written).toBe(plan.rows);
+    expect((await testPrisma.brand.findFirst({ where: { storeId: fixture.store.id, name: "Inicial Línea" } }))?.parentBrandId).toBe(
+      (await testPrisma.brand.findFirst({ where: { storeId: fixture.store.id, name: "Inicial Uno" } }))?.id,
+    );
+    expect((await testPrisma.brand.findFirst({ where: { storeId: fixture.store.id, name: "Inicial Oculta" } }))?.isVisible).toBe(false);
     const again = await loadBrandInitialPlan(testPrisma, config, normalizeBrandName);
     expect(again.rows).toBe(0);
     await expect(

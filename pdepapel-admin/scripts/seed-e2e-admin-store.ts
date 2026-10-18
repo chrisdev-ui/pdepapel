@@ -242,6 +242,8 @@ async function main() {
   await prisma.product.updateMany({ where: { storeId }, data: { brandId: null } });
   await prisma.productGroup.updateMany({ where: { storeId }, data: { brandId: null } });
   await prisma.brandSlugRedirect.deleteMany({ where: { storeId } });
+  // La relación madre → línea es Restrict: se suelta antes de borrar.
+  await prisma.brand.updateMany({ where: { storeId }, data: { parentBrandId: null } });
   await prisma.brand.deleteMany({ where: { storeId } });
   for (const [id, name, sku] of [
     ["e2e-brand-kiut-1", "Cuaderno Kiut E2E", "E2E-BRAND-KIUT-1"],

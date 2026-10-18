@@ -12,6 +12,7 @@ export const PUBLIC_BRAND_SELECT = {
   color: true,
   isVisible: true,
   isArchived: true,
+  parent: { select: { name: true, slug: true, isVisible: true, isArchived: true } },
 } satisfies Prisma.BrandSelect;
 
 export interface PublicBrand {
@@ -23,6 +24,8 @@ export interface PublicBrand {
   color: string | null;
   /** Visible y no archivada: la tienda muestra enlaces, logos y filtros solo con esto en true. */
   isPublic: boolean;
+  /** Si es una línea («Flower Power»), su marca madre («Primavera»). Una madre archivada no sale. */
+  parent: { name: string; slug: string; isPublic: boolean } | null;
 }
 
 /** Marca archivada: no sale (ni el nombre). Oculta: sale con `isPublic: false`, solo para los datos. */
@@ -38,6 +41,10 @@ export function toPublicBrand(
     logoPermission: brand.logoPermission,
     color: brand.color,
     isPublic: isBrandPublic(brand),
+    parent:
+      brand.parent && !brand.parent.isArchived
+        ? { name: brand.parent.name, slug: brand.parent.slug, isPublic: isBrandPublic(brand.parent) }
+        : null,
   };
 }
 

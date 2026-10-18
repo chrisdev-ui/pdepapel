@@ -72,6 +72,7 @@ import { Redis } from "@upstash/redis";
 import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import {
   BRAND_FILTER_PARAM,
+  getBrandParents,
   getPublicBrandsForFacets,
   parseBrandSlugsParam,
   resolvePublicBrandIds,
@@ -1262,6 +1263,10 @@ export async function GET(
           hasDiscount: Boolean(pricing && pricing.discount > 0),
         };
       });
+      const [brandParents, facetBrands] = await Promise.all([
+        getBrandParents(params.storeId),
+        getPublicBrandsForFacets(params.storeId),
+      ]);
       const { brandIds: brandCounts, ...cardFacets } = computeCardFacets(
         facetRows,
         {
@@ -1281,10 +1286,11 @@ export async function GET(
           isOnSale,
         },
         storeCategories,
+        brandParents,
       );
       const groupFacets: ProductFacets = {
         ...cardFacets,
-        brands: toBrandFacets(brandCounts, await getPublicBrandsForFacets(params.storeId)),
+        brands: toBrandFacets(brandCounts, facetBrands),
       };
 
       const response = {

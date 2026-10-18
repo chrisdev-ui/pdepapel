@@ -46,6 +46,8 @@ export interface PublicBrand {
   logoPermission: BrandLogoPermission;
   color: string | null;
   isPublic: boolean;
+  /** La marca madre cuando esta es una línea (Flower Power → Primavera); null si no tiene o está archivada. */
+  parent: { name: string; slug: string; isPublic: boolean } | null;
 }
 
 /** Marca visible de `GET /brands` (lista) o `GET /brands/{slug}` (página). */
@@ -61,10 +63,22 @@ export interface BrandSummary {
   isFeatured: boolean;
   sortOrder: number;
   productCount: number;
+  /** Solo cuando la madre es visible. */
+  parent: { name: string; slug: string } | null;
+}
+
+export interface BrandLine {
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  logoPermission: BrandLogoPermission;
+  productCount: number;
 }
 
 export interface BrandPageData extends BrandSummary {
   categories: { id: string; name: string; slug: string; count: number }[];
+  /** Líneas visibles con productos, en el orden del panel. */
+  lines: BrandLine[];
 }
 
 export interface BrandFacet {

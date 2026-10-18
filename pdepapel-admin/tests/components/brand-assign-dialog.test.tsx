@@ -22,7 +22,7 @@ const products = [
   { id: "p2", name: "Agenda Kiut" },
 ];
 const brands = [
-  { id: "b-kiut", name: "Kiut", aliases: [], logoUrl: null, logoPermission: "UNKNOWN" as const, isArchived: false },
+  { id: "b-kiut", name: "Kiut", aliases: [], logoUrl: null, logoPermission: "UNKNOWN" as const, isArchived: false, parentBrandId: null, parentName: null },
 ];
 
 type Body = { brandId: string | null; productIds: string[]; preview?: boolean };

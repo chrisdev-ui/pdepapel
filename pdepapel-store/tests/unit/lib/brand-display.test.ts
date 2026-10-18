@@ -10,6 +10,7 @@ import {
   joinBrandNames,
   parseBrandParam,
   publicProductBrand,
+  topLevelBrandName,
 } from "@/lib/brand-display";
 import type { Product, PublicBrand } from "@/types";
 
@@ -22,6 +23,7 @@ const brand = (overrides: Partial<PublicBrand> = {}): PublicBrand => ({
   logoPermission: "ALLOWED",
   color: null,
   isPublic: true,
+  parent: null,
   ...overrides,
 });
 const product = (overrides: Partial<Product>) => overrides as Pick<Product, "brand" | "productGroup">;
@@ -48,6 +50,14 @@ describe("regla de visibilidad", () => {
     expect(publicProductBrand(product({ brand: brand() }))?.slug).toBe("marca-de-prueba");
     expect(publicProductBrand(product({ brand: brand({ isPublic: false }) }))).toBeNull();
     expect(brandDataName(product({ brand: brand({ isPublic: false }) }))).toBe("Marca de prueba");
+  });
+
+  it("JSON-LD lleva la marca madre de una línea, también si la madre está oculta; GA4 sigue con la línea", () => {
+    const line = brand({ name: "Flower Power", slug: "flower-power", parent: { name: "Primavera", slug: "primavera", isPublic: false } });
+    expect(topLevelBrandName(product({ brand: line }))).toBe("Primavera");
+    expect(brandDataName(product({ brand: line }))).toBe("Flower Power");
+    expect(topLevelBrandName(product({ brand: brand() }))).toBe("Marca de prueba");
+    expect(topLevelBrandName(product({ brand: null }))).toBeUndefined();
   });
 
   it("usa la marca del grupo cuando el producto no trae una", () => {

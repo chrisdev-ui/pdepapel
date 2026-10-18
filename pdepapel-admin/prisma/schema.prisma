@@ -615,17 +615,22 @@ model Brand {
   isFeatured        Boolean             @default(false)
   sortOrder         Int                 @default(0)
   isArchived        Boolean             @default(false)
+  /// «Una línea de»: Flower Power es una línea de Primavera. Un solo nivel: una línea no tiene líneas.
+  parentBrandId     String?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   createdBy         String?
 
   store         Store               @relation(fields: [storeId], references: [id])
+  parent        Brand?              @relation("BrandLines", fields: [parentBrandId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines         Brand[]             @relation("BrandLines")
   products      Product[]
   productGroups ProductGroup[]
   slugRedirects BrandSlugRedirect[]
 
   @@unique([storeId, slug])
   @@index([storeId, isVisible, isArchived, sortOrder])
+  @@index([parentBrandId])
 }
 
 /// Dirección anterior de una marca («Cambiar dirección» o una fusión): /marcas/<oldSlug> redirige a la marca.

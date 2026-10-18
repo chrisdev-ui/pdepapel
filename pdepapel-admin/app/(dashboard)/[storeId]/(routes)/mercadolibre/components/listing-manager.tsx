@@ -116,6 +116,7 @@ function toSelectedProduct(
     acqPrice: product.acqPrice ?? null,
     transportationCost: product.transportationCost ?? null,
     brand: product.brand ?? null,
+    brandLine: product.brandLine ?? null,
     gtin: product.gtin ?? null,
     mpn: product.mpn ?? null,
     hasNoProductIdentifier: product.hasNoProductIdentifier ?? false,
@@ -1630,6 +1631,7 @@ export function MercadoLibreListingManager({
         productId: string;
         isKit: boolean;
         brand: string | null;
+        brandLine: string | null;
         productGroupName: string | null;
         images: { url: string; isMain: boolean }[];
       };
@@ -1640,6 +1642,7 @@ export function MercadoLibreListingManager({
               images: data.images,
               isKit: data.isKit,
               brand: current.brand ?? data.brand,
+              brandLine: current.brandLine ?? data.brandLine,
               productGroupName: data.productGroupName,
             }
           : current,

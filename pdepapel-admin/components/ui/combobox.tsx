@@ -43,6 +43,9 @@ export interface ComboboxProps {
   onCreate?: (query: string) => void;
   createLabel?: (query: string) => string;
   "aria-label"?: string;
+  /** Lo que `FormControl` pasa: la descripción y el error del campo llegan al lector de pantalla. */
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 }
 
 /**
@@ -63,6 +66,8 @@ export function Combobox({
   onCreate,
   createLabel = (q) => `Crear “${q}”`,
   "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -83,6 +88,8 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
           disabled={disabled}
           className={cn(
             "w-full justify-between bg-white px-3 font-normal",

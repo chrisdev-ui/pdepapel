@@ -13,7 +13,11 @@ export function parseBrandSlugsParam(value: string | null | undefined): string[]
   return Array.from(new Set(slugs)).sort().slice(0, MAX_BRAND_SLUGS);
 }
 
-/** Ids de las marcas públicas pedidas por slug actual o por una dirección anterior. */
+/**
+ * Ids de las marcas públicas pedidas por slug actual o por una dirección
+ * anterior, más las líneas (sin archivar, aunque estén ocultas) de cada una:
+ * elegir Primavera trae también Flower Power; elegir la línea, solo la línea.
+ */
 export async function resolvePublicBrandIds(storeId: string, slugs: string[]) {
   if (slugs.length === 0) return [];
   const [direct, redirects] = await Promise.all([
@@ -26,7 +30,22 @@ export async function resolvePublicBrandIds(storeId: string, slugs: string[]) {
       select: { brandId: true },
     }),
   ]);
-  return Array.from(new Set([...direct.map((brand) => brand.id), ...redirects.map((row) => row.brandId)]));
+  const ids = Array.from(new Set([...direct.map((brand) => brand.id), ...redirects.map((row) => row.brandId)]));
+  if (ids.length === 0) return ids;
+  const lines = await prismadb.brand.findMany({
+    where: { storeId, parentBrandId: { in: ids }, isArchived: false },
+    select: { id: true },
+  });
+  return Array.from(new Set([...ids, ...lines.map((line) => line.id)]));
+}
+
+/** Línea → marca madre (líneas sin archivar): los conteos de la madre suman sus líneas. */
+export async function getBrandParents(storeId: string): Promise<Map<string, string>> {
+  const lines = await prismadb.brand.findMany({
+    where: { storeId, parentBrandId: { not: null }, isArchived: false },
+    select: { id: true, parentBrandId: true },
+  });
+  return new Map(lines.map((line) => [line.id, line.parentBrandId as string]));
 }
 
 export async function getPublicBrandsForFacets(storeId: string) {
@@ -40,6 +59,7 @@ export async function getPublicBrandsForFacets(storeId: string) {
       logoHasBackground: true,
       logoPermission: true,
       sortOrder: true,
+      parentBrandId: true,
     },
   });
 }

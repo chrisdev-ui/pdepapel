@@ -5,18 +5,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
-import { BrandFromGroup, BrandSuggestion, type BrandOption } from "@/components/brands/brand-picker";
+import { BrandFromGroup, BrandPicker, BrandSuggestion, type BrandOption } from "@/components/brands/brand-picker";
 
-const brand = (id: string, name: string, aliases: string[] = []): BrandOption => ({
+const brand = (id: string, name: string, aliases: string[] = [], parent: { id: string; name: string } | null = null): BrandOption => ({
   id,
   name,
   aliases,
   logoUrl: null,
   logoPermission: "UNKNOWN",
   isArchived: false,
+  parentBrandId: parent?.id ?? null,
+  parentName: parent?.name ?? null,
 });
 
-const brands = [brand("b-kiut", "Kiut"), brand("b-scribe", "Scribe", ["Incolors"]), brand("b-norma", "Norma")];
+const brands = [
+  brand("b-kiut", "Kiut"),
+  brand("b-scribe", "Scribe"),
+  brand("b-incolors", "Incolors", [], { id: "b-scribe", name: "Scribe" }),
+  brand("b-klipp", "Klipp", ["Fashion"]),
+  brand("b-norma", "Norma"),
+];
 
 afterEach(cleanup);
 
@@ -32,10 +40,18 @@ describe("BrandSuggestion", () => {
   });
 
   it("says when the match comes from an alias", () => {
-    render(<BrandSuggestion productName="Colores Incolors doble punta" brands={brands} value={null} onUse={vi.fn()} />);
+    render(<BrandSuggestion productName="Morral Fashion estampado" brands={brands} value={null} onUse={vi.fn()} />);
 
-    expect(screen.getByRole("status").textContent).toContain("por el alias «Incolors»");
-    expect(screen.getByRole("button", { name: "Usar Scribe" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("por el alias «Fashion»");
+    expect(screen.getByRole("button", { name: "Usar Klipp" })).toBeTruthy();
+  });
+
+  it("suggests the line when the name says both the line and its parent brand", () => {
+    const onUse = vi.fn();
+    render(<BrandSuggestion productName="Colores Scribe Incolors doble punta" brands={brands} value={null} onUse={onUse} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Usar Incolors" }));
+    expect(onUse).toHaveBeenCalledWith("b-incolors");
   });
 
   it("stays quiet when the field already has a brand or the name mentions two", () => {
@@ -79,5 +95,44 @@ describe("BrandFromGroup", () => {
   it("shows a variant's brand read-only, as coming from its group", () => {
     render(<BrandFromGroup brand={{ name: "Kiut", logoUrl: null }} />);
     expect(screen.getByText(/Kiut/).textContent).toContain("viene del grupo");
+  });
+});
+
+describe("BrandPicker con líneas", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  function setPhone(matches: boolean) {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: () => ({ matches, addEventListener: () => undefined, removeEventListener: () => undefined }),
+    });
+  }
+
+  afterEach(() => {
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+  });
+
+  it("muestra «línea de» en la lista de escritorio y elige por id", () => {
+    Object.defineProperty(Element.prototype, "scrollIntoView", { value: () => undefined, configurable: true });
+    setPhone(false);
+    const onChange = vi.fn();
+    render(<BrandPicker storeId="s" brands={brands} value={null} onChange={onChange} allowCreate={false} />);
+    fireEvent.click(screen.getByRole("combobox"));
+    const option = screen.getByRole("option", { name: /Incolors/ });
+    expect(option.textContent).toContain("Incolors · línea de Scribe");
+    expect(screen.getByRole("option", { name: /Kiut/ }).textContent).not.toContain("línea de");
+    fireEvent.click(option);
+    expect(onChange).toHaveBeenCalledWith("b-incolors");
+  });
+
+  it("muestra «línea de» en la hoja del teléfono", () => {
+    setPhone(true);
+    const onChange = vi.fn();
+    render(<BrandPicker storeId="s" brands={brands} value={null} onChange={onChange} allowCreate={false} />);
+    fireEvent.click(screen.getByRole("combobox"));
+    const radio = screen.getByRole("radio", { name: /Incolors/ });
+    expect(radio.closest("label")?.textContent).toContain("Incolors · línea de Scribe");
+    fireEvent.click(radio);
+    expect(onChange).toHaveBeenCalledWith("b-incolors");
   });
 });

@@ -35,6 +35,23 @@ describe("product structured data", () => {
     expect(schema.review[0]).toMatchObject({ author: { name: "Laura" }, reviewRating: { ratingValue: 5 }, reviewBody: "Hermoso", datePublished: "2026-09-01T00:00:00Z" });
   });
 
+  it("uses the parent brand of a product line as Brand.name, for the product and its group", () => {
+    const brand = {
+      name: "Flower Power",
+      slug: "flower-power",
+      logoUrl: null,
+      logoHasBackground: false,
+      logoPermission: "UNKNOWN",
+      color: null,
+      isPublic: true,
+      parent: { name: "Primavera", slug: "primavera", isPublic: true },
+    } as const;
+    const a = { ...base, id: "a", brand, productGroupId: "g1", color: { id: "c1", name: "Rosa", value: "#f0f" } } as unknown as Product;
+    const b = { ...a, id: "b", color: { id: "c2", name: "Azul", value: "#00f" } } as Product;
+    expect((buildProductSchema(a) as Record<string, any>).brand).toEqual({ "@type": "Brand", name: "Primavera" });
+    expect((buildProductJsonLd(a, [a, b]) as Record<string, any>).brand).toEqual({ "@type": "Brand", name: "Primavera" });
+  });
+
   it("wraps distinct variants in a ProductGroup and falls back to a single Product otherwise", () => {
     const a = { ...base, id: "a", productGroupId: "g1", color: { id: "c1", name: "Rosa", value: "#f0f" } } as Product;
     const b = { ...base, id: "b", productGroupId: "g1", color: { id: "c2", name: "Azul", value: "#00f" } } as Product;

@@ -24,7 +24,14 @@ export function ProductDetailsAccordion({ product }: ProductDetailsAccordionProp
   const brand = publicProductBrand(product);
   const details: { label: string; value: string; href?: string }[] = [
     ...(product.sku ? [{ label: "Referencia", value: product.sku }] : []),
-    ...(brand ? [{ label: "Marca", value: brand.name, href: brandPath(brand.slug) }] : []),
+    ...(brand?.parent?.isPublic
+      ? [
+          { label: "Marca", value: brand.parent.name, href: brandPath(brand.parent.slug) },
+          { label: "Línea", value: brand.name, href: brandPath(brand.slug) },
+        ]
+      : brand
+        ? [{ label: "Marca", value: brand.name, href: brandPath(brand.slug) }]
+        : []),
     ...(product.category?.name ? [{ label: "Categoría", value: product.category.name }] : []),
     ...(product.design?.name ? [{ label: "Diseño", value: product.design.name }] : []),
     ...(product.color?.name ? [{ label: "Color", value: product.color.name }] : []),

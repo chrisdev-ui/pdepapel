@@ -22,6 +22,8 @@ export type ProductReference = {
   category?: { id: string; name: string } | null;
   /** Datos que rellenan la ficha técnica sin volver a teclearlos. */
   brand?: string | null;
+  /** Línea de la marca, para el atributo LINE. */
+  brandLine?: string | null;
   gtin?: string | null;
   mpn?: string | null;
   hasNoProductIdentifier?: boolean;

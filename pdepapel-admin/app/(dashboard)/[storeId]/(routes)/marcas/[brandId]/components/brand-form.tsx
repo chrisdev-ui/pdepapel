@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { FormPageHeader, FormStickyFooter } from "@/components/ui/form-page-chrome";
 import { Input } from "@/components/ui/input";
@@ -35,13 +36,17 @@ import {
 } from "@/lib/brand-rules";
 import { slugify } from "@/lib/slugify";
 
-import type { BrandDetail } from "../server/get-brand";
+import { BrandLogoTile } from "../../components/brand-logo-tile";
+import type { BrandDetail, BrandParentOption } from "../server/get-brand";
 import { AliasInput } from "./alias-input";
 import { BrandLogoUpload, detectLogoBackground, LogoPreview, type UploadedLogo } from "./brand-logo-upload";
 import { BrandStorePreview } from "./brand-store-preview";
 import { ChangeSlugDialog } from "./change-slug-dialog";
 
 const PERMISSIONS = Object.keys(BRAND_LOGO_PERMISSION_LABELS) as BrandLogoPermissionValue[];
+
+/** «Ninguna (marca principal)»: el Combobox no tiene opción vacía propia. */
+const NO_PARENT = "__principal__";
 
 const urlField = z
   .string()
@@ -70,6 +75,7 @@ const formSchema = z.object({
   logoPermission: z.enum(["UNKNOWN", "ALLOWED", "PENDING", "DENIED"]),
   isVisible: z.boolean(),
   isFeatured: z.boolean(),
+  parentBrandId: z.string().nullable(),
 });
 
 type BrandFormValues = z.infer<typeof formSchema>;
@@ -105,17 +111,20 @@ function defaultsFrom(brand: BrandDetail | null): BrandFormValues {
     logoPermission: brand?.logoPermission ?? "UNKNOWN",
     isVisible: brand?.isVisible ?? true,
     isFeatured: brand?.isFeatured ?? false,
+    parentBrandId: brand?.parentBrandId ?? null,
   };
 }
 
 interface BrandFormProps {
   initialData: BrandDetail | null;
+  /** Candidatas a «Es una línea de» (principales sin archivar, sin ella misma). */
+  parentOptions: BrandParentOption[];
   storeUrl: string | null;
 }
 
 type BackgroundCheck = "idle" | "checking" | "failed";
 
-export function BrandForm({ initialData, storeUrl }: BrandFormProps) {
+export function BrandForm({ initialData, parentOptions, storeUrl }: BrandFormProps) {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -237,6 +246,8 @@ export function BrandForm({ initialData, storeUrl }: BrandFormProps) {
   const storeLink = storeUrl && initialData ? `${storeUrl.replace(/\/$/, "")}/marcas/${slug}` : null;
   const disabled = loading || !canWrite;
   const width = values.logoWidth;
+  const hasLines = (initialData?.activeLines ?? 0) > 0;
+  const parentName = parentOptions.find((option) => option.id === values.parentBrandId)?.name ?? null;
 
   return (
     <>
@@ -358,6 +369,40 @@ export function BrandForm({ initialData, storeUrl }: BrandFormProps) {
                         <p id="alias-ayuda" className="text-xs text-muted-foreground">
                           Otras formas de escribirla. Si el nombre de un producto dice un alias, te sugerimos esta marca.
                         </p>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="parentBrandId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Es una línea de</FormLabel>
+                        <FormControl>
+                          <Combobox
+                            options={[
+                              { value: NO_PARENT, label: "Ninguna (marca principal)" },
+                              ...parentOptions.map((option) => ({
+                                value: option.id,
+                                label: option.isArchived ? `${option.name} · archivada` : option.name,
+                                keywords: option.aliases,
+                                icon: <BrandLogoTile logoUrl={option.logoUrl} size="sm" className="h-8 w-8 p-0.5 text-[8px]" />,
+                              })),
+                            ]}
+                            value={field.value ?? NO_PARENT}
+                            onChange={(next) => field.onChange(next && next !== NO_PARENT ? next : null)}
+                            disabled={disabled || hasLines}
+                            searchPlaceholder="Buscar marca…"
+                            emptyText="No hay otra marca principal."
+                            className="min-h-11 w-full"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {hasLines
+                            ? "Tiene líneas: no puede ser a su vez una línea de otra marca."
+                            : `Una línea se ve como una marca propia (su página, su logo, su filtro) y en la ficha sale «Marca: ${parentName ?? "la marca madre"} · Línea: ${values.name.trim() || "esta marca"}».`}
+                        </FormDescription>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />

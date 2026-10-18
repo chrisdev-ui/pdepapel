@@ -285,6 +285,8 @@ export function getInitialListingWizardStep(input: {
 export type ListingWizardPrefillProduct = {
   isKit?: boolean;
   brand?: string | null;
+  /** Línea de la marca (Flower Power de Primavera): va en LINE si la categoría lo pide. */
+  brandLine?: string | null;
   gtin?: string | null;
   mpn?: string | null;
   colorName?: string | null;
@@ -390,6 +392,7 @@ export function prefillListingAttributes(
   const additions: string[] = [];
   const candidates: Record<string, string | null | undefined> = {
     BRAND: product.brand,
+    LINE: product.brandLine,
     GTIN: shouldUseEmptyGtinReason(product) ? null : product.gtin,
     MPN: product.mpn,
     COLOR: product.colorName,

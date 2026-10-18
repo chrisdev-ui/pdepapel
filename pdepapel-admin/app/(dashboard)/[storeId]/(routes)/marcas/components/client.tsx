@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import { Reorder, useDragControls } from "framer-motion";
-import { AlertTriangle, ArrowDown, ArrowUp, ExternalLink, GripVertical, Plus } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CornerDownRight, ExternalLink, GripVertical, Plus } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,7 +17,17 @@ import { ToastAction } from "@/components/ui/toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { brandFlagToast, brandsApi, moveItem, plural, sameOrder, type BrandFlag } from "@/lib/brand-admin";
+import {
+  brandFlagToast,
+  brandMoveBounds,
+  brandsApi,
+  groupBrands,
+  moveBrand,
+  normalizeBrandOrder,
+  plural,
+  sameOrder,
+  type BrandFlag,
+} from "@/lib/brand-admin";
 import { cn } from "@/lib/utils";
 
 import type { BrandRow } from "../server/get-brands";
@@ -39,15 +49,27 @@ function storeHref(storeUrl: string | null, slug: string) {
   return storeUrl ? `${storeUrl.replace(/\/$/, "")}/marcas/${slug}` : null;
 }
 
-function BrandIdentity({ brand, storeUrl, storeId }: { brand: BrandRow; storeUrl: string | null; storeId: string }) {
+function BrandIdentity({
+  brand,
+  storeUrl,
+  storeId,
+  nested,
+}: {
+  brand: BrandRow;
+  storeUrl: string | null;
+  storeId: string;
+  nested: boolean;
+}) {
   const href = storeHref(storeUrl, brand.slug);
   const pending = brand.logoPermission === "PENDING" || brand.logoPermission === "DENIED";
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <div className="flex flex-wrap items-center gap-2">
+        {nested && <CornerDownRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
         <Link href={`/${storeId}/marcas/${brand.id}`} className="font-semibold text-primary underline-offset-4 hover:underline">
           {brand.name}
         </Link>
+        {brand.parentName && <TintBadge label={`línea de ${brand.parentName}`} tone="lavender" />}
         {brand.logoPermission === "PENDING" && <TintBadge label="Permiso pendiente" tone="cream" />}
         {brand.logoPermission === "DENIED" && <TintBadge label="Permiso negado" tone="pink" />}
         {!brand.logoUrl && !pending && <TintBadge label="Falta el logo" tone="cream" />}
@@ -119,16 +141,14 @@ function FlagSwitch({
 
 function MoveButtons({
   brand,
-  index,
-  count,
+  bounds,
   disabled,
   onMove,
 }: {
   brand: BrandRow;
-  index: number;
-  count: number;
+  bounds: { up: boolean; down: boolean };
   disabled: boolean;
-  onMove: (index: number, delta: -1 | 1) => void;
+  onMove: (brandId: string, delta: -1 | 1) => void;
 }) {
   return (
     <>
@@ -137,8 +157,8 @@ function MoveButtons({
         size="icon"
         className="h-11 w-11"
         aria-label={`Subir ${brand.name}`}
-        disabled={disabled || index === 0}
-        onClick={() => onMove(index, -1)}
+        disabled={disabled || !bounds.up}
+        onClick={() => onMove(brand.id, -1)}
       >
         <ArrowUp className="h-4 w-4" aria-hidden="true" />
       </Button>
@@ -147,8 +167,8 @@ function MoveButtons({
         size="icon"
         className="h-11 w-11"
         aria-label={`Bajar ${brand.name}`}
-        disabled={disabled || index === count - 1}
-        onClick={() => onMove(index, 1)}
+        disabled={disabled || !bounds.down}
+        onClick={() => onMove(brand.id, 1)}
       >
         <ArrowDown className="h-4 w-4" aria-hidden="true" />
       </Button>
@@ -158,8 +178,9 @@ function MoveButtons({
 
 interface RowProps {
   brand: BrandRow;
-  index: number;
-  count: number;
+  /** Línea mostrada debajo de su madre. */
+  nested: boolean;
+  bounds: { up: boolean; down: boolean };
   flags: Flags;
   canWrite: boolean;
   sortable: boolean;
@@ -167,13 +188,13 @@ interface RowProps {
   storeId: string;
   storeUrl: string | null;
   brands: BrandRow[];
-  onMove: (index: number, delta: -1 | 1) => void;
+  onMove: (brandId: string, delta: -1 | 1) => void;
   onFlag: (brand: BrandRow, flag: BrandFlag, value: boolean) => void;
   onDragEnd: () => void;
 }
 
 function DesktopRow(props: RowProps) {
-  const { brand, index, count, flags, canWrite, sortable, busy, storeId, storeUrl, brands, onMove, onFlag, onDragEnd } = props;
+  const { brand, nested, bounds, flags, canWrite, sortable, busy, storeId, storeUrl, brands, onMove, onFlag, onDragEnd } = props;
   const controls = useDragControls();
   const visible = flags.isVisible ?? brand.isVisible;
   const featured = flags.isFeatured ?? brand.isFeatured;
@@ -197,7 +218,7 @@ function DesktopRow(props: RowProps) {
             >
               <GripVertical className="h-4 w-4" />
             </span>
-            <MoveButtons brand={brand} index={index} count={count} disabled={busy} onMove={onMove} />
+            <MoveButtons brand={brand} bounds={bounds} disabled={busy} onMove={onMove} />
           </>
         ) : (
           <span className="pl-2 text-sm text-muted-foreground">—</span>
@@ -206,8 +227,8 @@ function DesktopRow(props: RowProps) {
       <div role="cell">
         <BrandLogoTile logoUrl={brand.logoUrl} />
       </div>
-      <div role="cell" className="min-w-0">
-        <BrandIdentity brand={brand} storeUrl={storeUrl} storeId={storeId} />
+      <div role="cell" className={cn("min-w-0", nested && "pl-4")}>
+        <BrandIdentity brand={brand} storeUrl={storeUrl} storeId={storeId} nested={nested} />
       </div>
       <div role="cell" className="flex justify-end">
         <ProductCount brand={brand} />
@@ -238,15 +259,15 @@ function DesktopRow(props: RowProps) {
 }
 
 function MobileCard(props: RowProps) {
-  const { brand, index, count, flags, canWrite, sortable, busy, storeId, storeUrl, brands, onMove, onFlag } = props;
+  const { brand, nested, bounds, flags, canWrite, sortable, busy, storeId, storeUrl, brands, onMove, onFlag } = props;
   const visible = flags.isVisible ?? brand.isVisible;
   const featured = flags.isFeatured ?? brand.isFeatured;
   return (
-    <li className="flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm">
+    <li className={cn("flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm", nested && "ml-6")}>
       <div className="flex items-start gap-3">
         <BrandLogoTile logoUrl={brand.logoUrl} />
         <div className="min-w-0 flex-1">
-          <BrandIdentity brand={brand} storeUrl={storeUrl} storeId={storeId} />
+          <BrandIdentity brand={brand} storeUrl={storeUrl} storeId={storeId} nested={nested} />
           <p className="mt-1 text-xs text-muted-foreground">
             {plural(brand.activeProducts, "producto activo", "productos activos")} · {brand.totalProducts} en total
           </p>
@@ -276,7 +297,7 @@ function MobileCard(props: RowProps) {
         </div>
         {sortable && (
           <div className="flex items-center">
-            <MoveButtons brand={brand} index={index} count={count} disabled={busy} onMove={onMove} />
+            <MoveButtons brand={brand} bounds={bounds} disabled={busy} onMove={onMove} />
           </div>
         )}
       </div>
@@ -296,7 +317,7 @@ const BrandsClient: React.FC<BrandsClientProps> = ({ data, unbranded, unbrandedM
 
   const active = useMemo(() => data.filter((brand) => !brand.isArchived), [data]);
   const archived = useMemo(() => data.filter((brand) => brand.isArchived), [data]);
-  const serverOrder = useMemo(() => active.map((brand) => brand.id), [active]);
+  const serverOrder = useMemo(() => normalizeBrandOrder(active).map((brand) => brand.id), [active]);
   const [order, setOrder] = useState<string[]>(serverOrder);
   const savedOrder = useRef<string[]>(serverOrder);
   const latestOrder = useRef<string[]>(order);
@@ -309,8 +330,11 @@ const BrandsClient: React.FC<BrandsClientProps> = ({ data, unbranded, unbrandedM
   }, [serverOrder]);
 
   const byId = useMemo(() => new Map(data.map((brand) => [brand.id, brand])), [data]);
-  const ordered = order.map((id) => byId.get(id)).filter((brand): brand is BrandRow => Boolean(brand));
-  const rows = view === "activas" ? ordered : archived;
+  const toRows = (ids: string[]) => ids.map((id) => byId.get(id)).filter((brand): brand is BrandRow => Boolean(brand));
+  const ordered = toRows(order);
+  const archivedRows = useMemo(() => normalizeBrandOrder(archived), [archived]);
+  const rows = view === "activas" ? ordered : archivedRows;
+  const nestedIds = new Set(groupBrands(rows).flatMap((group) => group.lines.map((line) => line.id)));
   const sortable = canWrite && view === "activas" && ordered.length > 1;
 
   const persistOrder = async (next: string[]) => {
@@ -330,8 +354,15 @@ const BrandsClient: React.FC<BrandsClientProps> = ({ data, unbranded, unbrandedM
     }
   };
 
-  const onMove = (index: number, delta: -1 | 1) => {
-    const next = moveItem(order, index, delta);
+  const onMove = (brandId: string, delta: -1 | 1) => {
+    const next = moveBrand(ordered, brandId, delta).map((brand) => brand.id);
+    setOrder(next);
+    void persistOrder(next);
+  };
+
+  // Arrastrar mueve una fila suelta: al soltar, las líneas vuelven debajo de su madre.
+  const onDragEnd = () => {
+    const next = normalizeBrandOrder(toRows(latestOrder.current)).map((brand) => brand.id);
     setOrder(next);
     void persistOrder(next);
   };
@@ -369,10 +400,10 @@ const BrandsClient: React.FC<BrandsClientProps> = ({ data, unbranded, unbrandedM
     }
   };
 
-  const rowProps = (brand: BrandRow, index: number) => ({
+  const rowProps = (brand: BrandRow) => ({
     brand,
-    index,
-    count: rows.length,
+    nested: nestedIds.has(brand.id),
+    bounds: sortable ? brandMoveBounds(ordered, brand.id) : { up: false, down: false },
     flags: flags[brand.id] ?? {},
     canWrite,
     sortable,
@@ -382,7 +413,7 @@ const BrandsClient: React.FC<BrandsClientProps> = ({ data, unbranded, unbrandedM
     brands: data,
     onMove,
     onFlag: (target: BrandRow, flag: BrandFlag, value: boolean) => void onFlag(target, flag, value),
-    onDragEnd: () => void persistOrder(latestOrder.current),
+    onDragEnd,
   });
 
   return (
@@ -469,20 +500,20 @@ const BrandsClient: React.FC<BrandsClientProps> = ({ data, unbranded, unbrandedM
                 values={view === "activas" ? order : rows.map((brand) => brand.id)}
                 onReorder={view === "activas" ? setOrder : () => undefined}
               >
-                {rows.map((brand, index) => (
-                  <DesktopRow key={brand.id} {...rowProps(brand, index)} />
+                {rows.map((brand) => (
+                  <DesktopRow key={brand.id} {...rowProps(brand)} />
                 ))}
               </Reorder.Group>
             </div>
           </div>
           <ul className="flex flex-col gap-3 lg:hidden" aria-label="Marcas">
-            {rows.map((brand, index) => (
-              <MobileCard key={brand.id} {...rowProps(brand, index)} />
+            {rows.map((brand) => (
+              <MobileCard key={brand.id} {...rowProps(brand)} />
             ))}
           </ul>
           {sortable && (
             <p className="text-xs text-muted-foreground">
-              Arrastra o usa ↑ ↓ para ordenar: así salen en «Compra por marca» y en el menú de la tienda.
+              Arrastra o usa ↑ ↓ para ordenar: así salen en «Compra por marca» y en el menú de la tienda. Las líneas van siempre debajo de su marca.
             </p>
           )}
         </>

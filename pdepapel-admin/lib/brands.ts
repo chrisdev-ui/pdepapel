@@ -7,6 +7,7 @@ import {
   BRAND_NAME_MAX_LENGTH,
   BRAND_SEO_TEXT_MAX_LENGTH,
   brandKey,
+  brandParentError,
   brandSlugFromName,
   checkBrandColor,
   cleanBrandName,
@@ -59,6 +60,13 @@ export const brandInputSchema = z.object({
   logoPermission: z.enum(["UNKNOWN", "ALLOWED", "PENDING", "DENIED"]).default("UNKNOWN"),
   isVisible: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
+  /** «Es una línea de»: la marca madre, o null. */
+  parentBrandId: z
+    .string()
+    .trim()
+    .max(191)
+    .nullish()
+    .transform((value) => (value ? value : null)),
 });
 
 export type BrandInput = z.infer<typeof brandInputSchema>;
@@ -121,12 +129,30 @@ function brandData(input: BrandInput) {
     logoPermission: input.logoPermission,
     isVisible: input.isVisible,
     isFeatured: input.isFeatured,
+    parentBrandId: input.parentBrandId,
   };
+}
+
+/** Líneas sin archivar de una marca. */
+export async function countActiveLines(db: Db, brandId: string) {
+  return db.brand.count({ where: { parentBrandId: brandId, isArchived: false } });
+}
+
+/** «Es una línea de»: un solo nivel, misma tienda, madre sin archivar y nunca ella misma. */
+async function assertParentAllowed(db: Db, storeId: string, brandId: string | null, parentBrandId: string | null) {
+  if (!parentBrandId) return;
+  const [parent, lines] = await Promise.all([
+    db.brand.findFirst({ where: { id: parentBrandId }, select: { id: true, storeId: true, parentBrandId: true, isArchived: true } }),
+    brandId ? countActiveLines(db, brandId) : Promise.resolve(0),
+  ]);
+  const error = brandParentError({ brandId, storeId, parent, hasLines: lines > 0 });
+  if (error) throw ErrorFactory.InvalidRequest(error);
 }
 
 export async function createBrand(storeId: string, userId: string, input: BrandInput) {
   return prismadb.$transaction(async (tx) => {
     await assertNameFree(tx, storeId, input.name);
+    await assertParentAllowed(tx, storeId, null, input.parentBrandId);
     const last = await tx.brand.aggregate({ where: { storeId }, _max: { sortOrder: true } });
     return tx.brand.create({
       data: {
@@ -145,11 +171,15 @@ export async function updateBrand(storeId: string, brandId: string, input: Brand
   const previous = await prismadb.brand.findFirst({ where: { id: brandId, storeId } });
   if (!previous) throw ErrorFactory.NotFound("Marca no encontrada");
   await assertNameFree(prismadb, storeId, input.name, brandId);
+  // Solo si cambia: una línea archivada con su madre archivada tiene que poder guardar el resto.
+  if (input.parentBrandId !== previous.parentBrandId) {
+    await assertParentAllowed(prismadb, storeId, brandId, input.parentBrandId);
+  }
   const brand = await prismadb.brand.update({ where: { id: brandId }, data: brandData(input) });
   const replacedLogos = [previous.logoUrl, previous.logoInverseUrl].filter(
     (url): url is string => Boolean(url) && url !== brand.logoUrl && url !== brand.logoInverseUrl,
   );
-  return { brand, replacedLogos };
+  return { brand, replacedLogos, previousParentBrandId: previous.parentBrandId };
 }
 
 export async function updateBrandFlags(storeId: string, brandId: string, flags: z.infer<typeof brandFlagsSchema>) {
@@ -195,8 +225,17 @@ export async function countBrandProducts(db: Db, brandId: string) {
 }
 
 export async function setBrandArchived(storeId: string, brandId: string, isArchived: boolean) {
-  const found = await prismadb.brand.findFirst({ where: { id: brandId, storeId }, select: { id: true, slug: true } });
+  const found = await prismadb.brand.findFirst({
+    where: { id: brandId, storeId },
+    select: { id: true, slug: true, parent: { select: { name: true, isArchived: true } } },
+  });
   if (!found) throw ErrorFactory.NotFound("Marca no encontrada");
+  if (isArchived && (await countActiveLines(prismadb, brandId)) > 0) {
+    throw ErrorFactory.Conflict("Tiene líneas sin archivar: archívalas o pásalas a otra marca antes.");
+  }
+  if (!isArchived && found.parent?.isArchived) {
+    throw ErrorFactory.Conflict(`Es una línea de «${found.parent.name}», que está archivada: desarchívala primero.`);
+  }
   if (!isArchived) {
     // Una marca fusionada dejó su dirección redirigiendo a otra: devolverla
     // tendría dos dueños para la misma dirección.
@@ -218,6 +257,9 @@ export async function deleteBrand(storeId: string, brandId: string) {
   return prismadb.$transaction(async (tx) => {
     const brand = await tx.brand.findFirst({ where: { id: brandId, storeId } });
     if (!brand) throw ErrorFactory.NotFound("Marca no encontrada");
+    if ((await tx.brand.count({ where: { parentBrandId: brandId } })) > 0) {
+      throw ErrorFactory.Conflict("Tiene líneas: no se puede eliminar. Archívala cuando no tenga líneas activas.");
+    }
     const counts = await countBrandProducts(tx, brandId);
     if (counts.products > 0 || counts.groups > 0) {
       throw ErrorFactory.Conflict(
@@ -261,6 +303,15 @@ export async function mergeBrands(
     if (!source || !target) throw ErrorFactory.NotFound("Marca no encontrada");
     if (source.isArchived) throw ErrorFactory.Conflict(`«${source.name}» ya está archivada`);
     if (target.isArchived) throw ErrorFactory.Conflict(`«${target.name}» está archivada: desarchívala antes de fusionar en ella`);
+    if (target.parentBrandId === source.id) {
+      throw ErrorFactory.Conflict(`«${target.name}» es una línea de «${source.name}»: no se puede fusionar una marca en una de sus líneas`);
+    }
+    const sourceLines = await countActiveLines(tx, source.id);
+    if (sourceLines > 0 && target.parentBrandId) {
+      throw ErrorFactory.Conflict(`«${source.name}» tiene líneas y «${target.name}» es una línea: las líneas quedarían en dos niveles`);
+    }
+    // Las líneas de A pasan a ser líneas de B.
+    await tx.brand.updateMany({ where: { storeId, parentBrandId: source.id }, data: { parentBrandId: target.id } });
 
     const [products, groups] = await Promise.all([
       tx.product.updateMany({ where: { storeId, brandId: sourceId }, data: { brandId: targetId } }),
@@ -406,10 +457,11 @@ export interface BrandSuggestion {
 export async function getBrandSuggestions(storeId: string, brandId: string) {
   const brand = await prismadb.brand.findFirst({
     where: { id: brandId, storeId },
-    select: { id: true, name: true, aliases: true },
+    select: { id: true, name: true, aliases: true, parentBrandId: true, lines: { where: { isArchived: false }, select: { id: true, name: true, aliases: true, parentBrandId: true } } },
   });
   if (!brand) throw ErrorFactory.NotFound("Marca no encontrada");
-  const match = buildBrandMatcher([brand]);
+  // Con sus líneas en el buscador: lo que dice una línea se sugiere a la línea, no a la madre.
+  const match = buildBrandMatcher([brand, ...brand.lines]);
   const products = await prismadb.product.findMany({
     where: { storeId, isArchived: false, OR: [{ brandId: null }, { brandId: { not: brandId } }] },
     select: {
@@ -425,7 +477,7 @@ export async function getBrandSuggestions(storeId: string, brandId: string) {
   const clean: BrandSuggestion[] = [];
   const conflicts: (BrandSuggestion & { currentBrandName: string })[] = [];
   for (const product of products) {
-    const [hit] = match(product.name);
+    const hit = match(product.name).find((candidate) => candidate.brandId === brand.id);
     if (!hit) continue;
     const row = {
       id: product.id,

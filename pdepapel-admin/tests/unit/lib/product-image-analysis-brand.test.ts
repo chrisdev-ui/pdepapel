@@ -4,7 +4,9 @@ import { matchAnalysisBrand } from "@/lib/product-image-analysis";
 
 const brands = [
   { id: "brand-kiut", name: "Kiut", aliases: [] },
-  { id: "brand-scribe", name: "Scribe", aliases: ["Incolors"] },
+  { id: "brand-scribe", name: "Scribe", aliases: [] },
+  { id: "brand-incolors", name: "Incolors", aliases: [], parentBrandId: "brand-scribe" },
+  { id: "brand-klipp", name: "Klipp", aliases: ["Fashion"] },
   { id: "brand-norma", name: "Norma", aliases: null },
 ];
 
@@ -18,11 +20,16 @@ describe("matchAnalysisBrand", () => {
   });
 
   it("maps through an alias and answers with the brand's own name", () => {
-    expect(matchAnalysisBrand("Incolors", brands)).toEqual({
-      brandId: "brand-scribe",
-      brandName: "Scribe",
+    expect(matchAnalysisBrand("Fashion", brands)).toEqual({
+      brandId: "brand-klipp",
+      brandName: "Klipp",
       brandSource: "existing",
     });
+  });
+
+  it("maps a line by its own name, and prefers the line when the photo says both", () => {
+    expect(matchAnalysisBrand("Incolors", brands).brandId).toBe("brand-incolors");
+    expect(matchAnalysisBrand("Scribe Incolors", brands).brandId).toBe("brand-incolors");
   });
 
   it("finds a brand contained in a longer text read by the model", () => {

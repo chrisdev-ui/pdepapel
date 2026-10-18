@@ -21,6 +21,10 @@ export interface BrandSeed {
   aliases?: string[];
   manufacturerName?: string | null;
   logoPermission?: BrandLogoPermissionValue;
+  /** «Es una línea de»: el nombre de la marca madre (también en esta lista o ya creada). */
+  parent?: string | null;
+  /** Oculta: existe para los datos (feeds, Mercado Libre) pero no sale en la tienda ni sugiere por nombre. */
+  isVisible?: boolean;
 }
 
 /** Decisión de Christian por texto anterior (normalizado con `normalizeBrandName`): a una marca o a ninguna. */
@@ -53,6 +57,8 @@ export interface PlanBrand {
   name: string;
   aliases: unknown;
   isArchived: boolean;
+  isVisible: boolean;
+  parentBrandId: string | null;
 }
 
 export interface ManualReviewRow {
@@ -62,7 +68,16 @@ export interface ManualReviewRow {
 }
 
 export interface BrandInitialPlan {
-  createBrands: { name: string; slug: string; aliases: string[]; manufacturerName: string | null; logoPermission: BrandLogoPermissionValue }[];
+  createBrands: {
+    name: string;
+    slug: string;
+    aliases: string[];
+    manufacturerName: string | null;
+    logoPermission: BrandLogoPermissionValue;
+    /** Nombre de la marca madre, o null. Las madres van antes que sus líneas. */
+    parent: string | null;
+    isVisible: boolean;
+  }[];
   groupAssignments: { productGroupId: string; brand: string; via: string }[];
   productAssignments: { productId: string; brand: string; via: string }[];
   manualReview: ManualReviewRow[];
@@ -84,7 +99,18 @@ export function planBrandInitialData(input: {
 
   const createBrands: BrandInitialPlan["createBrands"] = [];
   const takenSlugs = new Set<string>();
-  for (const seed of config.brands) {
+  // Madres antes que líneas: al escribir, la línea busca a su madre ya creada.
+  const seeds = [...config.brands].sort((first, second) => Number(Boolean(first.parent)) - Number(Boolean(second.parent)));
+  const seedByKey = new Map(config.brands.map((seed) => [brandKey(seed.name), seed]));
+  for (const seed of seeds) {
+    if (seed.parent) {
+      const parentKey = brandKey(seed.parent);
+      const parentSeed = seedByKey.get(parentKey);
+      const parentExisting = existingByKey.get(parentKey);
+      if (!parentSeed && !parentExisting) throw new Error(`«${seed.name}» es línea de «${seed.parent}», que no está en la lista ni existe.`);
+      if (parentSeed?.parent || parentExisting?.parentBrandId) throw new Error(`«${seed.parent}» ya es una línea: «${seed.name}» no puede ser línea de una línea.`);
+      if (parentKey === brandKey(seed.name)) throw new Error(`«${seed.name}» no puede ser línea de sí misma.`);
+    }
     if (existingByKey.has(brandKey(seed.name))) continue;
     let slug = brandSlugFromName(seed.name);
     for (let index = 2; takenSlugs.has(slug); index++) slug = `${brandSlugFromName(seed.name)}-${index}`;
@@ -95,15 +121,37 @@ export function planBrandInitialData(input: {
       aliases: normalizeBrandAliases(seed.aliases ?? [], seed.name),
       manufacturerName: seed.manufacturerName ?? null,
       logoPermission: seed.logoPermission ?? "UNKNOWN",
+      parent: seed.parent ?? null,
+      isVisible: seed.isVisible ?? true,
     });
   }
 
+  const idOfName = new Map<string, string>([
+    ...existingBrands.filter((brand) => !brand.isArchived).map((brand) => [brandKey(brand.name), brand.id] as const),
+    ...createBrands.map((brand) => [brandKey(brand.name), `new:${brand.name}`] as const),
+  ]);
   const knownBrands = [
-    ...existingBrands.filter((brand) => !brand.isArchived).map((brand) => ({ id: brand.id, name: brand.name, aliases: brand.aliases })),
-    ...createBrands.map((brand) => ({ id: `new:${brand.name}`, name: brand.name, aliases: brand.aliases })),
+    ...existingBrands
+      .filter((brand) => !brand.isArchived)
+      .map((brand) => ({ id: brand.id, name: brand.name, aliases: brand.aliases, isVisible: brand.isVisible, parentBrandId: brand.parentBrandId })),
+    ...createBrands.map((brand) => ({
+      id: `new:${brand.name}`,
+      name: brand.name,
+      aliases: brand.aliases,
+      isVisible: brand.isVisible,
+      parentBrandId: brand.parent ? (idOfName.get(brandKey(brand.parent)) ?? null) : null,
+    })),
   ];
+  // El texto anterior puede llevar a cualquier marca (también a las ocultas);
+  // el nombre del producto solo sugiere marcas y líneas visibles.
   const brandNameByKey = new Map(knownBrands.map((brand) => [brandKey(brand.name), brand.name]));
-  const matchBrands = buildBrandMatcher(knownBrands);
+  const matchBrands = buildBrandMatcher(knownBrands.filter((brand) => brand.isVisible));
+  const nameById = new Map(knownBrands.map((brand) => [brand.id, brand.name]));
+  const parentNameOf = new Map(
+    knownBrands
+      .filter((brand) => brand.parentBrandId)
+      .map((brand) => [brand.name, nameById.get(brand.parentBrandId as string) ?? null]),
+  );
 
   const decideText = (text: string): { brand: string | null } | { unknown: string } => {
     const decision = config.textMapping[text];
@@ -129,6 +177,10 @@ export function planBrandInitialData(input: {
       const brand = Array.from(decided)[0];
       if (!brand) return null;
       const contradicting = nameHits.filter((hit) => hit !== brand);
+      const lineOfText = contradicting.filter((hit) => parentNameOf.get(hit) === brand);
+      if (lineOfText.length > 0 && lineOfText.length === contradicting.length) {
+        return { review: `el texto dice «${brand}» y el nombre dice su línea «${lineOfText.join(", ")}»` };
+      }
       if (contradicting.length > 0) return { review: `el texto dice «${brand}» y el nombre dice «${contradicting.join(", ")}»` };
       return { brand, via: "texto anterior" };
     }
@@ -194,7 +246,10 @@ type Db = Pick<PrismaClient, "brand" | "product" | "productGroup"> | Prisma.Tran
 
 export async function loadBrandInitialPlan(db: Db, config: BrandInitialConfig, normalize: Normalize) {
   const [existingBrands, products, groups] = await Promise.all([
-    db.brand.findMany({ where: { storeId: config.storeId }, select: { id: true, name: true, aliases: true, isArchived: true } }),
+    db.brand.findMany({
+      where: { storeId: config.storeId },
+      select: { id: true, name: true, aliases: true, isArchived: true, isVisible: true, parentBrandId: true },
+    }),
     db.product.findMany({
       where: { storeId: config.storeId },
       select: { id: true, name: true, brand: true, brandId: true, isArchived: true, productGroupId: true },
@@ -210,7 +265,7 @@ export async function loadBrandInitialPlan(db: Db, config: BrandInitialConfig, n
 /** Lo que el ensayo guardó y la escritura vuelve a calcular: tiene que ser idéntico. */
 export function planFingerprint(plan: Pick<BrandInitialPlan, "createBrands" | "groupAssignments" | "productAssignments">) {
   return JSON.stringify({
-    createBrands: plan.createBrands.map((brand) => brand.name),
+    createBrands: plan.createBrands.map((brand) => `${brand.name}>${brand.parent ?? ""}|${brand.isVisible ? "visible" : "oculta"}`),
     groupAssignments: plan.groupAssignments.map((row) => `${row.productGroupId}:${row.brand}`),
     productAssignments: plan.productAssignments.map((row) => `${row.productId}:${row.brand}`),
   });
@@ -238,7 +293,17 @@ export async function applyBrandInitialPlan(
 
   const last = await tx.brand.aggregate({ where: { storeId: config.storeId }, _max: { sortOrder: true } });
   let sortOrder = (last._max.sortOrder ?? -1) + 1;
+  // Las madres van primero en el plan: cada línea encuentra a su madre ya escrita.
   for (const brand of plan.createBrands) {
+    let parentBrandId: string | null = null;
+    if (brand.parent) {
+      const parent = await tx.brand.findFirst({
+        where: { storeId: config.storeId, isArchived: false, parentBrandId: null, name: brand.parent },
+        select: { id: true },
+      });
+      if (!parent) throw new Error(`No existe la marca madre «${brand.parent}» de «${brand.name}». No se escribió nada.`);
+      parentBrandId = parent.id;
+    }
     await tx.brand.create({
       data: {
         storeId: config.storeId,
@@ -247,6 +312,8 @@ export async function applyBrandInitialPlan(
         aliases: brand.aliases,
         manufacturerName: brand.manufacturerName,
         logoPermission: brand.logoPermission,
+        isVisible: brand.isVisible,
+        parentBrandId,
         sortOrder: sortOrder++,
         createdBy,
       },

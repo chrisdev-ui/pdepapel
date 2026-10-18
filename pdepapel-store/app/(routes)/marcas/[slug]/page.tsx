@@ -5,6 +5,7 @@ import { getBrand } from "@/actions/get-brands";
 import { getProducts } from "@/actions/get-products";
 import { BrandEmptyState } from "@/components/brands/brand-empty-state";
 import { BrandHeader } from "@/components/brands/brand-header";
+import { BrandLines } from "@/components/brands/brand-lines";
 import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
@@ -108,21 +109,24 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
         {state.kind === "empty" ? (
           <BrandEmptyState />
         ) : (
-          <ShopContent
-            initialProducts={products}
-            initialTotalPages={totalPages}
-            initialTotalItems={totalItems}
-            initialFacets={facets}
-            initialSearchCorrection={searchCorrection}
-            types={[]}
-            categories={[]}
-            catalogOptions={[]}
-            colors={[]}
-            designs={[]}
-            fixedBrandSlug={brand.slug}
-            showFilters={false}
-            heading={`Productos ${brand.name}`}
-          />
+          <>
+            <BrandLines brandName={brand.name} lines={brand.lines ?? []} />
+            <ShopContent
+              initialProducts={products}
+              initialTotalPages={totalPages}
+              initialTotalItems={totalItems}
+              initialFacets={facets}
+              initialSearchCorrection={searchCorrection}
+              types={[]}
+              categories={[]}
+              catalogOptions={[]}
+              colors={[]}
+              designs={[]}
+              fixedBrandSlug={brand.slug}
+              showFilters={false}
+              heading={`Productos ${brand.name}`}
+            />
+          </>
         )}
       </Container>
     </>

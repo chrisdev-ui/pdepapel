@@ -14,6 +14,10 @@ const EMPTY_BRAND_SLUG = process.env.E2E_EMPTY_BRAND_SLUG;
 const HIDDEN_BRAND_SLUG = process.env.E2E_HIDDEN_BRAND_SLUG;
 const HIDDEN_BRAND_NAME = process.env.E2E_HIDDEN_BRAND_NAME;
 const HIDDEN_BRAND_PRODUCT_SLUG = process.env.E2E_HIDDEN_BRAND_PRODUCT_SLUG;
+const PARENT_BRAND_SLUG = process.env.E2E_PARENT_BRAND_SLUG;
+const PARENT_BRAND_NAME = process.env.E2E_PARENT_BRAND_NAME;
+const LINE_BRAND_SLUG = process.env.E2E_LINE_BRAND_SLUG;
+const LINE_BRAND_NAME = process.env.E2E_LINE_BRAND_NAME;
 
 const grid = (page: Page) => page.locator('#catalog-results a[href^="/producto/"]');
 const brandRow = (page: Page) => page.getByRole("navigation", { name: "Marcas" });
@@ -110,6 +114,44 @@ test.describe("página de la marca", () => {
     await expect(page.getByRole("heading", { name: "Pronto tendremos productos de esta marca" })).toBeVisible();
     await expect(page.getByRole("link", { name: /catálogo|tienda/i }).filter({ visible: true }).first()).toHaveAttribute("href", /\/tienda/);
     expect(await robots(page)).toMatch(/noindex/);
+  });
+});
+
+test.describe("líneas de una marca", () => {
+  test.skip(
+    !PARENT_BRAND_SLUG || !PARENT_BRAND_NAME || !LINE_BRAND_SLUG || !LINE_BRAND_NAME,
+    "sin E2E_PARENT_BRAND_SLUG / E2E_PARENT_BRAND_NAME / E2E_LINE_BRAND_SLUG / E2E_LINE_BRAND_NAME",
+  );
+
+  test("/tienda?marca=<madre> incluye los productos de la línea", async ({ page }) => {
+    const productHrefs = async () => new Set(await grid(page).evaluateAll((links) => links.map((link) => link.getAttribute("href"))));
+    await open(page, `/marcas/${LINE_BRAND_SLUG}`);
+    await expect(grid(page).first()).toBeVisible({ timeout: 45_000 });
+    const lineHrefs = await productHrefs();
+
+    await openListing(page, `/tienda?marca=${PARENT_BRAND_SLUG}`);
+    const parentHrefs = await productHrefs();
+    expect(Array.from(lineHrefs).some((href) => parentHrefs.has(href))).toBe(true);
+  });
+
+  test("la página de la línea dice «Una línea de <Madre>» con enlace a la madre", async ({ page }) => {
+    await open(page, `/marcas/${LINE_BRAND_SLUG}`);
+    const header = page.locator("section[aria-labelledby='brand-title']");
+    await expect(header.getByRole("heading", { level: 1, name: LINE_BRAND_NAME })).toBeVisible({ timeout: 45_000 });
+    await expect(header.getByText(`Una línea de ${PARENT_BRAND_NAME}`)).toBeVisible();
+    await expect(header.getByRole("link", { name: PARENT_BRAND_NAME, exact: true })).toHaveAttribute("href", `/marcas/${PARENT_BRAND_SLUG}`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  test("la página de la madre trae un chip de la línea", async ({ page }) => {
+    await open(page, `/marcas/${PARENT_BRAND_SLUG}`);
+    const lines = page.getByRole("navigation", { name: "Líneas" });
+    await expect(lines).toBeVisible({ timeout: 45_000 });
+    const chip = lines.locator(`a[href="/marcas/${LINE_BRAND_SLUG}"]`);
+    await expect(chip).toHaveCount(1);
+    await expect(chip).toHaveAccessibleName(new RegExp(`^${LINE_BRAND_NAME}: `));
+    expect((await chip.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
 

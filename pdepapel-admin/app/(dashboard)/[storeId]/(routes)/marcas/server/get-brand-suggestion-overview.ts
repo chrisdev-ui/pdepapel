@@ -28,7 +28,7 @@ export async function getBrandSuggestionOverview(storeId: string): Promise<Brand
   const [brands, products] = await Promise.all([
     prismadb.brand.findMany({
       where: { storeId, isArchived: false },
-      select: { id: true, name: true, aliases: true },
+      select: { id: true, name: true, aliases: true, parentBrandId: true },
     }),
     prismadb.product.findMany({
       where: { storeId, isArchived: false },

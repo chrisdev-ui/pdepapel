@@ -10,6 +10,9 @@ export interface BrandOption {
   logoPermission: BrandLogoPermissionValue;
   aliases: string[];
   isArchived: boolean;
+  /** Si es una línea: su marca madre (para «línea de …» y para preferir la línea al sugerir). */
+  parentBrandId: string | null;
+  parentName: string | null;
 }
 
 /**
@@ -20,8 +23,17 @@ export async function loadBrandOptions(storeId: string, keepIds: (string | null 
   const keep = keepIds.filter((id): id is string => Boolean(id));
   const rows = await prismadb.brand.findMany({
     where: { storeId, OR: [{ isArchived: false }, ...(keep.length ? [{ id: { in: keep } }] : [])] },
-    select: { id: true, name: true, logoUrl: true, logoPermission: true, aliases: true, isArchived: true },
+    select: {
+      id: true,
+      name: true,
+      logoUrl: true,
+      logoPermission: true,
+      aliases: true,
+      isArchived: true,
+      parentBrandId: true,
+      parent: { select: { name: true } },
+    },
     orderBy: { name: "asc" },
   });
-  return rows.map((row) => ({ ...row, aliases: readStoredAliases(row.aliases) }));
+  return rows.map(({ parent, ...row }) => ({ ...row, aliases: readStoredAliases(row.aliases), parentName: parent?.name ?? null }));
 }

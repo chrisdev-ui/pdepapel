@@ -17,7 +17,7 @@ import {
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { brandsApi, plural } from "@/lib/brand-admin";
+import { brandsApi, mergeCandidates, plural } from "@/lib/brand-admin";
 
 import type { BrandRow } from "../server/get-brands";
 import { MergeBrandDialog } from "./merge-brand-dialog";
@@ -35,8 +35,8 @@ export function BrandRowMenu({ storeId, brand, brands }: BrandRowMenuProps) {
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [loading, setLoading] = useState(false);
   const [merging, setMerging] = useState(false);
-  const deletable = brand.totalProducts === 0 && brand.groups === 0;
-  const hasMergeTarget = brands.some((other) => other.id !== brand.id && !other.isArchived);
+  const deletable = brand.totalProducts === 0 && brand.groups === 0 && brand.lines === 0;
+  const hasMergeTarget = mergeCandidates(brand, brands).length > 0;
 
   const setArchived = async (isArchived: boolean) => {
     if (isArchived) {
@@ -133,13 +133,23 @@ export function BrandRowMenu({ storeId, brand, brands }: BrandRowMenuProps) {
               </DropdownMenuItem>
             </>
           )}
-          {canWrite && !deletable && (
+          {canWrite && !deletable && (brand.totalProducts > 0 || brand.groups > 0) && (
             <p className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground">
               Tiene{" "}
               {brand.totalProducts > 0
                 ? plural(brand.totalProducts, "producto", "productos")
                 : plural(brand.groups, "grupo", "grupos")}
               : no se puede eliminar. Archívala o fusiónala con otra.
+            </p>
+          )}
+          {canWrite && brand.totalProducts === 0 && brand.groups === 0 && brand.lines > brand.activeLines && (
+            <p className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground">
+              Tiene {plural(brand.lines - brand.activeLines, "línea archivada", "líneas archivadas")}: no se puede eliminar.
+            </p>
+          )}
+          {canWrite && !brand.isArchived && brand.activeLines > 0 && (
+            <p className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground">
+              Tiene {plural(brand.activeLines, "línea", "líneas")}: para archivarla, archívalas o pásalas a otra marca antes.
             </p>
           )}
         </DropdownMenuContent>

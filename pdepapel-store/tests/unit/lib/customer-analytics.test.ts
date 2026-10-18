@@ -17,6 +17,7 @@ const testBrand = (isPublic: boolean) => ({
   logoPermission: "UNKNOWN" as const,
   color: null,
   isPublic,
+  parent: null,
 });
 
 const product = {

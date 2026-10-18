@@ -1,5 +1,6 @@
 import type { BrandLogoPermission } from "@prisma/client";
 
+import { countBrandLines } from "@/lib/brand-admin";
 import { readStoredAliases } from "@/lib/brand-rules";
 import { getBrandProductCounts } from "@/lib/brands";
 import prismadb from "@/lib/prismadb";
@@ -20,6 +21,12 @@ export interface BrandRow {
   activeProducts: number;
   totalProducts: number;
   groups: number;
+  /** «Es una línea de»: la marca madre, o null. */
+  parentBrandId: string | null;
+  parentName: string | null;
+  /** Sus líneas: todas (bloquean eliminar) y las sin archivar (bloquean archivar). */
+  lines: number;
+  activeLines: number;
 }
 
 /**
@@ -44,14 +51,20 @@ export async function getBrands(storeId: string): Promise<BrandRow[]> {
         isFeatured: true,
         isArchived: true,
         sortOrder: true,
+        parentBrandId: true,
+        parent: { select: { name: true } },
         _count: { select: { productGroups: true } },
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     getBrandProductCounts(storeId),
   ]);
-  return brands.map(({ _count, ...brand }) => ({
+  const lineCounts = countBrandLines(brands);
+  return brands.map(({ _count, parent, ...brand }) => ({
     ...brand,
+    parentName: parent?.name ?? null,
+    lines: lineCounts.get(brand.id)?.total ?? 0,
+    activeLines: lineCounts.get(brand.id)?.active ?? 0,
     aliases: readStoredAliases(brand.aliases),
     activeProducts: counts.get(brand.id)?.active ?? 0,
     totalProducts: counts.get(brand.id)?.total ?? 0,

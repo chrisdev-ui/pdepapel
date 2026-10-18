@@ -33,6 +33,7 @@ describe("GET /marketplaces/mercadolibre/listings/product-photos", () => {
       productId: "p1",
       isKit: false,
       brand: null,
+      brandLine: null,
       productGroupName: "Bitácora-Agenda William Morris",
       images: [{ url: "cover.jpg", isMain: true }, { url: "b.jpg", isMain: false }],
     });

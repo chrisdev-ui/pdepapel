@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { env } from "@/lib/env.mjs";
 
 import { BrandForm } from "./components/brand-form";
-import { getBrand } from "./server/get-brand";
+import { getBrand, getBrandParentOptions } from "./server/get-brand";
 
 const NEW_SEGMENTS = new Set(["nueva", "nuevo"]);
 
@@ -14,10 +14,12 @@ export default async function BrandPage({ params }: { params: { brandId: string;
   // Un id de otra tienda o inexistente no debe abrir el formulario de «nueva».
   if (!isNew && !brand) notFound();
 
+  const parentOptions = await getBrandParentOptions(params.storeId, brand?.id ?? null, brand?.parentBrandId ?? null);
+
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
-        <BrandForm initialData={brand} storeUrl={env.FRONTEND_STORE_URL ?? null} />
+        <BrandForm initialData={brand} parentOptions={parentOptions} storeUrl={env.FRONTEND_STORE_URL ?? null} />
       </div>
     </div>
   );
