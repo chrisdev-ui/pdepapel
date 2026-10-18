@@ -116,7 +116,7 @@ describe("Mercado Libre listing publication", () => {
           stockSafetyBuffer: 2,
           metadata: {
             familyName: "Agenda kawaii",
-            attributes: [{ id: "COLOR", value_name: "Rosado" }],
+            attributes: [{ id: "COLOR", value_name: "Rosado" }, { id: "LINE", value_name: "Clásica" }],
             saleConditions: {
               shippingMode: "me2",
               freeShipping: true,
@@ -186,7 +186,9 @@ describe("Mercado Libre listing publication", () => {
         { id: "PACKAGE_WIDTH", value_name: "20 cm" },
         { id: "PACKAGE_LENGTH", value_name: "28 cm" },
         { id: "PACKAGE_WEIGHT", value_name: "500 g" },
+        // Al crear, BRAND y LINE viajan siempre.
         { id: "BRAND", value_name: "P de Papel" },
+        { id: "LINE", value_name: "Clásica" },
         { id: "MPN", value_name: "AGENDA-01" },
         { id: "GTIN", value_name: "7701234567890" },
       ]),

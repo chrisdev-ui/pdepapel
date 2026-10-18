@@ -129,4 +129,60 @@ describe("Mercado Libre listing content synchronization", () => {
     const attributes = await syncWithoutBrand([{ id: "BRAND", value_name: "" }, { id: "MATERIAL", value_name: "Plástico" }]);
     expect(attributes.some((attribute) => attribute.id === "BRAND")).toBe(false);
   });
+
+  async function syncWith(remoteAttributes: unknown[], configured: unknown[], brandRef: unknown) {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ attributes: remoteAttributes }), { status: 200 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
+      .mockResolvedValueOnce(new Response("", { status: 404 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 201 }));
+    await syncMercadoLibreListingContent(
+      {
+        id: "listing-id",
+        connectionId: "connection-id",
+        externalItemId: "MCO123",
+        categoryId: "MCO1234",
+        listingType: "gold_special",
+        marketplacePrice: 19_900,
+        stockSafetyBuffer: 1,
+        metadata: { attributes: configured },
+        product: {
+          id: "product-id",
+          name: "Agenda kawaii",
+          description: "Agenda",
+          stock: 5,
+          sku: "AGENDA-01",
+          brand: null,
+          brandRef,
+          productGroup: null,
+          gtin: null,
+          mpn: null,
+          isArchived: false,
+          images: [{ url: "https://images.example.com/cover.jpg" }],
+        },
+      } as never,
+      request,
+    );
+    const attributes = (JSON.parse(request.mock.calls[1][1].body) as { attributes: { id: string; value_name?: string }[] }).attributes;
+    return (id: string) => attributes.filter((attribute) => attribute.id === id).map((attribute) => attribute.value_name);
+  }
+
+  const primavera = { name: "Flower Power", isArchived: false, parent: { name: "Primavera", isArchived: false } };
+
+  it("al editar no cambia un BRAND ni una LINE que la publicación ya tiene", async () => {
+    const values = await syncWith(
+      [{ id: "BRAND", value_name: "Fashion" }, { id: "LINE", value_name: "Clásica" }],
+      [{ id: "LINE", value_name: "Flower Power" }],
+      primavera,
+    );
+    expect(values("BRAND")).toEqual(["Fashion"]);
+    expect(values("LINE")).toEqual(["Clásica"]);
+  });
+
+  it("al editar una publicación sin BRAND ni LINE sí manda los del panel", async () => {
+    const values = await syncWith([{ id: "MATERIAL", value_name: "Plástico" }], [{ id: "LINE", value_name: "Flower Power" }], primavera);
+    expect(values("BRAND")).toEqual(["Primavera"]);
+    expect(values("LINE")).toEqual(["Flower Power"]);
+  });
 });

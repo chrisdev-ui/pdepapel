@@ -564,6 +564,13 @@ type ListingForContentSync = ListingForPublication & {
   externalItemId: string;
 };
 
+/**
+ * BRAND y LINE solo se mandan al crear o si la publicación aún no los tiene:
+ * Mercado Libre puede rechazar o moderar un cambio de marca (sobre todo con
+ * ventas) y eso tumbaría la edición entera.
+ */
+const KEEP_REMOTE_ON_UPDATE = new Set(["BRAND", "LINE"]);
+
 function mergeRemoteAttributes(
   remoteAttributes: MercadoLibreAttribute[],
   listing: ListingForPublication,
@@ -575,6 +582,7 @@ function mergeRemoteAttributes(
     getConfiguredAttributes(listing.metadata),
     listing.product,
   )) {
+    if (KEEP_REMOTE_ON_UPDATE.has(attribute.id) && merged.has(attribute.id)) continue;
     merged.set(attribute.id, attribute);
   }
   return Array.from(merged.values());
