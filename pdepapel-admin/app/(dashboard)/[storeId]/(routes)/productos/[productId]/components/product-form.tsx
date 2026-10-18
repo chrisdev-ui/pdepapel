@@ -1365,6 +1365,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit, focusFirstInvalidField)}
+          // Valida Zod: un límite nativo en un campo escondido (la calculadora plegada con un aumento de más de 100 %) bloqueaba el envío sin decir nada.
+          noValidate
           autoComplete="off"
           className="flex w-full flex-col gap-4"
         >
@@ -1885,6 +1887,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         </FormLabel>
                         <PercentageInput
                           id="calculadora-incremento"
+                          max={1000}
                           disabled={loading}
                           value={effectiveIncrease}
                           onChange={(value) =>

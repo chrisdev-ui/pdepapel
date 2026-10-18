@@ -2265,7 +2265,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <FormField control={form.control} name="percentageIncrease" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Incremento</FormLabel>
-                      <FormControl><PercentageInput disabled={loading} placeholder="30" value={field.value} onChange={field.onChange} /></FormControl>
+                      <FormControl><PercentageInput max={1000} disabled={loading} placeholder="30" value={field.value} onChange={field.onChange} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
