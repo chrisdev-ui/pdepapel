@@ -2,12 +2,14 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Marcas en la tienda (2026-10-17), a 390 y 768. Solo lectura. Va aparte de
- * `playwright.config.ts` porque depende de los datos de marcas: contra
- * producción solo sirve después de crear las marcas (`E2E_BASE_URL` y los
- * `E2E_BRAND_*` de `tests/e2e/brands/brands.spec.ts` apuntan a otra tienda).
+ * `playwright.config.ts` porque depende de los datos de marcas. Contra
+ * producción, `tests/e2e/brands/discover-brands.ts` saca las marcas de la API
+ * pública; las variables `E2E_*` de `brands.spec.ts` siempre ganan, y otra
+ * tienda necesita las suyas o `E2E_ADMIN_API_URL`.
  */
 export default defineConfig({
   testDir: "./tests/e2e/brands",
+  globalSetup: "./tests/e2e/brands/discover-brands.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,

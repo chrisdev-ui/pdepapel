@@ -1,11 +1,11 @@
 import { skipPrivacyBanner } from "../helpers/public-page";
-import { expect, test, type Page } from "../helpers/safe-test";
+import { expect, test, type Locator, type Page } from "../helpers/safe-test";
 
 /**
  * Marcas en la tienda: fila de marcas del catálogo, sección «Marca» de la hoja
  * de filtros, página de la marca (con productos y vacía), ficha del producto y
- * una marca oculta que no aparece en ningún lado. Datos por entorno; los que
- * faltan saltan su prueba.
+ * una marca oculta que no aparece en ningún lado. Datos por entorno o, contra
+ * producción, descubiertos por `discover-brands.ts`; los que faltan saltan su prueba.
  */
 const BRAND_SLUG = process.env.E2E_BRAND_SLUG || "kiut";
 const BRAND_NAME = process.env.E2E_BRAND_NAME || "Kiut";
@@ -33,6 +33,21 @@ async function openListing(page: Page, path: string) {
   await open(page, path);
   await expect(grid(page).first()).toBeVisible({ timeout: 45_000 });
   await expect(page.getByRole("button", { name: "Filtros", exact: true })).toBeEnabled({ timeout: 45_000 });
+}
+
+/**
+ * Un clic antes de que React hidrate no abre nada, y uno durante la hidratación
+ * se pierde al reconciliar: se espera a que React tome el botón y se pulsa una vez.
+ */
+async function hydrated(node: Locator) {
+  await expect
+    .poll(() => node.evaluate((element) => Object.keys(element).some((key) => key.startsWith("__reactFiber"))), { timeout: 30_000 })
+    .toBe(true);
+}
+
+async function clickHydrated(trigger: Locator) {
+  await hydrated(trigger);
+  await trigger.click();
 }
 
 async function robots(page: Page) {
@@ -161,7 +176,9 @@ test.describe("ficha del producto", () => {
     const pill = page.getByRole("link", { name: new RegExp(`Original ${BRAND_NAME}`) }).first();
     await expect(pill).toHaveAttribute("href", `/marcas/${BRAND_SLUG}`);
 
-    await page.getByRole("button", { name: /Detalles y medidas/ }).first().click();
+    const details = page.getByRole("button", { name: /Detalles y medidas/ }).first();
+    await clickHydrated(details);
+    await expect(details).toHaveAttribute("aria-expanded", "true");
     const detailLink = page.getByRole("link", { name: BRAND_NAME, exact: true }).filter({ visible: true }).first();
     await expect(detailLink).toHaveAttribute("href", `/marcas/${BRAND_SLUG}`);
     await expect(detailLink.locator("img")).toHaveCount(0);
@@ -175,8 +192,9 @@ test.describe("ficha del producto", () => {
 test.describe("menú", () => {
   test("el cajón trae «Marcas» con «Ver todas»", async ({ page }) => {
     await open(page, "/");
-    await page.getByRole("button", { name: "Abrir menú de categorías" }).click();
     const drawer = page.getByRole("navigation", { name: "Categorías" });
+    await clickHydrated(page.getByRole("button", { name: "Abrir menú de categorías" }));
+    await expect(drawer).toBeVisible();
     await expect(drawer.getByText("Marcas", { exact: true })).toBeVisible();
     await expect(drawer.getByRole("link", { name: "Ver todas" }).first()).toHaveAttribute("href", "/marcas");
   });
@@ -196,6 +214,8 @@ test.describe("medición", () => {
       });
       await open(page, path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 45_000 });
+      // Los observadores de web-vitals se registran después de hidratar.
+      await hydrated(page.getByRole("heading", { level: 1 }));
       await page.waitForTimeout(1_500);
       // El LCP se cierra con la primera interacción; el INP necesita una y se manda al ocultar la página.
       await page.getByRole("heading", { level: 1 }).click();

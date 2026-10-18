@@ -27,3 +27,12 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      # Marcas: los datos salen de la API pública (tests/e2e/brands/discover-brands.ts).
+      # La marca oculta no se puede descubrir: su bloque corre solo si existen
+      # las variables del repositorio E2E_HIDDEN_BRAND_*.
+      - run: npm run test:e2e:brands
+        if: ${{ !cancelled() }}
+        env:
+          E2E_HIDDEN_BRAND_SLUG: ${{ vars.E2E_HIDDEN_BRAND_SLUG }}
+          E2E_HIDDEN_BRAND_NAME: ${{ vars.E2E_HIDDEN_BRAND_NAME }}
+          E2E_HIDDEN_BRAND_PRODUCT_SLUG: ${{ vars.E2E_HIDDEN_BRAND_PRODUCT_SLUG }}
