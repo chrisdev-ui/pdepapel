@@ -9,6 +9,7 @@ import { brandStorefrontTarget } from "@/lib/brand-cache";
 import { resolvePublicBrandIds } from "@/lib/brand-catalog";
 import { findPublicBrand, listPublicBrands } from "@/lib/brand-public";
 import { applyBrandInitialPlan, loadBrandInitialPlan, type BrandInitialConfig } from "@/lib/brand-initial-data";
+import { applyMercadoLibreBrandPlan, loadMercadoLibreBrandPlan, type MercadoLibreBrandConfig } from "@/lib/brand-mercadolibre-mapping";
 import {
   assignBrandToProducts,
   changeBrandSlug,
@@ -74,6 +75,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const storeId = fixture.store.id;
+  await testPrisma.marketplaceListing.deleteMany({ where: { connection: { storeId } } });
+  await testPrisma.marketplaceConnection.deleteMany({ where: { storeId } });
   await testPrisma.product.deleteMany({ where: { id: { in: created } } });
   await testPrisma.productGroup.deleteMany({ where: { storeId } });
   await testPrisma.brandSlugRedirect.deleteMany({ where: { storeId } });
@@ -262,5 +265,52 @@ describe("marcas", () => {
     await expect(
       testPrisma.$transaction((tx) => applyBrandInitialPlan(tx, config, normalizeBrandName, plan, plan.rows, "test")),
     ).rejects.toThrow(/El plan cambió/);
+  });
+
+  it("marcas desde Mercado Libre: crea la oculta, asigna el grupo entero y una publicación cambiada invalida el plan", async () => {
+    const storeId = fixture.store.id;
+    const connection = await testPrisma.marketplaceConnection.create({ data: { storeId, provider: "MERCADOLIBRE", status: "CONNECTED" } });
+    const group = await testPrisma.productGroup.create({ data: { storeId, name: "Grupo ML", description: "" } });
+    const listed = await product("Variante listada", { productGroupId: group.id });
+    const sibling = await product("Variante hermana", { productGroupId: group.id });
+    const generic = await product("Producto genérico");
+    const item = (externalItemId: string, productId: string) =>
+      testPrisma.marketplaceListing.create({ data: { connectionId: connection.id, productId, externalItemId, status: "ACTIVE" } });
+    await item("MCO-T1", listed.id);
+    await item("MCO-T2", generic.id);
+    const config: MercadoLibreBrandConfig = {
+      storeId,
+      brands: [{ name: "Marca ML Oculta", isVisible: false }],
+      valueMapping: { "Marca ML Oculta": { brand: "Marca ML Oculta" }, "Genérica": { none: true } },
+    };
+    const listings = [
+      { externalItemId: "MCO-T1", productId: listed.id, mlBrand: "Marca ML Oculta" },
+      { externalItemId: "MCO-T2", productId: generic.id, mlBrand: "Genérica" },
+    ];
+    const plan = await loadMercadoLibreBrandPlan(testPrisma, config, listings);
+    expect(plan.createBrands.map((brand) => [brand.name, brand.isVisible])).toEqual([["Marca ML Oculta", false]]);
+    expect(plan.productAssignments.map((row) => [row.productId, row.via])).toEqual(
+      [
+        [listed.id, "BRAND de Mercado Libre"],
+        [sibling.id, "grupo"],
+      ].sort(([a], [b]) => String(a).localeCompare(String(b))),
+    );
+    expect(plan.rows).toBe(4);
+
+    // Una publicación pausada desde el ensayo: no se escribe nada.
+    await testPrisma.marketplaceListing.updateMany({ where: { externalItemId: "MCO-T1" }, data: { status: "PAUSED" } });
+    await expect(testPrisma.$transaction((tx) => applyMercadoLibreBrandPlan(tx, config, listings, plan, plan.rows, "test"))).rejects.toThrow(
+      /ya no está activa/,
+    );
+    expect(await testPrisma.brand.count({ where: { storeId, name: "Marca ML Oculta" } })).toBe(0);
+    await testPrisma.marketplaceListing.updateMany({ where: { externalItemId: "MCO-T1" }, data: { status: "ACTIVE" } });
+
+    const result = await testPrisma.$transaction((tx) => applyMercadoLibreBrandPlan(tx, config, listings, plan, plan.rows, "test"));
+    expect(result.written).toBe(4);
+    const brand = await testPrisma.brand.findFirstOrThrow({ where: { storeId, name: "Marca ML Oculta" } });
+    expect(brand.isVisible).toBe(false);
+    expect((await testPrisma.productGroup.findUniqueOrThrow({ where: { id: group.id } })).brandId).toBe(brand.id);
+    expect((await testPrisma.product.findUniqueOrThrow({ where: { id: generic.id } })).brandId).toBeNull();
+    expect((await loadMercadoLibreBrandPlan(testPrisma, config, listings)).rows).toBe(0);
   });
 });

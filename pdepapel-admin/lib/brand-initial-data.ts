@@ -86,23 +86,15 @@ export interface BrandInitialPlan {
 
 type Normalize = (value: string | null | undefined) => string | null;
 
-/** Plan puro: mismo resultado para los mismos datos. */
-export function planBrandInitialData(input: {
-  config: BrandInitialConfig;
-  existingBrands: PlanBrand[];
-  products: PlanProduct[];
-  groups: PlanGroup[];
-  normalize: Normalize;
-}): BrandInitialPlan {
-  const { config, existingBrands, products, groups, normalize } = input;
+/** Marcas por crear de una lista de semillas: las que no existen, madres antes que líneas, con slug libre. */
+export function planBrandCreations(seeds: BrandSeed[], existingBrands: PlanBrand[]): BrandInitialPlan["createBrands"] {
   const existingByKey = new Map(existingBrands.filter((brand) => !brand.isArchived).map((brand) => [brandKey(brand.name), brand]));
-
   const createBrands: BrandInitialPlan["createBrands"] = [];
   const takenSlugs = new Set<string>();
   // Madres antes que líneas: al escribir, la línea busca a su madre ya creada.
-  const seeds = [...config.brands].sort((first, second) => Number(Boolean(first.parent)) - Number(Boolean(second.parent)));
-  const seedByKey = new Map(config.brands.map((seed) => [brandKey(seed.name), seed]));
-  for (const seed of seeds) {
+  const ordered = [...seeds].sort((first, second) => Number(Boolean(first.parent)) - Number(Boolean(second.parent)));
+  const seedByKey = new Map(seeds.map((seed) => [brandKey(seed.name), seed]));
+  for (const seed of ordered) {
     if (seed.parent) {
       const parentKey = brandKey(seed.parent);
       const parentSeed = seedByKey.get(parentKey);
@@ -125,6 +117,21 @@ export function planBrandInitialData(input: {
       isVisible: seed.isVisible ?? true,
     });
   }
+  return createBrands;
+}
+
+/** Plan puro: mismo resultado para los mismos datos. */
+export function planBrandInitialData(input: {
+  config: BrandInitialConfig;
+  existingBrands: PlanBrand[];
+  products: PlanProduct[];
+  groups: PlanGroup[];
+  normalize: Normalize;
+}): BrandInitialPlan {
+  const { config, existingBrands, products, groups, normalize } = input;
+  const existingByKey = new Map(existingBrands.filter((brand) => !brand.isArchived).map((brand) => [brandKey(brand.name), brand]));
+
+  const createBrands = planBrandCreations(config.brands, existingBrands);
 
   const idOfName = new Map<string, string>([
     ...existingBrands.filter((brand) => !brand.isArchived).map((brand) => [brandKey(brand.name), brand.id] as const),
@@ -291,14 +298,29 @@ export async function applyBrandInitialPlan(
   }
   if (plan.rows !== expectRows) throw new Error(`El plan tiene ${plan.rows} filas y se esperaban ${expectRows}. No se escribió nada.`);
 
-  const last = await tx.brand.aggregate({ where: { storeId: config.storeId }, _max: { sortOrder: true } });
+  return writeBrandPlan(tx, config.storeId, plan, expectRows, createdBy);
+}
+
+/**
+ * Escribe un plan ya verificado dentro de la transacción que recibe: crea las
+ * marcas, asigna grupos y productos solo si siguen sin marca, y lanza si lo
+ * escrito no suma N (la transacción se deshace entera).
+ */
+export async function writeBrandPlan(
+  tx: Prisma.TransactionClient,
+  storeId: string,
+  plan: Pick<BrandInitialPlan, "createBrands" | "groupAssignments" | "productAssignments">,
+  expectRows: number,
+  createdBy: string,
+) {
+  const last = await tx.brand.aggregate({ where: { storeId: storeId }, _max: { sortOrder: true } });
   let sortOrder = (last._max.sortOrder ?? -1) + 1;
   // Las madres van primero en el plan: cada línea encuentra a su madre ya escrita.
   for (const brand of plan.createBrands) {
     let parentBrandId: string | null = null;
     if (brand.parent) {
       const parent = await tx.brand.findFirst({
-        where: { storeId: config.storeId, isArchived: false, parentBrandId: null, name: brand.parent },
+        where: { storeId: storeId, isArchived: false, parentBrandId: null, name: brand.parent },
         select: { id: true },
       });
       if (!parent) throw new Error(`No existe la marca madre «${brand.parent}» de «${brand.name}». No se escribió nada.`);
@@ -306,7 +328,7 @@ export async function applyBrandInitialPlan(
     }
     await tx.brand.create({
       data: {
-        storeId: config.storeId,
+        storeId: storeId,
         name: brand.name,
         slug: brand.slug,
         aliases: brand.aliases,
@@ -319,7 +341,7 @@ export async function applyBrandInitialPlan(
       },
     });
   }
-  const brands = await tx.brand.findMany({ where: { storeId: config.storeId, isArchived: false }, select: { id: true, name: true } });
+  const brands = await tx.brand.findMany({ where: { storeId: storeId, isArchived: false }, select: { id: true, name: true } });
   const idByName = new Map(brands.map((brand) => [brandKey(brand.name), brand.id]));
   const idOf = (name: string) => {
     const id = idByName.get(brandKey(name));
@@ -330,7 +352,7 @@ export async function applyBrandInitialPlan(
   let groupsWritten = 0;
   for (const row of plan.groupAssignments) {
     const result = await tx.productGroup.updateMany({
-      where: { id: row.productGroupId, storeId: config.storeId, brandId: null },
+      where: { id: row.productGroupId, storeId: storeId, brandId: null },
       data: { brandId: idOf(row.brand) },
     });
     groupsWritten += result.count;
@@ -338,7 +360,7 @@ export async function applyBrandInitialPlan(
   let productsWritten = 0;
   for (const row of plan.productAssignments) {
     const result = await tx.product.updateMany({
-      where: { id: row.productId, storeId: config.storeId, brandId: null },
+      where: { id: row.productId, storeId: storeId, brandId: null },
       data: { brandId: idOf(row.brand) },
     });
     productsWritten += result.count;
