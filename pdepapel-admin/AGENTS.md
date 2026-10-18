@@ -351,6 +351,12 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 Added 2026-10-17 (`feat/marcas`). Migration `prisma/manual-migrations/20261017_add_brands.sql`, then grants in `20261017_grant_copilot_ro_brands.sql`. Both must be applied before the code is deployed.
 
 - **Model:** `Brand` holds the logo, a permission for the logo, aliases, visibility and order. `BrandSlugRedirect` holds old addresses. `Product.brandId` and `ProductGroup.brandId` link the brand. `OrderItem.brandName` is a snapshot of the brand name taken when the line is created.
+- **Lines («línea de»):** `Brand.parentBrandId` makes a brand a line of another (Flower Power of Primavera, Incolors of Scribe). One level only, enforced in `brandParentError` (`lib/brand-rules.ts`) and the server guards in `lib/brands.ts`:
+  - the parent must exist in the same store, not be archived and not be a line itself; a brand cannot be its own parent (the migration also adds a `CHECK`);
+  - a brand with non-archived lines cannot become a line, cannot be archived and cannot be deleted;
+  - a parent cannot be merged into one of its lines; a brand with lines cannot be merged into a line; otherwise a merge moves the source's lines to the target.
+
+  In the store a line behaves like any brand (own chip, filter row, logo, page). Filtering by the parent includes its non-archived lines, even hidden ones (`resolvePublicBrandIds`), and the parent's facet count, product count and brand page include them. A line's page header says «Una línea de <Madre>» (only when the parent is public). Names: JSON-LD `Product.brand`, both feeds and Mercado Libre BRAND use the top-level brand (`topLevelBrandName`); GA4 `item_brand` and `OrderItem.brandName` use the displayed brand, the line (`brandDataName`). Mercado Libre LINE carries the line name, prefilled in the publish wizard only when the category has a LINE attribute. When a name matches both a line and its parent, the matcher keeps the line (`preferLines`).
 - **Groups:** a product in a group always carries its group's brand (`resolveProductBrandId`, `findGroupBrandMismatches` in `lib/brand-consistency.ts`). The group editor writes the group and every variant. Assigning one variant (in bulk or from suggestions) carries the whole group with it.
 - **Legacy text:** the free-text `Product.brand` / `ProductGroup.brand` columns are no longer written. Nothing customer-facing reads them. Mercado Libre falls back to them only while `MERCADOLIBRE_LEGACY_BRAND_FALLBACK` is `true` (`lib/mercadolibre/brand.ts`). Set it to `false`, and later drop the columns in their own migration, once `scripts/brands-initial-data.ts` finds nothing left to assign.
 - **Visibility rule** (`lib/brand-rules.ts`):
@@ -359,13 +365,14 @@ Added 2026-10-17 (`feat/marcas`). Migration `prisma/manual-migrations/20261017_a
   - An archived brand goes nowhere: `toPublicBrand` returns `null` and `brandDataName` returns `null`.
 - **Logo permission rule:** the store shows the logo only when `logoUrl` is set and `logoPermission` is not `PENDING`/`DENIED` (`canShowBrandLogo`); otherwise it shows the name in a text pill. Never upload a logo that wasn't taken unaltered from the brand's own site, and record the source in «Fuente del logo».
 - **Public shape:**
-  - Every public product and group carries `brand: { name, slug, logoUrl, logoHasBackground, logoPermission, color, isPublic } | null`, mapped from `brandRef` by `netPublicProduct`. `PUBLIC_PRODUCTS_CACHE_VERSION` is `v8`.
+  - Every public product and group carries `brand: { name, slug, logoUrl, logoHasBackground, logoPermission, color, isPublic, parent: { name, slug, isPublic } | null } | null`, mapped from `brandRef` by `netPublicProduct`. `PUBLIC_PRODUCTS_CACHE_VERSION` is `v8`.
   - `GET /products?marca=a,b` ORs brands and ANDs with the other filters. Old slugs resolve through redirects. `facets.brands` holds only public brands with a count above 0, and each count respects every other filter.
   - `GET /brands?conProductos=1` and `GET /brands/{slug}` are public. An old address answers `{ redirectTo }`; a hidden or archived brand answers 404.
 - **Purges:** brand changes purge only the brand's scope (`brandStorefrontTarget` in `lib/brand-cache.ts`):
   - the tags `brands`, `products:list` and `brand:<slug>` for every current and old slug;
   - the paths `/marcas` and `/marcas/<slug>`;
-  - the brand's products and groups.
+  - the brand's products and groups;
+  - the whole family: the parent of a line and the lines of a parent (the parent's page lists its lines' products; a line's product page names the parent). Editing a line's parent also purges the previous parent.
 
   A merge purges both brands. The store's revalidate allowlist accepts `brands` and `brand:<slug>`. Over the scope limits it falls back to a full purge, like any other scoped purge.
 - **Merge** (`mergeBrands`) runs as one transaction:
@@ -376,9 +383,9 @@ Added 2026-10-17 (`feat/marcas`). Migration `prisma/manual-migrations/20261017_a
   - A is archived, never deleted.
 
   A merged brand cannot be unarchived while its slug redirects elsewhere. Delete is only possible with 0 products and 0 groups.
-- **Suggestions:** `buildBrandMatcher` matches whole words, ignoring accents and case, on the brand name and its aliases. For example, the alias «Incolors» suggests Scribe. Products without a brand are pre-checked; products that already have another brand are listed apart, unchecked and outside the count. The AI assistant only proposes a brand through the same matcher and never creates one.
+- **Suggestions:** `buildBrandMatcher` matches whole words, ignoring accents and case, on the brand name and its aliases. For example, the alias «Fashion» suggests Klipp. Products without a brand are pre-checked; products that already have another brand are listed apart, unchecked and outside the count. The AI assistant only proposes a brand through the same matcher and never creates one.
 - **Mercado Libre:** BRAND goes only in the normal create and update payloads (`addProductIdentifiers`, the wizard, group publishing). There is never a bulk update of live listings. `scripts/mercadolibre-brand-audit.ts` is read-only: it lists active listings whose BRAND is missing or different (ids and counts only) and never refreshes the token.
-- **Initial data:** `scripts/brands-initial-data.ts` (rule in `lib/brand-initial-data.ts`) reads an untracked config. The dry run uses `pdepapel_ro` and saves the plan in `output/audits/`. `prod:write … --apply --plan <file> --expect-rows N` recomputes the plan inside the transaction and writes nothing unless the plan and N match. It is idempotent, so it is re-run after each push for products created in between.
+- **Initial data:** `scripts/brands-initial-data.ts` (rule in `lib/brand-initial-data.ts`) reads an untracked config. Brands in the config can declare `parent` and `isVisible`; parents are created before their lines. Name and alias matching only uses visible brands and lines; the old text can map to hidden brands. When the old text names a parent and the product name names one of its lines, the row goes to manual review with its own reason. The dry run refuses to run unless the connection is `pdepapel_ro` (`scripts/lib/read-only-user.ts`) and saves the plan in `output/audits/`. `prod:write … --apply --plan <file> --expect-rows N` recomputes the plan inside the transaction and writes nothing unless the plan and N match. It is idempotent, so it is re-run after each push for products created in between.
 
 ### Product AI assistant
 

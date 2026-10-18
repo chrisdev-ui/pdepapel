@@ -502,15 +502,24 @@ Analytics.
   logo». Con «Pendiente» o «Negado» la tienda muestra el nombre en vez del logo.
   El logo se sube tal cual lo entrega la marca: sin recortarlo ni cambiarle
   colores.
-- **Fusionar con otra marca…** Para una marca repetida o que en realidad es una
-  línea de otra (por ejemplo «Incolors» es una línea de Scribe). Todos los
+- **Es una línea de.** En la ficha de la marca, elige su marca madre: Flower
+  Power es una línea de Primavera; Incolors, de Scribe. Una línea se ve en la
+  tienda como una marca propia (su página, su logo, su filtro); su página dice
+  «Una línea de Primavera» y en la ficha del producto sale «Marca: Primavera ·
+  Línea: Flower Power». Elegir Primavera en el filtro trae también sus líneas.
+  Google, Meta y Mercado Libre reciben la marca madre (y Mercado Libre la línea
+  en «Línea» cuando la categoría lo pide). Un solo nivel: una línea no tiene
+  líneas, y una marca con líneas no se archiva ni se fusiona en una de ellas.
+- **Fusionar con otra marca…** Para una marca repetida o un nombre que es otra
+  forma de escribirla (por ejemplo «Fashion» de Klipp). Todos los
   productos pasan a la otra marca, la dirección anterior redirige, el nombre y
   los alias se suman como alias y la marca queda archivada. No se puede
   deshacer.
 - **Archivar / Eliminar.** Con productos solo se archiva o se fusiona; eliminar
   solo aparece cuando no tiene ninguno.
 - **Sugerencias automáticas.** Por cada marca, los productos activos cuyo
-  nombre dice la marca o uno de sus alias («coincide por el alias «Incolors»»).
+  nombre dice la marca o uno de sus alias («coincide por el alias «Fashion»»).
+  Si el nombre dice una línea y su marca madre, se sugiere la línea.
   Los que no tienen marca van marcados; los que ya tienen otra salen aparte, sin
   marcar. «Asignar X a N productos» asigna; en un grupo la marca es una sola y
   pasa a todas sus variantes.
