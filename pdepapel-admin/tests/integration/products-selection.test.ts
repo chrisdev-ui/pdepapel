@@ -153,4 +153,48 @@ describe("Seleccionar los N de este filtro (MySQL)", () => {
     expect(stranger.status).toBe(403);
     session.userId = fixture!.store.userId;
   });
+
+  it("el CSV de «todos los N» trae el mismo stock que el CSV de la página y la lista (el de un kit sale de sus piezas)", async () => {
+    const { POST } = await import("@/app/api/[storeId]/products/selection/route");
+    const { getProducts } = await import("@/app/(dashboard)/[storeId]/(routes)/productos/server/get-products");
+    const { productsToCsv } = await import("@/lib/product-bulk");
+    const { currencyFormatter } = await import("@/lib/utils");
+    const store = fixture!.store.id;
+    const query = "vista=todos";
+    // Por página: lo que exporta la barra en cada página, con las filas de la lista.
+    const pages: Record<string, unknown>[] = [];
+    for (let page = 1; ; page += 1) {
+      const result = await getProducts(store, parseProductListQuery({ vista: "todos", pagina: String(page) }));
+      pages.push(...(result.products as unknown as Record<string, unknown>[]));
+      if (page >= result.pageCount) break;
+    }
+    const perPage = stockBySku(productsToCsv(pages as never, currencyFormatter));
+    const all = await (await POST(json({ query, intent: "csv", expectedCount: pages.length }), { params: { storeId: store } })).json();
+    const allN = stockBySku(all.csv);
+    expect(allN).toEqual(perPage);
+    // El kit del fixture: 0 unidades propias, 6 de su pieza que lleva 2 → 3 kits.
+    expect(allN[fixture!.kit.sku]).toBe("3");
+    expect(allN[fixture!.component.sku]).toBe("6");
+  });
 });
+
+/** SKU → columna Stock de un CSV de productos (respeta comillas). */
+function stockBySku(csv: string): Record<string, string> {
+  const [header, ...lines] = csv.split("\n").map((line) => {
+    const cells: string[] = [];
+    let cell = "";
+    let quoted = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (quoted && ch === '"' && line[i + 1] === '"') { cell += '"'; i += 1; }
+      else if (ch === '"') quoted = !quoted;
+      else if (ch === "," && !quoted) { cells.push(cell); cell = ""; }
+      else cell += ch;
+    }
+    cells.push(cell);
+    return cells;
+  });
+  const sku = header.indexOf("SKU");
+  const stock = header.indexOf("Stock");
+  return Object.fromEntries(lines.map((cells) => [cells[sku], cells[stock]]));
+}

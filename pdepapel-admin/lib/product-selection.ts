@@ -4,7 +4,7 @@ import { ErrorFactory } from "@/lib/api-errors";
 import { getActiveOffers } from "@/lib/discount-engine";
 import type { ActiveOffer } from "@/lib/offer-pricing";
 import { partitionForBulk, summarizeSkipped, type ProductBulkAction } from "@/lib/product-bulk";
-import { loadProductListRows, matchProducts } from "@/lib/product-list";
+import { effectiveStock, loadProductListRows, matchProducts } from "@/lib/product-list";
 import { parseProductListQuery, writeProductListQuery } from "@/lib/product-list-query";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
 import prismadb from "@/lib/prismadb";
@@ -58,12 +58,16 @@ export const BULK_ROW_SELECT = {
   brandId: true,
   price: true,
   stock: true,
+  isKit: true,
+  kitComponents: { select: { quantity: true, component: { select: { stock: true } } } },
   category: { select: { name: true } },
   productGroup: { select: { name: true } },
 } satisfies Prisma.ProductSelect;
 
+/** Las filas para decidir omisiones y exportar; `stock` es el de la lista (un kit, el de sus piezas). */
 export async function loadBulkRows(storeId: string, ids: string[]) {
-  return ids.length ? prismadb.product.findMany({ where: { storeId, id: { in: ids } }, select: BULK_ROW_SELECT }) : [];
+  const rows = ids.length ? await prismadb.product.findMany({ where: { storeId, id: { in: ids } }, select: BULK_ROW_SELECT }) : [];
+  return rows.map((row) => ({ ...row, stock: effectiveStock(row) }));
 }
 
 const ACTIONS: ProductBulkAction[] = ["archive", "restore", "feature", "unfeature", "mark-no-identifier", "unmark-no-identifier", "coming-soon", "available-now"];
