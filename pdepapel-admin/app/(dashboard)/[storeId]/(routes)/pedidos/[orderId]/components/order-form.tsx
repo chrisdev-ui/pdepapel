@@ -840,6 +840,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   transactionId={watchedTransaction}
                   guideRate={guideRate}
                   hasGuide={Boolean(initialData.shipping?.envioClickIdOrder)}
+                  guideOnFile={(initialData.shipping as { hasGuide?: boolean } | null)?.hasGuide === true}
                   nextStep={nextStep}
                   steps={timeline}
                   loading={loading}

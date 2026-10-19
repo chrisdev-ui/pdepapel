@@ -1,5 +1,6 @@
 import {
   getOrderQueue,
+  hasRegisteredGuide,
   isAwaitingPaymentStale,
   type OrderQueue,
   type QueueableOrder,
@@ -33,6 +34,8 @@ export interface TimelineOrder extends QueueableOrder {
   shipping?: {
     status: ShippingStatus;
     trackingCode?: string | null;
+    /** Solo lectura: la guía existe pero el número no se manda. */
+    hasGuide?: boolean;
     trackingUrl?: string | null;
     courier?: string | null;
     carrierName?: string | null;
@@ -67,7 +70,7 @@ export function buildOrderTimeline(
     order.status === OrderStatus.SENT ||
     queue === "completed";
   const shipping = order.shipping;
-  const hasGuide = Boolean(shipping?.trackingCode);
+  const hasGuide = hasRegisteredGuide(shipping);
   const delivered = shipping?.status === ShippingStatus.Delivered;
   const MOVING: ShippingStatus[] = [
     ShippingStatus.Shipped,

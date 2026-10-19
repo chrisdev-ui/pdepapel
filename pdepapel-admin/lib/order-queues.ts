@@ -62,9 +62,23 @@ export interface QueueableOrder {
   paidAt?: Date | string | null;
   expiresAt?: Date | string | null;
   payment?: { method: PaymentMethod } | null;
-  shipping?: { status: ShippingStatus; trackingCode?: string | null; updatedAt?: Date | string | null } | null;
+  shipping?: {
+    status: ShippingStatus;
+    trackingCode?: string | null;
+    /** Solo lectura: la guía existe pero el número no se manda (`scrubOrder`). */
+    hasGuide?: boolean;
+    updatedAt?: Date | string | null;
+  } | null;
   /** Líneas de inventario que fallaron al mover y siguen sin resolver. */
   openInventoryIssues?: number;
+}
+
+/**
+ * Si el envío ya tiene guía registrada: por su número o, para la cuenta de
+ * solo lectura (que no recibe el número), por la marca `hasGuide` del servidor.
+ */
+export function hasRegisteredGuide(shipping?: { trackingCode?: string | null; hasGuide?: boolean } | null): boolean {
+  return Boolean(shipping?.trackingCode) || shipping?.hasGuide === true;
 }
 
 /** Deuda con el kardex: el pedido cambió de estado pero alguna línea no se movió. */
@@ -109,7 +123,7 @@ export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQue
   if (status === OrderStatus.DRAFT) return "quote";
 
   const shippingStatus = order.shipping?.status;
-  const hasGuide = Boolean(order.shipping?.trackingCode);
+  const hasGuide = hasRegisteredGuide(order.shipping);
   const inStore = type === OrderType.POINT_OF_SALE || type === OrderType.FESTIVAL;
   // Una tarjeta de regalo se entrega por correo al pagar: nunca hay nada que despachar.
   const digital = type === OrderType.GIFT_CARD;

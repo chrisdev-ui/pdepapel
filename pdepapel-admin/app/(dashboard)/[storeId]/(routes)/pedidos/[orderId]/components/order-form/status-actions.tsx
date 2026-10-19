@@ -42,6 +42,8 @@ interface StatusActionsProps {
   guideRate?: { carrier: string; cost: number } | null;
   /** Ya existe una guía de EnvioClick: cancelar el pedido no la anula sola. */
   hasGuide?: boolean;
+  /** Solo lectura: hay guía registrada aunque el número no llegue (`shipping.hasGuide`). */
+  guideOnFile?: boolean;
   loading: boolean;
   /** Solo las acciones normales; las destructivas van aparte. */
   variant: "card" | "care";
@@ -71,6 +73,7 @@ export function StatusActions({
   transactionId,
   guideRate = null,
   hasGuide = false,
+  guideOnFile = false,
   loading,
   variant,
   onTransition,
@@ -98,7 +101,8 @@ export function StatusActions({
   const asksGuideNumber =
     pending?.confirm === "ship" &&
     shippingProvider !== ShippingProvider.NONE &&
-    !trackingCode;
+    !trackingCode &&
+    !guideOnFile;
   const needsGuide =
     asksGuideNumber && shippingProvider === ShippingProvider.ENVIOCLICK;
   // La guía se decide aquí mismo, en el diálogo de pago, en lugar de un

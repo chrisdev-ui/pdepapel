@@ -35,6 +35,8 @@ interface OrderStatusBarProps {
   transactionId?: string | null;
   guideRate?: { carrier: string; cost: number } | null;
   hasGuide?: boolean;
+  /** Solo lectura: hay guía registrada aunque el número no llegue (`shipping.hasGuide`). */
+  guideOnFile?: boolean;
   /** Qué toca ahora, calculado en el servidor con `getNextStepCard`. */
   nextStep?: NextStepCard | null;
   /** Línea de tiempo del pedido, calculada en el servidor con `buildOrderTimeline`. */
@@ -57,6 +59,7 @@ export function OrderStatusBar({
   transactionId,
   guideRate = null,
   hasGuide = false,
+  guideOnFile = false,
   nextStep = null,
   steps = [],
   loading,
@@ -72,6 +75,7 @@ export function OrderStatusBar({
     transactionId,
     guideRate,
     hasGuide,
+    guideOnFile,
     loading,
     onTransition,
   };

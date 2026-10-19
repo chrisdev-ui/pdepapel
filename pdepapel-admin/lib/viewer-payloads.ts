@@ -149,7 +149,9 @@ export function scrubOrder<T extends AnyRecord | null | undefined>(order: T): T 
     clean.payment = { ...omit(clean.payment as AnyRecord, VIEWER_HIDDEN_PAYMENT_FIELDS), proofKey: null };
   }
   if (clean.shipping && typeof clean.shipping === "object") {
-    clean.shipping = omit(clean.shipping as AnyRecord, VIEWER_HIDDEN_ORDER_SHIPPING_FIELDS);
+    const shipping = clean.shipping as AnyRecord;
+    // Sin el número de guía, la etapa del pedido («va en camino») se calcula con esta marca.
+    clean.shipping = { ...omit(shipping, VIEWER_HIDDEN_ORDER_SHIPPING_FIELDS), hasGuide: Boolean(shipping.trackingCode) };
   }
   const items = clean.orderItems;
   if (Array.isArray(items)) {
