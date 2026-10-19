@@ -1,6 +1,7 @@
 import { availableStock } from "@/lib/available-stock";
 import { scrubProducts } from "@/lib/viewer-payloads";
 import { requireStoreRead } from "@/lib/store-access";
+import { readStorePolicies } from "@/lib/store-policies";
 import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { calculateDiscountedPrice } from "@/lib/discount-engine";
@@ -103,9 +104,7 @@ export async function GET(
         products: access.role === "viewer" ? scrubProducts(productsWithDiscounts) : productsWithDiscounts,
         store: {
           ...store,
-          policies: store.policies
-            ? JSON.parse(store.policies as string)
-            : null,
+          policies: readStorePolicies(store.policies),
         },
       },
       {

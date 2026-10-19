@@ -1,5 +1,6 @@
 "use client";
 
+import { readStorePolicies } from "@/lib/store-policies";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Store } from "@prisma/client";
 import {
@@ -189,14 +190,12 @@ export const SettingsForm: React.FC<
       storeMinMarginPercent: initialData.storeMinMarginPercent != null ? String(initialData.storeMinMarginPercent) : "",
       mercadoLibreLowPriceFixedFee: initialData.mercadoLibreLowPriceFixedFee != null ? String(initialData.mercadoLibreLowPriceFixedFee) : "",
       mercadoLibreFreeShippingMin: initialData.mercadoLibreFreeShippingMin != null ? String(initialData.mercadoLibreFreeShippingMin) : "",
-      policies:
-        typeof initialData.policies === "string"
-          ? JSON.parse(initialData.policies)
-          : {
-              shipping: "",
-              returns: "",
-              payment: "",
-            },
+      policies: {
+        shipping: "",
+        returns: "",
+        payment: "",
+        ...readStorePolicies(initialData.policies),
+      },
     }),
     [initialData],
   );

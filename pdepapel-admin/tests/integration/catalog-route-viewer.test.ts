@@ -60,4 +60,12 @@ describe("catálogo PDF y la cuenta de solo lectura (MySQL)", () => {
     const component = products.find((product) => product.id === fixture!.component.id)!;
     expect(component).toMatchObject({ acqPrice: 4000, transportationCost: 500 });
   });
+
+  it("las políticas de la tienda funcionan guardadas como texto o como objeto (antes el objeto daba 500)", async () => {
+    const store = fixture!.store.id;
+    await testPrisma.store.update({ where: { id: store }, data: { policies: { shipping: "2 a 6 días" } } });
+    expect(((await catalogAs("owner")) as unknown as { store: { policies: unknown } }).store.policies).toEqual({ shipping: "2 a 6 días" });
+    await testPrisma.store.update({ where: { id: store }, data: { policies: JSON.stringify({ shipping: "2 a 6 días" }) } });
+    expect(((await catalogAs("owner")) as unknown as { store: { policies: unknown } }).store.policies).toEqual({ shipping: "2 a 6 días" });
+  });
 });
