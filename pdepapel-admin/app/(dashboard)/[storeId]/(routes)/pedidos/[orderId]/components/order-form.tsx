@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
@@ -232,6 +233,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const { isDirty } = form.formState;
 
   const [loading, setLoading] = useState(false);
+  // Solo lectura: nada que cambie el pedido se puede pulsar (el servidor también lo rechaza).
+  const canWrite = useCanWrite();
   // `/pedidos/nuevo` y `/pedidos/<id>` son el mismo segmento dinamico: Next
   // no muestra `loading.tsx` al cambiar solo el parametro, deja en pantalla el
   // formulario recien llenado mientras trae la ficha (1,2 MB de payload) y
@@ -420,7 +423,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     ],
   );
 
-  const onSubmit = (data: OrderFormValues) => submitOrder(data);
+  const onSubmit = (data: OrderFormValues) => (canWrite ? submitOrder(data) : undefined);
 
   const onTransition = useCallback(
     async ({
@@ -959,7 +962,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     </p>
                     <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
                     {canCancelAsFraud(initialData) && (
-                      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => setFraudOpen(true)} className="shrink-0">
+                      <Button type="button" variant="outline" size="sm" disabled={loading || !canWrite} onClick={() => setFraudOpen(true)} className="shrink-0">
                         <ShieldAlert className="h-4 w-4" aria-hidden="true" />
                         Cancelar como fraude/bot
                       </Button>
@@ -968,7 +971,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={loading}
+                      disabled={loading || !canWrite}
                       onClick={() => setDeleteOpen(true)}
                       className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
@@ -1078,7 +1081,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               <Button
                 type="submit"
                 disabled={
-                  loading || isNavigating || (Boolean(initialData) && !isDirty)
+                  loading || isNavigating || (Boolean(initialData) && !isDirty) || !canWrite
                 }
                 isLoading={loading || isNavigating}
                 loadingText={

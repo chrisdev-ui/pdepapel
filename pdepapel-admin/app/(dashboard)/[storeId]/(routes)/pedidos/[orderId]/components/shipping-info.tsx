@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -87,6 +88,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
+  const canWrite = useCanWrite();
   const [tracking, setTracking] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -257,7 +259,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
               variant="ghost"
               size="icon-sm"
               onClick={trackShipment}
-              disabled={tracking}
+              disabled={tracking || !canWrite}
               aria-label="Actualizar rastreo"
             >
               <RefreshCw
@@ -354,7 +356,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                   variant="outline"
                   className="flex-1 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={() => setCancelOpen(true)}
-                  disabled={cancelling}
+                  disabled={cancelling || !canWrite}
                 >
                   <XCircle className="h-4 w-4" aria-hidden="true" />
                   Cancelar envío

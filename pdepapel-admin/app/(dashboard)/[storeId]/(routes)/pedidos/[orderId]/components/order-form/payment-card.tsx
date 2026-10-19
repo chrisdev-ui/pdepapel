@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,6 +74,8 @@ export function PaymentCard({
   const form = useFormContext<OrderFormValues>();
   const { toast } = useToast();
   const [copyingWompi, setCopyingWompi] = useState(false);
+  // Solo lectura: ni cobros ni enlaces (el enlace abre el recibo con los datos de la clienta).
+  const canWrite = useCanWrite();
   const [pushingBold, setPushingBold] = useState(false);
 
   const method = useWatch({ control: form.control, name: "payment.method" });
@@ -332,7 +335,7 @@ export function PaymentCard({
                 variant="soft"
                 size="sm"
                 className="justify-start"
-                disabled={pushingBold}
+                disabled={pushingBold || !canWrite}
                 onClick={pushBold}
               >
                 {pushingBold ? (
@@ -350,6 +353,7 @@ export function PaymentCard({
                 variant="outline"
                 size="sm"
                 className="justify-start"
+                disabled={!canWrite}
                 onClick={() =>
                   copy(
                     `${STORE_URL}/pedido/${initialData!.id}?autoPay=true`,
@@ -368,7 +372,7 @@ export function PaymentCard({
               variant="outline"
               size="sm"
               className="justify-start"
-              disabled={copyingWompi}
+              disabled={copyingWompi || !canWrite}
               onClick={copyWompiLink}
             >
               {copyingWompi ? (
@@ -396,6 +400,7 @@ export function PaymentCard({
             variant="ghost"
             size="sm"
             className="justify-start"
+            disabled={!canWrite}
             onClick={() =>
               copy(
                 `${STORE_URL}/pedido/${initialData!.id}`,

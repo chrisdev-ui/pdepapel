@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,6 +79,8 @@ export function StatusActions({
   variant,
   onTransition,
 }: StatusActionsProps) {
+  // Solo lectura: las transiciones se ven pero no se pueden pulsar.
+  const canWrite = useCanWrite();
   const [pending, setPending] = useState<StatusAction | null>(null);
   const [reference, setReference] = useState("");
   const [guide, setGuide] = useState("");
@@ -228,7 +231,7 @@ export function StatusActions({
                   ? "default"
                   : "soft"
             }
-            disabled={loading || submitting}
+            disabled={loading || submitting || !canWrite}
             onClick={() => run(action)}
             className={
               action.destructive

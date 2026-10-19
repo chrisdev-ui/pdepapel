@@ -1,5 +1,6 @@
 "use client";
 
+import { useCanWrite } from "@/components/shell/viewer-access";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -70,6 +71,7 @@ export function GuidePanel({
   const { toast } = useToast();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const canWrite = useCanWrite();
   const [creating, setCreating] = useState(false);
 
   const payable = canCreateGuide(status, isCOD);
@@ -152,7 +154,7 @@ export function GuidePanel({
         </div>
         <Button
           type="button"
-          disabled={!ready || disabled || creating}
+          disabled={!ready || disabled || creating || !canWrite}
           onClick={() => setOpen(true)}
           className="shrink-0"
         >
