@@ -120,7 +120,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReserveSheet } from "@/components/reservations/reserve-sheet";
 import { reservedSuffix } from "@/lib/reservation-labels";
-import { getProduct, getProductSeed } from "../server/get-product";
+import type { getProduct, getProductSeed } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
 import { ComponentSelector } from "./component-selector";
 import { TransportCostField } from "./transport-cost-field";

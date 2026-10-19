@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 import { requireStoreRead } from "@/lib/store-access";
 

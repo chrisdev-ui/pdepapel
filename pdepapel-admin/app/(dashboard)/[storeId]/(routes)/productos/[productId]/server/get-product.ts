@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
