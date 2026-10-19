@@ -26,6 +26,7 @@ import {
   CUSTOMER_ORDER_SELECT,
   VIEWER_ORDER_DETAIL_SELECT,
   canCustomerViewOrder,
+  receiptMeta,
   toCustomerOrderResponse,
 } from "@/lib/public-orders";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
@@ -116,7 +117,7 @@ export async function GET(
       const order = await prismadb.order.findFirst({ where, select: VIEWER_ORDER_DETAIL_SELECT });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-      return NextResponse.json(scrubOrder(order), {
+      return NextResponse.json({ ...scrubOrder(order), ...receiptMeta(order.status) }, {
         headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
       });
     }
@@ -136,7 +137,7 @@ export async function GET(
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-      return NextResponse.json(order, {
+      return NextResponse.json({ ...order, ...receiptMeta(order.status) }, {
         headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
       });
     }

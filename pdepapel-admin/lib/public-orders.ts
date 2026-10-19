@@ -1,4 +1,6 @@
-import { Prisma } from "@prisma/client";
+import { OrderStatus, Prisma } from "@prisma/client";
+
+import { isPaidLike } from "@/lib/order-transitions";
 
 import {
   PUBLIC_CATALOG_OPTION_VALUE_SELECT,
@@ -161,7 +163,30 @@ export type CustomerOrderRecord = Prisma.OrderGetPayload<{
  */
 export function toCustomerOrderResponse(order: CustomerOrderRecord) {
   const { createdBy, ...customerOrder } = order;
-  return { ...customerOrder, createdByAdmin: Boolean(createdBy) };
+  return { ...customerOrder, createdByAdmin: Boolean(createdBy), ...receiptMeta(order.status) };
+}
+
+export type PaymentResult = "approved" | "declined" | "pending";
+
+/**
+ * Cómo terminó el pago, para el aviso de la tienda al volver de Bold o Wompi.
+ * Sale del estado del pedido (no del id de la transacción, que el enlace del
+ * recibo dejará de mostrar), así funciona igual con las dos pasarelas.
+ */
+export function getPaymentResult(status: OrderStatus): PaymentResult {
+  if (isPaidLike(status)) return "approved";
+  if (status === OrderStatus.CANCELLED || status === OrderStatus.REJECTED) return "declined";
+  return "pending";
+}
+
+/**
+ * Campos del recibo que la tienda usa sin depender de datos de la clienta:
+ * el resultado del pago y si la respuesta viene enmascarada (enlace sin
+ * sesión dueña). Por ahora nunca se enmascara: la tienda primero aprende a
+ * leerlos y después se activa.
+ */
+export function receiptMeta(status: OrderStatus) {
+  return { paymentResult: getPaymentResult(status), masked: false };
 }
 
 /** Campos de `Order` que nunca deben salir por una ruta pública (para pruebas). */
