@@ -1,4 +1,6 @@
 import { EXCLUDE_CAPSULE_PRODUCTS } from "@/lib/catalog-filters";
+import { paginateInventory } from "@/lib/inventory-list";
+import type { InventoryListQuery } from "@/lib/inventory-list-query";
 import prismadb from "@/lib/prismadb";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
 import { addKitDemand, computeReplenishment, limitingKitComponent, type ReplenishmentSignal } from "@/lib/replenishment";
@@ -23,6 +25,12 @@ export type LastCostSource = "purchase" | "product";
  */
 export async function getInventory(storeId: string, now = new Date()) {
   const access = await requireStoreRead(storeId);
+  const rows = await loadInventoryRows(storeId, now);
+  return access.role === "viewer" ? scrubInventoryRows(rows) : rows;
+}
+
+/** Las filas con su señal, sin comprobar acceso: solo para `getInventory` y mediciones. */
+export async function loadInventoryRows(storeId: string, now = new Date()) {
   const [products, store, context] = await Promise.all([
     prismadb.product.findMany({
       where: { storeId, isArchived: false, ...EXCLUDE_CAPSULE_PRODUCTS },
@@ -46,7 +54,6 @@ export async function getInventory(storeId: string, now = new Date()) {
     getReplenishmentContext(storeId, now),
   ]);
   const threshold = resolveLowStockThreshold(store);
-  const isViewer = access.role === "viewer";
 
   // Lo que se vende dentro de un kit consume el stock del componente: cuenta
   // como demanda del componente aunque el pedido lleve el kit.
@@ -99,7 +106,24 @@ export async function getInventory(storeId: string, now = new Date()) {
     };
   });
 
-  return isViewer ? scrubInventoryRows(rows) : rows;
+  return rows;
 }
 
 export type InventoryRow = Awaited<ReturnType<typeof getInventory>>[number];
+
+/**
+ * La pantalla de Inventario: la señal se calcula para todo el catálogo (las
+ * cifras y los conteos la necesitan), pero al navegador solo baja la página
+ * de 25 o, agrupado, lo que está por reponer.
+ */
+export async function getInventoryPage(storeId: string, query: InventoryListQuery) {
+  const access = await requireStoreRead(storeId);
+  const [rows, store] = await Promise.all([
+    getInventory(storeId),
+    prismadb.store.findUnique({ where: { id: storeId }, select: { lowStockThreshold: true } }),
+  ]);
+  const threshold = resolveLowStockThreshold(store);
+  return { ...paginateInventory(rows, query, { threshold, viewer: access.role === "viewer" }), threshold, store };
+}
+
+export type InventoryPage = Awaited<ReturnType<typeof getInventoryPage>>;

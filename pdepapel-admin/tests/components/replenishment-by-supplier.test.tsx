@@ -9,7 +9,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn() }
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("axios", () => ({ default: { post: vi.fn() }, isAxiosError: () => false }));
 
-import { groupBySupplier, ReplenishmentBySupplier } from "@/app/(dashboard)/[storeId]/(routes)/inventario/components/replenishment-by-supplier";
+import { ReplenishmentBySupplier } from "@/app/(dashboard)/[storeId]/(routes)/inventario/components/replenishment-by-supplier";
+import { groupBySupplier } from "@/lib/inventory-list";
 import type { InventoryRow } from "@/app/(dashboard)/[storeId]/(routes)/inventario/server/get-inventory";
 import { computeReplenishment } from "@/lib/replenishment";
 
@@ -43,7 +44,7 @@ describe("ReplenishmentBySupplier", () => {
   it("creates a draft with the ticked lines at the last purchase cost and opens it", async () => {
     vi.mocked(axios.post).mockResolvedValue({ data: { id: "po-9", orderNumber: "PO-0040" } });
     const user = userEvent.setup();
-    render(<ReplenishmentBySupplier rows={rows} storeId="store-1" />);
+    render(<ReplenishmentBySupplier groups={groupBySupplier(rows)} storeId="store-1" />);
 
     expect(screen.getByText(/4 unidades en camino de este proveedor/)).toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: "Incluir Washi" }));
@@ -56,7 +57,7 @@ describe("ReplenishmentBySupplier", () => {
   });
 
   it("lets a product without supplier start its own draft instead of a group draft", () => {
-    render(<ReplenishmentBySupplier rows={rows} storeId="store-1" />);
+    render(<ReplenishmentBySupplier groups={groupBySupplier(rows)} storeId="store-1" />);
     expect(screen.getAllByRole("button", { name: /Crear borrador/ })).toHaveLength(1);
     expect(screen.getByText(/al recibir el pedido, el producto queda con ese proveedor/)).toBeInTheDocument();
     const stickers = screen.getByText("Stickers").closest("tr") as HTMLElement;
@@ -70,7 +71,7 @@ describe("ReplenishmentBySupplier", () => {
     const kit = row("k1", "Kit resaltadores", 2, 6, henko, { isKit: true, lastCost: null, lastCostSource: null, lastCostAt: null, limitingComponent: "Marcador lila" });
     const guessed = row("p4", "Marcador lila", 3, 9, henko, { lastCost: 1500, lastCostSource: "product", lastCostAt: null, soldViaKits30: 6 });
     const unknown = row("p5", "Borrador", 1, 5, henko, { lastCost: null, lastCostSource: null, lastCostAt: null });
-    render(<ReplenishmentBySupplier rows={[rows[0], kit, guessed, unknown]} storeId="store-1" />);
+    render(<ReplenishmentBySupplier groups={groupBySupplier([rows[0], kit, guessed, unknown])} storeId="store-1" />);
 
     expect(screen.getByText("recibido el 5 ago")).toBeInTheDocument();
     expect(screen.getByText("costo del producto, sin compra recibida")).toBeInTheDocument();

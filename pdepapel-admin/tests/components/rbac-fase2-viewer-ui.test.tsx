@@ -23,13 +23,15 @@ vi.mock("@/lib/env.mjs", () => ({ env: new Proxy({}, { get: () => "test" }) }));
 
 import { ViewerAccessProvider } from "@/components/shell/viewer-access";
 import { InventoryClient } from "@/app/(dashboard)/[storeId]/(routes)/inventario/components/inventory-client";
+import { paginateInventory } from "@/lib/inventory-list";
+import { parseInventoryListQuery } from "@/lib/inventory-list-query";
 import { CustomerOverviewPanel } from "@/app/(dashboard)/[storeId]/(routes)/clientes/components/customer-overview-panel";
 import { buildColumns } from "@/app/(dashboard)/[storeId]/(routes)/envios/components/columns";
 
 const asViewer = (node: React.ReactNode) => render(<ViewerAccessProvider role="viewer">{node}</ViewerAccessProvider>);
 const asOwner = (node: React.ReactNode) => render(<ViewerAccessProvider role="owner">{node}</ViewerAccessProvider>);
 
-const inventory = <InventoryClient data={[]} threshold={5} />;
+const inventory = <InventoryClient list={paginateInventory([], parseInventoryListQuery({}), { threshold: 5 })} threshold={5} />;
 
 afterEach(cleanup);
 

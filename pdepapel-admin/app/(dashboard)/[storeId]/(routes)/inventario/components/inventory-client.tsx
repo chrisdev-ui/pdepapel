@@ -11,23 +11,22 @@ import { TintBadge } from "@/components/ui/tint-badge";
 import { buildOfferPreselectionHref } from "@/lib/offer-preselection";
 import { Models } from "@/constants";
 import { useCanWrite } from "@/components/shell/viewer-access";
-import { INVENTORY_VIEWS, inventoryMatchesView, inventoryRowValue, normalizeInventoryView, summarizeInventory, type InventoryView } from "@/lib/inventory-views";
+import { INVENTORY_VIEWS, inventoryRowValue, type InventoryView } from "@/lib/inventory-views";
+import { DEFAULT_INVENTORY_VIEW, GROUP_BY_SUPPLIER, INVENTORY_LIST_PARAMS } from "@/lib/inventory-list-query";
 import { isOutOfStock } from "@/lib/product-readiness";
-import { compareUrgency, describeCover, DORMANT_WINDOW_DAYS, SALES_WINDOW_DAYS, TARGET_WEEKS } from "@/lib/replenishment";
+import { describeCover, DORMANT_WINDOW_DAYS, SALES_WINDOW_DAYS, TARGET_WEEKS } from "@/lib/replenishment";
 import { cn, currencyFormatter } from "@/lib/utils";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { AlertTriangle, Boxes, History, LayoutList, MoreHorizontal, Package, Truck, Wallet } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AdjustInventoryModal } from "../../movimientos-inventario/components/adjust-inventory-modal";
-import type { InventoryRow } from "../server/get-inventory";
+import type { InventoryPage, InventoryRow } from "../server/get-inventory";
 import { ReplenishmentBySupplier, restockHref } from "./replenishment-by-supplier";
 
-const VIEW_PARAM = "vista";
-const GROUP_PARAM = "agrupar";
-const DEFAULT_VIEW: InventoryView = "por-reponer";
+const SEARCH_DELAY_MS = 350;
 
 /** Costo y proveedor: el servidor no los manda a una cuenta de solo lectura. */
 const HIDDEN_FOR_VIEWER = ["supplier", "acqPrice", "value"];
@@ -58,67 +57,110 @@ function StockCell({ row }: { row: InventoryRow }) {
 }
 
 interface InventoryClientProps {
-  data: InventoryRow[];
+  /** La página (o los grupos), los conteos y las cifras, ya calculados en el servidor con la consulta de la URL. */
+  list: Omit<InventoryPage, "store" | "threshold">;
   /** Umbral de stock crítico ya resuelto (`resolveLowStockThreshold`); respaldo cuando no hay ventas. */
   threshold: number;
   thresholdFromSettings?: boolean;
-  initialView?: string | null;
-  initialGrouped?: boolean;
 }
 
-export function InventoryClient({ data, threshold, thresholdFromSettings = false, initialView = null, initialGrouped = false }: InventoryClientProps) {
+export function InventoryClient({ list, threshold, thresholdFromSettings = false }: InventoryClientProps) {
   // Sin permiso de escritura no hay costos que mostrar ni acciones que ofrecer:
   // el servidor ya manda la fila sin `acqPrice`, aquí se quitan las columnas.
   const canWrite = useCanWrite();
   const router = useRouter();
   const pathname = usePathname() ?? "";
-  const searchParams = useSearchParams();
   const params = useParams();
   const storeId = String(params.storeId);
-  // La URL manda; el estado local solo cubre el hueco hasta que Next
-  // refleja el replaceState.
-  const askedFor = normalizeInventoryView(initialView ?? searchParams.get(VIEW_PARAM)) ?? DEFAULT_VIEW;
-  // Escribiendo la URL se llega a «Sin costo» aunque la pestaña no esté. Sin
-  // `acqPrice` esa vista devuelve todo el catálogo, así que se cae al inicio.
-  const requestedView: InventoryView = !canWrite && askedFor === "sin-costo" ? DEFAULT_VIEW : askedFor;
-  const [selected, setSelected] = useState<{ base: InventoryView; view: InventoryView } | null>(null);
-  const view = selected?.base === requestedView ? selected.view : requestedView;
-  const [grouped, setGroupedState] = useState(initialGrouped || searchParams.get(GROUP_PARAM) === "proveedor");
+  const [, startTransition] = useTransition();
+  // La vista, la búsqueda, la página, el orden y la agrupación vienen de la
+  // URL ya resueltos por el servidor (a solo lectura no le llega «Sin costo»).
+  const { query, totals, counts, rows } = list;
+  const view = query.view;
+  const grouped = query.groupBySupplier;
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
 
-  const totals = useMemo(() => summarizeInventory(data, threshold), [data, threshold]);
   // «Sin costo» existe solo para encontrar productos a los que les falta el
   // precio de compra: no tiene sentido sin costos a la vista.
   const views = useMemo(() => (canWrite ? INVENTORY_VIEWS : INVENTORY_VIEWS.filter((v) => v.id !== "sin-costo")), [canWrite]);
-  const counts = useMemo(() => Object.fromEntries(INVENTORY_VIEWS.map((v) => [v.id, data.filter((row) => inventoryMatchesView(row, v.id, threshold)).length])) as Record<InventoryView, number>, [data, threshold]);
-  const rows = useMemo(() => {
-    const filtered = data.filter((row) => inventoryMatchesView(row, view, threshold));
-    return view === "por-reponer" ? [...filtered].sort(compareUrgency) : filtered;
-  }, [data, view, threshold]);
 
   const openAdjust = (productId: string | null) => {
     setAdjustProductId(productId);
     setAdjustOpen(true);
   };
 
-  const replaceQuery = (nextView: InventoryView, nextGrouped: boolean) => {
-    const query = new URLSearchParams(searchParams.toString());
-    if (nextView === DEFAULT_VIEW) query.delete(VIEW_PARAM);
-    else query.set(VIEW_PARAM, nextView);
-    if (nextGrouped && nextView === "por-reponer") query.set(GROUP_PARAM, "proveedor");
-    else query.delete(GROUP_PARAM);
-    const suffix = query.toString();
-    window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
-  };
-  const setView = (next: InventoryView) => {
-    setSelected({ base: requestedView, view: next });
-    replaceQuery(next, grouped);
-  };
-  const setGrouped = (next: boolean) => {
-    setGroupedState(next);
-    replaceQuery(view, next);
-  };
+  /**
+   * Todo vive en la URL, como en Productos: pestaña, página, orden y
+   * agrupación dejan entrada en el historial; la búsqueda reemplaza la suya.
+   */
+  const navigate = useCallback(
+    (change: (params: URLSearchParams) => void, history: "push" | "replace" = "push") => {
+      const next = new URLSearchParams(window.location.search);
+      change(next);
+      const suffix = next.toString();
+      const href = suffix ? `${pathname}?${suffix}` : pathname;
+      if (href === `${pathname}${window.location.search}`) return;
+      startTransition(() => (history === "push" ? router.push(href, { scroll: false }) : router.replace(href, { scroll: false })));
+    },
+    [pathname, router],
+  );
+  const setView = (next: InventoryView) =>
+    navigate((params) => {
+      if (next === DEFAULT_INVENTORY_VIEW) params.delete(INVENTORY_LIST_PARAMS.view);
+      else params.set(INVENTORY_LIST_PARAMS.view, next);
+      if (next !== "por-reponer") params.delete(INVENTORY_LIST_PARAMS.group);
+      params.delete(INVENTORY_LIST_PARAMS.page);
+    });
+  const setGrouped = (next: boolean) =>
+    navigate((params) => {
+      if (next) params.set(INVENTORY_LIST_PARAMS.group, GROUP_BY_SUPPLIER);
+      else params.delete(INVENTORY_LIST_PARAMS.group);
+      params.delete(INVENTORY_LIST_PARAMS.page);
+    });
+  const setPage = useCallback(
+    (next: number) =>
+      navigate((params) => {
+        if (next <= 1) params.delete(INVENTORY_LIST_PARAMS.page);
+        else params.set(INVENTORY_LIST_PARAMS.page, String(next));
+      }),
+    [navigate],
+  );
+  const sorting = useMemo<SortingState>(() => (query.sort ? [query.sort] : []), [query.sort]);
+  const setSorting = useCallback(
+    (next: SortingState) =>
+      navigate((params) => {
+        const [first] = next;
+        if (first) params.set(INVENTORY_LIST_PARAMS.sort, `${first.desc ? "-" : ""}${first.id}`);
+        else params.delete(INVENTORY_LIST_PARAMS.sort);
+        params.delete(INVENTORY_LIST_PARAMS.page);
+      }),
+    [navigate],
+  );
+  // La búsqueda espera a que se deje de escribir para no pedir una página por letra.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
+  const setSearch = useCallback(
+    (value: string) => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = setTimeout(
+        () =>
+          navigate((params) => {
+            const text = value.trim();
+            if (text) params.set(INVENTORY_LIST_PARAMS.search, text);
+            else params.delete(INVENTORY_LIST_PARAMS.search);
+            params.delete(INVENTORY_LIST_PARAMS.page);
+          }, "replace"),
+        SEARCH_DELAY_MS,
+      );
+    },
+    [navigate],
+  );
 
   const columns = useMemo<ColumnDef<InventoryRow>[]>(() => {
     const all: ColumnDef<InventoryRow>[] = [
@@ -187,7 +229,7 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
     return all.filter((column) => !HIDDEN_FOR_VIEWER.includes(columnId(column)));
   }, [router, storeId, canWrite]);
 
-  const showGrouped = canWrite && view === "por-reponer" && grouped;
+  const showGrouped = canWrite && view === "por-reponer" && grouped && list.groups !== null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -244,13 +286,24 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
       )}
 
       {showGrouped ? (
-        <ReplenishmentBySupplier rows={rows} storeId={storeId} />
+        <ReplenishmentBySupplier groups={list.groups ?? []} storeId={storeId} />
       ) : (
         <DataTable
           tableKey={Models.Inventory}
           searchPlaceholder="Buscar por nombre, SKU o subcategoría…"
           columns={columns}
           data={rows}
+          server={{
+            page: list.page,
+            pageCount: list.pageCount,
+            total: list.total,
+            pageSize: list.pageSize,
+            search: query.search,
+            onSearchChange: setSearch,
+            onPageChange: setPage,
+            sorting,
+            onSortingChange: setSorting,
+          }}
           getRowId={(row) => row.id}
           onRowClick={(row) => router.push(`/${storeId}/productos/${row.id}`)}
           emptyState={view === "todo" ? { title: "Aún no hay productos con stock" } : { title: "Nada en esta vista", description: view === "por-reponer" ? "Todo lo que se vende tiene cobertura." : view === "agotados" ? "No hay productos agotados." : view === "sin-costo" ? "Todos los productos tienen costo de compra." : "No hay kits." }}

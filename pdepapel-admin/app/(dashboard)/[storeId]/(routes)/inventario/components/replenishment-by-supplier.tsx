@@ -8,12 +8,13 @@ import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { formatKardexDay } from "@/lib/kardex";
-import { compareUrgency, describeCover } from "@/lib/replenishment";
+import type { SupplierGroup as InventorySupplierGroup } from "@/lib/inventory-list";
+import { describeCover } from "@/lib/replenishment";
 import { currencyFormatter } from "@/lib/utils";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { InventoryRow } from "../server/get-inventory";
 
@@ -23,12 +24,7 @@ interface Line {
   quantity: number;
 }
 
-interface SupplierGroup {
-  id: string | null;
-  name: string;
-  rows: InventoryRow[];
-  onOrderUnits: number;
-}
+type SupplierGroup = InventorySupplierGroup<InventoryRow>;
 
 /** Borrador de reposición con proveedor, producto y cantidad sugerida ya diligenciados. */
 export function restockHref(storeId: string, row: Pick<InventoryRow, "id" | "supplier" | "signal">): string {
@@ -37,23 +33,6 @@ export function restockHref(storeId: string, row: Pick<InventoryRow, "id" | "sup
   query.set("producto", row.id);
   if (row.signal.suggested > 0) query.set("cantidad", String(row.signal.suggested));
   return `/${storeId}/aprovisionamiento/nuevo?${query.toString()}`;
-}
-
-/** Agrupa las filas por proveedor; las que no tienen quedan al final. */
-export function groupBySupplier(rows: InventoryRow[]): SupplierGroup[] {
-  const groups = new Map<string | null, SupplierGroup>();
-  for (const row of [...rows].sort(compareUrgency)) {
-    const key = row.supplier?.id ?? null;
-    const group = groups.get(key) ?? { id: key, name: row.supplier?.name ?? "Sin proveedor asignado", rows: [], onOrderUnits: 0 };
-    group.rows.push(row);
-    group.onOrderUnits += row.onOrder;
-    groups.set(key, group);
-  }
-  return Array.from(groups.values()).sort((a, b) => {
-    if (a.id === null) return 1;
-    if (b.id === null) return -1;
-    return b.rows.length - a.rows.length;
-  });
 }
 
 /** Nota bajo el costo: de dónde sale. */
@@ -250,9 +229,8 @@ function SupplierCard({ group, storeId }: { group: SupplierGroup; storeId: strin
   );
 }
 
-/** Vista «Por reponer» agrupada por proveedor: un borrador de aprovisionamiento por grupo. */
-export function ReplenishmentBySupplier({ rows, storeId }: { rows: InventoryRow[]; storeId: string }) {
-  const groups = useMemo(() => groupBySupplier(rows), [rows]);
+/** Vista «Por reponer» agrupada por proveedor (armada en el servidor): un borrador de aprovisionamiento por grupo. */
+export function ReplenishmentBySupplier({ groups, storeId }: { groups: SupplierGroup[]; storeId: string }) {
   if (groups.length === 0) {
     return <p className="rounded-xl border bg-white p-6 text-center text-sm text-muted-foreground">Nada por reponer: todo lo que se vende tiene cobertura.</p>;
   }
