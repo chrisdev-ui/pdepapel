@@ -11,9 +11,11 @@ import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 export async function getOrder(orderId: string, storeId: string) {
   const access = await requireStoreRead(storeId);
   headers();
-  const order = await prismadb.order.findUnique({
+  // Acotado a la tienda de la URL: con acceso a una tienda no se abre un pedido de otra.
+  const order = await prismadb.order.findFirst({
     where: {
       id: orderId,
+      storeId,
     },
     include: {
       orderItems: true,
