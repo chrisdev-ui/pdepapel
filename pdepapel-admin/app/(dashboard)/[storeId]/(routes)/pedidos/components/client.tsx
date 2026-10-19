@@ -18,6 +18,7 @@ import {
   type OrderListFilters,
 } from "@/lib/order-list-filters";
 import { cn } from "@/lib/utils";
+import type { SortingState } from "@tanstack/react-table";
 import { Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -42,6 +43,7 @@ interface OrderClientProps {
 const VIEW_PARAM = "vista";
 const PAGE_PARAM = "pagina";
 const SEARCH_PARAM = "q";
+const SORT_PARAM = "orden";
 const SEARCH_DELAY_MS = 350;
 
 const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pageCount, pageSize, totalOrders, search }) => {
@@ -99,6 +101,23 @@ const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pa
       navigate((query) => {
         if (next <= 1) query.delete(PAGE_PARAM);
         else query.set(PAGE_PARAM, String(next));
+      }),
+    [navigate],
+  );
+
+  // El orden lo aplica el servidor a toda la lista: antes solo reordenaba los 25 pedidos de la página.
+  const sortParam = searchParams.get(SORT_PARAM) ?? "";
+  const sorting = useMemo<SortingState>(
+    () => (sortParam ? [{ id: sortParam.replace(/^-/, ""), desc: sortParam.startsWith("-") }] : []),
+    [sortParam],
+  );
+  const setSorting = useCallback(
+    (next: SortingState) =>
+      navigate((query) => {
+        const [first] = next;
+        if (first) query.set(SORT_PARAM, `${first.desc ? "-" : ""}${first.id}`);
+        else query.delete(SORT_PARAM);
+        query.delete(PAGE_PARAM);
       }),
     [navigate],
   );
@@ -254,7 +273,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pa
         columns={columns}
         data={data}
         isLoading={pending}
-        server={{ page, pageCount, total, pageSize, search, onSearchChange: setSearch, onPageChange: setPage }}
+        server={{ page, pageCount, total, pageSize, search, onSearchChange: setSearch, onPageChange: setPage, sorting, onSortingChange: setSorting }}
         getRowId={(row) => row.id}
         rowSelection={rowSelection}
         onRowSelectionChange={setRowSelection}

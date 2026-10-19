@@ -137,4 +137,23 @@ describe("Pedidos paginado en el servidor (MySQL)", () => {
     expect(result.orders[0].orderItems[0].product?.images[0]?.url).toBe("https://images.test/principal.jpg");
     expect(new Date(result.orders[0].createdAt).getTime()).toBeGreaterThanOrEqual(new Date(result.orders[24].createdAt).getTime());
   });
+
+  it("el orden de una columna vale para toda la lista, no solo para los 25 de la página", async () => {
+    const store = fixture!.store.id;
+    const walk = async (orden: string) => {
+      const first = await listOrderPage(testPrisma, store, parseOrderListQuery({ vista: "todos", orden }));
+      const second = await listOrderPage(testPrisma, store, parseOrderListQuery({ vista: "todos", orden, pagina: "2" }));
+      return [...first.ids, ...second.ids];
+    };
+    const byTotalDesc = await walk("-totalPrice");
+    const totals = new Map((await testPrisma.order.findMany({ where: { id: { in: byTotalDesc } }, select: { id: true, total: true } })).map((row) => [row.id, row.total]));
+    // El único de 45.000 está en la última fecha de la lista: sin orden en el servidor quedaría en la página 2.
+    expect(totals.get(byTotalDesc[0])).toBe(45000);
+    expect(byTotalDesc).toHaveLength(40);
+    const byName = await walk("fullName");
+    const names = new Map((await testPrisma.order.findMany({ where: { id: { in: byName } }, select: { id: true, fullName: true } })).map((row) => [row.id, row.fullName]));
+    const ordered = byName.map((id) => names.get(id)!);
+    expect(ordered).toEqual([...ordered].sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base", numeric: true })));
+    expect(parseOrderListQuery({ orden: "secreto" }).sort).toBeNull();
+  });
 });

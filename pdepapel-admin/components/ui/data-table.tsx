@@ -67,6 +67,8 @@ interface DataTableProps<TData, TValue> {
       label: string;
       value: string;
       icon?: React.ComponentType<{ className?: string }>;
+      /** Cuántas filas tiene la opción, cuando la cuenta el servidor. */
+      count?: number;
     }[];
   }[];
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
@@ -107,6 +109,14 @@ interface DataTableProps<TData, TValue> {
     search: string;
     onSearchChange: (value: string) => void;
     onPageChange: (page: number) => void;
+    /** Orden de toda la lista: lo aplica el servidor, no la página en pantalla. */
+    sorting?: SortingState;
+    onSortingChange?: (sorting: SortingState) => void;
+    /** Filtros de columna aplicados en el servidor. */
+    columnFilters?: ColumnFiltersState;
+    onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
+    /** «Limpiar»: búsqueda y filtros de una vez, en un solo viaje. */
+    onClear?: () => void;
   };
 }
 
@@ -156,7 +166,12 @@ export function DataTable<TData, TValue>({
     setGlobalFilterState(value);
     server?.onSearchChange(value);
   };
-  const [sorting, setSorting] = useState<SortingState>(tableState.sorting);
+  const [localSorting, setSorting] = useState<SortingState>(tableState.sorting);
+  // Con lista del servidor el orden y los filtros vienen de la URL: lo guardado
+  // en el navegador de otra visita ordenaría solo la página en pantalla.
+  const sorting = server?.onSortingChange ? (server.sorting ?? []) : server ? [] : localSorting;
+  const serverFilters = Boolean(server?.onColumnFiltersChange);
+  const activeColumnFilters = serverFilters ? (server?.columnFilters ?? []) : columnFilters;
   const [internalRowSelection, setInternalRowSelection] =
     useState<RowSelectionState>({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
@@ -223,10 +238,17 @@ export function DataTable<TData, TValue>({
     getRowId,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    onColumnFiltersChange: setColumnFilters,
+    onColumnFiltersChange: serverFilters
+      ? (updater) => server!.onColumnFiltersChange!(typeof updater === "function" ? updater(activeColumnFilters) : updater)
+      : setColumnFilters,
+    manualFiltering: serverFilters,
     onGlobalFilterChange: (updater) => setGlobalFilter(typeof updater === "function" ? updater(globalFilter) : updater),
     globalFilterFn: "includesString",
-    onSortingChange: setSorting,
+    onSortingChange: server?.onSortingChange
+      ? (updater) => server.onSortingChange!(typeof updater === "function" ? updater(sorting) : updater)
+      : setSorting,
+    manualSorting: Boolean(server),
+    enableSorting: !server || Boolean(server.onSortingChange),
     onColumnVisibilityChange: setColumnVisibility,
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -235,7 +257,7 @@ export function DataTable<TData, TValue>({
     onRowSelectionChange: setRowSelection,
     state: {
       sorting,
-      columnFilters,
+      columnFilters: activeColumnFilters,
       globalFilter: server ? "" : globalFilter,
       columnVisibility,
       rowSelection,
@@ -268,7 +290,7 @@ export function DataTable<TData, TValue>({
   useEffect(() => {
     updateTableState(tableKey, {
       pagination: { pageIndex, pageSize },
-      sorting,
+      sorting: localSorting,
       columnFilters,
       columnVisibility,
     });
@@ -277,15 +299,20 @@ export function DataTable<TData, TValue>({
     tableKey,
     pageIndex,
     pageSize,
-    sorting,
+    localSorting,
     columnFilters,
     columnVisibility,
     updateTableState,
     onColumnFiltersChangeProp,
   ]);
 
-  const hasActiveFilters = globalFilter.length > 0 || columnFilters.length > 0;
+  const hasActiveFilters = globalFilter.length > 0 || activeColumnFilters.length > 0;
   const clearFilters = () => {
+    if (server?.onClear) {
+      setGlobalFilterState("");
+      server.onClear();
+      return;
+    }
     setGlobalFilter("");
     table.resetColumnFilters();
   };

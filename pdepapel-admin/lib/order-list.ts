@@ -3,7 +3,10 @@ import { OrderType, type Prisma } from "@prisma/client";
 import {
   DEFAULT_ORDER_VIEW,
   ORDER_VIEWS,
+  getOrderChannel,
   getOrderQueue,
+  getPaymentBadge,
+  getShippingBadge,
   isOrderView,
   orderMatchesView,
   type OrderView,
@@ -24,11 +27,16 @@ import { getOrderDateRange, parseOrderListFilters, type OrderListFilters } from 
 export const ORDER_PAGE_SIZE = 25;
 const MAX_SEARCH_LENGTH = 80;
 
+export const ORDER_SORT_COLUMNS = ["orderNumber", "fullName", "channel", "payment", "shipping", "totalPrice"] as const;
+export type OrderSortColumn = (typeof ORDER_SORT_COLUMNS)[number];
+
 export interface OrderListQuery {
   view: OrderView;
   filters: OrderListFilters;
   search: string;
   page: number;
+  /** Orden de toda la lista (`orden=total` o `orden=-total`); sin él, del más nuevo al más viejo. */
+  sort: { id: OrderSortColumn; desc: boolean } | null;
 }
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -42,11 +50,15 @@ export function parseOrderListQuery(params: SearchParams): OrderListQuery {
   }
   const view = query.get("vista");
   const page = Number.parseInt(query.get("pagina") ?? "1", 10);
+  const sortParam = query.get("orden") ?? "";
+  const desc = sortParam.startsWith("-");
+  const sortId = (desc ? sortParam.slice(1) : sortParam) as OrderSortColumn;
   return {
     view: isOrderView(view) ? view : DEFAULT_ORDER_VIEW,
     filters: parseOrderListFilters(query),
     search: (query.get("q") ?? "").trim().slice(0, MAX_SEARCH_LENGTH),
     page: Number.isFinite(page) && page > 0 ? page : 1,
+    sort: ORDER_SORT_COLUMNS.includes(sortId) ? { id: sortId, desc } : null,
   };
 }
 
@@ -95,6 +107,9 @@ export function orderListWhere(storeId: string, filters: OrderListFilters, searc
 /** Lo justo para decidir la cola de cada pedido. */
 export const ORDER_QUEUE_SELECT = {
   id: true,
+  orderNumber: true,
+  fullName: true,
+  total: true,
   status: true,
   type: true,
   createdAt: true,
@@ -117,19 +132,38 @@ export interface OrderListPage {
   pageSize: number;
 }
 
+const collator = new Intl.Collator("es", { sensitivity: "base", numeric: true });
+const compareSortKeys = (a: string | number, b: string | number) => (typeof a === "number" && typeof b === "number" ? a - b : collator.compare(String(a), String(b)));
+
+/** Lo mismo que muestra cada columna ordenable de la tabla. */
+const ORDER_SORT_KEYS: Record<OrderSortColumn, (row: QueueRow, order: QueueableOrder, now: Date) => string | number> = {
+  orderNumber: (row) => row.orderNumber,
+  fullName: (row) => row.fullName ?? "",
+  channel: (row) => getOrderChannel(row.type).label,
+  payment: (_row, order, now) => getPaymentBadge(order, now).label,
+  shipping: (_row, order, now) => getShippingBadge(order, now)?.label ?? "",
+  totalPrice: (row) => row.total,
+};
+
 /** La parte pura: clasificar, contar y cortar la página. Las filas vienen ordenadas de la más nueva a la más vieja. */
 export function paginateOrders(rows: readonly QueueRow[], query: OrderListQuery, now = new Date(), pageSize = ORDER_PAGE_SIZE): OrderListPage {
   const counts = Object.fromEntries(ORDER_VIEWS.map((view) => [view.id, 0])) as Record<OrderView, number>;
-  const matching: string[] = [];
+  const matching: { row: QueueRow; order: QueueableOrder }[] = [];
   for (const row of rows) {
     const order: QueueableOrder = { ...row, openInventoryIssues: row._count.inventoryIssues };
     const queue = getOrderQueue(order, now);
     for (const { id } of ORDER_VIEWS) if (orderMatchesView(queue, id, order, now)) counts[id] += 1;
-    if (orderMatchesView(queue, query.view, order, now)) matching.push(row.id);
+    if (orderMatchesView(queue, query.view, order, now)) matching.push({ row, order });
+  }
+  if (query.sort) {
+    const { id, desc } = query.sort;
+    const key = ORDER_SORT_KEYS[id];
+    // `sort` es estable: entre iguales queda el más nuevo primero.
+    matching.sort((a, b) => (desc ? -1 : 1) * compareSortKeys(key(a.row, a.order, now), key(b.row, b.order, now)));
   }
   const pageCount = Math.max(1, Math.ceil(matching.length / pageSize));
   const page = Math.min(query.page, pageCount);
-  return { ids: matching.slice((page - 1) * pageSize, page * pageSize), counts, total: matching.length, page, pageCount, pageSize };
+  return { ids: matching.slice((page - 1) * pageSize, page * pageSize).map(({ row }) => row.id), counts, total: matching.length, page, pageCount, pageSize };
 }
 
 type OrderListDb = { order: { findMany: (args: { where: Prisma.OrderWhereInput; select: typeof ORDER_QUEUE_SELECT; orderBy: Prisma.OrderOrderByWithRelationInput[] }) => Promise<QueueRow[]> } };

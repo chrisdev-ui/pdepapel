@@ -19,6 +19,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import {
   DEFAULT_PRODUCT_VIEW,
   PRODUCT_ATTRIBUTE_PARAMS,
+  PRODUCT_FILTER_COLUMNS,
   PRODUCT_LIST_PARAMS,
   type ProductListQuery,
 } from "@/lib/product-list-query";
@@ -30,7 +31,7 @@ import {
 } from "@/lib/product-readiness";
 import { cn } from "@/lib/utils";
 import { Supplier } from "@prisma/client";
-import { ColumnFiltersState } from "@tanstack/react-table";
+import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
 import {
   ChevronDown,
   Edit,
@@ -103,7 +104,6 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const [catalogData, setCatalogData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   // Modo selección en celular: las tarjetas muestran su casilla.
   const [selectMode, setSelectMode] = useState(false);
@@ -167,19 +167,51 @@ const ProductClient: React.FC<ProductClientProps> = ({
     }
   }, [storeId, toast]);
 
-  const option = ({ value, label }: { value: string; label: string }) => ({ value, label });
-  const groupFilterOptions = list.facets.group.map(option);
-  const categoryFilterOptions = list.facets.category.map(option);
-  const brandFilterOptions = list.facets.brand.map(option);
+  const columnFilters = useMemo<ColumnFiltersState>(
+    () =>
+      PRODUCT_FILTER_COLUMNS.flatMap(({ column, key }) =>
+        query.filters[key].length ? [{ id: column, value: query.filters[key] }] : [],
+      ),
+    [query.filters],
+  );
+  const sorting = useMemo<SortingState>(() => (query.sort ? [query.sort] : []), [query.sort]);
+  // «Editar grupo seleccionado» cuando el filtro Grupo tiene uno solo.
+  const selectedGroups = query.filters.group;
 
-  const handleFiltersChange = useCallback((filters: ColumnFiltersState) => {
-    const groupFilter = filters.find((f) => f.id === "productGroupId");
-    setSelectedGroups(
-      groupFilter && Array.isArray(groupFilter.value)
-        ? (groupFilter.value as string[])
-        : [],
-    );
-  }, []);
+  const setColumnFilters = useCallback(
+    (filters: ColumnFiltersState) =>
+      navigate((params) => {
+        for (const { column, param } of PRODUCT_FILTER_COLUMNS) {
+          const value = filters.find((filter) => filter.id === column)?.value;
+          const values = Array.isArray(value) ? (value as string[]) : [];
+          if (values.length) params.set(param, values.join(","));
+          else params.delete(param);
+        }
+        params.delete(PRODUCT_LIST_PARAMS.page);
+      }),
+    [navigate],
+  );
+
+  const setSorting = useCallback(
+    (next: SortingState) =>
+      navigate((params) => {
+        const [first] = next;
+        if (first) params.set(PRODUCT_LIST_PARAMS.sort, `${first.desc ? "-" : ""}${first.id}`);
+        else params.delete(PRODUCT_LIST_PARAMS.sort);
+        params.delete(PRODUCT_LIST_PARAMS.page);
+      }),
+    [navigate],
+  );
+
+  const clearSearchAndFilters = useCallback(
+    () =>
+      navigate((params) => {
+        params.delete(PRODUCT_LIST_PARAMS.search);
+        PRODUCT_FILTER_COLUMNS.forEach(({ param }) => params.delete(param));
+        params.delete(PRODUCT_LIST_PARAMS.page);
+      }),
+    [navigate],
+  );
 
   const threshold = resolveLowStockThreshold(lowStockThreshold);
   const { counts, summary } = list;
@@ -361,6 +393,11 @@ const ProductClient: React.FC<ProductClientProps> = ({
           search: query.search,
           onSearchChange: setSearch,
           onPageChange: setPage,
+          sorting,
+          onSortingChange: setSorting,
+          columnFilters,
+          onColumnFiltersChange: setColumnFilters,
+          onClear: clearSearchAndFilters,
         }}
         getRowId={(row) => row.id}
         onRowClick={(row) => router.push(`/${storeId}/productos/${row.id}`)}
@@ -378,44 +415,11 @@ const ProductClient: React.FC<ProductClientProps> = ({
           />
         )}
         filters={[
-          {
-            columnKey: "shape",
-            title: "Forma",
-            options: [
-              { label: "Individual", value: "Individual" },
-              { label: "Variante", value: "Variante" },
-              { label: "Kit", value: "Kit" },
-            ],
-          },
-          ...(brandFilterOptions.length
-            ? [
-                {
-                  columnKey: "brand",
-                  title: "Marca",
-                  options: brandFilterOptions,
-                },
-              ]
-            : []),
-          ...(categoryFilterOptions.length
-            ? [
-                {
-                  columnKey: "category",
-                  title: "Subcategoría",
-                  options: categoryFilterOptions,
-                },
-              ]
-            : []),
-          ...(groupFilterOptions.length
-            ? [
-                {
-                  columnKey: "productGroupId",
-                  title: "Grupo",
-                  options: groupFilterOptions,
-                },
-              ]
-            : []),
+          { columnKey: "shape", title: "Forma", options: list.facets.shape },
+          ...(list.facets.brand.length ? [{ columnKey: "brand", title: "Marca", options: list.facets.brand }] : []),
+          ...(list.facets.category.length ? [{ columnKey: "category", title: "Subcategoría", options: list.facets.category }] : []),
+          ...(list.facets.group.length ? [{ columnKey: "productGroupId", title: "Grupo", options: list.facets.group }] : []),
         ]}
-        onColumnFiltersChange={handleFiltersChange}
         bulkActions={(table) => (
           <ProductBulkActions table={table} taxonomies={taxonomies} brands={brands} />
         )}
