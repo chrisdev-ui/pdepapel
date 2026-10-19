@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
+import { scrubGiftCard } from "@/lib/viewer-payloads";
 
 /** Una tarjeta con su libro y los pedidos donde se usó. Sin el hash del código. */
 export async function getGiftCard(storeId: string, giftCardId: string) {
@@ -47,9 +48,8 @@ export async function getGiftCard(storeId: string, giftCardId: string) {
   if (!card) return null;
   const isViewer = access.role === "viewer";
   return {
-    ...card,
-    buyerEmail: isViewer ? null : card.buyerEmail,
-    recipientEmail: isViewer ? null : card.recipientEmail,
+    // Solo lectura: sin quién compra, para quién ni el mensaje.
+    ...(isViewer ? scrubGiftCard(card) : card),
     canWrite: !isViewer,
   };
 }

@@ -186,7 +186,7 @@ export function GiftCardWorkspace({ storeId, card }: { storeId: string; card: Gi
               <div>
                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">Quien compró</dt>
                 <dd className="font-medium">
-                  <Link href={`/${storeId}/pedidos/${card.purchaseOrder.id}`} className="hover:underline">{card.purchaseOrder.fullName}</Link>
+                  <Link href={`/${storeId}/pedidos/${card.purchaseOrder.id}`} className="hover:underline">{card.purchaseOrder.fullName ?? "Oculto en solo lectura"}</Link>
                   <span className="block text-xs text-muted-foreground">
                     {card.buyerEmail ?? "correo oculto"} · pedido {card.purchaseOrder.orderNumber}
                   </span>
@@ -195,10 +195,16 @@ export function GiftCardWorkspace({ storeId, card }: { storeId: string; card: Gi
               <div>
                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">Quien recibe</dt>
                 <dd className="font-medium">
-                  {card.recipientName || "Se entrega en mano"}
-                  <span className="block text-xs text-muted-foreground">
-                    {card.recipientEmail ?? (card.recipientName ? "sin correo: el código fue a quien compró" : "el código fue a quien compró")}
-                  </span>
+                  {card.canWrite ? (
+                    <>
+                      {card.recipientName || "Se entrega en mano"}
+                      <span className="block text-xs text-muted-foreground">
+                        {card.recipientEmail ?? (card.recipientName ? "sin correo: el código fue a quien compró" : "el código fue a quien compró")}
+                      </span>
+                    </>
+                  ) : (
+                    "Oculto en solo lectura"
+                  )}
                 </dd>
               </div>
               {card.message && (

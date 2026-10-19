@@ -43,7 +43,7 @@ export const buildColumns = (storeId: string): ColumnDef<GiftCardColumn>[] => [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Quien compró" />,
     cell: ({ row }) => (
       <div className="flex min-w-0 max-w-[190px] flex-col gap-0.5">
-        <span className="truncate text-[13px] font-medium">{row.original.purchaseOrder.fullName}</span>
+        <span className="truncate text-[13px] font-medium">{row.original.purchaseOrder.fullName ?? "—"}</span>
         {row.original.buyerEmail && <span className="truncate text-[11px] text-muted-foreground">{row.original.buyerEmail}</span>}
       </div>
     ),

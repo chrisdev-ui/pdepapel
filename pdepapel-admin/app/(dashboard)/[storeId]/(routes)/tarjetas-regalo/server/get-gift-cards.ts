@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
+import { scrubGiftCard } from "@/lib/viewer-payloads";
 
 /**
  * Las tarjetas de la tienda para la lista y los valores a la venta para el
@@ -38,10 +39,8 @@ export async function getGiftCards(storeId: string) {
   const isViewer = access.role === "viewer";
   return {
     cards: cards.map(({ _count, ...card }) => ({
-      ...card,
-      // Solo lectura: sin correos de clientas.
-      buyerEmail: isViewer ? null : card.buyerEmail,
-      recipientEmail: isViewer ? null : card.recipientEmail,
+      // Solo lectura: sin quién compra ni para quién (ni nombres ni correos).
+      ...(isViewer ? scrubGiftCard(card) : card),
       redemptions: _count.redemptions,
     })),
     denominations,
