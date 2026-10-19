@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ storeId: "store-1" }),
-  useRouter: () => ({ push: mocks.push, refresh: vi.fn() }),
+  useRouter: () => ({ push: mocks.push, replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/store-1/productos",
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -34,6 +34,20 @@ const ProductClient = (clientModule as unknown as { default?: React.ComponentTyp
 
 afterEach(cleanup);
 
+const views = ["activos", "sin-completar", "sin-identificador", "imagen-rota", "transporte-por-revisar", "proximamente", "stock-critico", "agotados", "en-oferta", "archivados", "todos"];
+const zero = Object.fromEntries(views.map((view) => [view, 0]));
+const list = {
+  counts: zero,
+  summary: zero,
+  total: 0,
+  page: 1,
+  pageCount: 1,
+  pageSize: 25,
+  facets: { shape: [], brand: [], category: [], group: [] },
+  query: { view: "activos", search: "", page: 1, sort: null, filters: { shape: [], brand: [], category: [], group: [] }, attribute: null },
+  attributeName: null,
+};
+
 /**
  * Productos: la búsqueda de la tabla filtra en el cliente lo ya cargado y cada
  * fila abre la ficha, así que una lectura abre directamente la ficha del
@@ -42,7 +56,7 @@ afterEach(cleanup);
 describe("Productos · escanear y abrir", () => {
   it("opens the scanned standalone product's detail page instead of filtering the list", async () => {
     const Client = ProductClient as unknown as React.ComponentType<Record<string, unknown>>;
-    render(<Client data={[]} suppliers={[]} taxonomies={{ categories: [], sizes: [], colors: [], designs: [] }} lowStockThreshold={null} />);
+    render(<Client data={[]} list={list} suppliers={[]} taxonomies={{ categories: [], sizes: [], colors: [], designs: [] }} lowStockThreshold={null} />);
     expect(screen.getByPlaceholderText("Nombre, SKU, GTIN o grupo…")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Escanear y abrir" }));
     expect(mocks.push).toHaveBeenCalledWith("/store-1/productos/p-scan");
@@ -51,7 +65,7 @@ describe("Productos · escanear y abrir", () => {
   /** Una variante abre su grupo, con la variante marcada en la URL; un kit sigue abriendo su propia ficha. */
   it("opens the group page for a variant, and the kit's own page for a kit", async () => {
     const Client = ProductClient as unknown as React.ComponentType<Record<string, unknown>>;
-    render(<Client data={[]} suppliers={[]} taxonomies={{ categories: [], sizes: [], colors: [], designs: [] }} lowStockThreshold={null} />);
+    render(<Client data={[]} list={list} suppliers={[]} taxonomies={{ categories: [], sizes: [], colors: [], designs: [] }} lowStockThreshold={null} />);
     mocks.scanned = { ...mocks.scanned, id: "v-2", productGroupId: "g-hadas" };
     fireEvent.click(await screen.findByRole("button", { name: "Escanear y abrir" }));
     expect(mocks.push).toHaveBeenLastCalledWith("/store-1/productos/grupo/g-hadas?variante=v-2");

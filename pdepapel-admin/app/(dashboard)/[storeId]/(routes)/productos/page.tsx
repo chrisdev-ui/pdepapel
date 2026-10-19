@@ -1,4 +1,5 @@
 import { loadBrandOptions } from "@/lib/brand-options";
+import { parseProductListQuery, type ProductListQuery } from "@/lib/product-list-query";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { requireStoreRead } from "@/lib/store-access";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
@@ -22,26 +23,24 @@ export const metadata: Metadata = {
 
 export default async function ProductsPage({
   params,
+  searchParams,
 }: {
   params: {
     storeId: string;
   };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   await requireStoreRead(params.storeId);
-  const [products, suppliers, store, categories, sizes, colors, designs, brands] =
+  const query = parseProductListQuery(searchParams);
+  const [result, suppliers, attributeName, categories, sizes, colors, designs, brands] =
     await Promise.all([
-      getProducts(params.storeId),
+      getProducts(params.storeId, query),
       prismadb.supplier.findMany({
         where: { storeId: params.storeId },
         orderBy: { name: "asc" },
         select: SUPPLIER_PICKER_SELECT,
       }),
-      prismadb.store
-        .findUnique({
-          where: { id: params.storeId },
-          select: { lowStockThreshold: true },
-        })
-        .catch(() => null),
+      loadAttributeName(params.storeId, query.attribute),
       // Taxonomías para la edición en lote (antes vivían en «Gestión masiva»).
       prismadb.category.findMany({
         where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
@@ -69,13 +68,40 @@ export default async function ProductsPage({
   return (
     <div className="p-4 sm:p-8 sm:pt-6">
       <ProductClient
-        data={products}
+        data={result.products}
+        list={{
+          counts: result.counts,
+          summary: result.summary,
+          total: result.total,
+          page: result.page,
+          pageCount: result.pageCount,
+          pageSize: result.pageSize,
+          facets: result.facets,
+          query,
+          attributeName,
+        }}
         suppliers={suppliers}
         taxonomies={{ categories, sizes, colors, designs }}
         brands={brands}
-        lowStockThreshold={store?.lowStockThreshold ?? null}
+        lowStockThreshold={result.lowStockThreshold}
         storeUrl={env.FRONTEND_STORE_URL}
       />
     </div>
   );
+}
+
+/** El nombre del color, tamaño, diseño o subcategoría que llega desde Atributos. */
+async function loadAttributeName(storeId: string, attribute: ProductListQuery["attribute"]): Promise<string | null> {
+  if (!attribute) return null;
+  const where = { id: attribute.id, storeId };
+  const select = { name: true } as const;
+  const row =
+    attribute.field === "colorId"
+      ? await prismadb.color.findFirst({ where, select })
+      : attribute.field === "sizeId"
+        ? await prismadb.size.findFirst({ where, select })
+        : attribute.field === "designId"
+          ? await prismadb.design.findFirst({ where, select })
+          : await prismadb.category.findFirst({ where, select });
+  return row?.name ?? null;
 }

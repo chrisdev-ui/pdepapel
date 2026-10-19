@@ -57,11 +57,12 @@ vi.mock("@/lib/prismadb", () => ({
     },
   }),
 }));
-vi.mock("@/lib/discount-engine", () => ({ getProductsPrices: async () => new Map() }));
+vi.mock("@/lib/discount-engine", () => ({ getProductsPrices: async () => new Map(), getActiveOffers: async () => [] }));
 
 import { getProducts } from "@/app/(dashboard)/[storeId]/(routes)/productos/server/get-products";
 import { getOrders } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/server/get-orders";
 import { parseOrderListQuery } from "@/lib/order-list";
+import { parseProductListQuery } from "@/lib/product-list-query";
 import { getCategories } from "@/app/(dashboard)/[storeId]/(routes)/categorias/server/get-categories";
 
 function signIn(role: "owner" | "viewer" | "stranger" | "anon") {
@@ -81,7 +82,7 @@ beforeEach(() => {
 describe("catálogo para una cuenta de solo lectura", () => {
   it("entrega los productos sin costo de compra, transporte ni proveedor", async () => {
     signIn("viewer");
-    const rows = (await getProducts(STORE)) as Record<string, unknown>[];
+    const rows = (await getProducts(STORE, parseProductListQuery({}))).products as unknown as Record<string, unknown>[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: "p-1", name: "Libreta", price: 12000 });
     for (const hidden of ["acqPrice", "transportationCost", "supplierId"]) {
@@ -91,15 +92,15 @@ describe("catálogo para una cuenta de solo lectura", () => {
 
   it("a la dueña le entrega el costo de siempre", async () => {
     signIn("owner");
-    const rows = (await getProducts(STORE)) as Record<string, unknown>[];
+    const rows = (await getProducts(STORE, parseProductListQuery({}))).products as unknown as Record<string, unknown>[];
     expect(rows[0]).toMatchObject({ acqPrice: 5000, transportationCost: 300, supplierId: "sup-1" });
   });
 
   it("no entrega nada a una sesión ajena ni sin sesión", async () => {
     signIn("stranger");
-    await expect(getProducts(STORE)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(getProducts(STORE, parseProductListQuery({}))).rejects.toMatchObject({ statusCode: 403 });
     signIn("anon");
-    await expect(getProducts(STORE)).rejects.toMatchObject({ statusCode: 401 });
+    await expect(getProducts(STORE, parseProductListQuery({}))).rejects.toMatchObject({ statusCode: 401 });
   });
 });
 

@@ -9,6 +9,7 @@ import {
   getListReadiness,
   getProductShape,
 } from "@/lib/product-readiness";
+import { NO_BRAND_FILTER_VALUE } from "@/lib/product-list-query";
 import { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { getProducts } from "../server/get-products";
@@ -23,10 +24,9 @@ import {
   StockBadge,
 } from "./product-badges";
 
-export type ProductColumn = Awaited<ReturnType<typeof getProducts>>[number];
+export type ProductColumn = Awaited<ReturnType<typeof getProducts>>["products"][number];
 
-/** Valor del filtro «Marca» para los productos sin marca. */
-export const NO_BRAND_FILTER_VALUE = "__none__";
+export { NO_BRAND_FILTER_VALUE } from "@/lib/product-list-query";
 
 export const productImage = (row: ProductColumn) =>
   row.images.find((image) => image.isMain)?.url ??

@@ -17,9 +17,14 @@ import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import {
+  DEFAULT_PRODUCT_VIEW,
+  PRODUCT_ATTRIBUTE_PARAMS,
+  PRODUCT_LIST_PARAMS,
+  type ProductListQuery,
+} from "@/lib/product-list-query";
+import type { ProductListPage } from "@/lib/product-list";
+import {
   PRODUCT_VIEWS,
-  isProductView,
-  productMatchesView,
   resolveLowStockThreshold,
   type ProductView,
 } from "@/lib/product-readiness";
@@ -41,10 +46,9 @@ import {
   useParams,
   usePathname,
   useRouter,
-  useSearchParams,
 } from "next/navigation";
-import React, { useCallback, useMemo, useState } from "react";
-import { NO_BRAND_FILTER_VALUE, ProductColumn, buildColumns } from "./columns";
+import React, { useCallback, useMemo, useState, useTransition } from "react";
+import { ProductColumn, buildColumns } from "./columns";
 import type { BrandOption } from "@/lib/brand-options";
 import {
   ProductBulkActions,
@@ -53,7 +57,13 @@ import {
 import { ProductMobileCard } from "./product-mobile-card";
 
 interface ProductClientProps {
+  /** Solo la página actual: la lista se pagina, filtra y busca en el servidor. */
   data: ProductColumn[];
+  list: Omit<ProductListPage, "ids"> & {
+    query: ProductListQuery;
+    /** Nombre del color, tamaño, diseño o subcategoría que llega desde Atributos. */
+    attributeName: string | null;
+  };
   suppliers: SupplierPickerOption[];
   taxonomies: BulkTaxonomies;
   /** Umbral de stock crítico de la tienda; null usa el de la aplicación. */
@@ -75,32 +85,9 @@ const CatalogPdfLink = dynamic(loadCatalogPdfLink, {
   ),
 });
 
-const VIEW_PARAM = "vista";
-const DEFAULT_VIEW: ProductView = "activos";
-
-/** Filtro por atributo que llega desde Atributos («Ver sus productos»): `?color=<id>`, `?tamano=`, `?diseno=`, `?subcategoria=`. */
-const ATTRIBUTE_PARAMS = [
-  { param: "color", label: "color", pick: (p: ProductColumn) => p.color },
-  { param: "tamano", label: "tamaño", pick: (p: ProductColumn) => p.size },
-  { param: "diseno", label: "diseño", pick: (p: ProductColumn) => p.design },
-  { param: "subcategoria", label: "subcategoría", pick: (p: ProductColumn) => p.category },
-] as const;
-
-export function readAttributeFilter(
-  searchParams: { get(name: string): string | null },
-  data: readonly ProductColumn[],
-): { param: string; label: string; name: string; matches: (p: ProductColumn) => boolean } | null {
-  for (const entry of ATTRIBUTE_PARAMS) {
-    const id = searchParams.get(entry.param);
-    if (!id) continue;
-    const sample = data.find((p) => entry.pick(p)?.id === id);
-    return { param: entry.param, label: entry.label, name: sample ? entry.pick(sample)!.name : "—", matches: (p) => entry.pick(p)?.id === id };
-  }
-  return null;
-}
-
 const ProductClient: React.FC<ProductClientProps> = ({
   data,
+  list,
   suppliers,
   taxonomies,
   lowStockThreshold,
@@ -110,7 +97,6 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const canWrite = useCanWrite();
   const router = useRouter();
   const pathname = usePathname() ?? "";
-  const searchParams = useSearchParams();
   const params = useParams();
   const storeId = String(params.storeId);
   const { toast } = useToast();
@@ -121,19 +107,46 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   // Modo selección en celular: las tarjetas muestran su casilla.
   const [selectMode, setSelectMode] = useState(false);
-  // Con texto en el buscador se busca en TODAS las vistas, no solo en la pestaña.
-  const [search, setSearch] = useState("");
-  const requested = searchParams.get(VIEW_PARAM);
-  // La URL manda; el estado local solo cubre el hueco hasta que Next
-  // refleja el replaceState.
-  const requestedView: ProductView = isProductView(requested)
-    ? requested
-    : DEFAULT_VIEW;
-  const [selected, setSelected] = useState<{
-    base: ProductView;
-    view: ProductView;
-  } | null>(null);
-  const view = selected?.base === requestedView ? selected.view : requestedView;
+  const [pending, startTransition] = useTransition();
+  const { query } = list;
+  const view = query.view;
+  const searching = query.search.length > 0;
+  const attributeFilter = query.attribute ? { ...query.attribute, name: list.attributeName ?? "—" } : null;
+
+  /** Todo vive en la URL: el servidor arma la página con ella, y se puede compartir. */
+  const navigate = useCallback(
+    (change: (params: URLSearchParams) => void) => {
+      // Las acciones en lote solo ven las filas de la página: al cambiar de página o de lista se suelta la selección.
+      setRowSelection({});
+      const params = new URLSearchParams(window.location.search);
+      change(params);
+      const suffix = params.toString();
+      startTransition(() => router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false }));
+    },
+    [pathname, router],
+  );
+
+  const setPage = useCallback(
+    (next: number) =>
+      navigate((params) => {
+        if (next <= 1) params.delete(PRODUCT_LIST_PARAMS.page);
+        else params.set(PRODUCT_LIST_PARAMS.page, String(next));
+      }),
+    [navigate],
+  );
+
+  const setSearch = useCallback(
+    (value: string) => {
+      const text = value.trim();
+      if (text === query.search) return;
+      navigate((params) => {
+        if (text) params.set(PRODUCT_LIST_PARAMS.search, text);
+        else params.delete(PRODUCT_LIST_PARAMS.search);
+        params.delete(PRODUCT_LIST_PARAMS.page);
+      });
+    },
+    [navigate, query.search],
+  );
 
   const fetchCatalogData = useCallback(async () => {
     try {
@@ -154,40 +167,10 @@ const ProductClient: React.FC<ProductClientProps> = ({
     }
   }, [storeId, toast]);
 
-  const groupFilterOptions = useMemo(() => {
-    const unique = new Map<string, { id: string; name: string }>();
-    data.forEach(
-      (item) =>
-        item.productGroup &&
-        unique.set(item.productGroup.id, item.productGroup),
-    );
-    return Array.from(unique.values())
-      .sort((a, b) => a.name.localeCompare(b.name, "es"))
-      .map((g) => ({ label: g.name, value: g.id }));
-  }, [data]);
-  const categoryFilterOptions = useMemo(() => {
-    const names = new Set(
-      data
-        .map((item) => item.category?.name)
-        .filter((n): n is string => Boolean(n)),
-    );
-    return Array.from(names)
-      .sort()
-      .map((name) => ({ label: name, value: name }));
-  }, [data]);
-
-  const brandFilterOptions = useMemo(() => {
-    const unique = new Map<string, string>();
-    let withoutBrand = false;
-    data.forEach((item) => {
-      if (item.brandRef) unique.set(item.brandRef.id, item.brandRef.name);
-      else withoutBrand = true;
-    });
-    const options = Array.from(unique, ([value, label]) => ({ label, value })).sort((a, b) =>
-      a.label.localeCompare(b.label, "es"),
-    );
-    return withoutBrand ? [{ label: "Sin marca", value: NO_BRAND_FILTER_VALUE }, ...options] : options;
-  }, [data]);
+  const option = ({ value, label }: { value: string; label: string }) => ({ value, label });
+  const groupFilterOptions = list.facets.group.map(option);
+  const categoryFilterOptions = list.facets.category.map(option);
+  const brandFilterOptions = list.facets.brand.map(option);
 
   const handleFiltersChange = useCallback((filters: ColumnFiltersState) => {
     const groupFilter = filters.find((f) => f.id === "productGroupId");
@@ -199,44 +182,23 @@ const ProductClient: React.FC<ProductClientProps> = ({
   }, []);
 
   const threshold = resolveLowStockThreshold(lowStockThreshold);
-  const counts = useMemo(() => {
-    const result = {} as Record<ProductView, number>;
-    for (const { id } of PRODUCT_VIEWS)
-      result[id] = data.filter((p) =>
-        productMatchesView(p, id, threshold),
-      ).length;
-    return result;
-  }, [data, threshold]);
-  const searching = search.trim().length > 0;
-  // Con un atributo en la URL se listan todos sus productos, sin importar la vista.
-  const attributeFilter = useMemo(() => readAttributeFilter(searchParams, data), [searchParams, data]);
-  const rows = useMemo(() => {
-    if (attributeFilter) return data.filter(attributeFilter.matches);
-    return searching ? data : data.filter((p) => productMatchesView(p, view, threshold));
-  }, [data, view, threshold, searching, attributeFilter]);
-  const clearAttributeFilter = () => {
-    const query = new URLSearchParams(searchParams.toString());
-    ATTRIBUTE_PARAMS.forEach((entry) => query.delete(entry.param));
-    const suffix = query.toString();
-    router.replace(suffix ? `${pathname}?${suffix}` : pathname);
-  };
+  const { counts, summary } = list;
+  const clearAttributeFilter = () =>
+    navigate((params) => {
+      PRODUCT_ATTRIBUTE_PARAMS.forEach((entry) => params.delete(entry.param));
+      params.delete(PRODUCT_LIST_PARAMS.page);
+    });
   const columns = useMemo(
     () => buildColumns(storeId, threshold, storeUrl),
     [storeId, threshold, storeUrl],
   );
 
-  const setView = (next: ProductView) => {
-    setSelected({ base: requestedView, view: next });
-    const query = new URLSearchParams(searchParams.toString());
-    if (next === DEFAULT_VIEW) query.delete(VIEW_PARAM);
-    else query.set(VIEW_PARAM, next);
-    const suffix = query.toString();
-    window.history.replaceState(
-      null,
-      "",
-      suffix ? `${pathname}?${suffix}` : pathname,
-    );
-  };
+  const setView = (next: ProductView) =>
+    navigate((params) => {
+      if (next === DEFAULT_PRODUCT_VIEW) params.delete(PRODUCT_LIST_PARAMS.view);
+      else params.set(PRODUCT_LIST_PARAMS.view, next);
+      params.delete(PRODUCT_LIST_PARAMS.page);
+    });
 
   return (
     <div className="flex flex-col gap-4">
@@ -246,8 +208,8 @@ const ProductClient: React.FC<ProductClientProps> = ({
             Productos
           </h1>
           <p className="text-sm text-muted-foreground">
-            {counts.activos} a la venta · {counts.agotados} agotados ·{" "}
-            {counts["stock-critico"]} con stock crítico · {counts.archivados}{" "}
+            {summary.activos} a la venta · {summary.agotados} agotados ·{" "}
+            {summary["stock-critico"]} con stock crítico · {summary.archivados}{" "}
             archivados.
           </p>
         </div>
@@ -370,7 +332,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
       {attributeFilter && (
         <div role="status" className="flex flex-wrap items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm">
           <span>
-            {rows.length === 1 ? "1 producto" : `${rows.length} productos`} con {attributeFilter.label}{" "}
+            {list.total === 1 ? "1 producto" : `${list.total} productos`} con {attributeFilter.label}{" "}
             <span className="font-semibold">«{attributeFilter.name}»</span>, incluidos los archivados.
           </span>
           <Button type="button" variant="ghost" size="sm" onClick={clearAttributeFilter}>
@@ -389,10 +351,19 @@ const ProductClient: React.FC<ProductClientProps> = ({
         tableKey={Models.Products}
         searchPlaceholder="Nombre, SKU, GTIN o grupo…"
         columns={columns}
-        data={rows}
+        data={data}
+        isLoading={pending}
+        server={{
+          page: list.page,
+          pageCount: list.pageCount,
+          total: list.total,
+          pageSize: list.pageSize,
+          search: query.search,
+          onSearchChange: setSearch,
+          onPageChange: setPage,
+        }}
         getRowId={(row) => row.id}
         onRowClick={(row) => router.push(`/${storeId}/productos/${row.id}`)}
-        onGlobalFilterChange={setSearch}
         rowSelection={rowSelection}
         onRowSelectionChange={setRowSelection}
         renderMobileCard={(row) => (
