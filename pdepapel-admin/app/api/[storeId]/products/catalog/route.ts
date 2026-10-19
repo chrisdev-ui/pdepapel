@@ -99,7 +99,8 @@ export async function GET(
 
     return NextResponse.json(
       {
-        products: productsWithDiscounts,
+        // La cuenta de solo lectura no recibe costo de compra, transporte ni proveedor.
+        products: access.role === "viewer" ? scrubProducts(productsWithDiscounts) : productsWithDiscounts,
         store: {
           ...store,
           policies: store.policies
