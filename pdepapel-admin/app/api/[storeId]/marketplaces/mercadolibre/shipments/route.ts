@@ -54,22 +54,26 @@ export async function GET(
       orderBy: { updatedAt: "desc" },
       take: 100,
     });
+    const rows = shipments.map(({ marketplaceOrder, status, ...shipment }) => ({
+      ...shipment,
+      status: getEffectiveMercadoLibreShipmentStatus(
+        status,
+        marketplaceOrder?.status,
+      ),
+      marketplaceOrder: marketplaceOrder
+        ? {
+            id: marketplaceOrder.id,
+            externalOrderId: marketplaceOrder.externalOrderId,
+            buyerName: marketplaceOrder.buyerName,
+          }
+        : null,
+    }));
+    // Solo lectura: sin guía ni nombre de quien compra.
     return NextResponse.json(
-      shipments.map(({ marketplaceOrder, status, ...shipment }) => ({
-        ...shipment,
-        status: getEffectiveMercadoLibreShipmentStatus(
-          status,
-          marketplaceOrder?.status,
-        ),
-        marketplaceOrder: marketplaceOrder
-          ? {
-              id: marketplaceOrder.id,
-              externalOrderId: marketplaceOrder.externalOrderId,
-              buyerName: marketplaceOrder.buyerName,
-            }
-          : null,
-      })),
-      { headers: CACHE_HEADERS.NO_CACHE },
+      access.role === "viewer" ? scrubMarketplaceRows(rows) : rows,
+      {
+        headers: CACHE_HEADERS.NO_CACHE,
+      },
     );
   } catch (error) {
     return handleErrorResponse(error, "MERCADOLIBRE_SHIPMENTS_GET", {
