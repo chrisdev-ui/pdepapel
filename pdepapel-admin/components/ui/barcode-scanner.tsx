@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  BrowserMultiFormatReader,
-  type IScannerControls,
-} from "@zxing/browser";
+import type { IScannerControls } from "@zxing/browser";
 import { Camera, Loader2, RefreshCw, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -21,6 +18,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+/**
+ * El lector de códigos baja al abrir la cámara: está en el botón de nueve
+ * pantallas y pesa casi medio megabyte que la mayoría de visitas no usa.
+ */
+const loadReader = () => import("./zxing-reader").then((module) => module.BrowserMultiFormatReader);
 
 type BarcodeScannerProps = {
   /**
@@ -168,6 +171,7 @@ export function BarcodeScanner({
     setError(null);
     setIsStarting(true);
     setOpen(true);
+    void loadReader();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -189,21 +193,22 @@ export function BarcodeScanner({
   useEffect(() => {
     if (!open || !cameraStream || !videoElement) return;
 
-    const reader = new BrowserMultiFormatReader();
     let isActive = true;
 
-    reader
-      .decodeFromStream(cameraStream, videoElement, (result) => {
-        if (!isActive || !result || detectedRef.current) return;
+    loadReader()
+      .then((BrowserMultiFormatReader) =>
+        new BrowserMultiFormatReader().decodeFromStream(cameraStream, videoElement, (result) => {
+          if (!isActive || !result || detectedRef.current) return;
 
-        detectedRef.current = true;
-        const code = result.getText().trim();
-        setDetectedCode(code);
-        stopScanner();
-        void handleCodeRef.current(code);
-        // Deja ver «Código leído» un instante antes de cerrar.
-        closeTimerRef.current = window.setTimeout(() => setOpen(false), 350);
-      })
+          detectedRef.current = true;
+          const code = result.getText().trim();
+          setDetectedCode(code);
+          stopScanner();
+          void handleCodeRef.current(code);
+          // Deja ver «Código leído» un instante antes de cerrar.
+          closeTimerRef.current = window.setTimeout(() => setOpen(false), 350);
+        }),
+      )
       .then((controls) => {
         controlsRef.current = controls;
         if (isActive) setIsStarting(false);

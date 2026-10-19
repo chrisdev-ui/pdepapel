@@ -2,7 +2,6 @@
 
 import type { SupplierPickerOption } from "@/lib/public-catalog";
 import { useCanWrite } from "@/components/shell/viewer-access";
-import { ProductCatalog } from "@/components/catalog/product-catalog";
 import { ProductBatchImportModal } from "@/components/modals/product-batch-import-modal";
 import { Button } from "@/components/ui/button";
 import { ProductScanButton } from "@/components/ui/product-scan-button";
@@ -26,9 +25,7 @@ import {
 } from "@/lib/product-readiness";
 import { cn } from "@/lib/utils";
 import { Supplier } from "@prisma/client";
-import { PDFDownloadLink } from "@react-pdf/renderer";
 import { ColumnFiltersState } from "@tanstack/react-table";
-import { format } from "date-fns";
 import {
   ChevronDown,
   Edit,
@@ -38,6 +35,7 @@ import {
   ListChecks,
   Plus,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   useParams,
@@ -65,6 +63,17 @@ interface ProductClientProps {
   /** Marcas sin archivar, para «Asignar marca». */
   brands?: BrandOption[];
 }
+
+const loadCatalogPdfLink = () => import("./catalog-pdf-link");
+const CatalogPdfLink = dynamic(loadCatalogPdfLink, {
+  ssr: false,
+  loading: () => (
+    <Button variant="secondary" disabled>
+      <FileDown className="h-4 w-4" aria-hidden="true" />
+      Preparando PDF…
+    </Button>
+  ),
+});
 
 const VIEW_PARAM = "vista";
 const DEFAULT_VIEW: ProductView = "activos";
@@ -129,6 +138,8 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const fetchCatalogData = useCallback(async () => {
     try {
       setIsLoading(true);
+      // La librería del PDF baja mientras el servidor arma el catálogo.
+      void loadCatalogPdfLink();
       const response = await fetch(
         `/api/${storeId}/${Models.Products}/catalog`,
       );
@@ -288,24 +299,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          {catalogData && !isLoading && (
-            <PDFDownloadLink
-              document={
-                <ProductCatalog
-                  products={catalogData.products}
-                  store={catalogData.store}
-                />
-              }
-              fileName={`Catálogo-${(catalogData.store.name as string).toLowerCase().replace(/\s+/g, "-")}-${format(new Date(), "yyyy-MM-dd")}.pdf`}
-            >
-              {({ loading: pdfLoading }) => (
-                <Button variant="secondary" disabled={pdfLoading}>
-                  <FileDown className="h-4 w-4" aria-hidden="true" />
-                  {pdfLoading ? "Preparando PDF…" : "Descargar catálogo"}
-                </Button>
-              )}
-            </PDFDownloadLink>
-          )}
+          {catalogData && !isLoading && <CatalogPdfLink catalogData={catalogData} />}
           {/* Escanear abre la ficha (la búsqueda de la tabla filtra en el cliente y cada fila abre la ficha);
               una variante abre su grupo con la variante resaltada; un suelto o un kit, su propia ficha. */}
           <ProductScanButton

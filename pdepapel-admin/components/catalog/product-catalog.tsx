@@ -293,7 +293,7 @@ interface Store {
   } | null;
 }
 
-interface CatalogProps {
+export interface CatalogProps {
   store: Store;
   products: Product[];
 }
