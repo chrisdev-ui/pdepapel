@@ -14,13 +14,13 @@ import { StoreSwitcher } from "@/components/store-switcher";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useSidebarStore } from "@/hooks/use-sidebar-store";
 import { cn } from "@/lib/utils";
-import type { Store } from "@prisma/client";
+import type { StorePickerItem } from "@/lib/store-picker";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface AppShellProps {
   storeId: string;
-  stores: Store[];
+  stores: StorePickerItem[];
   /**
    * Sesión en `ADMIN_ALLOWED_USER_IDS`: además de crear tiendas, ve las
    * entradas reservadas del menú (invitaciones).

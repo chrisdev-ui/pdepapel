@@ -9,6 +9,7 @@ import { overduePresaleWhere } from "@/lib/presale";
 
 import prismadb from "@/lib/prismadb";
 import { getStoreAccess } from "@/lib/store-access";
+import { STORE_PICKER_SELECT } from "@/lib/store-picker";
 import { isCopilotConfigured } from "@/lib/copiloto/config";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -35,6 +36,7 @@ export default async function DashboardLayout({
   }
   const store = await prismadb.store.findFirst({
     where: { id: params.storeId },
+    select: { ...STORE_PICKER_SELECT, logoUrl: true },
   });
   if (!store) {
     redirect("/");
@@ -44,8 +46,8 @@ export default async function DashboardLayout({
     await Promise.all([
     // El selector de tiendas de una cuenta de solo lectura muestra solo esta.
     access?.role === "viewer"
-      ? Promise.resolve([store])
-      : prismadb.store.findMany({ where: { userId } }),
+      ? Promise.resolve([{ id: store.id, name: store.name }])
+      : prismadb.store.findMany({ where: { userId }, select: STORE_PICKER_SELECT }),
     prismadb.order
       .count({ where: { storeId: params.storeId, status: "PENDING" } })
       .catch(() => 0),

@@ -1,6 +1,6 @@
 "use client";
 
-import { Store } from "@prisma/client";
+import type { StorePickerItem } from "@/lib/store-picker";
 import {
   Check,
   ChevronsUpDown,
@@ -33,7 +33,7 @@ type PopoverTriggerProps = React.ComponentPropsWithoutRef<
 >;
 
 interface StoreSwitcherProps extends PopoverTriggerProps {
-  items: Store[];
+  items: StorePickerItem[];
   /** Solo el icono (barra lateral contraída). */
   compact?: boolean;
   /** Crear tiendas exige autorización explícita del dueño; si no la hay, la opción ni se muestra. */
