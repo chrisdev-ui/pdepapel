@@ -14,7 +14,7 @@ import {
 } from "@/lib/attribute-archive";
 import { loadMarkupMap } from "@/lib/pricing/category-markup-db";
 import prismadb from "@/lib/prismadb";
-import { scrubProduct } from "@/lib/viewer-payloads";
+import { scrubProduct, scrubReviews } from "@/lib/viewer-payloads";
 import { NEW_PRODUCT_SEGMENT } from "@/lib/product-routes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -159,7 +159,7 @@ export async function getProduct(id: string, storeId: string) {
     }),
   ]);
 
-  const reviews =
+  const mappedReviews =
     product?.reviews.map((review) => ({
       id: review.id,
       productId: review.productId,
@@ -195,9 +195,18 @@ export async function getProduct(id: string, storeId: string) {
   const markups = access.role === "viewer" ? null : await loadMarkupMap(prismadb, storeId);
   const brands = await loadBrandOptions(storeId, [product?.brandId]);
 
+  const isViewer = access.role === "viewer";
+  // Solo lectura: las reseñas sin quién escribió ni la moderación.
+  const reviews = isViewer ? scrubReviews(mappedReviews) : mappedReviews;
+  // El margen mínimo de la tienda sale de los costos: solo lectura no lo recibe.
+  const storeMinMarginPercent = isViewer
+    ? null
+    : ((await prismadb.store.findUnique({ where: { id: storeId }, select: { storeMinMarginPercent: true } }))?.storeMinMarginPercent ?? null);
+
   return {
     // Solo lectura: la ficha se ve sin costo de compra, transporte ni proveedor.
-    product: access.role === "viewer" ? scrubProduct(product) : product,
+    product: isViewer ? scrubProduct(product) : product,
+    storeMinMarginPercent,
     markups,
     activeOffers: activeOffers.map((row) => row.offer),
     activePresale: activePresale
