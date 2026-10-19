@@ -37,6 +37,7 @@ function row(overrides: Partial<ProductListRow> = {}): ProductListRow {
     productGroupId: null,
     isKit: false,
     brandId: null,
+    supplierId: null,
     createdAt: new Date(base - seq * DAY),
     kitComponents: [],
     _count: { images: 1 },
@@ -78,6 +79,12 @@ describe("parseProductListQuery / writeProductListQuery", () => {
     expect(writeProductListQuery(query).toString()).toBe(
       "vista=agotados&q=l%C3%A1piz&orden=-price&forma=kit%2Cvariante&marca=b-kiut%2C__none__&categoria=c-1&grupo=g-1&color=col-1",
     );
+  });
+
+  it("?proveedor= es un atributo más: viaja en la URL y filtra por supplierId", () => {
+    const query = q({ proveedor: "sup-1" });
+    expect(query.attribute).toEqual({ param: "proveedor", label: "proveedora", field: "supplierId", id: "sup-1" });
+    expect(writeProductListQuery(query).toString()).toBe("proveedor=sup-1");
   });
 
   it("valores inválidos vuelven a lo de siempre", () => {

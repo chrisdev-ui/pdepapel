@@ -109,4 +109,11 @@ describe("Productos · la lista vive en la URL", () => {
     fireEvent.click(screen.getByRole("button", { name: "Quitar filtro" }));
     expect(nav.push).toHaveBeenLastCalledWith("/store-1/productos?grupo=g-1", { scroll: false });
   });
+
+  it("desde la ficha de la proveedora: «N productos con proveedora «X», incluidos los archivados» y «Quitar filtro»", () => {
+    renderList("proveedor=sup-1");
+    expect(screen.getByText(/30 productos con proveedora/)).toHaveTextContent("30 productos con proveedora «Rosa», incluidos los archivados.");
+    fireEvent.click(screen.getByRole("button", { name: "Quitar filtro" }));
+    expect(nav.push).toHaveBeenLastCalledWith("/store-1/productos", { scroll: false });
+  });
 });

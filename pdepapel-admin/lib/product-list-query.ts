@@ -31,14 +31,16 @@ export const PRODUCT_FILTER_COLUMNS = [
 ] as const;
 
 /**
- * Llegan desde Atributos («Ver sus productos»): todos los productos con ese
- * valor, incluidos los archivados, sin importar la pestaña.
+ * Llegan desde Atributos («Ver sus productos») y desde la ficha de la
+ * proveedora: todos los productos con ese valor, incluidos los archivados,
+ * sin importar la pestaña.
  */
 export const PRODUCT_ATTRIBUTE_PARAMS = [
   { param: "color", label: "color", field: "colorId" },
   { param: "tamano", label: "tamaño", field: "sizeId" },
   { param: "diseno", label: "diseño", field: "designId" },
   { param: "subcategoria", label: "subcategoría", field: "categoryId" },
+  { param: "proveedor", label: "proveedora", field: "supplierId" },
 ] as const;
 
 export type ProductAttributeField = (typeof PRODUCT_ATTRIBUTE_PARAMS)[number]["field"];

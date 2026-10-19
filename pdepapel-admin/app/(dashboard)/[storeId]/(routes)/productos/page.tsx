@@ -30,8 +30,10 @@ export default async function ProductsPage({
   };
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  await requireStoreRead(params.storeId);
+  const access = await requireStoreRead(params.storeId);
   const query = parseProductListQuery(searchParams);
+  // La proveedora es un dato oculto para la cuenta de solo lectura: tampoco filtra por ella.
+  if (access.role === "viewer" && query.attribute?.field === "supplierId") query.attribute = null;
   const [result, suppliers, attributeName, categories, sizes, colors, designs, brands] =
     await Promise.all([
       getProducts(params.storeId, query),
@@ -90,7 +92,7 @@ export default async function ProductsPage({
   );
 }
 
-/** El nombre del color, tamaño, diseño o subcategoría que llega desde Atributos. */
+/** El nombre del color, tamaño, diseño, subcategoría o proveedora del filtro que llega por la URL. */
 async function loadAttributeName(storeId: string, attribute: ProductListQuery["attribute"]): Promise<string | null> {
   if (!attribute) return null;
   const where = { id: attribute.id, storeId };
@@ -102,6 +104,8 @@ async function loadAttributeName(storeId: string, attribute: ProductListQuery["a
         ? await prismadb.size.findFirst({ where, select })
         : attribute.field === "designId"
           ? await prismadb.design.findFirst({ where, select })
-          : await prismadb.category.findFirst({ where, select });
+          : attribute.field === "supplierId"
+            ? await prismadb.supplier.findFirst({ where, select })
+            : await prismadb.category.findFirst({ where, select });
   return row?.name ?? null;
 }

@@ -24,6 +24,7 @@ const DAY = 86_400_000;
 let fixture: InventoryFixture | undefined;
 let brandId = "";
 let groupId = "";
+let supplierId = "";
 let extraIds: string[] = [];
 
 const options = { offers: [], threshold: 3 };
@@ -34,6 +35,7 @@ beforeAll(async () => {
   const store = fixture.store.id;
   const suffix = randomUUID().slice(0, 8);
   brandId = (await testPrisma.brand.create({ data: { storeId: store, name: `Kiut ${suffix}`, slug: `kiut-${suffix}`, aliases: [] } as never })).id;
+  supplierId = (await testPrisma.supplier.create({ data: { storeId: store, name: `Proveedora ${suffix}` } as never })).id;
   groupId = (await testPrisma.productGroup.create({ data: { storeId: store, name: `Libreta hadas ${suffix}`, description: "" } as never })).id;
 
   const rows = Array.from({ length: 64 }, (_, i) => ({
@@ -55,6 +57,7 @@ beforeAll(async () => {
     availableAt: i % 17 === 0 ? new Date(Date.now() + 5 * DAY) : null,
     brandId: i % 4 === 0 ? brandId : null,
     productGroupId: i >= 50 && i < 56 ? groupId : null,
+    supplierId: i % 3 === 0 ? supplierId : null,
     createdAt: new Date(Date.now() - i * DAY),
   }));
   await testPrisma.product.createMany({ data: rows as never });
@@ -70,6 +73,7 @@ afterAll(async () => {
     await testPrisma.product.deleteMany({ where: { id: { in: extraIds } } });
     await testPrisma.productGroup.deleteMany({ where: { id: groupId } });
     await testPrisma.brand.deleteMany({ where: { id: brandId } });
+    await testPrisma.supplier.deleteMany({ where: { id: supplierId } });
     await deleteInventoryFixture(fixture);
   }
   await testPrisma.$disconnect();
@@ -108,6 +112,26 @@ describe("Productos paginado en el servidor (MySQL)", () => {
     expect((await walk({ vista: "archivados" })).ids).toHaveLength(archived);
     expect((await walk({ vista: "todos", marca: NO_BRAND_FILTER_VALUE })).ids).toHaveLength(withoutBrand);
     expect(archived).toBeGreaterThan(10);
+  });
+
+  it("?proveedor= lista todos los productos de la proveedora, incluidos los archivados, en cualquier pestaña", async () => {
+    const store = fixture!.store.id;
+    const expected = await testPrisma.product.count({ where: { storeId: store, supplierId } });
+    const archived = await testPrisma.product.count({ where: { storeId: store, supplierId, isArchived: true } });
+    expect(archived).toBeGreaterThan(0);
+    for (const vista of ["activos", "archivados"]) {
+      const { first, ids } = await walk({ proveedor: supplierId, vista });
+      expect(first.total).toBe(expected);
+      expect(ids).toHaveLength(expected);
+    }
+  });
+
+  it("la cuenta de solo lectura no filtra por proveedora: ve la lista de siempre", async () => {
+    const store = fixture!.store.id;
+    const plain = await listProductPage(testPrisma, store, parseProductListQuery({}), { ...options, viewer: true });
+    const withSupplier = await listProductPage(testPrisma, store, parseProductListQuery({ proveedor: supplierId }), { ...options, viewer: true });
+    expect(withSupplier.total).toBe(plain.total);
+    expect(withSupplier.ids).toEqual(plain.ids);
   });
 
   it("páginas de 25; una página de más cae en la última; sin resultados no falla", async () => {

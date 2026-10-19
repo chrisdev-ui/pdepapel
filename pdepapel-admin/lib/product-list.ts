@@ -49,6 +49,7 @@ export const PRODUCT_LIST_SELECT = {
   productGroupId: true,
   isKit: true,
   brandId: true,
+  supplierId: true,
   createdAt: true,
   kitComponents: { select: { quantity: true, component: { select: { stock: true } } } },
   _count: { select: { images: true } },
@@ -187,13 +188,15 @@ export function matchProducts(rows: readonly ProductListRow[], query: ProductLis
   const items = rows.map((row) => classify(row, ctx));
   const words = foldText(query.search).split(/\s+/).filter(Boolean).slice(0, 8);
   const matchesSearch = (item: Classified) => words.every((word) => item.haystack.includes(word));
-  const matchesAttribute = (item: Classified) => !query.attribute || item.row[query.attribute.field] === query.attribute.id;
+  // La cuenta de solo lectura no ve la proveedora, así que tampoco filtra por ella.
+  const attribute = ctx.viewer && query.attribute?.field === "supplierId" ? null : query.attribute;
+  const matchesAttribute = (item: Classified) => !attribute || item.row[attribute.field] === attribute.id;
   const matchesFilters = (item: Classified, skip?: keyof ProductListFilters) =>
     (Object.keys(filterValue) as (keyof ProductListFilters)[]).every(
       (key) => key === skip || query.filters[key].length === 0 || query.filters[key].includes(filterValue[key](item)),
     );
   // Con un atributo de Atributos o con texto en el buscador se mira en todas las pestañas.
-  const ignoresView = Boolean(query.attribute) || words.length > 0;
+  const ignoresView = Boolean(attribute) || words.length > 0;
   const inScope = (item: Classified) => matchesAttribute(item) && matchesSearch(item) && (ignoresView || item.views.has(query.view));
 
   const summary = Object.fromEntries(PRODUCT_VIEWS.map((view) => [view.id, 0])) as Record<ProductView, number>;
