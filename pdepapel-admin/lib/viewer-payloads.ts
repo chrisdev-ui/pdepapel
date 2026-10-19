@@ -96,9 +96,39 @@ function omit<T extends AnyRecord>(row: T, fields: readonly string[]): T {
 }
 
 /** Quita del producto el costo, el transporte, el proveedor y demás campos internos. */
+/** Solo objetos literales: un `Decimal` o una `Date` de Prisma se dejan como están. */
+function isPlainObject(value: unknown): value is AnyRecord {
+  if (!value || typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+const PRODUCT_SCRUB_MAX_DEPTH = 6;
+
+function deepScrubProduct(value: unknown, depth: number): unknown {
+  if (Array.isArray(value)) return value.map((item) => deepScrubProduct(item, depth));
+  if (!isPlainObject(value) || depth > PRODUCT_SCRUB_MAX_DEPTH) return value;
+  const clean: AnyRecord = {};
+  for (const [key, child] of Object.entries(value)) {
+    if ((VIEWER_HIDDEN_PRODUCT_FIELDS as readonly string[]).includes(key)) continue;
+    if (key === "reviews" && Array.isArray(child)) {
+      clean[key] = child.map((review) => (isPlainObject(review) ? scrubReview(review) : review));
+      continue;
+    }
+    clean[key] = deepScrubProduct(child, depth + 1);
+  }
+  return clean;
+}
+
+/**
+ * Un producto para la cuenta de solo lectura, con todo lo que cuelga de él:
+ * piezas de kit (`kitComponents[].component`), variantes del grupo,
+ * relaciones anidadas y reseñas. Antes solo se limpiaba el primer nivel y
+ * cada pieza de un kit llegaba con su costo, transporte y proveedor.
+ */
 export function scrubProduct<T extends AnyRecord | null | undefined>(product: T): T {
   if (!product) return product;
-  return omit(product as AnyRecord, VIEWER_HIDDEN_PRODUCT_FIELDS) as T;
+  return deepScrubProduct(product, 0) as T;
 }
 
 export function scrubProducts<T extends AnyRecord>(products: T[]): T[] {
@@ -179,12 +209,8 @@ export function scrubFairEvent<T extends AnyRecord | null | undefined>(detail: T
   const clean = { ...(detail as AnyRecord) };
   const items = clean.inventoryItems;
   if (Array.isArray(items)) {
-    clean.inventoryItems = items.map((item) => {
-      if (!item || typeof item !== "object") return item;
-      const row = { ...(item as AnyRecord) };
-      if (row.product) row.product = scrubProduct(row.product as AnyRecord);
-      return row;
-    });
+    // Cada fila lleva su producto y, si es un kit, sus piezas con costo.
+    clean.inventoryItems = items.map((item) => (item && typeof item === "object" ? scrubProduct(item as AnyRecord) : item));
   }
   if (Array.isArray(clean.capsules)) {
     clean.capsules = (clean.capsules as AnyRecord[]).map((capsule) => {
