@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
+import { scrubGiftCard } from "@/lib/viewer-payloads";
 import { CACHE_HEADERS } from "@/lib/utils";
 
 import { GIFT_CARD_ADMIN_SELECT } from "@/lib/gift-card-admin-select";
@@ -14,7 +15,7 @@ export async function GET(
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    await requireStoreRead(params.storeId);
+    const access = await requireStoreRead(params.storeId);
     const card = await prismadb.giftCard.findFirst({
       where: { id: params.giftCardId, storeId: params.storeId },
       select: {
@@ -39,7 +40,7 @@ export async function GET(
       },
     });
     if (!card) throw ErrorFactory.NotFound("La tarjeta de regalo no existe");
-    return NextResponse.json(card, { headers: CACHE_HEADERS.NO_CACHE });
+    return NextResponse.json(access.role === "viewer" ? scrubGiftCard(card) : card, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "GIFT_CARD_GET", {
       headers: CACHE_HEADERS.NO_CACHE,

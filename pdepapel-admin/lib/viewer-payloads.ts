@@ -321,3 +321,22 @@ export function scrubPresale<T extends AnyRecord | null | undefined>(presale: T)
 export function scrubPresales<T extends AnyRecord>(presales: T[]): T[] {
   return presales.map((presale) => scrubPresale(presale));
 }
+
+/**
+ * Tarjetas de regalo vistas por una cuenta de solo lectura: saldo, estado y
+ * movimientos sí; quién la compró, para quién y el mensaje, no.
+ */
+export const VIEWER_HIDDEN_GIFT_CARD_FIELDS = ["buyerEmail", "recipientEmail", "recipientName", "message"] as const;
+
+export function scrubGiftCard<T extends AnyRecord | null | undefined>(card: T): T {
+  if (!card) return card;
+  const clean = omit(card as AnyRecord, VIEWER_HIDDEN_GIFT_CARD_FIELDS);
+  if (clean.purchaseOrder && typeof clean.purchaseOrder === "object") {
+    clean.purchaseOrder = omit(clean.purchaseOrder as AnyRecord, VIEWER_HIDDEN_ORDER_FIELDS);
+  }
+  return clean as T;
+}
+
+export function scrubGiftCards<T extends AnyRecord>(cards: T[]): T[] {
+  return cards.map((card) => scrubGiftCard(card));
+}
