@@ -123,3 +123,27 @@ export function productsToCsv(
   );
   return [header.join(","), ...lines].join("\n");
 }
+
+/**
+ * La partición de cada edición en lote sale del campo y el valor, no de lo que
+ * diga el navegador: «Marcar sin código» borra GTIN y MPN, así que el servidor
+ * decide solo qué filas se omiten.
+ */
+export function bulkPartitionFor(field: string, value: unknown): ProductBulkAction | null {
+  if (field === "isArchived") return value === true ? "archive" : value === false ? "restore" : null;
+  if (field === "isFeatured") return value === true ? "feature" : value === false ? "unfeature" : null;
+  if (field === "hasNoProductIdentifier") return value === true ? "mark-no-identifier" : value === false ? "unmark-no-identifier" : null;
+  if (field === "availableAt") return value === null ? "available-now" : "coming-soon";
+  return null;
+}
+
+/** Los motivos de omisión agrupados: «Ya está archivado» × 12. */
+export function summarizeSkipped<T>(skipped: { row: T; reason: string }[]): { reason: string; count: number }[] {
+  const byReason = new Map<string, number>();
+  for (const { reason } of skipped) {
+    // «Tiene GTIN 770…; se conserva» se agrupa sin el código.
+    const key = reason.replace(/^Tiene GTIN .*; se conserva$/, "Tiene GTIN; se conserva").replace(/^Tiene referencia .*; se conserva$/, "Tiene referencia; se conserva");
+    byReason.set(key, (byReason.get(key) ?? 0) + 1);
+  }
+  return Array.from(byReason, ([reason, count]) => ({ reason, count }));
+}

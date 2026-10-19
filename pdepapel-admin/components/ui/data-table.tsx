@@ -117,6 +117,12 @@ interface DataTableProps<TData, TValue> {
     onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
     /** «Limpiar»: búsqueda y filtros de una vez, en un solo viaje. */
     onClear?: () => void;
+    /**
+     * «Seleccionar los N de este filtro»: la selección pasa de las filas de la
+     * página a toda la lista, que el servidor vuelve a calcular al aplicar.
+     * `count` es el número que dio el servidor al activarla (null mientras cuenta).
+     */
+    selectAll?: { active: boolean; count: number | null; onChange: (active: boolean) => void };
   };
 }
 
@@ -336,6 +342,7 @@ export function DataTable<TData, TValue>({
   };
 
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const allMatching = Boolean(server?.selectAll?.active);
   const visibleColumnCount = table.getVisibleLeafColumns().length;
   const rows = table.getRowModel().rows;
   const placeholder =
@@ -568,12 +575,25 @@ export function DataTable<TData, TValue>({
       {selectedCount > 0 && (
         <div
           role="region"
-          aria-label={`${selectedCount} filas seleccionadas`}
+          aria-label={allMatching ? "Todos los de este filtro seleccionados" : `${selectedCount} filas seleccionadas`}
           className="sticky bottom-4 z-20 mx-auto flex w-full max-w-full flex-wrap items-center gap-2 rounded-2xl bg-primary p-2 pl-4 text-sm text-primary-foreground shadow-xl sm:w-fit sm:rounded-full sm:py-2"
         >
-          <span className="font-semibold">
-            {selectedCount} {selectedCount === 1 ? "seleccionado" : "seleccionados"}
+          <span className="font-semibold" aria-live="polite">
+            {allMatching
+              ? server!.selectAll!.count === null
+                ? "Contando…"
+                : `${server!.selectAll!.count} ${server!.selectAll!.count === 1 ? "seleccionado" : "seleccionados"} en este filtro`
+              : `${selectedCount} ${selectedCount === 1 ? "seleccionado" : "seleccionados"}`}
           </span>
+          {server?.selectAll && server.total > rows.length && (
+            <button
+              type="button"
+              className="min-h-11 rounded-full px-2 text-left font-semibold underline underline-offset-2 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:min-h-8"
+              onClick={() => server.selectAll!.onChange(!allMatching)}
+            >
+              {allMatching ? "Solo esta página" : `Seleccionar los ${server.total} de este filtro`}
+            </button>
+          )}
           <span className="hidden h-5 w-px bg-white/20 sm:block" aria-hidden="true" />
           <div className="order-last flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto [&_button]:border-white/30 [&_button]:bg-transparent [&_button]:text-primary-foreground [&_button]:shadow-none [&_button:hover]:bg-white/10 [&_button:hover]:text-primary-foreground">
             {canWrite &&
@@ -588,7 +608,10 @@ export function DataTable<TData, TValue>({
             size="icon-sm"
             className="ml-auto rounded-full bg-white/10 text-primary-foreground hover:bg-white/20 hover:text-primary-foreground"
             aria-label="Quitar selección"
-            onClick={() => table.resetRowSelection()}
+            onClick={() => {
+              server?.selectAll?.onChange(false);
+              table.resetRowSelection();
+            }}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </Button>

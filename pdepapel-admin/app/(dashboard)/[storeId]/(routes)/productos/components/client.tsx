@@ -16,13 +16,16 @@ import { RefreshButton } from "@/components/ui/refresh-button";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import axios from "axios";
 import {
   DEFAULT_PRODUCT_VIEW,
   PRODUCT_ATTRIBUTE_PARAMS,
   PRODUCT_FILTER_COLUMNS,
   PRODUCT_LIST_PARAMS,
+  writeProductListQuery,
   type ProductListQuery,
 } from "@/lib/product-list-query";
+import type { ProductSelectionSummary } from "@/lib/product-selection";
 import type { ProductListPage } from "@/lib/product-list";
 import {
   PRODUCT_VIEWS,
@@ -107,6 +110,8 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  /** «Seleccionar los N de este filtro»: el número y el resumen los da el servidor. */
+  const [allMatching, setAllMatching] = useState<{ count: number | null; summary: ProductSelectionSummary | null } | null>(null);
   // Modo selección en celular: las tarjetas muestran su casilla.
   const [selectMode, setSelectMode] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -125,6 +130,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
     (change: (params: URLSearchParams) => void, history: "push" | "replace" = "push") => {
       // Las acciones en lote solo ven las filas de la página: al cambiar de página o de lista se suelta la selección.
       setRowSelection({});
+      setAllMatching(null);
       const params = new URLSearchParams(window.location.search);
       change(params);
       const suffix = params.toString();
@@ -168,6 +174,24 @@ const ProductClient: React.FC<ProductClientProps> = ({
     },
     [navigate],
   );
+
+  // La consulta de esta lista sin la página: lo que el servidor vuelve a correr para «los N de este filtro».
+  const selectionQuery = useMemo(() => writeProductListQuery(query).toString(), [query]);
+  const loadSelectionSummary = useCallback(async (recount = false) => {
+    // Al volver a contar se deja lo anterior a la vista: el diálogo abierto no se cierra.
+    if (!recount) setAllMatching({ count: null, summary: null });
+    try {
+      const { data } = await axios.post<ProductSelectionSummary>(`/api/${storeId}/${Models.Products}/selection`, { query: selectionQuery, intent: "summary" });
+      setAllMatching({ count: data.count, summary: data });
+    } catch (error) {
+      setAllMatching(null);
+      toast({ variant: "destructive", description: getErrorMessage(error) });
+    }
+  }, [selectionQuery, storeId, toast]);
+  const changeRowSelection = useCallback((next: Record<string, boolean>) => {
+    setRowSelection(next);
+    if (!Object.values(next).some(Boolean)) setAllMatching(null);
+  }, []);
 
   const fetchCatalogData = useCallback(async () => {
     try {
@@ -273,7 +297,7 @@ const ProductClient: React.FC<ProductClientProps> = ({
             variant={selectMode ? "secondary" : "outline"}
             className="sm:hidden"
             onClick={() => {
-              if (selectMode) setRowSelection({});
+              if (selectMode) changeRowSelection({});
               setSelectMode((value) => !value);
             }}
           >
@@ -419,11 +443,16 @@ const ProductClient: React.FC<ProductClientProps> = ({
           columnFilters,
           onColumnFiltersChange: setColumnFilters,
           onClear: clearSearchAndFilters,
+          selectAll: {
+            active: allMatching !== null,
+            count: allMatching?.count ?? null,
+            onChange: (active) => (active ? void loadSelectionSummary() : setAllMatching(null)),
+          },
         }}
         getRowId={(row) => row.id}
         onRowClick={(row) => router.push(`/${storeId}/productos/${row.id}`)}
         rowSelection={rowSelection}
-        onRowSelectionChange={setRowSelection}
+        onRowSelectionChange={changeRowSelection}
         renderMobileCard={(row) => (
           <ProductMobileCard
             product={row.original}
@@ -442,7 +471,12 @@ const ProductClient: React.FC<ProductClientProps> = ({
           ...(list.facets.group.length ? [{ columnKey: "productGroupId", title: "Grupo", options: list.facets.group }] : []),
         ]}
         bulkActions={(table) => (
-          <ProductBulkActions table={table} taxonomies={taxonomies} brands={brands} />
+          <ProductBulkActions
+            table={table}
+            taxonomies={taxonomies}
+            brands={brands}
+            allMatching={allMatching ? { query: selectionQuery, count: allMatching.count, summary: allMatching.summary, refresh: () => loadSelectionSummary(true) } : undefined}
+          />
         )}
         emptyState={
           view === "todos" || view === "activos"

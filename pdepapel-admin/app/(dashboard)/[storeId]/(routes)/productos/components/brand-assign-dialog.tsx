@@ -21,6 +21,16 @@ interface AssignPreview {
   withOtherBrand: { id: string; name: string; brandName: string }[];
   extraVariants: number;
   groups: number;
+  /** Con «los N de este filtro»: cuántos coinciden hoy con la lista. */
+  matching?: number;
+}
+
+/** «Los N de este filtro»: el servidor vuelve a correr la consulta de la lista. */
+export interface BrandAssignMatch {
+  query: string;
+  count: number;
+  /** La lista cambió entre confirmar y aplicar: volver a contar. */
+  onSelectionChanged: () => Promise<void> | void;
 }
 
 export interface BrandAssignTarget {
@@ -40,6 +50,7 @@ export function BrandAssignDialog({
   mode,
   storeId,
   products,
+  match,
   brands,
   onOpenChange,
   onDone,
@@ -48,6 +59,7 @@ export function BrandAssignDialog({
   mode: "assign" | "remove";
   storeId: string;
   products: BrandAssignTarget[];
+  match?: BrandAssignMatch;
   brands: BrandOption[];
   onOpenChange: (open: boolean) => void;
   onDone: () => void;
@@ -86,10 +98,38 @@ export function BrandAssignDialog({
     [allIds, conflictIds, replace],
   );
 
+  // Con «los N de este filtro» una sola vista previa del servidor dice quiénes
+  // tienen otra marca y cuántos cambian con lo que está marcado para reemplazar.
+  const replaceKey = Array.from(replace).sort().join(",");
+  // Solo el texto de la consulta: el objeto `match` es nuevo en cada pintado.
+  const matchQuery = match?.query;
+  useEffect(() => {
+    if (!matchQuery || !open || !ready) return;
+    let cancelled = false;
+    setCounts(null);
+    setPreviewError(null);
+    axios
+      .post<AssignPreview>(`/api/${storeId}/brands/assign`, {
+        brandId: targetBrandId,
+        match: { query: matchQuery },
+        replaceIds: replaceKey ? replaceKey.split(",") : [],
+        preview: true,
+      })
+      .then((response) => {
+        if (cancelled) return;
+        setConflicts(response.data);
+        setCounts(response.data);
+      })
+      .catch((error) => !cancelled && setPreviewError(getErrorMessage(error)));
+    return () => {
+      cancelled = true;
+    };
+  }, [matchQuery, open, ready, storeId, targetBrandId, replaceKey]);
+
   // Primero con toda la selección (quién tiene otra marca); después solo con
   // los que cambian, porque las variantes arrastradas dependen de esos ids.
   useEffect(() => {
-    if (!open || !ready || allIds.length === 0) return;
+    if (matchQuery || !open || !ready || allIds.length === 0) return;
     let cancelled = false;
     setConflicts(null);
     setPreviewError(null);
@@ -100,11 +140,11 @@ export function BrandAssignDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, ready, storeId, targetBrandId, allIds]);
+  }, [matchQuery, open, ready, storeId, targetBrandId, allIds]);
 
   const includedKey = includedIds.join(",");
   useEffect(() => {
-    if (!open || !conflicts) return;
+    if (matchQuery || !open || !conflicts) return;
     if (includedIds.length === allIds.length) {
       setCounts(conflicts);
       return;
@@ -129,14 +169,18 @@ export function BrandAssignDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, conflicts, includedKey, storeId, targetBrandId]);
 
+  const includedCount = match ? (counts?.requested ?? 0) : includedIds.length;
+
   const apply = async () => {
-    if (!ready || includedIds.length === 0) return;
+    if (!ready || includedCount === 0) return;
     try {
       setSaving(true);
-      const { data } = await axios.post<{ updatedProducts: number }>(`/api/${storeId}/brands/assign`, {
-        brandId: targetBrandId,
-        productIds: includedIds,
-      });
+      const { data } = await axios.post<{ updatedProducts: number }>(
+        `/api/${storeId}/brands/assign`,
+        match
+          ? { brandId: targetBrandId, match: { query: match.query, expectedCount: match.count }, replaceIds: Array.from(replace) }
+          : { brandId: targetBrandId, productIds: includedIds },
+      );
       toast({
         description:
           mode === "remove"
@@ -147,6 +191,8 @@ export function BrandAssignDialog({
       onDone();
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });
+      // La lista cambió entre confirmar y aplicar: no se tocó nada; se vuelve a contar.
+      if (match && axios.isAxiosError(error) && error.response?.status === 409) await match.onSelectionChanged();
     } finally {
       setSaving(false);
     }
@@ -156,18 +202,22 @@ export function BrandAssignDialog({
   const changing = products.filter((product) => includedIds.includes(product.id) && !conflictIds.has(product.id));
   const confirmLabel = saving
     ? "Guardando…"
-    : mode === "remove"
-      ? `Quitar la marca a ${plural(includedIds.length)}`
+    : match && ready && !counts
+      ? "Contando…"
+      : mode === "remove"
+      ? `Quitar la marca a ${plural(includedCount)}`
       : brandName
-        ? `Asignar ${brandName} a ${plural(includedIds.length)}`
+        ? `Asignar ${brandName} a ${plural(includedCount)}`
         : "Elige una marca";
+  const targetCount = match ? (mode === "remove" ? (counts?.requested ?? match.count) : match.count) : products.length;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {mode === "remove" ? `Quitar la marca a ${plural(products.length)}` : `Asignar marca a ${plural(products.length)}`}
+            {mode === "remove" ? `Quitar la marca a ${plural(targetCount)}` : `Asignar marca a ${plural(targetCount)}`}
+            {match && " de este filtro"}
           </DialogTitle>
           <DialogDescription>
             {mode === "remove"
@@ -202,7 +252,12 @@ export function BrandAssignDialog({
 
         {ready && conflicts && (
           <div className="flex flex-col gap-3 rounded-lg border p-3 text-sm">
-            {changing.length > 0 && (
+            {match && counts && (
+              <p className="font-semibold">
+                {mode === "remove" ? `Quedan sin marca ${plural(counts.requested)}.` : `Quedan con la marca ${brandName}: ${plural(counts.requested)}.`}
+              </p>
+            )}
+            {!match && changing.length > 0 && (
               <div>
                 <p className="font-semibold">
                   {mode === "remove" ? "Quedan sin marca:" : `Quedan con la marca ${brandName}:`}
@@ -262,7 +317,7 @@ export function BrandAssignDialog({
           <Button
             type="button"
             className="min-h-11"
-            disabled={saving || !ready || !conflicts || !counts || includedIds.length === 0}
+            disabled={saving || !ready || !conflicts || !counts || includedCount === 0}
             onClick={() => void apply()}
           >
             {confirmLabel}

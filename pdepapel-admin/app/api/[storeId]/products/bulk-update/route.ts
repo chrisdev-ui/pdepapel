@@ -6,6 +6,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { parseAvailableAt } from "@/lib/product-availability";
 import { pauseMarketplaceListingsForProducts } from "@/lib/product-archive";
+import { bulkPartitionFor, partitionForBulk, summarizeSkipped } from "@/lib/product-bulk";
+import { loadBulkRows, resolveMatchingProductIds, type ProductSelectionMatch } from "@/lib/product-selection";
 
 const RELATION_FIELDS = [
   "categoryId",
@@ -44,7 +46,14 @@ export async function POST(
     await verifyStoreOwner(userId, params.storeId);
 
     const body = await req.json();
-    const { productIds, productGroupIds, field, value, preview = false } = body;
+    const { field, value, preview = false } = body;
+    const match: ProductSelectionMatch | undefined =
+      body.match && typeof body.match.query === "string"
+        ? { query: body.match.query, expectedCount: typeof body.match.expectedCount === "number" ? body.match.expectedCount : undefined }
+        : undefined;
+    if (match && !preview && match.expectedCount === undefined) {
+      throw ErrorFactory.InvalidRequest("Falta cuántos productos se confirmaron");
+    }
 
     const isRelation = RELATION_FIELDS.includes(field);
     const isFlag = FLAG_FIELDS.includes(field);
@@ -75,8 +84,24 @@ export async function POST(
       }
     }
 
+    // «Los N de este filtro»: el servidor vuelve a correr la consulta de la
+    // lista, exige el número confirmado y decide él qué filas se omiten.
+    let productIds: string[] = Array.isArray(body.productIds) ? body.productIds : [];
+    let productGroupIds: string[] | undefined = body.productGroupIds;
+    let selection: { matching: number; eligible: number; skipped: { reason: string; count: number }[] } | null = null;
+    if (match) {
+      const ids = await resolveMatchingProductIds(params.storeId, match);
+      const rows = await loadBulkRows(params.storeId, ids);
+      const action = bulkPartitionFor(field, value);
+      const partition = action ? partitionForBulk(rows, action) : { eligible: rows, skipped: [] };
+      productIds = partition.eligible.map((row) => row.id);
+      const groupIds = Array.from(new Set(rows.map((row) => row.productGroupId).filter((id): id is string => Boolean(id))));
+      productGroupIds = preview || body.expandGroups === true ? groupIds : undefined;
+      selection = { matching: ids.length, eligible: productIds.length, skipped: summarizeSkipped(partition.skipped) };
+    }
+
     // Solo ids de esta tienda: un id ajeno o inventado no cuenta.
-    const requested = Array.from(new Set<string>(productIds || []));
+    const requested = Array.from(new Set<string>(productIds));
     const ownRows = requested.length
       ? await prismadb.product.findMany({
           where: { storeId: params.storeId, id: { in: requested } },
@@ -124,7 +149,7 @@ export async function POST(
 
     if (preview) {
       return NextResponse.json(
-        { affected: finalProductIds.length, siblings },
+        { affected: finalProductIds.length, siblings, ...(selection ? { selection } : {}) },
         { headers: corsHeaders },
       );
     }

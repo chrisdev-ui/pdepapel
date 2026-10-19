@@ -61,6 +61,7 @@ import { cn, currencyFormatter } from "@/lib/utils";
 import type { ProductColumn } from "./columns";
 import { BrandAssignDialog } from "./brand-assign-dialog";
 import type { BrandOption } from "@/lib/brand-options";
+import type { ProductSelectionSummary } from "@/lib/product-selection";
 
 type BulkField =
   | "isArchived"
@@ -236,14 +237,33 @@ function downloadCsv(text: string) {
 const plural = (count: number) =>
   `${count} ${count === 1 ? "producto" : "productos"}`;
 
+/** «Los N de este filtro»: la consulta de la lista y lo que contó el servidor. */
+export interface AllMatchingSelection {
+  query: string;
+  count: number | null;
+  summary: ProductSelectionSummary | null;
+  /** Vuelve a contar (si la lista cambió entre confirmar y aplicar). */
+  refresh: () => Promise<void> | void;
+}
+
+const SELECTION_CHANGED = "SELECTION_CHANGED";
+const selectionChangedCount = (error: unknown): number | null => {
+  if (!axios.isAxiosError(error)) return null;
+  const details = (error.response?.data as { details?: { code?: string; count?: number } } | undefined)?.details;
+  return error.response?.status === 409 && details?.code === SELECTION_CHANGED && typeof details.count === "number" ? details.count : null;
+};
+
 export function ProductBulkActions({
   table,
   taxonomies,
   brands = [],
+  allMatching,
 }: {
   table: Table<ProductColumn>;
   taxonomies: BulkTaxonomies;
   brands?: BrandOption[];
+  /** Con «Seleccionar los N de este filtro» las acciones van a toda la lista, no a la página. */
+  allMatching?: AllMatchingSelection;
 }) {
   const params = useParams();
   const router = useRouter();
@@ -258,6 +278,14 @@ export function ProductBulkActions({
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [brandMode, setBrandMode] = useState<"assign" | "remove" | null>(null);
+  const [matchPreview, setMatchPreview] = useState<{
+    matching: number;
+    eligible: number;
+    skipped: { reason: string; count: number }[];
+  } | null>(null);
+  const all = allMatching?.summary && allMatching.count !== null ? { ...allMatching, summary: allMatching.summary, count: allMatching.count } : null;
+  const allQuery = all?.query;
+  const allCount = all?.count;
 
   const selected = table
     .getFilteredSelectedRowModel()
@@ -275,9 +303,11 @@ export function ProductBulkActions({
   const eligibleIds = partition.eligible.map((row) => row.id);
 
   // El conteo de variantes hermanas lo da el servidor: la vista del navegador
-  // no ve las archivadas ni las de otras pestañas.
+  // no ve las archivadas ni las de otras pestañas. Con «los N de este filtro»
+  // también dice cuántos cambian y cuántos se omiten, y por qué.
   useEffect(() => {
-    if (!pending || groupIds.length === 0) {
+    setMatchPreview(null);
+    if (!pending || (!all && groupIds.length === 0)) {
       setSiblings(null);
       return;
     }
@@ -286,15 +316,17 @@ export function ProductBulkActions({
       .post<{
         affected: number;
         siblings: { total: number; archived: number };
+        selection?: { matching: number; eligible: number; skipped: { reason: string; count: number }[] };
       }>(`/api/${params.storeId}/${Models.Products}/bulk-update`, {
-        productIds: eligibleIds,
-        productGroupIds: groupIds,
+        ...(all ? { match: { query: all.query } } : { productIds: eligibleIds, productGroupIds: groupIds }),
         field: pending.field,
         value: pending.value,
         preview: true,
       })
       .then((response) => {
-        if (!cancelled) setSiblings(response.data.siblings);
+        if (cancelled) return;
+        setSiblings(response.data.siblings);
+        setMatchPreview(response.data.selection ?? null);
       })
       .catch(() => {
         if (!cancelled) setSiblings(null);
@@ -308,21 +340,27 @@ export function ProductBulkActions({
     pending?.value,
     groupIds.join(","),
     eligibleIds.join(","),
+    allQuery,
+    allCount,
   ]);
 
   if (selected.length === 0) return null;
+  if (allMatching && !all) return null;
 
   const needsDate = pending?.field === "availableAt" && pending.value !== null;
   const needsPick = Boolean(pending?.picker);
   const pickerOptions = pending?.picker ? taxonomies[pending.picker] : [];
   const siblingCount = siblings?.total ?? 0;
-  const affected = eligibleIds.length + (expandGroups ? siblingCount : 0);
+  const baseCount = all ? (pending?.partition ? (matchPreview?.eligible ?? 0) : all.count) : eligibleIds.length;
+  const affected = baseCount + (expandGroups ? siblingCount : 0);
+  const hasGroups = all ? all.summary.groups > 0 : groupIds.length > 0;
 
   const closeDialog = () => {
     setPending(null);
     setPickedValue("");
     setExpandGroups(false);
     setSiblings(null);
+    setMatchPreview(null);
   };
 
   const run = async () => {
@@ -346,10 +384,14 @@ export function ProductBulkActions({
       const response = await axios.post<{ message: string }>(
         `/api/${params.storeId}/${Models.Products}/bulk-update`,
         {
-          productIds: eligibleIds,
-          ...(expandGroups && groupIds.length > 0
-            ? { productGroupIds: groupIds }
-            : {}),
+          ...(all
+            ? { match: { query: all.query, expectedCount: all.count }, expandGroups }
+            : {
+                productIds: eligibleIds,
+                ...(expandGroups && groupIds.length > 0
+                  ? { productGroupIds: groupIds }
+                  : {}),
+              }),
           field: pending.field,
           value: needsDate ? date : needsPick ? pickedValue : pending.value,
         },
@@ -368,6 +410,27 @@ export function ProductBulkActions({
         description: getErrorMessage(error),
         variant: "destructive",
       });
+      // La lista cambió entre confirmar y aplicar: no se tocó nada; se vuelve
+      // a contar y el diálogo queda abierto para confirmar el número nuevo.
+      if (all && selectionChangedCount(error) !== null) await allMatching?.refresh();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportAllCsv = async () => {
+    if (!all) return;
+    try {
+      setLoading(true);
+      const { data } = await axios.post<{ csv: string }>(`/api/${params.storeId}/${Models.Products}/selection`, {
+        query: all.query,
+        intent: "csv",
+        expectedCount: all.count,
+      });
+      downloadCsv(data.csv);
+    } catch (error) {
+      toast({ title: "No se pudo exportar", description: getErrorMessage(error), variant: "destructive" });
+      if (selectionChangedCount(error) !== null) await allMatching?.refresh();
     } finally {
       setLoading(false);
     }
@@ -375,6 +438,10 @@ export function ProductBulkActions({
 
   const countLabel = (action: (typeof ACTIONS)[number]) => {
     if (!action.partition) return "";
+    if (all) {
+      const eligible = all.summary.actions[action.partition].eligible;
+      return eligible === all.count ? "" : ` (${eligible} de ${all.count})`;
+    }
     const eligible = partitionForBulk(selected, action.partition).eligible
       .length;
     return eligible === selected.length
@@ -396,7 +463,7 @@ export function ProductBulkActions({
           <Award className="mr-2 h-4 w-4" aria-hidden="true" />
           Asignar marca
         </Button>
-        {selected.some((row) => row.brandId) && (
+        {(all ? all.summary.withBrand > 0 : selected.some((row) => row.brandId)) && (
           <Button
             type="button"
             variant="ghost"
@@ -409,7 +476,11 @@ export function ProductBulkActions({
             Quitar marca
           </Button>
         )}
-        {ACTIONS.filter((action) => action.show(selected)).map((action) => (
+        {ACTIONS.filter((action) =>
+          all
+            ? !action.partition || all.summary.actions[action.partition].eligible > 0
+            : action.show(selected),
+        ).map((action) => (
           <Button
             key={`${action.field}-${String(action.value)}`}
             type="button"
@@ -434,7 +505,9 @@ export function ProductBulkActions({
           size="sm"
           disabled={loading}
           onClick={() =>
-            downloadCsv(productsToCsv(selected, currencyFormatter))
+            all
+              ? void exportAllCsv()
+              : downloadCsv(productsToCsv(selected, currencyFormatter))
           }
         >
           <Download className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -445,10 +518,11 @@ export function ProductBulkActions({
         open={brandMode !== null}
         mode={brandMode ?? "assign"}
         storeId={String(params.storeId)}
-        products={(brandMode === "remove" ? selected.filter((row) => row.brandId) : selected).map((row) => ({
+        products={all ? [] : (brandMode === "remove" ? selected.filter((row) => row.brandId) : selected).map((row) => ({
           id: row.id,
           name: row.name,
         }))}
+        match={all ? { query: all.query, count: all.count, onSelectionChanged: allMatching!.refresh } : undefined}
         brands={brands}
         onOpenChange={(open) => !open && setBrandMode(null)}
         onDone={() => {
@@ -470,7 +544,27 @@ export function ProductBulkActions({
               {pending?.description}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {pending?.partition && (
+          {all && pending && (
+            <div className="rounded-lg border p-3 text-sm" role="status">
+              <p className="font-semibold">
+                {pending.partition
+                  ? matchPreview
+                    ? `Se aplica a ${plural(matchPreview.eligible)} de los ${all.count} de este filtro.`
+                    : "Contando…"
+                  : `Se aplica a los ${plural(all.count)} de este filtro.`}
+              </p>
+              {matchPreview && matchPreview.skipped.length > 0 && (
+                <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                  {matchPreview.skipped.map((entry) => (
+                    <li key={entry.reason}>
+                      Se omiten {plural(entry.count)}: {entry.reason.toLowerCase()}.
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {!all && pending?.partition && (
             <ul className="max-h-56 divide-y overflow-y-auto rounded-lg border">
               {selected.map((row) => {
                 const skipped = partition.skipped.find(
@@ -543,7 +637,7 @@ export function ProductBulkActions({
               </Command>
             </div>
           )}
-          {groupIds.length > 0 && (
+          {hasGroups && (
             <label className="flex cursor-pointer items-start gap-3 rounded-md border border-tint-cream bg-tint-cream/30 p-3">
               <Checkbox
                 checked={expandGroups}
@@ -557,7 +651,7 @@ export function ProductBulkActions({
                   ? "Contando variantes…"
                   : siblingCount === 0
                     ? "No hay más variantes en sus grupos."
-                    : `Se suman ${plural(siblingCount)} más${siblings.archived ? ` (${siblings.archived} ${siblings.archived === 1 ? "archivado" : "archivados"})` : ""}: ${eligibleIds.length + siblingCount} en total.`}
+                    : `Se suman ${plural(siblingCount)} más${siblings.archived ? ` (${siblings.archived} ${siblings.archived === 1 ? "archivado" : "archivados"})` : ""}: ${baseCount + siblingCount} en total.`}
               </span>
             </label>
           )}
@@ -568,13 +662,13 @@ export function ProductBulkActions({
                 event.preventDefault();
                 void run();
               }}
-              disabled={loading || affected === 0}
+              disabled={loading || affected === 0 || (Boolean(all) && Boolean(pending?.partition) && !matchPreview)}
             >
               {loading
                 ? "Aplicando…"
                 : affected === 0
                   ? `Nada que ${pending?.label.toLowerCase()}`
-                  : `${pending?.label} ${affected}`}
+                  : `${pending?.label} ${plural(affected)}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

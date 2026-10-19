@@ -113,6 +113,8 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "brands/[brandId]/suggestions", methods: ["GET"], params: { brandId: "x" } },
   { path: "brands/reorder", methods: ["POST"] },
   { path: "brands/assign", methods: ["POST"] },
+  // «Seleccionar los N de este filtro» en Productos (2026-10-19).
+  { path: "products/selection", methods: ["POST"] },
 ];
 // Bulk handlers (products PATCH, orders PATCH/DELETE, coupons PATCH/DELETE)
 // validate the id list before authorizing, so an empty body answers 400
