@@ -3,6 +3,7 @@
 import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
+import { GROUP_VARIANT_COMBINATION_SELECT } from "@/lib/variant-combinations";
 import { requireStoreRead } from "@/lib/store-access";
 
 import { ProductPresaleStatus } from "@prisma/client";
@@ -16,6 +17,11 @@ import { scrubProduct } from "@/lib/viewer-payloads";
 import { NEW_PRODUCT_SEGMENT } from "@/lib/product-routes";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+
+const GROUP_VARIANT_COMBINATION_SELECT_WITH_IMAGES = {
+  ...GROUP_VARIANT_COMBINATION_SELECT,
+  images: { select: { url: true } },
+} as const;
 
 export async function getProduct(id: string, storeId: string) {
   const access = await requireStoreRead(storeId);
@@ -139,7 +145,8 @@ export async function getProduct(id: string, storeId: string) {
         _count: { select: { productValues: true } },
       },
     }),
-    // Grupos para el selector y la detección de colisiones de variantes.
+    // Grupos para el selector. Las variantes de otro grupo se piden al elegirlo
+    // (`product-groups/[id]/combinations`); las del grupo actual llegan abajo.
     prismadb.productGroup.findMany({
       where: { storeId },
       select: {
@@ -147,16 +154,6 @@ export async function getProduct(id: string, storeId: string) {
         name: true,
         brandId: true,
         brandRef: { select: { name: true, logoUrl: true } },
-        products: {
-          select: {
-            id: true,
-            categoryId: true,
-            designId: true,
-            colorId: true,
-            sizeId: true,
-            price: true,
-          },
-        },
       },
     }),
   ]);
@@ -183,13 +180,12 @@ export async function getProduct(id: string, storeId: string) {
         id: product.productGroupId,
         storeId,
       },
-      include: {
-        images: true,
-        products: {
-          include: {
-            images: true,
-          },
-        },
+      // Lo que usa la ficha: la galería del grupo, qué fotos ya tiene cada
+      // variante y su combinación (aviso de variante repetida y subcategoría).
+      select: {
+        id: true,
+        images: { select: { url: true } },
+        products: { select: GROUP_VARIANT_COMBINATION_SELECT_WITH_IMAGES, orderBy: { createdAt: "asc" } },
       },
     });
   }

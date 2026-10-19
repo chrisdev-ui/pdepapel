@@ -140,6 +140,25 @@ describe("duplicate variant combination is refused by the server", () => {
     await expect(testPrisma.product.findUniqueOrThrow({ where: { id: loose.id } })).resolves.toMatchObject({ productGroupId: null });
   });
 
+  it("la ficha pide las combinaciones de un grupo: solo id, subcategoría y combinación, y solo de esta tienda", async () => {
+    const existing = await setUp();
+    const { GET } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/combinations/route");
+    const response = await GET(new Request("http://admin.test/api/x"), { params: { storeId: fixture!.store.id, productGroupId: groupId } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([
+      { id: existing.id, categoryId: existing.categoryId, sizeId: existing.sizeId, colorId: existing.colorId, designId: existing.designId },
+    ]);
+
+    const other = await createInventoryFixture();
+    try {
+      session.userId = other.store.userId;
+      const foreign = await GET(new Request("http://admin.test/api/x"), { params: { storeId: other.store.id, productGroupId: groupId } });
+      expect(foreign.status).toBe(404);
+    } finally {
+      await deleteInventoryFixture(other);
+    }
+  });
+
   it("guardar el grupo con dos filas de la misma combinación responde 400", async () => {
     const existing = await setUp();
     const { PATCH } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");

@@ -28,3 +28,36 @@ export function hasDuplicateVariantCombination(variants: VariantPayload[]) {
 
   return false;
 }
+
+/** Lo justo de cada variante de un grupo para avisar de una combinación repetida en la ficha. */
+export const GROUP_VARIANT_COMBINATION_SELECT = {
+  id: true,
+  categoryId: true,
+  sizeId: true,
+  colorId: true,
+  designId: true,
+} as const;
+
+export type GroupVariantCombination = {
+  id: string;
+  categoryId: string;
+  sizeId: string;
+  colorId: string;
+  designId: string;
+};
+
+/** La otra variante del grupo con esa combinación, si existe (la misma regla que el servidor). */
+export function findCombinationOwner(
+  variants: readonly GroupVariantCombination[],
+  target: { sizeId: string; colorId: string; designId: string; excludeId?: string },
+) {
+  return (
+    variants.find(
+      (variant) =>
+        variant.id !== target.excludeId &&
+        variant.sizeId === target.sizeId &&
+        variant.colorId === target.colorId &&
+        variant.designId === target.designId,
+    ) ?? null
+  );
+}

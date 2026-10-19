@@ -112,7 +112,8 @@ import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { DUPLICATE_VARIANT_MESSAGE } from "@/lib/variant-combinations";
+import { DUPLICATE_VARIANT_MESSAGE, findCombinationOwner } from "@/lib/variant-combinations";
+import { useGroupVariants } from "@/hooks/use-group-variants";
 import { Color, Design, Size, Supplier, Type } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -666,15 +667,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const watchedStock = form.watch("stock");
   const watchedCatalogAttributes = form.watch("catalogAttributes") || [];
 
+  const selectedGroupVariants = useGroupVariants(
+    String(params.storeId),
+    inGroup && watchedGroupId ? watchedGroupId : null,
+    productGroup,
+  );
+
   useEffect(() => {
     if (watchedGroupId) {
-      const selectedGroup = productGroups?.find(
-        (g: any) => g.id === watchedGroupId,
-      );
-
-      if (selectedGroup && selectedGroup.products.length > 0) {
+      if (selectedGroupVariants && selectedGroupVariants.length > 0) {
         // 1. Auto-Inherit Category from the first product in the group
-        const groupCategory = selectedGroup.products[0].categoryId;
+        const groupCategory = selectedGroupVariants[0].categoryId;
         const currentCategory = form.getValues("categoryId");
         if (groupCategory && groupCategory !== currentCategory) {
           form.setValue("categoryId", groupCategory);
@@ -685,7 +688,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         }
       }
     }
-  }, [watchedGroupId, productGroups, form, categories, toast]);
+  }, [watchedGroupId, selectedGroupVariants, form, categories, toast]);
 
   // Collision Detection
   const collisionError = useMemo(() => {
@@ -697,29 +700,19 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     )
       return null;
 
-    const selectedGroup = productGroups?.find(
-      (g: any) => g.id === watchedGroupId,
-    );
-    if (!selectedGroup) return null;
-
-    const existingVariant = selectedGroup.products.find(
-      (p: any) =>
-        p.colorId === watchedColorId &&
-        p.sizeId === watchedSizeId &&
-        p.designId === watchedDesignId &&
-        p.id !== initialData?.id, // Exclude self if editing
-    );
-
-    if (existingVariant) {
-      return DUPLICATE_VARIANT_MESSAGE;
-    }
-    return null;
+    const owner = findCombinationOwner(selectedGroupVariants ?? [], {
+      sizeId: watchedSizeId,
+      colorId: watchedColorId,
+      designId: watchedDesignId,
+      excludeId: initialData?.id,
+    });
+    return owner ? DUPLICATE_VARIANT_MESSAGE : null;
   }, [
     watchedGroupId,
     watchedColorId,
     watchedSizeId,
     watchedDesignId,
-    productGroups,
+    selectedGroupVariants,
     initialData,
   ]);
 
