@@ -48,7 +48,7 @@ import {
   usePathname,
   useRouter,
 } from "next/navigation";
-import React, { useCallback, useMemo, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ProductColumn, buildColumns } from "./columns";
 import type { BrandOption } from "@/lib/brand-options";
 import {
@@ -74,6 +74,8 @@ interface ProductClientProps {
   /** Marcas sin archivar, para «Asignar marca». */
   brands?: BrandOption[];
 }
+
+const SEARCH_DELAY_MS = 350;
 
 const loadCatalogPdfLink = () => import("./catalog-pdf-link");
 const CatalogPdfLink = dynamic(loadCatalogPdfLink, {
@@ -113,15 +115,22 @@ const ProductClient: React.FC<ProductClientProps> = ({
   const searching = query.search.length > 0;
   const attributeFilter = query.attribute ? { ...query.attribute, name: list.attributeName ?? "—" } : null;
 
-  /** Todo vive en la URL: el servidor arma la página con ella, y se puede compartir. */
+  /**
+   * Todo vive en la URL: el servidor arma la página con ella, se puede
+   * compartir y sobrevive a recargar. Pestaña, página, orden y filtros dejan
+   * una entrada en el historial (Atrás vuelve al estado anterior); la búsqueda
+   * reemplaza la suya para no llenar el historial de letras.
+   */
   const navigate = useCallback(
-    (change: (params: URLSearchParams) => void) => {
+    (change: (params: URLSearchParams) => void, history: "push" | "replace" = "push") => {
       // Las acciones en lote solo ven las filas de la página: al cambiar de página o de lista se suelta la selección.
       setRowSelection({});
       const params = new URLSearchParams(window.location.search);
       change(params);
       const suffix = params.toString();
-      startTransition(() => router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false }));
+      const href = suffix ? `${pathname}?${suffix}` : pathname;
+      if (href === `${pathname}${window.location.search}`) return;
+      startTransition(() => (history === "push" ? router.push(href, { scroll: false }) : router.replace(href, { scroll: false })));
     },
     [pathname, router],
   );
@@ -135,17 +144,29 @@ const ProductClient: React.FC<ProductClientProps> = ({
     [navigate],
   );
 
+  // La búsqueda espera a que se deje de escribir para no pedir una página por letra.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
   const setSearch = useCallback(
     (value: string) => {
-      const text = value.trim();
-      if (text === query.search) return;
-      navigate((params) => {
-        if (text) params.set(PRODUCT_LIST_PARAMS.search, text);
-        else params.delete(PRODUCT_LIST_PARAMS.search);
-        params.delete(PRODUCT_LIST_PARAMS.page);
-      });
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = setTimeout(
+        () =>
+          navigate((params) => {
+            const text = value.trim();
+            if (text) params.set(PRODUCT_LIST_PARAMS.search, text);
+            else params.delete(PRODUCT_LIST_PARAMS.search);
+            params.delete(PRODUCT_LIST_PARAMS.page);
+          }, "replace"),
+        SEARCH_DELAY_MS,
+      );
     },
-    [navigate, query.search],
+    [navigate],
   );
 
   const fetchCatalogData = useCallback(async () => {

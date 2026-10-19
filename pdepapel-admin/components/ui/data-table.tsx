@@ -37,7 +37,7 @@ import {
 import { Models } from "@/constants";
 import { useTableStore } from "@/hooks/use-table-store";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DataTableFacetedFilter } from "./data-table-faceted-filter";
 import { DataTableViewOptions } from "./data-table-view-options";
 
@@ -166,6 +166,24 @@ export function DataTable<TData, TValue>({
     setGlobalFilterState(value);
     server?.onSearchChange(value);
   };
+  // Con Atrás o Adelante la búsqueda de la URL cambia sin que nadie escriba:
+  // el buscador la refleja. Mientras se escribe no se toca lo que hay en él.
+  const historyNavigation = useRef(false);
+  const hasServer = Boolean(server);
+  useEffect(() => {
+    if (!hasServer) return;
+    const onPopState = () => {
+      historyNavigation.current = true;
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [hasServer]);
+  const serverSearch = server?.search;
+  useEffect(() => {
+    if (serverSearch === undefined || !historyNavigation.current) return;
+    historyNavigation.current = false;
+    setGlobalFilterState(serverSearch);
+  }, [serverSearch]);
   const [localSorting, setSorting] = useState<SortingState>(tableState.sorting);
   // Con lista del servidor el orden y los filtros vienen de la URL: lo guardado
   // en el navegador de otra visita ordenaría solo la página en pantalla.
