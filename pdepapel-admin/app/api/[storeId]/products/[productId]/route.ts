@@ -63,6 +63,7 @@ import { NextResponse } from "next/server";
 import { findArchivedProductRedirect } from "@/lib/archived-product-redirect";
 import { resolveProductBrandId } from "@/lib/brand-consistency";
 import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
+import { assertUniqueVariantCombination } from "@/lib/product-group-save";
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json(
@@ -362,6 +363,25 @@ export async function PATCH(
       throw ErrorFactory.NotFound(
         `El Producto ${params.productId} no existe en esta tienda`,
       );
+
+    // Solo si cambia el grupo o la combinación: un duplicado viejo se sigue
+    // pudiendo editar (precio, stock…) sin que el guardado falle.
+    if (
+      normalizedProductGroupId &&
+      (productToUpdate.productGroupId !== normalizedProductGroupId ||
+        productToUpdate.sizeId !== sizeId ||
+        productToUpdate.colorId !== colorId ||
+        productToUpdate.designId !== designId)
+    ) {
+      await assertUniqueVariantCombination(prismadb, {
+        storeId: params.storeId,
+        productGroupId: normalizedProductGroupId,
+        sizeId,
+        colorId,
+        designId,
+        excludeProductId: params.productId,
+      });
+    }
 
     // En un grupo la marca es la del grupo; suelto, la elegida (sin `brandId` en el cuerpo no se toca).
     if (!normalizedProductGroupId) {

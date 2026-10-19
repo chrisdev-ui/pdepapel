@@ -63,6 +63,7 @@ import {
 import { recordDeletedProductUrls } from "@/lib/deleted-product-urls";
 import { resolveProductBrandId } from "@/lib/brand-consistency";
 import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
+import { assertUniqueVariantCombination } from "@/lib/product-group-save";
 
 import { getActiveOffers, getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs/server";
@@ -283,6 +284,13 @@ export async function POST(
         throw ErrorFactory.NotFound("Grupo de productos no encontrado");
       }
       groupBrandId = productGroup.brandId;
+      await assertUniqueVariantCombination(prismadb, {
+        storeId: params.storeId,
+        productGroupId: normalizedProductGroupId,
+        sizeId,
+        colorId,
+        designId,
+      });
     } else {
       await assertAssignableBrand(prismadb, params.storeId, requestedBrandId);
     }

@@ -112,6 +112,7 @@ import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { DUPLICATE_VARIANT_MESSAGE } from "@/lib/variant-combinations";
 import { Color, Design, Size, Supplier, Type } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -710,7 +711,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     );
 
     if (existingVariant) {
-      return "Esta combinación (Color + Tamaño + Diseño) ya existe en este grupo.";
+      return DUPLICATE_VARIANT_MESSAGE;
     }
     return null;
   }, [

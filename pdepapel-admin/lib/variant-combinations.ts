@@ -7,6 +7,9 @@ type VariantPayload = {
   designId?: string;
 };
 
+/** El mismo texto en el formulario y en el servidor. */
+export const DUPLICATE_VARIANT_MESSAGE = "Esta combinación (Color + Tamaño + Diseño) ya existe en este grupo.";
+
 export function hasDuplicateVariantCombination(variants: VariantPayload[]) {
   const combinations = new Set<string>();
 

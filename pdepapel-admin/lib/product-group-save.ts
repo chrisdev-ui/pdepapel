@@ -7,6 +7,7 @@ import {
 } from "@/lib/product-deletion";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
+import { DUPLICATE_VARIANT_MESSAGE } from "@/lib/variant-combinations";
 
 /**
  * Reglas compartidas por `POST /product-groups` y `PATCH /product-groups/[id]`.
@@ -305,4 +306,49 @@ export function collectArchiveTransitions(
   return previous
     .filter((product) => !product.isArchived && next.get(product.id) === true)
     .map((product) => product.id);
+}
+
+type VariantCombinationClient = {
+  product: {
+    findFirst: (args: {
+      where: Prisma.ProductWhereInput;
+      select: { id: true; name: true };
+    }) => Promise<{ id: string; name: string } | null>;
+  };
+};
+
+/**
+ * Guardar un producto suelto (crear o editar) dentro de un grupo: ninguna otra
+ * fila del grupo, archivada o no, puede tener su tamaño, color y diseño. Es la
+ * misma regla que el aviso del formulario, para que saltárselo no cuele un
+ * duplicado.
+ */
+export async function assertUniqueVariantCombination(
+  db: VariantCombinationClient,
+  input: {
+    storeId: string;
+    productGroupId: string | null;
+    sizeId: string;
+    colorId: string;
+    designId: string;
+    excludeProductId?: string;
+  },
+) {
+  if (!input.productGroupId) return;
+  const owner = await db.product.findFirst({
+    where: {
+      storeId: input.storeId,
+      productGroupId: input.productGroupId,
+      sizeId: input.sizeId,
+      colorId: input.colorId,
+      designId: input.designId,
+      ...(input.excludeProductId ? { id: { not: input.excludeProductId } } : {}),
+    },
+    select: { id: true, name: true },
+  });
+  if (owner) {
+    throw ErrorFactory.Conflict(`${DUPLICATE_VARIANT_MESSAGE} La tiene «${owner.name}».`, {
+      productId: owner.id,
+    });
+  }
 }
