@@ -41,6 +41,40 @@ export const CUSTOMER_ORDER_ITEM_PRODUCT_SELECT = {
   catalogOptionValues: { select: PUBLIC_CATALOG_OPTION_VALUE_SELECT },
 } satisfies Prisma.ProductSelect;
 
+/**
+ * Un pedido visto por la cuenta de solo lectura en la API: el estado, las
+ * líneas, los totales y el envío sin datos de quien recibe. Nada de contacto,
+ * transacción, guía, enlace público, riesgo ni costos de la casa.
+ */
+export const VIEWER_ORDER_DETAIL_SELECT = {
+  id: true,
+  storeId: true,
+  orderNumber: true,
+  status: true,
+  type: true,
+  source: true,
+  city: true,
+  department: true,
+  createdAt: true,
+  updatedAt: true,
+  paidAt: true,
+  subtotal: true,
+  discount: true,
+  discountType: true,
+  couponDiscount: true,
+  total: true,
+  isGift: true,
+  giftCardAmount: true,
+  orderItems: {
+    orderBy: { createdAt: "asc" },
+    select: { id: true, productId: true, quantity: true, name: true, sku: true, price: true, imageUrl: true, isCustom: true, brandName: true, isPreorder: true },
+  },
+  payment: { select: { id: true, method: true } },
+  shipping: {
+    select: { id: true, status: true, provider: true, carrierName: true, courier: true, deliveryDays: true, estimatedDeliveryDate: true, actualDeliveryDate: true, createdAt: true },
+  },
+} satisfies Prisma.OrderSelect;
+
 export const CUSTOMER_ORDER_SELECT = {
   id: true,
   orderNumber: true,

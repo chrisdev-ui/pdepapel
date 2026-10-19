@@ -24,6 +24,7 @@ import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-bra
 import prismadb from "@/lib/prismadb";
 import {
   CUSTOMER_ORDER_SELECT,
+  VIEWER_ORDER_DETAIL_SELECT,
   canCustomerViewOrder,
   toCustomerOrderResponse,
 } from "@/lib/public-orders";
@@ -104,11 +105,21 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
 
     const { userId } = await auth();
-    // El select de la clienta trae su propio contacto, así que a una cuenta de
-    // solo lectura hay que limpiárselo aparte.
     const access = await getStoreAccess(params.storeId);
     const isOwner = access?.role === "owner";
     const where = { id: params.orderId, storeId: params.storeId };
+
+    // La cuenta de solo lectura no es «clienta»: antes caía en esa rama y,
+    // con un pedido de invitada, recibía el contacto completo. Tiene su
+    // propia forma, sin datos de la clienta.
+    if (access?.role === "viewer") {
+      const order = await prismadb.order.findFirst({ where, select: VIEWER_ORDER_DETAIL_SELECT });
+      if (!order)
+        throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+      return NextResponse.json(scrubOrder(order), {
+        headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+      });
+    }
 
     if (isOwner) {
       const order = await prismadb.order.findFirst({
@@ -125,7 +136,7 @@ export async function GET(
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-      return NextResponse.json(access?.role === "viewer" ? scrubOrder(order) : order, {
+      return NextResponse.json(order, {
         headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
       });
     }
