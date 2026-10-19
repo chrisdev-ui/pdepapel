@@ -63,7 +63,7 @@ beforeAll(async () => {
       trackingCode: "GUIA-2",
       trackingUrl: "https://track.test/2",
       guideUrl: "https://guide.test/2",
-      destinationData: { name: "Quien recibe", phone: "3111111111", address: "Cra 4" },
+      destinationData: { name: "Quien recibe", phone: "3000000000", address: "Cra 4" },
       originData: { name: "Tienda" },
       notes: "Dejar en portería",
     } as never,
