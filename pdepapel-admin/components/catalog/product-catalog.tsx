@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
+import { CATALOG_PDF_LAYOUT } from "@/lib/catalog-pdf-image";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -38,7 +39,7 @@ Font.register({
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Nunito",
-    padding: 30,
+    padding: CATALOG_PDF_LAYOUT.pagePadding,
     backgroundColor: "#FEE5ED",
     fontWeight: 400,
   },
@@ -51,19 +52,20 @@ const styles = StyleSheet.create({
     minHeight: 0,
     breakInside: "avoid-page",
   },
+  // Estas medidas fijan la caja de la foto y con ella la copia de Cloudinary (lib/catalog-pdf-image.ts).
   productCard: {
-    width: "48%",
+    width: `${CATALOG_PDF_LAYOUT.cardWidthPercent}%`,
     marginBottom: 12,
-    padding: 10,
+    padding: CATALOG_PDF_LAYOUT.cardPadding,
     backgroundColor: "#FFFFFF",
     borderRadius: 15,
-    border: "2pt solid #FFE4E9",
+    border: `${CATALOG_PDF_LAYOUT.cardBorder}pt solid #FFE4E9`,
     minHeight: 0, // Important for flex layout
     breakInside: "avoid",
   },
   productImage: {
     width: "100%",
-    height: 200,
+    height: CATALOG_PDF_LAYOUT.photoHeight,
     objectFit: "cover",
     marginBottom: 10,
     borderRadius: 10,

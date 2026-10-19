@@ -64,6 +64,14 @@ distintas de pedir la misma imagen y por listas de anchos demasiado largas.
    feeds o marketplaces si existe una alternativa; el feed de Merchant y las
    publicaciones de Mercado Libre usan el original una vez y lo cachean, eso
    es aceptable.
+7. **Única excepción autorizada (2026-10-19): el catálogo PDF del panel**
+   pide `c_fill,w_400,h_344,q_auto` en `.jpg`
+   (`pdepapel-admin/lib/catalog-pdf-image.ts`). La proporción sale de la caja
+   de la foto en la tarjeta (233 × 200 pt); react-pdf no lee WebP/AVIF, de ahí
+   el JPEG fijo. Es una copia derivada por foto en catálogo, una sola vez. Si
+   cambia la tarjeta cambia la copia, y el test que fija la cadena falla a
+   propósito: no se toca sin una nueva autorización. Las copias `400×311` que
+   quedaron de la muestra no se usan.
 
 ## Vigilancia
 
