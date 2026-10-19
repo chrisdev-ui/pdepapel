@@ -44,7 +44,42 @@ export const VIEWER_HIDDEN_ORDER_FIELDS = [
   "analyticsSessionId",
   "adminNotes",
   "internalNotes",
+  // Dinero de la casa, enlace público, señales de riesgo y datos del regalo.
+  "shippingCost",
+  "token",
+  "riskScore",
+  "riskReasons",
+  "giftRecipientName",
+  "giftMessage",
+  // Quién es la clienta (cuenta o invitada).
+  "userId",
+  "guestId",
 ] as const;
+
+/**
+ * El envío dentro de un pedido. `cost` (lo que se le cobra a la clienta) y
+ * `codFee` se quedan: con ellos se ven los totales. Fuera: guía, rastreo,
+ * los datos de quien recibe (JSON de la transportadora) y lo que le cuesta
+ * el envío a la casa.
+ */
+export const VIEWER_HIDDEN_ORDER_SHIPPING_FIELDS = [
+  "trackingCode",
+  "trackingUrl",
+  "trackingNumber",
+  "guideUrl",
+  "labelUrl",
+  "guidePdfBase64",
+  "guideError",
+  "destinationData",
+  "originData",
+  "quotationData",
+  "notes",
+  "flete",
+  "codCost",
+] as const;
+
+/** Del pago solo se ven el método y el estado: ni la transacción ni el comprobante. */
+export const VIEWER_HIDDEN_PAYMENT_FIELDS = ["transactionId", "details", "proofKey"] as const;
 
 /** Nombres de personas en ventas de marketplace. */
 export const VIEWER_HIDDEN_MARKETPLACE_FIELDS = ["buyerName", "trackingNumber"] as const;
@@ -81,7 +116,10 @@ export function scrubOrder<T extends AnyRecord | null | undefined>(order: T): T 
   // la cuenta de solo lectura no ve ni el enlace (la ruta que lo sirve
   // tampoco se lo daría).
   if (clean.payment && typeof clean.payment === "object") {
-    clean.payment = { ...(clean.payment as AnyRecord), proofKey: null };
+    clean.payment = { ...omit(clean.payment as AnyRecord, VIEWER_HIDDEN_PAYMENT_FIELDS), proofKey: null };
+  }
+  if (clean.shipping && typeof clean.shipping === "object") {
+    clean.shipping = omit(clean.shipping as AnyRecord, VIEWER_HIDDEN_ORDER_SHIPPING_FIELDS);
   }
   const items = clean.orderItems;
   if (Array.isArray(items)) {
