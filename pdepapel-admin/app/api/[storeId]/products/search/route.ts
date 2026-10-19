@@ -52,10 +52,12 @@ export async function GET(
     // unidades, agotados al final), con el precio de oferta, en una sola página.
     const saleMode = searchParams.get("mode") === "venta";
 
-    // Redis Caching Logic
-    // Key format: store:{storeId}:admin-select:{normalized_query}:{page}
+    // La respuesta depende del rol (solo lectura va sin costos) y del tamaño de
+    // página: los dos van en la llave. La invalidación borra
+    // `store:{id}:admin-select:*`, que cubre todas las variantes.
+    const viewer = access.role === "viewer";
     const redis = Redis.fromEnv();
-    const cacheKey = `store:${params.storeId}:admin-select:${saleMode ? "venta:" : ""}${query.toLowerCase().trim()}:${page}`;
+    const cacheKey = `store:${params.storeId}:admin-select:${viewer ? "viewer" : "owner"}:${saleMode ? "venta:" : ""}${limit}:${query.toLowerCase().trim()}:${page}`;
 
     // 1. Try Cache
     try {
@@ -74,7 +76,8 @@ export async function GET(
     }
 
     if (saleMode) {
-      const response = await searchForSale(params.storeId, query, limit);
+      const sale = await searchForSale(params.storeId, query, limit);
+      const response = viewer ? { ...sale, data: scrubProducts(sale.data) } : sale;
       try {
         await redis.set(cacheKey, JSON.stringify(response), { ex: 60 });
       } catch (error) {
@@ -156,7 +159,7 @@ export async function GET(
       }),
     );
     // Solo lectura: sin costo de compra ni transporte.
-    const data = access.role === "viewer" ? scrubProducts(page1 as any[]) : page1;
+    const data = viewer ? scrubProducts(page1 as any[]) : page1;
 
     const response = {
       data,

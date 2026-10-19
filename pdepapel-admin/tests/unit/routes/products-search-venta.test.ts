@@ -48,7 +48,7 @@ describe("GET /products/search?mode=venta", () => {
     expect(body.data[2]).toMatchObject({ available: false });
     expect(body.metadata).toEqual({ hasMore: false, nextPage: null, total: 3, truncated: false });
     expect(mocks.findFirst.mock.calls[0][0].where).toMatchObject({ storeId: "store-1", isArchived: false, OR: [{ sku: "LIB-1" }, { gtin: "LIB-1" }] });
-    expect(mocks.redisSet.mock.calls[0][0]).toBe("store:store-1:admin-select:venta:lib-1:1");
+    expect(mocks.redisSet.mock.calls[0][0]).toBe("store:store-1:admin-select:owner:venta:30:lib-1:1");
   });
 
   /**
