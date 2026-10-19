@@ -122,12 +122,14 @@ export const CellAction: React.FC<CellActionProps> = ({ data, storeUrl }) => {
               Ir al grupo
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem
-            onClick={() => router.push(`${base}/nuevo?desde=${data.id}`)}
-          >
-            <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
-            Duplicar
-          </DropdownMenuItem>
+          {canWrite && (
+            <DropdownMenuItem
+              onClick={() => router.push(`${base}/nuevo?desde=${data.id}`)}
+            >
+              <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+              Duplicar
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={onCopySku}>
             <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
             Copiar SKU

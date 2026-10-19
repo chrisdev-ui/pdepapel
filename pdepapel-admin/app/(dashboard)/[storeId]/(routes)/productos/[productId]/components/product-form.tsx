@@ -1315,17 +1315,19 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem
-                    onClick={async () => {
-                      if (await confirmLeave())
-                        router.push(
-                          `/${params.storeId}/${Models.Products}/nuevo?desde=${initialData.id}`,
-                        );
-                    }}
-                  >
-                    <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Duplicar
-                  </DropdownMenuItem>
+                  {canWrite && (
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        if (await confirmLeave())
+                          router.push(
+                            `/${params.storeId}/${Models.Products}/nuevo?desde=${initialData.id}`,
+                          );
+                      }}
+                    >
+                      <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Duplicar
+                    </DropdownMenuItem>
+                  )}
                   {!initialData.productGroupId && !initialData.isKit && (
                     <DropdownMenuItem
                       onClick={async () => {

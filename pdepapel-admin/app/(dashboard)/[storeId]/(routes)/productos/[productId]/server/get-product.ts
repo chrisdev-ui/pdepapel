@@ -4,6 +4,7 @@ import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { GROUP_VARIANT_COMBINATION_SELECT } from "@/lib/variant-combinations";
+import { ErrorFactory } from "@/lib/api-errors";
 import { requireStoreRead } from "@/lib/store-access";
 
 import { ProductPresaleStatus } from "@prisma/client";
@@ -241,6 +242,9 @@ export async function getProduct(id: string, storeId: string) {
  */
 export async function getProductSeed(storeId: string, sourceId: string) {
   const access = await requireStoreRead(storeId);
+  // Duplicar es crear: la cuenta de solo lectura no puede, y la copia traería
+  // costo, proveedor y piezas del kit con sus costos.
+  if (access.role !== "owner") throw ErrorFactory.Unauthorized();
   const source = await prismadb.product.findFirst({
     where: { id: sourceId, storeId },
     include: {
