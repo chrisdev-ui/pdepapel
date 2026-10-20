@@ -75,6 +75,8 @@ type QueuedClarityEvent = {
 };
 
 const SENSITIVE_ROUTE_PREFIXES = [
+  // La vista previa de una edición lleva su enlace firmado en `?vista=` (P4 puede abrirla).
+  "/capsulas/",
   "/cotizacion/",
   "/crear-cuenta",
   "/iniciar-sesion",

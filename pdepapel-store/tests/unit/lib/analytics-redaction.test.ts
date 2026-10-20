@@ -47,6 +47,12 @@ describe("analítica sin el id del recibo", () => {
     expect(redactAnalyticsUrl("no es una url::")).toBe("no es una url::");
   });
 
+  it("la vista previa de una edición de cápsulas nunca lleva su enlace firmado", () => {
+    expect(redactAnalyticsUrl(`${ORIGIN}/capsulas/3-escritorio?vista=abc.def&utm_source=wa`)).toBe(`${ORIGIN}/capsulas/3-escritorio?utm_source=wa`);
+    expect(redactAnalyticsUrl(`${ORIGIN}/capsulas/3-escritorio?vista=abc.def`)).toBe(`${ORIGIN}/capsulas/3-escritorio`);
+    expect(redactAnalyticsUrl(`${ORIGIN}/capsulas/3-escritorio`)).toBe(`${ORIGIN}/capsulas/3-escritorio`);
+  });
+
   it("el título del recibo nunca lleva el número de pedido", () => {
     expect(redactAnalyticsTitle(`/pedido/${ID}`, "Pedido #ORD-123 | Papelería P de Papel")).toBe(REDACTED_ORDER_TITLE);
     expect(REDACTED_ORDER_TITLE).not.toMatch(/ORD|#/);

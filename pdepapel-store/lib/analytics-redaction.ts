@@ -6,6 +6,10 @@
  */
 const ORDER_RECEIPT_PATH = /^\/(?:pedido|order)\/[^/]+\/?$/;
 
+/** La vista previa de una edición de cápsulas: el enlace firmado nunca sale en una medición. */
+const CAPSULE_PATH = /^\/capsulas\//;
+const CAPSULE_PREVIEW_PARAM = "vista";
+
 export const REDACTED_ORDER_PATH = "/pedido/[id]";
 export const REDACTED_ORDER_TITLE = "Tu pedido | Papelería P de Papel";
 
@@ -24,6 +28,10 @@ export function redactAnalyticsUrl(url: string, base = "https://papeleriapdepape
     parsed = new URL(url, base);
   } catch {
     return url;
+  }
+  if (CAPSULE_PATH.test(parsed.pathname) && parsed.searchParams.has(CAPSULE_PREVIEW_PARAM)) {
+    parsed.searchParams.delete(CAPSULE_PREVIEW_PARAM);
+    return parsed.toString();
   }
   if (!isOrderReceiptPath(parsed.pathname)) return url;
 
