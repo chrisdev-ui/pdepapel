@@ -9,6 +9,7 @@ import {
   Shell,
   Ticket,
   Title,
+  Unsubscribe,
 } from "./components";
 
 interface RecommendedProduct {
@@ -26,6 +27,8 @@ interface ReactivationEmailTemplateProps {
   discountPercentage: number;
   recommendedProducts: RecommendedProduct[];
   storeUrl?: string;
+  /** El enlace de baja del boletín: sin él no se envía. */
+  unsubscribeUrl: string;
 }
 
 /**
@@ -38,7 +41,8 @@ export function reactivationEmailText({
   discountPercentage,
   recommendedProducts = [],
   storeUrl = "https://papeleriapdepapel.com",
-}: Pick<ReactivationEmailTemplateProps, "customerName" | "discountCode" | "discountPercentage" | "recommendedProducts" | "storeUrl">): string {
+  unsubscribeUrl,
+}: Pick<ReactivationEmailTemplateProps, "customerName" | "discountCode" | "discountPercentage" | "recommendedProducts" | "storeUrl" | "unsubscribeUrl">): string {
   const firstName = customerName.trim().split(/\s+/)[0] ?? "";
   const greeting = firstName ? `Hace rato no te vemos, ${firstName}.` : "Hace rato no te vemos por la papelería.";
   const products = recommendedProducts.length
@@ -46,7 +50,7 @@ export function reactivationEmailText({
     : "";
   return (
     `${greeting}\n\nTe guardamos un descuento para cuando quieras volver. No hay apuro, pero sí fecha de vencimiento.\n\n` +
-    `Tu código: ${discountCode} (${discountPercentage} % en toda la tienda).${products}\n\nUsar mi descuento: ${storeUrl}\n\nP de Papel · Medellín, Colombia`
+    `Tu código: ${discountCode} (${discountPercentage} % en toda la tienda).${products}\n\nUsar mi descuento: ${storeUrl}\n\nP de Papel · Medellín, Colombia\nCancelar suscripción: ${unsubscribeUrl}`
   );
 }
 
@@ -56,6 +60,7 @@ export function ReactivationEmailTemplate({
   discountPercentage = 10,
   recommendedProducts = [],
   storeUrl = "https://papeleriapdepapel.com",
+  unsubscribeUrl,
 }: ReactivationEmailTemplateProps) {
   const firstName = customerName ? customerName.split(" ")[0] : "";
 
@@ -98,7 +103,11 @@ export function ReactivationEmailTemplate({
 
       <Cta href={storeUrl}>Usar mi descuento</Cta>
 
-      <Foot>P de Papel · Medellín, Colombia</Foot>
+      <Foot>
+        P de Papel · Medellín, Colombia · te escribimos porque te suscribiste al boletín
+        <br />
+        Puedes <Unsubscribe url={unsubscribeUrl} /> sin iniciar sesión.
+      </Foot>
     </Shell>
   );
 }
@@ -109,6 +118,7 @@ ReactivationEmailTemplate.PreviewProps = {
   discountCode: "VUELVE20",
   discountPercentage: 20,
   storeUrl: "https://papeleriapdepapel.com",
+  unsubscribeUrl: "https://admin.papeleriapdepapel.com/api/tienda/newsletter/unsubscribe?hash=muestra",
   recommendedProducts: [
     { id: "1", slug: "agenda-2027-mensual", name: "Agenda 2027 Mensual", imageUrl: "", priceFormatted: "$ 62.000" },
     { id: "2", slug: "boligrafo-gel-pastel", name: "Bolígrafo gel pastel", imageUrl: "", priceFormatted: "$ 9.500" },

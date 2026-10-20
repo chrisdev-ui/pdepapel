@@ -9,9 +9,10 @@ import { resend } from "@/lib/resend";
 import { ReactivationEmailTemplate, reactivationEmailText } from "@/emails/reactivation-email";
 import { env } from "@/lib/env.mjs";
 import { normalizeNewsletterEmail } from "@/lib/newsletter-tokens";
+import { listUnsubscribeHeaders, newsletterUnsubscribeUrl } from "@/lib/newsletter-unsubscribe-link";
 import { currencyFormatter } from "@/lib/utils";
 
-/** Clientas con el boletín activo (confirmado y sin baja) en esta tienda. */
+/** Clientas con el boletín activo (confirmado, sin baja y con enlace de baja) en esta tienda. */
 export async function keepCustomersWithMarketingConsent<T extends { email: string }>(
   storeId: string,
   customers: T[],
@@ -22,6 +23,7 @@ export async function keepCustomersWithMarketingConsent<T extends { email: strin
       storeId,
       status: NewsletterSubscriberStatus.ACTIVE,
       unsubscribedAt: null,
+      unsubscribeTokenHash: { not: null },
       emailNormalized: { in: customers.map((customer) => normalizeNewsletterEmail(customer.email)) },
     },
     select: { emailNormalized: true },
@@ -72,6 +74,7 @@ export async function processAutomaticReactivations(
 
   let processedCount = 0;
   let recentlyContacted = 0;
+  let optedOut = 0;
   const errors: { error: string }[] = [];
 
   for (const customer of eligibleCustomers) {
@@ -95,6 +98,18 @@ export async function processAutomaticReactivations(
       }
       // Simulación: se cuenta a quién se escribiría, sin cupón ni correo.
       if (options.dryRun) continue;
+
+      // La baja pudo llegar mientras corría el lote: se mira otra vez antes
+      // de crear el cupón, y de aquí sale el enlace de baja del correo.
+      const subscriber = await prismadb.newsletterSubscriber.findUnique({
+        where: { storeId_emailNormalized: { storeId, emailNormalized: normalizeNewsletterEmail(customer.email) } },
+        select: { status: true, unsubscribedAt: true, unsubscribeTokenHash: true },
+      });
+      if (subscriber?.status !== NewsletterSubscriberStatus.ACTIVE || subscriber.unsubscribedAt || !subscriber.unsubscribeTokenHash) {
+        optedOut += 1;
+        continue;
+      }
+      const unsubscribeUrl = newsletterUnsubscribeUrl(storeId, subscriber.unsubscribeTokenHash);
 
       // 3. Find Product Recommendations
       // Look up their last order to see what categories they bought
@@ -185,6 +200,7 @@ export async function processAutomaticReactivations(
         discountPercentage: 10,
         recommendedProducts,
         storeUrl: env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com",
+        unsubscribeUrl,
       };
 
       // 6. Send Email via Resend
@@ -194,6 +210,7 @@ export async function processAutomaticReactivations(
         subject: `¡Te extrañamos, ${firstName}! Tienes un regalo 🎁`,
         react: ReactivationEmailTemplate(emailProps) as React.ReactElement,
         text: reactivationEmailText(emailProps),
+        headers: listUnsubscribeHeaders(unsubscribeUrl),
       });
 
       if (response.error) {
@@ -244,6 +261,7 @@ export async function processAutomaticReactivations(
   return {
     success: true,
     processed: processedCount,
+    optedOut,
     errors,
     ...(options.dryRun
       ? {

@@ -9,6 +9,7 @@ import { createEarlyAccessToken, isEarlyAccessConfigured } from "@/lib/early-acc
 import { env } from "@/lib/env.mjs";
 import { HOME_CONTENT_ADMIN_SELECT, toPublicHomeContent } from "@/lib/home-content";
 import { formatEmailDate } from "@/lib/newsletter";
+import { listUnsubscribeHeaders as listHeaders, newsletterUnsubscribeUrl as unsubscribeUrl } from "@/lib/newsletter-unsubscribe-link";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 
@@ -19,10 +20,6 @@ const FROM = "P de Papel <novedades@papeleriapdepapel.com>";
 
 function storefrontUrl(path: string): string {
   return new URL(path, `${env.FRONTEND_STORE_URL.replace(/\/$/, "")}/`).toString();
-}
-
-function adminUrl(path: string): string {
-  return new URL(path, `${env.ADMIN_WEB_URL.replace(/\/$/, "")}/`).toString();
 }
 
 async function activeSubscribers(storeId: string) {
@@ -72,17 +69,6 @@ async function recordSend(input: {
       homeContentId: input.homeContentId ?? null,
     },
   });
-}
-
-function unsubscribeUrl(storeId: string, unsubscribeTokenHash: string) {
-  return adminUrl(`/api/${encodeURIComponent(storeId)}/newsletter/unsubscribe?hash=${encodeURIComponent(unsubscribeTokenHash)}`);
-}
-
-function listHeaders(url: string) {
-  return {
-    "List-Unsubscribe": `<${url}>`,
-    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-  };
 }
 
 async function loadShipmentCampaign(storeId: string, homeContentId: string) {

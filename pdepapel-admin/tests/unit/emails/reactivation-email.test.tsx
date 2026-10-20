@@ -9,6 +9,7 @@ const props = {
   discountPercentage: 10,
   recommendedProducts: [{ id: "p1", slug: "libreta-a5", name: "Libreta A5", imageUrl: "https://res.cloudinary.com/x.png", priceFormatted: "$ 15.000" }],
   storeUrl: "https://papeleriapdepapel.com",
+  unsubscribeUrl: "https://admin.papeleriapdepapel.com/api/tienda/newsletter/unsubscribe?hash=abc",
 };
 
 describe("correo de reactivación", () => {
@@ -21,5 +22,7 @@ describe("correo de reactivación", () => {
     expect(text).toContain("Tu código: VUELVE-AB12 (10 % en toda la tienda).");
     expect(text).toContain("• Libreta A5 ($ 15.000): https://papeleriapdepapel.com/producto/libreta-a5");
     expect(text).toContain("Usar mi descuento: https://papeleriapdepapel.com");
+    expect(text).toContain("Cancelar suscripción: https://admin.papeleriapdepapel.com/api/tienda/newsletter/unsubscribe?hash=abc");
+    expect(html).toContain("cancelar la suscripción");
   });
 });
