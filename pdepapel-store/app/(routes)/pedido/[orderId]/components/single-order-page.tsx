@@ -5,7 +5,7 @@ import axios from "axios";
 import { ArrowRight, MessageCircle, Printer, ShieldAlert, ShieldCheck, ShieldClose } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { OrderAccountClaimCard } from "@/components/order-account-claim-card";
 import { OrderGiftNotice } from "@/components/order-gift-notice";
@@ -24,6 +24,7 @@ import useTrackShipment from "@/hooks/use-track-shipment";
 import { cartMatchesOrder } from "@/lib/cart-matches-order";
 import { formatOrderDate } from "@/lib/order-dates";
 import {
+  mergePolledOrder,
   ORDER_STATUS_POLL_INTERVAL_MS,
   shouldPollOrderStatus,
 } from "@/lib/order-status-polling";
@@ -64,6 +65,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const { fireConfetti } = useConfetti();
   const [currentOrder, setCurrentOrder] = useState(order);
   const activeOrder = currentOrder || order;
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
 
   // The checkout keeps the cart until the gateway confirms the payment. Once
   // this order is PAID, the cart and the saved checkout are cleared here —
@@ -118,14 +121,19 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         const storeApiUrl = process.env.NEXT_PUBLIC_API_URL;
         if (!storeApiUrl) return;
 
-        const response = await axios.get(`${storeApiUrl}/orders/${order.id}`);
-        const fetchedOrder = response.data;
+        // Sin la sesión, un pedido de cuenta responde 404 y la página dejaba
+        // de actualizarse.
+        const sessionToken = await getTokenRef.current().catch(() => null);
+        const response = await axios.get(`${storeApiUrl}/orders/${order.id}`, {
+          headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+        });
+        const fetchedOrder = response.data as Order | null;
         if (
           !isDisposed &&
           fetchedOrder &&
           fetchedOrder.status !== currentOrder.status
         ) {
-          setCurrentOrder(fetchedOrder);
+          setCurrentOrder((previous) => mergePolledOrder(previous, fetchedOrder));
 
           if (fetchedOrder.status === OrderStatus.PAID) {
             toast({
