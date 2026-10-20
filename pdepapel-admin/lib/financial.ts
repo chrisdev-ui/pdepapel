@@ -119,7 +119,7 @@ export async function calculateTotalProductCost(orderItems: OrderItem[], prismad
 
 /**
  * Comisión de pasarela de un cobro. La tabla vive en `lib/gateway-fees.ts`;
- * `null` = desconocida (datáfono Bold), nunca 0.
+ * `null` = desconocida, nunca 0.
  */
 export function calculateGatewayFee(
   total: number,

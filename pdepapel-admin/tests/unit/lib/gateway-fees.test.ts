@@ -1,5 +1,5 @@
 import { calculateGatewayFee, calculateOrderFinancials, getOrderNetProfit } from "@/lib/financial";
-import { BOLD_ONLINE_FEE, BOLD_TERMINAL_MARKER, gatewayChannelOf, gatewayFee, keepTerminalMarker } from "@/lib/gateway-fees";
+import { BOLD_FEE_BASIS, BOLD_PAYOUT_PLAN, BOLD_PUBLIC_RATES, BOLD_TERMINAL_MARKER, gatewayChannelOf, gatewayFee, keepTerminalMarker } from "@/lib/gateway-fees";
 import { orderFinancialsPlan } from "@/lib/order-financials-backfill";
 import { OrderSource, OrderType, PaymentMethod } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
@@ -9,14 +9,20 @@ const order = (extra: Record<string, unknown> = {}) =>
   ({ id: "o1", total: 100000, giftCardAmount: 0, type: OrderType.STANDARD, orderItems: [{ productId: "p1", quantity: 1 }], ...extra }) as never;
 
 describe("gatewayFee (lib/gateway-fees.ts)", () => {
-  it("Bold en línea cobra la tarifa pública: (2,99 % + $900) × 1,19, y está marcada como sin verificar", () => {
+  it("Bold en línea cobra la tarifa pública del plan de la Cuenta digital Bold al día siguiente: (2,99 % + $900) × 1,19", () => {
+    expect(BOLD_PAYOUT_PLAN).toBe("nextDayBoldAccount");
+    expect(BOLD_FEE_BASIS).toBe("tarifa pública de Bold consultada el 2026-10-20");
     expect(gatewayFee(100000, PaymentMethod.Bold)).toBe(4629.1);
     expect(gatewayFee(12900, PaymentMethod.Bold)).toBe(1529.99);
-    expect(BOLD_ONLINE_FEE.verified).toBe(false);
   });
 
-  it("el datáfono Bold es desconocido (null), nunca 0", () => {
-    expect(gatewayFee(100000, PaymentMethod.Bold, { channel: "terminal" })).toBeNull();
+  it("el datáfono Bold cobra su tarifa pública: (2,69 % + $300) × 1,19, nunca 0", () => {
+    expect(gatewayFee(100000, PaymentMethod.Bold, { channel: "terminal" })).toBe(3558.1);
+  });
+
+  it("los otros planes publicados quedan en la tabla para cambiar de plan sin buscarlos", () => {
+    expect(BOLD_PUBLIC_RATES.otherBanks.online).toEqual({ percent: 0.0359, fixed: 900, vat: 0.19 });
+    expect(BOLD_PUBLIC_RATES.otherBanks.terminal).toEqual({ percent: 0.0329, fixed: 300, vat: 0.19 });
   });
 
   it("Wompi no cambia y efectivo, transferencia y contra entrega siguen en 0", () => {
@@ -47,25 +53,25 @@ describe("finanzas con la comisión compartida", () => {
     expect(calculateGatewayFee(100000, PaymentMethod.Bold)).toBe(4629.1);
   });
 
-  it("un cobro en el datáfono guarda la comisión en null y la ganancia sin ella", async () => {
+  it("un cobro en el datáfono guarda la comisión del datáfono y la ganancia baja en lo mismo", async () => {
     const metrics = await calculateOrderFinancials(order({ type: OrderType.POINT_OF_SALE }), PaymentMethod.Bold, 0, db());
-    expect(metrics.gatewayFee).toBeNull();
-    expect(metrics.netProfit).toBe(60000);
+    expect(metrics.gatewayFee).toBe(3558.1);
+    expect(metrics.netProfit).toBeCloseTo(60000 - 3558.1, 6);
     expect(Number.isNaN(metrics.profitMarginPct)).toBe(false);
   });
 
   it("una tarjeta de regalo cobrada en el datáfono no da NaN", async () => {
     const metrics = await calculateOrderFinancials(order({ type: OrderType.GIFT_CARD, source: OrderSource.POS }), PaymentMethod.Bold, 0, db());
-    expect(metrics).toMatchObject({ gatewayFee: null, netProfit: 0, totalProductCost: 0 });
+    expect(metrics).toMatchObject({ gatewayFee: 3558.1, netProfit: -3558.1, totalProductCost: 0 });
   });
 
-  it("la ganancia estimada usa la misma regla: datáfono sin comisión, en línea con ella", () => {
+  it("la ganancia estimada usa la misma regla: cada canal con su comisión", () => {
     const base = { total: 100000, totalProductCost: 40000, shipping: { cost: 0 } };
-    expect(getOrderNetProfit({ ...base, type: OrderType.POINT_OF_SALE, payment: { method: PaymentMethod.Bold } })).toBe(60000);
+    expect(getOrderNetProfit({ ...base, type: OrderType.POINT_OF_SALE, payment: { method: PaymentMethod.Bold } })).toBeCloseTo(60000 - 3558.1, 6);
     expect(getOrderNetProfit({ ...base, payment: { method: PaymentMethod.Bold } })).toBeCloseTo(100000 - 40000 - 4629.1, 6);
   });
 
-  it("el relleno de financieros deja la comisión en null para un cobro de datáfono", async () => {
+  it("el relleno de financieros usa la comisión del datáfono para un cobro de datáfono", async () => {
     const findMany = vi.fn().mockResolvedValue([
       {
         id: "o1",
@@ -78,6 +84,6 @@ describe("finanzas con la comisión compartida", () => {
       },
     ]);
     const plan = await orderFinancialsPlan({ order: { findMany }, ...db() } as never);
-    expect(plan.rows[0]).toMatchObject({ gatewayFee: null, netProfit: 60000 });
+    expect(plan.rows[0]).toMatchObject({ gatewayFee: 3558.1, netProfit: expect.closeTo(60000 - 3558.1, 6) });
   });
 });

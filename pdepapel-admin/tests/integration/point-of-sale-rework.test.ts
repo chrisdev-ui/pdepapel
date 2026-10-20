@@ -172,9 +172,9 @@ describe("point of sale rework with MySQL", () => {
     expect(approved.status).toBe(200);
     const paid = await testPrisma.order.findUniqueOrThrow({ where: { id: sale.order.id }, include: { payment: true } });
     expect(paid).toMatchObject({ status: OrderStatus.PAID, payment: { transactionId: "BOLD-TEST-1" } });
-    // El datáfono no tiene tarifa conocida: la comisión queda en null, no en la de Bold en línea ni en 0.
-    expect(paid.gatewayFee).toBeNull();
-    expect(paid.netProfit).toBe(6000);
+    // El datáfono cobra su propia tarifa, no la de Bold en línea ni 0: (2,69 % de 10.000 + $300) × 1,19.
+    expect(paid.gatewayFee).toBeCloseTo(677.11, 2);
+    expect(paid.netProfit).toBeCloseTo(6000 - 677.11, 2);
     expect(paid.payment?.details).toContain(BOLD_TERMINAL_MARKER);
     expect(paid.paidAt).toBeInstanceOf(Date);
     await expect(testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id } })).resolves.toMatchObject({ stock: 5 });

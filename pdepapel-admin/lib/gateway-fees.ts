@@ -9,27 +9,45 @@ import { OrderSource, OrderType, PaymentMethod } from "@prisma/client";
  * van aquí.
  */
 
+type PercentPlusFixed = { percent: number; fixed: number; vat: number };
+
 /**
- * Bold, pago en línea con tarjeta (link de pago / checkout): 2,99 % + $900,
- * más IVA sobre la comisión.
- *
- * TARIFA PÚBLICA SIN VERIFICAR (2026-10-20): sale de las páginas públicas de
- * Bold, no de una liquidación de la tienda. Se reemplaza cuando Paula
- * descargue una liquidación real.
+ * Bold: tarifa pública de Bold consultada el 2026-10-20 (no es una
+ * liquidación de la tienda), tramo de ventas de $0 a $10 millones al mes.
+ * - https://bold.co/tarifas
  * - https://bold.co/pagos-en-linea/link-de-pago
- * - https://bold.co/tarifas.html
- * - https://datafonos.bold.co/bienvenida-a-bold/tarifas/
+ *
+ * La página publica tres planes según a dónde llega el dinero. Las tarifas
+ * van antes de IVA y retenciones: el IVA se suma sobre la comisión. No se
+ * cuentan el 1 % adicional de las tarjetas internacionales ni el tramo de
+ * $10 a $20 millones.
  */
-export const BOLD_ONLINE_FEE = { percent: 0.0299, fixed: 900, vat: 0.19, verified: false } as const;
+export const BOLD_PUBLIC_RATES = {
+  /** Al día siguiente en la Cuenta digital Bold (Visa o Mastercard; otras tarjetas, 3,29 % / 2,99 %). */
+  nextDayBoldAccount: { online: { percent: 0.0299, fixed: 900, vat: 0.19 }, terminal: { percent: 0.0269, fixed: 300, vat: 0.19 } },
+  /** De inmediato en la Cuenta digital Bold, cualquier tarjeta. */
+  instantBoldAccount: { online: { percent: 0.0359, fixed: 900, vat: 0.19 }, terminal: { percent: 0.0329, fixed: 300, vat: 0.19 } },
+  /** En otros bancos, cualquier tarjeta. */
+  otherBanks: { online: { percent: 0.0359, fixed: 900, vat: 0.19 }, terminal: { percent: 0.0329, fixed: 300, vat: 0.19 } },
+} as const satisfies Record<string, { online: PercentPlusFixed; terminal: PercentPlusFixed }>;
+
+/**
+ * Paula recibe los pagos en su Cuenta digital Bold, al día siguiente
+ * (confirmado el 2026-10-20). Se cuenta la tarifa de Visa o Mastercard; las
+ * otras tarjetas cuestan 0,3 puntos más.
+ */
+export const BOLD_PAYOUT_PLAN: keyof typeof BOLD_PUBLIC_RATES = "nextDayBoldAccount";
+
+export const BOLD_FEE_BASIS = "tarifa pública de Bold consultada el 2026-10-20";
+
+/** Bold, pago en línea con tarjeta (link de pago / checkout). */
+export const BOLD_ONLINE_FEE: PercentPlusFixed = BOLD_PUBLIC_RATES[BOLD_PAYOUT_PLAN].online;
+
+/** Bold, cobro en el datáfono. */
+export const BOLD_TERMINAL_FEE: PercentPlusFixed = BOLD_PUBLIC_RATES[BOLD_PAYOUT_PLAN].terminal;
 
 /** Wompi: 2,65 % + $700, más IVA sobre la comisión. */
 export const WOMPI_FEE = { percent: 0.0265, fixed: 700, vat: 0.19 } as const;
-
-/**
- * El cobro en el datáfono Bold no tiene tarifa conocida (solo una referencia
- * no confirmada de 2,59 %): su comisión es `null` hasta tener la liquidación.
- */
-export const BOLD_TERMINAL_FEE = null;
 
 /**
  * Marca fija en `PaymentDetails.details` de un pedido cobrado en el datáfono.
@@ -42,7 +60,7 @@ export type GatewayChannel = "online" | "terminal";
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-const percentPlusFixed = (amount: number, fee: { percent: number; fixed: number; vat: number }) =>
+const percentPlusFixed = (amount: number, fee: PercentPlusFixed) =>
   round2((amount * fee.percent + fee.fixed) * (1 + fee.vat));
 
 /**
@@ -60,7 +78,7 @@ export function gatewayFee(
     case PaymentMethod.Wompi:
       return percentPlusFixed(validAmount, WOMPI_FEE);
     case PaymentMethod.Bold:
-      return options.channel === "terminal" ? BOLD_TERMINAL_FEE : percentPlusFixed(validAmount, BOLD_ONLINE_FEE);
+      return percentPlusFixed(validAmount, options.channel === "terminal" ? BOLD_TERMINAL_FEE : BOLD_ONLINE_FEE);
     default:
       return 0;
   }

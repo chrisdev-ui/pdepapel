@@ -16,7 +16,7 @@ describe("financial helpers", () => {
     expect(calculateGatewayFee(100000, PaymentMethod.CASH)).toBe(0);
     expect(calculateGatewayFee(100000, PaymentMethod.COD)).toBe(0);
     expect(calculateGatewayFee(100000, PaymentMethod.BankTransfer)).toBe(0);
-    // Tarifa pública de Bold en línea, sin verificar (lib/gateway-fees.ts).
+    // Tarifa pública de Bold en línea, Cuenta digital Bold al día siguiente (lib/gateway-fees.ts).
     expect(calculateGatewayFee(100000, PaymentMethod.Bold)).toBe(4629.1);
   });
 
