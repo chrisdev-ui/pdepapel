@@ -1,6 +1,7 @@
 import { CapsuleBatchMode } from "@prisma/client";
 
 import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { fifoSoldByBatch } from "@/lib/capsule-batch-sales";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 
@@ -28,8 +29,10 @@ export interface CapsuleBatchRow {
   unitCost: number;
   totalCost: number;
   unpackedAt: string | null;
-  /** Cápsulas de este lote que siguen en la estantería; por debajo ya se vendió. */
+  /** Stock del producto cápsula (de todos sus lotes). */
   capsuleStock: number;
+  /** Vendidas de este lote: lo vendido del producto repartido del lote más viejo al más nuevo. */
+  sold: number;
   items: { name: string; sku: string; quantity: number }[];
 }
 
@@ -71,6 +74,16 @@ export async function getCapsuleWorkspace(storeId: string) {
     }),
   ]);
 
+  const productIds = Array.from(new Set(batches.map((batch) => batch.capsuleProductId)));
+  const liveBatches = productIds.length
+    ? await prismadb.capsuleBatch.findMany({
+        where: { storeId, mode: CapsuleBatchMode.TRANSFER, unpackedAt: null, capsuleProductId: { in: productIds } },
+        select: { id: true, capsuleProductId: true, quantity: true, createdAt: true, unpackedAt: true },
+      })
+    : [];
+  const stockByProduct = new Map(batches.map((batch) => [batch.capsuleProductId, batch.capsuleProduct.stock]));
+  const soldByBatch = fifoSoldByBatch(liveBatches, stockByProduct);
+
   return {
     capsuleProducts: capsuleProducts.map((product) => ({
       ...product,
@@ -92,6 +105,7 @@ export async function getCapsuleWorkspace(storeId: string) {
       totalCost: batch.totalCost,
       unpackedAt: batch.unpackedAt ? batch.unpackedAt.toISOString() : null,
       capsuleStock: batch.capsuleProduct.stock,
+      sold: batch.unpackedAt ? 0 : (soldByBatch.get(batch.id) ?? 0),
       items: batch.items.map((item) => ({
         name: item.product.name,
         sku: item.product.sku,

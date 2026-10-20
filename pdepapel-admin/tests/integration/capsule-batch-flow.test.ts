@@ -4,7 +4,9 @@ import { createPointOfSaleSale } from "@/lib/point-of-sale";
 import { priceLines } from "@/lib/product-pricing";
 import { OrderType, PaymentMethod } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/store-access", async (importOriginal) => ({ ...(await importOriginal<object>()), requireStoreOwner: vi.fn().mockResolvedValue("test-user") }));
 
 import { testPrisma } from "./helpers/database";
 
@@ -238,6 +240,21 @@ describe("lotes de cápsulas contra MySQL", () => {
         userId: "test-user",
       }),
     ).rejects.toThrow(/vendieron/i);
+  });
+
+  it("«N vendidas» reparte lo vendido del lote más viejo al más nuevo", async () => {
+    fixture = await createFixture();
+    const pack = (quantity: number) =>
+      packCapsules({ storeId: fixture!.store.id, capsuleProductId: fixture!.capsule.id, quantity, sources: [{ productId: fixture!.stickers.id, quantity }], userId: "test-user" });
+    const older = await pack(10);
+    await testPrisma.capsuleBatch.update({ where: { id: older.id }, data: { createdAt: new Date(Date.now() - 60_000) } });
+    const newer = await pack(10);
+    await createPointOfSaleSale({ storeId: fixture.store.id, items: [{ productId: fixture.capsule.id, quantity: 3 }], paymentMethod: PaymentMethod.CASH, idempotencyKey: `pos-${randomUUID()}`, userId: "test-user" });
+
+    const { getCapsuleWorkspace } = await import("@/app/(dashboard)/[storeId]/(routes)/productos/capsulas/server/get-capsule-workspace");
+    const { batches } = await getCapsuleWorkspace(fixture.store.id);
+    expect(batches.find((row) => row.id === older.id)).toMatchObject({ sold: 3 });
+    expect(batches.find((row) => row.id === newer.id)).toMatchObject({ sold: 0 });
   });
 
   it("la escalera por cantidad decide el precio, y nunca se suma a la oferta", async () => {

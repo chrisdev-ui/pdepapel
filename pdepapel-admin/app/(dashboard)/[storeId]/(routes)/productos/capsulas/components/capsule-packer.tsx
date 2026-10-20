@@ -365,7 +365,7 @@ export function CapsulePacker({
         ) : (
           <ul className="flex flex-col gap-2">
             {batches.map((batch) => {
-              const sold = batch.quantity - batch.capsuleStock;
+              const sold = batch.sold;
               const canUndo = !batch.unpackedAt && batch.capsuleStock >= batch.quantity;
               return (
                 <li
