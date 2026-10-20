@@ -76,7 +76,8 @@ export async function getPublicCapsuleEdition({
     edition: { number: edition.number, name: edition.name, theme: edition.theme, segment: editionPathSegment(edition), status: edition.status },
     preview: previewValid,
     salesEnabled,
-    product: { slug: edition.product.slug, name: edition.product.name, description: edition.product.description, images: edition.product.images.map((image) => image.url) },
+    // El id del producto de la edición es lo que la tienda pone en el pedido; los de la bolsa nunca salen.
+    product: { id: edition.product.id, slug: edition.product.slug, name: edition.product.name, description: edition.product.description, images: edition.product.images.map((image) => image.url) },
     gallery: poolProducts.slice(0, GALLERY_LIMIT).map((product) => ({ name: product.name, imageUrl: product.images[0]?.url ?? null })),
     packs: CAPSULE_PACK_PRICES.map((price) => ({
       packSize: price.packSize,

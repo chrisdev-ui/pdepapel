@@ -106,7 +106,12 @@ describe("quién ve una edición en la tienda", () => {
     const payload = await getPublicCapsuleEdition({ storeId: f!.store.id, segment: "3", token });
     assertNoForbiddenKeys(payload, "viewer");
     const text = JSON.stringify(payload);
-    for (const key of ["unitCost", "acqPrice", "provisionalCost", "minMarginPct", "costBandMin", "costBandMax", "giftMaxCost", "boxReserveCost", "reservedUnits", "stock", "productId", "\"id\""]) expect(text).not.toContain(key);
+    for (const key of ["unitCost", "acqPrice", "provisionalCost", "minMarginPct", "costBandMin", "costBandMax", "giftMaxCost", "boxReserveCost", "reservedUnits", "stock", "productId"]) expect(text).not.toContain(key);
+    // Solo el id del producto que se vende; ni el de la edición ni los de la bolsa.
+    expect(payload!.product.id).toBe(edition.productId);
+    expect(text).not.toContain(edition.id);
+    const pool = await testPrisma.capsuleSlip.findMany({ where: { editionId: edition.id }, distinct: ["productId"], select: { productId: true } });
+    for (const { productId } of pool) expect(text).not.toContain(productId);
     const codes = await testPrisma.capsuleSlip.findMany({ where: { editionId: edition.id }, select: { code: true }, take: 3 });
     for (const { code } of codes) expect(text).not.toContain(code);
   });

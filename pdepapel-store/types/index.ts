@@ -356,6 +356,15 @@ export interface Order {
   paymentResult?: PaymentResult;
   /** Quien abre el enlace sin ser la clienta del pedido recibe los datos recortados. */
   masked?: boolean;
+  /** Pack de cápsulas sorpresa: lo que salió llega solo con el sorteo cerrado. */
+  capsule?: {
+    editionName: string;
+    editionNumber: number;
+    packSize: number;
+    giftLabel: string | null;
+    drawCompleted: boolean;
+    products: { name: string; gift: boolean }[];
+  } | null;
 }
 
 export type PaymentResult = "approved" | "declined" | "pending";

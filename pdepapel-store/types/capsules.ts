@@ -3,7 +3,7 @@ export interface CapsuleEditionPublic {
   edition: { number: number; name: string; theme: string; segment: string; status: string };
   preview: boolean;
   salesEnabled: boolean;
-  product: { slug: string; name: string; description: string; images: string[] };
+  product: { id: string; slug: string; name: string; description: string; images: string[] };
   gallery: { name: string; imageUrl: string | null }[];
   packs: {
     packSize: number;

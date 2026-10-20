@@ -35,6 +35,8 @@ import {
 } from "./shipping-rate-recovery";
 
 interface PaymentInfoStepProps {
+  /** Pack de cápsulas: solo pago en línea y sin cupones (el servidor los rechaza). */
+  capsuleMode?: boolean;
   form: UseFormReturn<CheckoutFormValue>;
   isLoading?: boolean;
   couponState: CouponState;
@@ -68,6 +70,7 @@ const formatDeliveryDays = (days?: number) => {
 };
 
 export const PaymentInfoStep = ({
+  capsuleMode = false,
   form,
   isLoading,
   couponState,
@@ -241,6 +244,7 @@ export const PaymentInfoStep = ({
                 disabled={isLoading || giftCardCoversAll}
                 ariaLabelledBy={paymentLabelId}
                 omit={!codAvailable ? [PaymentMethod.COD] : []}
+                hide={capsuleMode ? [PaymentMethod.BankTransfer, PaymentMethod.COD] : []}
                 disabledMessages={
                   !codAvailable
                     ? {
@@ -342,19 +346,25 @@ export const PaymentInfoStep = ({
       </div>
 
       <div className="space-y-4">
-        <WelcomeBenefitCard
-          onApply={onApplyWelcomeBenefit}
-          isApplying={validateCouponStatus === "pending"}
-        />
-        <CouponField
-          form={form}
-          isLoading={isLoading}
-          couponState={couponState}
-          setCouponState={setCouponState}
-          validateCouponMutate={validateCouponMutate}
-          validateCouponStatus={validateCouponStatus}
-          subtotal={subtotal}
-        />
+        {capsuleMode ? (
+          <p className="text-sm text-muted-foreground">Los cupones no aplican a los packs de cápsulas.</p>
+        ) : (
+          <>
+            <WelcomeBenefitCard
+              onApply={onApplyWelcomeBenefit}
+              isApplying={validateCouponStatus === "pending"}
+            />
+            <CouponField
+              form={form}
+              isLoading={isLoading}
+              couponState={couponState}
+              setCouponState={setCouponState}
+              validateCouponMutate={validateCouponMutate}
+              validateCouponStatus={validateCouponStatus}
+              subtotal={subtotal}
+            />
+          </>
+        )}
         <GiftCardField
           form={form}
           isLoading={isLoading}

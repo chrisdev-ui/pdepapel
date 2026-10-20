@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function CheckoutPage() {
+export default async function CheckoutPage({ searchParams = {} }: { searchParams?: { capsulas?: string } }) {
   const [user, storefrontSettings] = await Promise.all([
     currentUser(),
     getStorefrontSettings(),
@@ -33,6 +33,7 @@ export default async function CheckoutPage() {
   };
 
   const isGuest = !user;
+  const capsuleMode = searchParams.capsulas === "1";
 
   return (
     <Container>
@@ -62,8 +63,10 @@ export default async function CheckoutPage() {
         <div className="order-2 sm:col-span-2 sm:row-start-2">
           <MultiStepCheckoutForm
             currentUser={formattedUser}
-            freeShippingThreshold={storefrontSettings.freeShippingThreshold}
+            // Un pack de cápsulas no tiene envío gratis (decisión P1): el servidor tampoco lo aplica.
+            freeShippingThreshold={capsuleMode ? null : storefrontSettings.freeShippingThreshold}
             isGuest={isGuest}
+            capsuleMode={capsuleMode}
           />
         </div>
       </div>

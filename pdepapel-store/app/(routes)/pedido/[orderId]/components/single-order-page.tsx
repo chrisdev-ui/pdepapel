@@ -49,6 +49,7 @@ import {
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order, ShippingTrackingEvent } from "@/types";
 import { OrderHelpCard } from "./order-help-card";
+import { OrderCapsuleCard } from "./order-capsule-card";
 import { OrderItemsCard } from "./order-items-card";
 import { OrderShippingCard } from "./order-shipping-card";
 import { OrderSummaryCard } from "./order-summary-card";
@@ -396,6 +397,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               }
             />
           )}
+          {activeOrder.capsule && <OrderCapsuleCard capsule={activeOrder.capsule} />}
           <OrderItemsCard
             order={activeOrder}
             allowReorder={!digital && stage.stage !== "unpaid" && stage.stage !== "verifying"}

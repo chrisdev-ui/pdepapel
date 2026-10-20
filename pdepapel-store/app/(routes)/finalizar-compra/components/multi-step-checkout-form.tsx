@@ -14,6 +14,7 @@ import { Currency } from "@/components/ui/currency";
 import { Form } from "@/components/ui/form";
 import { NoResults } from "@/components/ui/no-results";
 import { KAWAII_FACE_SAD, PaymentMethod, ShippingStatus } from "@/constants";
+import { useCapsulePack } from "@/hooks/use-capsule-pack";
 import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
 import {
@@ -284,6 +285,8 @@ interface CheckoutFormProps {
   freeShippingThreshold?: number | null;
   /** Resolved on the server, so guest-only blocks render without waiting for Clerk. */
   isGuest?: boolean;
+  /** `?capsulas=1`: se paga el pack de cápsulas (`useCapsulePack`), no el carrito. */
+  capsuleMode?: boolean;
 }
 
 export interface CouponState {
@@ -300,6 +303,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
   freeShippingThreshold = null,
   isGuest = true,
+  capsuleMode = false,
 }) => {
   const { userId, getToken } = useAuth();
   const router = useRouter();
@@ -308,7 +312,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const [isNavigationVisible, setIsNavigationVisible] = useState(true);
   const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const botTrap = useBotTrap();
-  const cart = useCart();
+  const shoppingCart = useCart();
+  const capsulePack = useCapsulePack();
+  // El pack de cápsulas va aparte del carrito: se paga solo y el carrito queda intacto.
+  const cart = capsuleMode ? capsulePack : shoppingCart;
   const [isMounted, setIsMounted] = useState(false);
   const [stockConflicts, setStockConflicts] = useState<StockConflictItem[]>([]);
   // La tarjeta de regalo se valida en cada visita: el saldo puede cambiar.
@@ -371,6 +378,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     if (hasVerifiedStockRef.current) return;
     hasVerifiedStockRef.current = true;
 
+    // El pack lo revisa el servidor (peldaño, 25 % de lo que queda, cupos): su producto no está en el catálogo.
+    if (capsuleMode) return;
     const cartState = useCart.getState();
     if (cartState.items.length === 0) return;
 
@@ -1052,8 +1061,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   };
 
   const adjustStockConflict = (productId: string, quantity: number) => {
-    if (quantity <= 0) cart.removeItem(productId);
-    else cart.updateQuantity(productId, quantity);
+    if (quantity <= 0) shoppingCart.removeItem(productId);
+    else shoppingCart.updateQuantity(productId, quantity);
     setStockConflicts((conflicts) =>
       conflicts.filter((item) => item.productId !== productId),
     );
@@ -1095,9 +1104,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       // Stock is re-checked right before creating the order so the customer
       // fixes quantities here instead of getting a server rejection.
       // Si esta cortesía falla, se sigue: el servidor revisa el stock igual.
-      const { stock: stockMap } = await safeStockPrecheck(() =>
-        checkLiveStock(activeItems.map((i) => i.id)),
-      );
+      const { stock: stockMap } = capsuleMode
+        ? { stock: null }
+        : await safeStockPrecheck(() =>
+            checkLiveStock(activeItems.map((i) => i.id)),
+          );
       const conflicts: StockConflictItem[] = activeItems.flatMap((item) => {
         const live = stockMap?.[item.id];
         const requested = item.quantity ?? 1;
@@ -1191,6 +1202,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           ? Math.max(0, quotedFee)
           : null;
       const formattedData = {
+        ...(capsuleMode ? { capsuleVideoConsent: capsulePack.videoConsent } : {}),
         fullName: fullName.trim(),
         phone: telephone,
         email,
@@ -1694,6 +1706,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                       )}
                       {currentStep === 3 && (
                         <PaymentInfoStep
+                          capsuleMode={capsuleMode}
                           form={form}
                           isLoading={isPendingSubmit}
                           couponState={couponState}

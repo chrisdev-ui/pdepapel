@@ -1,12 +1,15 @@
 "use client";
 
 import { Gift, Package, Sparkles, Ticket, Video } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { type CapsuleVideoConsent, useCapsulePack } from "@/hooks/use-capsule-pack";
 import { dayMessage } from "@/lib/capsule-copy";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn, currencyFormatter } from "@/lib/utils";
 import type { CapsuleEditionPublic } from "@/types/capsules";
 
@@ -24,7 +27,12 @@ const CONSENT_OPTIONS = [
 export function CapsuleEditionView({ data }: { data: CapsuleEditionPublic }) {
   const firstAvailable = data.packs.find((pack) => pack.available)?.packSize ?? null;
   const [packSize, setPackSize] = useState<number | null>(firstAvailable);
-  const [consent, setConsent] = useState<string>("PRIVATE");
+  const [consent, setConsent] = useState<CapsuleVideoConsent>("PRIVATE");
+  const router = useRouter();
+  const setPack = useCapsulePack((state) => state.setPack);
+  // Se compra solo con la venta abierta y la edición a la venta (una vista previa no compra).
+  const canBuy = data.salesEnabled && data.edition.status === "LIVE";
+  const dayOpen = data.day.closedReason === null && data.day.left > 0;
   const selected = data.packs.find((pack) => pack.packSize === packSize) ?? null;
   const day = dayMessage(data.day);
   const cover = data.product.images[0] ?? null;
@@ -137,7 +145,7 @@ export function CapsuleEditionView({ data }: { data: CapsuleEditionPublic }) {
           <Video className="h-5 w-5" aria-hidden />
           ¿Podemos compartir el video de tu apertura?
         </h2>
-        <RadioGroup value={consent} onValueChange={setConsent} className="flex flex-col gap-2" aria-label="Permiso para el video">
+        <RadioGroup value={consent} onValueChange={(value) => setConsent(value as CapsuleVideoConsent)} className="flex flex-col gap-2" aria-label="Permiso para el video">
           {CONSENT_OPTIONS.map((option) => (
             <label key={option.value} htmlFor={`video-${option.value}`} className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-blue-baby bg-white px-3 py-2">
               <RadioGroupItem id={`video-${option.value}`} value={option.value} />
@@ -159,12 +167,34 @@ export function CapsuleEditionView({ data }: { data: CapsuleEditionPublic }) {
         ) : (
           <p className="text-blue-yankees">Por ahora no hay packs disponibles en esta edición.</p>
         )}
-        <Button className="min-h-[44px] w-full sm:w-auto" disabled aria-describedby="compra-pronto">
-          Muy pronto
-        </Button>
-        <p id="compra-pronto" className="text-sm text-muted-foreground">
-          La compra de cápsulas se abre en el lanzamiento.
-        </p>
+        {canBuy ? (
+          <>
+            <Button
+              className="min-h-[44px] w-full sm:w-auto"
+              disabled={!selected || !dayOpen}
+              aria-describedby="compra-cupos"
+              onClick={() => {
+                if (!selected) return;
+                setPack(data, selected.packSize, consent);
+                router.push(`${STOREFRONT_ROUTES.checkout}?capsulas=1`);
+              }}
+            >
+              {selected ? `Comprar pack de ${selected.packSize}` : "Elige un pack"}
+            </Button>
+            <p id="compra-cupos" className="text-sm text-muted-foreground">
+              {dayOpen ? "Se paga en línea. Un pack va solo en su pedido." : day.detail ?? "Hoy ya no quedan cupos."}
+            </p>
+          </>
+        ) : (
+          <>
+            <Button className="min-h-[44px] w-full sm:w-auto" disabled aria-describedby="compra-pronto">
+              Muy pronto
+            </Button>
+            <p id="compra-pronto" className="text-sm text-muted-foreground">
+              La compra de cápsulas se abre en el lanzamiento.
+            </p>
+          </>
+        )}
       </section>
     </div>
   );
