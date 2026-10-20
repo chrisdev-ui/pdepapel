@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import dynamic from "next/dynamic";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -42,9 +42,10 @@ const CONSENT_LABEL: Record<string, string> = {
  * cámara solo lo llenan): así funciona con lector de barras, con la cámara
  * del celular o a mano.
  */
-export function CapsuleQueue({ orders, boxes }: { orders: CapsuleQueueRow[]; boxes: { name: string; type: string; isDefault: boolean }[] }) {
+export function CapsuleQueue({ orders: initialOrders, boxes }: { orders: CapsuleQueueRow[]; boxes: { name: string; type: string; isDefault: boolean }[] }) {
   const params = useParams<{ storeId: string }>();
-  const router = useRouter();
+  // La cola se vuelve a pedir a la API en vez de refrescar la página: `productos/loading.tsx` la volvería a montar y se perdería el pedido abierto.
+  const [orders, setOrders] = useState(initialOrders);
   const { toast } = useToast();
   const [tab, setTab] = useState<"sacar" | "videos">("sacar");
   const [selected, setSelected] = useState<string | null>(null);
@@ -67,6 +68,10 @@ export function CapsuleQueue({ orders, boxes }: { orders: CapsuleQueueRow[]; box
     },
     [params.storeId],
   );
+  const reloadQueue = useCallback(async () => {
+    const { data } = await axios.get(`/api/${params.storeId}/capsule-orders`);
+    setOrders(data.orders);
+  }, [params.storeId]);
 
   useEffect(() => {
     if (!selected) return;
@@ -90,7 +95,11 @@ export function CapsuleQueue({ orders, boxes }: { orders: CapsuleQueueRow[]; box
       const { data } = await axios.post(`/api/${params.storeId}/capsule-orders/${selected}/draw`, { code: value.trim() });
       toast({ title: data.kind === "GIFT" ? "Regalo sacado" : `Papel ${data.drawnSlips} sacado` });
       setCode("");
+      // Cada escaneo recarga solo el pedido abierto; la fila de la cola se ajusta aquí, sin pedir la cola entera.
       await load(selected);
+      setOrders((current) =>
+        current.map((order) => (order.orderId === selected ? { ...order, slipsDrawn: data.drawnSlips, giftsDrawn: data.drawnGifts } : order)),
+      );
       codeInput.current?.focus();
     });
 
@@ -99,8 +108,7 @@ export function CapsuleQueue({ orders, boxes }: { orders: CapsuleQueueRow[]; box
       if (!selected) return;
       const { data } = await axios.post(`/api/${params.storeId}/capsule-orders/${selected}/finish`);
       toast({ title: "Sorteo cerrado", description: `Costo real ${currencyFormatter(data.realCost)} · empácalo en ${data.box.name ?? `la caja ${data.box.type}`}.` });
-      await load(selected);
-      router.refresh();
+      await Promise.all([load(selected), reloadQueue()]);
     });
 
   const advanceVideo = (videoStatus: string) =>
@@ -108,8 +116,7 @@ export function CapsuleQueue({ orders, boxes }: { orders: CapsuleQueueRow[]; box
       if (!selected) return;
       await axios.patch(`/api/${params.storeId}/capsule-orders/${selected}/video`, { videoStatus, videoUrl });
       toast({ title: `Video: ${VIDEO_STEPS.find((step) => step.status === videoStatus)?.label}` });
-      await load(selected);
-      router.refresh();
+      await Promise.all([load(selected), reloadQueue()]);
     });
 
   const list = tab === "sacar" ? toDraw : drawnOrders;

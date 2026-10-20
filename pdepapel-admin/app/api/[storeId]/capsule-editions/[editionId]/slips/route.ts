@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { runInBackground } from "@/lib/background";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { printFromPanel } from "@/lib/capsule-print";
 import { withIdempotency } from "@/lib/idempotency";
@@ -18,8 +19,9 @@ export async function POST(req: Request, { params }: { params: { storeId: string
       if (!body || typeof body !== "object" || !Array.isArray(body.items)) throw ErrorFactory.InvalidRequest("Datos de la impresión inválidos");
       const items = body.items.map((line: { productId?: unknown; quantity?: unknown }) => ({ productId: String(line.productId ?? ""), quantity: Number(line.quantity) }));
       const result = await printFromPanel({ storeId: params.storeId, editionId: params.editionId, kind: body.kind, items, userId });
-      // Lo apartado deja de estar disponible en la tienda.
-      await invalidateStoreProductsCache(params.storeId, { productIds: items.map((line: { productId: string }) => line.productId) });
+      // Lo apartado deja de estar disponible en la tienda; la purga va después de responder.
+      const productIds = items.map((line: { productId: string }) => line.productId);
+      runInBackground("cápsulas: purga tras imprimir", () => invalidateStoreProductsCache(params.storeId, { productIds }));
       return NextResponse.json(result, { status: 201, headers: CACHE_HEADERS.NO_CACHE });
     }, CACHE_HEADERS.NO_CACHE);
   } catch (error) {

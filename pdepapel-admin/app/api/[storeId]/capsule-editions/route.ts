@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { runInBackground } from "@/lib/background";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { createCapsuleEdition, listCapsuleEditions } from "@/lib/capsule-editions";
 import { withIdempotency } from "@/lib/idempotency";
@@ -37,8 +38,8 @@ export async function POST(req: Request, { params }: { params: { storeId: string
         dailyOrderCap: body.dailyOrderCap === undefined ? undefined : Number(body.dailyOrderCap),
         userId,
       });
-      // El producto quedó archivado: la tienda deja de mostrarlo.
-      await invalidateStoreProductsCache(params.storeId, { productIds: [edition.productId] });
+      // El producto quedó archivado: la tienda deja de mostrarlo (purga después de responder).
+      runInBackground("cápsulas: purga del producto de la edición", () => invalidateStoreProductsCache(params.storeId, { productIds: [edition.productId] }));
       return NextResponse.json({ edition }, { status: 201, headers: CACHE_HEADERS.NO_CACHE });
     }, CACHE_HEADERS.NO_CACHE);
   } catch (error) {
