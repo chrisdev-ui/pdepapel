@@ -415,7 +415,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         });
       }
     });
-  }, [toast]);
+  }, [capsuleMode, toast]);
 
   const form = useForm<CheckoutFormValue>({
     mode: "onTouched",
