@@ -1,3 +1,5 @@
+import { CapsuleBatchMode } from "@prisma/client";
+
 import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
@@ -59,7 +61,7 @@ export async function getCapsuleWorkspace(storeId: string) {
       orderBy: { name: "asc" },
     }),
     prismadb.capsuleBatch.findMany({
-      where: { storeId },
+      where: { storeId, mode: CapsuleBatchMode.TRANSFER },
       orderBy: { createdAt: "desc" },
       take: 30,
       include: {

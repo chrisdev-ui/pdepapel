@@ -1,3 +1,5 @@
+import { CapsuleBatchMode } from "@prisma/client";
+
 import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
 import { CAPSULAS_SORPRESA_ID } from "@/constants";
@@ -74,9 +76,12 @@ export async function packCapsules({
   return prismadb.$transaction(async (tx) => {
     const capsuleProduct = await tx.product.findFirst({
       where: { id: capsuleProductId, storeId },
-      select: { id: true, name: true, categoryId: true, isKit: true },
+      select: { id: true, name: true, categoryId: true, isKit: true, capsuleEdition: { select: { id: true } } },
     });
     if (!capsuleProduct) throw ErrorFactory.NotFound("Producto cápsula no encontrado");
+    if (capsuleProduct.capsuleEdition) {
+      throw ErrorFactory.InvalidRequest("Ese producto es de una edición por papeles: su stock lo suben las impresiones");
+    }
     if (capsuleProduct.isKit) {
       throw ErrorFactory.InvalidRequest(
         "Un kit no puede ser una cápsula: su stock lo calculan sus componentes",
@@ -213,6 +218,10 @@ export async function unpackCapsuleBatch({
       },
     });
     if (!batch) throw ErrorFactory.NotFound("Lote no encontrado");
+    // Una impresión de papeles no movió stock: deshacerla como empaque inventaría unidades.
+    if (batch.mode === CapsuleBatchMode.RESERVE) {
+      throw ErrorFactory.InvalidRequest("Esta es una impresión de papeles de una edición: se anulan sus papeles, no se deshace el lote");
+    }
     if (batch.unpackedAt) {
       throw ErrorFactory.Conflict("Este lote ya se deshizo");
     }
