@@ -87,6 +87,8 @@ export interface AsyncProductSelectProps {
    * dueño sí, la de solo lectura no).
    */
   details?: "sale" | "cost";
+  /** `mercadolibre`: la búsqueda deja fuera lo que no se puede publicar allá (productos de ediciones de cápsulas). */
+  purpose?: "mercadolibre";
 }
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
@@ -275,6 +277,7 @@ export function AsyncProductSelect({
   ariaLabel,
   onSelectGroup,
   details = "sale",
+  purpose,
 }: AsyncProductSelectProps) {
   const params = useParams();
   const isPhone = useIsPhone(modal === "auto");
@@ -299,7 +302,7 @@ export function AsyncProductSelect({
 
     return `/api/${params.storeId}/products/search?q=${debouncedQuery}&page=${
       pageIndex + 1
-    }&limit=20`;
+    }&limit=20${purpose ? `&for=${purpose}` : ""}`;
   };
 
   const { data, size, setSize, isValidating, isLoading } = useSWRInfinite(

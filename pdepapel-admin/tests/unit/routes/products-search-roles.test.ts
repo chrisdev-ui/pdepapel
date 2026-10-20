@@ -80,3 +80,20 @@ describe("GET /products/search: la caché no mezcla roles", () => {
     for (const key of keys) expect(key.startsWith(pattern.replace(/\*$/, ""))).toBe(true);
   });
 });
+
+describe("GET /products/search?for=mercadolibre", () => {
+  beforeEach(() => {
+    mocks.cache.clear();
+    mocks.role = "owner";
+    mocks.findMany.mockReset().mockResolvedValue([product]);
+    mocks.prices.mockResolvedValue(new Map());
+  });
+
+  it("deja fuera los productos de una edición de cápsulas, con su propia llave de caché", async () => {
+    await call("q=lib&for=mercadolibre");
+    expect(mocks.findMany.mock.calls[0][0].where).toMatchObject({ capsuleEdition: { is: null } });
+    await call("q=lib");
+    expect(mocks.findMany.mock.calls[1][0].where).not.toHaveProperty("capsuleEdition");
+    expect(new Set(mocks.cache.keys()).size).toBe(2);
+  });
+});

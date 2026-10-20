@@ -1,6 +1,7 @@
 import { MarketplaceListingStatus, Prisma } from "@prisma/client";
 
 import { AppError, ErrorFactory } from "@/lib/api-errors";
+import { CAPSULES_NOT_ON_MERCADOLIBRE } from "@/lib/mercadolibre/capsule-exclusion";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import prismadb from "@/lib/prismadb";
 
@@ -595,11 +596,12 @@ export async function importMercadoLibreListings({
   const result = await prismadb.$transaction(async (transaction) => {
     const products = await transaction.product.findMany({
       where: { id: { in: productIds }, storeId, isArchived: false },
-      select: { id: true, stock: true },
+      select: { id: true, stock: true, capsuleEdition: { select: { id: true } } },
     });
     if (products.length !== productIds.length) {
       throw ErrorFactory.Conflict("Uno de los productos locales no está disponible");
     }
+    if (products.some((product) => product.capsuleEdition)) throw ErrorFactory.Conflict(CAPSULES_NOT_ON_MERCADOLIBRE);
 
     const existingByProduct = new Map(
       (

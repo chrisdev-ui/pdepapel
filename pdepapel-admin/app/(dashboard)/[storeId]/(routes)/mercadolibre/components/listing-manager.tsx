@@ -2769,6 +2769,7 @@ export function MercadoLibreListingManager({
                               value={selection.productId ?? ""}
                               modal
                               ariaLabel={`Producto local para ${listing.title}`}
+                              purpose="mercadolibre"
                               placeholder="Buscar producto local..."
                               className="min-h-10"
                               disabled={listing.status === "ERROR"}

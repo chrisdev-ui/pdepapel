@@ -784,6 +784,7 @@ export function ListingPublicationWizard({
                   modal
                   disabled={productLocked}
                   ariaLabel="Producto local para la publicación"
+                  purpose="mercadolibre"
                   placeholder="Buscar por nombre o SKU..."
                   onChange={(productId, product) => {
                     setIssue((current) =>

@@ -242,6 +242,14 @@ describe("Mercado Libre listing import", () => {
       expect(mocks.queueStock).toHaveBeenCalledWith(expect.anything(), ["prod-1"]);
     });
 
+    it("no enlaza una publicación a un producto de edición de cápsulas", async () => {
+      mocks.findProducts.mockResolvedValue([{ id: "prod-1", stock: 5, capsuleEdition: { id: "ed-1" } }]);
+      await expect(
+        importMercadoLibreListings({ connectionId: "conn", storeId: "store", sellerId: "s", selections: [{ externalItemId: "MCO1", externalVariationId: null, productId: "prod-1" }] }),
+      ).rejects.toMatchObject({ statusCode: 409, message: "Las cápsulas sorpresa no se publican en Mercado Libre" });
+      expect(mocks.transactionListings.create).not.toHaveBeenCalled();
+    });
+
     it("names the item that no longer exists and reads only the selected ids", async () => {
       mocks.requestJson.mockResolvedValue({ ok: true, status: 200, payload: [] });
       await expect(

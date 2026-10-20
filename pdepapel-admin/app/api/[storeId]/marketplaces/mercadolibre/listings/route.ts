@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+import { CAPSULES_NOT_ON_MERCADOLIBRE } from "@/lib/mercadolibre/capsule-exclusion";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
@@ -299,9 +300,11 @@ export async function POST(
         acqPrice: true,
         transportationCost: true,
         images: { select: { url: true } },
+        capsuleEdition: { select: { id: true } },
       },
     });
     if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
+    if (product.capsuleEdition) throw ErrorFactory.Conflict(CAPSULES_NOT_ON_MERCADOLIBRE);
 
     // Piso de precio: por debajo del costo solo con motivo escrito.
     const marketplacePrice = parseOptionalPrice(body.marketplacePrice);

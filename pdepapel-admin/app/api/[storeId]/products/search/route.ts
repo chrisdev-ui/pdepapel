@@ -51,13 +51,15 @@ export async function GET(
     // `mode=venta`: resultados ordenados para vender (código exacto, con
     // unidades, agotados al final), con el precio de oferta, en una sola página.
     const saleMode = searchParams.get("mode") === "venta";
+    // `for=mercadolibre`: sin los productos de una edición de cápsulas, que no se publican allá.
+    const forMercadoLibre = searchParams.get("for") === "mercadolibre";
 
     // La respuesta depende del rol (solo lectura va sin costos) y del tamaño de
     // página: los dos van en la llave. La invalidación borra
     // `store:{id}:admin-select:*`, que cubre todas las variantes.
     const viewer = access.role === "viewer";
     const redis = Redis.fromEnv();
-    const cacheKey = `store:${params.storeId}:admin-select:${viewer ? "viewer" : "owner"}:${saleMode ? "venta:" : ""}${limit}:${query.toLowerCase().trim()}:${page}`;
+    const cacheKey = `store:${params.storeId}:admin-select:${viewer ? "viewer" : "owner"}:${saleMode ? "venta:" : ""}${forMercadoLibre ? "ml:" : ""}${limit}:${query.toLowerCase().trim()}:${page}`;
 
     // 1. Try Cache
     try {
@@ -92,6 +94,7 @@ export async function GET(
       where: {
         storeId: params.storeId,
         isArchived: false,
+        ...(forMercadoLibre ? { capsuleEdition: { is: null } } : {}),
         OR: [
           { name: { contains: query } },
           { sku: { contains: query } },
