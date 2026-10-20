@@ -20,7 +20,8 @@ const NETWORKS = [
 async function expectNetworks(page: Page, scope: ReturnType<Page["locator"]>) {
   const links = scope.getByRole("link", { name: / de P de Papel$/ });
   await expect(links).toHaveCount(NETWORKS.length);
-  for (const [index, [label, href]] of NETWORKS.entries()) {
+  for (let index = 0; index < NETWORKS.length; index += 1) {
+    const [label, href] = NETWORKS[index];
     const link = links.nth(index);
     await expect(link).toHaveAccessibleName(`${label} de P de Papel`);
     await expect(link).toHaveAttribute("href", href);
