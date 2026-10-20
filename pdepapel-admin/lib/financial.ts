@@ -1,6 +1,7 @@
 import { Order, OrderItem, OrderType, PaymentMethod } from "@prisma/client";
 
 import { getAmountDue } from "@/lib/gift-card-amounts";
+import { gatewayChannelOf, gatewayFee, type GatewayChannel } from "@/lib/gateway-fees";
 import { isKnownTransport } from "@/lib/product-costs";
 
 interface OrderWithItems extends Order {
@@ -14,7 +15,8 @@ export interface FinancialMetrics {
   productShippingCost: number;
   /** A alguna línea le faltaba el envío por unidad: la ganancia real puede ser menor. */
   productShippingMissing: boolean;
-  gatewayFee: number;
+  /** `null`: comisión desconocida (datáfono). La ganancia se calcula sin ella y el pedido queda marcado. */
+  gatewayFee: number | null;
   shippingCost: number;
   netProfit: number;
   profitMarginPct: number;
@@ -116,46 +118,15 @@ export async function calculateTotalProductCost(orderItems: OrderItem[], prismad
 }
 
 /**
- * Calculates the payment gateway fee based on the payment method.
- * Rates based on standard Colombian gateway fees + 19% VAT on the fee itself.
+ * Comisión de pasarela de un cobro. La tabla vive en `lib/gateway-fees.ts`;
+ * `null` = desconocida (datáfono Bold), nunca 0.
  */
 export function calculateGatewayFee(
   total: number,
   paymentMethod: PaymentMethod | string | undefined,
-): number {
-  if (!paymentMethod) return 0;
-
-  // Ensure 'total' is a valid number to prevent NaN results
-  const validTotal = Number(total) || 0;
-
-  switch (paymentMethod) {
-    // Wompi rates: ~2.65% + $700 COP + 19% VAT on the fee
-    case PaymentMethod.Wompi: {
-      const baseFee = validTotal * 0.0265 + 700;
-      const vat = baseFee * 0.19;
-      return baseFee + vat;
-    }
-
-    // Efectivo, contra entrega y transferencia no pagan pasarela: no hay
-    // intermediario que cobre.
-    case PaymentMethod.BankTransfer:
-    case PaymentMethod.COD:
-    case PaymentMethod.CASH:
-      return 0;
-
-    // TODO(bold): este 0 NO esta verificado contra el contrato de Bold.
-    // Se agrego en un commit de limpieza del enum de pagos, sin nota ni
-    // documento que diga si Bold liquida neto (ya descontada su comision) o
-    // si simplemente no teniamos la tarifa a mano. Nada del payload de Bold
-    // trae comision, neto ni liquidacion, asi que el repo no puede decidirlo.
-    // Mientras siga en 0, el margen de un pedido pagado con Bold sale inflado.
-    // Al confirmar los terminos: si liquida neto, dejarlo en 0 y documentarlo;
-    // si cobra comision, modelarla como en Mercado Libre (valor real del
-    // proveedor, y `null` cuando no se conoce) en vez de copiar la de Wompi.
-    case PaymentMethod.Bold:
-    default:
-      return 0;
-  }
+  options: { channel?: GatewayChannel } = {},
+): number | null {
+  return gatewayFee(total, paymentMethod, options);
 }
 
 /**
@@ -173,7 +144,8 @@ export async function calculateOrderFinancials(
   // La pasarela cobra sobre lo que pasó por ella: el total menos lo que
   // cubrió una tarjeta de regalo.
   const chargedAmount = getAmountDue(order);
-  const gatewayFee = calculateGatewayFee(chargedAmount, paymentMethod);
+  const gatewayFee = calculateGatewayFee(chargedAmount, paymentMethod, { channel: gatewayChannelOf(order as never) });
+  const knownFee = gatewayFee ?? 0;
 
   // La compra de una tarjeta de regalo no es una venta: no hay producto ni
   // utilidad; solo la comisión, que sí se paga. El ingreso se reconoce
@@ -185,7 +157,7 @@ export async function calculateOrderFinancials(
       productShippingMissing: false,
       gatewayFee,
       shippingCost: 0,
-      netProfit: gatewayFee === 0 ? 0 : -gatewayFee,
+      netProfit: knownFee === 0 ? 0 : -knownFee,
       profitMarginPct: 0,
     };
   }
@@ -195,7 +167,7 @@ export async function calculateOrderFinancials(
   const totalProductCost = costs.purchase + costs.shipping;
 
   // order.total is the gross amount paid by the customer (subtotal - discount + shipping)
-  const netProfit = order.total - totalProductCost - gatewayFee - shippingCost;
+  const netProfit = order.total - totalProductCost - knownFee - shippingCost;
 
   // Prevent division by zero
   const profitMarginPct = order.total > 0 ? (netProfit / order.total) * 100 : 0;
@@ -232,7 +204,7 @@ export function getOrderNetProfit(order: any): number {
 
   // Una sola definicion de la comision: antes esta rama repetia la tarifa de
   // Wompi a mano, asi que cambiarla en un sitio dejaba el otro desfasado.
-  const gatewayFee = calculateGatewayFee(total, paymentMethod);
+  const gatewayFee = calculateGatewayFee(total, paymentMethod, { channel: gatewayChannelOf(order) }) ?? 0;
 
   // Product cost calculation
   let totalProductCost = Number(order.totalProductCost || 0);

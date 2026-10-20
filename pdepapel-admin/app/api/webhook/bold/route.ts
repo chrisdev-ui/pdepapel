@@ -1,4 +1,5 @@
 import { sendOrderEmail } from "@/lib/email";
+import { keepTerminalMarker } from "@/lib/gateway-fees";
 import { flagPaymentOnCancelledOrder } from "@/lib/late-payment";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
 import {
@@ -411,7 +412,10 @@ async function processBoldPayment(
         where: { orderId: order.id },
         update: {
           transactionId,
-          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+          details: keepTerminalMarker(
+            order.payment?.details,
+            `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+          ),
         },
         create: {
           method: PaymentMethod.Bold,
@@ -570,7 +574,10 @@ async function processBoldPayment(
         where: { orderId: order.id },
         update: {
           transactionId,
-          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+          details: keepTerminalMarker(
+            order.payment?.details,
+            `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+          ),
         },
         create: {
           method: PaymentMethod.Bold,

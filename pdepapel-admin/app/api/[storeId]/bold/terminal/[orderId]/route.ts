@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { pushToBoldDatafono } from "@/lib/bold-terminal";
+import { BOLD_TERMINAL_MARKER } from "@/lib/gateway-fees";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
@@ -73,6 +74,14 @@ export async function POST(
 
     if (!result.success) {
       throw ErrorFactory.InvalidRequest(result.message);
+    }
+
+    // Sin la marca, la comisión de este cobro se contaría con la tarifa en línea.
+    if (!order.payment.details?.includes(BOLD_TERMINAL_MARKER)) {
+      await prismadb.paymentDetails.update({
+        where: { orderId: order.id },
+        data: { details: [order.payment.details, BOLD_TERMINAL_MARKER].filter(Boolean).join(" · ") },
+      });
     }
 
     return NextResponse.json(

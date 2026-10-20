@@ -16,6 +16,7 @@ vi.mock("@/lib/google-analytics", () => ({ recordPaidOrderInGoogleAnalytics: vi.
 vi.mock("@/lib/cache", () => ({ storefrontScopeOf: vi.fn().mockResolvedValue(null), revalidateStorefrontFor: vi.fn().mockResolvedValue(undefined), invalidateStoreProductsCache: vi.fn() }));
 
 import { POST as boldWebhook } from "@/app/api/webhook/bold/route";
+import { BOLD_TERMINAL_MARKER } from "@/lib/gateway-fees";
 import { recalculateKitStock } from "@/lib/inventory";
 import { chargePointOfSaleOnTerminal, createPointOfSaleSale, undoPointOfSaleSale } from "@/lib/point-of-sale";
 
@@ -171,6 +172,10 @@ describe("point of sale rework with MySQL", () => {
     expect(approved.status).toBe(200);
     const paid = await testPrisma.order.findUniqueOrThrow({ where: { id: sale.order.id }, include: { payment: true } });
     expect(paid).toMatchObject({ status: OrderStatus.PAID, payment: { transactionId: "BOLD-TEST-1" } });
+    // El datáfono no tiene tarifa conocida: la comisión queda en null, no en la de Bold en línea ni en 0.
+    expect(paid.gatewayFee).toBeNull();
+    expect(paid.netProfit).toBe(6000);
+    expect(paid.payment?.details).toContain(BOLD_TERMINAL_MARKER);
     expect(paid.paidAt).toBeInstanceOf(Date);
     await expect(testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id } })).resolves.toMatchObject({ stock: 5 });
     await expect(testPrisma.inventoryMovement.findMany({ where: { referenceId: sale.order.id } })).resolves.toEqual([

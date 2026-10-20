@@ -10,15 +10,14 @@ import { PaymentMethod } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
 describe("financial helpers", () => {
-  it("calculates gateway fees only for Wompi payments", () => {
+  it("calculates gateway fees for Wompi and Bold online payments", () => {
     expect(calculateGatewayFee(100000, PaymentMethod.Wompi)).toBe(3986.5);
     // Efectivo, contra entrega y transferencia no pagan pasarela.
     expect(calculateGatewayFee(100000, PaymentMethod.CASH)).toBe(0);
     expect(calculateGatewayFee(100000, PaymentMethod.COD)).toBe(0);
     expect(calculateGatewayFee(100000, PaymentMethod.BankTransfer)).toBe(0);
-    // Bold sigue en 0 a la espera de confirmar el contrato; ver el TODO en
-    // lib/financial.ts. Si se confirma que cobra comision, esta linea cambia.
-    expect(calculateGatewayFee(100000, PaymentMethod.Bold)).toBe(0);
+    // Tarifa pública de Bold en línea, sin verificar (lib/gateway-fees.ts).
+    expect(calculateGatewayFee(100000, PaymentMethod.Bold)).toBe(4629.1);
   });
 
   it("el margen estimado usa la misma comision que el calculo principal", () => {
@@ -30,7 +29,7 @@ describe("financial helpers", () => {
       shipping: { cost: 10000 },
     };
     const expected =
-      100000 - 40000 - calculateGatewayFee(100000, PaymentMethod.Wompi) - 10000;
+      100000 - 40000 - calculateGatewayFee(100000, PaymentMethod.Wompi)! - 10000;
     expect(getOrderNetProfit(order)).toBeCloseTo(expected, 6);
   });
 
@@ -136,10 +135,11 @@ describe("financial helpers", () => {
       totalProductCost: 20000,
       productShippingCost: 0,
       productShippingMissing: true,
-      gatewayFee: 0,
+      // Bold en línea: (2,99 % de 40.000 + 900) × 1,19.
+      gatewayFee: 2494.24,
       shippingCost: 5000,
-      netProfit: 15000,
-      profitMarginPct: 37.5,
+      netProfit: expect.closeTo(12505.76, 6),
+      profitMarginPct: expect.closeTo(31.2644, 6),
     });
   });
 

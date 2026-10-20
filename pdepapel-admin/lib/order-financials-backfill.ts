@@ -27,7 +27,7 @@ export const ORDER_FINANCIALS_BACKFILL_WHERE = {
 export interface OrderFinancialsRow {
   id: string;
   totalProductCost: number;
-  gatewayFee: number;
+  gatewayFee: number | null;
   shippingCost: number;
   netProfit: number;
   profitMarginPct: number;
@@ -53,7 +53,7 @@ export async function orderFinancialsPlan(db: Db, storeId?: string): Promise<Ord
           },
         },
       },
-      payment: { select: { method: true } },
+      payment: { select: { method: true, details: true } },
       shipping: { select: { cost: true, codFee: true } },
     },
     orderBy: { id: "asc" },
@@ -85,7 +85,7 @@ export async function orderFinancialsPlan(db: Db, storeId?: string): Promise<Ord
     plan.rows.push({
       id: order.id,
       totalProductCost: round2(metrics.totalProductCost),
-      gatewayFee: round2(metrics.gatewayFee),
+      gatewayFee: metrics.gatewayFee === null ? null : round2(metrics.gatewayFee),
       shippingCost: round2(metrics.shippingCost),
       netProfit: round2(metrics.netProfit),
       profitMarginPct: round2(metrics.profitMarginPct),

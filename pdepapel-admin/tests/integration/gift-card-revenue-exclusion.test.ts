@@ -204,7 +204,7 @@ describe("gift card purchases are excluded from every revenue site", () => {
     const metrics = await calculateOrderFinancials(gift as never, PaymentMethod.Wompi, 0, testPrisma);
     expect(metrics.totalProductCost).toBe(0);
     expect(metrics.gatewayFee).toBeGreaterThan(0);
-    expect(metrics.netProfit).toBe(-metrics.gatewayFee);
+    expect(metrics.netProfit).toBe(-metrics.gatewayFee!);
     expect(metrics.profitMarginPct).toBe(0);
   });
 });
