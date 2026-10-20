@@ -48,7 +48,17 @@ test.describe("pedido real contra la administración local", () => {
 
     const created = await readOrderFromAdmin(SEEDED_STORE_ID, orderId);
     expect(created.status).not.toBe("PAID");
+    expect(created.paymentResult).toBe("pending");
     expect(Number(created.total)).toBe(UNIT_PRICE * QUANTITY);
+
+    // Bold vuelve sin `?id`: con el pago aún sin confirmar la página espera
+    // en un estado neutro y cambia sola cuando llega el webhook.
+    await page.goto(
+      `/pedido/${orderId}?bold-order-id=${encodeURIComponent(created.orderNumber || orderId)}&bold-tx-status=approved`,
+    );
+    await expect(page.getByTestId("payment-return-status")).toContainText(
+      "Estamos confirmando tu pago",
+    );
 
     const webhook = await deliverBoldWebhook({
       storeId: SEEDED_STORE_ID,
@@ -61,7 +71,14 @@ test.describe("pedido real contra la administración local", () => {
     const paid = await readOrderFromAdmin(SEEDED_STORE_ID, orderId);
     expect(paid.status).toBe("PAID");
     expect(paid.paidAt).toBeTruthy();
-    expect(paid.payment?.transactionId).toBeTruthy();
+    expect(paid.paymentResult).toBe("approved");
+
+    // El aviso dura 2 s: se busca antes que el título, que se queda.
+    await expect(
+      page.getByRole("region", { name: /Notifications/ }).getByText("¡Gracias por tu compra!"),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("¡Gracias por tu compra!");
+    await expect(page.getByTestId("payment-return-status")).toHaveCount(0);
 
     const stockAfter = await readProductStock(SEEDED_STORE_ID, PRODUCT_ID);
     expect(stockAfter).toBe(stockBefore - QUANTITY);
@@ -84,6 +101,14 @@ test.describe("pedido real contra la administración local", () => {
     const rejected = await readOrderFromAdmin(SEEDED_STORE_ID, orderId);
     expect(rejected.status).toBe("CANCELLED");
     expect(rejected.paidAt).toBeFalsy();
+    expect(rejected.paymentResult).toBe("declined");
+
+    await page.goto(
+      `/pedido/${orderId}?bold-order-id=${encodeURIComponent(created.orderNumber || orderId)}&bold-tx-status=rejected`,
+    );
+    await expect(
+      page.getByRole("region", { name: /Notifications/ }).getByText("¡Hubo un fallo en tu intento de pago!"),
+    ).toBeVisible();
   });
 
   test("la anulación después del cobro también cancela el pedido", async ({
