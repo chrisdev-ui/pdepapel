@@ -208,8 +208,9 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
 ### Capsule editions (`/capsulas/[edicion]`)
 
 - The page is `force-dynamic` and always `noindex`; it is not in the sitemap. It renders only what the admin's public edition endpoint returns: 404 there (sales flag off without a preview link, CLOSED, unknown) is `notFound()` here. `?vista=<token>` is Paula's signed preview link from the panel; never cache it or add it to analytics.
-- The gallery shows names and photos only — never per-item prices or peso value claims, and no «Lucky» wording. Packs show total, per-capsule price, «Ahorras» and the gift label; a pack is disabled when the admin marks it unavailable (25 % rule). Buying stays «Muy pronto» until P4 wires checkout.
-- Local e2e: `npm run test:e2e:local -- tests/e2e/local/capsule-edition.spec.ts` (seeds through the admin's `scripts/seed-e2e-capsule-edition.ts`).
+- The gallery shows names and photos only — never per-item prices or peso value claims, and no «Lucky» wording. Packs show total, per-capsule price, «Ahorras» and the gift label; a pack is disabled when the admin marks it unavailable (25 % rule).
+- Buying (P4): only when the payload says `salesEnabled` and the edition is LIVE (a preview link never buys) and today has slots. «Comprar pack de N» stores the pack in `hooks/use-capsule-pack.ts` (sessionStorage, **not the cart**: the edition product is archived and the cart would drop it) and opens `/finalizar-compra?capsulas=1`, which pays that pack: online payment only, no coupon field, no free shipping, no catalog stock pre-check (the admin validates pack, slots and the 25 % rule), sends `capsuleVideoConsent`, and leaves the cart untouched. The receipt shows `OrderCapsuleCard` (pack, gift, and what came out after the draw).
+- Local e2e: `npm run test:e2e:local -- tests/e2e/local/capsule-edition.spec.ts tests/e2e/local/capsule-purchase.spec.ts` (seed through the admin's `scripts/seed-e2e-capsule-edition.ts`; the admin test server runs with sales forced on, `CAPSULE_SALES_TEST_OVERRIDE`).
 
 ### Accessibility, UX and performance
 
