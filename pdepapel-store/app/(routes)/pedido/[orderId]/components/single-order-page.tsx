@@ -14,6 +14,7 @@ import { OrderStageBadge } from "@/components/order-stage-badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { OrderStatus } from "@/constants";
+import { useCapsulePack } from "@/hooks/use-capsule-pack";
 import { useCart } from "@/hooks/use-cart";
 import useCheckoutOrder from "@/hooks/use-checkout-order";
 import { useCheckoutStore } from "@/hooks/use-checkout-store";
@@ -68,6 +69,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     [],
   );
   const removeAll = useCart((state) => state.removeAll);
+  const clearCapsulePack = useCapsulePack((state) => state.removeAll);
   const cartItems = useCart((state) => state.items);
   const pendingOrder = useCheckoutStore((state) => state.pendingOrder);
   const setPendingOrder = useCheckoutStore((state) => state.setPendingOrder);
@@ -130,15 +132,20 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     // El segundo: se pagó en otro navegador —pasa al abrir el enlace desde
     // Instagram o WhatsApp— y aquí quedó el mismo carrito sin vaciar.
     const isRememberedOrder = pendingOrder?.id === order.id;
-    const leftoverCartWasPaid = cartMatchesOrder(cartItems, order.orderItems);
+    // Un pack de cápsulas se pagó desde su propio carrito: el de la tienda queda como estaba.
+    const isCapsulePack = Boolean(activeOrder.capsule);
+    const leftoverCartWasPaid = !isCapsulePack && cartMatchesOrder(cartItems, order.orderItems);
     if (!isRememberedOrder && !leftoverCartWasPaid) return;
 
-    removeAll();
+    if (isCapsulePack) clearCapsulePack();
+    else removeAll();
     resetCheckout();
     if (isRememberedOrder) setPendingOrder(null);
   }, [
     activeOrder.status,
+    activeOrder.capsule,
     cartItems,
+    clearCapsulePack,
     order.id,
     order.orderItems,
     pendingOrder?.id,
@@ -400,7 +407,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           {activeOrder.capsule && <OrderCapsuleCard capsule={activeOrder.capsule} />}
           <OrderItemsCard
             order={activeOrder}
-            allowReorder={!digital && stage.stage !== "unpaid" && stage.stage !== "verifying"}
+            allowReorder={!digital && !activeOrder.capsule && stage.stage !== "unpaid" && stage.stage !== "verifying"}
           />
           <OrderHelpCard orderNumber={orderNumber} />
         </div>

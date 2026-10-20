@@ -9,6 +9,15 @@ import { OrderSection } from "./order-section";
  * que salió. Sin cifras de lo que «vale» el contenido.
  */
 export function OrderCapsuleCard({ capsule }: { capsule: NonNullable<Order["capsule"]> }) {
+  // Lo repetido va una vez con su cantidad («Lápiz conejito × 4»); el regalo primero.
+  const grouped = Array.from(
+    capsule.products.reduce((map, product) => {
+      const key = `${product.gift ? "1" : "0"}:${product.name}`;
+      const row = map.get(key);
+      map.set(key, { ...product, count: (row?.count ?? 0) + 1 });
+      return map;
+    }, new Map<string, { name: string; gift: boolean; count: number }>()).values(),
+  ).sort((a, b) => Number(b.gift) - Number(a.gift));
   return (
     <OrderSection id="pedido-capsulas" title="Tus cápsulas sorpresa" icon={Sparkles} tint="bg-kawaii-lavender-light">
       <p className="text-blue-yankees">
@@ -19,10 +28,11 @@ export function OrderCapsuleCard({ capsule }: { capsule: NonNullable<Order["caps
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">Ya abrimos tus cápsulas. Esto fue lo que salió:</p>
           <ul className="flex flex-col gap-1" data-testid="capsulas-que-salieron">
-            {capsule.products.map((product, index) => (
-              <li key={`${product.name}-${index}`} className="flex items-center gap-2 text-blue-yankees">
+            {grouped.map((product) => (
+              <li key={`${product.gift}-${product.name}`} className="flex items-center gap-2 text-blue-yankees">
                 {product.gift ? <Gift className="h-4 w-4" aria-hidden /> : <Sparkles className="h-4 w-4 text-yellow-star" aria-hidden />}
                 {product.name}
+                {product.count > 1 ? ` × ${product.count}` : ""}
                 {product.gift ? " (regalo)" : ""}
               </li>
             ))}
