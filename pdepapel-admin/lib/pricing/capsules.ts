@@ -14,6 +14,16 @@ import { gatewayFee } from "@/lib/gateway-fees";
  */
 export const CAPSULE_SALES_ENABLED = false;
 
+/**
+ * Lo que lee el código. Las pruebas locales (y solo fuera de Vercel) encienden
+ * la venta con `CAPSULE_SALES_TEST_OVERRIDE=1`; en cualquier despliegue de
+ * Vercel (`VERCEL` definido) manda únicamente la constante.
+ */
+export function capsuleSalesEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  if (CAPSULE_SALES_ENABLED) return true;
+  return !env.VERCEL && env.CAPSULE_SALES_TEST_OVERRIDE === "1";
+}
+
 /** Pack mínimo y la parte de los papeles que quedan que puede llevarse un solo pack. */
 export const CAPSULE_MIN_PACK = 5;
 export const CAPSULE_MAX_PACK_SHARE = 0.25;

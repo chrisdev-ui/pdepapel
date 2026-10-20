@@ -3,7 +3,7 @@ import { CapsuleEditionStatus, CapsuleSlipKind, CapsuleSlipStatus, OrderStatus, 
 import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
 import { voidCapsuleSlips } from "@/lib/capsule-slips";
-import { CAPSULE_PACK_PRICES, capsuleUnitPrice } from "@/lib/pricing/capsules";
+import { CAPSULE_PACK_PRICES, capsuleSalesEnabled, capsuleUnitPrice } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -51,14 +51,16 @@ function assertDailyCap(cap: number) {
 }
 
 /**
- * Un producto de edición queda archivado (fuera de la tienda, el punto de
- * venta y el bot) hasta que su edición se abra a la venta. Restaurarlo desde
- * la ficha o en lote lo pondría a la venta por fuera del flujo de cápsulas.
+ * Un producto de edición queda archivado siempre (fuera del catálogo, los
+ * feeds, Mercado Libre, el punto de venta y el bot): incluso a la venta, se
+ * compra solo desde la página de la edición y el checkout lo admite por ser de
+ * una edición LIVE. Restaurarlo desde la ficha o en lote lo vendería por fuera
+ * del flujo de cápsulas.
  */
 export async function assertEditionProductsStayArchived(db: Db, productIds: readonly string[]) {
   if (productIds.length === 0) return;
   const editions = await db.capsuleEdition.findMany({
-    where: { productId: { in: [...productIds] }, status: { not: CapsuleEditionStatus.LIVE } },
+    where: { productId: { in: [...productIds] } },
     select: { product: { select: { name: true } } },
   });
   if (editions.length > 0) {
@@ -189,8 +191,8 @@ export async function getCapsuleEdition(storeId: string, editionId: string) {
 
 const NEXT_STATUSES: Record<CapsuleEditionStatus, CapsuleEditionStatus[]> = {
   DRAFT: [CapsuleEditionStatus.PREVIEW, CapsuleEditionStatus.CLOSED],
-  PREVIEW: [CapsuleEditionStatus.DRAFT, CapsuleEditionStatus.CLOSED],
-  LIVE: [CapsuleEditionStatus.CLOSED],
+  PREVIEW: [CapsuleEditionStatus.DRAFT, CapsuleEditionStatus.LIVE, CapsuleEditionStatus.CLOSED],
+  LIVE: [CapsuleEditionStatus.PREVIEW, CapsuleEditionStatus.CLOSED],
   CLOSED: [],
 };
 
@@ -234,15 +236,33 @@ export async function updateCapsuleEdition(input: UpdateCapsuleEditionInput) {
   const target = input.status === undefined ? null : (input.status as CapsuleEditionStatus);
   if (target !== null && target !== edition.status) {
     if (!(Object.values(CapsuleEditionStatus) as string[]).includes(target)) throw ErrorFactory.InvalidRequest("Estado de edición inválido");
-    if (target === CapsuleEditionStatus.LIVE) {
-      throw ErrorFactory.Conflict("La venta de una edición se abre con la bandera de lanzamiento, después de la revisión legal");
-    }
     if (!NEXT_STATUSES[edition.status].includes(target)) throw ErrorFactory.Conflict("Ese cambio de estado no está permitido");
     if (target === CapsuleEditionStatus.CLOSED) return closeCapsuleEdition(edition.id, input.storeId, input.userId, data);
+    if (target === CapsuleEditionStatus.LIVE) return openCapsuleEdition(edition.id, input.storeId, data);
     data.status = target;
   }
 
   return prismadb.capsuleEdition.update({ where: { id: edition.id }, data });
+}
+
+/**
+ * A la venta: con la bandera de lanzamiento, con packs configurados y una sola
+ * edición LIVE por tienda (los cupos del día son de la tienda, la capacidad de
+ * Paula). La fila de la tienda se bloquea para que dos ediciones no se abran a
+ * la vez.
+ */
+async function openCapsuleEdition(editionId: string, storeId: string, data: Prisma.CapsuleEditionUpdateInput) {
+  if (!capsuleSalesEnabled()) {
+    throw ErrorFactory.Conflict("La venta de una edición se abre con la bandera de lanzamiento, después de la revisión legal");
+  }
+  return prismadb.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM Store WHERE id = ${storeId} FOR UPDATE`;
+    const live = await tx.capsuleEdition.findFirst({ where: { storeId, status: CapsuleEditionStatus.LIVE, id: { not: editionId } }, select: { number: true, name: true } });
+    if (live) throw ErrorFactory.Conflict(`La edición #${live.number} ${live.name} ya está a la venta: pásala a vista previa o ciérrala antes de abrir otra`);
+    const packs = await tx.capsulePackOption.count({ where: { editionId } });
+    if (packs === 0) throw ErrorFactory.Conflict("Configura y guarda los packs antes de abrir la venta");
+    return tx.capsuleEdition.update({ where: { id: editionId }, data: { ...data, status: CapsuleEditionStatus.LIVE } });
+  });
 }
 
 /**

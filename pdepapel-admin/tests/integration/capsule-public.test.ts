@@ -61,6 +61,7 @@ beforeAll(async () => {
   await testPrisma.$connect();
 });
 afterEach(async () => {
+  vi.unstubAllEnvs();
   if (f) await deleteInventoryFixture(f);
   f = undefined;
 });
@@ -84,6 +85,7 @@ describe("quién ve una edición en la tienda", () => {
   });
 
   it("con la venta apagada responde 404 sin enlace y la edición con el enlace de esa edición", async () => {
+    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "");
     const { edition } = await setup();
     const { GET } = await import("@/app/api/[storeId]/capsulas/[edicion]/route");
     const params = { params: { storeId: f!.store.id, edicion: "3-escritorio" } };

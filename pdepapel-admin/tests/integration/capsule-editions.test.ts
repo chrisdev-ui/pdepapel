@@ -103,13 +103,44 @@ describe("crear una edición", () => {
 });
 
 describe("cambiar una edición", () => {
-  it("pasa a vista previa y vuelve; la venta no se abre desde aquí", async () => {
+  it("pasa a vista previa y vuelve; sin la bandera la venta no se abre", async () => {
     f = await createInventoryFixture();
     const edition = await create((await make("Edicion estados")).id);
     const base = { storeId: f.store.id, editionId: edition.id, userId: "paula" };
     await expect(updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.PREVIEW })).resolves.toMatchObject({ status: CapsuleEditionStatus.PREVIEW });
-    await expect(updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.LIVE })).rejects.toMatchObject({ statusCode: 409 });
+    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "");
+    try {
+      await expect(updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.LIVE })).rejects.toMatchObject({ statusCode: 409 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
     await expect(updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.DRAFT })).resolves.toMatchObject({ status: CapsuleEditionStatus.DRAFT });
+  });
+
+  it("con la bandera abre una sola edición a la venta por tienda, con sus packs, y su producto sigue archivado", async () => {
+    f = await createInventoryFixture();
+    signIn("owner");
+    const first = await create((await make("Edicion uno")).id);
+    const second = await create((await make("Edicion dos")).id);
+    const base = (editionId: string) => ({ storeId: f!.store.id, editionId, userId: "paula" });
+    await updateCapsuleEdition({ ...base(first.id), status: CapsuleEditionStatus.PREVIEW });
+    await updateCapsuleEdition({ ...base(second.id), status: CapsuleEditionStatus.PREVIEW });
+    // Sin packs no abre.
+    await expect(updateCapsuleEdition({ ...base(first.id), status: CapsuleEditionStatus.LIVE })).rejects.toMatchObject({ statusCode: 409 });
+    for (const edition of [first, second]) await testPrisma.capsulePackOption.create({ data: { editionId: edition.id, packSize: 5 } });
+    await expect(updateCapsuleEdition({ ...base(first.id), status: CapsuleEditionStatus.LIVE })).resolves.toMatchObject({ status: CapsuleEditionStatus.LIVE });
+    await expect(updateCapsuleEdition({ ...base(second.id), status: CapsuleEditionStatus.LIVE })).rejects.toMatchObject({ statusCode: 409 });
+
+    const { POST } = await import("@/app/api/[storeId]/products/bulk-update/route");
+    const restore = await POST(
+      new Request(`https://admin.test/api/${f.store.id}/products/bulk-update`, { method: "POST", body: JSON.stringify({ field: "isArchived", value: false, productIds: [first.productId] }) }),
+      { params: { storeId: f.store.id } },
+    );
+    expect(restore.status).toBe(409);
+
+    // Pausar (vista previa) deja abrir la otra.
+    await expect(updateCapsuleEdition({ ...base(first.id), status: CapsuleEditionStatus.PREVIEW })).resolves.toMatchObject({ status: CapsuleEditionStatus.PREVIEW });
+    await expect(updateCapsuleEdition({ ...base(second.id), status: CapsuleEditionStatus.LIVE })).resolves.toMatchObject({ status: CapsuleEditionStatus.LIVE });
   });
 
   it("la banda no cambia después de imprimir papeles", async () => {

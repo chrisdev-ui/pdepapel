@@ -4,7 +4,7 @@ import { availableStock } from "@/lib/available-stock";
 import { suggestCapsuleBox } from "@/lib/capsule-box";
 import { capsuleDayStatus } from "@/lib/capsule-day";
 import { verifyCapsulePreviewToken } from "@/lib/capsule-preview";
-import { CAPSULE_PACK_PRICES, CAPSULE_SALES_ENABLED, capsuleUnitPrice, maxPackFor, packSaving } from "@/lib/pricing/capsules";
+import { CAPSULE_PACK_PRICES, capsuleSalesEnabled, capsuleUnitPrice, maxPackFor, packSaving } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
 import { slugify } from "@/lib/slugify";
 
@@ -33,7 +33,7 @@ export async function getPublicCapsuleEdition({
   segment,
   token,
   now = new Date(),
-  salesEnabled = CAPSULE_SALES_ENABLED,
+  salesEnabled = capsuleSalesEnabled(),
 }: {
   storeId: string;
   segment: string;

@@ -37,6 +37,8 @@ export const TEST_ENV_STUBS = Object.freeze({
   CLOUDFLARE_R2_ACCOUNT_ID: STUB,
   CLOUDFLARE_R2_BUCKET_NAME: STUB,
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: STUB,
+  // Enciende la venta de cápsulas solo en pruebas locales (`capsuleSalesEnabled`).
+  CAPSULE_SALES_TEST_OVERRIDE: "1",
   CLOUDINARY_API_KEY: STUB,
   CLOUDINARY_API_SECRET: STUB,
   CLOUDINARY_CLOUD_NAME: STUB,

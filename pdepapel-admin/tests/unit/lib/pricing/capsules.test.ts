@@ -4,6 +4,7 @@ import { gatewayFee } from "@/lib/gateway-fees";
 import {
   CAPSULE_PACK_PRICES,
   CAPSULE_SALES_ENABLED,
+  capsuleSalesEnabled,
   maxGiftCostOf,
   packRungs,
   capsuleProvisionalCost,
@@ -62,8 +63,13 @@ describe("escalera de packs (lib/pricing/capsules.ts)", () => {
     expect(maxGiftCostOf([])).toBe(0);
   });
 
-  it("la venta arranca apagada", () => {
+  it("la venta arranca apagada y la prueba solo la enciende fuera de Vercel", () => {
     expect(CAPSULE_SALES_ENABLED).toBe(false);
+    expect(capsuleSalesEnabled({})).toBe(false);
+    expect(capsuleSalesEnabled({ CAPSULE_SALES_TEST_OVERRIDE: "1" })).toBe(true);
+    expect(capsuleSalesEnabled({ CAPSULE_SALES_TEST_OVERRIDE: "1", VERCEL: "1", VERCEL_ENV: "production" })).toBe(false);
+    expect(capsuleSalesEnabled({ CAPSULE_SALES_TEST_OVERRIDE: "1", VERCEL: "1", VERCEL_ENV: "preview" })).toBe(false);
+    expect(capsuleSalesEnabled({ CAPSULE_SALES_TEST_OVERRIDE: "true" })).toBe(false);
   });
 });
 
