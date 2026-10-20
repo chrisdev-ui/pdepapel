@@ -54,6 +54,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { describeInPersonOrdersInBatch } from "@/lib/in-person-orders";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { applyCapsulePayment } from "@/lib/capsule-payment";
+import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import {
   ORDER_STATUS_LABELS,
@@ -1151,7 +1152,7 @@ export async function DELETE(
           // Un kit devuelve tambien sus componentes (ver explodeKitMovements).
           const restockMovements = await explodeKitMovements(
             tx,
-            stockMovements,
+            await withoutDrawnCapsuleUnits(tx, stockMovements),
           );
           const stockResult = await createInventoryMovementBatchResilient(
             tx,
@@ -1438,7 +1439,7 @@ export async function PATCH(
 
       // Batch execute stock updates using resilient method
       if (stockUpdates.length > 0) {
-        const attemptedMovements = await explodeKitMovements(tx, stockUpdates);
+        const attemptedMovements = await explodeKitMovements(tx, await withoutDrawnCapsuleUnits(tx, stockUpdates));
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
           attemptedMovements,

@@ -2,7 +2,7 @@ import { CapsuleDailySlotStatus, CapsuleEditionStatus, CapsuleVideoConsent, Paym
 
 import { ErrorFactory } from "@/lib/api-errors";
 import { availableStock } from "@/lib/available-stock";
-import { bogotaDate, bogotaMinutes, formatOpensAt, minutesOf } from "@/lib/capsule-day";
+import { bogotaDate, bogotaMinutes, daySlots, formatOpensAt, minutesOf } from "@/lib/capsule-day";
 import { CAPSULE_MIN_PACK, CAPSULE_PACK_PRICES, capsuleSalesEnabled, capsuleUnitPrice, maxPackFor } from "@/lib/pricing/capsules";
 
 /**
@@ -123,7 +123,7 @@ export async function resolveCapsuleOrder(
   };
 }
 
-type ReserveDb = Pick<Prisma.TransactionClient, "$queryRaw" | "capsuleOrder" | "capsuleDailySlot" | "capsuleDayCap">;
+type ReserveDb = Pick<Prisma.TransactionClient, "$queryRaw" | "capsuleOrder" | "capsuleDailySlot" | "capsuleDayCap" | "order">;
 
 /**
  * Bloquea la fila de la tienda: todos los cupos de cápsulas del día se asignan
@@ -144,8 +144,8 @@ const firstFree = (taken: readonly number[]) => {
 /**
  * Dentro de la transacción que crea el pedido: el `CapsuleOrder` (pack y regalo
  * copiados del peldaño, el permiso del video) y un cupo del día apartado
- * (`HELD`) por la ventana de pago. Los apartados vencidos del día se borran
- * antes de contar: un cupo liberado vuelve a estar libre.
+ * (`HELD`) por la ventana de pago. Los cupos muertos del día (apartado
+ * vencido, pedido cancelado o borrado) se borran antes de contar.
  */
 export async function reserveCapsuleOrder(db: ReserveDb, plan: CapsuleOrderPlan, { storeId, orderId, now = new Date() }: { storeId: string; orderId: string; now?: Date }) {
   await db.capsuleOrder.create({
@@ -165,11 +165,12 @@ export async function reserveCapsuleOrder(db: ReserveDb, plan: CapsuleOrderPlan,
   if (plan.channel === "STORE" && bogotaMinutes(now) < minutesOf(plan.opensAtLocal)) {
     throw ErrorFactory.Conflict(`Los cupos de cápsulas de hoy abren a las ${formatOpensAt(plan.opensAtLocal)}`);
   }
-  await db.capsuleDailySlot.deleteMany({ where: { storeId, bogotaDate: day, status: CapsuleDailySlotStatus.HELD, expiresAt: { lte: now } } });
-  const [override, taken] = await Promise.all([
+  const [override, slots] = await Promise.all([
     db.capsuleDayCap.findUnique({ where: { storeId_bogotaDate: { storeId, bogotaDate: day } }, select: { cap: true } }),
-    db.capsuleDailySlot.findMany({ where: { storeId, bogotaDate: day }, select: { slotNumber: true } }),
+    daySlots(db, storeId, day, now),
   ]);
+  if (slots.dead.length > 0) await db.capsuleDailySlot.deleteMany({ where: { orderId: { in: slots.dead.map((slot) => slot.orderId) } } });
+  const taken = slots.active;
   const cap = override?.cap ?? plan.dailyOrderCap;
   if (taken.length >= cap) {
     throw ErrorFactory.Conflict(

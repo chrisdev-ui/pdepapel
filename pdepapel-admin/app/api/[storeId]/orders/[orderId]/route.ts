@@ -47,6 +47,7 @@ import {
 } from "@/lib/inventory";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { applyCapsulePayment } from "@/lib/capsule-payment";
+import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import {
   canTransition,
@@ -1096,7 +1097,7 @@ export async function PATCH(
         // Restock items
         const stockMovements = await explodeKitMovements(
           tx,
-          updated.orderItems
+          await withoutDrawnCapsuleUnits(tx, updated.orderItems
             .filter((item) => item.productId)
             .map((item) => ({
               productId: item.productId as string,
@@ -1108,7 +1109,7 @@ export async function PATCH(
               cost: Number(item.product?.acqPrice) || 0,
               price: Number(item.price),
               createdBy: userId || "SYSTEM",
-            })),
+            }))),
         );
 
         // We use standard batch because restocking shouldn't fail (unless product deleted?)
@@ -1293,7 +1294,7 @@ export async function DELETE(
         // una unidad fantasma y los componentes vendidos se pierden del libro.
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          await explodeKitMovements(tx, stockMovements),
+          await explodeKitMovements(tx, await withoutDrawnCapsuleUnits(tx, stockMovements)),
         );
 
         // Log any stock update failures but don't throw errors

@@ -67,6 +67,7 @@ export async function applyCapsulePayment(db: PaymentDb, { orderId, storeId }: {
   await lockCapsuleDay(db, storeId);
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, select: { createdAt: true } });
   const day = bogotaDate(order.createdAt);
+  // Los muertos conservan su número hasta que se borran: se cuentan como tomados.
   const taken = await db.capsuleDailySlot.findMany({ where: { storeId, bogotaDate: day }, select: { slotNumber: true } });
   const used = new Set(taken.map((row) => row.slotNumber));
   let slotNumber = 1;

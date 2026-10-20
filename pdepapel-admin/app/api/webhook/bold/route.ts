@@ -31,6 +31,7 @@ import {
 } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { applyCapsulePayment } from "@/lib/capsule-payment";
+import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import {
   markWelcomeBenefitRedeemed,
@@ -504,7 +505,7 @@ async function processBoldPayment(
 
         const restockMovements = await explodeKitMovements(
           tx,
-          order.orderItems
+          await withoutDrawnCapsuleUnits(tx, order.orderItems
             .filter(
               (item: any) =>
                 item.product &&
@@ -520,7 +521,7 @@ async function processBoldPayment(
               cost: Number(orderItem.product.acqPrice) || 0,
               price: Number(orderItem.product.price),
               createdBy: "SYSTEM_BOLD",
-            })),
+            }))),
         );
 
         const restockResult = await createInventoryMovementBatchResilient(

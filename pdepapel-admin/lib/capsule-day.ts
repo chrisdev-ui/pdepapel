@@ -1,4 +1,4 @@
-import { CapsuleDailySlotStatus } from "@prisma/client";
+import { CapsuleDailySlotStatus, OrderStatus } from "@prisma/client";
 
 /**
  * Los cupos de cápsulas de un día de Bogotá. Cuenta lo mismo que contará la
@@ -44,24 +44,50 @@ export interface CapsuleDayStatus {
   closedReason: "before-open" | "full" | null;
 }
 
-type DayDb = {
+type SlotRow = { orderId: string; slotNumber: number; status: CapsuleDailySlotStatus; expiresAt: Date | null };
+
+export type DaySlotsDb = {
+  capsuleDailySlot: { findMany: (args: { where: { storeId: string; bogotaDate: Date }; select: { orderId: true; slotNumber: true; status: true; expiresAt: true } }) => Promise<SlotRow[]> };
+  order: { findMany: (args: { where: { id: { in: string[] } }; select: { id: true; status: true } }) => Promise<{ id: string; status: OrderStatus }[]> };
+};
+
+/**
+ * Los cupos de un día, separados en vivos y muertos. Un cupo está vivo si su
+ * pedido existe, no está cancelado y el cupo está confirmado o apartado sin
+ * vencer. Los muertos (apartado vencido, pedido cancelado o borrado) se
+ * liberan al asignar: así cualquier camino de cancelación devuelve el cupo
+ * sin tener que acordarse de hacerlo. Dos consultas acotadas al día.
+ */
+export async function daySlots(db: DaySlotsDb, storeId: string, bogotaDate: Date, now: Date) {
+  const slots = await db.capsuleDailySlot.findMany({ where: { storeId, bogotaDate }, select: { orderId: true, slotNumber: true, status: true, expiresAt: true } });
+  if (slots.length === 0) return { active: [] as SlotRow[], dead: [] as SlotRow[] };
+  const orders = await db.order.findMany({ where: { id: { in: slots.map((slot) => slot.orderId) } }, select: { id: true, status: true } });
+  const statusById = new Map(orders.map((order) => [order.id, order.status]));
+  const active: SlotRow[] = [];
+  const dead: SlotRow[] = [];
+  for (const slot of slots) {
+    const orderStatus = statusById.get(slot.orderId);
+    const alive =
+      orderStatus !== undefined &&
+      orderStatus !== OrderStatus.CANCELLED &&
+      (slot.status === CapsuleDailySlotStatus.CONFIRMED || (slot.expiresAt !== null && slot.expiresAt > now));
+    (alive ? active : dead).push(slot);
+  }
+  return { active, dead };
+}
+
+type DayDb = DaySlotsDb & {
   capsuleDayCap: { findUnique: (args: { where: { storeId_bogotaDate: { storeId: string; bogotaDate: Date } }; select: { cap: true } }) => Promise<{ cap: number } | null> };
-  capsuleDailySlot: { count: (args: { where: object }) => Promise<number> };
 };
 
 export async function capsuleDayStatus(db: DayDb, storeId: string, edition: { dailyOrderCap: number; opensAtLocal: string }, now: Date = new Date()): Promise<CapsuleDayStatus> {
   const day = bogotaDay(now);
-  const bogotaDate = new Date(`${day}T00:00:00.000Z`);
-  const [override, used] = await Promise.all([
-    db.capsuleDayCap.findUnique({ where: { storeId_bogotaDate: { storeId, bogotaDate } }, select: { cap: true } }),
-    db.capsuleDailySlot.count({
-      where: {
-        storeId,
-        bogotaDate,
-        OR: [{ status: CapsuleDailySlotStatus.CONFIRMED }, { status: CapsuleDailySlotStatus.HELD, expiresAt: { gt: now } }],
-      },
-    }),
+  const date = new Date(`${day}T00:00:00.000Z`);
+  const [override, slots] = await Promise.all([
+    db.capsuleDayCap.findUnique({ where: { storeId_bogotaDate: { storeId, bogotaDate: date } }, select: { cap: true } }),
+    daySlots(db, storeId, date, now),
   ]);
+  const used = slots.active.length;
   const cap = override?.cap ?? edition.dailyOrderCap;
   const left = Math.max(0, cap - used);
   const closedReason = bogotaMinutes(now) < minutesOf(edition.opensAtLocal) ? "before-open" : left === 0 ? "full" : null;
