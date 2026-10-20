@@ -163,9 +163,9 @@ test.describe("pedido de cápsulas en el panel", () => {
     const created = await page.request.post(new URL(`/api/${storeId}/orders`, baseURL).toString(), {
       data: {
         fullName: "Laura Pineda",
-        phone: "3007654321",
+        phone: "3001234567",
         email: "laura@ejemplo.test",
-        address: "Carrera 5 # 6-7",
+        address: "Calle 10 # 20-30",
         city: "Medellín",
         department: "Antioquia",
         daneCode: "05001000",
