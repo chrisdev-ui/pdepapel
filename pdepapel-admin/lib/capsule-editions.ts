@@ -22,6 +22,7 @@ export interface CreateCapsuleEditionInput {
   costBandMin: number;
   costBandMax: number;
   dailyOrderCap?: number;
+  minMarginPct?: unknown;
   userId: string;
 }
 
@@ -36,6 +37,13 @@ function assertBand(min: number, max: number) {
   if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max <= min) {
     throw ErrorFactory.InvalidRequest("La banda de costo necesita un mínimo mayor a 0 y un máximo mayor que el mínimo");
   }
+}
+
+function parseMinMargin(value: unknown): number | null {
+  if (value === null || value === "") return null;
+  const pct = Number(value);
+  if (!Number.isFinite(pct) || pct <= 0 || pct >= 100) throw ErrorFactory.InvalidRequest("El margen mínimo de la edición va de 1 a 99 %");
+  return Math.round(pct * 10) / 10;
 }
 
 function assertDailyCap(cap: number) {
@@ -107,6 +115,7 @@ export async function createCapsuleEdition(input: CreateCapsuleEditionInput) {
         costBandMin,
         costBandMax,
         ...(dailyOrderCap !== undefined ? { dailyOrderCap } : {}),
+        ...(input.minMarginPct !== undefined ? { minMarginPct: parseMinMargin(input.minMarginPct) } : {}),
         createdBy: input.userId,
       },
     });
@@ -194,6 +203,7 @@ export interface UpdateCapsuleEditionInput {
   costBandMin?: unknown;
   costBandMax?: unknown;
   dailyOrderCap?: unknown;
+  minMarginPct?: unknown;
   status?: unknown;
 }
 
@@ -210,6 +220,7 @@ export async function updateCapsuleEdition(input: UpdateCapsuleEditionInput) {
     assertDailyCap(cap);
     data.dailyOrderCap = cap;
   }
+  if (input.minMarginPct !== undefined) data.minMarginPct = parseMinMargin(input.minMarginPct);
   if (input.costBandMin !== undefined || input.costBandMax !== undefined) {
     const min = input.costBandMin === undefined ? edition.costBandMin : Number(input.costBandMin);
     const max = input.costBandMax === undefined ? edition.costBandMax : Number(input.costBandMax);

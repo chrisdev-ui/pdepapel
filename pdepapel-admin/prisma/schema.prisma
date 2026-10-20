@@ -878,6 +878,8 @@ model CapsuleEdition {
   dailyOrderCap Int                  @default(5)
   /// Hora de Bogotá en que abren los cupos del día.
   opensAtLocal  String               @default("08:00") @db.VarChar(5)
+  /// Piso del P95 de cada pack para esta edición (%). Sin valor, rige el margen mínimo de la tienda.
+  minMarginPct  Float?
   createdBy     String?
   closedAt      DateTime?
   createdAt     DateTime             @default(now())

@@ -114,7 +114,7 @@ export interface PackCheck {
   expectedPct: number | null;
   p95Pct: number | null;
   worstPct: number | null;
-  /** P95 ≥ el margen mínimo de la tienda; null si no hay mínimo configurado o el pack no cabe. */
+  /** P95 ≥ el piso (de la edición o de la tienda); null si no hay piso o el pack no cabe. */
   passes: boolean | null;
 }
 
@@ -122,8 +122,9 @@ const pct = (value: number) => Math.round(value * 1000) / 10;
 
 /**
  * El margen de cada pack sobre la bolsa: los papeles ya impresos y sin anular
- * más los propuestos (al costo de hoy). El mínimo es el margen mínimo de la
- * tienda (Configuración), no una cifra del código.
+ * más los propuestos (al costo de hoy). El piso es el de la edición
+ * (`minMarginPct`) o, sin él, el margen mínimo de la tienda; nunca una cifra
+ * del código.
  */
 export async function checkPoolMargins({
   storeId,
@@ -159,7 +160,9 @@ export async function checkPoolMargins({
     for (let unit = 0; unit < line.quantity; unit += 1) pool.push(cost);
   }
 
-  const minMarginPct = store?.storeMinMarginPercent ?? null;
+  // El piso de la edición manda; sin él, el margen mínimo de la tienda.
+  const minMarginPct = edition.minMarginPct ?? store?.storeMinMarginPercent ?? null;
+  const floorSource: "edition" | "store" | null = edition.minMarginPct !== null ? "edition" : minMarginPct !== null ? "store" : null;
   const largest = maxPackFor(pool.length);
   const packs: PackCheck[] = rungs.map((rung) => {
     if (largest === null || rung.packSize > largest) {
@@ -177,5 +180,5 @@ export async function checkPoolMargins({
       passes: minMarginPct === null ? null : p95Pct >= minMarginPct,
     };
   });
-  return { poolSize: pool.length, minMarginPct, packs, ok: packs.every((pack) => pack.passes !== false) };
+  return { poolSize: pool.length, minMarginPct, floorSource, packs, ok: packs.every((pack) => pack.passes !== false) };
 }

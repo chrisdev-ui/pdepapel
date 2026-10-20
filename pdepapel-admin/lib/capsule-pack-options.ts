@@ -56,7 +56,7 @@ export async function savePackOptions({ storeId, editionId, options: raw, propos
   }
   const check = await checkPoolMargins({ storeId, editionId, proposed, packOptions: options });
   if (check.poolSize === 0) throw ErrorFactory.InvalidRequest("Elige la bolsa de papeles antes de guardar los packs: el margen se mide sobre ella");
-  if (check.minMarginPct === null) throw ErrorFactory.InvalidRequest("Configura el margen mínimo de la tienda en Configuración: es el piso del P95 de cada pack");
+  if (check.minMarginPct === null) throw ErrorFactory.InvalidRequest("Pon el margen mínimo de la edición (o el de la tienda en Configuración): es el piso del P95 de cada pack");
   if (!check.ok) {
     const failing = check.packs.filter((pack) => pack.passes === false).map((pack) => `${pack.packSize} (P95 ${pack.p95Pct} %)`);
     throw new AppError(`Con esta bolsa no llegan al margen mínimo de ${check.minMarginPct} %: ${failing.length === 1 ? "el pack de" : "los packs de"} ${failing.join(", ")}`, 409, { check });

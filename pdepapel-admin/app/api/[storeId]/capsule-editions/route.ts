@@ -36,6 +36,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
         costBandMin: Number(body.costBandMin),
         costBandMax: Number(body.costBandMax),
         dailyOrderCap: body.dailyOrderCap === undefined ? undefined : Number(body.dailyOrderCap),
+        minMarginPct: body.minMarginPct,
         userId,
       });
       // El producto quedó archivado: la tienda deja de mostrarlo (purga después de responder).

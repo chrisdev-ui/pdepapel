@@ -15,7 +15,7 @@ export async function printFromPanel({ storeId, editionId, kind, items, userId }
   if (kind !== CapsuleSlipKind.SLIP && kind !== CapsuleSlipKind.GIFT) throw ErrorFactory.InvalidRequest("Elige si imprimes papeles o regalos");
   if (kind === CapsuleSlipKind.SLIP) {
     const check = await checkPoolMargins({ storeId, editionId, proposed: items });
-    if (check.minMarginPct === null) throw ErrorFactory.InvalidRequest("Configura el margen mínimo de la tienda en Configuración antes de imprimir");
+    if (check.minMarginPct === null) throw ErrorFactory.InvalidRequest("Pon el margen mínimo de la edición (o el de la tienda en Configuración) antes de imprimir");
     if (!check.ok) throw new AppError(`Con esta impresión algún pack queda por debajo del margen mínimo de ${check.minMarginPct} %`, 409, { check });
   }
   const printed = await printCapsuleSlips({ storeId, editionId, kind, items, userId });

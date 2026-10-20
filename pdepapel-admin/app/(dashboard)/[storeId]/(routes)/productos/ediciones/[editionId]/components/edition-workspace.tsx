@@ -45,6 +45,7 @@ interface PackCheck {
 interface MarginCheck {
   poolSize: number;
   minMarginPct: number | null;
+  floorSource: "edition" | "store" | null;
   packs: PackCheck[];
   ok: boolean;
 }
@@ -75,6 +76,10 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const [confirmClose, setConfirmClose] = useState(false);
   // Guardar los packs no refresca la página: `productos/loading.tsx` la volvería a montar y se perdería la bolsa elegida.
   const [packsSaved, setPacksSaved] = useState(edition.packOptions.length > 0);
+  const [editionFloor, setEditionFloor] = useState<number | null>(edition.minMarginPct);
+  const [floorInput, setFloorInput] = useState(edition.minMarginPct === null ? "" : String(edition.minMarginPct));
+  const floorLabel =
+    editionFloor !== null ? `${editionFloor} % (margen mínimo de esta edición)` : data.storeMinMarginPct !== null ? `${data.storeMinMarginPct} % (margen mínimo de la tienda)` : "sin piso: pon el de la edición o el de la tienda en Configuración";
   const [packs, setPacks] = useState<PackForm>(() =>
     Object.fromEntries(
       CAPSULE_PACK_PRICES.map((price) => {
@@ -169,6 +174,15 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       const { data: body } = await axios.post(`${api}/slips/void`, { slipIds });
       toast({ title: `${body.voided} anulados`, description: "Su apartado se liberó." });
       router.refresh();
+    });
+
+  const saveFloor = () =>
+    run("piso", async () => {
+      const value = floorInput.trim() === "" ? null : Number(floorInput);
+      const { data: body } = await axios.patch(api, { minMarginPct: value });
+      setEditionFloor(body.edition.minMarginPct);
+      setCheck(null);
+      toast({ title: body.edition.minMarginPct === null ? "Esta edición usa el margen mínimo de la tienda" : `Margen mínimo de la edición: ${body.edition.minMarginPct} %` });
     });
 
   const setStatus = (status: string) =>
@@ -284,8 +298,20 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
           id="packs"
           step={2}
           title="Packs: regalo y caja"
-          description={`Cada pack se guarda solo si su P95 llega al margen mínimo de la tienda${data.minMarginPct === null ? " (sin configurar: ve a Configuración)" : ` (${data.minMarginPct} %)`}. El margen se mide sobre lo impreso más lo elegido.`}
+          description="Cada pack se guarda —y los papeles se imprimen— solo si su P95 llega al piso. El margen se mide sobre lo impreso más lo elegido."
         >
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="grid gap-1">
+              <Label htmlFor="piso-edicion">Margen mínimo de esta edición (%)</Label>
+              <Input id="piso-edicion" inputMode="decimal" className="h-11 w-32" value={floorInput} onChange={(event) => setFloorInput(event.target.value)} placeholder={data.storeMinMarginPct === null ? "" : `tienda: ${data.storeMinMarginPct}`} />
+            </div>
+            <Button variant="outline" className="min-h-[44px]" disabled={busy !== null} onClick={saveFloor}>
+              {busy === "piso" ? "Guardando…" : "Guardar piso"}
+            </Button>
+            <p className="text-sm text-muted-foreground" data-testid="piso-vigente">
+              Piso vigente: {floorLabel}
+            </p>
+          </div>
           <div className="flex flex-col divide-y rounded-md border">
             {CAPSULE_PACK_PRICES.map((price) => {
               const row = packs[price.packSize];
@@ -342,7 +368,8 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
           </div>
           {check && (
             <p className={`text-sm ${check.ok ? "text-muted-foreground" : "font-medium text-destructive"}`} role="status">
-              Bolsa de {check.poolSize} papeles · {check.ok ? "todos los packs que caben llegan al margen mínimo" : "algún pack no llega al margen mínimo"}
+              Bolsa de {check.poolSize} papeles · piso {check.minMarginPct === null ? "sin configurar" : `${check.minMarginPct} % (${check.floorSource === "edition" ? "de la edición" : "de la tienda"})`} ·{" "}
+              {check.ok ? "todos los packs que caben llegan al piso" : "algún pack no llega al piso"}
             </p>
           )}
         </SectionCard>

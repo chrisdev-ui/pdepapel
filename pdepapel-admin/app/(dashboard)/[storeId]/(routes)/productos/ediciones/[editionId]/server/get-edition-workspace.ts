@@ -10,7 +10,7 @@ export async function getEditionWorkspace(storeId: string, editionId: string) {
     prismadb.category.findMany({ where: { storeId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prismadb.store.findUnique({ where: { id: storeId }, select: { storeMinMarginPercent: true } }),
   ]);
-  return { ...detail, categories, minMarginPct: store?.storeMinMarginPercent ?? null };
+  return { ...detail, categories, storeMinMarginPct: store?.storeMinMarginPercent ?? null };
 }
 
 export type EditionWorkspaceData = Awaited<ReturnType<typeof getEditionWorkspace>>;

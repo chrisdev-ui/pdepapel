@@ -131,6 +131,21 @@ describe("margen de la bolsa", () => {
     expect(strict.packs[0]).toMatchObject({ packSize: 5, passes: false });
   });
 
+  it("el piso de la edición manda sobre el de la tienda, y sin él rige el de la tienda", async () => {
+    const { edition } = await setup();
+    const lapicero = await make("Lapicero", { stock: 30 });
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { storeMinMarginPercent: 40 } });
+    const run = () => checkPoolMargins({ storeId: f!.store.id, editionId: edition.id, proposed: [{ productId: lapicero.id, quantity: 20 }], packOptions: options(), runs: 500 });
+    await expect(run()).resolves.toMatchObject({ minMarginPct: 40, floorSource: "store", ok: true });
+
+    const { updateCapsuleEdition } = await import("@/lib/capsule-editions");
+    await updateCapsuleEdition({ storeId: f!.store.id, editionId: edition.id, userId: "paula", minMarginPct: 90 });
+    await expect(run()).resolves.toMatchObject({ minMarginPct: 90, floorSource: "edition", ok: false });
+    await expect(updateCapsuleEdition({ storeId: f!.store.id, editionId: edition.id, userId: "paula", minMarginPct: 120 })).rejects.toMatchObject({ statusCode: 400 });
+    await updateCapsuleEdition({ storeId: f!.store.id, editionId: edition.id, userId: "paula", minMarginPct: null });
+    await expect(run()).resolves.toMatchObject({ minMarginPct: 40, floorSource: "store" });
+  });
+
   it("sin packs configurados o con un producto sin costo, no calcula", async () => {
     const { edition } = await setup();
     const noCost = await make("Sin costo", { acqPrice: 0 });
