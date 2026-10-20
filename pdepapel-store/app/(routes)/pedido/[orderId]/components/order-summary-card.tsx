@@ -134,10 +134,10 @@ export function OrderSummaryCard({
         <Row label="Método de pago">
           <span className="font-semibold">{getPaymentMethodLabel(method)}</span>
         </Row>
-        {order.payment?.transactionId && (
+        {order.orderNumber && (
           <Row label="Referencia">
             <span className="select-all font-quicksand text-xs font-semibold">
-              {order.payment.transactionId}
+              {order.orderNumber}
             </span>
           </Row>
         )}

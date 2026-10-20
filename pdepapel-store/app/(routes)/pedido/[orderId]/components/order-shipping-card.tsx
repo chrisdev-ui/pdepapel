@@ -91,18 +91,15 @@ export function OrderShippingCard({
       ? `${shipping.deliveryDays} ${Number(shipping.deliveryDays) === 1 ? "día hábil" : "días hábiles"} después del despacho`
       : null;
 
+  const street = [order.address, order.address2].filter(Boolean).join(", ");
+  const place = [order.city, order.department].filter(Boolean).join(", ");
   const address = (
     <address className="not-italic">
-      <p className="font-semibold">{order.fullName}</p>
+      {order.fullName && <p className="font-semibold">{order.fullName}</p>}
       {order.company && <p className="text-muted-foreground">{order.company}</p>}
-      <p>
-        {order.address}
-        {order.address2 ? `, ${order.address2}` : ""}
-      </p>
+      {street && <p>{street}</p>}
       {order.neighborhood && <p>Barrio {order.neighborhood}</p>}
-      <p>
-        {[order.city, order.department].filter(Boolean).join(", ")}
-      </p>
+      {place && <p>{place}</p>}
       {order.addressReference && (
         <p className="mt-1 text-sm text-muted-foreground">
           {order.addressReference}
@@ -193,7 +190,14 @@ export function OrderShippingCard({
           {getShippingStatusLabel(shipping?.status)}
         </Field>
         {eta && <Field label="Entrega estimada">{eta}</Field>}
-        <Field label="Dirección de entrega">{address}</Field>
+        <Field label="Dirección de entrega">
+          {address}
+          {order.masked && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Por tu privacidad, este enlace no muestra la dirección completa.
+            </p>
+          )}
+        </Field>
       </dl>
 
       {(trackingEvents.length > 0 || canRefreshTracking) && (

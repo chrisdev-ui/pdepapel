@@ -309,10 +309,13 @@ export interface Order {
   status: string;
   /** STANDARD, GIFT_CARD, … Sólo GIFT_CARD cambia la página del pedido. */
   type?: string;
+  /** Con `masked` llega recortado («Ana M.»). */
   fullName: string;
+  /** Con `masked` llegan solo los últimos cuatro dígitos («•••• 1234»). */
   phone: string;
   email?: string;
-  address: string;
+  /** Sin `address*`, barrio ni empresa cuando `masked`: solo ciudad y departamento. */
+  address?: string | null;
   city?: string;
   department?: string;
   daneCode?: string;
@@ -349,7 +352,13 @@ export interface Order {
   createdAt: string;
   /** Set by the admin only when a genuine payment was confirmed. */
   paidAt?: string | null;
+  /** Lo calcula la administración desde el estado; la tienda no lo deduce de la pasarela. */
+  paymentResult?: PaymentResult;
+  /** Quien abre el enlace sin ser la clienta del pedido recibe los datos recortados. */
+  masked?: boolean;
 }
+
+export type PaymentResult = "approved" | "declined" | "pending";
 
 export interface OrderItem {
   id: string;
