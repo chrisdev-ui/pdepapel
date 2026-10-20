@@ -8,6 +8,7 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
 
+import { savePackOptions } from "@/lib/capsule-pack-options";
 import { checkPoolMargins, giftCandidates, slipCandidates } from "@/lib/capsule-pool";
 import { CAPSULE_PACK_PRICES } from "@/lib/pricing/capsules";
 
@@ -137,6 +138,32 @@ describe("margen de la bolsa", () => {
     await expect(checkPoolMargins({ storeId: f!.store.id, editionId: edition.id, proposed: [{ productId: noCost.id, quantity: 5 }], packOptions: options() })).rejects.toMatchObject({ statusCode: 400 });
   });
 
+  it("guardar los packs exige bolsa, margen mínimo configurado y P95 suficiente; escribe la escalera sin tocar el precio base", async () => {
+    const { edition, editionProduct } = await setup();
+    const lapicero = await make("Lapicero", { stock: 40 });
+    const base = { storeId: f!.store.id, editionId: edition.id, options: options() };
+    await expect(savePackOptions({ ...base, proposed: [] })).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining("Elige la bolsa") });
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { storeMinMarginPercent: null } });
+    await expect(savePackOptions({ ...base, proposed: [{ productId: lapicero.id, quantity: 40 }] })).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining("margen mínimo") });
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { storeMinMarginPercent: 90 } });
+    await expect(savePackOptions({ ...base, proposed: [{ productId: lapicero.id, quantity: 40 }] })).rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining("no llegan al margen mínimo de 90 %") });
+    await expect(testPrisma.capsulePackOption.count({ where: { editionId: edition.id } })).resolves.toBe(0);
+
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { storeMinMarginPercent: 40 } });
+    const saved = await savePackOptions({ ...base, proposed: [{ productId: lapicero.id, quantity: 40 }] });
+    expect(saved.check.ok).toBe(true);
+    await expect(testPrisma.capsulePackOption.findMany({ where: { editionId: edition.id }, orderBy: { packSize: "asc" } })).resolves.toHaveLength(CAPSULE_PACK_PRICES.length);
+    const tiers = await testPrisma.productPriceTier.findMany({ where: { productId: editionProduct.id }, orderBy: { minQuantity: "asc" } });
+    expect(tiers.map((tier) => [tier.minQuantity, tier.unitPrice])).toEqual([[10, 12490], [15, 11990], [20, 11745], [25, 11596], [30, 11330]]);
+    await expect(testPrisma.product.findUniqueOrThrow({ where: { id: editionProduct.id } })).resolves.toMatchObject({ price: 12900 });
+
+    // Guardar de nuevo reemplaza, y con la edición a la venta ya no se cambia.
+    await savePackOptions({ ...base, options: options(1500), proposed: [{ productId: lapicero.id, quantity: 40 }] });
+    await expect(testPrisma.capsulePackOption.findFirstOrThrow({ where: { editionId: edition.id, packSize: 10 } })).resolves.toMatchObject({ giftMaxCost: 1500 });
+    await testPrisma.capsuleEdition.update({ where: { id: edition.id }, data: { status: "LIVE" } });
+    await expect(savePackOptions({ ...base, proposed: [{ productId: lapicero.id, quantity: 40 }] })).rejects.toMatchObject({ statusCode: 409 });
+  });
+
   it("las rutas de la bolsa son solo de la dueña", async () => {
     const { edition } = await setup();
     session.userId = "user_viewer_pool";
@@ -146,5 +173,7 @@ describe("margen de la bolsa", () => {
     const params = { params: { storeId: f!.store.id, editionId: edition.id } };
     expect((await GET(new Request(`https://admin.test/x?tipo=papeles&categorias=${f!.category.id}`), params)).status).toBe(403);
     expect((await POST(new Request("https://admin.test/x", { method: "POST", body: JSON.stringify({ pool: [] }) }), params)).status).toBe(403);
+    const { PUT } = await import("@/app/api/[storeId]/capsule-editions/[editionId]/pack-options/route");
+    expect((await PUT(new Request("https://admin.test/x", { method: "PUT", body: JSON.stringify({ options: options() }) }), params)).status).toBe(403);
   });
 });

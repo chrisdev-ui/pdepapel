@@ -1,5 +1,9 @@
-import { ErrorFactory } from "@/lib/api-errors";
-import { CAPSULE_PACK_PRICES, type CapsulePackCosts } from "@/lib/pricing/capsules";
+import { CapsuleEditionStatus } from "@prisma/client";
+
+import { AppError, ErrorFactory } from "@/lib/api-errors";
+import { checkPoolMargins, type PoolLine } from "@/lib/capsule-pool";
+import { CAPSULE_PACK_PRICES, capsuleUnitPrice, type CapsulePackCosts } from "@/lib/pricing/capsules";
+import prismadb from "@/lib/prismadb";
 
 export interface PackOptionInput extends CapsulePackCosts {
   giftLabel: string | null;
@@ -34,4 +38,43 @@ export function parsePackOptions(value: unknown): PackOptionInput[] {
   const missing = Array.from(sizes).filter((size) => !seen.has(size));
   if (missing.length) throw ErrorFactory.InvalidRequest(`Falta configurar ${missing.length === 1 ? "el pack" : "los packs"} de ${missing.join(", ")}`);
   return options.sort((a, b) => a.packSize - b.packSize);
+}
+
+/**
+ * Guarda los packs de una edición solo si cada pack que cabe en la bolsa
+ * (impresa + propuesta) deja su P95 en el margen mínimo de la tienda o más.
+ * En la misma transacción escribe la escalera de precio del producto de la
+ * edición (`ProductPriceTier`, un peldaño por pack mayor al mínimo); el
+ * precio base del producto no se toca.
+ */
+export async function savePackOptions({ storeId, editionId, options: raw, proposed = [] }: { storeId: string; editionId: string; options: unknown; proposed?: PoolLine[] }) {
+  const options = parsePackOptions(raw);
+  const edition = await prismadb.capsuleEdition.findFirst({ where: { id: editionId, storeId }, select: { id: true, status: true, productId: true } });
+  if (!edition) throw ErrorFactory.NotFound("Edición no encontrada");
+  if (edition.status === CapsuleEditionStatus.LIVE || edition.status === CapsuleEditionStatus.CLOSED) {
+    throw ErrorFactory.Conflict("Los packs solo se cambian mientras la edición no está a la venta");
+  }
+  const check = await checkPoolMargins({ storeId, editionId, proposed, packOptions: options });
+  if (check.poolSize === 0) throw ErrorFactory.InvalidRequest("Elige la bolsa de papeles antes de guardar los packs: el margen se mide sobre ella");
+  if (check.minMarginPct === null) throw ErrorFactory.InvalidRequest("Configura el margen mínimo de la tienda en Configuración: es el piso del P95 de cada pack");
+  if (!check.ok) {
+    const failing = check.packs.filter((pack) => pack.passes === false).map((pack) => `${pack.packSize} (P95 ${pack.p95Pct} %)`);
+    throw new AppError(`Con esta bolsa no llegan al margen mínimo de ${check.minMarginPct} %: ${failing.length === 1 ? "el pack de" : "los packs de"} ${failing.join(", ")}`, 409, { check });
+  }
+
+  const [smallest] = [...CAPSULE_PACK_PRICES].sort((a, b) => a.packSize - b.packSize);
+  const tiers = CAPSULE_PACK_PRICES.filter((price) => price.packSize > smallest.packSize).map((price) => ({ minQuantity: price.packSize, unitPrice: capsuleUnitPrice(price) }));
+  await prismadb.$transaction(async (tx) => {
+    await tx.capsulePackOption.deleteMany({ where: { editionId } });
+    await tx.capsulePackOption.createMany({ data: options.map((option) => ({ editionId, ...option })) });
+    await tx.productPriceTier.deleteMany({ where: { productId: edition.productId, minQuantity: { notIn: tiers.map((tier) => tier.minQuantity) } } });
+    for (const tier of tiers) {
+      await tx.productPriceTier.upsert({
+        where: { productId_minQuantity: { productId: edition.productId, minQuantity: tier.minQuantity } },
+        update: { unitPrice: tier.unitPrice },
+        create: { storeId, productId: edition.productId, ...tier },
+      });
+    }
+  });
+  return { options, check };
 }
