@@ -193,7 +193,9 @@ describe("no file blobs leave the order APIs (MySQL)", () => {
     for (const leak of [ADDRESS, "guideUrl", "destinationData", "originData", "fullName", "phone", "email", "tracking\""]) {
       expect(text, leak).not.toContain(leak);
     }
-    expect(body.shipping).toMatchObject({ status: "InTransit", carrierName: "COORDINADORA", trackingCode: "970000" });
+    // Con el enlace solo: estado y transportadora, sin el número de guía (A2).
+    expect(body.shipping).toMatchObject({ status: "InTransit", carrierName: "COORDINADORA" });
+    expect(body.shipping).not.toHaveProperty("trackingCode");
     expect(body.events).toEqual([expect.objectContaining({ status: "En tránsito", location: "Bogotá" })]);
 
     // Un id de envío que no es de ese pedido no sirve, y el id de invitada ya no es llave.
@@ -203,7 +205,9 @@ describe("no file blobs leave the order APIs (MySQL)", () => {
     // El pedido de una clienta con cuenta solo se rastrea con su sesión.
     expect((await track({ orderId: accountOrder.id })).status).toBe(404);
     session.userId = CUSTOMER;
-    expect((await track({ orderId: accountOrder.id })).status).toBe(200);
+    const own = await track({ orderId: accountOrder.id });
+    expect(own.status).toBe(200);
+    expect((await own.json()).shipping).toMatchObject({ trackingCode: "970000" });
     expect((await track({ shippingId: accountOrder.shipping!.id })).status).toBe(200);
     session.userId = "user_someone_else";
     expect((await track({ shippingId: accountOrder.shipping!.id })).status).toBe(404);

@@ -65,11 +65,53 @@ const VIEWER_KEYS = [
   "repliedBy",
 ];
 
-export type PayloadRole = "owner" | "viewer";
+/**
+ * Quien abre el recibo solo con el enlace: sin dirección, empresa, documento,
+ * transacción, mensaje de regalo, notas, riesgo ni costos. Nombre, teléfono y
+ * correo llegan recortados (se comprueban por valor) y la guía sí llega.
+ */
+const LINK_HOLDER_KEYS = [
+  "address",
+  "address2",
+  "addressReference",
+  "neighborhood",
+  "company",
+  "documentId",
+  "transactionId",
+  "giftMessage",
+  "giftRecipientEmail",
+  "giftRecipientPhone",
+  "token",
+  "riskScore",
+  "riskReasons",
+  "adminNotes",
+  "internalNotes",
+  "createdBy",
+  "analyticsClientId",
+  "analyticsSessionId",
+  "acqPrice",
+  "transportationCost",
+  "supplierId",
+  "netProfit",
+  "totalProductCost",
+  "gatewayFee",
+  "shippingCost",
+  "guideUrl",
+  "destinationData",
+  "originData",
+];
+
+export type PayloadRole = "owner" | "viewer" | "linkHolder";
+
+const ROLE_KEYS: Record<PayloadRole, string[]> = {
+  owner: SECRET_KEYS,
+  viewer: [...SECRET_KEYS, ...VIEWER_KEYS],
+  linkHolder: [...SECRET_KEYS, ...LINK_HOLDER_KEYS],
+};
 
 /** Las rutas (a.b[0].c) donde aparece alguna clave prohibida para el rol. */
 export function findForbiddenKeys(payload: unknown, role: PayloadRole): string[] {
-  const forbidden = new Set(role === "viewer" ? [...SECRET_KEYS, ...VIEWER_KEYS] : SECRET_KEYS);
+  const forbidden = new Set(ROLE_KEYS[role]);
   const found: string[] = [];
   const walk = (value: unknown, path: string) => {
     if (Array.isArray(value)) {

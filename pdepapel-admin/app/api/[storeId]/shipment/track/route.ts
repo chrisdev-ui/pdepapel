@@ -6,6 +6,7 @@ import {
   TRACKING_EVENT_SELECT,
   TRACKING_SHIPPING_SELECT,
   canCustomerViewOrder,
+  isOrderOwnerSession,
 } from "@/lib/public-orders";
 import { applyShipmentStatus } from "@/lib/shipment-status-apply";
 import { mapEnvioClickStatus } from "@/lib/shipment-status";
@@ -25,7 +26,8 @@ export async function OPTIONS(req: Request) {
  * Rastreo de un envío. La tienda manda el `orderId` y la regla es la de la
  * página del pedido (`canCustomerViewOrder`); el panel manda el `shippingId`
  * con la sesión de la dueña. La respuesta trae solo lo que el rastreo
- * necesita: nunca la guía, la dirección ni los datos de la clienta.
+ * necesita: nunca la guía, la dirección ni los datos de la clienta; a quien
+ * no es la dueña ni la clienta con sesión, tampoco el número de guía.
  */
 export async function POST(
   req: Request,
@@ -131,8 +133,16 @@ export async function POST(
       }),
     ]);
 
+    // Quien rastrea solo con el enlace recibe los eventos, no el número de
+    // guía (el enlace de seguimiento lo lleva dentro).
+    const fullView = isStoreOwner || isOrderOwnerSession(shipping.order, userId);
+    const shippingBody =
+      fullView || !updatedShipping
+        ? updatedShipping
+        : (({ trackingCode: _code, trackingUrl: _url, ...rest }) => rest)(updatedShipping);
+
     return NextResponse.json(
-      { success: true, shipping: updatedShipping, events },
+      { success: true, shipping: shippingBody, events },
       { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } },
     );
   } catch (error: any) {

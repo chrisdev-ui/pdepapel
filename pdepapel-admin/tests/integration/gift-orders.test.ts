@@ -149,7 +149,9 @@ describe("gift orders with MySQL", () => {
     const response = await GET(get(), { params: { storeId: fixture.store.id, orderId: order.id } });
     expect(response.status).toBe(200);
     const publicOrder = await response.json();
-    expect(publicOrder).toMatchObject({ isGift: true, giftRecipientName: "Mariana López", giftMessage: "¡Feliz cumpleaños!", email: "luisa@prueba.test" });
+    // Con el enlace solo (A2): quien recibe recortado y sin el mensaje.
+    expect(publicOrder).toMatchObject({ isGift: true, giftRecipientName: "Mariana L.", email: "l***@prueba.test", masked: true });
+    expect(publicOrder).not.toHaveProperty("giftMessage");
     expect(INTERNAL_ORDER_FIELDS).toEqual(expect.arrayContaining(["giftRecipientEmail", "giftRecipientPhone"]));
     for (const field of INTERNAL_ORDER_FIELDS) expect(publicOrder, `campo interno «${field}»`).not.toHaveProperty(field);
   });

@@ -166,7 +166,9 @@ describe("public API exposure with MySQL", () => {
     expect(publicOrder).toMatchObject({
       id: order.id,
       orderNumber: order.orderNumber,
-      email: "clienta@example.com",
+      // Sin sesión dueña, recortado (A2).
+      email: "c***@example.com",
+      masked: true,
       total: 10000,
       createdByAdmin: true,
     });

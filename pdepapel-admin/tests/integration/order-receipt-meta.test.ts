@@ -66,12 +66,13 @@ const as = (who: "owner" | "viewer" | "anonymous" | "account" | "otherAccount") 
 const fetchOrder = async (key: string) => GET(new Request("http://admin.test/x"), { params: { storeId: fixture!.store.id, orderId: ids[key] } });
 
 describe("GET /orders/[orderId]: paymentResult y masked para todos (A1)", () => {
-  it("enlace sin sesión (invitada y panel): campos nuevos y los de siempre intactos", async () => {
+  it("enlace sin sesión (invitada y panel): campos nuevos", async () => {
     as("anonymous");
+    // Desde A2 el enlace sin sesión dueña recibe el recibo recortado (order-receipt-link-holder.test.ts).
     const paid = await (await fetchOrder("guestPaid")).json();
-    expect(paid).toMatchObject({ paymentResult: "approved", masked: false, fullName: "Clienta Ejemplo", phone: "3000000000", address: "Calle 1", payment: { transactionId: "TX-guestPaid" } });
+    expect(paid).toMatchObject({ paymentResult: "approved", masked: true, fullName: "Clienta E.", city: "Medellín" });
     expect((await (await fetchOrder("guestPending")).json()).paymentResult).toBe("pending");
-    expect(await (await fetchOrder("panelCancelled")).json()).toMatchObject({ paymentResult: "declined", masked: false, createdByAdmin: true });
+    expect(await (await fetchOrder("panelCancelled")).json()).toMatchObject({ paymentResult: "declined", masked: true, createdByAdmin: true });
   });
 
   it("clienta con sesión dueña: campos nuevos y su pedido completo", async () => {

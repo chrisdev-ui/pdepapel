@@ -181,12 +181,70 @@ export function getPaymentResult(status: OrderStatus): PaymentResult {
 
 /**
  * Campos del recibo que la tienda usa sin depender de datos de la clienta:
- * el resultado del pago y si la respuesta viene enmascarada (enlace sin
- * sesión dueña). Por ahora nunca se enmascara: la tienda primero aprende a
- * leerlos y después se activa.
+ * el resultado del pago y si la respuesta viene enmascarada.
  */
 export function receiptMeta(status: OrderStatus) {
   return { paymentResult: getPaymentResult(status), masked: false };
+}
+
+/** «Ana María Pérez» → «Ana P.»; un solo nombre queda tal cual. */
+export function maskPersonName(name: string | null | undefined): string {
+  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1].charAt(0).toLocaleUpperCase("es-CO")}.`;
+}
+
+/** Solo los últimos cuatro dígitos: «•••• 1234». */
+export function maskPhone(phone: string | null | undefined): string {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+  return digits.length >= 4 ? `•••• ${digits.slice(-4)}` : "••••";
+}
+
+/** Primera letra y dominio: «a***@gmail.com». */
+export function maskEmail(email: string | null | undefined): string {
+  const value = String(email ?? "").trim();
+  const at = value.lastIndexOf("@");
+  if (at < 1 || at === value.length - 1) return "";
+  return `${value.charAt(0)}***@${value.slice(at + 1)}`;
+}
+
+/**
+ * Lo que recibe quien abre el recibo solo con el enlace (no es la clienta
+ * con sesión dueña ni el panel): nombres, teléfono y correo recortados,
+ * dirección solo con ciudad y departamento, sin empresa, sin mensaje de regalo
+ * ni transacción. Guía, estado, productos, totales y fechas siguen. La forma
+ * es la del fixture de la tienda (pdepapel-store/tests/fixtures/receipt-orders.ts).
+ */
+export function maskOrderForLinkHolder(order: ReturnType<typeof toCustomerOrderResponse>) {
+  const {
+    address: _address,
+    address2: _address2,
+    neighborhood: _neighborhood,
+    addressReference: _addressReference,
+    company: _company,
+    giftMessage: _giftMessage,
+    payment,
+    giftCardPurchase,
+    ...kept
+  } = order;
+  return {
+    ...kept,
+    fullName: maskPersonName(order.fullName),
+    phone: maskPhone(order.phone),
+    email: maskEmail(order.email),
+    giftRecipientName: order.giftRecipientName ? maskPersonName(order.giftRecipientName) : order.giftRecipientName,
+    giftCardPurchase: giftCardPurchase
+      ? { ...giftCardPurchase, recipientName: giftCardPurchase.recipientName ? maskPersonName(giftCardPurchase.recipientName) : giftCardPurchase.recipientName }
+      : giftCardPurchase,
+    payment: payment ? { id: payment.id, method: payment.method } : payment,
+    masked: true,
+  };
+}
+
+/** La clienta con sesión dueña del pedido; cualquier otra persona con el enlace recibe el recibo recortado. */
+export function isOrderOwnerSession(order: { userId: string | null }, sessionUserId: string | null) {
+  return Boolean(sessionUserId && order.userId && order.userId === sessionUserId);
 }
 
 /** Campos de `Order` que nunca deben salir por una ruta pública (para pruebas). */

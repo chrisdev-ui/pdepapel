@@ -26,6 +26,8 @@ import {
   CUSTOMER_ORDER_SELECT,
   VIEWER_ORDER_DETAIL_SELECT,
   canCustomerViewOrder,
+  isOrderOwnerSession,
+  maskOrderForLinkHolder,
   receiptMeta,
   toCustomerOrderResponse,
 } from "@/lib/public-orders";
@@ -90,7 +92,8 @@ export async function OPTIONS(req: Request) {
  * WhatsApp); un pedido de una clienta con cuenta solo se entrega a su sesión
  * o a la dueña, y a cualquier otra persona se le responde 404 como si no
  * existiera. La respuesta de clienta es el `select` público: nunca el token,
- * las notas internas, los costos ni la utilidad. La dueña recibe la fila
+ * las notas internas, los costos ni la utilidad; quien solo tiene el enlace
+ * la recibe recortada (`maskOrderForLinkHolder`). La dueña recibe la fila
  * completa.
  */
 // Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
@@ -153,7 +156,8 @@ export async function GET(
     // (`createdBy`) sí viajan por enlace, como los de invitada.
     if (!canCustomerViewOrder(order, userId))
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-    return NextResponse.json(toCustomerOrderResponse(order), {
+    const receipt = toCustomerOrderResponse(order);
+    return NextResponse.json(isOrderOwnerSession(order, userId) ? receipt : maskOrderForLinkHolder(receipt), {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   } catch (error) {
