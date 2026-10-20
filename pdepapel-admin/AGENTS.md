@@ -694,6 +694,8 @@ Design: `docs/design/asistente-experto-paula.md` (§13 is what v1 built) and `do
 
 ### Boletín: subscribers, issues and campaigns
 
+**Every email uses the layout** (`emails/components.tsx`): customer mails use `Shell`; panel notices use `PanelShell`, and automatic alerts go through `emails/panel-notice.tsx` (`PanelNotice`: title, summary card, sections, action, button into the panel). Each send passes `react:` **and** a plain-text `text:` alternative; there are no text-only or HTML-only mails. `tests/unit/security/emails-use-layout.test.ts` fails on a literal `emails.send({...})` without `react`. The store's contact form mirrors the panel skin in `pdepapel-store/emails/` and also sends `text`.
+
 The newsletter has **one sender**, `lib/newsletter-campaigns.ts`. Everything that mails subscribers goes through its `sendInBatches` helper — Resend `batch.send` in batches of 100, `List-Unsubscribe` plus `List-Unsubscribe-Post: One-Click` headers on every message, and recipients read from `activeSubscribers()`, which only returns `ACTIVE` subscribers that hold an `unsubscribeTokenHash`. **Never add a second sender**: a path that skips these headers or that consent filter breaks one-click unsubscribe and the double opt-in guarantee.
 
 - **Models.** `NewsletterSubscriber` is unchanged and still owns consent. Added alongside it: `NewsletterIssue` (the magazine, unique on `[storeId, slug]`), `NewsletterIssuePage` (one image per page, ordered by `position`), and `NewsletterCampaignSend` (the send ledger). `NewsletterIssueStatus` is `DRAFT | SENT`.
