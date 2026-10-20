@@ -5,11 +5,13 @@ import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
+import { PanelNotice } from "@/emails/panel-notice";
 
 /**
  * Correos de revisión de inventario (lib/stock-review.ts los agenda). Aparte
  * para que el inventario no cargue correo, Redis ni el entorno al importarse.
  */
+const PANEL_ORIGIN = "https://admin.papeleriapdepapel.com";
 const ALERT_TTL_SECONDS = 60 * 60 * 24 * 14;
 /** Esperas antes de mirar si la transacción ya se confirmó (ms). */
 const COMMIT_WAITS = [1_500, 3_000, 6_000];
@@ -26,13 +28,13 @@ async function claimAlert(key: string): Promise<boolean> {
   }
 }
 
-async function send(storeId: string | undefined, subject: string, text: string): Promise<boolean> {
+async function send(storeId: string | undefined, subject: string, text: string, react: React.ReactElement): Promise<boolean> {
   const to = await getAdminNotificationRecipients(storeId);
   if (to.length === 0) {
     console.warn("[STOCK_REVIEW] Sin correos para avisos en Configuración; no se avisa.");
     return false;
   }
-  await resend.emails.send({ from: "Papelería P de Papel <orders@papeleriapdepapel.com>", to, subject, text });
+  await resend.emails.send({ from: "Papelería P de Papel <orders@papeleriapdepapel.com>", to, subject, text, react });
   return true;
 }
 
@@ -45,13 +47,24 @@ export async function notifyStockShortfall(storeId: string, orderId: string, wai
     });
     if (issues.length === 0) continue;
     if (!(await claimAlert(`alert:stock-shortfall:${orderId}`))) return false;
-    const lines = issues.map((issue) => `• ${issue.productName}: faltan ${issue.quantity}`).join("\n");
+    const rows = issues.map((issue) => `${issue.productName}: faltan ${issue.quantity}`);
+    const action =
+      "No se creó la guía de envío automáticamente. Abre el pedido en Pedidos: repón o cambia el producto con la clienta, o devuélvele el dinero. " +
+      "La incidencia de inventario queda abierta en el pedido hasta que la resuelvas.";
     return send(
       storeId,
       `[Revisar] Pedido ${issues[0].orderNumber} pagado sin stock suficiente`,
-      `El pedido ${issues[0].orderNumber} se pagó, pero no había unidades para:\n${lines}\n\n` +
-        "No se creó la guía de envío automáticamente. Abre el pedido en Pedidos: repón o cambia el producto con la clienta, o devuélvele el dinero. " +
-        "La incidencia de inventario queda abierta en el pedido hasta que la resuelvas.",
+      `El pedido ${issues[0].orderNumber} se pagó, pero no había unidades para:\n${rows.map((row) => `• ${row}`).join("\n")}\n\n${action}`,
+      PanelNotice({
+        preview: `El pedido ${issues[0].orderNumber} se pagó sin stock suficiente`,
+        label: "Panel · Inventario",
+        title: "Pedido pagado sin stock",
+        meta: `Pedido ${issues[0].orderNumber}`,
+        summary: `El pedido ${issues[0].orderNumber} se pagó, pero no había unidades para todo lo que pidió.`,
+        sections: [{ label: "Lo que falta", lines: rows }],
+        action,
+        cta: { href: `${PANEL_ORIGIN}/${storeId}/pedidos/${orderId}`, label: "Abrir el pedido" },
+      }) as React.ReactElement,
     );
   }
   return false;
@@ -73,14 +86,22 @@ export async function notifyUnbackedReservations(reservationIds: string[], waits
     const fresh = [];
     for (const hold of holds) if (await claimAlert(`alert:reservation-unbacked:${hold.id}`)) fresh.push(hold);
     if (fresh.length === 0) return false;
-    const lines = fresh
-      .flatMap((hold) => hold.items.map((item) => `• ${item.product.name} × ${item.quantity} (reserva de ${hold.customerName})`))
-      .join("\n");
+    const rows = fresh.flatMap((hold) => hold.items.map((item) => `${item.product.name} × ${item.quantity} (reserva de ${hold.customerName})`));
+    const action = "La venta no se deshace. Revisa en Reservas si repones, ofreces otro producto a la clienta o liberas la reserva.";
+    const subject = `[Revisar] ${fresh.length === 1 ? "Una reserva quedó" : `${fresh.length} reservas quedaron`} sin respaldo`;
     return send(
       fresh[0].storeId,
-      `[Revisar] ${fresh.length === 1 ? "Una reserva quedó" : `${fresh.length} reservas quedaron`} sin respaldo`,
-      `Una venta pagada se llevó las unidades que estas reservas guardaban:\n${lines}\n\n` +
-        "La venta no se deshace. Revisa en Reservas si repones, ofreces otro producto a la clienta o liberas la reserva.",
+      subject,
+      `Una venta pagada se llevó las unidades que estas reservas guardaban:\n${rows.map((row) => `• ${row}`).join("\n")}\n\n${action}`,
+      PanelNotice({
+        preview: subject.replace("[Revisar] ", ""),
+        label: "Panel · Reservas",
+        title: fresh.length === 1 ? "Una reserva quedó sin respaldo" : `${fresh.length} reservas quedaron sin respaldo`,
+        summary: "Una venta pagada se llevó las unidades que estas reservas guardaban.",
+        sections: [{ label: "Reservas afectadas", lines: rows }],
+        action,
+        cta: { href: `${PANEL_ORIGIN}/${fresh[0].storeId}/reservas`, label: "Abrir Reservas" },
+      }) as React.ReactElement,
     );
   }
   return false;

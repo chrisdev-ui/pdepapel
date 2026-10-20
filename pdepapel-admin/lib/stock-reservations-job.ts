@@ -9,6 +9,7 @@ import { HOLDING_RESERVATION_STATUSES, RESERVATION_LINES_SELECT, piecesForLines,
 import { resend } from "@/lib/resend";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { expireReservation, releaseReservation } from "@/lib/stock-reservations";
+import { PanelNotice, type PanelNoticeProps } from "@/emails/panel-notice";
 
 const BOGOTA_OFFSET_MS = -5 * 60 * 60 * 1000;
 const DIGEST_HOUR_BOGOTA = 8;
@@ -23,6 +24,8 @@ const endOfBogotaDay = (date: Date) => new Date(Date.parse(`${bogotaDate(date)}T
 const formatDay = (date: Date) =>
   new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "America/Bogota" }).format(date);
 
+const PANEL_ORIGIN = "https://admin.papeleriapdepapel.com";
+
 async function claimOnce(key: string): Promise<boolean> {
   if (env.NODE_ENV !== "production") return true;
   try {
@@ -34,11 +37,20 @@ async function claimOnce(key: string): Promise<boolean> {
 }
 
 /** Un correo que falla no detiene la corrida: los vencimientos ya se aplicaron y el registro del job debe quedar. */
-async function send(storeId: string, subject: string, text: string): Promise<boolean> {
+type ReservationNotice = Pick<PanelNoticeProps, "title" | "summary" | "sections" | "action"> & { tint?: PanelNoticeProps["tint"] };
+
+/** Todos los correos de reservas: plantilla del panel con el botón a Reservas, y el texto plano de siempre. */
+async function send(storeId: string, subject: string, text: string, notice: ReservationNotice): Promise<boolean> {
   try {
     const to = await getAdminNotificationRecipients(storeId);
     if (to.length === 0) return false;
-    await resend.emails.send({ from: "Papelería P de Papel <orders@papeleriapdepapel.com>", to, subject, text });
+    const react = PanelNotice({
+      preview: notice.title,
+      label: "Panel · Reservas",
+      cta: { href: `${PANEL_ORIGIN}/${storeId}/reservas`, label: "Abrir Reservas" },
+      ...notice,
+    }) as React.ReactElement;
+    await resend.emails.send({ from: "Papelería P de Papel <orders@papeleriapdepapel.com>", to, subject, text, react });
     return true;
   } catch (error) {
     console.error(`[STOCK_RESERVATIONS] No se pudo enviar «${subject}»:`, error);
@@ -105,10 +117,12 @@ export async function sweepStockReservations(options: { now?: Date; forceDigest?
     if (hold.expiresAt < now && (await claimOnce(`alert:reservation-converted-overdue:${hold.id}:${hold.expiresAt.getTime()}`))) overdue.push(hold);
   }
   for (const [storeId, rows] of Array.from(groupBy(overdue, (row) => row.storeId))) {
-    const lines = rows.map((row) => `• ${describeLines(row)} — ${row.customerName}, pedido ${row.order!.orderNumber}`).join("\n");
-    if (await send(storeId, `[Reservas] ${rows.length === 1 ? "Un pedido de reserva venció" : `${rows.length} pedidos de reservas vencieron`} sin pagar`,
-      `Estas reservas ya tienen pedido, pero se venció la fecha y el pedido sigue sin pagar:\n${lines}\n\n` +
-        "Las unidades siguen guardadas. Si la clienta no va a pagar, cancela el pedido y las unidades vuelven a la venta; si sí, dale más días a la reserva.")) {
+    const rowsText = rows.map((row) => `${describeLines(row)} — ${row.customerName}, pedido ${row.order!.orderNumber}`);
+    const action = "Las unidades siguen guardadas. Si la clienta no va a pagar, cancela el pedido y las unidades vuelven a la venta; si sí, dale más días a la reserva.";
+    const title = `${rows.length === 1 ? "Un pedido de reserva venció" : `${rows.length} pedidos de reservas vencieron`} sin pagar`;
+    if (await send(storeId, `[Reservas] ${title}`,
+      `Estas reservas ya tienen pedido, pero se venció la fecha y el pedido sigue sin pagar:\n${rowsText.map((row) => `• ${row}`).join("\n")}\n\n${action}`,
+      { title, summary: "Estas reservas ya tienen pedido, pero se venció la fecha y el pedido sigue sin pagar.", sections: [{ label: "Pedidos sin pagar", lines: rowsText }], action })) {
       result.convertedOverdueAlerts += rows.length;
     }
   }
@@ -179,9 +193,11 @@ export async function checkReservationDrift(now = new Date()): Promise<number> {
   const off = await driftedProducts(expected, firstPass.map((product) => product.id));
   for (const [storeId, rows] of Array.from(groupBy(off, (row) => row.storeId))) {
     if (!(await claimOnce(`alert:reservation-drift:${storeId}:${bogotaDate(now)}`))) continue;
-    const lines = rows.slice(0, 20).map((row) => `• ${row.name}: el contador dice ${row.reservedUnits}, las reservas y los papeles de cápsulas suman ${expected.get(row.id) ?? 0}`).join("\n");
-    await send(storeId, `[Revisar] Reservas descuadradas en ${rows.length} ${rows.length === 1 ? "producto" : "productos"}`,
-      `El número de unidades reservadas no coincide con las reservas vigentes:\n${lines}\n\nNo se corrigió nada automáticamente. Revisa las reservas de esos productos.`);
+    const rowsText = rows.slice(0, 20).map((row) => `${row.name}: el contador dice ${row.reservedUnits}, las reservas y los papeles de cápsulas suman ${expected.get(row.id) ?? 0}`);
+    const title = `Reservas descuadradas en ${rows.length} ${rows.length === 1 ? "producto" : "productos"}`;
+    await send(storeId, `[Revisar] ${title}`,
+      `El número de unidades reservadas no coincide con las reservas vigentes:\n${rowsText.map((row) => `• ${row}`).join("\n")}\n\nNo se corrigió nada automáticamente. Revisa las reservas de esos productos.`,
+      { title, summary: "El número de unidades reservadas no coincide con las reservas vigentes.", sections: [{ label: "Productos", lines: rowsText }], action: "No se corrigió nada automáticamente. Revisa las reservas de esos productos." });
   }
   return off.length;
 }
@@ -199,9 +215,15 @@ export async function sendDailyDigest(storeId: string, now = new Date()): Promis
     prismadb.stockReservation.findMany({ where: { storeId, status: StockReservationStatus.CONVERTED }, select }),
     prismadb.stockReservation.findMany({ where: { storeId, status: { in: HOLDING_RESERVATION_STATUSES }, unbackedAt: { not: null } }, select }),
   ]);
-  const text = renderDigest({ expiringToday, expiringTomorrow, expired, convertedUnpaid, unbacked });
+  const buckets = { expiringToday, expiringTomorrow, expired, convertedUnpaid, unbacked };
+  const text = renderDigest(buckets);
   if (!text) return false;
-  return send(storeId, `[Reservas] Resumen del ${formatDay(now)}`, text);
+  return send(storeId, `[Reservas] Resumen del ${formatDay(now)}`, text, {
+    tint: "slate",
+    title: `Resumen de reservas del ${formatDay(now)}`,
+    summary: "Lo que vence, lo que venció y lo que espera pago o respaldo.",
+    sections: digestSections(buckets).map(({ title, rows }) => ({ label: `${title} (${rows.length})`, lines: rows })),
+  });
 }
 
 const DIGEST_LINES_SELECT = {
@@ -224,14 +246,17 @@ export function describeLines(row: DigestLines): string {
   return lines.map((line) => `${line.product.name} × ${line.quantity}`).join(", ");
 }
 
-export function renderDigest(buckets: {
+type DigestBuckets = {
   expiringToday: DigestRow[];
   expiringTomorrow?: DigestRow[];
   expired: DigestRow[];
   convertedUnpaid: DigestRow[];
   unbacked: DigestRow[];
-}): string | null {
-  const line = (row: DigestRow) => `• ${describeLines(row)} — ${row.customerName}${row.order ? ` (pedido ${row.order.orderNumber})` : ""}`;
+};
+
+/** Las secciones del resumen que tienen algo, con una línea por reserva. */
+export function digestSections(buckets: DigestBuckets): { title: string; rows: string[] }[] {
+  const line = (row: DigestRow) => `${describeLines(row)} — ${row.customerName}${row.order ? ` (pedido ${row.order.orderNumber})` : ""}`;
   const sections = [
     ["Vencen hoy", buckets.expiringToday],
     ["Vencen mañana", buckets.expiringTomorrow ?? []],
@@ -239,7 +264,11 @@ export function renderDigest(buckets: {
     ["Convertidos en pedido y sin pagar", buckets.convertedUnpaid],
     ["Sin respaldo (una venta pagada se llevó las unidades)", buckets.unbacked],
   ] as const;
-  const filled = sections.filter(([, rows]) => rows.length > 0);
+  return sections.filter(([, rows]) => rows.length > 0).map(([title, rows]) => ({ title, rows: rows.map(line) }));
+}
+
+export function renderDigest(buckets: DigestBuckets): string | null {
+  const filled = digestSections(buckets);
   if (filled.length === 0) return null;
-  return filled.map(([title, rows]) => `${title} (${rows.length}):\n${rows.map(line).join("\n")}`).join("\n\n") + "\n\nTodo esto está en el panel, en Reservas.";
+  return filled.map(({ title, rows }) => `${title} (${rows.length}):\n${rows.map((row) => `• ${row}`).join("\n")}`).join("\n\n") + "\n\nTodo esto está en el panel, en Reservas.";
 }
