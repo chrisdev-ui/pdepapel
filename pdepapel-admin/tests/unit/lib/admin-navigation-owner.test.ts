@@ -37,8 +37,8 @@ describe("menú según la autorización explícita", () => {
     // «Sin costo» se esconde por lo mismo que «Invitaciones»: la vista existe
     // solo para encontrar productos sin precio de compra. «Empacar cápsulas»
     // muestra el costo de compra de cada producto que entra al lote, y
-    // «Ediciones de cápsulas» la banda y el costo de cada papel.
-    const ownerOnlyChildren = ["Invitaciones", "Sin costo", "Empacar cápsulas", "Ediciones de cápsulas"];
+    // «Ediciones de cápsulas» y «Sacar cápsulas» la banda y el costo de cada papel.
+    const ownerOnlyChildren = ["Invitaciones", "Sin costo", "Empacar cápsulas", "Ediciones de cápsulas", "Sacar cápsulas"];
     const withoutInvitations = allChildLabels().filter((label) => !ownerOnlyChildren.includes(label));
     expect(childLabels(false)).toEqual(withoutInvitations);
     expect(navGroupsFor(visibility(false)).map((group) => group.id)).toEqual(NAV_GROUPS.map((group) => group.id));
