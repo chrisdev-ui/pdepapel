@@ -35,7 +35,7 @@ beforeAll(async () => {
   editionProductId = product.id;
   const edition = await testPrisma.capsuleEdition.create({ data: { storeId: store, number: 1, name: "Escritorio", theme: "escritorio", productId: product.id, costBandMin: 3000, costBandMax: 5000 } });
   editionId = edition.id;
-  await testPrisma.capsulePackOption.create({ data: { editionId, packSize: 10, giftMaxCost: 2000, giftMaxItems: 1, giftLabel: "1 producto de regalo" } });
+  await testPrisma.capsulePackOption.create({ data: { editionId, packSize: 10, giftMaxCost: 2000, giftMaxItems: 1, giftLabel: "1 producto de regalo", boxReserveCost: 1000 } });
   await printCapsuleSlips({ storeId: store, editionId, kind: CapsuleSlipKind.SLIP, items: [{ productId: fixture.component.id, quantity: 2 }], userId: fixture.store.userId });
   const order = await testPrisma.order.create({
     data: { storeId: store, orderNumber: `CAP-V-${store.slice(0, 6)}`, status: OrderStatus.PAID, subtotal: 64500, total: 64500, totalProductCost: 20000, netProfit: 40000, payment: { create: { method: PaymentMethod.Bold, storeId: store } } },
@@ -60,7 +60,7 @@ describe("cápsulas para la cuenta de solo lectura (MySQL)", () => {
       include: { product: true, packOptions: true, slips: true, batches: { include: { items: true } }, orders: { include: { order: true } } },
     });
     // Sin limpiar, la prueba sí encuentra la plata de la casa: el detector mira lo que importa.
-    expect(findForbiddenKeys(raw, "viewer")).toEqual(expect.arrayContaining(["costBandMin", "product.acqPrice", "slips[0].unitCost", "orders[0].provisionalCost", "packOptions[0].giftMaxCost"]));
+    expect(findForbiddenKeys(raw, "viewer")).toEqual(expect.arrayContaining(["costBandMin", "product.acqPrice", "slips[0].unitCost", "orders[0].provisionalCost", "packOptions[0].giftMaxCost", "packOptions[0].boxReserveCost"]));
     const clean = scrubCapsulePayload(raw);
     assertNoForbiddenKeys(clean, "viewer");
     expect(clean).toMatchObject({ name: "Escritorio", slips: [expect.objectContaining({ code: expect.any(String) }), expect.anything()], packOptions: [{ packSize: 10, giftLabel: "1 producto de regalo" }] });

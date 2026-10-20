@@ -237,6 +237,7 @@ export const VIEWER_HIDDEN_CAPSULE_EDITION_FIELDS = [
   "unitCost",
   "totalCost",
   "giftMaxCost",
+  "boxReserveCost",
   "provisionalCost",
   "realCost",
   "costStatus",

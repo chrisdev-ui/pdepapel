@@ -36,6 +36,7 @@ const VIEWER_KEYS = [
   "unitCost",
   "totalCost",
   "giftMaxCost",
+  "boxReserveCost",
   "provisionalCost",
   "realCost",
   // Contacto de clientas (y de quien recibe un envío o un regalo).

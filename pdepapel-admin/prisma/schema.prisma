@@ -962,15 +962,19 @@ model CapsuleOrder {
 }
 
 /**
- * Los regalos de cada pack de una edición. El precio del pack vive en `ProductPriceTier`.
+ * Lo que cuesta cada pack de una edición fuera de sus papeles: el tope del
+ * regalo y la reserva de caja/empaque. Son cifras del negocio y viven aquí,
+ * no en el código. El precio del pack vive en `ProductPriceTier`.
  */
 model CapsulePackOption {
-  id           String  @id @default(uuid())
-  editionId    String
-  packSize     Int
-  giftMaxCost  Float   @default(0)
-  giftMaxItems Int     @default(0)
-  giftLabel    String? @db.VarChar(120)
+  id             String  @id @default(uuid())
+  editionId      String
+  packSize       Int
+  giftMaxCost    Float   @default(0)
+  giftMaxItems   Int     @default(0)
+  giftLabel      String? @db.VarChar(120)
+  /// Reserva de caja y empaque por pack (el modelo `Box` no tiene costo).
+  boxReserveCost Float   @default(0)
 
   edition CapsuleEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
 

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { gatewayFee } from "@/lib/gateway-fees";
 import {
-  CAPSULE_PACK_LADDER,
+  CAPSULE_PACK_PRICES,
   CAPSULE_SALES_ENABLED,
+  maxGiftCostOf,
+  packRungs,
   capsuleProvisionalCost,
   capsuleUnitPrice,
   maxPackFor,
@@ -14,13 +16,16 @@ import {
 } from "@/lib/pricing/capsules";
 import { PaymentMethod } from "@prisma/client";
 
-const rung = (size: number) => CAPSULE_PACK_LADDER.find((row) => row.packSize === size)!;
+// Costos de prueba por pack (números redondos; los reales viven en CapsulePackOption).
+const options = CAPSULE_PACK_PRICES.map((price) => ({ packSize: price.packSize, giftMaxCost: price.packSize >= 10 ? 2000 : 0, giftMaxItems: price.packSize >= 10 ? 1 : 0, boxReserveCost: 1000 }));
+const ladder = packRungs(options);
+const rung = (size: number) => ladder.find((row) => row.packSize === size)!;
 // Bolsa de prueba (no la real): 100 papeles de 3.000 a 4.980 en pasos de 20.
 const pool = Array.from({ length: 100 }, (_, index) => 3000 + index * 20);
 
 describe("escalera de packs (lib/pricing/capsules.ts)", () => {
   it("cada peldaño tiene un precio entero por cápsula, para que ProductPriceTier lo guarde exacto", () => {
-    for (const row of CAPSULE_PACK_LADDER) expect(Number.isInteger(capsuleUnitPrice(row))).toBe(true);
+    for (const row of CAPSULE_PACK_PRICES) expect(Number.isInteger(capsuleUnitPrice(row))).toBe(true);
     expect(capsuleUnitPrice(rung(15))).toBe(11990);
     expect(rung(15).total).toBe(179850);
   });
@@ -49,6 +54,14 @@ describe("escalera de packs (lib/pricing/capsules.ts)", () => {
     expect(() => capsuleProvisionalCost({ averageSlipCost: 0, packSize: 5, giftMaxCost: 0 })).toThrow();
   });
 
+  it("el código solo guarda precios públicos: el regalo y la caja de cada pack vienen de su configuración", () => {
+    for (const price of CAPSULE_PACK_PRICES) expect(Object.keys(price).sort()).toEqual(["packSize", "total"]);
+    expect(rung(10)).toMatchObject({ total: 124900, giftMaxCost: 2000, giftMaxItems: 1, boxReserveCost: 1000 });
+    expect(() => packRungs(options.filter((option) => option.packSize !== 15))).toThrow("Falta la configuración del pack de 15");
+    expect(maxGiftCostOf([{ giftMaxCost: 0 }, { giftMaxCost: 2500 }, { giftMaxCost: 1800 }])).toBe(2500);
+    expect(maxGiftCostOf([])).toBe(0);
+  });
+
   it("la venta arranca apagada", () => {
     expect(CAPSULE_SALES_ENABLED).toBe(false);
   });
@@ -63,7 +76,7 @@ describe("margen de un pack", () => {
     const row = rung(10);
     const result = packMargins({ pool, rung: row, runs: 20000, seed: 7 });
     const mean = pool.reduce((a, b) => a + b, 0) / pool.length;
-    const analytic = (row.total - row.packSize * mean - row.giftMaxCost - row.boxCost - result.fee) / row.total;
+    const analytic = (row.total - row.packSize * mean - row.giftMaxCost - row.boxReserveCost - result.fee) / row.total;
     expect(result.expected).toBeCloseTo(analytic, 3);
     expect(result.p95).toBeLessThan(result.expected);
     expect(result.worst).toBeLessThan(result.p95);
@@ -73,7 +86,7 @@ describe("margen de un pack", () => {
     const row = rung(5);
     const worstCost = 4980 + 4960 + 4940 + 4920 + 4900;
     const result = packMargins({ pool, rung: row, runs: 10 });
-    expect(result.worst).toBeCloseTo((row.total - worstCost - row.boxCost - result.fee) / row.total, 10);
+    expect(result.worst).toBeCloseTo((row.total - worstCost - row.boxReserveCost - result.fee) / row.total, 10);
   });
 
   it("con la misma semilla da el mismo resultado", () => {

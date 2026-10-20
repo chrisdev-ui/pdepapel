@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
 import { createInventoryMovement } from "@/lib/inventory";
-import { CAPSULE_GIFT_MAX_COST } from "@/lib/pricing/capsules";
+import { maxGiftCostOf } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
 import { adjustReservedUnits } from "@/lib/reservation-counters";
 
@@ -72,9 +72,14 @@ export async function printCapsuleSlips({ storeId, editionId, kind, items, userI
   }
 
   return prismadb.$transaction(async (tx) => {
-    const edition = await tx.capsuleEdition.findFirst({ where: { id: editionId, storeId } });
+    const edition = await tx.capsuleEdition.findFirst({ where: { id: editionId, storeId }, include: { packOptions: { select: { giftMaxCost: true } } } });
     if (!edition) throw ErrorFactory.NotFound("Edición no encontrada");
     if (edition.status === CapsuleEditionStatus.CLOSED) throw ErrorFactory.Conflict("La edición está cerrada");
+    // El tope de un regalo sale de los packs de la edición: un regalo que ningún pack puede llevar no se aparta.
+    const giftCap = maxGiftCostOf(edition.packOptions);
+    if (kind === CapsuleSlipKind.GIFT && giftCap <= 0) {
+      throw ErrorFactory.InvalidRequest("Configura el regalo de los packs de la edición antes de imprimir regalos");
+    }
     if (seen.has(edition.productId)) throw ErrorFactory.InvalidRequest("El producto de la edición no puede ser un papel de sí misma");
 
     const products = await tx.product.findMany({
@@ -95,7 +100,7 @@ export async function printCapsuleSlips({ storeId, editionId, kind, items, userI
       if (kind === CapsuleSlipKind.SLIP && (cost < edition.costBandMin || cost > edition.costBandMax)) {
         throw ErrorFactory.InvalidRequest(`«${product.name}» está fuera de la banda de costo de la edición`);
       }
-      if (kind === CapsuleSlipKind.GIFT && cost > CAPSULE_GIFT_MAX_COST) {
+      if (kind === CapsuleSlipKind.GIFT && cost > giftCap) {
         throw ErrorFactory.InvalidRequest(`«${product.name}» cuesta más de lo que puede costar un regalo`);
       }
       if (availableStock(product) < item.quantity) throw ErrorFactory.InsufficientStock(product.name, availableStock(product), item.quantity);

@@ -54,6 +54,8 @@ async function createFixture() {
   const edition = await testPrisma.capsuleEdition.create({
     data: { storeId: store.id, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3000, costBandMax: 6000 },
   });
+  // El tope del regalo sale de los packs de la edición (aquí 3.000); la otra edición no tiene packs con regalo.
+  await testPrisma.capsulePackOption.create({ data: { editionId: edition.id, packSize: 30, giftMaxCost: 3000, giftMaxItems: 2, boxReserveCost: 3000 } });
   const otherEdition = await testPrisma.capsuleEdition.create({
     data: { storeId: store.id, number: 2, name: "Otra", theme: "otra", productId: otherProduct.id, costBandMin: 3000, costBandMax: 6000 },
   });
@@ -67,6 +69,7 @@ async function deleteFixture(f: Fixture) {
   await testPrisma.capsuleOrder.deleteMany({ where: { storeId } });
   await testPrisma.capsuleBatchItem.deleteMany({ where: { batch: { storeId } } });
   await testPrisma.capsuleBatch.deleteMany({ where: { storeId } });
+  await testPrisma.capsulePackOption.deleteMany({ where: { edition: { storeId } } });
   await testPrisma.capsuleEdition.deleteMany({ where: { storeId } });
   await testPrisma.orderItem.deleteMany({ where: { order: { storeId } } });
   await testPrisma.paymentDetails.deleteMany({ where: { storeId } });
@@ -161,6 +164,18 @@ describe("papeles de cápsulas contra MySQL", () => {
     await expect(counters(f.borrador.id)).resolves.toMatchObject({ reservedUnits: 0 });
     await expect(testPrisma.capsuleSlip.count({ where: { storeId: f.store.id } })).resolves.toBe(0);
     await expect(testPrisma.capsuleBatch.count({ where: { storeId: f.store.id } })).resolves.toBe(0);
+  });
+
+  it("el tope de un regalo sale de los packs de la edición, no del código", async () => {
+    f = await createFixture();
+    // 3.500 pasa la banda de papeles pero no el regalo más caro que lleva algún pack (3.000).
+    await expect(print(f, [{ productId: f.borrador.id, quantity: 1 }], CapsuleSlipKind.GIFT)).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining("cuesta más de lo que puede costar un regalo") });
+    await expect(print(f, [{ productId: f.regalo.id, quantity: 1 }], CapsuleSlipKind.GIFT, f.otherEdition.id)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Configura el regalo de los packs de la edición antes de imprimir regalos",
+    });
+    await expect(counters(f.borrador.id)).resolves.toMatchObject({ reservedUnits: 0 });
+    await expect(counters(f.regalo.id)).resolves.toMatchObject({ reservedUnits: 0 });
   });
 
   it("los regalos se apartan en su bolsa sin subir el stock de la edición", async () => {

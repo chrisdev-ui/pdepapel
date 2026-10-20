@@ -18,41 +18,58 @@ export const CAPSULE_SALES_ENABLED = false;
 export const CAPSULE_MIN_PACK = 5;
 export const CAPSULE_MAX_PACK_SHARE = 0.25;
 
-/** El tope de costo más alto de un regalo (el del pack de 30, combinado). */
-export const CAPSULE_GIFT_MAX_COST = 6000;
-
-export interface CapsulePackRung {
+/** El precio público de un pack. Es entero por cápsula para que `ProductPriceTier` lo represente exacto. */
+export interface CapsulePackPrice {
   packSize: number;
-  /** Precio del pack. Es entero por cápsula para que `ProductPriceTier` lo represente exacto. */
   total: number;
-  /** Tope de costo de los regalos (productos quietos) y cuántos puede llevar. */
-  giftMaxCost: number;
-  giftMaxItems: number;
-  /** Reserva de caja/empaque por pack (no hay costo de caja en el código; supuesto de la validación). */
-  boxCost: number;
 }
 
-/** La escalera aprobada (2026-10-20). */
-export const CAPSULE_PACK_LADDER: readonly CapsulePackRung[] = [
-  { packSize: 5, total: 64500, giftMaxCost: 0, giftMaxItems: 0, boxCost: 1000 },
-  { packSize: 10, total: 124900, giftMaxCost: 2000, giftMaxItems: 1, boxCost: 1000 },
-  { packSize: 15, total: 179850, giftMaxCost: 3000, giftMaxItems: 1, boxCost: 2000 },
-  { packSize: 20, total: 234900, giftMaxCost: 4000, giftMaxItems: 1, boxCost: 2000 },
-  { packSize: 25, total: 289900, giftMaxCost: 4000, giftMaxItems: 1, boxCost: 3000 },
-  { packSize: 30, total: 339900, giftMaxCost: 6000, giftMaxItems: 2, boxCost: 3000 },
+/** Los precios aprobados (2026-10-20). Son públicos: la tienda los muestra. */
+export const CAPSULE_PACK_PRICES: readonly CapsulePackPrice[] = [
+  { packSize: 5, total: 64500 },
+  { packSize: 10, total: 124900 },
+  { packSize: 15, total: 179850 },
+  { packSize: 20, total: 234900 },
+  { packSize: 25, total: 289900 },
+  { packSize: 30, total: 339900 },
 ];
 
-export const capsuleUnitPrice = (rung: Pick<CapsulePackRung, "packSize" | "total">) => rung.total / rung.packSize;
+/** Lo que cuesta un pack fuera de sus papeles. Vive en `CapsulePackOption` (cifras del negocio, por edición), nunca en el código. */
+export interface CapsulePackCosts {
+  packSize: number;
+  giftMaxCost: number;
+  giftMaxItems: number;
+  boxReserveCost: number;
+}
+
+export type CapsulePackRung = CapsulePackPrice & CapsulePackCosts;
+
+/** Cada precio con los costos de su pack. Un pack sin su configuración no se puede calcular. */
+export function packRungs(options: readonly CapsulePackCosts[], prices: readonly CapsulePackPrice[] = CAPSULE_PACK_PRICES): CapsulePackRung[] {
+  const bySize = new Map(options.map((option) => [option.packSize, option]));
+  return [...prices]
+    .sort((a, b) => a.packSize - b.packSize)
+    .map((price) => {
+      const costs = bySize.get(price.packSize);
+      if (!costs) throw new Error(`Falta la configuración del pack de ${price.packSize} (regalo y caja).`);
+      return { ...price, giftMaxCost: costs.giftMaxCost, giftMaxItems: costs.giftMaxItems, boxReserveCost: costs.boxReserveCost };
+    });
+}
+
+/** El regalo más caro que puede llevar algún pack de la edición: el tope para imprimir su bolsa de regalos. */
+export const maxGiftCostOf = (options: readonly Pick<CapsulePackCosts, "giftMaxCost">[]) => options.reduce((max, option) => Math.max(max, option.giftMaxCost), 0);
+
+export const capsuleUnitPrice = (rung: Pick<CapsulePackPrice, "packSize" | "total">) => rung.total / rung.packSize;
 
 /** «Ahorras $X» frente a comprar el mismo número de cápsulas al precio del pack más pequeño. */
-export function packSaving(rung: Pick<CapsulePackRung, "packSize" | "total">, ladder: readonly CapsulePackRung[] = CAPSULE_PACK_LADDER): number {
-  const base = ladder[0];
+export function packSaving(rung: CapsulePackPrice, prices: readonly CapsulePackPrice[] = CAPSULE_PACK_PRICES): number {
+  const base = [...prices].sort((a, b) => a.packSize - b.packSize)[0];
   return Math.max(0, Math.round(capsuleUnitPrice(base) * rung.packSize - rung.total));
 }
 
 /** El pack más grande que se puede vender con los papeles que quedan: ninguno pasa del 25 %. `null` si ni el mínimo cabe. */
-export function maxPackFor(remainingSlips: number, ladder: readonly CapsulePackRung[] = CAPSULE_PACK_LADDER): number | null {
-  const allowed = ladder.filter((rung) => rung.packSize <= remainingSlips * CAPSULE_MAX_PACK_SHARE);
+export function maxPackFor(remainingSlips: number, prices: readonly CapsulePackPrice[] = CAPSULE_PACK_PRICES): number | null {
+  const allowed = prices.filter((price) => price.packSize <= remainingSlips * CAPSULE_MAX_PACK_SHARE).sort((a, b) => a.packSize - b.packSize);
   return allowed.length ? allowed[allowed.length - 1].packSize : null;
 }
 
@@ -109,7 +126,7 @@ export interface PackMarginInput {
 export function packMargins({ pool, rung, runs = 20000, seed = 1 }: PackMarginInput) {
   if (pool.length < rung.packSize) throw new Error("La bolsa tiene menos papeles que el pack.");
   const fee = gatewayFee(rung.total, PaymentMethod.Bold) ?? 0;
-  const fixed = rung.giftMaxCost + rung.boxCost + fee;
+  const fixed = rung.giftMaxCost + rung.boxReserveCost + fee;
   const marginOf = (slipCost: number) => (rung.total - slipCost - fixed) / rung.total;
 
   const random = seededRandom(seed);
