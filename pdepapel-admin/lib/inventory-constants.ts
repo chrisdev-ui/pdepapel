@@ -16,7 +16,10 @@ export type MovementType =
   | "IN_PERSON_SALE"
   | "VARIANT_CONVERSION"
   | "CAPSULE_PACKED"
-  | "CAPSULE_UNPACKED";
+  | "CAPSULE_UNPACKED"
+  | "CAPSULE_SLIPS_PRINTED"
+  | "CAPSULE_SLIP_DRAWN"
+  | "CAPSULE_SLIPS_VOIDED";
 
 /**
  * **El** catálogo de etiquetas por tipo de movimiento. Antes había dos (este y
@@ -48,6 +51,9 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   VARIANT_CONVERSION: "Conversión a variantes",
   CAPSULE_PACKED: "Empaque de cápsulas",
   CAPSULE_UNPACKED: "Cápsulas deshechas",
+  CAPSULE_SLIPS_PRINTED: "Papeles impresos",
+  CAPSULE_SLIP_DRAWN: "Sacado en cápsula",
+  CAPSULE_SLIPS_VOIDED: "Papeles anulados",
 };
 
 export const MANUAL_ADJUSTMENT_OPTIONS: {

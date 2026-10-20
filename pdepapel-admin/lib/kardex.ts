@@ -39,6 +39,9 @@ export const MOVEMENT_TONES: Record<InventoryMovementType, TintTone> = {
   VARIANT_CONVERSION: "lavender",
   CAPSULE_PACKED: "lavender",
   CAPSULE_UNPACKED: "lavender",
+  CAPSULE_SLIPS_PRINTED: "lavender",
+  CAPSULE_SLIP_DRAWN: "sky",
+  CAPSULE_SLIPS_VOIDED: "lavender",
 };
 
 /** Salidas por venta (se cuentan en valor absoluto). */
@@ -58,6 +61,7 @@ export const ORDER_LINKED_TYPES: ReadonlySet<InventoryMovementType> = new Set<In
   "ORDER_PLACED",
   "ORDER_CANCELLED",
   "IN_PERSON_SALE",
+  "CAPSULE_SLIP_DRAWN",
 ]);
 export const FAIR_LINKED_TYPES: ReadonlySet<InventoryMovementType> = new Set<InventoryMovementType>([
   "FESTIVAL_ALLOCATION",

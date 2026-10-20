@@ -103,6 +103,11 @@ model Store {
   newsletterCampaignSends         NewsletterCampaignSend[]        @relation("StoreToNewsletterCampaignSend")
   fairEvents                      FairEvent[]
   capsuleBatches                  CapsuleBatch[]
+  capsuleEditions                 CapsuleEdition[]
+  capsuleSlips                    CapsuleSlip[]
+  capsuleOrders                   CapsuleOrder[]
+  capsuleDailySlots               CapsuleDailySlot[]
+  capsuleDayCaps                  CapsuleDayCap[]
   productPriceTiers               ProductPriceTier[]
   marketplaceConnections          MarketplaceConnection[]
   marketplaceOAuthStates          MarketplaceOAuthState[]
@@ -500,6 +505,10 @@ model Product {
   capsuleBatches    CapsuleBatch[]
   /// Veces que este producto se consumió empacando cápsulas.
   capsuleBatchItems CapsuleBatchItem[]
+  /// La edición de cápsulas que este producto vende (el producto de la edición).
+  capsuleEdition    CapsuleEdition?
+  /// Papeles y regalos de ediciones que apartan unidades de este producto.
+  capsuleSlips      CapsuleSlip[]
   /// Escalera de precio por cantidad. Sin filas, el precio es `price` a secas.
   priceTiers        ProductPriceTier[]
 
@@ -757,8 +766,12 @@ model ProductKit {
  * tiempo y el margen de una venta vieja no debe moverse con él.
  */
 model CapsuleBatch {
-  id               String    @id @default(uuid())
+  id               String           @id @default(uuid())
   storeId          String
+  /// TRANSFER: el empaque de siempre (mueve stock). RESERVE: una impresión de papeles de una edición (aparta).
+  mode             CapsuleBatchMode @default(TRANSFER)
+  /// La edición de una impresión (modo RESERVE).
+  editionId        String?
   /// El producto cápsula que este lote produce. Un producto normal y corriente.
   capsuleProductId String
   /// Cápsulas producidas. El stock del producto cápsula sube en esta cantidad.
@@ -767,20 +780,237 @@ model CapsuleBatch {
   unitCost         Float
   /// Costo total del lote, congelado por la misma razón.
   totalCost        Float
-  notes            String?   @db.Text
+  notes            String?          @db.Text
   createdBy        String?
   /// Fecha en que se deshizo el lote; mientras sea null el lote está vigente.
   unpackedAt       DateTime?
   unpackedBy       String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   store          Store              @relation(fields: [storeId], references: [id])
   capsuleProduct Product            @relation(fields: [capsuleProductId], references: [id])
+  edition        CapsuleEdition?    @relation(fields: [editionId], references: [id])
   items          CapsuleBatchItem[]
+  slips          CapsuleSlip[]
 
   @@index([storeId, createdAt])
   @@index([capsuleProductId])
+  @@index([editionId])
+}
+
+enum CapsuleBatchMode {
+  TRANSFER
+  RESERVE
+}
+
+enum CapsuleEditionStatus {
+  /// Paula arma la lista; nada se vende.
+  DRAFT
+  /// Se ve con el enlace firmado de vista previa; no se vende.
+  PREVIEW
+  /// A la venta (además exige la bandera de lanzamiento).
+  LIVE
+  /// Cerrada: los papeles que quedaban se anularon.
+  CLOSED
+}
+
+enum CapsuleSlipKind {
+  /// Un papel: 1 cápsula = 1 producto.
+  SLIP
+  /// Un regalo del pack: producto quieto apartado en la bolsa de regalos de la edición.
+  GIFT
+}
+
+enum CapsuleSlipStatus {
+  /// Impreso y apartado en su producto.
+  PRINTED
+  /// Sacado para un pedido: el producto real ya bajó de stock.
+  DRAWN
+  /// Anulado: el apartado se liberó.
+  VOID
+}
+
+enum CapsuleCostStatus {
+  /// Costo al pagar: la media de los papeles de la edición + el tope del regalo.
+  PROVISIONAL
+  /// Costo de los papeles y regalos sacados de verdad.
+  REAL
+}
+
+enum CapsuleVideoConsent {
+  NONE
+  PRIVATE
+  PUBLIC_FIRST_NAME
+}
+
+enum CapsuleVideoStatus {
+  POR_ABRIR
+  GRABADO
+  ENVIADO
+  PUBLICADO
+}
+
+enum CapsuleDailySlotStatus {
+  HELD
+  CONFIRMED
+}
+
+/**
+ * Una edición de cápsulas sorpresa por papeles: cada cápsula es un papel con
+ * QR que corresponde a un producto real, apartado (`reservedUnits`) hasta que
+ * se saca para un pedido pagado. El producto que se vende en la tienda es
+ * `productId`; su stock son los papeles impresos que quedan sin vender.
+ */
+model CapsuleEdition {
+  id            String               @id @default(uuid())
+  storeId       String
+  number        Int
+  name          String               @db.VarChar(120)
+  theme         String               @db.VarChar(60)
+  /// El producto que se vende (precio, escalera, stock = papeles sin vender).
+  productId     String               @unique
+  status        CapsuleEditionStatus @default(DRAFT)
+  /// Banda de costo registrado de los papeles (todos equivalentes).
+  costBandMin   Float
+  costBandMax   Float
+  /// Pedidos de cápsulas por día de Bogotá (todos los canales cuentan).
+  dailyOrderCap Int                  @default(5)
+  /// Hora de Bogotá en que abren los cupos del día.
+  opensAtLocal  String               @default("08:00") @db.VarChar(5)
+  createdBy     String?
+  closedAt      DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  store       Store               @relation(fields: [storeId], references: [id])
+  product     Product             @relation(fields: [productId], references: [id])
+  batches     CapsuleBatch[]
+  slips       CapsuleSlip[]
+  orders      CapsuleOrder[]
+  packOptions CapsulePackOption[]
+
+  @@unique([storeId, number])
+  @@index([storeId, status])
+}
+
+/**
+ * Un papel (o un regalo) de una edición: un producto real, con costo congelado al imprimir.
+ */
+model CapsuleSlip {
+  id        String            @id @default(uuid())
+  storeId   String
+  editionId String
+  batchId   String
+  productId String
+  kind      CapsuleSlipKind   @default(SLIP)
+  code      String            @unique @db.VarChar(40)
+  /// `acqPrice` del producto al imprimir, congelado.
+  unitCost  Float
+  status    CapsuleSlipStatus @default(PRINTED)
+  orderId   String?
+  drawnAt   DateTime?
+  drawnBy   String?
+  voidedAt  DateTime?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  store   Store          @relation(fields: [storeId], references: [id])
+  edition CapsuleEdition @relation(fields: [editionId], references: [id])
+  batch   CapsuleBatch   @relation(fields: [batchId], references: [id])
+  product Product        @relation(fields: [productId], references: [id])
+  order   Order?         @relation(fields: [orderId], references: [id])
+
+  @@index([storeId])
+  @@index([editionId, kind, status])
+  @@index([productId, status])
+  @@index([batchId])
+  @@index([orderId])
+}
+
+/**
+ * Lo propio de un pedido de cápsulas: pack, regalo, costo provisional/real y el video.
+ */
+model CapsuleOrder {
+  id              String              @id @default(uuid())
+  storeId         String
+  orderId         String              @unique
+  editionId       String
+  packSize        Int
+  /// Tope de costo de los regalos del pack (0 = sin regalo) y cuántos productos puede llevar.
+  giftMaxCost     Float               @default(0)
+  giftMaxItems    Int                 @default(0)
+  /// Congelado al pagar: media de los papeles × pack + tope del regalo. Nunca 0.
+  provisionalCost Float?
+  /// Suma de los costos congelados de los papeles y regalos sacados.
+  realCost        Float?
+  costStatus      CapsuleCostStatus   @default(PROVISIONAL)
+  videoConsent    CapsuleVideoConsent @default(NONE)
+  videoStatus     CapsuleVideoStatus  @default(POR_ABRIR)
+  videoUrl        String?             @db.VarChar(500)
+  suggestedBox    String?             @db.VarChar(10)
+  drawCompletedAt DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  store   Store          @relation(fields: [storeId], references: [id])
+  order   Order          @relation(fields: [orderId], references: [id])
+  edition CapsuleEdition @relation(fields: [editionId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([editionId, videoStatus])
+}
+
+/**
+ * Los regalos de cada pack de una edición. El precio del pack vive en `ProductPriceTier`.
+ */
+model CapsulePackOption {
+  id           String  @id @default(uuid())
+  editionId    String
+  packSize     Int
+  giftMaxCost  Float   @default(0)
+  giftMaxItems Int     @default(0)
+  giftLabel    String? @db.VarChar(120)
+
+  edition CapsuleEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@unique([editionId, packSize])
+}
+
+/**
+ * Un cupo del día (Bogotá) tomado por un pedido de cápsulas. El índice único impide vender de más.
+ */
+model CapsuleDailySlot {
+  id         String                 @id @default(uuid())
+  storeId    String
+  bogotaDate DateTime               @db.Date
+  slotNumber Int
+  orderId    String                 @unique
+  status     CapsuleDailySlotStatus @default(HELD)
+  expiresAt  DateTime?
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, bogotaDate, slotNumber])
+  @@index([status, expiresAt])
+}
+
+/**
+ * La dueña sube (o baja) el tope de un día concreto.
+ */
+model CapsuleDayCap {
+  id         String   @id @default(uuid())
+  storeId    String
+  bogotaDate DateTime @db.Date
+  cap        Int
+  setBy      String?
+  createdAt  DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, bogotaDate])
 }
 
 model CapsuleBatchItem {
@@ -986,6 +1216,8 @@ model Order {
   fairEvent         FairEvent?            @relation(fields: [fairEventId], references: [id])
   inventoryIssues   OrderInventoryIssue[]
   stockReservations StockReservation[]
+  capsuleOrder      CapsuleOrder?
+  capsuleSlips      CapsuleSlip[]
 
   @@index([storeId])
   @@index([couponId])
@@ -2045,6 +2277,9 @@ enum InventoryMovementType {
   VARIANT_CONVERSION // Reparto del stock de un producto suelto entre sus variantes nuevas
   CAPSULE_PACKED // Empaque de cápsulas: salida en los productos de origen, entrada en la cápsula
   CAPSULE_UNPACKED // Deshacer un empaque: la cápsula vuelve a ser sus productos de origen
+  CAPSULE_SLIPS_PRINTED // Impresión de papeles: entrada en el producto de la edición (los productos reales solo se apartan)
+  CAPSULE_SLIP_DRAWN // Un papel o regalo sacado para un pedido pagado: salida en el producto real
+  CAPSULE_SLIPS_VOIDED // Papeles anulados: salida en el producto de la edición
 }
 
 enum FairEventStatus {
