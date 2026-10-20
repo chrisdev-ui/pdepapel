@@ -144,6 +144,7 @@ describe("customer analytics tracking", () => {
 
     expect(window.gtag).toHaveBeenCalledWith("event", "page_view", {
       page_location: window.location.href,
+      page_referrer: "",
       page_path: "/producto/agenda",
       page_title: "Agenda",
     });
@@ -156,7 +157,8 @@ describe("customer analytics tracking", () => {
     expect(
       document.querySelectorAll("#pdepapel-google-analytics"),
     ).toHaveLength(1);
-    expect(window.dataLayer).toHaveLength(8);
+    // js, consent default, consent update, set (contexto de la página), config, por cada llamada.
+    expect(window.dataLayer).toHaveLength(10);
   });
 
   it("ignores an empty measurement id", () => {

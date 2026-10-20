@@ -1,6 +1,5 @@
 import { esES } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Analytics } from "@vercel/analytics/react";
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
@@ -14,6 +13,7 @@ import { ClarityPrivacyBoundary } from "@/components/clarity-privacy-boundary";
 import { Footer } from "@/components/footer";
 import Navbar from "@/components/navbar";
 import { Spooky } from "@/components/spooky";
+import { VercelAnalytics } from "@/components/vercel-analytics";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 import { WishlistSyncProvider } from "@/components/wishlist-sync-provider";
 import { buildFeaturedByType, buildFeaturedSubcategories, buildNavigationTypes } from "@/lib/catalog-navigation";
@@ -101,7 +101,7 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
           clarityProjectId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID}
           clarityEnabled={process.env.NEXT_PUBLIC_CLARITY_ENABLED === "true"}
         />
-        <Analytics />
+        <VercelAnalytics />
         <WebVitalsReporter />
       </ReactQueryProvider>
     </ClerkProvider>

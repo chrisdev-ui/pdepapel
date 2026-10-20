@@ -42,7 +42,8 @@ export async function generateMetadata({
     };
   }
   return {
-    title: `Pedido #${order.orderNumber}`,
+    // Sin número de pedido: el título llega a la analítica y al historial del navegador.
+    title: "Tu pedido",
     description:
       "Estado, envío, guía y recibo de tu pedido en Papelería P de Papel.",
     alternates: {

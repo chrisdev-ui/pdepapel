@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { ANALYTICS_CONSENT_CHANGED_EVENT, hasAnalyticsConsent } from "@/lib/analytics-consent";
 import { createClsTracker, type LayoutShiftEntry } from "@/lib/cls-metric";
+import { redactAnalyticsPath } from "@/lib/analytics-redaction";
 import { trackGoogleEvent } from "@/lib/customer-analytics";
 import { inpEventParams, isBackForwardRestore, lcpEventParams, WEB_VITALS_INP_EVENT, WEB_VITALS_LCP_EVENT } from "@/lib/web-vitals-events";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
@@ -90,7 +91,7 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
         cls_value: round(value),
         cls_largest_value: round(largestValue),
         cls_largest_target: largestTarget || "(ninguno)",
-        cls_page: pathRef.current ?? "",
+        cls_page: redactAnalyticsPath(pathRef.current ?? ""),
       });
     });
 
@@ -137,7 +138,7 @@ export function WebVitalsReporter({ sampleRate = WEB_VITALS_SAMPLE_RATE }: { sam
   // Sin permiso al cargar, se espera a que la persona lo dé en el aviso: el
   // LCP y el INP de esta carga siguen en el búfer del navegador.
   useEffect(() => {
-    const page = pathRef.current ?? "";
+    const page = redactAnalyticsPath(pathRef.current ?? "");
     const start = () =>
       safely(() => {
         if (vitalsStartedRef.current || !hasAnalyticsConsent()) return;

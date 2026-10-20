@@ -1,6 +1,7 @@
 import { track as trackVercelEvent } from "@vercel/analytics/react";
 
 import { hasAnalyticsConsent } from "@/lib/analytics-consent";
+import { redactAnalyticsPath, redactAnalyticsTitle, redactAnalyticsUrl } from "@/lib/analytics-redaction";
 import { brandDataName } from "@/lib/product-brand";
 import { trackMicrosoftClarityEvent } from "@/lib/microsoft-clarity";
 import { getStructuredProductSize } from "@/lib/product-options";
@@ -58,6 +59,31 @@ function sendOrQueueGoogleEvent(
   if (pendingGoogleEvents.length < MAX_QUEUED_EVENTS) {
     pendingGoogleEvents.push({ name, parameters });
   }
+}
+
+/**
+ * gtag pone `page_location`, `page_referrer` y `page_title` en CADA evento,
+ * no solo en `page_view`. Se fijan con `set` ya limpios (lib/analytics-redaction.ts)
+ * para que ningún evento lleve el id de un recibo.
+ */
+interface PageContext {
+  page_location: string;
+  page_referrer: string;
+  page_title: string;
+}
+
+function currentPageContext(): PageContext | null {
+  if (!window.location?.href) return null;
+  const pathname = window.location.pathname;
+  return {
+    page_location: redactAnalyticsUrl(window.location.href),
+    page_referrer: document.referrer ? redactAnalyticsUrl(document.referrer) : "",
+    page_title: redactAnalyticsTitle(pathname, document.title ?? ""),
+  };
+}
+
+function applyPageContext(context: PageContext | null): void {
+  if (context) window.gtag?.("set", context);
 }
 
 function flushGoogleEvents(): void {
@@ -150,6 +176,7 @@ export function enableGoogleAnalytics(measurementId: string): void {
   window.gtag?.("consent", "update", {
     analytics_storage: "granted",
   });
+  applyPageContext(currentPageContext());
   window.gtag?.("config", measurementId, {
     anonymize_ip: true,
     send_page_view: false,
@@ -221,11 +248,10 @@ export function trackGoogleEvent(
 export function trackGooglePageView(path: string, title: string): void {
   if (typeof window === "undefined" || !hasAnalyticsConsent()) return;
 
-  sendOrQueueGoogleEvent("page_view", {
-    page_location: window.location.href,
-    page_path: path,
-    page_title: title,
-  });
+  const context = currentPageContext();
+  const pageView = { ...context, page_title: redactAnalyticsTitle(path, title) } as PageContext;
+  applyPageContext(context ? pageView : null);
+  sendOrQueueGoogleEvent("page_view", { ...pageView, page_path: redactAnalyticsPath(path) });
 }
 
 export const GA_CLIENT_ID_WAIT_MS = 2_000;
