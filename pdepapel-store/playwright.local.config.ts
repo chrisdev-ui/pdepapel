@@ -2,8 +2,6 @@ import { defineConfig, devices } from "@playwright/test";
 
 import {
   LOCAL_ADMIN_PORT,
-  LOCAL_BOLD_IDENTITY_KEY,
-  LOCAL_BOLD_SECRET_KEY,
   LOCAL_STORE_PORT,
   SEEDED_STORE_ID,
   localApiUrl,
@@ -35,19 +33,16 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npm run dev -- -p ${LOCAL_ADMIN_PORT}`,
+      // El mismo servidor aislado de las e2e de la administración: claves de
+      // prueba salvo Clerk de desarrollo y sin red salvo la máquina local y
+      // Clerk. Con `npm run dev` usaba el `.env` real (Upstash de producción).
+      // Siempre escucha en 3101 (LOCAL_ADMIN_PORT).
+      command: "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs node scripts/e2e-dev-server.mjs",
       cwd: "../pdepapel-admin",
       url: `http://localhost:${LOCAL_ADMIN_PORT}/images/placeholder_1.png`,
-      reuseExistingServer: !process.env.CI,
+      // Nunca un servidor que ya estaba: podría ser un `npm run dev` con las claves reales.
+      reuseExistingServer: false,
       timeout: 180_000,
-      env: {
-        // `process.loadEnvFile` no pisa lo que ya existe, así que inyectar aquí
-        // es lo único que gana sobre el `.env` de la administración: sin esto
-        // la firma se verificaría con la clave real de Bold.
-        BOLD_ENVIRONMENT: "test",
-        BOLD_SECRET_KEY: LOCAL_BOLD_SECRET_KEY,
-        NEXT_PUBLIC_BOLD_IDENTITY_KEY: LOCAL_BOLD_IDENTITY_KEY,
-      },
     },
     {
       // La tienda se sirve compilada, no en `dev`: en dev Next compila cada

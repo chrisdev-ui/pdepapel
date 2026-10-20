@@ -35,7 +35,9 @@ export const LOCAL_STORE_PORT = 3100;
  * firmar un pago, y esa defensa se prueba tal cual está.
  */
 export const LOCAL_BOLD_SECRET_KEY =
-  process.env.E2E_BOLD_SECRET_KEY || "e2e-local-bold-signing-key";
+  // El servidor aislado de la administración firma con el valor de prueba de
+  // `TEST_ENV_STUBS` (pdepapel-admin/scripts/lib/test-isolation.mjs).
+  process.env.E2E_BOLD_SECRET_KEY || "test-stub-bold-secret";
 
 export const LOCAL_BOLD_IDENTITY_KEY =
   process.env.E2E_BOLD_IDENTITY_KEY || "e2e-local-bold-identity";
