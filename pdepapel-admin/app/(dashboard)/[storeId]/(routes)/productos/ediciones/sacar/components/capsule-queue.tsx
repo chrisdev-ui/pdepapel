@@ -12,7 +12,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import type { CapsuleQueueRow } from "@/lib/capsule-orders";
+import type { CapsuleQueueRow, PendingTransferCapsuleRow } from "@/lib/capsule-orders";
 import { currencyFormatter } from "@/lib/utils";
 
 const ContinuousBarcodeScanner = dynamic(() => import("@/components/ui/continuous-barcode-scanner").then((mod) => mod.ContinuousBarcodeScanner), { ssr: false });
@@ -49,8 +49,10 @@ export function CapsuleQueue({
   boxes,
   initialOrderId = null,
   day: initialDay = null,
+  pendingTransfers = [],
 }: {
   orders: CapsuleQueueRow[];
+  pendingTransfers?: PendingTransferCapsuleRow[];
   boxes: { name: string; type: string; isDefault: boolean }[];
   initialOrderId?: string | null;
   day?: DayStatus | null;
@@ -176,6 +178,30 @@ export function CapsuleQueue({
             </Button>
           ))}
         </div>
+        {tab === "sacar" && pendingTransfers.length > 0 && (
+          <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3" data-testid="transferencias-por-verificar">
+            <p className="text-sm font-medium">Transferencias por verificar ({pendingTransfers.length})</p>
+            <p className="text-xs text-muted-foreground">No se sacan hasta marcarlas pagadas en el pedido. Su cupo queda apartado mientras tanto.</p>
+            <ul className="flex flex-col gap-2">
+              {pendingTransfers.map((row) => (
+                <li key={row.orderId}>
+                  <a
+                    href={`/${params.storeId}/pedidos/${row.orderId}`}
+                    className="flex min-h-[44px] flex-col gap-1 rounded-lg border p-3 text-sm transition-colors hover:bg-muted/50"
+                  >
+                    <span className="font-medium">
+                      {row.firstName} · pack de {row.packSize}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {row.orderNumber} · {row.hasProof ? "comprobante recibido" : "sin comprobante"} ·{" "}
+                      {row.holdUntil ? `cupo apartado hasta ${new Date(row.holdUntil).toLocaleString("es-CO", { timeZone: "America/Bogota", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : "el apartado venció: al pagarse toma un cupo de más"}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {list.length === 0 ? (
           <p className="text-sm text-muted-foreground">{tab === "sacar" ? "No hay pedidos por sacar." : "Todavía no hay pedidos sacados."}</p>
         ) : (

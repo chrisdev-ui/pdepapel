@@ -479,7 +479,8 @@ async function createOrder(
         quantity: line.quantity,
       }));
       const storeSettings = await prismadb.store.findUnique({ where: { id: params.storeId }, select: { freeShippingThreshold: true } });
-      return { pricedItems, freeShipping: qualifiesForFreeShipping(calculateOrderTotals(pricedItems).subtotal, storeSettings?.freeShippingThreshold) };
+      // Un pack de cápsulas no tiene envío gratis (decisión P1).
+      return { pricedItems, freeShipping: !capsulePlan && qualifiesForFreeShipping(calculateOrderTotals(pricedItems).subtotal, storeSettings?.freeShippingThreshold) };
     };
     if (storeEnvioClick && !storeCodWithFee) {
       const rateId = Number(envioClickIdRate || shippingFields.idRate) || 0;

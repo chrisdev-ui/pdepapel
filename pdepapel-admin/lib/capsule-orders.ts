@@ -1,4 +1,4 @@
-import { CapsuleSlipKind, CapsuleSlipStatus, CapsuleVideoConsent, CapsuleVideoStatus, OrderStatus } from "@prisma/client";
+import { CapsuleSlipKind, CapsuleSlipStatus, CapsuleVideoConsent, CapsuleVideoStatus, OrderStatus, PaymentMethod } from "@prisma/client";
 
 import { ErrorFactory } from "@/lib/api-errors";
 import { suggestCapsuleBox } from "@/lib/capsule-box";
@@ -105,6 +105,43 @@ export async function completeCapsuleDraw({ storeId, orderId }: { storeId: strin
   if (guideQueued) createGuideInBackground({ orderId, storeId, source: "sorteo de cápsulas cerrado" });
   return { ...result, box, guideQueued };
 }
+
+/**
+ * Pedidos de cápsulas por transferencia que esperan que Paula verifique el
+ * pago: van aparte de «Por sacar» (no se saca nada hasta que el pedido esté
+ * pagado) y muestran hasta cuándo dura apartado su cupo y si ya llegó el
+ * comprobante.
+ */
+export async function listPendingTransferCapsuleOrders(storeId: string) {
+  const rows = await prismadb.capsuleOrder.findMany({
+    where: { storeId, order: { status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] }, payment: { method: PaymentMethod.BankTransfer } } },
+    select: {
+      orderId: true,
+      packSize: true,
+      edition: { select: { number: true, name: true } },
+      order: { select: { orderNumber: true, fullName: true, createdAt: true, payment: { select: { proofKey: true } } } },
+    },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+  });
+  const slots = rows.length
+    ? await prismadb.capsuleDailySlot.findMany({ where: { orderId: { in: rows.map((row) => row.orderId) } }, select: { orderId: true, expiresAt: true } })
+    : [];
+  const holdUntil = new Map(slots.map((slot) => [slot.orderId, slot.expiresAt]));
+  return rows.map((row) => ({
+    orderId: row.orderId,
+    orderNumber: row.order.orderNumber,
+    firstName: firstName(row.order.fullName),
+    packSize: row.packSize,
+    edition: row.edition,
+    createdAt: row.order.createdAt,
+    hasProof: Boolean(row.order.payment?.proofKey),
+    /** null: el apartado venció y el cupo se liberó (al pagar toma uno de más). */
+    holdUntil: holdUntil.get(row.orderId) ?? null,
+  }));
+}
+
+export type PendingTransferCapsuleRow = Awaited<ReturnType<typeof listPendingTransferCapsuleOrders>>[number];
 
 const VIDEO_FLOW: CapsuleVideoStatus[] = [CapsuleVideoStatus.POR_ABRIR, CapsuleVideoStatus.GRABADO, CapsuleVideoStatus.ENVIADO, CapsuleVideoStatus.PUBLICADO];
 

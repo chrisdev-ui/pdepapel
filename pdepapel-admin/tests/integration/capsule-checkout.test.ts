@@ -100,7 +100,7 @@ describe("checkout de un pack de cápsulas", () => {
     await expect(testPrisma.order.findUniqueOrThrow({ where: { id: await orderIdOf(response) } })).resolves.toMatchObject({ subtotal: 124900, total: 129900 });
   });
 
-  it("se niega sin la bandera, con la edición fuera de venta, contra entrega o transferencia, con cupón, mezclado o con un pack que no existe o no cabe", async () => {
+  it("se niega sin la bandera, con la edición fuera de venta, contra entrega u otro medio, con cupón, mezclado o con un pack que no existe o no cabe", async () => {
     f = await createInventoryFixture();
     const { editionProduct, edition } = await createLiveCapsuleEdition(f);
     const expectRefused = async (route: "checkout" | "orders", body: Record<string, unknown>, status: number, text: RegExp) => {
@@ -112,8 +112,8 @@ describe("checkout de un pack de cápsulas", () => {
     await expectRefused("checkout", capsuleCheckoutBody(editionProduct.id, 7), 400, /Elige un pack de 5, 10, 15, 20, 25, 30 cápsulas/);
     await expectRefused("checkout", capsuleCheckoutBody(editionProduct.id, 15), 409, /el pack más grande disponible es de 10/);
     await expectRefused("checkout", capsuleCheckoutBody(editionProduct.id, 5, { payment: { method: "COD" } }), 400, /no hay pago contra entrega/);
-    await expectRefused("checkout", capsuleCheckoutBody(editionProduct.id, 5, { payment: { method: "BankTransfer" } }), 400, /se pagan en línea/);
-    await expectRefused("orders", capsuleCheckoutBody(editionProduct.id, 5, { payment: { method: "BankTransfer" } }), 400, /se pagan en línea/);
+    await expectRefused("orders", capsuleCheckoutBody(editionProduct.id, 5, { payment: { method: "COD" } }), 400, /no hay pago contra entrega/);
+    await expectRefused("orders", capsuleCheckoutBody(editionProduct.id, 5, { payment: { method: "GiftCard" } }), 400, /en línea o por transferencia/);
     await expectRefused("checkout", capsuleCheckoutBody(editionProduct.id, 5, { couponCode: "BIENVENIDA" }), 409, /cupones y descuentos no aplican/);
     await expectRefused(
       "checkout",

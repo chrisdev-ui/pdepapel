@@ -12,14 +12,27 @@ import { CAPSULE_MIN_PACK, CAPSULE_PACK_PRICES, capsuleSalesEnabled, capsuleUnit
  *
  * Reglas del MVP: el pack va solo en su pedido; sin cupones ni descuentos; el
  * precio es el del peldaño (nunca una oferta); la edición debe estar a la venta
- * con la bandera; desde la tienda se paga en línea (Bold o Wompi), porque el
- * sorteo exige el pedido pagado y la guía exige el sorteo cerrado.
+ * con la bandera; desde la tienda se paga en línea (Bold o Wompi) o por
+ * transferencia, nunca contra entrega: el sorteo exige el pedido pagado y la
+ * guía exige el sorteo cerrado.
  */
 
 export type CapsuleChannel = "STORE" | "PANEL";
 
-/** Ventana de pago: lo que dura apartado un cupo del día sin pagar. */
+/** Ventana de pago en línea: lo que dura apartado un cupo del día sin pagar. */
 export const CAPSULE_HOLD_MINUTES = 120;
+/**
+ * Transferencia: el cupo queda apartado mientras Paula verifica el comprobante.
+ * Si no lo marca pagado en este tiempo, el cupo vuelve a estar libre (se
+ * libera solo al asignar el siguiente); un pago verificado después gana igual.
+ */
+export const CAPSULE_TRANSFER_HOLD_HOURS = 24;
+
+/** Hasta cuándo dura apartado el cupo de un pedido sin pagar. */
+export function capsuleHoldExpiry(paymentMethod: string | null | undefined, now: Date): Date {
+  const ms = paymentMethod === PaymentMethod.BankTransfer ? CAPSULE_TRANSFER_HOLD_HOURS * 60 * 60 * 1000 : CAPSULE_HOLD_MINUTES * 60 * 1000;
+  return new Date(now.getTime() + ms);
+}
 
 export interface CapsuleOrderPlan {
   editionId: string;
@@ -32,11 +45,12 @@ export interface CapsuleOrderPlan {
   dailyOrderCap: number;
   opensAtLocal: string;
   channel: CapsuleChannel;
+  paymentMethod: string | null;
 }
 
 type EditionLookupDb = Pick<Prisma.TransactionClient, "capsuleEdition">;
 
-const STORE_PAYMENT_METHODS: ReadonlySet<string> = new Set([PaymentMethod.Bold, PaymentMethod.Wompi]);
+const STORE_PAYMENT_METHODS: ReadonlySet<string> = new Set([PaymentMethod.Bold, PaymentMethod.Wompi, PaymentMethod.BankTransfer]);
 
 function parseConsent(value: unknown): CapsuleVideoConsent {
   return typeof value === "string" && (Object.values(CapsuleVideoConsent) as string[]).includes(value) ? (value as CapsuleVideoConsent) : CapsuleVideoConsent.NONE;
@@ -89,7 +103,7 @@ export async function resolveCapsuleOrder(
     throw ErrorFactory.InvalidRequest("Los packs de cápsulas se pagan antes de abrirlos: no hay pago contra entrega");
   }
   if (input.channel === "STORE" && !STORE_PAYMENT_METHODS.has(String(input.paymentMethod))) {
-    throw ErrorFactory.InvalidRequest("Los packs de cápsulas se pagan en línea");
+    throw ErrorFactory.InvalidRequest("Los packs de cápsulas se pagan en línea o por transferencia");
   }
   if (input.hasCoupon || input.hasDiscount) {
     throw ErrorFactory.Conflict("Los cupones y descuentos no aplican a los packs de cápsulas");
@@ -120,6 +134,7 @@ export async function resolveCapsuleOrder(
     dailyOrderCap: edition.dailyOrderCap,
     opensAtLocal: edition.opensAtLocal,
     channel: input.channel,
+    paymentMethod: input.paymentMethod ?? null,
   };
 }
 
@@ -186,7 +201,7 @@ export async function reserveCapsuleOrder(db: ReserveDb, plan: CapsuleOrderPlan,
       slotNumber: firstFree(taken.map((row) => row.slotNumber)),
       orderId,
       status: CapsuleDailySlotStatus.HELD,
-      expiresAt: new Date(now.getTime() + CAPSULE_HOLD_MINUTES * 60 * 1000),
+      expiresAt: capsuleHoldExpiry(plan.paymentMethod, now),
     },
   });
 }
