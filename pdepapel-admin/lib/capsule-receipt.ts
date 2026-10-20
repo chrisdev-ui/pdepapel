@@ -1,4 +1,4 @@
-import { CapsuleSlipKind, CapsuleSlipStatus, OrderStatus, Prisma } from "@prisma/client";
+import { CapsuleSlipKind, CapsuleSlipStatus, OrderStatus, PaymentMethod, Prisma } from "@prisma/client";
 
 /**
  * Lo que la clienta ve de su pack de cápsulas: en el recibo (`/pedido/[id]`) y
@@ -41,10 +41,14 @@ export async function loadCapsuleReceipt(db: ReceiptDb, order: { id: string; ord
 }
 
 /** El párrafo de agradecimiento del correo de un pedido de cápsulas. */
-export function capsuleThanksParagraph(capsule: { packSize: number; giftLabel: string | null }, status: OrderStatus): string {
+export function capsuleThanksParagraph(capsule: { packSize: number; giftLabel: string | null }, status: OrderStatus, paymentMethod: PaymentMethod | null = null): string {
   const gift = capsule.giftLabel ? ` Tu pack trae ${capsule.giftLabel}.` : "";
   if (status === OrderStatus.PAID) {
     return `¡Gracias por tu pack de ${capsule.packSize} cápsulas sorpresa! Abriremos tus cápsulas, te contamos qué salió y te enviamos tus productos en una cajita.${gift}`;
+  }
+  if (paymentMethod === PaymentMethod.BankTransfer) {
+    // El cupo del día queda apartado 24 horas (CAPSULE_TRANSFER_HOLD_HOURS) mientras se verifica.
+    return `Recibimos tu pack de ${capsule.packSize} cápsulas sorpresa y te guardamos el cupo de hoy por 24 horas. Sube el comprobante de tu transferencia desde el enlace de tu pedido; cuando lo verifiquemos, abriremos tus cápsulas y te enviamos tus productos.${gift}`;
   }
   return `Recibimos tu pack de ${capsule.packSize} cápsulas sorpresa. Cuando se confirme el pago, abriremos tus cápsulas y te enviamos tus productos.${gift}`;
 }

@@ -388,7 +388,7 @@ export function buildOrderEmails(
     ? { packSize: order.capsuleOrder.packSize, giftLabel: order.capsuleOrder.edition.packOptions.find((option) => option.packSize === order.capsuleOrder!.packSize)?.giftLabel ?? null }
     : null;
   const thanksParagraph = capsule && (status === OrderStatus.PAID || status === OrderStatus.PENDING || status === OrderStatus.CREATED)
-    ? capsuleThanksParagraph(capsule, status)
+    ? capsuleThanksParagraph(capsule, status, order.payment)
     : digital
     ? status === OrderStatus.PAID && giftCardHeld
       ? order.giftRecipientEmail
