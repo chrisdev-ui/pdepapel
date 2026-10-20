@@ -235,7 +235,8 @@ export function CapsuleQueue({
                 <Label htmlFor="codigo-papel">Código del papel</Label>
                 <div className="flex flex-wrap gap-2">
                   <Input id="codigo-papel" ref={codeInput} value={code} onChange={(event) => setCode(event.target.value)} autoComplete="off" autoCapitalize="characters" className="h-11 min-w-0 flex-1" placeholder="CAP-E1-…" />
-                  <Button type="submit" className="min-h-[44px]" disabled={busy || !code.trim() || slipsDone}>
+                  {/* Con los papeles completos sigue abierto para escanear el QR del regalo. */}
+                  <Button type="submit" className="min-h-[44px]" disabled={busy || !code.trim() || (slipsDone && giftsDone)}>
                     Sacar
                   </Button>
                   <Button type="button" variant="outline" className="min-h-[44px]" onClick={() => setCamera((value) => !value)} aria-pressed={camera}>
