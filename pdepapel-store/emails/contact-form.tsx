@@ -40,6 +40,23 @@ interface ContactFormEmailProps {
   message?: string;
 }
 
+/** El mismo mensaje en texto plano, para quien lee el correo sin HTML. */
+export function contactFormEmailText({ name, email, subject, message }: ContactFormEmailProps): string {
+  return [
+    "Alguien escribió desde la tienda.",
+    "",
+    `Nombre: ${name}`,
+    `Correo: ${email}`,
+    subject ? `Asunto: ${subject}` : null,
+    "",
+    message?.trim() ? message.trim() : "(sin mensaje)",
+    "",
+    `Responder: mailto:${email}`,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+}
+
 /**
  * Lo que llega cuando alguien escribe desde `/contacto`.
  *

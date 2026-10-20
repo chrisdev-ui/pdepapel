@@ -1,4 +1,4 @@
-import { ContactFormEmail } from "@/emails/contact-form";
+import { ContactFormEmail, contactFormEmailText } from "@/emails/contact-form";
 import { env } from "@/lib/env.mjs";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
@@ -78,6 +78,7 @@ export async function POST(req: Request) {
         subject,
         message,
       }) as React.ReactElement,
+      text: contactFormEmailText({ name, email, subject, message }),
     });
 
     if (error) {
