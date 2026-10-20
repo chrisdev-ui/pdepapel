@@ -30,6 +30,14 @@ const VIEWER_KEYS = [
   "mercadoLibreMinNetPerUnit",
   "mercadoLibreLowPriceFixedFee",
   "medianMarkup",
+  // Cápsulas por papeles: banda, costo congelado, tope del regalo, provisional y real.
+  "costBandMin",
+  "costBandMax",
+  "unitCost",
+  "totalCost",
+  "giftMaxCost",
+  "provisionalCost",
+  "realCost",
   // Contacto de clientas (y de quien recibe un envío o un regalo).
   "fullName",
   "phone",

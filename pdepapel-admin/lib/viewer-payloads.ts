@@ -226,6 +226,40 @@ export function scrubFairEvent<T extends AnyRecord | null | undefined>(detail: T
   return clean as T;
 }
 
+/**
+ * Lo que una edición de cápsulas por papeles sabe de la plata de la casa: la
+ * banda de costo, el costo congelado de cada papel e impresión, el tope del
+ * regalo y el costo provisional o real de un pedido de cápsulas.
+ */
+export const VIEWER_HIDDEN_CAPSULE_EDITION_FIELDS = [
+  "costBandMin",
+  "costBandMax",
+  "unitCost",
+  "totalCost",
+  "giftMaxCost",
+  "provisionalCost",
+  "realCost",
+  "costStatus",
+] as const;
+
+function deepOmit(value: unknown, keys: ReadonlySet<string>, depth: number): unknown {
+  if (Array.isArray(value)) return value.map((item) => deepOmit(item, keys, depth));
+  if (!isPlainObject(value) || depth > PRODUCT_SCRUB_MAX_DEPTH) return value;
+  const clean: AnyRecord = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (keys.has(key)) continue;
+    clean[key] = deepOmit(child, keys, depth + 1);
+  }
+  return clean;
+}
+
+const CAPSULE_EDITION_HIDDEN = new Set<string>([...VIEWER_HIDDEN_CAPSULE_EDITION_FIELDS, ...VIEWER_HIDDEN_PRODUCT_FIELDS, ...VIEWER_HIDDEN_ORDER_FIELDS]);
+
+/** Una edición, impresión, papel o pedido de cápsulas (con lo que cuelgue de ellos) sin costos, bandas ni datos de clientas. */
+export function scrubCapsulePayload<T>(payload: T): T {
+  return deepOmit(payload, CAPSULE_EDITION_HIDDEN, 0) as T;
+}
+
 /** Un grupo trae sus variantes completas: cada una se limpia por dentro. */
 export function scrubProductGroup<T extends AnyRecord | null | undefined>(group: T): T {
   if (!group) return group;
