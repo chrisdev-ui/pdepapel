@@ -20,6 +20,7 @@ export const STOREFRONT_ROUTES = {
   giftCard: "/tarjeta-regalo",
   earlyAccess: "/acceso-anticipado",
   brands: "/marcas",
+  capsules: "/capsulas",
 } as const;
 
 const STOREFRONT_ORIGIN = "https://papeleriapdepapel.com";

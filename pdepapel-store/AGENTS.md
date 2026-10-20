@@ -205,6 +205,12 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
 
 **Colour swatches (issue #3, 2026-10-07):** every colour circle (product page picker, single-product dot, shop filter) goes through `components/ui/color-swatch.tsx`, which paints from `color.swatchType` (`lib/color-swatch.ts`, byte-identical to the admin copy; `tests/unit/lib/color-swatch-parity.test.ts`). A missing or unknown type paints the hex as a solid, never a type guessed from the name. Light solids (contrast < 3:1 against white) get a reinforced inner border; the hex is always declared as `backgroundColor` and the gradient separately, so a browser that rejects the gradient keeps the tone. The «Color: …» heading shows the hovered or focused colour name (the `title` tooltip is gone).
 
+### Capsule editions (`/capsulas/[edicion]`)
+
+- The page is `force-dynamic` and always `noindex`; it is not in the sitemap. It renders only what the admin's public edition endpoint returns: 404 there (sales flag off without a preview link, CLOSED, unknown) is `notFound()` here. `?vista=<token>` is Paula's signed preview link from the panel; never cache it or add it to analytics.
+- The gallery shows names and photos only — never per-item prices or peso value claims, and no «Lucky» wording. Packs show total, per-capsule price, «Ahorras» and the gift label; a pack is disabled when the admin marks it unavailable (25 % rule). Buying stays «Muy pronto» until P4 wires checkout.
+- Local e2e: `npm run test:e2e:local -- tests/e2e/local/capsule-edition.spec.ts` (seeds through the admin's `scripts/seed-e2e-capsule-edition.ts`).
+
 ### Accessibility, UX and performance
 
 - Preserve responsive behaviour and verify at **390 / 768 / 820 / 1280 / 1440** with real device emulation, checking **both** page-level and container-level overflow. Header, menus, drawers, dialogs and tables break easily on tablet and mobile.
