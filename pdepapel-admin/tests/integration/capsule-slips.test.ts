@@ -10,6 +10,7 @@ import { availableStock, marketplaceAvailableStock } from "@/lib/available-stock
 import { unpackCapsuleBatch } from "@/lib/capsule-batches";
 import { drawCapsuleSlip, finishCapsuleDraw, printCapsuleSlips, voidCapsuleSlips } from "@/lib/capsule-slips";
 import { createPointOfSaleSale } from "@/lib/point-of-sale";
+import { checkReservationDrift } from "@/lib/stock-reservations-job";
 
 import { testPrisma } from "./helpers/database";
 
@@ -215,6 +216,18 @@ describe("papeles de cápsulas contra MySQL", () => {
     await expect(voidCapsuleSlips({ storeId: f.store.id, editionId: f.edition.id, slipIds: [one.id], userId: "paula" })).resolves.toEqual({ voided: 1 });
     await expect(counters(f.borrador.id)).resolves.toMatchObject({ stock: 10, reservedUnits: 3 });
     await expect(counters(f.editionProduct.id)).resolves.toMatchObject({ stock: 0 });
+  });
+
+  it("la revisión diaria de descuadres calla con papeles impresos y sigue avisando un descuadre real", async () => {
+    f = await createFixture();
+    await print(f, [{ productId: f.borrador.id, quantity: 5 }]);
+    await print(f, [{ productId: f.regalo.id, quantity: 2 }], CapsuleSlipKind.GIFT);
+    await expect(checkReservationDrift()).resolves.toBe(0);
+    expect(mail.send).not.toHaveBeenCalled();
+
+    await testPrisma.product.update({ where: { id: f.borrador.id }, data: { reservedUnits: 6 } });
+    await expect(checkReservationDrift()).resolves.toBe(1);
+    expect(mail.send).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("el contador dice 6, las reservas y los papeles de cápsulas suman 5") }));
   });
 
   it("cerrar el sorteo reemplaza el costo provisional por el real y mueve las finanzas en la diferencia, una sola vez", async () => {

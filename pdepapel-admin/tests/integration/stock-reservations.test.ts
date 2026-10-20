@@ -264,7 +264,7 @@ describe("reservas (MySQL)", () => {
     await reserve(f, 2);
     await testPrisma.product.update({ where: { id: f.component.id }, data: { reservedUnits: 3 } });
     await expect(checkReservationDrift()).resolves.toBeGreaterThanOrEqual(1);
-    expect(mail.send).toHaveBeenCalledWith(expect.objectContaining({ subject: expect.stringContaining("Reservas descuadradas"), text: expect.stringContaining("el contador dice 3, las reservas suman 2") }));
+    expect(mail.send).toHaveBeenCalledWith(expect.objectContaining({ subject: expect.stringContaining("Reservas descuadradas"), text: expect.stringContaining("el contador dice 3, las reservas y los papeles de cápsulas suman 2") }));
     await expect(counters(f.component.id)).resolves.toMatchObject({ reservedUnits: 3 });
     await testPrisma.product.update({ where: { id: f.component.id }, data: { reservedUnits: 2 } });
   });

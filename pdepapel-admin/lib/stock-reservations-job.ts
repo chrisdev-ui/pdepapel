@@ -1,4 +1,4 @@
-import { OrderStatus, Prisma, StockReservationStatus } from "@prisma/client";
+import { CapsuleSlipStatus, OrderStatus, Prisma, StockReservationStatus } from "@prisma/client";
 import { Redis } from "@upstash/redis";
 
 import { invalidateStoreProductsCache } from "@/lib/cache";
@@ -143,15 +143,22 @@ function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
 
 /**
  * El contador de cada pieza (no kit: el de un kit se deriva) debe ser la
- * suma de lo que guardan sus reservas vigentes. Si no cuadra se avisa una
- * vez por día con las cuentas; arreglarlo es una decisión, no un efecto.
+ * suma de lo que guardan sus reservas vigentes más los papeles y regalos de
+ * cápsulas impresos y sin sacar (`lib/capsule-slips.ts` también aparta). Si
+ * no cuadra se avisa una vez por día con las cuentas; arreglarlo es una
+ * decisión, no un efecto.
  */
 async function expectedReservedUnits(): Promise<Map<string, number>> {
-  const holds = await prismadb.stockReservation.findMany({
-    where: { status: { in: HOLDING_RESERVATION_STATUSES } },
-    select: RESERVATION_LINES_SELECT,
-  });
-  return piecesForLines(prismadb, holds.flatMap((hold) => reservationLines(hold)));
+  const [holds, printedSlips] = await Promise.all([
+    prismadb.stockReservation.findMany({
+      where: { status: { in: HOLDING_RESERVATION_STATUSES } },
+      select: RESERVATION_LINES_SELECT,
+    }),
+    prismadb.capsuleSlip.groupBy({ by: ["productId"], where: { status: CapsuleSlipStatus.PRINTED }, _count: { _all: true } }),
+  ]);
+  const expected = await piecesForLines(prismadb, holds.flatMap((hold) => reservationLines(hold)));
+  for (const row of printedSlips) expected.set(row.productId, (expected.get(row.productId) ?? 0) + row._count._all);
+  return expected;
 }
 
 async function driftedProducts(expected: Map<string, number>, onlyIds?: string[]) {
@@ -172,7 +179,7 @@ export async function checkReservationDrift(now = new Date()): Promise<number> {
   const off = await driftedProducts(expected, firstPass.map((product) => product.id));
   for (const [storeId, rows] of Array.from(groupBy(off, (row) => row.storeId))) {
     if (!(await claimOnce(`alert:reservation-drift:${storeId}:${bogotaDate(now)}`))) continue;
-    const lines = rows.slice(0, 20).map((row) => `• ${row.name}: el contador dice ${row.reservedUnits}, las reservas suman ${expected.get(row.id) ?? 0}`).join("\n");
+    const lines = rows.slice(0, 20).map((row) => `• ${row.name}: el contador dice ${row.reservedUnits}, las reservas y los papeles de cápsulas suman ${expected.get(row.id) ?? 0}`).join("\n");
     await send(storeId, `[Revisar] Reservas descuadradas en ${rows.length} ${rows.length === 1 ? "producto" : "productos"}`,
       `El número de unidades reservadas no coincide con las reservas vigentes:\n${lines}\n\nNo se corrigió nada automáticamente. Revisa las reservas de esos productos.`);
   }
