@@ -73,6 +73,8 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const [giftQuantities, setGiftQuantities] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Guardar los packs no refresca la página: `productos/loading.tsx` la volvería a montar y se perdería la bolsa elegida.
+  const [packsSaved, setPacksSaved] = useState(edition.packOptions.length > 0);
   const [packs, setPacks] = useState<PackForm>(() =>
     Object.fromEntries(
       CAPSULE_PACK_PRICES.map((price) => {
@@ -132,8 +134,8 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
     run("packs", async () => {
       const { data: body } = await axios.put(`${api}/pack-options`, { options: packOptions, pool: proposed });
       setCheck(body.check);
+      setPacksSaved(true);
       toast({ title: "Packs guardados", description: "La escalera de precio del producto de la edición quedó al día." });
-      router.refresh();
     });
 
   const printLabels = (slips: { id: string; code: string; productName: string; sku: string }[], ) => {
@@ -334,7 +336,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
             <Button className="min-h-[44px]" disabled={busy !== null} onClick={savePacks}>
               {busy === "packs" ? "Guardando…" : "Guardar packs"}
             </Button>
-            <Button className="min-h-[44px]" disabled={busy !== null || proposedUnits === 0 || edition.packOptions.length === 0} onClick={() => print("SLIP")}>
+            <Button className="min-h-[44px]" disabled={busy !== null || proposedUnits === 0 || !packsSaved} onClick={() => print("SLIP")}>
               {busy === "imprimir" ? "Imprimiendo…" : `Imprimir ${proposedUnits} papeles`}
             </Button>
           </div>
@@ -349,7 +351,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       {editable && (
         <SectionCard id="regalos" step={3} title="Regalos" description="Productos quietos (sin ventas en la ventana de lentos) con costo hasta el tope de regalo más alto de los packs guardados. Quedan apartados como los papeles.">
           <div>
-            <Button variant="outline" className="min-h-[44px]" disabled={busy !== null || edition.packOptions.length === 0} onClick={loadGifts}>
+            <Button variant="outline" className="min-h-[44px]" disabled={busy !== null || !packsSaved} onClick={loadGifts}>
               {busy === "regalos" ? "Buscando…" : "Buscar regalos"}
             </Button>
           </div>
