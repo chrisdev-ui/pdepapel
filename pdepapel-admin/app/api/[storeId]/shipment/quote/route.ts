@@ -12,6 +12,7 @@ import {
   calculatePackageDimensions,
   BoxConfiguration,
 } from "@/lib/package-calculator";
+import { capsulePackageFor } from "@/lib/capsule-quote";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { envioClickClient, type QuoteResponse } from "@/lib/envioclick";
@@ -170,6 +171,12 @@ export async function POST(
         products,
         boxConfigurations,
       );
+    }
+
+    // Cápsulas: se cotiza la caja del peor caso del pack (no se sabe qué va a salir).
+    if (!manualBox) {
+      const capsulePackage = await capsulePackageFor(prismadb, items, products, boxConfigurations);
+      if (capsulePackage) packageDimensions = capsulePackage;
     }
 
     // Find used box info if automatic and merge into packageDimensions

@@ -182,6 +182,19 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       await reloadDetail();
     });
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const makePreviewLink = () =>
+    run("vista", async () => {
+      const { data: body } = await axios.post(`${api}/preview-link`);
+      setPreviewUrl(body.url);
+      try {
+        await navigator.clipboard.writeText(body.url);
+        toast({ title: "Enlace de vista previa copiado", description: "Sirve 14 días y solo para esta edición." });
+      } catch {
+        toast({ title: "Enlace de vista previa listo", description: "Cópialo de la caja de abajo." });
+      }
+    });
+
   const saveFloor = () =>
     run("piso", async () => {
       const value = floorInput.trim() === "" ? null : Number(floorInput);
@@ -238,12 +251,24 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
             </Button>
           )}
           {edition.status !== "CLOSED" && (
+            <Button variant="outline" className="min-h-[44px]" disabled={busy !== null} onClick={makePreviewLink}>
+              Enlace de vista previa
+            </Button>
+          )}
+          {edition.status !== "CLOSED" && (
             <Button variant="destructive" className="min-h-[44px]" disabled={busy !== null} onClick={() => setConfirmClose(true)}>
               Cerrar edición
             </Button>
           )}
         </div>
       </div>
+
+      {previewUrl && (
+        <div className="flex flex-col gap-1 rounded-lg border bg-white p-3">
+          <Label htmlFor="enlace-vista-previa">Vista previa en la tienda (14 días, solo esta edición; la compra sigue apagada)</Label>
+          <Input id="enlace-vista-previa" readOnly value={previewUrl} className="h-11" onFocus={(event) => event.currentTarget.select()} />
+        </div>
+      )}
 
       {editable && (
         <SectionCard id="bolsa" step={1} title="Bolsa de papeles" description="Elige las categorías del tema: salen los productos con costo dentro de la banda y algo disponible. Quita lo que no quepa en una cápsula.">

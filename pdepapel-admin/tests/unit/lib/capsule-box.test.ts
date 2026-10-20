@@ -24,6 +24,12 @@ describe("suggestCapsuleBox", () => {
     expect(suggestCapsuleBox(["S-L", null, "S-L", "S-L", "S-L"], boxes)).toEqual({ type: "M", name: "Caja M" });
   });
 
+  it("para cotizar el peor caso: el producto más grande de toda la bolsa y la cantidad del pack", () => {
+    expect(suggestCapsuleBox(["XS-L", "L-P"], boxes, 5)).toEqual({ type: "L", name: "Caja L" });
+    expect(suggestCapsuleBox(["XS-L", "S-L"], boxes, 30)).toEqual({ type: "L", name: "Caja L" });
+    expect(suggestCapsuleBox(["XS-L"], boxes, 12)).toEqual({ type: "M", name: "Caja M" });
+  });
+
   it("sin una caja de ese tipo en la tienda, devuelve solo el tipo", () => {
     expect(suggestCapsuleBox(["XL-P", "S-L", "S-L", "S-L", "S-L"], boxes)).toEqual({ type: "XL", name: null });
   });

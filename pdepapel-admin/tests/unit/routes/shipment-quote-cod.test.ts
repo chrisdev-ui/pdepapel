@@ -15,6 +15,7 @@ vi.mock("@/lib/prismadb", () => ({
   default: {
     product: { findMany: vi.fn().mockResolvedValue([]) },
     box: { findMany: vi.fn().mockResolvedValue([]) },
+    capsuleEdition: { findMany: vi.fn().mockResolvedValue([]) },
     store: { findUnique: vi.fn(async () => ({ freeShippingThreshold: mocks.threshold.value })) },
     shippingQuote: { findUnique: vi.fn().mockResolvedValue(null), upsert: mocks.upsert, update: vi.fn(), deleteMany: vi.fn().mockResolvedValue({}) },
   },
