@@ -178,6 +178,27 @@ describe("cupos del día", () => {
     await expect(testPrisma.capsuleDailySlot.findUniqueOrThrow({ where: { orderId: await orderIdOf(raised) } })).resolves.toMatchObject({ slotNumber: 2 });
   });
 
+  it("la dueña cambia el tope de hoy desde «Sacar cápsulas»; la tienda lo respeta; nadie más puede", async () => {
+    f = await createInventoryFixture();
+    const { editionProduct } = await createLiveCapsuleEdition(f, { dailyOrderCap: 1 });
+    expect((await post("checkout", capsuleCheckoutBody(editionProduct.id, 5))).status).toBe(200);
+    expect((await post("checkout", capsuleCheckoutBody(editionProduct.id, 5))).status).toBe(409);
+
+    const { PUT } = await import("@/app/api/[storeId]/capsule-day-cap/route");
+    const put = (cap: unknown) =>
+      PUT(new Request("http://admin.test/x", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ cap }) }), { params: { storeId: f!.store.id } });
+    expect((await put(3)).status).toBe(401);
+    session.userId = "user_otra_tienda";
+    expect((await put(3)).status).toBe(403);
+    session.userId = f.store.userId;
+    expect((await put(101)).status).toBe(400);
+    const raised = await put(3);
+    expect(raised.status).toBe(200);
+    await expect(raised.json()).resolves.toMatchObject({ cap: 3, used: 1, left: 2 });
+    session.userId = null;
+    expect((await post("checkout", capsuleCheckoutBody(editionProduct.id, 5))).status).toBe(200);
+  });
+
   it("dos compras a la vez por el último cupo: gana exactamente una", async () => {
     f = await createInventoryFixture();
     const { editionProduct } = await createLiveCapsuleEdition(f, { dailyOrderCap: 1 });

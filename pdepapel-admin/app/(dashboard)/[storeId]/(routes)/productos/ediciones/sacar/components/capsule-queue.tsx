@@ -42,7 +42,19 @@ const CONSENT_LABEL: Record<string, string> = {
  * cámara solo lo llenan): así funciona con lector de barras, con la cámara
  * del celular o a mano.
  */
-export function CapsuleQueue({ orders: initialOrders, boxes, initialOrderId = null }: { orders: CapsuleQueueRow[]; boxes: { name: string; type: string; isDefault: boolean }[]; initialOrderId?: string | null }) {
+type DayStatus = { day: string; cap: number; used: number; left: number; opensAt: string; closedReason: "before-open" | "full" | null };
+
+export function CapsuleQueue({
+  orders: initialOrders,
+  boxes,
+  initialOrderId = null,
+  day: initialDay = null,
+}: {
+  orders: CapsuleQueueRow[];
+  boxes: { name: string; type: string; isDefault: boolean }[];
+  initialOrderId?: string | null;
+  day?: DayStatus | null;
+}) {
   const params = useParams<{ storeId: string }>();
   // La cola se vuelve a pedir a la API en vez de refrescar la página: `productos/loading.tsx` la volvería a montar y se perdería el pedido abierto.
   const [orders, setOrders] = useState(initialOrders);
@@ -122,6 +134,15 @@ export function CapsuleQueue({ orders: initialOrders, boxes, initialOrderId = nu
       await Promise.all([load(selected), reloadQueue()]);
     });
 
+  const [day, setDay] = useState<DayStatus | null>(initialDay);
+  const [capInput, setCapInput] = useState(String(initialDay?.cap ?? ""));
+  const saveTodayCap = () =>
+    act(async () => {
+      const { data } = await axios.put(`/api/${params.storeId}/capsule-day-cap`, { cap: Number(capInput) });
+      setDay(data);
+      toast({ title: `Tope de hoy: ${data.cap} pedidos`, description: `Quedan ${data.left} cupos.` });
+    });
+
   const list = tab === "sacar" ? toDraw : drawnOrders;
   const slipsDone = detail ? detail.slipsDrawn >= detail.packSize : false;
   const giftsDone = detail ? detail.giftMaxItems === 0 || detail.giftsDrawn > 0 : false;
@@ -130,6 +151,24 @@ export function CapsuleQueue({ orders: initialOrders, boxes, initialOrderId = nu
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
       <SectionCard id="cola" title="Pedidos" description="Pedidos de cápsulas pagados.">
+        {day && (
+          <div className="flex flex-col gap-2 rounded-lg border p-3" data-testid="cupos-de-hoy">
+            <p className="text-sm font-medium">
+              Cupos de hoy: {day.used} de {day.cap} · {day.left === 1 ? "queda 1" : `quedan ${day.left}`}
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="tope-hoy" className="text-xs text-muted-foreground">
+                  Tope de hoy
+                </Label>
+                <Input id="tope-hoy" type="number" inputMode="numeric" min={0} max={100} className="h-11 w-24" value={capInput} onChange={(event) => setCapInput(event.target.value)} />
+              </div>
+              <Button variant="outline" className="min-h-[44px]" disabled={busy || capInput === "" || Number(capInput) === day.cap} onClick={saveTodayCap}>
+                Cambiar tope de hoy
+              </Button>
+            </div>
+          </div>
+        )}
         <div role="tablist" aria-label="Cola de cápsulas" className="grid grid-cols-2 gap-2">
           {(["sacar", "videos"] as const).map((key) => (
             <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "default" : "outline"} className="min-h-[44px]" onClick={() => setTab(key)}>
