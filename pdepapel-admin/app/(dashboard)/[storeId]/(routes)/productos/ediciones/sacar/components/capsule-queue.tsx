@@ -107,7 +107,8 @@ export function CapsuleQueue({ orders: initialOrders, boxes }: { orders: Capsule
     act(async () => {
       if (!selected) return;
       const { data } = await axios.post(`/api/${params.storeId}/capsule-orders/${selected}/finish`);
-      toast({ title: "Sorteo cerrado", description: `Costo real ${currencyFormatter(data.realCost)} · empácalo en ${data.box.name ?? `la caja ${data.box.type}`}.` });
+      const guide = data.guideQueued ? " La guía de EnvioClick se está creando con esa caja; revisa el pedido en un momento." : "";
+      toast({ title: "Sorteo cerrado", description: `Costo real ${currencyFormatter(data.realCost)} · empácalo en ${data.box.name ?? `la caja ${data.box.type}`}.${guide}` });
       await Promise.all([load(selected), reloadQueue()]);
     });
 

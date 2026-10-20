@@ -44,6 +44,27 @@ export function phoneToNational(phone: string): string {
   return digits.substring(0, 10);
 }
 
+type GuidePackage = { weight: number; height: number; width: number; length: number };
+
+async function capsuleGuidePackage(db: any, storeId: string, order: any, current: GuidePackage, fromQuote: boolean): Promise<GuidePackage> {
+  const capsuleOrder = await db.capsuleOrder.findUnique({ where: { orderId: order.id }, select: { suggestedBox: true } });
+  if (!capsuleOrder) return current;
+  const boxes = await db.box.findMany({ where: { storeId } });
+  const configurations: Record<string, BoxConfiguration> = {};
+  for (const type of ["XS", "S", "M", "L", "XL"]) {
+    const box = boxes.find((candidate: any) => candidate.type === type && candidate.isDefault) ?? boxes.find((candidate: any) => candidate.type === type);
+    if (box) configurations[type] = { width: box.width, height: box.height, length: box.length, type: "box", size: box.type, id: box.id, name: box.name };
+  }
+  let weight = current.weight;
+  if (!fromQuote) {
+    const items = order.orderItems.filter((item: any) => item.productId && item.product).map((item: any) => ({ productId: item.productId, quantity: item.quantity }));
+    const worst = await capsulePackageFor(db, items, order.orderItems.filter((item: any) => item.product).map((item: any) => item.product), configurations);
+    if (worst) weight = worst.weight;
+  }
+  const box = capsuleOrder.suggestedBox ? configurations[capsuleOrder.suggestedBox] : undefined;
+  return box ? { weight, width: box.width, height: box.height, length: box.length } : { ...current, weight };
+}
+
 export async function createGuideForOrder(
   orderId: string,
   storeId: string,
@@ -67,6 +88,7 @@ export async function createGuideForOrder(
               select: {
                 id: true,
                 name: true,
+                isArchived: true,
                 size: { select: { value: true, name: true } },
               },
             },
@@ -205,6 +227,13 @@ export async function createGuideForOrder(
       length: calculatedDims.length,
     };
     declaredValue = order.total;
+  }
+
+  // Cápsulas: la caja es la sugerida al cerrar el sorteo (lo que salió de
+  // verdad); el peso, el del peor caso que se cotizó. Solo se consulta si el
+  // pedido trae un producto archivado, como lo es el de una edición.
+  if (order.orderItems?.some((item: any) => item.product?.isArchived)) {
+    packageDimensions = await capsuleGuidePackage(db, storeId, order, packageDimensions, Boolean(shippingQuote && shippingQuote.expiresAt >= new Date()));
   }
 
   if (

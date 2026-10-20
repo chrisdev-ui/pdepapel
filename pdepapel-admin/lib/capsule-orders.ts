@@ -3,6 +3,7 @@ import { CapsuleSlipKind, CapsuleSlipStatus, CapsuleVideoConsent, CapsuleVideoSt
 import { ErrorFactory } from "@/lib/api-errors";
 import { suggestCapsuleBox } from "@/lib/capsule-box";
 import { finishCapsuleDraw } from "@/lib/capsule-slips";
+import { createGuideInBackground } from "@/lib/guide-background";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -97,7 +98,12 @@ export async function completeCapsuleDraw({ storeId, orderId }: { storeId: strin
   ]);
   const box = suggestCapsuleBox(slips.map((slip) => slip.product.size?.value ?? null), boxes);
   await prismadb.capsuleOrder.update({ where: { orderId }, data: { suggestedBox: box.type } });
-  return { ...result, box };
+  // Con el sorteo cerrado el pedido ya puede salir: la guía se compra en segundo
+  // plano con la caja sugerida (o queda el motivo en el envío si falla).
+  const shipping = await prismadb.shipping.findFirst({ where: { orderId, storeId }, select: { envioClickIdRate: true, envioClickIdOrder: true } });
+  const guideQueued = Boolean(shipping?.envioClickIdRate && !shipping.envioClickIdOrder);
+  if (guideQueued) createGuideInBackground({ orderId, storeId, source: "sorteo de cápsulas cerrado" });
+  return { ...result, box, guideQueued };
 }
 
 const VIDEO_FLOW: CapsuleVideoStatus[] = [CapsuleVideoStatus.POR_ABRIR, CapsuleVideoStatus.GRABADO, CapsuleVideoStatus.ENVIADO, CapsuleVideoStatus.PUBLICADO];

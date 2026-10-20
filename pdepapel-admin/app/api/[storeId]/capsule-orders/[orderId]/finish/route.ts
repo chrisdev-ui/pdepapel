@@ -5,7 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { completeCapsuleDraw } from "@/lib/capsule-orders";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
-/** Cierra el sorteo: costo real, finanzas del pedido y caja sugerida. Una sola vez. Solo la dueña. */
+/** Cierra el sorteo: costo real, finanzas del pedido, caja sugerida y la guía en segundo plano. Una sola vez. Solo la dueña. */
 export async function POST(_req: Request, { params }: { params: { storeId: string; orderId: string } }) {
   try {
     const { userId } = await auth();
