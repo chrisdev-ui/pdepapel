@@ -1,6 +1,7 @@
 import { OrderInventoryIssueKind, OrderStatus, PaymentMethod, ShippingStatus, type Prisma } from "@prisma/client";
 
 import { markWelcomeBenefitRedeemed } from "@/lib/customer-benefits";
+import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
@@ -76,6 +77,7 @@ export async function settleFullyCoveredOrder(
     where: { id: order.id },
     data: { ...financials, status: OrderStatus.PAID, paidAt: new Date() },
   });
+  await applyCapsulePayment(tx, { orderId: order.id, storeId: order.storeId });
   await tx.paymentDetails.update({
     where: { orderId: order.id },
     data: { method: PaymentMethod.GiftCard, transactionId: `GIFTCARD-${order.orderNumber}` },

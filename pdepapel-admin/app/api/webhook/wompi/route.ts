@@ -20,6 +20,7 @@ import {
   OrderType,
 } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
+import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import {
   markWelcomeBenefitRedeemed,
@@ -405,6 +406,7 @@ async function updateOrderData(order: any, transaction: any) {
             paidAt: new Date(),
           } as any,
         });
+        await applyCapsulePayment(tx, { orderId: order.id, storeId: order.storeId });
 
         if (order.coupon) {
           await tx.coupon.update({

@@ -53,6 +53,7 @@ import {
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { describeInPersonOrdersInBatch } from "@/lib/in-person-orders";
 import { calculateOrderFinancials } from "@/lib/financial";
+import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import {
   ORDER_STATUS_LABELS,
@@ -922,6 +923,7 @@ async function createOrder(
           where: { id: createdOrder.id },
           data: { ...financials, paidAt: new Date() } as any,
         });
+        await applyCapsulePayment(tx, { orderId: createdOrder.id, storeId: params.storeId });
         issuedGiftCard = await issueGiftCardForOrder(tx, {
           storeId: params.storeId,
           orderId: createdOrder.id,
@@ -1531,6 +1533,7 @@ export async function PATCH(
             where: { id: updated.id },
             data: financials as any,
           });
+          await applyCapsulePayment(tx, { orderId: updated.id, storeId: params.storeId });
           const issued = await issueGiftCardForOrder(tx, {
             storeId: params.storeId,
             orderId: updated.id,

@@ -41,6 +41,8 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+// El pago de cápsulas (costo provisional y cupo) tiene su propia prueba de integración.
+vi.mock("@/lib/capsule-payment", () => ({ applyCapsulePayment: vi.fn().mockResolvedValue(undefined) }));
 // Tarjetas de regalo: la emisión corre dentro de la transacción de pago y el
 // correo con el código después; aquí solo se comprueba que se llaman.
 vi.mock("@/lib/gift-cards", async (importOriginal) => ({

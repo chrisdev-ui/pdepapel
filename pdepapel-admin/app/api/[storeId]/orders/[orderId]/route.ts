@@ -46,6 +46,7 @@ import {
   validateStockAvailability,
 } from "@/lib/inventory";
 import { calculateOrderFinancials } from "@/lib/financial";
+import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import {
   canTransition,
@@ -1079,6 +1080,7 @@ export async function PATCH(
             paidAt: new Date(),
           } as any,
         });
+        await applyCapsulePayment(tx, { orderId: updated.id, storeId: params.storeId });
 
         // Compra de tarjeta de regalo marcada pagada a mano (transferencia).
         issuedGiftCard = await issueGiftCardForOrder(tx, {
