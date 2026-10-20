@@ -1,3 +1,6 @@
+import Module, { createRequire } from "node:module";
+import path from "node:path";
+
 import { assertTestDatabaseEnv } from "./lib/test-database.mjs";
 import { blockOutboundNetwork, NOT_STUBBED, TEST_ENV_STUBS } from "./lib/test-isolation.mjs";
 
@@ -20,6 +23,17 @@ for (const [name, value] of Object.entries(TEST_ENV_STUBS)) {
   if (!NOT_STUBBED.has(name)) process.env[name] = value;
 }
 blockOutboundNetwork();
+
+// Los módulos del panel importan `server-only`, que lanza fuera de un servidor
+// de React. Con `--conditions=react-server` React estable no carga (las
+// plantillas de correo lo importan), así que solo `server-only` se cambia por
+// su módulo vacío.
+const loader = Module as unknown as { _resolveFilename: (request: string, ...rest: unknown[]) => string };
+const resolveFilename = loader._resolveFilename;
+const emptyServerOnly = path.join(path.dirname(createRequire(path.join(process.cwd(), "package.json")).resolve("server-only")), "empty.js");
+loader._resolveFilename = function (request, ...rest) {
+  return resolveFilename.call(this, request === "server-only" ? emptyServerOnly : request, ...rest);
+};
 
 const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";
 const EDITIONS = {

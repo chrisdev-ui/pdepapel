@@ -40,7 +40,7 @@ let edition: { segment: string; productId: string };
 let orderId: string;
 
 const seed = (...args: string[]) =>
-  execFileSync("node", ["scripts/with-e2e-env.mjs", "node", "scripts/with-test-env.mjs", "npx", "tsx", "--conditions=react-server", "scripts/seed-e2e-capsule-edition.ts", ...args], {
+  execFileSync("node", ["scripts/with-e2e-env.mjs", "node", "scripts/with-test-env.mjs", "npx", "tsx", "scripts/seed-e2e-capsule-edition.ts", ...args], {
     cwd: path.resolve(__dirname, "../.."),
     encoding: "utf8",
     env: { ...process.env, PRISMA_LOG: "" },

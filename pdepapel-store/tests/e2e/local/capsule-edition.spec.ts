@@ -20,7 +20,7 @@ const ADMIN_DIR = path.resolve(process.cwd(), "../pdepapel-admin");
 const SCREENSHOTS = path.join(ADMIN_DIR, "output/screenshots/capsulas-p3");
 
 function runSeed(mode: "seed" | "clean") {
-  const output = execFileSync("node", ["scripts/with-e2e-env.mjs", "node", "scripts/with-test-env.mjs", "npx", "tsx", "--conditions=react-server", "scripts/seed-e2e-capsule-edition.ts", mode], {
+  const output = execFileSync("node", ["scripts/with-e2e-env.mjs", "node", "scripts/with-test-env.mjs", "npx", "tsx", "scripts/seed-e2e-capsule-edition.ts", mode], {
     cwd: ADMIN_DIR,
     encoding: "utf8",
     env: { ...process.env, PRISMA_LOG: "" },
