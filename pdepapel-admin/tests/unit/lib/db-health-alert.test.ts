@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { sendDbHealthAlert } from "@/lib/db-health-alert";
 
+import { expectPanelEmail } from "../../helpers/panel-email";
+
 const recipients = async () => ["avisos@prueba.test"];
 
 describe("correo de la revisión de MySQL", () => {
@@ -17,6 +19,9 @@ describe("correo de la revisión de MySQL", () => {
       subject: "⚠️ Memoria de MySQL alta",
       text: expect.stringContaining("El contenedor de MySQL usa 2355 MB."),
     }));
+
+    const html = await expectPanelEmail((send.mock.calls[0] as unknown[])[0] as never, { label: "Panel · Sistemas", title: "Memoria de MySQL alta", text: /2355 MB/ });
+    expect(html).toContain("El contenedor de MySQL usa 2355 MB.");
 
     expect(await sendDbHealthAlert(["otra vez"], "detalle", { redis, send, recipients })).toBe("cooldown");
     expect(send).toHaveBeenCalledTimes(1);

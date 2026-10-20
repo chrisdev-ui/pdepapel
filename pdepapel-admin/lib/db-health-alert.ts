@@ -2,13 +2,14 @@ import { Redis } from "@upstash/redis";
 
 import { deliverEmails, type ResendSendResult } from "@/lib/email-delivery";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
+import { PanelNotice } from "@/emails/panel-notice";
 
 const ALERT_KEY = "monitor:db-health:container-alert";
 const ALERT_COOLDOWN_SECONDS = 20 * 3600;
 const PANEL_URL = "https://admin.papeleriapdepapel.com";
 
 type AlertRedis = { set: (key: string, value: string, options: { nx: true; ex: number }) => Promise<unknown> };
-type Send = (email: { from: string; to: string[]; subject: string; text: string }) => Promise<ResendSendResult>;
+type Send = (email: { from: string; to: string[]; subject: string; text: string; react?: React.ReactElement }) => Promise<ResendSendResult>;
 
 /** Correo de la revisión diaria cuando el contenedor de MySQL crece de más; uno por día como mucho. */
 export async function sendDbHealthAlert(
@@ -43,6 +44,16 @@ export async function sendDbHealthAlert(
             from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
             to,
             subject: "⚠️ Memoria de MySQL alta",
+            react: PanelNotice({
+              preview: "La memoria de MySQL está alta",
+              label: "Panel · Sistemas",
+              title: "Memoria de MySQL alta",
+              summary: warnings.join(" "),
+              sections: [{ label: "Detalle", lines: detail.split("\n").filter(Boolean) }],
+              action: "Revisa la memoria del servicio «MySQL US East» en Railway. El detalle queda en «Sistemas», en Inicio del panel.",
+              cta: { href: PANEL_URL, label: "Abrir el panel" },
+              note: "Este aviso sale como mucho una vez al día.",
+            }) as React.ReactElement,
             text: `${warnings.join("\n")}\n\n${detail}\n\nRevisa la memoria del servicio «MySQL US East» en Railway. El detalle queda en «Sistemas», en Inicio del panel (${PANEL_URL}).`,
           }),
       },
