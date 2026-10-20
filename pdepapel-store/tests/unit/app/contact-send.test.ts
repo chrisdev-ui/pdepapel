@@ -11,7 +11,7 @@ vi.mock("resend", () => ({
     emails = { send: mocks.send };
   },
 }));
-vi.mock("@/emails/contact-form", () => ({ ContactFormEmail: () => null }));
+vi.mock("@/emails/contact-form", async (importOriginal) => ({ ...(await importOriginal<object>()), ContactFormEmail: () => null }));
 
 import { POST } from "@/app/api/send/route";
 
@@ -51,6 +51,8 @@ describe("POST /api/send", () => {
     );
     expect(mocks.send).toHaveBeenCalledOnce();
     expect(mocks.send.mock.calls[0][0].to).toEqual(["avisos@prueba.test"]);
+    // Plantilla y texto plano: nunca un correo solo HTML.
+    expect(mocks.send.mock.calls[0][0].text).toContain("Nombre: Laura");
   });
 
   it("sin destinatarios desde el panel no envía y lo dice", async () => {
