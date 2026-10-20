@@ -18,7 +18,12 @@ describe("organization structured data", () => {
       address: { addressLocality: "Medellín", addressRegion: "Antioquia", addressCountry: "CO" },
       contactPoint: { telephone: "+57-313-258-2293", email: "papeleria.pdepapel@gmail.com" },
     });
-    expect(organizationSchema.sameAs).toHaveLength(2);
+    expect(organizationSchema.sameAs).toEqual([
+      "https://instagram.com/papeleria.pdepapel",
+      "https://tiktok.com/@papeleria.pdepapel",
+      "https://www.facebook.com/papeleriapdepapel/",
+      "https://www.youtube.com/@papeleriapdepapel",
+    ]);
   });
 
   it("uses the same email the contact page publishes", () => {

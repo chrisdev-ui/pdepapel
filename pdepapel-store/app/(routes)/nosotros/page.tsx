@@ -16,22 +16,20 @@ import { AboutPage as AboutPageSchema, WithContext } from "schema-dts";
 
 import { getPosts } from "@/actions/get-posts";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
-import { FacebookIcon, FlagIcons, InstagramIcon, TiktokIcon } from "@/components/icons";
+import { FlagIcons } from "@/components/icons";
+import { SocialIcon } from "@/components/social-icon";
 import Newsletter from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FACEBOOK_PAGE_URL, BASE_URL } from "@/constants";
+import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { socialAriaLabel, STORE_SOCIAL_LINKS } from "@/lib/social-links";
 import { cn } from "@/lib/utils";
 import SocialMedia from "./components/social-media";
 import { organizationSchema } from "@/lib/organization-schema";
 
 export const revalidate = 60;
 
-const INSTAGRAM_URL =
-  "https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA==";
-const TIKTOK_URL =
-  "https://www.tiktok.com/@papeleria.pdepapel?_t=8gctJXIdqD7&_r=1";
 
 const jsonLd: WithContext<AboutPageSchema> = {
   "@context": "https://schema.org",
@@ -217,16 +215,14 @@ export default async function AboutPage() {
                 Explorar la tienda
                 <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </Link>
-              <SocialOutlineLink
-                href={INSTAGRAM_URL}
-                icon={<InstagramIcon className="h-[18px] w-[18px]" />}
-                label="Instagram"
-              />
-              <SocialOutlineLink
-                href={TIKTOK_URL}
-                icon={<TiktokIcon className="h-[18px] w-[18px]" />}
-                label="TikTok"
-              />
+              {STORE_SOCIAL_LINKS.map((link) => (
+                <SocialOutlineLink
+                  key={link.network}
+                  href={link.url}
+                  icon={<SocialIcon network={link.network} className="h-[18px] w-[18px]" />}
+                  label={link.label}
+                />
+              ))}
             </div>
           </div>
 
@@ -416,21 +412,14 @@ export default async function AboutPage() {
               ¡Estamos emocionados de conectar contigo!
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-3 sm:gap-6">
-              <SocialButton
-                href={INSTAGRAM_URL}
-                icon={<InstagramIcon className="h-6 w-6" />}
-                label="Instagram"
-              />
-              <SocialButton
-                href={FACEBOOK_PAGE_URL}
-                icon={<FacebookIcon className="h-6 w-6" />}
-                label="Facebook"
-              />
-              <SocialButton
-                href={TIKTOK_URL}
-                icon={<TiktokIcon className="h-5 w-5" />}
-                label="TikTok"
-              />
+              {STORE_SOCIAL_LINKS.map((link) => (
+                <SocialButton
+                  key={link.network}
+                  href={link.url}
+                  icon={<SocialIcon network={link.network} className="h-6 w-6" />}
+                  label={link.label}
+                />
+              ))}
             </div>
           </div>
 
@@ -471,7 +460,7 @@ function SocialOutlineLink({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Visitar ${label} de Papelería P de Papel`}
+      aria-label={socialAriaLabel(label)}
       className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-input bg-background px-5 text-sm font-medium transition-colors hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
     >
       <span aria-hidden="true">{icon}</span>
@@ -494,7 +483,7 @@ function SocialButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Visitar ${label} de Papelería P de Papel`}
+      aria-label={socialAriaLabel(label)}
       className="group flex min-h-[44px] items-center gap-2 rounded-full bg-white px-6 py-3 font-medium text-blue-yankees shadow-sm transition-all hover:scale-105 hover:bg-kawaii-pink hover:text-white hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
     >
       <span

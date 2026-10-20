@@ -190,7 +190,7 @@ const sections: PolicySection[] = [
         </li>
         <li>
           Al comprar eliges si el video es solo para ti o si podemos publicarlo
-          en nuestras redes (Instagram y TikTok). Si lo autorizas, decimos solo
+          en nuestras redes (Instagram, TikTok, Facebook y YouTube). Si lo autorizas, decimos solo
           tu primer nombre: nunca tu apellido, tu correo, tu teléfono ni tu
           dirección.
         </li>

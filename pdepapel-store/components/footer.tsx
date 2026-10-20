@@ -1,4 +1,5 @@
-import { InstagramIcon, TiktokIcon, WhatsappIcon } from "@/components/icons";
+import { WhatsappIcon } from "@/components/icons";
+import { SocialIcon } from "@/components/social-icon";
 import { buildWhatsAppUrl } from "@/lib/whatsapp-prefill";
 import { PrivacyPreferencesButton } from "@/components/privacy-preferences-button";
 import { SEASON_CONFIG } from "@/constants";
@@ -7,6 +8,7 @@ import { Season } from "@/types";
 import { ArrowRight, CalendarDays, Mail, MapPin, Phone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { socialAriaLabel, STORE_SOCIAL_LINKS } from "@/lib/social-links";
 
 /** Lo que se muestra mientras nadie haya configurado el horario. */
 export const DEFAULT_OPENING_HOURS_LABEL = "08:00 - 20:00, Lun - Dom";
@@ -171,25 +173,19 @@ export const Footer: React.FC<FooterProps> = ({
             >
               Redes Sociales
             </h2>
-            <div className="mt-4 flex justify-start gap-3">
-              <Link
-                rel="noopener noreferrer"
-                href="https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA=="
-                aria-label="Visitar Instagram de Papelería P de Papel"
-                className="flex h-11 w-11 items-center justify-center rounded-full border bg-background text-blue-yankees hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
-                target="_blank"
-              >
-                <InstagramIcon aria-hidden="true" className="h-5 w-5" />
-              </Link>
-              <Link
-                rel="noopener noreferrer"
-                href="https://www.tiktok.com/@papeleria.pdepapel?_t=8gctJXIdqD7&_r=1"
-                aria-label="Visitar TikTok de Papelería P de Papel"
-                className="flex h-11 w-11 items-center justify-center rounded-full border bg-background text-blue-yankees hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
-                target="_blank"
-              >
-                <TiktokIcon aria-hidden="true" className="h-5 w-5" />
-              </Link>
+            <div className="mt-4 flex flex-wrap justify-start gap-3">
+              {STORE_SOCIAL_LINKS.map((link) => (
+                <Link
+                  key={link.network}
+                  rel="noopener noreferrer"
+                  href={link.url}
+                  aria-label={socialAriaLabel(link.label)}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border bg-background text-blue-yankees hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
+                  target="_blank"
+                >
+                  <SocialIcon network={link.network} className="h-5 w-5" />
+                </Link>
+              ))}
             </div>
           </section>
         </div>

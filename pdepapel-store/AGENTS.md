@@ -205,6 +205,10 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
 
 **Colour swatches (issue #3, 2026-10-07):** every colour circle (product page picker, single-product dot, shop filter) goes through `components/ui/color-swatch.tsx`, which paints from `color.swatchType` (`lib/color-swatch.ts`, byte-identical to the admin copy; `tests/unit/lib/color-swatch-parity.test.ts`). A missing or unknown type paints the hex as a solid, never a type guessed from the name. Light solids (contrast < 3:1 against white) get a reinforced inner border; the hex is always declared as `backgroundColor` and the gradient separately, so a browser that rejects the gradient keeps the tone. The «Color: …» heading shows the hovered or focused colour name (the `title` tooltip is gone).
 
+### Social networks
+
+`lib/social-links.ts` is the only list of the store's networks (`STORE_SOCIAL_LINKS`): Instagram, TikTok, Facebook, YouTube, in that order. The footer, /nosotros (hero and «Síguenos»), «Entre ediciones», the Organization JSON-LD `sameAs` and the Facebook fallback for embedded posts all read it. Icons come from `components/social-icon.tsx` (monochrome `currentColor` marks in `components/icons.tsx`). Every link opens in a new tab with `rel="noopener noreferrer"` and `aria-label` «<Red> de P de Papel». The admin has the same list in `pdepapel-admin/lib/social-links.ts`, and a test checks that the two match. No email shows the networks today.
+
 ### Capsule editions (`/capsulas/[edicion]`)
 
 - The page is `force-dynamic`. It is **indexable only while it is the LIVE edition, viewed without a preview link** (`index, follow` + canonical). Every other case is `noindex`. It renders only what the admin's public edition endpoint returns: a 404 there (sales off without a preview link, CLOSED, unknown) is `notFound()` here. `?vista=<token>` is Paula's signed preview link from the panel. Never cache it or send it to analytics: GA4 and Vercel strip it, and Clarity does not record a `/capsulas/` page that carries `vista` (`isClarityEligiblePath`).
@@ -212,7 +216,7 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
   - «Cápsulas» in the desktop row and the drawer (only with a LIVE edition; at `lg` it takes one type's slot so the row does not wrap).
   - `CapsuleEditionBanner` below the hero on the home page (no slot counts or value claims).
   - The sitemap entry: the LIVE edition, or `/capsulas` between editions.
-  - **`/capsulas`** is the stable bio URL. With sales off it is a 404. With a LIVE edition it is a 307 to it, forwarding only `utm_*` (`withUtmParams`; `redirect()` does not keep the query). With no LIVE edition it is the indexable «Entre ediciones» page (Instagram, TikTok, newsletter double opt-in). It reads `searchParams`, so it is dynamic; the inner fetch is still cached.
+  - **`/capsulas`** is the stable bio URL. With sales off it is a 404. With a LIVE edition it is a 307 to it, forwarding only `utm_*` (`withUtmParams`; `redirect()` does not keep the query). With no LIVE edition it is the indexable «Entre ediciones» page (the four networks, newsletter double opt-in). It reads `searchParams`, so it is dynamic; the inner fetch is still cached.
   - `/capsules` and `/capsules/:path*` → `/capsulas…` (308).
 - «Cómo funciona y condiciones» (`components/capsules/capsule-conditions.tsx`) is plain Spanish: slips, minimum 5, equivalent capsules, the gallery, fixed gifts, daily slots, the draw after payment, the retracto (5 business days, Ley 1480 art. 47, linked to `/politicas/devoluciones`) and the video/first name (linked to `/politicas/privacidad#videos-de-capsulas`). No peso values and no «suerte».
 - The gallery shows names and photos only — never per-item prices or peso value claims, and no «Lucky» wording. Packs show total, per-capsule price, «Ahorras» and the gift label; a pack is disabled when the admin marks it unavailable (25 % rule).

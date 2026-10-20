@@ -10,6 +10,8 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
+import { socialLinksLine } from "@/lib/social-links";
+
 // Register custom fonts using stable fontsource links
 Font.register({
   family: "Inter",
@@ -410,7 +412,8 @@ export const StoreInvoicePDF = ({ data }: { data: InvoiceData }) => {
           ¡Gracias por tu compra en Papelería P de Papel!{"\n"}
           Este documento es un recibo de compra interno y no representa una
           factura electrónica de venta con obligaciones tributarias.{"\n"}
-          Contáctanos: https://papeleriapdepapel.com | Instagram: @papeleria.pdepapel
+          Contáctanos: https://papeleriapdepapel.com{"\n"}
+          {socialLinksLine()}
         </Text>
       </Page>
     </Document>

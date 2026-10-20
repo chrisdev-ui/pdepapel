@@ -1,7 +1,7 @@
 import type { Organization } from "schema-dts";
 
 import { BASE_URL } from "@/constants";
-import { STORE_INSTAGRAM_URL, STORE_TIKTOK_URL } from "@/lib/social-links";
+import { STORE_SOCIAL_LINKS } from "@/lib/social-links";
 
 /**
  * La organización, una sola vez para todo el sitio. Antes había tres copias
@@ -32,5 +32,5 @@ export const organizationSchema = {
     addressRegion: "Antioquia",
     addressCountry: "CO",
   },
-  sameAs: [STORE_INSTAGRAM_URL, STORE_TIKTOK_URL],
+  sameAs: STORE_SOCIAL_LINKS.map((link) => link.url),
 } satisfies Organization;

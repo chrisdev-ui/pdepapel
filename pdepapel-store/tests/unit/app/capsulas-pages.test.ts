@@ -59,6 +59,9 @@ describe("/capsulas (el enlace de la bio)", () => {
     expect(html).toContain("Entre ediciones");
     expect(html).toContain('href="https://instagram.com/papeleria.pdepapel"');
     expect(html).toContain('href="https://tiktok.com/@papeleria.pdepapel"');
+    expect(html).toContain('href="https://www.facebook.com/papeleriapdepapel/"');
+    expect(html).toContain('href="https://www.youtube.com/@papeleriapdepapel"');
+    expect(html).toContain('aria-label="YouTube de P de Papel"');
     expect(mocks.redirect).not.toHaveBeenCalled();
     const metadata = await capsulesMetadata();
     expect(metadata.robots).toBeUndefined();

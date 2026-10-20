@@ -4,11 +4,12 @@ import { notFound, redirect } from "next/navigation";
 
 import { capsuleEditionPath, getCurrentCapsuleEdition } from "@/actions/get-current-capsule-edition";
 import { Newsletter } from "@/components/newsletter";
+import { SocialIcon } from "@/components/social-icon";
 import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
 import { withUtmParams } from "@/lib/capsule-links";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
-import { STORE_INSTAGRAM_URL, STORE_TIKTOK_URL } from "@/lib/social-links";
+import { socialAriaLabel, STORE_SOCIAL_LINKS } from "@/lib/social-links";
 
 /**
  * La dirección fija de las cápsulas (la de la bio de Instagram y TikTok). Con
@@ -46,15 +47,15 @@ export default async function CapsulesPage({ searchParams }: { searchParams: Rec
           La próxima edición sale pronto. En cada edición, cada cápsula trae el nombre de un producto de la colección, y te enviamos los productos en una caja.
         </p>
         <p className="max-w-[60ch] font-sans text-base leading-relaxed text-blue-yankees">
-          Avisamos primero en Instagram y TikTok, y por correo a quien está suscrito al boletín.
+          Avisamos primero en nuestras redes y por correo a quien está suscrito al boletín.
         </p>
         <div className="flex flex-wrap gap-3">
-          <a href={STORE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className={social}>
-            Instagram
-          </a>
-          <a href={STORE_TIKTOK_URL} target="_blank" rel="noopener noreferrer" className={social}>
-            TikTok
-          </a>
+          {STORE_SOCIAL_LINKS.map((link) => (
+            <a key={link.network} href={link.url} target="_blank" rel="noopener noreferrer" aria-label={socialAriaLabel(link.label)} className={social}>
+              <SocialIcon network={link.network} className="mr-2 h-[18px] w-[18px]" />
+              {link.label}
+            </a>
+          ))}
           <Link href={STOREFRONT_ROUTES.shop} className="inline-flex min-h-[44px] items-center font-sans text-base font-semibold text-blue-yankees underline underline-offset-4">
             Ver la tienda
           </Link>

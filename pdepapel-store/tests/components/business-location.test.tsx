@@ -51,16 +51,11 @@ describe("business location messaging", () => {
     expect(
       screen.getByRole("heading", { name: "Redes Sociales", level: 2 }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", {
-        name: "Visitar Instagram de Papelería P de Papel",
-      }),
-    ).toHaveClass("h-11", "w-11");
-    expect(
-      screen.getByRole("link", {
-        name: "Visitar TikTok de Papelería P de Papel",
-      }),
-    ).toHaveClass("h-11", "w-11");
+    for (const network of ["Instagram", "TikTok", "Facebook", "YouTube"]) {
+      expect(
+        screen.getByRole("link", { name: `${network} de P de Papel` }),
+      ).toHaveClass("h-11", "w-11");
+    }
     expect(
       screen.getByRole("link", { name: "Políticas de entrega" }),
     ).toHaveClass("min-h-[44px]");

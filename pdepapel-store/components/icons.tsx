@@ -50,6 +50,17 @@ export const FacebookIcon = (props: LucideProps) => (
   </svg>
 );
 
+export const YoutubeIcon = (props: LucideProps) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="currentColor"
+    viewBox="0 0 24 24"
+    {...props}
+  >
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.12-2.134C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.507A3.017 3.017 0 0 0 .503 6.186C0 8.07 0 12 0 12s0 3.93.503 5.814a3.017 3.017 0 0 0 2.12 2.134c1.872.507 9.377.507 9.377.507s7.505 0 9.377-.507a3.017 3.017 0 0 0 2.12-2.134C24 15.93 24 12 24 12s0-3.93-.502-5.814ZM9.545 15.568V8.432L15.818 12l-6.273 3.568Z" />
+  </svg>
+);
+
 export const InstagramIcon = (props: LucideProps) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"

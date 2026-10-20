@@ -693,6 +693,10 @@ Design: `docs/design/asistente-experto-paula.md` (§13 is what v1 built) and `do
   - A suggestion above 1.8 × the store price shows the «vender en pack o kit» hint.
 - The wizard loads every product photo in gallery order (`…/listings/product-photos`, which keeps the cover first). It checks the copy ML downloads against 500 × 500 px. `lib/catalog-image-url.ts` is client-safe; never import `lib/google-merchant.ts` into client code (it pulls `sanitize-html`).
 
+### Store social networks
+
+`lib/social-links.ts` lists the store's networks (Instagram, TikTok, Facebook, YouTube), mirroring `pdepapel-store/lib/social-links.ts`; `tests/unit/lib/social-links.test.ts` fails if the two differ. The invoice PDF footer prints `socialLinksLine()`. The PDF catalog reads the per-store `Store.instagram/tiktok/facebook/youtube` fields that Paula edits in Configuración › Redes sociales: that is data, not this list.
+
 ### Boletín: subscribers, issues and campaigns
 
 **Every email uses the layout** (`emails/components.tsx`): customer mails use `Shell`; panel notices use `PanelShell`, and automatic alerts go through `emails/panel-notice.tsx` (`PanelNotice`: title, summary card, sections, action, button into the panel). Each send passes `react:` **and** a plain-text `text:` alternative; there are no text-only or HTML-only mails. `tests/unit/security/emails-use-layout.test.ts` fails on a literal `emails.send({...})` without `react`. The store's contact form mirrors the panel skin in `pdepapel-store/emails/` and also sends `text`.

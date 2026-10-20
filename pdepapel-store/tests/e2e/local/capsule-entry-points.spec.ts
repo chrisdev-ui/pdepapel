@@ -75,8 +75,17 @@ test.describe("cápsulas: entradas en la tienda", () => {
         const response = await page.goto("/capsulas");
         expect(response?.status()).toBe(200);
         await expect(page.getByRole("heading", { level: 1, name: "Entre ediciones" })).toBeVisible();
-        await expect(page.getByRole("link", { name: "Instagram", exact: true })).toHaveAttribute("href", "https://instagram.com/papeleria.pdepapel");
-        await expect(page.getByRole("link", { name: "TikTok", exact: true })).toHaveAttribute("href", "https://tiktok.com/@papeleria.pdepapel");
+        const main = page.locator("main");
+        for (const [label, href] of [
+          ["Instagram", "https://instagram.com/papeleria.pdepapel"],
+          ["TikTok", "https://tiktok.com/@papeleria.pdepapel"],
+          ["Facebook", "https://www.facebook.com/papeleriapdepapel/"],
+          ["YouTube", "https://www.youtube.com/@papeleriapdepapel"],
+        ]) {
+          const link = main.getByRole("link", { name: `${label} de P de Papel` });
+          await expect(link).toHaveAttribute("href", href);
+          expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        }
         await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
         await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/capsulas$/);
         await noHorizontalScroll(page);

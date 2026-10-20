@@ -23,4 +23,21 @@ describe("Footer", () => {
       "/",
     );
   });
+
+  it("links the four networks in order, in a new tab, with Spanish labels", () => {
+    render(<Footer />);
+    const expected = [
+      ["Instagram de P de Papel", "https://instagram.com/papeleria.pdepapel"],
+      ["TikTok de P de Papel", "https://tiktok.com/@papeleria.pdepapel"],
+      ["Facebook de P de Papel", "https://www.facebook.com/papeleriapdepapel/"],
+      ["YouTube de P de Papel", "https://www.youtube.com/@papeleriapdepapel"],
+    ];
+    const links = screen.getAllByRole("link", { name: / de P de Papel$/ });
+    expect(links.map((link) => [link.getAttribute("aria-label"), link.getAttribute("href")])).toEqual(expected);
+    for (const link of links) {
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      expect(link.querySelector("svg")).not.toBeNull();
+    }
+  });
 });

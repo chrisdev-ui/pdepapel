@@ -1,7 +1,7 @@
 "use client";
 
 import { Social } from "@/constants";
-import { FACEBOOK_PAGE_URL } from "@/constants";
+import { STORE_FACEBOOK_URL } from "@/lib/social-links";
 import { Post } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -63,7 +63,7 @@ export function buildEmbedUrl(post: Post): string {
     case Social.Facebook:
       // Sin enlace a la publicación concreta: ver `buildSocialPostUrl` en el
       // panel. Se lleva a la página para no dejar un enlace muerto.
-      return FACEBOOK_PAGE_URL;
+      return STORE_FACEBOOK_URL;
     case Social.Youtube:
       return `https://www.youtube.com/watch?v=${id}`;
     case Social.Pinterest:
