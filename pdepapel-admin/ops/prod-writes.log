@@ -132,3 +132,4 @@
 2026-10-20T13:56:20.083Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Migración cápsulas por papeles (20261021_add_capsule_editions)"
 2026-10-20T13:56:44.440Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Permiso copilot_ro para CapsuleEdition"
 2026-10-20T14:28:06.739Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Reserva de caja por pack de cápsulas (20261022_add_capsule_pack_box_reserve)"
+2026-10-20T17:26:05.404Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Piso de margen por edición de cápsulas (20261022_add_capsule_edition_min_margin)"
