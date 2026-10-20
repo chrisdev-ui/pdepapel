@@ -15,6 +15,7 @@ import { resolveStoreShippingRate } from "@/lib/store-shipping-quote";
 import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import { sendOrderEmail } from "@/lib/email";
 import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
+import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { qualifiesForFreeShipping } from "@/lib/order-totals";
@@ -1288,6 +1289,9 @@ export async function PATCH(
       // (mostrador y feria) son comprobantes y no se editan desde Pedidos.
       const inPersonEdit = describeInPersonOrdersInBatch(orders, "edit");
       if (inPersonEdit) throw ErrorFactory.Conflict(inPersonEdit);
+      if (status === OrderStatus.SENT) {
+        await assertCapsuleDrawsClosed(tx, orders.filter((order) => order.status !== OrderStatus.SENT).map((order) => order.id));
+      }
 
       // Las mismas reglas que en la página del pedido: si alguna orden no
       // admite el cambio, no se aplica ninguna. Un lote a medias deja el

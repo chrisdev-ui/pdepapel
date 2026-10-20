@@ -12,6 +12,7 @@ vi.mock("@/lib/prismadb", () => ({
   default: {
     product: { findMany: vi.fn().mockResolvedValue([]) },
     box: { findMany: vi.fn().mockResolvedValue([]) },
+    capsuleOrder: { findMany: vi.fn().mockResolvedValue([]) },
     shippingQuote: { findFirst: mocks.findQuote },
     shipping: { update: mocks.shippingUpdate },
   },

@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   createGuideForOrder: vi.fn(),
   shippingUpdateMany: vi.fn(),
   openIssues: vi.fn(),
+  pendingCapsuleDraws: vi.fn(),
   record: vi.fn(),
   waitUntil: vi.fn(),
 }));
@@ -11,7 +12,7 @@ vi.mock("@vercel/functions", () => ({ waitUntil: mocks.waitUntil }));
 vi.mock("@/lib/shipping-helpers", () => ({ createGuideForOrder: mocks.createGuideForOrder }));
 vi.mock("@/lib/notification-failures", () => ({ recordFailedNotification: mocks.record }));
 vi.mock("@/lib/prismadb", () => ({
-  default: { shipping: { updateMany: mocks.shippingUpdateMany }, orderInventoryIssue: { count: mocks.openIssues } },
+  default: { shipping: { updateMany: mocks.shippingUpdateMany }, orderInventoryIssue: { count: mocks.openIssues }, capsuleOrder: { findMany: mocks.pendingCapsuleDraws } },
 }));
 
 import { createGuideInBackground, createGuideRecordingFailure } from "@/lib/guide-background";
@@ -23,6 +24,18 @@ describe("guide creation in the background", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     mocks.shippingUpdateMany.mockResolvedValue({ count: 1 });
     mocks.openIssues.mockResolvedValue(0);
+    mocks.pendingCapsuleDraws.mockResolvedValue([]);
+  });
+
+  it("un pedido de cápsulas sin sorteo cerrado no compra guía todavía, y no cuenta como fallo", async () => {
+    mocks.pendingCapsuleDraws.mockResolvedValue([{ orderId: "o1" }]);
+    await expect(createGuideRecordingFailure({ orderId: "o1", storeId: "s1", source: "webhook de Bold" })).resolves.toBe(false);
+    expect(mocks.createGuideForOrder).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+    expect(mocks.shippingUpdateMany).toHaveBeenCalledWith({
+      where: { orderId: "o1", storeId: "s1", envioClickIdOrder: null },
+      data: { guideError: expect.stringContaining("cierra el sorteo"), guideAttemptedAt: expect.any(Date) },
+    });
   });
 
   it("does not buy a guide for an order paid without stock; the reason stays on the shipping row", async () => {

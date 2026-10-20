@@ -21,6 +21,7 @@ import {
   resolveCouponForOrderUpdate,
 } from "@/lib/order-coupons";
 import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
+import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
 import prismadb from "@/lib/prismadb";
 import {
   CUSTOMER_ORDER_SELECT,
@@ -480,6 +481,11 @@ export async function PATCH(
           "La orden debe tener nombre, teléfono, email y dirección para ser activada.",
         );
       }
+    }
+
+    // Un pedido de cápsulas no sale sin cerrar su sorteo: la caja sale de lo que se sacó.
+    if (targetStatus === OrderStatus.SENT && order.status !== OrderStatus.SENT) {
+      await assertCapsuleDrawsClosed(prismadb, [params.orderId]);
     }
 
     const guideCreation = {

@@ -7,6 +7,7 @@ import {
   STORE_SHIPPING_ORIGIN,
   truncateField,
 } from "@/constants/shipping";
+import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
 import prismadb from "@/lib/prismadb";
 import { getShippingContact } from "@/lib/gift-orders";
 import { getStoreSender } from "@/lib/store-sender";
@@ -50,6 +51,7 @@ export async function createGuideForOrder(
 ) {
   // Use provided client (transaction) or default prismadb
   const db = prismaClient || prismadb;
+  await assertCapsuleDrawsClosed(db, [orderId]);
 
   // 1. Obtener orden completa (o usar datos proporcionados)
   const order =

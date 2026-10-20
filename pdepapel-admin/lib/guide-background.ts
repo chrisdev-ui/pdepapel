@@ -1,6 +1,7 @@
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
 import { recordFailedNotification } from "@/lib/notification-failures";
+import { CAPSULE_DRAW_PENDING_MESSAGE, ordersWithPendingCapsuleDraw } from "@/lib/capsule-shipping-guard";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 
@@ -34,6 +35,14 @@ export function createGuideInBackground(params: { orderId: string; storeId: stri
 }
 
 export async function createGuideRecordingFailure(params: { orderId: string; storeId: string; source: string }): Promise<boolean> {
+  // Un pedido de cápsulas espera a que se cierre su sorteo: no es un fallo, la guía se crea después.
+  if ((await ordersWithPendingCapsuleDraw(prismadb, [params.orderId])).length > 0) {
+    await prismadb.shipping.updateMany({
+      where: { orderId: params.orderId, storeId: params.storeId, envioClickIdOrder: null },
+      data: { guideError: `${params.source}: ${CAPSULE_DRAW_PENDING_MESSAGE}; la guía se crea después.`, guideAttemptedAt: new Date() },
+    });
+    return false;
+  }
   if (await hasOpenStockShortfall(params.storeId, params.orderId)) {
     // Pagado sin unidades: la guía espera a que Paula decida (lib/stock-review.ts).
     await prismadb.shipping.updateMany({

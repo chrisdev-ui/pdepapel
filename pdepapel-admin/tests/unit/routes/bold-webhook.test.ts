@@ -37,6 +37,7 @@ vi.mock("@/lib/prismadb", () => ({
     },
     paymentWebhookEvent: { create: mocks.eventCreate, update: mocks.eventUpdate },
     orderInventoryIssue: { count: async () => 0 },
+    capsuleOrder: { findMany: async () => [] },
     $transaction: mocks.transaction,
   },
 }));

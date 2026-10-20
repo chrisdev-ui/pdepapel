@@ -15,6 +15,7 @@ vi.mock("@/lib/prismadb", () => ({
     shippingQuote: { findFirst: mocks.findQuote },
     shipping: { update: mocks.shippingUpdate },
     box: { findMany: vi.fn().mockResolvedValue([]) },
+    capsuleOrder: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 vi.mock("@/lib/envioclick", () => ({
