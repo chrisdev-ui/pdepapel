@@ -1,4 +1,5 @@
 import "./lib/env.mjs";
+import { ORDER_RECEIPT_HEADERS, ORDER_RECEIPT_HEADER_SOURCE } from "./lib/receipt-headers.mjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -48,6 +49,7 @@ const nextConfig = {
           },
         ],
       },
+      { source: ORDER_RECEIPT_HEADER_SOURCE, headers: ORDER_RECEIPT_HEADERS },
     ];
   },
   async redirects() {
