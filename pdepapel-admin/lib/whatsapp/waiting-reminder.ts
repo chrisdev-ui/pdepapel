@@ -5,6 +5,9 @@ import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { claimWindow } from "@/lib/whatsapp/recovery";
 import { countWaitingConversations } from "@/lib/whatsapp/waiting-list";
 import { REMINDER_AFTER_MS, REMINDER_MAX_WAIT_MS, isReminderHours, waitingReminderEmail } from "@/lib/whatsapp/waiting";
+import { PanelNotice } from "@/emails/panel-notice";
+
+const PANEL_ORIGIN = "https://admin.papeleriapdepapel.com";
 
 export const WAITING_REMINDER_EVERY_MS = 60 * 60 * 1000;
 export const WAITING_CHECK_EVERY_MS = 10 * 60 * 1000;
@@ -42,12 +45,21 @@ export async function maybeSendWaitingReminder(storeId: string, now = new Date()
   return { sent: true, count };
 }
 
-async function sendWaitingReminder(input: { storeId: string; count: number }): Promise<void> {
+export async function sendWaitingReminder(input: { storeId: string; count: number }): Promise<void> {
   if (env.NODE_ENV !== "production") return;
   const to = await getAdminNotificationRecipients();
   if (to.length === 0) return;
   const { subject, text } = waitingReminderEmail(input);
-  await resend.emails.send({ from: "Papelería P de Papel <orders@papeleriapdepapel.com>", to, subject, text });
+  const react = PanelNotice({
+    preview: subject,
+    label: "Panel · WhatsApp",
+    tint: "peach",
+    title: subject,
+    summary: `${input.count === 1 ? "Hay 1 conversación" : `Hay ${input.count} conversaciones`} en las que la clienta escribió hace más de 30 minutos (en las últimas 24 horas) y nadie le ha respondido.`,
+    cta: { href: `${PANEL_ORIGIN}/${input.storeId}/conversaciones?esperando=1`, label: "Ver «Esperando a Paula»" },
+    note: "Este recordatorio sale como mucho una vez por hora, de 8 a. m. a 11 p. m.",
+  }) as React.ReactElement;
+  await resend.emails.send({ from: "Papelería P de Papel <orders@papeleriapdepapel.com>", to, subject, text, react });
 }
 
 /** Lo que dispara el barrido de recuperación (≤ cada 2 min): las tiendas con el correo encendido y mensajes de clientas en el último día. */

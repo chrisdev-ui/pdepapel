@@ -4,6 +4,7 @@ import { deliverEmails } from "@/lib/email-delivery";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import { isFraudCancelled, parseRiskReasons, withRiskReason } from "@/lib/order-risk";
 import prismadb from "@/lib/prismadb";
+import { PanelNotice } from "@/emails/panel-notice";
 
 const PANEL_ORIGIN = "https://admin.papeleriapdepapel.com";
 
@@ -46,6 +47,15 @@ export async function flagPaymentOnCancelledOrder(orderId: string, provider: "Bo
             from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
             to,
             subject: `⚠️ Pago recibido en pedido cancelado — #${order.orderNumber}`,
+            react: PanelNotice({
+              preview: `Pago recibido en el pedido cancelado #${order.orderNumber}`,
+              label: "Panel · Pagos",
+              title: "Pago en un pedido cancelado",
+              meta: `Pedido #${order.orderNumber} · ${provider}`,
+              summary: `${provider} aprobó un pago del pedido #${order.orderNumber}, que estaba cancelado. No se reactivó ni se emitió nada.`,
+              action: "Revisa el pedido y reembolsa si corresponde.",
+              cta: { href: link, label: "Abrir el pedido" },
+            }) as React.ReactElement,
             text: `${provider} aprobó un pago del pedido #${order.orderNumber}, que estaba cancelado. No se reactivó ni se emitió nada. Revisa el pedido y reembolsa si corresponde: ${link}`,
           }),
       },

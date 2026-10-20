@@ -10,6 +10,7 @@ import { IGNORED_EVENT_NOTE, findIgnoredContact } from "@/lib/whatsapp/ignored-c
 import { enqueueWhatsAppWebhookEvent } from "@/lib/whatsapp/queue";
 import { getWhatsAppWebhookConversationKey, getWhatsAppWebhookIdentity } from "@/lib/whatsapp/webhook";
 import { resolveFallbackStoreId } from "@/lib/whatsapp/webhook-intake";
+import { PanelNotice } from "@/emails/panel-notice";
 
 /**
  * Recuperación de eventos de WhatsApp que se quedaron sin procesar: PENDING
@@ -195,6 +196,14 @@ export async function sendStuckEventsAlert(counts: StuckCounts): Promise<void> {
     from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
     to,
     subject: "[Alerta] Mensajes de WhatsApp sin procesar",
+    react: PanelNotice({
+      preview: "Hay mensajes de WhatsApp sin procesar",
+      label: "Panel · WhatsApp",
+      title: "Mensajes de WhatsApp sin procesar",
+      summary: `Hay eventos de WhatsApp sin procesar desde hace más de 10 minutos: ${counts.pending} pendientes y ${counts.retryOverdue} reintentos vencidos.`,
+      action: "La recuperación los vuelve a encolar sola; si el aviso se repite, revisa la cuota de QStash y los registros de Vercel.",
+      note: "Este aviso sale como mucho una vez por hora.",
+    }) as React.ReactElement,
     text:
       `Hay eventos de WhatsApp sin procesar desde hace más de 10 minutos: ${counts.pending} pendientes y ${counts.retryOverdue} reintentos vencidos.\n\n` +
       "La recuperación los vuelve a encolar sola; si el aviso se repite, revisa la cuota de QStash y los registros de Vercel.\n\n" +

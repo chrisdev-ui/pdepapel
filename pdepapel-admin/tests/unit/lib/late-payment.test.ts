@@ -7,6 +7,7 @@ vi.mock("@/lib/store-email-settings", () => ({ getAdminNotificationRecipients: a
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: mocks.send } } }));
 
 import { blocksLatePaymentRevival, flagPaymentOnCancelledOrder } from "@/lib/late-payment";
+import { expectPanelEmail } from "../../helpers/panel-email";
 
 const order = { id: "order-1", storeId: "store-1", orderNumber: "ORD-9", type: "GIFT_CARD", riskScore: 0, riskReasons: null };
 
@@ -38,6 +39,8 @@ describe("pagos tardíos en pedidos cancelados", () => {
     expect(sent.subject).toBe("⚠️ Pago recibido en pedido cancelado — #ORD-9");
     expect(sent.text).toContain("https://admin.papeleriapdepapel.com/store-1/pedidos/order-1");
     expect(sent.text).toContain("Wompi");
+    const html = await expectPanelEmail(sent, { label: "Panel · Pagos", title: "Pago en un pedido cancelado" });
+    expect(html).toContain("https://admin.papeleriapdepapel.com/store-1/pedidos/order-1");
     expect(mocks.deliver.mock.calls[0][1]).toMatchObject({ storeId: "store-1", orderId: "order-1", kind: "order:late-payment" });
 
     mocks.findUnique.mockResolvedValue({ ...order, riskReasons: "pago-en-cancelado" });

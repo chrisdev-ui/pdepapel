@@ -1,6 +1,7 @@
 import { deliverEmails } from "@/lib/email-delivery";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 import prismadb from "@/lib/prismadb";
+import { PanelNotice } from "@/emails/panel-notice";
 
 const PANEL_ORIGIN = "https://admin.papeleriapdepapel.com";
 
@@ -25,6 +26,14 @@ export async function notifyMercadoLibreReauthRequired(connectionId: string) {
               from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
               to,
               subject: "⚠️ Mercado Libre requiere reconexión",
+              react: PanelNotice({
+                preview: "Mercado Libre requiere reconexión",
+                label: "Panel · Mercado Libre",
+                title: "Reconecta Mercado Libre",
+                summary: "La conexión con Mercado Libre se venció: las publicaciones, el stock y las ventas no se sincronizan hasta reconectarla.",
+                action: "Entra a Mercado Libre en el panel y usa «Reconectar» en el Resumen.",
+                cta: { href: link, label: "Reconectar Mercado Libre" },
+              }) as React.ReactElement,
               text: `La conexión con Mercado Libre se venció: las publicaciones, el stock y las ventas no se sincronizan hasta reconectarla. Reconéctala desde ${link} (Resumen → Reconectar).`,
             }),
         },
