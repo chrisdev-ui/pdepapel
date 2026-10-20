@@ -5,7 +5,7 @@ import { getCapsuleQueue } from "./server/get-capsule-queue";
 
 export const metadata: Metadata = { title: "Sacar cápsulas" };
 
-export default async function SacarCapsulasPage({ params }: { params: { storeId: string } }) {
+export default async function SacarCapsulasPage({ params, searchParams }: { params: { storeId: string }; searchParams: { pedido?: string } }) {
   const { orders, boxes } = await getCapsuleQueue(params.storeId);
   return (
     <div className="flex flex-col gap-6 p-4 pt-6 md:p-8">
@@ -15,7 +15,7 @@ export default async function SacarCapsulasPage({ params }: { params: { storeId:
           Abre un pedido pagado, saca sus papeles de la bolsa completa y escanea cada uno; elige el regalo, cierra y empaca en la caja sugerida. Después, su video.
         </p>
       </div>
-      <CapsuleQueue orders={JSON.parse(JSON.stringify(orders))} boxes={boxes} />
+      <CapsuleQueue orders={JSON.parse(JSON.stringify(orders))} boxes={boxes} initialOrderId={typeof searchParams.pedido === "string" ? searchParams.pedido : null} />
     </div>
   );
 }

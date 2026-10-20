@@ -42,13 +42,15 @@ const CONSENT_LABEL: Record<string, string> = {
  * cámara solo lo llenan): así funciona con lector de barras, con la cámara
  * del celular o a mano.
  */
-export function CapsuleQueue({ orders: initialOrders, boxes }: { orders: CapsuleQueueRow[]; boxes: { name: string; type: string; isDefault: boolean }[] }) {
+export function CapsuleQueue({ orders: initialOrders, boxes, initialOrderId = null }: { orders: CapsuleQueueRow[]; boxes: { name: string; type: string; isDefault: boolean }[]; initialOrderId?: string | null }) {
   const params = useParams<{ storeId: string }>();
   // La cola se vuelve a pedir a la API en vez de refrescar la página: `productos/loading.tsx` la volvería a montar y se perdería el pedido abierto.
   const [orders, setOrders] = useState(initialOrders);
   const { toast } = useToast();
-  const [tab, setTab] = useState<"sacar" | "videos">("sacar");
-  const [selected, setSelected] = useState<string | null>(null);
+  // Desde el pedido («Abrir en Sacar cápsulas») llega abierto, en su pestaña.
+  const linked = initialOrders.find((order) => order.orderId === initialOrderId) ?? null;
+  const [tab, setTab] = useState<"sacar" | "videos">(linked?.drawCompletedAt ? "videos" : "sacar");
+  const [selected, setSelected] = useState<string | null>(linked?.orderId ?? null);
   const [detail, setDetail] = useState<DrawDetail | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);

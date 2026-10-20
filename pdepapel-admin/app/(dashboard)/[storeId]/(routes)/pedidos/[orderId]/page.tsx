@@ -1,8 +1,10 @@
 import { getDaneLocations } from "@/actions/get-dane-locations";
+import { getOrderCapsuleSection } from "@/lib/capsule-order-section";
 import { buildOrderTimeline, getNextStepCard } from "@/lib/order-timeline";
 import { getShippingChargeState } from "@/lib/order-totals";
 import prismadb from "@/lib/prismadb";
 import { getStoreAccess } from "@/lib/store-access";
+import { CapsuleOrderCard } from "./components/capsule-order-card";
 import { OrderForm } from "./components/order-form";
 import { OrderWorkspaceHeader } from "./components/order-workspace-header";
 import { ShippingInfo } from "./components/shipping-info";
@@ -31,6 +33,7 @@ export default async function OrderPage({
     locations,
     boxes,
     storeSettings,
+    capsule,
   ] = await Promise.all([
     getOrder(params.orderId, params.storeId),
     getCoupons(params.storeId),
@@ -43,6 +46,7 @@ export default async function OrderPage({
         select: { freeShippingThreshold: true },
       })
       .catch(() => null),
+    access ? getOrderCapsuleSection(prismadb, { storeId: params.storeId, orderId: params.orderId, isViewer: access.role === "viewer" }) : Promise.resolve(null),
   ]);
 
   const freeShippingThreshold = storeSettings?.freeShippingThreshold ?? null;
@@ -67,6 +71,7 @@ export default async function OrderPage({
             }}
           />
         )}
+        {capsule && <CapsuleOrderCard storeId={params.storeId} orderId={params.orderId} capsule={capsule} />}
         <OrderForm
           storeId={params.storeId}
           products={products}
