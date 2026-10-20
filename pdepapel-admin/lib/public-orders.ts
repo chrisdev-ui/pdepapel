@@ -1,5 +1,6 @@
 import { OrderStatus, Prisma } from "@prisma/client";
 
+import type { CapsuleReceipt } from "@/lib/capsule-receipt";
 import { isPaidLike } from "@/lib/order-transitions";
 
 import {
@@ -161,9 +162,9 @@ export type CustomerOrderRecord = Prisma.OrderGetPayload<{
  * Respuesta pública del pedido: cambia el id de quien lo creó por una marca
  * booleana (la tienda solo necesita saber si lo creó el panel).
  */
-export function toCustomerOrderResponse(order: CustomerOrderRecord) {
+export function toCustomerOrderResponse(order: CustomerOrderRecord, capsule: CapsuleReceipt | null = null) {
   const { createdBy, ...customerOrder } = order;
-  return { ...customerOrder, createdByAdmin: Boolean(createdBy), ...receiptMeta(order.status) };
+  return { ...customerOrder, createdByAdmin: Boolean(createdBy), capsule, ...receiptMeta(order.status) };
 }
 
 export type PaymentResult = "approved" | "declined" | "pending";

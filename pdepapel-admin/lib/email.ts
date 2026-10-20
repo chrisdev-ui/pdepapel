@@ -27,6 +27,7 @@ import {
   getReadablePaymentMethod,
   getReadableStatus,
 } from "@/lib/utils";
+import { capsuleThanksParagraph } from "@/lib/capsule-receipt";
 import { env } from "@/lib/env.mjs";
 import {
   createOrderAccountClaimToken,
@@ -54,6 +55,8 @@ export const ORDER_EMAIL_INCLUDE = {
     include: { product: { select: { name: true } } },
     orderBy: { createdAt: "asc" },
   },
+  // Un pack de cápsulas cambia el agradecimiento (lib/capsule-receipt.ts).
+  capsuleOrder: { select: { packSize: true, edition: { select: { packOptions: { select: { packSize: true, giftLabel: true } } } } } },
 } satisfies Prisma.OrderInclude;
 
 type LoadedOrder = Prisma.OrderGetPayload<{ include: typeof ORDER_EMAIL_INCLUDE }>;
@@ -381,7 +384,12 @@ export function buildOrderEmails(
   const riskNote = flagged
     ? parseRiskReasons(order.riskReasons).map((reason) => RISK_REASON_LABELS[reason]).join(" · ") || "Varias señales"
     : null;
-  const thanksParagraph = digital
+  const capsule = order.capsuleOrder
+    ? { packSize: order.capsuleOrder.packSize, giftLabel: order.capsuleOrder.edition.packOptions.find((option) => option.packSize === order.capsuleOrder!.packSize)?.giftLabel ?? null }
+    : null;
+  const thanksParagraph = capsule && (status === OrderStatus.PAID || status === OrderStatus.PENDING || status === OrderStatus.CREATED)
+    ? capsuleThanksParagraph(capsule, status)
+    : digital
     ? status === OrderStatus.PAID && giftCardHeld
       ? order.giftRecipientEmail
         ? `¡Gracias! Recibimos tu pago. La revisamos en menos de 24 horas hábiles y el código llega ${giftCardTarget}.`

@@ -48,6 +48,7 @@ import {
 import { calculateOrderFinancials } from "@/lib/financial";
 import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
+import { loadCapsuleReceipt } from "@/lib/capsule-receipt";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import {
   canTransition,
@@ -159,7 +160,7 @@ export async function GET(
     // (`createdBy`) sí viajan por enlace, como los de invitada.
     if (!canCustomerViewOrder(order, userId))
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-    const receipt = toCustomerOrderResponse(order);
+    const receipt = toCustomerOrderResponse(order, await loadCapsuleReceipt(prismadb, order));
     return NextResponse.json(isOrderOwnerSession(order, userId) ? receipt : maskOrderForLinkHolder(receipt), {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
