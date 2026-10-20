@@ -172,6 +172,9 @@ function useToast() {
 
   React.useEffect(() => {
     listeners.push(setState);
+    // Un aviso disparado al montar la página corre antes de que el Toaster se
+    // suscriba (va después en el árbol) y se perdía.
+    setState(memoryState);
     return () => {
       const index = listeners.indexOf(setState);
       if (index > -1) {
