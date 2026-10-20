@@ -9,6 +9,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { e2eServerEnv, withNetworkGuard } from "./lib/e2e-server-env.mjs";
+import { startFakeUpstash, withFakeUpstash } from "./lib/fake-upstash.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const env = { ...e2eServerEnv(process.env, "e2e (build de producción)"), NODE_ENV: "production", NEXT_DIST_DIR: ".next-e2e" };
@@ -22,8 +23,14 @@ if (process.env.E2E_SKIP_BUILD !== "1") {
   console.log(`[e2e] build de producción listo en ${Math.round((Date.now() - started) / 1000)} s`);
 }
 
-const server = spawn(npx, ["next", "start", "-p", "3101"], { cwd: root, env: withNetworkGuard(env), stdio: "inherit" });
+// El Redis falso corre en este proceso: se arranca después del build, que
+// bloquea el proceso (spawnSync) y no podría contestarle.
+const upstash = await startFakeUpstash();
+const server = spawn(npx, ["next", "start", "-p", "3101"], { cwd: root, env: withNetworkGuard(withFakeUpstash(env, upstash.url)), stdio: "inherit" });
 const stop = () => server.kill("SIGTERM");
 process.on("SIGTERM", stop);
 process.on("SIGINT", stop);
-server.on("exit", (code) => process.exit(code ?? 0));
+server.on("exit", (code) => {
+  upstash.close();
+  process.exit(code ?? 0);
+});
