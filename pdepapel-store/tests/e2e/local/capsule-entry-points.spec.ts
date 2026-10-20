@@ -29,6 +29,8 @@ function admin(mode: "seed" | "seed-live" | "clean") {
 const VIEWPORTS = [
   { name: "390", width: 390, height: 844 },
   { name: "768", width: 768, height: 1024 },
+  // Desde 1024 se ve la fila de categorías: «Cápsulas» toma el lugar de un tipo.
+  { name: "1024", width: 1024, height: 768 },
   { name: "1280", width: 1280, height: 800 },
 ] as const;
 
