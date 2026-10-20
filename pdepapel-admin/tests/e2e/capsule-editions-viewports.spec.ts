@@ -55,15 +55,18 @@ async function seedEdition(width: number) {
   const slipProduct = await db.product.create({
     data: { ...base, id: `e2e-capsule-slip-${width}`, name: `Lapicero cápsula ${width}`, slug: `lapicero-capsula-${width}`, sku: `E2E-CAP-SLIP-${width}`, stock: 25, price: 9000, acqPrice: 4000 },
   });
+  const extraProduct = await db.product.create({
+    data: { ...base, id: `e2e-capsule-extra-${width}`, name: `Borrador cápsula ${width}`, slug: `borrador-capsula-${width}`, sku: `E2E-CAP-EXTRA-${width}`, stock: 5, price: 9000, acqPrice: 4000 },
+  });
   const editionProduct = await db.product.create({
     data: { ...base, id: `e2e-capsule-edition-${width}`, name: `Cápsula edición ${width}`, slug: `capsula-edicion-${width}`, sku: `E2E-CAP-ED-${width}`, stock: 0, price: 12900, acqPrice: 0, isArchived: true },
   });
   const edition = await db.capsuleEdition.create({
     data: { storeId, number: width, name: `Escritorio ${width}`, theme: "escritorio", productId: editionProduct.id, costBandMin: 3000, costBandMax: 5000 },
   });
-  created.products.push(slipProduct.id, editionProduct.id);
+  created.products.push(slipProduct.id, extraProduct.id, editionProduct.id);
   created.editions.push(edition.id);
-  return { slipProduct, edition };
+  return { slipProduct, extraProduct, edition };
 }
 
 test.describe("ediciones de cápsulas en distintos tamaños", () => {
@@ -98,7 +101,7 @@ test.describe("ediciones de cápsulas en distintos tamaños", () => {
     test(`armar, imprimir y sacar en ${viewport.name}`, async ({ page }) => {
       test.setTimeout(300_000);
       mkdirSync(SHOTS, { recursive: true });
-      const { slipProduct, edition } = await seedEdition(viewport.width);
+      const { slipProduct, extraProduct, edition } = await seedEdition(viewport.width);
       const category = await db.category.findUniqueOrThrow({ where: { id: CATEGORY_ID }, select: { name: true } });
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await signIn(page, `/${storeId}/productos/ediciones/${edition.id}`);
@@ -110,6 +113,7 @@ test.describe("ediciones de cápsulas en distintos tamaños", () => {
       const quantity = page.getByRole("textbox", { name: `Papeles de ${slipProduct.name}` });
       await expect(quantity).toBeVisible({ timeout: 30_000 });
       await quantity.fill("20");
+      await page.getByRole("textbox", { name: `Papeles de ${extraProduct.name}` }).fill("2");
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-1-bolsa.png`), fullPage: true });
 
@@ -121,7 +125,7 @@ test.describe("ediciones de cápsulas en distintos tamaños", () => {
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-2-packs.png`), fullPage: true });
 
       // Imprimir: aparta y abre la hoja de etiquetas con un QR por papel.
-      const print = page.getByRole("button", { name: "Imprimir 20 papeles" });
+      const print = page.getByRole("button", { name: "Imprimir 22 papeles" });
       await expect(print).toBeEnabled({ timeout: 30_000 });
       const popup = page.waitForEvent("popup", { timeout: 15_000 }).catch(() => null);
       await print.click();
@@ -130,6 +134,18 @@ test.describe("ediciones de cápsulas en distintos tamaños", () => {
       await expect(sheet.locator("svg").first()).toBeVisible({ timeout: 60_000 });
       await sheet.screenshot({ path: path.join(SHOTS, `${viewport.name}-3-etiquetas.png`) });
       await expect.poll(async () => (await db.product.findUniqueOrThrow({ where: { id: slipProduct.id } })).reservedUnits).toBe(20);
+
+      // Anular un producto con una bolsa a medio armar: la bolsa no se pierde.
+      await page.goto(new URL(`/${storeId}/productos/ediciones/${edition.id}`, baseURL).toString(), { waitUntil: "domcontentloaded" });
+      await page.getByRole("checkbox", { name: category.name }).check();
+      await page.getByRole("button", { name: "Buscar productos" }).click();
+      const inProgress = page.getByRole("textbox", { name: `Papeles de ${slipProduct.name}` });
+      await inProgress.fill("1");
+      await page.getByRole("listitem").filter({ hasText: `${extraProduct.name} (papel)` }).getByRole("button", { name: "Anular 2" }).click();
+      await expect(page.getByText("2 anulados").first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("listitem").filter({ hasText: `${extraProduct.name} (papel)` })).toContainText("0 impresos · 0 sacados · 2 anulados");
+      await expect(inProgress).toHaveValue("1");
+      await expect.poll(async () => (await db.product.findUniqueOrThrow({ where: { id: extraProduct.id } })).reservedUnits).toBe(0);
 
       // Un pedido pagado de pack de 5, con el costo provisional ya en sus finanzas.
       const order = await db.order.create({
@@ -150,7 +166,7 @@ test.describe("ediciones de cápsulas en distintos tamaños", () => {
       });
       created.orders.push(order.id);
       await db.capsuleOrder.create({ data: { storeId, orderId: order.id, editionId: edition.id, packSize: 5, provisionalCost: 20000, videoConsent: "PUBLIC_FIRST_NAME" } });
-      const codes = (await db.capsuleSlip.findMany({ where: { editionId: edition.id, status: "PRINTED" }, orderBy: { code: "asc" }, take: 5 })).map((slip) => slip.code);
+      const codes = (await db.capsuleSlip.findMany({ where: { editionId: edition.id, productId: slipProduct.id, status: "PRINTED" }, orderBy: { code: "asc" }, take: 5 })).map((slip) => slip.code);
 
       // Sacar: escribir cada código en el campo, cerrar y ver la caja.
       await page.goto(new URL(`/${storeId}/productos/ediciones/sacar`, baseURL).toString(), { waitUntil: "domcontentloaded" });

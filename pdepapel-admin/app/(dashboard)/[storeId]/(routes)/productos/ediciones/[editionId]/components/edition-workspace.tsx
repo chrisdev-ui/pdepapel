@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { DEFAULT_CONTENT_OPTIONS, openLabelPrintJob } from "@/components/labels/qr-label-print-sheet";
@@ -61,9 +61,11 @@ const percent = (value: number | null) => (value === null ? "—" : `${value.toL
  */
 export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const params = useParams<{ storeId: string }>();
-  const router = useRouter();
   const { toast } = useToast();
-  const { edition, pool, printedSlips, categories } = data;
+  const { categories } = data;
+  // La edición, la bolsa y lo impreso se vuelven a pedir a la API: refrescar la página la remontaría (productos/loading.tsx) y se perdería la bolsa en curso.
+  const [detail, setDetail] = useState({ edition: data.edition, pool: data.pool, printedSlips: data.printedSlips });
+  const { edition, pool, printedSlips } = detail;
   const editable = edition.status === "DRAFT" || edition.status === "PREVIEW";
 
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -101,6 +103,10 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   }));
 
   const api = `/api/${params.storeId}/capsule-editions/${edition.id}`;
+  const reloadDetail = async () => {
+    const { data: fresh } = await axios.get(api);
+    setDetail({ edition: fresh.edition, pool: fresh.pool, printedSlips: fresh.printedSlips });
+  };
   const run = async (key: string, work: () => Promise<void>) => {
     setBusy(key);
     try {
@@ -165,7 +171,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       printLabels(body.slips);
       if (kind === "SLIP") setQuantities({});
       else setGiftQuantities({});
-      router.refresh();
+      await reloadDetail();
     });
 
   const voidProduct = (productId: string, kind: string) =>
@@ -173,7 +179,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       const slipIds = printedSlips.filter((slip) => slip.productId === productId && slip.kind === kind).map((slip) => slip.id);
       const { data: body } = await axios.post(`${api}/slips/void`, { slipIds });
       toast({ title: `${body.voided} anulados`, description: "Su apartado se liberó." });
-      router.refresh();
+      await reloadDetail();
     });
 
   const saveFloor = () =>
@@ -189,7 +195,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
     run(`estado-${status}`, async () => {
       await axios.patch(api, { status });
       toast({ title: status === "CLOSED" ? "Edición cerrada" : `Edición en ${EDITION_STATUS[status].label.toLowerCase()}` });
-      router.refresh();
+      await reloadDetail();
     });
 
   const quantityInput = (row: Candidate, values: Record<string, number>, setValues: (next: Record<string, number>) => void, label: string) => (
