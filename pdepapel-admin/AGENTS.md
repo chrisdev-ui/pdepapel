@@ -695,7 +695,7 @@ Design: `docs/design/asistente-experto-paula.md` (§13 is what v1 built) and `do
 
 ### Store social networks
 
-`lib/social-links.ts` lists the store's networks (Instagram, TikTok, Facebook, YouTube), mirroring `pdepapel-store/lib/social-links.ts`; `tests/unit/lib/social-links.test.ts` fails if the two differ. The invoice PDF footer prints `socialLinksLine()`. The PDF catalog reads the per-store `Store.instagram/tiktok/facebook/youtube` fields that Paula edits in Configuración › Redes sociales: that is data, not this list.
+`lib/social-links.ts` lists the store's networks (Instagram, TikTok, Facebook, YouTube), mirroring `pdepapel-store/lib/social-links.ts`; `tests/unit/lib/social-links.test.ts` fails if the two differ. The invoice PDF footer prints `socialLinksLine()`. **Every customer email** (`Shell`: orders, shipping, gift notice, gift card, newsletter, reactivation) ends with «Síguenos: Instagram · TikTok · Facebook · YouTube» as text links (no SVG: mail clients block it), and its plain-text part ends with `socialLinksText()` (`withSocialLinks`). Panel notices (`PanelShell`) never carry it. `tests/unit/emails/social-footer.test.ts` covers both. The PDF catalog reads the per-store `Store.instagram/tiktok/facebook/youtube` fields that Paula edits in Configuración › Redes sociales: that is data, not this list.
 
 ### Boletín: subscribers, issues and campaigns
 

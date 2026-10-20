@@ -14,6 +14,7 @@ import {
 } from "@/lib/newsletter-tokens";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
+import { socialLinksText, withSocialLinks } from "@/lib/social-links";
 
 export const NEWSLETTER_CONSENT_VERSION = "2026-09-01";
 export const NEWSLETTER_CONSENT_TEXT =
@@ -60,7 +61,7 @@ async function sendConfirmationEmail(email: string, token: string) {
     to: [email],
     subject: "Confirma tu suscripción a P de Papel",
     react: NewsletterConfirmation({ confirmationUrl }) as React.ReactElement,
-    text: `Confirma tu suscripción a P de Papel: ${confirmationUrl}\n\nEl enlace vence en 48 horas. Si no lo solicitaste, ignora este mensaje.`,
+    text: withSocialLinks(`Confirma tu suscripción a P de Papel: ${confirmationUrl}\n\nEl enlace vence en 48 horas. Si no lo solicitaste, ignora este mensaje.`),
   });
 
   if (error) throw new Error(error.message);
@@ -97,6 +98,7 @@ async function sendWelcomeEmail(
       "Tu suscripción está confirmada.",
       coupon ? `Tu código de ${NEWSLETTER_WELCOME_DISCOUNT_PERCENT} % en tu primera compra: ${coupon.code} (vence el ${formatEmailDate(coupon.endDate)}).` : null,
       `Explora la tienda: ${shopUrl}`,
+      socialLinksText(),
       `Cancelar suscripción: ${unsubscribeUrl}`,
     ]
       .filter(Boolean)

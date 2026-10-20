@@ -12,6 +12,7 @@ import { formatEmailDate } from "@/lib/newsletter";
 import { listUnsubscribeHeaders as listHeaders, newsletterUnsubscribeUrl as unsubscribeUrl } from "@/lib/newsletter-unsubscribe-link";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
+import { socialLinksText } from "@/lib/social-links";
 
 export type NewsletterCampaignKind = "early-access" | "arrival";
 
@@ -112,7 +113,7 @@ export async function sendNewsletterCampaign(input: { storeId: string; homeConte
           to: subscriber.email,
           subject: `Acceso anticipado: ${entry.title}`,
           react: NewsletterEarlyAccess({ title: entry.title, subtitle: entry.subtitle, accessUrl, products: productCards, expiresAt, unsubscribeUrl: cancelUrl }) as React.ReactElement,
-          text: `${entry.title}\n\nCompra antes que nadie con este enlace (vence el ${formatEmailDate(expiresAt)}): ${accessUrl}\n\nCancelar suscripción: ${cancelUrl}`,
+          text: `${entry.title}\n\nCompra antes que nadie con este enlace (vence el ${formatEmailDate(expiresAt)}): ${accessUrl}\n\n${socialLinksText()}\n\nCancelar suscripción: ${cancelUrl}`,
           headers: listHeaders(cancelUrl),
         };
       }),
@@ -131,7 +132,7 @@ export async function sendNewsletterCampaign(input: { storeId: string; homeConte
         to: subscriber.email,
         subject: `Ya llegó: ${entry.title}`,
         react: NewsletterArrival({ title: entry.title, subtitle: entry.subtitle, shopUrl: newArrivalsUrl, products: productCards, unsubscribeUrl: cancelUrl }) as React.ReactElement,
-        text: `${entry.title}\n\nYa está en la tienda: ${newArrivalsUrl}\n\nCancelar suscripción: ${cancelUrl}`,
+        text: `${entry.title}\n\nYa está en la tienda: ${newArrivalsUrl}\n\n${socialLinksText()}\n\nCancelar suscripción: ${cancelUrl}`,
         headers: listHeaders(cancelUrl),
       };
     }),
@@ -216,7 +217,7 @@ export async function sendNewsletterIssue(input: {
           pageCount: issue._count.pages,
           unsubscribeUrl: cancelUrl,
         }) as React.ReactElement,
-        text: `${issue.title}\n\n${issue.intro ?? ""}\n\nVer el número completo: ${issueUrl}\n\nCancelar suscripción: ${cancelUrl}`,
+        text: `${issue.title}\n\n${issue.intro ?? ""}\n\nVer el número completo: ${issueUrl}\n\n${socialLinksText()}\n\nCancelar suscripción: ${cancelUrl}`,
         headers: listHeaders(cancelUrl),
       };
     }),

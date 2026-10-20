@@ -11,6 +11,7 @@ import {
   Title,
   Unsubscribe,
 } from "./components";
+import { socialLinksText } from "../lib/social-links";
 
 interface RecommendedProduct {
   id: string;
@@ -50,7 +51,7 @@ export function reactivationEmailText({
     : "";
   return (
     `${greeting}\n\nTe guardamos un descuento para cuando quieras volver. No hay apuro, pero sí fecha de vencimiento.\n\n` +
-    `Tu código: ${discountCode} (${discountPercentage} % en toda la tienda).${products}\n\nUsar mi descuento: ${storeUrl}\n\nP de Papel · Medellín, Colombia\nCancelar suscripción: ${unsubscribeUrl}`
+    `Tu código: ${discountCode} (${discountPercentage} % en toda la tienda).${products}\n\nUsar mi descuento: ${storeUrl}\n\n${socialLinksText()}\n\nP de Papel · Medellín, Colombia\nCancelar suscripción: ${unsubscribeUrl}`
   );
 }
 

@@ -38,6 +38,7 @@ import { getShippingChargeState } from "@/lib/order-totals";
 import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 import prismadb from "@/lib/prismadb";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import { socialLinksText, withSocialLinks } from "@/lib/social-links";
 
 /**
  * Lo que necesita un correo de pedido, en UNA sola consulta.
@@ -284,6 +285,7 @@ async function sendGiftNotification(
           ? `Guía de envío: ${trackingInfo}\nSeguimiento: https://www.envioclick.com/co/track/${trackingInfo}`
           : "",
         "Este aviso no muestra qué hay dentro ni cuánto costó: es una sorpresa.",
+        socialLinksText(),
       ]
         .filter(Boolean)
         .join("\n\n"),
@@ -451,7 +453,7 @@ export function buildOrderEmails(
           giftRecipientName,
           digital,
         }) as React.ReactElement,
-        text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`,
+        text: withSocialLinks(`Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`),
       }
     : null;
 
@@ -664,7 +666,7 @@ export function buildShippingEmails(
           thanksParagraph,
           giftRecipientName,
         }) as React.ReactElement,
-        text: `${subjectCustomer}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`,
+        text: withSocialLinks(`${subjectCustomer}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`),
       }
     : null;
 

@@ -28,6 +28,8 @@ import {
 } from "@react-email/components";
 import * as React from "react";
 
+import { STORE_SOCIAL_LINKS } from "../lib/social-links";
+
 import {
   LOGO_URL,
   Tint,
@@ -132,9 +134,32 @@ export function Shell({ preview, tint = "pink", kicker, children }: ShellProps) 
             {kicker ? <Text style={tagline(tint)}>{kicker}</Text> : null}
           </Section>
           <Section style={body}>{children}</Section>
+          <SocialFooter />
         </Container>
       </Body>
     </Html>
+  );
+}
+
+/**
+ * Las redes de la tienda al pie de todo correo a clientes. Enlaces de texto:
+ * los clientes de correo bloquean los SVG. Los avisos del panel no lo llevan.
+ */
+function SocialFooter() {
+  return (
+    <Section style={{ padding: "0 24px 22px" }}>
+      <Text style={footer}>
+        Síguenos:{" "}
+        {STORE_SOCIAL_LINKS.map((link, index) => (
+          <React.Fragment key={link.network}>
+            {index > 0 ? " · " : null}
+            <Link href={link.url} style={footerLink}>
+              {link.label}
+            </Link>
+          </React.Fragment>
+        ))}
+      </Text>
+    </Section>
   );
 }
 

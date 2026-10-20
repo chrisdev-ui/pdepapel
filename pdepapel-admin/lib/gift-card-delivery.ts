@@ -3,6 +3,7 @@ import type { IssuedGiftCard } from "@/lib/gift-cards";
 import { recordFailedNotification } from "@/lib/notification-failures";
 import prismadb from "@/lib/prismadb";
 import { currencyFormatter } from "@/lib/utils";
+import { socialLinksText } from "@/lib/social-links";
 
 /**
  * Manda el correo con el código de una tarjeta recién emitida o reemitida.
@@ -62,6 +63,7 @@ export async function deliverGiftCard(
         `Código: ${code}`,
         "Se usa en papeleriapdepapel.com al pagar, entera o por partes.",
         card.message ? `Mensaje: «${card.message}»` : "",
+        socialLinksText(),
       ]
         .filter(Boolean)
         .join("\n\n"),

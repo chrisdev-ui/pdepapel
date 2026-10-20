@@ -207,7 +207,7 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
 
 ### Social networks
 
-`lib/social-links.ts` is the only list of the store's networks (`STORE_SOCIAL_LINKS`): Instagram, TikTok, Facebook, YouTube, in that order. The footer, /nosotros (hero and «Síguenos»), «Entre ediciones», the Organization JSON-LD `sameAs` and the Facebook fallback for embedded posts all read it. Icons come from `components/social-icon.tsx` (monochrome `currentColor` marks in `components/icons.tsx`). Every link opens in a new tab with `rel="noopener noreferrer"` and `aria-label` «<Red> de P de Papel». The admin has the same list in `pdepapel-admin/lib/social-links.ts`, and a test checks that the two match. No email shows the networks today.
+`lib/social-links.ts` is the only list of the store's networks (`STORE_SOCIAL_LINKS`): Instagram, TikTok, Facebook, YouTube, in that order. The footer, /nosotros (hero and «Síguenos»), «Entre ediciones», the Organization JSON-LD `sameAs` and the Facebook fallback for embedded posts all read it. Icons come from `components/social-icon.tsx` (monochrome `currentColor` marks in `components/icons.tsx`). Every link opens in a new tab with `rel="noopener noreferrer"` and `aria-label` «<Red> de P de Papel». The admin has the same list in `pdepapel-admin/lib/social-links.ts`, and a test checks that the two match. Customer emails (admin `emails/components.tsx` `Shell`) carry them as text links in the footer and in the plain-text part.
 
 ### Capsule editions (`/capsulas/[edicion]`)
 
