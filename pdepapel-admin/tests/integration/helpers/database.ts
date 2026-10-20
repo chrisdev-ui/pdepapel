@@ -106,6 +106,11 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
       where: { fairEventId: { in: fairEventIds } },
     });
   }
+  await testPrisma.capsuleSlip.deleteMany({ where: { storeId: fixture.store.id } });
+  await testPrisma.capsuleOrder.deleteMany({ where: { storeId: fixture.store.id } });
+  await testPrisma.capsuleBatchItem.deleteMany({ where: { batch: { storeId: fixture.store.id } } });
+  await testPrisma.capsuleBatch.deleteMany({ where: { storeId: fixture.store.id } });
+  await testPrisma.capsuleEdition.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.stockReservationEvent.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.stockReservationItem.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.stockReservation.deleteMany({ where: { storeId: fixture.store.id } });

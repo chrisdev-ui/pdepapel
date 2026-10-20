@@ -25,6 +25,7 @@ const password = `t${randomBytes(12).toString("hex")}`;
 let roUrl = "";
 let roClient: PrismaClient;
 let fixture: InventoryFixture | undefined;
+let editionProductId = "";
 
 const statementsFor = (databaseName: string) => copilotRoStatements(databaseName, password);
 
@@ -44,6 +45,12 @@ beforeAll(async () => {
   fixture = await createInventoryFixture();
   session.userId = fixture.store.userId;
   const store = fixture.store.id;
+  // Un producto de edición de cápsulas con stock: el Copiloto lo deja fuera, y para eso lee CapsuleEdition.
+  const editionProduct = await testPrisma.product.create({
+    data: { name: "Edicion Escritorio", slug: `edicion-${store}`, description: "Cápsulas", stock: 10, price: 12900, acqPrice: 4000, sku: `ED-${store}`, storeId: store, categoryId: fixture.category.id, colorId: fixture.component.colorId, sizeId: fixture.component.sizeId, designId: fixture.component.designId },
+  });
+  editionProductId = editionProduct.id;
+  await testPrisma.capsuleEdition.create({ data: { storeId: store, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3350, costBandMax: 5580 } });
   const now = new Date();
   await testPrisma.order.create({
     data: {
@@ -163,6 +170,7 @@ describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada m
       datos: { criterios: { margenMinimoPct: number }; productos: { productId: string; unidades30Dias: number; enlaceConUtm: string; bandaDeMargen: string }[] };
     }).datos;
     expect(promotion.criterios.margenMinimoPct).toBe(35);
+    expect(promotion.productos.map((row) => row.productId)).not.toContain(editionProductId);
     const component = promotion.productos.find((row) => row.productId === fixture!.component.id);
     expect(component?.unidades30Dias).toBe(4);
     expect(component?.enlaceConUtm).toMatch(/^https:\/\/papeleriapdepapel\.com\/producto\/.+utm_source=social&utm_medium=paid_social&utm_campaign=producto-/);

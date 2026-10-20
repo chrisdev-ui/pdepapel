@@ -123,7 +123,8 @@ export async function loadDemand(storeId: string, now: Date, run: typeof withCop
 export async function loadKitData(db: CopilotDb, storeId: string, days: number, now = new Date()) {
   const [rows, history, offers, tiers, firstStocked] = await Promise.all([
     db.product.findMany({
-      where: { storeId, isArchived: false },
+      // Sin el producto de una edición de cápsulas: sus papeles ya cuentan en los productos reales.
+      where: { storeId, isArchived: false, capsuleEdition: { is: null } },
       select: {
         id: true,
         name: true,

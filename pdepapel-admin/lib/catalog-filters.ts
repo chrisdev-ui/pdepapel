@@ -23,6 +23,8 @@ import { CAPSULAS_SORPRESA_ID } from "@/constants";
 export const EXCLUDE_BUNDLE_PRODUCTS = {
   isKit: false,
   categoryId: { not: CAPSULAS_SORPRESA_ID },
+  // El producto de una edición de cápsulas: su stock son papeles que ya cuentan en los productos reales.
+  capsuleEdition: { is: null },
 } as const;
 
 /**
@@ -35,6 +37,7 @@ export const EXCLUDE_BUNDLE_PRODUCTS = {
  */
 export const EXCLUDE_CAPSULE_PRODUCTS = {
   categoryId: { not: CAPSULAS_SORPRESA_ID },
+  capsuleEdition: { is: null },
 } as const;
 
 /**

@@ -265,7 +265,8 @@ async function promotionRows(db: CopilotDb, storeId: string, limit: number, now 
       select: { minimumCampaignMarginPct: true, minimumCampaignStock: true, minimumCampaignDaysCover: true },
     }),
     db.product.findMany({
-      where: { storeId, isArchived: false },
+      // El producto de una edición de cápsulas no se promociona ni cuenta como plata quieta: sus papeles ya están en los productos reales.
+      where: { storeId, isArchived: false, capsuleEdition: { is: null } },
       select: { id: true, name: true, slug: true, stock: true, reservedUnits: true, acqPrice: true, transportationCost: true, isKit: true, description: true, createdAt: true },
       orderBy: [{ stock: "desc" }, { updatedAt: "desc" }],
       take: 100,

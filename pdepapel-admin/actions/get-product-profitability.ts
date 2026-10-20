@@ -1,3 +1,4 @@
+import { availableStock } from "@/lib/available-stock";
 import { requireStoreOwner } from "@/lib/store-access";
 import { getOrderNetProfit } from "@/lib/financial";
 import {
@@ -210,6 +211,8 @@ export async function getDeadInventory(
       stock: { gt: 0 },
       isArchived: false,
       createdAt: { lt: cutoffDate },
+      // Sus papeles ya cuentan en los productos reales: sería contar dos veces.
+      capsuleEdition: { is: null },
     },
     include: {
       orderItems: {
@@ -232,6 +235,9 @@ export async function getDeadInventory(
   const deadStock: DeadInventoryProduct[] = [];
 
   for (const product of products) {
+    // Lo apartado (reservas, papeles de cápsulas impresos) no está quieto: ya tiene destino.
+    const idleUnits = availableStock(product);
+    if (idleUnits <= 0) continue;
     // Determine the last sale date (either from orderItems or inventory movements)
     const lastOrderDate = product.orderItems[0]?.createdAt;
     const lastMovementDate = product.inventoryMovements[0]?.createdAt;
@@ -258,12 +264,12 @@ export async function getDeadInventory(
         id: product.id,
         name: product.name,
         sku: product.sku,
-        stock: product.stock,
+        stock: idleUnits,
         price: product.price,
         acqPrice: product.acqPrice,
         daysSinceLastSale,
         // Calculate capital tied up based on acquisition price if available, otherwise 0
-        capitalTiedUp: (product.acqPrice || 0) * product.stock,
+        capitalTiedUp: (product.acqPrice || 0) * idleUnits,
       });
     }
   }
