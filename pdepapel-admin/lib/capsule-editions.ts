@@ -174,7 +174,7 @@ export async function getCapsuleEdition(storeId: string, editionId: string) {
     pool: Array.from(pool.values()).sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)),
     printedSlips: slips
       .filter((slip) => slip.status === CapsuleSlipStatus.PRINTED)
-      .map((slip) => ({ id: slip.id, code: slip.code, kind: slip.kind, productName: slip.product.name, sku: slip.product.sku })),
+      .map((slip) => ({ id: slip.id, code: slip.code, kind: slip.kind, productId: slip.productId, productName: slip.product.name, sku: slip.product.sku })),
   };
 }
 

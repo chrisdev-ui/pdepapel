@@ -227,6 +227,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Nombres para búsqueda", segment: "productos/nombres" },
           { label: "Opciones para clientes", segment: "productos/opciones" },
           { label: "Empacar cápsulas", segment: "productos/capsulas", ownerOnly: true },
+          { label: "Ediciones de cápsulas", segment: "productos/ediciones", ownerOnly: true },
         ],
       },
       {
