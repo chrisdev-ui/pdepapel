@@ -319,7 +319,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                 <p>
                   <strong>Tu pago sigue en confirmación.</strong> La pasarela
                   aún no nos responde. Apenas llegue la confirmación te avisamos
-                  por WhatsApp o correo; no tienes que pagar de nuevo.
+                  por WhatsApp o correo; no tienes que pagar de nuevo.{" "}
+                  <a
+                    href={getOrderSupportWhatsAppUrl(orderNumber)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold underline underline-offset-4"
+                  >
+                    ¿Tienes dudas? Escríbenos por WhatsApp
+                  </a>
                 </p>
               ) : (
                 <>

@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({ query: "" }));
@@ -130,6 +130,9 @@ describe.each(variants)("aviso de pago al volver de la pasarela (recibo %s)", (_
 
     const status = screen.getByTestId("payment-return-status");
     expect(status).toHaveTextContent(/te avisamos\s+por WhatsApp o correo/);
+    const help = within(status).getByRole("link", { name: "¿Tienes dudas? Escríbenos por WhatsApp" });
+    expect(help).toHaveAttribute("href", expect.stringMatching(/^https:\/\/wa\.me\/.*ORD-1/));
+    expect(help).toHaveAttribute("target", "_blank");
     expect(spies.toast).not.toHaveBeenCalled();
     expect(document.body).not.toHaveTextContent(/rechaz/i);
     expect(screen.queryByRole("button", { name: "Pagar con Bold" })).not.toBeInTheDocument();
