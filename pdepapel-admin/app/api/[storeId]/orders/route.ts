@@ -82,6 +82,7 @@ import {
 } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
+import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 
 type StoreFreight = {
   idRate: number;
@@ -420,6 +421,17 @@ async function createOrder(
       }
     }
 
+    // Cápsulas: las mismas reglas del pack para la tienda y para el panel.
+    const capsulePlan = await resolveCapsuleOrder(prismadb, {
+      storeId: params.storeId,
+      items: orderItems,
+      paymentMethod: payment?.method ?? null,
+      hasCoupon: Boolean(couponCode),
+      hasDiscount: Boolean(discount?.amount && discount.amount > 0),
+      channel: isStoreOwner ? "PANEL" : "STORE",
+      videoConsent: body.capsuleVideoConsent,
+    });
+
     // Recaudo contra entrega (decisión 2026-10-15: lo paga la clienta, aparte
     // del envío). Nunca se acepta el monto que manda la tienda: con la tienda
     // nueva (`shipping.codFeeShown`) el servidor re-cotiza con recaudo, revisa
@@ -574,6 +586,11 @@ async function createOrder(
           })),
         products,
       );
+
+      if (capsulePlan) {
+        const line = discountedPricesMap.get(capsulePlan.editionProductId);
+        if (line) discountedPricesMap.set(capsulePlan.editionProductId, { ...line, unitPrice: capsulePlan.unitPrice, source: "tier", offerLabel: null });
+      }
 
       const itemsWithPrices = orderItems.map(
         (item: {
@@ -831,6 +848,10 @@ async function createOrder(
           },
         },
       });
+
+      if (capsulePlan) {
+        await reserveCapsuleOrder(tx, capsulePlan, { storeId: params.storeId, orderId: createdOrder.id });
+      }
 
       // Batch update stock if order is paid
       if (status === OrderStatus.PAID) {

@@ -7,6 +7,7 @@ import {
   STORE_SHIPPING_ORIGIN,
   truncateField,
 } from "@/constants/shipping";
+import { capsulePackageFor } from "@/lib/capsule-quote";
 import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
 import prismadb from "@/lib/prismadb";
 import { getShippingContact } from "@/lib/gift-orders";
@@ -492,11 +493,10 @@ export async function requoteCartShipping(input: {
     };
   }
 
-  const calculadas = calculatePackageDimensions(
-    input.items as never,
-    products as never,
-    boxConfigurations,
-  );
+  // Cápsulas: la misma caja del peor caso que cotizó `/shipment/quote`.
+  const calculadas =
+    (products.some((product) => product.isArchived) ? await capsulePackageFor(prismadb, input.items, products, boxConfigurations) : null) ??
+    calculatePackageDimensions(input.items as never, products as never, boxConfigurations);
 
   // Se reaprovechan las medidas de la cotización original cuando el carrito
   // no ha cambiado. Por qué: `/shipment/quote` guarda las medidas que devolvió

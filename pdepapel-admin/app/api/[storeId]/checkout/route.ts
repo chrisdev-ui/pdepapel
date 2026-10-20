@@ -67,6 +67,7 @@ import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { runInBackground } from "@/lib/background";
 import { createGuideInBackground } from "@/lib/guide-background";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -428,6 +429,19 @@ async function createCheckout(
       },
     });
 
+    // Cápsulas: las reglas del pack (lib/capsule-checkout.ts). Solo consulta si
+    // el carrito trae un producto archivado, como lo es el de una edición.
+    const capsulePlan = await resolveCapsuleOrder(prismadb, {
+      storeId: params.storeId,
+      items: typedOrderItems,
+      paymentMethod: payment.method,
+      hasCoupon: Boolean(couponCode),
+      hasDiscount: false,
+      channel: "STORE",
+      videoConsent: (body as Record<string, unknown>).capsuleVideoConsent,
+      archivedProductIds: products.filter((product) => product.isArchived).map((product) => product.id),
+    });
+
     // AGGREGATE QUANTITIES FOR VALIDATION
     // We must sum up quantities for duplicate product IDs to assert total required stock
     const neededQuantities: Record<string, number> = {};
@@ -470,7 +484,8 @@ async function createCheckout(
     products.forEach((product) => {
       const requiredQuantity = neededQuantities[product.id];
 
-      if (!product || product.isArchived) {
+      // El producto de una edición sigue archivado a la venta: entra solo como pack.
+      if (!product || (product.isArchived && product.id !== capsulePlan?.editionProductId)) {
         throw ErrorFactory.InvalidRequest(
           `El producto "${product?.name || "Desconocido"}" no está disponible`,
         );
@@ -546,6 +561,12 @@ async function createCheckout(
       ),
       products, // Use the validated products
     );
+
+    // El pack se cobra a su peldaño, nunca con una oferta encima.
+    if (capsulePlan) {
+      const line = pricedLines.get(capsulePlan.editionProductId);
+      if (line) pricedLines.set(capsulePlan.editionProductId, { ...line, unitPrice: capsulePlan.unitPrice, source: "tier", offerLabel: null });
+    }
 
     const errors: string[] = [];
     const orderItemsData: Prisma.OrderItemCreateWithoutOrderInput[] = [];
@@ -854,6 +875,9 @@ async function createCheckout(
       }
 
       const createdOrder = await createStandardOrder(tx);
+      if (capsulePlan) {
+        await reserveCapsuleOrder(tx, capsulePlan, { storeId: params.storeId, orderId: createdOrder.id });
+      }
 
       if (coupon?.isWelcomeBenefit) {
         await reserveWelcomeBenefit(tx, {

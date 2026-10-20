@@ -5,8 +5,8 @@ import { CapsuleDailySlotStatus } from "@prisma/client";
  * reserva de cupo del checkout (P4): cupos CONFIRMED más los HELD que no han
  * vencido. Todos los pedidos de cápsulas de la tienda cuentan, de cualquier
  * canal. El tope es el del día si la dueña lo cambió (`CapsuleDayCap`) o el de
- * la edición; con dos ediciones a la venta el mismo día el tope sería ambiguo
- * (pendiente para P4).
+ * la edición a la venta: solo puede haber una LIVE por tienda, así que ese es
+ * el tope de la tienda (la capacidad de Paula).
  */
 const BOGOTA_OFFSET_MS = -5 * 60 * 60 * 1000;
 
@@ -17,10 +17,20 @@ export const bogotaMinutes = (now: Date) => {
   const local = new Date(now.getTime() + BOGOTA_OFFSET_MS);
   return local.getUTCHours() * 60 + local.getUTCMinutes();
 };
-const minutesOf = (hhmm: string) => {
+/** El día de Bogotá como la fecha (`@db.Date`) de `CapsuleDailySlot`/`CapsuleDayCap`. */
+export const bogotaDate = (now: Date) => new Date(`${bogotaDay(now)}T00:00:00.000Z`);
+export const minutesOf = (hhmm: string) => {
   const [hours, minutes] = hhmm.split(":").map(Number);
   return (Number.isFinite(hours) ? hours : 8) * 60 + (Number.isFinite(minutes) ? minutes : 0);
 };
+
+/** «08:00» → «8:00 a. m.» (la misma cuenta que la tienda en `lib/capsule-copy.ts`). */
+export function formatOpensAt(hhmm: string): string {
+  const [hoursRaw, minutes = "00"] = hhmm.split(":");
+  const hours = Number(hoursRaw);
+  if (!Number.isFinite(hours)) return hhmm;
+  return `${hours % 12 === 0 ? 12 : hours % 12}:${minutes.padStart(2, "0")} ${hours < 12 ? "a. m." : "p. m."}`;
+}
 
 export interface CapsuleDayStatus {
   /** Día de Bogotá («YYYY-MM-DD»). */
