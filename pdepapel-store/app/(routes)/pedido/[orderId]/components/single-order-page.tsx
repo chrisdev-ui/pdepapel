@@ -2,7 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
-import { ArrowRight, MessageCircle, Printer, ShieldAlert, ShieldCheck, ShieldClose } from "lucide-react";
+import { ArrowRight, Loader2, MessageCircle, Printer, ShieldCheck, ShieldClose } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -28,6 +28,15 @@ import {
   ORDER_STATUS_POLL_INTERVAL_MS,
   shouldPollOrderStatus,
 } from "@/lib/order-status-polling";
+import {
+  isCashOnDelivery,
+  isPaymentReturn,
+  PAYMENT_RETURN_POLL_INTERVAL_MS,
+  PAYMENT_RETURN_WINDOW_MS,
+  rememberPaymentNotice,
+  resolvePaymentResult,
+  wasPaymentNoticeShown,
+} from "@/lib/payment-return";
 import {
   countOrderUnits,
   formatUnits,
@@ -67,6 +76,47 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const activeOrder = currentOrder || order;
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+
+  const returnedFromGateway = useMemo(() => isPaymentReturn(searchParams), [searchParams]);
+  const paymentResult = resolvePaymentResult(activeOrder);
+  const paymentReturn = returnedFromGateway && !isCashOnDelivery(activeOrder);
+  const confirmingReturn = paymentReturn && paymentResult === "pending";
+  const [returnWindowOver, setReturnWindowOver] = useState(false);
+  const fastPolling = confirmingReturn && !returnWindowOver;
+
+  useEffect(() => {
+    if (!confirmingReturn) return;
+    const timeoutId = window.setTimeout(() => setReturnWindowOver(true), PAYMENT_RETURN_WINDOW_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [confirmingReturn]);
+
+  // Un aviso por resultado y por pedido en la pestaña: ni el sondeo ni una
+  // recarga lo repiten. Una visita sin marca de la pasarela no avisa nada.
+  useEffect(() => {
+    if (!paymentReturn || paymentResult === "pending") return;
+    if (wasPaymentNoticeShown(order.id, paymentResult)) return;
+    rememberPaymentNotice(order.id, paymentResult);
+
+    if (paymentResult === "approved") {
+      toast({
+        title: "¡Gracias por tu compra!",
+        variant: "success",
+        icon: <ShieldCheck className="h-8 w-8" />,
+        description: "Recibimos tu pago.",
+        duration: 10000,
+      });
+      fireConfetti();
+      return;
+    }
+    toast({
+      title: "¡Hubo un fallo en tu intento de pago!",
+      variant: "destructive",
+      icon: <ShieldClose className="h-14 w-14" />,
+      description:
+        "No se realizó ningún cargo a tu cuenta. Tu carrito sigue intacto: intenta el pago de nuevo o usa otro método.",
+      duration: 10000,
+    });
+  }, [paymentReturn, paymentResult, order.id, toast, fireConfetti]);
 
   // The checkout keeps the cart until the gateway confirms the payment. Once
   // this order is PAID, the cart and the saved checkout are cleared here —
@@ -134,26 +184,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           fetchedOrder.status !== currentOrder.status
         ) {
           setCurrentOrder((previous) => mergePolledOrder(previous, fetchedOrder));
-
-          if (fetchedOrder.status === OrderStatus.PAID) {
-            toast({
-              title: "¡Pago confirmado!",
-              description:
-                "Recibimos tu pago. Tu pedido ya está en preparación.",
-              variant: "success",
-              icon: <ShieldCheck className="h-8 w-8 text-emerald-600" />,
-              duration: 10000,
-            });
-            fireConfetti();
-          } else if (fetchedOrder.status === OrderStatus.CANCELLED) {
-            toast({
-              title: "Intento de pago no procesado",
-              description:
-                "El intento de pago no fue completado. Puedes reintentar cuando desees.",
-              variant: "destructive",
-              duration: 8000,
-            });
-          }
         }
       } catch (e) {
         // Silent catch for background polling
@@ -168,9 +198,12 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       }
     };
 
-    const intervalId = window.setInterval(() => {
-      void refreshOrder();
-    }, ORDER_STATUS_POLL_INTERVAL_MS);
+    const intervalId = window.setInterval(
+      () => {
+        void refreshOrder();
+      },
+      fastPolling ? PAYMENT_RETURN_POLL_INTERVAL_MS : ORDER_STATUS_POLL_INTERVAL_MS,
+    );
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     void refreshOrder();
@@ -180,7 +213,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [currentOrder.status, order.id, fireConfetti, toast]);
+  }, [currentOrder.status, order.id, fastPolling]);
 
   const { mutate, status } = useCheckoutOrder({
     orderId: order.id,
@@ -216,52 +249,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     },
   });
 
-  useEffect(() => {
-    if (
-      searchParams.get("id") &&
-      searchParams.get("id") === order?.payment?.transactionId &&
-      order?.status === OrderStatus.PAID
-    ) {
-      toast({
-        title: "¡Gracias por tu compra!",
-        variant: "success",
-        icon: <ShieldCheck className="h-8 w-8" />,
-        description: "Tu pago ha sido recibido.",
-        duration: 10000,
-      });
-      fireConfetti();
-    }
-
-    if (
-      searchParams.get("id") &&
-      searchParams.get("id") === order?.payment?.transactionId &&
-      order?.status === OrderStatus.CANCELLED
-    ) {
-      toast({
-        title: "¡Hubo un fallo en tu intento de pago!",
-        variant: "destructive",
-        icon: <ShieldClose className="h-14 w-14" />,
-        description:
-          "No se realizó ningún cargo a tu cuenta. Tu carrito sigue intacto: intenta el pago de nuevo o usa otro método.",
-        duration: 10000,
-      });
-    }
-
-    if (
-      searchParams.get("id") &&
-      searchParams.get("id") === order?.payment?.transactionId &&
-      order?.status === OrderStatus.PENDING
-    ) {
-      toast({
-        title: "Pago pendiente",
-        variant: "warning",
-        icon: <ShieldAlert className="h-14 w-14" />,
-        description:
-          "¡Casi listo! Estamos confirmando tu pago. Te mantendremos informado y te avisaremos en cuanto tengamos todo confirmado.",
-        duration: 10000,
-      });
-    }
-  }, [order, searchParams, toast, fireConfetti]);
 
   const stage = useMemo(() => getOrderStage(activeOrder), [activeOrder]);
   const timeline = useMemo(() => getOrderTimeline(activeOrder), [activeOrder]);
@@ -289,7 +276,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     .join(" · ");
 
   const heading =
-    stage.stage === "paid" && searchParams.get("id")
+    paymentReturn && paymentResult === "approved"
       ? "¡Gracias por tu compra!"
       : `Pedido #${orderNumber}`;
 
@@ -322,7 +309,31 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
             )}
           </h1>
           <p className="text-sm text-muted-foreground">{summaryLine}</p>
-          <p className="max-w-2xl text-[15px] text-foreground">{stage.description}</p>
+          {confirmingReturn ? (
+            <div
+              role="status"
+              data-testid="payment-return-status"
+              className="flex max-w-2xl items-start gap-3 rounded-xl border border-kawaii-blue bg-kawaii-blue-light/60 p-3 text-[15px] text-sky-950"
+            >
+              {returnWindowOver ? (
+                <p>
+                  <strong>Tu pago sigue en confirmación.</strong> La pasarela
+                  aún no nos responde. Apenas llegue la confirmación te avisamos
+                  por WhatsApp o correo; no tienes que pagar de nuevo.
+                </p>
+              ) : (
+                <>
+                  <Loader2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                  <p>
+                    <strong>Estamos confirmando tu pago…</strong> Suele tardar
+                    unos segundos; esta página se actualiza sola.
+                  </p>
+                </>
+              )}
+            </div>
+          ) : (
+            <p className="max-w-2xl text-[15px] text-foreground">{stage.description}</p>
+          )}
           <OrderGiftNotice order={activeOrder} />
           <OrderGiftCardPurchaseNotice order={activeOrder} />
         </div>
@@ -388,7 +399,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           <OrderSummaryCard
             order={activeOrder}
             stage={stage}
-            awaitingPayment={awaitingPayment}
+            // Volviendo de la pasarela con el pago sin confirmar, ofrecer pagar
+            // otra vez invitaría a un doble cobro.
+            awaitingPayment={awaitingPayment && !confirmingReturn}
             autoOpenPayment={searchParams.get("autoPay") === "true"}
             isStartingWompi={status === "pending"}
             onPayWithWompi={() => mutate()}
