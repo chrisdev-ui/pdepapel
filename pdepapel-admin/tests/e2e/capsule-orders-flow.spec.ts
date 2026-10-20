@@ -155,6 +155,48 @@ test.describe("pedido de cápsulas en el panel", () => {
     await page.screenshot({ path: path.join(SHOTS, "panel-sacar-cerrado-1280.png"), fullPage: true });
   });
 
+  test("transferencia: aparte de «Por sacar» hasta que Paula la marca pagada", async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page, `/${storeId}/productos/ediciones/sacar`);
+    await expect(page.getByTestId("cupos-de-hoy")).toBeVisible({ timeout: 90_000 });
+    const created = await page.request.post(new URL(`/api/${storeId}/orders`, baseURL).toString(), {
+      data: {
+        fullName: "Laura Pineda",
+        phone: "3007654321",
+        email: "laura@ejemplo.test",
+        address: "Carrera 5 # 6-7",
+        city: "Medellín",
+        department: "Antioquia",
+        daneCode: "05001000",
+        status: "PENDING",
+        orderItems: [{ productId: edition.productId, quantity: 5 }],
+        payment: { method: "BankTransfer" },
+      },
+    });
+    expect(created.status()).toBe(200);
+    const order = (await created.json()) as { id: string; orderNumber: string };
+    const slot = await db.capsuleDailySlot.findUniqueOrThrow({ where: { orderId: order.id } });
+    expect(slot.status).toBe("HELD");
+    expect(slot.expiresAt!.getTime() - Date.now()).toBeGreaterThan(23 * 60 * 60 * 1000);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const pending = page.getByTestId("transferencias-por-verificar");
+    await expect(pending).toContainText(order.orderNumber, { timeout: 60_000 });
+    await expect(pending).toContainText("cupo apartado hasta");
+    await expect(page.getByRole("button", { name: /Laura · pack de 5/ })).toHaveCount(0);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: path.join(SHOTS, "panel-transferencia-por-verificar-390.png"), fullPage: true });
+
+    // Paula verifica el comprobante y la marca pagada: cupo confirmado y a «Por sacar».
+    const paid = await page.request.patch(new URL(`/api/${storeId}/orders/${order.id}`, baseURL).toString(), { data: { status: "PAID", expectedStatus: "PENDING" } });
+    expect(paid.status()).toBe(200);
+    await expect(db.capsuleDailySlot.findUniqueOrThrow({ where: { orderId: order.id } })).resolves.toMatchObject({ status: "CONFIRMED" });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("button", { name: /Laura · pack de 5/ })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("transferencias-por-verificar")).toHaveCount(0);
+  });
+
   for (const viewport of [
     { name: "telefono-390", width: 390, height: 844 },
     { name: "tableta-768", width: 768, height: 1024 },
