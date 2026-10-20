@@ -182,7 +182,7 @@ export function CapsuleEditionView({ data }: { data: CapsuleEditionPublic }) {
               {selected ? `Comprar pack de ${selected.packSize}` : "Elige un pack"}
             </Button>
             <p id="compra-cupos" className="text-sm text-muted-foreground">
-              {dayOpen ? "Se paga en línea. Un pack va solo en su pedido." : day.detail ?? "Hoy ya no quedan cupos."}
+              {dayOpen ? "Se paga en línea o por transferencia. Un pack va solo en su pedido." : day.detail ?? "Hoy ya no quedan cupos."}
             </p>
           </>
         ) : (

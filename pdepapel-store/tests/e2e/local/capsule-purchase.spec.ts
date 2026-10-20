@@ -37,7 +37,7 @@ function admin(...args: string[]) {
 function readCapsuleRow(orderId: string) {
   const script =
     'const { PrismaClient } = require("@prisma/client"); const db = new PrismaClient();' +
-    "Promise.all([db.capsuleOrder.findUnique({ where: { orderId: process.argv[1] }, select: { videoConsent: true, provisionalCost: true, costStatus: true } }), db.capsuleDailySlot.findUnique({ where: { orderId: process.argv[1] }, select: { status: true, slotNumber: true } })])" +
+    "Promise.all([db.capsuleOrder.findUnique({ where: { orderId: process.argv[1] }, select: { videoConsent: true, provisionalCost: true, costStatus: true } }), db.capsuleDailySlot.findUnique({ where: { orderId: process.argv[1] }, select: { status: true, slotNumber: true, expiresAt: true } })])" +
     ".then(([capsule, slot]) => { console.log(JSON.stringify({ capsule, slot })); return db.$disconnect(); });";
   const output = execFileSync("node", ["scripts/with-test-env.mjs", "node", "-e", script, orderId], { cwd: ADMIN_DIR, encoding: "utf8", env: { ...process.env, PRISMA_LOG: "" } });
   return JSON.parse(output.trim().split("\n").reverse().find((line) => line.startsWith("{"))!);
@@ -89,7 +89,7 @@ test.describe("cápsulas: comprar un pack", () => {
     await fillContact(page);
     await fillDeliveryWithoutCarrier(page);
     await expect(page.getByText("Los cupones no aplican a los packs de cápsulas.")).toBeVisible();
-    await expect(page.getByText("Transferencia bancaria", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Transferencia bancaria", { exact: true })).toBeVisible();
     await expect(page.getByText("Contra entrega", { exact: true })).toHaveCount(0);
     await screenshot(page, "tienda-checkout-pack-390");
     await page.getByText("Pago en línea", { exact: true }).click();
@@ -127,6 +127,45 @@ test.describe("cápsulas: comprar un pack", () => {
 
     await page.goto(`/capsulas/${edition.segment}`);
     await expect(page.getByTestId("cupos-del-dia")).toContainText("Cupos de hoy: 4 de 5");
+  });
+
+  test("por transferencia: pedido pendiente con el cupo apartado 24 horas, a 390", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await skipPrivacyBanner(page);
+    await page.route("**/api/locations**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ results: [{ value: "05001000", label: "MEDELLÍN - ANTIOQUIA", city: "MEDELLÍN", department: "ANTIOQUIA", daneCode: "05001000", raw: { locationCode: "05001000", cityName: "MEDELLÍN", departmentName: "ANTIOQUIA" } }], count: 1 }),
+      }),
+    );
+    await page.addInitScript(() => window.localStorage.removeItem("checkout-storage"));
+    await page.goto(`/capsulas/${edition.segment}`);
+    await expect(page.getByTestId("cupos-del-dia")).toContainText("Cupos de hoy: 4 de 5");
+    await page.getByRole("button", { name: "Comprar pack de 5" }).click();
+    await page.waitForURL(/\/finalizar-compra\?capsulas=1/);
+    await fillContact(page);
+    await fillDeliveryWithoutCarrier(page);
+    await page.getByText("Transferencia bancaria", { exact: true }).click();
+    const before = Date.now();
+    await formButton(page, "Confirmar pedido").click();
+    await page.waitForURL(/\/pedido\/[^/?]+/, { timeout: 60_000 });
+    const transferId = new URL(page.url()).pathname.split("/").pop()!;
+
+    const pending = await readOrderFromAdmin(SEEDED_STORE_ID, transferId);
+    expect(pending.status).not.toBe("PAID");
+    expect(Number(pending.total)).toBe(64500);
+    expect(pending.capsule).toMatchObject({ packSize: 5, drawCompleted: false });
+    const row = readCapsuleRow(transferId);
+    expect(row).toMatchObject({ capsule: { videoConsent: "PRIVATE", provisionalCost: null }, slot: { status: "HELD", slotNumber: 2 } });
+    const holdMs = new Date(row.slot.expiresAt).getTime() - before;
+    expect(holdMs).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(holdMs).toBeLessThan(25 * 60 * 60 * 1000);
+    await expect(page.getByRole("heading", { name: "Tus cápsulas sorpresa" })).toBeVisible({ timeout: 30_000 });
+    await screenshot(page, "tienda-recibo-transferencia-390");
+
+    await page.goto(`/capsulas/${edition.segment}`);
+    await expect(page.getByTestId("cupos-del-dia")).toContainText("Cupos de hoy: 3 de 5");
   });
 
   for (const viewport of [

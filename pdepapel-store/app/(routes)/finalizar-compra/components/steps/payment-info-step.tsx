@@ -35,7 +35,7 @@ import {
 } from "./shipping-rate-recovery";
 
 interface PaymentInfoStepProps {
-  /** Pack de cápsulas: solo pago en línea y sin cupones (el servidor los rechaza). */
+  /** Pack de cápsulas: en línea o por transferencia, sin contra entrega ni cupones (el servidor los rechaza). */
   capsuleMode?: boolean;
   form: UseFormReturn<CheckoutFormValue>;
   isLoading?: boolean;
@@ -244,7 +244,7 @@ export const PaymentInfoStep = ({
                 disabled={isLoading || giftCardCoversAll}
                 ariaLabelledBy={paymentLabelId}
                 omit={!codAvailable ? [PaymentMethod.COD] : []}
-                hide={capsuleMode ? [PaymentMethod.BankTransfer, PaymentMethod.COD] : []}
+                hide={capsuleMode ? [PaymentMethod.COD] : []}
                 disabledMessages={
                   !codAvailable
                     ? {
