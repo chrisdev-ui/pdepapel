@@ -76,6 +76,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const [giftQuantities, setGiftQuantities] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   // Guardar los packs no refresca la página: `productos/loading.tsx` la volvería a montar y se perdería la bolsa elegida.
   const [packsSaved, setPacksSaved] = useState(edition.packOptions.length > 0);
   const [editionFloor, setEditionFloor] = useState<number | null>(edition.minMarginPct);
@@ -207,7 +208,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const setStatus = (status: string) =>
     run(`estado-${status}`, async () => {
       await axios.patch(api, { status });
-      toast({ title: status === "CLOSED" ? "Edición cerrada" : `Edición en ${EDITION_STATUS[status].label.toLowerCase()}` });
+      toast({ title: status === "CLOSED" ? "Edición cerrada" : status === "LIVE" ? "La edición está a la venta en la tienda" : `Edición en ${EDITION_STATUS[status].label.toLowerCase()}` });
       await reloadDetail();
     });
 
@@ -250,6 +251,16 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
               Volver a borrador
             </Button>
           )}
+          {edition.status === "PREVIEW" && (
+            <Button className="min-h-[44px]" disabled={busy !== null || !packsSaved} onClick={() => setConfirmOpen(true)}>
+              Poner a la venta
+            </Button>
+          )}
+          {edition.status === "LIVE" && (
+            <Button variant="outline" className="min-h-[44px]" disabled={busy !== null} onClick={() => setStatus("PREVIEW")}>
+              Pausar la venta
+            </Button>
+          )}
           {edition.status !== "CLOSED" && (
             <Button variant="outline" className="min-h-[44px]" disabled={busy !== null} onClick={makePreviewLink}>
               Enlace de vista previa
@@ -265,7 +276,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
 
       {previewUrl && (
         <div className="flex flex-col gap-1 rounded-lg border bg-white p-3">
-          <Label htmlFor="enlace-vista-previa">Vista previa en la tienda (14 días, solo esta edición; la compra sigue apagada)</Label>
+          <Label htmlFor="enlace-vista-previa">Vista previa en la tienda (14 días, solo esta edición; se compra solo cuando está a la venta)</Label>
           <Input id="enlace-vista-previa" readOnly value={previewUrl} className="h-11" onFocus={(event) => event.currentTarget.select()} />
         </div>
       )}
@@ -484,9 +495,20 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
           setStatus("CLOSED");
         }}
         title="¿Cerrar la edición?"
-        description="Se anulan los papeles y regalos que siguen impresos y se libera su apartado. No se puede si hay pedidos de esta edición sin terminar de sacar."
+        description={`${edition.status === "LIVE" ? "La edición sale de la tienda y deja de venderse. " : ""}Se anulan los papeles y regalos que siguen impresos y se libera su apartado. No se puede si hay pedidos de esta edición sin terminar de sacar. Cerrar no se deshace.`}
         confirmLabel="Cerrar edición"
         destructive
+      />
+      <ActionConfirmationDialog
+        isOpen={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          setStatus("LIVE");
+        }}
+        title="¿Poner la edición a la venta?"
+        description="La edición quedará a la venta en la tienda: aparece en el menú y en el inicio, y cualquiera puede comprar packs desde ya, con los cupos del día. Para detenerla, usa «Pausar la venta»."
+        confirmLabel="Poner a la venta"
       />
     </div>
   );

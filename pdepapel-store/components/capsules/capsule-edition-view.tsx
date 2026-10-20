@@ -20,8 +20,8 @@ const CONSENT_OPTIONS = [
 
 /**
  * La página de una edición: qué es, «Lo que puede salir» (sin precios), el
- * pack, los cupos del día, el permiso para el video y la caja del envío. La
- * compra se abre en el lanzamiento (P4): hasta entonces el botón dice «Muy
+ * pack, los cupos del día, el permiso para el video y la caja del envío. Se
+ * compra solo una edición a la venta; en vista previa el botón dice «Muy
  * pronto».
  */
 export function CapsuleEditionView({ data }: { data: CapsuleEditionPublic }) {
@@ -191,7 +191,7 @@ export function CapsuleEditionView({ data }: { data: CapsuleEditionPublic }) {
               Muy pronto
             </Button>
             <p id="compra-pronto" className="text-sm text-muted-foreground">
-              La compra de cápsulas se abre en el lanzamiento.
+              La compra se abre cuando la edición sale a la venta.
             </p>
           </>
         )}

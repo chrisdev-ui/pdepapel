@@ -2,9 +2,11 @@ import { CapsuleEditionStatus, CapsuleSlipKind, CapsuleSlipStatus, OrderStatus, 
 
 import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
+import { runInBackground } from "@/lib/background";
 import { voidCapsuleSlips } from "@/lib/capsule-slips";
 import { CAPSULE_PACK_PRICES, capsuleSalesEnabled, capsuleUnitPrice } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
+import { CAPSULE_STOREFRONT_SCOPE } from "@/lib/storefront-cache-scope";
 
 /**
  * Ediciones de cápsulas: crear (enlazando un producto que Paula ya armó en la
@@ -234,15 +236,27 @@ export async function updateCapsuleEdition(input: UpdateCapsuleEditionInput) {
   }
 
   const target = input.status === undefined ? null : (input.status as CapsuleEditionStatus);
+  let updated;
   if (target !== null && target !== edition.status) {
     if (!(Object.values(CapsuleEditionStatus) as string[]).includes(target)) throw ErrorFactory.InvalidRequest("Estado de edición inválido");
     if (!NEXT_STATUSES[edition.status].includes(target)) throw ErrorFactory.Conflict("Ese cambio de estado no está permitido");
-    if (target === CapsuleEditionStatus.CLOSED) return closeCapsuleEdition(edition.id, input.storeId, input.userId, data);
-    if (target === CapsuleEditionStatus.LIVE) return openCapsuleEdition(edition.id, input.storeId, data);
-    data.status = target;
+    if (target === CapsuleEditionStatus.CLOSED) updated = await closeCapsuleEdition(edition.id, input.storeId, input.userId, data);
+    else if (target === CapsuleEditionStatus.LIVE) updated = await openCapsuleEdition(edition.id, input.storeId, data);
+    else updated = await prismadb.capsuleEdition.update({ where: { id: edition.id }, data: { ...data, status: target } });
+  } else {
+    updated = await prismadb.capsuleEdition.update({ where: { id: edition.id }, data });
   }
 
-  return prismadb.capsuleEdition.update({ where: { id: edition.id }, data });
+  // El menú, el banner del inicio y /capsulas leen la edición LIVE: se purgan
+  // cuando una abre, cierra o cambia mientras está a la venta.
+  if (edition.status === CapsuleEditionStatus.LIVE || updated.status === CapsuleEditionStatus.LIVE) {
+    // Import diferido: la ficha de producto importa este módulo por su guardia y no necesita el envío de alertas.
+    runInBackground("revalidar cápsulas en la tienda", async () => {
+      const { triggerStorefrontRevalidation } = await import("@/lib/revalidate-store");
+      await triggerStorefrontRevalidation({ scope: CAPSULE_STOREFRONT_SCOPE });
+    });
+  }
+  return updated;
 }
 
 /**

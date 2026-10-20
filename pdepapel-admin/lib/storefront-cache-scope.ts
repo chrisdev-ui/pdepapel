@@ -20,6 +20,10 @@ export const brandTag = (slug: string) => `brand:${slug}`;
 export const brandPagePath = (slug: string) => `/marcas/${slug}`;
 export const BRANDS_INDEX_PATH = "/marcas";
 
+/** La edición de cápsulas LIVE: el enlace del menú, el banner del inicio y /capsulas. */
+export const CAPSULES_TAG = "capsules";
+export const CAPSULE_STOREFRONT_SCOPE: StorefrontScope = { tags: [CAPSULES_TAG], paths: ["/", "/capsulas"] };
+
 /** Topes de la tienda; por encima se manda la purga completa. */
 export const MAX_SCOPE_TAGS = 200;
 export const MAX_SCOPE_PATHS = 50;

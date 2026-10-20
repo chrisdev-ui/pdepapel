@@ -8,18 +8,19 @@ import { gatewayFee } from "@/lib/gateway-fees";
  */
 
 /**
- * Bandera de lanzamiento. Apagada: el checkout la valida en el servidor y la
- * tienda solo muestra la edición con el enlace firmado de vista previa.
- * Encenderla es un commit, después de la revisión legal.
+ * Bandera de lanzamiento, encendida el 2026-10-20 tras la revisión legal.
+ * Encendida no vende nada por sí sola: una edición se vende solo cuando Paula
+ * la pasa a LIVE en el taller, y el rollback rápido es pasarla a vista previa.
  */
-export const CAPSULE_SALES_ENABLED = false;
+export const CAPSULE_SALES_ENABLED = true;
 
 /**
- * Lo que lee el código. Las pruebas locales (y solo fuera de Vercel) encienden
- * la venta con `CAPSULE_SALES_TEST_OVERRIDE=1`; en cualquier despliegue de
- * Vercel (`VERCEL` definido) manda únicamente la constante.
+ * Lo que lee el código. Fuera de Vercel, las pruebas pueden forzarla con
+ * `CAPSULE_SALES_TEST_OVERRIDE` ("1" encendida, "0" apagada); en cualquier
+ * despliegue de Vercel (`VERCEL` definido) manda únicamente la constante.
  */
 export function capsuleSalesEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  if (!env.VERCEL && env.CAPSULE_SALES_TEST_OVERRIDE === "0") return false;
   if (CAPSULE_SALES_ENABLED) return true;
   return !env.VERCEL && env.CAPSULE_SALES_TEST_OVERRIDE === "1";
 }

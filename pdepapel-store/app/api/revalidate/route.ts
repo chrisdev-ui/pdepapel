@@ -11,7 +11,7 @@ const SCOPED_VERSION = 2;
 const MAX_TAGS = 200;
 const MAX_PATHS = 50;
 const ALLOWED_TAG =
-  /^(products|catalog|catalog-options|categories|home-content|posts|reviews|storefront-settings|newsletter-issues|products:list|products:featured|product:[^\s/]{1,200}|products:(group|category|type):[^\s/]{1,200}|brands|brand:[^\s/]{1,200})$/;
+  /^(products|catalog|catalog-options|categories|home-content|posts|reviews|storefront-settings|newsletter-issues|products:list|products:featured|product:[^\s/]{1,200}|products:(group|category|type):[^\s/]{1,200}|brands|brand:[^\s/]{1,200}|capsules)$/;
 
 export async function POST(req: NextRequest) {
   return handleRevalidation(req);

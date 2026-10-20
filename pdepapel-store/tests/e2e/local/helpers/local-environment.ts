@@ -163,3 +163,17 @@ export async function readProductStock(storeId: string, productId: string) {
   const product = await response.json();
   return Number(product.stock);
 }
+
+/**
+ * La tienda guarda 5 minutos la edición LIVE (etiqueta `capsules`). El panel de
+ * las e2e purga otra dirección, así que cada prueba que cambia la edición la
+ * purga aquí, con la clave de prueba de `scripts/lib/e2e-store-env.mjs`.
+ */
+export async function purgeStoreCapsules() {
+  const response = await fetch(`http://localhost:${LOCAL_STORE_PORT}/api/revalidate`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-revalidate-secret": "test-stub" },
+    body: JSON.stringify({ version: 2, tags: ["capsules"], paths: ["/", "/capsulas"] }),
+  });
+  if (!response.ok) throw new Error(`No se pudo purgar la caché de cápsulas de la tienda: ${response.status}`);
+}

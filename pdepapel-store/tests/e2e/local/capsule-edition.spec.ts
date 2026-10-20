@@ -6,7 +6,7 @@ import { expect, test } from "../helpers/safe-test";
 import { skipPrivacyBanner } from "../helpers/public-page";
 
 /**
- * La página de una edición de cápsulas con la venta apagada: 404 sin enlace o
+ * La página de una edición que no está a la venta: 404 sin enlace o
  * con un enlace equivocado; con el enlace de vista previa, la galería sin
  * precios, los packs (solo hasta el 25 % de los papeles), los cupos del día,
  * el permiso del video y la compra en «Muy pronto». A 390, 768 y 1280.

@@ -17,6 +17,8 @@ export const productCategoryTag = (category: string) => `products:category:${cat
 export const productTypeTag = (type: string) => `products:type:${type}`;
 /** Lista de marcas visibles (menú, /marcas, filtros, sitemap). */
 export const BRANDS_TAG = "brands";
+/** La edición de cápsulas LIVE (menú, banner del inicio, /capsulas); el panel la purga al abrir o cerrar una. */
+export const CAPSULES_TAG = "capsules";
 /** Una página de marca (`GET /brands/{slug}`). */
 export const brandTag = (slug: string) => `brand:${slug}`;
 

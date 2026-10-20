@@ -7,10 +7,13 @@ vi.mock("@clerk/nextjs/server", () => ({
   auth: async () => ({ userId: session.userId, sessionClaims: session.claims }),
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
+const revalidate = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("@/lib/revalidate-store", () => ({ triggerStorefrontRevalidation: revalidate }));
 vi.mock("@/lib/cache", async (importOriginal) => ({ ...(await importOriginal<object>()), invalidateStoreProductsCache: vi.fn().mockResolvedValue(undefined) }));
 
 import { createCapsuleEdition, updateCapsuleEdition } from "@/lib/capsule-editions";
 import { printCapsuleSlips } from "@/lib/capsule-slips";
+import { CAPSULE_STOREFRONT_SCOPE } from "@/lib/storefront-cache-scope";
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
@@ -108,7 +111,7 @@ describe("cambiar una edición", () => {
     const edition = await create((await make("Edicion estados")).id);
     const base = { storeId: f.store.id, editionId: edition.id, userId: "paula" };
     await expect(updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.PREVIEW })).resolves.toMatchObject({ status: CapsuleEditionStatus.PREVIEW });
-    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "");
+    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "0");
     try {
       await expect(updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.LIVE })).rejects.toMatchObject({ statusCode: 409 });
     } finally {
@@ -141,6 +144,31 @@ describe("cambiar una edición", () => {
     // Pausar (vista previa) deja abrir la otra.
     await expect(updateCapsuleEdition({ ...base(first.id), status: CapsuleEditionStatus.PREVIEW })).resolves.toMatchObject({ status: CapsuleEditionStatus.PREVIEW });
     await expect(updateCapsuleEdition({ ...base(second.id), status: CapsuleEditionStatus.LIVE })).resolves.toMatchObject({ status: CapsuleEditionStatus.LIVE });
+  });
+
+  it("abrir, cambiar o cerrar una edición LIVE purga el menú, el banner y /capsulas de la tienda; lo demás no", async () => {
+    f = await createInventoryFixture();
+    const edition = await create((await make("Edicion purga")).id);
+    const base = { storeId: f.store.id, editionId: edition.id, userId: "paula" };
+    await testPrisma.capsulePackOption.create({ data: { editionId: edition.id, packSize: 5 } });
+    revalidate.mockClear();
+    await updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.PREVIEW });
+    await updateCapsuleEdition({ ...base, name: "Escritorio" });
+    expect(revalidate).not.toHaveBeenCalled();
+
+    await updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.LIVE });
+    await updateCapsuleEdition({ ...base, name: "Escritorio pastel" });
+    await updateCapsuleEdition({ ...base, status: CapsuleEditionStatus.CLOSED });
+    await vi.waitFor(() => expect(revalidate).toHaveBeenCalledTimes(3));
+    for (const [call] of revalidate.mock.calls) expect(call).toEqual({ scope: CAPSULE_STOREFRONT_SCOPE });
+    expect(CAPSULE_STOREFRONT_SCOPE).toEqual({ tags: ["capsules"], paths: ["/", "/capsulas"] });
+
+    // Una apertura rechazada no purga.
+    revalidate.mockClear();
+    const other = await create((await make("Edicion sin packs")).id);
+    await updateCapsuleEdition({ ...base, editionId: other.id, status: CapsuleEditionStatus.PREVIEW });
+    await expect(updateCapsuleEdition({ ...base, editionId: other.id, status: CapsuleEditionStatus.LIVE })).rejects.toMatchObject({ statusCode: 409 });
+    expect(revalidate).not.toHaveBeenCalled();
   });
 
   it("la banda no cambia después de imprimir papeles", async () => {

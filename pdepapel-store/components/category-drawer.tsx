@@ -1,7 +1,7 @@
 "use client";
 
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { ArrowRight, Bookmark, Heart, LayoutGrid, Mail, Menu, PackageOpen, Store, Tag, User, X, Gift } from "lucide-react";
+import { ArrowRight, Bookmark, Heart, LayoutGrid, Mail, Menu, PackageOpen, Sparkles, Store, Tag, User, X, Gift } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { ReactNode, useEffect, useState } from "react";
@@ -44,6 +44,8 @@ interface CategoryDrawerProps {
   logoSrc: string;
   /** Marcas (enlaces del servidor) justo debajo de «Todos los productos». */
   brandsSlot?: ReactNode;
+  /** Hay una edición de cápsulas a la venta. */
+  hasCapsules?: boolean;
 }
 
 const rowClass =
@@ -54,7 +56,7 @@ const rowClass =
  * with its subcategories (accordion), the offers and info pages, and the
  * account shortcuts. Replaces the old five-link dropdown.
  */
-export function CategoryDrawer({ types, featuredSubcategories, logoSrc, brandsSlot }: CategoryDrawerProps) {
+export function CategoryDrawer({ types, featuredSubcategories, logoSrc, brandsSlot, hasCapsules = false }: CategoryDrawerProps) {
   const pathname = useStorefrontPathname();
   const [open, setOpen] = useState(false);
 
@@ -202,6 +204,12 @@ export function CategoryDrawer({ types, featuredSubcategories, logoSrc, brandsSl
             <Tag aria-hidden="true" className="h-6 w-6 shrink-0" />
             <span className="flex-1">Ofertas</span>
           </Link>
+          {hasCapsules && (
+            <Link href={STOREFRONT_ROUTES.capsules} prefetch={false} className={rowClass}>
+              <Sparkles aria-hidden="true" className="h-6 w-6 shrink-0 text-muted-foreground" />
+              <span className="flex-1">Cápsulas</span>
+            </Link>
+          )}
           <Link href={STOREFRONT_ROUTES.giftCard} className={rowClass}>
             <Gift aria-hidden="true" className="h-6 w-6 shrink-0 text-muted-foreground" />
             <span className="flex-1">Tarjeta de regalo</span>

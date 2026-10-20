@@ -1,5 +1,6 @@
 import { getBrands } from "@/actions/get-brands";
 import { getCategoriesOrThrow } from "@/actions/get-categories";
+import { capsuleEditionPath, getCurrentCapsuleEdition } from "@/actions/get-current-capsule-edition";
 import { getProducts } from "@/actions/get-products";
 import { getSitemapProducts } from "@/actions/get-sitemap-products";
 import { BASE_URL } from "@/constants";
@@ -66,6 +67,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ]
       : [];
 
+  // Con una edición a la venta va su página (/capsulas redirige a ella); entre ediciones, /capsulas.
+  const capsules = await getCurrentCapsuleEdition();
+  const capsuleUrls: MetadataRoute.Sitemap = !capsules.salesEnabled
+    ? []
+    : [{ url: `${BASE_URL}${capsules.edition ? capsuleEditionPath(capsules.edition) : STOREFRONT_ROUTES.capsules}` }];
+
   return [
     {
       url: BASE_URL,
@@ -92,6 +99,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${BASE_URL}${STOREFRONT_ROUTES.giftCard}`,
     },
     ...comingSoonUrls,
+    ...capsuleUrls,
     ...categoryUrls,
     ...brandUrls,
     ...productsUrls,

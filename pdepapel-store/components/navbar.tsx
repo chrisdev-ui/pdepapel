@@ -32,6 +32,8 @@ interface NavbarProps {
   freeShippingThreshold: number | null;
   /** Hay marcas visibles con productos: enlace «Marcas» en la fila de escritorio. */
   hasBrands?: boolean;
+  /** Hay una edición de cápsulas a la venta: enlace «Cápsulas» a /capsulas. */
+  hasCapsules?: boolean;
   /** Marcas del cajón y del menú de escritorio, pintadas en el servidor. */
   brandsDrawerSlot?: ReactNode;
   brandsMegaSlot?: ReactNode;
@@ -55,6 +57,7 @@ const Navbar: React.FC<NavbarProps> = ({
   featuredByType,
   freeShippingThreshold,
   hasBrands = false,
+  hasCapsules = false,
   brandsDrawerSlot,
   brandsMegaSlot,
 }) => {
@@ -85,6 +88,7 @@ const Navbar: React.FC<NavbarProps> = ({
               featuredSubcategories={featuredSubcategories}
               logoSrc={seasonConfig.navbarText}
               brandsSlot={brandsDrawerSlot}
+              hasCapsules={hasCapsules}
             />
           </div>
           {/* Los dos logos —teléfono y escritorio— viven siempre en el DOM.
@@ -190,7 +194,8 @@ const Navbar: React.FC<NavbarProps> = ({
               key={type.id}
               className={cn(
                 "hidden",
-                index < 3 ? "lg:block" : index < 5 ? "xl:block" : "2xl:block",
+                // «Cápsulas» ocupa el lugar de un tipo para que la fila no se parta.
+                index < (hasCapsules ? 2 : 3) ? "lg:block" : index < (hasCapsules ? 4 : 5) ? "xl:block" : "2xl:block",
               )}
             >
               <NavigationLink href={typePath(type)}>{type.label}</NavigationLink>
@@ -212,6 +217,13 @@ const Navbar: React.FC<NavbarProps> = ({
               Ofertas
             </Link>
           </li>
+          {hasCapsules && (
+            <li>
+              <NavigationLink href={STOREFRONT_ROUTES.capsules} prefetch={false} matchPrefix>
+                Cápsulas
+              </NavigationLink>
+            </li>
+          )}
         </ul>
         <ul className="ml-auto flex items-center gap-6 whitespace-nowrap font-sans text-sm font-semibold text-muted-foreground">
           <li>

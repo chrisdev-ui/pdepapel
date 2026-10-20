@@ -92,4 +92,29 @@ export async function getPublicCapsuleEdition({
   };
 }
 
+/**
+ * La edición que está a la venta hoy, para el menú, el banner del inicio y
+ * /capsulas de la tienda. `undefined` con la venta apagada (la ruta responde
+ * 404), `null` sin edición LIVE. Sin costos, cupos ni ids.
+ */
+export async function getCurrentCapsuleEdition({ storeId, salesEnabled = capsuleSalesEnabled() }: { storeId: string; salesEnabled?: boolean }) {
+  if (!salesEnabled) return undefined;
+  const edition = await prismadb.capsuleEdition.findFirst({
+    where: { storeId, status: CapsuleEditionStatus.LIVE },
+    select: { number: true, name: true, theme: true, product: { select: { images: { select: { url: true }, take: 1 } } } },
+  });
+  if (!edition) return null;
+  const smallest = [...CAPSULE_PACK_PRICES].sort((a, b) => a.packSize - b.packSize)[0];
+  return {
+    number: edition.number,
+    name: edition.name,
+    theme: edition.theme,
+    segment: editionPathSegment(edition),
+    coverImage: edition.product.images[0]?.url ?? null,
+    fromPack: { packSize: smallest.packSize, total: smallest.total },
+  };
+}
+
+export type CurrentCapsuleEdition = NonNullable<Awaited<ReturnType<typeof getCurrentCapsuleEdition>>>;
+
 export type PublicCapsuleEdition = NonNullable<Awaited<ReturnType<typeof getPublicCapsuleEdition>>>;

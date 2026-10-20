@@ -90,6 +90,13 @@ describe("scoped revalidation (version 2)", () => {
     expect(vi.mocked(revalidatePath).mock.calls.map(([path]) => path)).toEqual(["/marcas", "/marcas/kiut", "/catalogo-cache/marcas/kiut"]);
   });
 
+  it("accepts the capsules tag the panel purges when an edition opens or closes", async () => {
+    process.env.REVALIDATION_SECRET = "shared-secret";
+    const response = await scopedRequest({ tags: ["capsules"], paths: ["/", "/capsulas"] });
+    expect(response.status).toBe(200);
+    expect(vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag)).toEqual(["capsules"]);
+  });
+
   it("rejects a brand tag with a path inside", async () => {
     process.env.REVALIDATION_SECRET = "shared-secret";
     expect((await scopedRequest({ tags: ["brand:a/b"] })).status).toBe(400);

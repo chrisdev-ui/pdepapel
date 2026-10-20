@@ -180,6 +180,28 @@ const sections: PolicySection[] = [
     ),
   },
   {
+    id: "videos-de-capsulas",
+    title: "Videos de cápsulas sorpresa",
+    content: (
+      <ul>
+        <li>
+          Cuando compras cápsulas sorpresa grabamos la apertura de tus cápsulas
+          para enviarte el video y mostrarte qué salió.
+        </li>
+        <li>
+          Al comprar eliges si el video es solo para ti o si podemos publicarlo
+          en nuestras redes (Instagram y TikTok). Si lo autorizas, decimos solo
+          tu primer nombre: nunca tu apellido, tu correo, tu teléfono ni tu
+          dirección.
+        </li>
+        <li>
+          Puedes retirar ese permiso en cualquier momento escribiéndonos: dejamos
+          de usar el video y retiramos lo que esté publicado en nuestras cuentas.
+        </li>
+      </ul>
+    ),
+  },
+  {
     id: "tus-derechos",
     title: "Tus derechos",
     content: (
@@ -256,7 +278,7 @@ export default function DataPolicyPage() {
       eyebrowClassName="bg-kawaii-lavender-light text-violet-900"
       title="Tratamiento de datos personales"
       lede="Qué datos pedimos, para qué los usamos, con quién los procesamos y cómo puedes consultarlos, corregirlos o borrarlos."
-      updatedAt="2026-09-09"
+      updatedAt="2026-10-20"
       sections={sections}
       contactPrompt="¿Tienes una duda sobre tus datos?"
       currentRoute={STOREFRONT_ROUTES.dataPolicy}

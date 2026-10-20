@@ -35,6 +35,8 @@ export function storeServerEnv(source, { appEnvFile, context = "e2e (tienda)" })
   // Sin marcadores: apuntan a la cuenta de Cloudinary de la tienda.
   env.NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS = "0";
   env.NEXT_TELEMETRY_DISABLED = "1";
+  // Las e2e purgan la caché de la tienda con este valor (`purgeStoreCache`).
+  env.REVALIDATION_SECRET = STUB;
   if (!String(env.CLERK_SECRET_KEY ?? "").startsWith("sk_test_")) {
     throw new Error(`[${context}] La tienda de las e2e solo corre con claves de desarrollo de Clerk (sk_test_).`);
   }

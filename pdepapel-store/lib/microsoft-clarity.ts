@@ -75,8 +75,6 @@ type QueuedClarityEvent = {
 };
 
 const SENSITIVE_ROUTE_PREFIXES = [
-  // La vista previa de una edición lleva su enlace firmado en `?vista=` (P4 puede abrirla).
-  "/capsulas/",
   "/cotizacion/",
   "/crear-cuenta",
   "/iniciar-sesion",
@@ -99,6 +97,7 @@ export type ClarityRouteGroup =
   | "inicio"
   | "producto"
   | "tienda"
+  | "capsulas"
   | "no_medida";
 
 function hasValidProjectId(projectId?: string): projectId is string {
@@ -112,11 +111,16 @@ export function getClarityRouteGroup(pathname: string): ClarityRouteGroup {
   if (pathname.startsWith("/producto/")) return "producto";
   if (pathname === "/carrito") return "carrito";
   if (pathname === "/finalizar-compra") return "finalizar_compra";
+  if (pathname === "/capsulas" || pathname.startsWith("/capsulas/")) return "capsulas";
   return "no_medida";
 }
 
-export function isClarityEligiblePath(pathname: string): boolean {
-  return getClarityRouteGroup(pathname) !== "no_medida";
+const currentSearch = () => (typeof window === "undefined" ? "" : window.location.search);
+
+/** Una vista previa de cápsulas lleva su enlace firmado en `?vista=`: esa página no se graba. */
+export function isClarityEligiblePath(pathname: string, search: string = currentSearch()): boolean {
+  if (getClarityRouteGroup(pathname) === "no_medida") return false;
+  return !(pathname.startsWith("/capsulas/") && new URLSearchParams(search).has("vista"));
 }
 
 export function shouldMaskClarityPage(pathname: string): boolean {

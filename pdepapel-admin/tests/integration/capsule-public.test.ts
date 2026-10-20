@@ -9,7 +9,7 @@ vi.mock("@clerk/nextjs/server", () => ({
 }));
 
 import { createCapsulePreviewToken } from "@/lib/capsule-preview";
-import { canSeeEdition, getPublicCapsuleEdition } from "@/lib/capsule-public";
+import { canSeeEdition, getCurrentCapsuleEdition, getPublicCapsuleEdition } from "@/lib/capsule-public";
 import { capsulePackageFor } from "@/lib/capsule-quote";
 import { printCapsuleSlips } from "@/lib/capsule-slips";
 import { CAPSULE_PACK_PRICES } from "@/lib/pricing/capsules";
@@ -85,7 +85,7 @@ describe("quién ve una edición en la tienda", () => {
   });
 
   it("con la venta apagada responde 404 sin enlace y la edición con el enlace de esa edición", async () => {
-    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "");
+    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "0");
     const { edition } = await setup();
     const { GET } = await import("@/app/api/[storeId]/capsulas/[edicion]/route");
     const params = { params: { storeId: f!.store.id, edicion: "3-escritorio" } };
@@ -132,6 +132,46 @@ describe("quién ve una edición en la tienda", () => {
     await expect(getPublicCapsuleEdition({ storeId: f!.store.id, segment: "3", salesEnabled: true })).resolves.toMatchObject({ preview: false });
     await testPrisma.capsuleEdition.update({ where: { id: edition.id }, data: { status: CapsuleEditionStatus.CLOSED } });
     await expect(getPublicCapsuleEdition({ storeId: f!.store.id, segment: "3", salesEnabled: true })).resolves.toBeNull();
+  });
+});
+
+describe("la edición LIVE de hoy (menú, banner y /capsulas)", () => {
+  it("404 con la venta apagada, null sin edición LIVE y la edición sin costos, cupos ni ids cuando está a la venta", async () => {
+    const { edition, editionProduct } = await setup();
+    const { GET } = await import("@/app/api/[storeId]/capsulas/actual/route");
+    const call = () => GET(new Request("https://admin.test/x"), { params: { storeId: f!.store.id } });
+
+    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "0");
+    expect((await call()).status).toBe(404);
+    vi.unstubAllEnvs();
+
+    // La edición está en borrador y luego en vista previa: no hay ninguna a la venta.
+    await expect((await call()).json()).resolves.toEqual({ edition: null });
+    await testPrisma.capsuleEdition.update({ where: { id: edition.id }, data: { status: CapsuleEditionStatus.PREVIEW } });
+    await expect((await call()).json()).resolves.toEqual({ edition: null });
+
+    await testPrisma.image.create({ data: { productId: editionProduct.id, url: "https://res.cloudinary.com/demo/image/upload/capsulas.jpg" } });
+    await testPrisma.capsuleEdition.update({ where: { id: edition.id }, data: { status: CapsuleEditionStatus.LIVE } });
+    const response = await call();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    const body = await response.json();
+    expect(body).toEqual({
+      edition: {
+        number: 3,
+        name: "Escritorio",
+        theme: "escritorio",
+        segment: "3-escritorio",
+        coverImage: "https://res.cloudinary.com/demo/image/upload/capsulas.jpg",
+        fromPack: { packSize: 5, total: 64500 },
+      },
+    });
+    assertNoForbiddenKeys(body, "viewer");
+    const text = JSON.stringify(body);
+    for (const id of [edition.id, editionProduct.id]) expect(text).not.toContain(id);
+
+    await testPrisma.capsuleEdition.update({ where: { id: edition.id }, data: { status: CapsuleEditionStatus.CLOSED } });
+    await expect(getCurrentCapsuleEdition({ storeId: f!.store.id })).resolves.toBeNull();
   });
 });
 

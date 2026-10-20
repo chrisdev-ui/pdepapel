@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { getBrands } from "@/actions/get-brands";
 import { getCategories } from "@/actions/get-categories";
+import { getCurrentCapsuleEdition } from "@/actions/get-current-capsule-edition";
 import { getProducts } from "@/actions/get-products";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { getTypes } from "@/actions/get-types";
@@ -45,12 +46,13 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
   const currentSeason = getCurrentSeason();
   // Header data: catalog tree for the drawer/mega menu, featured products for
   // the mega menu tile, and the public store settings for the announcement bar.
-  const [types, categories, settings, featured, brands] = await Promise.all([
+  const [types, categories, settings, featured, brands, capsules] = await Promise.all([
     getTypes(),
     getCategories(),
     getStorefrontSettings(),
     getProducts({ isFeatured: true, limit: 60 }),
     getBrands(),
+    getCurrentCapsuleEdition(),
   ]);
   const menuBrands = toMenuBrands(brands);
   const navigationTypes = buildNavigationTypes(types, categories);
@@ -86,6 +88,7 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
               featuredSubcategories={featuredSubcategories}
               freeShippingThreshold={settings.freeShippingThreshold}
               hasBrands={menuBrands.length > 0}
+              hasCapsules={capsules.edition !== null}
               brandsDrawerSlot={menuBrands.length > 0 ? <BrandMenuTiles brands={menuBrands} /> : null}
               brandsMegaSlot={menuBrands.length > 0 ? <BrandMenuStrip brands={menuBrands} /> : null}
             />

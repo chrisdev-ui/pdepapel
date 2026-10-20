@@ -60,6 +60,8 @@ const nextConfig = {
         permanent: true,
       },
       { source: "/about", destination: "/nosotros", permanent: true },
+      { source: "/capsules", destination: "/capsulas", permanent: true },
+      { source: "/capsules/:path*", destination: "/capsulas/:path*", permanent: true },
       { source: "/shop", destination: "/tienda", permanent: true },
       { source: "/contact", destination: "/contacto", permanent: true },
       { source: "/cart", destination: "/carrito", permanent: true },

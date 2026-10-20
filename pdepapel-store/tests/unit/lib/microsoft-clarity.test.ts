@@ -35,7 +35,10 @@ describe("Microsoft Clarity integration", () => {
     expect(isClarityEligiblePath("/finalizar-compra")).toBe(true);
     expect(isClarityEligiblePath("/pedido/order-id")).toBe(false);
     expect(isClarityEligiblePath("/cotizacion/token")).toBe(false);
-    expect(isClarityEligiblePath("/capsulas/3-escritorio")).toBe(false);
+    expect(getClarityRouteGroup("/capsulas")).toBe("capsulas");
+    expect(isClarityEligiblePath("/capsulas/3-escritorio", "")).toBe(true);
+    expect(isClarityEligiblePath("/capsulas", "?utm_source=instagram")).toBe(true);
+    expect(isClarityEligiblePath("/capsulas/3-escritorio", "?vista=token-firmado")).toBe(false);
     expect(shouldMaskClarityPage("/pedido/order-id")).toBe(true);
     expect(shouldMaskClarityPage("/mis-pedidos")).toBe(true);
     expect(shouldMaskClarityPage("/tienda")).toBe(false);

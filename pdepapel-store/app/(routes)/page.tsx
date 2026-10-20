@@ -3,9 +3,11 @@ import { Suspense } from "react";
 import { WebSite } from "schema-dts";
 
 import { getCategories } from "@/actions/get-categories";
+import { getCurrentCapsuleEdition } from "@/actions/get-current-capsule-edition";
 import { getHomeContent } from "@/actions/get-home-content";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { getTypes } from "@/actions/get-types";
+import { CapsuleEditionBanner } from "@/components/capsules/capsule-edition-banner";
 import { CategoryChips } from "@/components/category-chips";
 import { CampaignBanner } from "@/components/home/campaign-banner";
 import { CategoryRail } from "@/components/home/category-rail";
@@ -110,6 +112,11 @@ async function HomeCategoryChips() {
   return <CategoryChips types={buildNavigationTypes(types, categories)} />;
 }
 
+async function HomeCapsules() {
+  const { edition } = await getCurrentCapsuleEdition();
+  return <CapsuleEditionBanner edition={edition} />;
+}
+
 async function HomeCategories() {
   const categories = await getCategories();
   const featured = categories.filter(
@@ -148,6 +155,9 @@ export default async function HomePage() {
         <HomeCategoryChips />
       </Suspense>
       <Hero content={content.hero} freeShippingThreshold={settings.freeShippingThreshold} />
+      <Suspense fallback={null}>
+        <HomeCapsules />
+      </Suspense>
       <Suspense fallback={<RailSkeleton count={6} tile="h-44 w-44 rounded-full" />}>
         <HomeCategories />
       </Suspense>

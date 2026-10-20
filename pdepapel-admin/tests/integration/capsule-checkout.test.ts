@@ -122,7 +122,7 @@ describe("checkout de un pack de cápsulas", () => {
       /va solo en su pedido/,
     );
 
-    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "");
+    vi.stubEnv("CAPSULE_SALES_TEST_OVERRIDE", "0");
     await expectRefused("checkout", capsuleCheckoutBody(editionProduct.id, 5), 409, /todavía no está abierta/);
     vi.unstubAllEnvs();
 

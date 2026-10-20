@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getSitemapProducts: vi.fn(),
   getProducts: vi.fn(),
   getBrands: vi.fn(),
+  getCurrentCapsuleEdition: vi.fn(),
 }));
 
 vi.mock("@/actions/get-categories", () => ({
@@ -19,6 +20,10 @@ vi.mock("@/actions/get-products", () => ({
 vi.mock("@/actions/get-brands", () => ({
   getBrands: mocks.getBrands,
 }));
+vi.mock("@/actions/get-current-capsule-edition", () => ({
+  getCurrentCapsuleEdition: mocks.getCurrentCapsuleEdition,
+  capsuleEditionPath: (edition: { segment: string }) => `/capsulas/${edition.segment}`,
+}));
 
 import sitemap from "@/app/sitemap";
 
@@ -28,6 +33,21 @@ describe("storefront sitemap", () => {
     mocks.getCategories.mockResolvedValue([]);
     mocks.getProducts.mockResolvedValue({ products: [] });
     mocks.getBrands.mockResolvedValue([]);
+    mocks.getCurrentCapsuleEdition.mockResolvedValue({ salesEnabled: false, edition: null });
+  });
+
+  it("lists the LIVE capsule edition, /capsulas between editions, and nothing with sales off", async () => {
+    mocks.getSitemapProducts.mockResolvedValue([{ id: "p", slug: "producto", isArchived: false }]);
+    const off = (await sitemap()).map((entry) => entry.url);
+    expect(off.some((url) => url.includes("/capsulas"))).toBe(false);
+
+    mocks.getCurrentCapsuleEdition.mockResolvedValue({ salesEnabled: true, edition: null });
+    expect((await sitemap()).map((entry) => entry.url)).toContain("https://papeleriapdepapel.com/capsulas");
+
+    mocks.getCurrentCapsuleEdition.mockResolvedValue({ salesEnabled: true, edition: { segment: "1-escritorio" } });
+    const live = (await sitemap()).map((entry) => entry.url);
+    expect(live).toContain("https://papeleriapdepapel.com/capsulas/1-escritorio");
+    expect(live).not.toContain("https://papeleriapdepapel.com/capsulas");
   });
 
   /** `getBrands` ya trae solo marcas visibles con productos; con menos del umbral la página es noindex. */
