@@ -28,6 +28,28 @@ interface ReactivationEmailTemplateProps {
   storeUrl?: string;
 }
 
+/**
+ * El mismo correo en texto plano, para quien lo lee sin HTML (y para los
+ * filtros de spam, que desconfían de un correo solo con HTML).
+ */
+export function reactivationEmailText({
+  customerName,
+  discountCode,
+  discountPercentage,
+  recommendedProducts = [],
+  storeUrl = "https://papeleriapdepapel.com",
+}: Pick<ReactivationEmailTemplateProps, "customerName" | "discountCode" | "discountPercentage" | "recommendedProducts" | "storeUrl">): string {
+  const firstName = customerName.trim().split(/\s+/)[0] ?? "";
+  const greeting = firstName ? `Hace rato no te vemos, ${firstName}.` : "Hace rato no te vemos por la papelería.";
+  const products = recommendedProducts.length
+    ? `\n\nLlegó esto desde tu última visita:\n${recommendedProducts.map((product) => `• ${product.name} (${product.priceFormatted}): ${storeUrl}/producto/${product.slug || product.id}`).join("\n")}`
+    : "";
+  return (
+    `${greeting}\n\nTe guardamos un descuento para cuando quieras volver. No hay apuro, pero sí fecha de vencimiento.\n\n` +
+    `Tu código: ${discountCode} (${discountPercentage} % en toda la tienda).${products}\n\nUsar mi descuento: ${storeUrl}\n\nP de Papel · Medellín, Colombia`
+  );
+}
+
 export function ReactivationEmailTemplate({
   customerName,
   discountCode = "VUELVE-REGALO",

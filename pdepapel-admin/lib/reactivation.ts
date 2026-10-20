@@ -6,8 +6,7 @@ import { addDays } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { resend } from "@/lib/resend";
-import { ReactivationEmailTemplate } from "@/emails/reactivation-email";
-import { render } from "@react-email/render";
+import { ReactivationEmailTemplate, reactivationEmailText } from "@/emails/reactivation-email";
 import { env } from "@/lib/env.mjs";
 import { normalizeNewsletterEmail } from "@/lib/newsletter-tokens";
 import { currencyFormatter } from "@/lib/utils";
@@ -178,24 +177,23 @@ export async function processAutomaticReactivations(
       const rawName = customer.name || "Cliente Ideal";
       const firstName = rawName.trim() ? rawName.trim().split(" ")[0] : "Cliente";
 
-      // 5. Render HTML Email
-      const htmlContent = await render(
-        ReactivationEmailTemplate({
-          customerName: rawName,
-          storeName: store.name,
-          discountCode: code,
-          discountPercentage: 10,
-          recommendedProducts,
-          storeUrl: env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com",
-        }),
-      );
+      // 5. El correo con la plantilla y su texto plano.
+      const emailProps = {
+        customerName: rawName,
+        storeName: store.name,
+        discountCode: code,
+        discountPercentage: 10,
+        recommendedProducts,
+        storeUrl: env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com",
+      };
 
       // 6. Send Email via Resend
       const response = await resend.emails.send({
         from: `Novedades ${store.name} <novedades@papeleriapdepapel.com>`,
         to: customer.email,
         subject: `¡Te extrañamos, ${firstName}! Tienes un regalo 🎁`,
-        html: htmlContent,
+        react: ReactivationEmailTemplate(emailProps) as React.ReactElement,
+        text: reactivationEmailText(emailProps),
       });
 
       if (response.error) {
