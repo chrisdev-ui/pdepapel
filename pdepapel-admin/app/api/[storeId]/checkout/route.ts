@@ -699,7 +699,8 @@ async function createCheckout(
     const shippingRule = getEffectiveShippingCost(
       productSubtotal,
       Number(selectedQuote.totalCost) || 0,
-      storeSettings?.freeShippingThreshold,
+      // Un pack de cápsulas no tiene envío gratis (decisión P1).
+      capsulePlan ? null : storeSettings?.freeShippingThreshold,
     );
     if (shippingRule.freeShipping) {
       console.log(

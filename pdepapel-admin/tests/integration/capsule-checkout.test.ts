@@ -91,6 +91,15 @@ describe("checkout de un pack de cápsulas", () => {
     expect(slot.expiresAt!.getTime() - before).toBeLessThanOrEqual(121 * 60 * 1000);
   });
 
+  it("un pack no tiene envío gratis aunque pase el umbral de la tienda", async () => {
+    f = await createInventoryFixture();
+    const { editionProduct } = await createLiveCapsuleEdition(f);
+    await testPrisma.store.update({ where: { id: f.store.id }, data: { freeShippingThreshold: 100000 } });
+    const response = await post("checkout", capsuleCheckoutBody(editionProduct.id, 10));
+    expect(response.status).toBe(200);
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: await orderIdOf(response) } })).resolves.toMatchObject({ subtotal: 124900, total: 129900 });
+  });
+
   it("se niega sin la bandera, con la edición fuera de venta, contra entrega o transferencia, con cupón, mezclado o con un pack que no existe o no cabe", async () => {
     f = await createInventoryFixture();
     const { editionProduct, edition } = await createLiveCapsuleEdition(f);
