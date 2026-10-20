@@ -52,10 +52,10 @@ async function createFixture() {
   const editionProduct = await make("Edicion Escritorio", 0, 0, 12900);
   const otherProduct = await make("Edicion Otra", 0, 0, 12900);
   const edition = await testPrisma.capsuleEdition.create({
-    data: { storeId: store.id, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3350, costBandMax: 5580 },
+    data: { storeId: store.id, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3000, costBandMax: 6000 },
   });
   const otherEdition = await testPrisma.capsuleEdition.create({
-    data: { storeId: store.id, number: 2, name: "Otra", theme: "otra", productId: otherProduct.id, costBandMin: 3350, costBandMax: 5580 },
+    data: { storeId: store.id, number: 2, name: "Otra", theme: "otra", productId: otherProduct.id, costBandMin: 3000, costBandMax: 6000 },
   });
   return { store, borrador, resaltador, caro, regalo, editionProduct, otherProduct, edition, otherEdition };
 }

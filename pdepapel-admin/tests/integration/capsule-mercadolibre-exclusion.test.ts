@@ -30,7 +30,7 @@ describe("Mercado Libre sin cápsulas", () => {
     const editionProduct = await testPrisma.product.create({
       data: { name: "Edicion Escritorio", slug: `edicion-${f.store.id}`, description: "Cápsulas", stock: 10, price: 12900, acqPrice: 4000, sku: `ED-${f.store.id}`, storeId: f.store.id, categoryId: f.category.id, colorId: f.component.colorId, sizeId: f.component.sizeId, designId: f.component.designId },
     });
-    await testPrisma.capsuleEdition.create({ data: { storeId: f.store.id, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3350, costBandMax: 5580 } });
+    await testPrisma.capsuleEdition.create({ data: { storeId: f.store.id, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3000, costBandMax: 6000 } });
     const connection = await testPrisma.marketplaceConnection.create({
       data: { storeId: f.store.id, provider: MarketplaceProvider.MERCADOLIBRE, status: MarketplaceConnectionStatus.CONNECTED, sellerId: `seller-${randomBytes(4).toString("hex")}` },
     });

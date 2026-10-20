@@ -50,7 +50,7 @@ beforeAll(async () => {
     data: { name: "Edicion Escritorio", slug: `edicion-${store}`, description: "Cápsulas", stock: 10, price: 12900, acqPrice: 4000, sku: `ED-${store}`, storeId: store, categoryId: fixture.category.id, colorId: fixture.component.colorId, sizeId: fixture.component.sizeId, designId: fixture.component.designId },
   });
   editionProductId = editionProduct.id;
-  await testPrisma.capsuleEdition.create({ data: { storeId: store, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3350, costBandMax: 5580 } });
+  await testPrisma.capsuleEdition.create({ data: { storeId: store, number: 1, name: "Escritorio", theme: "escritorio", productId: editionProduct.id, costBandMin: 3000, costBandMax: 6000 } });
   const now = new Date();
   await testPrisma.order.create({
     data: {
