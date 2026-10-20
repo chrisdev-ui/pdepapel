@@ -129,3 +129,6 @@
 2026-10-18T03:53:36.130Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Marcas: permiso de copilot_ro (20261017_grant_copilot_ro_brands.sql)"
 2026-10-18T03:57:19.362Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/brands-initial-data.ts@7d150a71babfded1 | estado=ok | exit=0 | rows=81 | "Marcas: datos iniciales (81 filas)"
 2026-10-18T05:46:03.723Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/brands-from-mercadolibre.ts@55efcfa99ceec619 | estado=ok | exit=0 | rows=15 | "Marcas desde BRAND de Mercado Libre (15 filas)"
+2026-10-20T13:56:20.083Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Migración cápsulas por papeles (20261021_add_capsule_editions)"
+2026-10-20T13:56:44.440Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Permiso copilot_ro para CapsuleEdition"
+2026-10-20T14:28:06.739Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Reserva de caja por pack de cápsulas (20261022_add_capsule_pack_box_reserve)"
