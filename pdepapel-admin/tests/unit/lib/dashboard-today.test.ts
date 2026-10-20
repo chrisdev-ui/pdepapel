@@ -254,7 +254,7 @@ describe("dashboard today", () => {
       const summary = await getTodaySummary("s1", now);
 
       expect(db.store.findUnique).toHaveBeenCalledWith({ where: { id: "s1" }, select: { lowStockThreshold: true } });
-      expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { storeId: "s1", isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID } } }));
+      expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { storeId: "s1", isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID }, capsuleEdition: { is: null } } }));
       // Nunca por id de categoría de kits: un kit se reconoce por `isKit`.
       const wheres = db.product.findMany.mock.calls.map((call) => JSON.stringify(call[0]));
       expect(wheres.every((where) => !where.includes("notIn"))).toBe(true);
