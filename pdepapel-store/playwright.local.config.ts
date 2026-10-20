@@ -48,9 +48,11 @@ export default defineConfig({
       // La tienda se sirve compilada, no en `dev`: en dev Next compila cada
       // ruta la primera vez que la piden y las esperas del checkout —pensadas
       // para un sitio ya construido— se agotaban esperando esa compilación.
-      command: `npm run build && npm run start -- -p ${LOCAL_STORE_PORT}`,
+      // Con claves de prueba y sin red salvo local y Clerk, como la
+      // administración. Siempre escucha en 3100 (LOCAL_STORE_PORT).
+      command: "node scripts/e2e-store-server.mjs",
       url: baseURL,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 600_000,
       env: {
         NEXT_PUBLIC_API_URL: localApiUrl(SEEDED_STORE_ID),

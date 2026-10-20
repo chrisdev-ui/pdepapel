@@ -8,6 +8,7 @@
  */
 import { fileURLToPath } from "node:url";
 
+import { assertNoProductionLeaks } from "./e2e-production-leaks.mjs";
 import { assertTestDatabaseEnv } from "./test-database.mjs";
 import { ABSENT_IN_TESTS, testEnvStubs } from "./test-isolation.mjs";
 
@@ -19,12 +20,15 @@ export function e2eServerEnv(source = process.env, context = "e2e") {
   if (!source.CLERK_SECRET_KEY?.startsWith("sk_test_")) {
     throw new Error(`[${context}] El servidor de las e2e solo corre con claves de desarrollo de Clerk (sk_test_).`);
   }
+  const appEnvFile = fileURLToPath(new URL("../../.env", import.meta.url));
   const env = { ...source };
-  for (const [name, value] of Object.entries(testEnvStubs(fileURLToPath(new URL("../../.env", import.meta.url))))) {
+  const stubs = testEnvStubs(appEnvFile);
+  for (const [name, value] of Object.entries(stubs)) {
     if (!KEEP.has(name)) env[name] = value;
   }
   for (const name of ABSENT_IN_TESTS) delete env[name];
   env.NEXT_TELEMETRY_DISABLED = "1";
+  assertNoProductionLeaks(env, { appEnvFiles: [appEnvFile], stubs, context });
   return env;
 }
 
