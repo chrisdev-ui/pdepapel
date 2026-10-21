@@ -72,10 +72,16 @@ export const ALLOWED_ADDRESSES = new Set<string>([
   "cra567",
 ]);
 
-/** Archivos donde un número es público a propósito (se le muestra a la clienta). */
-export const CUSTOMER_FACING: Record<string, { accounts?: true; phones?: true }> = {
+/**
+ * Archivos donde un dato es público a propósito (se le muestra a la clienta).
+ * Las políticas llevan la dirección de notificación del responsable, que la
+ * ley exige publicar; se exceptúan por ruta para no copiarla en esta lista.
+ */
+export const CUSTOMER_FACING: Record<string, { accounts?: true; phones?: true; addresses?: true }> = {
   "pdepapel-store/components/bank-transfer-instructions.tsx": { accounts: true },
   "pdepapel-store/components/ui/payment-method-selector.tsx": { accounts: true },
+  "pdepapel-store/app/(routes)/politicas/terminos/page.tsx": { addresses: true },
+  "pdepapel-store/app/(routes)/politicas/privacidad/page.tsx": { addresses: true },
 };
 
 const PHONE = /(?<![\w+])(?:\+?57[\s.-]?)?\(?(3\d{2})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})(?![\w])/g;
@@ -90,7 +96,7 @@ export type SensitiveHit = { kind: "teléfono" | "cuenta" | "dirección"; line: 
 
 export function findSensitiveValues(
   content: string,
-  options: { allowAccounts?: boolean; allowPhones?: boolean } = {},
+  options: { allowAccounts?: boolean; allowPhones?: boolean; allowAddresses?: boolean } = {},
 ): SensitiveHit[] {
   const hits: SensitiveHit[] = [];
   const lineOf = (index: number) => content.slice(0, index).split("\n").length;
@@ -106,8 +112,10 @@ export function findSensitiveValues(
       if (!ALLOWED_ACCOUNTS.has(digits)) hits.push({ kind: "cuenta", line: lineOf(match.index ?? 0) });
     }
   }
-  for (const match of Array.from(content.matchAll(ADDRESS))) {
-    if (!ALLOWED_ADDRESSES.has(normalizeAddress(match[0]))) hits.push({ kind: "dirección", line: lineOf(match.index ?? 0) });
+  if (!options.allowAddresses) {
+    for (const match of Array.from(content.matchAll(ADDRESS))) {
+      if (!ALLOWED_ADDRESSES.has(normalizeAddress(match[0]))) hits.push({ kind: "dirección", line: lineOf(match.index ?? 0) });
+    }
   }
   return hits;
 }

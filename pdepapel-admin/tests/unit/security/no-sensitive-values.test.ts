@@ -45,7 +45,7 @@ describe("datos personales fuera del repositorio público", () => {
       const content = readFileSync(resolve(ROOT, path), "utf8");
       if (content.includes("\u0000")) continue;
       const allowed = CUSTOMER_FACING[path] ?? {};
-      for (const hit of findSensitiveValues(content, { allowAccounts: allowed.accounts, allowPhones: allowed.phones })) {
+      for (const hit of findSensitiveValues(content, { allowAccounts: allowed.accounts, allowPhones: allowed.phones, allowAddresses: allowed.addresses })) {
         hits.push(`${path}:${hit.line} (${hit.kind})`);
       }
     }
