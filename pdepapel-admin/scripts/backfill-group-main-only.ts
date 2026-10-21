@@ -4,10 +4,12 @@
  * El plan está en `lib/group-cover-backfill.ts` (probado con datos armados).
  *
  * Ensayo (no escribe; corre con pdepapel_ro):
- *   node --env-file=.env node_modules/.bin/tsx scripts/backfill-group-main-only.ts [--out output/archivo.json]
+ *   node --env-file=.env node_modules/.bin/tsx scripts/backfill-group-main-only.ts [--out output/plans/archivo.json]
  * Escritura (después del despliegue del código, con el token de Christian):
  *   npm run prod:approve -- "<motivo>"
  *   npm run prod:write -- scripts/backfill-group-main-only.ts --apply --expect new
+ *
+ * Los grupos con varias fotos principales no se tocan: salen en el informe.
  *
  * Antes de escribir anota en `ops/prod-writes.log` una línea DESHACER por cada
  * cambio (filas borradas, portadas y alcances). Todo va en una transacción.
@@ -51,6 +53,12 @@ async function main() {
     const report = {
       modo: apply ? "APLICAR" : "ENSAYO",
       grupos: groups.length,
+      gruposConVariantes: groups.filter((group) => group.products.length > 0).length,
+      gruposSinPortada: groups.filter((group) => !group.images.some((image) => image.isMain)).length,
+      gruposConVariasPortadasSinTocar: plan.multiCoverGroups.length,
+      principalesEnGruposConVariasPortadas: plan.multiCoverGroups.reduce((sum, group) => sum + group.covers, 0),
+      principalesConAlcanceGuardado: plan.multiCoverGroups.reduce((sum, group) => sum + group.withScope, 0),
+      filasDeVarianteEnGruposConVariasPortadas: plan.multiCoverGroups.reduce((sum, group) => sum + group.variantRows, 0),
       portadasAMarcar: plan.scopeUpdates.length,
       variantesQueSeLimpian: plan.touchedProductIds.length,
       variantesVivasQueSeLimpian: touchedLive,
@@ -64,7 +72,7 @@ async function main() {
     console.log(JSON.stringify(report, null, 1));
     console.log("\nSe quedan con la portada de respaldo (vivas), por grupo:");
     for (const item of plan.skipped.filter((entry) => !entry.isArchived)) console.log(`  ${item.group} — ${item.variant} (${item.sku ?? "sin SKU"})`);
-    if (outFile) writeFileSync(outFile, JSON.stringify({ report, skipped: plan.skipped, touchedProductIds: plan.touchedProductIds }, null, 1));
+    if (outFile) writeFileSync(outFile, JSON.stringify({ report, multiCoverGroups: plan.multiCoverGroups, skipped: plan.skipped, touchedProductIds: plan.touchedProductIds }, null, 1));
 
     if (!apply) {
       console.log("PROD_WRITE_ROWS=0");

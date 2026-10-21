@@ -13,6 +13,9 @@ import { GROUP_ONLY_SCOPE } from "@/lib/variant-images";
  *   primera foto repartida.
  * - Una variante cuyas fotos son todas la portada no se toca: la sigue
  *   mostrando de respaldo y sale en la lista para que Paula le suba una.
+ * - Un grupo con varias fotos principales (datos viejos: el formulario muestra
+ *   una sola estrella) no se toca: sale en `multiCoverGroups` hasta decidir
+ *   cuál es su portada.
  *
  * Es la única excepción deliberada a «el reparto no borra filas propias».
  */
@@ -50,6 +53,8 @@ export interface BackfillPlan {
   touchedProductIds: string[];
   /** Solo muestran la portada: se quedan con ella de respaldo. */
   skipped: { groupId: string; group: string; productId: string; variant: string; sku: string | null; isArchived: boolean }[];
+  /** Varias fotos principales: no se tocan; filas de variante con esas fotos. */
+  multiCoverGroups: { groupId: string; group: string; covers: number; withScope: number; variantRows: number }[];
 }
 
 /** Lo que el guion lee de cada grupo (el mismo `select` lo usa su prueba). */
@@ -71,10 +76,16 @@ export const BACKFILL_GROUP_SELECT = {
 const byGalleryOrder = (a: BackfillImageRow, b: BackfillImageRow) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
 
 export function planGroupCoverBackfill(groups: BackfillGroup[]): BackfillPlan {
-  const plan: BackfillPlan = { scopeUpdates: [], deletions: [], coverChanges: [], touchedProductIds: [], skipped: [] };
+  const plan: BackfillPlan = { scopeUpdates: [], deletions: [], coverChanges: [], touchedProductIds: [], skipped: [], multiCoverGroups: [] };
   for (const group of groups) {
     const covers = group.images.filter((image) => image.isMain);
     if (covers.length === 0) continue;
+    if (covers.length > 1) {
+      const urls = new Set(covers.map((cover) => cover.url.trim()));
+      const variantRows = group.products.reduce((sum, variant) => sum + variant.images.filter((row) => urls.has(row.url.trim())).length, 0);
+      plan.multiCoverGroups.push({ groupId: group.id, group: group.name, covers: covers.length, withScope: covers.filter((cover) => cover.scope !== null).length, variantRows });
+      continue;
+    }
     for (const cover of covers) {
       if (cover.scope !== GROUP_ONLY_SCOPE) plan.scopeUpdates.push({ imageId: cover.id, groupId: group.id, before: cover.scope });
     }

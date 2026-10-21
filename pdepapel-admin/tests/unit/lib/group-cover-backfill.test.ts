@@ -60,6 +60,20 @@ describe("planGroupCoverBackfill", () => {
     expect(planGroupCoverBackfill([group([], [{ id: "x", url: "x.jpg", isMain: true, scope: "GROUP_ONLY" }])]).scopeUpdates).toEqual([]);
   });
 
+  it("un grupo con varias fotos principales no se toca y sale en la lista con sus filas", () => {
+    const plan = planGroupCoverBackfill([
+      group(
+        [{ id: "v1", name: "Rosa", sku: null, isArchived: false, images: [row("a", "portada.jpg", { isMain: true }), row("b", "otra-principal.jpg"), row("c", "propia.jpg")] }],
+        [
+          { id: "g-cover", url: "portada.jpg", isMain: true, scope: null },
+          { id: "g-otra", url: "otra-principal.jpg", isMain: true, scope: null },
+        ],
+      ),
+    ]);
+    expect(plan).toMatchObject({ scopeUpdates: [], deletions: [], coverChanges: [], touchedProductIds: [] });
+    expect(plan.multiCoverGroups).toEqual([{ groupId: "grupo-1", group: "Agendas", covers: 2, withScope: 0, variantRows: 2 }]);
+  });
+
   it("las líneas de deshacer recrean las filas borradas y devuelven portadas y alcances", () => {
     const plan = planGroupCoverBackfill([
       group([{ id: "v1", name: "Rosa", sku: null, isArchived: false, images: [row("a", "portada.jpg", { isMain: true, origin: "GROUP_COPY", createdAt: at(3) }), row("c", "it's.jpg")] }]),
