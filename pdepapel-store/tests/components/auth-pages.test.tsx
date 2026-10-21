@@ -101,14 +101,15 @@ describe("full-page sign-in and sign-up", () => {
     expect(state.replace).toHaveBeenCalledWith("/favoritos");
   });
 
-  it("renders the sign-up page with the data policy notice", () => {
+  it("renders the sign-up page with the terms and data-processing authorization (Ley 1581)", () => {
     render(<Register />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Crea tu cuenta" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "política de tratamiento de datos" })).toHaveAttribute(
-      "href",
-      "/politicas/privacidad",
+    expect(screen.getByTestId("legal-consent")).toHaveTextContent(
+      "Al crear tu cuenta aceptas los Términos y condiciones y autorizas el tratamiento de tus datos según la Política de privacidad.",
     );
+    expect(screen.getByRole("link", { name: "Términos y condiciones" })).toHaveAttribute("href", "/politicas/terminos");
+    expect(screen.getByRole("link", { name: "Política de privacidad" })).toHaveAttribute("href", "/politicas/privacidad");
     expect(state.signUpProps).toMatchObject({ path: "/crear-cuenta", routing: "path" });
   });
 });

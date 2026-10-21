@@ -1,12 +1,12 @@
 "use client";
 
 import { SignUp, useAuth } from "@clerk/nextjs";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo } from "react";
 
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
 import { ClerkMountGate } from "@/components/auth/clerk-mount-gate";
+import { LegalConsent } from "@/components/legal/legal-consent";
 import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import {
   accountAccessPath,
@@ -51,16 +51,7 @@ export function Register() {
           appearance={storefrontClerkAppearance}
         />
       </ClerkMountGate>
-      <p className="text-center text-xs text-muted-foreground">
-        Al crear la cuenta aceptas la{" "}
-        <Link
-          href={STOREFRONT_ROUTES.dataPolicy}
-          className="font-semibold text-blue-yankees underline underline-offset-4"
-        >
-          política de tratamiento de datos
-        </Link>
-        .
-      </p>
+      <LegalConsent action="signUp" className="text-center" />
     </AuthPageShell>
   );
 }
