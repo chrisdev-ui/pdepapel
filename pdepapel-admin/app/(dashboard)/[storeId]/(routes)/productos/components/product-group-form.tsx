@@ -625,8 +625,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   // a otra foto la anterior queda sin repartir hasta que Paula decida.
   const savedMapping = () => {
     if (!initialData) return [];
+    const cover = groupGallery().find((img) => img.isMain)?.url;
     const covers = new Set(
-      initialData.images.filter((img) => img.isMain || img.scope === GROUP_ONLY_SCOPE).map((img) => img.url),
+      initialData.images.filter((img) => img.url === cover || img.scope === GROUP_ONLY_SCOPE).map((img) => img.url),
     );
     const saved = initialData.images
       .filter((img) => img.scope && !covers.has(img.url))
@@ -641,8 +642,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   };
 
   // Solo las fotos del grupo: las propias de cada variante van en su sección.
-  const groupGallery = () =>
-    (initialData?.images ?? []).map((img) => ({ url: img.url, isMain: img.isMain ?? false }));
+  // Una sola estrella: en grupos viejos con varias principales, la primera.
+  const groupGallery = () => {
+    const images = initialData?.images ?? [];
+    const cover = images.findIndex((img) => img.isMain);
+    return images.map((img, index) => ({ url: img.url, isMain: index === cover }));
+  };
 
   const defaultValues: ProductGroupFormValues = initialData
     ? {
@@ -1940,7 +1945,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       value={field.value.map((v) => ({ ...v, isMain: v.isMain ?? false }))}
                       disabled={loading}
                       maxImages={8}
-                      onChange={(images) => field.onChange(images)}
+                      onChange={(images) => {
+                        const cover = images.findIndex((img) => img.isMain);
+                        field.onChange(images.map((img, index) => ({ ...img, isMain: index === cover })));
+                      }}
                       pendingRemovals={pendingImageRemovals}
                       onMarkRemoval={(url) => void markGroupPhotoRemoval(url)}
                       onUndoRemoval={undoGroupPhotoRemoval}

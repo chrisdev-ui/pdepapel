@@ -32,6 +32,15 @@ export const GROUP_ONLY_SCOPE = "GROUP_ONLY";
 const isGroupCover = (photo: GroupPhoto, imageMapping?: ImageMappingEntry[] | null) =>
   Boolean(photo.isMain) || scopeOf(photo, imageMapping) === GROUP_ONLY_SCOPE;
 
+/**
+ * Una sola portada: la primera foto principal en el orden del grupo, la que
+ * lleva la estrella en el formulario. Grupos viejos traen varias filas
+ * principales (la foto de cada variante adoptada); las demás se reparten.
+ */
+export function groupCoverPhoto<T extends GroupPhoto>(groupImages: T[], imageMapping?: ImageMappingEntry[] | null): T | undefined {
+  return groupImages.find((photo) => photo.url.trim() && isGroupCover(photo, imageMapping));
+}
+
 interface ResolveVariantImagesOptions {
   /** Fotos propias (OWN y sin origen), en su orden. */
   variantImages?: (string | { url: string; isMain?: boolean })[] | null;
@@ -90,20 +99,19 @@ export function resolveVariantImages({
     own.push({ url, isMain: typeof image === "string" ? false : Boolean(image.isMain) });
   }
 
+  const cover = groupCoverPhoto(groupImages, imageMapping);
+  const coverUrlOfGroup = cover?.url.trim();
   const copies: { url: string; groupCover: boolean }[] = [];
   for (const photo of groupImages) {
     const url = photo.url.trim();
-    if (!url || seen.has(url) || isGroupCover(photo, imageMapping)) continue;
+    if (!url || seen.has(url) || url === coverUrlOfGroup) continue;
     if (!scopeAppliesTo(scopeOf(photo, imageMapping), colorId, designId)) continue;
     seen.add(url);
     copies.push({ url, groupCover: false });
   }
-  if (own.length === 0 && copies.length === 0) {
-    const cover = groupImages.find((photo) => photo.url.trim() && isGroupCover(photo, imageMapping));
-    if (cover) {
-      seen.add(cover.url.trim());
-      copies.push({ url: cover.url.trim(), groupCover: true });
-    }
+  if (own.length === 0 && copies.length === 0 && coverUrlOfGroup) {
+    seen.add(coverUrlOfGroup);
+    copies.push({ url: coverUrlOfGroup, groupCover: true });
   }
 
   const gallery: GalleryPhoto[] = [
@@ -138,9 +146,11 @@ export function showsOnlyGroupCover(gallery: Pick<GalleryPhoto, "url" | "groupCo
   return gallery.every((image) => image.groupCover || covers.has(image.url.trim()));
 }
 
-/** Las direcciones de la portada del grupo (sus fotos principales). */
-export const groupCoverUrls = (groupImages: GroupPhoto[]) =>
-  groupImages.filter((photo) => photo.isMain || photo.scope === GROUP_ONLY_SCOPE).map((photo) => photo.url.trim());
+/** La dirección de la portada del grupo, si tiene. */
+export const groupCoverUrls = (groupImages: GroupPhoto[]) => {
+  const cover = groupCoverPhoto(groupImages);
+  return cover ? [cover.url.trim()] : [];
+};
 
 /** Clave sin orden ni repetidos para comparar juegos de fotos. */
 export function imageUrlKey(urls: string[]): string {

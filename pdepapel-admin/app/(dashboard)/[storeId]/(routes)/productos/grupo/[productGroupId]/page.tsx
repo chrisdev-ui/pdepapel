@@ -30,7 +30,7 @@ const ProductGroupPage = async ({
       storeId: params.storeId,
     },
     include: {
-      images: { orderBy: { createdAt: "asc" } },
+      images: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
       // Solo el conteo: «Desagrupar» dice cuántas ofertas del grupo pasan a cada variante.
       offers: { select: { offerId: true } },
       products: {

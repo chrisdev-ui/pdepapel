@@ -81,8 +81,18 @@ describe("the variant cover", () => {
   });
 
   it("without own photos, the first group photo that applies is the cover (the group cover is not handed out)", () => {
-    const photos = [{ url: "a" }, { url: "b", isMain: true }, { url: "c", isMain: true }];
+    const photos = [{ url: "a" }, { url: "b", isMain: true }];
     expect(resolveVariantImages({ groupImages: photos })).toEqual([{ url: "a", isMain: true, fromGroup: true }]);
+  });
+
+  it("with several main photos (old groups), only the first is the group cover; the rest are handed out by their scope", () => {
+    const photos = [
+      { url: "portada", isMain: true, scope: "all" },
+      { url: "rosa", isMain: true, scope: "COLOR|rosa" },
+      { url: "azul", isMain: true, scope: "COLOR|azul" },
+    ];
+    expect(resolveVariantImages({ variantImages: ["propia"], groupImages: photos, colorId: "rosa" }).map((image) => image.url)).toEqual(["propia", "rosa"]);
+    expect(groupCoverUrls(photos)).toEqual(["portada"]);
   });
 
   it("keeps the current cover while it stays in the gallery", () => {

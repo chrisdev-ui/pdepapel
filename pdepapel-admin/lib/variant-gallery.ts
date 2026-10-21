@@ -64,12 +64,13 @@ export async function writeGroupPhotos(
 ) {
   await tx.image.deleteMany({ where: { productGroupId } });
   if (images.length === 0) return;
+  const coverIndex = images.findIndex((image) => image.isMain);
   await tx.image.createMany({
     data: images.map((image, index) => ({
       url: image.url,
-      isMain: image.isMain ?? false,
+      isMain: index === coverIndex,
       productGroupId,
-      scope: image.isMain ? GROUP_ONLY_SCOPE : (imageMapping?.find((entry) => entry.url === image.url)?.scope ?? null),
+      scope: index === coverIndex ? GROUP_ONLY_SCOPE : (imageMapping?.find((entry) => entry.url === image.url && entry.scope !== GROUP_ONLY_SCOPE)?.scope ?? null),
       createdAt: staggered(now, index),
     })),
   });
@@ -77,8 +78,8 @@ export async function writeGroupPhotos(
 
 /** Solo la portada del grupo (su foto principal) se queda sin repartir. */
 export function assertGroupOnlyIsCover(images: { url: string; isMain?: boolean }[] | null | undefined, imageMapping?: ImageMappingEntry[] | null) {
-  const covers = new Set((images ?? []).filter((image) => image.isMain).map((image) => image.url));
-  const stray = (imageMapping ?? []).find((entry) => entry.scope === GROUP_ONLY_SCOPE && !covers.has(entry.url));
+  const cover = (images ?? []).find((image) => image.isMain)?.url;
+  const stray = (imageMapping ?? []).find((entry) => entry.scope === GROUP_ONLY_SCOPE && entry.url !== cover);
   if (stray) throw ErrorFactory.InvalidRequest("Solo la portada del grupo se queda sin repartir: elige a qué variantes va cada otra foto");
 }
 

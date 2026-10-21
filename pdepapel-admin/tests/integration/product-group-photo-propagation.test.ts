@@ -260,6 +260,22 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
       expect(Object.fromEntries(rows.map((row) => [row.url, row.scope]))).toMatchObject({ [ctx.g1]: "GROUP_ONLY", [ctx.cover]: "all" });
     });
 
+    it("con varias fotos principales (grupos viejos), solo la primera es la portada y las demás se reparten", async () => {
+      const ctx = await setup();
+      const rosa = photo("rosa");
+      await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: rosa, isMain: true }, { url: ctx.g1 }], [
+        ...allMapping0(ctx),
+        { url: rosa, scope: `COLOR|${ctx.colorA.id}` },
+      ]);
+
+      expect(await urls(ctx.ids.vA1)).toEqual([ctx.own, rosa, ctx.g1]);
+      expect(await urls(ctx.ids.vA2)).toEqual([rosa, ctx.g1]);
+      expect(await urls(ctx.ids.vB1)).toEqual([ctx.g1]);
+      const rows = await testPrisma.image.findMany({ where: { productGroupId: ctx.groupId }, select: { url: true, isMain: true, scope: true } });
+      expect(rows.filter((row) => row.isMain)).toEqual([{ url: ctx.cover, isMain: true, scope: "GROUP_ONLY" }]);
+      expect(rows.find((row) => row.url === rosa)).toMatchObject({ isMain: false, scope: `COLOR|${ctx.colorA.id}` });
+    });
+
     it("«solo del grupo» en una foto que no es la portada se rechaza", async () => {
       const ctx = await setup();
       const { PATCH } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");

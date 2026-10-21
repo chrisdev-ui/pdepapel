@@ -547,3 +547,22 @@ describe("cambiar la estrella en un grupo ya guardado con la portada «solo del 
     expect(enviado.imageMapping.map((m) => m.scope)).not.toContain("GROUP_ONLY");
   });
 });
+
+describe("grupo viejo con varias fotos principales", () => {
+  const guardadas = [
+    { id: "i1", url: "a.jpg", isMain: true, scope: "all" },
+    { id: "i2", url: "lila.jpg", isMain: true, scope: "color-1" },
+  ];
+
+  it("una sola estrella: la segunda se reparte con su alcance guardado y viaja sin estrella", async () => {
+    abrirEditar(undefined, guardadas);
+    await waitFor(() => expect(selectores()).toHaveLength(1), { timeout: ESPERA_MS });
+    expect(screen.getAllByText("Solo del grupo")).toHaveLength(1);
+    expect(selectores()[0].textContent).toMatch(/Color: Lila/);
+    guardarEditar();
+
+    const enviado = await esperaGuardado(mocks.patch);
+    expect(enviado.images.filter((f) => f.isMain).map((f) => f.url)).toEqual(["a.jpg"]);
+    expect(enviado.imageMapping).toContainEqual({ url: "lila.jpg", scope: "color-1" });
+  });
+});

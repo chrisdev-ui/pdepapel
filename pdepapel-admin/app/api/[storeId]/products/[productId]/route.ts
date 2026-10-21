@@ -550,7 +550,7 @@ export async function PATCH(
       if (previousGroupId && targetProductGroupId && previousGroupId !== targetProductGroupId) {
         const groupPhotos = await tx.image.findMany({
           where: { productGroupId: targetProductGroupId },
-          orderBy: { createdAt: "asc" },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: { url: true, isMain: true, scope: true },
         });
         await switchVariantGroup(tx, { productId: params.productId, images, groupPhotos, colorId, designId });
