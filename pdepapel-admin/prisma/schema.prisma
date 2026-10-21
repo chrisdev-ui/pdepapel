@@ -41,6 +41,8 @@ model Store {
   mercadoLibreMinNetPerUnit       Int                             @default(10000)
   /// Margen bruto mínimo sobre el precio en la tienda: (venta − costo con envío) / venta, en %; null = sin mínimo.
   storeMinMarginPercent           Float?                          @default(35)
+  /// Costo de compra mínimo de un papel en las ediciones sugeridas, en COP; null = sin piso. Más barato va como regalo.
+  capsuleMinSlipCost              Float?                          @default(3000)
   /// Cargo fijo por unidad de Mercado Libre en precios bajos (en vez del envío), en COP; null = no registrado.
   mercadoLibreLowPriceFixedFee    Int?
   /// Precio hasta el cual Mercado Libre cobra el cargo fijo en vez del envío, en COP; null = no registrado.
@@ -108,6 +110,8 @@ model Store {
   capsuleOrders                   CapsuleOrder[]
   capsuleDailySlots               CapsuleDailySlot[]
   capsuleDayCaps                  CapsuleDayCap[]
+  capsulePackTemplates            CapsulePackTemplate[]
+  capsuleSuggestionFeedback       CapsuleSuggestionFeedback[]
   productPriceTiers               ProductPriceTier[]
   marketplaceConnections          MarketplaceConnection[]
   marketplaceOAuthStates          MarketplaceOAuthState[]
@@ -502,15 +506,18 @@ model Product {
 
   // -- CÁPSULAS SORPRESA --
   /// Lotes empacados de este producto cápsula (la cápsula es un producto normal).
-  capsuleBatches    CapsuleBatch[]
+  capsuleBatches            CapsuleBatch[]
   /// Veces que este producto se consumió empacando cápsulas.
-  capsuleBatchItems CapsuleBatchItem[]
+  capsuleBatchItems         CapsuleBatchItem[]
   /// La edición de cápsulas que este producto vende (el producto de la edición).
-  capsuleEdition    CapsuleEdition?
+  capsuleEdition            CapsuleEdition?
   /// Papeles y regalos de ediciones que apartan unidades de este producto.
-  capsuleSlips      CapsuleSlip[]
+  capsuleSlips              CapsuleSlip[]
+  /// Solo cuenta si el producto parece de personaje o licencia: Paula lo permite en las ediciones sugeridas.
+  capsuleLicenseAllowed     Boolean                     @default(false)
+  capsuleSuggestionFeedback CapsuleSuggestionFeedback[]
   /// Escalera de precio por cantidad. Sin filas, el precio es `price` a secas.
-  priceTiers        ProductPriceTier[]
+  priceTiers                ProductPriceTier[]
 
   // -- KIT / COMBO FIELDS --
   isKit                Boolean                 @default(false)
@@ -968,6 +975,48 @@ model CapsuleOrder {
  * regalo y la reserva de caja/empaque. Son cifras del negocio y viven aquí,
  * no en el código. El precio del pack vive en `ProductPriceTier`.
  */
+/// Plantilla de packs para las ediciones sugeridas cuando todavía no hay una
+/// edición con packs guardados de dónde copiarlos. Cifras del negocio: las
+/// llena Paula en Configuración.
+model CapsulePackTemplate {
+  id             String   @id @default(uuid())
+  storeId        String
+  packSize       Int
+  giftMaxCost    Float    @default(0)
+  giftMaxItems   Int      @default(0)
+  giftLabel      String?  @db.VarChar(120)
+  boxReserveCost Float    @default(0)
+  updatedAt      DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, packSize])
+}
+
+enum CapsuleSuggestionDecision {
+  ACCEPTED
+  REJECTED
+}
+
+/// ✓/✗ de Paula a una edición sugerida (productId null) o a un producto de su bolsa.
+model CapsuleSuggestionFeedback {
+  id             String                    @id @default(uuid())
+  storeId        String
+  themeKey       String                    @db.VarChar(120)
+  productId      String?
+  decision       CapsuleSuggestionDecision
+  reason         String?                   @db.VarChar(160)
+  scoringVersion String                    @db.VarChar(32)
+  createdBy      String                    @db.VarChar(191)
+  createdAt      DateTime                  @default(now())
+
+  store   Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
+  @@index([productId])
+}
+
 model CapsulePackOption {
   id             String  @id @default(uuid())
   editionId      String
