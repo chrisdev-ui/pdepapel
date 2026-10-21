@@ -6,7 +6,23 @@ import { expect } from "vitest";
  * cuenta de solo lectura además el dinero de la casa, el proveedor, los datos
  * de contacto de las clientas y lo que identifica un pago o un envío.
  */
-const SECRET_KEYS = ["accessToken", "refreshToken", "clientSecret", "webhookSecret", "apiKey", "apiSecret", "secret"];
+const SECRET_KEYS = [
+  "accessToken",
+  "refreshToken",
+  "clientSecret",
+  "webhookSecret",
+  "apiKey",
+  "apiSecret",
+  "secret",
+  // Redes: la referencia del token, lo cifrado, el verifier de PKCE y la respuesta cruda.
+  "tokenRef",
+  "pageToken",
+  "encryptedAccessToken",
+  "encryptedRefreshToken",
+  "encryptedCodeVerifier",
+  "codeVerifier",
+  "raw",
+];
 
 const VIEWER_KEYS = [
   // Costos, proveedor y señales internas del producto.

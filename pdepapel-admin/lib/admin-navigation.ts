@@ -28,6 +28,7 @@ import {
   Warehouse,
   Gift,
   Brain,
+  TrendingUp,
 } from "lucide-react";
 
 /**
@@ -297,6 +298,7 @@ export const NAV_GROUPS: NavGroup[] = [
         ],
       },
       { id: "boletin", ownerOnly: true, label: "Boletín", icon: Mail, segment: "boletin" },
+      { id: "redes", ownerOnly: true, label: "Métricas de redes", icon: TrendingUp, segment: "redes" },
     ],
   },
   {
@@ -426,6 +428,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   ofertas: "Ofertas",
   cupones: "Cupones",
   boletin: "Boletín",
+  redes: "Métricas de redes",
   rendimiento: "Rendimiento",
   negocio: "Negocio y crecimiento",
   "inteligencia-negocio": "Rendimiento detallado",
