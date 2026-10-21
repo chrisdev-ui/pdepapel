@@ -5,7 +5,9 @@ import { DEFAULT_SLOW_DAYS, loadFirstStockedAt, loadSalesHistory, rankSlowMovers
  * Los productos quietos de la tienda con la regla del Copiloto
  * (`rankSlowMovers`, ventana de `DEFAULT_SLOW_DAYS`): la base de los papeles
  * y de las ediciones sugeridas. El cálculo lee hasta un año de ventas, así
- * que se guarda unos minutos en Redis; sin Redis se calcula cada vez.
+ * que se guarda unos minutos en Redis; sin Redis se calcula cada vez. La
+ * clave lleva la huella del catálogo (cuántos productos y el último
+ * `updatedAt`): una venta, una impresión o un producto nuevo la cambian.
  * Solo guarda qué está quieto y desde cuándo; disponible y costo se leen en
  * vivo en cada consulta.
  */
@@ -17,7 +19,12 @@ export interface IdleInfo {
 }
 
 export const CAPSULE_IDLE_CACHE_SECONDS = 600;
-const cacheKey = (storeId: string) => `store:${storeId}:capsule-idle:v1`;
+const cacheKey = (storeId: string, fingerprint: string) => `store:${storeId}:capsule-idle:v2:${fingerprint}`;
+
+async function catalogFingerprint(storeId: string) {
+  const { _count, _max } = await prismadb.product.aggregate({ where: { storeId }, _count: { _all: true }, _max: { updatedAt: true } });
+  return `${_count._all}:${_max.updatedAt?.getTime() ?? 0}`;
+}
 const DAY_MS = 86_400_000;
 
 type CacheClient = { get: (key: string) => Promise<unknown>; set: (key: string, value: unknown, options: { ex: number }) => Promise<unknown> };
@@ -53,9 +60,10 @@ export async function computeIdleProducts(storeId: string, now = new Date()): Pr
 
 export async function loadIdleProducts(storeId: string): Promise<Map<string, IdleInfo>> {
   const redis = await cacheClient();
+  const key = redis ? cacheKey(storeId, await catalogFingerprint(storeId)) : "";
   if (redis) {
     try {
-      const cached = (await redis.get(cacheKey(storeId))) as [string, IdleInfo][] | null;
+      const cached = (await redis.get(key)) as [string, IdleInfo][] | null;
       if (Array.isArray(cached)) return new Map(cached);
     } catch {
       // Sin caché: se calcula.
@@ -64,7 +72,7 @@ export async function loadIdleProducts(storeId: string): Promise<Map<string, Idl
   const idle = await computeIdleProducts(storeId);
   if (redis) {
     try {
-      await redis.set(cacheKey(storeId), Array.from(idle.entries()), { ex: CAPSULE_IDLE_CACHE_SECONDS });
+      await redis.set(key, Array.from(idle.entries()), { ex: CAPSULE_IDLE_CACHE_SECONDS });
     } catch {
       // La próxima consulta lo vuelve a calcular.
     }

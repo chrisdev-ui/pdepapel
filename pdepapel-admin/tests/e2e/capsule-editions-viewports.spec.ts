@@ -51,12 +51,14 @@ async function signIn(page: Page, redirectPath: string) {
 
 async function seedEdition(width: number) {
   const seed = await db.product.findUniqueOrThrow({ where: { id: "e2e-fair-product" }, select: { sizeId: true, colorId: true, designId: true } });
+  // Los papeles salen de los productos quietos (sin ventas en 90 días): estos llevan 200 días en el catálogo.
+  const idleSince = new Date(Date.now() - 200 * 86_400_000);
   const base = { storeId, categoryId: CATEGORY_ID, sizeId: seed.sizeId, colorId: seed.colorId, designId: seed.designId, description: "Producto de pruebas de cápsulas" };
   const slipProduct = await db.product.create({
-    data: { ...base, id: `e2e-capsule-slip-${width}`, name: `Lapicero cápsula ${width}`, slug: `lapicero-capsula-${width}`, sku: `E2E-CAP-SLIP-${width}`, stock: 25, price: 9000, acqPrice: 4000 },
+    data: { ...base, id: `e2e-capsule-slip-${width}`, name: `Lapicero cápsula ${width}`, slug: `lapicero-capsula-${width}`, sku: `E2E-CAP-SLIP-${width}`, stock: 25, price: 9000, acqPrice: 4000, createdAt: idleSince },
   });
   const extraProduct = await db.product.create({
-    data: { ...base, id: `e2e-capsule-extra-${width}`, name: `Borrador cápsula ${width}`, slug: `borrador-capsula-${width}`, sku: `E2E-CAP-EXTRA-${width}`, stock: 5, price: 9000, acqPrice: 4000 },
+    data: { ...base, id: `e2e-capsule-extra-${width}`, name: `Borrador cápsula ${width}`, slug: `borrador-capsula-${width}`, sku: `E2E-CAP-EXTRA-${width}`, stock: 5, price: 9000, acqPrice: 4000, createdAt: idleSince },
   });
   const editionProduct = await db.product.create({
     data: { ...base, id: `e2e-capsule-edition-${width}`, name: `Cápsula edición ${width}`, slug: `capsula-edicion-${width}`, sku: `E2E-CAP-ED-${width}`, stock: 0, price: 12900, acqPrice: 0, isArchived: true },
