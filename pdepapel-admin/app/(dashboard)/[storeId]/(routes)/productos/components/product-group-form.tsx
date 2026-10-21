@@ -91,7 +91,7 @@ import {
   Supplier,
 } from "@prisma/client";
 import axios from "axios";
-import { imageUrlKey, resolveVariantImages } from "@/lib/variant-images";
+import { GROUP_ONLY_SCOPE, imageUrlKey, resolveVariantImages } from "@/lib/variant-images";
 import {
   applyOwnPhotoRemovals,
   applyPendingImageRemovals,
@@ -621,16 +621,21 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   };
 
   // Reparto guardado; las fotos sin `scope` (previas) se reconstruyen como antes.
+  // La portada no entra: su alcance lo pone el servidor, y si la estrella pasa
+  // a otra foto la anterior queda sin repartir hasta que Paula decida.
   const savedMapping = () => {
     if (!initialData) return [];
+    const covers = new Set(
+      initialData.images.filter((img) => img.isMain || img.scope === GROUP_ONLY_SCOPE).map((img) => img.url),
+    );
     const saved = initialData.images
-      .filter((img) => img.scope)
+      .filter((img) => img.scope && !covers.has(img.url))
       .map((img) => ({ url: img.url, scope: img.scope as string }));
     const savedUrls = new Set(saved.map((entry) => entry.url));
     return [
       ...saved,
       ...reconstructMapping(groupGallery(), initialData.products).filter(
-        (entry) => !savedUrls.has(entry.url),
+        (entry) => !savedUrls.has(entry.url) && !covers.has(entry.url),
       ),
     ];
   };
@@ -662,7 +667,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         miscCost: INITIAL_MISC_COST,
         price: initialData.products?.[0]?.price || 0,
         defaultSupplier: initialData.products?.[0]?.supplierId || "",
-        imageMapping: initialData.imageMapping || savedMapping(),
+        imageMapping: (initialData.imageMapping || savedMapping()).filter((entry) => entry.scope !== GROUP_ONLY_SCOPE),
         isFeatured: initialData.products?.[0]?.isFeatured || false,
         archiveMode: deriveArchiveMode(initialData.products ?? []),
         variants:

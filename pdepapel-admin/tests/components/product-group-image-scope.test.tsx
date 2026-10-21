@@ -76,6 +76,11 @@ vi.mock("@/components/ui/image-upload", () => ({
           {`quitar ${foto.url}`}
         </button>
       ))}
+      {props.value.map((foto) => (
+        <button key={`estrella-${foto.url}`} type="button" onClick={() => props.onChange(props.value.map((otra) => ({ ...otra, isMain: otra.url === foto.url })))}>
+          {`portada ${foto.url}`}
+        </button>
+      ))}
     </div>
   ),
 }));
@@ -139,16 +144,19 @@ const conFotosDelGrupo = (v: ReturnType<typeof variante>) => ({
     { id: `${v.id}-b`, url: "b.jpg", isMain: false },
   ],
 });
-function grupoGuardado(productos = [conFotosDelGrupo(variante("p1", "color-1")), conFotosDelGrupo(variante("p2", "color-2"))]) {
+function grupoGuardado(
+  productos = [conFotosDelGrupo(variante("p1", "color-1")), conFotosDelGrupo(variante("p2", "color-2"))],
+  images: { id: string; url: string; isMain: boolean; scope?: string | null }[] = [
+    { id: "i1", url: "a.jpg", isMain: true },
+    { id: "i2", url: "b.jpg", isMain: false },
+  ],
+) {
   return {
     id: "group-1",
     name: "Cartuchera kawaii",
     storeId: "store-1",
     categoryId: "cat-1",
-    images: [
-      { id: "i1", url: "a.jpg", isMain: true },
-      { id: "i2", url: "b.jpg", isMain: false },
-    ],
+    images,
     products: productos,
   } as never;
 }
@@ -190,8 +198,8 @@ const props = {
   suppliers: [],
 };
 
-function abrirEditar(productos?: ReturnType<typeof variante>[]) {
-  render(<ProductGroupForm {...props} initialData={grupoGuardado(productos)} />);
+function abrirEditar(productos?: ReturnType<typeof variante>[], images?: Parameters<typeof grupoGuardado>[1]) {
+  render(<ProductGroupForm {...props} initialData={grupoGuardado(productos, images)} />);
 }
 
 async function abrirNuevo(fotos: Foto[], colores?: string[]) {
@@ -468,9 +476,9 @@ describe("editar un grupo: lo que envía el formulario", () => {
       ["p1", ["propia.jpg"]],
       ["p2", []],
     ]);
+    // La portada no viaja en el reparto: el servidor le pone «solo del grupo».
     expect(Object.fromEntries(enviado.imageMapping.map((e) => [e.url, e.scope]))).toEqual({
-      "a.jpg": "all",
-      "b.jpg": "all",
+            "b.jpg": "all",
       "propia.jpg": "COMBO|color-1|design-1",
     });
   });
@@ -507,5 +515,35 @@ describe("editar un grupo anterior: reparto sin alcance claro", () => {
     for (const trigger of selectores()) {
       expect(trigger.textContent).not.toMatch(/Todas las variantes/);
     }
+  });
+});
+
+describe("cambiar la estrella en un grupo ya guardado con la portada «solo del grupo»", () => {
+  const guardadas = [
+    { id: "i1", url: "a.jpg", isMain: true, scope: "GROUP_ONLY" },
+    { id: "i2", url: "b.jpg", isMain: false, scope: "all" },
+  ];
+
+  it("la portada anterior queda sin repartir y frena el guardado hasta que se decide", async () => {
+    abrirEditar(undefined, guardadas);
+    fireEvent.click(screen.getByRole("button", { name: "portada b.jpg" }));
+
+    await waitFor(() => expect(selectores()).toHaveLength(1), { timeout: ESPERA_MS });
+    expect(selectores()[0].textContent).toMatch(/Elige a quién/);
+    guardarEditar();
+    await esperaFreno();
+  });
+
+  it("decidida, guarda con la nueva portada y sin «solo del grupo» en el reparto", async () => {
+    abrirEditar(undefined, guardadas);
+    fireEvent.click(screen.getByRole("button", { name: "portada b.jpg" }));
+    await waitFor(() => expect(selectores()).toHaveLength(1), { timeout: ESPERA_MS });
+    elegir(0, "Todas las variantes");
+    guardarEditar();
+
+    const enviado = await esperaGuardado(mocks.patch);
+    expect(enviado.images.find((f) => f.isMain)?.url).toBe("b.jpg");
+    expect(enviado.imageMapping).toContainEqual({ url: "a.jpg", scope: "all" });
+    expect(enviado.imageMapping.map((m) => m.scope)).not.toContain("GROUP_ONLY");
   });
 });
