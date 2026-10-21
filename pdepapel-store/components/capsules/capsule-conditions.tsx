@@ -24,6 +24,10 @@ export function CapsuleConditions({ opensAt }: { opensAt: string }) {
           Tienes derecho de retracto: cinco (5) días hábiles desde la entrega (Ley 1480 de 2011, art. 47). Los productos se devuelven sin usar y en su empaque, como dice nuestra{" "}
           <Link href={STOREFRONT_ROUTES.returnsPolicy} className={link}>
             política de cambios y devoluciones
+          </Link>{" "}
+          y nuestros{" "}
+          <Link href={STOREFRONT_ROUTES.termsPolicy} className={link}>
+            términos y condiciones
           </Link>
           .
         </li>

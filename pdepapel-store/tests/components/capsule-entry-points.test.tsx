@@ -60,6 +60,7 @@ describe("entradas a las cápsulas", () => {
     expect(text.toLowerCase()).not.toContain("suerte");
     expect(text).not.toMatch(/\$\s?\d/);
     expect(screen.getByRole("link", { name: "política de cambios y devoluciones" }).getAttribute("href")).toBe("/politicas/devoluciones");
+    expect(screen.getByRole("link", { name: "términos y condiciones" }).getAttribute("href")).toBe("/politicas/terminos");
     expect(screen.getByRole("link", { name: "política de tratamiento de datos" }).getAttribute("href")).toBe("/politicas/privacidad#videos-de-capsulas");
   });
 });
