@@ -2,7 +2,7 @@ import { CapsuleSlipKind, CapsuleSlipStatus } from "@prisma/client";
 
 import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
-import { maxGiftCostOf, maxPackFor, packMargins, packRungs, type CapsulePackCosts } from "@/lib/pricing/capsules";
+import { evaluatePoolMargins, maxGiftCostOf, packRungs, type CapsulePackCosts } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
 import { DEFAULT_SLOW_DAYS, isSlowMover, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf } from "@/lib/sales-velocity";
 
@@ -106,19 +106,7 @@ export interface PoolLine {
   quantity: number;
 }
 
-export interface PackCheck {
-  packSize: number;
-  total: number;
-  /** El pack cabe en la bolsa (≤ 25 % de los papeles). */
-  available: boolean;
-  expectedPct: number | null;
-  p95Pct: number | null;
-  worstPct: number | null;
-  /** P95 ≥ el piso (de la edición o de la tienda); null si no hay piso o el pack no cabe. */
-  passes: boolean | null;
-}
-
-const pct = (value: number) => Math.round(value * 1000) / 10;
+export type { PackCheck } from "@/lib/pricing/capsules";
 
 /**
  * El margen de cada pack sobre la bolsa: los papeles ya impresos y sin anular
@@ -142,7 +130,7 @@ export async function checkPoolMargins({
   const edition = await loadEdition(storeId, editionId);
   const options = packOptions ?? edition.packOptions;
   if (options.length === 0) throw ErrorFactory.InvalidRequest("Configura los packs de la edición antes de revisar el margen");
-  const rungs = packRungs(options);
+  packRungs(options); // Falla antes de consultar la base si falta un pack.
 
   const [printed, proposedProducts, store] = await Promise.all([
     prismadb.capsuleSlip.findMany({ where: { editionId, kind: CapsuleSlipKind.SLIP, status: { not: CapsuleSlipStatus.VOID } }, select: { unitCost: true } }),
@@ -163,22 +151,6 @@ export async function checkPoolMargins({
   // El piso de la edición manda; sin él, el margen mínimo de la tienda.
   const minMarginPct = edition.minMarginPct ?? store?.storeMinMarginPercent ?? null;
   const floorSource: "edition" | "store" | null = edition.minMarginPct !== null ? "edition" : minMarginPct !== null ? "store" : null;
-  const largest = maxPackFor(pool.length);
-  const packs: PackCheck[] = rungs.map((rung) => {
-    if (largest === null || rung.packSize > largest) {
-      return { packSize: rung.packSize, total: rung.total, available: false, expectedPct: null, p95Pct: null, worstPct: null, passes: null };
-    }
-    const result = packMargins({ pool, rung, runs, seed: 1 });
-    const p95Pct = pct(result.p95);
-    return {
-      packSize: rung.packSize,
-      total: rung.total,
-      available: true,
-      expectedPct: pct(result.expected),
-      p95Pct,
-      worstPct: pct(result.worst),
-      passes: minMarginPct === null ? null : p95Pct >= minMarginPct,
-    };
-  });
-  return { poolSize: pool.length, minMarginPct, floorSource, packs, ok: packs.every((pack) => pack.passes !== false) };
+  const result = evaluatePoolMargins({ pool, options, minMarginPct, runs });
+  return { poolSize: result.poolSize, minMarginPct, floorSource, packs: result.packs, ok: result.ok };
 }

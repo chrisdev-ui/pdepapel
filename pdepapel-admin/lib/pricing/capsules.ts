@@ -161,3 +161,55 @@ export function packMargins({ pool, rung, runs = 20000, seed = 1 }: PackMarginIn
     worst: marginOf(worstCost),
   };
 }
+
+export interface PackCheck {
+  packSize: number;
+  total: number;
+  /** El pack cabe en la bolsa (≤ 25 % de los papeles). */
+  available: boolean;
+  expectedPct: number | null;
+  p95Pct: number | null;
+  worstPct: number | null;
+  /** P95 ≥ el piso; null si no hay piso o el pack no cabe. */
+  passes: boolean | null;
+}
+
+const pct = (value: number) => Math.round(value * 1000) / 10;
+
+/**
+ * El margen de cada pack sobre una bolsa (un costo por papel) contra un piso.
+ * Lo usan el taller (`checkPoolMargins`) y las ediciones sugeridas: una sola
+ * cuenta. Solo se miden los packs que caben (`maxPackFor`).
+ */
+export function evaluatePoolMargins({
+  pool,
+  options,
+  minMarginPct,
+  runs = 5000,
+  seed = 1,
+}: {
+  pool: readonly number[];
+  options: readonly CapsulePackCosts[];
+  minMarginPct: number | null;
+  runs?: number;
+  seed?: number;
+}): { poolSize: number; packs: PackCheck[]; ok: boolean } {
+  const largest = maxPackFor(pool.length);
+  const packs: PackCheck[] = packRungs(options).map((rung) => {
+    if (largest === null || rung.packSize > largest) {
+      return { packSize: rung.packSize, total: rung.total, available: false, expectedPct: null, p95Pct: null, worstPct: null, passes: null };
+    }
+    const result = packMargins({ pool, rung, runs, seed });
+    const p95Pct = pct(result.p95);
+    return {
+      packSize: rung.packSize,
+      total: rung.total,
+      available: true,
+      expectedPct: pct(result.expected),
+      p95Pct,
+      worstPct: pct(result.worst),
+      passes: minMarginPct === null ? null : p95Pct >= minMarginPct,
+    };
+  });
+  return { poolSize: pool.length, packs, ok: packs.every((pack) => pack.passes !== false) };
+}

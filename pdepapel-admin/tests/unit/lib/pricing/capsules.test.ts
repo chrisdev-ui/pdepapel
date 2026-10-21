@@ -5,6 +5,7 @@ import {
   CAPSULE_PACK_PRICES,
   CAPSULE_SALES_ENABLED,
   capsuleSalesEnabled,
+  evaluatePoolMargins,
   maxGiftCostOf,
   packRungs,
   capsuleProvisionalCost,
@@ -104,5 +105,26 @@ describe("margen de un pack", () => {
   it("resume la banda de costo de una bolsa", () => {
     expect(slipCostBand([5000, 3000, 4000])).toMatchObject({ min: 3000, max: 5000, mean: 4000, p50: 4000 });
     expect(slipCostBand([])).toBeNull();
+  });
+});
+
+describe("evaluatePoolMargins", () => {
+  const options = CAPSULE_PACK_PRICES.map((price) => ({ packSize: price.packSize, giftMaxCost: 3000, giftMaxItems: 1, boxReserveCost: 2000 }));
+
+  it("solo mide los packs que caben en la bolsa y juzga cada uno contra el piso", () => {
+    const result = evaluatePoolMargins({ pool: Array.from({ length: 40 }, () => 4000), options, minMarginPct: 20, runs: 500 });
+    expect(result.poolSize).toBe(40);
+    expect(result.packs.filter((pack) => pack.available).map((pack) => pack.packSize)).toEqual([5, 10]);
+    expect(result.packs.filter((pack) => !pack.available).every((pack) => pack.passes === null && pack.p95Pct === null)).toBe(true);
+    expect(result.packs.filter((pack) => pack.available).every((pack) => pack.passes === true)).toBe(true);
+    expect(result.ok).toBe(true);
+  });
+
+  it("un pack bajo el piso hace fallar la bolsa; sin piso no se juzga", () => {
+    const expensive = Array.from({ length: 40 }, () => 11000);
+    expect(evaluatePoolMargins({ pool: expensive, options, minMarginPct: 20, runs: 500 }).ok).toBe(false);
+    const unjudged = evaluatePoolMargins({ pool: expensive, options, minMarginPct: null, runs: 500 });
+    expect(unjudged.ok).toBe(true);
+    expect(unjudged.packs.filter((pack) => pack.available).every((pack) => pack.passes === null)).toBe(true);
   });
 });
