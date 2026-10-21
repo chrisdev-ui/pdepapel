@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { getCapsuleSettings } from "@/lib/capsule-settings";
 import prismadb from "@/lib/prismadb";
 import { getStoreEmailSettings } from "@/lib/store-email-settings";
 import { getStoreSettings } from "@/lib/store-settings";
@@ -12,6 +13,7 @@ import { getBoxes } from "../cajas/server/get-boxes";
 import { CacheManagement } from "../envios/components/cache-management";
 import { BoxesPanel } from "./components/boxes-panel";
 import { BusinessInfoPanel } from "./components/business-info-panel";
+import { CapsulesPanel } from "./components/capsules-panel";
 import { EmailListsPanel } from "./components/email-lists-panel";
 import { IntegrationsPanel } from "./components/integrations-panel";
 import { MercadoLibreProfilesPanel } from "./components/mercadolibre-profiles-panel";
@@ -104,6 +106,7 @@ export default async function SettingsPage({
               hasStoreEmail: Boolean(emails.storeEmail),
             }))}
           />
+          <CapsulesPanel initial={await getCapsuleSettings(params.storeId)} />
         </div>
       )}
 
