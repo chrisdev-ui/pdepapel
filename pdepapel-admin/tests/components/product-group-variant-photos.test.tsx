@@ -290,9 +290,10 @@ describe("borrar una foto del grupo que una variante también tiene como propia"
 });
 
 describe("una variante que se quedaría sin fotos", () => {
+  // Sin portada del grupo: no hay respaldo, así que la variante sí se queda vacía.
   const sinFotosTrasQuitar = () => {
     renderForm({
-      groupImages: [{ url: "solo-azul.jpg", scope: "COMBO|azul|flores", isMain: true }],
+      groupImages: [{ url: "solo-azul.jpg", scope: "COMBO|azul|flores" }],
       products: [
         variante("p-rojo", "rojo", "Agenda Rojo", [{ url: "portada-rojo.jpg", isMain: true }]),
         variante("p-azul", "azul", "Agenda Azul", [{ url: "solo-azul.jpg", origin: "GROUP_COPY", isMain: true }]),
@@ -321,6 +322,27 @@ describe("una variante que se quedaría sin fotos", () => {
     await quitarPortadaRojo();
     save();
     fireEvent.click(within(await dialog()).getByRole("button", { name: "Guardar igual" }));
+    await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1));
+    expect(variantOf("p-rojo").images).toEqual([]);
+  });
+});
+
+describe("la portada del grupo de respaldo", () => {
+  it("una variante sin otras fotos no avisa al guardar: la portada del grupo la cubre", async () => {
+    renderForm({
+      groupImages: [
+        { url: "portada.jpg", scope: "GROUP_ONLY", isMain: true },
+        { url: "solo-azul.jpg", scope: "COMBO|azul|flores" },
+      ],
+      products: [
+        variante("p-rojo", "rojo", "Agenda Rojo", [{ url: "portada-rojo.jpg", isMain: true }]),
+        variante("p-azul", "azul", "Agenda Azul", [{ url: "solo-azul.jpg", origin: "GROUP_COPY", isMain: true }]),
+      ],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Quitar de Agenda Rojo" }));
+    fireEvent.click(within(await dialog()).getByRole("button", { name: "Quitar de la variante" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    save();
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1));
     expect(variantOf("p-rojo").images).toEqual([]);
   });

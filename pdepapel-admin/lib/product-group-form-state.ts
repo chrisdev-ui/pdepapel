@@ -4,7 +4,7 @@
  * navegador y las fotos marcadas para quitar.
  */
 
-import { resolveVariantImages, scopeAppliesTo, scopeOf, type ImageMappingEntry } from "@/lib/variant-images";
+import { resolveVariantImages, type ImageMappingEntry } from "@/lib/variant-images";
 
 export type GroupArchiveMode = "per-variant" | "all-archived" | "all-published";
 
@@ -297,12 +297,19 @@ export function applyOwnPhotoRemovals<T extends OwnPhotoVariant>(variants: T[], 
 export function isAlsoDeliveredByGroup(
   url: string,
   variant: OwnPhotoVariant,
-  groupImages: { url: string; scope?: string | null }[],
+  groupImages: { url: string; scope?: string | null; isMain?: boolean }[],
   mapping: ImageMappingEntry[] | undefined,
 ): boolean {
-  const photo = groupImages.find((image) => image.url === url);
-  if (!photo) return false;
-  return scopeAppliesTo(scopeOf(photo, mapping), variant.color?.id, variant.design?.id);
+  if (!groupImages.some((image) => image.url === url)) return false;
+  // Sin esta propia, ¿la galería la vuelve a traer? La portada del grupo solo
+  // vuelve como respaldo, cuando la variante se quedaría sin ninguna foto.
+  return resolveVariantImages({
+    variantImages: (variant.images ?? []).filter((own) => own !== url),
+    groupImages,
+    imageMapping: mapping,
+    colorId: variant.color?.id,
+    designId: variant.design?.id,
+  }).some((image) => image.url === url);
 }
 
 /** Nombres de las variantes que quedarían sin ninguna foto tras el guardado. */

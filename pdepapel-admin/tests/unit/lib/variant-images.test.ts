@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  GROUP_ONLY_SCOPE,
+  groupCoverUrls,
   imageUrlKey,
   resolveVariantImages,
+  scopeAppliesTo,
+  showsOnlyGroupCover,
   withVariantCover,
 } from "@/lib/variant-images";
 
@@ -25,15 +29,13 @@ const imageMapping = [
 describe("resolveVariantImages", () => {
   const urlsOf = (images: { url: string }[]) => images.map((i) => i.url);
 
-  it("hands each variant only the group photos scoped to its colour, design or combo", () => {
+  it("hands each variant only the group photos scoped to its colour, design or combo, never the group cover", () => {
     expect(urlsOf(resolveVariantImages({ groupImages, imageMapping, colorId: "color-rosa", designId: "design-kawaii" }))).toEqual([
-      groupImages[0].url,
       groupImages[1].url,
       groupImages[3].url,
       groupImages[4].url,
     ]);
     expect(urlsOf(resolveVariantImages({ groupImages, imageMapping, colorId: "color-lila", designId: "design-otro" }))).toEqual([
-      groupImages[0].url,
       groupImages[2].url,
     ]);
   });
@@ -48,7 +50,6 @@ describe("resolveVariantImages", () => {
     });
     expect(result).toEqual([
       { url: "https://res.cloudinary.com/x/own.jpg", isMain: true, fromGroup: false },
-      { url: groupImages[0].url, isMain: false, fromGroup: true },
       { url: groupImages[2].url, isMain: false, fromGroup: true },
     ]);
   });
@@ -79,13 +80,17 @@ describe("the variant cover", () => {
     expect(covers(resolveVariantImages({ variantImages: own, groupImages, imageMapping, colorId: "x", designId: "y" }))).toEqual(["v-2.jpg"]);
   });
 
-  it("without own photos, takes the first group cover that applies, and only one", () => {
+  it("without own photos, the first group photo that applies is the cover (the group cover is not handed out)", () => {
     const photos = [{ url: "a" }, { url: "b", isMain: true }, { url: "c", isMain: true }];
-    expect(covers(resolveVariantImages({ groupImages: photos }))).toEqual(["b"]);
+    expect(resolveVariantImages({ groupImages: photos })).toEqual([{ url: "a", isMain: true, fromGroup: true }]);
   });
 
   it("keeps the current cover while it stays in the gallery", () => {
-    expect(covers(resolveVariantImages({ variantImages: own, groupImages, imageMapping, colorId: "x", designId: "y", currentCoverUrl: groupImages[0].url }))).toEqual([groupImages[0].url]);
+    expect(covers(resolveVariantImages({ variantImages: own, groupImages, imageMapping, colorId: "x", designId: "y", currentCoverUrl: "v-1.jpg" }))).toEqual(["v-1.jpg"]);
+  });
+
+  it("drops a current cover that was the group cover and takes the first own photo", () => {
+    expect(covers(resolveVariantImages({ variantImages: ["p-1.jpg", "p-2.jpg"], groupImages, imageMapping, colorId: "x", designId: "y", currentCoverUrl: groupImages[0].url }))).toEqual(["p-1.jpg"]);
   });
 
   it("falls back to the next photo when the current cover leaves", () => {
@@ -94,6 +99,39 @@ describe("the variant cover", () => {
 
   it("with own photos and none marked, the first own photo is the cover", () => {
     expect(covers(resolveVariantImages({ variantImages: ["p-1.jpg", "p-2.jpg"], groupImages }))).toEqual(["p-1.jpg"]);
+  });
+});
+
+describe("the group cover («solo del grupo»)", () => {
+  const cover = { url: "portada.jpg", isMain: true };
+  const rosa = { url: "rosa.jpg", scope: "COLOR|rosa" };
+
+  it("is not handed to a variant that has its own photos or another group photo", () => {
+    expect(resolveVariantImages({ variantImages: ["propia.jpg"], groupImages: [cover] }).map((i) => i.url)).toEqual(["propia.jpg"]);
+    expect(resolveVariantImages({ groupImages: [cover, rosa], colorId: "rosa" }).map((i) => i.url)).toEqual(["rosa.jpg"]);
+  });
+
+  it("is the fallback cover of a variant that would otherwise have no photos", () => {
+    expect(resolveVariantImages({ groupImages: [cover, rosa], colorId: "azul" })).toEqual([{ url: "portada.jpg", isMain: true, fromGroup: true, groupCover: true }]);
+  });
+
+  it("counts as the cover by being the main photo, whatever its stored or mapped scope, and by GROUP_ONLY", () => {
+    expect(resolveVariantImages({ groupImages: [{ ...cover, scope: "all" }, rosa], imageMapping: [{ url: "portada.jpg", scope: "all" }], colorId: "rosa" }).map((i) => i.url)).toEqual(["rosa.jpg"]);
+    expect(resolveVariantImages({ groupImages: [{ url: "solo.jpg", scope: GROUP_ONLY_SCOPE }, rosa], colorId: "rosa" }).map((i) => i.url)).toEqual(["rosa.jpg"]);
+    expect(scopeAppliesTo(GROUP_ONLY_SCOPE, "rosa", "kawaii")).toBe(false);
+  });
+
+  it("an own row with the same image stays: the distribution never removes own photos", () => {
+    expect(resolveVariantImages({ variantImages: ["portada.jpg"], groupImages: [cover, rosa], colorId: "rosa" }).map((i) => i.url)).toEqual(["portada.jpg", "rosa.jpg"]);
+  });
+
+  it("«Sin foto propia»: the variant shows only the group cover, as fallback or as its own duplicate", () => {
+    const covers = groupCoverUrls([cover, rosa]);
+    expect(covers).toEqual(["portada.jpg"]);
+    expect(showsOnlyGroupCover(resolveVariantImages({ groupImages: [cover, rosa], colorId: "azul" }), covers)).toBe(true);
+    expect(showsOnlyGroupCover(resolveVariantImages({ variantImages: ["portada.jpg"], groupImages: [cover] }), covers)).toBe(true);
+    expect(showsOnlyGroupCover(resolveVariantImages({ groupImages: [cover, rosa], colorId: "rosa" }), covers)).toBe(false);
+    expect(showsOnlyGroupCover([], covers)).toBe(false);
   });
 });
 

@@ -15,6 +15,7 @@ import { recordDeletedProductUrls } from "@/lib/deleted-product-urls";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
 import {
+  assertGroupOnlyIsCover,
   GALLERY_ORDER,
   releaseGroupCopies,
   syncVariantGallery,
@@ -163,6 +164,7 @@ export async function PATCH(
 
     // Igual que al crear el grupo: una variante nueva no puede llamarse como
     // un producto suelto que ya existe.
+    assertGroupOnlyIsCover(images, imageMapping);
     await assertNoStandaloneConflicts(
       prismadb,
       params.storeId,

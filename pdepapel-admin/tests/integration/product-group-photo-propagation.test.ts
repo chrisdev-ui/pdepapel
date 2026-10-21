@@ -39,6 +39,8 @@ type Ctx = {
   own: string;
   g1: string;
   g2: string;
+  /** La portada del grupo: solo del grupo, salvo como respaldo. */
+  cover: string;
 };
 
 describe("group photos reach every variant they apply to (MySQL)", () => {
@@ -82,6 +84,10 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     });
   const covers = async (productId: string) => (await gallery(productId)).filter((image) => image.isMain).map((image) => image.url);
   const urls = async (productId: string) => (await gallery(productId)).map((image) => image.url);
+  const allMapping0 = (ctx: Ctx) => [
+    { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
+    { url: ctx.g1, scope: "all" },
+  ];
 
   const variantRow = (ctx: Ctx, key: keyof Ctx["ids"], images: string[] = [], coverUrl?: string) => {
     const colorId = key === "vB1" ? ctx.colorB.id : ctx.colorA.id;
@@ -89,7 +95,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     return { id: ctx.ids[key], sizeId: ctx.f.component.sizeId, colorId, designId, images, coverUrl };
   };
 
-  /** g1 es portada en «Todas»; vA1 tiene `own` como propia. */
+  /** `cover` es la portada del grupo; g1 va a «Todas»; vA1 tiene `own` como propia. */
   async function setup(): Promise<Ctx> {
     const f = await createInventoryFixture();
     fixture = f;
@@ -102,6 +108,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     const own = photo("propia");
     const g1 = photo("g1");
     const g2 = photo("g2");
+    const cover = photo("portada");
     const { POST } = await import("@/app/api/[storeId]/product-groups/route");
     const response = await POST(
       json("POST", {
@@ -110,7 +117,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
         categoryId: f.category.id,
         defaultPrice: 12000,
         defaultCost: 5000,
-        images: [{ url: own, isMain: false }, { url: g1, isMain: true }],
+        images: [{ url: own, isMain: false }, { url: cover, isMain: true }, { url: g1 }],
         imageMapping: [
           { url: own, scope: `COMBO|${colorA.id}|${design1.id}` },
           { url: g1, scope: "all" },
@@ -126,7 +133,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     expect(response.status).toBe(200);
     const group = await testPrisma.productGroup.findFirstOrThrow({ where: { storeId: f.store.id }, include: { products: true } });
     const bySku = (prefix: string) => group.products.find((p) => p.sku.startsWith(prefix))!.id;
-    return { f, colorA, colorB, design1, design2: { id: design2.id }, groupId: group.id, ids: { vA1: bySku("VA1"), vB1: bySku("VB1"), vA2: bySku("VA2") }, own, g1, g2 };
+    return { f, colorA, colorB, design1, design2: { id: design2.id }, groupId: group.id, ids: { vA1: bySku("VA1"), vB1: bySku("VB1"), vA2: bySku("VA2") }, own, g1, g2, cover };
   }
 
   async function patchGroup(
@@ -160,7 +167,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
       { url: ctx.g1, scope: "all" },
       { url: ctx.g2, scope: "all" },
     ];
-    await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.g1, isMain: true }, { url: ctx.g2 }], mapping);
+    await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: ctx.g2 }], mapping);
 
     expect(await urls(ctx.ids.vA1)).toEqual([ctx.own, ctx.g1, ctx.g2]);
     expect(await covers(ctx.ids.vA1)).toEqual([ctx.own]);
@@ -172,6 +179,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     const groupRows = await testPrisma.image.findMany({ where: { productGroupId: ctx.groupId }, select: { url: true, scope: true } });
     expect(Object.fromEntries(groupRows.map((row) => [row.url, row.scope]))).toEqual({
       [ctx.own]: `COMBO|${ctx.colorA.id}|${ctx.design1.id}`,
+      [ctx.cover]: "GROUP_ONLY",
       [ctx.g1]: "all",
       [ctx.g2]: "all",
     });
@@ -181,7 +189,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     const ctx = await setup();
     await patchGroup(
       ctx,
-      [{ url: ctx.own }, { url: ctx.g2, isMain: true }, { url: ctx.g1, isMain: true }],
+      [{ url: ctx.own }, { url: ctx.g2, isMain: true }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }],
       [
         { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
         { url: ctx.g2, scope: "all" },
@@ -194,6 +202,80 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     expect(await covers(ctx.ids.vA1)).toEqual([ctx.own]);
   });
 
+  describe("la portada del grupo es solo del grupo", () => {
+    it("no llega a variantes con fotos; las que no tienen ninguna la reciben de respaldo y la pierden al tener una propia", async () => {
+      const ctx = await setup();
+      const rosa = photo("solo-b");
+      const mapping = [
+        { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
+        { url: rosa, scope: `COLOR|${ctx.colorB.id}` },
+      ];
+      await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: rosa }], mapping, { vA1: [ctx.own] });
+      expect(await urls(ctx.ids.vA1)).toEqual([ctx.own]);
+      expect(await urls(ctx.ids.vB1)).toEqual([rosa]);
+      // vA2 no tiene propias ni fotos repartidas: respaldo con la portada.
+      expect(await gallery(ctx.ids.vA2)).toEqual([{ url: ctx.cover, isMain: true, origin: "GROUP_COPY" }]);
+
+      const propia = photo("propia-a2");
+      await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: rosa }], mapping, { vA1: [ctx.own], vA2: [propia] });
+      expect(await gallery(ctx.ids.vA2)).toEqual([{ url: propia, isMain: true, origin: "OWN" }]);
+    });
+
+    it("un grupo de antes (portada en «Todas», copiada a todas) la quita al guardar de las variantes que tienen otras fotos", async () => {
+      const ctx = await setup();
+      // Así quedó del alta en el código anterior: la portada copiada a cada variante.
+      await testPrisma.image.updateMany({ where: { productGroupId: ctx.groupId, url: ctx.cover }, data: { scope: "all" } });
+      for (const id of Object.values(ctx.ids)) {
+        await testPrisma.image.create({ data: { productId: id, url: ctx.cover, origin: "GROUP_COPY", isMain: true } });
+        await testPrisma.image.updateMany({ where: { productId: id, NOT: { url: ctx.cover } }, data: { isMain: false } });
+      }
+      await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }], [
+        { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
+        { url: ctx.cover, scope: "all" },
+        { url: ctx.g1, scope: "all" },
+      ]);
+      for (const id of Object.values(ctx.ids)) expect(await urls(id)).not.toContain(ctx.cover);
+      expect(await covers(ctx.ids.vA1)).toEqual([ctx.own]);
+      expect(await covers(ctx.ids.vB1)).toEqual([ctx.g1]);
+      const stored = await testPrisma.image.findFirstOrThrow({ where: { productGroupId: ctx.groupId, url: ctx.cover } });
+      expect(stored.scope).toBe("GROUP_ONLY");
+    });
+
+    it("una fila propia con la misma imagen no la quita el reparto", async () => {
+      const ctx = await setup();
+      await testPrisma.image.create({ data: { productId: ctx.ids.vB1, url: ctx.cover, origin: "OWN" } });
+      await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }], allMapping0(ctx), { vA1: [ctx.own], vB1: [ctx.cover] });
+      expect(await urls(ctx.ids.vB1)).toEqual([ctx.cover, ctx.g1]);
+    });
+
+    it("al cambiar la estrella, la nueva portada deja de repartirse y la anterior va donde diga su reparto", async () => {
+      const ctx = await setup();
+      await patchGroup(ctx, [{ url: ctx.own }, { url: ctx.cover }, { url: ctx.g1, isMain: true }], [
+        { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
+        { url: ctx.cover, scope: "all" },
+      ]);
+      for (const id of [ctx.ids.vB1, ctx.ids.vA2]) expect(await urls(id)).toEqual([ctx.cover]);
+      expect(await urls(ctx.ids.vA1)).toEqual([ctx.own, ctx.cover]);
+      const rows = await testPrisma.image.findMany({ where: { productGroupId: ctx.groupId }, select: { url: true, scope: true } });
+      expect(Object.fromEntries(rows.map((row) => [row.url, row.scope]))).toMatchObject({ [ctx.g1]: "GROUP_ONLY", [ctx.cover]: "all" });
+    });
+
+    it("«solo del grupo» en una foto que no es la portada se rechaza", async () => {
+      const ctx = await setup();
+      const { PATCH } = await import("@/app/api/[storeId]/product-groups/[productGroupId]/route");
+      const response = await PATCH(
+        json("PATCH", {
+          name: "Grupo fotos", description: "", categoryId: ctx.f.category.id, preserveSlug: true, confirmRemovals: true,
+          images: [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }],
+          imageMapping: [{ url: ctx.g1, scope: "GROUP_ONLY" }],
+          variants: (["vA1", "vB1", "vA2"] as const).map((key) => variantRow(ctx, key, key === "vA1" ? [ctx.own] : [])),
+        }),
+        { params: { storeId: ctx.f.store.id, productGroupId: ctx.groupId } },
+      );
+      expect(response.status).toBe(400);
+    });
+  });
+
   it("color, design and combination scopes also reach existing variants with own photos", async () => {
     const ctx = await setup();
     const color = photo("color-a");
@@ -201,7 +283,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     const combo = photo("combo-b1");
     await patchGroup(
       ctx,
-      [{ url: ctx.own }, { url: ctx.g1, isMain: true }, { url: color }, { url: design }, { url: combo }],
+      [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: color }, { url: design }, { url: combo }],
       [
         { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
         { url: ctx.g1, scope: "all" },
@@ -220,7 +302,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     // vA2 elige g1 como propia; vB1 la tiene solo como copia (y es su portada).
     await patchGroup(
       ctx,
-      [{ url: ctx.own }, { url: ctx.g1, isMain: true }, { url: ctx.g2 }],
+      [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: ctx.g2 }],
       [
         { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
         { url: ctx.g1, scope: "all" },
@@ -250,7 +332,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     const ctx = await setup();
     await patchGroup(
       ctx,
-      [{ url: ctx.own }, { url: ctx.g1, isMain: true }],
+      [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }],
       [
         { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
         { url: ctx.g1, scope: `COLOR|${ctx.colorA.id}` },
@@ -258,7 +340,9 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     );
     expect(await urls(ctx.ids.vA1)).toEqual([ctx.own, ctx.g1]);
     expect(await urls(ctx.ids.vA2)).toEqual([ctx.g1]);
-    expect(await urls(ctx.ids.vB1)).toEqual([]);
+    // Sin ninguna otra foto, la variante recibe la portada del grupo como respaldo.
+    expect(await urls(ctx.ids.vB1)).toEqual([ctx.cover]);
+    expect(await covers(ctx.ids.vB1)).toEqual([ctx.cover]);
   });
 
   it("rows with no origin (before the backfill) count as own: never removed, never duplicated", async () => {
@@ -268,7 +352,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
 
     await patchGroup(
       ctx,
-      [{ url: ctx.own }, { url: ctx.g1, isMain: true }],
+      [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }],
       [
         { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
         { url: ctx.g1, scope: "all" },
@@ -325,7 +409,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
 
   it("saving twice without changes leaves the same photos, order and cover", async () => {
     const ctx = await setup();
-    const body = [[{ url: ctx.own }, { url: ctx.g1, isMain: true }, { url: ctx.g2 }], [
+    const body = [[{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: ctx.g2 }], [
       { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
       { url: ctx.g1, scope: "all" },
       { url: ctx.g2, scope: "all" },
@@ -349,7 +433,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
 
     await patchGroup(
       ctx,
-      [{ url: ctx.own }, { url: ctx.g1, isMain: true }, { url: ctx.g2 }],
+      [{ url: ctx.own }, { url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: ctx.g2 }],
       [
         { url: ctx.own, scope: `COMBO|${ctx.colorA.id}|${ctx.design1.id}` },
         { url: ctx.g1, scope: "all" },
@@ -423,7 +507,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
           slug: `otro-grupo-${randomUUID().slice(0, 6)}`,
           description: "",
           storeId: ctx.f.store.id,
-          images: { create: [{ url: h1, isMain: true, scope }] },
+          images: { create: [{ url: h1, isMain: false, scope }] },
         },
       });
       return { groupId: group.id, h1 };
@@ -501,7 +585,7 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
       const ctx = await setup();
       expect(await covers(ctx.ids.vA1)).toEqual([ctx.own]);
 
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }], allMapping(ctx), { vA1: [] });
 
       expect(await urls(ctx.ids.vA1)).toEqual([ctx.g1]);
       expect(await covers(ctx.ids.vA1)).toEqual([ctx.g1]);
@@ -510,14 +594,14 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
 
     it("deleting a group photo that a variant also holds as own: «yes» removes the own row and the file", async () => {
       const ctx = await setup();
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }, { url: ctx.g2 }], allMapping(ctx, ctx.g2), { vA1: [ctx.own, ctx.g2] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: ctx.g2 }], allMapping(ctx, ctx.g2), { vA1: [ctx.own, ctx.g2] });
       expect((await gallery(ctx.ids.vA1)).map((row) => [row.url, row.origin])).toEqual([
         [ctx.own, "OWN"],
         [ctx.g2, "OWN"],
         [ctx.g1, "GROUP_COPY"],
       ]);
 
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }], allMapping(ctx), { vA1: [ctx.own] });
 
       for (const id of Object.values(ctx.ids)) expect(await urls(id)).not.toContain(ctx.g2);
       expect(await deletedPublicIds()).toContain(publicId(ctx.g2));
@@ -525,9 +609,9 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
 
     it("deleting a group photo that a variant also holds as own: «no» keeps the own row and the file", async () => {
       const ctx = await setup();
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }, { url: ctx.g2 }], allMapping(ctx, ctx.g2), { vA1: [ctx.own, ctx.g2] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: ctx.g2 }], allMapping(ctx, ctx.g2), { vA1: [ctx.own, ctx.g2] });
 
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, ctx.g2] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }], allMapping(ctx), { vA1: [ctx.own, ctx.g2] });
 
       expect((await gallery(ctx.ids.vA1)).map((row) => [row.url, row.origin])).toEqual([
         [ctx.own, "OWN"],
@@ -541,14 +625,14 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
     it("an explicit cover from the group editor wins over the current one; without it the cover stays", async () => {
       const ctx = await setup();
       const second = photo("segunda");
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, second] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }], allMapping(ctx), { vA1: [ctx.own, second] });
       expect(await covers(ctx.ids.vA1)).toEqual([ctx.own]);
 
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, second] }, { vA1: second });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }], allMapping(ctx), { vA1: [ctx.own, second] }, { vA1: second });
       expect(await covers(ctx.ids.vA1)).toEqual([second]);
       expect(await urls(ctx.ids.vA1)).toEqual([ctx.own, second, ctx.g1]);
 
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }], allMapping(ctx), { vA1: [ctx.own, second] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }], allMapping(ctx), { vA1: [ctx.own, second] });
       expect(await covers(ctx.ids.vA1)).toEqual([second]);
     });
 
@@ -559,21 +643,21 @@ describe("group photos reach every variant they apply to (MySQL)", () => {
       const extra = photo("todas-2");
       await patchGroup(
         ctx,
-        [{ url: ctx.g1, isMain: true }, { url: extra }],
+        [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: extra }],
         allMapping(ctx, extra),
         { vA1: [ctx.own], vB1: [coverB], vA2: [coverA2] },
         { vA1: ctx.own, vB1: coverB, vA2: coverA2 },
       );
       expect(await covers(ctx.ids.vB1)).toEqual([coverB]);
 
-      await patchGroup(ctx, [{ url: ctx.g1, isMain: true }, { url: extra }], allMapping(ctx, extra), { vA1: [], vB1: [], vA2: [] });
+      await patchGroup(ctx, [{ url: ctx.cover, isMain: true }, { url: ctx.g1 }, { url: extra }], allMapping(ctx, extra), { vA1: [], vB1: [], vA2: [] });
 
       for (const id of Object.values(ctx.ids)) {
         expect(await urls(id)).toEqual([ctx.g1, extra]);
         expect(await covers(id)).toEqual([ctx.g1]);
       }
       const groupRows = await testPrisma.image.count({ where: { productGroupId: ctx.groupId } });
-      expect(groupRows).toBe(2);
+      expect(groupRows).toBe(3);
       expect(await deletedPublicIds()).toEqual(expect.arrayContaining([publicId(ctx.own), publicId(coverB), publicId(coverA2)]));
     });
   });

@@ -13,7 +13,7 @@ import {
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
-import { syncVariantGallery, writeGroupPhotos } from "@/lib/variant-gallery";
+import { assertGroupOnlyIsCover, syncVariantGallery, writeGroupPhotos } from "@/lib/variant-gallery";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { findProductWithGtin } from "@/lib/product-identifiers";
@@ -120,6 +120,7 @@ export async function POST(
 
     // Una variante sin id que se llama como un producto suelto sería un
     // duplicado con el inventario en el otro: 409 antes de crear nada.
+    assertGroupOnlyIsCover(images, imageMapping);
     await assertNoStandaloneConflicts(
       prismadb,
       params.storeId,
