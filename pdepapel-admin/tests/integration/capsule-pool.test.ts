@@ -75,11 +75,34 @@ describe("candidatos de la bolsa", () => {
     const otherCategory = await testPrisma.category.create({ data: { name: "Otra", slug: `otra-${randomBytes(4).toString("hex")}`, storeId: f!.store.id, typeId: (await testPrisma.category.findUniqueOrThrow({ where: { id: f!.category.id } })).typeId } });
     await make("Otra categoria", { categoryId: otherCategory.id });
 
-    const rows = await slipCandidates({ storeId: f!.store.id, editionId: edition.id, categoryIds: [f!.category.id] });
-    // El componente del fixture (4.000, 6 en stock) y el lapicero; ni el kit, ni el producto de la edición.
-    expect(rows.map((row) => row.name).sort()).toEqual(["Componente", "Lapicero"]);
-    expect(rows.find((row) => row.productId === inBand.id)).toMatchObject({ unitCost: 4000, available: 10, printed: 0 });
+    // Con «incluir los que sí se venden»: el componente del fixture (4.000, recién creado) y el lapicero; ni el kit, ni el producto de la edición.
+    const all = await slipCandidates({ storeId: f!.store.id, editionId: edition.id, categoryIds: [f!.category.id], onlyIdle: false });
+    expect(all.map((row) => row.name)).toEqual(["Lapicero", "Componente"]);
+    expect(all.find((row) => row.productId === inBand.id)).toMatchObject({ unitCost: 4000, available: 10, printed: 0, idle: true });
+    expect(all.find((row) => row.name === "Componente")).toMatchObject({ idle: false, reason: "Se vende: no está quieto" });
     await expect(slipCandidates({ storeId: f!.store.id, editionId: edition.id, categoryIds: [] })).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("papeles: por defecto solo los quietos (la regla del Copiloto), con su razón", async () => {
+    const { edition } = await setup();
+    await make("Lapicero");
+    const sold = await make("Vendido hace poco");
+    await testPrisma.order.create({
+      data: {
+        storeId: f!.store.id,
+        orderNumber: `ORD-${randomBytes(4).toString("hex")}`,
+        status: OrderStatus.PAID,
+        paidAt: new Date(),
+        subtotal: 9000,
+        total: 9000,
+        orderItems: { create: [{ productId: sold.id, quantity: 1, price: 9000, name: "Vendido hace poco" }] },
+        payment: { create: { method: PaymentMethod.CASH, storeId: f!.store.id } },
+      },
+    });
+
+    const rows = await slipCandidates({ storeId: f!.store.id, editionId: edition.id, categoryIds: [f!.category.id] });
+    expect(rows.map((row) => row.name)).toEqual(["Lapicero"]);
+    expect(rows[0]).toMatchObject({ idle: true, reason: "Sin ventas en el último año · cabe en la banda" });
   });
 
   it("regalos: productos quietos con costo dentro del tope; ni los vendidos hace poco ni los nuevos", async () => {

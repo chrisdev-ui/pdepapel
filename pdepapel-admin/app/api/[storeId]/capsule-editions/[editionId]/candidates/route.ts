@@ -5,7 +5,11 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { giftCandidates, slipCandidates } from "@/lib/capsule-pool";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
-/** `?tipo=papeles&categorias=a,b` (por categoría y banda) o `?tipo=regalos` (quietos dentro del tope de regalo). Solo la dueña. */
+/**
+ * `?tipo=papeles&categorias=a,b` (quietos por categoría y banda; `&todos=1`
+ * suma los que sí se venden) o `?tipo=regalos` (quietos dentro del tope de
+ * regalo). Solo la dueña.
+ */
 export async function GET(req: Request, { params }: { params: { storeId: string; editionId: string } }) {
   try {
     const { userId } = await auth();
@@ -19,6 +23,7 @@ export async function GET(req: Request, { params }: { params: { storeId: string;
             storeId: params.storeId,
             editionId: params.editionId,
             categoryIds: (search.get("categorias") ?? "").split(",").map((id) => id.trim()).filter(Boolean),
+            onlyIdle: search.get("todos") !== "1",
           });
     return NextResponse.json({ candidates }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

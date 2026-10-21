@@ -30,6 +30,8 @@ interface Candidate {
   unitCost: number;
   available: number;
   printed: number;
+  idle: boolean;
+  reason: string;
 }
 
 interface PackCheck {
@@ -69,6 +71,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const editable = edition.status === "DRAFT" || edition.status === "PREVIEW";
 
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [includeSelling, setIncludeSelling] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [check, setCheck] = useState<MarginCheck | null>(null);
@@ -123,7 +126,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
 
   const loadCandidates = () =>
     run("candidatos", async () => {
-      const { data: body } = await axios.get(`${api}/candidates`, { params: { tipo: "papeles", categorias: categoryIds.join(",") } });
+      const { data: body } = await axios.get(`${api}/candidates`, { params: { tipo: "papeles", categorias: categoryIds.join(","), ...(includeSelling ? { todos: "1" } : {}) } });
       setCandidates(body.candidates);
       setQuantities({});
       setCheck(null);
@@ -282,7 +285,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       )}
 
       {editable && (
-        <SectionCard id="bolsa" step={1} title="Bolsa de papeles" description="Elige las categorías del tema: salen los productos con costo dentro de la banda y algo disponible. Quita lo que no quepa en una cápsula.">
+        <SectionCard id="bolsa" step={1} title="Bolsa de papeles" description="Elige las categorías del tema: salen los productos quietos (sin ventas en 90 días) con costo dentro de la banda y algo disponible. Quita lo que no quepa en una cápsula.">
           <fieldset className="flex flex-col gap-2">
             <legend className="text-sm font-medium">Categorías</legend>
             <div className="grid max-h-60 gap-1 overflow-y-auto rounded-md border p-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -302,6 +305,10 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
               })}
             </div>
           </fieldset>
+          <label htmlFor="incluir-vendidos" className="flex min-h-[44px] items-center gap-2 text-sm">
+            <Checkbox id="incluir-vendidos" checked={includeSelling} onCheckedChange={(value) => setIncludeSelling(value === true)} />
+            Incluir productos que sí se venden
+          </label>
           <div>
             <Button className="min-h-[44px]" disabled={categoryIds.length === 0 || busy !== null} onClick={loadCandidates}>
               {busy === "candidatos" ? "Buscando…" : "Buscar productos"}
@@ -325,6 +332,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
                       <p className="text-xs text-muted-foreground">
                         {row.categoryName ?? "Sin categoría"} · costo {currencyFormatter(row.unitCost)} · {row.available} disponibles{row.printed ? ` · ${row.printed} ya impresos` : ""}
                       </p>
+                      <p className={row.idle ? "text-xs text-foreground" : "text-xs text-amber-700"}>{row.reason}</p>
                     </div>
                     {quantityInput(row, quantities, setQuantities, "Papeles")}
                   </li>

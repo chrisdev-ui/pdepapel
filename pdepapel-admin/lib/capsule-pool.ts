@@ -1,10 +1,10 @@
 import { CapsuleSlipKind, CapsuleSlipStatus } from "@prisma/client";
 
 import { availableStock } from "@/lib/available-stock";
+import { idleReason, loadIdleProducts } from "@/lib/capsule-idle";
 import { ErrorFactory } from "@/lib/api-errors";
 import { evaluatePoolMargins, maxGiftCostOf, packRungs, type CapsulePackCosts } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
-import { DEFAULT_SLOW_DAYS, isSlowMover, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf } from "@/lib/sales-velocity";
 
 /**
  * La bolsa de una edición: qué productos pueden ser papeles (por categoría y
@@ -23,7 +23,6 @@ const CANDIDATE_SELECT = {
   transportationCost: true,
   isKit: true,
   isArchived: true,
-  createdAt: true,
   category: { select: { name: true } },
 } as const;
 
@@ -38,11 +37,16 @@ async function printedByProduct(editionId: string, kind: CapsuleSlipKind) {
   return new Map(rows.map((row) => [row.productId, row._count._all]));
 }
 
-/** Productos de las categorías elegidas con costo dentro de la banda y algo disponible para apartar. */
-export async function slipCandidates({ storeId, editionId, categoryIds }: { storeId: string; editionId: string; categoryIds: string[] }) {
+/**
+ * Productos de las categorías elegidas con costo dentro de la banda y algo
+ * disponible para apartar. Por defecto solo los quietos (la regla del
+ * Copiloto): las cápsulas existen para mover lo que no se vende. Con
+ * `onlyIdle: false` salen también los que sí se venden, marcados.
+ */
+export async function slipCandidates({ storeId, editionId, categoryIds, onlyIdle = true }: { storeId: string; editionId: string; categoryIds: string[]; onlyIdle?: boolean }) {
   if (categoryIds.length === 0) throw ErrorFactory.InvalidRequest("Elige al menos una categoría");
   const edition = await loadEdition(storeId, editionId);
-  const [products, printed] = await Promise.all([
+  const [products, printed, idle] = await Promise.all([
     prismadb.product.findMany({
       where: {
         storeId,
@@ -56,40 +60,47 @@ export async function slipCandidates({ storeId, editionId, categoryIds }: { stor
       orderBy: { name: "asc" },
     }),
     printedByProduct(editionId, CapsuleSlipKind.SLIP),
+    loadIdleProducts(storeId),
   ]);
   return products
-    .map((product) => ({
-      productId: product.id,
-      name: product.name,
-      sku: product.sku,
-      categoryName: product.category?.name ?? null,
-      unitCost: Number(product.acqPrice),
-      available: availableStock(product),
-      printed: printed.get(product.id) ?? 0,
-    }))
-    .filter((row) => row.available > 0 || row.printed > 0);
+    .map((product) => {
+      const info = idle.get(product.id);
+      return {
+        productId: product.id,
+        name: product.name,
+        sku: product.sku,
+        categoryName: product.category?.name ?? null,
+        unitCost: Number(product.acqPrice),
+        available: availableStock(product),
+        printed: printed.get(product.id) ?? 0,
+        idle: info !== undefined,
+        reason: info ? `${idleReason(info)} · cabe en la banda` : "Se vende: no está quieto",
+        daysSinceLastSale: info?.daysSinceLastSale ?? null,
+      };
+    })
+    .filter((row) => (row.available > 0 || row.printed > 0) && (!onlyIdle || row.idle || row.printed > 0))
+    .sort((a, b) => Number(b.idle) - Number(a.idle) || (b.daysSinceLastSale ?? Infinity) - (a.daysSinceLastSale ?? Infinity) || a.name.localeCompare(b.name));
 }
 
 /**
  * Regalos: productos quietos (sin ventas en la ventana de lentos) con costo
  * registrado hasta el tope de regalo más alto de los packs de la edición.
  */
-export async function giftCandidates({ storeId, editionId, now = new Date() }: { storeId: string; editionId: string; now?: Date }) {
+export async function giftCandidates({ storeId, editionId }: { storeId: string; editionId: string }) {
   const edition = await loadEdition(storeId, editionId);
   const cap = maxGiftCostOf(edition.packOptions);
   if (cap <= 0) throw ErrorFactory.InvalidRequest("Configura el regalo de los packs de la edición antes de elegir regalos");
-  const [products, history, firstStocked, printed] = await Promise.all([
+  const [products, idle, printed] = await Promise.all([
     prismadb.product.findMany({
       where: { storeId, isArchived: false, isKit: false, capsuleEdition: { is: null }, acqPrice: { gt: 0, lte: cap } },
       select: CANDIDATE_SELECT,
       orderBy: { name: "asc" },
     }),
-    loadSalesHistory(prismadb, storeId, { days: DEFAULT_SLOW_DAYS, now }),
-    loadFirstStockedAt(prismadb, storeId),
+    loadIdleProducts(storeId),
     printedByProduct(editionId, CapsuleSlipKind.GIFT),
   ]);
   return products
-    .filter((product) => isSlowMover({ ...product, stockedSince: stockedSinceOf(firstStocked, product), unitCost: unitCostOf(product) }, history.get(product.id), DEFAULT_SLOW_DAYS, now))
+    .filter((product) => idle.has(product.id))
     .map((product) => ({
       productId: product.id,
       name: product.name,
@@ -98,6 +109,9 @@ export async function giftCandidates({ storeId, editionId, now = new Date() }: {
       unitCost: Number(product.acqPrice),
       available: availableStock(product),
       printed: printed.get(product.id) ?? 0,
+      idle: true,
+      reason: idleReason(idle.get(product.id)!),
+      daysSinceLastSale: idle.get(product.id)!.daysSinceLastSale,
     }));
 }
 
