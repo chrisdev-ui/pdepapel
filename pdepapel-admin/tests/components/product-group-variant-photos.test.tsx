@@ -328,6 +328,25 @@ describe("una variante que se quedaría sin fotos", () => {
 });
 
 describe("la portada del grupo de respaldo", () => {
+  it("la variante que solo muestra la portada lleva «Sin foto propia»; el grupo cuenta cuántas y filtra", async () => {
+    renderForm({
+      groupImages: [
+        { url: "portada.jpg", scope: "GROUP_ONLY", isMain: true },
+        { url: "solo-azul.jpg", scope: "COMBO|azul|flores" },
+      ],
+      products: [
+        variante("p-rojo", "rojo", "Agenda Rojo", [{ url: "portada.jpg", origin: "GROUP_COPY", isMain: true }]),
+        variante("p-azul", "azul", "Agenda Azul", [{ url: "solo-azul.jpg", origin: "GROUP_COPY", isMain: true }]),
+      ],
+    });
+    const contador = await screen.findByRole("button", { name: "1 sin foto propia" });
+    expect(screen.getAllByText("Sin foto propia").length).toBeGreaterThan(0);
+    fireEvent.click(contador);
+    expect(contador.getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(screen.queryAllByRole("link", { name: "Agenda Azul" })).toHaveLength(0));
+    expect(screen.getAllByRole("link", { name: "Agenda Rojo" }).length).toBeGreaterThan(0);
+  });
+
   it("una variante sin otras fotos no avisa al guardar: la portada del grupo la cubre", async () => {
     renderForm({
       groupImages: [
@@ -354,6 +373,7 @@ describe("aviso de fotos sin repartir (#16)", () => {
       groupImages: [
         { url: "a.jpg", scope: null, isMain: true },
         { url: "b.jpg", scope: null },
+        { url: "c.jpg", scope: null },
       ],
       products: [variante("p-rojo", "rojo", "Agenda Rojo"), variante("p-azul", "azul", "Agenda Azul")],
     });
@@ -371,9 +391,10 @@ describe("aviso de fotos sin repartir (#16)", () => {
     expect(await screen.findByText("No se guardó: faltan 2 fotos por repartir")).toBeTruthy();
     expect(screen.getByText("No se guardó: faltan 2 fotos por repartir.")).toBeTruthy();
     expect(mocks.patch).not.toHaveBeenCalled();
-    const tarjetas = document.querySelectorAll("[data-reparto-url]");
-    expect(tarjetas).toHaveLength(2);
-    tarjetas.forEach((tarjeta) => expect(tarjeta.className).toMatch(/ring-destructive/));
+    // La portada del grupo (a.jpg) no se reparte: no cuenta ni se marca.
+    const tarjetas = Array.from(document.querySelectorAll<HTMLElement>("[data-reparto-url]"));
+    expect(tarjetas).toHaveLength(3);
+    expect(tarjetas.filter((tarjeta) => /ring-destructive/.test(tarjeta.className)).map((tarjeta) => tarjeta.dataset.repartoUrl)).toEqual(["b.jpg", "c.jpg"]);
   });
 
   it("con todo repartido no hay aviso", () => {

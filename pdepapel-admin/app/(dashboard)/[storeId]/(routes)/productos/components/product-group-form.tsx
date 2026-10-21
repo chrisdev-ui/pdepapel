@@ -1951,7 +1951,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 <div>
                   <p className="text-sm font-semibold text-primary">Reparto por variante</p>
                   <p className="text-xs text-muted-foreground">
-                    Debajo de cada foto eliges quién la recibe. Llega también a las variantes con fotos propias, después de ellas.
+                    Debajo de cada foto eliges quién la recibe. Llega también a las variantes con fotos propias, después de ellas. La portada del grupo (la de la estrella) no se reparte: solo la recibe, de respaldo, una variante que no tiene ninguna otra foto.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
@@ -1966,7 +1966,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                      */
                     const scope = currentMapping.find((m) => m.url === img.url)?.scope;
                     const isPending = pendingImageRemovals.includes(img.url);
-                    const unassigned = !scope && !isPending;
+                    const isCover = Boolean(img.isMain);
+                    const unassigned = !isCover && !scope && !isPending;
                     return (
                       <div
                         key={img.url}
@@ -1981,6 +1982,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                         <div className="relative aspect-square overflow-hidden rounded-md border">
                           <Image src={img.url} alt="" fill sizes="(max-width: 640px) 50vw, 200px" className="object-cover" />
                         </div>
+                        {isCover ? (
+                          <p className="flex h-8 items-center rounded-md border border-dashed px-2 text-xs font-medium text-primary">
+                            Solo del grupo
+                          </p>
+                        ) : (
                         <Select
                           key={`${img.url}-${scope ?? "sin-repartir"}-${availableScopes.length}`}
                           disabled={loading || isPending}
@@ -2004,8 +2010,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                             ))}
                           </SelectContent>
                         </Select>
+                        )}
                         <span className={cn("text-[11px]", unassigned ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
-                          {isPending ? "Se quita al guardar" : scope ? `→ ${scopeRecipients(scope)}` : "Sin repartir"}
+                          {isPending
+                            ? "Se quita al guardar"
+                            : isCover
+                              ? "Portada del grupo — no se reparte"
+                              : scope
+                                ? `→ ${scopeRecipients(scope)}`
+                                : "Sin repartir"}
                         </span>
                       </div>
                     );

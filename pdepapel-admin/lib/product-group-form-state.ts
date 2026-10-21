@@ -88,11 +88,12 @@ export function applyPendingImageRemovals<T extends { url: string }>(
  * con `scope: "all"` puesta a mano es una decisión válida y no sale aquí.
  */
 export function findUnassignedGroupImages(
-  images: { url: string }[],
+  images: { url: string; isMain?: boolean }[],
   mapping: { url: string; scope: string }[] | undefined,
 ): string[] {
   const repartidas = new Set((mapping ?? []).map((entry) => entry.url));
-  return images.map((image) => image.url).filter((url) => !repartidas.has(url));
+  // La portada del grupo no se reparte: no queda pendiente.
+  return images.filter((image) => !image.isMain && !repartidas.has(image.url)).map((image) => image.url);
 }
 
 /**
@@ -105,7 +106,7 @@ export function findUnassignedGroupImages(
  * variante.
  */
 export function shouldBlockForUnassignedImages(
-  images: { url: string }[],
+  images: { url: string; isMain?: boolean }[],
   mapping: { url: string; scope: string }[] | undefined,
   variantCount: number,
 ): { block: boolean; missing: string[] } {

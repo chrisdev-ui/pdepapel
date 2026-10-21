@@ -30,14 +30,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, currencyFormatter } from "@/lib/utils";
-import { resolveVariantImages } from "@/lib/variant-images";
+import { groupCoverUrls, resolveVariantImages, showsOnlyGroupCover } from "@/lib/variant-images";
 import { ProductTintBadge } from "./product-badges";
 import type { FormVariant, ProductGroupFormValues } from "./product-group-form";
 
 interface VariantGridProps {
   form: UseFormReturn<ProductGroupFormValues>;
   loading: boolean;
-  images: { url: string }[];
+  images: { url: string; isMain?: boolean; scope?: string | null }[];
   imageScopes: Record<string, string>;
   suppliers: SupplierPickerOption[];
   storeId: string;
@@ -146,8 +146,11 @@ function VariantIdentity({
   storeId,
   storeUrl,
   withStatus = false,
+  coverOnly = false,
 }: {
   variant: FormVariant;
+  /** Solo muestra la portada del grupo: le falta una foto propia. */
+  coverOnly?: boolean;
   storeId: string;
   storeUrl?: string | null;
   /** La tabla no tiene columna de estado; la tarjeta lo pinta en su cabecera. */
@@ -175,6 +178,7 @@ function VariantIdentity({
         )}
         <ProductTintBadge label={origin.label} tone={origin.tone} />
         {withStatus && variant.id && <ProductTintBadge label={status.label} tone={status.tone} />}
+        {coverOnly && <ProductTintBadge label="Sin foto propia" tone="cream" />}
         {variant.isFeatured && (
           <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" aria-label="Destacada" />
         )}
@@ -209,6 +213,7 @@ const VariantTableRow = memo(function VariantTableRow({
   highlighted = false,
   loading,
   thumbs,
+  coverOnly,
   supplierName,
   storeId,
   storeUrl,
@@ -219,6 +224,7 @@ const VariantTableRow = memo(function VariantTableRow({
   highlighted?: boolean;
   loading: boolean;
   thumbs: string[];
+  coverOnly: boolean;
   supplierName: string;
   storeId: string;
   storeUrl?: string | null;
@@ -242,7 +248,7 @@ const VariantTableRow = memo(function VariantTableRow({
       <TableCell>
         <div className="flex items-start gap-3">
           <VariantThumb urls={thumbs} name={row.name || "la variante"} />
-          <VariantIdentity variant={row} storeId={storeId} storeUrl={storeUrl} withStatus />
+          <VariantIdentity variant={row} storeId={storeId} storeUrl={storeUrl} withStatus coverOnly={coverOnly} />
         </div>
       </TableCell>
       <TableCell>
@@ -322,6 +328,7 @@ const VariantCard = memo(function VariantCard({
   highlighted = false,
   loading,
   thumbs,
+  coverOnly,
   supplierName,
   storeId,
   storeUrl,
@@ -332,6 +339,7 @@ const VariantCard = memo(function VariantCard({
   highlighted?: boolean;
   loading: boolean;
   thumbs: string[];
+  coverOnly: boolean;
   supplierName: string;
   storeId: string;
   storeUrl?: string | null;
@@ -360,7 +368,7 @@ const VariantCard = memo(function VariantCard({
         />
         <VariantThumb urls={thumbs} name={row.name || "la variante"} />
         <div className="min-w-0 flex-1">
-          <VariantIdentity variant={row} storeId={storeId} storeUrl={storeUrl} />
+          <VariantIdentity variant={row} storeId={storeId} storeUrl={storeUrl} coverOnly={coverOnly} />
         </div>
         <ProductTintBadge label={status.label} tone={status.tone} />
       </div>
@@ -445,6 +453,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
   const watchedVariants = watch("variants");
   const formVariants = useMemo(() => watchedVariants ?? [], [watchedVariants]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [onlyCoverOnly, setOnlyCoverOnly] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
@@ -457,6 +466,22 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
     [imageScopes],
   );
 
+  const galleryFor = useCallback(
+    (variant: FormVariant) =>
+      resolveVariantImages({
+        variantImages: variant.images,
+        groupImages: images,
+        imageMapping: mapping,
+        colorId: variant.color?.id,
+        designId: variant.design?.id,
+      }),
+    [images, mapping],
+  );
+  const thumbsFor = useCallback((variant: FormVariant) => galleryFor(variant).map((image) => image.url), [galleryFor]);
+  const coverUrls = useMemo(() => groupCoverUrls(images), [images]);
+  const coverOnlyFor = useCallback((variant: FormVariant) => showsOnlyGroupCover(galleryFor(variant), coverUrls), [galleryFor, coverUrls]);
+  const coverOnlyCount = useMemo(() => formVariants.filter((variant) => !variant.isArchived && coverOnlyFor(variant)).length, [formVariants, coverOnlyFor]);
+
   const rows: Row[] = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return formVariants
@@ -467,20 +492,10 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
           variant.sku?.toLowerCase().includes(term) ||
           variant.name?.toLowerCase().includes(term) ||
           variant.gtin?.includes(term),
-      );
-  }, [formVariants, searchTerm]);
+      )
+      .filter((variant) => !onlyCoverOnly || coverOnlyFor(variant));
+  }, [formVariants, searchTerm, onlyCoverOnly, coverOnlyFor]);
 
-  const thumbsFor = useCallback(
-    (variant: FormVariant) =>
-      resolveVariantImages({
-        variantImages: variant.images,
-        groupImages: images,
-        imageMapping: mapping,
-        colorId: variant.color?.id,
-        designId: variant.design?.id,
-      }).map((image) => image.url),
-    [images, mapping],
-  );
 
   const updateRow = useCallback(
     (index: number, patch: Partial<FormVariant>) => {
@@ -579,6 +594,18 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
               onChange={(event) => setSearchTerm(event.target.value)}
               className="sm:max-w-xs"
             />
+            {(coverOnlyCount > 0 || onlyCoverOnly) && (
+              <Button
+                type="button"
+                size="sm"
+                variant={onlyCoverOnly ? "default" : "outline"}
+                className="min-h-[44px] sm:min-h-9"
+                aria-pressed={onlyCoverOnly}
+                onClick={() => setOnlyCoverOnly((value) => !value)}
+              >
+                {coverOnlyCount === 1 ? "1 sin foto propia" : `${coverOnlyCount} sin foto propia`}
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground sm:ml-auto">
               {rows.length} de {formVariants.length}{" "}
               {formVariants.length === 1 ? "variante" : "variantes"}
@@ -661,6 +688,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                 highlighted={Boolean(highlightId) && row.id === highlightId}
                 loading={loading}
                 thumbs={thumbsFor(row)}
+                coverOnly={coverOnlyFor(row)}
                 supplierName={supplierNames.get(row.supplierId ?? "") ?? "Sin proveedor"}
                 storeId={storeId}
                 storeUrl={storeUrl}
@@ -702,6 +730,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                     highlighted={Boolean(highlightId) && row.id === highlightId}
                     loading={loading}
                     thumbs={thumbsFor(row)}
+                    coverOnly={coverOnlyFor(row)}
                     supplierName={supplierNames.get(row.supplierId ?? "") ?? "Sin proveedor"}
                     storeId={storeId}
                     storeUrl={storeUrl}

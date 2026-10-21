@@ -198,7 +198,9 @@ async function abrirNuevo(fotos: Foto[], colores?: string[]) {
   mocks.borrador = borradorNuevo(fotos, colores);
   render(<ProductGroupForm {...props} initialData={null as never} />);
   // El borrador se aplica en un efecto: esperar a que el reparto aparezca.
-  await waitFor(() => expect(selectores().length).toBe(fotos.length), { timeout: ESPERA_MS });
+  // La portada del grupo no tiene selector: no se reparte.
+  await waitFor(() => expect(screen.getAllByText(/Portada del grupo — no se reparte|Sin repartir|Elige a quién/).length).toBeGreaterThan(0), { timeout: ESPERA_MS });
+  await waitFor(() => expect(selectores().length).toBe(fotos.filter((foto) => !foto.isMain).length), { timeout: ESPERA_MS });
 }
 
 /**
@@ -277,18 +279,19 @@ describe("editar un grupo: fotos nuevas en el reparto", () => {
   it("una foto sin decidir se ve «sin repartir», no como «Todas las variantes»", () => {
     abrirEditar();
     subir({ url: "nueva.jpg" });
-    const nueva = selectores()[2];
+    const nueva = selectores()[1];
     expect(nueva.textContent).not.toMatch(/Todas las variantes/);
     expect(nueva.textContent).toMatch(/Elige a quién/);
-    // Las guardadas conservan su reparto reconstruido.
+    // Las guardadas conservan su reparto reconstruido; la portada no tiene selector.
     expect(selectores()[0].textContent).toMatch(/Todas las variantes/);
+    expect(screen.getByText("Portada del grupo — no se reparte")).toBeTruthy();
   });
 
   it("(a) elegir «Todas las variantes» en una foto nueva guarda, junto a otras repartidas", async () => {
     abrirEditar();
     subir({ url: "nueva.jpg" }, { url: "lila.jpg" });
-    elegir(2, "Todas las variantes");
-    elegir(3, "Color: Lila");
+    elegir(1, "Todas las variantes");
+    elegir(2, "Color: Lila");
     guardarEditar();
 
     const enviado = await esperaGuardado(mocks.patch);
@@ -300,23 +303,22 @@ describe("editar un grupo: fotos nuevas en el reparto", () => {
     );
   });
 
-  it("(b) la nueva portada del grupo en «Todas las variantes» guarda y sigue siendo portada", async () => {
+  it("(b) la portada del grupo no se reparte ni pide reparto: guarda y sigue siendo portada", async () => {
     abrirEditar();
-    subir({ url: "portada.jpg", isMain: true });
-    elegir(2, "Todas las variantes");
+    expect(screen.getByText("Portada del grupo — no se reparte")).toBeTruthy();
     guardarEditar();
 
     const enviado = await esperaGuardado(mocks.patch);
-    expect(enviado.imageMapping).toContainEqual({ url: "portada.jpg", scope: "all" });
-    expect(enviado.images.find((f) => f.url === "portada.jpg")?.isMain).toBe(true);
+    expect(enviado.images.find((f) => f.url === "a.jpg")?.isMain).toBe(true);
+    expect(avisos()).not.toMatch(/Faltan fotos/);
   });
 
   it("(c) varias fotos de portada para todas las variantes guardan", async () => {
     abrirEditar();
     subir({ url: "portada-1.jpg" }, { url: "portada-2.jpg" }, { url: "portada-3.jpg" });
+    elegir(1, "Todas las variantes");
     elegir(2, "Todas las variantes");
     elegir(3, "Todas las variantes");
-    elegir(4, "Todas las variantes");
     guardarEditar();
 
     const enviado = await esperaGuardado(mocks.patch);
@@ -348,7 +350,7 @@ describe("editar un grupo: fotos nuevas en el reparto", () => {
   it("el freno sigue: una foto nueva sin decidir no deja guardar", async () => {
     abrirEditar();
     subir({ url: "nueva.jpg" }, { url: "otra.jpg" });
-    elegir(2, "Todas las variantes");
+    elegir(1, "Todas las variantes");
     guardarEditar();
 
     await esperaFreno();
@@ -365,7 +367,7 @@ describe("crear un grupo: el reparto empieza vacío", () => {
   });
 
   it("(a) una foto en «Todas las variantes» y otra en un color guardan", async () => {
-    await abrirNuevo([{ url: "a.jpg" }, { url: "b.jpg", isMain: true }]);
+    await abrirNuevo([{ url: "a.jpg" }, { url: "b.jpg" }, { url: "c.jpg", isMain: true }]);
     elegir(0, "Todas las variantes");
     elegir(1, "Color: Menta");
     guardarNuevo();
@@ -377,14 +379,14 @@ describe("crear un grupo: el reparto empieza vacío", () => {
     ]);
   });
 
-  it("(b) la portada en «Todas las variantes» guarda y sigue siendo portada", async () => {
+  it("(b) la portada no se reparte: no pide reparto y sigue siendo portada", async () => {
     await abrirNuevo([{ url: "portada.jpg", isMain: true }, { url: "menta.jpg" }]);
-    elegir(0, "Todas las variantes");
-    elegir(1, "Color: Menta");
+    expect(screen.getByText("Portada del grupo — no se reparte")).toBeTruthy();
+    elegir(0, "Color: Menta");
     guardarNuevo();
 
     const enviado = await esperaGuardado(mocks.post);
-    expect(enviado.imageMapping).toContainEqual({ url: "portada.jpg", scope: "all" });
+    expect(enviado.imageMapping).toEqual([{ url: "menta.jpg", scope: "color-2" }]);
     expect(enviado.images.find((f) => f.url === "portada.jpg")?.isMain).toBe(true);
   });
 
@@ -392,12 +394,10 @@ describe("crear un grupo: el reparto empieza vacío", () => {
     await abrirNuevo([{ url: "p1.jpg", isMain: true }, { url: "p2.jpg" }, { url: "p3.jpg" }]);
     elegir(0, "Todas las variantes");
     elegir(1, "Todas las variantes");
-    elegir(2, "Todas las variantes");
     guardarNuevo();
 
     const enviado = await esperaGuardado(mocks.post);
     expect(enviado.imageMapping).toEqual([
-      { url: "p1.jpg", scope: "all" },
       { url: "p2.jpg", scope: "all" },
       { url: "p3.jpg", scope: "all" },
     ]);
@@ -413,7 +413,6 @@ describe("crear un grupo: el reparto empieza vacío", () => {
 
   it("(e) una foto marcada para quitar no pide reparto y no viaja", async () => {
     await abrirNuevo([{ url: "a.jpg", isMain: true }, { url: "descartada.jpg" }]);
-    elegir(0, "Todas las variantes");
     fireEvent.click(screen.getByRole("button", { name: "quitar descartada.jpg" }));
     guardarNuevo();
 
@@ -423,7 +422,6 @@ describe("crear un grupo: el reparto empieza vacío", () => {
 
   it("el freno sigue: fotos que nadie tocó no dejan crear el grupo", async () => {
     await abrirNuevo([{ url: "a.jpg", isMain: true }, { url: "b.jpg" }]);
-    elegir(0, "Todas las variantes");
     guardarNuevo();
 
     await esperaFreno();
@@ -456,8 +454,9 @@ describe("editar un grupo: lo que envía el formulario", () => {
       ],
     } as never;
     render(<ProductGroupForm {...props} initialData={grupo} />);
-    await waitFor(() => expect(selectores().length).toBe(3), { timeout: ESPERA_MS });
-    elegir(1, "Todas las variantes");
+    // a.jpg es la portada: sin selector.
+    await waitFor(() => expect(selectores().length).toBe(2), { timeout: ESPERA_MS });
+    elegir(0, "Todas las variantes");
     guardarEditar();
 
     await waitFor(() => expect(mocks.patch, avisos()).toHaveBeenCalledTimes(1), { timeout: ESPERA_MS });
@@ -493,11 +492,10 @@ describe("editar un grupo anterior: reparto sin alcance claro", () => {
       products: tres,
     } as never;
     render(<ProductGroupForm {...props} initialData={grupo} />);
-    await waitFor(() => expect(selectores().length).toBe(2), { timeout: ESPERA_MS });
+    await waitFor(() => expect(selectores().length).toBe(1), { timeout: ESPERA_MS });
 
-    expect(selectores()[0].textContent).toMatch(/Todas las variantes/);
-    expect(selectores()[1].textContent).toMatch(/Sin repartir|Elige a quién le toca/);
-    elegir(0, "Todas las variantes");
+    expect(screen.getByText("Portada del grupo — no se reparte")).toBeTruthy();
+    expect(selectores()[0].textContent).toMatch(/Sin repartir|Elige a quién le toca/);
     guardarEditar();
     await esperaFreno();
   });
@@ -505,7 +503,7 @@ describe("editar un grupo anterior: reparto sin alcance claro", () => {
   it("una foto del grupo que no tiene ninguna variante también queda «Sin repartir»", async () => {
     const grupo = { ...(grupoGuardado([variante("p1", "color-1"), variante("p2", "color-2")]) as object) } as never;
     render(<ProductGroupForm {...props} initialData={grupo} />);
-    await waitFor(() => expect(selectores().length).toBe(2), { timeout: ESPERA_MS });
+    await waitFor(() => expect(selectores().length).toBe(1), { timeout: ESPERA_MS });
     for (const trigger of selectores()) {
       expect(trigger.textContent).not.toMatch(/Todas las variantes/);
     }
