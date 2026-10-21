@@ -155,7 +155,10 @@ export async function getSuggestedBag({ storeId, editionId, themeKey }: { storeI
   }
   return {
     themes: Array.from(themes.values()).filter((theme) => !rejections.themes.has(theme.key)).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0, 40),
-    bag: suggestBagForEdition({ products, themeKey, costBandMin: edition.costBandMin, costBandMax: edition.costBandMax, printed, rejections }),
+    bag: suggestBagForEdition({ products, themeKey, costBandMin: edition.costBandMin, costBandMax: edition.costBandMax, printed, rejections }).map((line) => ({
+      ...line,
+      printed: printed.get(line.productId) ?? 0,
+    })),
   };
 }
 

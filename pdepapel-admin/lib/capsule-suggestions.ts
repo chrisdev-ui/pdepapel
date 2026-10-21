@@ -63,6 +63,7 @@ export interface Theme {
 export interface BagLine {
   productId: string;
   name: string;
+  categoryName: string | null;
   unitCost: number;
   available: number;
   quantity: number;
@@ -219,6 +220,7 @@ function bagLines(products: readonly SuggestionProduct[], quantities: Map<string
     .map((product) => ({
       productId: product.id,
       name: product.name,
+      categoryName: product.categoryName,
       unitCost: product.unitCost,
       available: product.available,
       quantity: quantities.get(product.id)!,

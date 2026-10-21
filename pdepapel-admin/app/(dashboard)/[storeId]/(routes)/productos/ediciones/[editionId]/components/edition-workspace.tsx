@@ -2,8 +2,8 @@
 
 import axios from "axios";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DEFAULT_CONTENT_OPTIONS, openLabelPrintJob } from "@/components/labels/qr-label-print-sheet";
 import { ActionConfirmationDialog } from "@/components/modals/action-confirmation-dialog";
@@ -72,6 +72,9 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
 
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [includeSelling, setIncludeSelling] = useState(false);
+  const searchParams = useSearchParams();
+  const [themes, setThemes] = useState<{ key: string; label: string; count: number }[]>([]);
+  const [themeKey, setThemeKey] = useState(searchParams.get("tema") ?? "");
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [check, setCheck] = useState<MarginCheck | null>(null);
@@ -131,6 +134,26 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       setQuantities({});
       setCheck(null);
     });
+
+  const suggestBag = (key: string) =>
+    run("sugerir", async () => {
+      const { data: body } = await axios.get(`${api}/suggested-bag`, { params: key ? { tema: key } : {} });
+      setThemes(body.themes);
+      setCandidates(body.bag.map((line: Candidate & { quantity: number }) => ({ ...line, sku: "", idle: true })));
+      setQuantities(Object.fromEntries(body.bag.map((line: { productId: string; quantity: number }) => [line.productId, line.quantity])));
+      setCheck(null);
+      if (body.bag.length === 0) toast({ title: "Sin bolsa sugerida", description: "No hay productos quietos de ese tema dentro de la banda de la edición." });
+    });
+
+  // Al llegar desde «Usar esta sugerencia» (`?tema=`) se arma la misma bolsa; sin tema, solo se cargan los temas.
+  const loadedThemes = useRef(false);
+  useEffect(() => {
+    if (!editable || loadedThemes.current) return;
+    loadedThemes.current = true;
+    if (themeKey) void suggestBag(themeKey);
+    else void axios.get(`${api}/suggested-bag`).then(({ data: body }) => setThemes(body.themes)).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadGifts = () =>
     run("regalos", async () => {
@@ -286,8 +309,31 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
 
       {editable && (
         <SectionCard id="bolsa" step={1} title="Bolsa de papeles" description="Elige las categorías del tema: salen los productos quietos (sin ventas en 90 días) con costo dentro de la banda y algo disponible. Quita lo que no quepa en una cápsula.">
+          <div className="flex flex-col gap-2 rounded-md border bg-white p-3">
+            <Label htmlFor="sugerir-tema">Sugerir bolsa por tema</Label>
+            <p className="text-xs text-muted-foreground">Llena las cantidades con productos quietos del tema dentro de la banda; cada fila dice por qué. Cámbialas como quieras: nada se imprime hasta que lo pidas.</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select
+                id="sugerir-tema"
+                className="h-11 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                value={themeKey}
+                onChange={(event) => setThemeKey(event.target.value)}
+              >
+                <option value="">Todos los quietos de la banda</option>
+                {themeKey && !themes.some((theme) => theme.key === themeKey) && <option value={themeKey}>Tema de la sugerencia</option>}
+                {themes.map((theme) => (
+                  <option key={theme.key} value={theme.key}>
+                    {theme.label} ({theme.count})
+                  </option>
+                ))}
+              </select>
+              <Button className="min-h-[44px]" disabled={busy !== null} onClick={() => suggestBag(themeKey)}>
+                {busy === "sugerir" ? "Armando…" : "Sugerir bolsa"}
+              </Button>
+            </div>
+          </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium">Categorías</legend>
+            <legend className="text-sm font-medium">O busca por categorías</legend>
             <div className="grid max-h-60 gap-1 overflow-y-auto rounded-md border p-2 sm:grid-cols-2 lg:grid-cols-3">
               {categories.map((category) => {
                 const id = `categoria-${category.id}`;
@@ -330,7 +376,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{row.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {row.categoryName ?? "Sin categoría"} · costo {currencyFormatter(row.unitCost)} · {row.available} disponibles{row.printed ? ` · ${row.printed} ya impresos` : ""}
+                        {row.categoryName ? `${row.categoryName} · ` : ""}costo {currencyFormatter(row.unitCost)} · {row.available} disponibles{row.printed ? ` · ${row.printed} ya impresos` : ""}
                       </p>
                       <p className={row.idle ? "text-xs text-foreground" : "text-xs text-amber-700"}>{row.reason}</p>
                     </div>
