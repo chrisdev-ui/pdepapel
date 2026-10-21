@@ -3,6 +3,7 @@ import { Prisma, SocialAccountStatus, type SocialPlatform, type SocialProductTyp
 import prismadb from "@/lib/prismadb";
 
 import { SocialReconnectRequired } from "./credentials";
+import { markSocialNeedsReconnect } from "./reconnect";
 import { SocialApiError } from "./errors";
 import { DAILY_WINDOW_DAYS, hoursSince, pickAccountMetrics, shouldPollPost, type MetricValues } from "./metrics";
 
@@ -107,7 +108,7 @@ export async function runSocialSync(input: {
       if (!input.continuation) {
         const info = await input.adapter.fetchAccount();
         if (info.externalId !== account.externalId) {
-          await markAccountStatus(account.id, SocialAccountStatus.NEEDS_RECONNECT, "account_changed");
+          await markSocialNeedsReconnect(account.id, "account_changed");
           return { status: "reconnect", reason: "account_changed" };
         }
         const picked = pickAccountMetrics(info.metrics);
@@ -189,11 +190,11 @@ export async function runSocialSync(input: {
     return { status: "done", posts, snapshots };
   } catch (error) {
     if (error instanceof SocialReconnectRequired) {
-      await markAccountStatus(account.id, SocialAccountStatus.NEEDS_RECONNECT, error.reason);
+      await markSocialNeedsReconnect(account.id, error.reason);
       return { status: "reconnect", reason: error.reason };
     }
     if (error instanceof SocialApiError && error.kind === "auth") {
-      await markAccountStatus(account.id, SocialAccountStatus.NEEDS_RECONNECT, error.code);
+      await markSocialNeedsReconnect(account.id, error.code);
       return { status: "reconnect", reason: error.code };
     }
     if (error instanceof SocialApiError && error.kind === "rate_limit") {

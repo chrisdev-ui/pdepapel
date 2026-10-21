@@ -10,6 +10,7 @@ import { YearSelector } from "@/components/year-selector";
 import { getStoreAccess } from "@/lib/store-access";
 import { getTodaySummary } from "@/lib/dashboard-today";
 import { getSystemsStatus } from "@/lib/job-runs";
+import { getSocialReconnectNeeds } from "@/lib/social/reconnect";
 import { getColombiaDate } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -19,6 +20,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { InventorySummaryTab } from "./components/inventory-summary-tab";
 import { PendingActions } from "./components/pending-actions";
+import { SocialReconnectBanner } from "./components/social-reconnect-banner";
 import { SystemsStatus } from "./components/systems-status";
 import { TodayKpis } from "./components/today-kpis";
 import { TopProducts } from "./components/top-products";
@@ -49,11 +51,12 @@ export default async function DashboardPage({
   const year = searchParams.year
     ? parseInt(searchParams.year)
     : new Date().getFullYear();
-  const [summary, graphRevenue, salesCount, systems] = await Promise.all([
+  const [summary, graphRevenue, salesCount, systems, reconnect] = await Promise.all([
     getTodaySummary(params.storeId),
     getGraphRevenue(params.storeId, year),
     getSalesCount(params.storeId, year),
     getSystemsStatus(params.storeId),
+    canSeeCosts ? getSocialReconnectNeeds(params.storeId) : Promise.resolve([]),
   ]);
   const local = getColombiaDate(summary.generatedAt);
   const title = `Hoy, ${format(local, "EEEE d 'de' MMMM", { locale: es })}`;
@@ -78,6 +81,8 @@ export default async function DashboardPage({
           </Link>
         </Button>
       </div>
+
+      <SocialReconnectBanner storeId={params.storeId} platforms={reconnect} />
 
       <TodayKpis storeId={params.storeId} summary={summary} />
 

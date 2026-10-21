@@ -10,8 +10,8 @@ import { createTestPrismaClient } from "./helpers/test-database";
 /**
  * «Métricas de redes» a 390, 768 y 1280 px con una cuenta y publicaciones
  * sembradas en la base de pruebas: la pantalla lee solo la base (nada sale a
- * Meta ni a TikTok), una miniatura vencida cae al marcador neutro y la curva
- * abre. Sin desbordes horizontales.
+ * Meta ni a TikTok), una miniatura vencida cae al marcador neutro, la curva
+ * abre e Inicio avisa la red que pide reconectar. Sin desbordes horizontales.
  *
  *   npm run test:e2e:seed-admin
  *   npm run test:e2e:prod -- tests/e2e/social-metrics-viewports.spec.ts --workers=1
@@ -59,7 +59,7 @@ test.describe("métricas de redes", () => {
       ],
     });
     const captions = ["Reel de agendas kawaii con stickers nuevos para la temporada", "Carrusel de cuadernos", "Reel de plumones pastel", "Publicación de bolígrafos"];
-    for (const [index, caption] of captions.entries()) {
+    for (const [index, caption] of Array.from(captions.entries())) {
       const postedAt = new Date(now - (index * 2 + 1) * 24 * HOUR);
       const post = await db.socialPost.create({
         data: {
@@ -119,12 +119,22 @@ test.describe("métricas de redes", () => {
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}.png`), fullPage: true });
 
       await list.getByText(/Reel de agendas kawaii/).click();
+      const curveDialog = page.getByRole("dialog");
       const dialog = page.getByRole("dialog");
       await expect(dialog.getByText("A las 24 h")).toBeVisible();
       await expect(dialog.locator(".recharts-line")).toBeVisible();
       await expect(dialog).toHaveCSS("opacity", "1");
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}-curva.png`) });
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+      await curveDialog.press("Escape");
+
+      // Inicio avisa mientras TikTok pide reconectar, con el enlace a esta pantalla.
+      await page.goto(`/${storeId}`);
+      const banner = page.getByRole("status").filter({ hasText: "Hay que reconectar TikTok" });
+      await expect(banner).toBeVisible({ timeout: 60_000 });
+      await expect(banner.getByRole("link", { name: "Ir a Métricas de redes" })).toHaveAttribute("href", `/${storeId}/redes`);
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: path.join(SHOTS, `inicio-reconectar-${viewport.name}.png`) });
     });
   }
 });
