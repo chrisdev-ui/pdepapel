@@ -1,4 +1,15 @@
-import { CapsuleBatchMode, CapsuleCostStatus, CapsuleSlipKind, CapsuleSlipStatus, InventoryMovementType, OrderStatus, PaymentMethod } from "@prisma/client";
+import {
+  CapsuleBatchMode,
+  CapsuleCostStatus,
+  CapsuleSlipKind,
+  CapsuleSlipStatus,
+  InventoryMovementType,
+  MarketplaceConnectionStatus,
+  MarketplaceOutboxAction,
+  MarketplaceProvider,
+  OrderStatus,
+  PaymentMethod,
+} from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -76,6 +87,8 @@ async function deleteFixture(f: Fixture) {
   await testPrisma.order.deleteMany({ where: { storeId } });
   await testPrisma.inventoryMovement.deleteMany({ where: { storeId } });
   await testPrisma.marketplaceOutboxEvent.deleteMany({ where: { product: { storeId } } });
+  await testPrisma.marketplaceListing.deleteMany({ where: { connection: { storeId } } });
+  await testPrisma.marketplaceConnection.deleteMany({ where: { storeId } });
   await testPrisma.product.deleteMany({ where: { storeId } });
   await testPrisma.category.deleteMany({ where: { storeId } });
   await testPrisma.size.deleteMany({ where: { storeId } });
@@ -153,6 +166,22 @@ describe("papeles de cápsulas contra MySQL", () => {
     await expect(
       createPointOfSaleSale({ storeId: f.store.id, items: [{ productId: f.borrador.id, quantity: 3 }], paymentMethod: PaymentMethod.CASH, idempotencyKey: randomUUID(), userId: f.store.userId }),
     ).rejects.toThrow(/No alcanzó el inventario/);
+  });
+
+  it("imprimir un producto publicado en Mercado Libre encola la sincronización de su stock con lo que queda disponible", async () => {
+    f = await createFixture();
+    const connection = await testPrisma.marketplaceConnection.create({
+      data: { storeId: f.store.id, provider: MarketplaceProvider.MERCADOLIBRE, status: MarketplaceConnectionStatus.CONNECTED, sellerId: `s-${randomUUID().slice(0, 8)}` },
+    });
+    const listing = await testPrisma.marketplaceListing.create({
+      data: { connectionId: connection.id, productId: f.borrador.id, externalItemId: `MCO-${randomUUID().slice(0, 8)}`, status: "ACTIVE", stockSafetyBuffer: 1 },
+    });
+
+    await print(f, [{ productId: f.borrador.id, quantity: 8 }]);
+
+    const events = await testPrisma.marketplaceOutboxEvent.findMany({ where: { listingId: listing.id }, select: { action: true, payload: true } });
+    // 10 en stock − 8 apartados − 1 de colchón = 1 en Mercado Libre.
+    expect(events).toEqual([{ action: MarketplaceOutboxAction.SYNC_STOCK, payload: { targetQuantity: 1 } }]);
   });
 
   it("imprimir más de lo disponible, fuera de la banda o un regalo caro falla sin apartar nada", async () => {
