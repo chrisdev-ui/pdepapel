@@ -58,21 +58,27 @@ export async function computeIdleProducts(storeId: string, now = new Date()): Pr
   );
 }
 
+/**
+ * Cada operación con Redis usa su propio cliente: el plazo de 1,5 s corre
+ * desde que se crea, y calcular los quietos puede tardar más que eso; con un
+ * solo cliente la escritura saldría abortada siempre.
+ */
 export async function loadIdleProducts(storeId: string): Promise<Map<string, IdleInfo>> {
-  const redis = await cacheClient();
-  const key = redis ? cacheKey(storeId, await catalogFingerprint(storeId)) : "";
-  if (redis) {
+  const reader = await cacheClient();
+  const key = reader ? cacheKey(storeId, await catalogFingerprint(storeId)) : "";
+  if (reader) {
     try {
-      const cached = (await redis.get(key)) as [string, IdleInfo][] | null;
+      const cached = (await reader.get(key)) as [string, IdleInfo][] | null;
       if (Array.isArray(cached)) return new Map(cached);
     } catch {
       // Sin caché: se calcula.
     }
   }
   const idle = await computeIdleProducts(storeId);
-  if (redis) {
+  const writer = reader ? await cacheClient() : null;
+  if (writer) {
     try {
-      await redis.set(key, Array.from(idle.entries()), { ex: CAPSULE_IDLE_CACHE_SECONDS });
+      await writer.set(key, Array.from(idle.entries()), { ex: CAPSULE_IDLE_CACHE_SECONDS });
     } catch {
       // La próxima consulta lo vuelve a calcular.
     }
