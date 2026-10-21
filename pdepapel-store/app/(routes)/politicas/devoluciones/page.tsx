@@ -2,7 +2,11 @@ import { CalendarClock, PackageOpen, Undo2 } from "lucide-react";
 import { Metadata } from "next";
 import Link from "next/link";
 
-import { PolicyPage, type PolicyFact, type PolicySection } from "@/components/policy/policy-page";
+import {
+  PolicyPage,
+  type PolicyFact,
+  type PolicySection,
+} from "@/components/policy/policy-page";
 import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { StorefrontLink } from "@/components/storefront-link";
@@ -47,10 +51,11 @@ const sections: PolicySection[] = [
     content: (
       <>
         <p>
-          Tienes <strong>cinco (5) días hábiles contados desde la entrega</strong>{" "}
-          para avisarnos de cualquier cambio o devolución. Escríbenos
-          por WhatsApp o correo con el número de pedido, el producto y, si
-          aplica, una foto del problema. Te respondemos con los pasos a seguir.
+          Tienes{" "}
+          <strong>cinco (5) días hábiles contados desde la entrega</strong> para
+          avisarnos de cualquier cambio o devolución. Escríbenos por WhatsApp o
+          correo con el número de pedido, el producto y, si aplica, una foto del
+          problema. Te respondemos con los pasos a seguir.
         </p>
       </>
     ),
@@ -114,11 +119,11 @@ const sections: PolicySection[] = [
         </p>
         <p>
           Si te retractas de la compra, te devolvemos el dinero por el mismo
-          medio de pago, o por el que acordemos contigo, en máximo
-          quince (15) días calendario desde que ejerces el derecho, nos das los
-          datos para el reembolso y nos devuelves el producto. Si lo prefieres,
-          el valor puede quedar como saldo a favor para usar en otros productos
-          de la tienda.
+          medio de pago, o por el que acordemos contigo, en máximo treinta (30)
+          días calendario desde que ejerces el derecho; normalmente lo hacemos
+          apenas recibimos el producto y los datos para el reembolso. Si lo
+          prefieres, el valor puede quedar como saldo a favor para usar en otros
+          productos de la tienda.
         </p>
       </>
     ),
@@ -129,9 +134,11 @@ const sections: PolicySection[] = [
     content: (
       <p>
         Puedes ver el estado de cada pedido en{" "}
-        <StorefrontLink href={STOREFRONT_ROUTES.myOrders}>Mis pedidos</StorefrontLink>. Si el
-        problema es con la entrega (paquete que no llega, dañado o incompleto),
-        revisa también la{" "}
+        <StorefrontLink href={STOREFRONT_ROUTES.myOrders}>
+          Mis pedidos
+        </StorefrontLink>
+        . Si el problema es con la entrega (paquete que no llega, dañado o
+        incompleto), revisa también la{" "}
         <Link href={STOREFRONT_ROUTES.shippingPolicy}>política de envíos</Link>.
       </p>
     ),
@@ -146,7 +153,7 @@ export default function ReturnsPolicyPage() {
       eyebrowClassName="bg-kawaii-yellow-light text-yellow-900"
       title="Cambios y devoluciones"
       lede="Queremos que quedes feliz con cada compra. Si algo no salió bien, así lo resolvemos."
-      updatedAt="2026-10-05"
+      updatedAt="2026-10-21"
       facts={facts}
       sections={sections}
       contactPrompt="¿Necesitas un cambio o una devolución?"

@@ -115,8 +115,8 @@ describe("commerce policies match the published policy pages", () => {
       const lines = readFileSync(file, "utf8").split("\n");
       lines.forEach((line, index) => {
         if (!/d[ií]as calendario/i.test(line)) return;
-        // El reembolso del retracto sí es en días calendario (art. 47).
-        if (/quince \(15\) d[ií]as calendario/i.test(line)) return;
+        // El reembolso del retracto sí es en días calendario (art. 47): máximo 30.
+        if (/treinta \(30\)\s+d[ií]as calendario/i.test(`${lines[index - 1] ?? ""} ${line}`)) return;
         const around = lines.slice(Math.max(0, index - 3), index + 4).join(" ");
         if (/cambio|devoluci|retract|recib|entrega/i.test(around)) offenders.push(`${relative(join(__dirname, "../../.."), file)}:${index + 1}`);
       });
@@ -126,12 +126,15 @@ describe("commerce policies match the published policy pages", () => {
 
   /**
    * Retracto (Ley 1480, art. 47, comercio electrónico): el dinero vuelve por
-   * el mismo medio de pago o uno acordado en máximo 15 días calendario; el
-   * saldo a favor solo si la clienta lo elige.
+   * el mismo medio de pago o uno acordado en máximo 30 días calendario desde
+   * que se ejerce el derecho, igual que en los términos; el saldo a favor
+   * solo si la clienta lo elige.
    */
-  it("refunds a retraction to the payment method within fifteen calendar days", () => {
+  it("refunds a retraction to the payment method within thirty calendar days of exercising it", () => {
     const text = flat(page("devoluciones"));
-    expect(text).toContain("te devolvemos el dinero por el mismo medio de pago, o por el que acordemos contigo, en máximo quince (15) días calendario");
+    expect(text).toContain("te devolvemos el dinero por el mismo medio de pago, o por el que acordemos contigo, en máximo treinta (30) días calendario desde que ejerces el derecho");
+    expect(text).not.toMatch(/quince \(15\) d[ií]as/);
+    expect(flat(page("terminos"))).toContain("treinta (30) días calendario desde que ejerces el derecho");
     expect(text).toContain("Si lo prefieres, el valor puede quedar como saldo a favor");
     expect(text).not.toContain("el valor queda como saldo a favor para usar");
   });
