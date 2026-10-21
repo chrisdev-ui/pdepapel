@@ -4,6 +4,7 @@ import {
   decryptMercadoLibreToken,
   encryptMercadoLibreToken,
 } from "@/lib/mercadolibre/crypto";
+import { decodeTokenKey, decryptToken, encryptToken, TokenDecryptionError } from "@/lib/token-crypto";
 
 const key = Buffer.alloc(32, 7).toString("base64");
 
@@ -22,5 +23,33 @@ describe("Mercado Libre token encryption", () => {
     expect(() => encryptMercadoLibreToken("token", "not-a-valid-key")).toThrow(
       "MERCADOLIBRE_TOKEN_ENCRYPTION_KEY",
     );
+  });
+});
+
+describe("cifrado compartido (lib/token-crypto)", () => {
+  // Cifrado con la versión anterior a la extracción: los tokens guardados siguen legibles.
+  const STORED = "v1.3ChDAsdaD3CdnclL.EH8jNuXIg88jVctulzLtBQ.-c6ytMCLMWx6n5UPOWXWRpbPDl2n84yPqg";
+
+  it("Mercado Libre descifra un token guardado antes de la extracción", () => {
+    expect(decryptMercadoLibreToken(STORED, key)).toBe("APP_USR-fixture-token-123");
+  });
+
+  it("el módulo compartido lee el mismo formato y una llave ajena no lo abre", () => {
+    expect(decryptToken(STORED, decodeTokenKey(key)!)).toBe("APP_USR-fixture-token-123");
+    expect(() => decryptMercadoLibreToken(STORED, Buffer.alloc(32, 8).toString("base64"))).toThrow("No fue posible descifrar el token de Mercado Libre");
+    expect(() => decryptToken(STORED, Buffer.alloc(32, 8))).toThrow(TokenDecryptionError);
+  });
+
+  it("solo acepta llaves Base64 de 32 bytes", () => {
+    expect(decodeTokenKey(undefined)).toBeNull();
+    expect(decodeTokenKey("corta")).toBeNull();
+    expect(decodeTokenKey(Buffer.alloc(32, 1).toString("base64"))).toHaveLength(32);
+  });
+
+  it("un token cifrado nuevo vuelve a abrirse", () => {
+    const k = Buffer.alloc(32, 3);
+    const sealed = encryptToken("act.tiktok-token", k);
+    expect(sealed.startsWith("v1.")).toBe(true);
+    expect(decryptToken(sealed, k)).toBe("act.tiktok-token");
   });
 });
