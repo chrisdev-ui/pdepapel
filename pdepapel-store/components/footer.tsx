@@ -162,6 +162,14 @@ export const Footer: React.FC<FooterProps> = ({
                 </Link>
               </li>
               <li>
+                <Link
+                  href={STOREFRONT_ROUTES.termsPolicy}
+                  className={footerLinkClassName}
+                >
+                  Términos y condiciones
+                </Link>
+              </li>
+              <li>
                 <PrivacyPreferencesButton />
               </li>
             </ul>

@@ -93,6 +93,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${BASE_URL}${STOREFRONT_ROUTES.shippingPolicy}`,
     },
     {
+      url: `${BASE_URL}${STOREFRONT_ROUTES.termsPolicy}`,
+    },
+    {
       url: `${BASE_URL}${STOREFRONT_ROUTES.shop}`,
     },
     {

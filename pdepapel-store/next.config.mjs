@@ -115,6 +115,11 @@ const nextConfig = {
         destination: "/politicas/envios",
         permanent: true,
       },
+      {
+        source: "/policies/terms",
+        destination: "/politicas/terminos",
+        permanent: true,
+      },
     ];
   },
   experimental: {

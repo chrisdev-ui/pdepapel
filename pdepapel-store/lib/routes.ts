@@ -14,6 +14,7 @@ export const STOREFRONT_ROUTES = {
   dataPolicy: "/politicas/privacidad",
   returnsPolicy: "/politicas/devoluciones",
   shippingPolicy: "/politicas/envios",
+  termsPolicy: "/politicas/terminos",
   newsletterConfirm: "/suscripcion/confirmar",
   newsletterUnsubscribe: "/suscripcion/cancelar",
   comingSoon: "/proximamente",

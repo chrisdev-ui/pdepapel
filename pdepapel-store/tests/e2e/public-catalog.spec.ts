@@ -15,6 +15,7 @@ const legacyRoutes = [
   ["/policies/data", "/politicas/privacidad"],
   ["/policies/returns", "/politicas/devoluciones"],
   ["/policies/shipping", "/politicas/envios"],
+  ["/policies/terms", "/politicas/terminos"],
 ] as const;
 
 const categorySlug = process.env.E2E_CATEGORY_SLUG || "boligrafos-lapiceros";

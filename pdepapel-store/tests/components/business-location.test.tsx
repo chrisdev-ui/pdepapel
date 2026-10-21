@@ -60,6 +60,9 @@ describe("business location messaging", () => {
       screen.getByRole("link", { name: "Políticas de entrega" }),
     ).toHaveClass("min-h-[44px]");
     expect(
+      screen.getByRole("link", { name: "Términos y condiciones" }),
+    ).toHaveAttribute("href", "/politicas/terminos");
+    expect(
       screen.getByRole("button", { name: "Preferencias de privacidad" }),
     ).toHaveClass("min-h-[44px]");
   });

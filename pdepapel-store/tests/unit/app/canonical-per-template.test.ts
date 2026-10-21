@@ -27,6 +27,7 @@ describe("canonical per template", () => {
     ["(routes)/politicas/devoluciones/page.tsx", /canonical/],
     ["(routes)/politicas/envios/page.tsx", /canonical/],
     ["(routes)/politicas/privacidad/page.tsx", /canonical/],
+    ["(routes)/politicas/terminos/page.tsx", /canonical: STOREFRONT_ROUTES\.termsPolicy/],
     ["(routes)/tarjeta-regalo/page.tsx", /canonical/],
     ["(routes)/proximamente/page.tsx", /canonical: "\/proximamente"/],
     ["(routes)/boletin/[slug]/page.tsx", /canonical: `\$\{BASE_URL\}\/boletin\/\$\{issue\.slug\}`/],

@@ -49,6 +49,7 @@ const POLICY_LINKS = [
   { href: STOREFRONT_ROUTES.shippingPolicy, label: "Envíos y entregas" },
   { href: STOREFRONT_ROUTES.returnsPolicy, label: "Cambios y devoluciones" },
   { href: STOREFRONT_ROUTES.dataPolicy, label: "Datos personales" },
+  { href: STOREFRONT_ROUTES.termsPolicy, label: "Términos y condiciones" },
 ];
 
 function formatUpdatedAt(iso: string) {

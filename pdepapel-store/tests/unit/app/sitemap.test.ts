@@ -36,6 +36,14 @@ describe("storefront sitemap", () => {
     mocks.getCurrentCapsuleEdition.mockResolvedValue({ salesEnabled: false, edition: null });
   });
 
+  it("lists every policy page, Terms included", async () => {
+    mocks.getSitemapProducts.mockResolvedValue([{ id: "p", slug: "producto", isArchived: false }]);
+    const urls = (await sitemap()).map((entry) => entry.url);
+    for (const path of ["/politicas/envios", "/politicas/devoluciones", "/politicas/privacidad", "/politicas/terminos"]) {
+      expect(urls).toContain(`https://papeleriapdepapel.com${path}`);
+    }
+  });
+
   it("lists the LIVE capsule edition, /capsulas between editions, and nothing with sales off", async () => {
     mocks.getSitemapProducts.mockResolvedValue([{ id: "p", slug: "producto", isArchived: false }]);
     const off = (await sitemap()).map((entry) => entry.url);
