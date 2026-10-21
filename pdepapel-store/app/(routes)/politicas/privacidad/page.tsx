@@ -22,14 +22,22 @@ const sections: PolicySection[] = [
     id: "quienes-somos",
     title: "Quiénes somos y qué cubre esta política",
     content: (
-      <p>
-        Papelería P de Papel, tienda en línea de papelería kawaii con operación
-        en Medellín, Colombia, es responsable del tratamiento de los datos
-        personales de sus clientes, proveedores y demás personas que se
-        relacionan con la tienda. Esta política sigue la Ley 1581 de 2012 y
-        sus decretos reglamentarios, y aplica a los datos que recogemos por la
-        página web, el correo, WhatsApp, llamadas y cualquier otro canal.
-      </p>
+      <>
+        <p>
+          Papelería P de Papel, tienda en línea de papelería kawaii con operación
+          en Medellín, Colombia, es responsable del tratamiento de los datos
+          personales de sus clientes, proveedores y demás personas que se
+          relacionan con la tienda. Esta política sigue la Ley 1581 de 2012 y
+          sus decretos reglamentarios, y aplica a los datos que recogemos por la
+          página web, el correo, WhatsApp, llamadas y cualquier otro canal.
+        </p>
+        <p data-testid="responsable">
+          Responsable del tratamiento: Paula Fernanda Morales Rodriguez (nombre
+          comercial: Papelería P de Papel), NIT 1030579584-5. Dirección de
+          notificación: Calle 12 AA Sur #55D-30, Medellín, Antioquia. Contacto:
+          papeleria.pdepapel@gmail.com.
+        </p>
+      </>
     ),
   },
   {
@@ -264,7 +272,8 @@ const sections: PolicySection[] = [
       <p>
         Si cambiamos esta política, publicamos la nueva versión en esta página
         con la fecha de actualización. Los cambios importantes también se
-        avisan por correo a quienes tienen cuenta o suscripción.
+        avisan por correo a quienes tienen cuenta o suscripción. Esta versión
+        está vigente desde el 21 de octubre de 2026.
       </p>
     ),
   },
@@ -278,7 +287,7 @@ export default function DataPolicyPage() {
       eyebrowClassName="bg-kawaii-lavender-light text-violet-900"
       title="Tratamiento de datos personales"
       lede="Qué datos pedimos, para qué los usamos, con quién los procesamos y cómo puedes consultarlos, corregirlos o borrarlos."
-      updatedAt="2026-10-20"
+      updatedAt="2026-10-21"
       sections={sections}
       contactPrompt="¿Tienes una duda sobre tus datos?"
       currentRoute={STOREFRONT_ROUTES.dataPolicy}
