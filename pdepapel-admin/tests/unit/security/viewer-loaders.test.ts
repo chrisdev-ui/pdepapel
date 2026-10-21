@@ -43,6 +43,7 @@ vi.mock("@/lib/prismadb", () => ({
   default: new Proxy({} as Record<string, unknown>, {
     get: (_t, model: string) => {
       if (model === "$transaction") return async () => [];
+      if (model === "$queryRawUnsafe") return async () => [];
       if (model === "then") return undefined;
       return new Proxy({} as Record<string, unknown>, {
         get: (_m, method: string) => {

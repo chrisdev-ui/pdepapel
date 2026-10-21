@@ -26,6 +26,7 @@ import {
   type ProductListQuery,
   type ProductSortColumn,
 } from "@/lib/product-list-query";
+import { GROUP_ONLY_SCOPE } from "@/lib/variant-images";
 
 export * from "@/lib/product-list-query";
 
@@ -76,6 +77,8 @@ export interface ProductListContext {
   names: ProductListNames;
   /** Imágenes rotas por producto (cron de salud de imágenes). */
   brokenImages: ReadonlyMap<string, number>;
+  /** Variantes que solo muestran la portada de su grupo («Sin foto propia»). */
+  onlyGroupCover?: ReadonlySet<string>;
   /** Cuenta de solo lectura: clasifica sin costo ni transporte, como siempre la vio. */
   viewer?: boolean;
 }
@@ -132,6 +135,7 @@ function classify(row: ProductListRow, ctx: ProductListContext): Classified {
     images: row._count.images,
     brokenImages: ctx.brokenImages.get(row.id) ?? 0,
     hasDiscount: offer.price < row.price,
+    onlyGroupCover: ctx.onlyGroupCover?.has(row.id) ?? false,
   };
   const views = new Set<ProductView>();
   for (const { id } of PRODUCT_VIEWS) if (productMatchesView(product, id, ctx.threshold)) views.add(id);
@@ -272,7 +276,32 @@ type ProductListDb = {
   category: { findMany: (args: { where: { storeId: string }; select: { id: true; name: true } }) => Promise<{ id: string; name: string }[]> };
   brand: { findMany: (args: { where: { storeId: string }; select: { id: true; name: true; isArchived: true } }) => Promise<{ id: string; name: string; isArchived: boolean }[]> };
   productGroup: { findMany: (args: { where: { storeId: string }; select: { id: true; name: true } }) => Promise<{ id: string; name: string }[]> };
+  $queryRawUnsafe: <T>(query: string, ...values: unknown[]) => Promise<T>;
 };
+
+/**
+ * Variantes cuyas fotos son todas la portada de su grupo (su foto principal):
+ * de respaldo o como copia propia de la misma imagen. Una sola consulta
+ * agregada, en paralelo con las demás de la lista.
+ */
+export async function loadGroupCoverOnlyIds(db: Pick<ProductListDb, "$queryRawUnsafe">, storeId: string): Promise<Set<string>> {
+  // Parámetros enlazados (?), nunca interpolados: este archivo también lo importa el cliente y no puede traer `Prisma.sql`.
+  const rows = await db.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT p.id
+       FROM Product p
+       JOIN Image v ON v.productId = p.id
+       LEFT JOIN Image g
+         ON g.productGroupId = p.productGroupId
+        AND g.url = v.url
+        AND (g.isMain = 1 OR g.scope = ?)
+      WHERE p.storeId = ? AND p.productGroupId IS NOT NULL
+      GROUP BY p.id
+     HAVING SUM(g.id IS NULL) = 0`,
+    GROUP_ONLY_SCOPE,
+    storeId,
+  );
+  return new Set(rows.map((row) => row.id));
+}
 
 /** Las filas livianas de toda la tienda y lo que hace falta para clasificarlas. */
 export async function loadProductListRows(
@@ -280,12 +309,13 @@ export async function loadProductListRows(
   storeId: string,
   options: { offers: readonly ActiveOffer[]; threshold: number; viewer?: boolean },
 ): Promise<{ rows: ProductListRow[]; ctx: ProductListContext }> {
-  const [rows, broken, categories, brands, groups] = await Promise.all([
+  const [rows, broken, categories, brands, groups, coverOnly] = await Promise.all([
     db.product.findMany({ where: { storeId }, select: PRODUCT_LIST_SELECT, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }),
     db.image.groupBy({ by: ["productId"], where: { brokenAt: { not: null }, product: { storeId } }, _count: { _all: true } }),
     db.category.findMany({ where: { storeId }, select: { id: true, name: true } }),
     db.brand.findMany({ where: { storeId }, select: { id: true, name: true, isArchived: true } }),
     db.productGroup.findMany({ where: { storeId }, select: { id: true, name: true } }),
+    loadGroupCoverOnlyIds(db, storeId),
   ]);
   return {
     rows,
@@ -294,6 +324,7 @@ export async function loadProductListRows(
       threshold: options.threshold,
       viewer: options.viewer,
       brokenImages: new Map(broken.filter((row) => row.productId).map((row) => [row.productId!, row._count._all])),
+      onlyGroupCover: coverOnly,
       names: {
         categories: new Map(categories.map((row) => [row.id, row.name])),
         brands: new Map(brands.map((row) => [row.id, { name: row.name, isArchived: row.isArchived }])),

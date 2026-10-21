@@ -105,6 +105,29 @@ describe("Productos paginado en el servidor (MySQL)", () => {
     }
   });
 
+  it("«Sin foto propia» lista las variantes vivas que solo muestran la portada de su grupo", async () => {
+    const store = fixture!.store.id;
+    const variants = await testPrisma.product.findMany({ where: { productGroupId: groupId, isArchived: false }, orderBy: { sku: "asc" }, select: { id: true } });
+    const [soloPortada, conPropia, ambas] = variants.map((row) => row.id);
+    const cover = "https://images.test/portada-grupo.jpg";
+    await testPrisma.image.create({ data: { productGroupId: groupId, url: cover, isMain: true, scope: "GROUP_ONLY" } });
+    await testPrisma.image.createMany({
+      data: [
+        { productId: soloPortada, url: cover, origin: "GROUP_COPY", isMain: true },
+        { productId: conPropia, url: "https://images.test/propia.jpg", origin: "OWN", isMain: true },
+        { productId: ambas, url: cover, origin: "OWN", isMain: true },
+        { productId: ambas, url: "https://images.test/propia-2.jpg", origin: "OWN" },
+      ],
+    });
+    try {
+      const { ids, first } = await walk({ vista: "sin-foto-propia" });
+      expect(ids).toEqual([soloPortada]);
+      expect(first.counts["sin-foto-propia"]).toBe(1);
+    } finally {
+      await testPrisma.image.deleteMany({ where: { OR: [{ productGroupId: groupId }, { productId: { in: [soloPortada, conPropia, ambas] } }] } });
+    }
+  });
+
   it("los archivados y «Sin marca» suman lo que hay en la base", async () => {
     const store = fixture!.store.id;
     const archived = await testPrisma.product.count({ where: { storeId: store, isArchived: true } });

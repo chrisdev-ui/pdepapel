@@ -133,6 +133,7 @@ export type ProductView =
   | "sin-completar"
   | "sin-identificador"
   | "imagen-rota"
+  | "sin-foto-propia"
   | "transporte-por-revisar"
   | "proximamente"
   | "stock-critico"
@@ -146,6 +147,7 @@ export const PRODUCT_VIEWS: { id: ProductView; label: string }[] = [
   { id: "sin-completar", label: "Sin completar" },
   { id: "sin-identificador", label: "Sin identificador" },
   { id: "imagen-rota", label: "Imagen rota" },
+  { id: "sin-foto-propia", label: "Sin foto propia" },
   { id: "transporte-por-revisar", label: "Transporte por revisar" },
   { id: "proximamente", label: "Próximamente" },
   { id: "stock-critico", label: "Stock crítico" },
@@ -173,7 +175,7 @@ export function needsTransportReview(product: Pick<ReadinessInput, "transportati
 }
 
 export function productMatchesView(
-  product: { isArchived: boolean; stock: number; hasDiscount?: boolean } & Omit<ReadinessInput, "description">,
+  product: { isArchived: boolean; stock: number; hasDiscount?: boolean; onlyGroupCover?: boolean } & Omit<ReadinessInput, "description">,
   view: ProductView,
   lowStockThreshold = DEFAULT_LOW_STOCK_THRESHOLD,
 ): boolean {
@@ -192,6 +194,8 @@ export function productMatchesView(
       return !product.isArchived && productLacksIdentifier(product);
     case "imagen-rota":
       return !product.isArchived && (product.brokenImages ?? 0) > 0;
+    case "sin-foto-propia":
+      return !product.isArchived && product.onlyGroupCover === true;
     case "transporte-por-revisar":
       return !product.isArchived && needsTransportReview(product);
     case "proximamente":
