@@ -216,7 +216,8 @@ describe("Cloudinary cleanup on every hard-delete path (MySQL)", () => {
     );
     expect(res.status).toBe(200);
     const images = await testPrisma.image.findMany({ where: { productId: adopted.id }, select: { url: true } });
-    expect(images.map((image) => image.url).sort()).toEqual([url("grupo-adopta"), url("suelta-vieja")].sort());
+    // La única foto del grupo es su portada: no se reparte a una variante que ya tiene foto propia.
+    expect(images.map((image) => image.url)).toEqual([url("suelta-vieja")]);
     expect(deletedIds()).toEqual([]);
   });
 
