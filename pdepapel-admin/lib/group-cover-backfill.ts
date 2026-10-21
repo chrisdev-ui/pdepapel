@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
-import { GROUP_ONLY_SCOPE } from "@/lib/variant-images";
+import { GROUP_ONLY_SCOPE, groupCoverPhoto } from "@/lib/variant-images";
 
 /**
  * Plan del respaldo «portada solo del grupo» (sin Prisma: se prueba con datos
@@ -142,4 +142,52 @@ export async function applyGroupCoverBackfill(tx: ImageWriter, plan: BackfillPla
   const coverIds = plan.coverChanges.map((change) => change.imageId);
   if (coverIds.length) rows += (await tx.image.updateMany({ where: { id: { in: coverIds }, isMain: false }, data: { isMain: true } })).count;
   return rows;
+}
+
+/**
+ * Grupos viejos con varias fotos principales: se queda con la estrella solo
+ * la que el formulario muestra como portada (`groupCoverPhoto`, en el orden de
+ * `BACKFILL_GROUP_SELECT`); las demás pasan a `isMain = 0` con su alcance
+ * guardado, así cada variante conserva su foto de color. Las que no tienen
+ * alcance salen en `unscoped`: Paula les elige destino al guardar el grupo.
+ */
+export interface DemotionPlan {
+  demotions: { imageId: string; groupId: string; url: string; scope: string | null }[];
+  groups: { groupId: string; group: string; coverImageId: string; coverUrl: string; demoted: number; unscoped: { imageId: string; url: string }[] }[];
+}
+
+export function planExtraCoverDemotion(groups: BackfillGroup[]): DemotionPlan {
+  const plan: DemotionPlan = { demotions: [], groups: [] };
+  for (const group of groups) {
+    if (group.images.filter((image) => image.isMain).length < 2) continue;
+    const cover = groupCoverPhoto(group.images.filter((image) => image.isMain));
+    if (!cover) continue;
+    const extras = group.images.filter((image) => image.isMain && image.id !== cover.id);
+    plan.demotions.push(...extras.map((image) => ({ imageId: image.id, groupId: group.id, url: image.url, scope: image.scope })));
+    plan.groups.push({
+      groupId: group.id,
+      group: group.name,
+      coverImageId: cover.id,
+      coverUrl: cover.url,
+      demoted: extras.length,
+      unscoped: extras.filter((image) => image.scope === null).map((image) => ({ imageId: image.id, url: image.url })),
+    });
+  }
+  return plan;
+}
+
+export function demotionUndoStatements(plan: DemotionPlan): string[] {
+  return plan.demotions.map((row) => `UPDATE \`Image\` SET \`isMain\` = 1 WHERE \`id\` = ${sqlString(row.imageId)};`);
+}
+
+/** Cómo quedan los grupos después de bajar las estrellas sobrantes (para el ensayo del respaldo principal). */
+export function withDemotedCovers(groups: BackfillGroup[], plan: DemotionPlan): BackfillGroup[] {
+  const demoted = new Set(plan.demotions.map((row) => row.imageId));
+  return groups.map((group) => ({ ...group, images: group.images.map((image) => (demoted.has(image.id) ? { ...image, isMain: false } : image)) }));
+}
+
+export async function applyExtraCoverDemotion(tx: ImageWriter, plan: DemotionPlan): Promise<number> {
+  const ids = plan.demotions.map((row) => row.imageId);
+  if (ids.length === 0) return 0;
+  return (await tx.image.updateMany({ where: { id: { in: ids }, isMain: true, productGroupId: { not: null } }, data: { isMain: false } })).count;
 }

@@ -1,6 +1,15 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { applyGroupCoverBackfill, BACKFILL_GROUP_SELECT, planGroupCoverBackfill, undoStatements, type BackfillGroup } from "@/lib/group-cover-backfill";
+import {
+  applyExtraCoverDemotion,
+  applyGroupCoverBackfill,
+  BACKFILL_GROUP_SELECT,
+  demotionUndoStatements,
+  planExtraCoverDemotion,
+  planGroupCoverBackfill,
+  undoStatements,
+  type BackfillGroup,
+} from "@/lib/group-cover-backfill";
 import { GROUP_ONLY_SCOPE } from "@/lib/variant-images";
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
@@ -21,8 +30,8 @@ async function seed() {
   groupId = group.id;
   await testPrisma.image.createMany({
     data: [
-      { productGroupId: group.id, url: "https://x/portada.jpg", isMain: true, scope: "all" },
-      { productGroupId: group.id, url: "https://x/g1.jpg", isMain: false, scope: "all" },
+      { productGroupId: group.id, url: "https://x/portada.jpg", isMain: true, scope: "all", createdAt: at(1) },
+      { productGroupId: group.id, url: "https://x/g1.jpg", isMain: false, scope: "all", createdAt: at(2) },
     ],
   });
   const [withOwn, onlyCover] = [f.component.id, f.kit.id];
@@ -105,5 +114,32 @@ describe("respaldo «portada solo del grupo»", () => {
     expect(withoutUpdatedAt(restored)).toEqual(withoutUpdatedAt(before));
     const reinserted = new Set(plan.deletions.map((row) => row.id));
     expect(restored.filter((row) => reinserted.has(row.id))).toEqual(before.filter((row) => reinserted.has(row.id)));
+  });
+});
+
+describe("bajar las estrellas sobrantes (--demote-extra-covers)", () => {
+  async function seedMulti() {
+    await seed();
+    await testPrisma.image.updateMany({ where: { productGroupId: groupId, url: "https://x/g1.jpg" }, data: { isMain: true } });
+    await testPrisma.image.create({ data: { productGroupId: groupId!, url: "https://x/suelta.jpg", isMain: true, scope: null, createdAt: at(50) } });
+  }
+
+  it("deja una sola estrella, las demás conservan su alcance, deshacer devuelve las filas y otra pasada no encuentra nada", async () => {
+    await seedMulti();
+    const before = await snapshot();
+    const plan = planExtraCoverDemotion(await load());
+    expect(plan.groups).toHaveLength(1);
+    expect(plan.groups[0].unscoped.map((photo) => photo.url)).toEqual(["https://x/suelta.jpg"]);
+
+    expect(await testPrisma.$transaction((tx) => applyExtraCoverDemotion(tx, plan))).toBe(2);
+    const groupRows = await testPrisma.image.findMany({ where: { productGroupId: groupId }, select: { url: true, isMain: true, scope: true } });
+    expect(groupRows.filter((row) => row.isMain).map((row) => row.url)).toHaveLength(1);
+    expect(groupRows.find((row) => row.url === "https://x/g1.jpg")).toMatchObject({ isMain: false, scope: "all" });
+    expect(groupRows.find((row) => row.url === "https://x/suelta.jpg")).toMatchObject({ isMain: false, scope: null });
+    expect(planExtraCoverDemotion(await load()).demotions).toEqual([]);
+
+    for (const statement of demotionUndoStatements(plan)) await testPrisma.$executeRawUnsafe(statement);
+    const withoutUpdatedAt = (rows: Awaited<ReturnType<typeof snapshot>>) => rows.map(({ updatedAt: _updatedAt, ...row }) => row);
+    expect(withoutUpdatedAt(await snapshot())).toEqual(withoutUpdatedAt(before));
   });
 });

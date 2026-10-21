@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { planGroupCoverBackfill, undoStatements, type BackfillGroup } from "@/lib/group-cover-backfill";
+import { demotionUndoStatements, planExtraCoverDemotion, planGroupCoverBackfill, undoStatements, withDemotedCovers, type BackfillGroup } from "@/lib/group-cover-backfill";
 
 const at = (n: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, n));
 const row = (id: string, url: string, extra: Partial<{ isMain: boolean; origin: "OWN" | "GROUP_COPY" | null; createdAt: Date }> = {}) => ({
@@ -83,5 +83,42 @@ describe("planGroupCoverBackfill", () => {
       "UPDATE `Image` SET `isMain` = 0 WHERE `id` = 'c';",
       "UPDATE `Image` SET `scope` = 'all' WHERE `id` = 'g-cover';",
     ]);
+  });
+});
+
+describe("planExtraCoverDemotion", () => {
+  const multi = () =>
+    group(
+      [{ id: "v1", name: "Rosa", sku: null, isArchived: false, images: [row("a", "portada.jpg", { isMain: true }), row("b", "rosa.jpg"), row("c", "propia.jpg")] }],
+      [
+        { id: "g-cover", url: "portada.jpg", isMain: true, scope: "all" },
+        { id: "g-rosa", url: "rosa.jpg", isMain: true, scope: "COLOR|rosa" },
+        { id: "g-suelta", url: "suelta.jpg", isMain: true, scope: null },
+        { id: "g-normal", url: "normal.jpg", isMain: false, scope: "all" },
+      ],
+    );
+
+  it("deja la estrella en la primera principal y baja las demás con su alcance; lista las que no tienen alcance", () => {
+    const plan = planExtraCoverDemotion([multi()]);
+    expect(plan.demotions).toEqual([
+      { imageId: "g-rosa", groupId: "grupo-1", url: "rosa.jpg", scope: "COLOR|rosa" },
+      { imageId: "g-suelta", groupId: "grupo-1", url: "suelta.jpg", scope: null },
+    ]);
+    expect(plan.groups).toEqual([
+      { groupId: "grupo-1", group: "Agendas", coverImageId: "g-cover", coverUrl: "portada.jpg", demoted: 2, unscoped: [{ imageId: "g-suelta", url: "suelta.jpg" }] },
+    ]);
+    expect(demotionUndoStatements(plan)).toEqual([
+      "UPDATE `Image` SET `isMain` = 1 WHERE `id` = 'g-rosa';",
+      "UPDATE `Image` SET `isMain` = 1 WHERE `id` = 'g-suelta';",
+    ]);
+  });
+
+  it("no toca grupos con una sola principal, y después el respaldo principal ya trata el grupo", () => {
+    expect(planExtraCoverDemotion([group([])]).demotions).toEqual([]);
+    const plan = planExtraCoverDemotion([multi()]);
+    const after = planGroupCoverBackfill(withDemotedCovers([multi()], plan));
+    expect(after.multiCoverGroups).toEqual([]);
+    expect(after.deletions.map((r) => r.id)).toEqual(["a"]);
+    expect(planExtraCoverDemotion(withDemotedCovers([multi()], plan)).demotions).toEqual([]);
   });
 });
