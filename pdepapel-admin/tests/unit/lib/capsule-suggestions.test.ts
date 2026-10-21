@@ -5,6 +5,7 @@ import {
   buildThemes,
   isSafeCopy,
   missingProducts,
+  rejectionPair,
   SUGGESTION_RULES,
   suggestBagForEdition,
   suggestEditions,
@@ -102,6 +103,24 @@ describe("ediciones sugeridas", () => {
     const ids = suggestEditions({ products: marked, options: OPTIONS, minMarginPct: 20, minSlipCost: 3000 }).flatMap((s) => s.bag.map((line) => line.productId));
     expect(ids.some((id) => blocked.has(id))).toBe(false);
     expect(ids).not.toContain(cheap.id);
+  });
+});
+
+describe("los ✗ de Paula", () => {
+  it("un tema rechazado no vuelve a salir y un producto rechazado sale de la bolsa de ese tema", () => {
+    const products = catalog();
+    const first = suggestEditions({ products, options: OPTIONS, minMarginPct: 20, minSlipCost: 3000 });
+    const kawaii = first.find((s) => s.themeKey === "design:kawaii")!;
+    const dropped = kawaii.bag[0].productId;
+    const again = suggestEditions({
+      products,
+      options: OPTIONS,
+      minMarginPct: 20,
+      minSlipCost: 3000,
+      rejections: { themes: new Set(["design:vintage"]), pairs: new Set([rejectionPair("design:kawaii", dropped)]) },
+    });
+    expect(again.map((s) => s.themeKey)).toEqual(["design:kawaii"]);
+    expect(again[0].bag.map((line) => line.productId)).not.toContain(dropped);
   });
 });
 

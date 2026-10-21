@@ -45,6 +45,15 @@ export interface SuggestionProduct {
   licenseBlocked: boolean;
 }
 
+/** Los ✗ de Paula: temas que no quiere ver y productos que no van en un tema (`tema|producto`). */
+export interface Rejections {
+  themes: ReadonlySet<string>;
+  pairs: ReadonlySet<string>;
+}
+
+export const NO_REJECTIONS: Rejections = { themes: new Set(), pairs: new Set() };
+export const rejectionPair = (key: string, productId: string) => `${key}|${productId}`;
+
 export interface Theme {
   key: string;
   kind: ThemeKind;
@@ -229,13 +238,15 @@ export function bagForTheme({
   theme,
   options,
   minMarginPct,
+  rejections = NO_REJECTIONS,
 }: {
   products: readonly SuggestionProduct[];
   theme: Theme;
   options: readonly CapsulePackCosts[];
   minMarginPct: number;
+  rejections?: Rejections;
 }): EditionSuggestion | null {
-  let members = bestWindow(products.filter((product) => matchesTheme(product, theme.key)));
+  let members = bestWindow(products.filter((product) => matchesTheme(product, theme.key) && !rejections.pairs.has(rejectionPair(theme.key, product.id))));
   while (members && members.length >= SUGGESTION_RULES.minProducts) {
     const quantities = allocate(members);
     if (!meetsBagRules(quantities)) return null;
@@ -283,24 +294,26 @@ export function suggestEditions({
   minMarginPct,
   minSlipCost,
   limit = SUGGESTION_RULES.maxSuggestions,
+  rejections = NO_REJECTIONS,
 }: {
   products: readonly SuggestionProduct[];
   options: readonly CapsulePackCosts[];
   minMarginPct: number;
   minSlipCost: number | null;
   limit?: number;
+  rejections?: Rejections;
 }): EditionSuggestion[] {
   const products = suggestable(all).filter((product) => minSlipCost === null || product.unitCost >= minSlipCost);
   const themes = buildThemes(products);
   const used = new Set<string>();
   const suggestions: EditionSuggestion[] = [];
-  const blocked = new Set<string>();
+  const blocked = new Set<string>(rejections.themes);
   while (suggestions.length < limit) {
     const remaining = products.filter((product) => !used.has(product.id));
     const ranked = themes
       .filter((theme) => !blocked.has(theme.key))
       .map((theme) => {
-        const members = remaining.filter((product) => matchesTheme(product, theme.key));
+        const members = remaining.filter((product) => matchesTheme(product, theme.key) && !rejections.pairs.has(rejectionPair(theme.key, product.id)));
         const window = bestWindow(members);
         if (!window) return null;
         const quantities = allocate(window);
@@ -311,7 +324,7 @@ export function suggestEditions({
       .sort((a, b) => b.money - a.money || a.theme.key.localeCompare(b.theme.key));
     let picked: EditionSuggestion | null = null;
     for (const { theme } of ranked) {
-      picked = bagForTheme({ products: remaining, theme, options, minMarginPct });
+      picked = bagForTheme({ products: remaining, theme, options, minMarginPct, rejections });
       if (picked) break;
       blocked.add(theme.key);
     }
@@ -334,16 +347,18 @@ export function suggestBagForEdition({
   costBandMin,
   costBandMax,
   printed,
+  rejections = NO_REJECTIONS,
 }: {
   products: readonly SuggestionProduct[];
   themeKey: string | null;
   costBandMin: number;
   costBandMax: number;
   printed: ReadonlyMap<string, number>;
+  rejections?: Rejections;
 }): BagLine[] {
   const parsed = key ? parseThemeKey(key) : null;
   const ordered = suggestable(all)
-    .filter((product) => product.unitCost >= costBandMin && product.unitCost <= costBandMax && (!key || matchesTheme(product, key)))
+    .filter((product) => product.unitCost >= costBandMin && product.unitCost <= costBandMax && (!key || (matchesTheme(product, key) && !rejections.pairs.has(rejectionPair(key, product.id)))))
     .sort(byIdleness);
   const printedTotal = Array.from(printed.values()).reduce((sum, quantity) => sum + quantity, 0);
   const addable = (product: SuggestionProduct, cap: number) => Math.max(0, Math.min(product.available, cap - (printed.get(product.id) ?? 0)));
