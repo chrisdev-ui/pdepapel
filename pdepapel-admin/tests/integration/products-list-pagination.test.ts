@@ -110,6 +110,9 @@ describe("Productos paginado en el servidor (MySQL)", () => {
     const variants = await testPrisma.product.findMany({ where: { productGroupId: groupId, isArchived: false }, orderBy: { sku: "asc" }, select: { id: true } });
     const [soloPortada, conPropia, ambas] = variants.map((row) => row.id);
     const cover = "https://images.test/portada-grupo.jpg";
+    // La semilla reparte fotos propias sobre ids sin orden: a veces le toca una a estas variantes.
+    const seeded = await testPrisma.image.findMany({ where: { productId: { in: [soloPortada, conPropia, ambas] } } });
+    await testPrisma.image.deleteMany({ where: { id: { in: seeded.map((row) => row.id) } } });
     await testPrisma.image.create({ data: { productGroupId: groupId, url: cover, isMain: true, scope: "GROUP_ONLY" } });
     await testPrisma.image.createMany({
       data: [
@@ -125,6 +128,7 @@ describe("Productos paginado en el servidor (MySQL)", () => {
       expect(first.counts["sin-foto-propia"]).toBe(1);
     } finally {
       await testPrisma.image.deleteMany({ where: { OR: [{ productGroupId: groupId }, { productId: { in: [soloPortada, conPropia, ambas] } }] } });
+      if (seeded.length) await testPrisma.image.createMany({ data: seeded });
     }
   });
 
