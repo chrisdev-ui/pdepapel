@@ -39,9 +39,10 @@ export type JobName =
   | "whatsapp-bot-ratio"
   | "copilot-spend"
   | "copilot-skill-overrides"
-  // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
-  // si no «Sistemas» lo marcaría atrasado.
-  | "customer-reactivation";
+  // Apagados (lib/scheduled-jobs.ts): entran a JOB_DEFINITIONS al encenderlos,
+  // si no «Sistemas» los marcaría atrasados.
+  | "customer-reactivation"
+  | "social-sync";
 
 export interface JobDefinition {
   name: JobName;

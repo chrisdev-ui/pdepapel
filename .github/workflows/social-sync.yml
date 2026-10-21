@@ -1,0 +1,48 @@
+# Instagram and TikTok metrics for «Métricas de redes» (owner-only).
+#
+# Its own workflow because Vercel's two crons are taken and
+# `admin-scheduled-tasks.yml` runs once a day; a second schedule there would
+# run every daily job four times. The endpoint answers at once: it queues one
+# QStash task per connected account and the work happens there.
+#
+# OFF until Christian turns it on: while `SCHEDULED_JOBS["social-sync"]` is
+# false the route only accepts mode=dry-run and returns counts without
+# calling Meta or TikTok. To turn it on: set it to true, add the job to
+# JOB_DEFINITIONS (expectedEveryHours: 6) and change MODE below to apply.
+name: Social metrics sync
+
+on:
+  schedule:
+    # 03:15, 09:15, 15:15 and 21:15 UTC = 22:15, 04:15, 10:15 and 16:15 Bogota.
+    - cron: "15 3,9,15,21 * * *"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "all, instagram or tiktok"
+        required: false
+        default: all
+      mode:
+        description: "dry-run or apply (apply only works once the job is on)"
+        required: false
+        default: dry-run
+
+jobs:
+  social-sync:
+    name: Queue social metrics sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+      PLATFORM: ${{ github.event.inputs.platform || 'all' }}
+      MODE: ${{ github.event.inputs.mode || 'dry-run' }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      - name: Queue the sync (or count it, in dry-run)
+        run: |
+          case "$PLATFORM" in all|instagram|tiktok) ;; *) echo "invalid platform"; exit 1 ;; esac
+          case "$MODE" in dry-run|apply) ;; *) echo "invalid mode"; exit 1 ;; esac
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/social-sync?platform=$PLATFORM&mode=$MODE" > /dev/null
