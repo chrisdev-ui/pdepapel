@@ -1,4 +1,4 @@
-import { expect, Page, test } from "../helpers/safe-test";
+import { expect, Page, test } from "./helpers/local-test";
 
 import {
   fillContact,

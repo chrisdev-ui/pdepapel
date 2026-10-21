@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 import {
   LOCAL_ADMIN_PORT,
+  LOCAL_FAKE_UPSTASH_PORT,
   LOCAL_STORE_PORT,
   SEEDED_STORE_ID,
   localApiUrl,
@@ -39,6 +40,8 @@ export default defineConfig({
       // Siempre escucha en 3101 (LOCAL_ADMIN_PORT).
       command: "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs node scripts/e2e-dev-server.mjs",
       cwd: "../pdepapel-admin",
+      // Puerto fijo del Redis falso: las pruebas vacían ahí el límite de pedidos.
+      env: { E2E_FAKE_UPSTASH_PORT: String(LOCAL_FAKE_UPSTASH_PORT) },
       url: `http://localhost:${LOCAL_ADMIN_PORT}/images/placeholder_1.png`,
       // Nunca un servidor que ya estaba: podría ser un `npm run dev` con las claves reales.
       reuseExistingServer: false,

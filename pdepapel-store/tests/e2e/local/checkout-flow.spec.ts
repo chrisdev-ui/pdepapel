@@ -1,4 +1,4 @@
-import { expect, Page, Route, test } from "../helpers/safe-test";
+import { expect, Page, Route, test } from "./helpers/local-test";
 
 import { gotoPublicPage, skipPrivacyBanner } from "../helpers/public-page";
 import { PHONE_ERROR } from "../../../lib/customer-checks";

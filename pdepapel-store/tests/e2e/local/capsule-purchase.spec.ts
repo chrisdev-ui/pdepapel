@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-import { expect, test, type Page } from "../helpers/safe-test";
+import { expect, test, type Page } from "./helpers/local-test";
 import { CART_STORAGE, fillContact, fillDeliveryWithoutCarrier, formButton } from "./helpers/checkout";
 import { deliverBoldWebhook, readOrderFromAdmin, SEEDED_STORE_ID } from "./helpers/local-environment";
 import { skipPrivacyBanner } from "../helpers/public-page";

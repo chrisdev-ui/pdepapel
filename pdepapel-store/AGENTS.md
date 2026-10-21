@@ -63,6 +63,7 @@ CI (`.github/workflows/quality.yml`) runs `type-check` and `test:coverage`. `pub
 **Testing rules that matter:**
 
 - `npm run test:e2e` **defaults to production** (`https://papeleriapdepapel.com`) for read-only public checks. Override with `E2E_BASE_URL` for anything else. Pin references with `E2E_CATEGORY_SLUG` / `E2E_ARCHIVED_PRODUCT_SLUG`.
+- `npm run test:e2e:local` (`playwright.local.config.ts`) runs against a local admin with a fake Upstash pinned to port 3199 (`LOCAL_FAKE_UPSTASH_PORT`). Local specs import `test` from `tests/e2e/local/helpers/local-test.ts`. Its auto fixture deletes the `orders:*` rate-limit counters before every test, so the run order never trips «Hiciste varios pedidos seguidos». The limit itself is unchanged, and the fake Redis only exists in e2e.
 - **Never run a real purchase flow against production.** For purchase E2E use a non-production URL and set `E2E_PURCHASABLE_PRODUCT_SLUG`.
 - Playwright has desktop Chrome and Pixel 5 projects. Keep public visual and navigation regressions covered at both, including **no unintended horizontal scroll** on home, shop and category pages.
 - For a bug fix, add the regression test that would have failed before the fix.

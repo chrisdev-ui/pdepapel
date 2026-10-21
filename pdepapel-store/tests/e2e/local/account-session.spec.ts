@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { expect, Page, test } from "../helpers/safe-test";
+import { expect, Page, test } from "./helpers/local-test";
 import { skipPrivacyBanner } from "../helpers/public-page";
 import { fillContact, fillDeliveryWithoutCarrier, formButton, startCheckout } from "./helpers/checkout";
 import { localAdminOrigin } from "./helpers/local-environment";

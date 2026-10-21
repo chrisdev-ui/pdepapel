@@ -89,8 +89,12 @@ function encodeResult(value) {
   return value;
 }
 
-/** Arranca el Redis falso en un puerto libre de 127.0.0.1 y devuelve su URL. */
-export function startFakeUpstash() {
+/**
+ * Arranca el Redis falso en 127.0.0.1 y devuelve su URL. El puerto es libre,
+ * salvo `E2E_FAKE_UPSTASH_PORT`: las e2e locales de la tienda lo fijan para
+ * borrar entre pruebas los contadores de pedidos (`resetOrderRateLimits`).
+ */
+export function startFakeUpstash({ port = Number(process.env.E2E_FAKE_UPSTASH_PORT) || 0 } = {}) {
   const store = createStore();
   const server = http.createServer((request, response) => {
     let body = "";
@@ -112,7 +116,7 @@ export function startFakeUpstash() {
     });
   });
   return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(port, "127.0.0.1", () => {
       const { port } = server.address();
       resolve({ url: `http://127.0.0.1:${port}`, close: () => server.close() });
     });

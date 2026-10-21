@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-import { expect, test } from "../helpers/safe-test";
+import { expect, test } from "./helpers/local-test";
 import { skipPrivacyBanner } from "../helpers/public-page";
 
 /**

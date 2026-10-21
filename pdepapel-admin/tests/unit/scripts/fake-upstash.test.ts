@@ -55,3 +55,29 @@ describe("Upstash falso de las e2e", () => {
     }
   });
 });
+
+describe("puerto fijo para las e2e de la tienda", () => {
+  it("escucha en el puerto pedido y deja borrar solo los contadores de pedidos", async () => {
+    const fixed = await startFakeUpstash({ port: 0 });
+    const port = Number(new URL(fixed.url).port);
+    fixed.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const pinned = await startFakeUpstash({ port });
+    try {
+      expect(pinned.url).toBe(`http://127.0.0.1:${port}`);
+      const client = new Redis({ url: pinned.url, token: "test-stub" });
+      await client.incr("orders:store:s1:ip:abc");
+      await client.incr("orders:store:s1:email:def");
+      await client.set("idempotency:x", "1");
+      // Lo que hace `resetOrderRateLimits` (pdepapel-store/tests/e2e/local/helpers/local-environment.ts).
+      const post = (command: unknown[]) => fetch(pinned.url, { method: "POST", body: JSON.stringify(command) }).then((r) => r.json());
+      const { result: keys } = (await post(["KEYS", "orders:*"])) as { result: string[] };
+      expect(keys.sort()).toEqual(["orders:store:s1:email:def", "orders:store:s1:ip:abc"]);
+      await post(["DEL", ...keys]);
+      expect(await client.exists("orders:store:s1:ip:abc")).toBe(0);
+      expect(await client.get("idempotency:x")).toBe(1);
+    } finally {
+      pinned.close();
+    }
+  });
+});

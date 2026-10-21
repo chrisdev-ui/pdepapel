@@ -24,6 +24,8 @@ export const SEEDED_STORE_ID = resolveSeededStoreId();
 
 export const LOCAL_ADMIN_PORT = 3101;
 export const LOCAL_STORE_PORT = 3100;
+/** El Redis falso del panel de las e2e (pdepapel-admin/scripts/lib/fake-upstash.mjs), en un puerto fijo. */
+export const LOCAL_FAKE_UPSTASH_PORT = 3199;
 
 /**
  * Clave de firma sólo para estas pruebas. No es un secreto: firma webhooks que
@@ -176,4 +178,22 @@ export async function purgeStoreCapsules() {
     body: JSON.stringify({ version: 2, tags: ["capsules"], paths: ["/", "/capsulas"] }),
   });
   if (!response.ok) throw new Error(`No se pudo purgar la caché de cápsulas de la tienda: ${response.status}`);
+}
+
+/**
+ * Borra los contadores del límite de pedidos (`orders:*`) en el Redis falso
+ * del panel de pruebas. La suite completa crea más pedidos desde la misma IP
+ * que los que el límite deja en una hora, y la prueba que llegaba tarde
+ * recibía «Hiciste varios pedidos seguidos». El límite no cambia: solo se
+ * vacía entre pruebas, y este Redis existe solo en las e2e.
+ */
+export async function resetOrderRateLimits() {
+  const url = `http://127.0.0.1:${LOCAL_FAKE_UPSTASH_PORT}`;
+  const call = async (command: unknown[]) => {
+    const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command) });
+    if (!response.ok) throw new Error(`Redis falso de las e2e: ${response.status}`);
+    return ((await response.json()) as { result: unknown }).result;
+  };
+  const keys = (await call(["KEYS", "orders:*"])) as string[];
+  if (keys.length > 0) await call(["DEL", ...keys]);
 }
