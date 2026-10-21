@@ -1,5 +1,6 @@
 "use client";
 
+import { LegalConsent } from "@/components/legal/legal-consent";
 import { checkLiveStock } from "@/actions/check-live-stock";
 import { safeStockPrecheck } from "@/lib/checkout-precheck";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1303,38 +1304,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     paymentMethod === PaymentMethod.Wompi ? (
       <>
         Vas a la pasarela segura para pagar; no se cobra nada hasta que
-        confirmes allí. Al continuar aceptas las{" "}
-        <Link
-          href={STOREFRONT_ROUTES.shippingPolicy}
-          className="underline underline-offset-4"
-        >
-          políticas de entrega y cambios
-        </Link>
-        .
+        confirmes allí.
       </>
     ) : paymentMethod === PaymentMethod.BankTransfer ? (
-      <>
-        Te mostraremos la cuenta y el valor exacto en la siguiente pantalla. Al
-        continuar aceptas las{" "}
-        <Link
-          href={STOREFRONT_ROUTES.shippingPolicy}
-          className="underline underline-offset-4"
-        >
-          políticas de entrega y cambios
-        </Link>
-        .
-      </>
+      <>Te mostraremos la cuenta y el valor exacto en la siguiente pantalla.</>
     ) : (
-      <>
-        Pagas al recibir. Al continuar aceptas las{" "}
-        <Link
-          href={STOREFRONT_ROUTES.shippingPolicy}
-          className="underline underline-offset-4"
-        >
-          políticas de entrega y cambios
-        </Link>
-        .
-      </>
+      <>Pagas al recibir.</>
     );
 
   const shippingSummary = (() => {
@@ -1552,16 +1527,19 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           <dt className="text-base font-bold">
             {giftCardCoversAll ? "Te queda por pagar" : "Total a pagar"}
           </dt>
-          <dd>
+          <dd className="flex flex-col items-end">
             <Currency
               className="font-quicksand text-2xl font-black text-pink-froly"
               value={amountDue}
             />
+            <span className="text-xs font-normal text-muted-foreground" data-testid="checkout-final-price-note">
+              Precio final, incluye los impuestos aplicables
+            </span>
           </dd>
         </div>
       </dl>
       <p className="text-xs text-muted-foreground">
-        IVA incluido. Sin cargos ocultos: el envío que ves es el que pagas.
+        Sin cargos ocultos: el envío que ves es el que pagas.
       </p>
       <ul className="flex flex-col gap-2 border-t pt-3 text-xs text-foreground/80">
         <li className="flex items-center gap-2">
@@ -1755,6 +1733,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                           ? submitFootnote
                           : undefined
                       }
+                      consent={
+                        currentStep === FORM_STEPS.length ? (
+                          <LegalConsent action="checkout" />
+                        ) : undefined
+                      }
                     />
                   </form>
                 </Form>
@@ -1769,6 +1752,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       {/* Phone: the main action follows the customer once the in-form buttons scroll away. */}
       {activeItems.length > 0 && !isNavigationVisible && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-blue-baby/60 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
+          {currentStep === FORM_STEPS.length ? (
+            <LegalConsent action="checkout" className="mx-auto mb-2 max-w-lg text-[11px]" />
+          ) : null}
           <div className="mx-auto flex max-w-lg items-center gap-3">
             <div className="flex min-w-0 flex-col">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

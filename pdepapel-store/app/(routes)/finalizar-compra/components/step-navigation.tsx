@@ -17,8 +17,10 @@ interface StepNavigationProps {
   nextLabel?: string;
   backLabel?: string;
   className?: string;
-  /** Small print under the buttons (terms, what happens next). */
+  /** Small print under the buttons (what happens next). */
   footnote?: React.ReactNode;
+  /** Legal consent, right above the buttons on the last step. */
+  consent?: React.ReactNode;
 }
 
 export const NEXT_STEP_LABELS: Record<number, string> = {
@@ -41,6 +43,7 @@ export const StepNavigation = forwardRef<HTMLDivElement, StepNavigationProps>(
       backLabel,
       className,
       footnote,
+      consent,
     },
     ref,
   ) => {
@@ -58,6 +61,7 @@ export const StepNavigation = forwardRef<HTMLDivElement, StepNavigationProps>(
         ref={ref}
         className={cn("flex flex-col gap-3 border-t pt-5", className)}
       >
+        {consent ? <div className="sm:text-right">{consent}</div> : null}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           {!isFirstStep && (
             <Button

@@ -193,7 +193,7 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
         <span className="font-sans text-lg font-bold text-blue-yankees">Total</span>
         <span className="font-quicksand text-[28px] font-bold text-blue-yankees">{currencyFormatter.format(total)}</span>
       </div>
-      <p className="-mt-2 font-sans text-xs text-gray-500">{freeShipping ? "Envío gratis incluido" : "Sin envío"} · IVA incluido</p>
+      <p className="-mt-2 font-sans text-xs text-gray-500">{freeShipping ? "Envío gratis incluido" : "Sin envío"} · Precio final con impuestos incluidos</p>
 
       {disabledReason && (
         <p role="alert" className="rounded-lg bg-white px-3 py-2 font-sans text-xs font-semibold text-amber-800">
