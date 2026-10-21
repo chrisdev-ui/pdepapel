@@ -28,6 +28,13 @@ describe("servidor de las e2e aislado", () => {
     expect(out).toContain("[pruebas] red bloqueada: papeleriapdepapel.com:443");
   });
 
+  it("Meta e TikTok quedan cortados en el servidor de las e2e", () => {
+    for (const url of ["https://graph.facebook.com/v24.0/me", "https://graph.instagram.com/me", "https://open.tiktokapis.com/v2/user/info/"]) {
+      const out = runWithGuard(`const r = await fetch(${JSON.stringify(url)}).then(() => "conectó", (e) => String(e.cause?.message ?? e.message)); console.log(r);`);
+      expect(out, url).toContain(`[pruebas] red bloqueada: ${new URL(url).hostname}:443`);
+    }
+  });
+
   it("con E2E_NETWORK_LOG anota el intento (comando y clave de Upstash, nunca el valor)", () => {
     const log = path.join(mkdtempSync(path.join(tmpdir(), "e2e-net-")), "red.jsonl");
     runWithGuard(
@@ -50,6 +57,10 @@ describe("servidor de las e2e aislado", () => {
       MIPAQUETE_API_KEY: "real-mipaquete",
       REVALIDATION_SECRET: "real-revalidation",
       TURNSTILE_SECRET_KEY: "real-turnstile",
+      META_IG_PAGE_TOKEN: "real-page-token",
+      TIKTOK_CLIENT_KEY: "real-tiktok-key",
+      TIKTOK_CLIENT_SECRET: "real-tiktok-secret",
+      SOCIAL_TOKEN_ENCRYPTION_KEY: "cmVhbC1rZXk=",
     };
     const env = e2eServerEnv(source, "prueba");
     expect(env).toMatchObject({
@@ -59,6 +70,10 @@ describe("servidor de las e2e aislado", () => {
       KV_REST_API_TOKEN: TEST_ENV_STUBS.KV_REST_API_TOKEN,
       MIPAQUETE_API_KEY: TEST_ENV_STUBS.MIPAQUETE_API_KEY,
       REVALIDATION_SECRET: TEST_ENV_STUBS.REVALIDATION_SECRET,
+      META_IG_PAGE_TOKEN: TEST_ENV_STUBS.META_IG_PAGE_TOKEN,
+      TIKTOK_CLIENT_KEY: TEST_ENV_STUBS.TIKTOK_CLIENT_KEY,
+      TIKTOK_CLIENT_SECRET: TEST_ENV_STUBS.TIKTOK_CLIENT_SECRET,
+      SOCIAL_TOKEN_ENCRYPTION_KEY: TEST_ENV_STUBS.SOCIAL_TOKEN_ENCRYPTION_KEY,
     });
     expect(env).not.toHaveProperty("TURNSTILE_SECRET_KEY");
     expect(withNetworkGuard(env).NODE_OPTIONS).toContain("e2e-server-network.mjs");

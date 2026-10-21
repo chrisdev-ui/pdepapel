@@ -7,13 +7,15 @@
  * - nada heredado del `.env` real de la app (mismo valor), salvo las claves de
  *   Clerk de desarrollo y sus URL de páginas;
  * - nada con forma de producción aunque venga de otro lado: Upstash real,
- *   Resend, Clerk live, tokens de Meta, secreto de GA4 MP, MiPaquete, Bold
- *   fuera de pruebas o una base que no sea `pdepapel_test` local.
+ *   Resend, Clerk live, tokens de Meta, claves de TikTok, la llave de tokens
+ *   de redes, secreto de GA4 MP, MiPaquete, Bold fuera de pruebas o una base
+ *   que no sea `pdepapel_test` local.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
 
 import { assertTestDatabaseUrl } from "./test-database.mjs";
+import { TEST_ENV_STUBS } from "./test-isolation.mjs";
 
 const STUB = "test-stub";
 const CLERK_PAGE_URL = /^NEXT_PUBLIC_CLERK_(SIGN_IN|SIGN_UP|AFTER_SIGN_IN|AFTER_SIGN_UP)_URL$/;
@@ -36,6 +38,8 @@ function productionShape(name, value) {
   if (/^re_[A-Za-z0-9]/.test(value) && value !== RESEND_STUB) return "Resend";
   if (/^EAA[A-Za-z0-9]{20,}/.test(value)) return "token de Meta";
   if (/(^|_)(META|WHATSAPP|FACEBOOK)_.*(TOKEN|SECRET)$/.test(name) && !/VERIFY_TOKEN$/.test(name) && realValue(value)) return "Meta";
+  if (/^TIKTOK_.*(KEY|SECRET|TOKEN)$/.test(name) && realValue(value)) return "TikTok";
+  if (name === "SOCIAL_TOKEN_ENCRYPTION_KEY" && value !== TEST_ENV_STUBS.SOCIAL_TOKEN_ENCRYPTION_KEY) return "llave de tokens de redes";
   if (name === "GA4_API_SECRET" && realValue(value)) return "GA4 MP";
   if (name.startsWith("MIPAQUETE_") && realValue(value)) return "MiPaquete";
   if (name === "BOLD_ENVIRONMENT" && value !== "test") return "Bold fuera de pruebas";

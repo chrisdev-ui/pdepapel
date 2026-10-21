@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { assertNoProductionLeaks, findProductionLeaks } from "../../../scripts/lib/e2e-production-leaks.mjs";
 import { e2eServerEnv } from "../../../scripts/lib/e2e-server-env.mjs";
+import { TEST_ENV_STUBS } from "../../../scripts/lib/test-isolation.mjs";
 
 const TEST_DB = "mysql://root:root@127.0.0.1:3307/pdepapel_test";
 
@@ -33,6 +34,11 @@ describe("ningún servidor de las e2e arranca con algo de producción", () => {
     ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "pk_live_abc", "Clerk live"],
     ["WHATSAPP_ACCESS_TOKEN", "otro-token", "Meta"],
     ["META_CONVERSIONS_TOKEN", "EAAB1234567890123456789012", "token de Meta"],
+    ["META_IG_PAGE_TOKEN", "token-de-pagina", "Meta"],
+    ["META_IG_PAGE_TOKEN", "EAAB1234567890123456789012", "token de Meta"],
+    ["TIKTOK_CLIENT_KEY", "awclavereal", "TikTok"],
+    ["TIKTOK_CLIENT_SECRET", "secreto-tiktok", "TikTok"],
+    ["SOCIAL_TOKEN_ENCRYPTION_KEY", "b3RyYS1sbGF2ZS1kZS0zMi1ieXRlcy1wYXJhLXJlZGVz", "llave de tokens de redes"],
     ["GA4_API_SECRET", "secreto-ga4", "GA4 MP"],
     ["MIPAQUETE_API_KEY", "clave-mipaquete", "MiPaquete"],
     ["BOLD_ENVIRONMENT", "production", "Bold fuera de pruebas"],
@@ -53,6 +59,11 @@ describe("ningún servidor de las e2e arranca con algo de producción", () => {
         WHATSAPP_ACCESS_TOKEN: "test-stub",
         WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-stub-whatsapp-verify-token",
         META_CATALOG_FEED_SECRET: "test-stub-meta-catalog-feed-secret",
+        META_IG_PAGE_TOKEN: TEST_ENV_STUBS.META_IG_PAGE_TOKEN,
+        TIKTOK_CLIENT_KEY: TEST_ENV_STUBS.TIKTOK_CLIENT_KEY,
+        TIKTOK_CLIENT_SECRET: TEST_ENV_STUBS.TIKTOK_CLIENT_SECRET,
+        TIKTOK_REDIRECT_URI: TEST_ENV_STUBS.TIKTOK_REDIRECT_URI,
+        SOCIAL_TOKEN_ENCRYPTION_KEY: TEST_ENV_STUBS.SOCIAL_TOKEN_ENCRYPTION_KEY,
         BOLD_ENVIRONMENT: "test",
         DATABASE_URL: TEST_DB,
         CLERK_SECRET_KEY: "sk_test_dev",

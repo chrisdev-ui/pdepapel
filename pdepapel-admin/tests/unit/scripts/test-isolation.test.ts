@@ -63,7 +63,7 @@ describe("claves dobladas", () => {
     expect(process.env.OPENAI_API_KEY).toBe(TEST_ENV_STUBS.OPENAI_API_KEY);
     expect(process.env.RESEND_API_KEY).toBe(TEST_ENV_STUBS.RESEND_API_KEY);
     await import("@prisma/client");
-    for (const name of ["OPENAI_API_KEY", "GEMINI_API_KEY", "WHATSAPP_ACCESS_TOKEN", "MERCADOLIBRE_CLIENT_SECRET", "QSTASH_TOKEN", "CLERK_SECRET_KEY", "CLOUDINARY_API_SECRET", "CLOUDFLARE_R2_SECRET_ACCESS_KEY", "RESEND_API_KEY", "CHAKRA_API_KEY"]) {
+    for (const name of ["META_IG_PAGE_TOKEN", "TIKTOK_CLIENT_SECRET", "SOCIAL_TOKEN_ENCRYPTION_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "WHATSAPP_ACCESS_TOKEN", "MERCADOLIBRE_CLIENT_SECRET", "QSTASH_TOKEN", "CLERK_SECRET_KEY", "CLOUDINARY_API_SECRET", "CLOUDFLARE_R2_SECRET_ACCESS_KEY", "RESEND_API_KEY", "CHAKRA_API_KEY"]) {
       expect(process.env[name], name).toBe(TEST_ENV_STUBS[name as keyof typeof TEST_ENV_STUBS]);
     }
   });
@@ -99,6 +99,16 @@ describe("red bloqueada fuera de la máquina local", () => {
       });
     await expect(attempt(https, "https://graph.facebook.com/v21.0/me")).resolves.toMatchObject({ code: "E_TEST_NETWORK_BLOCKED" });
     await expect(attempt(http, "http://example.com/")).resolves.toMatchObject({ code: "E_TEST_NETWORK_BLOCKED" });
+  });
+
+  it("Meta (Graph e Instagram) y TikTok están cortados en las unitarias", async () => {
+    for (const host of ["graph.facebook.com", "graph.instagram.com", "open.tiktokapis.com"]) {
+      const error = await fetch(`https://${host}/`).then(
+        () => null,
+        (reason: Error & { cause?: Error }) => reason,
+      );
+      expect(String(error?.cause?.message ?? error?.message), host).toContain(`[pruebas] red bloqueada: ${host}:443`);
+    }
   });
 
   it("la red local sigue abierta", async () => {

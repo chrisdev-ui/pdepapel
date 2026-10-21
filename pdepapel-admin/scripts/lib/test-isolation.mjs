@@ -63,6 +63,7 @@ export const TEST_ENV_STUBS = Object.freeze({
   MERCADOLIBRE_OAUTH_REDIRECT_URI: "http://127.0.0.1:3001/api/integrations/mercadolibre/callback",
   MERCADOLIBRE_TOKEN_ENCRYPTION_KEY: "dGVzdC1zdHViLWtleS1vZi10aGlydHktdHdvLWJ5dGU=",
   META_CATALOG_FEED_SECRET: "test-stub-meta-catalog-feed-secret",
+  META_IG_PAGE_TOKEN: STUB,
   MIPAQUETE_API_KEY: STUB,
   NEWSLETTER_EARLY_ACCESS_SECRET: "test-stub-newsletter-early-access",
   NEXT_PUBLIC_BOLD_IDENTITY_KEY: STUB,
@@ -84,11 +85,16 @@ export const TEST_ENV_STUBS = Object.freeze({
   RESEND_API_KEY: "re_test_stub",
   REVALIDATION_SECRET: STUB,
   SCHEDULER_SECRET: STUB,
+  // Base64 de 32 bytes, como exige lib/token-crypto.
+  SOCIAL_TOKEN_ENCRYPTION_KEY: "dGVzdC1zdHViLXNvY2lhbC10b2tlbi1rZXktMzJieXQ=",
   STORE_SENDER_ADDRESS: "Calle 123 # 45-67, Apto 101",
   STORE_SENDER_EMAIL: "envios@ejemplo.test",
   STORE_SENDER_FIRST_NAME: "Remitente",
   STORE_SENDER_LAST_NAME: "De Prueba",
   STORE_SENDER_PHONE: "3000000000",
+  TIKTOK_CLIENT_KEY: STUB,
+  TIKTOK_CLIENT_SECRET: STUB,
+  TIKTOK_REDIRECT_URI: "http://127.0.0.1:3001/api/integrations/tiktok/callback",
   UPSTASH_REDIS_REST_TOKEN: STUB,
   UPSTASH_REDIS_REST_URL: "https://upstash.stub.invalid",
   WHATSAPP_ACCESS_TOKEN: STUB,
@@ -103,6 +109,11 @@ export const TEST_ENV_STUBS = Object.freeze({
   WOMPI_EVENTS_KEY: STUB,
   WOMPI_INTEGRITY_KEY: STUB,
 });
+
+/** Las claves de redes sociales: también van a la tienda de las e2e, que no las lee pero no debe heredarlas. */
+export const SOCIAL_TEST_ENV_STUBS = Object.freeze(
+  Object.fromEntries(["META_IG_PAGE_TOKEN", "SOCIAL_TOKEN_ENCRYPTION_KEY", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_REDIRECT_URI"].map((name) => [name, TEST_ENV_STUBS[name]])),
+);
 
 /**
  * Interruptores: sin la clave la función se apaga (Turnstile no pide el

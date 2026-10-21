@@ -64,6 +64,16 @@ describe("servidores de las e2e locales de la tienda", () => {
     ).toThrow(/GA4_API_SECRET \(GA4 MP\), KV_REST_API_URL \(Upstash\)/);
   });
 
+  it("las claves de redes sociales del entorno no llegan a la tienda: pasan a valores de prueba", () => {
+    const appEnvFile = storeEnvFile("CLERK_SECRET_KEY=sk_test_dev\nNEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_dev\n");
+    const env = storeServerEnv(
+      { NEXT_PUBLIC_API_URL: LOCAL_API, META_IG_PAGE_TOKEN: "EAAreal", TIKTOK_CLIENT_KEY: "awreal", TIKTOK_CLIENT_SECRET: "real", SOCIAL_TOKEN_ENCRYPTION_KEY: "cmVhbA==" },
+      { appEnvFile },
+    );
+    expect(env).toMatchObject({ META_IG_PAGE_TOKEN: "test-stub", TIKTOK_CLIENT_KEY: "test-stub", TIKTOK_CLIENT_SECRET: "test-stub" });
+    expect(env.SOCIAL_TOKEN_ENCRYPTION_KEY).not.toBe("cmVhbA==");
+  });
+
   it("sin la API local no arranca", () => {
     const appEnvFile = storeEnvFile("CLERK_SECRET_KEY=sk_test_dev\n");
     expect(() => storeServerEnv({}, { appEnvFile })).toThrow("NEXT_PUBLIC_API_URL");

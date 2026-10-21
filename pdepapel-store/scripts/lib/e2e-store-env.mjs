@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
 
 import { assertNoProductionLeaks } from "../../../pdepapel-admin/scripts/lib/e2e-production-leaks.mjs";
+import { SOCIAL_TEST_ENV_STUBS } from "../../../pdepapel-admin/scripts/lib/test-isolation.mjs";
 
 const STUB = "test-stub";
 const KEEP = new Set([
@@ -29,6 +30,10 @@ export function storeServerEnv(source, { appEnvFile, context = "e2e (tienda)" })
       stubs[name] = name === "RESEND_API_KEY" ? "re_test_stub" : STUB;
       env[name] = stubs[name];
     }
+  }
+  for (const [name, value] of Object.entries(SOCIAL_TEST_ENV_STUBS)) {
+    stubs[name] = value;
+    env[name] = value;
   }
   if (!source.NEXT_PUBLIC_API_URL) throw new Error(`[${context}] Falta NEXT_PUBLIC_API_URL (la administración local).`);
   env.NEXT_PUBLIC_API_URL = source.NEXT_PUBLIC_API_URL;
