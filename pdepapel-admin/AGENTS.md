@@ -303,6 +303,27 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
     - **Panel:** `/pedidos/[id]` shows `CapsuleOrderCard` (`lib/capsule-order-section.ts`; costs only for the owner, viewer through `scrubCapsulePayload`); «Abrir en Sacar cápsulas» deep-links with `?pedido=`.
     - **Store:** «Comprar pack de N» stores the pack in `useCapsulePack` (sessionStorage, separate from the cart) and opens `/finalizar-compra?capsulas=1` (online payment only, no coupon field, no catalog stock check, cart untouched). The public edition payload now carries `product.id` (the edition product); pool product ids never leave.
     - **Launch commit** (separate, after the checklist in `output/plans/capsulas-mvp-p1-fase0.md` §G): `CAPSULE_SALES_ENABLED = true`, Clarity back on `/capsulas/`, `/capsules` → `/capsulas` redirect, then set the edition LIVE.
+  - **Suggested editions, phase 1 (2026-10-23, structured data only, no AI; plan `output/plans/capsulas-sugerencias-ia.md`):**
+    - **Slips come from idle stock.** `slipCandidates` defaults to slow movers: `rankSlowMovers`, 90 days, the Copiloto's rule. Each row says why («120 días sin venta · cabe en la banda»). «Incluir productos que sí se venden» (`?todos=1`) adds the others, marked.
+    - **One idle loader.** Slips, gifts and suggestions read the slow movers from `lib/capsule-idle.ts`. It caches 10 minutes in Redis, keyed by a catalog fingerprint (product count + latest `updatedAt`, so a sale, a print or a new product invalidates it). Without Redis it computes every time. Kits still load their own through `copilot_ro`.
+    - **Pure engine (`lib/capsule-suggestions.ts`).**
+      - Themes come from the data: design, color, brand, subcategory, type. A value with fewer than 8 idle products or more than 40 % of them is not a theme; that drops defaults such as «Clásico» without naming them in code.
+      - **Band:** ≤ 1.7× between the cheapest and the dearest slip.
+      - **Bag:** 40–150 slips, ≥ 8 products, no product above 20 %.
+      - **Margin:** every pack that fits (`maxPackFor`) must pass `evaluatePoolMargins`. That is the same function `checkPoolMargins` uses: one engine, never a second formula. The search runs 1 000 draws and confirms with 5 000.
+      - **Floor:** the store's minimum margin for new suggestions, the edition floor in the builder.
+      - **Exclusions:** products cheaper than `Store.capsuleMinSlipCost` (3 000, Ajustes) never become slips; «Te faltan estos» marks them «para regalo».
+      - **Copy:** fixed Spanish templates built from the theme, counts and subcategories only. `isSafeCopy` rejects money, chance and value claims. Suggestions never share a product.
+    - **Pack template.** It comes from the newest edition with all its `CapsulePackOption` rows, else `CapsulePackTemplate` (Ajustes › Tienda › «Cápsulas: ediciones sugeridas»), else no suggestions (`missingSetup`). There are no figures in code.
+    - **Licences (`lib/capsule-licenses.ts`).** A list of known character and brand names, matched on product name, design, brand and group. A match is excluded from every suggestion until Paula turns on «Permitir en cápsulas» (`Product.capsuleLicenseAllowed`, written with raw SQL so `updatedAt` and the sitemap lastmod do not move). Manual category search still lists it.
+    - **Feedback.** `CapsuleSuggestionFeedback` stores ✓/✗ per edition (`productId` null) and per product, with `scoringVersion`. The latest decision wins: a rejected theme or product leaves the suggestions until a later ✓.
+    - **UI and flow.**
+      - **Ediciones:** «Ediciones sugeridas», «Te faltan estos» and «Revisar licencia» are computed on demand, about 0.4 s for 516 idle products.
+      - **«Usar esta sugerencia»:** fills «Nueva edición» (name, theme, band). Only Paula's «Crear edición» creates the DRAFT. The workspace gets `?tema=` and rebuilds the same bag through «Sugerir bolsa» (`GET …/capsule-editions/[id]/suggested-bag`; slips already printed count towards the 20 % and the 150).
+      - **What stays manual:** nothing is printed, priced or put on sale automatically.
+    - **Access.** Every route is owner-only (`capsule-suggestions`, `…/feedback`, `…/licenses`, `capsule-settings`, `suggested-bag`). A viewer gets 401/403 with no costs or bands (`assertNoForbiddenKeys`); `capsuleMinSlipCost` is in `VIEWER_KEYS`. The Copiloto reads nothing new; its tools are phase 3.
+    - **Mercado Libre.** Listed products are suggested. Printing goes through `adjustReservedUnits`, which queues `SYNC_STOCK` with the available stock minus the buffer (asserted in `tests/integration/capsule-slips.test.ts`).
+    - **Migration** `20261023_add_capsule_suggestions.sql` (additive) must be applied before the push.
   - **Order matters:** migration `20261021_add_capsule_editions.sql`, then grant `20261021_grant_copilot_ro_capsule_editions.sql`, and only then the push. P3 adds `20261022_add_capsule_edition_min_margin.sql` (nullable column), applied before its push. P4 has no migration. Prisma selects `CapsuleBatch.mode` and the Copiloto joins `CapsuleEdition`.
 - A kardex mismatch between `Product.stock` and the latest movement's `newStock` means something wrote `stock` outside `lib/inventory.ts`. Fix it with a movement, never by editing `stock` or a movement by hand.
 - Product forms may set initial stock only for a **new** variant. Saving an existing product must never derive a movement from submitted form stock.
