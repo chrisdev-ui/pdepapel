@@ -113,6 +113,9 @@ model Store {
   capsuleDailySlots               CapsuleDailySlot[]
   capsuleDayCaps                  CapsuleDayCap[]
   capsulePackTemplates            CapsulePackTemplate[]
+  socialAccounts                  SocialAccount[]
+  socialCredentials               SocialCredential[]
+  socialOAuthStates               SocialOAuthState[]
   capsuleSuggestionFeedback       CapsuleSuggestionFeedback[]
   productPriceTiers               ProductPriceTier[]
   marketplaceConnections          MarketplaceConnection[]
@@ -3719,4 +3722,158 @@ model WhatsAppWaitDecision {
   @@unique([turnMessageId, kind])
   @@index([storeId, createdAt])
   @@index([conversationId])
+}
+
+// ---------------------------------------------------------------------------
+// Métricas de redes (2026-10): solo lectura de nuestras propias cuentas de
+// Instagram (Graph API, token de página que no vence) y TikTok (Display API,
+// OAuth con PKCE). Solo la dueña ve esto; ningún token sale del servidor.
+// ---------------------------------------------------------------------------
+
+enum SocialPlatform {
+  INSTAGRAM
+  TIKTOK
+}
+
+enum SocialAccountStatus {
+  OK
+  NEEDS_RECONNECT
+  DISABLED
+}
+
+enum SocialProductType {
+  REELS
+  FEED
+  CAROUSEL
+  STORY
+  VIDEO
+}
+
+model SocialAccount {
+  id           String              @id @default(uuid())
+  storeId      String
+  platform     SocialPlatform
+  /// Instagram: id de la cuenta profesional. TikTok: open_id.
+  externalId   String              @db.VarChar(191)
+  username     String?             @db.VarChar(191)
+  /// Solo Instagram: la página de Facebook dueña del token.
+  pageId       String?             @db.VarChar(191)
+  status       SocialAccountStatus @default(OK)
+  /// Un código corto (p. ej. «meta_190»), nunca el mensaje del proveedor.
+  statusReason String?             @db.VarChar(191)
+  /// «env:META_IG_PAGE_TOKEN» o «credential:<id>». Nunca el token.
+  tokenRef     String?             @db.VarChar(191)
+  connectedAt  DateTime            @default(now())
+  lastSyncAt   DateTime?
+  updatedAt    DateTime            @updatedAt
+
+  store     Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  posts     SocialPost[]
+  snapshots SocialAccountSnapshot[]
+
+  @@unique([storeId, platform])
+  @@index([storeId])
+}
+
+/// Tokens cifrados con SOCIAL_TOKEN_ENCRYPTION_KEY. Solo TikTok hoy.
+model SocialCredential {
+  id                    String         @id @default(uuid())
+  storeId               String
+  platform              SocialPlatform
+  encryptedAccessToken  String         @db.Text
+  encryptedRefreshToken String?        @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?        @db.VarChar(255)
+  /// Sube en cada refresco: dos refrescos a la vez no se pisan.
+  tokenVersion          Int            @default(0)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, platform])
+}
+
+model SocialOAuthState {
+  id                    String         @id @default(uuid())
+  storeId               String
+  platform              SocialPlatform
+  stateHash             String         @unique @db.VarChar(64)
+  encryptedCodeVerifier String         @db.Text
+  createdBy             String         @db.VarChar(191)
+  expiresAt             DateTime
+  consumedAt            DateTime?
+  createdAt             DateTime       @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, platform, expiresAt])
+  @@index([expiresAt])
+}
+
+model SocialPost {
+  id                 String             @id @default(uuid())
+  socialAccountId    String
+  platform           SocialPlatform
+  externalId         String             @db.VarChar(191)
+  mediaType          String?            @db.VarChar(40)
+  productType        SocialProductType?
+  caption            String?            @db.Text
+  permalink          String?            @db.VarChar(512)
+  /// Efímera en ambas plataformas: se renueva en cada sincronización y nunca se copia a Cloudinary ni a R2.
+  thumbnailUrl       String?            @db.Text
+  thumbnailCheckedAt DateTime?
+  durationSec        Float?
+  postedAt           DateTime
+  /// Último sondeo de métricas; decide si toca de nuevo (30 días: cada corrida; más viejas: una vez al día).
+  metricsSyncedAt    DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  account   SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  snapshots SocialMetricSnapshot[]
+
+  @@unique([socialAccountId, externalId])
+  @@index([socialAccountId, postedAt])
+}
+
+/// Solo se agregan filas: la curva de cada publicación.
+model SocialMetricSnapshot {
+  id                Int      @id @default(autoincrement())
+  socialPostId      String
+  capturedAt        DateTime @default(now())
+  hoursSincePost    Float
+  views             Int?
+  reach             Int?
+  likes             Int?
+  comments          Int?
+  shares            Int?
+  saves             Int?
+  totalInteractions Int?
+  avgWatchTimeMs    Int?
+  totalWatchTimeMs  BigInt?
+  skipRate          Float?
+  /// Solo nombres de métrica permitidos con su número; nunca datos de personas.
+  raw               Json?
+
+  post SocialPost @relation(fields: [socialPostId], references: [id], onDelete: Cascade)
+
+  @@index([socialPostId, capturedAt])
+}
+
+model SocialAccountSnapshot {
+  id              Int      @id @default(autoincrement())
+  socialAccountId String
+  capturedAt      DateTime @default(now())
+  followers       Int?
+  following       Int?
+  mediaCount      Int?
+  likesTotal      Int?
+  profileViews    Int?
+  raw             Json?
+
+  account SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([socialAccountId, capturedAt])
 }
