@@ -117,12 +117,19 @@ describe("ediciones sugeridas (MySQL)", () => {
     const feedback = (decision: string, productId?: string) =>
       postFeedback(req(`/api/${store}/capsule-suggestions/feedback`, "POST", { themeKey, decision, productId }), { params: { storeId: store } });
     expect((await feedback("REJECTED")).status).toBe(201);
-    expect((await suggestions(store)).suggestions).toEqual([]);
+    const rejected = await suggestions(store);
+    expect(rejected.suggestions).toEqual([]);
+    // Queda en «Descartadas» con su nombre, para poder devolverla.
+    expect(rejected.rejected.themes).toEqual([{ themeKey, label: expect.stringMatching(/^Kawaii /) }]);
     expect((await feedback("ACCEPTED")).status).toBe(201);
-    expect((await suggestions(store)).suggestions.map((s: { themeKey: string }) => s.themeKey)).toEqual([themeKey]);
+    const restored = await suggestions(store);
+    expect(restored.suggestions.map((s: { themeKey: string }) => s.themeKey)).toEqual([themeKey]);
+    expect(restored.rejected.themes).toEqual([]);
 
     expect((await feedback("REJECTED", licensed.id)).status).toBe(201);
-    expect((await suggestions(store)).suggestions[0].bag.map((line: { productId: string }) => line.productId)).not.toContain(licensed.id);
+    const withoutProduct = await suggestions(store);
+    expect(withoutProduct.suggestions[0].bag.map((line: { productId: string }) => line.productId)).not.toContain(licensed.id);
+    expect(withoutProduct.rejected.products).toEqual([{ themeKey, themeLabel: expect.stringMatching(/^Kawaii /), productId: licensed.id, name: "Cuaderno Hello Kitty" }]);
   });
 
   it("«Sugerir bolsa» en una edición: sus temas y una bolsa dentro de su banda", async () => {

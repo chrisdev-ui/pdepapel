@@ -25,6 +25,7 @@ interface SuggestionsResponse {
   suggestions: EditionSuggestion[];
   missing: { themeKey: string | null; label: string; products: { productId: string; name: string; available: number; unitCost: number; reason: string; gift: boolean }[] }[];
   licenses: { productId: string; name: string; term: string; allowed: boolean }[];
+  rejected: { themes: { themeKey: string; label: string }[]; products: { themeKey: string; themeLabel: string; productId: string; name: string }[] };
 }
 
 const percent = (value: number | null) => (value === null ? "—" : `${value.toLocaleString("es-CO")} %`);
@@ -65,6 +66,20 @@ export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggest
       await axios.post(`${api}/feedback`, { themeKey, decision, productId });
       setDecided((current) => ({ ...current, [key]: decision }));
       toast({ title: decision === "ACCEPTED" ? "Anotado: te sirve" : productId ? "Anotado: ese producto no va en este tema" : "Anotado: no vuelve a salir este tema" });
+    } catch (error) {
+      toast({ title: "No se guardó", description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const restore = async (themeKey: string, productId?: string) => {
+    const key = productId ? `${themeKey}|${productId}` : themeKey;
+    setBusy(`volver-${key}`);
+    try {
+      await axios.post(`${api}/feedback`, { themeKey, decision: "ACCEPTED", productId });
+      await load();
+      toast({ title: "Vuelve a las sugerencias" });
     } catch (error) {
       toast({ title: "No se guardó", description: getErrorMessage(error), variant: "destructive" });
     } finally {
@@ -249,6 +264,36 @@ export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggest
           </div>
         )}
       </SectionCard>
+
+      {data.rejected.themes.length + data.rejected.products.length > 0 && (
+        <SectionCard id="descartadas" title="Descartadas" description="Lo que marcaste con ✗. No vuelve a salir en las sugerencias hasta que lo devuelvas.">
+          <details className="rounded-md border bg-white">
+            <summary className="flex min-h-[44px] cursor-pointer items-center px-3 text-sm font-medium">
+              Ver descartadas ({data.rejected.themes.length + data.rejected.products.length})
+            </summary>
+            <ul className="flex flex-col divide-y">
+              {data.rejected.themes.map((row) => (
+                <li key={row.themeKey} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+                  <span className="min-w-0 flex-1 truncate">Tema «{row.label}»</span>
+                  <Button variant="outline" className="min-h-[44px]" disabled={busy === `volver-${row.themeKey}`} onClick={() => restore(row.themeKey)}>
+                    Volver a sugerir
+                  </Button>
+                </li>
+              ))}
+              {data.rejected.products.map((row) => (
+                <li key={`${row.themeKey}|${row.productId}`} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+                  <span className="min-w-0 flex-1 truncate">
+                    {row.name} <span className="text-muted-foreground">en «{row.themeLabel}»</span>
+                  </span>
+                  <Button variant="outline" className="min-h-[44px]" disabled={busy === `volver-${row.themeKey}|${row.productId}`} onClick={() => restore(row.themeKey, row.productId)}>
+                    Volver a sugerir
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </SectionCard>
+      )}
 
       {data.licenses.length > 0 && (
         <SectionCard id="licencias" title="Revisar licencia" description="Parecen de personaje o de una marca de otra empresa. No entran en las sugerencias hasta que los permitas.">

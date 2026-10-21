@@ -8,6 +8,7 @@ import { detectLicense } from "@/lib/capsule-licenses";
 import { resolveSuggestionPackOptions } from "@/lib/capsule-settings";
 import {
   missingProducts,
+  parseThemeKey,
   rejectionPair,
   SCORING_VERSION,
   suggestBagForEdition,
@@ -111,7 +112,41 @@ async function loadRejections(storeId: string): Promise<Rejections> {
   return { themes, pairs };
 }
 
-/** «Ediciones sugeridas», «Te faltan estos» y «Revisar licencia» en una sola lectura. */
+/** Nombres para «Descartadas»: el tema por sus productos o su tabla; el producto por su nombre. */
+async function describeRejections(storeId: string, rejections: Rejections, products: readonly SuggestionProduct[]) {
+  const labels = new Map<string, string>();
+  for (const product of products) {
+    for (const [kind, value] of Object.entries(product.attributes)) if (value) labels.set(`${kind}:${value.id}`, value.name);
+  }
+  const keys = [...Array.from(rejections.themes), ...Array.from(rejections.pairs).map((pair) => pair.split("|")[0])];
+  const missing = (kind: string) => Array.from(new Set(keys.filter((key) => !labels.has(key)).map((key) => parseThemeKey(key)).filter((parsed) => parsed?.kind === kind).map((parsed) => parsed!.id)));
+  const [designs, colors, brands, categories, types] = await Promise.all([
+    missing("design").length ? prismadb.design.findMany({ where: { storeId, id: { in: missing("design") } }, select: { id: true, name: true } }) : [],
+    missing("color").length ? prismadb.color.findMany({ where: { storeId, id: { in: missing("color") } }, select: { id: true, name: true } }) : [],
+    missing("brand").length ? prismadb.brand.findMany({ where: { storeId, id: { in: missing("brand") } }, select: { id: true, name: true } }) : [],
+    missing("category").length ? prismadb.category.findMany({ where: { storeId, id: { in: missing("category") } }, select: { id: true, name: true } }) : [],
+    missing("type").length ? prismadb.type.findMany({ where: { storeId, id: { in: missing("type") } }, select: { id: true, name: true } }) : [],
+  ]);
+  for (const [kind, rows] of [["design", designs], ["color", colors], ["brand", brands], ["category", categories], ["type", types]] as const) {
+    for (const row of rows) labels.set(`${kind}:${row.id}`, label(row).name);
+  }
+  const pairIds = Array.from(new Set(Array.from(rejections.pairs).map((pair) => pair.split("|")[1])));
+  const names = new Map(
+    (pairIds.length ? await prismadb.product.findMany({ where: { storeId, id: { in: pairIds } }, select: { id: true, name: true } }) : []).map((row) => [row.id, row.name]),
+  );
+  const themeLabel = (key: string) => labels.get(key) ?? "Tema sin productos";
+  return {
+    themes: Array.from(rejections.themes).map((key) => ({ themeKey: key, label: themeLabel(key) })),
+    products: Array.from(rejections.pairs)
+      .map((pair) => {
+        const [key, productId] = pair.split("|");
+        return { themeKey: key, themeLabel: themeLabel(key), productId, name: names.get(productId) ?? "" };
+      })
+      .filter((row) => row.name),
+  };
+}
+
+/** «Ediciones sugeridas», «Te faltan estos», «Revisar licencia» y «Descartadas» en una sola lectura. */
 export async function getEditionSuggestions(storeId: string) {
   const [store, packs, { products, licenses }, rejections] = await Promise.all([
     prismadb.store.findUnique({ where: { id: storeId }, select: { storeMinMarginPercent: true, capsuleMinSlipCost: true } }),
@@ -133,6 +168,7 @@ export async function getEditionSuggestions(storeId: string) {
     suggestions,
     missing: missingProducts({ products, suggestions, minSlipCost }),
     licenses,
+    rejected: await describeRejections(storeId, rejections, products),
   };
 }
 
