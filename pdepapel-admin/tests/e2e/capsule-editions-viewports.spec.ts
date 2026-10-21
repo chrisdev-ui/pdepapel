@@ -76,10 +76,12 @@ test.describe("ediciones de cápsulas en distintos tamaños", () => {
 
   test.beforeAll(async () => {
     db = createTestPrismaClient("capsule-editions-viewports");
-    await db.store.update({ where: { id: storeId }, data: { storeMinMarginPercent: 35 } });
+    // Las ediciones de esta prueba no tienen piso propio: rige el margen mínimo de cápsulas (40 %), no el de la tienda (35 %).
+    await db.store.update({ where: { id: storeId }, data: { storeMinMarginPercent: 35, capsuleMinMarginPct: 40 } });
   });
   test.afterAll(async () => {
     if (!db) return;
+    await db.store.update({ where: { id: storeId }, data: { capsuleMinMarginPct: null } });
     await db.capsuleSlip.deleteMany({ where: { editionId: { in: created.editions } } });
     await db.capsuleOrder.deleteMany({ where: { editionId: { in: created.editions } } });
     await db.capsulePackOption.deleteMany({ where: { editionId: { in: created.editions } } });
@@ -123,6 +125,7 @@ test.describe("ediciones de cápsulas en distintos tamaños", () => {
       await page.getByRole("button", { name: "Guardar packs" }).click();
       await expect(page.getByText("Packs guardados").first()).toBeVisible({ timeout: 30_000 });
       await expect(page.getByTestId("margen-pack-5")).toContainText("P95");
+      await expect(page.getByTestId("piso-revision")).toContainText("Piso usado: 40 % (margen mínimo de cápsulas)");
       await expect(page.getByTestId("margen-pack-30")).toContainText("No disponible con esta bolsa");
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-2-packs.png`), fullPage: true });
 

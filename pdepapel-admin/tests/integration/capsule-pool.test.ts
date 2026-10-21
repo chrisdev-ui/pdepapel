@@ -169,6 +169,36 @@ describe("margen de la bolsa", () => {
     await expect(run()).resolves.toMatchObject({ minMarginPct: 40, floorSource: "store" });
   });
 
+  it("una edición sin piso propio se mide al margen mínimo de cápsulas: revisar, guardar packs e imprimir", async () => {
+    const { edition } = await setup();
+    const lapicero = await make("Lapicero", { stock: 40 });
+    // Con el margen de la tienda (40 %) la bolsa pasa; con el de cápsulas (90 %) ya no.
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { storeMinMarginPercent: 40, capsuleMinMarginPct: null } });
+    const proposed = [{ productId: lapicero.id, quantity: 40 }];
+    const run = () => checkPoolMargins({ storeId: f!.store.id, editionId: edition.id, proposed, packOptions: options(), runs: 500 });
+    await expect(run()).resolves.toMatchObject({ minMarginPct: 40, floorSource: "store", ok: true });
+
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { capsuleMinMarginPct: 90 } });
+    await expect(run()).resolves.toMatchObject({ minMarginPct: 90, floorSource: "capsules", ok: false });
+    await expect(savePackOptions({ storeId: f!.store.id, editionId: edition.id, options: options(), proposed })).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringContaining("margen mínimo de 90 %"),
+    });
+
+    // Con los packs guardados a un piso que pasa, imprimir también se mide al de cápsulas.
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { capsuleMinMarginPct: 45 } });
+    await savePackOptions({ storeId: f!.store.id, editionId: edition.id, options: options(), proposed });
+    await testPrisma.store.update({ where: { id: f!.store.id }, data: { capsuleMinMarginPct: 90 } });
+    const { printFromPanel } = await import("@/lib/capsule-print");
+    await expect(printFromPanel({ storeId: f!.store.id, editionId: edition.id, kind: "SLIP", items: proposed, userId: "paula" })).rejects.toMatchObject({ statusCode: 409 });
+    await expect(testPrisma.capsuleSlip.count({ where: { editionId: edition.id } })).resolves.toBe(0);
+
+    // El piso propio de la edición sigue mandando sobre los dos.
+    const { updateCapsuleEdition } = await import("@/lib/capsule-editions");
+    await updateCapsuleEdition({ storeId: f!.store.id, editionId: edition.id, userId: "paula", minMarginPct: 40 });
+    await expect(run()).resolves.toMatchObject({ minMarginPct: 40, floorSource: "edition", ok: true });
+  });
+
   it("sin packs configurados o con un producto sin costo, no calcula", async () => {
     const { edition } = await setup();
     const noCost = await make("Sin costo", { acqPrice: 0 });

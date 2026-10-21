@@ -1,6 +1,7 @@
 import { CapsuleSlipKind, CapsuleSlipStatus } from "@prisma/client";
 
 import { availableStock } from "@/lib/available-stock";
+import { resolveCapsuleFloor } from "@/lib/capsule-floor";
 import { idleReason, loadIdleProducts } from "@/lib/capsule-idle";
 import { ErrorFactory } from "@/lib/api-errors";
 import { evaluatePoolMargins, maxGiftCostOf, packRungs, type CapsulePackCosts } from "@/lib/pricing/capsules";
@@ -124,9 +125,9 @@ export type { PackCheck } from "@/lib/pricing/capsules";
 
 /**
  * El margen de cada pack sobre la bolsa: los papeles ya impresos y sin anular
- * más los propuestos (al costo de hoy). El piso es el de la edición
- * (`minMarginPct`) o, sin él, el margen mínimo de la tienda; nunca una cifra
- * del código.
+ * más los propuestos (al costo de hoy). El piso sale de `resolveCapsuleFloor`:
+ * el de la edición, si no el margen mínimo de cápsulas, si no el de la
+ * tienda; nunca una cifra del código.
  */
 export async function checkPoolMargins({
   storeId,
@@ -146,12 +147,12 @@ export async function checkPoolMargins({
   if (options.length === 0) throw ErrorFactory.InvalidRequest("Configura los packs de la edición antes de revisar el margen");
   packRungs(options); // Falla antes de consultar la base si falta un pack.
 
-  const [printed, proposedProducts, store] = await Promise.all([
+  const [printed, proposedProducts, floor] = await Promise.all([
     prismadb.capsuleSlip.findMany({ where: { editionId, kind: CapsuleSlipKind.SLIP, status: { not: CapsuleSlipStatus.VOID } }, select: { unitCost: true } }),
     proposed.length
       ? prismadb.product.findMany({ where: { storeId, id: { in: proposed.map((line) => line.productId) } }, select: { id: true, acqPrice: true } })
       : Promise.resolve([]),
-    prismadb.store.findUnique({ where: { id: storeId }, select: { storeMinMarginPercent: true } }),
+    resolveCapsuleFloor(storeId, { minMarginPct: edition.minMarginPct }),
   ]);
   const costById = new Map(proposedProducts.map((product) => [product.id, Number(product.acqPrice)]));
   const pool = printed.map((slip) => slip.unitCost);
@@ -162,9 +163,8 @@ export async function checkPoolMargins({
     for (let unit = 0; unit < line.quantity; unit += 1) pool.push(cost);
   }
 
-  // El piso de la edición manda; sin él, el margen mínimo de la tienda.
-  const minMarginPct = edition.minMarginPct ?? store?.storeMinMarginPercent ?? null;
-  const floorSource: "edition" | "store" | null = edition.minMarginPct !== null ? "edition" : minMarginPct !== null ? "store" : null;
+  const minMarginPct = floor?.value ?? null;
+  const floorSource = floor?.source ?? null;
   const result = evaluatePoolMargins({ pool, options, minMarginPct, runs });
   return { poolSize: result.poolSize, minMarginPct, floorSource, packs: result.packs, ok: result.ok };
 }

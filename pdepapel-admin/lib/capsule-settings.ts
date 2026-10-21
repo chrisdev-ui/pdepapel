@@ -1,6 +1,5 @@
 import { ErrorFactory } from "@/lib/api-errors";
 import { parsePackOptions, type PackOptionInput } from "@/lib/capsule-pack-options";
-import { pickCapsuleFloor } from "@/lib/capsule-suggestions";
 import { CAPSULE_PACK_PRICES } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
 
@@ -32,24 +31,6 @@ export async function resolveSuggestionPackOptions(storeId: string): Promise<Pac
     orderBy: { packSize: "asc" },
   });
   return template.length === CAPSULE_PACK_PRICES.length ? { source: "template", edition: null, options: template } : null;
-}
-
-/**
- * El piso de margen de las cápsulas. Para sugerir una edición nueva: el de la
- * edición más reciente si lo tiene, luego el de cápsulas, luego el de la
- * tienda. En el taller se pasa la edición que se arma: su piso, aunque sea null, reemplaza al de la más reciente.
- */
-export async function resolveCapsuleFloor(storeId: string, edition?: { minMarginPct: number | null }) {
-  const [store, latest] = await Promise.all([
-    prismadb.store.findUnique({ where: { id: storeId }, select: { capsuleMinMarginPct: true, storeMinMarginPercent: true } }),
-    edition ? Promise.resolve(null) : prismadb.capsuleEdition.findFirst({ where: { storeId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { number: true, name: true, minMarginPct: true } }),
-  ]);
-  const floor = pickCapsuleFloor({
-    editionFloor: edition ? edition.minMarginPct : latest?.minMarginPct,
-    capsuleFloor: store?.capsuleMinMarginPct,
-    storeFloor: store?.storeMinMarginPercent,
-  });
-  return floor ? { ...floor, edition: floor.source === "edition" && latest ? { number: latest.number, name: latest.name } : null } : null;
 }
 
 export async function getCapsuleSettings(storeId: string) {

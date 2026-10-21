@@ -5,7 +5,8 @@ import { ErrorFactory } from "@/lib/api-errors";
 import { stripTaxonomyIcon } from "@/lib/category-seo";
 import { loadIdleProducts } from "@/lib/capsule-idle";
 import { detectLicense } from "@/lib/capsule-licenses";
-import { resolveCapsuleFloor, resolveSuggestionPackOptions } from "@/lib/capsule-settings";
+import { resolveCapsuleFloor } from "@/lib/capsule-floor";
+import { resolveSuggestionPackOptions } from "@/lib/capsule-settings";
 import {
   missingProducts,
   parseThemeKey,

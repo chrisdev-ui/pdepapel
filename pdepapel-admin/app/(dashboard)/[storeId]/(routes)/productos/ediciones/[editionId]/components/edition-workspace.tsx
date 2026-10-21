@@ -47,7 +47,7 @@ interface PackCheck {
 interface MarginCheck {
   poolSize: number;
   minMarginPct: number | null;
-  floorSource: "edition" | "store" | null;
+  floorSource: "edition" | "capsules" | "store" | null;
   packs: PackCheck[];
   ok: boolean;
 }
@@ -89,7 +89,13 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const [editionFloor, setEditionFloor] = useState<number | null>(edition.minMarginPct);
   const [floorInput, setFloorInput] = useState(edition.minMarginPct === null ? "" : String(edition.minMarginPct));
   const floorLabel =
-    editionFloor !== null ? `${editionFloor} % (margen mínimo de esta edición)` : data.storeMinMarginPct !== null ? `${data.storeMinMarginPct} % (margen mínimo de la tienda)` : "sin piso: pon el de la edición o el de la tienda en Configuración";
+    editionFloor !== null
+      ? `${editionFloor} % (margen mínimo de esta edición)`
+      : data.capsuleMinMarginPct !== null
+        ? `${data.capsuleMinMarginPct} % (margen mínimo de cápsulas)`
+        : data.storeMinMarginPct !== null
+          ? `${data.storeMinMarginPct} % (margen mínimo de la tienda)`
+          : "sin piso: pon el de la edición, o el de cápsulas o el de la tienda en Ajustes";
   const [packs, setPacks] = useState<PackForm>(() =>
     Object.fromEntries(
       CAPSULE_PACK_PRICES.map((price) => {
@@ -406,7 +412,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
           <div className="flex flex-wrap items-end gap-2">
             <div className="grid gap-1">
               <Label htmlFor="piso-edicion">Margen mínimo de esta edición (%)</Label>
-              <Input id="piso-edicion" inputMode="decimal" className="h-11 w-32" value={floorInput} onChange={(event) => setFloorInput(event.target.value)} placeholder={data.storeMinMarginPct === null ? "" : `tienda: ${data.storeMinMarginPct}`} />
+              <Input id="piso-edicion" inputMode="decimal" className="h-11 w-32" value={floorInput} onChange={(event) => setFloorInput(event.target.value)} placeholder={data.capsuleMinMarginPct !== null ? `cápsulas: ${data.capsuleMinMarginPct}` : data.storeMinMarginPct === null ? "" : `tienda: ${data.storeMinMarginPct}`} />
             </div>
             <Button variant="outline" className="min-h-[44px]" disabled={busy !== null} onClick={saveFloor}>
               {busy === "piso" ? "Guardando…" : "Guardar piso"}
@@ -471,7 +477,13 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
           </div>
           {check && (
             <p className={`text-sm ${check.ok ? "text-muted-foreground" : "font-medium text-destructive"}`} role="status">
-              Bolsa de {check.poolSize} papeles · piso {check.minMarginPct === null ? "sin configurar" : `${check.minMarginPct} % (${check.floorSource === "edition" ? "de la edición" : "de la tienda"})`} ·{" "}
+              Bolsa de {check.poolSize} papeles ·{" "}
+              <span data-testid="piso-revision">
+                {check.minMarginPct === null
+                  ? "piso sin configurar"
+                  : `Piso usado: ${check.minMarginPct} % (${check.floorSource === "edition" ? "de la edición" : check.floorSource === "capsules" ? "margen mínimo de cápsulas" : "margen mínimo de la tienda"})`}
+              </span>{" "}
+              ·{" "}
               {check.ok ? "todos los packs que caben llegan al piso" : "algún pack no llega al piso"}
             </p>
           )}

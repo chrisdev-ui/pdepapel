@@ -8,7 +8,8 @@ vi.mock("@clerk/nextjs/server", () => ({
 }));
 
 import { GET, PUT } from "@/app/api/[storeId]/capsule-settings/route";
-import { resolveCapsuleFloor, resolveSuggestionPackOptions } from "@/lib/capsule-settings";
+import { resolveCapsuleFloor } from "@/lib/capsule-floor";
+import { resolveSuggestionPackOptions } from "@/lib/capsule-settings";
 import { CAPSULE_PACK_PRICES } from "@/lib/pricing/capsules";
 
 import { assertNoForbiddenKeys } from "../helpers/forbidden-keys";

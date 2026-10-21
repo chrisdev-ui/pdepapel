@@ -8,9 +8,9 @@ export async function getEditionWorkspace(storeId: string, editionId: string) {
   const [detail, categories, store] = await Promise.all([
     getCapsuleEdition(storeId, editionId),
     prismadb.category.findMany({ where: { storeId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    prismadb.store.findUnique({ where: { id: storeId }, select: { storeMinMarginPercent: true } }),
+    prismadb.store.findUnique({ where: { id: storeId }, select: { storeMinMarginPercent: true, capsuleMinMarginPct: true } }),
   ]);
-  return { ...detail, categories, storeMinMarginPct: store?.storeMinMarginPercent ?? null };
+  return { ...detail, categories, storeMinMarginPct: store?.storeMinMarginPercent ?? null, capsuleMinMarginPct: store?.capsuleMinMarginPct ?? null };
 }
 
 export type EditionWorkspaceData = Awaited<ReturnType<typeof getEditionWorkspace>>;

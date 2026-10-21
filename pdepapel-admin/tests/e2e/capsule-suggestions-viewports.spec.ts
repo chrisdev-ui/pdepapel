@@ -168,6 +168,7 @@ test.describe("ediciones sugeridas en distintos tamaños", () => {
 
       await page.getByRole("button", { name: "Revisar margen" }).click();
       await expect(page.getByTestId("margen-pack-5")).toContainText("P95", { timeout: 30_000 });
+      await expect(page.getByTestId("piso-revision")).toContainText("Piso usado: 50 % (de la edición)");
       const edition = await db.capsuleEdition.findFirstOrThrow({ where: { productId: editionProduct.id }, select: { id: true, status: true, minMarginPct: true } });
       expect(edition.status).toBe("DRAFT");
       expect(edition.minMarginPct).toBe(50);
