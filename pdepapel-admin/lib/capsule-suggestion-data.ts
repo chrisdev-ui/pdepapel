@@ -2,6 +2,7 @@ import { CapsuleEditionStatus, CapsuleSlipKind, CapsuleSlipStatus, CapsuleSugges
 
 import { availableStock } from "@/lib/available-stock";
 import { ErrorFactory } from "@/lib/api-errors";
+import { stripTaxonomyIcon } from "@/lib/category-seo";
 import { loadIdleProducts } from "@/lib/capsule-idle";
 import { detectLicense } from "@/lib/capsule-licenses";
 import { resolveSuggestionPackOptions } from "@/lib/capsule-settings";
@@ -21,6 +22,8 @@ import prismadb from "@/lib/prismadb";
  * sus atributos, los ✗ de Paula y los ajustes de la tienda. Todo es de la
  * dueña (lleva costos y bandas): las rutas lo piden con `verifyStoreOwner`.
  */
+
+const label = (value: { id: string; name: string }) => ({ id: value.id, name: stripTaxonomyIcon(value.name) || value.name });
 
 const OPEN_EDITION_STATUSES = [CapsuleEditionStatus.DRAFT, CapsuleEditionStatus.PREVIEW, CapsuleEditionStatus.LIVE];
 
@@ -73,14 +76,15 @@ async function loadSuggestionProducts(storeId: string, { exceptEditionId }: { ex
       available: availableStock(row),
       daysSinceLastSale: info.daysSinceLastSale,
       daysInStock: info.daysInStock,
+      // Los nombres de taxonomía llevan ícono al inicio; en textos y temas van sin él.
       attributes: {
-        ...(row.design ? { design: row.design } : {}),
-        ...(row.color ? { color: row.color } : {}),
-        ...(row.brandRef ? { brand: row.brandRef } : {}),
-        ...(row.category ? { category: { id: row.category.id, name: row.category.name } } : {}),
-        ...(row.category?.type ? { type: row.category.type } : {}),
+        ...(row.design ? { design: label(row.design) } : {}),
+        ...(row.color ? { color: label(row.color) } : {}),
+        ...(row.brandRef ? { brand: label(row.brandRef) } : {}),
+        ...(row.category ? { category: label(row.category) } : {}),
+        ...(row.category?.type ? { type: label(row.category.type) } : {}),
       },
-      categoryName: row.category?.name ?? null,
+      categoryName: row.category ? stripTaxonomyIcon(row.category.name) : null,
       onMercadoLibre: row.marketplaceListings.length > 0,
       licenseBlocked: term !== null && !row.capsuleLicenseAllowed,
     });

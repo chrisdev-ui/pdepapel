@@ -90,7 +90,10 @@ afterAll(async () => {
 describe("ediciones sugeridas (MySQL)", () => {
   it("sugiere el tema con sus quietos; deja fuera la licencia pendiente y lo barato, que sale «para regalo»", async () => {
     const { store, themeKey, kawaiiIds, licensed, cheap } = await setup();
+    await testPrisma.category.update({ where: { id: f!.category.id }, data: { name: "✏️ Agendas" } });
     const body = await suggestions(store);
+    expect(body.suggestions[0].pitch).toContain(": agendas.");
+    expect(JSON.stringify(body)).not.toContain("✏️");
     expect(body.packSource).toMatchObject({ source: "template" });
     expect(body.suggestions.map((s: { themeKey: string }) => s.themeKey)).toEqual([themeKey]);
     const [suggestion] = body.suggestions;
