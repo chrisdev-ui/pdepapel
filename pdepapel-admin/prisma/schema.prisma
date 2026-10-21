@@ -43,6 +43,8 @@ model Store {
   storeMinMarginPercent           Float?                          @default(35)
   /// Costo de compra mínimo de un papel en las ediciones sugeridas, en COP; null = sin piso. Más barato va como regalo.
   capsuleMinSlipCost              Float?                          @default(3000)
+  /// Margen mínimo (P95 por pack, %) de las ediciones de cápsulas; null = el de la edición más reciente o el de la tienda.
+  capsuleMinMarginPct             Float?
   /// Cargo fijo por unidad de Mercado Libre en precios bajos (en vez del envío), en COP; null = no registrado.
   mercadoLibreLowPriceFixedFee    Int?
   /// Precio hasta el cual Mercado Libre cobra el cargo fijo en vez del envío, en COP; null = no registrado.

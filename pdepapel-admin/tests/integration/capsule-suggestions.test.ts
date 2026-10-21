@@ -132,6 +132,21 @@ describe("ediciones sugeridas (MySQL)", () => {
     expect(withoutProduct.rejected.products).toEqual([{ themeKey, themeLabel: expect.stringMatching(/^Kawaii /), productId: licensed.id, name: "Cuaderno Hello Kitty" }]);
   });
 
+  it("se mide al piso de cápsulas: una edición que pasa con el margen de la tienda y no con el de cápsulas no se sugiere", async () => {
+    const { store, themeKey } = await setup();
+    await testPrisma.store.update({ where: { id: store }, data: { storeMinMarginPercent: 35, capsuleMinMarginPct: null } });
+    const atStore = await suggestions(store);
+    expect(atStore.floor).toMatchObject({ value: 35, source: "store" });
+    expect(atStore.suggestions.map((s: { themeKey: string }) => s.themeKey)).toEqual([themeKey]);
+
+    // Las libretas dejan cerca de 58 % en el P95: pasan el 35 % de la tienda, no un 70 % de cápsulas.
+    await testPrisma.store.update({ where: { id: store }, data: { capsuleMinMarginPct: 70 } });
+    const atCapsules = await suggestions(store);
+    expect(atCapsules.floor).toMatchObject({ value: 70, source: "capsules" });
+    expect(atCapsules.minMarginPct).toBe(70);
+    expect(atCapsules.suggestions).toEqual([]);
+  });
+
   it("«Sugerir bolsa» en una edición: sus temas y una bolsa dentro de su banda", async () => {
     const { store, themeKey } = await setup();
     const editionProduct = await make("Edicion", f!.component.designId!, 0, 0);
@@ -144,6 +159,8 @@ describe("ediciones sugeridas (MySQL)", () => {
     expect(body.themes.find((theme: { key: string }) => theme.key === themeKey)).toMatchObject({ count: 6 });
     expect(body.bag.length).toBeGreaterThan(0);
     expect(body.bag.every((line: { unitCost: number }) => line.unitCost >= 3000 && line.unitCost <= 4000)).toBe(true);
+    // Sin piso propio en la edición: el de la tienda (35 % en la base de pruebas).
+    expect(body.floor).toMatchObject({ source: "store" });
   });
 
   it("la cuenta de solo lectura no ve sugerencias, ni bolsas, ni da ✓/✗, ni permite licencias", async () => {

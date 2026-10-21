@@ -22,6 +22,7 @@ interface TemplateRow {
 
 export interface CapsuleSettingsData {
   minSlipCost: number | null;
+  minMarginPct: number | null;
   template: TemplateRow[];
   activeSource: { source: "edition" | "template"; edition: { number: number; name: string } | null } | null;
 }
@@ -45,6 +46,7 @@ const digits = (value: string) => Number(value.replace(/[.\s]/g, "")) || 0;
 export function CapsulesPanel({ initial }: { initial: CapsuleSettingsData }) {
   const params = useParams<{ storeId: string }>();
   const [minSlipCost, setMinSlipCost] = useState(initial.minSlipCost === null ? "" : String(initial.minSlipCost));
+  const [minMarginPct, setMinMarginPct] = useState(initial.minMarginPct === null ? "" : String(initial.minMarginPct));
   const [rows, setRows] = useState(() => toForm(initial.template));
   const [active, setActive] = useState(initial.activeSource);
   const [saving, setSaving] = useState(false);
@@ -56,6 +58,7 @@ export function CapsulesPanel({ initial }: { initial: CapsuleSettingsData }) {
       setSaving(true);
       const { data } = await axios.put(`/api/${params.storeId}/capsule-settings`, {
         minSlipCost: minSlipCost.trim() === "" ? null : digits(minSlipCost),
+        minMarginPct: minMarginPct.trim() === "" ? null : Number(minMarginPct.replace(",", ".")),
         template: CAPSULE_PACK_PRICES.map((price) => ({
           packSize: price.packSize,
           giftMaxCost: digits(rows[price.packSize].giftMaxCost),
@@ -80,10 +83,17 @@ export function CapsulesPanel({ initial }: { initial: CapsuleSettingsData }) {
         title="Cápsulas: ediciones sugeridas"
         description="El panel sugiere ediciones con productos quietos. Aquí van el costo mínimo de un papel y los packs que usa para medir el margen. Solo la dueña los ve."
       />
-      <div className="grid max-w-sm gap-2">
-        <Label htmlFor="capsula-papel-minimo">Costo mínimo de un papel (pesos)</Label>
-        <Input id="capsula-papel-minimo" inputMode="numeric" className="h-11" value={minSlipCost} onChange={(event) => setMinSlipCost(event.target.value)} placeholder="Sin mínimo" />
-        <p className="text-xs text-muted-foreground">Lo más barato no se sugiere como papel: queda para regalo.</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="capsula-papel-minimo">Costo mínimo de un papel (pesos)</Label>
+          <Input id="capsula-papel-minimo" inputMode="numeric" className="h-11" value={minSlipCost} onChange={(event) => setMinSlipCost(event.target.value)} placeholder="Sin mínimo" />
+          <p className="text-xs text-muted-foreground">Lo más barato no se sugiere como papel: queda para regalo.</p>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="capsula-margen-minimo">Margen mínimo de cápsulas (%)</Label>
+          <Input id="capsula-margen-minimo" inputMode="decimal" className="h-11" value={minMarginPct} onChange={(event) => setMinMarginPct(event.target.value)} placeholder="El de la tienda" />
+          <p className="text-xs text-muted-foreground">El P95 de cada pack de una edición sugerida debe llegar a esto. Si la edición más reciente tiene su propio margen, manda ese; vacío usa el margen mínimo de la tienda.</p>
+        </div>
       </div>
       <p className="text-sm">
         {active?.source === "edition" && active.edition

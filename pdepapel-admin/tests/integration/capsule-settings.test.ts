@@ -8,7 +8,7 @@ vi.mock("@clerk/nextjs/server", () => ({
 }));
 
 import { GET, PUT } from "@/app/api/[storeId]/capsule-settings/route";
-import { resolveSuggestionPackOptions } from "@/lib/capsule-settings";
+import { resolveCapsuleFloor, resolveSuggestionPackOptions } from "@/lib/capsule-settings";
 import { CAPSULE_PACK_PRICES } from "@/lib/pricing/capsules";
 
 import { assertNoForbiddenKeys } from "../helpers/forbidden-keys";
@@ -27,7 +27,7 @@ const call = (method: "GET" | "PUT", body?: unknown) => {
   return (method === "GET" ? GET : PUT)(req, { params: { storeId: f!.store.id } });
 };
 
-async function edition(number: number, createdAt: Date, gift: number | null) {
+async function edition(number: number, createdAt: Date, gift: number | null, minMarginPct: number | null = null) {
   const product = await testPrisma.product.create({
     data: {
       name: `Edicion ${number}`,
@@ -45,7 +45,7 @@ async function edition(number: number, createdAt: Date, gift: number | null) {
     },
   });
   const row = await testPrisma.capsuleEdition.create({
-    data: { storeId: f!.store.id, number, name: `Edición ${number}`, theme: "x", productId: product.id, costBandMin: 3000, costBandMax: 5000, createdAt },
+    data: { storeId: f!.store.id, number, name: `Edición ${number}`, theme: "x", productId: product.id, costBandMin: 3000, costBandMax: 5000, createdAt, minMarginPct },
   });
   if (gift !== null) {
     await testPrisma.capsulePackOption.createMany({ data: template(gift).map(({ giftLabel: _label, ...option }) => ({ editionId: row.id, ...option })) });
@@ -88,11 +88,33 @@ describe("packs de las sugerencias", () => {
     expect((await testPrisma.store.findUniqueOrThrow({ where: { id: f.store.id } })).capsuleMinSlipCost).toBe(3000);
   });
 
+  it("el piso de cápsulas: la edición más reciente si lo tiene, luego el de cápsulas, luego el de la tienda", async () => {
+    f = await createInventoryFixture();
+    const store = f.store.id;
+    await testPrisma.store.update({ where: { id: store }, data: { storeMinMarginPercent: 35, capsuleMinMarginPct: null } });
+    expect(await resolveCapsuleFloor(store)).toMatchObject({ value: 35, source: "store" });
+
+    session.userId = f.store.userId;
+    expect((await call("PUT", { minSlipCost: 3000, minMarginPct: 50 })).status).toBe(200);
+    expect(await resolveCapsuleFloor(store)).toMatchObject({ value: 50, source: "capsules" });
+
+    await edition(1, new Date("2026-10-01T00:00:00Z"), null, 60);
+    expect(await resolveCapsuleFloor(store)).toMatchObject({ value: 60, source: "edition", edition: { number: 1 } });
+    // Una edición más nueva sin piso propio: manda el de cápsulas, no el de la anterior.
+    await edition(2, new Date("2026-10-10T00:00:00Z"), null, null);
+    expect(await resolveCapsuleFloor(store)).toMatchObject({ value: 50, source: "capsules" });
+    // En el taller manda la edición que se arma, aunque no tenga piso.
+    expect(await resolveCapsuleFloor(store, { minMarginPct: 55 })).toMatchObject({ value: 55, source: "edition" });
+    expect(await resolveCapsuleFloor(store, { minMarginPct: null })).toMatchObject({ value: 50, source: "capsules" });
+    expect((await (await call("GET")).json()).minMarginPct).toBe(50);
+  });
+
   it("rechaza una plantilla incompleta o un piso negativo", async () => {
     f = await createInventoryFixture();
     session.userId = f.store.userId;
     expect((await call("PUT", { minSlipCost: 3000, template: template(1000).slice(0, 2) })).status).toBe(400);
     expect((await call("PUT", { minSlipCost: -1 })).status).toBe(400);
+    expect((await call("PUT", { minSlipCost: 3000, minMarginPct: 95 })).status).toBe(400);
     expect(await testPrisma.capsulePackTemplate.count({ where: { storeId: f.store.id } })).toBe(0);
   });
 

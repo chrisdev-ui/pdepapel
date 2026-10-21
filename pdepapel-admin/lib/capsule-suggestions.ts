@@ -413,3 +413,52 @@ export function missingProducts({
   }
   return Array.from(groups.values()).sort((a, b) => Number(a.themeKey === null) - Number(b.themeKey === null) || b.products.length - a.products.length);
 }
+
+export type CapsuleFloorSource = "edition" | "capsules" | "store";
+
+/**
+ * El piso de margen de las cápsulas: el de la edición (la que se arma, o la
+ * más reciente para sugerir una nueva) si lo tiene; si no, el margen mínimo
+ * de cápsulas de la tienda; si no, el margen mínimo general de la tienda.
+ */
+export function pickCapsuleFloor({
+  editionFloor,
+  capsuleFloor,
+  storeFloor,
+}: {
+  editionFloor: number | null | undefined;
+  capsuleFloor: number | null | undefined;
+  storeFloor: number | null | undefined;
+}): { value: number; source: CapsuleFloorSource } | null {
+  if (editionFloor !== null && editionFloor !== undefined) return { value: editionFloor, source: "edition" };
+  if (capsuleFloor !== null && capsuleFloor !== undefined) return { value: capsuleFloor, source: "capsules" };
+  if (storeFloor !== null && storeFloor !== undefined) return { value: storeFloor, source: "store" };
+  return null;
+}
+
+/**
+ * La bolsa sugerida de una edición recortada al piso: con lo ya impreso (a su
+ * costo congelado) más lo sugerido, cada pack que cabe debe pasar; si no,
+ * sale el producto más caro y se vuelve a medir. Mismo motor que el taller.
+ */
+export function trimBagToMargin({
+  bag,
+  printedCosts,
+  options,
+  minMarginPct,
+}: {
+  bag: readonly BagLine[];
+  printedCosts: readonly number[];
+  options: readonly CapsulePackCosts[];
+  minMarginPct: number;
+}): BagLine[] {
+  let lines = [...bag];
+  const poolFor = (current: readonly BagLine[]) => [...printedCosts, ...current.flatMap((line) => Array.from({ length: line.quantity }, () => line.unitCost))];
+  while (lines.length > 0) {
+    const pool = poolFor(lines);
+    if (evaluatePoolMargins({ pool, options, minMarginPct, runs: SUGGESTION_RULES.searchRuns }).ok && evaluatePoolMargins({ pool, options, minMarginPct, runs: SUGGESTION_RULES.confirmRuns }).ok) return lines;
+    const dearest = lines.reduce((top, line) => (line.unitCost > top.unitCost ? line : top), lines[0]);
+    lines = lines.filter((line) => line.productId !== dearest.productId);
+  }
+  return lines;
+}

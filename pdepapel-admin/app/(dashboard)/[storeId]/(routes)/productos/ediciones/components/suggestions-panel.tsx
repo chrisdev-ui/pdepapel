@@ -16,8 +16,21 @@ import { getErrorMessage } from "@/lib/api-errors";
 import type { EditionSuggestion } from "@/lib/capsule-suggestions";
 import { currencyFormatter } from "@/lib/utils";
 
+export interface SuggestionFloor {
+  value: number;
+  source: "edition" | "capsules" | "store";
+  edition: { number: number; name: string } | null;
+}
+
+export const FLOOR_SOURCE: Record<SuggestionFloor["source"], string> = {
+  edition: "de la edición más reciente",
+  capsules: "margen mínimo de cápsulas",
+  store: "margen mínimo de la tienda",
+};
+
 interface SuggestionsResponse {
   minMarginPct: number | null;
+  floor: SuggestionFloor | null;
   minSlipCost: number | null;
   packSource: { source: "edition" | "template"; edition: { number: number; name: string } | null } | null;
   missingSetup: "packs" | "margin" | null;
@@ -36,7 +49,7 @@ const percent = (value: number | null) => (value === null ? "—" : `${value.toL
  * servidor) y nada se crea solo: «Usar esta sugerencia» llena el formulario
  * de «Nueva edición».
  */
-export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggestion) => void }) {
+export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggestion, floor: SuggestionFloor | null) => void }) {
   const params = useParams<{ storeId: string }>();
   const { toast } = useToast();
   const [data, setData] = useState<SuggestionsResponse | null>(null);
@@ -162,7 +175,7 @@ export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggest
       <SectionCard
         id="sugeridas"
         title="Ediciones sugeridas"
-        description={`Armadas con productos quietos (90 días sin venta). Cada una pasa el margen mínimo de la tienda (${percent(data.minMarginPct)}) en todos los packs que caben. Nada se crea ni se imprime solo.`}
+        description={`Armadas con productos quietos (90 días sin venta). Cada una pasa el piso de margen de las cápsulas (${percent(data.minMarginPct)}) en todos los packs que caben. Nada se crea ni se imprime solo.`}
       >
         {data.missingSetup === "packs" ? (
           <p className="text-sm">
@@ -174,7 +187,7 @@ export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggest
           </p>
         ) : data.missingSetup === "margin" ? (
           <p className="text-sm">
-            Para sugerir ediciones falta el margen mínimo de la tienda.{" "}
+            Para sugerir ediciones falta el margen mínimo de cápsulas o el de la tienda.{" "}
             <Link href={settingsHref} className="font-medium underline underline-offset-4">
               Ponlo en Ajustes
             </Link>
@@ -196,6 +209,15 @@ export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggest
                 <p className="text-sm">
                   {suggestion.slips} papeles · {suggestion.products} productos · banda {currencyFormatter(suggestion.costBandMin)}–{currencyFormatter(suggestion.costBandMax)} · pack más grande {suggestion.maxPack ?? "—"}
                 </p>
+                {data.floor && (
+                  <p className="text-sm font-medium" data-testid="piso-usado">
+                    Piso usado: {percent(data.floor.value)}{" "}
+                    <span className="font-normal text-muted-foreground">
+                      ({FLOOR_SOURCE[data.floor.source]}
+                      {data.floor.edition ? ` #${data.floor.edition.number}` : ""})
+                    </span>
+                  </p>
+                )}
                 <ul className="flex flex-wrap gap-1.5" aria-label="Margen P95 por pack">
                   {suggestion.packs
                     .filter((pack) => pack.available)
@@ -223,7 +245,7 @@ export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggest
                   </ul>
                 </details>
                 <div>
-                  <Button className="min-h-[44px] w-full sm:w-auto" onClick={() => onUse(suggestion)}>
+                  <Button className="min-h-[44px] w-full sm:w-auto" onClick={() => onUse(suggestion, data.floor)}>
                     Usar esta sugerencia
                   </Button>
                 </div>

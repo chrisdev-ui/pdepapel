@@ -74,6 +74,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
   const [includeSelling, setIncludeSelling] = useState(false);
   const searchParams = useSearchParams();
   const [themes, setThemes] = useState<{ key: string; label: string; count: number }[]>([]);
+  const [bagFloor, setBagFloor] = useState<{ value: number; source: string } | null>(null);
   const [themeKey, setThemeKey] = useState(searchParams.get("tema") ?? "");
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -139,6 +140,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
     run("sugerir", async () => {
       const { data: body } = await axios.get(`${api}/suggested-bag`, { params: key ? { tema: key } : {} });
       setThemes(body.themes);
+      setBagFloor(body.floor);
       setCandidates(body.bag.map((line: Candidate & { quantity: number }) => ({ ...line, sku: "", idle: true })));
       setQuantities(Object.fromEntries(body.bag.map((line: { productId: string; quantity: number }) => [line.productId, line.quantity])));
       setCheck(null);
@@ -311,7 +313,12 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
         <SectionCard id="bolsa" step={1} title="Bolsa de papeles" description="Elige las categorías del tema: salen los productos quietos (sin ventas en 90 días) con costo dentro de la banda y algo disponible. Quita lo que no quepa en una cápsula.">
           <div className="flex flex-col gap-2 rounded-md border bg-white p-3">
             <Label htmlFor="sugerir-tema">Sugerir bolsa por tema</Label>
-            <p className="text-xs text-muted-foreground">Llena las cantidades con productos quietos del tema dentro de la banda; cada fila dice por qué. Cámbialas como quieras: nada se imprime hasta que lo pidas.</p>
+            <p className="text-xs text-muted-foreground">Llena las cantidades con productos quietos del tema dentro de la banda; cada fila dice por qué. Quita los más caros hasta que cada pack que cabe pase el piso. Cámbialas como quieras: nada se imprime hasta que lo pidas.</p>
+            {bagFloor && (
+              <p className="text-xs font-medium" data-testid="piso-bolsa">
+                Piso usado: {bagFloor.value.toLocaleString("es-CO")} % ({bagFloor.source === "edition" ? "de esta edición" : bagFloor.source === "capsules" ? "margen mínimo de cápsulas" : "margen mínimo de la tienda"})
+              </p>
+            )}
             <div className="flex flex-col gap-2 sm:flex-row">
               <select
                 id="sugerir-tema"

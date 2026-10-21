@@ -1,5 +1,6 @@
 -- Cápsulas, ediciones sugeridas fase 1 (2026-10-23). Aditiva, sin tocar filas:
 --   * Store.capsuleMinSlipCost: piso de costo de un papel en las sugerencias (3 000, decisión de Christian; editable en Configuración).
+--   * Store.capsuleMinMarginPct: margen mínimo de las cápsulas (sin cifra: lo pone Paula en Configuración).
 --   * Product.capsuleLicenseAllowed: Paula permite en las sugerencias un producto que parece de personaje o licencia.
 --   * CapsulePackTemplate: plantilla de packs (regalo y caja) cuando aún no hay una edición con packs guardados.
 --   * CapsuleSuggestionFeedback: el ✓/✗ de Paula a ediciones y productos sugeridos.
@@ -9,6 +10,8 @@
 --   npm run prod:migrate -- prisma/manual-migrations/20261023_add_capsule_suggestions.sql --expect new
 
 ALTER TABLE `Store` ADD COLUMN `capsuleMinSlipCost` DOUBLE NULL DEFAULT 3000;
+
+ALTER TABLE `Store` ADD COLUMN `capsuleMinMarginPct` DOUBLE NULL;
 
 ALTER TABLE `Product` ADD COLUMN `capsuleLicenseAllowed` BOOLEAN NOT NULL DEFAULT false;
 

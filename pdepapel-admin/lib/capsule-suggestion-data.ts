@@ -5,7 +5,7 @@ import { ErrorFactory } from "@/lib/api-errors";
 import { stripTaxonomyIcon } from "@/lib/category-seo";
 import { loadIdleProducts } from "@/lib/capsule-idle";
 import { detectLicense } from "@/lib/capsule-licenses";
-import { resolveSuggestionPackOptions } from "@/lib/capsule-settings";
+import { resolveCapsuleFloor, resolveSuggestionPackOptions } from "@/lib/capsule-settings";
 import {
   missingProducts,
   parseThemeKey,
@@ -13,9 +13,11 @@ import {
   SCORING_VERSION,
   suggestBagForEdition,
   suggestEditions,
+  trimBagToMargin,
   type Rejections,
   type SuggestionProduct,
 } from "@/lib/capsule-suggestions";
+import { CAPSULE_PACK_PRICES } from "@/lib/pricing/capsules";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -148,19 +150,21 @@ async function describeRejections(storeId: string, rejections: Rejections, produ
 
 /** «Ediciones sugeridas», «Te faltan estos», «Revisar licencia» y «Descartadas» en una sola lectura. */
 export async function getEditionSuggestions(storeId: string) {
-  const [store, packs, { products, licenses }, rejections] = await Promise.all([
-    prismadb.store.findUnique({ where: { id: storeId }, select: { storeMinMarginPercent: true, capsuleMinSlipCost: true } }),
+  const [store, packs, { products, licenses }, rejections, floor] = await Promise.all([
+    prismadb.store.findUnique({ where: { id: storeId }, select: { capsuleMinSlipCost: true } }),
     resolveSuggestionPackOptions(storeId),
     loadSuggestionProducts(storeId),
     loadRejections(storeId),
+    resolveCapsuleFloor(storeId),
   ]);
-  const minMarginPct = store?.storeMinMarginPercent ?? null;
+  const minMarginPct = floor?.value ?? null;
   const minSlipCost = store?.capsuleMinSlipCost ?? null;
   const ready = packs !== null && minMarginPct !== null;
   const suggestions = ready ? suggestEditions({ products, options: packs.options, minMarginPct, minSlipCost, rejections }) : [];
   return {
     scoringVersion: SCORING_VERSION,
     minMarginPct,
+    floor,
     minSlipCost,
     packSource: packs ? { source: packs.source, edition: packs.edition } : null,
     missingSetup: packs === null ? ("packs" as const) : minMarginPct === null ? ("margin" as const) : null,
@@ -174,13 +178,21 @@ export async function getEditionSuggestions(storeId: string) {
 
 /** «Sugerir bolsa» de una edición abierta: su banda, el tema elegido y lo ya impreso. */
 export async function getSuggestedBag({ storeId, editionId, themeKey }: { storeId: string; editionId: string; themeKey: string | null }) {
-  const edition = await prismadb.capsuleEdition.findFirst({ where: { id: editionId, storeId }, select: { id: true, status: true, costBandMin: true, costBandMax: true } });
+  const edition = await prismadb.capsuleEdition.findFirst({
+    where: { id: editionId, storeId },
+    select: { id: true, status: true, costBandMin: true, costBandMax: true, minMarginPct: true, packOptions: { select: { packSize: true, giftMaxCost: true, giftMaxItems: true, boxReserveCost: true } } },
+  });
   if (!edition) throw ErrorFactory.NotFound("Edición no encontrada");
-  const [{ products }, printedRows, rejections] = await Promise.all([
+  const [{ products }, printedRows, printedCosts, rejections, floor, template] = await Promise.all([
     loadSuggestionProducts(storeId, { exceptEditionId: editionId }),
     prismadb.capsuleSlip.groupBy({ by: ["productId"], where: { editionId, kind: CapsuleSlipKind.SLIP, status: CapsuleSlipStatus.PRINTED }, _count: { _all: true } }),
+    prismadb.capsuleSlip.findMany({ where: { editionId, kind: CapsuleSlipKind.SLIP, status: { not: CapsuleSlipStatus.VOID } }, select: { unitCost: true } }),
     loadRejections(storeId),
+    resolveCapsuleFloor(storeId, { minMarginPct: edition.minMarginPct }),
+    resolveSuggestionPackOptions(storeId),
   ]);
+  // Los packs de la edición si ya los guardó; si no, los mismos de las sugerencias.
+  const options = edition.packOptions.length === CAPSULE_PACK_PRICES.length ? edition.packOptions : (template?.options ?? null);
   const printed = new Map(printedRows.map((row) => [row.productId, row._count._all]));
   const inBand = products.filter((product) => !product.licenseBlocked && product.available > 0 && product.unitCost >= edition.costBandMin && product.unitCost <= edition.costBandMax);
   const themes = new Map<string, { key: string; label: string; count: number }>();
@@ -195,10 +207,12 @@ export async function getSuggestedBag({ storeId, editionId, themeKey }: { storeI
   }
   return {
     themes: Array.from(themes.values()).filter((theme) => !rejections.themes.has(theme.key)).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0, 40),
-    bag: suggestBagForEdition({ products, themeKey, costBandMin: edition.costBandMin, costBandMax: edition.costBandMax, printed, rejections }).map((line) => ({
-      ...line,
-      printed: printed.get(line.productId) ?? 0,
-    })),
+    floor,
+    bag: (() => {
+      const bag = suggestBagForEdition({ products, themeKey, costBandMin: edition.costBandMin, costBandMax: edition.costBandMax, printed, rejections });
+      const fitted = floor && options ? trimBagToMargin({ bag, printedCosts: printedCosts.map((slip) => slip.unitCost), options, minMarginPct: floor.value }) : bag;
+      return fitted.map((line) => ({ ...line, printed: printed.get(line.productId) ?? 0 }));
+    })(),
   };
 }
 

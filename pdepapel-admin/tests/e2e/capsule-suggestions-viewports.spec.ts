@@ -58,7 +58,8 @@ test.describe("ediciones sugeridas en distintos tamaños", () => {
   test.beforeAll(async () => {
     db = createTestPrismaClient("capsule-suggestions-viewports");
     previousMargin = (await db.store.findUniqueOrThrow({ where: { id: storeId }, select: { storeMinMarginPercent: true } })).storeMinMarginPercent;
-    await db.store.update({ where: { id: storeId }, data: { storeMinMarginPercent: 35, capsuleMinSlipCost: 3000 } });
+    // El piso de cápsulas (50 %) manda sobre el margen mínimo de la tienda (35 %).
+    await db.store.update({ where: { id: storeId }, data: { storeMinMarginPercent: 35, capsuleMinSlipCost: 3000, capsuleMinMarginPct: 50 } });
     for (const packSize of PACKS) {
       await db.capsulePackTemplate.upsert({
         where: { storeId_packSize: { storeId, packSize } },
@@ -100,7 +101,7 @@ test.describe("ediciones sugeridas en distintos tamaños", () => {
     await db.productPriceTier.deleteMany({ where: { productId: { in: created.products } } });
     await db.product.deleteMany({ where: { id: { in: created.products } } });
     await db.design.deleteMany({ where: { id: { in: created.designs } } });
-    await db.store.update({ where: { id: storeId }, data: { storeMinMarginPercent: previousMargin } });
+    await db.store.update({ where: { id: storeId }, data: { storeMinMarginPercent: previousMargin, capsuleMinMarginPct: null } });
     await db.$disconnect();
   });
 
@@ -137,6 +138,7 @@ test.describe("ediciones sugeridas en distintos tamaños", () => {
       await expect(card).toBeVisible({ timeout: 90_000 });
       await expect(card).toContainText("12 productos");
       await expect(card).toContainText("Pack 5: P95");
+      await expect(card.getByTestId("piso-usado")).toContainText("Piso usado: 50 %");
       await expect(page.getByText("Cuaderno Hello Kitty sugerido")).toBeVisible();
       await expect(page.getByRole("switch", { name: /Permitir en cápsulas/ }).first()).toBeVisible();
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
@@ -146,6 +148,7 @@ test.describe("ediciones sugeridas en distintos tamaños", () => {
       await expect(card.getByText(/días sin venta|Sin ventas en el último año/).first()).toBeVisible();
       await card.getByRole("button", { name: "Usar esta sugerencia" }).click();
       await expect(page.getByLabel("Nombre", { exact: true })).toHaveValue(SUGGESTION);
+      await expect(page.getByLabel("Margen mínimo de la edición (%)")).toHaveValue("50");
       await expect(page.getByRole("status").filter({ hasText: SUGGESTION })).toBeVisible();
 
       await page.getByRole("combobox", { name: "Producto de la edición" }).click();
@@ -158,14 +161,16 @@ test.describe("ediciones sugeridas en distintos tamaños", () => {
       await expect(firstQuantity).toBeVisible({ timeout: 60_000 });
       await expect(firstQuantity).not.toHaveValue("");
       await expect(page.getByText(/cabe en la banda/).first()).toBeVisible();
+      await expect(page.getByTestId("piso-bolsa")).toContainText("Piso usado: 50 % (de esta edición)");
       await expect(page.getByRole("textbox", { name: "Papeles de Cuaderno Hello Kitty sugerido" })).toHaveCount(0);
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
       await page.screenshot({ path: path.join(SHOTS, `${viewport.name}-2-taller.png`), fullPage: true });
 
       await page.getByRole("button", { name: "Revisar margen" }).click();
       await expect(page.getByTestId("margen-pack-5")).toContainText("P95", { timeout: 30_000 });
-      const edition = await db.capsuleEdition.findFirstOrThrow({ where: { productId: editionProduct.id }, select: { id: true, status: true } });
+      const edition = await db.capsuleEdition.findFirstOrThrow({ where: { productId: editionProduct.id }, select: { id: true, status: true, minMarginPct: true } });
       expect(edition.status).toBe("DRAFT");
+      expect(edition.minMarginPct).toBe(50);
       expect(await db.capsuleSlip.count({ where: { editionId: edition.id } })).toBe(0);
     });
   }

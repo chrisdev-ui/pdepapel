@@ -5,11 +5,13 @@ import {
   buildThemes,
   isSafeCopy,
   missingProducts,
+  pickCapsuleFloor,
   rejectionPair,
   SUGGESTION_RULES,
   suggestBagForEdition,
   suggestEditions,
   suggestionCopy,
+  trimBagToMargin,
   type SuggestionProduct,
 } from "@/lib/capsule-suggestions";
 import { CAPSULE_PACK_PRICES, maxPackFor } from "@/lib/pricing/capsules";
@@ -171,5 +173,32 @@ describe("licencias", () => {
     expect(detectLicense(["Lápiz infinito Gatito de Cats Diary"])).toBeNull();
     expect(detectLicense(["Botsy azul"])).toBeNull();
     expect(detectLicense([null, undefined, ""])).toBeNull();
+  });
+});
+
+describe("piso de las cápsulas", () => {
+  it("manda la edición, luego el margen de cápsulas, luego el de la tienda", () => {
+    expect(pickCapsuleFloor({ editionFloor: 55, capsuleFloor: 50, storeFloor: 35 })).toEqual({ value: 55, source: "edition" });
+    expect(pickCapsuleFloor({ editionFloor: null, capsuleFloor: 50, storeFloor: 35 })).toEqual({ value: 50, source: "capsules" });
+    expect(pickCapsuleFloor({ editionFloor: null, capsuleFloor: null, storeFloor: 35 })).toEqual({ value: 35, source: "store" });
+    expect(pickCapsuleFloor({ editionFloor: undefined, capsuleFloor: null, storeFloor: null })).toBeNull();
+    expect(pickCapsuleFloor({ editionFloor: 0, capsuleFloor: 50, storeFloor: 35 })).toEqual({ value: 0, source: "edition" });
+  });
+
+  it("una edición que pasa con el margen de la tienda y no con el de cápsulas no se sugiere a ese piso", () => {
+    const products = catalog().map((p) => ({ ...p, unitCost: p.unitCost * 2 }));
+    const atStore = suggestEditions({ products, options: OPTIONS, minMarginPct: 20, minSlipCost: 3000 });
+    expect(atStore.length).toBeGreaterThan(0);
+    expect(suggestEditions({ products, options: OPTIONS, minMarginPct: 50, minSlipCost: 3000 })).toEqual([]);
+  });
+
+  it("«Sugerir bolsa» recorta los más caros hasta que cada pack que cabe pasa el piso", () => {
+    seq = 200;
+    const cheap = Array.from({ length: 8 }, (_, i) => ({ productId: `b${i}`, name: `B${i}`, categoryName: null, unitCost: 3000, available: 6, quantity: 6, reason: "" }));
+    const dear = { productId: "caro", name: "Caro", categoryName: null, unitCost: 11000, available: 6, quantity: 6, reason: "" };
+    const trimmed = trimBagToMargin({ bag: [...cheap, dear], printedCosts: [], options: OPTIONS, minMarginPct: 50 });
+    expect(trimmed.map((line) => line.productId)).not.toContain("caro");
+    expect(trimmed).toHaveLength(8);
+    expect(trimBagToMargin({ bag: cheap, printedCosts: [], options: OPTIONS, minMarginPct: 50 })).toEqual(cheap);
   });
 });

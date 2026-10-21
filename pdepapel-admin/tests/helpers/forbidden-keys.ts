@@ -27,6 +27,7 @@ const VIEWER_KEYS = [
   "productCost",
   "storeMinMarginPercent",
   "capsuleMinSlipCost",
+  "capsuleMinMarginPct",
   "mercadoLibreTargetMarginPercent",
   "mercadoLibreMinNetPerUnit",
   "mercadoLibreLowPriceFixedFee",

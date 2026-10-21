@@ -16,7 +16,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import type { EditionSuggestion } from "@/lib/capsule-suggestions";
 
 import type { EditionListRow } from "../server/get-editions";
-import { SuggestionsPanel } from "./suggestions-panel";
+import { SuggestionsPanel, type SuggestionFloor } from "./suggestions-panel";
 
 export const EDITION_STATUS: Record<string, { label: string; tone: string }> = {
   DRAFT: { label: "Borrador", tone: "cream" },
@@ -29,14 +29,21 @@ export function EditionsClient({ editions }: { editions: EditionListRow[] }) {
   const params = useParams<{ storeId: string }>();
   const router = useRouter();
   const { toast } = useToast();
-  const [form, setForm] = useState({ productId: "", name: "", theme: "", costBandMin: "", costBandMax: "", dailyOrderCap: "5" });
+  const [form, setForm] = useState({ productId: "", name: "", theme: "", costBandMin: "", costBandMax: "", dailyOrderCap: "5", minMarginPct: "" });
   const [saving, setSaving] = useState(false);
   // El tema de la sugerencia usada: el taller lo recibe en `?tema=` y recalcula la misma bolsa.
   const [themeKey, setThemeKey] = useState<string | null>(null);
   const [fromSuggestion, setFromSuggestion] = useState<string | null>(null);
 
-  const applySuggestion = (suggestion: EditionSuggestion) => {
-    setForm((current) => ({ ...current, name: suggestion.name, theme: suggestion.theme, costBandMin: String(suggestion.costBandMin), costBandMax: String(suggestion.costBandMax) }));
+  const applySuggestion = (suggestion: EditionSuggestion, floor: SuggestionFloor | null) => {
+    setForm((current) => ({
+      ...current,
+      name: suggestion.name,
+      theme: suggestion.theme,
+      costBandMin: String(suggestion.costBandMin),
+      costBandMax: String(suggestion.costBandMax),
+      minMarginPct: floor ? String(floor.value) : "",
+    }));
     setThemeKey(suggestion.themeKey);
     setFromSuggestion(suggestion.name);
     document.getElementById("nueva-edicion")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -50,7 +57,13 @@ export function EditionsClient({ editions }: { editions: EditionListRow[] }) {
     try {
       const { data } = await axios.post(
         `/api/${params.storeId}/capsule-editions`,
-        { ...form, costBandMin: Number(form.costBandMin), costBandMax: Number(form.costBandMax), dailyOrderCap: Number(form.dailyOrderCap) },
+        {
+          ...form,
+          costBandMin: Number(form.costBandMin),
+          costBandMax: Number(form.costBandMax),
+          dailyOrderCap: Number(form.dailyOrderCap),
+          minMarginPct: form.minMarginPct.trim() === "" ? undefined : Number(form.minMarginPct.replace(",", ".")),
+        },
         { headers: { "Idempotency-Key": crypto.randomUUID() } },
       );
       toast({ title: `Edición #${data.edition.number} creada`, description: "Su producto quedó archivado hasta que la edición salga a la venta." });
@@ -126,6 +139,10 @@ export function EditionsClient({ editions }: { editions: EditionListRow[] }) {
           <div className="grid gap-2">
             <Label htmlFor="edicion-tope">Pedidos de cápsulas por día</Label>
             <Input id="edicion-tope" inputMode="numeric" value={form.dailyOrderCap} onChange={set("dailyOrderCap")} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="edicion-margen">Margen mínimo de la edición (%)</Label>
+            <Input id="edicion-margen" inputMode="decimal" value={form.minMarginPct} onChange={set("minMarginPct")} placeholder="El de la tienda" />
           </div>
         </div>
         <div>
