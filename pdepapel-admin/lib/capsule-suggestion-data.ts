@@ -146,7 +146,7 @@ export async function getSuggestedBag({ storeId, editionId, themeKey }: { storeI
     loadRejections(storeId),
   ]);
   const printed = new Map(printedRows.map((row) => [row.productId, row._count._all]));
-  const inBand = products.filter((product) => product.unitCost >= edition.costBandMin && product.unitCost <= edition.costBandMax);
+  const inBand = products.filter((product) => !product.licenseBlocked && product.available > 0 && product.unitCost >= edition.costBandMin && product.unitCost <= edition.costBandMax);
   const themes = new Map<string, { key: string; label: string; count: number }>();
   for (const product of inBand) {
     for (const [kind, value] of Object.entries(product.attributes)) {

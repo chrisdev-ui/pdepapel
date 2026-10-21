@@ -133,7 +133,8 @@ describe("ediciones sugeridas (MySQL)", () => {
     const response = await getBag(req(`/api/${store}/capsule-editions/${edition.id}/suggested-bag?tema=${encodeURIComponent(themeKey)}`), { params: { storeId: store, editionId: edition.id } });
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.themes.map((theme: { key: string }) => theme.key)).toContain(themeKey);
+    // 12 libretas del diseño en la banda (3.000–4.000 deja 6); la de licencia pendiente no cuenta.
+    expect(body.themes.find((theme: { key: string }) => theme.key === themeKey)).toMatchObject({ count: 6 });
     expect(body.bag.length).toBeGreaterThan(0);
     expect(body.bag.every((line: { unitCost: number }) => line.unitCost >= 3000 && line.unitCost <= 4000)).toBe(true);
   });
