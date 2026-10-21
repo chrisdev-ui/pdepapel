@@ -13,8 +13,10 @@ import { SectionCard } from "@/components/ui/section-card";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import type { EditionSuggestion } from "@/lib/capsule-suggestions";
 
 import type { EditionListRow } from "../server/get-editions";
+import { SuggestionsPanel } from "./suggestions-panel";
 
 export const EDITION_STATUS: Record<string, { label: string; tone: string }> = {
   DRAFT: { label: "Borrador", tone: "cream" },
@@ -29,6 +31,16 @@ export function EditionsClient({ editions }: { editions: EditionListRow[] }) {
   const { toast } = useToast();
   const [form, setForm] = useState({ productId: "", name: "", theme: "", costBandMin: "", costBandMax: "", dailyOrderCap: "5" });
   const [saving, setSaving] = useState(false);
+  // El tema de la sugerencia usada: el taller lo recibe en `?tema=` y recalcula la misma bolsa.
+  const [themeKey, setThemeKey] = useState<string | null>(null);
+  const [fromSuggestion, setFromSuggestion] = useState<string | null>(null);
+
+  const applySuggestion = (suggestion: EditionSuggestion) => {
+    setForm((current) => ({ ...current, name: suggestion.name, theme: suggestion.theme, costBandMin: String(suggestion.costBandMin), costBandMax: String(suggestion.costBandMax) }));
+    setThemeKey(suggestion.themeKey);
+    setFromSuggestion(suggestion.name);
+    document.getElementById("nueva-edicion")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const set = (field: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) => setForm((current) => ({ ...current, [field]: event.target.value }));
   const canSave = !saving && form.productId && form.name.trim() && form.theme.trim() && Number(form.costBandMin) > 0 && Number(form.costBandMax) > Number(form.costBandMin);
 
@@ -42,7 +54,7 @@ export function EditionsClient({ editions }: { editions: EditionListRow[] }) {
         { headers: { "Idempotency-Key": crypto.randomUUID() } },
       );
       toast({ title: `Edición #${data.edition.number} creada`, description: "Su producto quedó archivado hasta que la edición salga a la venta." });
-      router.push(`/${params.storeId}/productos/ediciones/${data.edition.id}`);
+      router.push(`/${params.storeId}/productos/ediciones/${data.edition.id}${themeKey ? `?tema=${encodeURIComponent(themeKey)}` : ""}`);
     } catch (error) {
       toast({ title: "No se creó la edición", description: getErrorMessage(error), variant: "destructive" });
     } finally {
@@ -52,6 +64,8 @@ export function EditionsClient({ editions }: { editions: EditionListRow[] }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <SuggestionsPanel onUse={applySuggestion} />
+
       <SectionCard id="ediciones" title="Ediciones" description="Abre una edición para armar su bolsa, sus packs e imprimir los papeles.">
         {editions.length === 0 ? (
           <p className="text-sm text-muted-foreground">Todavía no hay ediciones.</p>
@@ -83,6 +97,11 @@ export function EditionsClient({ editions }: { editions: EditionListRow[] }) {
         title="Nueva edición"
         description="Primero crea en Productos el producto que se va a vender (fotos, descripción, precio de una cápsula del pack de 5, sin stock). Aquí lo enlazas."
       >
+        {fromSuggestion && (
+          <p className="rounded-md border border-dashed bg-white p-3 text-sm" role="status">
+            Datos de la sugerencia «{fromSuggestion}». Elige el producto de la edición y revisa todo: al crearla se abre el taller con la bolsa sugerida para que la revises antes de imprimir.
+          </p>
+        )}
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2 md:col-span-2">
             <Label htmlFor="edicion-producto">Producto de la edición</Label>
