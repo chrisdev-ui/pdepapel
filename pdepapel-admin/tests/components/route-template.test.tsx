@@ -29,11 +29,13 @@ describe("admin route template", () => {
     expect(motionProps.last?.transition).toMatchObject({ duration: 0.15 });
   });
 
-  it("does not animate when the user prefers reduced motion", () => {
+  it("with reduced motion it renders the same element and lands in 0 s (no hydration mismatch)", () => {
     motionProps.reduce = true;
     render(<Template>Productos</Template>);
     expect(screen.getByText("Productos")).toBeTruthy();
-    expect(screen.queryByTestId("motion")).toBeNull();
-    expect(motionProps.last).toBeNull();
+    // Swapping to a plain <div> left the server's opacity 0 in place: the screen stayed invisible.
+    expect(screen.getByTestId("motion")).toBeTruthy();
+    expect(motionProps.last?.transition).toEqual({ duration: 0 });
+    expect(motionProps.last?.animate).toMatchObject({ opacity: 1 });
   });
 });
