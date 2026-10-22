@@ -40,6 +40,7 @@ function productionShape(name, value) {
   if (/(^|_)(META|WHATSAPP|FACEBOOK)_.*(TOKEN|SECRET)$/.test(name) && !/VERIFY_TOKEN$/.test(name) && realValue(value)) return "Meta";
   if (/^TIKTOK_.*(KEY|SECRET|TOKEN)$/.test(name) && realValue(value)) return "TikTok";
   if (name === "SOCIAL_TOKEN_ENCRYPTION_KEY" && value !== TEST_ENV_STUBS.SOCIAL_TOKEN_ENCRYPTION_KEY) return "llave de tokens de redes";
+  if (name === "CLERK_WEBHOOK_SIGNING_SECRET" && value !== TEST_ENV_STUBS.CLERK_WEBHOOK_SIGNING_SECRET) return "secreto del webhook de Clerk";
   if (name === "GA4_API_SECRET" && realValue(value)) return "GA4 MP";
   if (name.startsWith("MIPAQUETE_") && realValue(value)) return "MiPaquete";
   if (name === "BOLD_ENVIRONMENT" && value !== "test") return "Bold fuera de pruebas";

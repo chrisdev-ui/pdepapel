@@ -33,6 +33,8 @@ export const TEST_ENV_STUBS = Object.freeze({
   CHAKRA_API_KEY: STUB,
   CHAKRA_PLUGIN_ID: STUB,
   CLERK_SECRET_KEY: "sk_test_stub",
+  // Base64 válido con el prefijo whsec_, como los de Clerk (Standard Webhooks).
+  CLERK_WEBHOOK_SIGNING_SECRET: "whsec_dGVzdC1zdHViLWNsZXJrLXdlYmhvb2stc2VjcmV0",
   CLOUDFLARE_R2_ACCESS_KEY_ID: STUB,
   CLOUDFLARE_R2_ACCOUNT_ID: STUB,
   CLOUDFLARE_R2_BUCKET_NAME: STUB,
