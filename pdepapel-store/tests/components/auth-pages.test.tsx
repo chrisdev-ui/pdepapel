@@ -108,15 +108,11 @@ describe("full-page sign-in and sign-up", () => {
     expect(state.replace).toHaveBeenCalledWith("/favoritos");
   });
 
-  it("renders the sign-up page with the terms and data-processing authorization (Ley 1581)", () => {
+  it("leaves the sign-up consent to Clerk's express-consent checkbox, without a second notice", () => {
     render(<Register />);
 
     expect(screen.getByRole("heading", { level: 1, name: "Crea tu cuenta" })).toBeInTheDocument();
-    expect(screen.getByTestId("legal-consent")).toHaveTextContent(
-      "Al crear tu cuenta aceptas los Términos y condiciones y autorizas el tratamiento de tus datos según la Política de privacidad.",
-    );
-    expect(screen.getByRole("link", { name: "Términos y condiciones" })).toHaveAttribute("href", "/politicas/terminos");
-    expect(screen.getByRole("link", { name: "Política de privacidad" })).toHaveAttribute("href", "/politicas/privacidad");
+    expect(screen.queryByTestId("legal-consent")).not.toBeInTheDocument();
     // Prueba de consentimiento: el webhook de la administración lee estas versiones si Clerk no trae legal_accepted_at.
     expect(state.signUpProps).toMatchObject({ unsafeMetadata: { legalConsent: { terms: "2026-10-21", privacy: "2026-10-21", channel: "registro" } } });
     expect(state.signUpProps).toMatchObject({ path: "/crear-cuenta", routing: "path" });

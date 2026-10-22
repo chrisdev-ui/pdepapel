@@ -7,12 +7,12 @@ const linkClassName = "font-semibold text-blue-yankees underline underline-offse
 
 /**
  * La autorización de Ley 1581 y la aceptación de los términos antes de la
- * acción que entrega los datos (pagar, crear la cuenta). Los enlaces abren en
- * otra pestaña para no perder lo que ya se llenó.
+ * acción que entrega los datos. En el registro no va: ahí la pide la casilla
+ * de consentimiento expreso de Clerk. Los enlaces abren en otra pestaña para
+ * no perder lo que ya se llenó.
  */
 const LEAD = {
   checkout: "Al finalizar tu compra aceptas",
-  signUp: "Al crear tu cuenta aceptas",
   // Con Google, iniciar sesión puede crear la cuenta.
   signIn: "Si creas tu cuenta al iniciar sesión, aceptas",
 } as const;

@@ -13,7 +13,6 @@ import { skipPrivacyBanner } from "../helpers/public-page";
  */
 const SHOTS = path.resolve(process.cwd(), "../pdepapel-admin/output/screenshots/terminos");
 const CONSENT_CHECKOUT = "Al finalizar tu compra aceptas los Términos y condiciones y autorizas el tratamiento de tus datos según la Política de privacidad.";
-const CONSENT_SIGNUP = "Al crear tu cuenta aceptas los Términos y condiciones y autorizas el tratamiento de tus datos según la Política de privacidad.";
 
 const noHorizontalScroll = async (page: Page) =>
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
@@ -57,14 +56,12 @@ for (const viewport of [
     await page.screenshot({ path: path.join(SHOTS, `checkout-consentimiento-${viewport.name}.png`) });
   });
 
-  test(`registro a ${viewport.name}: la misma autorización bajo el formulario`, async ({ page }) => {
+  test(`registro a ${viewport.name}: sin aviso propio, lo pide la casilla de Clerk`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await skipPrivacyBanner(page);
     await page.goto("/crear-cuenta");
-    const consent = page.getByTestId("legal-consent");
-    await expect(consent).toHaveText(CONSENT_SIGNUP);
-    await expectLinks(consent);
-    await consent.scrollIntoViewIfNeeded();
+    await expect(page.getByRole("heading", { level: 1, name: "Crea tu cuenta" })).toBeVisible();
+    await expect(page.getByTestId("legal-consent")).toHaveCount(0);
     await noHorizontalScroll(page);
     await page.screenshot({ path: path.join(SHOTS, `registro-consentimiento-${viewport.name}.png`) });
   });
