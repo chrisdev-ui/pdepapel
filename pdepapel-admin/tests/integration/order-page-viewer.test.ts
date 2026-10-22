@@ -102,6 +102,13 @@ describe("getOrder (ficha del pedido) para la cuenta de solo lectura", () => {
     expect(json.payment).not.toHaveProperty("details");
   });
 
+  it("la dueña sí recibe la prueba de consentimiento que pinta el encabezado", async () => {
+    signIn("owner");
+    const { order } = await getOrder(orderId, fixture!.store.id);
+    expect(order).toMatchObject({ legalTermsVersion: "2026-10-21", legalPrivacyVersion: "2026-10-21", legalConsentChannel: "CHECKOUT" });
+    expect(order?.legalConsentAt).toBeInstanceOf(Date);
+  });
+
   it("los totales siguen saliendo: el cobro de envío a la clienta se queda", async () => {
     signIn("viewer");
     const { order } = await getOrder(orderId, fixture!.store.id);
