@@ -1,1 +1,1 @@
-2026-10-22 18:39 UTC · incidente Railway: CLERK_SECRET_KEY nueva
+2026-10-22 19:07 UTC · incidente Railway: secretos propios rotados (cron, revalidación, feed, acceso anticipado, API interna)
