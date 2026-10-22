@@ -1,1 +1,1 @@
-2026-10-22 19:29 UTC · incidente Railway: RESEND_API_KEY nueva
+2026-10-22 19:53 UTC · incidente Railway: credenciales nuevas de Upstash Redis
