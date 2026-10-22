@@ -147,6 +147,17 @@ describe("rotación de credenciales (MySQL local)", () => {
     expect(lines.join("\n")).toMatch(/NO corras --phase discard/);
   });
 
+  it("canLogin espera si la cuenta está en su tope de conexiones, en vez de dar la clave por mala", async () => {
+    await createRoUser();
+    await testPrisma.$executeRawUnsafe(`ALTER USER '${RO}'@'%' WITH MAX_USER_CONNECTIONS 1`);
+    const holder = new PrismaClient({ datasources: { db: { url: withCredentials(baseUrl, RO, OLD) } } });
+    await holder.$queryRawUnsafe("SELECT 1");
+    const release = new Promise((resolve) => setTimeout(() => holder.$disconnect().then(resolve), 1500));
+    expect(await canLogin(withCredentials(baseUrl, RO, OLD), RO, PrismaClient, { attempts: 5, waitMs: 800 })).toBe(true);
+    await release;
+    expect(await canLogin(withCredentials(baseUrl, RO, "clave-equivocada"), RO, PrismaClient, { attempts: 5, waitMs: 800 })).toBe(false);
+  });
+
   it("no empieza si la cuenta ya tiene una contraseña secundaria", async () => {
     await createRoUser();
     await testPrisma.$executeRawUnsafe(`ALTER USER '${RO}'@'%' IDENTIFIED BY 'otra-${OLD}' RETAIN CURRENT PASSWORD`);

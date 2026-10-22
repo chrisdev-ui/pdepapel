@@ -75,17 +75,26 @@ export async function hasSecondaryPassword(db, user, host) {
   return Boolean(Number(row?.has ?? 0));
 }
 
-/** Abre una conexión nueva con esa URL y comprueba quién es. Nunca lanza ni imprime la URL. */
-export async function canLogin(url, expectedUser, PrismaClient) {
-  const client = new PrismaClient({ datasources: { db: { url } }, log: [] });
-  try {
-    const [row] = await client.$queryRawUnsafe("SELECT CURRENT_USER() AS cu");
-    return String(row?.cu ?? "").startsWith(`${expectedUser}@`);
-  } catch {
-    return false;
-  } finally {
-    await client.$disconnect().catch(() => {});
+/**
+ * Abre una conexión nueva con esa URL y comprueba quién es. Nunca lanza ni
+ * imprime la URL. Si MySQL la rechaza por el tope de conexiones de la cuenta
+ * (1203, copilot_ro tiene 2), espera y reintenta: eso no dice nada de la clave.
+ */
+export async function canLogin(url, expectedUser, PrismaClient, { attempts = 6, waitMs = 2000 } = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const client = new PrismaClient({ datasources: { db: { url } }, log: [] });
+    try {
+      const [row] = await client.$queryRawUnsafe("SELECT CURRENT_USER() AS cu");
+      return String(row?.cu ?? "").startsWith(`${expectedUser}@`);
+    } catch (error) {
+      const busy = /1203|max_user_connections/i.test(String(error?.message ?? ""));
+      if (!busy || attempt === attempts) return false;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    } finally {
+      await client.$disconnect().catch(() => {});
+    }
   }
+  return false;
 }
 
 /**
