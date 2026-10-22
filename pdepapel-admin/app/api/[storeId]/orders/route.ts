@@ -85,6 +85,7 @@ import {
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
+import { orderLegalConsentData } from "@/lib/legal-consent";
 
 type StoreFreight = {
   idRate: number;
@@ -767,6 +768,7 @@ async function createOrder(
         ...gift,
         createdBy: isStoreOwner ? userLogged : null,
         source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
+        ...orderLegalConsentData({ isStoreOwner, legalConsent: body?.legalConsent }),
         ...(normalizedAnalyticsClientId
           ? { analyticsClientId: normalizedAnalyticsClientId }
           : {}),

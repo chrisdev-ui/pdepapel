@@ -150,3 +150,71 @@ describe("origen del pedido (MySQL)", () => {
     await expect(stored(fromOwner)).resolves.toMatchObject({ source: OrderSource.PANEL });
   });
 });
+
+/**
+ * Prueba de consentimiento (Ley 1581): versiones, hora del servidor y canal
+ * solo en los pedidos de la tienda con versiones conocidas. La dueña, una
+ * versión desconocida o un cuerpo sin versiones dejan todo en null.
+ */
+describe("consentimiento legal del pedido (MySQL)", () => {
+  let fixture: InventoryFixture | undefined;
+  const versions = { terms: "2026-10-21", privacy: "2026-10-21" };
+  const consent = (id: string) =>
+    testPrisma.order.findUniqueOrThrow({ where: { id }, select: { legalTermsVersion: true, legalPrivacyVersion: true, legalConsentAt: true, legalConsentChannel: true } });
+  const none = { legalTermsVersion: null, legalPrivacyVersion: null, legalConsentAt: null, legalConsentChannel: null };
+
+  afterEach(async () => {
+    if (fixture) {
+      await deleteInventoryFixture(fixture);
+      fixture = undefined;
+    }
+    session.userId = null;
+  });
+
+  const create = async (route: "orders" | "checkout", body: Record<string, unknown>) => {
+    const { POST } = route === "orders" ? await import("@/app/api/[storeId]/orders/route") : await import("@/app/api/[storeId]/checkout/route");
+    const response = await POST(json(body), { params: { storeId: fixture!.store.id } });
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { id?: string; orderId?: string; order?: { id: string } };
+    return data.id ?? data.orderId ?? data.order!.id;
+  };
+
+  it("/orders y /checkout de la tienda guardan versiones, hora del servidor y CHECKOUT", async () => {
+    fixture = await createInventoryFixture();
+    for (const route of ["orders", "checkout"] as const) {
+      const before = Date.now();
+      const id = await create(route, storeBody(fixture, { legalConsent: versions }));
+      const row = await consent(id);
+      expect(row, route).toMatchObject({ legalTermsVersion: "2026-10-21", legalPrivacyVersion: "2026-10-21", legalConsentChannel: "CHECKOUT" });
+      expect(row.legalConsentAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(row.legalConsentAt!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    }
+  });
+
+  it("sin versiones, con una desconocida o creado por la dueña: null (no se finge)", async () => {
+    fixture = await createInventoryFixture();
+    await expect(consent(await create("orders", storeBody(fixture)))).resolves.toEqual(none);
+    await expect(consent(await create("orders", storeBody(fixture, { legalConsent: { terms: "2030-01-01", privacy: "2026-10-21" } })))).resolves.toEqual(none);
+    await expect(consent(await create("checkout", storeBody(fixture, { legalConsent: "sí" })))).resolves.toEqual(none);
+    session.userId = fixture.store.userId;
+    await expect(consent(await create("orders", storeBody(fixture, { legalConsent: versions })))).resolves.toEqual(none);
+    await expect(consent(await create("checkout", storeBody(fixture, { legalConsent: versions, guestId: null })))).resolves.toEqual(none);
+  });
+
+  it("tarjeta de regalo de la tienda (con la frase encima del botón): guarda; de la dueña: null", async () => {
+    fixture = await createInventoryFixture();
+    const { POST } = await import("@/app/api/[storeId]/gift-cards/checkout/route");
+    const buy = async (extra: Record<string, unknown>) => {
+      const response = await POST(
+        json({ amount: 50000, buyerName: "Luisa Sánchez", buyerEmail: "luisa@prueba.test", recipientName: "Mariana", payment: { method: PaymentMethod.BankTransfer }, guestId: session.userId ? undefined : `guest-${randomUUID()}`, ...extra }),
+        { params: { storeId: fixture!.store.id } },
+      );
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as { orderId?: string; id?: string; order?: { id: string } };
+      return data.orderId ?? data.id ?? data.order!.id;
+    };
+    await expect(consent(await buy({ legalConsent: versions }))).resolves.toMatchObject({ legalTermsVersion: "2026-10-21", legalConsentChannel: "CHECKOUT" });
+    session.userId = fixture.store.userId;
+    await expect(consent(await buy({ legalConsent: versions }))).resolves.toEqual(none);
+  });
+});

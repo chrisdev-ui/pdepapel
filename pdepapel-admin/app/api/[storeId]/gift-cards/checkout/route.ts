@@ -24,6 +24,7 @@ import {
 } from "@/lib/utils";
 import { runInBackground } from "@/lib/background";
 import { checkIfStoreOwner } from "@/lib/utils";
+import { orderLegalConsentData } from "@/lib/legal-consent";
 
 /**
  * Compra de una tarjeta de regalo desde la tienda.
@@ -54,6 +55,7 @@ const bodySchema = z.object({
   website: z.string().max(200).optional(),
   formStartedAt: z.number().optional(),
   turnstileToken: z.string().max(4096).optional(),
+  legalConsent: z.object({ terms: z.string().max(20), privacy: z.string().max(20) }).optional(),
 });
 
 const getCorsHeaders = (request: Request) => ({
@@ -163,6 +165,7 @@ async function createGiftCardCheckout(
           status: OrderStatus.PENDING,
           type: OrderType.GIFT_CARD,
           source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
+          ...orderLegalConsentData({ isStoreOwner, legalConsent: body.legalConsent }),
           fullName: body.buyerName,
           email: body.buyerEmail.toLowerCase(),
           phone: screen.phone,

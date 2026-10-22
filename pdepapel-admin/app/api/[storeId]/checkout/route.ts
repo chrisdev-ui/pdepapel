@@ -68,6 +68,7 @@ import { runInBackground } from "@/lib/background";
 import { createGuideInBackground } from "@/lib/guide-background";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
+import { orderLegalConsentData } from "@/lib/legal-consent";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -760,6 +761,7 @@ async function createCheckout(
           guestId: !authenticatedUserId ? guestId : null,
           orderNumber: orderNumber,
           source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
+          ...orderLegalConsentData({ isStoreOwner, legalConsent: body?.legalConsent }),
           // Cubierto entero por la tarjeta: nace pagado y nunca va a la pasarela.
           status: fullyCovered ? OrderStatus.PAID : OrderStatus.PENDING,
           giftCardId,
