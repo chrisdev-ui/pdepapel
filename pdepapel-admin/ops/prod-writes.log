@@ -406,3 +406,4 @@
 2026-10-22T03:11:46.444Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Consentimiento legal (20261025_add_legal_consent)"
 2026-10-22T15:20:08.149Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/rotation/read-mysql-users.mjs@fe24954f23b79690 | estado=ok | exit=0 | rows=? | "Leer mysql.user (solo lectura) por el incidente de Railway"
 2026-10-22T15:20:44.930Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/rotation/rotate-db-credential.mjs@595873c95a18d314 | estado=ok | exit=0 | rows=? | "Crear pdepapel_app y cambiar DATABASE_URL de Production (incidente Railway)"
+2026-10-22T16:21:12.708Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/rotation/rotate-db-credential.mjs@595873c95a18d314 | estado=ok | exit=0 | rows=? | "Rotar copilot_ro (incidente Railway)"
