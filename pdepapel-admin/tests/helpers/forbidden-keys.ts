@@ -85,6 +85,11 @@ const VIEWER_KEYS = [
   "token",
   "riskScore",
   "riskReasons",
+  // Prueba de consentimiento del pedido (solo la dueña).
+  "legalTermsVersion",
+  "legalPrivacyVersion",
+  "legalConsentAt",
+  "legalConsentChannel",
   // Reseñas: quién escribió y la moderación.
   "userId",
   "moderationNote",
@@ -126,6 +131,10 @@ const LINK_HOLDER_KEYS = [
   "guideUrl",
   "destinationData",
   "originData",
+  "legalTermsVersion",
+  "legalPrivacyVersion",
+  "legalConsentAt",
+  "legalConsentChannel",
 ];
 
 export type PayloadRole = "owner" | "viewer" | "linkHolder";

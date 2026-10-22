@@ -64,6 +64,10 @@ describe("recorte para cuentas de solo lectura", () => {
       gatewayFee: 1500,
       profitMarginPct: 55,
       adminNotes: "nota interna",
+      legalTermsVersion: "2026-10-21",
+      legalPrivacyVersion: "2026-10-21",
+      legalConsentAt: new Date("2026-10-22T15:00:00Z"),
+      legalConsentChannel: "CHECKOUT",
       orderItems: [{ id: "i-1", quantity: 2, price: 12000, product: { id: "p-1", name: "Libreta", acqPrice: 5000 } }],
     };
     const clean = scrubOrder(order) as Record<string, any>;
@@ -71,6 +75,7 @@ describe("recorte para cuentas de solo lectura", () => {
       "fullName", "email", "phone", "address", "address2", "addressReference", "neighborhood",
       "daneCode", "documentId", "company",
       "totalProductCost", "netProfit", "gatewayFee", "profitMarginPct", "adminNotes",
+      "legalTermsVersion", "legalPrivacyVersion", "legalConsentAt", "legalConsentChannel",
     ]) {
       expect(clean, hidden).not.toHaveProperty(hidden);
     }

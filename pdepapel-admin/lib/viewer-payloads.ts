@@ -54,6 +54,11 @@ export const VIEWER_HIDDEN_ORDER_FIELDS = [
   // Quién es la clienta (cuenta o invitada).
   "userId",
   "guestId",
+  // Prueba de consentimiento: solo la dueña la ve.
+  "legalTermsVersion",
+  "legalPrivacyVersion",
+  "legalConsentAt",
+  "legalConsentChannel",
 ] as const;
 
 /**

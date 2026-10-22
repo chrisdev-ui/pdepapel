@@ -269,6 +269,10 @@ export const INTERNAL_ORDER_FIELDS = [
   "giftRecipientEmail",
   "giftRecipientPhone",
   "giftCardId",
+  "legalTermsVersion",
+  "legalPrivacyVersion",
+  "legalConsentAt",
+  "legalConsentChannel",
 ] as const;
 
 /** Lista «Mis pedidos» de la tienda: lo que pintan el historial y el resumen de la cuenta. */

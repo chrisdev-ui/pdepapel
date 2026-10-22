@@ -23,6 +23,11 @@ interface OrderWorkspaceHeaderProps {
     orderItems: { name: string; sku?: string | null; quantity: number }[];
     isGift?: boolean | null;
     giftRecipientName?: string | null;
+    /** Solo llegan para la dueña (la cuenta de solo lectura los recibe sin estos campos). */
+    legalTermsVersion?: string | null;
+    legalPrivacyVersion?: string | null;
+    legalConsentAt?: Date | string | null;
+    legalConsentChannel?: string | null;
   };
 }
 
@@ -82,6 +87,12 @@ export function OrderWorkspaceHeader({
               {order.fullName} · {currencyFormatter(order.total)} · creado el{" "}
               {fmt(order.createdAt)}
             </span>
+            {order.legalConsentAt && order.legalTermsVersion && order.legalPrivacyVersion && (
+              <span className="text-xs text-muted-foreground" data-testid="order-legal-consent">
+                Aceptó términos v{order.legalTermsVersion} y privacidad v{order.legalPrivacyVersion} el {fmt(order.legalConsentAt)}
+                {order.legalConsentChannel === "CHECKOUT" ? " (checkout)" : ""}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
