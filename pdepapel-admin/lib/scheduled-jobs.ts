@@ -20,8 +20,8 @@ export const SCHEDULED_JOBS = {
   "customer-reactivation": { enabled: false },
   "bank-transfer-review": { enabled: true },
   "copilot-retention": { enabled: true },
-  // Métricas de redes (social-sync.yml cada 6 h): simula hasta que Christian lo encienda.
-  "social-sync": { enabled: false },
+  // Métricas de redes (social-sync.yml cada 6 h), encendido 2026-10-21.
+  "social-sync": { enabled: true },
 } as const satisfies Record<string, { enabled: boolean }>;
 
 export type ScheduledJobName = keyof typeof SCHEDULED_JOBS;

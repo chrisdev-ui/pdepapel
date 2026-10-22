@@ -5,10 +5,10 @@
 # run every daily job four times. The endpoint answers at once: it queues one
 # QStash task per connected account and the work happens there.
 #
-# OFF until Christian turns it on: while `SCHEDULED_JOBS["social-sync"]` is
-# false the route only accepts mode=dry-run and returns counts without
-# calling Meta or TikTok. To turn it on: set it to true, add the job to
-# JOB_DEFINITIONS (expectedEveryHours: 6) and change MODE below to apply.
+# ON since 2026-10-21: scheduled runs use mode=apply and queue the sync of
+# every connected account; a manual run defaults to dry-run (counts only).
+# To turn it off: SCHEDULED_JOBS["social-sync"] = false (the route then
+# refuses apply with 409) and the default MODE below back to dry-run.
 name: Social metrics sync
 
 on:
@@ -35,7 +35,7 @@ jobs:
       ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
       ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
       PLATFORM: ${{ github.event.inputs.platform || 'all' }}
-      MODE: ${{ github.event.inputs.mode || 'dry-run' }}
+      MODE: ${{ github.event.inputs.mode || 'apply' }}
     steps:
       - name: Verify protected secret
         run: test -n "$ADMIN_CRON_SECRET"

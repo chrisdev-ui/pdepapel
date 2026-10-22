@@ -89,3 +89,14 @@ describe("systems status", () => {
     });
   });
 });
+
+describe("métricas de redes en «Sistemas»", () => {
+  it("sin cuentas conectadas no aparece; con cuentas, sin corrida reciente, pide atención", () => {
+    const now = new Date("2026-10-21T12:00:00.000Z");
+    expect(buildSystemsStatus([], "store-1", now, ["social-sync"]).some((row) => row.name === "social-sync")).toBe(false);
+    const row = buildSystemsStatus([], "store-1", now).find((candidate) => candidate.name === "social-sync");
+    expect(row).toMatchObject({ label: "Métricas de redes", overdue: true, attention: true });
+    const fresh = buildSystemsStatus([{ name: "social-sync", storeId: "store-1", ranAt: new Date("2026-10-21T09:00:00.000Z"), ok: true, detail: "Instagram: 3 publicaciones revisadas, 3 mediciones" }], "store-1", now).find((candidate) => candidate.name === "social-sync");
+    expect(fresh).toMatchObject({ overdue: false, attention: false });
+  });
+});

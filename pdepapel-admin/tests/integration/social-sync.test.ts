@@ -245,9 +245,10 @@ describe("ruta del cron", () => {
   const call = (query = "", token: string | null = TEST_ENV_STUBS.CRON_SECRET) =>
     cronGET(new Request(`http://admin.test/api/cron/social-sync${query}`, { headers: token ? { authorization: `Bearer ${token}` } : {} }) as never);
 
-  it("sin el secreto, 403; apagado solo simula y no encola; apply se rechaza", async () => {
+  it("sin el secreto, 403; sin mode simula y no encola; con apply encola las cuentas conectadas", async () => {
     f = await createInventoryFixture();
-    await account();
+    const connected = await account();
+    const blocked = await testPrisma.socialAccount.create({ data: { storeId: f.store.id, platform: "TIKTOK", externalId: "open1", status: "NEEDS_RECONNECT" } });
     expect((await call("", null)).status).toBe(403);
     expect((await call("", "otro")).status).toBe(403);
 
@@ -259,7 +260,11 @@ describe("ruta del cron", () => {
     expect(JSON.stringify(body)).not.toMatch(/tokenRef|META_IG_PAGE_TOKEN|access/i);
     expect(queue.enqueued).toEqual([]);
 
-    expect((await call("?mode=apply")).status).toBe(409);
+    const apply = await call("?mode=apply");
+    expect(apply.status).toBe(200);
+    expect(await apply.json()).toMatchObject({ mode: "apply", accounts: expect.any(Number), enqueued: expect.any(Number) });
+    expect(queue.enqueued).toContainEqual({ message: { accountId: connected.id }, delaySeconds: 0 });
+    expect(queue.enqueued.map((entry) => (entry as { message: { accountId: string } }).message.accountId)).not.toContain(blocked.id);
     expect((await call("?platform=youtube")).status).toBe(400);
   });
 });

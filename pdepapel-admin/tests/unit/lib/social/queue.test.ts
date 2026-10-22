@@ -15,11 +15,12 @@ describe("cola y horario de la sincronización de redes", () => {
     expect(SOCIAL_SYNC_PATH).toBe("/api/internal/social/sync");
   });
 
-  it("apagada hasta que Christian la encienda: el workflow corre cada 6 h en simulación", () => {
-    expect(SCHEDULED_JOBS["social-sync"].enabled).toBe(false);
+  it("encendida: el workflow programado corre cada 6 h con apply; a mano, simulación por defecto", () => {
+    expect(SCHEDULED_JOBS["social-sync"].enabled).toBe(true);
     const workflow = readFileSync(path.resolve(__dirname, "../../../../../.github/workflows/social-sync.yml"), "utf8");
     expect(workflow).toContain('cron: "15 3,9,15,21 * * *"');
-    expect(workflow).toContain("MODE: ${{ github.event.inputs.mode || 'dry-run' }}");
+    expect(workflow).toContain("MODE: ${{ github.event.inputs.mode || 'apply' }}");
+    expect(workflow).toMatch(/mode:\n\s+description: [^\n]+\n\s+required: false\n\s+default: dry-run/);
     expect(workflow).toContain("secrets.PDEPAPEL_ADMIN_CRON_SECRET");
     expect(workflow).toContain("/api/cron/social-sync?platform=$PLATFORM&mode=$MODE");
     expect(workflow).not.toMatch(/META_IG_PAGE_TOKEN|TIKTOK_CLIENT/);

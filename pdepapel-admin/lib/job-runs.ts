@@ -39,8 +39,8 @@ export type JobName =
   | "whatsapp-bot-ratio"
   | "copilot-spend"
   | "copilot-skill-overrides"
-  // Apagados (lib/scheduled-jobs.ts): entran a JOB_DEFINITIONS al encenderlos,
-  // si no «Sistemas» los marcaría atrasados.
+  // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
+  // si no «Sistemas» lo marcaría atrasado.
   | "customer-reactivation"
   | "social-sync";
 
@@ -54,6 +54,13 @@ export interface JobDefinition {
 }
 
 export const JOB_DEFINITIONS: JobDefinition[] = [
+  {
+    // Una fila por tienda en cada pasada de una cuenta; sin cuentas conectadas no se muestra.
+    name: "social-sync",
+    label: "Métricas de redes",
+    expectedEveryHours: 6,
+    perStore: true,
+  },
   {
     name: "stock-reservations",
     label: "Reservas (vencimientos y resumen)",
@@ -214,8 +221,9 @@ export function buildSystemsStatus(
   }[],
   storeId: string,
   now = new Date(),
+  skip: JobName[] = [],
 ): SystemStatusRow[] {
-  return JOB_DEFINITIONS.map((job) => {
+  return JOB_DEFINITIONS.filter((job) => !skip.includes(job.name)).map((job) => {
     const run = runs.find(
       (candidate) =>
         candidate.name === job.name &&
@@ -275,7 +283,9 @@ async function loadSystemsStatus(
       },
     })
     .catch(() => []);
-  const rows = buildSystemsStatus(runs, storeId, now);
+  // Sin cuentas de redes conectadas no hay corridas que esperar.
+  const connectedSocial = await prismadb.socialAccount.count({ where: { storeId, status: "OK" } }).catch(() => 0);
+  const rows = buildSystemsStatus(runs, storeId, now, connectedSocial === 0 ? ["social-sync"] : []);
   const ratio = await measureWhatsAppBotRatio(storeId, now).catch(() => null);
   const copilot = isCopilotConfigured() ? await measureCopilotSpend(storeId, getAiRoutingStore() as unknown as CopilotBudgetStore | null, now) : null;
   const overrides = isCopilotConfigured() ? await measureCopilotSkillOverrides(storeId, now).catch(() => null) : null;
