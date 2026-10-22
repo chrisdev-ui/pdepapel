@@ -1,1 +1,1 @@
-2026-10-22 15:22 UTC · incidente Railway: el panel pasa de root a pdepapel_app
+2026-10-22 16:22 UTC · incidente Railway: COPILOT_DATABASE_URL con la clave nueva de copilot_ro
