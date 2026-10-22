@@ -34,8 +34,8 @@ const sections: PolicySection[] = [
         <p data-testid="responsable">
           Responsable del tratamiento: Paula Fernanda Morales Rodriguez (nombre
           comercial: Papelería P de Papel), NIT 1030579584-5. Dirección de
-          notificación: Calle 12 AA Sur #55D-30, Medellín, Antioquia. Contacto:
-          papeleria.pdepapel@gmail.com.
+          notificación: Calle 12 AA Sur #55D-30, Medellín, Antioquia. Contacto:{" "}
+          {POLICY_CONTACT.email}.
         </p>
       </>
     ),

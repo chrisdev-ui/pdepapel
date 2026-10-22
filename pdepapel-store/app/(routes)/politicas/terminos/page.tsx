@@ -2,7 +2,7 @@ import { Scale } from "lucide-react";
 import { Metadata } from "next";
 import Link from "next/link";
 
-import { PolicyPage, type PolicySection } from "@/components/policy/policy-page";
+import { PolicyPage, POLICY_CONTACT, type PolicySection } from "@/components/policy/policy-page";
 import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
@@ -32,8 +32,8 @@ const sections: PolicySection[] = [
         <p data-testid="responsable">
           Responsable: Paula Fernanda Morales Rodriguez (nombre comercial:
           Papelería P de Papel), NIT 1030579584-5. Dirección de notificación:
-          Calle 12 AA Sur #55D-30, Medellín, Antioquia. Contacto:
-          papeleria.pdepapel@gmail.com.
+          Calle 12 AA Sur #55D-30, Medellín, Antioquia. Contacto:{" "}
+          {POLICY_CONTACT.email}.
         </p>
       </>
     ),
@@ -171,7 +171,7 @@ const sections: PolicySection[] = [
     title: "Peticiones, quejas y reclamos",
     content: (
       <p>
-        Escríbenos a papeleria.pdepapel@gmail.com o por WhatsApp (313 258 2293)
+        Escríbenos a {POLICY_CONTACT.email} o por WhatsApp (313 258 2293)
         con tu nombre, el número de pedido y lo que necesitas. Respondemos en un
         máximo de quince (15) días hábiles; normalmente lo hacemos en 12 a 24
         horas. Si no quedas conforme con la respuesta, puedes acudir a la
