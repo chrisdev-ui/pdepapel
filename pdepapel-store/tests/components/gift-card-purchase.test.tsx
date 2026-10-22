@@ -66,6 +66,14 @@ describe("tarjeta de regalo · compra", () => {
     expect(screen.getByText(/El código llega al correo de Mariana López/)).toBeInTheDocument();
   });
 
+  it("shows the terms and data-processing authorization right above the pay button", () => {
+    renderForm();
+    const consent = screen.getByTestId("legal-consent");
+    expect(consent).toHaveTextContent("Al finalizar tu compra aceptas los Términos y condiciones y autorizas el tratamiento de tus datos según la Política de privacidad.");
+    const button = screen.getByRole("button", { name: /Comprar tarjeta de/ });
+    expect(consent.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("submits the purchase and sends the buyer to the order page with the payment open", async () => {
     mocks.checkoutGiftCard.mockResolvedValue({ order: { id: "order-1", orderNumber: "ORD-1", total: 100000 }, boldData: {} });
     renderForm();
@@ -87,6 +95,7 @@ describe("tarjeta de regalo · compra", () => {
       userId: null,
       guestId: "guest-1",
       website: "",
+      legalConsent: { terms: "2026-10-21", privacy: "2026-10-21" },
     });
     expect(typeof payload.formStartedAt).toBe("number");
     expect(payload.recipientEmail).toBeUndefined();

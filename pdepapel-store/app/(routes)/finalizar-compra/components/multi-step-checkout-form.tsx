@@ -1,6 +1,7 @@
 "use client";
 
 import { LegalConsent } from "@/components/legal/legal-consent";
+import { legalConsentPayload } from "@/lib/legal-versions";
 import { checkLiveStock } from "@/actions/check-live-stock";
 import { safeStockPrecheck } from "@/lib/checkout-precheck";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1242,6 +1243,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         analyticsClientId,
         analyticsSessionId,
         analyticsConsent,
+        legalConsent: legalConsentPayload(),
         ...(await botTrap.fields()),
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,

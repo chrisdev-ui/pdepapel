@@ -36,6 +36,8 @@ import { NAME_ERROR, PHONE_ERROR, looksLikeRandomName, normalizeMobile } from "@
 import { orderPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { CheckoutResponse, GiftCardPurchase } from "@/types";
+import { LegalConsent } from "@/components/legal/legal-consent";
+import { legalConsentPayload } from "@/lib/legal-versions";
 
 const GIFT_MESSAGE_MAX = 300;
 
@@ -161,6 +163,7 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
       payment: { method: data.paymentMethod },
       userId: userId ?? null,
       guestId: userId ? null : guest,
+      legalConsent: legalConsentPayload(),
       ...(await botTrap.fields()),
     }).catch(() => undefined);
   };
@@ -339,7 +342,8 @@ export function GiftCardForm({ denominations }: { denominations: number[] }) {
         </section>
 
         <BotChallengeSlot trap={botTrap} />
-        <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <LegalConsent action="checkout" className="border-t border-border pt-5 sm:text-right" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5 text-success" aria-hidden="true" />
             Pago seguro. Tus datos solo se usan para esta compra.

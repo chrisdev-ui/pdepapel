@@ -6,6 +6,7 @@ import { useEffect, useMemo } from "react";
 
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
 import { ClerkMountGate } from "@/components/auth/clerk-mount-gate";
+import { LegalConsent } from "@/components/legal/legal-consent";
 import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import {
   accountAccessPath,
@@ -50,6 +51,7 @@ export function Login() {
           appearance={storefrontClerkAppearance}
         />
       </ClerkMountGate>
+      <LegalConsent action="signIn" className="text-center" />
     </AuthPageShell>
   );
 }

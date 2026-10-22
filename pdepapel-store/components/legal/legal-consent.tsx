@@ -10,10 +10,17 @@ const linkClassName = "font-semibold text-blue-yankees underline underline-offse
  * acción que entrega los datos (pagar, crear la cuenta). Los enlaces abren en
  * otra pestaña para no perder lo que ya se llenó.
  */
-export function LegalConsent({ action, className }: { action: "checkout" | "signUp"; className?: string }) {
+const LEAD = {
+  checkout: "Al finalizar tu compra aceptas",
+  signUp: "Al crear tu cuenta aceptas",
+  // Con Google, iniciar sesión puede crear la cuenta.
+  signIn: "Si creas tu cuenta al iniciar sesión, aceptas",
+} as const;
+
+export function LegalConsent({ action, className }: { action: keyof typeof LEAD; className?: string }) {
   return (
     <p className={cn("text-xs leading-relaxed text-muted-foreground", className)} data-testid="legal-consent">
-      {action === "checkout" ? "Al finalizar tu compra" : "Al crear tu cuenta"} aceptas los{" "}
+      {LEAD[action]} los{" "}
       <Link href={STOREFRONT_ROUTES.termsPolicy} target="_blank" rel="noopener noreferrer" className={linkClassName}>
         Términos y condiciones
       </Link>{" "}

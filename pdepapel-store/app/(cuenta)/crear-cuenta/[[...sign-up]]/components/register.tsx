@@ -7,6 +7,7 @@ import { useEffect, useMemo } from "react";
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
 import { ClerkMountGate } from "@/components/auth/clerk-mount-gate";
 import { LegalConsent } from "@/components/legal/legal-consent";
+import { legalConsentPayload } from "@/lib/legal-versions";
 import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import {
   accountAccessPath,
@@ -49,6 +50,7 @@ export function Register() {
           forceRedirectUrl={redirectUrl}
           signInForceRedirectUrl={redirectUrl}
           appearance={storefrontClerkAppearance}
+          unsafeMetadata={{ legalConsent: { ...legalConsentPayload(), channel: "registro" } }}
         />
       </ClerkMountGate>
       <LegalConsent action="signUp" className="text-center" />

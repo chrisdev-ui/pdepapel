@@ -4,6 +4,7 @@ import { Metadata } from "next";
 import { PolicyPage, POLICY_CONTACT, type PolicySection } from "@/components/policy/policy-page";
 import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { formatLegalDate, LEGAL_VERSIONS } from "@/lib/legal-versions";
 
 export const metadata: Metadata = {
   title: "Política de tratamiento de datos",
@@ -273,7 +274,7 @@ const sections: PolicySection[] = [
         Si cambiamos esta política, publicamos la nueva versión en esta página
         con la fecha de actualización. Los cambios importantes también se
         avisan por correo a quienes tienen cuenta o suscripción. Esta versión
-        está vigente desde el 21 de octubre de 2026.
+        está vigente desde el {formatLegalDate(LEGAL_VERSIONS.privacy)}.
       </p>
     ),
   },
@@ -287,7 +288,7 @@ export default function DataPolicyPage() {
       eyebrowClassName="bg-kawaii-lavender-light text-violet-900"
       title="Tratamiento de datos personales"
       lede="Qué datos pedimos, para qué los usamos, con quién los procesamos y cómo puedes consultarlos, corregirlos o borrarlos."
-      updatedAt="2026-10-21"
+      updatedAt={LEGAL_VERSIONS.privacy}
       sections={sections}
       contactPrompt="¿Tienes una duda sobre tus datos?"
       currentRoute={STOREFRONT_ROUTES.dataPolicy}

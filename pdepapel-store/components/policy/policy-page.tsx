@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { WhatsappIcon } from "@/components/icons";
+import { formatLegalDate } from "@/lib/legal-versions";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -52,14 +53,6 @@ const POLICY_LINKS = [
   { href: STOREFRONT_ROUTES.termsPolicy, label: "Términos y condiciones" },
 ];
 
-function formatUpdatedAt(iso: string) {
-  return new Intl.DateTimeFormat("es-CO", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(iso));
-}
 
 function TocLinks({ sections, className }: { sections: PolicySection[]; className?: string }) {
   return (
@@ -96,7 +89,7 @@ export function PolicyPage({
   currentRoute,
 }: PolicyPageProps) {
   const otherPolicies = POLICY_LINKS.filter((link) => link.href !== currentRoute);
-  const updatedLabel = formatUpdatedAt(updatedAt);
+  const updatedLabel = formatLegalDate(updatedAt);
 
   return (
     <>

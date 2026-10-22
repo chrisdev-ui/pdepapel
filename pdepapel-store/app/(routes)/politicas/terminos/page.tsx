@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { PolicyPage, POLICY_CONTACT, type PolicySection } from "@/components/policy/policy-page";
 import { BASE_URL } from "@/constants";
+import { LEGAL_VERSIONS } from "@/lib/legal-versions";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
@@ -226,7 +227,7 @@ export default function TermsPage() {
       eyebrowClassName="bg-kawaii-blue-light text-sky-900"
       title="Términos y condiciones de P de Papel"
       lede="Lo que aplica cuando navegas o compras en papeleriapdepapel.com."
-      updatedAt="2026-10-21"
+      updatedAt={LEGAL_VERSIONS.terms}
       sections={sections}
       contactPrompt="¿Tienes dudas sobre estos términos?"
       currentRoute={STOREFRONT_ROUTES.termsPolicy}

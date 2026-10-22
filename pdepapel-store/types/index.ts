@@ -500,6 +500,8 @@ export type CheckoutResponse = WompiResponse | BoldCheckoutResponse | Order;
 
 /** `POST /gift-cards/checkout`: la compra de una tarjeta de regalo. */
 export interface GiftCardPurchase {
+  /** Versiones de términos y privacidad que la frase encima del botón de pago mostró. */
+  legalConsent?: { terms: string; privacy: string };
   amount: number;
   buyerName: string;
   buyerEmail: string;
@@ -520,6 +522,8 @@ export interface GiftCardPurchase {
 export type CheckoutByOrderResponse = WompiResponse;
 
 export interface CheckoutOrder {
+  /** Versiones de términos y privacidad que la frase encima del botón de pago mostró. */
+  legalConsent?: { terms: string; privacy: string };
   fullName: string;
   /** Campo trampa y reloj del formulario (components/bot-trap.tsx). */
   website?: string;
