@@ -1,6 +1,6 @@
 import { SocialAccountStatus, SocialPlatform } from "@prisma/client";
 
-import { recordJobRun } from "@/lib/job-runs";
+import { recordJobRun, socialJobName } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
 
 import { getInstagramConfig, getTikTokConfig, INSTAGRAM_TOKEN_REF } from "./config";
@@ -64,6 +64,7 @@ export async function processSocialSyncMessage(message: SocialSyncMessage, optio
   const adapter = options.adapter === undefined ? adapterForAccount(account) : options.adapter;
   if (!adapter) {
     await markAccountStatus(account.id, SocialAccountStatus.OK, "not_configured");
+    await recordJobRun(socialJobName(account.platform), { ok: false, storeId: account.storeId, detail: "Falta configurar la red en el servidor (not_configured)" });
     return { status: "skipped", reason: "not_configured" };
   }
 
@@ -72,14 +73,13 @@ export async function processSocialSyncMessage(message: SocialSyncMessage, optio
     await enqueueSocialSync({ accountId: account.id, continuation: outcome.next }, outcome.delaySeconds);
   }
   if (outcome.status === "done" || outcome.status === "failed" || outcome.status === "reconnect") {
-    const label = account.platform === SocialPlatform.INSTAGRAM ? "Instagram" : "TikTok";
-    await recordJobRun("social-sync", {
+    await recordJobRun(socialJobName(account.platform), {
       ok: outcome.status === "done",
       storeId: account.storeId,
       detail:
         outcome.status === "done"
-          ? `${label}: ${outcome.posts} publicaciones revisadas, ${outcome.snapshots} mediciones`
-          : `${label}: ${outcome.status === "reconnect" ? "hay que volver a conectar" : "falló"} (${outcome.reason})`,
+          ? `${outcome.posts} publicaciones revisadas, ${outcome.snapshots} mediciones`
+          : `${outcome.status === "reconnect" ? "Hay que volver a conectar" : "Falló"} (${outcome.reason})`,
     });
   }
   return outcome;

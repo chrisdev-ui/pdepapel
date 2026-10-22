@@ -90,13 +90,19 @@ describe("systems status", () => {
   });
 });
 
-describe("métricas de redes en «Sistemas»", () => {
-  it("sin cuentas conectadas no aparece; con cuentas, sin corrida reciente, pide atención", () => {
-    const now = new Date("2026-10-21T12:00:00.000Z");
-    expect(buildSystemsStatus([], "store-1", now, ["social-sync"]).some((row) => row.name === "social-sync")).toBe(false);
-    const row = buildSystemsStatus([], "store-1", now).find((candidate) => candidate.name === "social-sync");
-    expect(row).toMatchObject({ label: "Métricas de redes", overdue: true, attention: true });
-    const fresh = buildSystemsStatus([{ name: "social-sync", storeId: "store-1", ranAt: new Date("2026-10-21T09:00:00.000Z"), ok: true, detail: "Instagram: 3 publicaciones revisadas, 3 mediciones" }], "store-1", now).find((candidate) => candidate.name === "social-sync");
-    expect(fresh).toMatchObject({ overdue: false, attention: false });
+describe("métricas de redes en «Sistemas»: una fila por red", () => {
+  const now = new Date("2026-10-21T12:00:00.000Z");
+  const run = (name: string, hoursAgo: number, ok: boolean, detail: string) => ({ name, storeId: "store-1", ranAt: new Date(now.getTime() - hoursAgo * 3_600_000), ok, detail });
+
+  it("cada red con su última corrida; el fallo de una no lo tapa el éxito de la otra", () => {
+    const rows = buildSystemsStatus([run("social-sync-instagram", 3, false, "Falló (meta_10)"), run("social-sync-tiktok", 1, true, "91 publicaciones revisadas, 91 mediciones")], "store-1", now);
+    expect(rows.find((row) => row.name === "social-sync-instagram")).toMatchObject({ label: "Métricas de Instagram", ok: false, attention: true, detail: "Falló (meta_10)" });
+    expect(rows.find((row) => row.name === "social-sync-tiktok")).toMatchObject({ label: "Métricas de TikTok", ok: true, attention: false });
+  });
+
+  it("una red sin cuenta en la tienda no aparece", () => {
+    const rows = buildSystemsStatus([], "store-1", now, ["social-sync-tiktok"]);
+    expect(rows.some((row) => row.name === "social-sync-tiktok")).toBe(false);
+    expect(rows.find((row) => row.name === "social-sync-instagram")).toMatchObject({ overdue: true, attention: true });
   });
 });

@@ -42,7 +42,9 @@ export type JobName =
   // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
   // si no «Sistemas» lo marcaría atrasado.
   | "customer-reactivation"
-  | "social-sync";
+  // Una fila por red: un fallo de una no lo tapa la otra.
+  | "social-sync-instagram"
+  | "social-sync-tiktok";
 
 export interface JobDefinition {
   name: JobName;
@@ -55,9 +57,15 @@ export interface JobDefinition {
 
 export const JOB_DEFINITIONS: JobDefinition[] = [
   {
-    // Una fila por tienda en cada pasada de una cuenta; sin cuentas conectadas no se muestra.
-    name: "social-sync",
-    label: "Métricas de redes",
+    // Por red y por tienda; una red sin cuenta en la tienda no se muestra.
+    name: "social-sync-instagram",
+    label: "Métricas de Instagram",
+    expectedEveryHours: 6,
+    perStore: true,
+  },
+  {
+    name: "social-sync-tiktok",
+    label: "Métricas de TikTok",
     expectedEveryHours: 6,
     perStore: true,
   },
@@ -283,9 +291,7 @@ async function loadSystemsStatus(
       },
     })
     .catch(() => []);
-  // Sin cuentas de redes conectadas no hay corridas que esperar.
-  const connectedSocial = await prismadb.socialAccount.count({ where: { storeId, status: "OK" } }).catch(() => 0);
-  const rows = buildSystemsStatus(runs, storeId, now, connectedSocial === 0 ? ["social-sync"] : []);
+  const rows = buildSystemsStatus(runs, storeId, now, await socialSystemsSkip(storeId));
   const ratio = await measureWhatsAppBotRatio(storeId, now).catch(() => null);
   const copilot = isCopilotConfigured() ? await measureCopilotSpend(storeId, getAiRoutingStore() as unknown as CopilotBudgetStore | null, now) : null;
   const overrides = isCopilotConfigured() ? await measureCopilotSkillOverrides(storeId, now).catch(() => null) : null;
@@ -404,4 +410,21 @@ export async function measureWhatsAppBotRatio(storeId: string, now: Date): Promi
     attention: high,
     metric: true,
   };
+}
+
+const SOCIAL_JOB_BY_PLATFORM = { INSTAGRAM: "social-sync-instagram", TIKTOK: "social-sync-tiktok" } as const satisfies Record<string, JobName>;
+
+export function socialJobName(platform: keyof typeof SOCIAL_JOB_BY_PLATFORM): JobName {
+  return SOCIAL_JOB_BY_PLATFORM[platform];
+}
+
+/**
+ * Las redes que la tienda no tiene conectadas no esperan corridas. Una cuenta
+ * en «Reconectar» sí cuenta: su fila sigue con el último error a la vista.
+ */
+export async function socialSystemsSkip(storeId: string): Promise<JobName[]> {
+  const accounts = await prismadb.socialAccount.findMany({ where: { storeId }, select: { platform: true } }).catch(() => null);
+  if (!accounts) return Object.values(SOCIAL_JOB_BY_PLATFORM);
+  const present = new Set(accounts.map((account) => account.platform));
+  return (Object.keys(SOCIAL_JOB_BY_PLATFORM) as (keyof typeof SOCIAL_JOB_BY_PLATFORM)[]).filter((platform) => !present.has(platform)).map((platform) => SOCIAL_JOB_BY_PLATFORM[platform]);
 }
