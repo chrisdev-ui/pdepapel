@@ -44,6 +44,17 @@ describe("decideProduct", () => {
     expect(decideProduct("cartuchera eval rosa", twins)).toEqual({ kind: "match", product: twins[0] });
   });
 
+  it("en un empate gana el que se llama exactamente así (Paula contesta con el nombre que le mostramos)", () => {
+    const staplers = [product("Grapadora Capibara", "Herramientas de oficina"), product("Mini grapadora Capibara", "Herramientas de oficina")];
+    expect(decideProduct("grapadora capibara", staplers)).toEqual({ kind: "match", product: staplers[0] });
+    const sameName = [product("Monedero Capibara", "Monederos", null, "MON-1"), product("Monedero Capibara", "Monederos", null, "MON-2")];
+    expect(decideProduct("Monedero Capibara", sameName).kind).toBe("ambiguous");
+  });
+
+  it("«cosedora» busca grapadoras (así se dice en Colombia)", () => {
+    expect(matchTokens("cosedora capibara")).toEqual(["grapadora", "capibara"]);
+  });
+
   it("si dijo una cantidad que no existe no adivina: muestra los 3 más parecidos", () => {
     const decision = decideProduct("marcadores en estuche x100", CATALOG);
     expect(decision.kind).toBe("none");

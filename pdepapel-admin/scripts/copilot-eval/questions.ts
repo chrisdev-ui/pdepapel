@@ -8,6 +8,7 @@
  * solo con todas las notas aprobadas (COPILOT_EVAL_NOTAS=borradores), porque
  * las de oficio piden citar notas.
  */
+import { PAULA_CAPIBARA_REQUEST } from "../../tests/helpers/capibara-kit";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -964,7 +965,10 @@ export const KITS_CASES: { id: string; criterio: string; estricto: boolean; pasa
 /** Habilidad «Precios»: valores de prueba, ninguna cifra del negocio. */
 export const PRICING_RUNS = 3;
 
-type PricingToolName = "calcularPrecio" | "compararPacks" | "margenesBajoMinimo";
+type PricingToolName = "calcularPrecio" | "compararPacks" | "margenesBajoMinimo" | "precioDeKit";
+
+/** Las herramientas de precios cuya respuesta arma el código. */
+export const PRICING_TOOL_NAMES: PricingToolName[] = ["calcularPrecio", "compararPacks", "margenesBajoMinimo", "precioDeKit"];
 type PricingInput = Record<string, unknown> | undefined;
 
 export interface PricingCase {
@@ -1028,6 +1032,26 @@ export const PRICING_CASES: PricingCase[] = [
     pasa: (answer) => has(answer.text, "Por debajo del 35 %", "Libreta precios eval: $10.000 → **$10.770**"),
   },
   {
+    // El pedido real de Paula del 2026-10-22 (18:26 UTC): piezas con nombre y para sacar mercancía quieta.
+    id: "precios-kit-paula",
+    pregunta: PAULA_CAPIBARA_REQUEST,
+    herramienta: "precioDeKit",
+    pasa: (answer, input) =>
+      Array.isArray(input?.piezas) && (input!.piezas as unknown[]).length === 9 && input?.paraRotar === true && has(answer.text, "Antes de darte el precio", "«lapicero capibara»: hay varios parecidos"),
+  },
+  {
+    id: "precios-kit-sin-rotar",
+    pregunta: "¿A cuánto vendo un kit con el Llavero Capibara y el Rollo de stickers Capibara?",
+    herramienta: "precioDeKit",
+    pasa: (answer, input) => input?.paraRotar !== true && has(answer.text, "## Opciones de precio", "Si pagan con Bold:") && !answer.text.includes("Precio para rotar"),
+  },
+  {
+    id: "precios-kit-rotar",
+    pregunta: "Quiero armar un kit para sacar inventario quieto con el Llavero Capibara, el Rollo de stickers Capibara y el Lapicero capibara eco. ¿A cuánto lo vendo?",
+    herramienta: "precioDeKit",
+    pasa: (answer, input) => input?.paraRotar === true && has(answer.text, "## Opciones de precio", "Precio para rotar inventario"),
+  },
+  {
     id: "precios-sin-costo",
     pregunta: "¿A cuánto vendo una libreta nueva que me llegó?",
     herramienta: null,
@@ -1037,7 +1061,7 @@ export const PRICING_CASES: PricingCase[] = [
 
 /** Cada monto de la respuesta sale de lo que trajo una herramienta de precios (con o sin signo). */
 export function pricingAmountsFromTool(answer: EvalAnswer): boolean {
-  const outputs = (answer.toolOutputs ?? []).filter((item) => ["calcularPrecio", "compararPacks", "margenesBajoMinimo"].includes(item.tool)).map((item) => item.output);
+  const outputs = (answer.toolOutputs ?? []).filter((item) => (PRICING_TOOL_NAMES as string[]).includes(item.tool)).map((item) => item.output);
   const allowed = new Set(Array.from(toolAmounts(outputs), (amount) => amount.replace("-", "")));
   const shown = amountsOf(answer.text);
   return outputs.length > 0 && shown.length > 0 && shown.every((amount) => allowed.has(amount));

@@ -5,7 +5,8 @@ import { z } from "zod";
 import { CopilotQueryFailure, withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
 import { getCustomerFacingSizeName } from "@/lib/product-naming";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
-import { MIN_FACTS_TO_WRITE, countConcreteFacts, decideProduct, foldText, matchTokens, skuLikeTokens } from "@/lib/copiloto/skills/product-match";
+import { findGroups, findProduct } from "@/lib/copiloto/skills/product-lookup";
+import { MIN_FACTS_TO_WRITE, countConcreteFacts } from "@/lib/copiloto/skills/product-match";
 import { buildSpecs } from "@/lib/copiloto/skills/specs";
 import { requireStoreOwner } from "@/lib/store-access";
 import { brandDataName } from "@/lib/brand-rules";
@@ -66,101 +67,6 @@ interface FoundProduct {
   category: { name: string } | null;
 }
 
-/**
- * Por SKU exacto, o por palabras: cada palabra (sin tildes, en singular, con
- * «x50» como «50») se busca en nombre, SKU, categoría y grupo, y gana el que
- * coincide en más palabras (ver product-match.ts).
- */
-/** Grupos cuyo nombre coincide; aparte porque necesita un permiso que puede faltar. */
-async function findGroups(storeId: string, query: string): Promise<{ id: string; name: string }[]> {
-  const stems = matchTokens(query).filter((token) => !/^\d+$/.test(token) && token.length >= 3);
-  if (!stems.length) return [];
-  try {
-    return await withCopilotQuery((db) =>
-      db.productGroup.findMany({ where: { storeId, OR: stems.map((token) => ({ name: { contains: token } })) }, select: { id: true, name: true }, take: 100 }),
-    );
-  } catch (error) {
-    if (error instanceof CopilotQueryFailure) return [];
-    throw error;
-  }
-}
-
-type Estado = "activo" | "desactivado";
-
-export const LOOKUP_CAP = 400;
-
-const view = (candidate: { name: string; sku: string | null; category: string | null }, estado: Estado): CandidateView => ({
-  nombre: candidate.name.trim(),
-  sku: candidate.sku,
-  categoria: candidate.category,
-  estado,
-});
-
-/**
- * Activos y desactivados se puntúan juntos: un desactivado que empata o le gana
- * a un activo se ofrece con su estado para preguntar «¿es este?», nunca como un
- * producto nuevo. Lo que tenga forma de SKU se busca primero exacto.
- */
-async function findProduct(db: CopilotDb, storeId: string, input: { sku?: string; nombre?: string }, groups: { id: string; name: string }[]) {
-  const query = input.nombre ?? input.sku ?? "";
-  const skus = Array.from(new Set([...(input.sku ? [input.sku.trim().toUpperCase()] : []), ...skuLikeTokens(query)]));
-  for (const sku of skus) {
-    const bySku = await db.product.findFirst({ where: { storeId, sku }, select: { ...PRODUCT_SELECT, isArchived: true } });
-    if (bySku && !bySku.isArchived) return { kind: "match" as const, product: bySku as FoundProduct };
-    if (bySku) return { kind: "inactive" as const, candidates: [view({ name: bySku.name, sku: bySku.sku, category: bySku.category?.name ?? null }, "desactivado")] };
-  }
-  const stems = matchTokens(query).filter((token) => !/^\d+$/.test(token) && token.length >= 3);
-  if (!stems.length) return { kind: "none" as const, closest: [] as CandidateView[] };
-  const groupName = new Map(groups.map((group) => [group.id, group.name]));
-  const matchesStem = (token: string) => {
-    const groupIds = groups.filter((group) => foldText(group.name).includes(token)).map((group) => group.id);
-    return [
-      { name: { contains: token } },
-      { sku: { contains: token } },
-      { category: { name: { contains: token } } },
-      ...(groupIds.length ? [{ productGroupId: { in: groupIds } }] : []),
-    ];
-  };
-  // Con todas las palabras primero: una palabra suelta («kit», «lapicero») trae
-  // cientos de productos y el tope dejaría por fuera el que es.
-  const search = (where: object) =>
-    db.product.findMany({
-      where: { storeId, ...where },
-      select: { ...PRODUCT_SELECT, soldCount: true, isArchived: true },
-      orderBy: [{ soldCount: "desc" }, { id: "asc" }],
-      take: LOOKUP_CAP,
-    });
-  let rows = await search({ AND: stems.map((token) => ({ OR: matchesStem(token) })) });
-  if (!rows.length) rows = await search({ OR: stems.flatMap(matchesStem) });
-  const decision = decideProduct(
-    query,
-    rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      sku: row.sku,
-      category: row.category?.name ?? null,
-      group: row.productGroupId ? groupName.get(row.productGroupId) ?? null : null,
-      soldCount: row.soldCount,
-      estado: (row.isArchived ? "desactivado" : "activo") as Estado,
-      row,
-    })),
-  );
-  if (decision.kind === "match") {
-    return decision.product.estado === "activo"
-      ? { kind: "match" as const, product: decision.product.row as FoundProduct }
-      : { kind: "inactive" as const, candidates: [view(decision.product, "desactivado")] };
-  }
-  if (decision.kind === "ambiguous") return { kind: "ambiguous" as const, candidates: decision.candidates.map((row) => view(row, row.estado)) };
-  return { kind: "none" as const, closest: decision.closest.map((row) => view(row, row.estado)) };
-}
-
-interface CandidateView {
-  nombre: string;
-  sku: string | null;
-  categoria: string | null;
-  estado: Estado;
-}
-
 async function readAttributes(db: CopilotDb, storeId: string, productId: string, productGroupId: string | null) {
   const row = await db.product.findUnique({
     where: { id: productId },
@@ -195,7 +101,7 @@ export function productoParaDescripcionTool(storeId: string) {
       await requireStoreOwner(storeId);
       const groups = await findGroups(storeId, nombre ?? sku ?? "");
       const base = await withCopilotQuery(async (db) => {
-        const found = await findProduct(db, storeId, { sku, nombre }, groups);
+        const found = await findProduct<FoundProduct>(db, storeId, { sku, nombre }, groups, { select: PRODUCT_SELECT });
         if (found.kind !== "match") return { found };
         const product = found.product;
         const [store, examples] = await Promise.all([

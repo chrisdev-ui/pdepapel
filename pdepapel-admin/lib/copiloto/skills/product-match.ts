@@ -40,11 +40,14 @@ export function singular(word: string): string {
   return word;
 }
 
+/** Como lo dice Paula → como está en el catálogo. */
+const SYNONYMS: Record<string, string> = { cosedora: "grapadora" };
+
 export function matchTokens(value: string): string[] {
   const words = normalizeQuantities(foldText(value))
     .split(/[^a-z0-9ñ]+/)
     .filter((word) => word && !STOPWORDS.has(word) && (word.length > 1 || /\d/.test(word)));
-  return Array.from(new Set(words.map(singular)));
+  return Array.from(new Set(words.map(singular).map((word) => SYNONYMS[word] ?? word)));
 }
 
 export interface MatchCandidate {
@@ -93,6 +96,9 @@ export function decideProduct<T extends MatchCandidate>(query: string, products:
   if (top.score < needed || !top.numbersOk) return { kind: "none", closest: ranked.slice(0, 3).map((row) => row.product) };
   const tied = ranked.filter((row) => row.score === top.score && row.numbersOk);
   if (tied.length === 1) return { kind: "match", product: top.product };
+  // Paula contesta con el nombre que le mostramos: si uno de los empatados se llama exactamente así, es ese.
+  const exact = tied.filter((row) => foldText(row.product.name).trim() === foldText(query).trim());
+  if (exact.length === 1) return { kind: "match", product: exact[0].product };
   return { kind: "ambiguous", candidates: tied.slice(0, MAX_CANDIDATES).map((row) => row.product) };
 }
 

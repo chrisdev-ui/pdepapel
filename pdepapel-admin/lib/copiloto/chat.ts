@@ -302,7 +302,7 @@ export async function handleCopilotChat(request: Request, storeId: string, deps:
       return { activeTools: activeToolNames(COPILOT_TOOL_NAMES, loaded) as (keyof typeof tools)[] };
     },
     // Al final, sin otra llamada: aviso de especificaciones que faltan, las respuestas de kits y de precios armadas por el código y, para toda respuesta, palabras simples en vez de nombres internos.
-    experimental_transform: [specCheckTransform(), kitsAnswerTransform(), pricingAnswerTransform({ hold: () => loaded.has("precios") }), plainWordsTransform()],
+    experimental_transform: [specCheckTransform(), kitsAnswerTransform(), pricingAnswerTransform({ hold: () => loaded.has("precios") || loaded.has("kits") }), plainWordsTransform()],
     stopWhen: [isStepCount(COPILOT_MAX_STEPS), hasToolCall(KITS_TEXTS_TOOL), ...PRICING_TOOLS.map((name) => hasToolCall(name))],
     abortSignal: AbortSignal.timeout(COPILOT_TIMEOUT_MS),
     maxRetries: 0,

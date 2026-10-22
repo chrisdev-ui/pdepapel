@@ -211,6 +211,55 @@ describe("copilot_ro: las concesiones alcanzan para las 12 herramientas y nada m
     expect(JSON.stringify([price, packs, below])).not.toMatch(/Clienta Ficticia|ficticia@prueba\.test|3000000000|Calle Falsa/);
   });
 
+  it("precioDeKit corre con copilot_ro sobre el pedido de Paula (capibara): busca, pregunta y precia", async () => {
+    const store = fixture!.store.id;
+    const suffix = randomBytes(3).toString("hex");
+    const { CAPIBARA_PRODUCTS, CAPIBARA_EXPECTED, PAULA_CAPIBARA_PIECES } = await import("../helpers/capibara-kit");
+    const created = await Promise.all(
+      CAPIBARA_PRODUCTS.map((product, index) =>
+        testPrisma.product.create({
+          data: {
+            name: product.name,
+            slug: `capi-${index}-${suffix}`,
+            description: "Prueba",
+            stock: product.stock,
+            price: product.price,
+            acqPrice: product.acqPrice,
+            sku: `${product.sku}-${suffix}`,
+            isArchived: product.isArchived,
+            isKit: product.isKit,
+            storeId: store,
+            categoryId: fixture!.category.id,
+            colorId: fixture!.component.colorId,
+            sizeId: fixture!.component.sizeId,
+            designId: fixture!.component.designId,
+          },
+          select: { id: true },
+        }),
+      ),
+    );
+    try {
+      const { buildSkillTools } = await import("@/lib/copiloto/skills/tools");
+      const tools = buildSkillTools(store, { alreadyLoaded: ["kits"], notesFor: async () => [] });
+      const run = (input: unknown) => (tools.precioDeKit as unknown as { execute: (input: unknown, options: unknown) => Promise<{ datos: Record<string, unknown> }> }).execute(input, { toolCallId: "k", messages: [] });
+
+      const asked = await run({ piezas: PAULA_CAPIBARA_PIECES.map((texto) => ({ texto, cantidad: 1 })), paraRotar: true });
+      expect(asked.datos.estado).toBe("aclarar");
+      expect((asked.datos.piezas as { nombre: string }[]).map((piece) => piece.nombre)).toEqual([...CAPIBARA_EXPECTED.resueltas]);
+      const clarify = Object.fromEntries((asked.datos.aclarar as { texto: string; problema: string; candidatos: { nombre: string }[] }[]).map((item) => [item.texto, item]));
+      expect(clarify["lapicero capibara"].candidatos.map((row) => row.nombre).sort()).toEqual([...CAPIBARA_EXPECTED.ambiguas["lapicero capibara"]].sort());
+      expect(clarify["monedero capibara tela"].candidatos).toHaveLength(2);
+      expect(clarify["cosedora capibara"].candidatos.map((row) => row.nombre).sort()).toEqual([...CAPIBARA_EXPECTED.ambiguas["cosedora capibara"]].sort());
+
+      const priced = await run({ piezas: [...CAPIBARA_EXPECTED.resueltas, "Lapicero capibara eco", "Grapadora Capibara"].map((texto) => ({ texto, cantidad: 1 })), paraRotar: true });
+      expect(priced.datos).toMatchObject({ estado: "listo", minimoPct: 35, paraRotar: true });
+      expect((priced.datos.opciones as { kinds: string[] }[]).some((option) => option.kinds.includes("rotar"))).toBe(true);
+      expect(JSON.stringify(priced)).not.toMatch(/Clienta Ficticia|ficticia@prueba\.test|3000000000|Calle Falsa/);
+    } finally {
+      await testPrisma.product.deleteMany({ where: { id: { in: created.map((row) => row.id) } } });
+    }
+  });
+
   it("no puede leer los datos de la clienta", async () => {
     await expect(roClient.order.findFirst({ where: { storeId: fixture!.store.id }, select: { email: true } })).rejects.toThrow();
     await expect(roClient.order.findFirst({ where: { storeId: fixture!.store.id } })).rejects.toThrow();
@@ -336,7 +385,7 @@ describe("copilot_ro: productoParaDescripcion (habilidad descripciones)", () => 
   });
 
   it("con más productos que el tope por palabra suelta, encuentra el que tiene todas las palabras", async () => {
-    const { LOOKUP_CAP } = await import("@/lib/copiloto/skills/descripciones-tool");
+    const { LOOKUP_CAP } = await import("@/lib/copiloto/skills/product-lookup");
     const store = fixture!.store.id;
     const attributes = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture!.component.id }, select: { colorId: true, sizeId: true, designId: true, categoryId: true } });
     const decoys = Array.from({ length: LOOKUP_CAP + 60 }, (_, index) => ({

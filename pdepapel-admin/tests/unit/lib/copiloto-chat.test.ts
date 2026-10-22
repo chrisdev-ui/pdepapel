@@ -79,6 +79,22 @@ vi.mock("@/lib/copiloto/skills/precios-tool", async () => {
   };
 });
 
+// precioDeKit sin base de datos: un resultado fijo, armado por el código.
+vi.mock("@/lib/copiloto/skills/kit-price-tool", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/copiloto/skills/kit-price-tool")>("@/lib/copiloto/skills/kit-price-tool");
+  const { tool } = await import("ai");
+  const { z } = await import("zod");
+  return {
+    ...actual,
+    precioDeKitTool: () =>
+      tool({
+        description: "Precio de kit (prueba)",
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => ({ fuente: "precioDeKit", datos: { estado: "noEsKit", producto: { nombre: "Llavero Eval", sku: "LLA-EVAL" } } }),
+      }),
+  };
+});
+
 import { handleCopilotChat } from "@/lib/copiloto/chat";
 
 const CONVERSATION = "11111111-1111-4111-8111-111111111111";
@@ -468,6 +484,33 @@ describe("correcciones de Paula a las habilidades", () => {
       expect(used.doStreamCalls[0].tools?.map((entry) => entry.name)).toContain("margenesBajoMinimo");
       expect(streamed).toContain("No tienes un margen mínimo en Configuración.");
       expect(streamed).not.toContain("Hay 9 productos");
+    });
+
+    it("precioDeKit entrando por kits: se ofrece, la respuesta la arma el código y no sale el texto del modelo", async () => {
+      mocks.messages.mockResolvedValue([
+        {
+          id: "a0",
+          role: "assistant",
+          parts: [{ type: "step-start" }, { type: "tool-cargarHabilidad", toolCallId: "call-0", state: "output-available", input: { id: "kits" }, output: { ok: true, id: "kits", nombre: "Kits", instrucciones: "…", herramientas: ["kitsParaRotar", "precioDeKit"] } }],
+        },
+      ]);
+      const steps = [
+        [
+          { type: "text-start", id: "t0" },
+          { type: "text-delta", id: "t0", delta: "El kit te sale en $1." },
+          { type: "text-end", id: "t0" },
+          { type: "tool-call", toolCallId: "call-k", toolName: "precioDeKit", input: "{}" },
+          { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, logprobs: undefined, usage },
+        ],
+      ];
+      let index = 0;
+      const used = new MockLanguageModelV4({ doStream: async () => ({ stream: simulateReadableStream({ chunks: (steps[index++] ?? []) as never[] }) }) });
+      const response = await handleCopilotChat(request(body("¿A cuánto vendo el kit del llavero?")), "store-1", { budgetStore: budgetStore(), languageModel: () => used });
+      const streamed = await response.text();
+      expect(used.doStreamCalls).toHaveLength(1);
+      expect(used.doStreamCalls[0].tools?.map((entry) => entry.name)).toContain("precioDeKit");
+      expect(streamed).toContain("no es un kit en el panel");
+      expect(streamed).not.toContain("El kit te sale en");
     });
   });
 });

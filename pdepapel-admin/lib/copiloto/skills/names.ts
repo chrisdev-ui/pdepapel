@@ -18,7 +18,7 @@ export const COPILOT_SKILL_CATALOG: readonly { id: string; nombre: string; resum
   {
     id: "precios",
     nombre: "Precios",
-    resumen: "a cuánto vender un producto según su costo (tienda y Mercado Libre), qué tamaños de pack convienen y qué productos quedan por debajo de un margen.",
+    resumen: "a cuánto vender un producto según su costo (tienda y Mercado Libre), el precio de un kit con piezas que Paula elige, qué tamaños de pack convienen y qué productos quedan por debajo de un margen.",
   },
 ];
 

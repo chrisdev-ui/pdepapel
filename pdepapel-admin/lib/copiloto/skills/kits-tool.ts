@@ -3,7 +3,9 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { DEFAULT_BUSINESS_CASH_POLICY } from "@/lib/business-growth";
-import { withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
+import { CopilotQueryFailure, withCopilotQuery, type CopilotDb } from "@/lib/copiloto/db";
+import { loadEffectivePricing } from "@/lib/copiloto/skills/effective-price";
+import { ROTATION_FLOOR_MARKUP_PCT } from "@/lib/pricing/kit-price";
 import {
   DEFAULT_MIN_SELLER_VALUE,
   DEFAULT_MIN_SLOW_VALUE,
@@ -17,7 +19,6 @@ import {
   type KitProduct,
   type KitSignals,
 } from "@/lib/copiloto/kits-rotation";
-import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
 import { DEFAULT_SLOW_DAYS, loadFirstStockedAt, loadSalesHistory, stockedSinceOf, unitCostOf, type SalesHistory } from "@/lib/sales-velocity";
 import { foldWords, upcomingOccasions } from "@/lib/season-calendar";
 import { requireStoreOwner } from "@/lib/store-access";
@@ -35,7 +36,7 @@ export const kitsInput = z.object({
   dias: z.number().int().min(30).max(365).default(DEFAULT_SLOW_DAYS).describe("Días sin venderse para considerar un producto lento (por defecto 90)"),
   kits: z.number().int().min(1).max(5).default(3).describe("Cuántos kits proponer"),
   minimoPorKit: z.number().int().min(1).max(50).default(3).describe("Kits que se deben poder armar como mínimo con el disponible"),
-  margenMinimo: z.number().min(0).max(80).default(20).describe("Margen mínimo sobre el costo total, en %"),
+  margenMinimo: z.number().min(0).max(80).default(ROTATION_FLOOR_MARKUP_PCT).describe("Margen mínimo sobre el costo total, en %"),
   descuentoObjetivo: z
     .number()
     .min(MIN_TARGET_DISCOUNT_PCT)
@@ -115,13 +116,15 @@ export async function loadDemand(storeId: string, now: Date, run: typeof withCop
          WHERE storeId = ${storeId} AND createdAt >= ${new Date(now.getTime() - DEMAND_DAYS * DAY_MS)}`),
     );
     return { available: true, ...summarizeDemand(rows) };
-  } catch {
+  } catch (error) {
+    // Sin esto, una vista rota solo se vería como «WhatsApp: no disponible».
+    console.warn("[COPILOTO] Demanda de WhatsApp no disponible", { kind: error instanceof CopilotQueryFailure ? error.kind : "error" });
     return { available: false, terms: [] as ReturnType<typeof summarizeDemand>["terms"], shown: new Map<string, number>() };
   }
 }
 
 export async function loadKitData(db: CopilotDb, storeId: string, days: number, now = new Date()) {
-  const [rows, history, offers, tiers, firstStocked] = await Promise.all([
+  const [rows, history, priceOf, firstStocked] = await Promise.all([
     db.product.findMany({
       // Sin el producto de una edición de cápsulas: sus papeles ya cuentan en los productos reales.
       where: { storeId, isArchived: false, capsuleEdition: { is: null } },
@@ -146,30 +149,12 @@ export async function loadKitData(db: CopilotDb, storeId: string, days: number, 
       take: PRODUCT_CAP,
     }),
     loadSalesHistory(db, storeId, { days, now }),
-    db.offer.findMany({
-      where: { storeId, isActive: true, startDate: { lte: now }, endDate: { gte: now } },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        label: true,
-        type: true,
-        amount: true,
-        products: { select: { productId: true } },
-        categories: { select: { categoryId: true } },
-        productGroups: { select: { productGroupId: true } },
-      },
-    }),
-    db.productPriceTier.findMany({ where: { storeId }, select: { productId: true, minQuantity: true, unitPrice: true } }),
+    loadEffectivePricing(db, storeId, now),
     loadFirstStockedAt(db, storeId),
   ]);
 
-  const tiersByProduct = new Map<string, { minQuantity: number; unitPrice: number }[]>();
-  for (const tier of tiers) tiersByProduct.set(tier.productId, [...(tiersByProduct.get(tier.productId) ?? []), { minQuantity: tier.minQuantity, unitPrice: tier.unitPrice }]);
-
   const products: KitProduct[] = rows.map((row) => {
-    const priced = { id: row.id, price: row.price, categoryId: row.categoryId, productGroupId: row.productGroupId };
-    const offer = pickBestOffer(priced, offers as ActiveOffer[]);
-    const resolved = effectiveUnitPrice({ product: priced, offer, tiers: tiersByProduct.get(row.id) ?? [], quantity: 1 });
+    const resolved = priceOf(row);
     return {
       id: row.id,
       name: row.name.trim(),

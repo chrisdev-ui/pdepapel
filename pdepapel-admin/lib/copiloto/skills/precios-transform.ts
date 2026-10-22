@@ -1,5 +1,7 @@
 import type { StreamTextTransform, TextStreamPart, ToolSet } from "ai";
 
+import { composeKitPriceAnswer } from "@/lib/copiloto/skills/kit-price-answer";
+import { KIT_PRICE_TOOL } from "@/lib/copiloto/skills/kit-price-tool";
 import { composeBelowMarginAnswer, composePacksAnswer, composePriceAnswer } from "@/lib/copiloto/skills/precios-answer";
 import { BELOW_MARGIN_TOOL, PACKS_TOOL, PRICE_TOOL, type BelowMarginResult, type PacksResult, type PriceResult } from "@/lib/copiloto/skills/precios-tool";
 
@@ -7,6 +9,7 @@ const COMPOSERS: Record<string, (output: never) => string> = {
   [PRICE_TOOL]: composePriceAnswer as (output: never) => string,
   [PACKS_TOOL]: composePacksAnswer as (output: never) => string,
   [BELOW_MARGIN_TOOL]: composeBelowMarginAnswer as (output: never) => string,
+  [KIT_PRICE_TOOL]: composeKitPriceAnswer as (output: never) => string,
 };
 
 /**

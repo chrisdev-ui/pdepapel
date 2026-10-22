@@ -40,7 +40,7 @@ export const COPILOT_SKILLS: readonly CopilotSkill[] = [
     ...catalog("kits"),
     instrucciones: KITS_SKILL_INSTRUCTIONS,
     // textosDeKits no va aquí: solo la ofrece el paso que sigue a kitsParaRotar (kitsTextsStep).
-    herramientas: ["kitsParaRotar"],
+    herramientas: ["kitsParaRotar", "precioDeKit"],
     version: 1,
   },
   {
@@ -52,7 +52,7 @@ export const COPILOT_SKILLS: readonly CopilotSkill[] = [
   {
     ...catalog("precios"),
     instrucciones: PRICING_SKILL_INSTRUCTIONS,
-    herramientas: ["calcularPrecio", "compararPacks", "margenesBajoMinimo"],
+    herramientas: ["calcularPrecio", "compararPacks", "margenesBajoMinimo", "precioDeKit"],
     version: 1,
   },
 ];

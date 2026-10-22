@@ -24,7 +24,9 @@ import { requireStoreOwner } from "@/lib/store-access";
 export const PRICE_TOOL = "calcularPrecio";
 export const PACKS_TOOL = "compararPacks";
 export const BELOW_MARGIN_TOOL = "margenesBajoMinimo";
-export const PRICING_TOOLS = [PRICE_TOOL, PACKS_TOOL, BELOW_MARGIN_TOOL] as const;
+/** Con su respuesta armada por el código; `precioDeKit` (kit-price-tool.ts) también. */
+export const KIT_PRICE_TOOL_NAME = "precioDeKit";
+export const PRICING_TOOLS = [PRICE_TOOL, PACKS_TOOL, BELOW_MARGIN_TOOL, KIT_PRICE_TOOL_NAME] as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SALES_DAYS = 30;

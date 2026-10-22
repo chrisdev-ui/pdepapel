@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { COPILOT_EXAMPLES } from "@/lib/copiloto/examples";
 import { matchesOccasion, upcomingOccasions } from "@/lib/season-calendar";
 
+import { CAPIBARA_PRODUCTS } from "../../tests/helpers/capibara-kit";
 import { copilotRoStatements } from "../../tests/integration/helpers/copilot-ro";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "../../tests/integration/helpers/database";
 import {
@@ -26,6 +27,7 @@ import {
   MARKETING_QUESTIONS,
   PAULA_SLOTS,
   PRICING_CASES,
+  PRICING_TOOL_NAMES,
   PRICING_RUNS,
   QUESTIONS,
   ROUTING_QUESTIONS,
@@ -704,7 +706,9 @@ describe("evaluación del copiloto", () => {
       [
         { name: "Libreta precios eval", price: 10000, acqPrice: 7000 },
         { name: "Agenda precios eval", price: 9000, acqPrice: 6000 },
-      ].map(({ name, price, acqPrice }) =>
+        // Los productos «capibara» del pedido de Paula (nombres reales, cifras de prueba).
+        ...CAPIBARA_PRODUCTS.map((product) => ({ name: product.name, price: product.price, acqPrice: product.acqPrice, isArchived: product.isArchived, isKit: product.isKit })),
+      ].map(({ name, price, acqPrice, isArchived = false, isKit = false }: { name: string; price: number; acqPrice: number; isArchived?: boolean; isKit?: boolean }) =>
         testPrisma.product.create({
           data: {
             storeId: store,
@@ -714,6 +718,8 @@ describe("evaluación del copiloto", () => {
             description: "Producto de la evaluación de precios.",
             price,
             acqPrice,
+            isArchived,
+            isKit,
             stock: 5,
             categoryId: base.categoryId,
             sizeId: base.sizeId,
@@ -727,7 +733,7 @@ describe("evaluación del copiloto", () => {
       for (const pricingCase of PRICING_CASES) {
         for (let run = 1; run <= PRICING_RUNS; run += 1) {
           const answer = await ask(store, pricingCase.pregunta);
-          const pricingTools = answer.tools.filter((tool) => ["calcularPrecio", "compararPacks", "margenesBajoMinimo"].includes(tool));
+          const pricingTools = answer.tools.filter((tool) => (PRICING_TOOL_NAMES as string[]).includes(tool));
           const input = pricingCase.herramienta ? ((answer.toolInputs ?? []).find((item) => item.tool === pricingCase.herramienta)?.input as Record<string, unknown> | undefined) : undefined;
           const toolOk = pricingCase.herramienta === null ? pricingTools.length === 0 : pricingTools.length === 1 && pricingTools[0] === pricingCase.herramienta;
           const montos = pricingCase.herramienta === null ? true : pricingAmountsFromTool(answer);

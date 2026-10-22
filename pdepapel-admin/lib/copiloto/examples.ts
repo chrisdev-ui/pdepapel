@@ -52,6 +52,7 @@ export const COPILOT_EXAMPLES: readonly CopilotExample[] = [
   },
   { pregunta: "¿Qué productos quedan por debajo del 35 % y del 40 % de margen?", tema: "Precios", herramienta: "margenesBajoMinimo", pantallas: ["configuracion", "categorias"] },
   { pregunta: "¿A cuánto tendría que venderlo en Mercado Libre si me costó $6.000?", tema: "Precios", herramienta: "calcularPrecio", pantallas: ["configuracion"] },
+  { pregunta: "Quiero armar un kit con una libreta, un lapicero y un llavero, ¿a cuánto lo vendo?", tema: "Precios", herramienta: "precioDeKit", pantallas: ["productos", "configuracion"] },
 ];
 
 const MAX_SUGGESTIONS = 5;

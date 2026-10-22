@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   coPurchaseCounts,
@@ -15,7 +15,8 @@ import {
   type KitProduct,
   type KitSignals,
 } from "@/lib/copiloto/kits-rotation";
-import { summarizeDemand } from "@/lib/copiloto/skills/kits-tool";
+import { CopilotQueryFailure } from "@/lib/copiloto/db";
+import { loadDemand, summarizeDemand } from "@/lib/copiloto/skills/kits-tool";
 import { effectiveUnitPrice, pickBestOffer, type ActiveOffer } from "@/lib/offer-pricing";
 import { buildSalesHistory, newWithoutSalesData, rankSlowMovers, type SaleRow } from "@/lib/sales-velocity";
 import { upcomingOccasions } from "@/lib/season-calendar";
@@ -480,6 +481,15 @@ describe("demanda por WhatsApp (vista CopilotBotDemand)", () => {
     ]);
     expect(summary.terms).toEqual([{ termino: "cartuchera", veces: 2, sinResultados: 1 }]);
     expect(Array.from(summary.shown)).toEqual([["p1", 2]]);
+  });
+  it("si la vista falla responde «no disponible» y deja un aviso con el tipo de error, sin datos", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await loadDemand("store", new Date(), (async () => {
+      throw new CopilotQueryFailure("sin_permiso");
+    }) as never);
+    expect(result.available).toBe(false);
+    expect(warn).toHaveBeenCalledWith("[COPILOTO] Demanda de WhatsApp no disponible", { kind: "sin_permiso" });
+    warn.mockRestore();
   });
 });
 

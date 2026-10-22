@@ -27,6 +27,7 @@ const TOOL_WORDS: Record<string, string> = {
   calcularPrecio: "la calculadora de precios",
   compararPacks: "la comparación de packs",
   margenesBajoMinimo: "los márgenes de la tienda",
+  precioDeKit: "el precio del kit",
 };
 
 const FIELD_WORDS: Record<string, string> = {
