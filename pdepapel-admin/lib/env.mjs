@@ -50,6 +50,10 @@ export const env = createEnv({
     // `X-Hub-Signature-256` sobre el cuerpo crudo. No aplica al webhook de
     // Chakra (usa el token propio de arriba); queda opcional por si hiciera falta.
     WHATSAPP_APP_SECRET: z.string().min(1).optional(),
+    // Firma del webhook de Clerk (user.created → prueba de consentimiento).
+    // Sin ella el webhook responde 503; con un valor que no es de Clerk, el
+    // build falla en vez de dejar el webhook rechazando todo en silencio.
+    CLERK_WEBHOOK_SIGNING_SECRET: z.string().startsWith("whsec_").optional(),
     // Credenciales para ENVIAR por WhatsApp a través de Chakra. Opcionales a
     // propósito: sin ellas el bot no manda nada y lo deja anotado, pero el
     // webhook sigue archivando conversaciones con normalidad.
