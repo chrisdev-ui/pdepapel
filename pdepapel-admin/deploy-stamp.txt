@@ -1,1 +1,1 @@
-2026-10-22 16:22 UTC · incidente Railway: COPILOT_DATABASE_URL con la clave nueva de copilot_ro
+2026-10-22 17:01 UTC · incidente Railway: RAILWAY_METRICS_TOKEN nuevo
