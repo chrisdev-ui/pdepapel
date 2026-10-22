@@ -134,8 +134,22 @@ describe("acceso a Métricas de redes", () => {
     await testPrisma.socialAccount.deleteMany({ where: { storeId: f.store.id } });
     vi.stubGlobal("fetch", vi.fn(async () => json({ error: { code: 190, message: "Invalid OAuth access token" } }, 400)));
     const rejected = await instagramConnectPOST(req("http://admin.test/x", "POST"), ctx());
-    expect(rejected.status).toBe(502);
+    expect(rejected.status).toBe(422);
     expect(await rejected.text()).not.toMatch(/access_token|graph\.facebook/);
+    expect(await testPrisma.socialAccount.count({ where: { storeId: f.store.id } })).toBe(0);
+
+    // Un token de usuario en vez de uno de página: así falló en producción, y no es «Meta no respondió».
+    vi.stubGlobal("fetch", vi.fn(async () => json({ error: { message: "(#100) Tried accessing nonexisting field (instagram_business_account)", type: "OAuthException", code: 100 } }, 400)));
+    const userToken = await instagramConnectPOST(req("http://admin.test/x", "POST"), ctx());
+    expect(userToken.status).toBe(422);
+    const userTokenBody = await userToken.text();
+    expect(userTokenBody).toContain("es de usuario, no de página");
+    expect(userTokenBody).not.toContain("no respondió");
+
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("fetch failed"); }));
+    const down = await instagramConnectPOST(req("http://admin.test/x", "POST"), ctx());
+    expect(down.status).toBe(502);
+    expect(await down.text()).toContain("no respondió");
     expect(await testPrisma.socialAccount.count({ where: { storeId: f.store.id } })).toBe(0);
   });
 

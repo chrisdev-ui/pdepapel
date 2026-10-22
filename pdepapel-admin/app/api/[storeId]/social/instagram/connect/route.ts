@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { connectInstagramAccount } from "@/lib/social/access";
-import { SocialApiError } from "@/lib/social/errors";
+import { describeInstagramConnectError, SocialApiError } from "@/lib/social/errors";
 import { requireStoreOwner } from "@/lib/store-access";
 import { CACHE_HEADERS } from "@/lib/utils";
 
@@ -17,11 +17,8 @@ export async function POST(_request: Request, { params }: { params: { storeId: s
       account = await connectInstagramAccount(params.storeId);
     } catch (error) {
       if (error instanceof SocialApiError) {
-        throw new AppError(
-          error.kind === "auth" ? "Meta rechazó el token de la página o la página no tiene una cuenta profesional de Instagram." : "Meta no respondió; intenta de nuevo en unos minutos.",
-          502,
-          { code: error.code },
-        );
+        const { status, message } = describeInstagramConnectError(error);
+        throw new AppError(message, status, { code: error.code });
       }
       throw error;
     }

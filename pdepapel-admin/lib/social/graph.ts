@@ -123,7 +123,14 @@ export async function fetchInstagramMediaMetrics(client: GraphClient, mediaId: s
 
 /** La cuenta profesional ligada a la página del token. */
 export async function discoverInstagramAccount(client: GraphClient) {
-  const page = await client.get<{ id: string; instagram_business_account?: { id: string } }>("/me", { fields: "id,instagram_business_account" });
+  let page: { id: string; instagram_business_account?: { id: string } };
+  try {
+    page = await client.get("/me", { fields: "id,instagram_business_account" });
+  } catch (error) {
+    // Con un token de usuario, /me es un User y el campo no existe (#100): no es un token de página.
+    if (error instanceof SocialApiError && error.code === "meta_100") throw new SocialApiError(SocialPlatform.INSTAGRAM, "auth", "meta_not_page_token", error.status);
+    throw error;
+  }
   const igUserId = page.instagram_business_account?.id;
   if (!igUserId) throw new SocialApiError(SocialPlatform.INSTAGRAM, "auth", "meta_no_ig_account", null);
   const profile = await client.get<Record<string, unknown> & { id: string; username?: string }>(`/${igUserId}`, { fields: "id,username,followers_count,follows_count,media_count" });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { SocialApiError } from "@/lib/social/errors";
+import { describeInstagramConnectError, SocialApiError } from "@/lib/social/errors";
 import { createInstagramAdapter, discoverInstagramAccount, fetchInstagramMediaMetrics, GraphClient, usagePauseSeconds } from "@/lib/social/graph";
 import { buildTikTokAuthorizeUrl, createTikTokAdapter, exchangeTikTokCode, refreshTikTokTokens, tiktokCodeChallenge } from "@/lib/social/tiktok";
 
@@ -66,6 +66,9 @@ describe("cliente de Instagram", () => {
     const ok = vi.fn().mockResolvedValueOnce(json({ id: "page1", instagram_business_account: { id: "ig1" } })).mockResolvedValueOnce(json({ id: "ig1", username: "papeleria.pdepapel", followers_count: 10 }));
     expect(await discoverInstagramAccount(new GraphClient(TOKEN, ok))).toMatchObject({ externalId: "ig1", username: "papeleria.pdepapel", pageId: "page1" });
     expect(await caught(discoverInstagramAccount(new GraphClient(TOKEN, vi.fn().mockResolvedValue(json({ id: "page1" })))))).toMatchObject({ kind: "auth", code: "meta_no_ig_account" });
+    // Lo que respondió Meta en producción el 2026-10-22 con un token de usuario.
+    const userToken = vi.fn().mockResolvedValue(json({ error: { message: "(#100) Tried accessing nonexisting field (instagram_business_account)", type: "OAuthException", code: 100 } }, { status: 400 }));
+    expect(await caught(discoverInstagramAccount(new GraphClient(TOKEN, userToken)))).toMatchObject({ kind: "auth", code: "meta_not_page_token", status: 400 });
   });
 
   it("lista publicaciones: miniatura de video o imagen, tipo y cursor solo si hay otra página", async () => {
@@ -130,5 +133,28 @@ describe("cliente de TikTok", () => {
     const adapter = (response: Response) => createTikTokAdapter({ getAccessToken: async () => "act.1", fetchImpl: vi.fn().mockResolvedValue(response) });
     expect(await caught(adapter(json({ error: { code: "rate_limit_exceeded" } }, { status: 429, headers: { "retry-after": "90" } })).listPosts(null))).toMatchObject({ kind: "rate_limit", retryAfterSeconds: 90 });
     expect(await caught(adapter(json({ error: { code: "access_token_invalid" } }, { status: 401 })).fetchAccount())).toMatchObject({ kind: "auth", code: "tiktok_access_token_invalid" });
+  });
+});
+
+describe("mensaje al conectar Instagram", () => {
+  const error = (kind: SocialApiError["kind"], code: string, status: number | null) => new SocialApiError("INSTAGRAM", kind, code, status);
+
+  it("«no respondió» solo cuando de verdad no respondió (red o 5xx)", () => {
+    expect(describeInstagramConnectError(error("http", "network", null))).toMatchObject({ status: 502, message: expect.stringContaining("no respondió") });
+    expect(describeInstagramConnectError(error("http", "http_503", 503))).toMatchObject({ status: 502, message: expect.stringContaining("no respondió") });
+    for (const rejected of [error("http", "meta_10", 400), error("http", "meta_200", 403), error("invalid_metric", "meta_100", 400)]) {
+      const described = describeInstagramConnectError(rejected);
+      expect(described.message, rejected.code).not.toContain("no respondió");
+      expect(described.message).toContain(`(${rejected.code})`);
+      expect(described.message).toContain("instagram_manage_insights");
+    }
+  });
+
+  it("cada causa del token con su arreglo", () => {
+    expect(describeInstagramConnectError(error("auth", "meta_not_page_token", 400))).toMatchObject({ status: 422, message: expect.stringContaining("es de usuario, no de página") });
+    expect(describeInstagramConnectError(error("auth", "meta_no_ig_account", null))).toMatchObject({ status: 422, message: expect.stringContaining("no tiene una cuenta profesional") });
+    expect(describeInstagramConnectError(error("auth", "meta_190", 400))).toMatchObject({ status: 422, message: expect.stringContaining("vencido o revocado") });
+    expect(describeInstagramConnectError(error("rate_limit", "meta_4", 400))).toMatchObject({ status: 503 });
+    expect(JSON.stringify(describeInstagramConnectError(error("auth", "meta_190", 400)))).not.toMatch(/EAA|access_token/);
   });
 });
