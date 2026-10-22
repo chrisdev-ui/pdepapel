@@ -24,6 +24,8 @@ export interface NormalizedPost {
   postedAt: Date;
   /** TikTok trae los contadores con la lista; Instagram los pide aparte. */
   metrics?: MetricValues;
+  /** Instagram: el MP4 del reel (vence en horas), solo para leer su duración en esta misma pasada. */
+  mediaUrl?: string | null;
 }
 
 export interface SocialAdapter {
@@ -32,7 +34,15 @@ export interface SocialAdapter {
   /** Más recientes primero; `next` null al terminar. */
   listPosts(cursor: string | null): Promise<{ posts: NormalizedPost[]; next: string | null }>;
   fetchPostMetrics?(externalId: string, post: { productType: SocialProductType | null; mediaType: string | null }): Promise<MetricValues>;
+  /** Duración en segundos leyendo el encabezado del video; null si no se pudo. Nunca lanza. */
+  probeDuration?(mediaUrl: string): Promise<number | null>;
 }
+
+/** Reels a los que se les lee la duración por pasada, y presupuesto mínimo que debe quedar para intentarlo. */
+export const MAX_DURATION_PROBES_PER_PASS = 3;
+export const DURATION_PROBE_MIN_BUDGET_MS = 15_000;
+/** El refresco de cada hora solo mide lo publicado en estas últimas horas. */
+export const RECENT_WINDOW_HOURS = 8;
 
 export type SyncPhase = "list" | "metrics";
 
@@ -72,6 +82,41 @@ function snapshotData(postId: string, postedAt: Date, values: MetricValues, now:
   };
 }
 
+interface UpsertedPost {
+  id: string;
+  metricsSyncedAt: Date | null;
+  durationSec: number | null;
+  durationCheckedAt: Date | null;
+}
+
+async function upsertPost(account: { id: string; platform: SocialPlatform }, post: NormalizedPost, now: Date): Promise<UpsertedPost> {
+  const fields = {
+    mediaType: sliceText(post.mediaType, 40),
+    productType: post.productType,
+    caption: post.caption,
+    permalink: sliceText(post.permalink, 512),
+    thumbnailUrl: post.thumbnailUrl,
+    thumbnailCheckedAt: now,
+    postedAt: post.postedAt,
+  };
+  // Instagram no trae la duración en la lista: un null no borra la que ya se leyó del video.
+  const duration = post.durationSec !== null ? { durationSec: post.durationSec } : {};
+  return prismadb.socialPost.upsert({
+    where: { socialAccountId_externalId: { socialAccountId: account.id, externalId: post.externalId } },
+    create: { socialAccountId: account.id, platform: account.platform, externalId: post.externalId, ...fields, durationSec: post.durationSec },
+    update: { ...fields, ...duration },
+    select: { id: true, metricsSyncedAt: true, durationSec: true, durationCheckedAt: true },
+  });
+}
+
+/** Lee la duración de un reel sin ella, una sola vez (también se marca si falla). Devuelve si lo intentó. */
+async function probeDurationOnce(adapter: SocialAdapter, post: NormalizedPost, row: UpsertedPost, now: () => Date): Promise<boolean> {
+  if (!adapter.probeDuration || post.productType !== "REELS" || !post.mediaUrl || row.durationSec !== null || row.durationCheckedAt !== null) return false;
+  const seconds = await adapter.probeDuration(post.mediaUrl).catch(() => null);
+  await prismadb.socialPost.update({ where: { id: row.id }, data: { durationSec: seconds, durationCheckedAt: now() } });
+  return true;
+}
+
 export async function markAccountStatus(accountId: string, status: SocialAccountStatus, reason: string | null) {
   await prismadb.socialAccount.update({ where: { id: accountId }, data: { status, statusReason: reason?.slice(0, 191) ?? null } });
 }
@@ -90,6 +135,7 @@ export async function runSocialSync(input: {
   const outOfTime = () => clock().getTime() >= deadline;
   let posts = 0;
   let snapshots = 0;
+  let probes = 0;
   const pause = (next: Omit<SyncContinuation, "runStartedAt">, delaySeconds: number): SyncOutcome => ({
     status: "continue",
     posts,
@@ -130,23 +176,9 @@ export async function runSocialSync(input: {
         const now = clock();
         for (const post of page.posts) {
           if (post.postedAt < oldest) continue;
-          const fields = {
-            mediaType: sliceText(post.mediaType, 40),
-            productType: post.productType,
-            caption: post.caption,
-            permalink: sliceText(post.permalink, 512),
-            thumbnailUrl: post.thumbnailUrl,
-            thumbnailCheckedAt: now,
-            durationSec: post.durationSec,
-            postedAt: post.postedAt,
-          };
-          const row = await prismadb.socialPost.upsert({
-            where: { socialAccountId_externalId: { socialAccountId: account.id, externalId: post.externalId } },
-            create: { socialAccountId: account.id, platform: account.platform, externalId: post.externalId, ...fields },
-            update: fields,
-            select: { id: true, metricsSyncedAt: true },
-          });
+          const row = await upsertPost(account, post, now);
           posts += 1;
+          if (probes < MAX_DURATION_PROBES_PER_PASS && deadline - clock().getTime() >= DURATION_PROBE_MIN_BUDGET_MS && (await probeDurationOnce(input.adapter, post, row, clock))) probes += 1;
           if (post.metrics && shouldPollPost({ postedAt: post.postedAt, metricsSyncedAt: row.metricsSyncedAt }, now)) {
             await prismadb.$transaction([
               prismadb.socialMetricSnapshot.create({ data: snapshotData(row.id, post.postedAt, post.metrics, now) }),
@@ -202,5 +234,50 @@ export async function runSocialSync(input: {
     }
     const reason = error instanceof SocialApiError ? error.code : "unexpected";
     return { status: "failed", reason };
+  }
+}
+
+/**
+ * El refresco de cada hora: solo la primera página de la lista y una foto de
+ * lo publicado en las últimas 8 h, para tener lecturas jóvenes (2–6 h). Sin
+ * foto de la cuenta y sin cola: lo corre el cron de Vercel directamente.
+ */
+export async function runRecentSync(input: { accountId: string; adapter: SocialAdapter; budgetMs?: number; now?: () => Date }): Promise<SyncOutcome> {
+  const clock = input.now ?? (() => new Date());
+  const deadline = clock().getTime() + (input.budgetMs ?? 20_000);
+  const account = await prismadb.socialAccount.findUniqueOrThrow({ where: { id: input.accountId }, select: { id: true, platform: true } });
+  let posts = 0;
+  let snapshots = 0;
+  let probes = 0;
+  try {
+    const page = await input.adapter.listPosts(null);
+    const since = clock().getTime() - RECENT_WINDOW_HOURS * 3_600_000;
+    for (const post of page.posts) {
+      if (post.postedAt.getTime() < since) continue;
+      if (clock().getTime() >= deadline) break;
+      const now = clock();
+      const row = await upsertPost(account, post, now);
+      posts += 1;
+      if (probes < MAX_DURATION_PROBES_PER_PASS && deadline - clock().getTime() >= DURATION_PROBE_MIN_BUDGET_MS && (await probeDurationOnce(input.adapter, post, row, clock))) probes += 1;
+      const values = post.metrics ?? (input.adapter.fetchPostMetrics ? await input.adapter.fetchPostMetrics(post.externalId, post) : null);
+      if (!values) continue;
+      const measuredAt = clock();
+      await prismadb.$transaction([
+        prismadb.socialMetricSnapshot.create({ data: snapshotData(row.id, post.postedAt, values, measuredAt) }),
+        prismadb.socialPost.update({ where: { id: row.id }, data: { metricsSyncedAt: measuredAt } }),
+      ]);
+      snapshots += 1;
+    }
+    return { status: "done", posts, snapshots };
+  } catch (error) {
+    if (error instanceof SocialReconnectRequired) {
+      await markSocialNeedsReconnect(account.id, error.reason);
+      return { status: "reconnect", reason: error.reason };
+    }
+    if (error instanceof SocialApiError && error.kind === "auth") {
+      await markSocialNeedsReconnect(account.id, error.code);
+      return { status: "reconnect", reason: error.code };
+    }
+    return { status: "failed", reason: error instanceof SocialApiError ? error.code : "unexpected" };
   }
 }

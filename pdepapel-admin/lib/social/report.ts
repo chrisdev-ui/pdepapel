@@ -1,6 +1,6 @@
 import type { PrismaClient, SocialPlatform } from "@prisma/client";
 
-import { CURVE_POINTS_HOURS, engagementRate, median, outlierMultiplier, viewsAt } from "./metrics";
+import { CURVE_POINTS_HOURS, engagementRate, median, outlierMultiplier, retentionWarning, viewsAt, watchedPct } from "./metrics";
 
 /**
  * Lo que muestran «Métricas de redes» y `social:report`, leído solo de la
@@ -36,7 +36,17 @@ export interface SocialPostSummary {
   comments: number | null;
   shares: number | null;
   saves: number | null;
+  totalInteractions: number | null;
   avgWatchTimeMs: number | null;
+  /** Tiempo total visto, en segundos. */
+  totalWatchSeconds: number | null;
+  /** Salto en los primeros 3 s, en % (solo reels de Instagram). */
+  skipRate: number | null;
+  durationSec: number | null;
+  /** Tiempo promedio ÷ duración, en %. */
+  watchedPct: number | null;
+  /** «La mayoría deja de verlo muy pronto»: menos del 15 % visto o más del 50 % de salto. */
+  retentionWarning: boolean;
   engagementRate: number | null;
   views3h: number | null;
   views24h: number | null;
@@ -88,9 +98,10 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       permalink: true,
       thumbnailUrl: true,
       postedAt: true,
+      durationSec: true,
       snapshots: {
         orderBy: { capturedAt: "asc" },
-        select: { hoursSincePost: true, views: true, reach: true, likes: true, comments: true, shares: true, saves: true, totalInteractions: true, avgWatchTimeMs: true },
+        select: { hoursSincePost: true, views: true, reach: true, likes: true, comments: true, shares: true, saves: true, totalInteractions: true, avgWatchTimeMs: true, totalWatchTimeMs: true, skipRate: true },
       },
     },
   });
@@ -104,6 +115,9 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     const last = post.snapshots.at(-1);
     const views = last?.views ?? null;
     const [h3, h24, d7] = CURVE_POINTS_HOURS.map((hours) => viewsAt(post.snapshots, hours));
+    const avgWatchTimeMs = last?.avgWatchTimeMs ?? null;
+    const skipRate = last?.skipRate ?? null;
+    const watched = watchedPct(avgWatchTimeMs, post.durationSec);
     return {
       id: post.id,
       platform: post.platform,
@@ -118,7 +132,13 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       comments: last?.comments ?? null,
       shares: last?.shares ?? null,
       saves: last?.saves ?? null,
-      avgWatchTimeMs: last?.avgWatchTimeMs ?? null,
+      totalInteractions: last?.totalInteractions ?? null,
+      avgWatchTimeMs,
+      totalWatchSeconds: last?.totalWatchTimeMs != null ? Math.round(Number(last.totalWatchTimeMs) / 1000) : null,
+      skipRate: skipRate === null ? null : Math.round(skipRate * 10) / 10,
+      durationSec: post.durationSec,
+      watchedPct: watched,
+      retentionWarning: retentionWarning({ watchedPct: watched, skipRate }),
       engagementRate: last ? engagementRate(last) : null,
       views3h: h3,
       views24h: h24,

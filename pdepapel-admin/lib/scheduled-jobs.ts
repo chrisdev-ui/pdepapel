@@ -22,6 +22,8 @@ export const SCHEDULED_JOBS = {
   "copilot-retention": { enabled: true },
   // Métricas de redes (social-sync.yml cada 6 h), encendido 2026-10-21.
   "social-sync": { enabled: true },
+  // Refresco de cada hora de lo publicado en las últimas 8 h (cron de Vercel), 2026-10-22.
+  "social-recent": { enabled: true },
 } as const satisfies Record<string, { enabled: boolean }>;
 
 export type ScheduledJobName = keyof typeof SCHEDULED_JOBS;

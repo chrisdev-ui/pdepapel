@@ -8,7 +8,7 @@ import { expect, test } from "./helpers/image-stub";
 import { createTestPrismaClient } from "./helpers/test-database";
 
 /**
- * «Métricas de redes» a 390, 768 y 1280 px con una cuenta y publicaciones
+ * «Métricas de redes» a 390, 768, 820, 1280 y 1440 px con una cuenta y publicaciones
  * sembradas en la base de pruebas: la pantalla lee solo la base (nada sale a
  * Meta ni a TikTok), una miniatura vencida cae al marcador neutro, la curva
  * abre e Inicio avisa la red que pide reconectar. Sin desbordes horizontales.
@@ -71,6 +71,8 @@ test.describe("métricas de redes", () => {
           permalink: `https://www.instagram.com/p/e2e${index}`,
           // Una miniatura vencida (host que no resuelve) y otra sin miniatura: ambas caen al marcador.
           thumbnailUrl: index === 0 ? "https://cdn.invalid/vencida.jpg" : null,
+          // El primer reel dura 30 s y la mayoría lo salta: lleva la alerta de retención.
+          durationSec: index === 0 ? 30 : index === 2 ? 20 : null,
           postedAt,
         },
       });
@@ -78,7 +80,17 @@ test.describe("métricas de redes", () => {
       await db.socialMetricSnapshot.createMany({
         data: [
           { socialPostId: post.id, capturedAt: new Date(postedAt.getTime() + 3 * HOUR), hoursSincePost: 3, views: Math.round(base / 3), reach: Math.round(base / 4), totalInteractions: 5 },
-          { socialPostId: post.id, capturedAt: new Date(postedAt.getTime() + 24 * HOUR), hoursSincePost: 24, views: base, reach: Math.round(base * 0.8), totalInteractions: 20, saves: 4, shares: 2 },
+          {
+            socialPostId: post.id,
+            capturedAt: new Date(postedAt.getTime() + 24 * HOUR),
+            hoursSincePost: 24,
+            views: base,
+            reach: Math.round(base * 0.8),
+            totalInteractions: 20,
+            saves: 4,
+            shares: 2,
+            ...(index === 0 ? { avgWatchTimeMs: 3000, skipRate: 62.4 } : index === 2 ? { avgWatchTimeMs: 9000, skipRate: 30 } : {}),
+          },
         ],
       });
     }
@@ -92,7 +104,9 @@ test.describe("métricas de redes", () => {
   for (const viewport of [
     { name: "390", width: 390, height: 844 },
     { name: "768", width: 768, height: 1024 },
+    { name: "820", width: 820, height: 1180 },
     { name: "1280", width: 1280, height: 800 },
+    { name: "1440", width: 1440, height: 900 },
   ]) {
     test(`a ${viewport.name} px`, async ({ page }) => {
       mkdirSync(SHOTS, { recursive: true });
@@ -115,6 +129,13 @@ test.describe("métricas de redes", () => {
       const list = viewport.width < 768 ? page.getByRole("list", { name: "Publicaciones" }) : page.locator("table");
       await expect(list.getByText("Carrusel de cuadernos")).toBeVisible();
       await expect(list.locator("img")).toHaveCount(0);
+      // La alerta de retención: en la tabla un ícono con la frase como nombre; en el celular, la frase.
+      if (viewport.width < 768) await expect(list.getByText("La mayoría deja de verlo muy pronto")).toBeVisible();
+      else {
+        await expect(list.getByRole("img", { name: "La mayoría deja de verlo muy pronto" })).toHaveCount(1);
+        await expect(list.getByRole("columnheader", { name: "Salto 3 s" })).toBeVisible();
+        await expect(list.getByRole("columnheader", { name: "% visto" })).toBeVisible();
+      }
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}.png`), fullPage: true });
 
@@ -122,6 +143,9 @@ test.describe("métricas de redes", () => {
       const curveDialog = page.getByRole("dialog");
       const dialog = page.getByRole("dialog");
       await expect(dialog.getByText("A las 24 h")).toBeVisible();
+      await expect(dialog.getByText("Salto en 3 s")).toBeVisible();
+      await expect(dialog.getByText("62,4 %")).toBeVisible();
+      await expect(dialog.getByText("10 %", { exact: true })).toBeVisible();
       await expect(dialog.locator(".recharts-line")).toBeVisible();
       await expect(dialog).toHaveCSS("opacity", "1");
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}-curva.png`) });

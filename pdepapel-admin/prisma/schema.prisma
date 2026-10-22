@@ -3831,6 +3831,8 @@ model SocialPost {
   thumbnailUrl       String?            @db.Text
   thumbnailCheckedAt DateTime?
   durationSec        Float?
+  /// Cuándo se intentó leer la duración del MP4 de un reel (también si falló): no se reintenta en cada sincronización.
+  durationCheckedAt  DateTime?
   postedAt           DateTime
   /// Último sondeo de métricas; decide si toca de nuevo (30 días: cada corrida; más viejas: una vez al día).
   metricsSyncedAt    DateTime?

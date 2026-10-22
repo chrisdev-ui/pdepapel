@@ -9,14 +9,15 @@ vi.mock("@/lib/social/queue", async (importOriginal) => ({
   }),
 }));
 
+import { GET as recentGET } from "@/app/api/cron/social-recent/route";
 import { GET as cronGET } from "@/app/api/cron/social-sync/route";
 import { getTikTokAccessToken, saveTikTokCredential, SocialReconnectRequired, type TikTokTokenSet } from "@/lib/social/credentials";
 import { SocialApiError } from "@/lib/social/errors";
 import { INSTAGRAM_POST_METRICS, pickMetrics } from "@/lib/social/metrics";
 import { consumeSocialOAuthState, createSocialOAuthState } from "@/lib/social/oauth-state";
-import { processSocialSyncMessage } from "@/lib/social/runner";
+import { processSocialSyncMessage, runRecentRefresh } from "@/lib/social/runner";
 import { buildSocialSummary, getSocialPostCurve } from "@/lib/social/report";
-import { runSocialSync, type NormalizedPost, type SocialAdapter } from "@/lib/social/sync";
+import { MAX_DURATION_PROBES_PER_PASS, runRecentSync, runSocialSync, type NormalizedPost, type SocialAdapter } from "@/lib/social/sync";
 
 import { TEST_ENV_STUBS } from "../../scripts/lib/test-isolation.mjs";
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
@@ -266,5 +267,111 @@ describe("ruta del cron", () => {
     expect(queue.enqueued).toContainEqual({ message: { accountId: connected.id }, delaySeconds: 0 });
     expect(queue.enqueued.map((entry) => (entry as { message: { accountId: string } }).message.accountId)).not.toContain(blocked.id);
     expect((await call("?platform=youtube")).status).toBe(400);
+  });
+});
+
+describe("duración de los reels (encabezado del MP4)", () => {
+  const reel = (id: string, hoursAgo: number) => post(id, hoursAgo, { mediaUrl: `https://cdn.example/${id}.mp4` });
+
+  it("se lee una vez por reel, también si falla; un null de la lista no borra la que ya se leyó", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const probed: string[] = [];
+    const withProbe = (result: (url: string) => number | null) => {
+      const { adapter } = fakeInstagram([[reel("a", 2), reel("b", 3), post("carrusel", 4, { productType: "CAROUSEL", mediaType: "CAROUSEL_ALBUM" })]]);
+      return { ...adapter, probeDuration: async (url: string) => (probed.push(url), result(url)) };
+    };
+    await runSocialSync({ accountId: row.id, adapter: withProbe((url) => (url.endsWith("a.mp4") ? 21.5 : null)), now: () => now });
+    expect(probed.sort()).toEqual(["https://cdn.example/a.mp4", "https://cdn.example/b.mp4"]);
+    const stored = await testPrisma.socialPost.findMany({ where: { socialAccountId: row.id }, select: { externalId: true, durationSec: true, durationCheckedAt: true } });
+    expect(Object.fromEntries(stored.map((item) => [item.externalId, [item.durationSec, item.durationCheckedAt !== null]]))).toEqual({ a: [21.5, true], b: [null, true], carrusel: [null, false] });
+
+    probed.length = 0;
+    await runSocialSync({ accountId: row.id, adapter: withProbe(() => 99), now: () => new Date(now.getTime() + 6 * HOUR) });
+    expect(probed).toEqual([]);
+    expect((await testPrisma.socialPost.findFirstOrThrow({ where: { socialAccountId: row.id, externalId: "a" } })).durationSec).toBe(21.5);
+  });
+
+  it("a lo sumo 3 por pasada y solo con 15 s o más de presupuesto; nunca frena la sincronización", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const probed: string[] = [];
+    const reels = Array.from({ length: 5 }, (_, index) => reel(`r${index}`, 2 + index));
+    const { adapter } = fakeInstagram([reels]);
+    const outcome = await runSocialSync({ accountId: row.id, adapter: { ...adapter, probeDuration: async (url) => (probed.push(url), 10) }, now: () => now });
+    expect(outcome).toMatchObject({ status: "done", posts: 5 });
+    expect(probed).toHaveLength(MAX_DURATION_PROBES_PER_PASS);
+
+    // Misma cuenta externa que el adaptador doblado: la pasada sí recorre la lista, pero con 10 s no lee duraciones.
+    const other = await testPrisma.socialAccount.create({ data: { storeId: f.store.id, platform: "TIKTOK", externalId: "ig1", tokenRef: "credential" } });
+    const short: string[] = [];
+    const tight = fakeInstagram([[reel("t1", 2)]]);
+    expect(await runSocialSync({ accountId: other.id, adapter: { ...tight.adapter, probeDuration: async (url) => (short.push(url), 10) }, budgetMs: 10_000, now: () => now })).toMatchObject({ status: "done", posts: 1 });
+    expect(short).toEqual([]);
+  });
+});
+
+describe("refresco de cada hora (lo publicado en las últimas 8 h)", () => {
+  it("mide solo lo de menos de 8 h, con la primera página, sin foto de la cuenta", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const { adapter, calls } = fakeInstagram([[post("nuevo", 2), post("de-7h", 7), post("de-10h", 10)], [post("viejo", 48)]]);
+    const outcome = await runRecentSync({ accountId: row.id, adapter, now: () => now });
+    expect(outcome).toMatchObject({ status: "done", posts: 2, snapshots: 2 });
+    expect(calls.list).toBe(1);
+    expect(calls.metrics.sort()).toEqual(["de-7h", "nuevo"]);
+    expect(await testPrisma.socialAccountSnapshot.count({ where: { socialAccountId: row.id } })).toBe(0);
+    const snapshot = await testPrisma.socialMetricSnapshot.findFirstOrThrow({ where: { post: { externalId: "nuevo", socialAccountId: row.id } } });
+    expect(snapshot.hoursSincePost).toBe(2);
+  });
+
+  it("TikTok usa los contadores de la lista; un token inválido pide reconectar", async () => {
+    f = await createInventoryFixture();
+    const row = await account("TIKTOK");
+    const tiktok: SocialAdapter = {
+      platform: "TIKTOK",
+      fetchAccount: async () => ({ externalId: "open1", username: null, metrics: {} }),
+      listPosts: async () => ({ posts: [post("v1", 3, { productType: "VIDEO", durationSec: 18, metrics: pickMetrics({ views: 70 }, INSTAGRAM_POST_METRICS) })], next: null }),
+    };
+    expect(await runRecentSync({ accountId: row.id, adapter: tiktok, now: () => now })).toMatchObject({ status: "done", snapshots: 1 });
+    expect((await testPrisma.socialPost.findFirstOrThrow({ where: { socialAccountId: row.id } })).durationSec).toBe(18);
+    const broken: SocialAdapter = { ...tiktok, listPosts: async () => { throw new SocialApiError("TIKTOK", "auth", "access_token_invalid", 401); } };
+    expect(await runRecentSync({ accountId: row.id, adapter: broken, now: () => now })).toMatchObject({ status: "reconnect" });
+  });
+
+  it("la ruta: sin el secreto, 403; sin mode no llama a nadie; con apply recorre las cuentas conectadas", async () => {
+    f = await createInventoryFixture();
+    await account();
+    const call = (query = "", token: string | null = TEST_ENV_STUBS.CRON_SECRET, extra: Record<string, string> = {}) =>
+      recentGET(new Request(`http://admin.test/api/cron/social-recent${query}`, { headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...extra } }) as never);
+    expect((await call("", null)).status).toBe(403);
+    expect(await (await call()).json()).toEqual({ mode: "dry-run" });
+    // Lo que manda el cron de Vercel: el encabezado con la expresión, sin consulta.
+    expect(await (await call("", TEST_ENV_STUBS.CRON_SECRET, { "x-vercel-cron-schedule": "5 * * * *" })).json()).toMatchObject({ mode: "apply", accounts: expect.any(Number) });
+    expect((await call("", null, { "x-vercel-cron-schedule": "5 * * * *" })).status).toBe(403);
+    const apply = await call("?mode=apply");
+    expect(apply.status).toBe(200);
+    expect(await apply.json()).toMatchObject({ mode: "apply", accounts: expect.any(Number) });
+
+    const refreshed = await runRecentRefresh({ adapterFor: () => fakeInstagram([[post("x", 1)]]).adapter });
+    expect(refreshed.results.some((result) => result.status === "done")).toBe(true);
+  });
+});
+
+describe("retención en el resumen", () => {
+  it("duración, salto y % visto llegan al resumen, con la alerta cuando la mayoría lo deja pronto", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const { adapter } = fakeInstagram([[post("corto", 5), post("bien", 6)]], {
+      metrics: async (id) =>
+        pickMetrics(id === "corto" ? { views: 100, ig_reels_avg_watch_time: 2000, reels_skip_rate: 62.4 } : { views: 100, ig_reels_avg_watch_time: 9000, reels_skip_rate: 30 }, INSTAGRAM_POST_METRICS),
+    });
+    await runSocialSync({ accountId: row.id, adapter: { ...adapter, probeDuration: async () => 20 }, now: () => now });
+    await testPrisma.socialPost.updateMany({ where: { socialAccountId: row.id }, data: { durationSec: 20 } });
+    const summary = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 7, now });
+    const byCaption = Object.fromEntries(summary.posts.map((item) => [item.caption, item]));
+    expect(byCaption["Reel corto"]).toMatchObject({ durationSec: 20, skipRate: 62.4, watchedPct: 10, retentionWarning: true });
+    expect(byCaption["Reel bien"]).toMatchObject({ watchedPct: 45, retentionWarning: false });
+    expect(JSON.stringify(summary)).not.toMatch(/"raw"/);
   });
 });

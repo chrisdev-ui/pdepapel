@@ -8,7 +8,7 @@ import { getTikTokAccessToken } from "./credentials";
 import { createInstagramAdapter } from "./graph";
 import { shouldPollPost } from "./metrics";
 import { enqueueSocialSync, type SocialSyncMessage } from "./queue";
-import { markAccountStatus, runSocialSync, type SocialAdapter, type SyncOutcome } from "./sync";
+import { markAccountStatus, runRecentSync, runSocialSync, type SocialAdapter, type SyncOutcome } from "./sync";
 import { createTikTokAdapter, refreshTikTokTokens } from "./tiktok";
 
 /** Cuentas conectadas que la corrida programada sincroniza (no las que piden reconectar ni las apagadas). */
@@ -83,4 +83,32 @@ export async function processSocialSyncMessage(message: SocialSyncMessage, optio
     });
   }
   return outcome;
+}
+
+/**
+ * El refresco de cada hora (cron de Vercel): cuentas conectadas, una a la vez,
+ * con su parte del presupuesto de la función. Sin cola. Un fallo de una cuenta
+ * no frena las demás; la próxima hora se intenta de nuevo.
+ */
+export async function runRecentRefresh(options: { budgetMs?: number; adapterFor?: typeof adapterForAccount } = {}) {
+  const accounts = await prismadb.socialAccount.findMany({
+    where: { status: SocialAccountStatus.OK },
+    select: { id: true, storeId: true, platform: true, externalId: true, tokenRef: true },
+  });
+  const budget = Math.floor((options.budgetMs ?? 45_000) / Math.max(1, accounts.length));
+  const results: { platform: SocialPlatform; status: string; posts?: number; snapshots?: number; reason?: string }[] = [];
+  for (const account of accounts) {
+    const adapter = (options.adapterFor ?? adapterForAccount)(account);
+    if (!adapter) {
+      results.push({ platform: account.platform, status: "skipped", reason: "not_configured" });
+      continue;
+    }
+    const outcome = await runRecentSync({ accountId: account.id, adapter, budgetMs: budget });
+    results.push(
+      outcome.status === "done"
+        ? { platform: account.platform, status: "done", posts: outcome.posts, snapshots: outcome.snapshots }
+        : { platform: account.platform, status: outcome.status, reason: "reason" in outcome ? outcome.reason : undefined },
+    );
+  }
+  return { accounts: accounts.length, results };
 }

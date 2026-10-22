@@ -3,6 +3,7 @@ import { SocialPlatform, type SocialProductType } from "@prisma/client";
 import { GRAPH_API_VERSION } from "./config";
 import { SocialApiError } from "./errors";
 import { INSTAGRAM_METRICS_BY_TYPE, INSTAGRAM_POST_METRICS, instagramProductType, instagramThumbnail, pickMetrics, type MetricValues } from "./metrics";
+import { probeMp4Duration } from "./mp4-duration";
 import type { SocialAdapter } from "./sync";
 
 /**
@@ -163,6 +164,7 @@ export function createInstagramAdapter(options: { pageToken: string; igUserId: s
         posts: (response.data ?? []).map((media) => ({
           externalId: media.id,
           mediaType: media.media_type ?? null,
+          mediaUrl: media.media_type === "VIDEO" ? (media.media_url ?? null) : null,
           productType: instagramProductType(media.media_type, media.media_product_type),
           caption: media.caption ?? null,
           permalink: media.permalink ?? null,
@@ -174,5 +176,6 @@ export function createInstagramAdapter(options: { pageToken: string; igUserId: s
       };
     },
     fetchPostMetrics: (externalId, post) => fetchInstagramMediaMetrics(client, externalId, post.productType),
+    probeDuration: (mediaUrl) => probeMp4Duration(mediaUrl, options.fetchImpl),
   };
 }

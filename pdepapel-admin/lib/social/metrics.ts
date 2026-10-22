@@ -165,6 +165,21 @@ export function outlierMultiplier(value: number | null, baseline: number | null)
   return Math.round((value / baseline) * 10) / 10;
 }
 
+/** Por debajo de esto del video visto en promedio, o por encima de este salto en 3 s, «la mayoría deja de verlo muy pronto». */
+export const RETENTION_MIN_WATCHED_PCT = 15;
+export const RETENTION_MAX_SKIP_PCT = 50;
+
+/** Porcentaje del video que se ve en promedio; null sin duración o sin tiempo promedio. */
+export function watchedPct(avgWatchTimeMs: number | null, durationSec: number | null) {
+  if (avgWatchTimeMs === null || durationSec === null || !(durationSec > 0)) return null;
+  return Math.round((avgWatchTimeMs / 1000 / durationSec) * 1000) / 10;
+}
+
+/** Alerta de retención: se ve menos del 15 % en promedio, o más de la mitad lo salta en los primeros 3 s. */
+export function retentionWarning(input: { watchedPct: number | null; skipRate: number | null }) {
+  return (input.watchedPct !== null && input.watchedPct < RETENTION_MIN_WATCHED_PCT) || (input.skipRate !== null && input.skipRate > RETENTION_MAX_SKIP_PCT);
+}
+
 /** Interacciones sobre alcance (Instagram) o sobre vistas (TikTok, que no da alcance). */
 export function engagementRate(snapshot: { reach: number | null; views: number | null; totalInteractions: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null }) {
   const interactions = snapshot.totalInteractions ?? [snapshot.likes, snapshot.comments, snapshot.shares, snapshot.saves].reduce<number>((sum, value) => sum + (value ?? 0), 0);
