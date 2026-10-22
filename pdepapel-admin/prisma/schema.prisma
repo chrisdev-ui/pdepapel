@@ -1270,6 +1270,12 @@ model Order {
    */
   source    OrderSource?
 
+  /// Prueba de consentimiento (Ley 1581): versiones que la frase encima del botón de pago mostró y hora del servidor. Solo el checkout de la tienda; null en todo lo demás.
+  legalTermsVersion   String?              @db.VarChar(20)
+  legalPrivacyVersion String?              @db.VarChar(20)
+  legalConsentAt      DateTime?
+  legalConsentChannel LegalConsentChannel?
+
   quoteRequests     QuoteRequest[]
   conversations     Conversation[]
   invoices          Invoice[]
@@ -3876,4 +3882,31 @@ model SocialAccountSnapshot {
   account SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
 
   @@index([socialAccountId, capturedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Prueba de consentimiento legal (Ley 1581 / Decreto 1377, 2026-10): en qué
+// canal y con qué versión de los términos y la privacidad se aceptó.
+// ---------------------------------------------------------------------------
+
+enum LegalConsentChannel {
+  CHECKOUT
+  REGISTRO
+}
+
+/// Consentimiento al crear la cuenta (webhook user.created de Clerk). Solo el id de Clerk, nada más de la persona.
+model LegalConsentRecord {
+  id             String              @id @default(uuid())
+  clerkUserId    String              @db.VarChar(191)
+  channel        LegalConsentChannel
+  termsVersion   String              @db.VarChar(20)
+  privacyVersion String              @db.VarChar(20)
+  consentedAt    DateTime
+  /// De dónde salió la hora: «legal_accepted_at» de Clerk o «unsafe_metadata» de la tienda.
+  evidence       String              @db.VarChar(40)
+  /// Id del mensaje del webhook (svix-id): un reintento no duplica.
+  sourceEventId  String?             @unique @db.VarChar(191)
+  createdAt      DateTime            @default(now())
+
+  @@unique([clerkUserId, channel])
 }
