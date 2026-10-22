@@ -1,1 +1,1 @@
-2026-10-22 17:44 UTC · incidente Railway: llaves nuevas de Wompi
+2026-10-22 18:39 UTC · incidente Railway: CLERK_SECRET_KEY nueva

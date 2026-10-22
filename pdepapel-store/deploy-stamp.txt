@@ -1,0 +1,1 @@
+2026-10-22 18:39 UTC · incidente Railway: CLERK_SECRET_KEY nueva
