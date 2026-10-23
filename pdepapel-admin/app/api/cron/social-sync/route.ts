@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
-import { resolveScheduledJobMode } from "@/lib/scheduled-jobs";
+import { resolveScheduledJobMode, scheduledRequestUrl } from "@/lib/scheduled-jobs";
 import { planSocialSync, startSocialSync, type PlatformFilter } from "@/lib/social/runner";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { safeSecretEquals } from "@/lib/webhook-auth";
@@ -27,8 +27,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const platform = (url.searchParams.get("platform") ?? "all") as PlatformFilter;
     if (!PLATFORMS.includes(platform)) throw ErrorFactory.InvalidRequest("platform debe ser all, instagram o tiktok");
-    if (request.headers.has("x-vercel-cron-schedule") && !url.searchParams.has("mode")) url.searchParams.set("mode", "apply");
-    const mode = resolveScheduledJobMode(url.toString(), "social-sync");
+    const mode = resolveScheduledJobMode(scheduledRequestUrl(request), "social-sync");
 
     if (mode === "apply") {
       const result = await startSocialSync(platform);

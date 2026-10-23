@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
-import { resolveScheduledJobMode } from "@/lib/scheduled-jobs";
+import { resolveScheduledJobMode, scheduledRequestUrl } from "@/lib/scheduled-jobs";
 import { runRecentRefresh } from "@/lib/social/runner";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { safeSecretEquals } from "@/lib/webhook-auth";
@@ -22,9 +22,7 @@ export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get("authorization")?.split("Bearer ").at(1);
     if (!safeSecretEquals(token, env.CRON_SECRET)) throw ErrorFactory.Unauthorized();
-    const url = new URL(request.url);
-    if (request.headers.has("x-vercel-cron-schedule") && !url.searchParams.has("mode")) url.searchParams.set("mode", "apply");
-    const mode = resolveScheduledJobMode(url.toString(), "social-recent");
+    const mode = resolveScheduledJobMode(scheduledRequestUrl(request), "social-recent");
     if (mode !== "apply") return NextResponse.json({ mode }, { headers: CACHE_HEADERS.NO_CACHE });
     const result = await runRecentRefresh();
     console.info("[SOCIAL_RECENT]", { accounts: result.accounts, results: result.results });

@@ -32,7 +32,7 @@ import { topLevelBrandName } from "@/lib/brand-rules";
  * The same row-building logic feeds three consumers:
  * - the manual exporter (`npm run export:products-merchant`), which also
  *   verifies every storefront URL before writing a file;
- * - the daily GitHub Actions job (`admin-scheduled-tasks.yml`), which calls
+ * - the daily Vercel cron at 13:00 UTC (`vercel.json`), which calls
  *   `/api/cron/google-merchant-feed` to regenerate the feed per store into Redis;
  * - the protected `GET /api/[storeId]/google-merchant/feed` route that
  *   Merchant Center fetches on its own schedule.

@@ -91,10 +91,10 @@ const routes = [
   { name: "copilot-retention", handler: copilotRetention },
 ] as const;
 
-const call = (handler: (request: never) => Promise<Response>, name: string, token?: string, query = "") =>
+const call = (handler: (request: never) => Promise<Response>, name: string, token?: string, query = "", vercelCron = false) =>
   handler(
     new Request(`https://admin.test/api/cron/${name}${query}`, {
-      headers: token ? { authorization: `Bearer ${token}` } : {},
+      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(vercelCron ? { "x-vercel-cron-schedule": "0 13 * * *" } : {}) },
     }) as never,
   );
 
@@ -141,6 +141,31 @@ describe("los trabajos heredados del programador", () => {
     expect(await response.json()).toMatchObject({ mode: "dry-run" });
     expect(mocks.writes).toEqual([]);
     expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it.each(routes.filter((route) => route.name !== "customer-reactivation"))(
+    "$name: el cron de Vercel (encabezado, sin consulta) corre en serio; un mode explícito sigue mandando",
+    async ({ name, handler }) => {
+      const scheduled = await call(handler, name, "cron-secret", "", true);
+      expect(scheduled.status).toBe(200);
+      expect(await scheduled.json()).toMatchObject({ mode: "apply" });
+      expect(mocks.record).toHaveBeenCalledWith(name, expect.objectContaining({ ok: true }));
+
+      vi.clearAllMocks();
+      mocks.writes.length = 0;
+      const manual = await call(handler, name, "cron-secret", "?mode=dry-run", true);
+      expect(await manual.json()).toMatchObject({ mode: "dry-run" });
+      expect(mocks.writes).toEqual([]);
+      expect(mocks.record).not.toHaveBeenCalled();
+      // Sin el secreto, el encabezado no vale nada.
+      expect((await call(handler, name, undefined, "", true)).status).toBe(403);
+    },
+  );
+
+  it("la reactivación, apagada, no corre aunque llegue el encabezado del cron", async () => {
+    const response = await call(reactivation, "customer-reactivation", "cron-secret", "", true);
+    expect(await response.json()).toMatchObject({ mode: "dry-run" });
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it("la retención del copiloto en simulación devuelve cuántas conversaciones y mensajes borraría", async () => {

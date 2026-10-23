@@ -6,17 +6,14 @@
 # messages silently stopped being processed for hours. Nobody noticed until
 # the next day.
 #
-# This lives in its own workflow instead of `admin-scheduled-tasks.yml`
-# because that one runs once at 13:00 UTC (08:00 Bogota). A daily count taken
-# at 08:00 reports on a day that has barely started — it would always be
-# green, and the alert would arrive a day late. This runs through the day so
-# a spike is caught while there is still quota left to protect.
+# The count runs through the day so a spike is caught while there is still
+# quota left to protect. Since 2026-10-23 it is a Vercel cron
+# (pdepapel-admin/vercel.json, 02:00, 14:00, 18:00 and 22:00 UTC = 21:00, 09:00,
+# 13:00 and 17:00 Bogota): GitHub skipped some of these slots. This workflow is
+# manual only; never add a schedule back, or the count runs twice.
 name: WhatsApp webhook volume watch
 
 on:
-  schedule:
-    # 14:00, 18:00, 22:00 and 02:00 UTC = 09:00, 13:00, 17:00 and 21:00 Bogota.
-    - cron: "0 14,18,22,2 * * *"
   workflow_dispatch:
 
 jobs:

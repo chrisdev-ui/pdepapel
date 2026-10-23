@@ -1,12 +1,14 @@
 name: Admin scheduled tasks
 
+# Manual only since 2026-10-23. Every daily job runs as a Vercel cron
+# (pdepapel-admin/vercel.json, 13:00–13:20 UTC, two minutes apart): GitHub
+# started this schedule 3 to 8.5 hours late. Keep this as the fallback to run a
+# job by hand; never add a schedule back, or the job runs twice a day.
 on:
-  schedule:
-    - cron: "0 13 * * *"
   workflow_dispatch:
     inputs:
       only:
-        description: "Run a single job (all = every daily job). db-health runs only the MySQL review; notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts). abc-classification, bank-transfer-review and copilot-retention run daily; customer-reactivation is switched off (manual dry runs only)."
+        description: "Run a single job (all = every daily job). db-health runs only the MySQL review; notification-retry resends failed order emails only; mercado-libre-health runs only the Mercado Libre review (manual only: QStash runs it daily; it emails only new or changed alerts). abc-classification, bank-transfer-review and copilot-retention run daily as Vercel crons; customer-reactivation is switched off (manual dry runs only)."
         required: false
         default: all
         type: choice
@@ -21,7 +23,7 @@ on:
           - copilot-retention
           - whatsapp-recovery
       mode:
-        description: "abc-classification, bank-transfer-review and copilot-retention only: dry-run reports counts and changes nothing; apply writes. Scheduled runs always apply. customer-reactivation is switched off and only accepts dry-run."
+        description: "abc-classification, bank-transfer-review and copilot-retention only: dry-run reports counts and changes nothing; apply writes. The Vercel crons always apply. customer-reactivation is switched off and only accepts dry-run."
         required: false
         default: dry-run
         type: choice
@@ -67,9 +69,8 @@ jobs:
       - name: Verify protected secret
         run: test -n "$ADMIN_CRON_SECRET"
       # Rebuilds every store's hosted feed into the cache (read-only on the
-      # catalog). Vercel's plan allows two crons and both are taken, so this
-      # runs here at 13:00 UTC (8:00 a. m. Colombia); schedule the Merchant
-      # Center fetch after 8:30 a. m.
+      # catalog). The daily run is a Vercel cron at 13:00 UTC (8:00 a. m.
+      # Colombia); schedule the Merchant Center fetch after 8:30 a. m.
       - name: Refresh Google Merchant feed
         run: |
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \

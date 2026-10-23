@@ -14,11 +14,11 @@ ningún producto.
   El token es un HMAC del `storeId` firmado con `GOOGLE_MERCHANT_FEED_SECRET`;
   sin ese secreto la ruta responde 404 y no expone nada. También acepta el
   token como contraseña de autenticación básica (usuario cualquiera).
-- **Regeneración:** el flujo de GitHub Actions `admin-scheduled-tasks.yml`
-  llama todos los días a las 13:00 UTC (8:00 a. m. Colombia) a
-  `/api/cron/google-merchant-feed` con el secreto `PDEPAPEL_ADMIN_CRON_SECRET`
-  (= `CRON_SECRET` del administrador). Vercel solo permite dos crons en el plan
-  actual y ambos están ocupados. La ruta reconstruye el feed de cada tienda y lo guarda en Upstash Redis durante 7
+- **Regeneración:** un cron de Vercel (`vercel.json`) llama todos los días a
+  las 13:00 UTC (8:00 a. m. Colombia) a `/api/cron/google-merchant-feed` con
+  el `CRON_SECRET` del administrador. Hasta el 2026-10-23 lo hacía GitHub
+  Actions, que arrancaba de 3 a 8,5 h tarde; `admin-scheduled-tasks.yml` queda
+  solo para correrlo a mano. La ruta reconstruye el feed de cada tienda y lo guarda en Upstash Redis durante 7
   días. La ruta pública sirve esa copia; solo genera al vuelo si la caché está
   vacía.
 - **Informe:** `GET /api/<storeId>/google-merchant/report` (solo dueño de la

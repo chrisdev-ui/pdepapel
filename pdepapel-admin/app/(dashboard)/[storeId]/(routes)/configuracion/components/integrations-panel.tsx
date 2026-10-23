@@ -91,9 +91,9 @@ export async function IntegrationsPanel({ storeId }: { storeId: string }) {
         <StatusCard
           icon={Activity}
           title="Tareas programadas"
-          description="Vigencias de cupones y ofertas cada día (Vercel) y salud de Mercado Libre y feed de Merchant (GitHub Actions)."
+          description="Vigencias de cupones y ofertas cada día, feed de Merchant y revisiones diarias desde las 8:00 a. m., y salud de Mercado Libre."
           status={cron ? CONFIGURED : MISSING}
-          facts={[{ label: "Cupones y ofertas", value: "Diario 00:00" }, { label: "Salud ML y feed", value: "Diario por GitHub" }]}
+          facts={[{ label: "Cupones y ofertas", value: "Diario 00:00" }, { label: "Feed y revisiones", value: "Diario 8:00 a. m." }]}
         />
       </div>
       <GoogleMerchantFeedCard storeId={storeId} />

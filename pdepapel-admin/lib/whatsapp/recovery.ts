@@ -20,7 +20,7 @@ import { PanelNotice } from "@/emails/panel-notice";
  * esto nunca llama al bot (el procesador decide, y no contesta lo viejo).
  *
  * No usa un horario de QStash: competiría por la misma cuota. Corre de paso
- * con cada webhook (como mucho cada 2 min) y una vez al día desde GitHub.
+ * con cada webhook (como mucho cada 2 min) y una vez al día con un cron de Vercel.
  */
 export const RECOVERY_MIN_AGE_MS = 2 * 60 * 1000;
 export const RECOVERY_MAX_AGE_MS = 72 * 60 * 60 * 1000;

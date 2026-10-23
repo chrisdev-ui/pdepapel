@@ -8,6 +8,7 @@ import {
   applyBankTransferReview,
   planBankTransferReview,
   resolveScheduledJobMode,
+  scheduledRequestUrl,
   summarizeBankTransferPlan,
 } from "@/lib/scheduled-jobs";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get("authorization")?.split("Bearer ").at(1);
     if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
-    const mode = resolveScheduledJobMode(request.url, "bank-transfer-review");
+    const mode = resolveScheduledJobMode(scheduledRequestUrl(request), "bank-transfer-review");
 
     const stores = await prismadb.store.findMany({ select: { id: true } });
     const results = [];

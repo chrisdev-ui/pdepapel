@@ -16,6 +16,54 @@
     {
       "path": "/api/cron/social-sync",
       "schedule": "15 3,9,15,21 * * *"
+    },
+    {
+      "path": "/api/cron/google-merchant-feed",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/image-health",
+      "schedule": "2 13 * * *"
+    },
+    {
+      "path": "/api/cron/notification-retry",
+      "schedule": "4 13 * * *"
+    },
+    {
+      "path": "/api/cron/db-health",
+      "schedule": "6 13 * * *"
+    },
+    {
+      "path": "/api/cron/gift-card-holds",
+      "schedule": "8 13 * * *"
+    },
+    {
+      "path": "/api/cron/bank-transfer-review",
+      "schedule": "10 13 * * *"
+    },
+    {
+      "path": "/api/cron/abc-classification",
+      "schedule": "12 13 * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-recovery",
+      "schedule": "14 13 * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-webhook-retention",
+      "schedule": "16 13 * * *"
+    },
+    {
+      "path": "/api/cron/payment-webhook-retention",
+      "schedule": "18 13 * * *"
+    },
+    {
+      "path": "/api/cron/copilot-retention",
+      "schedule": "20 13 * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-webhook-volume",
+      "schedule": "0 2,14,18,22 * * *"
     }
   ],
   "functions": {

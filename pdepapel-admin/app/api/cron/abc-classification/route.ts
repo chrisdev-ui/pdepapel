@@ -8,6 +8,7 @@ import {
   applyAbcClassification,
   planAbcClassification,
   resolveScheduledJobMode,
+  scheduledRequestUrl,
   summarizeAbcPlan,
 } from "@/lib/scheduled-jobs";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get("authorization")?.split("Bearer ").at(1);
     if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
-    const mode = resolveScheduledJobMode(request.url, "abc-classification");
+    const mode = resolveScheduledJobMode(scheduledRequestUrl(request), "abc-classification");
 
     const stores = await prismadb.store.findMany({ select: { id: true } });
     const results = [];

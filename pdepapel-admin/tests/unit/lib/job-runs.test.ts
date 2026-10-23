@@ -69,6 +69,15 @@ describe("systems status", () => {
     });
   });
 
+  it("los diarios con horario fijo se marcan atrasados a las 26 h, porque Vercel no reintenta; el resto, al doble", () => {
+    const status = (name: string, hoursAgo: number) =>
+      buildSystemsStatus([{ name, storeId: null, ranAt: hours(hoursAgo), ok: true, detail: null }], "s1", now).find((row) => row.name === name);
+    expect(status("notification-retry", 25.5)).toMatchObject({ overdue: false, attention: false });
+    expect(status("notification-retry", 26.5)).toMatchObject({ overdue: true, attention: true });
+    expect(status("whatsapp-webhook-volume", 11.5)).toMatchObject({ overdue: false });
+    expect(status("whatsapp-webhook-volume", 12.5)).toMatchObject({ overdue: true });
+  });
+
   it("does not let another store's per-store run count for this store", () => {
     const rows = buildSystemsStatus(
       [

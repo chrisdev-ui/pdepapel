@@ -10,7 +10,7 @@ import prismadb from "@/lib/prismadb";
  * Trabajos que llegaron del flujo `scheduler.yml`, que nunca corrió (vivía en
  * una carpeta que GitHub no lee). Mientras `enabled` sea false, su ruta solo
  * simula y devuelve cifras, sin escribir nada. Encender uno es cambiar esta
- * constante, su paso en `admin-scheduled-tasks.yml` y `JOB_DEFINITIONS`.
+ * constante, su entrada en `vercel.json` y `JOB_DEFINITIONS`.
  * La reactivación escribe a clientas: sigue apagada hasta que Christian vea
  * cuántas tienen consentimiento. La retención del copiloto usa el mismo
  * interruptor y la misma simulación.
@@ -20,7 +20,7 @@ export const SCHEDULED_JOBS = {
   "customer-reactivation": { enabled: false },
   "bank-transfer-review": { enabled: true },
   "copilot-retention": { enabled: true },
-  // Métricas de redes (social-sync.yml cada 6 h), encendido 2026-10-21.
+  // Métricas de redes (cron de Vercel cada 6 h), encendido 2026-10-21.
   "social-sync": { enabled: true },
   // Refresco de cada hora de lo publicado en las últimas 8 h (cron de Vercel), 2026-10-22.
   "social-recent": { enabled: true },
@@ -30,6 +30,17 @@ export type ScheduledJobName = keyof typeof SCHEDULED_JOBS;
 export type ScheduledJobMode = "dry-run" | "apply";
 
 /** `?mode=apply` solo con el trabajo encendido; sin parámetro, simulación. */
+/**
+ * La URL con la que se resuelve el modo. Los crons de Vercel no llevan consulta:
+ * mandan el CRON_SECRET y el encabezado `x-vercel-cron-schedule`, y con él la
+ * corrida es en serio. Un `mode` explícito (llamada a mano) sigue mandando.
+ */
+export function scheduledRequestUrl(request: Request): string {
+  const url = new URL(request.url);
+  if (request.headers.has("x-vercel-cron-schedule") && !url.searchParams.has("mode")) url.searchParams.set("mode", "apply");
+  return url.toString();
+}
+
 export function resolveScheduledJobMode(url: string, job: ScheduledJobName): ScheduledJobMode {
   const requested = new URL(url).searchParams.get("mode");
   if (requested !== null && requested !== "dry-run" && requested !== "apply") {

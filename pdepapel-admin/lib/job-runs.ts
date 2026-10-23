@@ -30,6 +30,7 @@ export type JobName =
   | "whatsapp-recovery"
   | "payment-webhook-retention"
   | "notification-retry"
+  | "gift-card-holds"
   | "db-health"
   | "abc-classification"
   | "bank-transfer-review"
@@ -53,11 +54,21 @@ export interface JobDefinition {
   label: string;
   /** Cada cuánto debería correr; pasado el doble sin corrida, se marca atrasada. */
   expectedEveryHours: number;
+  /**
+   * Cuándo se marca atrasada si no es el doble. Los diarios con horario fijo
+   * (crons de Vercel y QStash) usan 26 h: Vercel no reintenta, así que una
+   * corrida perdida se ve al día siguiente y no a los dos días.
+   */
+  overdueAfterHours?: number;
   /** Se registra por tienda (true) o una sola vez para toda la instalación. */
   perStore: boolean;
   /** El detalle se lee también cuando salió bien (p. ej. cuántas publicaciones se midieron), no solo al pasar el mouse. */
   showDetail?: boolean;
 }
+
+export const DAILY_OVERDUE_HOURS = 26;
+
+export const overdueAfterHours = (job: Pick<JobDefinition, "expectedEveryHours" | "overdueAfterHours">) => job.overdueAfterHours ?? job.expectedEveryHours * 2;
 
 export const JOB_DEFINITIONS: JobDefinition[] = [
   {
@@ -99,84 +110,104 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
     name: "mercadolibre-health",
     label: "Revisión de Mercado Libre",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "google-merchant-feed",
     label: "Feed de Google Merchant",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: true,
   },
   {
     name: "image-health",
     label: "Revisión de imágenes",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: true,
   },
   {
     name: "whatsapp-webhook-retention",
     label: "Retención de eventos de WhatsApp",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "whatsapp-recovery",
     label: "Recuperación de mensajes de WhatsApp",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "whatsapp-webhook-volume",
     label: "Volumen de eventos de WhatsApp",
-    expectedEveryHours: 24,
+    expectedEveryHours: 6,
     perStore: false,
   },
   {
     name: "payment-webhook-retention",
     label: "Retención de eventos de pago",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "notification-retry",
     label: "Reenvío de correos de pedidos",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
+    perStore: false,
+  },
+  {
+    name: "gift-card-holds",
+    label: "Reservas de tarjetas de regalo",
+    expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "db-health",
     label: "Salud de la base de datos",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "abc-classification",
     label: "Clasificación ABC de productos",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "bank-transfer-review",
     label: "Revisión de transferencias sin pagar",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "copilot-retention",
     label: "Retención de conversaciones del copiloto",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "update-offers",
     label: "Ofertas programadas",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
   {
     name: "update-coupons",
     label: "Cupones programados",
     expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,
   },
 ];
@@ -254,10 +285,7 @@ export function buildSystemsStatus(
           ? candidate.storeId === storeId
           : candidate.storeId === null),
     );
-    const overdue =
-      !run ||
-      now.getTime() - run.ranAt.getTime() >
-        job.expectedEveryHours * 2 * 60 * 60 * 1000;
+    const overdue = !run || now.getTime() - run.ranAt.getTime() > overdueAfterHours(job) * 60 * 60 * 1000;
     return {
       name: job.name,
       label: job.label,
