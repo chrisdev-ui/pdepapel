@@ -139,8 +139,12 @@ test.describe("marcas en el panel", () => {
       await page.goto(`/${storeId}/productos/${KIUT_1}`, { waitUntil: "domcontentloaded" });
       const useKiut = page.getByRole("button", { name: "Usar Kiut" });
       await expect(useKiut).toBeVisible({ timeout: 90_000 });
-      await useKiut.click();
-      await expect(visible(page.getByRole("combobox").filter({ hasText: "Kiut" }))).toBeVisible();
+      // En modo desarrollo el botón aparece antes de hidratar y el primer clic no hace nada: se repite
+      // hasta que el campo diga «Kiut» (con el build de producción pasa al primer clic, también a 390 px).
+      await expect(async () => {
+        if (await useKiut.isVisible()) await useKiut.click();
+        await expect(visible(page.getByRole("combobox").filter({ hasText: "Kiut" }))).toBeVisible({ timeout: 3000 });
+      }).toPass({ timeout: 60_000 });
       await page.getByRole("button", { name: "Guardar cambios" }).click();
       await expect.poll(() => brandIdsOf([KIUT_1]), { timeout: 60_000 }).toEqual({ [KIUT_1]: "Kiut" });
 
