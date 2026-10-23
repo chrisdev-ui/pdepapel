@@ -18,6 +18,7 @@ interface TemplateRow {
   giftMaxItems: number;
   giftLabel: string | null;
   boxReserveCost: number;
+  noBox: boolean;
 }
 
 export interface CapsuleSettingsData {
@@ -27,47 +28,86 @@ export interface CapsuleSettingsData {
   activeSource: { source: "edition" | "template"; edition: { number: number; name: string } | null } | null;
 }
 
-type RowForm = { giftMaxCost: string; giftMaxItems: string; giftLabel: string; boxReserveCost: string };
+type RowForm = { giftMaxCost: string; giftMaxItems: string; giftLabel: string; boxReserveCost: string; noBox: boolean };
 
+// Un pack sin fila guardada deja la caja vacía: 0 solo se guarda marcado «Sin caja».
 const toForm = (rows: TemplateRow[]): Record<number, RowForm> =>
   Object.fromEntries(
     CAPSULE_PACK_PRICES.map((price) => {
       const row = rows.find((item) => item.packSize === price.packSize);
-      return [price.packSize, { giftMaxCost: String(row?.giftMaxCost ?? 0), giftMaxItems: String(row?.giftMaxItems ?? 0), giftLabel: row?.giftLabel ?? "", boxReserveCost: String(row?.boxReserveCost ?? 0) }];
+      return [
+        price.packSize,
+        {
+          giftMaxCost: String(row?.giftMaxCost ?? 0),
+          giftMaxItems: String(row?.giftMaxItems ?? 0),
+          giftLabel: row?.giftLabel ?? "",
+          boxReserveCost: row && !row.noBox ? String(row.boxReserveCost) : "",
+          noBox: row?.noBox ?? false,
+        },
+      ];
     }),
   );
 
 const digits = (value: string) => Number(value.replace(/[.\s]/g, "")) || 0;
+const asText = (value: number | null) => (value === null ? "" : String(value));
 
 /**
  * Lo que necesitan las ediciones sugeridas: el piso de costo de un papel y,
  * mientras no haya una edición con packs guardados, la plantilla de packs.
+ * Guardar manda solo lo que se cambió: la plantilla viaja únicamente si se
+ * tocó, para no crear packs con campos que nadie llenó.
  */
 export function CapsulesPanel({ initial }: { initial: CapsuleSettingsData }) {
   const params = useParams<{ storeId: string }>();
-  const [minSlipCost, setMinSlipCost] = useState(initial.minSlipCost === null ? "" : String(initial.minSlipCost));
-  const [minMarginPct, setMinMarginPct] = useState(initial.minMarginPct === null ? "" : String(initial.minMarginPct));
+  const [saved, setSaved] = useState({ minSlipCost: asText(initial.minSlipCost), minMarginPct: asText(initial.minMarginPct) });
+  const [minSlipCost, setMinSlipCost] = useState(saved.minSlipCost);
+  const [minMarginPct, setMinMarginPct] = useState(saved.minMarginPct);
   const [rows, setRows] = useState(() => toForm(initial.template));
+  const [templateTouched, setTemplateTouched] = useState(false);
   const [active, setActive] = useState(initial.activeSource);
   const [saving, setSaving] = useState(false);
-  const set = (packSize: number, field: keyof RowForm) => (event: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (packSize: number, field: Exclude<keyof RowForm, "noBox">) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setTemplateTouched(true);
     setRows((current) => ({ ...current, [packSize]: { ...current[packSize], [field]: event.target.value } }));
+  };
+  const setNoBox = (packSize: number) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setTemplateTouched(true);
+    const noBox = event.target.checked;
+    setRows((current) => ({ ...current, [packSize]: { ...current[packSize], noBox, boxReserveCost: noBox ? "" : current[packSize].boxReserveCost } }));
+  };
 
   const save = async () => {
+    const body: Record<string, unknown> = {};
+    if (minSlipCost.trim() !== saved.minSlipCost) body.minSlipCost = minSlipCost.trim() === "" ? null : digits(minSlipCost);
+    if (minMarginPct.trim() !== saved.minMarginPct) body.minMarginPct = minMarginPct.trim() === "" ? null : Number(minMarginPct.replace(",", "."));
+    if (templateTouched) {
+      const missingBox = CAPSULE_PACK_PRICES.find((price) => !rows[price.packSize].noBox && digits(rows[price.packSize].boxReserveCost) <= 0);
+      if (missingBox) {
+        toast({ description: `Falta el costo de la caja del pack de ${missingBox.packSize}: escríbelo o marca «Sin caja».`, variant: "warning" });
+        return;
+      }
+      body.template = CAPSULE_PACK_PRICES.map((price) => ({
+        packSize: price.packSize,
+        giftMaxCost: digits(rows[price.packSize].giftMaxCost),
+        giftMaxItems: Number(rows[price.packSize].giftMaxItems) || 0,
+        giftLabel: rows[price.packSize].giftLabel,
+        boxReserveCost: rows[price.packSize].noBox ? 0 : digits(rows[price.packSize].boxReserveCost),
+        noBox: rows[price.packSize].noBox,
+      }));
+    }
+    if (Object.keys(body).length === 0) {
+      toast({ description: "No hay cambios para guardar" });
+      return;
+    }
     try {
       setSaving(true);
-      const { data } = await axios.put(`/api/${params.storeId}/capsule-settings`, {
-        minSlipCost: minSlipCost.trim() === "" ? null : digits(minSlipCost),
-        minMarginPct: minMarginPct.trim() === "" ? null : Number(minMarginPct.replace(",", ".")),
-        template: CAPSULE_PACK_PRICES.map((price) => ({
-          packSize: price.packSize,
-          giftMaxCost: digits(rows[price.packSize].giftMaxCost),
-          giftMaxItems: Number(rows[price.packSize].giftMaxItems) || 0,
-          giftLabel: rows[price.packSize].giftLabel,
-          boxReserveCost: digits(rows[price.packSize].boxReserveCost),
-        })),
-      });
+      const { data } = await axios.put(`/api/${params.storeId}/capsule-settings`, body);
+      const next = { minSlipCost: asText(data.minSlipCost), minMarginPct: asText(data.minMarginPct) };
+      setSaved(next);
+      setMinSlipCost(next.minSlipCost);
+      setMinMarginPct(next.minMarginPct);
       setRows(toForm(data.template));
+      setTemplateTouched(false);
       setActive(data.activeSource);
       toast({ description: "Ajustes de cápsulas guardados", variant: "success" });
     } catch (error) {
@@ -100,7 +140,7 @@ export function CapsulesPanel({ initial }: { initial: CapsuleSettingsData }) {
           ? `Hoy las sugerencias usan los packs de la edición #${active.edition.number} · ${active.edition.name}, la más reciente con packs guardados. Esta plantilla se usa cuando no hay ninguna.`
           : active?.source === "template"
             ? "Hoy las sugerencias usan esta plantilla: todavía no hay una edición con packs guardados."
-            : "Llena la plantilla para ver ediciones sugeridas: todavía no hay una edición con packs guardados de dónde copiarlos."}
+            : "Faltan los costos de las cajas: llena la plantilla (caja y empaque de cada pack, o «Sin caja») para ver ediciones sugeridas. Todavía no hay una edición con packs guardados de dónde copiarlos."}
       </p>
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-2 text-sm font-medium">Plantilla de packs</legend>
@@ -121,7 +161,19 @@ export function CapsulesPanel({ initial }: { initial: CapsuleSettingsData }) {
             </div>
             <div className="grid gap-1">
               <Label htmlFor={`plantilla-${price.packSize}-caja`}>Caja y empaque</Label>
-              <Input id={`plantilla-${price.packSize}-caja`} inputMode="numeric" className="h-11" value={rows[price.packSize].boxReserveCost} onChange={set(price.packSize, "boxReserveCost")} />
+              <Input
+                id={`plantilla-${price.packSize}-caja`}
+                inputMode="numeric"
+                className="h-11"
+                placeholder={rows[price.packSize].noBox ? "Sin caja" : "Costo en pesos"}
+                disabled={rows[price.packSize].noBox}
+                value={rows[price.packSize].boxReserveCost}
+                onChange={set(price.packSize, "boxReserveCost")}
+              />
+              <label htmlFor={`plantilla-${price.packSize}-sin-caja`} className="flex min-h-[44px] cursor-pointer items-center gap-2 text-sm">
+                <input id={`plantilla-${price.packSize}-sin-caja`} type="checkbox" className="h-5 w-5 accent-primary" checked={rows[price.packSize].noBox} onChange={setNoBox(price.packSize)} />
+                Sin caja
+              </label>
             </div>
           </div>
         ))}

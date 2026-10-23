@@ -144,6 +144,33 @@ describe("packs de las sugerencias", () => {
     expect(await minimums()).toEqual({ capsuleMinSlipCost: 4000, capsuleMinMarginPct: null });
   });
 
+  it("la caja de cada pack necesita costo o «Sin caja»; el regalo en 0 vale; sin plantilla completa no hay sugerencias", async () => {
+    f = await createInventoryFixture();
+    session.userId = f.store.userId;
+    const sizes = CAPSULE_PACK_PRICES.map((price) => price.packSize);
+    const row = (packSize: number, box: unknown, noBox?: boolean) => ({ packSize, giftMaxCost: 0, giftMaxItems: 0, giftLabel: "", boxReserveCost: box, ...(noBox === undefined ? {} : { noBox }) });
+
+    for (const box of [null, "", 0, undefined]) {
+      const response = await call("PUT", { template: sizes.map((size, index) => row(size, index === 0 ? box : 1500)) });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBe(`Falta el costo de la caja del pack de ${sizes[0]}: escríbelo o marca «Sin caja»`);
+    }
+    expect(await testPrisma.capsulePackTemplate.count({ where: { storeId: f.store.id } })).toBe(0);
+    expect(await resolveSuggestionPackOptions(f.store.id)).toBeNull();
+
+    // Regalos en 0 y una caja marcada «Sin caja»: se guarda, y la caja queda en 0 a propósito.
+    const saved = await call("PUT", { template: sizes.map((size, index) => (index === 0 ? row(size, null, true) : row(size, 1500))) });
+    expect(saved.status).toBe(200);
+    const body = await saved.json();
+    expect(body.template.find((item: { packSize: number }) => item.packSize === sizes[0])).toMatchObject({ boxReserveCost: 0, noBox: true, giftMaxCost: 0 });
+    expect(body.template.find((item: { packSize: number }) => item.packSize === sizes[1])).toMatchObject({ boxReserveCost: 1500, noBox: false });
+    expect(await resolveSuggestionPackOptions(f.store.id)).toMatchObject({ source: "template" });
+
+    // Guardar solo el margen después no toca la plantilla.
+    expect((await call("PUT", { minMarginPct: 50 })).status).toBe(200);
+    expect(await testPrisma.capsulePackTemplate.count({ where: { storeId: f.store.id } })).toBe(sizes.length);
+  });
+
   it("la cuenta de solo lectura no los lee ni los cambia", async () => {
     f = await createInventoryFixture();
     session.userId = "user_viewer_capsulas";

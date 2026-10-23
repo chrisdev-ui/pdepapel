@@ -15,8 +15,21 @@ const money = (value: unknown, label: string) => {
   return Math.round(amount);
 };
 
-/** Una fila por cada pack de la escalera, con su regalo y su caja. */
-export function parsePackOptions(value: unknown): PackOptionInput[] {
+function explicitBoxCost(row: Record<string, unknown>, packSize: number) {
+  if (row.noBox === true) return 0;
+  const empty = row.boxReserveCost === undefined || row.boxReserveCost === null || row.boxReserveCost === "";
+  const cost = empty ? 0 : money(row.boxReserveCost, `La caja del pack de ${packSize}`);
+  if (cost === 0) throw ErrorFactory.InvalidRequest(`Falta el costo de la caja del pack de ${packSize}: escríbelo o marca «Sin caja»`);
+  return cost;
+}
+
+/**
+ * Una fila por cada pack de la escalera, con su regalo y su caja. Con
+ * `explicitBox` (la plantilla de Ajustes) la caja no puede quedar vacía: o
+ * trae un costo mayor que 0 o viene marcada «Sin caja» (`noBox`), y solo así
+ * se guarda en 0. El regalo en 0 siempre vale.
+ */
+export function parsePackOptions(value: unknown, mode: { explicitBox?: boolean } = {}): PackOptionInput[] {
   if (!Array.isArray(value)) throw ErrorFactory.InvalidRequest("Faltan los packs");
   const sizes = new Set(CAPSULE_PACK_PRICES.map((price) => price.packSize));
   const seen = new Set<number>();
@@ -33,7 +46,7 @@ export function parsePackOptions(value: unknown): PackOptionInput[] {
       throw ErrorFactory.InvalidRequest(`El pack de ${packSize}: un regalo necesita tope y cantidad, o ninguno de los dos`);
     }
     const label = typeof row.giftLabel === "string" ? row.giftLabel.trim().slice(0, 120) : "";
-    return { packSize, giftMaxCost, giftMaxItems, boxReserveCost: money(row.boxReserveCost ?? 0, `La caja del pack de ${packSize}`), giftLabel: label || null };
+    return { packSize, giftMaxCost, giftMaxItems, boxReserveCost: mode.explicitBox ? explicitBoxCost(row, packSize) : money(row.boxReserveCost ?? 0, `La caja del pack de ${packSize}`), giftLabel: label || null };
   });
   const missing = Array.from(sizes).filter((size) => !seen.has(size));
   if (missing.length) throw ErrorFactory.InvalidRequest(`Falta configurar ${missing.length === 1 ? "el pack" : "los packs"} de ${missing.join(", ")}`);

@@ -30,6 +30,7 @@ export async function resolveSuggestionPackOptions(storeId: string): Promise<Pac
     select: { packSize: true, giftMaxCost: true, giftMaxItems: true, giftLabel: true, boxReserveCost: true },
     orderBy: { packSize: "asc" },
   });
+  // Completa solo con todos los packs: la plantilla se guarda entera y cada caja trae costo o «Sin caja».
   return template.length === CAPSULE_PACK_PRICES.length ? { source: "template", edition: null, options: template } : null;
 }
 
@@ -42,7 +43,8 @@ export async function getCapsuleSettings(storeId: string) {
   return {
     minSlipCost: store?.capsuleMinSlipCost ?? null,
     minMarginPct: store?.capsuleMinMarginPct ?? null,
-    template,
+    // Una fila guardada con caja en 0 solo pudo llegar marcada «Sin caja» (parsePackOptions con explicitBox).
+    template: template.map((row) => ({ ...row, noBox: row.boxReserveCost === 0 })),
     activeSource: active ? { source: active.source, edition: active.edition } : null,
   };
 }
@@ -70,7 +72,7 @@ export async function saveCapsuleSettings(storeId: string, body: Record<string, 
   const data: { capsuleMinSlipCost?: number | null; capsuleMinMarginPct?: number | null } = {};
   if (body.minSlipCost !== undefined) data.capsuleMinSlipCost = parseMinSlipCost(body.minSlipCost);
   if (body.minMarginPct !== undefined) data.capsuleMinMarginPct = parseMinMarginPct(body.minMarginPct);
-  const template = body.template === undefined || body.template === null ? null : parsePackOptions(body.template);
+  const template = body.template === undefined || body.template === null ? null : parsePackOptions(body.template, { explicitBox: true });
   await prismadb.$transaction(async (tx) => {
     if (Object.keys(data).length > 0) await tx.store.update({ where: { id: storeId }, data });
     if (template) {

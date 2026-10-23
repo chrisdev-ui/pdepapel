@@ -179,9 +179,9 @@ export function SuggestionsPanel({ onUse }: { onUse: (suggestion: EditionSuggest
       >
         {data.missingSetup === "packs" ? (
           <p className="text-sm">
-            Para sugerir ediciones falta la plantilla de packs (regalo y caja).{" "}
+            Faltan los costos de las cajas: para sugerir ediciones cada pack necesita su caja y empaque (o «Sin caja»).{" "}
             <Link href={settingsHref} className="font-medium underline underline-offset-4">
-              Llénala en Ajustes
+              Complétalos en Ajustes
             </Link>
             .
           </p>
