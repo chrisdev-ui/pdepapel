@@ -57,7 +57,10 @@ export function SystemsStatus({ rows }: { rows: SystemStatusRow[] }) {
                 {row.label}
               </span>
               <span
-                className="truncate text-xs text-muted-foreground"
+                className={cn(
+                  "text-xs text-muted-foreground",
+                  row.showDetail ? "break-words" : "truncate",
+                )}
                 title={row.detail ?? undefined}
               >
                 {row.metric ? (
@@ -68,7 +71,7 @@ export function SystemsStatus({ rows }: { rows: SystemStatusRow[] }) {
                       ? `${row.ok ? "Corrió" : "Falló"} ${fmt(row.ranAt)}`
                       : "Sin corridas registradas"}
                     {row.overdue && row.ranAt ? " · atrasada" : ""}
-                    {!row.ok && row.detail ? ` · ${row.detail}` : ""}
+                    {(!row.ok || row.showDetail) && row.detail ? ` · ${row.detail}` : ""}
                   </>
                 )}
               </span>

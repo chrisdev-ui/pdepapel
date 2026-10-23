@@ -55,6 +55,8 @@ export interface JobDefinition {
   expectedEveryHours: number;
   /** Se registra por tienda (true) o una sola vez para toda la instalación. */
   perStore: boolean;
+  /** El detalle se lee también cuando salió bien (p. ej. cuántas publicaciones se midieron), no solo al pasar el mouse. */
+  showDetail?: boolean;
 }
 
 export const JOB_DEFINITIONS: JobDefinition[] = [
@@ -64,12 +66,14 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
     label: "Métricas de Instagram",
     expectedEveryHours: 6,
     perStore: true,
+    showDetail: true,
   },
   {
     name: "social-sync-tiktok",
     label: "Métricas de TikTok",
     expectedEveryHours: 6,
     perStore: true,
+    showDetail: true,
   },
   {
     // Todas las cuentas en una sola corrida: una fila para la instalación.
@@ -77,6 +81,7 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
     label: "Métricas recientes (cada hora)",
     expectedEveryHours: 1,
     perStore: false,
+    showDetail: true,
   },
   {
     name: "stock-reservations",
@@ -225,6 +230,7 @@ export interface SystemStatusRow {
   attention: boolean;
   /** Una cifra medida ahora, no una tarea: se enseña `detail` en vez de «Corrió…». */
   metric?: boolean;
+  showDetail?: boolean;
 }
 
 /** Estado de cada tarea para una tienda (puro sobre filas ya cargadas, testeable). */
@@ -260,6 +266,7 @@ export function buildSystemsStatus(
       detail: run?.detail ?? null,
       overdue,
       attention: overdue || run?.ok === false,
+      ...(job.showDetail ? { showDetail: true } : {}),
     };
   });
 }

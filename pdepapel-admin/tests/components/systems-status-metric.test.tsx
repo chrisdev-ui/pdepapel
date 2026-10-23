@@ -33,3 +33,27 @@ describe("Sistemas: la cifra del bot", () => {
     expect(screen.getByText(/más de 0,5/)).toBeInTheDocument();
   });
 });
+
+describe("Sistemas: filas de redes", () => {
+  const recent = (ok: boolean, detail: string): SystemStatusRow => ({
+    name: "social-recent",
+    label: "Métricas recientes (cada hora)",
+    ranAt: new Date("2026-10-23T02:05:09.000Z"),
+    ok,
+    detail,
+    overdue: false,
+    attention: !ok,
+    showDetail: true,
+  });
+
+  it("dicen cuántas publicaciones se midieron también cuando salió bien, sin pasar el mouse", () => {
+    render(<SystemsStatus rows={[recent(true, "3 publicaciones medidas")]} />);
+    expect(screen.getByText(/^Corrió .* · 3 publicaciones medidas$/)).toBeInTheDocument();
+  });
+
+  it("una fila sin showDetail que salió bien solo dice «Corrió…»", () => {
+    render(<SystemsStatus rows={[{ ...recent(true, "ok interno"), name: "update-offers", label: "Ofertas", showDetail: undefined }]} />);
+    expect(screen.getByText(/^Corrió /)).toBeInTheDocument();
+    expect(screen.queryByText(/ok interno/)).toBeNull();
+  });
+});
