@@ -119,6 +119,31 @@ describe("packs de las sugerencias", () => {
     expect(await testPrisma.capsulePackTemplate.count({ where: { storeId: f.store.id } })).toBe(0);
   });
 
+  it("un cuerpo vacío o roto da 400 y no borra los mínimos; un campo que no viene se deja como está", async () => {
+    f = await createInventoryFixture();
+    session.userId = f.store.userId;
+    expect((await call("PUT", { minSlipCost: 3500, minMarginPct: 50 })).status).toBe(200);
+    const minimums = async () => testPrisma.store.findUniqueOrThrow({ where: { id: f!.store.id }, select: { capsuleMinSlipCost: true, capsuleMinMarginPct: true } });
+    const raw = (body: string | undefined, headers: Record<string, string> = { "content-type": "application/json" }) =>
+      PUT(new Request(`http://admin.test/api/${f!.store.id}/capsule-settings`, { method: "PUT", headers, body }), { params: { storeId: f!.store.id } });
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const response of [await raw(undefined), await raw(""), await raw('{"minMarginPct": 4'), await raw("null"), await raw("[]"), await raw("50", { "content-type": "text/plain" })]) {
+      expect(response.status).toBe(400);
+      expect((await response.json()).error ?? "").toMatch(/No llegaron los ajustes de cápsulas/);
+    }
+    expect(warn).toHaveBeenCalledWith("[CAPSULE_SETTINGS_PUT] cuerpo ilegible", expect.objectContaining({ method: "PUT" }));
+    warn.mockRestore();
+    expect(await minimums()).toEqual({ capsuleMinSlipCost: 3500, capsuleMinMarginPct: 50 });
+
+    expect((await call("PUT", {})).status).toBe(200);
+    expect((await call("PUT", { minSlipCost: 4000 })).status).toBe(200);
+    expect(await minimums()).toEqual({ capsuleMinSlipCost: 4000, capsuleMinMarginPct: 50 });
+    // Vaciar el campo en el panel manda null: eso sí lo borra.
+    expect((await call("PUT", { minMarginPct: null })).status).toBe(200);
+    expect(await minimums()).toEqual({ capsuleMinSlipCost: 4000, capsuleMinMarginPct: null });
+  });
+
   it("la cuenta de solo lectura no los lee ni los cambia", async () => {
     f = await createInventoryFixture();
     session.userId = "user_viewer_capsulas";

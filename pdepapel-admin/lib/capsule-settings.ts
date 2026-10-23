@@ -61,14 +61,18 @@ function parseMinMarginPct(value: unknown): number | null {
   return Math.round(pct * 10) / 10;
 }
 
-/** Guarda el piso de costo, el margen de cápsulas y, si viene, la plantilla completa (todos los packs). */
-export async function saveCapsuleSettings(storeId: string, body: unknown) {
-  const raw = (body ?? {}) as Record<string, unknown>;
-  const minSlipCost = parseMinSlipCost(raw.minSlipCost);
-  const minMarginPct = parseMinMarginPct(raw.minMarginPct);
-  const template = raw.template === undefined || raw.template === null ? null : parsePackOptions(raw.template);
+/**
+ * Guarda el piso de costo, el margen de cápsulas y, si viene, la plantilla
+ * completa (todos los packs). Un campo que no viene se deja como está; solo
+ * `null` o vacío lo borra.
+ */
+export async function saveCapsuleSettings(storeId: string, body: Record<string, unknown>) {
+  const data: { capsuleMinSlipCost?: number | null; capsuleMinMarginPct?: number | null } = {};
+  if (body.minSlipCost !== undefined) data.capsuleMinSlipCost = parseMinSlipCost(body.minSlipCost);
+  if (body.minMarginPct !== undefined) data.capsuleMinMarginPct = parseMinMarginPct(body.minMarginPct);
+  const template = body.template === undefined || body.template === null ? null : parsePackOptions(body.template);
   await prismadb.$transaction(async (tx) => {
-    await tx.store.update({ where: { id: storeId }, data: { capsuleMinSlipCost: minSlipCost, capsuleMinMarginPct: minMarginPct } });
+    if (Object.keys(data).length > 0) await tx.store.update({ where: { id: storeId }, data });
     if (template) {
       for (const option of template) {
         await tx.capsulePackTemplate.upsert({
