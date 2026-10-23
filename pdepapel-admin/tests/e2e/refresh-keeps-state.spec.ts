@@ -277,7 +277,7 @@ test.describe("guardar no borra lo que está abierto", () => {
       data: {
         storeId,
         customerName: "Clienta refresco",
-        customerPhone: "3009990001",
+        customerPhone: "3009999999",
         expiresAt: new Date(Date.now() + 3 * 86_400_000),
         items: {
           create: [
