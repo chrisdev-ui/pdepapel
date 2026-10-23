@@ -21,6 +21,7 @@ import {
   getGoogleMerchantFeedProductArgs,
   type GoogleMerchantFeedProduct,
 } from "@/lib/google-merchant-feed";
+import { googleProductCategoryId } from "@/lib/google-product-category";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -38,6 +39,9 @@ import prismadb from "@/lib/prismadb";
  * - el enlace, las imágenes (Cloudinary reescrito a PNG, que Meta también
  *   exige) y la descripción en texto plano;
  * - la regla de `identifier_exists` y la de `item_group_id`.
+ *
+ * Lo que solo tiene este feed (por Pinterest, que lee el mismo archivo):
+ * `google_product_category` y saltarse las fotos marcadas rotas.
  *
  * Nada de esto escribe en el catálogo: el feed solo lee productos.
  */
@@ -73,6 +77,7 @@ export const META_CATALOG_FEED_HEADERS = [
   "color",
   "size",
   "pattern",
+  "google_product_category",
 ] as const;
 
 export const META_CATALOG_FEED_NAME = "meta-catalog-feed";
@@ -111,7 +116,9 @@ export type MetaCatalogFeedReport = {
   exportedProducts: number;
   outOfStock: number;
   withoutIdentifier: number;
+  /** Productos sin ninguna foto que cargue: quedan fuera del feed. */
   missingImages: Array<{ id: string; productId: string; name: string }>;
+  withoutGoogleCategory: Array<{ id: string; productId: string; name: string }>;
   groupsWithDuplicateVariants: string[];
 };
 
@@ -143,30 +150,36 @@ export function buildMetaCatalogFeed(
   const generatedAt = options.generatedAt ?? new Date();
   const defaultBrand = options.defaultBrand ?? META_CATALOG_DEFAULT_BRAND;
   const groupsWithDuplicateVariants = findGroupsWithDuplicateVariants(products);
-  const exported = options.links
+  const linked = options.links
     ? products.filter((product) => options.links!.has(product.id))
     : products;
 
+  // Una foto marcada rota por image-health da 404: Meta y Pinterest no la
+  // pueden bajar. Sin ninguna foto viva, `image_link` (obligatorio) queda
+  // vacío y la fila se rechaza, así que el producto no sale.
   const missingImages: MetaCatalogFeedReport["missingImages"] = [];
+  const exported = linked.flatMap((product) => {
+    const images = product.images.filter((image) => !image.brokenAt && image.url);
+    if (images.length > 0) return [{ product, images }];
+    missingImages.push({ id: product.sku || product.id, productId: product.id, name: product.name });
+    return [];
+  });
+
+  const withoutGoogleCategory: MetaCatalogFeedReport["withoutGoogleCategory"] = [];
   let outOfStock = 0;
   let withoutIdentifier = 0;
 
-  const rows = exported.map((product) => {
+  const rows = exported.map(({ product, images }) => {
     const feedId = product.sku || product.id;
-    const mainImage = product.images.find((image) => image.isMain);
-    const rawMainImage = mainImage?.url || product.images[0]?.url || "";
+    const rawMainImage = (images.find((image) => image.isMain) ?? images[0]).url;
     const imageLink = toGoogleMerchantImageUrl(rawMainImage);
-    const additionalImages = product.images
+    const additionalImages = images
       .filter((image) => image.url !== rawMainImage)
       .slice(0, 10)
       .map((image) => toGoogleMerchantImageUrl(image.url));
-
-    if (!rawMainImage) {
-      missingImages.push({
-        id: feedId,
-        productId: product.id,
-        name: product.name,
-      });
+    const googleCategory = googleProductCategoryId(product.category);
+    if (googleCategory === null) {
+      withoutGoogleCategory.push({ id: feedId, productId: product.id, name: product.name });
     }
 
     // `brand` es obligatorio en Meta y casi todo el catálogo es papelería sin
@@ -220,6 +233,7 @@ export function buildMetaCatalogFeed(
       cleanFeedText(getGoogleMerchantColor(product.name, product.color)),
       cleanFeedText(getGoogleMerchantSize(product.category?.name, product.size)),
       cleanFeedText(getGoogleMerchantPattern(product.name, product.design)),
+      googleCategory === null ? "" : String(googleCategory),
     ].join("\t");
   });
 
@@ -232,6 +246,7 @@ export function buildMetaCatalogFeed(
       outOfStock,
       withoutIdentifier,
       missingImages,
+      withoutGoogleCategory,
       groupsWithDuplicateVariants: Array.from(groupsWithDuplicateVariants),
     },
   };

@@ -29,6 +29,7 @@ type FeedReport = {
   outOfStock: number;
   withoutIdentifier: number;
   missingImages: Array<{ id: string; productId: string; name: string }>;
+  withoutGoogleCategory?: Array<{ id: string; productId: string; name: string }>;
   groupsWithDuplicateVariants: string[];
 };
 
@@ -206,13 +207,14 @@ export function MetaCatalogFeedCard({ storeId }: { storeId: string }) {
 
         {report ? (
           <div className="space-y-4">
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {[
                 ["Activos", report.activeProducts],
                 ["Exportados", report.exportedProducts],
                 ["Sin stock", report.outOfStock],
                 ["Sin identificador", report.withoutIdentifier],
                 ["Sin imagen", report.missingImages.length],
+                ["Sin categoría de Google", report.withoutGoogleCategory?.length ?? 0],
               ].map(([label, value]) => (
                 <div key={String(label)} className="rounded-md border p-3">
                   <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -224,7 +226,7 @@ export function MetaCatalogFeedCard({ storeId }: { storeId: string }) {
             {report.missingImages.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-sm font-medium">
-                  Productos sin imagen (Meta los rechazará)
+                  Productos sin una foto que cargue (quedan fuera del catálogo)
                 </p>
                 <ul className="space-y-1 text-sm">
                   {report.missingImages.slice(0, 20).map((product) => (
@@ -245,6 +247,14 @@ export function MetaCatalogFeedCard({ storeId }: { storeId: string }) {
                   ) : null}
                 </ul>
               </div>
+            ) : null}
+
+            {report.withoutGoogleCategory?.length ? (
+              <p className="text-sm text-muted-foreground">
+                {report.withoutGoogleCategory.length} producto(s) salen sin
+                categoría de Google porque su tipo es nuevo. Avísale al equipo
+                técnico para agregarlo.
+              </p>
             ) : null}
 
             {report.groupsWithDuplicateVariants.length > 0 ? (

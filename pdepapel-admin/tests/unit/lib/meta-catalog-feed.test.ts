@@ -176,6 +176,7 @@ describe("buildMetaCatalogFeed", () => {
       "color",
       "size",
       "pattern",
+      "google_product_category",
     ]);
     expect(row).toMatchObject({
       id: "SKU-1",
@@ -231,14 +232,19 @@ describe("buildMetaCatalogFeed", () => {
     ]);
   });
 
-  it("falls back to the product id and reports a product with no images", () => {
+  it("falls back to the product id when there is no SKU", () => {
+    const [row] = rowsOf(buildMetaCatalogFeed([product({ id: "1", sku: "" })]).tsv);
+    expect(row.id).toBe("1");
+  });
+
+  it("leaves out a product with no photos and reports it", () => {
     const { tsv, report } = buildMetaCatalogFeed([
       product({ id: "1", sku: "", images: [] }),
+      product({ id: "2" }),
     ]);
-    const [row] = rowsOf(tsv);
 
-    expect(row.id).toBe("1");
-    expect(row.image_link).toBe("");
+    expect(rowsOf(tsv).map((row) => row.id)).toEqual(["SKU-2"]);
+    expect(report.exportedProducts).toBe(1);
     expect(report.missingImages).toEqual([
       { id: "1", productId: "1", name: "Producto 1" },
     ]);
@@ -346,5 +352,102 @@ describe("buildMetaCatalogFeed: aviso de marca", () => {
     const [row] = rowsOf(tsv);
     expect(row.description).toBe("Set de bloques de construcción para armar una figura de Luigi.");
     expect(tsv).not.toMatch(/lego/i);
+  });
+});
+
+describe("fotos rotas (Image.brokenAt) en el feed de Meta", () => {
+  const broken = new Date("2026-10-01T00:00:00.000Z");
+  const url = (name: string) => `https://res.cloudinary.com/demo/image/upload/v1/${name}.jpg`;
+  const feedUrl = (name: string) => `https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/${name}.jpg`;
+
+  it("si la portada está rota, sale la siguiente foto viva y la rota no aparece en ninguna columna", () => {
+    const [row] = rowsOf(
+      buildMetaCatalogFeed([
+        product({
+          id: "1",
+          images: [
+            { id: "a", url: url("portada"), isMain: true, brokenAt: broken },
+            { id: "b", url: url("segunda"), isMain: false, brokenAt: null },
+            { id: "c", url: url("tercera"), isMain: false, brokenAt: null },
+          ] as never,
+        }),
+      ]).tsv,
+    );
+    expect(row.image_link).toBe(feedUrl("segunda"));
+    expect(row.additional_image_link).toBe(feedUrl("tercera"));
+  });
+
+  it("una foto adicional rota se cae del listado; la portada sigue igual", () => {
+    const [row] = rowsOf(
+      buildMetaCatalogFeed([
+        product({
+          id: "1",
+          images: [
+            { id: "a", url: url("portada"), isMain: true, brokenAt: null },
+            { id: "b", url: url("rota"), isMain: false, brokenAt: broken },
+            { id: "c", url: url("viva"), isMain: false, brokenAt: null },
+          ] as never,
+        }),
+      ]).tsv,
+    );
+    expect(row.image_link).toBe(feedUrl("portada"));
+    expect(row.additional_image_link).toBe(feedUrl("viva"));
+  });
+
+  it("un producto con todas sus fotos rotas sale del feed y queda en el informe", () => {
+    const { tsv, report } = buildMetaCatalogFeed([
+      product({ id: "1", images: [{ id: "a", url: url("rota"), isMain: true, brokenAt: broken }] as never }),
+      product({ id: "2" }),
+    ]);
+    expect(rowsOf(tsv).map((row) => row.id)).toEqual(["SKU-2"]);
+    expect(report.missingImages).toEqual([{ id: "SKU-1", productId: "1", name: "Producto 1" }]);
+    expect(tsv).not.toContain("rota");
+  });
+});
+
+describe("google_product_category en el feed de Meta", () => {
+  const fixture = product({
+    id: "prod-1",
+    name: "Bolígrafo gel Capibara x3",
+    slug: "boligrafo-gel-capibara-x3",
+    sku: "BOL-CAP-AZU-S-L-0001",
+    description: "<p>Tinta <strong>azul</strong>, punta 0.5</p>",
+    price: 12000,
+    stock: 4,
+    brandRef: { name: "Kiut", isArchived: false, parent: null },
+    mpn: "KT-55",
+    productGroupId: "grupo-1",
+    category: {
+      id: "cat",
+      slug: "boligrafos-lapiceros",
+      name: "Bolígrafos / Lapiceros",
+      type: { id: "type", slug: "escritura", name: "Escritura" },
+    },
+    color: { name: "Azul" },
+    images: [
+      { id: "img-1", url: "https://res.cloudinary.com/demo/image/upload/v1/portada.webp", isMain: true, brokenAt: null },
+      { id: "img-2", url: "https://res.cloudinary.com/demo/image/upload/v1/detalle.jpg", isMain: false, brokenAt: null },
+    ],
+  } as never);
+
+  it("encabezado y fila: las 20 columnas de antes, byte a byte, y el ID de Google al final", () => {
+    // Las 20 primeras columnas son la salida exacta del feed antes de agregar
+    // la columna, generada con el código anterior para este mismo producto.
+    const [header, row] = buildMetaCatalogFeed([fixture], { generatedAt: new Date("2026-10-23T12:00:00.000Z") }).tsv.split("\n");
+    expect(header).toMatchInlineSnapshot(
+      `"id	title	description	availability	condition	price	sale_price	sale_price_effective_date	link	image_link	additional_image_link	brand	gtin	mpn	identifier_exists	item_group_id	product_type	color	size	pattern	google_product_category"`,
+    );
+    expect(row).toMatchInlineSnapshot(
+      `"BOL-CAP-AZU-S-L-0001	Bolígrafo gel Capibara x3	Tinta azul, punta 0.5.	in stock	new	12000.00 COP			https://papeleriapdepapel.com/producto/boligrafo-gel-capibara-x3	https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/portada.png	https://res.cloudinary.com/demo/image/upload/c_limit%2Cw_1600%2Cq_auto/v1/detalle.jpg	Kiut		KT-55		grupo-1	Escritura > Bolígrafos / Lapiceros				982"`,
+    );
+  });
+
+  it("una categoría sin mapeo usa el ID de su tipo; un tipo desconocido deja la celda vacía y lo reporta", () => {
+    const { tsv, report } = buildMetaCatalogFeed([
+      product({ id: "2", category: { id: "c", slug: "otra", name: "Otra", type: { id: "t", slug: "tipo-nuevo", name: "Tipo nuevo" } } as never }),
+      product({ id: "1", category: { id: "c", slug: "categoria-nueva", name: "Nueva", type: { id: "t", slug: "escritura", name: "Escritura" } } as never }),
+    ]);
+    expect(rowsOf(tsv).map((row) => row.google_product_category)).toEqual(["", "977"]);
+    expect(report.withoutGoogleCategory).toEqual([{ id: "SKU-2", productId: "2", name: "Producto 2" }]);
   });
 });
