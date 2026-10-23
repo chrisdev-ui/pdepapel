@@ -165,6 +165,71 @@ export function outlierMultiplier(value: number | null, baseline: number | null)
   return Math.round((value / baseline) * 10) / 10;
 }
 
+/**
+ * «× mediana» a la misma edad (decisión de Christian, 2026-10-22). Una
+ * publicación de 7 días o más usa su lectura de 7 días; si no la tiene (ya era
+ * vieja cuando se vio por primera vez), la última, marcada «aprox.». Una más
+ * joven usa su última lectura y se compara con las otras publicaciones de la
+ * red a esa misma edad. Con menos de 5 para comparar: «pocos datos».
+ */
+export const MULTIPLIER_MATURE_HOURS = 168;
+export const MULTIPLIER_MIN_SAMPLE = 5;
+
+export interface AgedPost {
+  id: string;
+  postedAt: Date;
+  snapshots: CurveSnapshot[];
+}
+
+interface Reading {
+  views: number;
+  hours: number;
+  approx: boolean;
+  mature: boolean;
+}
+
+function readingOf(post: AgedPost, now: Date): Reading | null {
+  const latest = post.snapshots.filter((snapshot) => snapshot.views !== null).at(-1);
+  if (!latest || latest.views === null) return null;
+  if (hoursSince(post.postedAt, now) < MULTIPLIER_MATURE_HOURS) return { views: latest.views, hours: latest.hoursSincePost, approx: false, mature: false };
+  const atSevenDays = viewsAt(post.snapshots, MULTIPLIER_MATURE_HOURS);
+  return atSevenDays === null
+    ? { views: latest.views, hours: latest.hoursSincePost, approx: true, mature: true }
+    : { views: atSevenDays, hours: MULTIPLIER_MATURE_HOURS, approx: false, mature: true };
+}
+
+export interface SameAgeMultiplier {
+  multiplier: number | null;
+  /** La lectura de la publicación o la de alguna comparada no es la de 7 días. */
+  approx: boolean;
+  /** Con cuántas publicaciones se comparó. */
+  sample: number;
+}
+
+/** `posts` son las de una red en los últimos 90 días (el periodo elegido no cambia la base). */
+export function sameAgeMultipliers(posts: readonly AgedPost[], now: Date): Map<string, SameAgeMultiplier> {
+  const readings = new Map(posts.map((post) => [post.id, readingOf(post, now)]));
+  const result = new Map<string, SameAgeMultiplier>();
+  for (const post of posts) {
+    const own = readings.get(post.id);
+    if (!own) {
+      result.set(post.id, { multiplier: null, approx: false, sample: 0 });
+      continue;
+    }
+    const others = posts.filter((other) => other.id !== post.id);
+    const peers = own.mature
+      ? others.map((other) => readings.get(other.id)).filter((reading): reading is Reading => reading?.mature === true)
+      : others.map((other) => viewsAt(other.snapshots, own.hours)).filter((views): views is number => views !== null).map((views) => ({ views, hours: own.hours, approx: false, mature: false }));
+    const enough = peers.length >= MULTIPLIER_MIN_SAMPLE;
+    result.set(post.id, {
+      multiplier: enough ? outlierMultiplier(own.views, median(peers.map((peer) => peer.views))) : null,
+      approx: enough && (own.approx || peers.some((peer) => peer.approx)),
+      sample: peers.length,
+    });
+  }
+  return result;
+}
+
 /** Menos de esto del video visto en promedio: «la mayoría deja de verlo muy pronto». */
 export const RETENTION_MIN_WATCHED_PCT = 15;
 /**

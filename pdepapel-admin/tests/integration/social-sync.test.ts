@@ -164,7 +164,7 @@ describe("pasada de sincronización", () => {
 });
 
 describe("resumen (página y social:report)", () => {
-  it("vistas a 3 h / 24 h, multiplicador sobre la mediana, seguidores ganados; sin token, tokenRef ni raw", async () => {
+  it("vistas a 3 h / 24 h, «pocos datos» con menos de 5 para comparar, seguidores ganados; sin token, tokenRef ni raw", async () => {
     f = await createInventoryFixture();
     const row = await account();
     const views: Record<string, number[]> = { a: [50, 400], b: [20, 100], c: [30, 100] };
@@ -182,7 +182,8 @@ describe("resumen (página y social:report)", () => {
     expect(summary.accounts[0].followersDaily).toMatchObject({ delta7: null, delta30: null, since: expect.any(String) });
     expect(summary.accounts[0].followersDaily.series.map((day) => day.followers)).toEqual([1234, 1300]);
     const a = summary.posts.find((p) => p.caption === "Reel a")!;
-    expect(a).toMatchObject({ views: 400, views3h: 50, views24h: 400, multiplier: 4, engagementRate: 10 });
+    // «× mediana» a la misma edad: con solo 2 publicaciones para comparar es «pocos datos» (null), no 4×.
+    expect(a).toMatchObject({ views: 400, views3h: 50, views24h: 400, multiplier: null, multiplierSample: 2, engagementRate: 10 });
     expect(summary.medianViews.INSTAGRAM).toBe(100);
     expect(JSON.stringify(summary)).not.toMatch(/tokenRef|encrypted|"raw"|META_IG/);
 

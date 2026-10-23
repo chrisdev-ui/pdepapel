@@ -1,13 +1,15 @@
 import type { PrismaClient, SocialPlatform } from "@prisma/client";
 
 import { dailyFollowers, type DailyFollowers } from "./followers";
-import { CURVE_POINTS_HOURS, engagementRate, median, outlierMultiplier, retentionReasons, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SkipBaseline } from "./metrics";
+import { CURVE_POINTS_HOURS, engagementRate, median, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
+import { autoTags, tagOptions, type PostTags } from "./tags";
+import { whatWorks, type WhatWorksNetwork } from "./what-works";
 
 /**
  * Lo que muestran «Métricas de redes» y `social:report`, leído solo de la
  * base (nunca de Meta ni de TikTok). Sin tokens, `tokenRef` ni `raw`.
  */
-type Db = Pick<PrismaClient, "socialAccount" | "socialPost" | "socialAccountSnapshot" | "socialMetricSnapshot">;
+type Db = Pick<PrismaClient, "socialAccount" | "socialPost" | "socialAccountSnapshot" | "socialMetricSnapshot" | "socialTag">;
 
 const DAY = 86_400_000;
 export const SOCIAL_REPORT_MAX_DAYS = 90;
@@ -57,7 +59,11 @@ export interface SocialPostSummary {
   views3h: number | null;
   views24h: number | null;
   views7d: number | null;
+  /** «× mediana» a la misma edad; null con menos de 5 publicaciones para comparar («pocos datos»). */
   multiplier: number | null;
+  multiplierApprox: boolean;
+  multiplierSample: number;
+  tags: PostTags;
 }
 
 export interface SocialSummary {
@@ -67,6 +73,10 @@ export interface SocialSummary {
   medianViews: Partial<Record<SocialPlatform, number | null>>;
   /** Salto en 3 s de cada red en los últimos 90 días, sin importar el periodo elegido. */
   skipBaselines: Partial<Record<SocialPlatform, SkipBaseline>>;
+  /** «Qué funciona» por red, con las publicaciones de los últimos 90 días. */
+  whatWorks: WhatWorksNetwork[];
+  /** Valores para el editor de etiquetas: los de fábrica y los que agregó la tienda. */
+  tagOptions: PostTags;
 }
 
 export async function buildSocialSummary(db: Db, input: { storeId: string; days?: number; now?: Date }): Promise<SocialSummary> {
@@ -101,33 +111,38 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     });
   }
 
-  const posts = await db.socialPost.findMany({
-    where: { socialAccountId: { in: accounts.map((account) => account.id) }, postedAt: { gte: since } },
-    orderBy: { postedAt: "desc" },
-    take: 300,
-    select: {
-      id: true,
-      platform: true,
-      productType: true,
-      caption: true,
-      permalink: true,
-      thumbnailUrl: true,
-      postedAt: true,
-      durationSec: true,
-      snapshots: {
-        orderBy: { capturedAt: "asc" },
-        select: { hoursSincePost: true, views: true, reach: true, likes: true, comments: true, shares: true, saves: true, totalInteractions: true, avgWatchTimeMs: true, totalWatchTimeMs: true, skipRate: true },
+  // Una sola lectura de 90 días: la lista del periodo, la mediana del salto, el «× mediana» y «Qué funciona» salen de aquí.
+  const [base, storedTags] = await Promise.all([
+    db.socialPost.findMany({
+      where: { socialAccountId: { in: accounts.map((account) => account.id) }, postedAt: { gte: new Date(now.getTime() - SOCIAL_REPORT_MAX_DAYS * DAY) } },
+      orderBy: { postedAt: "desc" },
+      take: 600,
+      select: {
+        id: true,
+        platform: true,
+        productType: true,
+        caption: true,
+        permalink: true,
+        thumbnailUrl: true,
+        postedAt: true,
+        durationSec: true,
+        snapshots: {
+          orderBy: { capturedAt: "asc" },
+          select: { hoursSincePost: true, views: true, reach: true, likes: true, comments: true, shares: true, saves: true, totalInteractions: true, avgWatchTimeMs: true, totalWatchTimeMs: true, skipRate: true },
+        },
+        tags: { select: { tag: { select: { kind: true, label: true } } } },
       },
-    },
-  });
+    }),
+    db.socialTag.findMany({ where: { storeId: input.storeId }, select: { kind: true, label: true } }),
+  ]);
+  const posts = base.filter((post) => post.postedAt >= since).slice(0, 300);
 
-  const reelSkips = await db.socialPost.findMany({
-    where: { socialAccountId: { in: accounts.map((account) => account.id) }, postedAt: { gte: new Date(now.getTime() - SOCIAL_REPORT_MAX_DAYS * DAY) }, productType: "REELS" },
-    select: { platform: true, snapshots: { orderBy: { capturedAt: "desc" }, take: 1, select: { skipRate: true } } },
-  });
   const skipBaselines: SocialSummary["skipBaselines"] = {};
-  for (const platform of Array.from(new Set(reelSkips.map((post) => post.platform)))) {
-    skipBaselines[platform as SocialPlatform] = skipBaseline(reelSkips.filter((post) => post.platform === platform).map((post) => post.snapshots[0]?.skipRate ?? null));
+  const multipliers = new Map<string, SameAgeMultiplier>();
+  for (const platform of Array.from(new Set(base.map((post) => post.platform)))) {
+    const network = base.filter((post) => post.platform === platform);
+    skipBaselines[platform] = skipBaseline(network.filter((post) => post.productType === "REELS").map((post) => post.snapshots.at(-1)?.skipRate ?? null));
+    sameAgeMultipliers(network, now).forEach((value, id) => multipliers.set(id, value));
   }
 
   const medianViews: SocialSummary["medianViews"] = {};
@@ -135,7 +150,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     medianViews[platform as SocialPlatform] = median(posts.filter((post) => post.platform === platform).map((post) => post.snapshots.at(-1)?.views ?? NaN));
   }
 
-  const postSummaries = posts.map((post) => {
+  const summarize = (post: (typeof base)[number]): SocialPostSummary => {
     const last = post.snapshots.at(-1);
     const views = last?.views ?? null;
     const [h3, h24, d7] = CURVE_POINTS_HOURS.map((hours) => viewsAt(post.snapshots, hours));
@@ -144,6 +159,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     const watched = watchedPct(avgWatchTimeMs, post.durationSec);
     const baseline = skipBaselines[post.platform] ?? null;
     const reasons = retentionReasons({ watchedPct: watched, skipRate, baseline });
+    const multiplier = multipliers.get(post.id);
     return {
       id: post.id,
       platform: post.platform,
@@ -171,11 +187,34 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       views3h: h3,
       views24h: h24,
       views7d: d7,
-      multiplier: outlierMultiplier(views, medianViews[post.platform] ?? null),
+      multiplier: multiplier?.multiplier ?? null,
+      multiplierApprox: multiplier?.approx ?? false,
+      multiplierSample: multiplier?.sample ?? 0,
+      tags: {
+        FORMATO: post.tags.filter((item) => item.tag.kind === "FORMATO").map((item) => item.tag.label).sort((a, b) => a.localeCompare(b, "es")),
+        GANCHO: post.tags.filter((item) => item.tag.kind === "GANCHO").map((item) => item.tag.label).sort((a, b) => a.localeCompare(b, "es")),
+      },
     };
-  });
+  };
+  const summaries = new Map(base.map((post) => [post.id, summarize(post)]));
+  const postSummaries = posts.map((post) => summaries.get(post.id)!);
 
-  return { days, accounts: accountSummaries, posts: postSummaries, medianViews, skipBaselines };
+  const works = whatWorks(
+    base.map((post) => {
+      const summary = summaries.get(post.id)!;
+      return {
+        platform: post.platform,
+        multiplier: summary.multiplier,
+        multiplierApprox: summary.multiplierApprox,
+        watchedPct: summary.watchedPct,
+        skipRate: summary.skipRate,
+        tags: summary.tags,
+        autoTags: autoTags(post),
+      };
+    }),
+  );
+
+  return { days, accounts: accountSummaries, posts: postSummaries, medianViews, skipBaselines, whatWorks: works, tagOptions: tagOptions(storedTags) };
 }
 
 /** La curva de una publicación de la tienda (null si no es suya). */

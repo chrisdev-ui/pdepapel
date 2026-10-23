@@ -49,6 +49,7 @@ test.describe("métricas de redes", () => {
   const db = createTestPrismaClient("social-metrics");
 
   test.beforeAll(async () => {
+    await db.socialTag.deleteMany({ where: { storeId } });
     await db.socialAccount.deleteMany({ where: { storeId } });
     const now = Date.now();
     const instagram = await db.socialAccount.create({
@@ -61,7 +62,8 @@ test.describe("métricas de redes", () => {
         { socialAccountId: instagram.id, capturedAt: new Date(now - HOUR), followers: 112 },
       ],
     });
-    const captions = ["Reel de agendas kawaii con stickers nuevos para la temporada", "Carrusel de cuadernos", "Reel de plumones pastel", "Publicación de bolígrafos"];
+    // Ocho publicaciones: el «× mediana» a la misma edad necesita 5 para comparar.
+    const captions = ["Reel de agendas kawaii con stickers nuevos para la temporada", "Carrusel de cuadernos", "Reel de plumones pastel", "Publicación de bolígrafos", "Reel de washi", "Reel de stickers", "Reel de libretas", "Reel de colores"];
     for (const [index, caption] of Array.from(captions.entries())) {
       const postedAt = new Date(now - (index * 2 + 1) * 24 * HOUR);
       const post = await db.socialPost.create({
@@ -100,6 +102,7 @@ test.describe("métricas de redes", () => {
   });
 
   test.afterAll(async () => {
+    await db.socialTag.deleteMany({ where: { storeId } });
     await db.socialAccount.deleteMany({ where: { storeId } });
     await db.$disconnect();
   });
@@ -122,16 +125,21 @@ test.describe("métricas de redes", () => {
         .poll(() => title.evaluate((node) => { for (let el: Element | null = node; el; el = el.parentElement) if (getComputedStyle(el).opacity !== "1") return false; return true; }))
         .toBe(true);
 
-      await expect(page.getByRole("heading", { name: "Instagram" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Instagram", exact: true })).toBeVisible();
       await expect(page.getByText("@papeleria.pdepapel")).toBeVisible();
       // TikTok pide reconectar; en las e2e además sale «No configurada» (sin TIKTOK_ENABLED).
       await expect(page.getByText("La red rechazó el acceso guardado.", { exact: false })).toBeVisible();
       await expect(page.getByText("(+12)")).toBeVisible();
       // Seguidores por día: con 6 días de lecturas no hay cambio a 7 ni a 30 días todavía, y se dice por qué.
       await expect(page.getByRole("img", { name: /^Seguidores del/ })).toBeVisible();
-      await expect(page.getByText("pocos datos")).toHaveCount(2);
+      await expect(page.getByRole("definition").filter({ hasText: /^pocos datos$/ })).toHaveCount(2);
       await expect(page.getByText(/Se completa con las semanas: hay lecturas desde el/)).toBeVisible();
-      await expect(page.getByText(/9× la mediana de Instagram|× la mediana de Instagram/)).toBeVisible();
+      await expect(page.getByText(/× la mediana de Instagram/)).toBeVisible();
+      // «Qué funciona»: últimos 90 días, con titular o con la frase de por qué todavía no lo hay.
+      const works = page.getByRole("region", { name: "Qué funciona en Instagram" });
+      await expect(works).toBeVisible();
+      await expect(works.getByText("Últimos 90 días · 8 publicaciones")).toBeVisible();
+      await expect(works.getByRole("list", { name: "Etiquetas de Instagram" }).getByText("Reel", { exact: true })).toBeVisible();
 
       const list = viewport.width < 768 ? page.getByRole("list", { name: "Publicaciones" }) : page.locator("table");
       await expect(list.getByText("Carrusel de cuadernos")).toBeVisible();
@@ -156,6 +164,21 @@ test.describe("métricas de redes", () => {
       await expect(dialog.getByText("10 %", { exact: true })).toBeVisible();
       // El gráfico carga aparte; en frío el servidor de desarrollo tarda más de 5 s en compilarlo.
       await expect(dialog.locator(".recharts-line")).toBeVisible({ timeout: 30_000 });
+      // Etiquetas: casillas reales; se guardan en la primera medida y las demás las encuentran marcadas.
+      const formato = dialog.getByRole("group", { name: /^Formato/ });
+      await expect(formato.getByRole("checkbox", { name: "pedido con nombre" })).toBeVisible();
+      await expect(dialog.getByRole("group", { name: /^Gancho/ }).getByRole("checkbox", { name: "POV" })).toBeVisible();
+      if (viewport.name === "390") {
+        await formato.getByRole("checkbox", { name: "ASMR" }).check();
+        await formato.getByRole("textbox", { name: "Agregar otra etiqueta de formato" }).fill("Unboxing");
+        await formato.getByRole("button", { name: "Agregar" }).click();
+        await expect(formato.getByRole("checkbox", { name: "Unboxing" })).toBeChecked();
+        await dialog.getByRole("button", { name: "Guardar etiquetas" }).click();
+        await expect(page.getByText("Etiquetas guardadas").first()).toBeVisible();
+      } else {
+        await expect(formato.getByRole("checkbox", { name: "ASMR" })).toBeChecked();
+        await expect(formato.getByRole("checkbox", { name: "Unboxing" })).toBeChecked();
+      }
       await expect(dialog).toHaveCSS("opacity", "1");
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}-curva.png`) });
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);

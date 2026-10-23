@@ -29,9 +29,11 @@ import type {
 
 import { FollowersTrend } from "./followers-trend";
 import { PostCurveDialog } from "./post-curve-dialog";
+import { WhatWorksCard } from "./what-works-card";
 import { RETENTION_WARNING_TEXT, RetentionFlag } from "./retention-flag";
 import {
   formatPct,
+  multiplierText,
   retentionDetails,
   visibleColumns,
   type PlatformFilter,
@@ -445,8 +447,19 @@ export function SocialMetricsClient({
               TYPE_LABEL[best.productType ?? ""] ??
               "una publicación"}
           </span>
-          , {best.multiplier}× la mediana de {PLATFORM[best.platform].label}.
+          , {best.multiplier}× la mediana de {PLATFORM[best.platform].label}
+          {best.multiplierApprox ? " (aprox.)" : ""}.
         </p>
+      )}
+
+      {data.whatWorks.some((network) => platformFilter === "ALL" || network.platform === platformFilter) && (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {data.whatWorks
+            .filter((network) => platformFilter === "ALL" || network.platform === platformFilter)
+            .map((network) => (
+              <WhatWorksCard key={network.platform} network={network} />
+            ))}
+        </div>
       )}
 
       {posts.length === 0 ? (
@@ -481,7 +494,9 @@ export function SocialMetricsClient({
                     </span>
                     <span className="text-xs text-primary">
                       {num(post.views)} vistas
-                      {post.multiplier != null ? ` · ${post.multiplier}×` : ""}
+                      {post.multiplier != null
+                        ? ` · ${multiplierText(post)}`
+                        : ""}
                       {post.engagementRate != null
                         ? ` · ${post.engagementRate} %`
                         : ""}
@@ -581,6 +596,7 @@ export function SocialMetricsClient({
 
       <PostCurveDialog
         storeId={storeId}
+        tagOptions={data.tagOptions}
         post={selected}
         onClose={() => setSelected(null)}
       />

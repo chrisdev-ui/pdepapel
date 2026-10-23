@@ -116,6 +116,7 @@ model Store {
   socialAccounts                  SocialAccount[]
   socialCredentials               SocialCredential[]
   socialOAuthStates               SocialOAuthState[]
+  socialTags                      SocialTag[]
   capsuleSuggestionFeedback       CapsuleSuggestionFeedback[]
   productPriceTiers               ProductPriceTier[]
   marketplaceConnections          MarketplaceConnection[]
@@ -3841,6 +3842,7 @@ model SocialPost {
 
   account   SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
   snapshots SocialMetricSnapshot[]
+  tags      SocialPostTag[]
 
   @@unique([socialAccountId, externalId])
   @@index([socialAccountId, postedAt])
@@ -3884,6 +3886,41 @@ model SocialAccountSnapshot {
   account SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
 
   @@index([socialAccountId, capturedAt])
+}
+
+/// Etiquetas que la dueña pone a mano a una publicación («Qué funciona»).
+enum SocialTagKind {
+  FORMATO
+  GANCHO
+}
+
+/// Un valor de etiqueta de la tienda. Los de fábrica viven en el código (lib/social/tags.ts) y se crean al primer uso.
+/// La intercalación es utf8mb4_unicode_ci: «POV» y «pov» son la misma etiqueta.
+model SocialTag {
+  id        String        @id @default(uuid())
+  storeId   String
+  kind      SocialTagKind
+  label     String        @db.VarChar(60)
+  createdAt DateTime      @default(now())
+
+  store Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  posts SocialPostTag[]
+
+  @@unique([storeId, kind, label])
+  @@index([storeId])
+}
+
+model SocialPostTag {
+  id           String   @id @default(uuid())
+  socialPostId String
+  socialTagId  String
+  createdAt    DateTime @default(now())
+
+  post SocialPost @relation(fields: [socialPostId], references: [id], onDelete: Cascade)
+  tag  SocialTag  @relation(fields: [socialTagId], references: [id], onDelete: Cascade)
+
+  @@unique([socialPostId, socialTagId])
+  @@index([socialTagId])
 }
 
 // ---------------------------------------------------------------------------

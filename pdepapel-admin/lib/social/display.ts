@@ -27,7 +27,7 @@ const COLUMNS: {
   {
     key: "multiplier",
     label: "× mediana",
-    cell: (post) => (post.multiplier == null ? "—" : `${post.multiplier}×`),
+    cell: (post) => multiplierText(post),
   },
   {
     key: "reach",
@@ -128,4 +128,10 @@ export function retentionDetails(
     );
   }
   return lines;
+}
+
+/** «× mediana» como se lee: «2,1×», «0,8× aprox.» o «pocos datos» (menos de 5 para comparar). */
+export function multiplierText(post: Pick<SocialPostSummary, "multiplier" | "multiplierApprox">) {
+  if (post.multiplier == null) return "pocos datos";
+  return `${decimal(post.multiplier)}×${post.multiplierApprox ? " aprox." : ""}`;
 }

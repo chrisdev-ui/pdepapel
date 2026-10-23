@@ -16,6 +16,7 @@ vi.mock("@/lib/social/queue", async (importOriginal) => ({
 }));
 
 import { GET as curveGET } from "@/app/api/[storeId]/social/posts/[postId]/route";
+import { PUT as tagsPUT } from "@/app/api/[storeId]/social/posts/[postId]/tags/route";
 import { POST as instagramConnectPOST } from "@/app/api/[storeId]/social/instagram/connect/route";
 import { GET as socialGET } from "@/app/api/[storeId]/social/route";
 import { POST as syncPOST } from "@/app/api/[storeId]/social/sync/route";
@@ -34,6 +35,8 @@ let f: InventoryFixture | undefined;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const req = (url: string, method = "GET") => new Request(url, { method });
 const ctx = () => ({ params: { storeId: f!.store.id } });
+
+const putTags = (body: unknown) => new Request("http://admin.test/x", { method: "PUT", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 
 function asOwner() {
   session.userId = f!.store.userId;
@@ -58,6 +61,7 @@ afterEach(async () => {
   if (f) {
     await testPrisma.socialOAuthState.deleteMany({ where: { storeId: f.store.id } });
     await testPrisma.socialCredential.deleteMany({ where: { storeId: f.store.id } });
+    await testPrisma.socialTag.deleteMany({ where: { storeId: f.store.id } });
     await testPrisma.socialAccount.deleteMany({ where: { storeId: f.store.id } });
     await deleteInventoryFixture(f);
   }
@@ -83,6 +87,7 @@ describe("acceso a Métricas de redes", () => {
       await instagramConnectPOST(req("http://admin.test/x", "POST"), ctx()),
       await syncPOST(req("http://admin.test/x", "POST"), ctx()),
       await tiktokConnectGET(req("http://admin.test/x"), ctx()),
+      await tagsPUT(putTags({ FORMATO: ["kit"], GANCHO: [] }), { params: { storeId: f.store.id, postId: post.id } }),
     ];
     for (const response of responses) {
       expect(response.status).toBe(403);
@@ -91,6 +96,7 @@ describe("acceso a Métricas de redes", () => {
     }
     expect(queue.enqueued).toEqual([]);
     expect(await testPrisma.socialOAuthState.count({ where: { storeId: f.store.id } })).toBe(0);
+    expect(await testPrisma.socialTag.count({ where: { storeId: f.store.id } })).toBe(0);
   });
 
   it("la dueña ve el resumen y la curva sin tokens, tokenRef ni raw; otra tienda no ve la curva", async () => {
@@ -161,6 +167,62 @@ describe("acceso a Métricas de redes", () => {
     const response = await syncPOST(req("http://admin.test/x", "POST"), ctx());
     expect(await response.json()).toEqual({ enqueued: 1 });
     expect(queue.enqueued).toEqual([{ accountId: account.id }]);
+  });
+});
+
+describe("etiquetas de una publicación", () => {
+  it("la dueña las pone y las cambia; «pov» reutiliza «POV»; las quitadas salen de la publicación pero la etiqueta queda", async () => {
+    f = await createInventoryFixture();
+    const { post } = await seedPost();
+    const second = await testPrisma.socialPost.create({ data: { socialAccountId: post.socialAccountId, platform: "INSTAGRAM", externalId: "m2", productType: "CAROUSEL", caption: "Carrusel", postedAt: new Date(Date.now() - 7_200_000) } });
+    asOwner();
+    const params = (postId: string) => ({ params: { storeId: f!.store.id, postId } });
+
+    const first = await tagsPUT(putTags({ FORMATO: ["ASMR", "  kit  ", "Kit"], GANCHO: ["POV"] }), params(post.id));
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ tags: { FORMATO: ["ASMR", "kit"], GANCHO: ["POV"] } });
+
+    const reused = await tagsPUT(putTags({ FORMATO: [], GANCHO: ["pov", "Unboxing  sorpresa"] }), params(second.id));
+    expect(await reused.json()).toEqual({ tags: { FORMATO: [], GANCHO: ["POV", "Unboxing sorpresa"] } });
+    expect(await testPrisma.socialTag.count({ where: { storeId: f.store.id, kind: "GANCHO" } })).toBe(2);
+
+    const replaced = await tagsPUT(putTags({ FORMATO: ["kit"], GANCHO: [] }), params(post.id));
+    expect(await replaced.json()).toEqual({ tags: { FORMATO: ["kit"], GANCHO: [] } });
+    expect(await testPrisma.socialPostTag.count({ where: { socialPostId: post.id } })).toBe(1);
+    expect(await testPrisma.socialTag.count({ where: { storeId: f.store.id } })).toBe(4);
+
+    const summary = await (await socialGET(req(`http://admin.test/api/${f.store.id}/social?dias=7`), ctx())).json();
+    const byCaption = Object.fromEntries(summary.posts.map((item: { caption: string }) => [item.caption, item]));
+    expect(byCaption.Reel.tags).toEqual({ FORMATO: ["kit"], GANCHO: [] });
+    expect(byCaption.Carrusel.tags).toEqual({ FORMATO: [], GANCHO: ["POV", "Unboxing sorpresa"] });
+    // Las de fábrica primero; «Unboxing sorpresa» al final; «POV» una sola vez aunque esté guardada.
+    expect(summary.tagOptions.GANCHO).toEqual(["pregunta", "producto en mano", "texto grande", "antes/después", "POV", "Unboxing sorpresa"]);
+    expect(summary.tagOptions.FORMATO.slice(0, 3)).toEqual(["pedido con nombre", "ASMR", "kit"]);
+    expect(summary.whatWorks).toEqual([expect.objectContaining({ platform: "INSTAGRAM", posts: 2 })]);
+    assertNoForbiddenKeys(summary, "owner");
+  });
+
+  it("otra tienda no puede etiquetar la publicación; un cuerpo inválido o demasiadas etiquetas dan 400 sin cambios", async () => {
+    f = await createInventoryFixture();
+    const { post } = await seedPost();
+    const other = await createInventoryFixture();
+    try {
+      session.userId = other.store.userId;
+      const foreign = await tagsPUT(putTags({ FORMATO: ["kit"], GANCHO: [] }), { params: { storeId: other.store.id, postId: post.id } });
+      expect(foreign.status).toBe(404);
+      expect(await testPrisma.socialTag.count({ where: { storeId: { in: [f.store.id, other.store.id] } } })).toBe(0);
+    } finally {
+      await deleteInventoryFixture(other);
+    }
+    asOwner();
+    const params = { params: { storeId: f.store.id, postId: post.id } };
+    expect((await tagsPUT(putTags({ FORMATO: "kit" }), params)).status).toBe(400);
+    expect((await tagsPUT(new Request("http://admin.test/x", { method: "PUT", body: "{" }), params)).status).toBe(400);
+    const eleven = Array.from({ length: 11 }, (_, index) => `etiqueta ${index}`);
+    const tooMany = await tagsPUT(putTags({ FORMATO: eleven, GANCHO: [] }), params);
+    expect(tooMany.status).toBe(400);
+    expect(await tooMany.json()).toMatchObject({ error: expect.stringContaining("Máximo 10") });
+    expect(await testPrisma.socialTag.count({ where: { storeId: f.store.id } })).toBe(0);
   });
 });
 

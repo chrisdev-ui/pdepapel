@@ -23,6 +23,9 @@ import {
 import { CHART_COLORS } from "@/lib/chart-palette";
 import type { SocialPostSummary } from "@/lib/social/report";
 
+import type { PostTags } from "@/lib/social/tags";
+
+import { PostTagEditor } from "./post-tag-editor";
 import { RETENTION_WARNING_TEXT } from "./retention-flag";
 import { postMetricRows, retentionDetails } from "@/lib/social/display";
 
@@ -38,10 +41,12 @@ const hoursLabel = (hours: number) =>
 /** La curva de vistas de una publicación desde que salió. */
 export function PostCurveDialog({
   storeId,
+  tagOptions,
   post,
   onClose,
 }: {
   storeId: string;
+  tagOptions: PostTags;
   post: SocialPostSummary | null;
   onClose: () => void;
 }) {
@@ -114,6 +119,15 @@ export function PostCurveDialog({
               </div>
             ))}
           </dl>
+        )}
+        {post && (
+          <PostTagEditor
+            key={post.id}
+            storeId={storeId}
+            postId={post.id}
+            initial={post.tags}
+            options={tagOptions}
+          />
         )}
         <div className="h-64 w-full">
           {failed ? (
