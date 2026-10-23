@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dailyFollowers, FOLLOWER_SERIES_DAYS } from "@/lib/social/followers";
+import { dailyFollowers, FOLLOWER_SERIES_DAYS, followerSpanFloor } from "@/lib/social/followers";
 
 const at = (iso: string, followers: number | null) => ({ capturedAt: new Date(iso), followers });
 const now = new Date("2026-11-20T15:00:00Z");
@@ -42,5 +42,11 @@ describe("seguidores por día (Bogotá)", () => {
 
   it("sin lecturas: serie vacía y sin «desde»", () => {
     expect(dailyFollowers([], now)).toEqual({ series: [], delta7: null, delta30: null, since: null });
+  });
+
+  it("la línea no agranda un cambio chico: el alto cubre al menos el 2 % de los seguidores (mínimo 20)", () => {
+    expect(followerSpanFloor(3551)).toBe(71);
+    expect(followerSpanFloor(28239)).toBe(565);
+    expect(followerSpanFloor(300)).toBe(20);
   });
 });

@@ -1,4 +1,4 @@
-import type { DailyFollowers } from "@/lib/social/followers";
+import { followerSpanFloor, type DailyFollowers } from "@/lib/social/followers";
 
 const NUMBER = new Intl.NumberFormat("es-CO");
 const DAY_LABEL = new Intl.DateTimeFormat("es-CO", {
@@ -17,9 +17,10 @@ function Sparkline({ series }: { series: DailyFollowers["series"] }) {
   const width = 120;
   const height = 32;
   const values = series.map((point) => point.followers);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const span = Math.max(high - low, followerSpanFloor(high));
+  const min = (low + high) / 2 - span / 2;
   const points = series
     .map(
       (point, index) =>

@@ -25,6 +25,13 @@ export interface DailyFollowers {
   since: string | null;
 }
 
+/**
+ * Alto mínimo de la línea: 2 % de los seguidores (al menos 20). Sin esto,
+ * perder 1 seguidor de 3.551 se dibujaba como una caída de toda la altura.
+ */
+export const followerSpanFloor = (followers: number) =>
+  Math.max(20, Math.round(followers * 0.02));
+
 const shiftDay = (day: string, days: number) =>
   format(addDays(parseISO(day), days), "yyyy-MM-dd");
 
