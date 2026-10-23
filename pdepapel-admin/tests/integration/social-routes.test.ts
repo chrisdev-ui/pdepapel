@@ -16,6 +16,7 @@ vi.mock("@/lib/social/queue", async (importOriginal) => ({
 }));
 
 import { GET as curveGET } from "@/app/api/[storeId]/social/posts/[postId]/route";
+import { PUT as earlyAlertPUT } from "@/app/api/[storeId]/social/early-alert/route";
 import { DELETE as pieceDELETE, POST as piecePOST } from "@/app/api/[storeId]/social/posts/[postId]/piece/route";
 import { PUT as tagsPUT } from "@/app/api/[storeId]/social/posts/[postId]/tags/route";
 import { POST as instagramConnectPOST } from "@/app/api/[storeId]/social/instagram/connect/route";
@@ -326,6 +327,32 @@ describe("la misma pieza en varias redes", () => {
       expect(await testPrisma.socialPiece.count({ where: { storeId: { in: [f.store.id, other.store.id] } } })).toBe(0);
     } finally {
       await deleteInventoryFixture(other);
+    }
+  });
+});
+
+describe("interruptor de la alerta temprana", () => {
+  const putSwitch = (body: unknown) => new Request("http://admin.test/x", { method: "PUT", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+
+  it("solo la dueña la pausa y la reanuda; la cuenta de solo lectura recibe 403; un cuerpo vacío da 400 en español", async () => {
+    f = await createInventoryFixture();
+    try {
+      asViewer();
+      expect((await earlyAlertPUT(putSwitch({ enabled: false }), ctx())).status).toBe(403);
+      expect(await testPrisma.storeSettings.count({ where: { storeId: f.store.id } })).toBe(0);
+      asOwner();
+      expect(await (await earlyAlertPUT(putSwitch({ enabled: false }), ctx())).json()).toEqual({ enabled: false });
+      expect((await testPrisma.storeSettings.findUniqueOrThrow({ where: { storeId: f.store.id } })).socialEarlyAlertEnabled).toBe(false);
+      expect(await (await earlyAlertPUT(putSwitch({ enabled: true }), ctx())).json()).toEqual({ enabled: true });
+      expect((await testPrisma.storeSettings.findUniqueOrThrow({ where: { storeId: f.store.id } })).socialEarlyAlertEnabled).toBe(true);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const empty = await earlyAlertPUT(new Request("http://admin.test/x", { method: "PUT" }), ctx());
+      warn.mockRestore();
+      expect(empty.status).toBe(400);
+      expect(await empty.json()).toMatchObject({ error: "No llegó si pausar o reanudar la alerta. Vuelve a intentarlo." });
+      expect((await earlyAlertPUT(putSwitch({ enabled: "no" }), ctx())).status).toBe(400);
+    } finally {
+      await testPrisma.storeSettings.deleteMany({ where: { storeId: f.store.id } });
     }
   });
 });

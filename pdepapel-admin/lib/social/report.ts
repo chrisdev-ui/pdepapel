@@ -4,6 +4,7 @@ import { dailyFollowers, type DailyFollowers } from "./followers";
 import { CURVE_POINTS_HOURS, engagementRate, median, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
 import { autoTags, tagOptions, type PostTags } from "./tags";
 import { bestTimeGrid, type BestTimeNetwork } from "./best-time";
+import { earlyAlertStatus, earlyHistoryCount, type EarlyAlertStatus } from "./early-alert-rules";
 import { pieceSuggestions } from "./pieces";
 import { whatWorks, type WhatWorksNetwork } from "./what-works";
 
@@ -11,7 +12,7 @@ import { whatWorks, type WhatWorksNetwork } from "./what-works";
  * Lo que muestran «Métricas de redes» y `social:report`, leído solo de la
  * base (nunca de Meta ni de TikTok). Sin tokens, `tokenRef` ni `raw`.
  */
-type Db = Pick<PrismaClient, "socialAccount" | "socialPost" | "socialAccountSnapshot" | "socialMetricSnapshot" | "socialTag">;
+type Db = Pick<PrismaClient, "socialAccount" | "socialPost" | "socialAccountSnapshot" | "socialMetricSnapshot" | "socialTag" | "storeSettings">;
 
 const DAY = 86_400_000;
 export const SOCIAL_REPORT_MAX_DAYS = 90;
@@ -86,6 +87,8 @@ export interface SocialSummary {
   skipBaselines: Partial<Record<SocialPlatform, SkipBaseline>>;
   /** «Qué funciona» por red, con las publicaciones de los últimos 90 días. */
   whatWorks: WhatWorksNetwork[];
+  /** Alerta temprana: el interruptor de la tienda y, por red, cuánta historia tiene y si ya se encendió sola (10). */
+  earlyAlert: EarlyAlertStatus;
   /** Piezas con sus publicaciones, para la tabla lado a lado del detalle. */
   pieces: SocialPieceSummary[];
   /** Mejor horario por red (día × franja de Bogotá), con la misma base de 90 días. */
@@ -127,7 +130,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
   }
 
   // Una sola lectura de 90 días: la lista del periodo, la mediana del salto, el «× mediana» y «Qué funciona» salen de aquí.
-  const [base, storedTags] = await Promise.all([
+  const [base, storedTags, settings] = await Promise.all([
     db.socialPost.findMany({
       where: { socialAccountId: { in: accounts.map((account) => account.id) }, postedAt: { gte: new Date(now.getTime() - SOCIAL_REPORT_MAX_DAYS * DAY) } },
       orderBy: { postedAt: "desc" },
@@ -150,6 +153,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       },
     }),
     db.socialTag.findMany({ where: { storeId: input.storeId }, select: { kind: true, label: true } }),
+    db.storeSettings.findUnique({ where: { storeId: input.storeId }, select: { socialEarlyAlertEnabled: true } }),
   ]);
   const posts = base.filter((post) => post.postedAt >= since).slice(0, 300);
 
@@ -249,6 +253,10 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     whatWorks: whatWorks(analyzed),
     bestTime: bestTimeGrid(analyzed),
     pieces: Array.from(pieces.values()),
+    earlyAlert: earlyAlertStatus(
+      settings?.socialEarlyAlertEnabled ?? true,
+      Object.fromEntries(accounts.map((account) => [account.platform, earlyHistoryCount(base.filter((post) => post.platform === account.platform).map((post) => post.snapshots))])),
+    ),
     tagOptions: tagOptions(storedTags),
   };
 }

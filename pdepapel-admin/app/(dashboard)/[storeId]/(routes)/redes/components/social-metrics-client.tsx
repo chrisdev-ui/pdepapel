@@ -33,6 +33,7 @@ import type {
 import { FollowersTrend } from "./followers-trend";
 import { PostCurveDialog } from "./post-curve-dialog";
 import { BestTimeCard } from "./best-time-card";
+import { EarlyAlertSwitch } from "./early-alert-switch";
 import { WhatWorksCard } from "./what-works-card";
 import { RETENTION_WARNING_TEXT, RetentionFlag } from "./retention-flag";
 import {
@@ -352,6 +353,11 @@ export function SocialMetricsClient({
             Cómo les fue a las publicaciones de Instagram y TikTok. Se leen cada
             6 horas, y lo publicado en las últimas 8 horas, cada hora.
           </p>
+          <EarlyAlertSwitch
+            storeId={storeId}
+            status={data.earlyAlert}
+            onChanged={reload}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

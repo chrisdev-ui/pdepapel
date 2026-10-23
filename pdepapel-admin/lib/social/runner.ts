@@ -8,6 +8,7 @@ import { getTikTokAccessToken } from "./credentials";
 import { createInstagramAdapter } from "./graph";
 import { shouldPollPost } from "./metrics";
 import { enqueueSocialSync, type SocialSyncMessage } from "./queue";
+import { evaluateEarlyAlerts } from "./early-alert";
 import { markAccountStatus, runRecentSync, runSocialSync, type SocialAdapter, type SyncOutcome } from "./sync";
 import { createTikTokAdapter, refreshTikTokTokens } from "./tiktok";
 
@@ -104,6 +105,10 @@ export async function runRecentRefresh(options: { budgetMs?: number; adapterFor?
       continue;
     }
     const outcome = await runRecentSync({ accountId: account.id, adapter, budgetMs: budget });
+    if (outcome.status === "done") {
+      // Un fallo de la alerta no frena el refresco: se reintenta la próxima hora.
+      await evaluateEarlyAlerts(account.id).catch((error: unknown) => console.error("[SOCIAL_EARLY]", error instanceof Error ? error.message : "unknown"));
+    }
     results.push(
       outcome.status === "done"
         ? { platform: account.platform, status: "done", posts: outcome.posts, snapshots: outcome.snapshots }

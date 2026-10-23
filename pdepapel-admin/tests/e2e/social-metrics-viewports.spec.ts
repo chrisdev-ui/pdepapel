@@ -133,6 +133,17 @@ test.describe("métricas de redes", () => {
 
       await expect(page.getByRole("heading", { name: "Instagram", exact: true })).toBeVisible();
       await expect(page.getByText("@papeleria.pdepapel")).toBeVisible();
+      // La alerta temprana se enciende sola por red al juntar 10 de historia; el interruptor la pausa sin desplegar.
+      await expect(page.getByText(/^Alerta temprana — Instagram: apagada, \d+ de 10 · TikTok: apagada, 0 de 10\./)).toBeVisible();
+      const earlySwitch = page.getByRole("switch", { name: "Alerta temprana" });
+      await expect(earlySwitch).toHaveAttribute("aria-checked", "true");
+      if (viewport.name === "390") {
+        await earlySwitch.click();
+        await expect(page.getByText("Alerta temprana: pausada desde el panel. No avisa en ninguna red hasta reanudarla.")).toBeVisible({ timeout: 20_000 });
+        await expect(earlySwitch).toHaveAttribute("aria-checked", "false");
+        await earlySwitch.click();
+        await expect(earlySwitch).toHaveAttribute("aria-checked", "true", { timeout: 20_000 });
+      }
       // TikTok pide reconectar; en las e2e además sale «No configurada» (sin TIKTOK_ENABLED).
       await expect(page.getByText("La red rechazó el acceso guardado.", { exact: false })).toBeVisible();
       await expect(page.getByText("(+12)")).toBeVisible();

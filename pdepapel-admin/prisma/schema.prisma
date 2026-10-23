@@ -118,6 +118,7 @@ model Store {
   socialOAuthStates               SocialOAuthState[]
   socialTags                      SocialTag[]
   socialPieces                    SocialPiece[]
+  socialEarlyAlerts               SocialEarlyAlert[]
   capsuleSuggestionFeedback       CapsuleSuggestionFeedback[]
   productPriceTiers               ProductPriceTier[]
   marketplaceConnections          MarketplaceConnection[]
@@ -2092,6 +2093,9 @@ model StoreSettings {
   /// Quién recibe los avisos del panel (uno por línea); vacía usa Store.email.
   /// Nunca sale por una ruta pública.
   adminNotificationEmails String?   @db.Text
+  /// Interruptor de emergencia de la alerta temprana de redes. Encendida por defecto: cada red
+  /// la activa sola al juntar 10 publicaciones con lectura a las 2–6 h; esto solo la pausa sin desplegar.
+  socialEarlyAlertEnabled Boolean   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3843,10 +3847,11 @@ model SocialPost {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  account   SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
-  snapshots SocialMetricSnapshot[]
-  tags      SocialPostTag[]
-  piece     SocialPiece?           @relation(fields: [socialPieceId], references: [id], onDelete: SetNull)
+  account    SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  snapshots  SocialMetricSnapshot[]
+  tags       SocialPostTag[]
+  piece      SocialPiece?           @relation(fields: [socialPieceId], references: [id], onDelete: SetNull)
+  earlyAlert SocialEarlyAlert?
 
   @@unique([socialAccountId, externalId])
   @@index([socialAccountId, postedAt])
@@ -3891,6 +3896,30 @@ model SocialAccountSnapshot {
   account SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
 
   @@index([socialAccountId, capturedAt])
+}
+
+enum SocialEarlyAlertKind {
+  DESPEGANDO
+  LENTA
+}
+
+/// Alerta temprana (2–6 h) de una publicación. La llave única sobre la publicación es el antiduplicado:
+/// crear la fila reclama la alerta. `emailedAt` se reserva con una sola sentencia que respeta el tope diario.
+model SocialEarlyAlert {
+  id             String               @id @default(uuid())
+  storeId        String
+  socialPostId   String               @unique
+  kind           SocialEarlyAlertKind
+  ratio          Float
+  hoursSincePost Float
+  createdAt      DateTime             @default(now())
+  emailedAt      DateTime?
+
+  store Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  post  SocialPost @relation(fields: [socialPostId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
+  @@index([storeId, emailedAt])
 }
 
 /// La misma pieza (video, carrusel) publicada en varias redes: una publicación por red como máximo.
