@@ -85,6 +85,14 @@ describe("«Qué funciona»", () => {
     expect(flat.headline).toBeNull();
   });
 
+  it("con valores «aprox.» el titular es una pista; con lecturas reales de 7 días deja de serlo", () => {
+    const tentative = whatWorks([1.4, 1.6, 1.8, 1.5, 2].map((value, index) => carousel(value, { multiplierApprox: index === 0 })));
+    expect(tentative[0]).toMatchObject({ headline: "En Instagram los carruseles van 1,6× la mediana (aprox.).", headlineTentative: true });
+    const confirmed = whatWorks([1.4, 1.6, 1.8, 1.5, 2].map((value) => carousel(value)));
+    expect(confirmed[0]).toMatchObject({ headline: "En Instagram los carruseles van 1,6× la mediana.", headlineTentative: false });
+    expect(whatWorks([carousel(3), carousel(2)])[0]).toMatchObject({ headline: null, headlineTentative: false });
+  });
+
   it("separa las redes, marca «aprox.» y arma la frase según el tipo de etiqueta", () => {
     const networks = whatWorks([carousel(1.2, { multiplierApprox: true }), carousel(1.4), base({ platform: "TIKTOK" })]);
     expect(networks.map((network) => network.platform)).toEqual(["INSTAGRAM", "TIKTOK"]);

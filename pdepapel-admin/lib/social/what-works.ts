@@ -13,6 +13,7 @@ export const WHAT_WORKS_MIN_POSTS = 2;
 export const WHAT_WORKS_FEW_DATA_BELOW = MULTIPLIER_MIN_SAMPLE;
 /** El titular solo nombra una etiqueta que le gana a la mediana por algo. */
 export const WHAT_WORKS_HEADLINE_MIN = 1.1;
+export const WHAT_WORKS_TENTATIVE_TEXT = "Todavía es una pista, no una regla: se confirma en unas semanas.";
 
 export type WhatWorksGroup = "FORMATO" | "GANCHO" | AutoTagGroup;
 
@@ -42,6 +43,12 @@ export interface WhatWorksNetwork {
   posts: number;
   rows: WhatWorksRow[];
   headline: string | null;
+  /**
+   * El titular sale de valores «aprox.» (todavía sin lecturas reales de 7 días):
+   * va con «Todavía es una pista, no una regla». Se apaga solo cuando la fila
+   * del titular ya no tiene publicaciones aproximadas.
+   */
+  headlineTentative: boolean;
 }
 
 const oneDecimal = (value: number | null) => (value === null ? null : Math.round(value * 10) / 10);
@@ -109,7 +116,7 @@ export function whatWorks(posts: readonly WhatWorksPost[]): WhatWorksNetwork[] {
       })
       .sort((a, b) => (b.medianMultiplier ?? -1) - (a.medianMultiplier ?? -1) || b.count - a.count || a.label.localeCompare(b.label, "es"));
     const best = rows.find((row) => !row.fewData && row.medianMultiplier !== null && row.medianMultiplier >= WHAT_WORKS_HEADLINE_MIN);
-    networks.push({ platform, posts: own.length, rows, headline: best ? whatWorksHeadline(platform, best) : null });
+    networks.push({ platform, posts: own.length, rows, headline: best ? whatWorksHeadline(platform, best) : null, headlineTentative: best?.approx ?? false });
   }
   return networks;
 }

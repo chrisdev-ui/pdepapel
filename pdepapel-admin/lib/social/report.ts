@@ -3,6 +3,7 @@ import type { PrismaClient, SocialPlatform } from "@prisma/client";
 import { dailyFollowers, type DailyFollowers } from "./followers";
 import { CURVE_POINTS_HOURS, engagementRate, median, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
 import { autoTags, tagOptions, type PostTags } from "./tags";
+import { bestTimeGrid, type BestTimeNetwork } from "./best-time";
 import { whatWorks, type WhatWorksNetwork } from "./what-works";
 
 /**
@@ -75,6 +76,8 @@ export interface SocialSummary {
   skipBaselines: Partial<Record<SocialPlatform, SkipBaseline>>;
   /** «Qué funciona» por red, con las publicaciones de los últimos 90 días. */
   whatWorks: WhatWorksNetwork[];
+  /** Mejor horario por red (día × franja de Bogotá), con la misma base de 90 días. */
+  bestTime: BestTimeNetwork[];
   /** Valores para el editor de etiquetas: los de fábrica y los que agregó la tienda. */
   tagOptions: PostTags;
 }
@@ -199,22 +202,20 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
   const summaries = new Map(base.map((post) => [post.id, summarize(post)]));
   const postSummaries = posts.map((post) => summaries.get(post.id)!);
 
-  const works = whatWorks(
-    base.map((post) => {
-      const summary = summaries.get(post.id)!;
-      return {
-        platform: post.platform,
-        multiplier: summary.multiplier,
-        multiplierApprox: summary.multiplierApprox,
-        watchedPct: summary.watchedPct,
-        skipRate: summary.skipRate,
-        tags: summary.tags,
-        autoTags: autoTags(post),
-      };
-    }),
-  );
+  const analyzed = base.map((post) => {
+    const summary = summaries.get(post.id)!;
+    return {
+      platform: post.platform,
+      multiplier: summary.multiplier,
+      multiplierApprox: summary.multiplierApprox,
+      watchedPct: summary.watchedPct,
+      skipRate: summary.skipRate,
+      tags: summary.tags,
+      autoTags: autoTags(post),
+    };
+  });
 
-  return { days, accounts: accountSummaries, posts: postSummaries, medianViews, skipBaselines, whatWorks: works, tagOptions: tagOptions(storedTags) };
+  return { days, accounts: accountSummaries, posts: postSummaries, medianViews, skipBaselines, whatWorks: whatWorks(analyzed), bestTime: bestTimeGrid(analyzed), tagOptions: tagOptions(storedTags) };
 }
 
 /** La curva de una publicación de la tienda (null si no es suya). */

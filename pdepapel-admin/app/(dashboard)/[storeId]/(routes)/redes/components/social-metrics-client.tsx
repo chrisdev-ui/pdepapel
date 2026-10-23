@@ -29,6 +29,7 @@ import type {
 
 import { FollowersTrend } from "./followers-trend";
 import { PostCurveDialog } from "./post-curve-dialog";
+import { BestTimeCard } from "./best-time-card";
 import { WhatWorksCard } from "./what-works-card";
 import { RETENTION_WARNING_TEXT, RetentionFlag } from "./retention-flag";
 import {
@@ -458,6 +459,16 @@ export function SocialMetricsClient({
             .filter((network) => platformFilter === "ALL" || network.platform === platformFilter)
             .map((network) => (
               <WhatWorksCard key={network.platform} network={network} />
+            ))}
+        </div>
+      )}
+
+      {data.bestTime.some((network) => platformFilter === "ALL" || network.platform === platformFilter) && (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {data.bestTime
+            .filter((network) => platformFilter === "ALL" || network.platform === platformFilter)
+            .map((network) => (
+              <BestTimeCard key={network.platform} network={network} />
             ))}
         </div>
       )}

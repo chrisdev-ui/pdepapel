@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { NETWORK_NAME } from "@/lib/social/tags";
-import type { WhatWorksGroup, WhatWorksNetwork } from "@/lib/social/what-works";
+import { WHAT_WORKS_TENTATIVE_TEXT, type WhatWorksGroup, type WhatWorksNetwork } from "@/lib/social/what-works";
 
 const GROUP_LABEL: Record<WhatWorksGroup, string> = {
   FORMATO: "Formato",
@@ -35,7 +35,10 @@ export function WhatWorksCard({ network }: { network: WhatWorksNetwork }) {
         </p>
       </div>
       {network.headline ? (
-        <p className="text-sm font-semibold text-primary">{network.headline}</p>
+        <div>
+          <p className="text-sm font-semibold text-primary">{network.headline}</p>
+          {network.headlineTentative && <p className="text-xs text-muted-foreground">{WHAT_WORKS_TENTATIVE_TEXT}</p>}
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground">
           {enough

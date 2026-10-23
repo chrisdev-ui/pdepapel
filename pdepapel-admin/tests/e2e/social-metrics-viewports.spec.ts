@@ -140,6 +140,11 @@ test.describe("métricas de redes", () => {
       await expect(works).toBeVisible();
       await expect(works.getByText("Últimos 90 días · 8 publicaciones")).toBeVisible();
       await expect(works.getByRole("list", { name: "Etiquetas de Instagram" }).getByText("Reel", { exact: true })).toBeVisible();
+      // Mejor horario: tabla día × franja con su leyenda en palabras.
+      const bestTime = page.getByRole("region", { name: "Mejor horario en Instagram" });
+      await expect(bestTime.getByRole("table", { name: /Mejor horario en Instagram/ })).toBeVisible();
+      await expect(bestTime.getByRole("rowheader")).toHaveCount(7);
+      await expect(bestTime.getByRole("list", { name: "Qué significa cada tono" })).toBeVisible();
 
       const list = viewport.width < 768 ? page.getByRole("list", { name: "Publicaciones" }) : page.locator("table");
       await expect(list.getByText("Carrusel de cuadernos")).toBeVisible();
@@ -164,6 +169,7 @@ test.describe("métricas de redes", () => {
       await expect(dialog.getByText("10 %", { exact: true })).toBeVisible();
       // El gráfico carga aparte; en frío el servidor de desarrollo tarda más de 5 s en compilarlo.
       await expect(dialog.locator(".recharts-line")).toBeVisible({ timeout: 30_000 });
+      await expect(dialog.getByRole("button", { name: "Cerrar" })).toBeAttached();
       // Etiquetas: casillas reales; se guardan en la primera medida y las demás las encuentran marcadas.
       const formato = dialog.getByRole("group", { name: /^Formato/ });
       await expect(formato.getByRole("checkbox", { name: "pedido con nombre" })).toBeVisible();

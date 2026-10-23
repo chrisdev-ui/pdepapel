@@ -76,10 +76,10 @@ const DURATION_BUCKETS = [
   { below: Infinity, label: "más de 2 min" },
 ] as const;
 
-const WEEKDAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"] as const;
+export const WEEKDAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"] as const;
 
 /** Franjas de Bogotá: madrugada 0–6, mañana 6–12, mediodía 12–15, tarde 15–19, noche 19–24. */
-const HOUR_BANDS = [
+export const HOUR_BANDS = [
   { below: 6, label: "madrugada" },
   { below: 12, label: "mañana" },
   { below: 15, label: "mediodía" },
