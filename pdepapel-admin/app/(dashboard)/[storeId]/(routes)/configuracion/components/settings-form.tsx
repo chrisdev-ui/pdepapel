@@ -232,7 +232,9 @@ export const SettingsForm: React.FC<
       setLoading(true);
       await axios.patch(`/api/stores/${params.storeId}`, values);
       clearStorage();
-      router.refresh();
+      // Solo el nombre, el logo y el correo se ven fuera de este formulario (menú y avisos de Correos).
+      // Refrescar por cualquier otro campo remontaba la pestaña y borraba lo escrito en los otros paneles.
+      if (values.name !== defaultValues.name || values.logoUrl !== defaultValues.logoUrl || values.email !== defaultValues.email) router.refresh();
       toast({
         description: "¡Listo! Los cambios se han guardado correctamente.",
         variant: "success",

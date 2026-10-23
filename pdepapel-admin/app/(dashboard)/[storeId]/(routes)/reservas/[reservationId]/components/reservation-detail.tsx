@@ -61,11 +61,15 @@ const when = (value: string) =>
 /**
  * El detalle de una reserva: sus productos (cambiar cantidad, quitar,
  * agregar), la clienta, el historial y las acciones. Una reserva convertida
- * se edita desde su pedido; una cerrada solo se lee.
+ * se edita desde su pedido; una cerrada solo se lee. Después de cada acción
+ * vuelve a leer la reserva por la API en vez de `router.refresh()`, que
+ * remonta la página y borraba las cantidades escritas en las otras líneas.
  */
-export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: string; detail: ReservationDetailView; defaultDays: number }) {
+export function ReservationDetail({ storeId, detail: initialDetail, defaultDays }: { storeId: string; detail: ReservationDetailView; defaultDays: number }) {
   const router = useRouter();
   const { toast } = useToast();
+  const [detail, setDetail] = useState(initialDetail);
+  useEffect(() => setDetail(initialDetail), [initialDetail]);
   const { reservation, events, productNames } = detail;
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -78,9 +82,12 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
   const [extendDays, setExtendDays] = useState(String(defaultDays));
   const [customer, setCustomer] = useState({ customerName: reservation.customerName, customerPhone: reservation.customerPhone, note: reservation.note ?? "" });
 
+  // Al volver a leer la reserva solo se descartan los borradores de líneas que ya no están.
   useEffect(() => {
-    setQuantities({});
-    setCustomer({ customerName: reservation.customerName, customerPhone: reservation.customerPhone, note: reservation.note ?? "" });
+    const present = new Set(reservation.items.map((item) => item.id));
+    setQuantities((current) => Object.fromEntries(Object.entries(current).filter(([id]) => present.has(id))));
+    if (!editingCustomer) setCustomer({ customerName: reservation.customerName, customerPhone: reservation.customerPhone, note: reservation.note ?? "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando llega una reserva nueva, no al abrir o cerrar la edición
   }, [reservation]);
 
   const active = reservation.status === "ACTIVE";
@@ -100,7 +107,8 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
     setBusy(key);
     try {
       await work();
-      router.refresh();
+      const { data } = await axios.get<ReservationDetailView>(`/api/${storeId}/stock-reservations/${reservation.id}`);
+      setDetail(data);
     } catch (cause) {
       const message = axios.isAxiosError(cause) ? cause.response?.data?.error : null;
       toast({ variant: "destructive", title: "No se pudo", description: typeof message === "string" ? message : fallback });
@@ -114,6 +122,7 @@ export function ReservationDetail({ storeId, detail, defaultDays }: { storeId: s
   const saveQuantity = (item: Item) =>
     run(`qty-${item.id}`, async () => {
       const { data } = await patch({ action: "set_quantity", itemId: item.id, quantity: quantities[item.id] });
+      setQuantities(({ [item.id]: _saved, ...rest }) => rest);
       toast({ variant: "success", title: "Cantidad guardada", description: `${item.product.name}: ${quantities[item.id]}.` });
       if (data?.released) toast({ variant: "success", title: "Reserva liberada", description: "Ya no tenía productos." });
     }, "La cantidad no cambió. Intenta de nuevo.");

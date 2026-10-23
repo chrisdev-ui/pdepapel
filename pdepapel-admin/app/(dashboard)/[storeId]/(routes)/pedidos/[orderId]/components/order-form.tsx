@@ -132,6 +132,12 @@ interface SubmitOptions {
   transactionId?: string;
   trackingCode?: string;
   skipAutoGuide?: boolean;
+  /**
+   * false: no refrescar la página después de guardar. «Crear guía» guarda la
+   * tarifa y sigue con la guía en su diálogo; refrescar en medio remontaba el
+   * pedido y cerraba la confirmación mientras la guía se pedía.
+   */
+  refresh?: boolean;
 }
 
 /**
@@ -376,7 +382,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           } else {
             toast({ description: "Cambios guardados", variant: "success" });
           }
-          router.refresh();
+          if (options.refresh !== false) router.refresh();
           return true;
         } else {
           const response = await axios.post(`/api/${storeId}/orders`, payload, {
@@ -482,7 +488,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     () =>
       new Promise<boolean>((resolve) => {
         void form.handleSubmit(
-          async (data) => resolve(Boolean(await submitOrder(data))),
+          // El panel de la guía refresca la página cuando la guía ya existe.
+          async (data) => resolve(Boolean(await submitOrder(data, { refresh: false }))),
           () => {
             onInvalid();
             resolve(false);

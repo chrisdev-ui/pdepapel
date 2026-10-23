@@ -154,6 +154,30 @@ export function FairEventWorkspace({
   const [generatedCapsules, setGeneratedCapsules] = useState<
     GeneratedCapsule[]
   >([]);
+  /**
+   * «Etiquetas listas» tiene el único botón para imprimir los QR recién
+   * empacados. El refresco que sigue al empaque remonta la página, así que
+   * las etiquetas se guardan por feria en sessionStorage hasta que Paula
+   * cierra el panel; también sobreviven a una recarga de la pestaña.
+   */
+  const labelsStorageKey = `pdepapel:feria-etiquetas:${event.id}`;
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(labelsStorageKey) ?? "[]") as GeneratedCapsule[];
+      if (Array.isArray(saved) && saved.length > 0) setGeneratedCapsules(saved);
+    } catch {
+      // Sin almacenamiento las etiquetas solo viven hasta el próximo refresco.
+    }
+  }, [labelsStorageKey]);
+  const keepLabels = (capsules: GeneratedCapsule[]) => {
+    setGeneratedCapsules(capsules);
+    try {
+      if (capsules.length > 0) window.sessionStorage.setItem(labelsStorageKey, JSON.stringify(capsules));
+      else window.sessionStorage.removeItem(labelsStorageKey);
+    } catch {
+      // Modo privado: queda solo en la pestaña.
+    }
+  };
   const [isReconciling, setIsReconciling] = useState(false);
   const [isCloseConfirmationOpen, setIsCloseConfirmationOpen] = useState(false);
   const [countedPhysically, setCountedPhysically] = useState(false);
@@ -435,7 +459,7 @@ export function FairEventWorkspace({
           minimumMarginPct,
         },
       );
-      setGeneratedCapsules(
+      keepLabels(
         response.data.map((capsule: GeneratedCapsule) => ({
           id: capsule.id,
           code: capsule.code,
@@ -1001,6 +1025,9 @@ export function FairEventWorkspace({
                   }}
                 >
                   Imprimir etiquetas
+                </Button>
+                <Button variant="ghost" onClick={() => keepLabels([])}>
+                  Cerrar
                 </Button>
               </div>
               <LabelSheetPreview

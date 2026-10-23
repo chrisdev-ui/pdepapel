@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BotAssistMode, MinimumOrderRule } from "@prisma/client";
 import axios from "axios";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -78,7 +78,6 @@ export function BusinessInfoPanel({
   settings: ResolvedStoreSettings;
 }) {
   const params = useParams();
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const form = useForm<FormValue>({
@@ -179,7 +178,7 @@ export function BusinessInfoPanel({
           ]),
         ),
       });
-      router.refresh();
+      // Sin refrescar la página: remontaba la pestaña y borraba lo escrito sin guardar en los otros paneles.
       toast({ description: "Datos del negocio guardados", variant: "success" });
     } catch (error) {
       const message = axios.isAxiosError(error)

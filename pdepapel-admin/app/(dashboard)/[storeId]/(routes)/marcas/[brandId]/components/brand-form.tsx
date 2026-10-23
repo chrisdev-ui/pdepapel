@@ -260,10 +260,8 @@ export function BrandForm({ initialData, parentOptions, storeUrl }: BrandFormPro
           slug={slug}
           open={slugOpen}
           onOpenChange={setSlugOpen}
-          onChanged={(next) => {
-            setSlug(next);
-            router.refresh();
-          }}
+          // La dirección vive en `slug`: refrescar remontaba el formulario y borraba lo escrito sin guardar.
+          onChanged={(next) => setSlug(next)}
         />
       )}
       <FormPageHeader

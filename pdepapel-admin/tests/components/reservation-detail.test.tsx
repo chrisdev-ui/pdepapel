@@ -78,17 +78,21 @@ describe("detalle de una reserva", () => {
 
   it("cambiar la cantidad guarda solo con «Guardar»", async () => {
     mocks.patch.mockResolvedValue({ data: { reservation: {}, released: false } });
+    mocks.get.mockResolvedValue({ data: detail() });
     render(<ReservationDetail storeId="store-1" detail={detail()} defaultDays={3} />);
     const [first] = screen.getAllByTestId("reservation-line");
     expect(within(first).queryByRole("button", { name: "Guardar" })).not.toBeInTheDocument();
     fireEvent.click(within(first).getByRole("button", { name: /aumentar|más|\+/i }));
     fireEvent.click(within(first).getByRole("button", { name: "Guardar" }));
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-1", { action: "set_quantity", itemId: "i-1", quantity: 3 }));
-    expect(mocks.refresh).toHaveBeenCalled();
+    // Vuelve a leer la reserva por la API: refrescar remontaba la página y borraba lo escrito en otras líneas.
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith("/api/store-1/stock-reservations/r-1"));
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("quitar pide confirmación y manda cantidad 0", async () => {
     mocks.patch.mockResolvedValue({ data: { reservation: {}, released: false } });
+    mocks.get.mockResolvedValue({ data: detail() });
     render(<ReservationDetail storeId="store-1" detail={detail()} defaultDays={3} />);
     fireEvent.click(screen.getByRole("button", { name: "Quitar Libreta" }));
     expect(mocks.patch).not.toHaveBeenCalled();

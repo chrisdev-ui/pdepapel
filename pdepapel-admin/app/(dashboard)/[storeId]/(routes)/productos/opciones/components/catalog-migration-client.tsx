@@ -12,8 +12,8 @@ import {
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { Modal } from "@/components/ui/modal";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { keepUnsavedDrafts } from "@/lib/catalog-migration-drafts";
 
 type MigrationAttribute = {
   key: string;
@@ -81,7 +82,6 @@ type MigrationData = {
 
 export function CatalogMigrationClient() {
   const params = useParams();
-  const router = useRouter();
   const { toast } = useToast();
   const storeId = String(params.storeId);
   const endpoint = `/api/${storeId}/catalog-migration`;
@@ -98,19 +98,21 @@ export function CatalogMigrationClient() {
     null,
   );
 
-  const load = useCallback(async () => {
-    const response = await axios.get<MigrationData>(endpoint);
-    setData(response.data);
-    setDraftAttributes(
-      Object.fromEntries(
-        response.data.suggestions.map((suggestion) => [
-          suggestion.id,
-          suggestion.payload.attributes,
-        ]),
-      ),
-    );
-    setDirtySuggestions({});
-  }, [endpoint]);
+  const draftsRef = useRef(draftAttributes);
+  draftsRef.current = draftAttributes;
+  const dirtyRef = useRef(dirtySuggestions);
+  dirtyRef.current = dirtySuggestions;
+
+  const load = useCallback(
+    async (except: readonly string[] = []) => {
+      const response = await axios.get<MigrationData>(endpoint);
+      setData(response.data);
+      const next = keepUnsavedDrafts(response.data.suggestions, draftsRef.current, dirtyRef.current, except);
+      setDraftAttributes(next.drafts);
+      setDirtySuggestions(next.dirty);
+    },
+    [endpoint],
+  );
 
   useEffect(() => {
     void load().catch((error) => {
@@ -137,13 +139,13 @@ export function CatalogMigrationClient() {
     (suggestion) => dirtySuggestions[suggestion.id],
   );
 
-  const runMutation = async (body: unknown, successMessage: string) => {
+  const runMutation = async (body: { action: string; suggestionIds?: string[] } & Record<string, unknown>, successMessage: string) => {
     setLoading(true);
     try {
       await axios.post(endpoint, body);
-      await load();
+      // Sin router.refresh(): la página no trae nada del servidor y remontarla borraba lo editado.
+      await load(body.suggestionIds ?? []);
       setSelected({});
-      router.refresh();
       toast({ title: successMessage });
     } catch (error) {
       toast({
@@ -185,7 +187,7 @@ export function CatalogMigrationClient() {
         enriched += 1;
       }
 
-      await load();
+      await load(selectedSuggestions.slice(0, 20).map((suggestion) => suggestion.id));
       setSelected({});
       toast({
         title: "Análisis visual terminado",
@@ -253,7 +255,7 @@ export function CatalogMigrationClient() {
         suggestionId,
         attributes,
       });
-      await load();
+      await load([suggestionId]);
       toast({ title: "Opciones guardadas para revisión" });
     } catch (error) {
       toast({

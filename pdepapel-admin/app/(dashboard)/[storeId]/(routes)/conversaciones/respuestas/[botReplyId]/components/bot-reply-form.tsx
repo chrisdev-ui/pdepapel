@@ -97,8 +97,8 @@ export function BotReplyForm({
       const url = `/api/${storeId}/bot-replies/${initialData.id}/approve`;
       if (approve) await axios.post(url);
       else await axios.delete(url);
+      // Sin refrescar: remontaba el formulario y borraba el texto sin guardar.
       setApprovedAt(approve ? new Date() : null);
-      router.refresh();
       toast({
         title: approve ? "Menú aprobado" : "Aprobación retirada",
         description: approve

@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ interface EmailListsPanelProps {
  */
 export function EmailListsPanel({ excludedCustomerEmails, adminNotificationEmails, hasStoreEmail }: EmailListsPanelProps) {
   const params = useParams<{ storeId: string }>();
-  const router = useRouter();
   const [excluded, setExcluded] = useState(excludedCustomerEmails.join("\n"));
   const [recipients, setRecipients] = useState(adminNotificationEmails.join("\n"));
   const [saving, setSaving] = useState(false);
@@ -37,7 +36,6 @@ export function EmailListsPanel({ excludedCustomerEmails, adminNotificationEmail
       });
       setExcluded((data.excludedCustomerEmails as string[]).join("\n"));
       setRecipients((data.adminNotificationEmails as string[]).join("\n"));
-      router.refresh();
       toast({ description: "Correos guardados", variant: "success" });
     } catch (error) {
       const message = axios.isAxiosError(error) ? (error.response?.data?.error ?? "No se pudo guardar") : "No se pudo guardar";
