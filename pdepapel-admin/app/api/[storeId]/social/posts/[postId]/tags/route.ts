@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse, zodErrorToAppError } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { readJsonBody } from "@/lib/request-body";
 import { postTagsInputSchema, setSocialPostTags, SocialPostNotFound, TooManySocialTags } from "@/lib/social/post-tags";
 import { SOCIAL_TAGS_PER_KIND_MAX } from "@/lib/social/tags";
 import { requireStoreOwner } from "@/lib/store-access";
@@ -13,7 +14,9 @@ export const dynamic = "force-dynamic";
 export async function PUT(request: Request, { params }: { params: { storeId: string; postId: string } }) {
   try {
     await requireStoreOwner(params.storeId);
-    const parsed = postTagsInputSchema.safeParse(await request.json().catch(() => null));
+    const read = await readJsonBody(request, "SOCIAL_POST_TAGS");
+    if (!read.ok) throw ErrorFactory.InvalidRequest("No llegaron las etiquetas. Vuelve a intentarlo.");
+    const parsed = postTagsInputSchema.safeParse(read.body);
     if (!parsed.success) throw zodErrorToAppError(parsed.error);
     const tags = await setSocialPostTags(prismadb, params.storeId, params.postId, parsed.data).catch((error: unknown) => {
       if (error instanceof SocialPostNotFound) throw ErrorFactory.NotFound("No encontramos esa publicación");

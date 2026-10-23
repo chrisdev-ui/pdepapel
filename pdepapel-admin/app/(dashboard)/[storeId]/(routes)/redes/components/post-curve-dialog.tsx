@@ -21,10 +21,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CHART_COLORS } from "@/lib/chart-palette";
-import type { SocialPostSummary } from "@/lib/social/report";
+import type {
+  SocialPieceSummary,
+  SocialPostSummary,
+} from "@/lib/social/report";
 
 import type { PostTags } from "@/lib/social/tags";
 
+import { PostPieceSection } from "./post-piece-section";
 import { PostTagEditor } from "./post-tag-editor";
 import { RETENTION_WARNING_TEXT } from "./retention-flag";
 import { postMetricRows, retentionDetails } from "@/lib/social/display";
@@ -42,11 +46,17 @@ const hoursLabel = (hours: number) =>
 export function PostCurveDialog({
   storeId,
   tagOptions,
+  posts,
+  pieces,
   post,
   onClose,
+  onChanged,
 }: {
   storeId: string;
   tagOptions: PostTags;
+  posts: SocialPostSummary[];
+  pieces: SocialPieceSummary[];
+  onChanged: () => Promise<void>;
   post: SocialPostSummary | null;
   onClose: () => void;
 }) {
@@ -65,7 +75,9 @@ export function PostCurveDialog({
     return () => {
       active = false;
     };
-  }, [storeId, post]);
+    // Solo al cambiar de publicación: tras guardar etiquetas o piezas llega un objeto nuevo de la misma.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, post?.id]);
 
   return (
     <Dialog open={post !== null} onOpenChange={(open) => !open && onClose()}>
@@ -127,6 +139,16 @@ export function PostCurveDialog({
             postId={post.id}
             initial={post.tags}
             options={tagOptions}
+            onSaved={onChanged}
+          />
+        )}
+        {post && (
+          <PostPieceSection
+            storeId={storeId}
+            post={post}
+            posts={posts}
+            pieces={pieces}
+            onChanged={onChanged}
           />
         )}
         <div className="h-64 w-full">

@@ -13,7 +13,7 @@ import {
   type LucideProps,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -251,7 +251,7 @@ function AccountCard({
 
 export function SocialMetricsClient({
   storeId,
-  data,
+  data: initialData,
   periods,
   tiktokResult,
   tiktokReason,
@@ -269,6 +269,16 @@ export function SocialMetricsClient({
   const [syncing, setSyncing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("ALL");
   const [selected, setSelected] = useState<SocialPostSummary | null>(null);
+  const [data, setData] = useState(initialData);
+  useEffect(() => setData(initialData), [initialData]);
+  // router.refresh() remonta la página (loading.tsx) y cierra el detalle abierto:
+  // tras guardar etiquetas o piezas se vuelve a leer el resumen sin salir del diálogo.
+  const reload = useCallback(async () => {
+    const { data: fresh } = await axios.get<Dashboard>(
+      `/api/${storeId}/social?dias=${initialData.days}`,
+    );
+    setData(fresh);
+  }, [storeId, initialData.days]);
 
   const accountOf = (platform: SocialPlatform) =>
     data.accounts.find((account) => account.platform === platform);
@@ -362,7 +372,10 @@ export function SocialMetricsClient({
           <Button
             variant="outline"
             onClick={() =>
-              void onCopy(weeklySummaryText(data, new Date()), "Resumen semanal")
+              void onCopy(
+                weeklySummaryText(data, new Date()),
+                "Resumen semanal",
+              )
             }
             disabled={data.accounts.length === 0}
             className="min-h-[44px]"
@@ -637,7 +650,14 @@ export function SocialMetricsClient({
       <PostCurveDialog
         storeId={storeId}
         tagOptions={data.tagOptions}
-        post={selected}
+        posts={data.posts}
+        pieces={data.pieces}
+        onChanged={reload}
+        post={
+          selected
+            ? (data.posts.find((item) => item.id === selected.id) ?? selected)
+            : null
+        }
         onClose={() => setSelected(null)}
       />
     </>

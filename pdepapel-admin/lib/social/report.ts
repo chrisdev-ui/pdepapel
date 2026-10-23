@@ -4,6 +4,7 @@ import { dailyFollowers, type DailyFollowers } from "./followers";
 import { CURVE_POINTS_HOURS, engagementRate, median, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
 import { autoTags, tagOptions, type PostTags } from "./tags";
 import { bestTimeGrid, type BestTimeNetwork } from "./best-time";
+import { pieceSuggestions } from "./pieces";
 import { whatWorks, type WhatWorksNetwork } from "./what-works";
 
 /**
@@ -65,6 +66,15 @@ export interface SocialPostSummary {
   multiplierApprox: boolean;
   multiplierSample: number;
   tags: PostTags;
+  /** La pieza a la que la dueña unió esta publicación (null = ninguna). */
+  pieceId: string | null;
+  /** Publicaciones de otra red que parecen la misma pieza (solo sugerencia; nunca se unen solas). */
+  pieceSuggestions: string[];
+}
+
+export interface SocialPieceSummary {
+  id: string;
+  posts: Pick<SocialPostSummary, "id" | "platform" | "caption" | "postedAt" | "views" | "multiplier" | "multiplierApprox" | "watchedPct" | "skipRate">[];
 }
 
 export interface SocialSummary {
@@ -76,6 +86,8 @@ export interface SocialSummary {
   skipBaselines: Partial<Record<SocialPlatform, SkipBaseline>>;
   /** «Qué funciona» por red, con las publicaciones de los últimos 90 días. */
   whatWorks: WhatWorksNetwork[];
+  /** Piezas con sus publicaciones, para la tabla lado a lado del detalle. */
+  pieces: SocialPieceSummary[];
   /** Mejor horario por red (día × franja de Bogotá), con la misma base de 90 días. */
   bestTime: BestTimeNetwork[];
   /** Valores para el editor de etiquetas: los de fábrica y los que agregó la tienda. */
@@ -129,6 +141,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
         thumbnailUrl: true,
         postedAt: true,
         durationSec: true,
+        socialPieceId: true,
         snapshots: {
           orderBy: { capturedAt: "asc" },
           select: { hoursSincePost: true, views: true, reach: true, likes: true, comments: true, shares: true, saves: true, totalInteractions: true, avgWatchTimeMs: true, totalWatchTimeMs: true, skipRate: true },
@@ -197,8 +210,11 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
         FORMATO: post.tags.filter((item) => item.tag.kind === "FORMATO").map((item) => item.tag.label).sort((a, b) => a.localeCompare(b, "es")),
         GANCHO: post.tags.filter((item) => item.tag.kind === "GANCHO").map((item) => item.tag.label).sort((a, b) => a.localeCompare(b, "es")),
       },
+      pieceId: post.socialPieceId,
+      pieceSuggestions: suggestions.get(post.id) ?? [],
     };
   };
+  const suggestions = pieceSuggestions(base.map((post) => ({ id: post.id, platform: post.platform, postedAt: post.postedAt, caption: post.caption, pieceId: post.socialPieceId })));
   const summaries = new Map(base.map((post) => [post.id, summarize(post)]));
   const postSummaries = posts.map((post) => summaries.get(post.id)!);
 
@@ -215,7 +231,26 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     };
   });
 
-  return { days, accounts: accountSummaries, posts: postSummaries, medianViews, skipBaselines, whatWorks: whatWorks(analyzed), bestTime: bestTimeGrid(analyzed), tagOptions: tagOptions(storedTags) };
+  const pieces = new Map<string, SocialPieceSummary>();
+  for (const post of base) {
+    if (!post.socialPieceId) continue;
+    const summary = summaries.get(post.id)!;
+    const piece = pieces.get(post.socialPieceId) ?? { id: post.socialPieceId, posts: [] };
+    piece.posts.push({ id: summary.id, platform: summary.platform, caption: summary.caption, postedAt: summary.postedAt, views: summary.views, multiplier: summary.multiplier, multiplierApprox: summary.multiplierApprox, watchedPct: summary.watchedPct, skipRate: summary.skipRate });
+    pieces.set(post.socialPieceId, piece);
+  }
+
+  return {
+    days,
+    accounts: accountSummaries,
+    posts: postSummaries,
+    medianViews,
+    skipBaselines,
+    whatWorks: whatWorks(analyzed),
+    bestTime: bestTimeGrid(analyzed),
+    pieces: Array.from(pieces.values()),
+    tagOptions: tagOptions(storedTags),
+  };
 }
 
 /** La curva de una publicación de la tienda (null si no es suya). */

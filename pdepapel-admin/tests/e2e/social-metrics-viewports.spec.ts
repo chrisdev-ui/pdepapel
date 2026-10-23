@@ -50,12 +50,17 @@ test.describe("métricas de redes", () => {
 
   test.beforeAll(async () => {
     await db.socialTag.deleteMany({ where: { storeId } });
+    await db.socialPiece.deleteMany({ where: { storeId } });
     await db.socialAccount.deleteMany({ where: { storeId } });
     const now = Date.now();
     const instagram = await db.socialAccount.create({
       data: { storeId, platform: "INSTAGRAM", externalId: "e2e-ig", username: "papeleria.pdepapel", tokenRef: "env:META_IG_PAGE_TOKEN", lastSyncAt: new Date(now - HOUR) },
     });
-    await db.socialAccount.create({ data: { storeId, platform: "TIKTOK", externalId: "e2e-tt", username: "P de Papel", status: "NEEDS_RECONNECT", statusReason: "tiktok_invalid_grant" } });
+    const tiktok = await db.socialAccount.create({ data: { storeId, platform: "TIKTOK", externalId: "e2e-tt", username: "P de Papel", status: "NEEDS_RECONNECT", statusReason: "tiktok_invalid_grant" } });
+    // La misma pieza en TikTok, una hora después: se sugiere en el detalle, nunca se une sola.
+    await db.socialPost.create({
+      data: { socialAccountId: tiktok.id, platform: "TIKTOK", externalId: "e2e-tt1", productType: "VIDEO", caption: "Agendas kawaii con stickers nuevos para la temporada", postedAt: new Date(now - 23 * HOUR) },
+    });
     await db.socialAccountSnapshot.createMany({
       data: [
         { socialAccountId: instagram.id, capturedAt: new Date(now - 6 * 24 * HOUR), followers: 100 },
@@ -103,6 +108,7 @@ test.describe("métricas de redes", () => {
 
   test.afterAll(async () => {
     await db.socialTag.deleteMany({ where: { storeId } });
+    await db.socialPiece.deleteMany({ where: { storeId } });
     await db.socialAccount.deleteMany({ where: { storeId } });
     await db.$disconnect();
   });
@@ -181,6 +187,18 @@ test.describe("métricas de redes", () => {
       // El gráfico carga aparte; en frío el servidor de desarrollo tarda más de 5 s en compilarlo.
       await expect(dialog.locator(".recharts-line")).toBeVisible({ timeout: 30_000 });
       await expect(dialog.getByRole("button", { name: "Cerrar" })).toBeAttached();
+      // La misma pieza: la de TikTok se sugiere; en la primera medida se une y se separa.
+      const piece = dialog.getByRole("region", { name: "La misma pieza en otras redes" });
+      await expect(piece.getByText(/Parece la misma · TikTok/)).toBeVisible();
+      if (viewport.name === "390") {
+        await piece.getByRole("button", { name: /^Unir con la de TikTok/ }).click();
+        await expect(page.getByText("Publicaciones unidas en una pieza").first()).toBeVisible();
+        // El diálogo sigue abierto: el resumen se vuelve a leer sin router.refresh() (que remontaba la página y lo cerraba).
+        await expect(piece.getByRole("table", { name: "Esta pieza en cada red" }).getByRole("rowheader")).toHaveCount(2, { timeout: 20_000 });
+        await piece.getByRole("button", { name: "Separar de la pieza" }).click();
+        await expect(page.getByText("Publicación separada de la pieza").first()).toBeVisible();
+        await expect(piece.getByText(/Parece la misma · TikTok/)).toBeVisible({ timeout: 20_000 });
+      }
       // Etiquetas: casillas reales; se guardan en la primera medida y las demás las encuentran marcadas.
       const formato = dialog.getByRole("group", { name: /^Formato/ });
       await expect(formato.getByRole("checkbox", { name: "pedido con nombre" })).toBeVisible();

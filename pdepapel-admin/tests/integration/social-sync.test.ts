@@ -401,6 +401,20 @@ describe("refresco de cada hora (lo publicado en las últimas 8 h)", () => {
   });
 });
 
+describe("piezas y sincronización", () => {
+  it("volver a sincronizar no borra la pieza que unió la dueña", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const { adapter } = fakeInstagram([[post("a", 2)]]);
+    await runSocialSync({ accountId: row.id, adapter, now: () => now });
+    const piece = await testPrisma.socialPiece.create({ data: { storeId: f.store.id } });
+    await testPrisma.socialPost.updateMany({ where: { socialAccountId: row.id }, data: { socialPieceId: piece.id } });
+    await runSocialSync({ accountId: row.id, adapter: fakeInstagram([[post("a", 2, { caption: "Texto nuevo" })]]).adapter, now: () => new Date(now.getTime() + 6 * HOUR) });
+    expect(await testPrisma.socialPost.findFirstOrThrow({ where: { socialAccountId: row.id } })).toMatchObject({ caption: "Texto nuevo", socialPieceId: piece.id });
+    await testPrisma.socialPiece.deleteMany({ where: { storeId: f.store.id } });
+  });
+});
+
 describe("retención en el resumen", () => {
   it("duración, salto y % visto llegan al resumen, con la alerta cuando la mayoría lo deja pronto", async () => {
     f = await createInventoryFixture();

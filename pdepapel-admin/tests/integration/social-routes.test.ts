@@ -16,6 +16,7 @@ vi.mock("@/lib/social/queue", async (importOriginal) => ({
 }));
 
 import { GET as curveGET } from "@/app/api/[storeId]/social/posts/[postId]/route";
+import { DELETE as pieceDELETE, POST as piecePOST } from "@/app/api/[storeId]/social/posts/[postId]/piece/route";
 import { PUT as tagsPUT } from "@/app/api/[storeId]/social/posts/[postId]/tags/route";
 import { POST as instagramConnectPOST } from "@/app/api/[storeId]/social/instagram/connect/route";
 import { GET as socialGET } from "@/app/api/[storeId]/social/route";
@@ -36,6 +37,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const req = (url: string, method = "GET") => new Request(url, { method });
 const ctx = () => ({ params: { storeId: f!.store.id } });
 
+const postJson = (body: unknown) => new Request("http://admin.test/x", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 const putTags = (body: unknown) => new Request("http://admin.test/x", { method: "PUT", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 
 function asOwner() {
@@ -62,6 +64,7 @@ afterEach(async () => {
     await testPrisma.socialOAuthState.deleteMany({ where: { storeId: f.store.id } });
     await testPrisma.socialCredential.deleteMany({ where: { storeId: f.store.id } });
     await testPrisma.socialTag.deleteMany({ where: { storeId: f.store.id } });
+    await testPrisma.socialPiece.deleteMany({ where: { storeId: f.store.id } });
     await testPrisma.socialAccount.deleteMany({ where: { storeId: f.store.id } });
     await deleteInventoryFixture(f);
   }
@@ -88,6 +91,8 @@ describe("acceso a Métricas de redes", () => {
       await syncPOST(req("http://admin.test/x", "POST"), ctx()),
       await tiktokConnectGET(req("http://admin.test/x"), ctx()),
       await tagsPUT(putTags({ FORMATO: ["kit"], GANCHO: [] }), { params: { storeId: f.store.id, postId: post.id } }),
+      await piecePOST(postJson({ otherPostId: post.id }), { params: { storeId: f.store.id, postId: post.id } }),
+      await pieceDELETE(req("http://admin.test/x", "DELETE"), { params: { storeId: f.store.id, postId: post.id } }),
     ];
     for (const response of responses) {
       expect(response.status).toBe(403);
@@ -223,6 +228,105 @@ describe("etiquetas de una publicación", () => {
     expect(tooMany.status).toBe(400);
     expect(await tooMany.json()).toMatchObject({ error: expect.stringContaining("Máximo 10") });
     expect(await testPrisma.socialTag.count({ where: { storeId: f.store.id } })).toBe(0);
+  });
+});
+
+describe("la misma pieza en varias redes", () => {
+  async function seedPair() {
+    const { account, post } = await seedPost();
+    const tiktok = await testPrisma.socialAccount.create({ data: { storeId: f!.store.id, platform: "TIKTOK", externalId: "open1", username: "P de Papel" } });
+    const tt = await testPrisma.socialPost.create({ data: { socialAccountId: tiktok.id, platform: "TIKTOK", externalId: "v1", productType: "VIDEO", caption: "Reel", postedAt: new Date(Date.now() - 7_200_000) } });
+    const tt2 = await testPrisma.socialPost.create({ data: { socialAccountId: tiktok.id, platform: "TIKTOK", externalId: "v2", productType: "VIDEO", caption: "Otro", postedAt: new Date(Date.now() - 9_000_000) } });
+    const ig2 = await testPrisma.socialPost.create({ data: { socialAccountId: account.id, platform: "INSTAGRAM", externalId: "m2", productType: "REELS", caption: "Otro", postedAt: new Date(Date.now() - 9_000_000) } });
+    return { ig: post, tt, tt2, ig2 };
+  }
+  const params = (postId: string) => ({ params: { storeId: f!.store.id, postId } });
+
+  it("la dueña une y separa; una pieza lleva una publicación por red; el resumen trae la pieza y las sugerencias", async () => {
+    f = await createInventoryFixture();
+    const { ig, tt, tt2, ig2 } = await seedPair();
+    asOwner();
+
+    // Mismo texto, otra red, 1 h de diferencia: se sugiere, pero no se une solo.
+    let summary = await (await socialGET(req(`http://admin.test/api/${f.store.id}/social?dias=7`), ctx())).json();
+    const byId = (body: { posts: { id: string }[] }, postId: string) => body.posts.find((item) => item.id === postId) as unknown as { pieceId: string | null; pieceSuggestions: string[] };
+    expect(byId(summary, ig.id)).toMatchObject({ pieceId: null, pieceSuggestions: [tt.id] });
+    expect(summary.pieces).toEqual([]);
+
+    expect((await piecePOST(postJson({ otherPostId: ig2.id }), params(ig.id))).status).toBe(400);
+    const linked = await piecePOST(postJson({ otherPostId: tt.id }), params(ig.id));
+    expect(linked.status).toBe(200);
+    const { pieceId } = await linked.json();
+    expect(await testPrisma.socialPost.count({ where: { socialPieceId: pieceId } })).toBe(2);
+    // Ya hay TikTok en la pieza: otro TikTok no entra.
+    expect((await piecePOST(postJson({ otherPostId: tt2.id }), params(ig.id))).status).toBe(409);
+    // Volver a unir las mismas no hace nada.
+    expect(await (await piecePOST(postJson({ otherPostId: ig.id }), params(tt.id))).json()).toEqual({ pieceId });
+
+    summary = await (await socialGET(req(`http://admin.test/api/${f.store.id}/social?dias=7`), ctx())).json();
+    expect(byId(summary, ig.id)).toMatchObject({ pieceId, pieceSuggestions: [] });
+    expect(summary.pieces).toEqual([{ id: pieceId, posts: expect.arrayContaining([expect.objectContaining({ id: ig.id, platform: "INSTAGRAM" }), expect.objectContaining({ id: tt.id, platform: "TIKTOK" })]) }]);
+    assertNoForbiddenKeys(summary, "owner");
+
+    // Dos piezas distintas no se mezclan.
+    const second = await (await piecePOST(postJson({ otherPostId: tt2.id }), params(ig2.id))).json();
+    expect((await piecePOST(postJson({ otherPostId: tt2.id }), params(ig.id))).status).toBe(409);
+
+    // Separar deja la pieza con una sola publicación: se borra y la otra queda libre.
+    expect(await (await pieceDELETE(req("http://admin.test/x", "DELETE"), params(tt.id))).json()).toEqual({ removed: true });
+    expect(await testPrisma.socialPiece.count({ where: { id: pieceId } })).toBe(0);
+    expect((await testPrisma.socialPost.findUniqueOrThrow({ where: { id: ig.id } })).socialPieceId).toBeNull();
+    expect(await testPrisma.socialPiece.count({ where: { id: second.pieceId } })).toBe(1);
+    expect(await (await pieceDELETE(req("http://admin.test/x", "DELETE"), params(tt.id))).json()).toEqual({ removed: false });
+  });
+
+  it("un cuerpo vacío, sin content-type o mal formado da 400 en español y deja el porqué en el registro, sin el contenido", async () => {
+    f = await createInventoryFixture();
+    const { ig } = await seedPair();
+    asOwner();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const bodies = [
+        new Request("http://admin.test/x", { method: "POST" }),
+        new Request("http://admin.test/x", { method: "POST", body: "" }),
+        new Request("http://admin.test/x", { method: "POST", body: '{"otherPostId":"secreto-123"', headers: { "content-type": "application/json" } }),
+      ];
+      for (const request of bodies) {
+        const response = await piecePOST(request, params(ig.id));
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({ error: "No llegó la publicación a unir. Vuelve a intentarlo." });
+      }
+      const tags = await tagsPUT(new Request("http://admin.test/x", { method: "PUT" }), params(ig.id));
+      expect(tags.status).toBe(400);
+      expect(await tags.json()).toMatchObject({ error: "No llegaron las etiquetas. Vuelve a intentarlo." });
+      const logged = warn.mock.calls.filter(([message]) => /cuerpo ilegible/.test(String(message)));
+      expect(logged.map(([message]) => message)).toEqual([
+        "[SOCIAL_POST_PIECE_LINK] cuerpo ilegible",
+        "[SOCIAL_POST_PIECE_LINK] cuerpo ilegible",
+        "[SOCIAL_POST_PIECE_LINK] cuerpo ilegible",
+        "[SOCIAL_POST_TAGS] cuerpo ilegible",
+      ]);
+      expect(logged[2][1]).toMatchObject({ method: "POST", contentType: "application/json", error: expect.any(String) });
+      expect(JSON.stringify(logged)).not.toContain("secreto-123");
+      expect(await testPrisma.socialPiece.count({ where: { storeId: f.store.id } })).toBe(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("otra tienda no puede unir ni separar publicaciones ajenas", async () => {
+    f = await createInventoryFixture();
+    const { ig, tt } = await seedPair();
+    const other = await createInventoryFixture();
+    try {
+      session.userId = other.store.userId;
+      const foreign = { params: { storeId: other.store.id, postId: ig.id } };
+      expect((await piecePOST(postJson({ otherPostId: tt.id }), foreign)).status).toBe(404);
+      expect((await pieceDELETE(req("http://admin.test/x", "DELETE"), foreign)).status).toBe(404);
+      expect(await testPrisma.socialPiece.count({ where: { storeId: { in: [f.store.id, other.store.id] } } })).toBe(0);
+    } finally {
+      await deleteInventoryFixture(other);
+    }
   });
 });
 

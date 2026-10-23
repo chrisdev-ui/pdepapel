@@ -2,8 +2,7 @@
 
 import axios from "axios";
 import { Loader2, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +14,14 @@ const KIND_LABEL = { FORMATO: "Formato", GANCHO: "Gancho" } as const;
 const KIND_HINT = { FORMATO: "Qué tipo de pieza es.", GANCHO: "Con qué engancha en el primer segundo." } as const;
 
 /** Formato y Gancho de una publicación: casillas con los valores de la tienda y «Agregar otra». */
-export function PostTagEditor({ storeId, postId, initial, options }: { storeId: string; postId: string; initial: PostTags; options: PostTags }) {
-  const router = useRouter();
+export function PostTagEditor({ storeId, postId, initial, options, onSaved }: { storeId: string; postId: string; initial: PostTags; options: PostTags; onSaved: () => Promise<void> }) {
   const { toast } = useToast();
   const id = useId();
   const [selected, setSelected] = useState<PostTags>(initial);
   const [extra, setExtra] = useState<PostTags>({ FORMATO: [], GANCHO: [] });
   const [draft, setDraft] = useState({ FORMATO: "", GANCHO: "" });
   const [saving, setSaving] = useState(false);
+  const inFlight = useRef(false);
   const [dirty, setDirty] = useState(false);
 
   const isOn = (kind: keyof PostTags, label: string) => selected[kind].some((item) => tagKey(item) === tagKey(label));
@@ -41,16 +40,19 @@ export function PostTagEditor({ storeId, postId, initial, options }: { storeId: 
     setDraft((current) => ({ ...current, [kind]: "" }));
   };
   const save = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
     try {
       const { data } = await axios.put<{ tags: PostTags }>(`/api/${storeId}/social/posts/${postId}/tags`, selected);
       setSelected(data.tags);
       setDirty(false);
       toast({ title: "Etiquetas guardadas", description: "«Qué funciona» ya las cuenta." });
-      router.refresh();
+      await onSaved();
     } catch (error) {
       toast({ title: "No se pudieron guardar las etiquetas", description: getErrorMessage(error), variant: "destructive" });
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };

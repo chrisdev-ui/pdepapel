@@ -117,6 +117,7 @@ model Store {
   socialCredentials               SocialCredential[]
   socialOAuthStates               SocialOAuthState[]
   socialTags                      SocialTag[]
+  socialPieces                    SocialPiece[]
   capsuleSuggestionFeedback       CapsuleSuggestionFeedback[]
   productPriceTiers               ProductPriceTier[]
   marketplaceConnections          MarketplaceConnection[]
@@ -3837,15 +3838,19 @@ model SocialPost {
   postedAt           DateTime
   /// Último sondeo de métricas; decide si toca de nuevo (30 días: cada corrida; más viejas: una vez al día).
   metricsSyncedAt    DateTime?
+  /// La misma pieza publicada en varias redes (la une la dueña; la sincronización nunca la toca).
+  socialPieceId      String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
   account   SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
   snapshots SocialMetricSnapshot[]
   tags      SocialPostTag[]
+  piece     SocialPiece?           @relation(fields: [socialPieceId], references: [id], onDelete: SetNull)
 
   @@unique([socialAccountId, externalId])
   @@index([socialAccountId, postedAt])
+  @@index([socialPieceId])
 }
 
 /// Solo se agregan filas: la curva de cada publicación.
@@ -3886,6 +3891,19 @@ model SocialAccountSnapshot {
   account SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
 
   @@index([socialAccountId, capturedAt])
+}
+
+/// La misma pieza (video, carrusel) publicada en varias redes: una publicación por red como máximo.
+model SocialPiece {
+  id        String   @id @default(uuid())
+  storeId   String
+  title     String?  @db.VarChar(120)
+  createdAt DateTime @default(now())
+
+  store Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  posts SocialPost[]
+
+  @@index([storeId])
 }
 
 /// Etiquetas que la dueña pone a mano a una publicación («Qué funciona»).
