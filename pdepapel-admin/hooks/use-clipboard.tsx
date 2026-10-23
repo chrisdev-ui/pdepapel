@@ -1,28 +1,27 @@
 import { useState } from "react";
 
-// Since we are moving away from react-hot-toast, we should use the internal toaster or simple navigator.
-// However, the pattern in cell-action.tsx uses onCopy(id, label).
-// Let's make this hook consistent with the codebase.
-// Wait, if I use internal toaster here, I need to verify if this hook is used elsewhere.
-// The user said "Cannot find module '@/hooks/use-clipboard'". It means it doesn't exist.
-// I will implement a simple one.
-
 import { useToast } from "@/hooks/use-toast";
 
+/** Copia al portapapeles y avisa; si el navegador lo bloquea, lo dice en vez de fingir que copió. */
 export const useClipboard = () => {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
-  const onCopy = (text: string, label: string = "Texto") => {
-    navigator.clipboard.writeText(text);
+  const onCopy = async (text: string, label: string = "Texto") => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      toast({
+        title: `No se pudo copiar: ${label.toLowerCase()}`,
+        description: "El navegador no dejó usar el portapapeles. Intenta de nuevo.",
+        variant: "destructive",
+      });
+      return false;
+    }
     setCopied(true);
-    toast({
-      title: `${label} copiado al portapapeles.`,
-      variant: "default", // or "success" if defined
-    });
-    setTimeout(() => {
-      setCopied(false);
-    }, 1000);
+    toast({ title: `${label} copiado al portapapeles.` });
+    setTimeout(() => setCopied(false), 1000);
+    return true;
   };
 
   return { onCopy, copied };

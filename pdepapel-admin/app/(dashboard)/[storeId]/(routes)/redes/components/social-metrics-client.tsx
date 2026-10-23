@@ -3,6 +3,7 @@
 import type { SocialPlatform } from "@prisma/client";
 import axios from "axios";
 import {
+  ClipboardCopy,
   Eye,
   ImageOff,
   Loader2,
@@ -19,9 +20,11 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { SocialNetworkIcons } from "@/components/ui/social-network-icons";
 import { TabNav } from "@/components/ui/tab-nav";
 import { TintBadge } from "@/components/ui/tint-badge";
+import { useClipboard } from "@/hooks/use-clipboard";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import type { getSocialDashboard } from "@/lib/social/access";
+import { weeklySummaryText } from "@/lib/social/weekly-summary";
 import type {
   SocialAccountSummary,
   SocialPostSummary,
@@ -261,6 +264,7 @@ export function SocialMetricsClient({
 }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { onCopy } = useClipboard();
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("ALL");
@@ -339,21 +343,34 @@ export function SocialMetricsClient({
             6 horas, y lo publicado en las últimas 8 horas, cada hora.
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={syncNow}
-          disabled={
-            syncing || !data.queueConfigured || data.accounts.length === 0
-          }
-          className="min-h-[44px]"
-        >
-          {syncing ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
-          )}
-          Sincronizar ahora
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={syncNow}
+            disabled={
+              syncing || !data.queueConfigured || data.accounts.length === 0
+            }
+            className="min-h-[44px]"
+          >
+            {syncing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
+            )}
+            Sincronizar ahora
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              void onCopy(weeklySummaryText(data, new Date()), "Resumen semanal")
+            }
+            disabled={data.accounts.length === 0}
+            className="min-h-[44px]"
+          >
+            <ClipboardCopy className="mr-2 h-4 w-4" aria-hidden />
+            Copiar resumen semanal
+          </Button>
+        </div>
       </div>
 
       {tiktokResult === "conectado" && (
@@ -453,20 +470,32 @@ export function SocialMetricsClient({
         </p>
       )}
 
-      {data.whatWorks.some((network) => platformFilter === "ALL" || network.platform === platformFilter) && (
+      {data.whatWorks.some(
+        (network) =>
+          platformFilter === "ALL" || network.platform === platformFilter,
+      ) && (
         <div className="grid gap-3 lg:grid-cols-2">
           {data.whatWorks
-            .filter((network) => platformFilter === "ALL" || network.platform === platformFilter)
+            .filter(
+              (network) =>
+                platformFilter === "ALL" || network.platform === platformFilter,
+            )
             .map((network) => (
               <WhatWorksCard key={network.platform} network={network} />
             ))}
         </div>
       )}
 
-      {data.bestTime.some((network) => platformFilter === "ALL" || network.platform === platformFilter) && (
+      {data.bestTime.some(
+        (network) =>
+          platformFilter === "ALL" || network.platform === platformFilter,
+      ) && (
         <div className="grid gap-3 lg:grid-cols-2">
           {data.bestTime
-            .filter((network) => platformFilter === "ALL" || network.platform === platformFilter)
+            .filter(
+              (network) =>
+                platformFilter === "ALL" || network.platform === platformFilter,
+            )
             .map((network) => (
               <BestTimeCard key={network.platform} network={network} />
             ))}

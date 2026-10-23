@@ -140,6 +140,17 @@ test.describe("métricas de redes", () => {
       await expect(works).toBeVisible();
       await expect(works.getByText("Últimos 90 días · 8 publicaciones")).toBeVisible();
       await expect(works.getByRole("list", { name: "Etiquetas de Instagram" }).getByText("Reel", { exact: true })).toBeVisible();
+      // Resumen semanal para WhatsApp: se copia; sin enlaces ni @menciones.
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await page.getByRole("button", { name: "Copiar resumen semanal" }).click();
+      await expect(page.getByText("Resumen semanal copiado al portapapeles.").first()).toBeVisible();
+      if (viewport.name === "1280") {
+        const copied = await page.evaluate(() => navigator.clipboard.readText());
+        expect(copied).toMatch(/^📊 \*Resumen de redes · /);
+        expect(copied).toContain("*Instagram* · ");
+        expect(copied).toContain("👉 *Para esta semana:* ");
+        expect(copied).not.toMatch(/https?:|@/);
+      }
       // Mejor horario: tabla día × franja con su leyenda en palabras.
       const bestTime = page.getByRole("region", { name: "Mejor horario en Instagram" });
       await expect(bestTime.getByRole("table", { name: /Mejor horario en Instagram/ })).toBeVisible();
