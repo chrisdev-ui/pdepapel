@@ -415,3 +415,4 @@
 2026-10-23T00:21:26.406Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Duración de reels (20261026_add_social_post_duration_checked)"
 2026-10-23T02:19:35.551Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Etiquetas de redes (20261027_add_social_tags)"
 2026-10-23T07:16:16.871Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Piezas de redes (20261028_add_social_pieces)"
+2026-10-23T13:03:07.217Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Alerta temprana de redes (20261029_add_social_early_alerts)"
