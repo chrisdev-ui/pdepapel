@@ -13,20 +13,27 @@ export const maxDuration = 30;
 const PLATFORMS: PlatformFilter[] = ["all", "instagram", "tiktok"];
 
 /**
- * `social-sync.yml` (cada 6 h). Responde enseguida: con `mode=apply` encola
- * una tarea por cuenta en QStash; sin él (o con el trabajo apagado) solo
- * cuenta, sin llamar a Meta ni a TikTok.
+ * Cron de Vercel cada 6 h (vercel.json, 03:15/09:15/15:15/21:15 UTC; antes
+ * GitHub Actions, que llegaba a correr 5 h tarde). Vercel manda el CRON_SECRET
+ * como Bearer y el encabezado `x-vercel-cron-schedule`: con él corre en serio,
+ * sin consulta en la ruta. Responde enseguida: encola una tarea por cuenta en
+ * QStash. Una llamada a mano (`social-sync.yml`, solo workflow_dispatch) sin
+ * `mode=apply`, o con el trabajo apagado, solo cuenta, sin llamar a Meta ni a TikTok.
  */
 export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get("authorization")?.split("Bearer ").at(1);
     if (!safeSecretEquals(token, env.CRON_SECRET)) throw ErrorFactory.Unauthorized();
-    const platform = (new URL(request.url).searchParams.get("platform") ?? "all") as PlatformFilter;
+    const url = new URL(request.url);
+    const platform = (url.searchParams.get("platform") ?? "all") as PlatformFilter;
     if (!PLATFORMS.includes(platform)) throw ErrorFactory.InvalidRequest("platform debe ser all, instagram o tiktok");
-    const mode = resolveScheduledJobMode(request.url, "social-sync");
+    if (request.headers.has("x-vercel-cron-schedule") && !url.searchParams.has("mode")) url.searchParams.set("mode", "apply");
+    const mode = resolveScheduledJobMode(url.toString(), "social-sync");
 
     if (mode === "apply") {
-      return NextResponse.json({ mode, platform, ...(await startSocialSync(platform)) }, { headers: CACHE_HEADERS.NO_CACHE });
+      const result = await startSocialSync(platform);
+      console.info("[SOCIAL_SYNC]", { platform, ...result });
+      return NextResponse.json({ mode, platform, ...result }, { headers: CACHE_HEADERS.NO_CACHE });
     }
     return NextResponse.json({ mode, platform, accounts: await planSocialSync(platform) }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

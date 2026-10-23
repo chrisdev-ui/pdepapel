@@ -247,8 +247,8 @@ describe("state de OAuth", () => {
 });
 
 describe("ruta del cron", () => {
-  const call = (query = "", token: string | null = TEST_ENV_STUBS.CRON_SECRET) =>
-    cronGET(new Request(`http://admin.test/api/cron/social-sync${query}`, { headers: token ? { authorization: `Bearer ${token}` } : {} }) as never);
+  const call = (query = "", token: string | null = TEST_ENV_STUBS.CRON_SECRET, extra: Record<string, string> = {}) =>
+    cronGET(new Request(`http://admin.test/api/cron/social-sync${query}`, { headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...extra } }) as never);
 
   it("sin el secreto, 403; sin mode simula y no encola; con apply encola las cuentas conectadas", async () => {
     f = await createInventoryFixture();
@@ -271,6 +271,22 @@ describe("ruta del cron", () => {
     expect(queue.enqueued).toContainEqual({ message: { accountId: connected.id }, delaySeconds: 0 });
     expect(queue.enqueued.map((entry) => (entry as { message: { accountId: string } }).message.accountId)).not.toContain(blocked.id);
     expect((await call("?platform=youtube")).status).toBe(400);
+  });
+
+  it("el cron de Vercel (encabezado, sin consulta) encola; sin el secreto, 403 aunque traiga el encabezado", async () => {
+    f = await createInventoryFixture();
+    const connected = await account();
+    const cron = { "x-vercel-cron-schedule": "15 3,9,15,21 * * *" };
+    expect((await call("", null, cron)).status).toBe(403);
+    expect(queue.enqueued).toEqual([]);
+    const run = await call("", TEST_ENV_STUBS.CRON_SECRET, cron);
+    expect(run.status).toBe(200);
+    expect(await run.json()).toMatchObject({ mode: "apply", platform: "all", enqueued: expect.any(Number) });
+    expect(queue.enqueued).toContainEqual({ message: { accountId: connected.id }, delaySeconds: 0 });
+    // Un dry-run explícito gana al encabezado.
+    queue.enqueued.length = 0;
+    expect(await (await call("?mode=dry-run", TEST_ENV_STUBS.CRON_SECRET, cron)).json()).toMatchObject({ mode: "dry-run" });
+    expect(queue.enqueued).toEqual([]);
   });
 });
 

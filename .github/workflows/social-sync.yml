@@ -1,20 +1,14 @@
-# Instagram and TikTok metrics for «Métricas de redes» (owner-only).
+# Instagram and TikTok metrics for «Métricas de redes» (owner-only): MANUAL ONLY.
 #
-# Its own workflow because Vercel's two crons are taken and
-# `admin-scheduled-tasks.yml` runs once a day; a second schedule there would
-# run every daily job four times. The endpoint answers at once: it queues one
-# QStash task per connected account and the work happens there.
-#
-# ON since 2026-10-21: scheduled runs use mode=apply and queue the sync of
-# every connected account; a manual run defaults to dry-run (counts only).
-# To turn it off: SCHEDULED_JOBS["social-sync"] = false (the route then
-# refuses apply with 409) and the default MODE below back to dry-run.
+# The 6-hourly schedule moved to a Vercel cron on 2026-10-23 (vercel.json,
+# "15 3,9,15,21 * * *"): GitHub's schedule was starting 3–5 h late. This
+# workflow stays for a manual run; it defaults to dry-run (counts only) and
+# `apply` queues one QStash task per connected account.
+# To turn the job off: SCHEDULED_JOBS["social-sync"] = false (the route then
+# refuses apply with 409, including the Vercel cron).
 name: Social metrics sync
 
 on:
-  schedule:
-    # 03:15, 09:15, 15:15 and 21:15 UTC = 22:15, 04:15, 10:15 and 16:15 Bogota.
-    - cron: "15 3,9,15,21 * * *"
   workflow_dispatch:
     inputs:
       platform:
@@ -35,7 +29,7 @@ jobs:
       ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
       ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
       PLATFORM: ${{ github.event.inputs.platform || 'all' }}
-      MODE: ${{ github.event.inputs.mode || 'apply' }}
+      MODE: ${{ github.event.inputs.mode || 'dry-run' }}
     steps:
       - name: Verify protected secret
         run: test -n "$ADMIN_CRON_SECRET"
