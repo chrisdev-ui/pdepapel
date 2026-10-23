@@ -105,3 +105,27 @@ export function postMetricRows(post: SocialPostSummary): [string, string][] {
     ["Duración", seconds(post.durationSec)],
   ];
 }
+
+const NETWORK_LABEL = { INSTAGRAM: "Instagram", TIKTOK: "TikTok" } as const;
+
+/** Por qué lleva la alerta, en palabras: una línea por motivo (va en el tooltip, el celular y el detalle). */
+export function retentionDetails(
+  post: Pick<
+    SocialPostSummary,
+    "platform" | "retentionReasons" | "watchedPct" | "skipRate" | "skipMedian"
+  >,
+): string[] {
+  const lines: string[] = [];
+  if (post.retentionReasons.includes("watched") && post.watchedPct !== null)
+    lines.push(`Se ve en promedio el ${formatPct(post.watchedPct)} del video.`);
+  if (
+    post.retentionReasons.includes("skip") &&
+    post.skipRate !== null &&
+    post.skipMedian !== null
+  ) {
+    lines.push(
+      `El ${formatPct(post.skipRate)} lo salta en los primeros 3 s: ${decimal(post.skipRate - post.skipMedian)} puntos más que lo normal en ${NETWORK_LABEL[post.platform]} (${formatPct(post.skipMedian)}).`,
+    );
+  }
+  return lines;
+}

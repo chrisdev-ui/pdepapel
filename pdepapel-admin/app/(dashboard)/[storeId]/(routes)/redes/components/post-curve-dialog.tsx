@@ -24,7 +24,7 @@ import { CHART_COLORS } from "@/lib/chart-palette";
 import type { SocialPostSummary } from "@/lib/social/report";
 
 import { RETENTION_WARNING_TEXT } from "./retention-flag";
-import { postMetricRows } from "@/lib/social/display";
+import { postMetricRows, retentionDetails } from "@/lib/social/display";
 
 interface CurvePoint {
   hoursSincePost: number;
@@ -90,9 +90,12 @@ export function PostCurveDialog({
           </dl>
         )}
         {post?.retentionWarning && (
-          <p className="rounded-lg bg-destructive/10 p-2 text-sm font-semibold text-destructive">
-            ⚠ {RETENTION_WARNING_TEXT}
-          </p>
+          <div className="rounded-lg bg-destructive/10 p-2 text-sm text-destructive">
+            <p className="font-semibold">⚠ {RETENTION_WARNING_TEXT}</p>
+            {retentionDetails(post).map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
         )}
         {post && (
           <dl

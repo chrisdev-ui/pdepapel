@@ -15,7 +15,7 @@ import { getTikTokAccessToken, saveTikTokCredential, SocialReconnectRequired, ty
 import { SocialApiError } from "@/lib/social/errors";
 import { INSTAGRAM_POST_METRICS, pickMetrics } from "@/lib/social/metrics";
 import { consumeSocialOAuthState, createSocialOAuthState } from "@/lib/social/oauth-state";
-import { processSocialSyncMessage, runRecentRefresh } from "@/lib/social/runner";
+import { processSocialSyncMessage, recentRunSummary, runRecentRefresh } from "@/lib/social/runner";
 import { buildSocialSummary, getSocialPostCurve } from "@/lib/social/report";
 import { MAX_DURATION_PROBES_PER_PASS, runRecentSync, runSocialSync, type NormalizedPost, type SocialAdapter } from "@/lib/social/sync";
 
@@ -178,6 +178,9 @@ describe("resumen (página y social:report)", () => {
 
     const summary = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 7, now: later });
     expect(summary.accounts[0]).toMatchObject({ platform: "INSTAGRAM", followers: 1300, followersDelta: 66 });
+    // Dos lecturas en días distintos de Bogotá: la serie diaria y, sin una semana de historia, sin cambio a 7 ni a 30 días.
+    expect(summary.accounts[0].followersDaily).toMatchObject({ delta7: null, delta30: null, since: expect.any(String) });
+    expect(summary.accounts[0].followersDaily.series.map((day) => day.followers)).toEqual([1234, 1300]);
     const a = summary.posts.find((p) => p.caption === "Reel a")!;
     expect(a).toMatchObject({ views: 400, views3h: 50, views24h: 400, multiplier: 4, engagementRate: 10 });
     expect(summary.medianViews.INSTAGRAM).toBe(100);
@@ -353,8 +356,31 @@ describe("refresco de cada hora (lo publicado en las últimas 8 h)", () => {
     expect(apply.status).toBe(200);
     expect(await apply.json()).toMatchObject({ mode: "apply", accounts: expect.any(Number) });
 
+    await testPrisma.jobRun.deleteMany({ where: { name: "social-recent" } });
     const refreshed = await runRecentRefresh({ adapterFor: () => fakeInstagram([[post("x", 1)]]).adapter });
     expect(refreshed.results.some((result) => result.status === "done")).toBe(true);
+    // Una sola fila global en Inicio › Sistemas, reescrita en cada corrida.
+    const rows = await testPrisma.jobRun.findMany({ where: { name: "social-recent" } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ storeId: null, ok: true, detail: expect.stringMatching(/^\d+ publicaci(ón medida|ones medidas)/) });
+    await runRecentRefresh({ adapterFor: () => null });
+    expect(await testPrisma.jobRun.findMany({ where: { name: "social-recent" } })).toEqual([expect.objectContaining({ ok: false, detail: expect.stringContaining("sin configurar en el servidor") })]);
+  });
+
+  it("la fila de Sistemas del refresco de cada hora dice cuántas se midieron y qué red falló", () => {
+    expect(recentRunSummary([])).toEqual({ ok: true, detail: "Sin cuentas conectadas" });
+    expect(recentRunSummary([{ platform: "INSTAGRAM", status: "done", posts: 3, snapshots: 1 }])).toEqual({ ok: true, detail: "1 publicación medida" });
+    expect(
+      recentRunSummary([
+        { platform: "INSTAGRAM", status: "failed", reason: "meta_10" },
+        { platform: "TIKTOK", status: "done", posts: 4, snapshots: 4 },
+      ]),
+    ).toEqual({ ok: false, detail: "4 publicaciones medidas · Instagram: falló (meta_10)" });
+    expect(recentRunSummary([{ platform: "TIKTOK", status: "reconnect", reason: "token_revoked" }])).toEqual({
+      ok: false,
+      detail: "0 publicaciones medidas · TikTok: hay que volver a conectar (token_revoked)",
+    });
+    expect(recentRunSummary([{ platform: "TIKTOK", status: "skipped", reason: "not_configured" }])).toEqual({ ok: false, detail: "0 publicaciones medidas · TikTok: sin configurar en el servidor" });
   });
 });
 
@@ -370,8 +396,29 @@ describe("retención en el resumen", () => {
     await testPrisma.socialPost.updateMany({ where: { socialAccountId: row.id }, data: { durationSec: 20 } });
     const summary = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 7, now });
     const byCaption = Object.fromEntries(summary.posts.map((item) => [item.caption, item]));
-    expect(byCaption["Reel corto"]).toMatchObject({ durationSec: 20, skipRate: 62.4, watchedPct: 10, retentionWarning: true });
+    expect(byCaption["Reel corto"]).toMatchObject({ durationSec: 20, skipRate: 62.4, watchedPct: 10, retentionWarning: true, retentionReasons: ["watched"], skipMedian: null });
     expect(byCaption["Reel bien"]).toMatchObject({ watchedPct: 45, retentionWarning: false });
+    // Dos reels: sin mediana de la red, el salto no decide.
+    expect(summary.skipBaselines.INSTAGRAM).toEqual({ median: null, count: 2 });
+  });
+
+  it("el salto alerta solo 10 puntos por encima de la mediana de la red en 90 días, aunque el reel quede fuera del periodo", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const skips: Record<string, number> = { a: 60, b: 61, c: 62, d: 63, e: 64, alto: 73, viejo: 62 };
+    const ids = Object.keys(skips);
+    const { adapter } = fakeInstagram([ids.map((id, index) => post(id, index + 1))], {
+      metrics: async (id) => pickMetrics({ views: 100, ig_reels_avg_watch_time: 9000, reels_skip_rate: skips[id] }, INSTAGRAM_POST_METRICS),
+    });
+    await runSocialSync({ accountId: row.id, adapter: { ...adapter, probeDuration: async () => 20 }, now: () => now });
+    // «viejo» sale del periodo de 7 días pero sigue en la mediana de 90.
+    await testPrisma.socialPost.updateMany({ where: { socialAccountId: row.id, externalId: "viejo" }, data: { postedAt: new Date(now.getTime() - 30 * 86_400_000) } });
+    const summary = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 7, now });
+    expect(summary.skipBaselines.INSTAGRAM).toEqual({ median: 62, count: 7 });
+    const byId = Object.fromEntries(summary.posts.map((item) => [item.caption?.replace("Reel ", ""), item]));
+    expect(byId.viejo).toBeUndefined();
+    expect(byId.alto).toMatchObject({ skipRate: 73, retentionWarning: true, retentionReasons: ["skip"], skipMedian: 62 });
+    for (const id of ["a", "b", "c", "d", "e"]) expect(byId[id]).toMatchObject({ retentionWarning: false });
     expect(JSON.stringify(summary)).not.toMatch(/"raw"/);
   });
 });

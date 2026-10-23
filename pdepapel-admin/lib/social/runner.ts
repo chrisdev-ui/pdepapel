@@ -110,5 +110,20 @@ export async function runRecentRefresh(options: { budgetMs?: number; adapterFor?
         : { platform: account.platform, status: outcome.status, reason: "reason" in outcome ? outcome.reason : undefined },
     );
   }
+  await recordJobRun("social-recent", recentRunSummary(results));
   return { accounts: accounts.length, results };
+}
+
+const NETWORK = { INSTAGRAM: "Instagram", TIKTOK: "TikTok" } as const;
+
+/** La fila de «Sistemas»: cuántas publicaciones se midieron y, si algo falló, qué red y por qué. */
+export function recentRunSummary(results: { platform: SocialPlatform; status: string; posts?: number; snapshots?: number; reason?: string }[]) {
+  const failed = results.filter((result) => result.status !== "done" && result.status !== "skipped");
+  const unconfigured = results.filter((result) => result.status === "skipped");
+  const measured = results.reduce((sum, result) => sum + (result.snapshots ?? 0), 0);
+  const parts = [results.length ? `${measured} ${measured === 1 ? "publicación medida" : "publicaciones medidas"}` : "Sin cuentas conectadas"];
+  for (const result of failed) parts.push(`${NETWORK[result.platform]}: ${result.status === "reconnect" ? "hay que volver a conectar" : "falló"} (${result.reason ?? "sin detalle"})`);
+  for (const result of unconfigured) parts.push(`${NETWORK[result.platform]}: sin configurar en el servidor`);
+  // Como en las filas de cada 6 h, una red conectada sin configuración en el servidor es un fallo, no un salto.
+  return { ok: failed.length === 0 && unconfigured.length === 0, detail: parts.join(" · ") };
 }

@@ -42,6 +42,9 @@ async function signIn(page: Page, target: string) {
 }
 
 test.describe("métricas de redes", () => {
+  // Un solo juego de cuentas sembradas (único por tienda y red): con varios workers cada beforeAll chocaba.
+  // En serie la primera prueba paga la compilación en frío del servidor de desarrollo.
+  test.describe.configure({ mode: "serial", timeout: 90_000 });
   test.skip(!configured, "Define claves de prueba de Clerk y E2E_ADMIN_CLERK_USER_ID.");
   const db = createTestPrismaClient("social-metrics");
 
@@ -124,15 +127,20 @@ test.describe("métricas de redes", () => {
       // TikTok pide reconectar; en las e2e además sale «No configurada» (sin TIKTOK_ENABLED).
       await expect(page.getByText("La red rechazó el acceso guardado.", { exact: false })).toBeVisible();
       await expect(page.getByText("(+12)")).toBeVisible();
+      // Seguidores por día: con 6 días de lecturas no hay cambio a 7 ni a 30 días todavía, y se dice por qué.
+      await expect(page.getByRole("img", { name: /^Seguidores del/ })).toBeVisible();
+      await expect(page.getByText("pocos datos")).toHaveCount(2);
+      await expect(page.getByText(/Se completa con las semanas: hay lecturas desde el/)).toBeVisible();
       await expect(page.getByText(/9× la mediana de Instagram|× la mediana de Instagram/)).toBeVisible();
 
       const list = viewport.width < 768 ? page.getByRole("list", { name: "Publicaciones" }) : page.locator("table");
       await expect(list.getByText("Carrusel de cuadernos")).toBeVisible();
       await expect(list.locator("img")).toHaveCount(0);
-      // La alerta de retención: en la tabla un ícono con la frase como nombre; en el celular, la frase.
-      if (viewport.width < 768) await expect(list.getByText("La mayoría deja de verlo muy pronto")).toBeVisible();
+      // La alerta de retención: en la tabla un ícono con la frase y el porqué como nombre; en el celular, la frase.
+      // Solo dos reels traen salto: sin mediana de la red, el 62,4 % no alerta; alerta el poco tiempo visto.
+      if (viewport.width < 768) await expect(list.getByText(/La mayoría deja de verlo muy pronto\. Se ve en promedio el .+ del video\./)).toBeVisible();
       else {
-        await expect(list.getByRole("img", { name: "La mayoría deja de verlo muy pronto" })).toHaveCount(1);
+        await expect(list.getByRole("img", { name: /^La mayoría deja de verlo muy pronto\. Se ve en promedio el .+ del video\.$/ })).toHaveCount(1);
         await expect(list.getByRole("columnheader", { name: "Salto 3 s" })).toBeVisible();
         await expect(list.getByRole("columnheader", { name: "% visto" })).toBeVisible();
       }
@@ -146,7 +154,8 @@ test.describe("métricas de redes", () => {
       await expect(dialog.getByText("Salto en 3 s")).toBeVisible();
       await expect(dialog.getByText("62,4 %")).toBeVisible();
       await expect(dialog.getByText("10 %", { exact: true })).toBeVisible();
-      await expect(dialog.locator(".recharts-line")).toBeVisible();
+      // El gráfico carga aparte; en frío el servidor de desarrollo tarda más de 5 s en compilarlo.
+      await expect(dialog.locator(".recharts-line")).toBeVisible({ timeout: 30_000 });
       await expect(dialog).toHaveCSS("opacity", "1");
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}-curva.png`) });
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);

@@ -27,10 +27,12 @@ import type {
   SocialPostSummary,
 } from "@/lib/social/report";
 
+import { FollowersTrend } from "./followers-trend";
 import { PostCurveDialog } from "./post-curve-dialog";
 import { RETENTION_WARNING_TEXT, RetentionFlag } from "./retention-flag";
 import {
   formatPct,
+  retentionDetails,
   visibleColumns,
   type PlatformFilter,
 } from "@/lib/social/display";
@@ -198,29 +200,32 @@ function AccountCard({
         ) : null}
       </div>
       {account && (
-        <dl className="grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Seguidores</dt>
-            <dd className="font-semibold text-primary">
-              {num(account.followers)}
-              {account.followersDelta != null &&
-                account.followersDelta !== 0 && (
-                  <span className="ml-1 text-xs font-medium text-muted-foreground">
-                    ({account.followersDelta > 0 ? "+" : ""}
-                    {NUMBER.format(account.followersDelta)})
-                  </span>
-                )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Última lectura</dt>
-            <dd className="font-medium text-primary">
-              {account.lastSyncAt
-                ? DATE_TIME.format(new Date(account.lastSyncAt))
-                : "Todavía no"}
-            </dd>
-          </div>
-        </dl>
+        <>
+          <dl className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <dt className="text-muted-foreground">Seguidores</dt>
+              <dd className="font-semibold text-primary">
+                {num(account.followers)}
+                {account.followersDelta != null &&
+                  account.followersDelta !== 0 && (
+                    <span className="ml-1 text-xs font-medium text-muted-foreground">
+                      ({account.followersDelta > 0 ? "+" : ""}
+                      {NUMBER.format(account.followersDelta)})
+                    </span>
+                  )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Última lectura</dt>
+              <dd className="font-medium text-primary">
+                {account.lastSyncAt
+                  ? DATE_TIME.format(new Date(account.lastSyncAt))
+                  : "Todavía no"}
+              </dd>
+            </div>
+          </dl>
+          <FollowersTrend daily={account.followersDaily} />
+        </>
       )}
       {needsReconnect && (
         <p className="text-sm text-primary">
@@ -496,7 +501,8 @@ export function SocialMetricsClient({
                     )}
                     {post.retentionWarning && (
                       <span className="text-xs font-semibold text-destructive">
-                        ⚠ {RETENTION_WARNING_TEXT}
+                        ⚠ {RETENTION_WARNING_TEXT}.{" "}
+                        {retentionDetails(post).join(" ")}
                       </span>
                     )}
                   </span>
@@ -552,7 +558,9 @@ export function SocialMetricsClient({
                             </span>
                           </span>
                         </button>
-                        {post.retentionWarning && <RetentionFlag />}
+                        {post.retentionWarning && (
+                          <RetentionFlag details={retentionDetails(post)} />
+                        )}
                       </div>
                     </td>
                     {visibleColumns(platformFilter).map((column) => (

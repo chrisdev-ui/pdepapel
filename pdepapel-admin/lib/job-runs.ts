@@ -44,7 +44,9 @@ export type JobName =
   | "customer-reactivation"
   // Una fila por red: un fallo de una no lo tapa la otra.
   | "social-sync-instagram"
-  | "social-sync-tiktok";
+  | "social-sync-tiktok"
+  // El refresco de cada hora de lo publicado en las últimas 8 h (cron de Vercel).
+  | "social-recent";
 
 export interface JobDefinition {
   name: JobName;
@@ -68,6 +70,13 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
     label: "Métricas de TikTok",
     expectedEveryHours: 6,
     perStore: true,
+  },
+  {
+    // Todas las cuentas en una sola corrida: una fila para la instalación.
+    name: "social-recent",
+    label: "Métricas recientes (cada hora)",
+    expectedEveryHours: 1,
+    perStore: false,
   },
   {
     name: "stock-reservations",

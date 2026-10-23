@@ -165,9 +165,16 @@ export function outlierMultiplier(value: number | null, baseline: number | null)
   return Math.round((value / baseline) * 10) / 10;
 }
 
-/** Por debajo de esto del video visto en promedio, o por encima de este salto en 3 s, «la mayoría deja de verlo muy pronto». */
+/** Menos de esto del video visto en promedio: «la mayoría deja de verlo muy pronto». */
 export const RETENTION_MIN_WATCHED_PCT = 15;
-export const RETENTION_MAX_SKIP_PCT = 50;
+/**
+ * El salto en 3 s es relativo (decisión de Christian, 2026-10-22): con un
+ * promedio de 62 % en la cuenta, un umbral fijo de 50 % marcaba casi todos los
+ * reels. Se marca un reel que salta 10 puntos o más por encima de la mediana de
+ * su red en 90 días, y solo con al menos 5 reels con ese dato.
+ */
+export const RETENTION_SKIP_POINTS_ABOVE_MEDIAN = 10;
+export const RETENTION_MIN_SKIP_SAMPLE = 5;
 
 /** Porcentaje del video que se ve en promedio; null sin duración o sin tiempo promedio. */
 export function watchedPct(avgWatchTimeMs: number | null, durationSec: number | null) {
@@ -175,9 +182,26 @@ export function watchedPct(avgWatchTimeMs: number | null, durationSec: number | 
   return Math.round((avgWatchTimeMs / 1000 / durationSec) * 1000) / 10;
 }
 
-/** Alerta de retención: se ve menos del 15 % en promedio, o más de la mitad lo salta en los primeros 3 s. */
-export function retentionWarning(input: { watchedPct: number | null; skipRate: number | null }) {
-  return (input.watchedPct !== null && input.watchedPct < RETENTION_MIN_WATCHED_PCT) || (input.skipRate !== null && input.skipRate > RETENTION_MAX_SKIP_PCT);
+export interface SkipBaseline {
+  /** Mediana del salto en 3 s de la red en 90 días; null con menos de 5 reels. */
+  median: number | null;
+  count: number;
+}
+
+export function skipBaseline(skipRates: readonly (number | null)[]): SkipBaseline {
+  const values = skipRates.filter((value): value is number => value !== null && Number.isFinite(value));
+  return { median: values.length >= RETENTION_MIN_SKIP_SAMPLE ? median(values) : null, count: values.length };
+}
+
+export type RetentionReason = "watched" | "skip";
+
+/** Por qué un reel lleva la alerta: se ve poco, o lo saltan bastante más que lo normal en su red. */
+export function retentionReasons(input: { watchedPct: number | null; skipRate: number | null; baseline: SkipBaseline | null }): RetentionReason[] {
+  const reasons: RetentionReason[] = [];
+  if (input.watchedPct !== null && input.watchedPct < RETENTION_MIN_WATCHED_PCT) reasons.push("watched");
+  const skipMedian = input.baseline?.median ?? null;
+  if (input.skipRate !== null && skipMedian !== null && input.skipRate >= skipMedian + RETENTION_SKIP_POINTS_ABOVE_MEDIAN) reasons.push("skip");
+  return reasons;
 }
 
 /** Interacciones sobre alcance (Instagram) o sobre vistas (TikTok, que no da alcance). */
