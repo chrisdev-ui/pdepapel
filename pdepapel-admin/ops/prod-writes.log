@@ -413,3 +413,4 @@
 2026-10-22T16:45:38.741Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/rotation/rotate-db-credential.mjs@595873c95a18d314 | estado=ok | exit=0 | rows=? | "Rotar root (incidente Railway)"
 2026-10-22T16:46:12.927Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/rotation/rotate-db-credential.mjs@595873c95a18d314 | estado=ok | exit=0 | rows=? | "Anular la clave vieja de root (incidente Railway)"
 2026-10-23T00:21:26.406Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Duración de reels (20261026_add_social_post_duration_checked)"
+2026-10-23T02:19:35.551Z | christiantorres | <user>@<db:new>/railway [base nueva] | scripts/apply-manual-migration.mjs@b54701aee477c1fd | estado=ok | exit=0 | rows=? | "Etiquetas de redes (20261027_add_social_tags)"
