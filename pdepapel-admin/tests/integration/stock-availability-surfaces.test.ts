@@ -175,6 +175,8 @@ describe("lo apartado no se vende en ninguna superficie (MySQL)", () => {
     expect(answer?.text).toBe(PRODUCT_TEMPLATES["availability.one.no"](fixture.component.name));
     await expect(countInStockMatches(fixture.store.id, "Componente", null, { minTokens: 1 })).resolves.toBe(0);
 
+    // Sin una foto que cargue, el producto no sale en el feed de Meta.
+    const photo = await testPrisma.image.create({ data: { productId: fixture.component.id, url: "https://res.cloudinary.com/demo/image/upload/v1/componente.jpg", isMain: true } });
     const products = await testPrisma.product.findMany(getGoogleMerchantFeedProductArgs(fixture.store.id));
     const component = products.filter((product) => product.id === fixture!.component.id);
     expect(buildGoogleMerchantFeed(component).report.outOfStock).toBe(1);
@@ -184,5 +186,6 @@ describe("lo apartado no se vende en ninguna superficie (MySQL)", () => {
     await expect(countInStockMatches(fixture.store.id, "Componente", null, { minTokens: 1 })).resolves.toBe(1);
     const again = await testPrisma.product.findMany(getGoogleMerchantFeedProductArgs(fixture.store.id));
     expect(buildGoogleMerchantFeed(again.filter((product) => product.id === fixture!.component.id)).report.outOfStock).toBe(0);
+    await testPrisma.image.delete({ where: { id: photo.id } });
   });
 });

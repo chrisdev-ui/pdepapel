@@ -45,6 +45,9 @@ beforeAll(async () => {
   await testPrisma.product.create({
     data: { storeId: fixture.store.id, categoryId: fixture.category.id, ...attributes, name: "Tote feed Meta prueba", description: "Sintético", slug: `prueba-${randomUUID().slice(0, 8)}`, price: 40000, stock: 5, sku } as never,
   });
+  // Sin una foto que cargue, el producto no sale en el feed de Meta.
+  const created = await testPrisma.product.findFirstOrThrow({ where: { sku }, select: { id: true } });
+  await testPrisma.image.create({ data: { productId: created.id, url: "https://res.cloudinary.com/demo/image/upload/v1/tote.jpg", isMain: true } });
 });
 
 afterAll(async () => {
@@ -52,6 +55,7 @@ afterAll(async () => {
   const offers = (await testPrisma.offer.findMany({ where: { storeId: store }, select: { id: true } })).map((row) => row.id);
   await testPrisma.offerProduct.deleteMany({ where: { offerId: { in: offers } } });
   await testPrisma.offer.deleteMany({ where: { storeId: store } });
+  await testPrisma.image.deleteMany({ where: { product: { storeId: store, description: "Sintético" } } });
   await testPrisma.product.deleteMany({ where: { storeId: store, description: "Sintético" } });
   await deleteInventoryFixture(fixture);
 });
