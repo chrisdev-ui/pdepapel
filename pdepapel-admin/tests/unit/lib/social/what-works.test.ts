@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { autoTags, cleanTagLabel, tagKey, tagOptions, uniqueTags } from "@/lib/social/tags";
+import { autoTags, cleanTagLabel, mergeTags, missingTags, tagCount, tagKey, tagOptions, uniqueTags } from "@/lib/social/tags";
 import { whatWorks, whatWorksHeadline, type WhatWorksPost } from "@/lib/social/what-works";
 
 describe("etiquetas", () => {
@@ -21,6 +21,15 @@ describe("etiquetas", () => {
     ]);
     expect(options.GANCHO).toEqual(["pregunta", "producto en mano", "texto grande", "antes/después", "POV", "plano quieto sin texto", "Detrás de cámaras", "Unboxing"]);
     expect(options.FORMATO.at(-1)).toBe("Tutorial");
+  });
+
+  it("copiar etiquetas de la otra red solo agrega lo que falta, sin duplicar por mayúsculas o tildes, y nunca quita", () => {
+    const target = { FORMATO: ["kit", "ASMR"], GANCHO: ["POV"] };
+    const source = { FORMATO: ["Kit", "tendencia"], GANCHO: ["pov", "Antes/después"] };
+    expect(missingTags(target, source)).toEqual({ FORMATO: ["tendencia"], GANCHO: ["Antes/después"] });
+    expect(mergeTags(target, source)).toEqual({ FORMATO: ["kit", "ASMR", "tendencia"], GANCHO: ["POV", "Antes/después"] });
+    expect(mergeTags(target, { FORMATO: [], GANCHO: [] })).toEqual(target);
+    expect(tagCount(missingTags(mergeTags(target, source), source))).toBe(0);
   });
 
   it("«plano quieto sin texto» es de fábrica: la etiqueta ya guardada por la tienda no sale dos veces", () => {

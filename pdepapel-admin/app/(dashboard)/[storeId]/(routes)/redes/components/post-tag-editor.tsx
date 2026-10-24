@@ -2,13 +2,13 @@
 
 import axios from "axios";
 import { Loader2, Plus } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { cleanTagLabel, SOCIAL_TAG_KINDS, tagKey, uniqueTags, type PostTags } from "@/lib/social/tags";
+import { cleanTagLabel, mergeTags, missingTags, SOCIAL_TAG_KINDS, tagCount, tagKey, uniqueTags, type PostTags } from "@/lib/social/tags";
 
 const KIND_LABEL = { FORMATO: "Formato", GANCHO: "Gancho" } as const;
 const KIND_HINT = { FORMATO: "Qué tipo de pieza es.", GANCHO: "Con qué engancha en el primer segundo." } as const;
@@ -23,6 +23,13 @@ export function PostTagEditor({ storeId, postId, initial, options, onSaved }: { 
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const [dirty, setDirty] = useState(false);
+  // Si llegan etiquetas guardadas desde fuera (copiadas de la otra red), se suman sin tocar lo que aún no se guardó.
+  const saved = useRef(initial);
+  useEffect(() => {
+    const added = missingTags(saved.current, initial);
+    saved.current = initial;
+    if (tagCount(added) > 0) setSelected((current) => mergeTags(current, added));
+  }, [initial]);
 
   const isOn = (kind: keyof PostTags, label: string) => selected[kind].some((item) => tagKey(item) === tagKey(label));
   const toggle = (kind: keyof PostTags, label: string) => {

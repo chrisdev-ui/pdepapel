@@ -47,6 +47,24 @@ export function uniqueTags(labels: readonly string[]): string[] {
   return result;
 }
 
+/** Las etiquetas de `source` que `target` no tiene (misma llave: sin mayúsculas ni tildes). */
+export function missingTags(target: PostTags, source: PostTags): PostTags {
+  const result = {} as PostTags;
+  for (const kind of SOCIAL_TAG_KINDS) {
+    const have = new Set(target[kind].map(tagKey));
+    result[kind] = uniqueTags(source[kind]).filter((label) => !have.has(tagKey(label)));
+  }
+  return result;
+}
+
+/** `target` más lo que le falta de `source`: solo agrega, nunca quita. */
+export function mergeTags(target: PostTags, source: PostTags): PostTags {
+  const missing = missingTags(target, source);
+  return { FORMATO: [...target.FORMATO, ...missing.FORMATO], GANCHO: [...target.GANCHO, ...missing.GANCHO] };
+}
+
+export const tagCount = (tags: PostTags) => tags.FORMATO.length + tags.GANCHO.length;
+
 /** Opciones del editor: las de fábrica primero, luego las que agregó la tienda en orden alfabético. */
 export function tagOptions(stored: readonly { kind: SocialTagKind; label: string }[]): PostTags {
   const options = {} as PostTags;

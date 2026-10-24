@@ -58,9 +58,12 @@ test.describe("métricas de redes", () => {
     });
     const tiktok = await db.socialAccount.create({ data: { storeId, platform: "TIKTOK", externalId: "e2e-tt", username: "P de Papel", status: "NEEDS_RECONNECT", statusReason: "tiktok_invalid_grant" } });
     // La misma pieza en TikTok, una hora después: se sugiere en el detalle, nunca se une sola.
-    await db.socialPost.create({
+    const tiktokPost = await db.socialPost.create({
       data: { socialAccountId: tiktok.id, platform: "TIKTOK", externalId: "e2e-tt1", productType: "VIDEO", caption: "Agendas kawaii con stickers nuevos para la temporada", postedAt: new Date(now - 23 * HOUR) },
     });
+    // La de TikTok ya trae la etiqueta «kit»: al unirlas, la de Instagram la puede copiar.
+    const kit = await db.socialTag.create({ data: { storeId, kind: "FORMATO", label: "kit" } });
+    await db.socialPostTag.create({ data: { socialPostId: tiktokPost.id, socialTagId: kit.id } });
     await db.socialAccountSnapshot.createMany({
       data: [
         { socialAccountId: instagram.id, capturedAt: new Date(now - 6 * 24 * HOUR), followers: 100 },
@@ -211,6 +214,12 @@ test.describe("métricas de redes", () => {
         await expect(page.getByText("Publicaciones unidas en una pieza").first()).toBeVisible();
         // El diálogo sigue abierto: el resumen se vuelve a leer sin router.refresh() (que remontaba la página y lo cerraba).
         await expect(piece.getByRole("table", { name: "Esta pieza en cada red" }).getByRole("rowheader")).toHaveCount(2, { timeout: 20_000 });
+        // Copiar etiquetas de la otra red: solo agrega, y el editor las muestra marcadas sin cerrar el detalle.
+        await expect(piece.getByText(/La de TikTok tiene 1 etiqueta que esta no: kit\./)).toBeVisible();
+        await piece.getByRole("button", { name: "Copiar etiquetas de TikTok" }).click();
+        await expect(page.getByText("Etiquetas copiadas de TikTok").first()).toBeVisible();
+        await expect(dialog.getByRole("group", { name: /^Formato/ }).getByRole("checkbox", { name: "kit" })).toBeChecked({ timeout: 20_000 });
+        await expect(piece.getByRole("button", { name: "Copiar etiquetas de TikTok" })).toHaveCount(0);
         await piece.getByRole("button", { name: "Separar de la pieza" }).click();
         await expect(page.getByText("Publicación separada de la pieza").first()).toBeVisible();
         await expect(piece.getByText(/Parece la misma · TikTok/)).toBeVisible({ timeout: 20_000 });
@@ -229,6 +238,7 @@ test.describe("métricas de redes", () => {
       } else {
         await expect(formato.getByRole("checkbox", { name: "ASMR" })).toBeChecked();
         await expect(formato.getByRole("checkbox", { name: "Unboxing" })).toBeChecked();
+        await expect(formato.getByRole("checkbox", { name: "kit" })).toBeChecked();
       }
       await expect(dialog).toHaveCSS("opacity", "1");
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}-curva.png`) });

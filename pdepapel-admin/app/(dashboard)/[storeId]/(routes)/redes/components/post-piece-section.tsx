@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { formatPct, multiplierText } from "@/lib/social/display";
 import type { SocialPieceSummary, SocialPostSummary } from "@/lib/social/report";
-import { NETWORK_NAME } from "@/lib/social/tags";
+import { mergeTags, missingTags, NETWORK_NAME, tagCount } from "@/lib/social/tags";
 
 const NUMBER = new Intl.NumberFormat("es-CO");
 const DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", timeZone: "America/Bogota" });
@@ -41,6 +41,30 @@ export function PostPieceSection({ storeId, post, posts, pieces, onChanged }: { 
       toast({ title: done });
     } catch (error) {
       toast({ title: "No se pudo guardar la pieza", description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+  // Copiar etiquetas de la otra red: una sola vez, solo agrega; cada red se sigue editando por su lado.
+  const copyFrom = piece
+    ? piece.posts
+        .filter((item) => item.id !== post.id)
+        .map((item) => posts.find((candidate) => candidate.id === item.id))
+        .filter((item): item is SocialPostSummary => Boolean(item))
+        .map((other) => ({ other, missing: missingTags(post.tags, other.tags) }))
+        .filter(({ missing }) => tagCount(missing) > 0)
+    : [];
+  const copyTags = async (other: SocialPostSummary) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      await axios.put(`/api/${storeId}/social/posts/${post.id}/tags`, mergeTags(post.tags, other.tags));
+      await onChanged();
+      toast({ title: `Etiquetas copiadas de ${NETWORK_NAME[other.platform]}` });
+    } catch (error) {
+      toast({ title: "No se pudieron copiar las etiquetas", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -84,6 +108,16 @@ export function PostPieceSection({ storeId, post, posts, pieces, onChanged }: { 
               </tbody>
             </table>
           </div>
+          {copyFrom.map(({ other, missing }) => (
+            <div key={other.id} className="flex flex-wrap items-center gap-2 rounded-md bg-muted p-2 text-sm">
+              <p className="min-w-0 flex-1 text-muted-foreground">
+                La de {NETWORK_NAME[other.platform]} tiene {tagCount(missing) === 1 ? "1 etiqueta" : `${tagCount(missing)} etiquetas`} que esta no: {[...missing.FORMATO, ...missing.GANCHO].join(", ")}.
+              </p>
+              <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => copyTags(other)}>
+                Copiar etiquetas de {NETWORK_NAME[other.platform]}
+              </Button>
+            </div>
+          ))}
           <Button type="button" variant="outline" className="h-11 self-start" disabled={busy} onClick={unlink}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
             Separar de la pieza
