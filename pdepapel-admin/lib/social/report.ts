@@ -1,7 +1,7 @@
 import type { PrismaClient, SocialPlatform } from "@prisma/client";
 
 import { dailyFollowers, type DailyFollowers } from "./followers";
-import { CURVE_POINTS_HOURS, engagementRate, median, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
+import { CURVE_POINTS_HOURS, engagementRate, knownDuration, median, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
 import { autoTags, tagOptions, type PostTags } from "./tags";
 import { bestTimeGrid, type BestTimeNetwork } from "./best-time";
 import { earlyAlertStatus, earlyHistoryCount, type EarlyAlertStatus } from "./early-alert-rules";
@@ -198,7 +198,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       avgWatchTimeMs,
       totalWatchSeconds: last?.totalWatchTimeMs != null ? Math.round(Number(last.totalWatchTimeMs) / 1000) : null,
       skipRate: skipRate === null ? null : Math.round(skipRate * 10) / 10,
-      durationSec: post.durationSec,
+      durationSec: knownDuration(post.durationSec),
       watchedPct: watched,
       retentionWarning: reasons.length > 0,
       retentionReasons: reasons,

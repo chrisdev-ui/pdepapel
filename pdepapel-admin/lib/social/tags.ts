@@ -1,5 +1,7 @@
 import type { SocialPlatform, SocialTagKind } from "@prisma/client";
 
+import { knownDuration } from "./metrics";
+
 /**
  * Etiquetas de «Qué funciona». Formato y Gancho las pone la dueña (con estos
  * valores de fábrica y los que agregue); Tipo, Duración, Día y Franja se
@@ -94,7 +96,8 @@ export function autoTags(post: { productType: string | null; durationSec: number
   const tags: AutoTag[] = [];
   const type = post.productType ? PRODUCT_TYPE_LABEL[post.productType] : undefined;
   if (type) tags.push({ group: "TIPO", label: type });
-  if (post.durationSec !== null && post.durationSec > 0) tags.push({ group: "DURACION", label: DURATION_BUCKETS.find((bucket) => post.durationSec! < bucket.below)!.label });
+  const duration = knownDuration(post.durationSec);
+  if (duration !== null) tags.push({ group: "DURACION", label: DURATION_BUCKETS.find((bucket) => duration < bucket.below)!.label });
   const parts = Object.fromEntries(BOGOTA_PARTS.formatToParts(post.postedAt).map((part) => [part.type, part.value]));
   tags.push({ group: "DIA", label: WEEKDAYS[WEEKDAY_INDEX[parts.weekday]] });
   const hour = Number(parts.hour);

@@ -14,6 +14,7 @@ import { GET as cronGET } from "@/app/api/cron/social-sync/route";
 import { getTikTokAccessToken, saveTikTokCredential, SocialReconnectRequired, type TikTokTokenSet } from "@/lib/social/credentials";
 import { SocialApiError } from "@/lib/social/errors";
 import { INSTAGRAM_POST_METRICS, pickMetrics } from "@/lib/social/metrics";
+import { createTikTokAdapter } from "@/lib/social/tiktok";
 import { consumeSocialOAuthState, createSocialOAuthState } from "@/lib/social/oauth-state";
 import { processSocialSyncMessage, recentRunSummary, runRecentRefresh } from "@/lib/social/runner";
 import { buildSocialSummary, getSocialPostCurve } from "@/lib/social/report";
@@ -451,5 +452,43 @@ describe("retención en el resumen", () => {
     expect(byId.alto).toMatchObject({ skipRate: 73, retentionWarning: true, retentionReasons: ["skip"], skipMedian: 62 });
     for (const id of ["a", "b", "c", "d", "e"]) expect(byId[id]).toMatchObject({ retentionWarning: false });
     expect(JSON.stringify(summary)).not.toMatch(/"raw"/);
+  });
+});
+
+describe("fotos de TikTok", () => {
+  it("una publicación de fotos (duración 0) queda como carrusel sin duración; la fila vieja «Video · 0 s» se corrige en la siguiente pasada", async () => {
+    f = await createInventoryFixture();
+    const row = await account("TIKTOK");
+    const created = Math.floor((now.getTime() - 5 * HOUR) / 1000);
+    // Tres de cada una: «Qué funciona» arma una fila desde WHAT_WORKS_MIN_POSTS publicaciones.
+    const item = (id: string, index: number, title: string, duration: number) => ({ id, create_time: created - index * 3600, title, duration, share_url: `https://www.tiktok.com/@pdepapel/video/${id}`, cover_image_url: `https://p16.example/${id}.jpg`, view_count: 300, like_count: 12, comment_count: 1, share_count: 0 });
+    const videos = [
+      item("foto1", 0, "Una tote para cada versión de ti", 0),
+      item("video1", 1, "Stickers nuevos", 18),
+      item("foto2", 2, "Comenta OCÉANO, PRINCIPITO o HADA", 0),
+      item("foto3", 3, "Carrusel de cuadernos", 0),
+      item("video2", 4, "Plumones pastel", 22),
+      item("video3", 5, "Agendas 2027", 25),
+    ];
+    const respond = (data: unknown) => new Response(JSON.stringify({ data, error: { code: "ok" } }), { status: 200, headers: { "content-type": "application/json" } });
+    const fetchImpl = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes("/user/info/") ? respond({ user: { open_id: "open1", display_name: "P de Papel", follower_count: 50 } }) : respond({ videos, has_more: false }),
+    );
+    // Así la guardaba la versión anterior: tipo «Video» y duración 0.
+    await testPrisma.socialPost.create({
+      data: { socialAccountId: row.id, platform: "TIKTOK", externalId: "foto1", mediaType: "VIDEO", productType: "VIDEO", caption: videos[0].title, durationSec: 0, postedAt: new Date(created * 1000) },
+    });
+
+    await runSocialSync({ accountId: row.id, adapter: createTikTokAdapter({ getAccessToken: async () => "act.test", fetchImpl }), now: () => now });
+
+    const stored = await testPrisma.socialPost.findFirstOrThrow({ where: { socialAccountId: row.id, externalId: "foto1" }, select: { productType: true, mediaType: true } });
+    expect(stored).toEqual({ productType: "CAROUSEL", mediaType: "PHOTO" });
+    const summary = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 7, now });
+    const byId = Object.fromEntries(summary.posts.map((item) => [item.caption, item]));
+    expect(byId[videos[0].title]).toMatchObject({ productType: "CAROUSEL", durationSec: null, watchedPct: null });
+    expect(byId[videos[1].title]).toMatchObject({ productType: "VIDEO", durationSec: 18 });
+    const tiktokRows = summary.whatWorks.find((network) => network.platform === "TIKTOK")?.rows ?? [];
+    expect(tiktokRows.filter((row) => row.group === "TIPO").map((row) => [row.label, row.count]).sort()).toEqual([["Carrusel", 3], ["Video", 3]]);
+    expect(tiktokRows.filter((row) => row.group === "DURACION").map((row) => [row.label, row.count])).toEqual([["15 a 30 s", 3]]);
   });
 });

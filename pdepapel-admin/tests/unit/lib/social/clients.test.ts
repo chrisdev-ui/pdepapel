@@ -129,6 +129,19 @@ describe("cliente de TikTok", () => {
     expect(page.posts[0]).toMatchObject({ externalId: "v1", caption: "Stickers", durationSec: 21, thumbnailUrl: "https://p16/c.jpg", metrics: { columns: { views: 900, likes: 40, comments: 3, shares: 2 } } });
   });
 
+  it("una publicación de fotos (duración 0) es carrusel sin duración; un video sigue siendo video", async () => {
+    const base = { create_time: 1_760_000_000, share_url: "https://tiktok/x", view_count: 10, like_count: 1, comment_count: 0, share_count: 0 };
+    const fetchImpl = vi.fn().mockResolvedValue(
+      json({ data: { videos: [{ ...base, id: "foto", title: "Fotos", duration: 0 }, { ...base, id: "video", title: "Video", duration: 18 }, { ...base, id: "sin", title: "Sin dato" }], has_more: false }, error: { code: "ok" } }),
+    );
+    const { posts } = await createTikTokAdapter({ getAccessToken: async () => "act.1", fetchImpl }).listPosts(null);
+    expect(posts.map(({ externalId, mediaType, productType, durationSec }) => ({ externalId, mediaType, productType, durationSec }))).toEqual([
+      { externalId: "foto", mediaType: "PHOTO", productType: "CAROUSEL", durationSec: null },
+      { externalId: "video", mediaType: "VIDEO", productType: "VIDEO", durationSec: 18 },
+      { externalId: "sin", mediaType: "VIDEO", productType: "VIDEO", durationSec: null },
+    ]);
+  });
+
   it("429 pide esperar; 401 pide reconectar", async () => {
     const adapter = (response: Response) => createTikTokAdapter({ getAccessToken: async () => "act.1", fetchImpl: vi.fn().mockResolvedValue(response) });
     expect(await caught(adapter(json({ error: { code: "rate_limit_exceeded" } }, { status: 429, headers: { "retry-after": "90" } })).listPosts(null))).toMatchObject({ kind: "rate_limit", retryAfterSeconds: 90 });

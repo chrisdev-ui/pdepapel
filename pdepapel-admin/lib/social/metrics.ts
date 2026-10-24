@@ -241,10 +241,16 @@ export const RETENTION_MIN_WATCHED_PCT = 15;
 export const RETENTION_SKIP_POINTS_ABOVE_MEDIAN = 10;
 export const RETENTION_MIN_SKIP_SAMPLE = 5;
 
+/** Duración en segundos, o null si no se sabe: 0 o menos cuenta como desconocida (las fotos de TikTok llegan con 0). */
+export function knownDuration(durationSec: number | null | undefined): number | null {
+  return typeof durationSec === "number" && durationSec > 0 ? durationSec : null;
+}
+
 /** Porcentaje del video que se ve en promedio; null sin duración o sin tiempo promedio. */
 export function watchedPct(avgWatchTimeMs: number | null, durationSec: number | null) {
-  if (avgWatchTimeMs === null || durationSec === null || !(durationSec > 0)) return null;
-  return Math.round((avgWatchTimeMs / 1000 / durationSec) * 1000) / 10;
+  const duration = knownDuration(durationSec);
+  if (avgWatchTimeMs === null || duration === null) return null;
+  return Math.round((avgWatchTimeMs / 1000 / duration) * 1000) / 10;
 }
 
 export interface SkipBaseline {

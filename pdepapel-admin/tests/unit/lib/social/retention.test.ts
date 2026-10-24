@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { postMetricRows, retentionDetails, visibleColumns } from "@/lib/social/display";
 import {
+  knownDuration,
   RETENTION_MIN_SKIP_SAMPLE,
   RETENTION_MIN_WATCHED_PCT,
   RETENTION_SKIP_POINTS_ABOVE_MEDIAN,
@@ -18,6 +19,15 @@ describe("retención de un reel", () => {
     expect(watchedPct(null, 30)).toBeNull();
     expect(watchedPct(4500, null)).toBeNull();
     expect(watchedPct(4500, 0)).toBeNull();
+  });
+
+  it("una duración de 0 o menos es desconocida en todos lados: % visto, cubeta de duración y tipo", async () => {
+    const { autoTags } = await import("@/lib/social/tags");
+    expect([knownDuration(0), knownDuration(-3), knownDuration(null), knownDuration(undefined), knownDuration(18)]).toEqual([null, null, null, null, 18]);
+    expect(watchedPct(4500, -1)).toBeNull();
+    const photo = autoTags({ productType: "CAROUSEL", durationSec: 0, postedAt: new Date("2026-10-19T17:00:00Z") });
+    expect(photo.find((tag) => tag.group === "TIPO")).toEqual({ group: "TIPO", label: "Carrusel" });
+    expect(photo.some((tag) => tag.group === "DURACION")).toBe(false);
   });
 
   it("la mediana del salto de la red necesita al menos 5 reels con el dato; los vacíos no cuentan", () => {

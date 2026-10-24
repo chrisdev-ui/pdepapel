@@ -5,7 +5,7 @@ import { SocialPlatform } from "@prisma/client";
 import type { TikTokConfig } from "./config";
 import type { TikTokTokenSet } from "./credentials";
 import { SocialApiError } from "./errors";
-import { pickMetrics, TIKTOK_POST_METRICS } from "./metrics";
+import { knownDuration, pickMetrics, TIKTOK_POST_METRICS } from "./metrics";
 import type { SocialAdapter } from "./sync";
 
 /**
@@ -164,17 +164,21 @@ export function createTikTokAdapter(options: { getAccessToken: () => Promise<str
         body: JSON.stringify({ max_count: 20, ...(cursor ? { cursor: Number(cursor) } : {}) }),
       });
       return {
-        posts: (data.videos ?? []).map((video) => ({
-          externalId: video.id,
-          mediaType: "VIDEO",
-          productType: "VIDEO" as const,
-          caption: video.title || video.video_description || null,
-          permalink: video.share_url ?? null,
-          thumbnailUrl: video.cover_image_url ?? null,
-          durationSec: typeof video.duration === "number" ? video.duration : null,
-          postedAt: new Date(video.create_time * 1000),
-          metrics: pickMetrics(video, TIKTOK_POST_METRICS),
-        })),
+        posts: (data.videos ?? []).map((video) => {
+          // La Display API no dice si es foto: las publicaciones de fotos llegan con duración 0 (comprobado contra la página pública).
+          const photo = video.duration === 0;
+          return {
+            externalId: video.id,
+            mediaType: photo ? "PHOTO" : "VIDEO",
+            productType: photo ? ("CAROUSEL" as const) : ("VIDEO" as const),
+            caption: video.title || video.video_description || null,
+            permalink: video.share_url ?? null,
+            thumbnailUrl: video.cover_image_url ?? null,
+            durationSec: knownDuration(video.duration),
+            postedAt: new Date(video.create_time * 1000),
+            metrics: pickMetrics(video, TIKTOK_POST_METRICS),
+          };
+        }),
         next: data.has_more && data.cursor ? String(data.cursor) : null,
       };
     },
