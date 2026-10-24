@@ -11,6 +11,7 @@ import {
   reviewRevalidationPaths,
 } from "@/lib/review-moderation";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Moderación de reseñas desde el panel (solo dueño de la tienda):
@@ -30,7 +31,7 @@ export async function PATCH(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const input = parseReviewModerationBody(await req.json().catch(() => ({})));
+    const input = parseReviewModerationBody(await requireJsonBody(req, "REVIEW_MODERATION_PATCH"));
     const review = await moderateReview(prismadb, {
       storeId: params.storeId,
       reviewId: params.reviewId,

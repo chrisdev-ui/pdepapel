@@ -13,6 +13,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Une atributos del catálogo (solo dueño de la tienda):
@@ -29,7 +30,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const { dryRun, ...input } = parseAttributeMergeBody(await req.json().catch(() => ({})));
+    const { dryRun, ...input } = parseAttributeMergeBody(await requireJsonBody(req, "ATTRIBUTES_MERGE_POST"));
 
     if (dryRun) {
       const preview = await previewAttributeMerge(prismadb, { storeId: params.storeId, input });

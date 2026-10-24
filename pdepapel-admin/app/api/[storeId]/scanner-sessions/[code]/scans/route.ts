@@ -5,6 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { expiryFrom, normalizePairingCode, PROBLEM_MESSAGES, scanProblem } from "@/lib/scanner-pairing";
 import { verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * El celular envía una lectura. Solo el celular con el token vigente puede;
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: { storeId: st
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = (await req.json().catch(() => ({}))) as { token?: unknown; code?: unknown };
+    const body = (await requireJsonBody(req, "SCANNER_SESSION_SCAN")) as { token?: unknown; code?: unknown };
     const token = typeof body.token === "string" ? body.token : null;
     const scanned = typeof body.code === "string" ? body.code.trim() : "";
     if (!scanned) throw ErrorFactory.InvalidRequest("Falta el código leído");

@@ -15,6 +15,7 @@ import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { assertProductsBelongToStore } from "@/lib/home-content-server";
 import { CACHE_HEADERS, getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 type Params = { params: { storeId: string; homeContentId: string } };
 
@@ -61,7 +62,7 @@ export async function GET(_req: Request, { params }: Params) {
 export async function PATCH(req: Request, { params }: Params) {
   try {
     await requireOwner(params);
-    const input = parseHomeContentBody(await req.json().catch(() => ({})));
+    const input = parseHomeContentBody(await requireJsonBody(req, "HOME_CONTENT_ITEM_PATCH"));
     await assertProductsBelongToStore(params.storeId, input.productIds);
 
     const current = await prismadb.homeContent.findFirst({

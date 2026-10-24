@@ -11,6 +11,7 @@ import {
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Archiva o restaura atributos del catálogo (solo dueño de la tienda):
@@ -25,7 +26,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const input = parseAttributeArchiveBody(await req.json().catch(() => ({})));
+    const input = parseAttributeArchiveBody(await requireJsonBody(req, "ATTRIBUTES_ARCHIVE_POST"));
     const result = await prismadb.$transaction((tx) =>
       setAttributesArchived(tx, { storeId: params.storeId, input }),
     );

@@ -5,6 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { checkPoolMargins } from "@/lib/capsule-pool";
 import { parsePackOptions } from "@/lib/capsule-pack-options";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Calcula, sin escribir nada, el margen de cada pack con la bolsa propuesta. POST porque recibe una lista. */
 export async function POST(req: Request, { params }: { params: { storeId: string; editionId: string } }) {
@@ -12,7 +13,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "CAPSULE_MARGIN_CHECK");
     if (!body || typeof body !== "object") throw ErrorFactory.InvalidRequest("Datos inválidos");
     const check = await checkPoolMargins({
       storeId: params.storeId,

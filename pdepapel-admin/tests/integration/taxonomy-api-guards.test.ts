@@ -190,6 +190,17 @@ describe("taxonomy API guards with MySQL", () => {
     });
     expect(badPart.status).toBe(400);
 
+    // Sin cuerpo no arranca una generación paga por defecto (decisión D2-1): 400, y el generador no se llama.
+    const callsBefore = mocks.ensureAssets.mock.calls.length;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const empty = await COVER(new Request("http://admin.test/api/x", { method: "POST", headers: { Origin: "https://admin.papeleriapdepapel.com" } }), {
+      params: { storeId: fixture.store.id, categoryId: created.id },
+    });
+    warn.mockRestore();
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ error: "El cuerpo de la solicitud no es JSON válido" });
+    expect(mocks.ensureAssets).toHaveBeenCalledTimes(callsBefore);
+
     // Anonymous callers and other stores' ids never reach the generator.
     session.userId = null;
     const anonymous = await COVER(json("POST", {}), { params: { storeId: fixture.store.id, categoryId: created.id } });

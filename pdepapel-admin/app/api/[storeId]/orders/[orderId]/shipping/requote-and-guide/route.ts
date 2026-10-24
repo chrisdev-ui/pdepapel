@@ -13,6 +13,7 @@ import {
 import { reconcileShippingRate } from "@/lib/shipping-rate-reconcile";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import { readOptionalJsonBody } from "@/lib/request-body";
 
 /**
  * Recotizar y crear la guía de una vez.
@@ -38,7 +39,7 @@ export async function POST(
     }
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => ({}));
+    const body = await readOptionalJsonBody(req, "ORDER_SHIPPING_REQUOTE_AND_GUIDE", {});
     const confirmed = Boolean((body as { confirm?: boolean }).confirm);
 
     const order = await prismadb.order.findFirst({

@@ -8,6 +8,7 @@ import { groupListingsForBackfill } from "@/lib/mercadolibre/category-profiles";
 import { getMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Siembra perfiles sugeridos desde lo ya publicado (#22). GET solo muestra la
@@ -75,7 +76,7 @@ export async function GET(_request: Request, { params }: { params: { storeId: st
 /** Escribe solo las subcategorías aprobadas en la lista (`localCategoryIds`). */
 export async function POST(request: Request, { params }: { params: { storeId: string } }) {
   try {
-    const body = (await request.json().catch(() => ({}))) as { localCategoryIds?: unknown };
+    const body = (await requireJsonBody(request, "MERCADOLIBRE_PROFILES_LEARN_POST")) as { localCategoryIds?: unknown };
     const approved = new Set(
       Array.isArray(body.localCategoryIds) ? body.localCategoryIds.filter((id): id is string => typeof id === "string") : [],
     );

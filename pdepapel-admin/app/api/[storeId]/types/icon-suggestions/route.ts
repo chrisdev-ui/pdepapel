@@ -14,6 +14,7 @@ import {
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { createAiProviders } from "@/lib/ai-model-providers";
 import { AiBusyError, runStructured } from "@/lib/ai-provider";
+import { requireJsonBody } from "@/lib/request-body";
 
 export const maxDuration = 60;
 
@@ -109,7 +110,7 @@ export async function POST(
       );
     }
 
-    const parsed = requestSchema.safeParse(await req.json().catch(() => ({})));
+    const parsed = requestSchema.safeParse(await requireJsonBody(req, "TYPE_ICON_SUGGESTIONS_POST"));
     if (!parsed.success) {
       throw ErrorFactory.InvalidRequest(
         parsed.error.issues[0]?.message ?? "Describe el icono",

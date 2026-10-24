@@ -6,6 +6,7 @@ import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { readOptionalJsonBody } from "@/lib/request-body";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,7 +33,7 @@ export async function POST(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => ({}));
+    const body = await readOptionalJsonBody(req, "BOLD_DATAFONO_PUSH", {});
     const { terminalId } = body || {};
 
     const order = await prismadb.order.findUnique({

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendNewsletterCampaign, type NewsletterCampaignKind } from "@/lib/newsletter-campaigns";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 export const maxDuration = 60;
 
@@ -16,7 +17,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = (await req.json().catch(() => ({}))) as { kind?: unknown; homeContentId?: unknown };
+    const body = (await requireJsonBody(req, "NEWSLETTER_CAMPAIGNS_POST")) as { kind?: unknown; homeContentId?: unknown };
     if (!KINDS.includes(body.kind as NewsletterCampaignKind)) {
       throw ErrorFactory.InvalidRequest("El envío debe ser de acceso anticipado o de llegada");
     }

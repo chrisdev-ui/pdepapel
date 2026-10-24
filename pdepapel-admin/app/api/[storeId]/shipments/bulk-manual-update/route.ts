@@ -9,6 +9,7 @@ import { applyShipmentStatus } from "@/lib/shipment-status-apply";
 import { CLOSED_SHIPMENT_STATUSES, isShipmentTransitionAllowed } from "@/lib/shipment-status";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 const bodySchema = z.object({
   fromStatus: z.nativeEnum(ShippingStatus, { errorMap: () => ({ message: "Elige el estado actual de los envíos a corregir." }) }),
@@ -34,7 +35,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
+    const parsed = bodySchema.safeParse(await requireJsonBody(req, "SHIPMENT_BULK_MANUAL_UPDATE"));
     if (!parsed.success) throw ErrorFactory.InvalidRequest(parsed.error.issues[0]?.message ?? "Datos no válidos.");
     const { fromStatus, toStatus, includeClosed, correction, dryRun } = parsed.data;
 

@@ -16,6 +16,7 @@ import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { assertProductsBelongToStore } from "@/lib/home-content-server";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 // Lectura con sesión del panel (o de la clienta): nunca en la caché pública del CDN (#6).
 export async function GET(req: Request, { params }: { params: { storeId: string } }) {
@@ -52,7 +53,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const input = parseHomeContentBody(await req.json().catch(() => ({})));
+    const input = parseHomeContentBody(await requireJsonBody(req, "HOME_CONTENT_POST"));
     await assertProductsBelongToStore(params.storeId, input.productIds);
 
     const entry = await prismadb.homeContent.create({

@@ -8,6 +8,7 @@ import { getCategoryRevalidationPaths } from "@/lib/category-slugs";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Mueve subcategorías a otra categoría (solo dueño): `{ ids, typeId }`.
@@ -21,7 +22,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const input = parseMoveCategoriesBody(await req.json().catch(() => ({})));
+    const input = parseMoveCategoriesBody(await requireJsonBody(req, "ATTRIBUTES_MOVE_POST"));
     const result = await prismadb.$transaction((tx) => moveCategoriesToType(tx, { storeId: params.storeId, input }));
 
     await Promise.all([

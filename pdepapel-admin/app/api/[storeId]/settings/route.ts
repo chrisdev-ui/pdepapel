@@ -8,6 +8,7 @@ import {
   storeSettingsInputSchema,
 } from "@/lib/store-settings";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 export async function GET(
   _req: Request,
@@ -36,7 +37,7 @@ export async function PATCH(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "STORE_SETTINGS_PATCH");
     const parsed = storeSettingsInputSchema.safeParse(body);
     if (!parsed.success) {
       throw ErrorFactory.InvalidRequest(

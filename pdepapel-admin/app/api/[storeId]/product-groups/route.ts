@@ -33,6 +33,7 @@ import {
   loadVariantAttributes,
 } from "@/lib/product-group-attributes";
 import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
+import { requireJsonBody } from "@/lib/request-body";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,9 +56,7 @@ export async function POST(
     await verifyStoreOwner(userId, params.storeId);
     // El cuerpo se lee después de autorizar: un cuerpo vacío sin sesión
     // respondía 500 en vez de 401.
-    const body = await req.json().catch(() => {
-      throw ErrorFactory.InvalidRequest("El cuerpo de la petición no es JSON válido");
-    });
+    const body = await requireJsonBody(req, "PRODUCT_GROUPS_POST", "El cuerpo de la petición no es JSON válido");
 
     const {
       name,

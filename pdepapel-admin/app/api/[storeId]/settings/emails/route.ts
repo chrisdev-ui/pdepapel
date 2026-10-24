@@ -8,6 +8,7 @@ import {
   storeEmailSettingsInputSchema,
 } from "@/lib/store-email-settings";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Correos del equipo y de avisos (Configuración › Tienda). Solo la dueña. */
 export async function GET(_req: Request, { params }: { params: { storeId: string } }) {
@@ -22,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: { storeId: string
 export async function PATCH(req: Request, { params }: { params: { storeId: string } }) {
   try {
     await requireStoreOwner(params.storeId);
-    const parsed = storeEmailSettingsInputSchema.safeParse(await req.json().catch(() => null));
+    const parsed = storeEmailSettingsInputSchema.safeParse(await requireJsonBody(req, "STORE_EMAIL_SETTINGS_PATCH"));
     if (!parsed.success) throw ErrorFactory.InvalidRequest("Revisa las listas de correos");
     await saveStoreEmailSettings(params.storeId, parsed.data);
     return NextResponse.json(await getStoreEmailSettings(params.storeId), { headers: CACHE_HEADERS.NO_CACHE });

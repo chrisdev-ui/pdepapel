@@ -8,6 +8,7 @@ import {
   listNewsletterIssues,
 } from "@/lib/newsletter-issues";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 export async function GET(req: Request, { params }: { params: { storeId: string } }) {
   try {
@@ -43,7 +44,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const issue = await createNewsletterIssue(params.storeId, await req.json().catch(() => ({})));
+    const issue = await createNewsletterIssue(params.storeId, await requireJsonBody(req, "NEWSLETTER_ISSUES_POST"));
     return NextResponse.json(issue, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "NEWSLETTER_ISSUES_POST", { headers: CACHE_HEADERS.NO_CACHE });

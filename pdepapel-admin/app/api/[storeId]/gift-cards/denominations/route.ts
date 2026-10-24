@@ -9,6 +9,7 @@ import {
 } from "@/lib/gift-cards";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Valores de tarjeta de regalo a la venta.
@@ -62,7 +63,7 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "GIFT_CARD_DENOMINATIONS_POST");
     const amount = parseDenominationAmount(body?.amount);
     const existing = await prismadb.giftCardDenomination.findUnique({
       where: { storeId_amount: { storeId: params.storeId, amount } },

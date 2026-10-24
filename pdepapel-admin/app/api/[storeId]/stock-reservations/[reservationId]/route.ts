@@ -13,6 +13,7 @@ import {
   setReservationItemQuantity,
 } from "@/lib/stock-reservations";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 type Params = { params: { storeId: string; reservationId: string } };
 
@@ -41,7 +42,7 @@ export async function PATCH(req: Request, { params }: Params) {
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
     return await withIdempotency(req, params.storeId, async () => {
-      const body = await req.json().catch(() => null);
+      const body = await requireJsonBody(req, "STOCK_RESERVATION_PATCH");
       const action = body && typeof body === "object" ? body.action : null;
       const { storeId, reservationId } = params;
 

@@ -6,6 +6,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { withIdempotency } from "@/lib/idempotency";
 import { createReservation, findOpenReservationsByPhone, isReservationFilter, listReservations } from "@/lib/stock-reservations";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Apartados de la tienda. Solo la dueña: llevan el nombre y el celular de la clienta. */
 export async function GET(req: Request, { params }: { params: { storeId: string } }) {
@@ -33,7 +34,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
     return await withIdempotency(req, params.storeId, async () => {
-      const body = await req.json().catch(() => null);
+      const body = await requireJsonBody(req, "STOCK_RESERVATIONS_POST");
       if (!body || typeof body !== "object") throw ErrorFactory.InvalidRequest("Datos de la reserva inválidos");
       const { reservation, affectedProductIds } = await createReservation({
         storeId: params.storeId,

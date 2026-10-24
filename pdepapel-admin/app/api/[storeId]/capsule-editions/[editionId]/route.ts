@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getCapsuleEdition, updateCapsuleEdition } from "@/lib/capsule-editions";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 type Params = { params: { storeId: string; editionId: string } };
 
@@ -24,7 +25,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "CAPSULE_EDITION_PATCH");
     if (!body || typeof body !== "object") throw ErrorFactory.InvalidRequest("Datos de la edición inválidos");
     const edition = await updateCapsuleEdition({ storeId: params.storeId, editionId: params.editionId, userId, ...body });
     return NextResponse.json({ edition }, { headers: CACHE_HEADERS.NO_CACHE });

@@ -6,6 +6,7 @@ import { isCopilotConfigured } from "@/lib/copiloto/config";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 const schema = z.object({ value: z.enum(["up", "down"]), note: z.string().trim().max(500).optional() });
 
@@ -14,7 +15,7 @@ export async function POST(request: Request, { params }: { params: { storeId: st
   try {
     const userId = await requireStoreOwner(params.storeId);
     if (!isCopilotConfigured()) throw ErrorFactory.NotFound("El copiloto no está configurado");
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await requireJsonBody(request, "COPILOTO_VALORACION_POST"));
     if (!parsed.success) throw ErrorFactory.InvalidRequest("Valoración inválida");
     const updated = await prismadb.assistantMessage.updateMany({
       where: { id: params.messageId, role: "assistant", conversation: { storeId: params.storeId, userId } },

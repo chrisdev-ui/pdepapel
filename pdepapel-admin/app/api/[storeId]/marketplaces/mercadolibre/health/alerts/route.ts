@@ -8,6 +8,7 @@ import { getMercadoLibreHealthSummary } from "@/lib/mercadolibre/health";
 import { countOpenMercadoLibreAlerts, identifyIssues, setAlertsReviewed } from "@/lib/mercadolibre/health-alerts";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 const bodySchema = z.union([
   z.object({ keys: z.array(z.string().min(1).max(191)).min(1).max(200), reviewed: z.boolean().default(true) }),
@@ -46,7 +47,7 @@ export async function POST(
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
-    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+    const parsed = bodySchema.safeParse(await requireJsonBody(request, "MERCADOLIBRE_HEALTH_ALERTS_POST"));
     if (!parsed.success) {
       throw ErrorFactory.InvalidRequest("Indica qué alertas marcar como revisadas");
     }

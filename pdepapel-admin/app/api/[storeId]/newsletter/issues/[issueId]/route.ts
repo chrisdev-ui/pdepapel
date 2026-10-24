@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { deleteNewsletterIssue, updateNewsletterIssue } from "@/lib/newsletter-issues";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 export async function PATCH(req: Request, { params }: { params: { storeId: string; issueId: string } }) {
   try {
@@ -12,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: { storeId: strin
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const issue = await updateNewsletterIssue(params.storeId, params.issueId, await req.json().catch(() => ({})));
+    const issue = await updateNewsletterIssue(params.storeId, params.issueId, await requireJsonBody(req, "NEWSLETTER_ISSUE_PATCH"));
     return NextResponse.json(issue, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "NEWSLETTER_ISSUE_PATCH", { headers: CACHE_HEADERS.NO_CACHE });

@@ -7,6 +7,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { printFromPanel } from "@/lib/capsule-print";
 import { withIdempotency } from "@/lib/idempotency";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Imprime papeles o regalos (apartan en el producto real). Un doble clic con la misma llave no imprime dos veces. Solo la dueña. */
 export async function POST(req: Request, { params }: { params: { storeId: string; editionId: string } }) {
@@ -15,7 +16,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
     return await withIdempotency(req, params.storeId, async () => {
-      const body = await req.json().catch(() => null);
+      const body = await requireJsonBody(req, "CAPSULE_SLIPS_POST");
       if (!body || typeof body !== "object" || !Array.isArray(body.items)) throw ErrorFactory.InvalidRequest("Datos de la impresión inválidos");
       const items = body.items.map((line: { productId?: unknown; quantity?: unknown }) => ({ productId: String(line.productId ?? ""), quantity: Number(line.quantity) }));
       const result = await printFromPanel({ storeId: params.storeId, editionId: params.editionId, kind: body.kind, items, userId });

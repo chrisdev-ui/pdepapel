@@ -11,6 +11,7 @@ import {
 } from "@/lib/cloudinary-orphans";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export async function DELETE(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => ({}));
+    const body = await requireJsonBody(req, "CLOUDINARY_ORPHANS_DELETE");
     const publicIds: unknown = body?.publicIds;
     if (
       !Array.isArray(publicIds) ||

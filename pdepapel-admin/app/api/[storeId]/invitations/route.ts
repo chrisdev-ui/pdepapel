@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { handleErrorResponse } from "@/lib/api-errors";
 import { createViewerInvitation, listPendingInvitations, requireInviter } from "@/lib/invitations";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Invitaciones pendientes. Solo quien está en la lista explícita del dueño. */
 export async function GET(_req: Request, { params }: { params: { storeId: string } }) {
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: { storeId: string
 export async function POST(req: Request, { params }: { params: { storeId: string } }) {
   try {
     const userId = await requireInviter(params.storeId);
-    const body = await req.json().catch(() => ({}));
+    const body = await requireJsonBody(req, "INVITATIONS_POST");
     const allowedStoreIds = Array.isArray(body?.allowedStoreIds) && body.allowedStoreIds.length > 0
       ? (body.allowedStoreIds as string[])
       : [params.storeId];

@@ -7,6 +7,7 @@ import { ensureCategoryAssets, isCategoryAssetPart, isCategoryCoverConfigured } 
 import prismadb from "@/lib/prismadb";
 import { missingTaxonomyMessage } from "@/lib/taxonomy";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 export const maxDuration = 60;
 
@@ -30,7 +31,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
       throw ErrorFactory.InvalidRequest("La generación con IA no está configurada: agrega OPENAI_API_KEY en el proyecto del panel.");
     }
 
-    const body = (await req.json().catch(() => ({}))) as { part?: unknown; force?: unknown };
+    const body = (await requireJsonBody(req, "CATEGORY_COVER_POST")) as { part?: unknown; force?: unknown };
     if (body.part !== undefined && !isCategoryAssetPart(body.part)) {
       throw ErrorFactory.InvalidRequest("Indica qué generar: la portada (cover), la intro (intro), los metadatos SEO (seo) o portada e intro (both).");
     }

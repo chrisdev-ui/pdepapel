@@ -45,6 +45,7 @@ import {
   loadVariantAttributes,
 } from "@/lib/product-group-attributes";
 import { assertAssignableBrand, readBrandIdInput } from "@/lib/product-brand-input";
+import { requireJsonBody } from "@/lib/request-body";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,9 +108,7 @@ export async function PATCH(
     if (!params.productGroupId)
       throw ErrorFactory.InvalidRequest("Product Group ID is required");
     await verifyStoreOwner(userId, params.storeId);
-    const body = await req.json().catch(() => {
-      throw ErrorFactory.InvalidRequest("El cuerpo de la petición no es JSON válido");
-    });
+    const body = await requireJsonBody(req, "PRODUCT_GROUP_PATCH", "El cuerpo de la petición no es JSON válido");
 
     const {
       name,

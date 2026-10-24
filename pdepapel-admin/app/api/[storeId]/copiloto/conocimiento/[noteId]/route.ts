@@ -6,6 +6,7 @@ import { getKnowledgeNotes, KNOWLEDGE_NOTE_MAX_CHARS, knowledgeDraftExists, know
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 type Params = { params: { storeId: string; noteId: string } };
 
@@ -23,7 +24,7 @@ export async function PUT(request: Request, { params }: Params) {
   try {
     const userId = await requireStoreOwner(params.storeId);
     await currentNote(params.storeId, params.noteId);
-    const parsed = editSchema.safeParse(await request.json().catch(() => null));
+    const parsed = editSchema.safeParse(await requireJsonBody(request, "COPILOTO_CONOCIMIENTO_PUT"));
     if (!parsed.success) throw ErrorFactory.InvalidRequest(`El texto debe tener entre 1 y ${KNOWLEDGE_NOTE_MAX_CHARS} caracteres`);
     await prismadb.assistantKnowledgeNote.upsert({
       where: { storeId_noteId: { storeId: params.storeId, noteId: params.noteId } },

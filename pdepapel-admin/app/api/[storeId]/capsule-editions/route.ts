@@ -7,6 +7,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { createCapsuleEdition, listCapsuleEditions } from "@/lib/capsule-editions";
 import { withIdempotency } from "@/lib/idempotency";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Ediciones de cápsulas. Solo la dueña: llevan costos y la banda de la edición. */
 export async function GET(_req: Request, { params }: { params: { storeId: string } }) {
@@ -26,7 +27,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
     return await withIdempotency(req, params.storeId, async () => {
-      const body = await req.json().catch(() => null);
+      const body = await requireJsonBody(req, "CAPSULE_EDITIONS_POST");
       if (!body || typeof body !== "object") throw ErrorFactory.InvalidRequest("Datos de la edición inválidos");
       const edition = await createCapsuleEdition({
         storeId: params.storeId,

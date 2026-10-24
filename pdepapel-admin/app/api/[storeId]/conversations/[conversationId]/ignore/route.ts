@@ -5,6 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { ignoreConversationContact, unignoreConversationContact } from "@/lib/conversations";
 import { validateIgnoreReason } from "@/lib/whatsapp/ignored-contacts";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * «Ignorar este contacto»: el panel deja de reflejar lo que llegue de él.
@@ -32,7 +33,7 @@ export async function POST(
     }
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = (await req.json().catch(() => ({}))) as { reason?: unknown };
+    const body = (await requireJsonBody(req, "CONVERSATION_IGNORE")) as { reason?: unknown };
     const reason = validateIgnoreReason(body.reason);
     if (!reason) {
       // Sin motivo no se ignora: una lista de números sin explicación es

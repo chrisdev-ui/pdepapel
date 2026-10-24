@@ -9,6 +9,7 @@ import {
 } from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Cierra una incidencia de inventario de un pedido.
@@ -25,7 +26,7 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = (await request.json().catch(() => ({}))) as {
+    const body = (await requireJsonBody(request, "ORDER_INVENTORY_ISSUE_POST")) as {
       action?: unknown;
     };
     const action =

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { MAX_ATTENDED_PER_REQUEST, markWaitsAttended } from "@/lib/whatsapp/waiting-list";
+import { requireJsonBody } from "@/lib/request-body";
 
 const bodySchema = z.object({
   ids: z.array(z.string().min(1).max(191)).min(1).max(MAX_ATTENDED_PER_REQUEST),
@@ -24,7 +25,7 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const parsed = bodySchema.safeParse(await req.json().catch(() => null));
+    const parsed = bodySchema.safeParse(await requireJsonBody(req, "CONVERSATIONS_ATTENDED"));
     if (!parsed.success) {
       throw ErrorFactory.InvalidRequest("Elige al menos una conversación.");
     }

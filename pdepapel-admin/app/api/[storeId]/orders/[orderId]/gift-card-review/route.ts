@@ -7,6 +7,7 @@ import { deliverGiftCard } from "@/lib/gift-card-delivery";
 import { issueGiftCardForOrder } from "@/lib/gift-cards";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 const DECISIONS = { approve: GiftCardReview.APPROVED, reject: GiftCardReview.REJECTED } as const;
 
@@ -25,7 +26,7 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "GIFT_CARD_REVIEW");
     const decision = body?.decision as keyof typeof DECISIONS;
     if (!(decision in DECISIONS)) throw ErrorFactory.InvalidRequest("Decisión desconocida");
 

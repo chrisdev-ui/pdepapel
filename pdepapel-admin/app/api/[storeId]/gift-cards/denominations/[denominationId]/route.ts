@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Un valor de tarjeta: activar, desactivar, reordenar o quitar (solo la dueña). */
 export async function PATCH(
@@ -16,7 +17,7 @@ export async function PATCH(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "GIFT_CARD_DENOMINATION_PATCH");
     const data: { isActive?: boolean; sortOrder?: number } = {};
     if (typeof body?.isActive === "boolean") data.isActive = body.isActive;
     if (Number.isInteger(body?.sortOrder)) data.sortOrder = body.sortOrder;

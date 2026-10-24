@@ -8,6 +8,7 @@ import { getCopilotSkill } from "@/lib/copiloto/skills";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 const schema = z.object({ action: z.enum(["add", "remove"]), skillId: z.string().trim().min(1).max(40) });
 
@@ -37,7 +38,7 @@ export async function GET(_request: Request, { params }: { params: { storeId: st
 export async function POST(request: Request, { params }: { params: { storeId: string; conversationId: string } }) {
   try {
     const conversationId = await ownConversation(params.storeId, params.conversationId);
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await requireJsonBody(request, "COPILOTO_HABILIDADES_POST"));
     if (!parsed.success || !getCopilotSkill(parsed.data.skillId)) throw ErrorFactory.InvalidRequest("Habilidad inválida");
     const [before, lastAnswer] = await Promise.all([
       readSkillState(conversationId),

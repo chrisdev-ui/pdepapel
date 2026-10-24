@@ -6,6 +6,7 @@ import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { boxInputSchema, normalizeBoxName } from "@/lib/boxes";
+import { requireJsonBody } from "@/lib/request-body";
 
 export async function POST(
   req: Request,
@@ -18,7 +19,7 @@ export async function POST(
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "BOXES_POST");
     const parsed = boxInputSchema.safeParse(body);
     if (!parsed.success) {
       throw ErrorFactory.InvalidRequest(

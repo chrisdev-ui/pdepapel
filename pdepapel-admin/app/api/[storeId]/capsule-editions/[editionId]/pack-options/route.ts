@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { savePackOptions } from "@/lib/capsule-pack-options";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Guarda regalo y caja de cada pack, solo si el P95 de cada pack que cabe llega al margen mínimo. Solo la dueña. */
 export async function PUT(req: Request, { params }: { params: { storeId: string; editionId: string } }) {
@@ -11,7 +12,7 @@ export async function PUT(req: Request, { params }: { params: { storeId: string;
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "CAPSULE_PACK_OPTIONS_PUT");
     if (!body || typeof body !== "object") throw ErrorFactory.InvalidRequest("Datos de los packs inválidos");
     const saved = await savePackOptions({
       storeId: params.storeId,
