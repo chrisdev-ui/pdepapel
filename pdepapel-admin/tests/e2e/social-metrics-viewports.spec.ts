@@ -159,7 +159,8 @@ test.describe("métricas de redes", () => {
       // «Qué funciona»: últimos 90 días, con titular o con la frase de por qué todavía no lo hay.
       const works = page.getByRole("region", { name: "Qué funciona en Instagram" });
       await expect(works).toBeVisible();
-      await expect(works.getByText("Últimos 90 días · 8 publicaciones")).toBeVisible();
+      // En la primera medida «Reel de libretas» se confirma promocionado (más abajo): desde ahí sale de «Qué funciona».
+      await expect(works.getByText(`Últimos 90 días · ${viewport.name === "390" ? 8 : 7} publicaciones`)).toBeVisible();
       await expect(works.getByRole("list", { name: "Etiquetas de Instagram" }).getByText("Reel", { exact: true })).toBeVisible();
       // Resumen semanal para WhatsApp: se copia; sin enlaces ni @menciones.
       await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
