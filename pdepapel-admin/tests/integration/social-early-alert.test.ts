@@ -78,6 +78,17 @@ describe("alerta temprana de redes", () => {
     expect(earlyAlertLine(summary.earlyAlert)).toBe("Alerta temprana — Instagram: encendida · TikTok: apagada, 5 de 10. Cada red se enciende sola al juntar 10 publicaciones con lectura a las 2–6 h.");
   });
 
+  it("una publicación promocionada (confirmada) no cuenta en la historia: con 10 y una promocionada, espera", async () => {
+    // 9 viejas + 1 nueva = 10 con lectura a las 2–6 h; sin la promocionada quedan 9.
+    const { account } = await seed(9, [{ views: 160 }]);
+    expect((await buildSocialSummary(testPrisma, { storeId: f!.store.id, days: 90, now })).earlyAlert.networks.INSTAGRAM).toEqual({ history: 10, on: true });
+    const promoted = await testPrisma.socialPost.findFirstOrThrow({ where: { socialAccountId: account.id, externalId: "INSTAGRAM-old0" } });
+    await testPrisma.socialPost.update({ where: { id: promoted.id }, data: { promotion: "PROMOTED", promotionSource: "MANUAL", promotionSetAt: now } });
+    expect(await evaluateEarlyAlerts(account.id, { now })).toEqual({ status: "waiting", created: 0, emailed: 0 });
+    const summary = await buildSocialSummary(testPrisma, { storeId: f!.store.id, days: 90, now });
+    expect(summary.earlyAlert.networks.INSTAGRAM).toEqual({ history: 9, on: false });
+  });
+
   it("el interruptor de la tienda la pausa sin desplegar y la reanuda; sin fila cuenta como encendido", async () => {
     const { account } = await seed(12, [{ views: 400 }]);
     expect(await isEarlyAlertSwitchOn(f!.store.id)).toBe(true);

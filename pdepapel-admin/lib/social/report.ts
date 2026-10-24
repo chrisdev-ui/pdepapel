@@ -1,7 +1,7 @@
 import type { PrismaClient, SocialPlatform } from "@prisma/client";
 
 import { dailyFollowers, type DailyFollowers } from "./followers";
-import { CURVE_POINTS_HOURS, engagementRate, knownDuration, median, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
+import { CURVE_POINTS_HOURS, effectiveDuration, engagementRate, isPromoted, median, promotionSuggested, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
 import { autoTags, tagOptions, type PostTags } from "./tags";
 import { bestTimeGrid, type BestTimeNetwork } from "./best-time";
 import { earlyAlertStatus, earlyHistoryCount, type EarlyAlertStatus } from "./early-alert-rules";
@@ -50,7 +50,18 @@ export interface SocialPostSummary {
   totalWatchSeconds: number | null;
   /** Salto en los primeros 3 s, en % (solo reels de Instagram). */
   skipRate: number | null;
+  /** La leída del video o, si no hay, la que escribió la dueña. */
   durationSec: number | null;
+  durationManualSec: number | null;
+  /** Reel cuyo video Instagram no entrega (audio con derechos): su duración solo puede escribirla la dueña. */
+  durationUnavailable: boolean;
+  /** Vistas totales de Instagram (con lo promocionado); `views` es solo orgánico. */
+  totalViews: number | null;
+  /** PROMOTED sale de medianas, «× mediana», «Qué funciona», «Mejor horario» y alerta temprana. */
+  promotion: "PROMOTED" | "NOT_PROMOTED" | null;
+  promotionSource: "MANUAL" | "AUTO" | null;
+  /** «¿Promocionado?»: sin decisión, y las totales pasan de 2× las orgánicas y de 500. No excluye nada. */
+  promotionSuggested: boolean;
   /** Tiempo promedio ÷ duración, en %. */
   watchedPct: number | null;
   /** «La mayoría deja de verlo muy pronto»: menos del 15 % visto, o 10 puntos de salto por encima de lo normal en su red. */
@@ -144,6 +155,11 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
         thumbnailUrl: true,
         postedAt: true,
         durationSec: true,
+        durationCheckedAt: true,
+        durationManualSec: true,
+        totalViews: true,
+        promotion: true,
+        promotionSource: true,
         socialPieceId: true,
         snapshots: {
           orderBy: { capturedAt: "asc" },
@@ -157,17 +173,19 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
   ]);
   const posts = base.filter((post) => post.postedAt >= since).slice(0, 300);
 
+  // Lo promocionado (confirmado) no cuenta para comparar: sus vistas orgánicas no dicen lo que funcionó.
+  const counted = base.filter((post) => !isPromoted(post));
   const skipBaselines: SocialSummary["skipBaselines"] = {};
   const multipliers = new Map<string, SameAgeMultiplier>();
   for (const platform of Array.from(new Set(base.map((post) => post.platform)))) {
     const network = base.filter((post) => post.platform === platform);
     skipBaselines[platform] = skipBaseline(network.filter((post) => post.productType === "REELS").map((post) => post.snapshots.at(-1)?.skipRate ?? null));
-    sameAgeMultipliers(network, now).forEach((value, id) => multipliers.set(id, value));
+    sameAgeMultipliers(network.filter((post) => !isPromoted(post)), now).forEach((value, id) => multipliers.set(id, value));
   }
 
   const medianViews: SocialSummary["medianViews"] = {};
   for (const platform of Array.from(new Set(posts.map((post) => post.platform)))) {
-    medianViews[platform as SocialPlatform] = median(posts.filter((post) => post.platform === platform).map((post) => post.snapshots.at(-1)?.views ?? NaN));
+    medianViews[platform as SocialPlatform] = median(posts.filter((post) => post.platform === platform && !isPromoted(post)).map((post) => post.snapshots.at(-1)?.views ?? NaN));
   }
 
   const summarize = (post: (typeof base)[number]): SocialPostSummary => {
@@ -176,7 +194,8 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     const [h3, h24, d7] = CURVE_POINTS_HOURS.map((hours) => viewsAt(post.snapshots, hours));
     const avgWatchTimeMs = last?.avgWatchTimeMs ?? null;
     const skipRate = last?.skipRate ?? null;
-    const watched = watchedPct(avgWatchTimeMs, post.durationSec);
+    const duration = effectiveDuration(post.durationSec, post.durationManualSec);
+    const watched = watchedPct(avgWatchTimeMs, duration);
     const baseline = skipBaselines[post.platform] ?? null;
     const reasons = retentionReasons({ watchedPct: watched, skipRate, baseline });
     const multiplier = multipliers.get(post.id);
@@ -198,7 +217,13 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       avgWatchTimeMs,
       totalWatchSeconds: last?.totalWatchTimeMs != null ? Math.round(Number(last.totalWatchTimeMs) / 1000) : null,
       skipRate: skipRate === null ? null : Math.round(skipRate * 10) / 10,
-      durationSec: knownDuration(post.durationSec),
+      durationSec: duration,
+      durationManualSec: post.durationManualSec,
+      durationUnavailable: post.productType === "REELS" && post.durationCheckedAt !== null && post.durationSec === null,
+      totalViews: post.totalViews,
+      promotion: post.promotion,
+      promotionSource: post.promotionSource,
+      promotionSuggested: promotionSuggested({ promotion: post.promotion, totalViews: post.totalViews, views }),
       watchedPct: watched,
       retentionWarning: reasons.length > 0,
       retentionReasons: reasons,
@@ -222,7 +247,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
   const summaries = new Map(base.map((post) => [post.id, summarize(post)]));
   const postSummaries = posts.map((post) => summaries.get(post.id)!);
 
-  const analyzed = base.map((post) => {
+  const analyzed = counted.map((post) => {
     const summary = summaries.get(post.id)!;
     return {
       platform: post.platform,
@@ -231,7 +256,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       watchedPct: summary.watchedPct,
       skipRate: summary.skipRate,
       tags: summary.tags,
-      autoTags: autoTags(post),
+      autoTags: autoTags({ ...post, durationSec: summary.durationSec }),
     };
   });
 
@@ -255,7 +280,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
     pieces: Array.from(pieces.values()),
     earlyAlert: earlyAlertStatus(
       settings?.socialEarlyAlertEnabled ?? true,
-      Object.fromEntries(accounts.map((account) => [account.platform, earlyHistoryCount(base.filter((post) => post.platform === account.platform).map((post) => post.snapshots))])),
+      Object.fromEntries(accounts.map((account) => [account.platform, earlyHistoryCount(counted.filter((post) => post.platform === account.platform).map((post) => post.snapshots))])),
     ),
     tagOptions: tagOptions(storedTags),
   };

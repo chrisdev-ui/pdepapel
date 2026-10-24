@@ -19,6 +19,8 @@ const USAGE_PAUSE_PERCENT = 80;
 const THROTTLE_CODES = new Set([4, 17, 32, 613, 80002]);
 const AUTH_CODES = new Set([102, 190]);
 const MEDIA_FIELDS = "id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp";
+/** Además: vistas totales y anuncios activos. Si Meta rechaza alguno (#100), la pasada sigue con MEDIA_FIELDS. */
+const MEDIA_FIELDS_WITH_PROMOTION = `${MEDIA_FIELDS},total_views_count,boost_ads_list`;
 
 type FetchImpl = typeof fetch;
 
@@ -147,19 +149,36 @@ interface MediaItem {
   thumbnail_url?: string;
   media_url?: string;
   timestamp: string;
+  total_views_count?: number;
+  boost_ads_list?: { data?: unknown[] };
 }
 
 export function createInstagramAdapter(options: { pageToken: string; igUserId: string; fetchImpl?: FetchImpl }): SocialAdapter {
   const client = new GraphClient(options.pageToken, options.fetchImpl);
+  // Una vez rechazados los campos extra, el resto de la pasada pide solo los básicos: no se repite el error por página.
+  let promotionFields = true;
+  const listMedia = async (cursor: string | null) => {
+    const page = (fields: string) =>
+      client.get<{ data: MediaItem[]; paging?: { next?: string; cursors?: { after?: string } } }>(`/${options.igUserId}/media`, {
+        fields,
+        limit: "25",
+        ...(cursor ? { after: cursor } : {}),
+      });
+    if (promotionFields) {
+      try {
+        return await page(MEDIA_FIELDS_WITH_PROMOTION);
+      } catch (error) {
+        if (!(error instanceof SocialApiError && error.code === "meta_100")) throw error;
+        promotionFields = false;
+      }
+    }
+    return page(MEDIA_FIELDS);
+  };
   return {
     platform: SocialPlatform.INSTAGRAM,
     fetchAccount: () => discoverInstagramAccount(client),
     async listPosts(cursor) {
-      const response = await client.get<{ data: MediaItem[]; paging?: { next?: string; cursors?: { after?: string } } }>(`/${options.igUserId}/media`, {
-        fields: MEDIA_FIELDS,
-        limit: "25",
-        ...(cursor ? { after: cursor } : {}),
-      });
+      const response = await listMedia(cursor);
       return {
         posts: (response.data ?? []).map((media) => ({
           externalId: media.id,
@@ -171,6 +190,8 @@ export function createInstagramAdapter(options: { pageToken: string; igUserId: s
           thumbnailUrl: instagramThumbnail(media),
           durationSec: null,
           postedAt: new Date(media.timestamp),
+          totalViews: typeof media.total_views_count === "number" ? media.total_views_count : null,
+          boostActive: promotionFields ? (media.boost_ads_list?.data?.length ?? 0) > 0 : null,
         })),
         next: response.paging?.next ? (response.paging.cursors?.after ?? null) : null,
       };

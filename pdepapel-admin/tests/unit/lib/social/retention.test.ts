@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { postMetricRows, retentionDetails, visibleColumns } from "@/lib/social/display";
 import {
+  effectiveDuration,
+  isPromoted,
   knownDuration,
+  promotionSuggested,
   RETENTION_MIN_SKIP_SAMPLE,
   RETENTION_MIN_WATCHED_PCT,
   RETENTION_SKIP_POINTS_ABOVE_MEDIAN,
@@ -19,6 +22,27 @@ describe("retención de un reel", () => {
     expect(watchedPct(null, 30)).toBeNull();
     expect(watchedPct(4500, null)).toBeNull();
     expect(watchedPct(4500, 0)).toBeNull();
+  });
+
+  it("la duración leída del video gana; si no hay, la escrita a mano; 0 no cuenta en ninguna", () => {
+    expect(effectiveDuration(20, 30)).toBe(20);
+    expect(effectiveDuration(null, 30)).toBe(30);
+    expect(effectiveDuration(0, 30)).toBe(30);
+    expect(effectiveDuration(null, 0)).toBeNull();
+    expect(effectiveDuration(null, null)).toBeNull();
+  });
+
+  it("«¿Promocionado?» solo sin decisión y con totales > 2× las orgánicas y > 500; solo PROMOTED excluye", () => {
+    expect(promotionSuggested({ promotion: null, totalViews: 3633, views: 319 })).toBe(true);
+    expect(promotionSuggested({ promotion: null, totalViews: 897, views: 895 })).toBe(false);
+    expect(promotionSuggested({ promotion: null, totalViews: 450, views: 100 })).toBe(false);
+    expect(promotionSuggested({ promotion: null, totalViews: 1001, views: 500 })).toBe(true);
+    expect(promotionSuggested({ promotion: null, totalViews: 1000, views: 500 })).toBe(false);
+    expect(promotionSuggested({ promotion: "NOT_PROMOTED", totalViews: 3633, views: 319 })).toBe(false);
+    expect(promotionSuggested({ promotion: "PROMOTED", totalViews: 3633, views: 319 })).toBe(false);
+    expect(promotionSuggested({ promotion: null, totalViews: null, views: 319 })).toBe(false);
+    expect(promotionSuggested({ promotion: null, totalViews: 3633, views: null })).toBe(false);
+    expect([isPromoted({ promotion: "PROMOTED" }), isPromoted({ promotion: "NOT_PROMOTED" }), isPromoted({ promotion: null })]).toEqual([true, false, false]);
   });
 
   it("una duración de 0 o menos es desconocida en todos lados: % visto, cubeta de duración y tipo", async () => {

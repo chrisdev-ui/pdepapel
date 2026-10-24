@@ -246,6 +246,26 @@ export function knownDuration(durationSec: number | null | undefined): number | 
   return typeof durationSec === "number" && durationSec > 0 ? durationSec : null;
 }
 
+/** La duración leída del video gana; si no hay, la que escribió la dueña. */
+export function effectiveDuration(readSec: number | null | undefined, manualSec: number | null | undefined): number | null {
+  return knownDuration(readSec) ?? knownDuration(manualSec);
+}
+
+/**
+ * Las vistas de la API son solo orgánicas. Una publicación PROMOTED sale de las medianas y de todo lo que compara;
+ * la sugerencia «¿Promocionado?» no saca nada hasta que la dueña la confirma.
+ */
+export const isPromoted = (post: { promotion: string | null }) => post.promotion === "PROMOTED";
+
+export const PROMOTION_SUGGEST_RATIO = 2;
+export const PROMOTION_SUGGEST_MIN_TOTAL = 500;
+
+/** «¿Promocionado?»: sin decisión todavía, y las vistas totales pasan de 2× las orgánicas y de 500. */
+export function promotionSuggested(post: { promotion: string | null; totalViews: number | null; views: number | null }): boolean {
+  if (post.promotion !== null || post.totalViews === null || post.views === null) return false;
+  return post.totalViews > PROMOTION_SUGGEST_RATIO * post.views && post.totalViews > PROMOTION_SUGGEST_MIN_TOTAL;
+}
+
 /** Porcentaje del video que se ve en promedio; null sin duración o sin tiempo promedio. */
 export function watchedPct(avgWatchTimeMs: number | null, durationSec: number | null) {
   const duration = knownDuration(durationSec);

@@ -90,6 +90,44 @@ describe("cliente de Instagram", () => {
     const last = await createInstagramAdapter({ pageToken: TOKEN, igUserId: "ig1", fetchImpl: vi.fn().mockResolvedValue(json({ data: [], paging: { cursors: { after: "X" } } })) }).listPosts("CUR");
     expect(last.next).toBeNull();
   });
+
+  it("pide vistas totales y anuncios activos; un anuncio activo se marca, sin lista no", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      json({
+        data: [
+          { id: "a", media_type: "VIDEO", media_product_type: "REELS", timestamp: "2026-10-20T10:00:00+0000", total_views_count: 3633, boost_ads_list: { data: [{ ad_id: "1" }] } },
+          { id: "b", media_type: "VIDEO", media_product_type: "REELS", timestamp: "2026-10-19T10:00:00+0000", total_views_count: 897 },
+        ],
+      }),
+    );
+    const page = await createInstagramAdapter({ pageToken: TOKEN, igUserId: "ig1", fetchImpl }).listPosts(null);
+    expect(new URL(fetchImpl.mock.calls[0][0]).searchParams.get("fields")).toContain("total_views_count,boost_ads_list");
+    expect(page.posts.map((post) => [post.externalId, post.totalViews, post.boostActive, post.mediaUrl])).toEqual([
+      ["a", 3633, true, null],
+      ["b", 897, false, null],
+    ]);
+  });
+
+  it("si Meta rechaza los campos nuevos (#100), la pasada sigue con los de siempre y no lo repite en cada página", async () => {
+    const rejected = json({ error: { code: 100, message: "(#100) Tried accessing nonexisting field (boost_ads_list)" } }, { status: 400 });
+    const page = (id: string, after: string | null) => json({ data: [{ id, media_type: "IMAGE", media_product_type: "FEED", timestamp: "2026-10-20T10:00:00+0000" }], paging: after ? { cursors: { after }, next: "https://graph.facebook.com/next" } : {} });
+    const fetchImpl = vi.fn().mockResolvedValueOnce(rejected).mockResolvedValueOnce(page("a", "CUR")).mockResolvedValueOnce(page("b", null));
+    const adapter = createInstagramAdapter({ pageToken: TOKEN, igUserId: "ig1", fetchImpl });
+    const first = await adapter.listPosts(null);
+    const second = await adapter.listPosts("CUR");
+    const fields = fetchImpl.mock.calls.map((call) => new URL(call[0]).searchParams.get("fields"));
+    expect(fields.map((value) => value?.includes("total_views_count"))).toEqual([true, false, false]);
+    expect([...first.posts, ...second.posts].map((post) => [post.externalId, post.totalViews, post.boostActive])).toEqual([
+      ["a", null, null],
+      ["b", null, null],
+    ]);
+  });
+
+  it("cualquier otro error de la lista sigue saliendo como antes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(json({ error: { code: 190, message: "Error validating access token" } }, { status: 400 }));
+    expect(await caught(createInstagramAdapter({ pageToken: TOKEN, igUserId: "ig1", fetchImpl }).listPosts(null))).toMatchObject({ kind: "auth" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("cliente de TikTok", () => {

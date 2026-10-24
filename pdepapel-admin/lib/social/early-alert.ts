@@ -7,6 +7,7 @@ import prismadb from "@/lib/prismadb";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
 
 import { EARLY_DAILY_EMAILS, EARLY_MAX_HOURS, EARLY_MIN_HISTORY, earlyAlertCopy, earlyHistoryCount, earlyVerdict } from "./early-alert-rules";
+import { isPromoted } from "./metrics";
 
 const PANEL_ORIGIN = "https://admin.papeleriapdepapel.com";
 const DAY = 86_400_000;
@@ -43,10 +44,12 @@ export async function evaluateEarlyAlerts(accountId: string, options: { now?: Da
   if (!(await isEarlyAlertSwitchOn(account.storeId))) return { status: "off", created: 0, emailed: 0 };
   const posts = await prismadb.socialPost.findMany({
     where: { socialAccountId: accountId, postedAt: { gte: new Date(now.getTime() - 90 * DAY) } },
-    select: { id: true, caption: true, postedAt: true, earlyAlert: { select: { id: true } }, snapshots: { orderBy: { capturedAt: "asc" }, select: { hoursSincePost: true, views: true } } },
+    select: { id: true, caption: true, postedAt: true, promotion: true, earlyAlert: { select: { id: true } }, snapshots: { orderBy: { capturedAt: "asc" }, select: { hoursSincePost: true, views: true } } },
   });
+  // Lo promocionado (confirmado) no entra en la historia con la que se compara.
+  const history = posts.filter((post) => !isPromoted(post));
 
-  if (earlyHistoryCount(posts.map((post) => post.snapshots)) < EARLY_MIN_HISTORY) return { status: "waiting", created: 0, emailed: 0 };
+  if (earlyHistoryCount(history.map((post) => post.snapshots)) < EARLY_MIN_HISTORY) return { status: "waiting", created: 0, emailed: 0 };
 
   let created = 0;
   let emailed = 0;
@@ -55,7 +58,7 @@ export async function evaluateEarlyAlerts(accountId: string, options: { now?: Da
     if (post.earlyAlert || now.getTime() - post.postedAt.getTime() > (EARLY_MAX_HOURS + 1) * HOUR) continue;
     const latest = post.snapshots.filter((snapshot) => snapshot.views !== null).at(-1);
     if (!latest) continue;
-    const verdict = earlyVerdict(latest, posts.filter((other) => other.id !== post.id).map((other) => other.snapshots));
+    const verdict = earlyVerdict(latest, history.filter((other) => other.id !== post.id).map((other) => other.snapshots));
     if (!verdict?.kind || verdict.ratio === null) continue;
     const alert = await claimEarlyAlert({ storeId: account.storeId, socialPostId: post.id, kind: verdict.kind, ratio: verdict.ratio, hoursSincePost: verdict.hours });
     if (!alert) continue;

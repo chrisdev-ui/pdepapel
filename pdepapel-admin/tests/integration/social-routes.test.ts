@@ -19,6 +19,9 @@ import { GET as curveGET } from "@/app/api/[storeId]/social/posts/[postId]/route
 import { PUT as earlyAlertPUT } from "@/app/api/[storeId]/social/early-alert/route";
 import { DELETE as pieceDELETE, POST as piecePOST } from "@/app/api/[storeId]/social/posts/[postId]/piece/route";
 import { PUT as tagsPUT } from "@/app/api/[storeId]/social/posts/[postId]/tags/route";
+import { PUT as durationPUT } from "@/app/api/[storeId]/social/posts/[postId]/duration/route";
+import { PUT as promotionPUT } from "@/app/api/[storeId]/social/posts/[postId]/promotion/route";
+import { buildSocialSummary } from "@/lib/social/report";
 import { POST as instagramConnectPOST } from "@/app/api/[storeId]/social/instagram/connect/route";
 import { GET as socialGET } from "@/app/api/[storeId]/social/route";
 import { POST as syncPOST } from "@/app/api/[storeId]/social/sync/route";
@@ -406,5 +409,82 @@ describe("conexión de TikTok", () => {
     expect(denied.headers.get("location")).toContain("motivo=denied");
     expect(await testPrisma.socialCredential.count({ where: { storeId: f.store.id } })).toBe(0);
     expect(await testPrisma.socialAccount.count({ where: { storeId: f.store.id } })).toBe(0);
+  });
+});
+
+describe("«Promocionado» y duración a mano", () => {
+  const put = (body: unknown) => new Request("http://admin.test/x", { method: "PUT", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+
+  it("solo la dueña decide; solo lectura 403, otra tienda 404; un cuerpo vacío o inválido da 400 sin cambios", async () => {
+    f = await createInventoryFixture();
+    const { post } = await seedPost();
+    const params = { params: { storeId: f.store.id, postId: post.id } };
+    const stored = () => testPrisma.socialPost.findUniqueOrThrow({ where: { id: post.id }, select: { promotion: true, promotionSource: true, durationManualSec: true } });
+
+    asViewer();
+    expect((await promotionPUT(put({ promotion: "PROMOTED" }), params)).status).toBe(403);
+    expect((await durationPUT(put({ seconds: 20 }), params)).status).toBe(403);
+    const other = await createInventoryFixture();
+    try {
+      session.userId = other.store.userId;
+      session.claims = {};
+      expect((await promotionPUT(put({ promotion: "PROMOTED" }), { params: { storeId: other.store.id, postId: post.id } })).status).toBe(404);
+      expect((await durationPUT(put({ seconds: 20 }), { params: { storeId: other.store.id, postId: post.id } })).status).toBe(404);
+    } finally {
+      await deleteInventoryFixture(other);
+    }
+    expect(await stored()).toEqual({ promotion: null, promotionSource: null, durationManualSec: null });
+
+    asOwner();
+    expect(await (await promotionPUT(put({ promotion: "PROMOTED" }), params)).json()).toEqual({ promotion: "PROMOTED", promotionSource: "MANUAL" });
+    expect(await (await durationPUT(put({ seconds: 22.5 }), params)).json()).toEqual({ durationManualSec: 22.5 });
+    expect(await stored()).toEqual({ promotion: "PROMOTED", promotionSource: "MANUAL", durationManualSec: 22.5 });
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const empty = await promotionPUT(new Request("http://admin.test/x", { method: "PUT" }), params);
+    const emptyDuration = await durationPUT(new Request("http://admin.test/x", { method: "PUT" }), params);
+    warn.mockRestore();
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ error: "No llegó la decisión. Vuelve a intentarlo." });
+    expect(await emptyDuration.json()).toMatchObject({ error: "No llegó la duración. Vuelve a intentarlo." });
+    for (const body of [{ promotion: "QUIZAS" }, { promotion: "PROMOTED", extra: 1 }]) expect((await promotionPUT(put(body), params)).status).toBe(400);
+    for (const body of [{ seconds: 0 }, { seconds: 4000 }, { seconds: "20" }, {}]) expect((await durationPUT(put(body), params)).status).toBe(400);
+    expect(await stored()).toEqual({ promotion: "PROMOTED", promotionSource: "MANUAL", durationManualSec: 22.5 });
+
+    expect(await (await promotionPUT(put({ promotion: null }), params)).json()).toEqual({ promotion: null, promotionSource: null });
+    expect(await (await durationPUT(put({ seconds: null }), params)).json()).toEqual({ durationManualSec: null });
+  });
+
+  it("lo promocionado (confirmado) sale de «× mediana», la mediana y «Qué funciona»; la sugerencia no saca nada", async () => {
+    f = await createInventoryFixture();
+    const account = await testPrisma.socialAccount.create({ data: { storeId: f.store.id, platform: "INSTAGRAM", externalId: "ig1", tokenRef: "env:META_IG_PAGE_TOKEN" } });
+    const now = new Date();
+    const create = async (id: string, views: number, extra: Record<string, unknown> = {}) => {
+      const created = await testPrisma.socialPost.create({
+        data: { socialAccountId: account.id, platform: "INSTAGRAM", externalId: id, productType: "REELS", caption: `Reel ${id}`, postedAt: new Date(now.getTime() - 10 * 86_400_000), ...extra },
+      });
+      await testPrisma.socialMetricSnapshot.create({ data: { socialPostId: created.id, hoursSincePost: 168, views } });
+      return created;
+    };
+    for (let index = 0; index < 6; index += 1) await create(`n${index}`, 100 + index);
+    const promo = await create("promo", 319, { totalViews: 3633 });
+    await create("baja", 50, { totalViews: 60 });
+
+    const before = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 30, now });
+    const byCaption = (summary: typeof before) => Object.fromEntries(summary.posts.map((item) => [item.caption, item]));
+    expect(byCaption(before)["Reel promo"]).toMatchObject({ promotion: null, promotionSuggested: true, totalViews: 3633 });
+    expect(byCaption(before)["Reel promo"].multiplier).not.toBeNull();
+    expect(byCaption(before)["Reel baja"].promotionSuggested).toBe(false);
+    expect(byCaption(before)["Reel n0"].multiplierSample).toBe(7);
+    const reelsBefore = before.whatWorks.find((network) => network.platform === "INSTAGRAM")!.rows.find((row) => row.group === "TIPO" && row.label === "Reel")!;
+    expect(reelsBefore.count).toBe(8);
+
+    await testPrisma.socialPost.update({ where: { id: promo.id }, data: { promotion: "PROMOTED", promotionSource: "MANUAL", promotionSetAt: now } });
+    const after = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 30, now });
+    expect(byCaption(after)["Reel promo"]).toMatchObject({ promotion: "PROMOTED", promotionSuggested: false, multiplier: null });
+    expect(byCaption(after)["Reel n0"].multiplierSample).toBe(6);
+    expect(after.whatWorks.find((network) => network.platform === "INSTAGRAM")!.rows.find((row) => row.group === "TIPO" && row.label === "Reel")!.count).toBe(7);
+    expect(after.posts).toHaveLength(8);
+    assertNoForbiddenKeys(after, "owner");
   });
 });

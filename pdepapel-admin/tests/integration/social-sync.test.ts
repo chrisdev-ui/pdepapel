@@ -492,3 +492,43 @@ describe("fotos de TikTok", () => {
     expect(tiktokRows.filter((row) => row.group === "DURACION").map((row) => [row.label, row.count])).toEqual([["15 a 30 s", 3]]);
   });
 });
+
+describe("reels sin video y publicaciones promocionadas", () => {
+  it("un reel sin media_url (audio con derechos) marca el intento sin gastar uno de los 3 por pasada", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const probed: string[] = [];
+    const locked = Array.from({ length: 4 }, (_, index) => post(`sin${index}`, 2 + index, { mediaUrl: null }));
+    const open = Array.from({ length: 3 }, (_, index) => post(`con${index}`, 10 + index, { mediaUrl: `https://cdn.example/con${index}.mp4` }));
+    const { adapter } = fakeInstagram([[...locked, ...open]]);
+    await runSocialSync({ accountId: row.id, adapter: { ...adapter, probeDuration: async (url) => (probed.push(url), 12) }, now: () => now });
+    expect(probed).toHaveLength(3);
+    const stored = await testPrisma.socialPost.findMany({ where: { socialAccountId: row.id }, select: { externalId: true, durationSec: true, durationCheckedAt: true } });
+    expect(stored.every((item) => item.durationCheckedAt !== null)).toBe(true);
+    expect(stored.filter((item) => item.externalId.startsWith("sin")).map((item) => item.durationSec)).toEqual([null, null, null, null]);
+    const summary = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 7, now });
+    expect(summary.posts.filter((item) => item.caption?.startsWith("Reel sin")).every((item) => item.durationUnavailable)).toBe(true);
+    expect(summary.posts.filter((item) => item.caption?.startsWith("Reel con")).every((item) => !item.durationUnavailable && item.durationSec === 12)).toBe(true);
+  });
+
+  it("un anuncio activo marca «Promocionado» (AUTO); la sincronización nunca lo borra y la decisión de la dueña gana", async () => {
+    f = await createInventoryFixture();
+    const row = await account();
+    const sync = (extra: Partial<NormalizedPost>, at = now) => runSocialSync({ accountId: row.id, adapter: fakeInstagram([[post("p1", 5, extra)]]).adapter, now: () => at });
+    const stored = () => testPrisma.socialPost.findFirstOrThrow({ where: { socialAccountId: row.id, externalId: "p1" }, select: { promotion: true, promotionSource: true, totalViews: true } });
+
+    await sync({ totalViews: 3633, boostActive: true });
+    expect(await stored()).toEqual({ promotion: "PROMOTED", promotionSource: "AUTO", totalViews: 3633 });
+
+    // La promoción terminó y la lista no trae vistas totales: nada se borra.
+    await sync({ totalViews: null, boostActive: false }, new Date(now.getTime() + 6 * HOUR));
+    expect(await stored()).toEqual({ promotion: "PROMOTED", promotionSource: "AUTO", totalViews: 3633 });
+
+    // La dueña dice que no: la siguiente pasada con anuncio activo no la contradice.
+    const { setSocialPostPromotion } = await import("@/lib/social/post-settings");
+    const id = (await testPrisma.socialPost.findFirstOrThrow({ where: { socialAccountId: row.id, externalId: "p1" } })).id;
+    await setSocialPostPromotion(testPrisma, f.store.id, id, { promotion: "NOT_PROMOTED" });
+    await sync({ totalViews: 4000, boostActive: true }, new Date(now.getTime() + 12 * HOUR));
+    expect(await stored()).toEqual({ promotion: "NOT_PROMOTED", promotionSource: "MANUAL", totalViews: 4000 });
+  });
+});

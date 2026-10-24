@@ -26,6 +26,10 @@ export interface NormalizedPost {
   metrics?: MetricValues;
   /** Instagram: el MP4 del reel (vence en horas), solo para leer su duración en esta misma pasada. */
   mediaUrl?: string | null;
+  /** Instagram: `total_views_count` (orgánicas + promocionadas + repeticiones); null si no llegó. */
+  totalViews?: number | null;
+  /** Instagram: true si `boost_ads_list` trae un anuncio activo; null si no se pudo saber. */
+  boostActive?: boolean | null;
 }
 
 export interface SocialAdapter {
@@ -99,14 +103,26 @@ async function upsertPost(account: { id: string; platform: SocialPlatform }, pos
     thumbnailCheckedAt: now,
     postedAt: post.postedAt,
   };
-  // Instagram no trae la duración en la lista: un null no borra la que ya se leyó del video.
+  // Instagram no trae la duración en la lista: un null no borra la que ya se leyó del video. Igual con las vistas totales.
   const duration = post.durationSec !== null ? { durationSec: post.durationSec } : {};
-  return prismadb.socialPost.upsert({
+  const totalViews = post.totalViews != null ? { totalViews: post.totalViews } : {};
+  const row = await prismadb.socialPost.upsert({
     where: { socialAccountId_externalId: { socialAccountId: account.id, externalId: post.externalId } },
-    create: { socialAccountId: account.id, platform: account.platform, externalId: post.externalId, ...fields, durationSec: post.durationSec },
-    update: { ...fields, ...duration },
+    create: { socialAccountId: account.id, platform: account.platform, externalId: post.externalId, ...fields, durationSec: post.durationSec, ...totalViews },
+    update: { ...fields, ...duration, ...totalViews },
     select: { id: true, metricsSyncedAt: true, durationSec: true, durationCheckedAt: true },
   });
+  // Un reel sin media_url (audio con derechos) nunca dará su duración: se marca el intento sin gastar uno de los 3.
+  if (post.productType === "REELS" && post.mediaUrl === null && row.durationSec === null && row.durationCheckedAt === null) {
+    await prismadb.socialPost.updateMany({ where: { id: row.id, durationCheckedAt: null }, data: { durationCheckedAt: now } });
+    row.durationCheckedAt = now;
+  }
+  // Un anuncio activo marca «Promocionado» (AUTO) salvo que la dueña ya haya decidido. Una sola sentencia: una
+  // decisión manual que llegue al mismo tiempo gana. Nunca se borra.
+  if (post.boostActive === true) {
+    await prismadb.$executeRaw`UPDATE \`SocialPost\` SET \`promotion\` = 'PROMOTED', \`promotionSource\` = 'AUTO', \`promotionSetAt\` = ${now} WHERE \`id\` = ${row.id} AND (\`promotionSource\` IS NULL OR \`promotionSource\` = 'AUTO')`;
+  }
+  return row;
 }
 
 /** Lee la duración de un reel sin ella, una sola vez (también se marca si falla). Devuelve si lo intentó. */

@@ -3753,6 +3753,16 @@ enum SocialAccountStatus {
   DISABLED
 }
 
+enum SocialPromotion {
+  PROMOTED
+  NOT_PROMOTED
+}
+
+enum SocialPromotionSource {
+  MANUAL
+  AUTO
+}
+
 enum SocialProductType {
   REELS
   FEED
@@ -3825,27 +3835,36 @@ model SocialOAuthState {
 }
 
 model SocialPost {
-  id                 String             @id @default(uuid())
+  id                 String                 @id @default(uuid())
   socialAccountId    String
   platform           SocialPlatform
-  externalId         String             @db.VarChar(191)
-  mediaType          String?            @db.VarChar(40)
+  externalId         String                 @db.VarChar(191)
+  mediaType          String?                @db.VarChar(40)
   productType        SocialProductType?
-  caption            String?            @db.Text
-  permalink          String?            @db.VarChar(512)
+  caption            String?                @db.Text
+  permalink          String?                @db.VarChar(512)
   /// Efímera en ambas plataformas: se renueva en cada sincronización y nunca se copia a Cloudinary ni a R2.
-  thumbnailUrl       String?            @db.Text
+  thumbnailUrl       String?                @db.Text
   thumbnailCheckedAt DateTime?
   durationSec        Float?
   /// Cuándo se intentó leer la duración del MP4 de un reel (también si falló): no se reintenta en cada sincronización.
   durationCheckedAt  DateTime?
+  /// Duración que escribe la dueña cuando Instagram no entrega el video (audio con derechos). La leída del video gana.
+  durationManualSec  Float?
+  /// Vistas totales de Instagram (`total_views_count`): orgánicas + promocionadas + repeticiones. `views` de las mediciones es solo orgánico.
+  totalViews         Int?
+  /// ¿Se promocionó? null = sin decidir. La dueña decide (MANUAL) y su decisión siempre gana; la sincronización
+  /// solo marca PROMOTED (AUTO) mientras Instagram lista un anuncio activo, y nunca lo borra.
+  promotion          SocialPromotion?
+  promotionSource    SocialPromotionSource?
+  promotionSetAt     DateTime?
   postedAt           DateTime
   /// Último sondeo de métricas; decide si toca de nuevo (30 días: cada corrida; más viejas: una vez al día).
   metricsSyncedAt    DateTime?
   /// La misma pieza publicada en varias redes (la une la dueña; la sincronización nunca la toca).
   socialPieceId      String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
   account    SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
   snapshots  SocialMetricSnapshot[]
