@@ -455,6 +455,30 @@ describe("«Promocionado» y duración a mano", () => {
     expect(await (await durationPUT(put({ seconds: null }), params)).json()).toEqual({ durationManualSec: null });
   });
 
+  it("lo promocionado (confirmado) también sale de la mediana del salto; la sugerencia sigue contando hasta confirmar", async () => {
+    f = await createInventoryFixture();
+    const account = await testPrisma.socialAccount.create({ data: { storeId: f.store.id, platform: "INSTAGRAM", externalId: "ig1", tokenRef: "env:META_IG_PAGE_TOKEN" } });
+    const now = new Date();
+    const reel = async (id: string, skipRate: number, extra: Record<string, unknown> = {}) => {
+      const created = await testPrisma.socialPost.create({
+        data: { socialAccountId: account.id, platform: "INSTAGRAM", externalId: id, productType: "REELS", caption: `Reel ${id}`, postedAt: new Date(now.getTime() - 3 * 86_400_000), ...extra },
+      });
+      await testPrisma.socialMetricSnapshot.create({ data: { socialPostId: created.id, hoursSincePost: 48, views: 100, skipRate } });
+      return created;
+    };
+    for (const [index, skip] of Array.from([50, 52, 54, 56, 58].entries())) await reel(`o${index}`, skip);
+    // El público del anuncio salta muchísimo más: con ella, la mediana sube y esconde los reels flojos.
+    const boosted = await reel("anuncio", 90, { totalViews: 5000 });
+    await reel("anuncio2", 92, { totalViews: 5000 });
+
+    const before = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 30, now });
+    expect(before.skipBaselines.INSTAGRAM).toEqual({ median: 56, count: 7 });
+    await testPrisma.socialPost.update({ where: { id: boosted.id }, data: { promotion: "PROMOTED", promotionSource: "MANUAL", promotionSetAt: now } });
+    const after = await buildSocialSummary(testPrisma, { storeId: f.store.id, days: 30, now });
+    // «anuncio2» sigue sin decidir: cuenta.
+    expect(after.skipBaselines.INSTAGRAM).toEqual({ median: 55, count: 6 });
+  });
+
   it("lo promocionado (confirmado) sale de «× mediana», la mediana y «Qué funciona»; la sugerencia no saca nada", async () => {
     f = await createInventoryFixture();
     const account = await testPrisma.socialAccount.create({ data: { storeId: f.store.id, platform: "INSTAGRAM", externalId: "ig1", tokenRef: "env:META_IG_PAGE_TOKEN" } });

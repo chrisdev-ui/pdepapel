@@ -143,4 +143,13 @@ describe("detalle de la publicación", () => {
     ]);
     expect(postMetricRows({ ...post, reach: null, skipRate: null }).filter(([, value]) => value === "—").map(([label]) => label)).toEqual(["Alcance", "Salto en 3 s"]);
   });
+
+  it("la duración escrita a mano se dice «(a mano)»; las vistas totales salen solo si Instagram las dio", () => {
+    const post = { durationSec: 22.5, durationIsManual: true, totalViews: 3633 } as SocialPostSummary;
+    const rows = Object.fromEntries(postMetricRows(post));
+    expect(rows["Duración"]).toBe("22,5 s (a mano)");
+    expect(rows["Vistas totales"]).toBe("3.633");
+    expect(Object.fromEntries(postMetricRows({ ...post, durationIsManual: false, totalViews: null }))).not.toHaveProperty("Vistas totales");
+    expect(Object.fromEntries(postMetricRows({ ...post, durationIsManual: false }))["Duración"]).toBe("22,5 s");
+  });
 });

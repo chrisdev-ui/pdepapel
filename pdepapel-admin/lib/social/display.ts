@@ -102,7 +102,8 @@ export function postMetricRows(post: SocialPostSummary): [string, string][] {
     ],
     ["% visto", formatPct(post.watchedPct)],
     ["Salto en 3 s", formatPct(post.skipRate)],
-    ["Duración", seconds(post.durationSec)],
+    ["Duración", post.durationIsManual ? `${seconds(post.durationSec)} (a mano)` : seconds(post.durationSec)],
+    ...(post.totalViews != null ? ([["Vistas totales", num(post.totalViews)]] as [string, string][]) : []),
   ];
 }
 

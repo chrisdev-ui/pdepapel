@@ -33,6 +33,7 @@ const post = {
   skipRate: null,
   durationSec: null,
   durationManualSec: null,
+  durationIsManual: false,
   durationUnavailable: false,
   totalViews: null,
   promotion: null,

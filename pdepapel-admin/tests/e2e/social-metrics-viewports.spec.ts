@@ -83,6 +83,10 @@ test.describe("métricas de redes", () => {
           thumbnailUrl: index === 0 ? "https://cdn.invalid/vencida.jpg" : null,
           // El primer reel dura 30 s y la mayoría lo salta: lleva la alerta de retención.
           durationSec: index === 0 ? 30 : index === 2 ? 20 : null,
+          // «Reel de libretas»: Instagram cuenta muchas más vistas en total que orgánicas → «¿Promocionado?».
+          totalViews: index === 6 ? 1000 : null,
+          // «Reel de colores»: Instagram no entrega el video → duración a mano.
+          durationCheckedAt: index === 7 ? new Date(now - HOUR) : null,
           postedAt,
         },
       });
@@ -229,6 +233,44 @@ test.describe("métricas de redes", () => {
       await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}-curva.png`) });
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
       await curveDialog.press("Escape");
+
+      // ¿Se promocionó? En la primera medida se acepta la sugerencia; las demás encuentran el interruptor encendido y la marca.
+      // «Reel de libretas» y «Reel de colores» tienen 13 y 15 días: se ven con el periodo de 30.
+      await page.goto(`/${storeId}/redes?dias=30`);
+      await expect(title).toBeVisible({ timeout: 60_000 });
+      await list.getByText(/Reel de libretas/).click();
+      const promoDialog = page.getByRole("dialog");
+      const promotion = promoDialog.getByRole("region", { name: "¿Se promocionó?" });
+      const promotedSwitch = promotion.getByRole("switch", { name: "Promocionado" });
+      if (viewport.name === "390") {
+        await expect(promotion.getByText("Instagram cuenta 1.000 vistas en total y 220 orgánicas. ¿Se promocionó?")).toBeVisible();
+        await promotion.getByRole("button", { name: "Sí, se promocionó" }).click();
+        await expect(page.getByText("Marcada como promocionada").first()).toBeVisible();
+      }
+      await expect(promotedSwitch).toHaveAttribute("aria-checked", "true", { timeout: 20_000 });
+      await expect(promotion.getByText(/No cuenta en la mediana/)).toBeVisible();
+      await expect(promoDialog.getByText("Vistas totales", { exact: true })).toBeVisible();
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: path.join(SHOTS, `redes-${viewport.name}-promocionado.png`) });
+      // Con el aviso abierto, Escape cierra el aviso y no el diálogo: se cierra con su botón.
+      await promoDialog.getByRole("button", { name: "Cerrar" }).click();
+      await expect(promoDialog).toBeHidden();
+      await expect(list.getByText("Promocionado").first()).toBeVisible();
+
+      // Duración a mano de un reel cuyo video Instagram no entrega.
+      await list.getByText(/Reel de colores/).click();
+      const durationDialog = page.getByRole("dialog");
+      const durationInput = durationDialog.getByLabel("Duración (s)");
+      if (viewport.name === "390") {
+        await durationInput.fill("25");
+        await durationDialog.getByRole("button", { name: "Guardar duración" }).click();
+        await expect(page.getByText("Duración guardada").first()).toBeVisible();
+      }
+      await expect(durationDialog.getByText("25 s (a mano)")).toBeVisible({ timeout: 20_000 });
+      await expect(durationInput).toHaveValue("25");
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+      await durationDialog.getByRole("button", { name: "Cerrar" }).click();
+      await expect(durationDialog).toBeHidden();
 
       // Inicio avisa mientras TikTok pide reconectar, con el enlace a esta pantalla.
       await page.goto(`/${storeId}`);

@@ -93,6 +93,15 @@ const TIKTOK_REASON: Record<string, string> = {
     "TikTok no aceptó la conexión. Vuelve a intentarlo en unos minutos.",
 };
 
+/** Sale de las comparaciones: sus vistas de Instagram son solo orgánicas. */
+function PromotedBadge() {
+  return (
+    <span className="inline-flex w-fit shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-950">
+      Promocionado
+    </span>
+  );
+}
+
 function AccountCard({
   storeId,
   platform,
@@ -524,6 +533,7 @@ export function SocialMetricsClient({
                       {PLATFORM[post.platform].label} ·{" "}
                       {DATE.format(new Date(post.postedAt))}
                     </span>
+                    {post.promotion === "PROMOTED" && <PromotedBadge />}
                     <span className="text-xs text-primary">
                       {num(post.views)} vistas
                       {post.multiplier != null
@@ -605,6 +615,7 @@ export function SocialMetricsClient({
                             </span>
                           </span>
                         </button>
+                        {post.promotion === "PROMOTED" && <PromotedBadge />}
                         {post.retentionWarning && (
                           <RetentionFlag details={retentionDetails(post)} />
                         )}

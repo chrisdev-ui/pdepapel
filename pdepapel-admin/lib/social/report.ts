@@ -1,7 +1,7 @@
 import type { PrismaClient, SocialPlatform } from "@prisma/client";
 
 import { dailyFollowers, type DailyFollowers } from "./followers";
-import { CURVE_POINTS_HOURS, effectiveDuration, engagementRate, isPromoted, median, promotionSuggested, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
+import { CURVE_POINTS_HOURS, effectiveDuration, engagementRate, isPromoted, knownDuration, median, promotionSuggested, retentionReasons, sameAgeMultipliers, skipBaseline, viewsAt, watchedPct, type RetentionReason, type SameAgeMultiplier, type SkipBaseline } from "./metrics";
 import { autoTags, tagOptions, type PostTags } from "./tags";
 import { bestTimeGrid, type BestTimeNetwork } from "./best-time";
 import { earlyAlertStatus, earlyHistoryCount, type EarlyAlertStatus } from "./early-alert-rules";
@@ -53,6 +53,8 @@ export interface SocialPostSummary {
   /** La leída del video o, si no hay, la que escribió la dueña. */
   durationSec: number | null;
   durationManualSec: number | null;
+  /** La duración que se muestra es la escrita a mano (no hay leída del video). */
+  durationIsManual: boolean;
   /** Reel cuyo video Instagram no entrega (audio con derechos): su duración solo puede escribirla la dueña. */
   durationUnavailable: boolean;
   /** Vistas totales de Instagram (con lo promocionado); `views` es solo orgánico. */
@@ -179,7 +181,8 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
   const multipliers = new Map<string, SameAgeMultiplier>();
   for (const platform of Array.from(new Set(base.map((post) => post.platform)))) {
     const network = base.filter((post) => post.platform === platform);
-    skipBaselines[platform] = skipBaseline(network.filter((post) => post.productType === "REELS").map((post) => post.snapshots.at(-1)?.skipRate ?? null));
+    // También fuera de la mediana del salto: el público de un anuncio salta mucho más y escondería los reels flojos.
+    skipBaselines[platform] = skipBaseline(network.filter((post) => post.productType === "REELS" && !isPromoted(post)).map((post) => post.snapshots.at(-1)?.skipRate ?? null));
     sameAgeMultipliers(network.filter((post) => !isPromoted(post)), now).forEach((value, id) => multipliers.set(id, value));
   }
 
@@ -219,6 +222,7 @@ export async function buildSocialSummary(db: Db, input: { storeId: string; days?
       skipRate: skipRate === null ? null : Math.round(skipRate * 10) / 10,
       durationSec: duration,
       durationManualSec: post.durationManualSec,
+      durationIsManual: knownDuration(post.durationSec) === null && duration !== null,
       durationUnavailable: post.productType === "REELS" && post.durationCheckedAt !== null && post.durationSec === null,
       totalViews: post.totalViews,
       promotion: post.promotion,

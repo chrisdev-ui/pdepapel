@@ -28,7 +28,9 @@ import type {
 
 import type { PostTags } from "@/lib/social/tags";
 
+import { PostDurationField } from "./post-duration-field";
 import { PostPieceSection } from "./post-piece-section";
+import { PostPromotionSection } from "./post-promotion-section";
 import { PostTagEditor } from "./post-tag-editor";
 import { PostThumbnail } from "./post-thumbnail";
 import { RETENTION_WARNING_TEXT } from "./retention-flag";
@@ -135,6 +137,10 @@ export function PostCurveDialog({
               </div>
             ))}
           </dl>
+        )}
+        {post && post.platform === "INSTAGRAM" && <PostPromotionSection storeId={storeId} post={post} onChanged={onChanged} />}
+        {post && (post.durationUnavailable || post.durationManualSec != null) && (
+          <PostDurationField key={`duracion-${post.id}`} storeId={storeId} post={post} onChanged={onChanged} />
         )}
         {post && (
           <PostTagEditor
