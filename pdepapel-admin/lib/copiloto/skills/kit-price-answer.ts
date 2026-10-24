@@ -31,7 +31,7 @@ function optionLabel(kinds: KitPriceOptionKind[], discountPct: number, minimumPc
 
 /**
  * Orden para Paula: el recomendado (el precio más bajo que cumple el mínimo
- * después de Bold), los otros permitidos de mayor a menor, el de rotar si lo
+ * antes de Bold), los otros permitidos de mayor a menor, el de rotar si lo
  * pidió y al final los no permitidos. Sin costo o sin mínimo: de mayor a menor.
  */
 export function orderKitOptions(options: readonly KitPriceOption[]): { option: KitPriceOption; recommended: boolean }[] {
@@ -129,7 +129,9 @@ export function composeKitPriceAnswer(result: KitPriceToolResult): string {
       [
         "Precio por separado: la suma de los precios de hoy de las piezas (con ofertas), bajada a un precio terminado en 900.",
         "Margen como en la ficha de producto: (precio − costo) ÷ precio, con el costo de compra más el transporte registrado.",
-        datos.minimoPct !== null ? `Tu mínimo de ${percent(datos.minimoPct)} se exige en el peor caso: después de la comisión de Bold por pago en línea.` : null,
+        datos.minimoPct !== null
+          ? `Tu mínimo de ${percent(datos.minimoPct)} se exige sobre ese margen, antes de la comisión de pago. «Si pagan con Bold» es solo un dato: el margen que queda si la clienta paga en línea con Bold.`
+          : null,
         datos.paraRotar ? "El precio para rotar usa el mismo piso que «Kits para rotar»: el costo más 20 %." : null,
       ].filter(Boolean) as string[],
     ),

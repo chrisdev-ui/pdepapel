@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { PaymentMethod } from "@prisma/client";
 
 import { gatewayFee } from "@/lib/gateway-fees";
-import { marginAfterBold, minimumPriceAfterBold, priceKitOptions, ROTATION_FLOOR_MARKUP_PCT, type KitPriceLine } from "@/lib/pricing/kit-price";
+import { marginAfterBold, minimumPriceAfterBold, minimumPriceBeforeBold, priceKitOptions, ROTATION_FLOOR_MARKUP_PCT, type KitPriceLine } from "@/lib/pricing/kit-price";
+import { marginOnPrice } from "@/lib/pricing/price-calculator";
 
 /** Valores de prueba: ninguna cifra del negocio. */
 const line = (nombre: string, precio: number, acqPrice: number | null, stock = 5, extra: Partial<KitPriceLine> = {}): KitPriceLine => ({
@@ -39,6 +40,15 @@ describe("margen después de Bold y precio mínimo", () => {
   it("sin costo o con un mínimo imposible no hay precio mínimo", () => {
     expect(minimumPriceAfterBold(0, 40)).toBeNull();
     expect(minimumPriceAfterBold(1000, 99)).toBeNull();
+    expect(minimumPriceBeforeBold(0, 40)).toBeNull();
+    expect(minimumPriceBeforeBold(1000, 100)).toBeNull();
+  });
+
+  it("el mínimo antes de Bold es el …900 más bajo cuyo margen de la ficha llega al 40 %", () => {
+    const price = minimumPriceBeforeBold(22000, 40) as number;
+    expect(price).toBe(36900);
+    expect(marginOnPrice(price, 22000)!).toBeGreaterThanOrEqual(40);
+    expect(marginOnPrice(price - 1000, 22000)!).toBeLessThan(40);
   });
 });
 
@@ -48,17 +58,25 @@ describe("opciones de precio de un kit armado a mano", () => {
     expect(result).toMatchObject({ sumaPorSeparado: 46500, costoTotal: 22000, kitsArmables: 2, piezaQueLimita: "Rollo de stickers", minimoSobreLaSuma: false });
     expect(result.opciones).toEqual([
       { kinds: ["separado"], precio: 45900, margenPct: 52.1, margenBoldPct: 46.2, permitido: true },
-      { kinds: ["descuento", "minimo"], precio: 40900, margenPct: 46.2, margenBoldPct: 40, permitido: true },
+      { kinds: ["descuento"], precio: 40900, margenPct: 46.2, margenBoldPct: 40, permitido: true },
+      { kinds: ["minimo"], precio: 36900, margenPct: 40.4, margenBoldPct: 33.9, permitido: true },
     ]);
   });
 
-  it("una opción con menos del 40 % después de Bold queda «no permitido»", () => {
+  it("el mínimo se exige antes de Bold: una opción que llega al 40 % solo sin Bold sigue permitida", () => {
+    const minimum = priceKitOptions({ lines: FIVE, minMarginPct: 40, discountPct: 12, forRotation: false }).opciones.find((option) => option.kinds.includes("minimo"))!;
+    expect(minimum.margenPct).toBeGreaterThanOrEqual(40);
+    expect(minimum.margenBoldPct).toBeLessThan(40);
+    expect(minimum.permitido).toBe(true);
+  });
+
+  it("una opción con menos del 40 % antes de Bold queda «no permitido»", () => {
     const result = priceKitOptions({ lines: FIVE, minMarginPct: 40, discountPct: 25, forRotation: false });
     const discounted = result.opciones.find((option) => option.kinds.includes("descuento"))!;
     expect(discounted.precio).toBe(33900);
-    expect(discounted.margenBoldPct).toBeLessThan(40);
+    expect(discounted.margenPct).toBeLessThan(40);
     expect(discounted.permitido).toBe(false);
-    expect(result.opciones.find((option) => option.kinds.includes("minimo"))).toMatchObject({ precio: 40900, permitido: true });
+    expect(result.opciones.find((option) => option.kinds.includes("minimo"))).toMatchObject({ precio: 36900, permitido: true });
   });
 
   it("sin intención de rotar no hay precio para rotar; con ella, el piso de kitsParaRotar (costo + 20 %) al …900", () => {

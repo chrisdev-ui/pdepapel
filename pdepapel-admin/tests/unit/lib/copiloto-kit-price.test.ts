@@ -132,7 +132,7 @@ describe("precioDeKit con el pedido de Paula del 2026-10-22 (capibara)", () => {
     expect(composeKitPriceAnswer(result)).not.toContain("Precio para rotar");
   });
 
-  it("una opción por debajo del 40 % después de Bold sale «no permitido»", async () => {
+  it("una opción por debajo del 40 % antes de Bold sale «no permitido»", async () => {
     const result = await computeKitPrice(fakeDb(), "store", { piezas: pieces(["Llavero Capibara", "Rollo de stickers Capibara"]), descuentoPct: 25 });
     const text = composeKitPriceAnswer(result);
     expect(text).toMatch(/no permitido \(menos del 40 %\)/);
@@ -233,7 +233,7 @@ describe("orden de las opciones de precio", () => {
   it("recomendado (el más bajo que cumple), otros permitidos de mayor a menor, rotar, y los no permitidos al final", () => {
     const ordered = orderKitOptions(priced(true).opciones);
     expect(ordered.map(({ option, recommended }) => [option.precio, option.kinds.join("+"), option.permitido, recommended])).toEqual([
-      [40900, "minimo", true, true],
+      [36900, "minimo", true, true],
       [45900, "separado", true, false],
       [26900, "rotar", null, false],
       [33900, "descuento", false, false],
@@ -257,7 +257,7 @@ describe("orden de las opciones de precio", () => {
 
       ## Opciones de precio
 
-      1. **$40.900** · el más bajo que cumple tu mínimo de 40 % · margen 46,2 % · Si pagan con Bold: 40 % [[tag:Recomendado]]
+      1. **$36.900** · el más bajo que cumple tu mínimo de 40 % · margen 40,4 % · Si pagan con Bold: 33,9 % [[tag:Recomendado]]
       2. **$45.900** · lo mismo que por separado · margen 52,1 % · Si pagan con Bold: 46,2 %
       3. **$26.900** · Precio para rotar inventario (por debajo del 40 %, aprobado por Paula para mercancía quieta) · margen 18,2 % · Si pagan con Bold: 10,7 %
       4. **$33.900** · con 25 % de descuento · margen 35,1 % · Si pagan con Bold: 28,4 % [[tag:no permitido (menos del 40 %)]]
@@ -278,7 +278,7 @@ describe("orden de las opciones de precio", () => {
       :::detalle Cómo se calculó
       - Precio por separado: la suma de los precios de hoy de las piezas (con ofertas), bajada a un precio terminado en 900.
       - Margen como en la ficha de producto: (precio − costo) ÷ precio, con el costo de compra más el transporte registrado.
-      - Tu mínimo de 40 % se exige en el peor caso: después de la comisión de Bold por pago en línea.
+      - Tu mínimo de 40 % se exige sobre ese margen, antes de la comisión de pago. «Si pagan con Bold» es solo un dato: el margen que queda si la clienta paga en línea con Bold.
       - El precio para rotar usa el mismo piso que «Kits para rotar»: el costo más 20 %.
       :::"
     `);

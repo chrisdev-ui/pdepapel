@@ -5,14 +5,16 @@ import { priceKit, type KitPiece } from "@/lib/copiloto/kits-rotation";
 import { BOLD_ONLINE_FEE, gatewayFee } from "@/lib/gateway-fees";
 import { isKnownTransport } from "@/lib/product-costs";
 
-import { landedCost, marginOnPrice } from "./price-calculator";
+import { landedCost, marginOnPrice, priceToReachMargin } from "./price-calculator";
 import { roundDown900, roundUp900 } from "./rounding";
 
 /**
  * Precio de un kit que Paula arma con piezas que ella elige. El margen que se
- * muestra es el de la ficha de producto, (precio − costo) ÷ precio; el mínimo
- * de la tienda se exige en el peor caso, después de la comisión de Bold en
- * línea. Sin el costo de alguna pieza no hay margen ni precio mínimo.
+ * muestra es el de la ficha de producto, (precio − costo) ÷ precio, y el
+ * mínimo de la tienda se exige sobre ese margen, antes de la comisión de pago
+ * (decisión de Christian, 2026-10). El margen si pagan con Bold en línea se
+ * muestra aparte, solo como dato. Sin el costo de alguna pieza no hay margen
+ * ni precio mínimo.
  */
 
 export interface KitPriceLine {
@@ -35,9 +37,9 @@ export interface KitPriceOption {
   precio: number;
   /** Margen como en la ficha de producto; null sin costo. */
   margenPct: number | null;
-  /** Margen si la clienta paga con Bold en línea; null sin costo. */
+  /** Margen si la clienta paga con Bold en línea, solo informativo; null sin costo. */
   margenBoldPct: number | null;
-  /** Cumple el mínimo después de Bold; null sin costo o sin mínimo configurado. */
+  /** Cumple el mínimo antes de Bold; null sin costo o sin mínimo configurado. */
   permitido: boolean | null;
 }
 
@@ -62,6 +64,12 @@ export function marginAfterBold(price: number, cost: number): number | null {
   if (!(price > 0)) return null;
   const fee = gatewayFee(price, PaymentMethod.Bold) ?? 0;
   return round1(((price - cost - fee) / price) * 100);
+}
+
+/** El precio terminado en 900 más bajo cuyo margen (antes de Bold) llega al mínimo. Null si no es alcanzable. */
+export function minimumPriceBeforeBold(cost: number, minMarginPct: number): number | null {
+  const exact = priceToReachMargin(cost, minMarginPct);
+  return exact === null ? null : roundUp900(exact);
 }
 
 /**
@@ -98,13 +106,13 @@ export function priceKitOptions(input: {
   const limiting = lines.find((line) => Math.floor(availableStock(line) / line.cantidad) === kitsArmables) ?? null;
 
   const option = (kind: KitPriceOptionKind, precio: number): KitPriceOption => {
-    const margenBoldPct = cost === null ? null : marginAfterBold(precio, cost);
+    const margenPct = cost === null ? null : marginOnPrice(precio, cost);
     return {
       kinds: [kind],
       precio,
-      margenPct: cost === null ? null : marginOnPrice(precio, cost),
-      margenBoldPct,
-      permitido: cost === null || minMarginPct === null || margenBoldPct === null ? null : margenBoldPct >= minMarginPct,
+      margenPct,
+      margenBoldPct: cost === null ? null : marginAfterBold(precio, cost),
+      permitido: minMarginPct === null || margenPct === null ? null : margenPct >= minMarginPct,
     };
   };
 
@@ -113,7 +121,7 @@ export function priceKitOptions(input: {
   if (separate > 0) candidates.push(option("separado", separate));
   const discounted = roundDown900(sum * (1 - discountPct / 100));
   if (discounted > 0) candidates.push(option("descuento", discounted));
-  const minimum = cost !== null && minMarginPct !== null ? minimumPriceAfterBold(cost, minMarginPct) : null;
+  const minimum = cost !== null && minMarginPct !== null ? minimumPriceBeforeBold(cost, minMarginPct) : null;
   if (minimum !== null) candidates.push(option("minimo", minimum));
   if (forRotation && cost !== null) {
     // El mismo piso que `kitsParaRotar`: costo × (1 + recargo), subido al 900 siguiente.
