@@ -14,6 +14,12 @@ const MB = 1024 * 1024;
 const WARN_RATIO = 0.7;
 const DEFAULT_MEMORY_LIMIT_MB = 8192;
 const RECENT_RESTART_SECONDS = 24 * 3600;
+/**
+ * `Max_used_connections` es el pico desde que MySQL arrancó: días después
+ * seguía en rojo por un pico viejo. Solo cuenta si pasó en esta ventana
+ * (`Max_used_connections_time`); si no, queda como dato con su fecha.
+ */
+const RECENT_PEAK_SECONDS = 60 * 60;
 /** Con la configuración actual ronda 0,5 GB: pasar de 2 GB o crecer 300 MB en un día es que algo vuelve a acumularse. */
 const CONTAINER_ALERT_MB = 2048;
 const CONTAINER_GROWTH_ALERT_MB = 300;
@@ -24,6 +30,8 @@ export interface DbHealthReading {
   uptimeSeconds: number;
   threadsConnected: number;
   maxUsedConnections: number;
+  /** Hace cuánto fue ese pico; null si MySQL no lo informa. */
+  maxUsedConnectionsAgeSeconds?: number | null;
   maxConnections: number;
 }
 
@@ -42,18 +50,27 @@ export async function readDbHealth(
       "SELECT SUM(CURRENT_NUMBER_OF_BYTES_USED) AS bytes FROM performance_schema.memory_summary_global_by_event_name",
     ),
     db.$queryRawUnsafe<{ Variable_name: string; Value: string }[]>(
-      "SHOW GLOBAL STATUS WHERE Variable_name IN ('Uptime', 'Threads_connected', 'Max_used_connections')",
+      "SHOW GLOBAL STATUS WHERE Variable_name IN ('Uptime', 'Threads_connected', 'Max_used_connections', 'Max_used_connections_time')",
     ),
-    db.$queryRawUnsafe<{ max: bigint | number }[]>("SELECT @@max_connections AS max"),
+    // La hora del pico viene en la zona del servidor: se resta de su propio NOW().
+    db.$queryRawUnsafe<{ max: bigint | number; now?: string }[]>("SELECT @@max_connections AS max, DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') AS now"),
   ]);
-  const value = (name: string) => Number(status.find((row) => row.Variable_name === name)?.Value ?? 0);
+  const raw = (name: string) => status.find((row) => row.Variable_name === name)?.Value;
+  const value = (name: string) => Number(raw(name) ?? 0);
   return {
     trackedBytes: Number(memory[0]?.bytes ?? 0),
     uptimeSeconds: value("Uptime"),
     threadsConnected: value("Threads_connected"),
     maxUsedConnections: value("Max_used_connections"),
+    maxUsedConnectionsAgeSeconds: secondsBetween(raw("Max_used_connections_time"), limits[0]?.now),
     maxConnections: Number(limits[0]?.max ?? 0),
   };
+}
+
+function secondsBetween(earlier: string | undefined, now: string | undefined): number | null {
+  const parse = (text: string | undefined) => (text && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? Date.parse(`${text.replace(" ", "T")}Z`) : NaN);
+  const diff = (parse(now) - parse(earlier)) / 1000;
+  return Number.isFinite(diff) ? Math.max(0, Math.round(diff)) : null;
 }
 
 const percent = (part: number, whole: number) => Math.round((100 * part) / Math.max(1, whole));
@@ -62,6 +79,11 @@ function describeUptime(seconds: number) {
   const hours = Math.floor(seconds / 3600);
   if (hours < 48) return `${hours} h`;
   return `${Math.floor(hours / 24)} días`;
+}
+
+function describePeakAge(seconds: number) {
+  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min`;
+  return describeUptime(seconds);
 }
 
 function judgeContainer(container: ContainerMemoryReading | undefined) {
@@ -99,9 +121,13 @@ export function judgeDbHealth(
     );
   }
   const connectionsLimit = input.maxConnections * WARN_RATIO;
-  if (input.threadsConnected >= connectionsLimit || input.maxUsedConnections >= connectionsLimit) {
+  const peakAge = input.maxUsedConnectionsAgeSeconds ?? null;
+  const recentPeak = peakAge !== null && peakAge <= RECENT_PEAK_SECONDS && input.maxUsedConnections >= connectionsLimit;
+  if (input.threadsConnected >= connectionsLimit) {
+    warnings.push(`Conexiones altas ahora: ${input.threadsConnected} abiertas de ${input.maxConnections}.`);
+  } else if (recentPeak) {
     warnings.push(
-      `Conexiones altas: ${input.threadsConnected} abiertas y un pico de ${input.maxUsedConnections} de ${input.maxConnections}.`,
+      `Conexiones altas hace ${describePeakAge(peakAge)}: un pico de ${input.maxUsedConnections} de ${input.maxConnections} (ahora ${input.threadsConnected}).`,
     );
   }
   if (input.uptimeSeconds < RECENT_RESTART_SECONDS) {
@@ -115,7 +141,7 @@ export function judgeDbHealth(
     );
   }
 
-  const summary = `Memoria contada por MySQL: ${memoryMb} MB de ${input.limitMb} MB (${percent(memoryMb, input.limitMb)} %).${container.summary} Conexiones: ${input.threadsConnected} de ${input.maxConnections} (pico ${input.maxUsedConnections}). Encendida hace ${describeUptime(input.uptimeSeconds)}.`;
+  const summary = `Memoria contada por MySQL: ${memoryMb} MB de ${input.limitMb} MB (${percent(memoryMb, input.limitMb)} %).${container.summary} Conexiones: ${input.threadsConnected} de ${input.maxConnections} (pico ${input.maxUsedConnections}${peakAge === null ? "" : ` hace ${describePeakAge(peakAge)}`}). Encendida hace ${describeUptime(input.uptimeSeconds)}.`;
   return {
     alert: warnings.length > 0,
     /** Solo el contenedor manda correo: lo demás ya se ve en «Sistemas». */
