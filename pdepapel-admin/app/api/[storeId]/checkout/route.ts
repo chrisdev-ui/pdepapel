@@ -69,6 +69,7 @@ import { createGuideInBackground } from "@/lib/guide-background";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 import { orderLegalConsentData } from "@/lib/legal-consent";
+import { requireJsonBody } from "@/lib/request-body";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -144,7 +145,7 @@ async function createCheckout(
       : false;
 
     // Un JSON roto respondía 500.
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "ORDER_CHECKOUT", "El cuerpo de la solicitud no es válido");
     if (!body || typeof body !== "object") {
       throw ErrorFactory.InvalidRequest(
         "El cuerpo de la solicitud no es válido",

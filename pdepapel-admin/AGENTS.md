@@ -128,6 +128,13 @@ CI (`.github/workflows/quality.yml`) runs `prisma generate`, `tsc --noEmit`, `te
 - Every API route answers through `handleErrorResponse` (`lib/api-errors.ts`). A route with its own `catch` returning `error.message` leaks raw `ZodError` JSON and tends to pick one status for every failure. Do not reintroduce that pattern.
   - `.parse()` on a **request body** is safe: a schema failure becomes a readable 400 naming the field.
   - `.parse()` on **data read back from MySQL** is not: that is corrupt data of ours, not a bad request. Catch it and raise a 500 that says so (see `parseStoredSuggestionPayload` in `lib/catalog-migration.ts`).
+- **Request bodies (2026-10-24):** read JSON with `requireJsonBody(request, "TAG")` from `lib/request-body.ts`, never with `request.json().catch(() => null | {})`.
+  - **Why the old pattern is banned:** it hid an empty or cut body behind a fallback. `capsule-settings` answered 200 and wiped the capsule minimums, and an empty POST to `categories/[categoryId]/cover` started a paid AI generation.
+  - **What the helper does:** an empty, cut or malformed body answers a Spanish 400 (the default text is «El cuerpo de la solicitud no es JSON válido»; a route can pass its own). It logs `[TAG] cuerpo ilegible` with error, `empty`, method, content-length and content-type, never the content. Read the body **after** the auth check, so an anonymous empty request still gets 401/403.
+  - **Optional bodies:** when the panel posts with no body, use `readOptionalJsonBody(request, "TAG", fallback)` (`bold/terminal/[orderId]`, `orders/[orderId]/shipping/requote-and-guide`). Empty means the fallback; text that isn't JSON is still a 400.
+  - **Typing:** both helpers return `any` by default, like `.json()`.
+  - **Guard:** `tests/unit/security/json-body-scan.test.ts` fails on any new `.json().catch(`; the only exception is the EnvioClick webhook, with its own error contract. It also ratchets the bare `await req.json()` count (≤ 115): the number only goes down.
+  - **Watch after deploys:** the standing «cuerpo ilegible» log check is how a client sending broken bodies shows up.
 - Spanish for all user-facing copy and error messages; English is fine in internal code and identifiers where already conventional.
 - Commit messages: Spanish conventional commits (`fix(whatsapp): …`).
 - `pdepapel-admin/.gitignore` ignores `*md`, so a new Markdown file here needs `git add -f` (or its own negation line) to be tracked.

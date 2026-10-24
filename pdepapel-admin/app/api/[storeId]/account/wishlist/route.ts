@@ -5,6 +5,7 @@ import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireJsonBody } from "@/lib/request-body";
 
 const MAX_WISHLIST_ITEMS = 200;
 
@@ -100,7 +101,7 @@ export async function PUT(
 
     // Un cuerpo vacío o cortado llega cuando la página se va a mitad del
     // envío: es un 400, no un error del servidor.
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "CUSTOMER_WISHLIST_PUT");
     if (!body || typeof body !== "object") {
       throw ErrorFactory.InvalidRequest("El cuerpo de la solicitud no es JSON válido");
     }

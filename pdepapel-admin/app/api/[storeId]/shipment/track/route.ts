@@ -14,6 +14,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS, checkIfStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireJsonBody } from "@/lib/request-body";
 
 const getCorsHeaders = (request: Request) =>
   createCorsHeaders(request, { methods: "POST, OPTIONS" });
@@ -37,7 +38,7 @@ export async function POST(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     const { userId } = await auth();
-    const body = await req.json().catch(() => ({}));
+    const body = await requireJsonBody(req, "TRACK_SHIPMENT");
     const orderId = typeof body?.orderId === "string" ? body.orderId : null;
     const shippingId = typeof body?.shippingId === "string" ? body.shippingId : null;
     if (!orderId && !shippingId)

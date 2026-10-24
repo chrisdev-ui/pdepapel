@@ -7,6 +7,7 @@ import { findGiftCardByCode, isGiftCardUsable } from "@/lib/gift-cards";
 import prismadb from "@/lib/prismadb";
 import { consumeRateLimit, getClientKey } from "@/lib/rate-limit";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Validación pública de un código en el checkout. Devuelve solo lo que la
@@ -46,7 +47,7 @@ export async function POST(
       );
     }
 
-    const body = await req.json().catch(() => null);
+    const body = await requireJsonBody(req, "GIFT_CARD_VALIDATE");
     const parsed = parseGiftCardCode(body?.code);
     if (!parsed) {
       throw ErrorFactory.InvalidRequest("Ese código no tiene la forma de una tarjeta de regalo (PDP-XXXX-XXXX-XXXX)");

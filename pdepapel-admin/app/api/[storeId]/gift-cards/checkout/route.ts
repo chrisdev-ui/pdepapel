@@ -25,6 +25,7 @@ import {
 import { runInBackground } from "@/lib/background";
 import { checkIfStoreOwner } from "@/lib/utils";
 import { orderLegalConsentData } from "@/lib/legal-consent";
+import { requireJsonBody } from "@/lib/request-body";
 
 /**
  * Compra de una tarjeta de regalo desde la tienda.
@@ -88,7 +89,7 @@ async function createGiftCardCheckout(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const raw = await req.json().catch(() => null);
+    const raw = await requireJsonBody(req, "GIFT_CARD_CHECKOUT");
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
       const first = parsed.error.issues[0];
