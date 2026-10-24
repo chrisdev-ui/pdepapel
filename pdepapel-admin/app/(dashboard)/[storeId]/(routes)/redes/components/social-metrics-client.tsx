@@ -5,7 +5,6 @@ import axios from "axios";
 import {
   ClipboardCopy,
   Eye,
-  ImageOff,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -32,6 +31,7 @@ import type {
 
 import { FollowersTrend } from "./followers-trend";
 import { PostCurveDialog } from "./post-curve-dialog";
+import { PostThumbnail } from "./post-thumbnail";
 import { BestTimeCard } from "./best-time-card";
 import { EarlyAlertSwitch } from "./early-alert-switch";
 import { WhatWorksCard } from "./what-works-card";
@@ -92,33 +92,6 @@ const TIKTOK_REASON: Record<string, string> = {
   authorization:
     "TikTok no aceptó la conexión. Vuelve a intentarlo en unos minutos.",
 };
-
-/** Miniatura efímera (Meta y TikTok la vencen): si no carga, un marcador neutro; nunca se copia a otro servidor. */
-function Thumbnail({ src, alt }: { src: string | null; alt: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) {
-    return (
-      <span
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-        aria-hidden
-      >
-        <ImageOff className="h-5 w-5" />
-      </span>
-    );
-  }
-  return (
-    // Dirección externa que vence en horas: no pasa por el cargador de Cloudinary.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="h-14 w-14 shrink-0 rounded-lg object-cover"
-    />
-  );
-}
 
 function AccountCard({
   storeId,
@@ -540,7 +513,7 @@ export function SocialMetricsClient({
                   onClick={() => setSelected(post)}
                   className="flex w-full min-w-0 items-center gap-3 rounded-xl border bg-white p-3 text-left shadow-sm"
                 >
-                  <Thumbnail src={post.thumbnailUrl} alt="" />
+                  <PostThumbnail key={post.thumbnailUrl ?? post.id} src={post.thumbnailUrl} alt="" />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="truncate text-sm font-medium text-primary">
                       {post.caption ??
@@ -618,7 +591,7 @@ export function SocialMetricsClient({
                           onClick={() => setSelected(post)}
                           className="flex min-h-[44px] min-w-0 items-center gap-3 text-left"
                         >
-                          <Thumbnail src={post.thumbnailUrl} alt="" />
+                          <PostThumbnail key={post.thumbnailUrl ?? post.id} src={post.thumbnailUrl} alt="" />
                           <span className="flex min-w-0 flex-col">
                             <span className="line-clamp-1 max-w-[22rem] font-medium text-primary">
                               {post.caption ??

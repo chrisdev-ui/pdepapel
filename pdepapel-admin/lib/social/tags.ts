@@ -7,7 +7,7 @@ import type { SocialPlatform, SocialTagKind } from "@prisma/client";
  */
 export const DEFAULT_SOCIAL_TAGS: Record<SocialTagKind, readonly string[]> = {
   FORMATO: ["pedido con nombre", "ASMR", "kit", "checklist/lista", "carrusel de producto", "tendencia", "restock"],
-  GANCHO: ["pregunta", "producto en mano", "texto grande", "antes/después", "POV"],
+  GANCHO: ["pregunta", "producto en mano", "texto grande", "antes/después", "POV", "plano quieto sin texto"],
 };
 
 export const SOCIAL_TAG_KINDS = ["FORMATO", "GANCHO"] as const satisfies readonly SocialTagKind[];

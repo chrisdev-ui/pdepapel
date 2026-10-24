@@ -202,7 +202,7 @@ describe("etiquetas de una publicación", () => {
     expect(byCaption.Reel.tags).toEqual({ FORMATO: ["kit"], GANCHO: [] });
     expect(byCaption.Carrusel.tags).toEqual({ FORMATO: [], GANCHO: ["POV", "Unboxing sorpresa"] });
     // Las de fábrica primero; «Unboxing sorpresa» al final; «POV» una sola vez aunque esté guardada.
-    expect(summary.tagOptions.GANCHO).toEqual(["pregunta", "producto en mano", "texto grande", "antes/después", "POV", "Unboxing sorpresa"]);
+    expect(summary.tagOptions.GANCHO).toEqual(["pregunta", "producto en mano", "texto grande", "antes/después", "POV", "plano quieto sin texto", "Unboxing sorpresa"]);
     expect(summary.tagOptions.FORMATO.slice(0, 3)).toEqual(["pedido con nombre", "ASMR", "kit"]);
     expect(summary.whatWorks).toEqual([expect.objectContaining({ platform: "INSTAGRAM", posts: 2 })]);
     assertNoForbiddenKeys(summary, "owner");

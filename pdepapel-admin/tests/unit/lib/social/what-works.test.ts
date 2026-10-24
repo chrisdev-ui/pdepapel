@@ -19,8 +19,13 @@ describe("etiquetas", () => {
       { kind: "GANCHO", label: "Detrás de cámaras" },
       { kind: "FORMATO", label: "Tutorial" },
     ]);
-    expect(options.GANCHO).toEqual(["pregunta", "producto en mano", "texto grande", "antes/después", "POV", "Detrás de cámaras", "Unboxing"]);
+    expect(options.GANCHO).toEqual(["pregunta", "producto en mano", "texto grande", "antes/después", "POV", "plano quieto sin texto", "Detrás de cámaras", "Unboxing"]);
     expect(options.FORMATO.at(-1)).toBe("Tutorial");
+  });
+
+  it("«plano quieto sin texto» es de fábrica: la etiqueta ya guardada por la tienda no sale dos veces", () => {
+    const options = tagOptions([{ kind: "GANCHO", label: "Plano quieto sin texto" }]);
+    expect(options.GANCHO.filter((label) => tagKey(label) === tagKey("plano quieto sin texto"))).toEqual(["plano quieto sin texto"]);
   });
 
   it("las automáticas usan la hora de Bogotá: tipo, duración, día y franja", () => {

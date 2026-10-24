@@ -30,6 +30,7 @@ import type { PostTags } from "@/lib/social/tags";
 
 import { PostPieceSection } from "./post-piece-section";
 import { PostTagEditor } from "./post-tag-editor";
+import { PostThumbnail } from "./post-thumbnail";
 import { RETENTION_WARNING_TEXT } from "./retention-flag";
 import { postMetricRows, retentionDetails } from "@/lib/social/display";
 
@@ -82,13 +83,16 @@ export function PostCurveDialog({
   return (
     <Dialog open={post !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="line-clamp-2">
-            {post?.caption ?? "Publicación"}
-          </DialogTitle>
-          <DialogDescription>
-            Vistas desde que se publicó. Cada punto es una lectura.
-          </DialogDescription>
+        <DialogHeader className="flex-row items-start gap-3 space-y-0 text-left">
+          {post && <PostThumbnail key={post.thumbnailUrl ?? post.id} src={post.thumbnailUrl} alt="" size="lg" />}
+          <div className="min-w-0 space-y-1.5">
+            <DialogTitle className="line-clamp-3">
+              {post?.caption ?? "Publicación"}
+            </DialogTitle>
+            <DialogDescription>
+              Vistas desde que se publicó. Cada punto es una lectura.
+            </DialogDescription>
+          </div>
         </DialogHeader>
         {post && (
           <dl className="grid grid-cols-3 gap-2 text-sm">
