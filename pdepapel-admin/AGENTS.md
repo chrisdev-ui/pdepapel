@@ -174,6 +174,25 @@ The default credentials in `.env` are the read-only MySQL user `pdepapel_ro` (`S
 - **Never hand-edit production data as a substitute for a migration**, except for an explicitly approved, auditable repair procedure.
 - **Production SQL that bypasses a domain guard** (delete checks, inventory helpers, payment state) **needs explicit approval in chat before it runs, every time.** Verification that creates ledger rows (stock intake, conversions, sales) runs against staging or the local Docker database; otherwise the disposable product is **archived and left in place** rather than deleted. Row counts before and after only prove the intended rows went away; they say nothing about rows nobody thought to count.
 
+### Cómo restaurar (database backups, restore drill 2026-10-25)
+
+- **Where the backups are:** daily, encrypted with age, in the private R2 bucket `pdepapel-db-backups` (`daily/`, 35 days plus a 30-day lock; `monthly/`, 400 days). They are written by `.github/workflows/db-backup.yml`, scheduled for 08:30 UTC. The full runbook is `docs/runbooks/db-backups.md`. The dump is taken by `pdepapel_ro` and holds tables, the `CopilotBotDemand` view (with `DEFINER=root@%`) and triggers. It does **not** hold users or grants.
+- **Restore, without Actions minutes:**
+  1. Download the newest `.age` from Cloudflare › R2 › `pdepapel-db-backups` › `daily/` (Chrome names it `daily_railway-…`).
+  2. Restore into a **throwaway** MySQL 8.4 container on its own port. Never use the shared test DB on 3307, and never restore on top of production:
+     `docker run -d --name restore -e MYSQL_ROOT_PASSWORD=<random> -p 127.0.0.1:3317:3306 mysql:8.4`
+     `age --decrypt --identity <key> <file>.age | gunzip | mysql -h127.0.0.1 -P3317 -uroot -p <new db>`
+  3. Import as root, so the view keeps its definer.
+  4. On a real replacement database, re-run the grant SQL files for `pdepapel_ro` and `copilot_ro`, and recreate the app user.
+  5. Delete the container and the downloaded copy when done.
+- **Verified 2026-10-25** against the copy `railway-2026-10-24T12-51-17Z`:
+  - Import clean. All 126 of 126 base tables are present.
+  - Row counts: 113 tables exact. 9 differ only by rows created after the backup. 4 are explained by later activity: snapshots captured after it, the WhatsApp webhook retention that deleted 254 events at 13:16 UTC, and JobRun's one row per job name.
+  - `CopilotBotDemand` is restored with its definer and answers queries.
+- **RTO:** about 1 min 15 s from file to usable database (image pull 25 s, container 18 s, decrypt and import 28 s), plus about 3 min to verify, plus the manual download.
+- **RPO:** the scheduled run actually starts 12:50–16:36 UTC because GitHub delays it, not at 08:30. The observed gap between backups is up to 27 h, and the worst case with scheduler drift is about 36 h.
+- **Actions dependency:** the backup only runs while the account has Actions minutes left (about 1–4 min per run). The report is `output/audits/restore-test-2026-10-25.md` (local only).
+
 ### Schema and migration protocol
 
 The schema is `prisma/schema.prisma` (roughly 77 models) on MySQL at Railway.

@@ -104,7 +104,13 @@ SOURCE_HOST=… SOURCE_PORT=… SOURCE_USER=pdepapel_ro SOURCE_PASSWORD=… SOUR
 npm run test:db:down
 ```
 
-Usa la copia diaria más reciente. «OK» quiere decir que están todas las tablas y que ninguna tiene más filas restauradas que en producción. Las tablas que crecieron desde la copia (pedidos, eventos de webhooks) salen como aviso, no como fallo. La base de borrador se borra al terminar.
+Usa la copia diaria más reciente.
+
+**Última prueba: 2026-10-25.** Se restauró `daily/railway-2026-10-24T12-51-17Z` en un contenedor desechable `mysql:8.4` en el puerto 3317, nunca en la base de pruebas compartida.
+- Están las 126 tablas y la vista `CopilotBotDemand` con su definer; todas las diferencias de filas tienen explicación.
+- Hasta tener la base usable: unos 75 s.
+- El paso a paso con contenedor desechable está en «Cómo restaurar» de `pdepapel-admin/AGENTS.md`.
+- `restore-test.sh` solo compara tablas base, así que las vistas hay que revisarlas aparte. «OK» quiere decir que están todas las tablas y que ninguna tiene más filas restauradas que en producción. Las tablas que crecieron desde la copia (pedidos, eventos de webhooks) salen como aviso, no como fallo. La base de borrador se borra al terminar.
 
 ## Rotación
 
