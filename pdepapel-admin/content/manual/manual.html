@@ -219,15 +219,16 @@
       <li><a href="#inventario">18. Inventario y movimientos</a></li>
       <li><a href="#promociones">19. Promociones</a></li>
       <li><a href="#boletin">20. Boletín</a></li>
+      <li><a href="#redes">21. Métricas de redes</a></li>
     </ol>
     <div class="group">Reportes y ajustes</div>
     <ol>
-      <li><a href="#reportes">21. Rendimiento y tributarios</a></li>
-      <li><a href="#ajustes">22. Ajustes</a></li>
-      <li><a href="#copiloto">23. Copiloto</a></li>
-      <li><a href="#estados">24. Estados y vocabulario</a></li>
-      <li><a href="#problemas">25. Si algo no cuadra</a></li>
-      <li><a href="#primer-dia">26. Primer día en el equipo</a></li>
+      <li><a href="#reportes">22. Rendimiento y tributarios</a></li>
+      <li><a href="#ajustes">23. Ajustes</a></li>
+      <li><a href="#copiloto">24. Copiloto</a></li>
+      <li><a href="#estados">25. Estados y vocabulario</a></li>
+      <li><a href="#problemas">26. Si algo no cuadra</a></li>
+      <li><a href="#primer-dia">27. Primer día en el equipo</a></li>
     </ol>
   </nav>
 
@@ -235,7 +236,7 @@
     <div class="toc-inline">
       <div class="eyebrow">Contenido</div>
       <ol>
-        <li><a href="#acceso">Antes de empezar</a></li><li><a href="#recorrido">Cómo se recorre el panel</a></li><li><a href="#inicio">Inicio</a></li><li><a href="#pedidos">Pedidos</a></li><li><a href="#tarjetas-regalo">Tarjetas de regalo</a></li><li><a href="#pos">Punto de venta</a></li><li><a href="#ferias">Ferias</a></li><li><a href="#ml">Mercado Libre</a></li><li><a href="#envios">Envíos</a></li><li><a href="#clientes">Clientes y reseñas</a></li><li><a href="#reservas">Reservas</a></li><li><a href="#productos">Productos</a></li><li><a href="#atributos">Atributos</a></li><li><a href="#marcas">Marcas</a></li><li><a href="#proveedores">Proveedores</a></li><li><a href="#contenido">Contenido de la tienda</a></li><li><a href="#inventario">Inventario</a></li><li><a href="#promociones">Promociones</a></li><li><a href="#boletin">Boletín</a></li><li><a href="#reportes">Reportes</a></li><li><a href="#ajustes">Ajustes</a></li><li><a href="#copiloto">Copiloto</a></li><li><a href="#estados">Estados</a></li><li><a href="#problemas">Si algo no cuadra</a></li><li><a href="#primer-dia">Primer día</a></li>
+        <li><a href="#acceso">Antes de empezar</a></li><li><a href="#recorrido">Cómo se recorre el panel</a></li><li><a href="#inicio">Inicio</a></li><li><a href="#pedidos">Pedidos</a></li><li><a href="#tarjetas-regalo">Tarjetas de regalo</a></li><li><a href="#pos">Punto de venta</a></li><li><a href="#ferias">Ferias</a></li><li><a href="#ml">Mercado Libre</a></li><li><a href="#envios">Envíos</a></li><li><a href="#clientes">Clientes y reseñas</a></li><li><a href="#reservas">Reservas</a></li><li><a href="#productos">Productos</a></li><li><a href="#atributos">Atributos</a></li><li><a href="#marcas">Marcas</a></li><li><a href="#proveedores">Proveedores</a></li><li><a href="#contenido">Contenido de la tienda</a></li><li><a href="#inventario">Inventario</a></li><li><a href="#promociones">Promociones</a></li><li><a href="#boletin">Boletín</a></li><li><a href="#redes">Métricas de redes</a></li><li><a href="#reportes">Reportes</a></li><li><a href="#ajustes">Ajustes</a></li><li><a href="#copiloto">Copiloto</a></li><li><a href="#estados">Estados</a></li><li><a href="#problemas">Si algo no cuadra</a></li><li><a href="#primer-dia">Primer día</a></li>
       </ol>
     </div>
 
@@ -1056,7 +1057,7 @@
       <p>La lista abre con cuatro cifras —esperando mercancía, unidades en camino, comprometido a costo y con retraso— y pestañas por estado (Todo, Borradores, Al proveedor, Recibiendo, Completados, Cancelados) que quedan en el enlace. La columna <strong>Cuándo llega</strong> suma el plazo del proveedor a la fecha del pedido; si el proveedor no tiene «Días de entrega» registrados dice «Sin plazo del proveedor» en vez de inventar una fecha.</p>
       <p>En el pedido, <strong>Recibir mercancía</strong> propone en cada línea lo que falta; recibir de más hay que confirmarlo, y antes de aceptar el bloque <strong>Al confirmar</strong> dice cuántas unidades entran, en cuántos movimientos, en qué estado queda el pedido y que no se puede deshacer desde ahí (se corrige con un movimiento en Movimientos de inventario).</p>
       <div class="note tip"><strong>El costo se promedia</strong><p>Con «Actualizar el costo» encendido, el costo del producto queda en el promedio ponderado por unidades entre lo que ya había en bodega y lo que entra, no en el precio de la última compra: recibir 2 unidades más caras ya no revalúa las 100 que estaban guardadas.</p></div>
-      <div class="note tip"><strong>Facturas de compra</strong><p>Un pedido de aprovisionamiento no es una factura. Las facturas reales de proveedores se registran para los reportes tributarios (capítulo 21) con su número de factura.</p></div>
+      <div class="note tip"><strong>Facturas de compra</strong><p>Un pedido de aprovisionamiento no es una factura. Las facturas reales de proveedores se registran para los reportes tributarios (capítulo 22) con su número de factura.</p></div>
     </section>
 
     <!-- 13 -->
@@ -1154,9 +1155,83 @@
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/boletin" alt="El boletín con sus contadores y la lista de confirmados." loading="lazy" width="1440" height="900"></div><figcaption>El boletín con sus contadores y la lista de confirmados.</figcaption></figure>
     </section>
 
+    <section class="chapter" id="redes" style="--dot:#A4C3FE">
+      <div class="chapter-head"><span class="area">Marketing</span><h2>21. Métricas de redes</h2></div>
+      <div class="route">Ruta: <code>/redes</code> · solo la dueña</div>
+      <p>Cómo le va a cada publicación de nuestra cuenta de <strong>Instagram</strong> y de <strong>TikTok</strong>, para decidir qué repetir y qué cambiar. La pantalla solo lee lo que ya está guardado: abrirla no le pide nada a Instagram ni a TikTok. Arriba eliges el periodo (<strong>7, 30 o 90 días</strong>) y la red (<strong>Todas</strong>, <strong>Instagram</strong> o <strong>TikTok</strong>).</p>
+
+      <h3>Cada cuánto se actualiza</h3>
+      <ul class="list">
+        <li><strong>Todo</strong> se lee cuatro veces al día: hacia las <strong>4:15 a. m.</strong>, las <strong>10:15 a. m.</strong>, las <strong>4:15 p. m.</strong> y las <strong>10:15 p. m.</strong> (hora de Colombia).</li>
+        <li><strong>Lo recién publicado</strong> (las primeras 8 horas) se lee además <strong>cada hora</strong>, para ver cómo arranca.</li>
+        <li><strong>Sincronizar ahora</strong> pide una lectura sin esperar a la próxima; los números aparecen en uno o dos minutos.</li>
+      </ul>
+
+      <h3>Qué dice cada columna</h3>
+      <ul class="list">
+        <li><strong>Vistas</strong>: cuántas veces se vio. En Instagram son solo las <strong>orgánicas</strong>: lo que trae la pauta pagada no entra aquí (ver «Promocionado», abajo).</li>
+        <li><strong>Alcance</strong>: cuántas cuentas distintas la vieron. Una persona que la ve tres veces cuenta una vez.</li>
+        <li><strong>Tiempo promedio</strong>: cuántos segundos se queda viendo una persona, en promedio.</li>
+        <li><strong>% visto</strong>: qué parte del video ve una persona en promedio (tiempo promedio ÷ duración). Necesita saber cuánto dura.</li>
+        <li><strong>Salto 3 s</strong>: de cada 100 personas, cuántas se van antes de los primeros 3 segundos. Más bajo es mejor. Solo los reels de Instagram lo traen.</li>
+        <li><strong>Duración</strong>: cuánto dura el video. Si dice <strong>«(a mano)»</strong>, la escribiste tú (ver abajo).</li>
+        <li><strong>× mediana</strong>: cuántas veces más (o menos) vistas tiene que una publicación típica de la misma red <strong>a la misma edad</strong>. 1× es lo normal; 2× es el doble; 0,5× es la mitad. Se compara a la misma edad porque un post de ayer no puede competir con uno de hace un mes.</li>
+        <li><strong>«aprox.»</strong>: el número es aproximado, porque esa publicación ya era vieja cuando empezamos a medir y no tiene su lectura de los 7 días.</li>
+        <li><strong>«pocos datos»</strong>: todavía no hay suficientes publicaciones parecidas para comparar (hacen falta al menos 5). Se completa solo con las semanas.</li>
+        <li><strong>«—»</strong>: esa red no da ese dato (por ejemplo, TikTok no da alcance ni salto), o todavía no lo tenemos.</li>
+      </ul>
+
+      <h3>El aviso rojo: «La mayoría deja de verlo muy pronto»</h3>
+      <p>Sale junto a un video cuando la gente lo abandona demasiado rápido. Pasa por una de dos razones, y al pasar el mouse dice cuál:</p>
+      <ul class="list">
+        <li>Se ve <strong>menos del 15 %</strong> del video en promedio.</li>
+        <li>El salto en 3 segundos está <strong>10 puntos o más por encima</strong> de lo normal en nuestros reels de Instagram de los últimos 90 días. Se mide contra lo nuestro y no contra un número fijo, porque nuestra cuenta salta más que el promedio y un número fijo marcaría casi todo.</li>
+      </ul>
+      <div class="note"><strong>Qué hacer con el aviso</strong><p>Casi siempre está en el primer segundo: la portada, el primer plano o el texto inicial. Prueba otro arranque en el siguiente video del mismo tipo.</p></div>
+
+      <h3>Etiquetas y «Qué funciona»</h3>
+      <p>En el detalle de cada publicación le pones etiquetas: el <strong>Formato</strong> (qué tipo de pieza es: muestra de productos, ASMR, checklist…) y el <strong>Gancho</strong> (cómo empieza: pregunta, texto en pantalla, plano quieto sin texto…). El panel agrega solo el <strong>tipo</strong> (reel, carrusel, foto, video), la <strong>duración</strong>, el <strong>día</strong> y la <strong>franja</strong> en que se publicó.</p>
+      <p><strong>Qué funciona</strong> junta las publicaciones de los últimos 90 días por cada etiqueta y dice cuál va mejor, con una frase como «En Instagram lo publicado en la tarde va 1,6× la mediana». Cada fila necesita al menos 2 publicaciones.</p>
+      <div class="note care"><strong>Pista no es regla</strong><p>Si el titular dice <strong>«Todavía es una pista, no una regla»</strong>, sale de números aproximados y puede cambiar en unas semanas. Úsalo para probar, no para decidir de una vez. Deja de decirlo cuando las publicaciones de esa fila tienen sus lecturas reales.</p></div>
+
+      <h3>Mejor horario</h3>
+      <p>Una tabla por red: los días de la semana contra la madrugada, la mañana, el mediodía, la tarde y la noche. Cada casilla es la mediana del «× mediana» de lo que se publicó ahí. El color más fuerte quiere decir que ahí va claramente mejor que lo normal (1,6× o más); los tonos claros, de lo normal hacia abajo. La tabla también se lee en palabras, sin depender del color. Un <strong>«·»</strong> quiere decir que hay menos de 2 publicaciones en esa casilla, así que todavía no dice nada.</p>
+
+      <h3>Seguidores por día</h3>
+      <p>La tarjeta de cada red muestra los seguidores, el cambio de ayer a hoy, de la última semana y del último mes, y una línea con los últimos 30 días. Mientras no haya lecturas de hace una semana o un mes, dice «pocos datos» y desde cuándo hay lecturas.</p>
+
+      <h3>La misma pieza en otras redes</h3>
+      <p>Cuando subes el mismo video a Instagram y a TikTok, el panel te sugiere unirlos si se publicaron con menos de 48 horas de diferencia y el texto se parece. Nunca los une solo: tú confirmas. Unidos, ves las dos redes lado a lado en el detalle.</p>
+      <p>Si una de las dos ya tiene etiquetas que la otra no, aparece <strong>«Copiar etiquetas de Instagram»</strong> (o de TikTok), con la lista de las que faltan. Solo agrega las que faltan, nunca quita, y es una copia de una vez: si después cambias una, la otra no cambia.</p>
+
+      <h3>«Promocionado» y «¿Promocionado?»</h3>
+      <p>Instagram nos da solo las vistas orgánicas. Una publicación con pauta pagada se ve floja en lo orgánico y desordena las comparaciones, así que se marca aparte:</p>
+      <ul class="list">
+        <li><strong>Promocionado</strong>: mientras la pauta está activa, el panel lo marca solo. También puedes marcarlo tú en el detalle con <strong>«Sí, se promocionó»</strong> o <strong>«No»</strong>. Lo que tú decides siempre manda sobre lo automático.</li>
+        <li><strong>¿Promocionado?</strong>: aparece cuando Instagram cuenta muchas más vistas en total (con la pauta) que orgánicas, más del doble y más de 500, y nadie ha decidido todavía. Es solo una pregunta: hasta que respondas, la publicación sigue contando como normal.</li>
+        <li>Una publicación marcada como promocionada <strong>sale</strong> de la mediana, del «× mediana», de «Qué funciona», de «Mejor horario», de la base del salto en 3 segundos y de la alerta temprana. En el detalle sigue viéndose, con sus <strong>vistas totales</strong>.</li>
+      </ul>
+
+      <h3>Duración a mano</h3>
+      <p>Algunos reels con audio con derechos no dejan leer cuánto duran, y entonces no hay «% visto». En el detalle de ese reel escribe los segundos en <strong>Duración (s)</strong> y pulsa <strong>Guardar duración</strong>. Si algún día Instagram la entrega, gana la de Instagram.</p>
+
+      <h3>Copiar resumen semanal</h3>
+      <p>El botón junto a «Sincronizar ahora» copia un texto listo para pegar en WhatsApp con los últimos 7 días de cada red: cuántas publicaciones, cuántos seguidores se ganaron, la mejor y la más floja, los titulares de «Qué funciona» y una recomendación. No lleva enlaces ni datos personales. Si el navegador no deja copiar, el panel lo dice en vez de decir «copiado».</p>
+
+      <h3>Alerta temprana</h3>
+      <p>En las primeras horas de una publicación (entre las 2 y las 6 horas), el panel la compara con cómo iban nuestras otras publicaciones de esa red a la misma edad:</p>
+      <ul class="list">
+        <li><strong>🚀 Va despegando</strong>: lleva 1,5 veces o más de lo normal. Qué hacer: respóndele a los comentarios ya y súbelo a historias.</li>
+        <li><strong>🐢 Va lenta</strong>: lleva la mitad o menos de lo normal. Qué hacer: revisa la portada y el primer segundo, y prueba otra hora para la próxima.</li>
+      </ul>
+      <p>El aviso aparece en <strong>Inicio</strong> y llega por correo (máximo 3 correos al día; si hay más, se ven solo en Inicio). Cada red se enciende sola cuando tiene al menos 10 publicaciones con lecturas de esas primeras horas, así que una red puede estar encendida y la otra todavía no: la pantalla dice «encendida», «apagada, 4 de 10…» o «pausada desde el panel». Con <strong>Pausar</strong> la apagas en las dos redes al instante, y con <strong>Reanudar</strong> la vuelves a encender.</p>
+
+      <div class="note"><strong>Si una red dice «Reconectar»</strong><p>El permiso de esa red se venció o cambió la cuenta. Pulsa <strong>Reconectar</strong> (en TikTok te pide entrar a la cuenta). Si sigue saliendo, avísale a Christian. Los datos guardados no se pierden.</p></div>
+    </section>
+
     <!-- 17 -->
     <section class="chapter" id="reportes" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Reportes</span><h2>21. Rendimiento y tributarios</h2></div>
+      <div class="chapter-head"><span class="area">Reportes</span><h2>22. Rendimiento y tributarios</h2></div>
       <div class="route">Rutas: <code>/rendimiento</code> (pestañas Resumen y caja, Productos y riesgos, Envíos) y <code>/reportes-tributarios</code></div>
       <p><strong>Rendimiento</strong> responde cuánto vendes, cuánto te cuesta y cuánto te queda, por mes. La pestaña <strong>Resumen y caja</strong> sugiere reserva para impuestos, reinversión y retiro; <strong>Productos y riesgos</strong> muestra ingresos contra ganancia, los productos sin rotación, los que se agotan pronto, los clientes que no vuelven y los mejores; <strong>Envíos</strong> muestra cuántos salieron, en qué punto están y con qué transportadora, con lo que te cobró cada una.</p>
       <div class="note"><strong>El mes que elijas manda en las tres pestañas</strong><p>El selector de mes está arriba a la derecha. Antes la pestaña de <strong>Envíos</strong> se lo saltaba: eligieras el mes que eligieras, te mostraba el actual y no lo decía. Ahora las tres enseñan el mismo mes, y Envíos lo escribe encima de las cifras para que no quede duda.</p></div>
@@ -1175,7 +1250,7 @@
 
     <!-- 18 -->
     <section class="chapter" id="ajustes" style="--dot:#FEA4C3">
-      <div class="chapter-head"><span class="area">Ajustes</span><h2>22. Ajustes</h2></div>
+      <div class="chapter-head"><span class="area">Ajustes</span><h2>23. Ajustes</h2></div>
       <div class="route">Ruta: <code>/configuracion</code> · pestañas Tienda, Envíos y empaques, Pagos, Integraciones, Avanzado</div>
       <ul class="list">
         <li><strong>Tienda</strong>: logo, nombre, contacto, redes sociales y políticas.</li>
@@ -1194,7 +1269,7 @@
 
     <!-- 22 -->
     <section class="chapter" id="copiloto" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Ajustes</span><h2>23. Copiloto</h2></div>
+      <div class="chapter-head"><span class="area">Ajustes</span><h2>24. Copiloto</h2></div>
       <div class="route">Ruta: <code>/copiloto</code> · botón <strong>Copiloto</strong> arriba a la derecha, en cualquier pantalla</div>
       <p>El copiloto es un chat que <strong>consulta tus datos y te responde con cifras de la tienda</strong>: ventas, margen, inventario, Mercado Libre, qué promocionar. Debajo de cada respuesta dice de dónde salieron los datos y de qué fecha son. También redacta descripciones de producto y textos para redes.</p>
       <div class="note rule"><strong>Solo lee, nunca cambia nada</strong><p>El copiloto no puede crear, editar ni borrar: ni productos, ni precios, ni pedidos, ni publicaciones. Si le pides algo así, te dice en qué pantalla del panel hacerlo. Tampoco da teléfonos ni correos de clientas.</p></div>
@@ -1235,7 +1310,7 @@
 
     <!-- 19 -->
     <section class="chapter" id="estados" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>24. Estados y vocabulario</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>25. Estados y vocabulario</h2></div>
       <h3>Estados de pago de un pedido</h3>
       <div class="table-wrap"><table class="states">
         <tr><th>Insignia</th><th>Significa</th><th>Siguiente paso</th></tr>
@@ -1256,7 +1331,7 @@
 
     <!-- 20 -->
     <section class="chapter" id="problemas" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>25. Si algo no cuadra</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>26. Si algo no cuadra</h2></div>
       <div class="table-wrap"><table class="states">
         <tr><th>Lo que ves</th><th>Qué revisar</th></tr>
         <tr><td>Cambié un producto y la tienda sigue mostrando lo anterior.</td><td>Espera unos segundos y recarga. Si persiste, Ajustes › Avanzado › limpiar caché de la tienda.</td></tr>
@@ -1277,7 +1352,7 @@
 
     <!-- 21 -->
     <section class="chapter" id="primer-dia" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>26. Primer día en el equipo</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>27. Primer día en el equipo</h2></div>
       <p>Una lista corta para quien empieza. Al terminarla ya puedes atender la tienda un día completo.</p>
       <ul class="checklist">
         <li>Entrar al panel con tu cuenta y confirmar que ves la tienda P de Papel.</li>

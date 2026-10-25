@@ -612,6 +612,45 @@ compartible sin estar suscrito; un borrador responde 404. Las páginas van como
 imágenes y no como PDF adjunto: un adjunto en un envío masivo es señal de spam
 y saldría del mismo dominio que las confirmaciones de pedido.
 
+## 16b. Métricas de redes (`/redes`, solo la dueña)
+
+Cómo le va a cada publicación de Instagram y TikTok. Solo lee lo guardado:
+abrir la pantalla no le pide nada a las redes. Todo se lee cuatro veces al día
+(4:15 y 10:15 a. m., 4:15 y 10:15 p. m., hora de Colombia), lo publicado en las
+últimas 8 horas además cada hora, y «Sincronizar ahora» no espera a la próxima.
+
+- **Vistas** (en Instagram solo orgánicas), **Alcance** (cuentas distintas),
+  **Tiempo promedio**, **% visto** (tiempo promedio ÷ duración), **Salto 3 s**
+  (de cada 100, cuántos se van antes de 3 segundos; solo reels de Instagram),
+  **Duración** («(a mano)» si la escribiste tú).
+- **× mediana**: vistas contra una publicación típica de la misma red **a la
+  misma edad**. «aprox.»: era vieja cuando empezamos a medir. «pocos datos»:
+  menos de 5 para comparar. «—»: esa red no da el dato.
+- **Aviso rojo** «La mayoría deja de verlo muy pronto»: menos del 15 % visto, o
+  salto 10 puntos o más sobre lo normal de nuestros reels (90 días).
+- **Etiquetas** (Formato y Gancho) en el detalle; el panel agrega tipo,
+  duración, día y franja. **Qué funciona** dice qué etiqueta va mejor (filas
+  con al menos 2 publicaciones). «Todavía es una pista, no una regla» = sale de
+  números aproximados: sirve para probar, no para decidir.
+- **Mejor horario**: día × franja, mediana del «× mediana»; «·» = menos de 2.
+- **Seguidores por día**: cambio de ayer, 7 y 30 días, y línea de 30 días.
+- **La misma pieza en otras redes**: el panel sugiere unir el mismo video de
+  las dos redes (≤ 48 h y texto parecido); nunca lo une solo. Unidas, «Copiar
+  etiquetas de …» agrega las que faltan, sin quitar nada, una sola vez.
+- **Promocionado**: automático mientras la pauta está activa, o «Sí, se
+  promocionó» / «No» en el detalle (lo tuyo manda). **¿Promocionado?** aparece
+  cuando las vistas totales pasan el doble de las orgánicas y 500; es solo una
+  pregunta. Lo promocionado sale de la mediana, el «× mediana», Qué funciona,
+  Mejor horario, la base del salto y la alerta temprana.
+- **Duración a mano**: para reels con audio con derechos; gana la de Instagram
+  si algún día llega.
+- **Copiar resumen semanal**: texto para WhatsApp con los últimos 7 días, sin
+  enlaces ni datos personales; si el navegador no deja copiar, lo dice.
+- **Alerta temprana** (2 a 6 horas de publicada): «🚀 Va despegando» (1,5× o
+  más) o «🐢 Va lenta» (0,5× o menos), en Inicio y por correo (máximo 3 al
+  día). Cada red se enciende sola con 10 publicaciones medidas en esas horas;
+  «Pausar» / «Reanudar» la apaga o enciende en las dos.
+
 ## 17. Rendimiento y tributarios (`/rendimiento`, `/reportes-tributarios`)
 
 Rendimiento: Resumen y caja (reserva para impuestos, reinversión, retiro
