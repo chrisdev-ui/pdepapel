@@ -1,5 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+import { readTestDatabaseUrl, testDatabaseProblem } from "./lib/test-database.mjs";
 
 const applicationEnvironmentFile = new URL("../.env", import.meta.url);
 const e2eEnvironmentFile = new URL("../.env.e2e.local", import.meta.url);
@@ -38,6 +41,26 @@ if (existsSync(e2eEnvironmentFile)) {
     const value = rawValue.replace(/^(?:"|')|(?:"|')$/g, "");
     process.env[name] = value;
   }
+}
+
+// Por defecto el copiloto usa `copilot_ro` (lo crea `test:e2e:seed-admin`) en
+// el mismo servidor local que la base de pruebas, y el aviso de versión el
+// HEAD: así esos specs corren siempre. Un valor explícito nunca se pisa.
+if (!process.env.COPILOT_DATABASE_URL?.trim()) {
+  const testDatabaseUrl = readTestDatabaseUrl(new URL("../.env.test", import.meta.url));
+  if (testDatabaseProblem(testDatabaseUrl) === null) {
+    const copilotUrl = new URL(String(testDatabaseUrl).trim());
+    copilotUrl.username = "copilot_ro";
+    copilotUrl.password = "";
+    copilotUrl.search = "";
+    process.env.COPILOT_DATABASE_URL = copilotUrl.toString();
+  }
+}
+
+if (!process.env.VERCEL_GIT_COMMIT_SHA?.trim()) {
+  const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8" });
+  const sha = head.status === 0 ? head.stdout.trim() : "";
+  if (sha) process.env.VERCEL_GIT_COMMIT_SHA = sha;
 }
 
 const [command, ...args] = process.argv.slice(2);

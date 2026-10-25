@@ -128,9 +128,30 @@ describe("envoltorios", () => {
     const output = execFileSync(
       process.execPath,
       ["scripts/with-e2e-env.mjs", process.execPath, "-e", "console.log(JSON.stringify([process.env.DATABASE_URL ?? null, process.env.COPILOT_DATABASE_URL ?? null]))"],
-      { cwd: root, env: envWithout("DATABASE_URL", "COPILOT_DATABASE_URL"), encoding: "utf8" },
+      { cwd: root, env: { ...envWithout("DATABASE_URL", "COPILOT_DATABASE_URL"), TEST_DATABASE_URL: LOCAL_URL }, encoding: "utf8" },
     );
-    expect(JSON.parse(output.trim().split("\n").at(-1)!)).toEqual([null, null]);
+    // El copiloto cae en `copilot_ro` del servidor local de pruebas, nunca en la URL de `.env`.
+    expect(JSON.parse(output.trim().split("\n").at(-1)!)).toEqual([null, "mysql://copilot_ro@127.0.0.1:3307/pdepapel_test"]);
+  });
+
+  it("with-e2e-env no inventa el copiloto si la base de pruebas no es local", () => {
+    const output = execFileSync(
+      process.execPath,
+      ["scripts/with-e2e-env.mjs", process.execPath, "-e", "console.log(JSON.stringify(process.env.COPILOT_DATABASE_URL ?? null))"],
+      { cwd: root, env: { ...envWithout("DATABASE_URL", "COPILOT_DATABASE_URL"), TEST_DATABASE_URL: PRODUCTION_URL }, encoding: "utf8" },
+    );
+    expect(JSON.parse(output.trim().split("\n").at(-1)!)).toBeNull();
+  });
+
+  it("with-e2e-env pone el HEAD como VERCEL_GIT_COMMIT_SHA salvo que venga uno", () => {
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+    const sha = (env: NodeJS.ProcessEnv) =>
+      execFileSync(process.execPath, ["scripts/with-e2e-env.mjs", process.execPath, "-e", "console.log(process.env.VERCEL_GIT_COMMIT_SHA)"], { cwd: root, env, encoding: "utf8" })
+        .trim()
+        .split("\n")
+        .at(-1);
+    expect(sha(envWithout("VERCEL_GIT_COMMIT_SHA"))).toBe(head);
+    expect(sha({ ...process.env, VERCEL_GIT_COMMIT_SHA: "commit-explicito" })).toBe("commit-explicito");
   });
 
   it("with-e2e-env respeta una base que se le pasa a propósito", () => {

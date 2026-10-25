@@ -2,9 +2,9 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { createClerkClient } from "@clerk/backend";
-import type { Page } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 
-import { expect, test } from "./helpers/image-stub";
+import { expect, stubCloudinaryImages, test } from "./helpers/image-stub";
 import { createTestPrismaClient } from "./helpers/test-database";
 
 /**
@@ -21,7 +21,7 @@ const clerkSecretKey = process.env.CLERK_SECRET_KEY;
 const clerkUserId = process.env.E2E_ADMIN_CLERK_USER_ID;
 const configured = Boolean(clerkSecretKey?.startsWith("sk_test_") && clerkUserId);
 const SHOTS = path.resolve(__dirname, "../../tmp/low-margin-shots");
-const OFFER = "e2e-margin-offer";
+const OFFER_NAME = "Oferta E2E margen";
 
 const PRODUCTS = [
   { id: "e2e-margin-offer-product", name: "Cartuchera oferta E2E", price: 8_000 },
@@ -46,11 +46,42 @@ async function signIn(page: Page, target: string) {
   await page.goto(task.url, { waitUntil: "domcontentloaded" });
 }
 
+/**
+ * La oferta se crea y se borra con la API del panel, como desde el formulario:
+ * la API invalida `store:<id>:active-offers`. Escrita directo en la base, un
+ * spec anterior de la misma corrida ya dejó la lista vacía en el Redis falso
+ * (1 h) y «Margen bajo» no la veía.
+ */
+async function withOwnerPage<T>(browser: Browser, run: (page: Page) => Promise<T>): Promise<T> {
+  const page = await browser.newPage();
+  try {
+    await stubCloudinaryImages(page);
+    const target = `/${storeId}/ofertas`;
+    await signIn(page, target);
+    await page.waitForURL((url) => url.pathname === target, { timeout: 120_000 });
+    return await run(page);
+  } finally {
+    await page.close();
+  }
+}
+
+const offersApi = (suffix = "") => new URL(`/api/${storeId}/offers${suffix}`, baseURL).toString();
+
+async function deleteLeftoverOffers(page: Page) {
+  const listed = await page.request.get(offersApi());
+  expect(listed.ok(), await listed.text()).toBe(true);
+  const ids = ((await listed.json()) as { id: string; name: string }[]).filter((offer) => offer.name === OFFER_NAME).map((offer) => offer.id);
+  if (ids.length === 0) return;
+  const deleted = await page.request.delete(offersApi(), { data: { ids } });
+  expect(deleted.ok(), await deleted.text()).toBe(true);
+}
+
 test.describe("margen bajo", () => {
   test.skip(!configured, "Define claves de prueba de Clerk y E2E_ADMIN_CLERK_USER_ID.");
   let previousMinimum: number | null = null;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(180_000);
     const db = createTestPrismaClient("low-margin-viewports");
     const template = await db.product.findUniqueOrThrow({ where: { id: "e2e-fair-product" }, select: { categoryId: true, sizeId: true, colorId: true, designId: true } });
     previousMinimum = (await db.store.findUniqueOrThrow({ where: { id: storeId }, select: { storeMinMarginPercent: true } })).storeMinMarginPercent;
@@ -59,26 +90,41 @@ test.describe("margen bajo", () => {
       const data = { ...template, storeId, name: product.name, description: "Producto para «Margen bajo» E2E.", slug: product.id, sku: product.id.toUpperCase(), stock: 5, price: product.price, acqPrice: 6_000, isArchived: false };
       await db.product.upsert({ where: { id: product.id }, update: data, create: { id: product.id, ...data } });
     }
-    await db.offer.deleteMany({ where: { id: OFFER } });
-    await db.offer.create({
-      data: {
-        id: OFFER,
-        storeId,
-        name: "Oferta E2E margen",
-        label: "Feria E2E",
-        type: "FIXED",
-        amount: 3_000,
-        startDate: new Date(Date.now() - 86_400_000),
-        endDate: new Date(Date.now() + 86_400_000),
-        products: { create: [{ productId: PRODUCTS[0].id }] },
-      },
-    });
     await db.$disconnect();
+
+    await withOwnerPage(browser, async (page) => {
+      await deleteLeftoverOffers(page);
+      // Lo mismo que envía el formulario de Ofertas; la API pasa las fechas a días de Colombia.
+      const created = await page.request.post(offersApi(), {
+        data: {
+          name: OFFER_NAME,
+          label: "Feria E2E",
+          type: "FIXED",
+          amount: 3_000,
+          isActive: true,
+          startDate: new Date(Date.now() - 86_400_000).toISOString(),
+          endDate: new Date(Date.now() + 86_400_000).toISOString(),
+          productIds: [PRODUCTS[0].id],
+          categoryIds: [],
+          productGroupIds: [],
+        },
+      });
+      expect(created.ok(), await created.text()).toBe(true);
+    });
   });
 
-  test.afterAll(async () => {
+  test.afterAll(async ({ browser }) => {
+    test.setTimeout(180_000);
+    try {
+      await withOwnerPage(browser, deleteLeftoverOffers);
+    } catch (error) {
+      // Sin sesión no hay API: se borra en la base y la próxima corrida vuelve a limpiar por la API.
+      console.warn("[low-margin-viewports] la oferta se borra en la base; la caché de ofertas activas puede quedar vieja:", error);
+      const db = createTestPrismaClient("low-margin-viewports");
+      await db.offer.deleteMany({ where: { storeId, name: OFFER_NAME } });
+      await db.$disconnect();
+    }
     const db = createTestPrismaClient("low-margin-viewports");
-    await db.offer.deleteMany({ where: { id: OFFER } });
     await db.product.updateMany({ where: { id: { in: PRODUCTS.map((product) => product.id) } }, data: { isArchived: true } });
     await db.store.update({ where: { id: storeId }, data: { storeMinMarginPercent: previousMinimum } });
     await db.$disconnect();
