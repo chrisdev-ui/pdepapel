@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 type FeedReport = {
   generatedAt: string;
@@ -106,7 +107,7 @@ export function MetaCatalogFeedCard({ storeId }: { storeId: string }) {
   const copyFeedUrl = async () => {
     if (!status?.feedUrl) return;
     try {
-      await navigator.clipboard.writeText(status.feedUrl);
+      if (!(await writeClipboard(status.feedUrl))) throw new Error("clipboard");
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {

@@ -28,6 +28,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ProductColumn } from "./columns";
 import { ProductDeleteDialog } from "./product-delete-dialog";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: ProductColumn;
@@ -38,6 +39,7 @@ interface CellActionProps {
 export const CellAction: React.FC<CellActionProps> = ({ data, storeUrl }) => {
   const canWrite = useCanWrite();
   const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const router = useRouter();
   const params = useParams();
   const [loading, setLoading] = useState(false);
@@ -45,11 +47,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data, storeUrl }) => {
   const base = `/${params.storeId}/${Models.Products}`;
 
   const onCopySku = () => {
-    navigator.clipboard.writeText(data.sku);
-    toast({
-      description: "SKU copiado al portapapeles",
-      variant: "success",
-    });
+    void copyText(data.sku, "SKU", { success: { description: "SKU copiado al portapapeles", variant: "success" } });
   };
 
   const toggleArchive = async () => {

@@ -30,6 +30,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import { REVIEW_REPLY_MAX_LENGTH, type ReviewAction } from "@/lib/review-moderation";
 
 import type { ReviewsColumn } from "./columns";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: ReviewsColumn;
@@ -38,6 +39,7 @@ interface CellActionProps {
 /** Menú de una reseña: ocultar o publicar, responder, quitar la respuesta y eliminar. */
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const router = useRouter();
   const params = useParams();
   const [loading, setLoading] = useState(false);
@@ -47,8 +49,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const hidden = data.status === "HIDDEN";
 
   const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast({ description: "ID de la reseña copiado al portapapeles", variant: "success" });
+    void copyText(id, "ID de la reseña", { success: { description: "ID de la reseña copiado al portapapeles", variant: "success" } });
   };
 
   const moderate = async (action: ReviewAction, body: Record<string, string> = {}) => {

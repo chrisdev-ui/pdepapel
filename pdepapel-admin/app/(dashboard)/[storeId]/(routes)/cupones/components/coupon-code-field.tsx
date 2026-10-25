@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { normalizeCouponCode } from "@/lib/coupon-code";
 
 import { generateUniqueCouponCode } from "../server/utils";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 interface CouponCodeFieldProps {
   form: UseFormReturn<any>;
@@ -58,7 +59,7 @@ export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
     const currentValue = form.getValues(fieldName);
     if (!currentValue) return;
     try {
-      await navigator.clipboard.writeText(currentValue);
+      if (!(await writeClipboard(currentValue))) throw new Error("clipboard");
       toast({ description: "Código copiado al portapapeles", variant: "success" });
     } catch {
       toast({ description: "No se pudo copiar al portapapeles", variant: "destructive" });

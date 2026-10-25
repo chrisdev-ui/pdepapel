@@ -23,6 +23,7 @@ import { MERGEABLE_KINDS, type MergeableKind } from "@/lib/attribute-merge";
 
 import { ArchiveMenuItem } from "./archive-actions";
 import { useAttributeActions } from "./attribute-actions";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface AttributeRowMenuProps {
   kind: AttributeKind;
@@ -64,6 +65,7 @@ export function AttributeRowMenu({
 }: AttributeRowMenuProps) {
   const canWrite = useCanWrite();
   const { toast } = useToast();
+  const { onCopy } = useClipboard();
   const router = useRouter();
   const actions = useAttributeActions();
   const [loading, setLoading] = useState(false);
@@ -131,8 +133,7 @@ export function AttributeRowMenu({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => {
-              navigator.clipboard.writeText(row.id);
-              toast({ description: copiedMessage, variant: "success" });
+              void onCopy(row.id, "ID", { success: { description: copiedMessage, variant: "success" } });
             }}
           >
             <Copy className="mr-2 h-4 w-4" aria-hidden="true" />

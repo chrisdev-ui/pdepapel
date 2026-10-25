@@ -18,6 +18,7 @@ import { ChevronRight, Copy, Loader2, Send } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 type DrilldownType =
   | "dead_stock"
@@ -78,6 +79,7 @@ export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
   data,
 }) => {
   const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const params = useParams();
   const router = useRouter();
   const [isReactivating, setIsReactivating] = useState(false);
@@ -90,8 +92,7 @@ export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
     type === "dead_stock" || type === "stockout" || type === "top_products";
 
   const copyEmail = (email: string) => {
-    navigator.clipboard.writeText(email);
-    toast({ description: "Correo copiado al portapapeles" });
+    void copyText(email, "Correo", { success: { description: "Correo copiado al portapapeles" } });
   };
 
   const reactivate = async () => {

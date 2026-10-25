@@ -2,6 +2,7 @@
 
 import { Share2 } from "lucide-react";
 
+import { writeClipboard } from "@/hooks/use-clipboard";
 import { toast } from "@/hooks/use-toast";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ export function ShareButton({ title, path, className }: ShareButtonProps) {
         trackCustomerEvent("share_product", { method: "native" });
         return;
       }
-      await navigator.clipboard.writeText(url);
+      if (!(await writeClipboard(url))) throw new Error("clipboard");
       trackCustomerEvent("share_product", { method: "clipboard" });
       toast({ description: "Enlace copiado. Pégalo donde quieras compartirlo.", variant: "success" });
     } catch (error) {

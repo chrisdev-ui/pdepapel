@@ -2,9 +2,9 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge, BadgeProps } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import { Copy, Server } from "lucide-react";
 import { Button } from "./button";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface ApiAlertProps {
   title: string;
@@ -27,13 +27,9 @@ export const ApiAlert: React.FC<ApiAlertProps> = ({
   description,
   variant = "public",
 }) => {
-  const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const onCopy = () => {
-    navigator.clipboard.writeText(description);
-    toast({
-      description: "La ruta del API ha sido copiada al portapapeles",
-      variant: "success",
-    });
+    void copyText(description, "Ruta del API", { success: { description: "La ruta del API ha sido copiada al portapapeles", variant: "success" } });
   };
   return (
     <Alert>

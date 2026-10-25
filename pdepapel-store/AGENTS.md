@@ -72,6 +72,8 @@ CI (`.github/workflows/quality.yml`) runs `type-check` and `test:coverage`. `pub
 
 ## Code style and conventions
 
+- **Clipboard (2026-10-25):** copy through `useClipboard().onCopy(text, { success, failure })` or `writeClipboard(text)` from `hooks/use-clipboard.ts`, never `navigator.clipboard` directly. A refused copy shows «No se pudo copiar» (the bank-transfer copy, tracking number and share fallback no longer claim «Copiado» when the browser blocks it). Guard: `tests/unit/clipboard-scan.test.ts`.
+
 - Next.js 14 App Router with heavy **RSC + ISR**, React 18, TypeScript strict, Tailwind 3, Radix + shadcn-style components, react-hook-form + Zod.
 - Store-specific stack: TanStack Query, **nuqs** for URL state, Zustand, vaul drawers, `schema-dts` JSON-LD, `app/sitemap.ts` / `app/robots.ts`, per-route `opengraph-image` / `twitter-image`, Vercel Analytics (Speed Insights was removed on 2026-10-05 to cut Vercel spend; do not re-add it without approval).
 - `next/image` optimization is **on** here (AVIF/WebP, long-cache headers), unlike the admin.

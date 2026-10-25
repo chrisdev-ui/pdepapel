@@ -27,7 +27,7 @@ import {
 import { WhatsappIcon } from "@/components/icons";
 import { PaymentIcons } from "@/components/payment-icons";
 import { currencyFormatter } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface BankTransferInstructionsProps {
   order: {
@@ -42,7 +42,7 @@ interface BankTransferInstructionsProps {
 export const BankTransferInstructions: React.FC<
   BankTransferInstructionsProps
 > = ({ order, compact = false }) => {
-  const { toast } = useToast();
+  const { onCopy } = useClipboard();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
 
@@ -51,14 +51,12 @@ export const BankTransferInstructions: React.FC<
   const whatsappNumber = "573132582293";
   const formattedTotal = currencyFormatter.format(order.total);
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(label);
-    toast({
-      title: "¡Copiado con éxito!",
-      description: `${label}: ${text}`,
-      variant: "success",
+  const copyToClipboard = async (text: string, label: string) => {
+    const copied = await onCopy(text, {
+      success: { title: "¡Copiado con éxito!", description: `${label}: ${text}`, variant: "success" },
     });
+    if (!copied) return;
+    setCopiedField(label);
     setTimeout(() => setCopiedField(null), 2500);
   };
 

@@ -21,6 +21,7 @@ import { currencyFormatter } from "@/lib/utils";
 
 import { EDITION_STATUS } from "../../components/editions-client";
 import type { EditionWorkspaceData } from "../server/get-edition-workspace";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 interface Candidate {
   productId: string;
@@ -223,7 +224,7 @@ export function EditionWorkspace({ data }: { data: EditionWorkspaceData }) {
       const { data: body } = await axios.post(`${api}/preview-link`);
       setPreviewUrl(body.url);
       try {
-        await navigator.clipboard.writeText(body.url);
+        if (!(await writeClipboard(body.url))) throw new Error("clipboard");
         toast({ title: "Enlace de vista previa copiado", description: "Sirve 14 días y solo para esta edición." });
       } catch {
         toast({ title: "Enlace de vista previa listo", description: "Cópialo de la caja de abajo." });

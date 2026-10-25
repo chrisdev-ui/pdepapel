@@ -15,6 +15,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import { getPromotionStatus } from "@/lib/promotion-status";
 
 import type { CouponColumn } from "./columns";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: CouponColumn;
@@ -34,7 +35,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   const onCopy = async (value: string, message: string) => {
     try {
-      await navigator.clipboard.writeText(value);
+      if (!(await writeClipboard(value))) throw new Error("clipboard");
       toast({ description: message, variant: "success" });
     } catch {
       toast({ description: "No se pudo copiar al portapapeles", variant: "destructive" });

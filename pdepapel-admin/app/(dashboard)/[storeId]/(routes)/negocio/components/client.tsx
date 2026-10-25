@@ -74,6 +74,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 type CashMovementForm = {
   type: BusinessCashMovementType;
@@ -433,9 +434,7 @@ export function BusinessGrowthClient({
     campaign: BusinessGrowthOverview["campaigns"][number],
   ) => {
     try {
-      await navigator.clipboard.writeText(
-        `https://papeleriapdepapel.com${campaign.landingPath}`,
-      );
+      if (!(await writeClipboard(`https://papeleriapdepapel.com${campaign.landingPath}`))) throw new Error("clipboard");
       toast({
         title: "Enlace copiado",
         description: "Puedes usarlo al crear contenido o una campaña externa.",

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { formatPhoneNumber } from "react-phone-number-input";
 
 import { Button } from "@/components/ui/button";
+import { useClipboard } from "@/hooks/use-clipboard";
 import { ShippingStatus } from "@/constants";
 import { formatOrderDate } from "@/lib/order-dates";
 import { getShippingStatusLabel, getTrackingUrl } from "@/lib/order-status";
@@ -31,15 +32,13 @@ const normalizeText = (text: string): string => {
 
 function CopyTrackingCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
+  const { onCopy } = useClipboard();
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard unavailable (insecure context): the code is still selectable.
-    }
+    // Sin portapapeles el número sigue a la vista para copiarlo a mano; el aviso lo dice.
+    if (!(await onCopy(code))) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (

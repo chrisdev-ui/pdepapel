@@ -41,6 +41,7 @@ import { PaymentStatusWatcher } from "./payment-status-watcher";
 import { parseOrderDetails, type OrderFormValues } from "./schema";
 import { SectionCard } from "./section-card";
 import { type TransitionPayload } from "./status-actions";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface PaymentCardProps {
   storeId: string;
@@ -73,6 +74,7 @@ export function PaymentCard({
 }: PaymentCardProps) {
   const form = useFormContext<OrderFormValues>();
   const { toast } = useToast();
+  const { onCopy } = useClipboard();
   const [copyingWompi, setCopyingWompi] = useState(false);
   // Solo lectura: ni cobros ni enlaces (el enlace abre el recibo con los datos de la clienta).
   const canWrite = useCanWrite();
@@ -121,8 +123,7 @@ export function PaymentCard({
   const methodPendingSave = Boolean(initialData) && method !== savedMethod;
 
   const copy = (value: string, description: string) => {
-    navigator.clipboard.writeText(value);
-    toast({ description, variant: "success" });
+    void onCopy(value, "Texto", { success: { description, variant: "success" } });
   };
 
   const copyWompiLink = async () => {

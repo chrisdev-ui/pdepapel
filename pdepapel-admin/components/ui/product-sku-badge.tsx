@@ -6,21 +6,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
 import { Copy, ScanBarcode } from "lucide-react";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface ProductSkuBadgeProps {
   sku: string;
 }
 
 export const ProductSkuBadge = ({ sku }: ProductSkuBadgeProps) => {
-  const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
 
   const onCopy = () => {
-    navigator.clipboard.writeText(sku);
-    toast({
-      description: "SKU copiado al portapapeles",
-    });
+    void copyText(sku, "SKU", { success: { description: "SKU copiado al portapapeles" } });
   };
 
   return (

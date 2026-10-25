@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AiProviderName } from "@/lib/ai-provider";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 type VisualAttributeType = "color" | "design";
 type IdentifierType = "gtin" | "mpn";
@@ -798,12 +799,7 @@ export function ProductNameAssistant({
 
   const copyKeywords = async () => {
     if (!visualAnalysis?.keywords.length) return;
-    try {
-      await navigator.clipboard.writeText(visualAnalysis.keywords.join(", "));
-      setCopiedKeywords(true);
-    } catch {
-      setCopiedKeywords(false);
-    }
+    setCopiedKeywords(await writeClipboard(visualAnalysis.keywords.join(", ")));
   };
 
   const createVisualAttribute = async () => {

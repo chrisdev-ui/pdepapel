@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
 import { OrderColumn } from "./columns";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 const STORE_URL =
   process.env.NEXT_PUBLIC_FRONTEND_STORE_URL || "https://papeleriapdepapel.com";
@@ -40,6 +41,7 @@ interface CellActionProps {
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const router = useRouter();
   const params = useParams();
   const [loading, setLoading] = useState(false);
@@ -60,11 +62,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     !data.payment?.method || data.payment.method === PaymentMethod.Wompi;
 
   const onCopy = (id: string, message: string) => {
-    navigator.clipboard.writeText(id);
-    toast({
-      description: message,
-      variant: "success",
-    });
+    void copyText(id, "Texto", { success: { description: message, variant: "success" } });
   };
 
   const onPushBoldDatafono = async () => {
@@ -140,10 +138,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         `/api/${params.storeId}/checkout/${data.id}`,
       );
       if (response.data?.url) {
-        navigator.clipboard.writeText(response.data.url);
-        toast({
-          description: "Enlace de pago copiado al portapapeles",
-          variant: "success",
+        await copyText(response.data.url, "Enlace de pago", {
+          success: { description: "Enlace de pago copiado al portapapeles", variant: "success" },
         });
       } else {
         throw new Error("No se pudo obtener el link de pago");

@@ -19,6 +19,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import { boxInUseMessage } from "@/lib/boxes";
 
 import { BoxColumn } from "./columns";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: BoxColumn;
@@ -28,6 +29,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const shipmentsCount = data.shipmentsCount ?? 0;
@@ -64,11 +66,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   };
 
   const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast({
-      title: "Código de caja copiado al portapapeles.",
-      variant: "default",
-    });
+    void copyText(id, "Código de caja", { success: { title: "Código de caja copiado al portapapeles.", variant: "default" } });
   };
 
   return (

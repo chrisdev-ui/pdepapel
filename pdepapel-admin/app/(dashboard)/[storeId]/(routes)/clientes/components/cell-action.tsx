@@ -12,23 +12,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
 import { normalizePhone } from "@/lib/customer-views";
 
 import type { CustomerColumn } from "./columns";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: Pick<CustomerColumn, "id" | "phone" | "email" | "fullName">;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const router = useRouter();
   const params = useParams();
 
   const onCopy = async (text: string, message: string) => {
-    await navigator.clipboard.writeText(text);
-    toast({ description: message, variant: "success" });
+    await copyText(text, "Texto", { success: { description: message, variant: "success" } });
   };
 
   return (

@@ -11,23 +11,19 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
 import { InventoryMovementColumn } from "./columns";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: InventoryMovementColumn;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const [open, setOpen] = useState(false);
 
   const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast({
-      description: "ID copiado al portapapeles",
-      variant: "success",
-    });
+    void copyText(id, "ID", { success: { description: "ID copiado al portapapeles", variant: "success" } });
   };
 
   return (

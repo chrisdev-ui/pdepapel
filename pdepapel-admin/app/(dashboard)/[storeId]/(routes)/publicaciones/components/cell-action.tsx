@@ -19,6 +19,7 @@ import { Copy, Edit, ExternalLink, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { PostColumn } from "./columns";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: PostColumn;
@@ -27,17 +28,14 @@ interface CellActionProps {
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const canWrite = useCanWrite();
   const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const router = useRouter();
   const params = useParams();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
   const onCopy = (value: string) => {
-    navigator.clipboard.writeText(value);
-    toast({
-      description: "Identificador copiado al portapapeles",
-      variant: "success",
-    });
+    void copyText(value, "Identificador", { success: { description: "Identificador copiado al portapapeles", variant: "success" } });
   };
 
   const onDelete = async () => {

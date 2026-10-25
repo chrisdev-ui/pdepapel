@@ -11,6 +11,7 @@ import { descriptionBlockToHtml, descriptionBlockToPlainText } from "@/lib/copil
 import { cn } from "@/lib/utils";
 
 import { BoldText } from "./bold-text";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 /** Copia en HTML (para pegar en la ficha) y en texto plano, sin etiquetas ni markdown. */
 export async function copyRichText(block: string): Promise<boolean> {
@@ -18,16 +19,7 @@ export async function copyRichText(block: string): Promise<boolean> {
   if (!clean) return false;
   const html = descriptionBlockToHtml(clean);
   const plain = descriptionBlockToPlainText(clean);
-  try {
-    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([plain], { type: "text/plain" }) })]);
-    } else {
-      await navigator.clipboard.writeText(plain);
-    }
-    return true;
-  } catch {
-    return false;
-  }
+  return writeClipboard(plain, html);
 }
 
 const TAG_TONES: Record<string, string> = {

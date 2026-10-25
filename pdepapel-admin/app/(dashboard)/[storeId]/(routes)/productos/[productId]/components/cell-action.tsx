@@ -17,6 +17,7 @@ import { Copy, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ReviewColumn } from "./columns";
+import { useClipboard } from "@/hooks/use-clipboard";
 
 interface CellActionProps {
   data: ReviewColumn;
@@ -24,17 +25,14 @@ interface CellActionProps {
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const { toast } = useToast();
+  const { onCopy: copyText } = useClipboard();
   const router = useRouter();
   const params = useParams();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
   const onCopy = (property: string, message: string) => {
-    navigator.clipboard.writeText(property);
-    toast({
-      description: message,
-      variant: "success",
-    });
+    void copyText(property, "Texto", { success: { description: message, variant: "success" } });
   };
 
   const onDelete = async () => {

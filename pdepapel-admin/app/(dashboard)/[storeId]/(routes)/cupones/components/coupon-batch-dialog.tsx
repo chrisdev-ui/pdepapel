@@ -27,6 +27,7 @@ import { getDatePresets } from "@/lib/date-presets";
 import { formatDiscount, getPromotionStatus, PROMOTION_STATUS } from "@/lib/promotion-status";
 import { localDateToPromotionDay } from "@/lib/promotion-window";
 import { currencyFormatter } from "@/lib/utils";
+import { writeClipboard } from "@/hooks/use-clipboard";
 
 const schema = z
   .object({
@@ -121,7 +122,7 @@ export function CouponBatchDialog() {
   const codesText = (result?.coupons ?? []).map((coupon) => coupon.code).join("\n");
   const copyCodes = async () => {
     try {
-      await navigator.clipboard.writeText(codesText);
+      if (!(await writeClipboard(codesText))) throw new Error("clipboard");
       toast({ description: "Códigos copiados al portapapeles", variant: "success" });
     } catch {
       toast({ description: "No se pudo copiar. Selecciona la lista y cópiala a mano.", variant: "destructive" });
