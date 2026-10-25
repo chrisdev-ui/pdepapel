@@ -67,7 +67,7 @@ Rutina sugerida: vaciar «Pendientes de acción» y luego Pedidos › Por atende
 ## 4. Pedidos (`/pedidos`, `/pedidos/<id>`)
 
 Vistas: **Por atender** (todo lo que necesita acción hoy), **Por verificar**
-(transferencias por confirmar), **Por despachar** (pagados sin guía), **En
+(transferencias por confirmar), **Por despachar** (pagados o contra entrega, sin guía y sin entregar), **En
 camino**, **Cotizaciones**, **Todos**. La columna Canal distingue Tienda,
 Presencial, Feria, Cotización o Mercado Libre.
 
@@ -593,7 +593,10 @@ vencida gana sobre «activa».
 ## 16. Boletín (`/boletin`)
 
 Solo las confirmadas se exportan («Exportar confirmados»); «Dar de baja»
-retira a quien lo pida. Al confirmar, cada suscriptora recibe un cupón de
+retira a quien lo pida. La persona confirma con el botón «Confirmar mi
+suscripción» de la página del correo (abrir el enlace no basta); recibe como
+máximo un correo de confirmación al día, y lo que nadie confirma se borra a
+los 7 días. Al confirmar, cada suscriptora recibe un cupón de
 bienvenida del 10 % (un uso, 30 días). Desde un banner «Cargamento nuevo»
 (Contenido › Portada) se envían una sola vez el acceso anticipado (enlace
 firmado para comprar lo «Próximamente» antes de su fecha) y el aviso «Ya

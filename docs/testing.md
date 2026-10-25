@@ -48,16 +48,15 @@ Las comprobaciones autenticadas crean una sesión temporal de hasta cinco minuto
 1. En Clerk Dashboard, crea un usuario exclusivo de pruebas y copia su ID (`user_...`).
 2. Copia `pdepapel-admin/.env.e2e.example` como `pdepapel-admin/.env.e2e.local`.
 3. Completa `E2E_ADMIN_CLERK_USER_ID`. Si `pdepapel-admin/.env` ya contiene claves `sk_test_...` y `pk_test_...`, el runner las carga automáticamente; de lo contrario, define allí `CLERK_SECRET_KEY` y las claves publicables de esa instancia.
-4. Prepara la base local y la tienda cuyo dueño es ese usuario:
+4. Levanta la base local y corre la prueba (cada comando de Playwright siembra solo `e2e-admin-store` y `copilot_ro` antes de empezar):
 
 ```bash
 npm run test:db:up
 npm run test:db:push
-npm run test:e2e:seed-admin
 npm run test:e2e:admin
 ```
 
-`test:e2e:seed-admin` solo puede escribir en `pdepapel_test` y crea o actualiza la tienda `e2e-admin-store`. `test:e2e:admin` falla si faltan las claves de desarrollo en vez de simular una sesión. Al terminar, ejecuta `npm run test:db:down` para eliminar el contenedor y sus datos.
+La semilla (`test:e2e:seed-admin`, también suelta) solo puede escribir en `pdepapel_test` y crea o actualiza la tienda `e2e-admin-store`. Sin `pdepapel-admin/.env.e2e.local` los comandos de Playwright del panel se detienen en la semilla en vez de saltarse pruebas. `test:e2e:admin` falla si faltan las claves de desarrollo en vez de simular una sesión. Al terminar, ejecuta `npm run test:db:down` para eliminar el contenedor y sus datos.
 
 ## Reglas de seguridad
 

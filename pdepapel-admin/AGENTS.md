@@ -95,6 +95,11 @@ CI (`.github/workflows/quality.yml`) runs `prisma generate`, `tsc --noEmit`, `te
     - Example: `brands.spec` takes more than 7 minutes in dev mode at 390 px, and 15 s on the production build.
     - Dev mode is still useful while iterating on a spec. A red dev-mode run is never enough to call a defect, and a commit is never gated on one.
     - Known dev-mode-only failure: `fair-events.spec` times out on the navigation after «Crear feria».
+- **E2E sets up its own data (2026-10-25).**
+  - Every Playwright npm script runs `test:e2e:seed-admin` first. The seed recreates `e2e-admin-store` (the integration suite deletes it) and the local `copilot_ro` (`scripts/seed-e2e-copilot-ro.ts`).
+  - `with-e2e-env.mjs` defaults `COPILOT_DATABASE_URL` to the local `copilot_ro` and `VERCEL_GIT_COMMIT_SHA` to `HEAD`; explicit values win.
+  - So integration → e2e never leaves e2e without data, and the Copiloto and version-banner specs always run.
+  - A spec that needs an offer creates it through the offers API, which purges `store:<id>:active-offers`, never directly in the DB: the active-offers list is cached for 1 h and the fake Upstash lives for the whole run.
 - Each Prisma integration test creates and cleans up its own data.
 - Authenticated Playwright needs Clerk **development/staging** keys (`sk_test_`), never live credentials, plus an isolated test user and the test database.
 - For a bug fix, add the regression test that would have failed before the fix.
@@ -139,6 +144,14 @@ CI (`.github/workflows/quality.yml`) runs `prisma generate`, `tsc --noEmit`, `te
 - Spanish for all user-facing copy and error messages; English is fine in internal code and identifiers where already conventional.
 - Commit messages: Spanish conventional commits (`fix(whatsapp): …`).
 - `pdepapel-admin/.gitignore` ignores `*md`, so a new Markdown file here needs `git add -f` (or its own negation line) to be tracked.
+
+- **Client/server boundary (2026-10-25).**
+  - `lib/utils.ts` has no server imports. `verifyStoreOwner`, `checkIfStoreOwner`, `getLastOrderTimestamp` and `processOrderItemsInBatches` live in `lib/server/utils.ts` (`server-only`).
+  - `lib/prismadb.ts` is `server-only`, so a tsx script that reaches it imports `scripts/lib/allow-server-only.cjs` first.
+  - Guard: `tests/unit/security/client-server-boundary.test.ts` (in both apps) walks the imports from every `"use client"` file and fails, printing the chain, if it reaches Prisma, `server-only`, `@clerk/nextjs/server`, `next/headers` or `fs`.
+  - A client component that needs labels or constants from a DB module imports its `*-labels`/`*-shared` twin.
+- **Inicio «Por despachar» uses `dispatchQueueWhere`** (`lib/order-queues.ts`), the Prisma version of `getOrderQueue`'s dispatch rule. Change both, or `dispatch-queue-where.test.ts` fails.
+- **The `[storeId]` layout calls `assertStoreIdShape` (`lib/store-id.ts`) before `auth()`.** A store id never contains a dot, so bot paths like `/x.php` get a 404 instead of a Clerk 500.
 
 ## Critical operational context
 
@@ -623,7 +636,7 @@ Design: `docs/design/asistente-experto-paula.md` (§13 is what v1 built) and `do
   - The eval checks `JARGON` on kits and on 5 data answers (`-t "kits con formato"`, 3 note modes).
 - **Example questions (2026-10-15):** `lib/copiloto/examples.ts` is the single list of example questions, each with the tool that answers it and the screens (`?desde=` first segment) where it is suggested. The empty chat's chips and the manual chapter «Copiloto» come from it; tapping a chip fills the box without sending. `tests/unit/lib/copiloto-examples.test.ts` requires every example to name a real tool, every data tool to have an example, and the manual and `docs/guia-panel-administracion.md` to contain each question verbatim; the eval case `-t "ejemplos del manual"` asks each one through the chat route and requires its tool call. Never suggest a question no tool answers.
 - **Tests:** unit (`copiloto-core`, `copiloto-chat` with `MockLanguageModelV4`), components (`copiloto-ui`), integration (`copilot-ro-grants`, `api-authorization`), and E2E at 390/1440 with the model stubbed:
-  `npm run test:e2e:seed-admin` then `COPILOT_DATABASE_URL=mysql://copilot_ro:x@127.0.0.1:3307/pdepapel_test npm run test:e2e -- tests/e2e/copilot-viewports.spec.ts`.
+  `npm run test:e2e:prod -- tests/e2e/copilot-viewports.spec.ts` (since 2026-10-25 the seed recreates the local `copilot_ro` and `with-e2e-env.mjs` defaults `COPILOT_DATABASE_URL`).
 - **Eval (real OpenAI, local DB only):** `COPILOT_EVAL_NOTAS=<modo> node scripts/with-test-env.mjs npx vitest run --config scripts/copilot-eval/vitest.config.mts scripts/copilot-eval/copilot.eval.ts`. The copiloto only uses notes Paula approved, so the eval seeds approvals by mode: `ninguna` (default, like production until she approves), `marketing` (only `marketing-*`), `borradores` (every draft, to test the notes themselves). Always: 5/5 safety, 4/4 marketing, 6/6 marketing-skill questions (now routed by the model, no flag) and 3/3 overrides (remove → regenerate does not reload; pin → tool available next turn; «no uses marketing» blocks); at least 6/7 routing and 7/8 descriptions (structural checks: markers, 3–7 emoji, no price, SEO title ≤ 60 without emoji); the 18-of-20 core bar applies only to `borradores`. Run all three before changing the prompt, the models or a tool. Results land in `tmp/copilot-eval/<fecha>-<modo>.json` (ignored).
 - **Ad strategy lives in the fixed prompt** (`COPILOT_RULES`, «Mercadeo y pauta»): Click-to-WhatsApp first, no ads or paid traffic to the website yet, one ad set at a time, measure cost per WhatsApp conversation and conversations that become sales. It holds before any note is approved (on 2026-10-10 production suggested «dirigir a la tienda» because the eval had loaded unapproved drafts). The note keeps the details.
 - **Skills, not toggles (2026-10-12, `lib/copiloto/skills/`).** The fixed prompt carries only a skill index (one line per skill) and the rule «cargarHabilidad before answering in a skill's domain». `cargarHabilidad(id)` returns the skill's instructions and its approved notes; from the next step its tools are active (`prepareStep` → `activeTools`, AI SDK 7). Unknown id → error listing the valid ids. Skills: `descripciones` (tool `productoParaDescripcion`) and `marketing` (the former Modo Marketing text, `lib/copiloto/marketing-mode.ts`, MIT attribution kept, no tools of its own; `productosParaPromocionar` stays a base tool).
@@ -842,6 +855,20 @@ The newsletter has **one sender**, `lib/newsletter-campaigns.ts`. Everything tha
 - **Pages are images, never attachments.** An attachment on a bulk send is a textbook spam signal, and the sending domain is shared with order confirmations. The cover rides inside the email; the remaining pages live on the storefront. `MAX_ISSUE_PAGES` caps an issue at 12.
 - `MAX_ISSUE_PAGES` lives in `lib/newsletter-issues-shared.ts`, a neutral module, because `lib/newsletter-issues.ts` imports `server-only` and the client panel needs that constant. Importing it from the `server-only` module makes the page fail at render time only.
 - `sendInBatches` returns early when `NODE_ENV === "development"`, so no local or test run can mail a real subscriber. `scripts/with-test-env.mjs` forces `NODE_ENV=development`, which is why the guard also holds during integration tests.
+
+- **Anti-bot signup and confirmation (2026-10-25, after the subscription bombing).**
+  - **Confirming is a POST from the «Confirmar mi suscripción» button on `/suscripcion/confirmar`.** `GET …/newsletter/confirm` only reads the token state. Never confirm on a GET: email security scanners open links, and that is how 16 strangers got «confirmed» with a welcome coupon.
+  - **Signups go from the browser straight to the panel,** screened by `lib/newsletter-intake.ts`:
+    - honeypot `website`/`company`;
+    - at least 3 s since the form opened;
+    - Turnstile, which never blocks a newsletter signup: with no token, a failed challenge or Cloudflare down it logs a warning and the honeypot, clock and limits still apply (a wrong key must not stop every signup);
+    - 5 per IP per hour and 3 per address per day through `consumeRateLimit` (lets through if Redis is down).
+    - What it drops gets the same 202 as a real signup, with nothing saved or sent.
+  - **Checkout opt-in:** the order carries `newsletterOptIn`, and the panel subscribes after creating the order (`subscribeFromStoreOrder`), with no second challenge.
+  - **Gmail keys:** new Gmail rows use `newsletterEmailKey` (no dots, nothing after `+`, googlemail → gmail). Old rows are looked up with both keys and never re-normalized, because of `@@unique([storeId, emailNormalized])`.
+  - **One confirmation per address every 24 h.**
+  - **Cron `newsletter-retention` (13:22 UTC)** deletes only PENDING rows older than 7 days whose link has expired. ACTIVE and UNSUBSCRIBED rows are never touched.
+  - **One-off fixes through `prod:write`:** `scripts/newsletter-suppress-scanner-confirmed.ts` (the 16, coupons turned off if unused) and `scripts/newsletter-delete-expired-pending.ts`.
 
 ### Catalog cache and revalidation
 

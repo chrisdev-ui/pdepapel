@@ -14,8 +14,8 @@ import {
  * `playwright.config.ts`, que apunta a producción y por eso lleva el guardia
  * que corta cualquier petición capaz de crear un pedido.
  *
- * Antes de correr: `npm run test:db:up && npm run test:db:push &&
- * npm run test:e2e:seed-admin` en pdepapel-admin.
+ * `npm run test:e2e:local` prepara la base solo (scripts/ensure-admin-test-db.mjs):
+ * la levanta si hace falta y siempre siembra antes de correr.
  */
 
 const baseURL = `http://localhost:${LOCAL_STORE_PORT}`;

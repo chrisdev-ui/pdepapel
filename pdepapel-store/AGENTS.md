@@ -69,7 +69,7 @@ CI (`.github/workflows/quality.yml`) runs `type-check` and `test:coverage`. `pub
 - For a bug fix, add the regression test that would have failed before the fix.
 - Stop local servers when done, and run `git diff --check` before handing work back.
 - Do not fix unrelated warnings during focused work; note them instead.
-
+- `npm run test:e2e:local` runs `scripts/ensure-admin-test-db.mjs` first. It waits for the panel's test MySQL, starts it with the admin's `docker-compose.test.yml` plus `db push` if it is down, and always seeds. A run never starts against a dead or empty database.
 ## Code style and conventions
 
 - **Clipboard (2026-10-25):** copy through `useClipboard().onCopy(text, { success, failure })` or `writeClipboard(text)` from `hooks/use-clipboard.ts`, never `navigator.clipboard` directly. A refused copy shows «No se pudo copiar» (the bank-transfer copy, tracking number and share fallback no longer claim «Copiado» when the browser blocks it). Guard: `tests/unit/clipboard-scan.test.ts`.
@@ -142,6 +142,12 @@ When adding a customer-navigable route:
 
 **Archived products redirect (308) to the closest thing still on sale** (policy change, 2026-10-05; until then they returned `404` and about 22 % of Google impressions landed on dead pages). The admin decides the destination in `lib/archived-product-redirect.ts`, in this order: a live sibling of the same product group (in stock first), the product's category if active, its type (`/tienda?typeId=…`) if active, otherwise `/tienda`. The store answers `permanentRedirect` with `#producto-no-disponible`, which shows a short notice and is never sent to the server, so it creates no new URLs. Google may treat a redirect to a non-equivalent page as a soft 404, which is why the sibling comes first; in October 2026 most archived products had no live sibling and went to their category. A product deleted from the panel resolves the same way (the admin keeps its URLs in `DeletedProductUrl`). A product or category that **never existed** must still return a real `404`, and both behaviours stay covered by the public health checks.
 
+- **Old-URL map (`lib/legacy-product-redirects.mjs`).**
+  - Regenerate it with `pdepapel-admin/scripts/export-product-slug-redirects.ts --store-id=<production>` as `pdepapel_ro`; the script checks the user.
+  - A source whose product was archived points in one hop to the sibling or the category, with `#producto-no-disponible`. A source is never deleted.
+  - `legacy-redirect-map.spec.ts` (weekly `public-health.yml`) fails when a destination stops being a live page.
+- `/tienda?q=` redirects (308) to `?search=`. A page past the last one redirects (307) to the last one.
+
 ### Clerk middleware — the 500 that shipped
 
 `middleware.ts` (Clerk v6 `clerkMiddleware` + `createRouteMatcher`) runs only on routes that read the session on the server and on the protected account routes. Public catalog routes bypass Clerk so genuine `notFound()` responses keep their HTTP `404` and ISR keeps working.
@@ -175,6 +181,12 @@ When a change touches authentication or authorization, verify that route list **
 - **Brand data** (`actions/get-brands.ts`): the list (`GET /brands?conProductos=1`) carries `brands` + `catalog`; a brand page (`GET /brands/{slug}`) carries `brand:<slug>` + `brands` + `catalog`. Both tags are in the revalidate allowlist. Brand-filtered product lists always carry `products:list`, which a brand assignment purges.
 - **`/tienda`, `/categoria/<slug>` and `/marcas/<slug>` without catalog parameters are served from an ISR copy.** `marca` is a catalog parameter. `middleware.ts` rewrites those requests to `/catalogo-cache/...`; tracking parameters such as `utm_*` and `fbclid` don't count as catalog parameters, and the rewrite drops the query. Any filter, search, sort or page keeps the dynamic route, and a direct visit to `/catalogo-cache/*` gets a 308 back to the public URL. The copies call the public pages with empty search params inside `StaticUrlState` (nuqs's React adapter; the Next adapter's `useSearchParams` would client-render the whole listing). Components read the path through `useStorefrontPathname`, never `usePathname`, so links and active states match between server and browser. Revalidating a public listing path also revalidates its cached twin.
 - Links in the first mobile screen to static pages (the breadcrumb, the header logo) use `prefetch={false}`: a full static prefetch competes with the LCP image.
+
+- **Upstream timeouts and ISR fallbacks (2026-10-25, after the 300 s hangs on `/tienda`).**
+  - Every server `fetch` to the panel goes through `withUpstreamTimeout` (8 s, `lib/catalog-cache.ts`). Listing routes have `maxDuration = 30`.
+  - `itemsPerPage`/`limit` are clamped to 60 in the store (`clampCatalogPageSize`) and to 100 in the panel's `GET /products`.
+  - The ISR copies pass `CACHED_LISTING_PARAMS` (compared by identity, `lib/cached-listing.ts`). There `getListingProducts` throws if the panel fails, so Next keeps the last good copy; only renders with filters show «no disponible».
+  - Consequence: if the panel fails during `next build`, the store deploy fails, and Vercel keeps the previous deployment.
 
 ### Payments and checkout
 
@@ -242,6 +254,15 @@ One frozen Cloudinary transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `lib
 - **Server actions run one at a time (Next 14.2).** A server-action call issued while another is in flight can be dropped silently. Sequence them, or move one to a plain fetch.
 - **Favorites keep the family.** The heart on a product-group card saves the group (`savedAsGroup`), and the favorites page must show it as the family with «Elegir opción», never as the variant that fronted it that day: refresh saved groups with `fetchCatalogFromClient({ groups })` by `productGroupId` and everything else with `ids`, keep the saved `id`/`slug` stable, and carry `savedAsGroup` through `slimStoredProduct`, the account sync (`items` in the PUT) and `mergeAccountProducts`. «Agregar al carrito» on a group still opens the preview: buying needs a variant.
 - Seasonal decoration uses optimized local assets, stays `pointer-events-none`, respects `prefers-reduced-motion`, and sits below dialogs and privacy prompts.
+
+- **Newsletter (2026-10-25).**
+  - The forms post from the browser straight to the panel with `useBotTrap` (honeypot, clock, Turnstile on submit), so the panel sees the real IP for its rate limit. Turnstile never blocks a newsletter signup: the panel logs a failed or missing token and relies on the honeypot, the clock and the limits.
+  - `/suscripcion/confirmar` only shows the state and a «Confirmar mi suscripción» button; only the click confirms (POST). Never confirm on load: mail scanners open links.
+  - The checkout opt-in travels as `newsletterOptIn` with the order.
+- **Client/server guard:** `tests/unit/security/client-server-boundary.test.ts` fails if a `"use client"` file reaches a `server-only` module, `next/headers` or `fs`.
+- **Accessibility:**
+  - Fixed bars that hide (`product-sticky-bar`, `mobile-cart-bar`) take `inert` along with `aria-hidden`.
+  - The pagination edges carry their name as `sr-only` text, never `aria-label` on an `<a>` without `href`.
 
 ## Definition of done
 
