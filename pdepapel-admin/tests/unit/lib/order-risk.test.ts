@@ -178,9 +178,34 @@ describe("consumeOrderRateLimits", () => {
     expect(last.allowed).toBe(false);
   });
 
+  it("sin Turnstile la misma IP se corta en el tercer pedido de la hora; con token sigue hasta seis", async () => {
+    const redis = fakeRedis();
+    setRateLimitRedis(redis.client as never);
+    const unverified = { scope: "checkout", storeId: "s-1", clientKey: "203.0.113.9", turnstileVerified: false };
+    const results = [];
+    for (let index = 0; index < 3; index += 1) results.push((await consumeOrderRateLimits({ ...unverified, email: `u${index}@correo.co` })).allowed);
+    expect(results).toEqual([true, true, false]);
+    expect(Array.from(redis.counts.keys()).join(" ")).not.toContain("203.0.113.9");
+
+    const verified = { scope: "checkout", storeId: "s-1", clientKey: "198.51.100.7" };
+    const allowed = [];
+    for (let index = 0; index < 7; index += 1) allowed.push((await consumeOrderRateLimits({ ...verified, email: `v${index}@correo.co` })).allowed);
+    expect(allowed).toEqual([true, true, true, true, true, true, false]);
+  });
+
   it("si Redis falla deja pasar sin marcar", async () => {
     setRateLimitRedis({ incr: vi.fn().mockRejectedValue(new Error("caído")), expire: vi.fn() } as never);
     await expect(consumeOrderRateLimits({ scope: "checkout", storeId: "s-1", clientKey: "x", email: "a@b.co" })).resolves.toEqual({ allowed: true, repeated: false });
+  });
+});
+
+describe("sin Turnstile", () => {
+  it("pesa 2: sola marca «Posible bot» y retiene una tarjeta de regalo", () => {
+    const risk = riskColumns(assessOrderRisk({ email: "ana@correo.co", noChallenge: true }));
+    expect(risk).toEqual({ riskScore: 2, riskReasons: "sin-turnstile" });
+    expect(isFlagged(risk)).toBe(true);
+    expect(parseRiskReasons(risk.riskReasons)).toEqual(["sin-turnstile"]);
+    expect(needsGiftCardReview({ ...risk, total: 20_000, isFirstPurchase: false })).toBe(true);
   });
 });
 

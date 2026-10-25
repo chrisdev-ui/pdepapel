@@ -7,7 +7,8 @@ import { HONEYPOT_FIELD } from "@/lib/customer-checks";
 /**
  * Campo trampa, reloj del formulario y, si la tienda tiene clave, el desafío
  * invisible de Cloudflare Turnstile para los pedidos. El servidor rechaza la
- * trampa llena, un envío en menos de unos segundos o un desafío fallido.
+ * trampa llena o un envío en menos de unos segundos; sin token o con el
+ * desafío fallido el pedido pasa marcado «Posible bot» y con un límite más corto.
  */
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 const SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";

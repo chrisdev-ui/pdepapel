@@ -27,7 +27,8 @@ export type RiskReason =
   | "pedidos-repetidos"
   | "fraude-previo"
   | "fraude-confirmado"
-  | "pago-en-cancelado";
+  | "pago-en-cancelado"
+  | "sin-turnstile";
 
 export const RISK_REASON_LABELS: Record<RiskReason, string> = {
   "envio-rapido": "Formulario enviado en segundos",
@@ -36,6 +37,7 @@ export const RISK_REASON_LABELS: Record<RiskReason, string> = {
   "fraude-previo": "Mismo correo o celular que un pedido cancelado como fraude",
   "fraude-confirmado": "Cancelado como fraude o bot",
   "pago-en-cancelado": "Pago recibido en pedido cancelado — revisar o reembolsar",
+  "sin-turnstile": "Sin verificación anti-bots (desafío fallido o sin token)",
 };
 
 const RISK_WEIGHTS: Record<RiskReason, number> = {
@@ -45,6 +47,7 @@ const RISK_WEIGHTS: Record<RiskReason, number> = {
   "fraude-previo": 3,
   "fraude-confirmado": 10,
   "pago-en-cancelado": 0,
+  "sin-turnstile": 2,
 };
 
 /**
@@ -119,6 +122,8 @@ export interface RiskInput {
   repeated?: boolean;
   /** El correo o el celular ya aparecen en un pedido cancelado como fraude. */
   priorFraud?: boolean;
+  /** Turnstile está configurado y el pedido llegó sin token o con uno que no valió. */
+  noChallenge?: boolean;
 }
 
 export interface RiskAssessment {
@@ -126,12 +131,13 @@ export interface RiskAssessment {
   reasons: RiskReason[];
 }
 
-export function assessOrderRisk({ email, elapsedMs, repeated, priorFraud }: RiskInput): RiskAssessment {
+export function assessOrderRisk({ email, elapsedMs, repeated, priorFraud, noChallenge }: RiskInput): RiskAssessment {
   const reasons: RiskReason[] = [];
   if (typeof elapsedMs === "number" && elapsedMs < FAST_SUBMIT_MS) reasons.push("envio-rapido");
   if (isEmailVariant(email)) reasons.push("correo-variante");
   if (repeated) reasons.push("pedidos-repetidos");
   if (priorFraud) reasons.push("fraude-previo");
+  if (noChallenge) reasons.push("sin-turnstile");
   return { score: reasons.reduce((total, reason) => total + RISK_WEIGHTS[reason], 0), reasons };
 }
 

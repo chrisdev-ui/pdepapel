@@ -65,7 +65,13 @@ export async function screenStoreOrder(req: Request, input: StoreOrderScreenInpu
   const elapsedMs = elapsedSince(input.formStartedAt);
   if (tripsBotTrap({ honeypot: input.honeypot, elapsedMs })) return { ok: false, status: 400, error: BOT_TRAP_ERROR };
   const challenge = await verifyTurnstile(typeof input.turnstileToken === "string" ? input.turnstileToken : null, getClientKey(req));
-  if (!challenge.ok) return { ok: false, status: 400, error: challenge.error };
+  // Sin token o con desafío fallido el pedido sigue: un navegador que bloquea Cloudflare no es un bot.
+  const noChallenge = !challenge.ok;
+  if (noChallenge) {
+    console.warn(
+      `[ORDER_INTAKE] Turnstile no verificó el pedido (scope=${input.scope}, motivo=${challenge.status}); siguen la trampa, el reloj, los límites y el riesgo.`,
+    );
+  }
   if (looksLikeRandomName(input.fullName)) return { ok: false, status: 400, error: NAME_ERROR };
 
   const rawPhone = String(input.phone ?? "").trim();
@@ -77,10 +83,11 @@ export async function screenStoreOrder(req: Request, input: StoreOrderScreenInpu
     storeId: input.storeId,
     clientKey: getClientKey(req),
     email: input.email,
+    turnstileVerified: !noChallenge,
   });
   if (!limits.allowed) return { ok: false, status: 429, error: RATE_LIMIT_ERROR };
 
   const priorFraud = await matchesFraudCancelledOrder(input.storeId, input.email, phone ?? "");
-  const risk = riskColumns(assessOrderRisk({ email: input.email, elapsedMs, repeated: limits.repeated, priorFraud }));
+  const risk = riskColumns(assessOrderRisk({ email: input.email, elapsedMs, repeated: limits.repeated, priorFraud, noChallenge }));
   return { ok: true, phone: phone ?? "", risk };
 }

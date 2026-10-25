@@ -5,21 +5,36 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 
 const hashKey = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 32);
 
-export const ORDER_RATE_LIMITS = { perIp: 6, perEmail: 4, windowSeconds: 60 * 60 } as const;
+export const ORDER_RATE_LIMITS = { perIp: 6, perIpUnverified: 2, perEmail: 4, windowSeconds: 60 * 60 } as const;
 
 /**
  * Pedidos creados desde la tienda por conexión y por correo normalizado. Las
  * llaves van con hash: ni la IP ni el correo quedan legibles en Redis. Falla
- * abierto como `consumeRateLimit`.
+ * abierto como `consumeRateLimit`. Un pedido sin Turnstile válido gasta
+ * además un cupo propio más corto por conexión, porque ya no se rechaza.
  */
-export async function consumeOrderRateLimits(input: { scope: string; storeId: string; clientKey: string; email: string | null | undefined }) {
-  const { scope, storeId, clientKey, email } = input;
-  const [byIp, byEmail] = await Promise.all([
-    consumeRateLimit({ key: `orders:${scope}:${storeId}:ip:${hashKey(clientKey)}`, limit: ORDER_RATE_LIMITS.perIp, windowSeconds: ORDER_RATE_LIMITS.windowSeconds }),
+export async function consumeOrderRateLimits(input: {
+  scope: string;
+  storeId: string;
+  clientKey: string;
+  email: string | null | undefined;
+  turnstileVerified?: boolean;
+}) {
+  const { scope, storeId, clientKey, email, turnstileVerified = true } = input;
+  const ipHash = hashKey(clientKey);
+  const [byIp, byEmail, byIpUnverified] = await Promise.all([
+    consumeRateLimit({ key: `orders:${scope}:${storeId}:ip:${ipHash}`, limit: ORDER_RATE_LIMITS.perIp, windowSeconds: ORDER_RATE_LIMITS.windowSeconds }),
     consumeRateLimit({ key: `orders:${scope}:${storeId}:email:${hashKey(normalizeEmailForLimits(email))}`, limit: ORDER_RATE_LIMITS.perEmail, windowSeconds: ORDER_RATE_LIMITS.windowSeconds }),
+    turnstileVerified
+      ? null
+      : consumeRateLimit({
+          key: `orders:${scope}:${storeId}:ip-sin-turnstile:${ipHash}`,
+          limit: ORDER_RATE_LIMITS.perIpUnverified,
+          windowSeconds: ORDER_RATE_LIMITS.windowSeconds,
+        }),
   ]);
   return {
-    allowed: byIp.allowed && byEmail.allowed,
+    allowed: byIp.allowed && byEmail.allowed && (byIpUnverified?.allowed ?? true),
     repeated: byIp.remaining < ORDER_RATE_LIMITS.perIp - 2 || byEmail.remaining < ORDER_RATE_LIMITS.perEmail - 1,
   };
 }
