@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
 import { exportShipmentsToCSV, withUtf8Bom } from "@/lib/shipment-export";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 export async function GET(

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { MAX_WAIT_TIME, TIMEOUT_TIME } from "@/constants";
 import { Prisma, PrismaClient } from "@prisma/client";
 

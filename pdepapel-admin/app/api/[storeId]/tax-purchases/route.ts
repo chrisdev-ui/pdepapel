@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { createTaxReportPeriod } from "@/lib/tax-reports";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 function parsePurchase(body: Record<string, unknown>) {
   const invoiceNumber = String(body.invoiceNumber ?? "").trim();

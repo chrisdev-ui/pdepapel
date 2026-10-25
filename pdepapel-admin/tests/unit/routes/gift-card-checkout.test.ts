@@ -35,6 +35,8 @@ vi.mock("@/lib/utils", () => ({
   currencyFormatter: (value: number) => `$ ${value}`,
   generateOrderNumber: () => "ORD-GC-1",
   generateWompiPayment: mocks.generateWompiPayment,
+}));
+vi.mock("@/lib/server/utils", () => ({
   getLastOrderTimestamp: mocks.getLastOrderTimestamp,
   checkIfStoreOwner: mocks.checkIfStoreOwner,
 }));

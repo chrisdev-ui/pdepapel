@@ -10,6 +10,7 @@ import { overduePresaleWhere } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { getStoreAccess } from "@/lib/store-access";
 import { STORE_PICKER_SELECT } from "@/lib/store-picker";
+import { assertStoreIdShape } from "@/lib/store-id";
 import { isCopilotConfigured } from "@/lib/copiloto/config";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -21,6 +22,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
   params: { storeId: string };
 }) {
+  assertStoreIdShape(params.storeId);
   const { userId } = await auth();
   if (!userId) {
     redirect("/iniciar-sesion");

@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { checkPoolMargins } from "@/lib/capsule-pool";
 import { parsePackOptions } from "@/lib/capsule-pack-options";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** Calcula, sin escribir nada, el margen de cada pack con la bolsa propuesta. POST porque recibe una lista. */

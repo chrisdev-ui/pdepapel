@@ -31,7 +31,7 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 vi.mock("@/lib/slugify", () => ({ slugify: mocks.slugify }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/api-errors", () => ({
   ErrorFactory: {
     Unauthenticated: () => new AppError("Autenticación requerida", 401),

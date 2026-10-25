@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { PRESALE_STATUS_LABELS } from "@/lib/presale";
+import { PRESALE_STATUS_LABELS } from "@/lib/presale-labels";
 import { formatAvailableAt } from "@/lib/product-availability";
 import { currencyFormatter } from "@/lib/utils";
 import type { PresaleRow, PresalesSummary } from "../server/get-presales";

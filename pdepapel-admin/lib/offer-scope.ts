@@ -1,5 +1,6 @@
 import { availableStockWhere } from "@/lib/available-stock-where";
 import { availableStock } from "@/lib/available-stock";
+import { priceAfter } from "@/lib/offer-price";
 import { DiscountType, type PrismaClient } from "@prisma/client";
 
 export interface ScopeOffer {
@@ -61,12 +62,7 @@ export interface ScopeSummary {
 
 export const SCOPE_SEARCH_LIMIT = 20;
 
-/** Precio final con el mismo redondeo de la tienda (`lib/discount-engine.ts`). */
-export function priceAfter(type: DiscountType | undefined, amount: number | undefined, price: number): number {
-  if (!type || !amount || amount <= 0) return price;
-  if (type === DiscountType.PERCENTAGE) return Math.max(0, Math.round(price * (1 - amount / 100)));
-  return Math.max(0, price - amount);
-}
+export { priceAfter } from "@/lib/offer-price";
 
 /** Ofertas que ya alcanzan al producto, directamente o por su subcategoría o grupo. */
 export function overlapsFor(offers: ScopeOffer[], product: ScopeProductRef): ScopeOffer[] {

@@ -12,7 +12,8 @@ import {
   releaseReservation,
   setReservationItemQuantity,
 } from "@/lib/stock-reservations";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 type Params = { params: { storeId: string; reservationId: string } };

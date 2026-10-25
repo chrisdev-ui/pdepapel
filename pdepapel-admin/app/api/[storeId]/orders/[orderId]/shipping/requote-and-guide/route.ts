@@ -11,7 +11,8 @@ import {
   requoteCartShipping,
 } from "@/lib/shipping-helpers";
 import { reconcileShippingRate } from "@/lib/shipping-rate-reconcile";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { readOptionalJsonBody } from "@/lib/request-body";
 

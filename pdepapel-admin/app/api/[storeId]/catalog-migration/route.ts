@@ -13,7 +13,8 @@ import {
 } from "@/lib/catalog-migration";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { NextResponse } from "next/server";
 
 const mutationSchema = z.discriminatedUnion("action", [

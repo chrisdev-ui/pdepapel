@@ -1,6 +1,6 @@
 "use client";
 
-import { getSalesData } from "@/actions/get-sales-data";
+import type { getSalesData } from "@/actions/get-sales-data";
 import {
   currencyFormatter,
   numberFormatter,

@@ -1,30 +1,17 @@
-"use client";
-
-import { motion, useReducedMotion } from "framer-motion";
-
 /**
- * Entrada breve de cada pantalla del panel. Antes eran 0,75 s y se sentía
- * como lentitud en cada navegación (auditoría 2026-10-06); 0,15 s marca el
- * cambio sin hacer esperar. Con «reducir movimiento» llega al final en 0 s.
+ * Entrada breve de cada pantalla del panel (0,15 s; antes 0,75 s se sentía
+ * como lentitud, auditoría 2026-10-06). La plantilla se monta de nuevo en cada
+ * navegación, así que la animación se repite sin JS.
  *
- * Siempre el mismo motion.div: el servidor no conoce la preferencia y pinta
- * el estado inicial (opacity 0). Cambiar a un <div> en el cliente dejaba ese
- * estilo puesto, porque React no corrige atributos al hidratar, y la pantalla
- * quedaba invisible.
+ * Es CSS y no framer-motion: framer pintaba `opacity: 0` desde el servidor y
+ * solo la hidratación la llevaba a 1, así que una hidratación lenta dejaba la
+ * pantalla en blanco (regresión 2026-10-25, F-5). Sin la animación el
+ * contenido se ve igual.
  */
-const ROUTE_TRANSITION_SECONDS = 0.15;
-
 export default function Template({ children }: { children: React.ReactNode }) {
-  const reduceMotion = useReducedMotion();
-
   return (
-    <motion.div
-      initial={{ y: 8, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 8, opacity: 0 }}
-      transition={reduceMotion ? { duration: 0 } : { ease: "easeOut", duration: ROUTE_TRANSITION_SECONDS }}
-    >
+    <div className="duration-150 ease-out animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none">
       {children}
-    </motion.div>
+    </div>
   );
 }

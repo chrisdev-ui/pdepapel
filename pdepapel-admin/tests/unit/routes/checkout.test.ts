@@ -70,10 +70,12 @@ vi.mock("@/lib/prismadb", () => ({
 }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
-  checkIfStoreOwner: mocks.checkIfStoreOwner,
   currencyFormatter: (value: number) => `$ ${value}`,
   generateOrderNumber: mocks.generateOrderNumber,
   generateWompiPayment: vi.fn(),
+}));
+vi.mock("@/lib/server/utils", () => ({
+  checkIfStoreOwner: mocks.checkIfStoreOwner,
   getLastOrderTimestamp: mocks.getLastOrderTimestamp,
   processOrderItemsInBatches: vi.fn(),
 }));

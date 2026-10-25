@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
-import { refreshImageHealth } from "@/lib/image-health";
+import { describeImageHealthReport, refreshImageHealth } from "@/lib/image-health";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { recordJobRun } from "@/lib/job-runs";
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
           ok: result.status === "fulfilled",
           detail:
             result.status === "fulfilled"
-              ? JSON.stringify(result.value).slice(0, 300)
+              ? describeImageHealthReport(result.value)
               : result.reason instanceof Error
                 ? result.reason.message
                 : String(result.reason),

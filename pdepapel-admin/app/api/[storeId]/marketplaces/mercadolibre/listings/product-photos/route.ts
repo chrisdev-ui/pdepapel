@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { MERCADOLIBRE_MAX_LISTING_PICTURES } from "@/lib/mercadolibre/listings";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { GALLERY_ORDER } from "@/lib/variant-gallery";
 import { mercadoLibreBrandName, mercadoLibreLineName } from "@/lib/mercadolibre/brand";
 

@@ -3,7 +3,7 @@ import { NewsletterSubscriberStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 function csvCell(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;

@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { conversationStatusUpdateSchema } from "@/lib/conversations";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /**
  * Lo único que se cambia de una conversación desde el panel es su estado:

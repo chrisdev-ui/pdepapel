@@ -1,7 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { auth } from "@clerk/nextjs/server";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";

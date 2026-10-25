@@ -24,6 +24,8 @@ vi.mock("@/lib/utils", () => ({
     DYNAMIC: { "Cache-Control": "public, s-maxage=0, must-revalidate" },
     STATIC: { "Cache-Control": "public, s-maxage=3600" },
   },
+}));
+vi.mock("@/lib/server/utils", () => ({
   verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 

@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), verifyStoreOwner: vi.fn(), findProduct: vi.fn() }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner, CACHE_HEADERS: { NO_CACHE: {} } }));
+vi.mock("@/lib/utils", () => ({ CACHE_HEADERS: { NO_CACHE: {} } }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/prismadb", () => ({ default: { product: { findFirst: mocks.findProduct } } }));
 
 import { GET } from "@/app/api/[storeId]/marketplaces/mercadolibre/listings/product-photos/route";

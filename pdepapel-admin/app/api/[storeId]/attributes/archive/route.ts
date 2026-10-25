@@ -10,7 +10,8 @@ import {
 } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /**

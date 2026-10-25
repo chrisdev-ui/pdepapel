@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 async function requireOwnedProfile(storeId: string, profileId: string) {
   const { userId } = await auth();

@@ -199,7 +199,9 @@ export function buildOrderTimeline(
       ? [shipping?.carrierName ?? shipping?.courier, shipping?.trackingCode]
           .filter(Boolean)
           .join(" · ")
-      : paid || queue === "dispatch"
+      : moving || delivered
+        ? "Sin guía registrada"
+        : paid || queue === "dispatch"
         ? "Crea la guía con la cotización guardada"
         : "Se crea al confirmar el pago",
   });

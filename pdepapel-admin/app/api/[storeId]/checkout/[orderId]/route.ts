@@ -3,12 +3,8 @@ import { createCorsHeaders } from "@/lib/cors";
 import { sendOrderEmail } from "@/lib/email";
 import { validateStockAvailability } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
-import {
-  CACHE_HEADERS,
-  CheckoutOrder,
-  generateWompiPayment,
-  processOrderItemsInBatches,
-} from "@/lib/utils";
+import { CACHE_HEADERS, CheckoutOrder, generateWompiPayment } from "@/lib/utils";
+import { processOrderItemsInBatches } from "@/lib/server/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { BATCH_SIZE } from "@/constants";

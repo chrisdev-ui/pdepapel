@@ -1,6 +1,6 @@
 "use client";
 
-import { DailyBreakdown } from "@/actions/get-financial-analytics";
+import type { DailyBreakdown } from "@/actions/get-financial-analytics";
 import { SectionCard } from "@/components/ui/section-card";
 import { currencyFormatter } from "@/lib/utils";
 import { format, parseISO } from "date-fns";

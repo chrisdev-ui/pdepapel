@@ -12,7 +12,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PdePapel Admin Dashboard",
+  title: "PdePapel Admin",
   description: "Admin Dashboard for PdePapel",
   robots: {
     index: false,

@@ -6,7 +6,8 @@ import { editionPathSegment } from "@/lib/capsule-public";
 import { createCapsulePreviewToken, isCapsulePreviewConfigured } from "@/lib/capsule-preview";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** El enlace firmado para ver la edición en la tienda con la venta apagada (14 días). Solo la dueña. */
 export async function POST(_req: Request, { params }: { params: { storeId: string; editionId: string } }) {

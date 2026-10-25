@@ -6,7 +6,8 @@ import { runInBackground } from "@/lib/background";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { createCapsuleEdition, listCapsuleEditions } from "@/lib/capsule-editions";
 import { withIdempotency } from "@/lib/idempotency";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** Ediciones de cápsulas. Solo la dueña: llevan costos y la banda de la edición. */

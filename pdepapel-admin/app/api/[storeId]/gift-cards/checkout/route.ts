@@ -20,10 +20,10 @@ import {
   currencyFormatter,
   generateOrderNumber,
   generateWompiPayment,
-  getLastOrderTimestamp,
 } from "@/lib/utils";
+import { getLastOrderTimestamp } from "@/lib/server/utils";
 import { runInBackground } from "@/lib/background";
-import { checkIfStoreOwner } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/server/utils";
 import { orderLegalConsentData } from "@/lib/legal-consent";
 import { requireJsonBody } from "@/lib/request-body";
 

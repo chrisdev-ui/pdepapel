@@ -7,7 +7,7 @@ import { Redis } from "@upstash/redis";
 
 import prismadb from "@/lib/prismadb";
 import { handleErrorResponse } from "@/lib/api-errors";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { rankSaleCandidates, type SaleCandidate } from "@/lib/sale-search";
 import { readScannedProductId } from "@/lib/scanned-code";

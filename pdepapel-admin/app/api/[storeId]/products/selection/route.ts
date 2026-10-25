@@ -5,7 +5,8 @@ import { z } from "zod";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { productsToCsv } from "@/lib/product-bulk";
 import { loadBulkRows, resolveMatchingProductIds, summarizeSelection } from "@/lib/product-selection";
-import { CACHE_HEADERS, currencyFormatter, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, currencyFormatter } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export const maxDuration = 60;
 

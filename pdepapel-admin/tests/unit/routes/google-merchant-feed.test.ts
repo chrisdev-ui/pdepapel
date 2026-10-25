@@ -42,6 +42,8 @@ vi.mock("@/lib/utils", () => ({
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
     },
   },
+}));
+vi.mock("@/lib/server/utils", () => ({
   verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 

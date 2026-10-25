@@ -190,11 +190,13 @@ export const CloudinaryClient = () => {
                 className="group relative aspect-square cursor-pointer overflow-hidden rounded-md border bg-muted"
                 onClick={() => toggleSelect(item.public_id)}
               >
+                {/* Ancho fijo de miniatura: solo pide 128 (o 384 en pantallas 2x), anchos que ya existen; sin él pedía 1600. */}
                 <Image
-                  fill
                   src={item.secure_url}
-                  alt="Image"
-                  className="object-cover transition-all group-hover:scale-110"
+                  width={128}
+                  height={128}
+                  alt="Imagen huérfana"
+                  className="h-full w-full object-cover transition-all group-hover:scale-110"
                 />
                 <div className="absolute right-2 top-2 z-10 transition-opacity">
                   <Checkbox

@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
 import { handleErrorResponse } from "@/lib/api-errors";
 import { buildSelectableWhere } from "@/lib/product-pickers";
-import { checkIfStoreOwner } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/server/utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

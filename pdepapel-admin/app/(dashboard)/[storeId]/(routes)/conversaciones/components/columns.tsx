@@ -12,8 +12,8 @@ import {
 import {
   CONVERSATION_STATUS_LABELS,
   DELIVERY_FAILED_LABEL,
-  type ConversationRow,
-} from "@/lib/conversations";
+} from "@/lib/conversation-labels";
+import type { ConversationRow } from "@/lib/conversations";
 import { ConversationStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { AlertTriangle, BellOff, BotOff, Hourglass, ShoppingBag } from "lucide-react";

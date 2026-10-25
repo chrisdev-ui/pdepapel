@@ -8,7 +8,8 @@ import {
   refreshMercadoLibreCashflowReleaseStatuses,
 } from "@/lib/mercadolibre/cashflow";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 async function getCashflowConnection(storeId: string) {
   const connection = await prismadb.marketplaceConnection.findUnique({

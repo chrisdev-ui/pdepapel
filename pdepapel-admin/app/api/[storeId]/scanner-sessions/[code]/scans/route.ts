@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { expiryFrom, normalizePairingCode, PROBLEM_MESSAGES, scanProblem } from "@/lib/scanner-pairing";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /**

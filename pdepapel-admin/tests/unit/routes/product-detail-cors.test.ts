@@ -55,6 +55,8 @@ vi.mock("@/lib/utils", () => ({
   },
   generateRandomSKU: vi.fn(),
   getPublicIdFromCloudinaryUrl: vi.fn(),
+}));
+vi.mock("@/lib/server/utils", () => ({
   verifyStoreOwner: vi.fn(),
   checkIfStoreOwner: mocks.checkIfStoreOwner,
 }));

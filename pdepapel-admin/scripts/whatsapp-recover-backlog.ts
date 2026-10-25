@@ -9,6 +9,7 @@
  *   npx tsx --env-file=.env scripts/whatsapp-recover-backlog.ts                                  # ensayo
  *   npm run prod:write -- scripts/whatsapp-recover-backlog.ts --expect new --apply             # escribe
  */
+import "./lib/allow-server-only.cjs";
 process.env.PRISMA_LOG = "quiet";
 
 async function main() {

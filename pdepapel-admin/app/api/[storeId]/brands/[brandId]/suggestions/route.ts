@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getBrandSuggestions } from "@/lib/brands";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** «Sugerencias automáticas» de una marca (solo la dueña). */
 export async function GET(_req: Request, { params }: { params: { storeId: string; brandId: string } }) {

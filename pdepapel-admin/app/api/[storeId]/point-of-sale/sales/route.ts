@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { chargePointOfSaleOnTerminal, createPointOfSaleSale, POINT_OF_SALE_PAYMENT_METHODS } from "@/lib/point-of-sale";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 
 export async function POST(

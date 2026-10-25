@@ -35,6 +35,13 @@ describe("order timeline", () => {
     expect(getNextStepCard(moving, "s1", now)).toMatchObject({ queue: "in-transit", primary: { label: "Ver seguimiento", href: "https://track/ABC123" } });
   });
 
+  it("does not ask for a guide on an order delivered by hand", () => {
+    const handDelivered = { ...base, status: OrderStatus.PAID, paidAt: new Date("2026-09-07T20:40:00.000Z"), shipping: { status: ShippingStatus.Delivered, trackingCode: null } };
+    const guide = buildOrderTimeline(handDelivered, now).find((s) => s.id === "guide")!;
+    expect(guide).toMatchObject({ state: "done", meta: "Sin guía registrada" });
+    expect(getNextStepCard(handDelivered, "s1", now)?.queue).not.toBe("dispatch");
+  });
+
   it("flags carrier problems and closes delivered orders", () => {
     const failed = { ...base, status: OrderStatus.SENT, shipping: { status: ShippingStatus.FailedDelivery, trackingCode: "X" } };
     expect(getNextStepCard(failed, "s1", now)).toMatchObject({ queue: "issue", tone: "pink" });

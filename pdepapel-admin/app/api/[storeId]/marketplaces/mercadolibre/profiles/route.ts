@@ -9,7 +9,8 @@ import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
 import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 type Attribute = { id: string; value_name?: string; value_id?: string };
 

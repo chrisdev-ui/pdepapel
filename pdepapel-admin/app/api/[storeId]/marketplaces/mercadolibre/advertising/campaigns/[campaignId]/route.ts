@@ -16,7 +16,8 @@ import {
   updateMercadoLibreProductAdsCampaign,
 } from "@/lib/mercadolibre/product-ads";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 type CampaignAction = "PAUSE" | "ACTIVATE" | "UPDATE_SETTINGS";
 

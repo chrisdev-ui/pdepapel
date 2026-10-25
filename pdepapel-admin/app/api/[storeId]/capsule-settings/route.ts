@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getCapsuleSettings, saveCapsuleSettings } from "@/lib/capsule-settings";
 import { readJsonBody } from "@/lib/request-body";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** Piso de costo de un papel y plantilla de packs de las ediciones sugeridas. Solo la dueña: son costos. */
 export async function GET(_req: Request, { params }: { params: { storeId: string } }) {

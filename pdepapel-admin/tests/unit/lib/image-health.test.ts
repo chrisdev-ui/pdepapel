@@ -13,7 +13,7 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 
-import { checkImageUrl, refreshImageHealth } from "@/lib/image-health";
+import { checkImageUrl, describeImageHealthReport, refreshImageHealth } from "@/lib/image-health";
 
 const respond = (status: number) => async () => ({ status, ok: status >= 200 && status < 300 });
 
@@ -55,5 +55,12 @@ describe("image health", () => {
     expect(report).toEqual({ checked: 4, broken: 1, repaired: 1, unknown: 1 });
     expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: { in: ["gone"] } }, data: { brokenAt: expect.any(Date) } });
     expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: { in: ["back"] } }, data: { brokenAt: null } });
+  });
+});
+
+describe("describeImageHealthReport", () => {
+  it("writes the Sistemas detail as text, not JSON", () => {
+    expect(describeImageHealthReport({ checked: 2585, broken: 12, repaired: 0, unknown: 0 })).toBe("2.585 revisadas · 12 rotas · 0 reparadas");
+    expect(describeImageHealthReport({ checked: 10, broken: 0, repaired: 1, unknown: 3 })).toBe("10 revisadas · 0 rotas · 1 reparada · 3 sin respuesta de Cloudinary");
   });
 });

@@ -11,7 +11,8 @@ import {
 } from "@/lib/mercadolibre/outbox";
 import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /**
  * Publica un borrador ahora. La ruta ya no llama a Mercado Libre por su

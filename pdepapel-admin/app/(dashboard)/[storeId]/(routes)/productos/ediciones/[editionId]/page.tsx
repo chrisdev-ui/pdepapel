@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { EditionWorkspace } from "./components/edition-workspace";
 import { getEditionWorkspace } from "./server/get-edition-workspace";
 
-export const metadata: Metadata = { title: "Edición de cápsulas" };
+export const metadata: Metadata = { title: "Edición de cápsulas | PdePapel Admin" };
 
 export default async function EdicionPage({ params }: { params: { storeId: string; editionId: string } }) {
   const data = await getEditionWorkspace(params.storeId, params.editionId);

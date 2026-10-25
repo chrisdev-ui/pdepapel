@@ -7,7 +7,7 @@ import TaxReportsClient from "./components/client";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "Reportes tributarios | P de Papel Admin",
+  title: "Reportes tributarios | PdePapel Admin",
   description: "Exporta las ventas y compras para declaraciones tributarias",
 };
 

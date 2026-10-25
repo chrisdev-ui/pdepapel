@@ -10,7 +10,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getMercadoLibreResource } from "@/lib/mercadolibre/client";
 import { synchronizeMercadoLibreOrder } from "@/lib/mercadolibre/order-sync";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const EXTERNAL_ORDER_ID_PATTERN = /^\d{8,30}$/;
 

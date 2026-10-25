@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner, CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } } }));
+vi.mock("@/lib/utils", () => ({ CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } } }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: mocks.invalidate }));
 vi.mock("@/lib/point-of-sale", () => ({
   POINT_OF_SALE_PAYMENT_METHODS: ["CASH", "BankTransfer", "Bold"],

@@ -9,7 +9,8 @@ import {
   getMercadoLibreQueueConfigurationStatus,
 } from "@/lib/mercadolibre/queue";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export async function POST(
   _request: Request,

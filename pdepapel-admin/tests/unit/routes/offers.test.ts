@@ -19,9 +19,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/utils", () => ({
-  verifyStoreOwner: mocks.verifyStoreOwner,
   currencyFormatter: (value: number) => `$ ${value}`,
   CACHE_HEADERS: { NO_CACHE: {}, DYNAMIC: {} },
+}));
+vi.mock("@/lib/server/utils", () => ({
+  verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStorePromotionsCache: mocks.invalidate }));
 vi.mock("@/lib/prismadb", () => ({

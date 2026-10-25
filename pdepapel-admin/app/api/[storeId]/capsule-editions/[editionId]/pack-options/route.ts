@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { savePackOptions } from "@/lib/capsule-pack-options";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** Guarda regalo y caja de cada pack, solo si el P95 de cada pack que cabe llega al margen mínimo. Solo la dueña. */

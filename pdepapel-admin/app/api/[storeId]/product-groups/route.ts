@@ -11,7 +11,7 @@ import {
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { assertNoStandaloneConflicts } from "@/lib/product-group-conflicts";
 import { assertGroupOnlyIsCover, syncVariantGallery, writeGroupPhotos } from "@/lib/variant-gallery";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";

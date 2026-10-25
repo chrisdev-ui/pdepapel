@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
 import { NamingReviewClient } from "./components/naming-review-client";
 import { getProductNamingCandidates } from "./server/get-product-naming-candidates";
+
+export const metadata: Metadata = {
+  title: "Nombres de productos | PdePapel Admin",
+};
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

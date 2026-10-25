@@ -18,6 +18,8 @@ vi.mock("@/lib/prismadb", () => ({
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
   generateWompiPayment: mocks.generateWompiPayment,
+}));
+vi.mock("@/lib/server/utils", () => ({
   processOrderItemsInBatches: vi.fn(),
 }));
 vi.mock("@/lib/inventory", () => ({

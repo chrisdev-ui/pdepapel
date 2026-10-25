@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { env } from "@/lib/env.mjs";
 
 import { BrandForm } from "./components/brand-form";
 import { getBrand, getBrandParentOptions } from "./server/get-brand";
+
+export const metadata: Metadata = {
+  title: "Marca | PdePapel Admin",
+};
 
 const NEW_SEGMENTS = new Set(["nueva", "nuevo"]);
 

@@ -1,4 +1,4 @@
-import { getCategorySales } from "@/actions/get-category-sales";
+import type { getCategorySales } from "@/actions/get-category-sales";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableCellCurrency } from "../ui/data-table-cell-currency";

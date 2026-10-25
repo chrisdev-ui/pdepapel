@@ -36,7 +36,7 @@ import {
   parseTriggerLines,
   triggersToLines,
   type BotReplyRow,
-} from "@/lib/whatsapp/bot-replies";
+} from "@/lib/whatsapp/bot-replies-shared";
 
 const formSchema = z.object({
   label: z.string().trim().min(1, "Ponle un nombre para reconocerla").max(80),

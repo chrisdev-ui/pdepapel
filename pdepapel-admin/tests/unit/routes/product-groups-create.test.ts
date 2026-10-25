@@ -21,7 +21,7 @@ vi.mock("@/lib/cloudinary-cleanup", () => ({
   deleteCloudinaryImages: vi.fn().mockResolvedValue({ deleted: 0, kept: 0 }),
 }));
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
 vi.mock("@/lib/product-slugs", () => ({
   synchronizeProductGroupSlugs: vi.fn(),

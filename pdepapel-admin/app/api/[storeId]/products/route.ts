@@ -6,6 +6,7 @@ import {
   productAvailabilityWhere,
 } from "@/lib/product-availability";
 import { movementActor } from "@/lib/movement-actor";
+import { clampPublicPageSize } from "@/lib/public-page-size";
 import { netPublicProduct } from "@/lib/available-stock";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
@@ -44,8 +45,8 @@ import {
   currencyFormatter,
   getPublicIdFromCloudinaryUrl,
   parseErrorDetails,
-  verifyStoreOwner,
 } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { loadProductAttributes } from "@/lib/product-attributes";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
@@ -439,9 +440,9 @@ export async function GET(
 
     const { searchParams } = new URL(req.url);
     const page = Number(searchParams.get("page")) || 1;
-    const limit = Number(searchParams.get("limit"));
+    const limit = clampPublicPageSize(searchParams.get("limit"));
     const itemsPerPage =
-      limit || Number(searchParams.get("itemsPerPage")) || 52;
+      limit || clampPublicPageSize(searchParams.get("itemsPerPage")) || 52;
     const typeId = searchParams.get("typeId")?.split(",") || [];
     let categoryId = searchParams.get("categoryId")?.split(",") || [];
     const colorId = searchParams.get("colorId")?.split(",") || [];

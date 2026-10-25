@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { CapsulePacker } from "./components/capsule-packer";
 import { getCapsuleWorkspace } from "./server/get-capsule-workspace";
 
-export const metadata: Metadata = { title: "Empacar cápsulas" };
+export const metadata: Metadata = { title: "Empacar cápsulas | PdePapel Admin" };
 
 export default async function CapsulasPage({
   params,

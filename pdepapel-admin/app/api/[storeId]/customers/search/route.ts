@@ -4,7 +4,8 @@ import prismadb from "@/lib/prismadb";
 import { handleErrorResponse } from "@/lib/api-errors";
 import { AvailableCustomer } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/[orderId]/server/get-available-customers";
 import parsePhoneNumber from "libphonenumber-js";
-import { checkIfStoreOwner, normalizePhone } from "@/lib/utils";
+import { normalizePhone } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/server/utils";
 
 export async function GET(
   req: Request,

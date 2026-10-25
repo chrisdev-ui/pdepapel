@@ -12,7 +12,8 @@ import {
   synchronizeRecentMercadoLibreQuestions,
 } from "@/lib/mercadolibre/questions";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 async function getConnection(storeId: string) {
   const connection = await prismadb.marketplaceConnection.findUnique({

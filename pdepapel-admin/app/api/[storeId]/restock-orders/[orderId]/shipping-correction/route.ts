@@ -8,7 +8,8 @@ import { createInventoryMovementBatch } from "@/lib/inventory";
 import { movementActor } from "@/lib/movement-actor";
 import prismadb from "@/lib/prismadb";
 import { planShippingCorrection, RESTOCK_STATUS_LABELS } from "@/lib/restock-orders";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

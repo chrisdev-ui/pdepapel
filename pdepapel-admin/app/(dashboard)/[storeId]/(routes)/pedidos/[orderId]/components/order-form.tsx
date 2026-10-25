@@ -840,11 +840,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               cliente, productos, envío, descuentos, notas. */}
           <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
             {initialData && (
-              <div className="order-1 lg:order-none">
+              <div className="order-1 min-w-0 lg:order-none">
                 <OrderStatusBar
                   status={initialData.status}
                   type={watchedType}
                   paymentMethod={initialData.payment?.method ?? null}
+                  shippingStatus={initialData.shipping?.status ?? null}
                   shippingProvider={watchedProvider}
                   trackingCode={watchedTracking}
                   transactionId={watchedTransaction}

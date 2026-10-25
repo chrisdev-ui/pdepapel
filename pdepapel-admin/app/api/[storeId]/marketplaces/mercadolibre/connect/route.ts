@@ -5,7 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getMercadoLibreConfig } from "@/lib/mercadolibre/config";
 import { createMercadoLibreAuthorizationUrl } from "@/lib/mercadolibre/oauth";
 import { createMercadoLibreOAuthState } from "@/lib/mercadolibre/oauth-state";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export async function GET(
   _request: Request,

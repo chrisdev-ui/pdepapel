@@ -90,3 +90,17 @@ describe("POST /shipment/quote", () => {
     expect(mocks.log.mock.calls.some(([tag]) => tag === "[SHIPPING_QUOTE] contra entrega")).toBe(false);
   });
 });
+
+describe("POST /shipment/quote con un cuerpo ilegible", () => {
+  const raw = (body: string) =>
+    new Request("https://admin.test/api/store-1/shipment/quote", { method: "POST", headers: { "content-type": "application/json" }, body });
+
+  it.each([["JSON cortado", "{\"destination\":"], ["vacío", ""], ["null", "null"], ["una lista", "[]"]])("%s responde 400 en español, no 500", async (_label, body) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const response = await POST(raw(body), { params: { storeId: "store-1" } });
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toMatch(/cuerpo de la solicitud no es JSON válido|necesita un objeto/);
+    expect(mocks.quoteShipment).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});

@@ -6,7 +6,8 @@ import { runInBackground } from "@/lib/background";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { printFromPanel } from "@/lib/capsule-print";
 import { withIdempotency } from "@/lib/idempotency";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** Imprime papeles o regalos (apartan en el producto real). Un doble clic con la misma llave no imprime dos veces. Solo la dueña. */

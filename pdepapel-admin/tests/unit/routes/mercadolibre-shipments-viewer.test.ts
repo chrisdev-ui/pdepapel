@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({ role: "owner" as "owner" | "viewer" }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: async () => ({ userId: "u" }) }));
 vi.mock("@/lib/store-access", () => ({ requireStoreRead: async () => ({ userId: "u", role: mocks.role }) }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn(), CACHE_HEADERS: { NO_CACHE: {} } }));
+vi.mock("@/lib/utils", () => ({ CACHE_HEADERS: { NO_CACHE: {} } }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     marketplaceConnection: { findUnique: async () => ({ id: "conn-1" }) },

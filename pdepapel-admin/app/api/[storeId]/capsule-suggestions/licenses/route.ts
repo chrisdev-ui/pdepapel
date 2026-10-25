@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { setCapsuleLicenseAllowed } from "@/lib/capsule-suggestion-data";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** «Permitir en cápsulas» para un producto que parece de personaje o licencia. */

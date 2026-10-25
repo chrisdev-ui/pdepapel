@@ -37,6 +37,8 @@ export function isPaidLike(status: OrderStatus): boolean {
 export interface TransitionContext {
   type: OrderType;
   paymentMethod?: PaymentMethod | null;
+  /** Estado del envío guardado: un pedido ya entregado (a mano, sin guía) no se vuelve a enviar. */
+  shippingStatus?: ShippingStatus | null;
 }
 
 const QUOTE_OPEN: OrderStatus[] = [OrderStatus.QUOTATION, OrderStatus.VIEWED];
@@ -92,7 +94,9 @@ export function getAllowedTransitions(
       ];
     case OrderStatus.PAID:
       return [
-        ...(isDigital ? [] : [OrderStatus.SENT]),
+        ...(isDigital || context.shippingStatus === ShippingStatus.Delivered
+          ? []
+          : [OrderStatus.SENT]),
         OrderStatus.CANCELLED,
       ];
     case OrderStatus.SENT:

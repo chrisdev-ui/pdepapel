@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { updateCapsuleVideo } from "@/lib/capsule-orders";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** Avanza el video del pedido (un paso a la vez) o guarda su enlace. Publicar exige el permiso de la clienta. Solo la dueña. */

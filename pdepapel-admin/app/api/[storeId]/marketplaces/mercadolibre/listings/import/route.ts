@@ -13,7 +13,8 @@ import {
 } from "@/lib/mercadolibre/import-listings";
 import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 function parseSelections(value: unknown): MercadoLibreListingImportSelection[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 500) {

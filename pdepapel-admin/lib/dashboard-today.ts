@@ -2,11 +2,10 @@ import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
 import { compareUrgency, computeReplenishment, describeCover } from "@/lib/replenishment";
 import { getUnitsOnOrderByProduct, getUnitsSoldByProduct } from "@/lib/replenishment-db";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
-import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS } from "@/lib/order-queues";
+import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS, dispatchQueueWhere } from "@/lib/order-queues";
 import { countRecentPaymentWebhookIssues } from "@/lib/payment-webhook-events";
 import { ORDER_READY_TO_DISPATCH } from "@/lib/presale";
 import {
-  DISPATCH_WINDOW_DAYS as VENTANA_DESPACHO,
   TRANSFER_WINDOW_DAYS as VENTANA_TRANSFERENCIA,
   getColombiaDayBounds as limitesDelDia,
 } from "@/lib/dashboard-windows";
@@ -396,7 +395,6 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
   const previousWeekStart = zonedTimeToUtc(startOfDay(subDays(local, 13)), TZ);
   const previousWeekEnd = new Date(weekStart.getTime() - 1);
   const quoteHorizon = addDays(now, 2);
-  const dispatchSince = subDays(now, VENTANA_DESPACHO);
   const transferSince = subDays(now, VENTANA_TRANSFERENCIA);
   const awaitingSince = subDays(now, AWAITING_PAYMENT_WINDOW_DAYS);
   const awaitingUntil = subHours(now, AWAITING_PAYMENT_STALE_HOURS);
@@ -414,13 +412,11 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       ],
     },
   };
+  // La misma regla que Pedidos → Por despachar: sin entregados a mano, en
+  // camino ni con novedad, y contra entrega aunque no se haya cobrado.
   const dispatchWhere = {
-    storeId,
-    status: OrderStatus.PAID,
-    type: { in: SHIPPABLE_TYPES },
     AND: [
-      paidWithin(dispatchSince, now),
-      { OR: [{ shipping: null }, { shipping: { trackingCode: null } }] },
+      dispatchQueueWhere(storeId, now),
       // Un pedido con preventa sin liberar no está atrasado: está esperando
       // mercancía, y espera COMPLETO. Se excluye a nivel de pedido, no de
       // línea, porque no se parten envíos.

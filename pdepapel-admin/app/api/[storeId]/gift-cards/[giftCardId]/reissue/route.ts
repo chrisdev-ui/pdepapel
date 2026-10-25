@@ -5,7 +5,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
 import { reissueGiftCard } from "@/lib/gift-cards";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /**
  * «Reenviar correo»: código nuevo para el mismo saldo. El anterior deja de

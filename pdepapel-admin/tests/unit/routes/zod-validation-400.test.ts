@@ -16,6 +16,8 @@ vi.mock("@clerk/nextjs/server", () => ({ auth: () => ({ userId: session.userId }
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
+}));
+vi.mock("@/lib/server/utils", () => ({
   verifyStoreOwner: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/newsletter", () => ({

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: async () => ({ userId: "u" }) }));
 vi.mock("@/lib/store-access", () => ({ requireStoreRead: async () => ({ userId: "u", role: mocks.role }) }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({ default: { product: { findFirst: mocks.findFirst, findMany: mocks.findMany } } }));
 // Redis en memoria: lo que una cuenta guarda, la otra lo podría leer.
 vi.mock("@upstash/redis", () => ({

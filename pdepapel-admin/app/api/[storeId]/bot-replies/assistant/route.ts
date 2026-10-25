@@ -9,7 +9,8 @@ import { logModelUsage } from "@/lib/ai-usage";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { parseStoredTriggers } from "@/lib/whatsapp/bot-replies";
 import {
   BOT_REPLY_ASSISTANT_CACHE_TTL_SECONDS,

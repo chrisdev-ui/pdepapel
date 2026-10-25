@@ -1,7 +1,8 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { summarizeScope } from "@/lib/offer-scope";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { auth } from "@clerk/nextjs/server";
 import { DiscountType } from "@prisma/client";
 import { NextResponse } from "next/server";

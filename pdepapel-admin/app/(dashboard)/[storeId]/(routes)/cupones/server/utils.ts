@@ -5,7 +5,7 @@ import { randomInt } from "node:crypto";
 
 import { BATCH_CODE_ALPHABET } from "@/lib/coupons";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const CODE_LENGTH = 8;
 const MAX_ATTEMPTS = 10;

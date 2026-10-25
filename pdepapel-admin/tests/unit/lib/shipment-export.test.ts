@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 // `lib/utils` valida el entorno al cargarse; la ruta solo necesita `verifyStoreOwner`.
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/prismadb", () => ({ default: { shipping: { findMany: mocks.findMany } } }));
 
 import { GET } from "@/app/api/[storeId]/shipments/export/route";

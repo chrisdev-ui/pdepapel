@@ -13,6 +13,7 @@
  *
  * No escribe nada, no encola, no llama al bot ni envía.
  */
+import "./lib/allow-server-only.cjs";
 process.env.PRISMA_LOG = "quiet";
 
 const args = process.argv.slice(2);

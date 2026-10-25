@@ -6,7 +6,7 @@ vi.mock("@/lib/prismadb", () => ({
   default: { order: { findFirst: mocks.findFirst } },
 }));
 
-import { getLastOrderTimestamp } from "@/lib/utils";
+import { getLastOrderTimestamp } from "@/lib/server/utils";
 
 describe("freno de «una orden cada pocos minutos»", () => {
   beforeEach(() => {

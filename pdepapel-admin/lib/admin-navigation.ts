@@ -273,7 +273,7 @@ export const NAV_GROUPS: NavGroup[] = [
         segment: "inventario",
         badge: "lowStock",
         children: [
-          { label: "Todo el stock", segment: "inventario" },
+          { label: "Todo el stock", segment: "inventario?vista=todo" },
           { label: "Por reponer", segment: "inventario?vista=por-reponer" },
           { label: "Agotados", segment: "inventario?vista=agotados" },
           { label: "Sin costo", segment: "inventario?vista=sin-costo", ownerOnly: true },

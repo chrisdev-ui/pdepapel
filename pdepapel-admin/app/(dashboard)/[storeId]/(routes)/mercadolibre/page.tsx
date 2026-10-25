@@ -12,7 +12,7 @@ export const revalidate = 0;
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Mercado Libre | P de Papel Admin",
+  title: "Mercado Libre | PdePapel Admin",
   description: "Conecta y administra las ventas de Mercado Libre",
 };
 

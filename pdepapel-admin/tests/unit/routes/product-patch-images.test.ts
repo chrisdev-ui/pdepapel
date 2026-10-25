@@ -28,10 +28,12 @@ vi.mock("@/lib/product-slugs", () => ({
 }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { DYNAMIC: {}, NO_CACHE: {} },
-  checkIfStoreOwner: vi.fn(),
-  verifyStoreOwner: vi.fn(),
   generateRandomSKU: vi.fn(),
   getPublicIdFromCloudinaryUrl: (url: string) => url.split("/").pop()?.replace(/\.\w+$/, "") ?? null,
+}));
+vi.mock("@/lib/server/utils", () => ({
+  checkIfStoreOwner: vi.fn(),
+  verifyStoreOwner: vi.fn(),
 }));
 vi.mock("@/lib/variant-gallery", async (importOriginal) => ({
   ...(await importOriginal<object>()),

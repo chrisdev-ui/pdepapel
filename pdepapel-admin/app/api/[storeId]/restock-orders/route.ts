@@ -6,7 +6,8 @@ import prismadb from "@/lib/prismadb";
 import { assertRestockReferences, RESTOCK_ORDER_INCLUDE } from "@/lib/restock-orders-db";
 import { allocateRestockOrderNumber, withOrderNumberRetry } from "@/lib/restock-order-numbers";
 import { lineSubtotal, restockOrderInputSchema, summarizeLines } from "@/lib/restock-orders";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

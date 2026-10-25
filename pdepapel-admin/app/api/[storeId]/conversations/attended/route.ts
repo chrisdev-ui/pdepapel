@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { MAX_ATTENDED_PER_REQUEST, markWaitsAttended } from "@/lib/whatsapp/waiting-list";
 import { requireJsonBody } from "@/lib/request-body";
 

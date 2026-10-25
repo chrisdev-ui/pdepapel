@@ -1,12 +1,10 @@
-import { BATCH_SIZE, DEFAULT_COUNTRY } from "@/constants";
-import prismadb from "@/lib/prismadb";
+import { DEFAULT_COUNTRY } from "@/constants";
 import {
   Order,
   OrderItem,
   OrderStatus,
   PaymentDetails,
   PaymentMethod,
-  Prisma,
   Product,
   ShippingStatus,
 } from "@prisma/client";
@@ -173,58 +171,9 @@ export function parseAndSplitAddress(address: string): {
   };
 }
 
-/**
- * Último pedido de QUIEN está comprando, para el freno de «una orden cada
- * pocos minutos».
- *
- * El `OR` se arma solo con los identificadores que existen: `{ userId: null }`
- * casa con TODOS los pedidos de invitadas, así que una compra bloqueaba a
- * todas las demás invitadas de la tienda. Sin identificador no hay a quién
- * frenar y se devuelve null.
- */
-export async function getLastOrderTimestamp(
-  userId: string | null | undefined,
-  guestId: string | null | undefined,
-  storeId: string,
-) {
-  if (!storeId) return null;
-
-  const actor: Prisma.OrderWhereInput[] = [];
-  if (userId) actor.push({ userId });
-  if (guestId) actor.push({ guestId });
-  if (actor.length === 0) return null;
-
-  const lastOrder = await prismadb.order.findFirst({
-    where: { OR: actor, storeId },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
-  });
-
-  return lastOrder?.createdAt;
-}
-
 export const capitalizeFirstLetter = (string: string) => {
   return string.charAt(0).toUpperCase() + string.slice(1);
 };
-
-export async function checkIfStoreOwner(
-  userId: string | null,
-  storeId: string,
-) {
-  if (!userId) return false;
-  const storeByUserId = await prismadb.store.findFirst({
-    where: {
-      id: storeId,
-      userId,
-    },
-  });
-  return !!storeByUserId;
-}
-
-export async function verifyStoreOwner(userId: string, storeId: string) {
-  const isStoreOwner = await checkIfStoreOwner(userId, storeId);
-  if (!isStoreOwner) throw ErrorFactory.Unauthorized();
-}
 
 export const parseErrorDetails = (
   key: string,
@@ -357,44 +306,3 @@ export const CACHE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   },
 };
-
-export async function processOrderItemsInBatches(
-  orderItems: any[],
-  storeId: string,
-  batchSize: number = BATCH_SIZE,
-) {
-  const batches = [];
-  for (let i = 0; i < orderItems.length; i += batchSize) {
-    batches.push(orderItems.slice(i, i + batchSize));
-  }
-
-  const allProducts = [];
-  for (const batch of batches) {
-    const products = await prismadb.product.findMany({
-      where: {
-        id: {
-          in: batch.map((item: any) => item.productId),
-        },
-        storeId: storeId,
-      },
-      select: {
-        id: true,
-        price: true,
-        stock: true,
-        name: true,
-        sku: true,
-        images: {
-          select: {
-            url: true,
-          },
-          take: 1,
-        },
-        categoryId: true,
-        productGroupId: true,
-      },
-    });
-    allProducts.push(...products);
-  }
-
-  return allProducts;
-}

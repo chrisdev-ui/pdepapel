@@ -6,7 +6,8 @@ import { runInBackground } from "@/lib/background";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { voidCapsuleSlips } from "@/lib/capsule-slips";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** Anula papeles o regalos impresos (libera el apartado). `slipIds` vacío no anula nada: cerrar la edición es lo que anula todo. Solo la dueña. */

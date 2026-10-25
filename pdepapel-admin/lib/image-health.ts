@@ -40,6 +40,16 @@ export interface ImageHealthReport {
   unknown: number;
 }
 
+const count = (value: number) => value.toLocaleString("es-CO");
+
+/** El resumen que ve Paula en Sistemas: «2.585 revisadas · 12 rotas · 0 reparadas». */
+export function describeImageHealthReport(report: ImageHealthReport): string {
+  const word = (value: number, singular: string) => `${count(value)} ${value === 1 ? singular : `${singular}s`}`;
+  const parts = [word(report.checked, "revisada"), word(report.broken, "rota"), word(report.repaired, "reparada")];
+  if (report.unknown > 0) parts.push(`${count(report.unknown)} sin respuesta de Cloudinary`);
+  return parts.join(" · ");
+}
+
 /**
  * Revisa las imágenes de los productos y grupos activos de una tienda y
  * actualiza `Image.brokenAt`: se marca cuando el archivo ya no existe y se

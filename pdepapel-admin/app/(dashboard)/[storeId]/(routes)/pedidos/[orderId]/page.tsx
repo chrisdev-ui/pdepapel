@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getDaneLocations } from "@/actions/get-dane-locations";
 import { getOrderCapsuleSection } from "@/lib/capsule-order-section";
 import { buildOrderTimeline, getNextStepCard } from "@/lib/order-timeline";
@@ -12,6 +13,10 @@ import { getAvailableCustomers } from "./server/get-available-customers";
 import { getBoxes } from "./server/get-boxes";
 import { getCoupons } from "./server/get-coupons";
 import { getOrder } from "./server/get-order";
+
+export const metadata: Metadata = {
+  title: "Pedido | PdePapel Admin",
+};
 
 export const revalidate = 0;
 

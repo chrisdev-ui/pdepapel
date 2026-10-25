@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { getProductsPrices } from "@/lib/discount-engine";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export async function GET(
   req: Request,

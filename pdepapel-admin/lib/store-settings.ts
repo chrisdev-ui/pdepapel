@@ -2,6 +2,7 @@ import { BotAssistMode, MinimumOrderRule } from "@prisma/client";
 import { z } from "zod";
 
 import { ErrorFactory } from "@/lib/api-errors";
+import { DAY_LABELS, DEFAULT_DELIVERY_ESTIMATE, WEEK_DAYS, type WeekDay } from "@/lib/store-settings-labels";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -99,26 +100,7 @@ export function parseMarkupOverridePercent(value: unknown): number | null | unde
 }
 
 // --- Datos del negocio editables desde Configuración -----------------------
-export const WEEK_DAYS = [
-  "lun",
-  "mar",
-  "mie",
-  "jue",
-  "vie",
-  "sab",
-  "dom",
-] as const;
-export type WeekDay = (typeof WEEK_DAYS)[number];
-
-export const DAY_LABELS: Record<WeekDay, string> = {
-  lun: "Lunes",
-  mar: "Martes",
-  mie: "Miércoles",
-  jue: "Jueves",
-  vie: "Viernes",
-  sab: "Sábado",
-  dom: "Domingo",
-};
+export { DAY_LABELS, DEFAULT_DELIVERY_ESTIMATE, WEEK_DAYS, type WeekDay } from "@/lib/store-settings-labels";
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -343,12 +325,6 @@ export async function saveStoreSettings(
   });
 }
 
-/**
- * Solo rellena el formulario cuando el campo está vacío. Se cuenta desde que
- * se confirma el pago y coincide con Merchant Center: 0–1 día de preparación
- * y 2–5 de tránsito, 2 a 6 días hábiles (ola 3, fase 2A, 2026-10-06).
- */
-export const DEFAULT_DELIVERY_ESTIMATE = "2 a 6 días hábiles";
 
 export const ALWAYS_OPEN_LABEL = "Todos los días, a toda hora";
 

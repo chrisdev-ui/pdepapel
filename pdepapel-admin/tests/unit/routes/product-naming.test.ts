@@ -35,7 +35,7 @@ const transaction = {
 };
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/cache", () => ({
   invalidateStoreProductsCache: mocks.invalidateStoreProductsCache,
 }));

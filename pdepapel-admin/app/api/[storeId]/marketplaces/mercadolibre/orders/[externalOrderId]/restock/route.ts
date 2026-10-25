@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { confirmMercadoLibreOrderReturn } from "@/lib/mercadolibre/order-restock";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const EXTERNAL_ORDER_ID_PATTERN = /^\d{8,30}$/;
 

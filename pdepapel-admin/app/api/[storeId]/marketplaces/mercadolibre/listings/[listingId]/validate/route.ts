@@ -5,7 +5,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { LISTING_FOR_PUBLICATION_SELECT, validateMercadoLibreItemDraft } from "@/lib/mercadolibre/listings";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** «Validar con Mercado Libre»: revisa el borrador guardado con `/items/validate`, sin crear nada. */
 export async function POST(

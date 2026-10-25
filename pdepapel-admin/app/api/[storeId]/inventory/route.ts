@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import { movementActor } from "@/lib/movement-actor";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import {
   assertNotKitProducts,
   createInventoryMovement,

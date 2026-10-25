@@ -3,7 +3,7 @@ import prismadb from "@/lib/prismadb";
 import { Prisma } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 // POST /api/[storeId]/migration/inventory
 export async function POST(

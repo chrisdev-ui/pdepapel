@@ -33,11 +33,7 @@ import { parseAvailableAt } from "@/lib/product-availability";
  *    bodega. Nunca se parte un envío.
  */
 
-export const PRESALE_STATUS_LABELS: Record<ProductPresaleStatus, string> = {
-  [ProductPresaleStatus.ACTIVE]: "En preventa",
-  [ProductPresaleStatus.RELEASED]: "Liberada",
-  [ProductPresaleStatus.CANCELLED]: "Cancelada",
-};
+export { PRESALE_STATUS_LABELS } from "@/lib/presale-labels";
 
 // --- Regla 5: el freno es del PEDIDO, no de la línea ------------------------
 

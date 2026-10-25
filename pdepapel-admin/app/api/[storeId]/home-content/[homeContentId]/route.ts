@@ -14,7 +14,8 @@ import {
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { assertProductsBelongToStore } from "@/lib/home-content-server";
-import { CACHE_HEADERS, getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 type Params = { params: { storeId: string; homeContentId: string } };

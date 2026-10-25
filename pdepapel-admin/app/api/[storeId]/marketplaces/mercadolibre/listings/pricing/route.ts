@@ -10,7 +10,8 @@ import {
   parseMercadoLibreListingPriceEstimates,
 } from "@/lib/mercadolibre/listing-pricing";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export async function GET(
   request: Request,

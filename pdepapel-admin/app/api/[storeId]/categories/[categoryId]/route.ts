@@ -20,7 +20,8 @@ import {
   missingTaxonomyMessage,
   requiredTaxonomyFieldMessage,
 } from "@/lib/taxonomy";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 

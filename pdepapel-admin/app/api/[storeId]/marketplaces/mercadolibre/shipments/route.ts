@@ -11,7 +11,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { refreshMercadoLibreShipments } from "@/lib/mercadolibre/logistics";
 import { getEffectiveMercadoLibreShipmentStatus } from "@/lib/mercadolibre/logistics-status";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export async function GET(
   _request: Request,

@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { giftCandidates, slipCandidates } from "@/lib/capsule-pool";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /**
  * `?tipo=papeles&categorias=a,b` (quietos por categoría y banda; `&todos=1`

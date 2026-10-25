@@ -34,12 +34,8 @@ import {
 } from "@/lib/public-orders";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
-import {
-  CACHE_HEADERS,
-  calculateOrderTotals,
-  processOrderItemsInBatches,
-  verifyStoreOwner,
-} from "@/lib/utils";
+import { CACHE_HEADERS, calculateOrderTotals } from "@/lib/utils";
+import { processOrderItemsInBatches, verifyStoreOwner } from "@/lib/server/utils";
 import {
   createInventoryMovementBatchResilient,
   createInventoryMovementBatch,

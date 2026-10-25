@@ -16,7 +16,7 @@ import {
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
 import { generateSemanticSKU } from "@/lib/variant-generator";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { isKnownTransport } from "@/lib/product-costs";
 
 const MAX_VARIANT_REVIEW_OPTIONS = 3;

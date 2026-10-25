@@ -5,7 +5,7 @@ import { requireStoreOwner } from "@/lib/store-access";
 import { EditionsClient } from "./components/editions-client";
 import { getEditions } from "./server/get-editions";
 
-export const metadata: Metadata = { title: "Ediciones de cápsulas" };
+export const metadata: Metadata = { title: "Ediciones de cápsulas | PdePapel Admin" };
 
 export default async function EdicionesPage({ params }: { params: { storeId: string } }) {
   await requireStoreOwner(params.storeId);

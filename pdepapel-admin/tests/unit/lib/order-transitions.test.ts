@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { canTransition, describeDeletionBlock, describeForbiddenTransition, getAllowedTransitions, getStatusActions, isPaidLike } from "@/lib/order-transitions";
-import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 const standard = { type: OrderType.STANDARD, paymentMethod: PaymentMethod.BankTransfer };
 const cod = { type: OrderType.STANDARD, paymentMethod: PaymentMethod.COD };
@@ -16,6 +16,12 @@ describe("order transitions", () => {
     expect(canTransition(OrderStatus.PAID, OrderStatus.CANCELLED, standard)).toBe(true);
     expect(describeForbiddenTransition(OrderStatus.PAID, OrderStatus.PENDING)).toContain("cancela el pedido");
     expect(isPaidLike(OrderStatus.SENT)).toBe(true);
+  });
+
+  it("does not offer «Marcar como enviado» on an order already delivered by hand", () => {
+    const delivered = { ...standard, shippingStatus: ShippingStatus.Delivered };
+    expect(getStatusActions(OrderStatus.PAID, delivered).map((a) => a.to)).toEqual([OrderStatus.CANCELLED]);
+    expect(getStatusActions(OrderStatus.PAID, { ...standard, shippingStatus: ShippingStatus.Preparing }).map((a) => a.label)).toContain("Marcar como enviado");
   });
 
   it("lets cash on delivery ship before payment and collect after delivery", () => {

@@ -6,7 +6,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getMercadoLibreHealthSummary } from "@/lib/mercadolibre/health";
 import { annotateIssues } from "@/lib/mercadolibre/health-alerts";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export async function GET(
   _request: Request,

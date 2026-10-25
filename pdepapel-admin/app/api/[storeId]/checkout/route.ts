@@ -29,14 +29,16 @@ import { verifyEarlyAccessToken } from "@/lib/early-access";
 import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
 import {
   CACHE_HEADERS,
-  checkIfStoreOwner,
   CheckoutOrder,
   currencyFormatter,
   generateOrderNumber,
   generateWompiPayment,
+} from "@/lib/utils";
+import {
+  checkIfStoreOwner,
   getLastOrderTimestamp,
   processOrderItemsInBatches,
-} from "@/lib/utils";
+} from "@/lib/server/utils";
 import {
   calculateOrderTotals,
   getEffectiveShippingCost,

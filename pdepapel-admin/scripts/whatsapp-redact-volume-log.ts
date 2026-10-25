@@ -8,6 +8,7 @@
  *   npx tsx --env-file=.env scripts/whatsapp-redact-volume-log.ts                         # ensayo (solo lectura)
  *   npm run prod:write -- scripts/whatsapp-redact-volume-log.ts --expect new --apply     # escribe
  */
+import "./lib/allow-server-only.cjs";
 process.env.PRISMA_LOG = "quiet";
 
 async function main() {

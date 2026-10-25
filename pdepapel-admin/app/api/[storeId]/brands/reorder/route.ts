@@ -6,7 +6,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { reorderBrands } from "@/lib/brands";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { BRANDS_INDEX_PATH, BRANDS_TAG, PRODUCT_LIST_TAG } from "@/lib/storefront-cache-scope";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const bodySchema = z.object({ orderedIds: z.array(z.string().min(1)).min(1).max(500) });
 

@@ -8,7 +8,8 @@ import {
   getTaxReport,
   parseTaxSalesDateBasis,
 } from "@/lib/tax-reports";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 function getReportOptions(searchParams: URLSearchParams) {
   const startDate =

@@ -25,10 +25,12 @@ vi.mock("@/lib/cloudinary", () => ({
 }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: {} },
-  verifyStoreOwner: mocks.verifyStoreOwner,
   getPublicIdFromCloudinaryUrl: (url: string) =>
     url.split("/upload/")[1]?.replace(/^v\d+\//, "").replace(/\.\w+$/, "") ??
     null,
+}));
+vi.mock("@/lib/server/utils", () => ({
+  verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 vi.mock("@/lib/prismadb", () => {
   const empty = { findMany: async () => [] };

@@ -8,7 +8,8 @@ import prismadb from "@/lib/prismadb";
 import { applyShipmentStatus } from "@/lib/shipment-status-apply";
 import { CLOSED_SHIPMENT_STATUSES, isShipmentTransitionAllowed } from "@/lib/shipment-status";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 const bodySchema = z.object({

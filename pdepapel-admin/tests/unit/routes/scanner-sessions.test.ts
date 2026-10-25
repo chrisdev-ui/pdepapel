@@ -31,7 +31,7 @@ const db = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: async () => ({ userId: db.userId }) }));
-vi.mock("@/lib/utils", async () => {
+vi.mock("@/lib/server/utils", async () => {
   const { ErrorFactory } = await import("@/lib/api-errors");
   return {
     verifyStoreOwner: async (userId: string, storeId: string) => {

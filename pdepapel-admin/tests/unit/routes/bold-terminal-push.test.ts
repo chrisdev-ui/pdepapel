@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/bold-terminal", () => ({ pushToBoldDatafono: mocks.push }));
 vi.mock("@/lib/prismadb", () => ({ default: { order: { findUnique: mocks.findUnique }, paymentDetails: { update: mocks.update } } }));
-vi.mock("@/lib/utils", () => ({ CACHE_HEADERS: { NO_CACHE: {} }, verifyStoreOwner: mocks.verifyStoreOwner }));
+vi.mock("@/lib/utils", () => ({ CACHE_HEADERS: { NO_CACHE: {} } }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 
 import { POST } from "@/app/api/[storeId]/bold/terminal/[orderId]/route";
 import { BOLD_TERMINAL_MARKER } from "@/lib/gateway-fees";

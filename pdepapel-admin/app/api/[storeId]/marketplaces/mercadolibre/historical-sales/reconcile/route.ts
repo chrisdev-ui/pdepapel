@@ -8,7 +8,8 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { reconcileMercadoLibreHistoricalSale } from "@/lib/mercadolibre/historical-sales";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 function parseAmount(value: unknown, label: string) {
   const amount = Number(value);

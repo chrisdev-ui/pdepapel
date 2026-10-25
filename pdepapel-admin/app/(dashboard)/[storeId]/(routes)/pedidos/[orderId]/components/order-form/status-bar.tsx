@@ -5,6 +5,7 @@ import type {
   OrderType,
   PaymentMethod,
   ShippingProvider,
+  ShippingStatus,
 } from "@prisma/client";
 import { Check, Clock } from "lucide-react";
 
@@ -30,6 +31,7 @@ interface OrderStatusBarProps {
   status: OrderStatus;
   type: OrderType;
   paymentMethod?: PaymentMethod | null;
+  shippingStatus?: ShippingStatus | null;
   shippingProvider: ShippingProvider;
   trackingCode?: string | null;
   transactionId?: string | null;
@@ -54,6 +56,7 @@ export function OrderStatusBar({
   status,
   type,
   paymentMethod,
+  shippingStatus,
   shippingProvider,
   trackingCode,
   transactionId,
@@ -70,6 +73,7 @@ export function OrderStatusBar({
     status,
     type,
     paymentMethod,
+    shippingStatus,
     shippingProvider,
     trackingCode,
     transactionId,
@@ -119,7 +123,7 @@ export function OrderStatusBar({
       {steps.length > 0 && (
         <ol
           aria-label="Línea de tiempo del pedido"
-          className="flex gap-2 overflow-x-auto border-t border-primary/10 pt-3"
+          className="relative flex min-w-0 gap-2 overflow-x-auto border-t border-primary/10 pt-3"
         >
           {steps.map((step, index) => (
             <li

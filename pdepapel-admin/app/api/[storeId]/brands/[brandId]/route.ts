@@ -13,7 +13,8 @@ import {
 import { brandStorefrontTarget } from "@/lib/brand-cache";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /**
  * Pública: la marca de /marcas/[slug] (aquí `brandId` es el slug). Una

@@ -7,7 +7,8 @@ import prismadb from "@/lib/prismadb";
 import { applyShipmentStatus } from "@/lib/shipment-status-apply";
 import { isShipmentTransitionAllowed } from "@/lib/shipment-status";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** Cambio de estado sobre una selección de envíos; el pedido de cada uno sigue al envío. */
 export async function PATCH(req: Request, { params }: { params: { storeId: string } }) {

@@ -10,7 +10,7 @@ vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prismadb", () => ({
   default: { order: { findFirst: mocks.findFirst } },
 }));
-vi.mock("@/lib/utils", () => ({
+vi.mock("@/lib/server/utils", () => ({
   checkIfStoreOwner: mocks.checkIfStoreOwner,
 }));
 

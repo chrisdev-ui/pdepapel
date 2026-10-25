@@ -6,7 +6,8 @@ import {
   createGroupPublicationDrafts,
   loadGroupPublicationPlan,
 } from "@/lib/mercadolibre/group-publication-server";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 async function requireOwner(storeId: string) {
   const { userId } = await auth();

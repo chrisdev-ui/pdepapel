@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { convertReservation, previewConversion } from "@/lib/stock-reservations";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** El resumen del pedido que se crearía (líneas al precio de hoy y total), sin crear nada. */
 export async function GET(_req: Request, { params }: { params: { storeId: string; reservationId: string } }) {

@@ -1,6 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { checkIfStoreOwner } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/server/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 

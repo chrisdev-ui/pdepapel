@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { CapsuleQueue } from "./components/capsule-queue";
 import { getCapsuleQueue } from "./server/get-capsule-queue";
 
-export const metadata: Metadata = { title: "Sacar cápsulas" };
+export const metadata: Metadata = { title: "Sacar cápsulas | PdePapel Admin" };
 
 export default async function SacarCapsulasPage({ params, searchParams }: { params: { storeId: string }; searchParams: { pedido?: string } }) {
   const { orders, pendingTransfers, boxes, day } = await getCapsuleQueue(params.storeId);

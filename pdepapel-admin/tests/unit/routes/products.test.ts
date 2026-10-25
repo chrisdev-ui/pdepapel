@@ -48,6 +48,8 @@ vi.mock("@/lib/utils", () => ({
   generateRandomSKU: vi.fn(),
   getPublicIdFromCloudinaryUrl: vi.fn(),
   parseErrorDetails: vi.fn(),
+}));
+vi.mock("@/lib/server/utils", () => ({
   verifyStoreOwner: vi.fn(),
 }));
 vi.mock("@/lib/variant-generator", () => ({ generateSemanticSKU: vi.fn() }));
@@ -720,6 +722,22 @@ describe("GET /api/[storeId]/products", () => {
       });
       expect(mocks.findProducts).toHaveBeenCalled();
       for (const call of mocks.findProducts.mock.calls) assertPublicSelect(call[0]);
+    }
+  });
+
+  it("recorta un itemsPerPage o limit gigante a 100 en la API pública (rastreo 2026-10-25)", async () => {
+    mocks.findProducts.mockResolvedValue([]);
+    mocks.countProducts.mockResolvedValue(0);
+    mocks.groupProducts.mockResolvedValue([]);
+    mocks.getProductsPrices.mockResolvedValue(new Map());
+
+    for (const query of ["products?fromShop=true&itemsPerPage=5000&skipCache=true", "products?limit=999&skipCache=true"]) {
+      mocks.findProducts.mockClear();
+      const response = await GET(new Request(`https://admin.example.com/api/store-id/${query}`), { params: { storeId: "store-id" } });
+      expect(response.status, query).toBe(200);
+      const takes = mocks.findProducts.mock.calls.map((call) => call[0]?.take).filter((take) => take !== undefined);
+      expect(takes, query).toContain(100);
+      expect(takes.every((take) => take <= 100), query).toBe(true);
     }
   });
 });

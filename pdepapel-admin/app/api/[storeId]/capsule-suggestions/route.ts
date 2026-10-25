@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getEditionSuggestions } from "@/lib/capsule-suggestion-data";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** Ediciones sugeridas, «Te faltan estos» y «Revisar licencia». Solo la dueña: llevan costos y bandas. */
 export async function GET(_req: Request, { params }: { params: { storeId: string } }) {

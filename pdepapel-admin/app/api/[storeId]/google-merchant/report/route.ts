@@ -9,7 +9,8 @@ import {
   readCachedGoogleMerchantFeed,
   refreshGoogleMerchantFeed,
 } from "@/lib/google-merchant-feed";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export const dynamic = "force-dynamic";
 

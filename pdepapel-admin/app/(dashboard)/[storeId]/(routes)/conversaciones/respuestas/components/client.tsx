@@ -16,7 +16,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import {
   TALK_TO_OWNER_BUTTON_TITLE,
   type BotReplyRow,
-} from "@/lib/whatsapp/bot-replies";
+} from "@/lib/whatsapp/bot-replies-shared";
 import { BotReplyAssistant } from "./assistant";
 import { BotReplyTester } from "./tester";
 

@@ -28,6 +28,7 @@
  * node no puede cargar el `.ts` y revienta con ERR_UNKNOWN_FILE_EXTENSION.
  */
 
+import "./lib/allow-server-only.cjs";
 import { PrismaClient } from "@prisma/client";
 
 import {

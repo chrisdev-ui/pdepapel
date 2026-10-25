@@ -29,9 +29,11 @@ import {
   CONVERSATION_STATUS_LABELS,
   DELIVERY_FAILED_LABEL,
   describeMedia,
-  type ConversationCart,
-  type ConversationDetail,
-  type ConversationThreadMessage,
+} from "@/lib/conversation-labels";
+import type {
+  ConversationCart,
+  ConversationDetail,
+  ConversationThreadMessage,
 } from "@/lib/conversations";
 import { currencyFormatter } from "@/lib/utils";
 import {

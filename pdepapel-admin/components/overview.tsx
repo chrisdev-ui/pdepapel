@@ -1,6 +1,6 @@
 "use client";
 
-import { getGraphRevenue } from "@/actions/get-graph-revenue";
+import type { getGraphRevenue } from "@/actions/get-graph-revenue";
 import { yearColors } from "@/constants";
 import { currencyFormatter, shortCurrencyFormatter } from "@/lib/utils";
 import { useMemo } from "react";

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { normalizePairingCode, REMOTE_SCAN_PAGE, sessionStatus } from "@/lib/scanner-pairing";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 type Params = { params: { storeId: string; code: string } };
 

@@ -7,7 +7,7 @@ import {
   resendNewsletterConfirmation,
   unsubscribeNewsletterSubscriber,
 } from "@/lib/newsletter";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const actionSchema = z.object({
   action: z.enum(["resend_confirmation", "unsubscribe"]),

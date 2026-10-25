@@ -11,7 +11,8 @@ import {
   ICON_SUGGESTIONS_MAX_PROPOSALS,
   iconSuggestionsOutputSchema,
 } from "@/lib/type-icon-suggestions";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { createAiProviders } from "@/lib/ai-model-providers";
 import { AiBusyError, runStructured } from "@/lib/ai-provider";
 import { requireJsonBody } from "@/lib/request-body";

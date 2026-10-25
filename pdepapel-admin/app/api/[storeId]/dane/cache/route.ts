@@ -1,7 +1,7 @@
 import { getStoreAccess } from "@/lib/store-access";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { checkIfStoreOwner } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/server/utils";
 import {
   getCacheStats,
   clearLocationsCache,

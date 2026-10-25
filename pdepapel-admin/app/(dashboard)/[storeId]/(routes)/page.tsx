@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
 import { getStoreAccess } from "@/lib/store-access";
+import { assertStoreIdShape } from "@/lib/store-id";
 import { getTodaySummary } from "@/lib/dashboard-today";
 import { getSystemsStatus } from "@/lib/job-runs";
 import { getRecentEarlyAlerts } from "@/lib/social/early-alert";
@@ -45,6 +46,7 @@ export default async function DashboardPage({
   params,
   searchParams,
 }: DashboardPageProps) {
+  assertStoreIdShape(params.storeId);
   // El resumen de inventario valora el stock al costo de compra: fuera para
   // una cuenta de solo lectura. El resto de la pantalla (ventas, pendientes)
   // sí se muestra, que es justo lo que una agencia necesita ver.
@@ -90,9 +92,9 @@ export default async function DashboardPage({
 
       <TodayKpis storeId={params.storeId} summary={summary} />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <PendingActions storeId={params.storeId} items={summary.pending} />
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <WeekSummary week={summary.week} />
           <TopProducts storeId={params.storeId} items={summary.topProducts} />
           <SystemsStatus rows={systems} />

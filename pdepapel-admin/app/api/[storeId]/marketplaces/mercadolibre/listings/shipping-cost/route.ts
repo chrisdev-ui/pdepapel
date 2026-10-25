@@ -10,7 +10,8 @@ import {
 import { parseMercadoLibreRemoteSaleConditions } from "@/lib/mercadolibre/sale-conditions";
 import { parseMercadoLibreShippingCostEstimate } from "@/lib/mercadolibre/shipping-cost";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 function getPositiveNumber(searchParams: URLSearchParams, key: string) {
   const value = Number(searchParams.get(key));

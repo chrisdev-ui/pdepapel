@@ -214,7 +214,7 @@ function pathFiles(file: string, depth = 2): string[] {
  * Una **definición** no es una llamada.
  *
  * `lib/store-access.ts` es donde se escriben `requireStoreOwner`,
- * `requireStoreRead` y `getStoreAccess`; `lib/utils.ts` es donde se escribe
+ * `requireStoreRead` y `getStoreAccess`; `lib/server/utils.ts` es donde se escribe
  * `verifyStoreOwner`. Medio panel importa uno de los dos por un ayudante que
  * no tiene nada que ver —`cn()`, sin ir más lejos—, así que si el escaneo
  * cuenta cualquier aparición del nombre en la cadena de imports, esos dos

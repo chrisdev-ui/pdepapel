@@ -47,11 +47,13 @@ vi.mock("@/lib/variant-gallery", async (importOriginal) => ({
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { DYNAMIC: {}, NO_CACHE: {}, STATIC: {} },
   currencyFormatter: (value: number) => String(value),
-  checkIfStoreOwner: vi.fn(),
-  verifyStoreOwner: vi.fn(),
   generateRandomSKU: vi.fn(),
   parseErrorDetails: vi.fn(),
   getPublicIdFromCloudinaryUrl: () => null,
+}));
+vi.mock("@/lib/server/utils", () => ({
+  checkIfStoreOwner: vi.fn(),
+  verifyStoreOwner: vi.fn(),
 }));
 vi.mock("@/lib/prismadb", () => ({
   default: {

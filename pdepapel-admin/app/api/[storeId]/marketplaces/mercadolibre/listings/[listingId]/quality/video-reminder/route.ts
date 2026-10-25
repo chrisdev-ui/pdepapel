@@ -5,7 +5,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { buildMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
 import { updateMarketplaceListingMetadataGuarded } from "@/lib/mercadolibre/listing-metadata-writes";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const VIDEO_REMINDER_DAYS = 30;
 

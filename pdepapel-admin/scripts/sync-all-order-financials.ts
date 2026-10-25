@@ -1,3 +1,4 @@
+import "./lib/allow-server-only.cjs";
 import prismadb from "../lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "../lib/financial";

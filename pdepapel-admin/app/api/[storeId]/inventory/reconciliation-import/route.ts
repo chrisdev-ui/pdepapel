@@ -14,7 +14,8 @@ import {
 import { recalculateKitStock } from "@/lib/inventory";
 import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export const runtime = "nodejs";
 

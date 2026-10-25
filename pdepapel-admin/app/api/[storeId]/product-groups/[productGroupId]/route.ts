@@ -22,7 +22,8 @@ import {
   writeGroupPhotos,
 } from "@/lib/variant-gallery";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { findProductWithGtin } from "@/lib/product-identifiers";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";

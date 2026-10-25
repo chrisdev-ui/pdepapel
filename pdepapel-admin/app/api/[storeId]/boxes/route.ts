@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { boxInputSchema, normalizeBoxName } from "@/lib/boxes";
 import { requireJsonBody } from "@/lib/request-body";

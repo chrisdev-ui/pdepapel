@@ -19,7 +19,8 @@ import {
   transportationShare,
   weightedAverageCost,
 } from "@/lib/restock-orders";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

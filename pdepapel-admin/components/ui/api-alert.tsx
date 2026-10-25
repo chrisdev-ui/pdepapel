@@ -38,11 +38,11 @@ export const ApiAlert: React.FC<ApiAlertProps> = ({
         {title}
         <Badge variant={variantMap[variant]}>{textMap[variant]}</Badge>
       </AlertTitle>
-      <AlertDescription className="mt-4 flex items-center justify-between">
-        <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold">
+      <AlertDescription className="mt-4 flex items-center justify-between gap-2">
+        <code className="relative min-w-0 break-all rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold">
           {description}
         </code>
-        <Button variant="outline" size="icon" onClick={onCopy}>
+        <Button variant="outline" size="icon" className="shrink-0" onClick={onCopy} aria-label="Copiar ruta">
           <Copy className="h-4 w-4" aria-hidden="true" />
         </Button>
       </AlertDescription>

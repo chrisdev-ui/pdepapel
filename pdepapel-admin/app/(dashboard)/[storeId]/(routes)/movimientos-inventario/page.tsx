@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { InventoryMovementClient } from "./components/client";
 import { getInventoryMovements } from "./server/get-movements";
 
@@ -5,6 +6,10 @@ import { InventoryIssuesPanel } from "@/components/inventory/inventory-issues-pa
 import { OPEN_INVENTORY_ISSUE_SELECT } from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
 import { requireStoreOwner } from "@/lib/store-access";
+
+export const metadata: Metadata = {
+  title: "Movimientos de inventario | PdePapel Admin",
+};
 
 export const revalidate = 0;
 export const maxDuration = 60;

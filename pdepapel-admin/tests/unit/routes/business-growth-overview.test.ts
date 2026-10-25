@@ -22,6 +22,8 @@ vi.mock("@/lib/date-utils", () => ({
 }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
+}));
+vi.mock("@/lib/server/utils", () => ({
   verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 

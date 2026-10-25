@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { describeDevice, expiryFrom, normalizePairingCode, pairingProblem, PROBLEM_MESSAGES } from "@/lib/scanner-pairing";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /**
  * El celular se vincula. Exige la misma sesión de Clerk que el panel: el

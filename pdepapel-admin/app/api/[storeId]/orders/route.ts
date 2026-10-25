@@ -37,13 +37,15 @@ import {
 import {
   CACHE_HEADERS,
   calculateOrderTotals,
-  checkIfStoreOwner,
   currencyFormatter,
   generateOrderNumber,
+} from "@/lib/utils";
+import {
+  checkIfStoreOwner,
   getLastOrderTimestamp,
   processOrderItemsInBatches,
   verifyStoreOwner,
-} from "@/lib/utils";
+} from "@/lib/server/utils";
 import {
   createInventoryMovementBatchResilient,
   createInventoryMovementBatch,

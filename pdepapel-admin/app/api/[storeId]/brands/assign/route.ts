@@ -7,7 +7,8 @@ import { assignBrandToProducts, previewBrandAssignment } from "@/lib/brands";
 import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { resolveMatchingProductIds } from "@/lib/product-selection";
 import { BRANDS_INDEX_PATH, BRANDS_TAG, PRODUCT_LIST_TAG } from "@/lib/storefront-cache-scope";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export const maxDuration = 60;
 

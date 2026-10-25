@@ -5,7 +5,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
 import { slugify } from "@/lib/slugify";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 type ConvertToVariantsBody = {
   name?: unknown;

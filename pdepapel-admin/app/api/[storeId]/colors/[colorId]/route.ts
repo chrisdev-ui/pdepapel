@@ -12,7 +12,8 @@ import {
   requiredTaxonomyFieldMessage,
 } from "@/lib/taxonomy";
 import { PUBLIC_COLOR_SELECT } from "@/lib/public-catalog";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 

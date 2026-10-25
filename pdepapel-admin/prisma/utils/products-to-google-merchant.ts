@@ -15,6 +15,7 @@
  * Center fetches on a schedule. Use this script for one-off audits or when a
  * file upload is preferable.
  */
+import "../../scripts/lib/allow-server-only.cjs";
 import { PrismaClient } from "@prisma/client";
 import * as fs from "fs";
 import path from "path";

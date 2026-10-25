@@ -6,6 +6,7 @@
  *
  *   node --env-file=.env node_modules/.bin/tsx scripts/whatsapp-backoff-shadow-report.ts [días=7]
  */
+import "./lib/allow-server-only.cjs";
 export {};
 
 process.env.PRISMA_LOG = "quiet";

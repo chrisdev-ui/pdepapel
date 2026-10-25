@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { SimuladoProvider } from "@/lib/invoicing/providers/simulado";
 import { InvoiceStatus, DianStatus } from "@prisma/client";
-import { checkIfStoreOwner } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/server/utils";
 
 const provider = new SimuladoProvider();
 

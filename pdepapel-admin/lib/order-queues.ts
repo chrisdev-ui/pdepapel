@@ -1,4 +1,4 @@
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingStatus, type Prisma } from "@prisma/client";
 import { isFlagged, parseRiskReasons } from "@/lib/order-risk";
 
 /**
@@ -94,8 +94,11 @@ export function getInventoryIssueBadge(order?: QueueableOrder): { label: string;
 export const STALE_IN_TRANSIT_DAYS = 5;
 
 const QUOTE_STATUSES: OrderStatus[] = [OrderStatus.DRAFT, OrderStatus.QUOTATION, OrderStatus.VIEWED, OrderStatus.ACCEPTED];
-const ISSUE_STATUSES: ShippingStatus[] = [ShippingStatus.FailedDelivery, ShippingStatus.Exception, ShippingStatus.Returned];
-const IN_TRANSIT_STATUSES: ShippingStatus[] = [ShippingStatus.Shipped, ShippingStatus.PickedUp, ShippingStatus.InTransit, ShippingStatus.OutForDelivery];
+export const ISSUE_STATUSES: ShippingStatus[] = [ShippingStatus.FailedDelivery, ShippingStatus.Exception, ShippingStatus.Returned];
+export const IN_TRANSIT_STATUSES: ShippingStatus[] = [ShippingStatus.Shipped, ShippingStatus.PickedUp, ShippingStatus.InTransit, ShippingStatus.OutForDelivery];
+/** Envíos que ya no son «por despachar» aunque no tengan guía: con novedad, en camino o entregados a mano. */
+export const NOT_DISPATCHABLE_SHIPPING_STATUSES: ShippingStatus[] = [...ISSUE_STATUSES, ShippingStatus.Delivered, ...IN_TRANSIT_STATUSES];
+const NOT_DISPATCHABLE_TYPES: OrderType[] = [OrderType.POINT_OF_SALE, OrderType.FESTIVAL, OrderType.GIFT_CARD];
 
 const toDate = (value?: Date | string | null) => (value ? (value instanceof Date ? value : new Date(value)) : null);
 
@@ -146,6 +149,42 @@ export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQue
   }
 
   return "closed";
+}
+
+/**
+ * La cola «dispatch» de `getOrderQueue` como filtro de Prisma, para que Inicio
+ * cuente lo mismo que Pedidos → Por despachar. Un cambio en la regla va en los
+ * dos sitios; `tests/unit/lib/dispatch-queue-where.test.ts` los compara.
+ */
+export function dispatchQueueWhere(storeId: string, now = new Date()): Prisma.OrderWhereInput {
+  const since = new Date(now.getTime() - DISPATCH_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return {
+    storeId,
+    AND: [
+      {
+        OR: [
+          { shipping: null },
+          {
+            shipping: {
+              status: { notIn: NOT_DISPATCHABLE_SHIPPING_STATUSES },
+              OR: [{ trackingCode: null }, { trackingCode: "" }],
+            },
+          },
+        ],
+      },
+      {
+        OR: [
+          {
+            status: OrderStatus.PAID,
+            type: { notIn: NOT_DISPATCHABLE_TYPES },
+            OR: [{ paidAt: { gte: since } }, { paidAt: null, createdAt: { gte: since } }],
+          },
+          // Contra entrega sale antes de cobrarse y sin ventana: espera su guía.
+          { status: { in: [OrderStatus.PENDING, OrderStatus.CREATED] }, payment: { method: PaymentMethod.COD } },
+        ],
+      },
+    ],
+  };
 }
 
 export interface NextStep {

@@ -12,6 +12,13 @@ const INTENT_LABELS: Record<string, string> = {
   fact: "Datos del negocio",
   escalate: "Queja o problema",
   other: "Otra cosa",
+  web_product: "Desde un producto de la tienda",
+  web_cart: "Desde el carrito de la tienda",
+  web_order: "Desde un pedido de la tienda",
+  web_general: "Desde la tienda (sin producto)",
+  order_request: "«Sí» a un pedido",
+  order_append: "Algo más para el pedido",
+  shipping_quote: "Pregunta por el envío",
 };
 
 const SILENCE_LABELS: Record<string, string> = {

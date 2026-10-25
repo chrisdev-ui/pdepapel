@@ -101,8 +101,6 @@ vi.mock("@/lib/cors", () => ({
 
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { DYNAMIC: {}, NO_CACHE: {} },
-  verifyStoreOwner: mocks.verifyStoreOwner,
-  processOrderItemsInBatches: mocks.processOrderItemsInBatches,
   calculateOrderTotals: (
     items: Array<{ product: { price: number }; quantity: number }>,
     config?: {
@@ -133,6 +131,10 @@ vi.mock("@/lib/utils", () => ({
       total: subtotal - discount - couponDiscount + (config?.shippingCost || 0),
     };
   },
+}));
+vi.mock("@/lib/server/utils", () => ({
+  verifyStoreOwner: mocks.verifyStoreOwner,
+  processOrderItemsInBatches: mocks.processOrderItemsInBatches,
 }));
 
 vi.mock("@/lib/discount-engine", () => ({

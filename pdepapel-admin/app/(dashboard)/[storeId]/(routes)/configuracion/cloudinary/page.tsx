@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import { CloudinaryClient } from "./components/client";
+
+export const metadata: Metadata = {
+  title: "Imágenes huérfanas | PdePapel Admin",
+};
 
 const CloudinaryPage = async ({ params }: { params: { storeId: string } }) => {
   return (

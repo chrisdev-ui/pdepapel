@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getSuggestedBag } from "@/lib/capsule-suggestion-data";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** «Sugerir bolsa»: los temas con productos quietos en la banda de la edición y, con `?tema=`, la bolsa sugerida. Solo la dueña. */
 export async function GET(req: Request, { params }: { params: { storeId: string; editionId: string } }) {

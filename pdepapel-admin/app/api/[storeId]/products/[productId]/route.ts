@@ -21,13 +21,8 @@ import { PUBLIC_PRODUCT_DETAIL_SELECT } from "@/lib/public-catalog";
 import { netPublicProduct } from "@/lib/available-stock";
 import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 import { deleteCloudinaryImages } from "@/lib/cloudinary-cleanup";
-import {
-  CACHE_HEADERS,
-  checkIfStoreOwner,
-  currencyFormatter,
-  verifyStoreOwner,
-  generateRandomSKU,
-} from "@/lib/utils";
+import { CACHE_HEADERS, currencyFormatter, generateRandomSKU } from "@/lib/utils";
+import { checkIfStoreOwner, verifyStoreOwner } from "@/lib/server/utils";
 import { loadProductAttributes } from "@/lib/product-attributes";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";

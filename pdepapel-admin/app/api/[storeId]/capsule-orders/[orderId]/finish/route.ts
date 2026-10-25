@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { completeCapsuleDraw } from "@/lib/capsule-orders";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** Cierra el sorteo: costo real, finanzas del pedido, caja sugerida y la guía en segundo plano. Una sola vez. Solo la dueña. */
 export async function POST(_req: Request, { params }: { params: { storeId: string; orderId: string } }) {

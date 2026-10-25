@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import { CatalogMigrationClient } from "./components/catalog-migration-client";
+
+export const metadata: Metadata = {
+  title: "Opciones del catálogo | PdePapel Admin",
+};
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

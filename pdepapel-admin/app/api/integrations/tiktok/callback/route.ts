@@ -8,7 +8,7 @@ import { saveTikTokCredential } from "@/lib/social/credentials";
 import { SocialApiError } from "@/lib/social/errors";
 import { consumeSocialOAuthState } from "@/lib/social/oauth-state";
 import { createTikTokAdapter, exchangeTikTokCode } from "@/lib/social/tiktok";
-import { checkIfStoreOwner } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/server/utils";
 
 export const dynamic = "force-dynamic";
 

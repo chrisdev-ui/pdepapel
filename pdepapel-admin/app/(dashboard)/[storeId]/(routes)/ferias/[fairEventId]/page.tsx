@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getFairEventDetail } from "@/lib/fair-events";
 import { isPaymentProofStorageConfigured } from "@/lib/payment-proofs";
 import { requireStoreRead } from "@/lib/store-access";
@@ -7,6 +8,10 @@ import {
   FairEventWorkspace,
   type FairEventDetail,
 } from "./components/fair-event-workspace";
+
+export const metadata: Metadata = {
+  title: "Feria | PdePapel Admin",
+};
 
 export const revalidate = 0;
 

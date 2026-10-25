@@ -24,6 +24,7 @@
  * se imprime). Antes de escribir anota los valores de antes y el SQL para
  * deshacer en `ops/prod-writes.log`.
  */
+import "./lib/allow-server-only.cjs";
 import { appendFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 

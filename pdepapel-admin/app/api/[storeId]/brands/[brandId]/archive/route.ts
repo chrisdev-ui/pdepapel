@@ -6,7 +6,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { setBrandArchived } from "@/lib/brands";
 import { brandStorefrontTarget } from "@/lib/brand-cache";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 const bodySchema = z.object({ isArchived: z.boolean() });
 

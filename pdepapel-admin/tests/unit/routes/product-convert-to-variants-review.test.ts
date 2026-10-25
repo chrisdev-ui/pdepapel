@@ -43,7 +43,7 @@ vi.mock("@/lib/slugify", () => ({
   slugify: vi.fn(),
   generateProductSlug: vi.fn(({ name, color }: { name: string; color?: { name?: string } }) => `${name}-${color?.name ?? ""}`.toLowerCase()),
 }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/variant-generator", () => ({
   generateSemanticSKU: vi.fn(),
 }));

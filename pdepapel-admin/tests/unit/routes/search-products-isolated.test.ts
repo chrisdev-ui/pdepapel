@@ -8,7 +8,7 @@ vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/store-access", () => ({
   requireStoreRead: mocks.requireStoreRead,
 }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({
   default: { product: { findMany: mocks.findMany } },
 }));

@@ -5,7 +5,7 @@ import { randomInt } from "node:crypto";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { expiryFrom, generatePairingCode, pairingUrl } from "@/lib/scanner-pairing";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /**
  * La pantalla abre una sesión de escáner remoto: devuelve el código corto y el

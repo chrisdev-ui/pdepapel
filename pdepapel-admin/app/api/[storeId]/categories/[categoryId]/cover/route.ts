@@ -6,7 +6,8 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { ensureCategoryAssets, isCategoryAssetPart, isCategoryCoverConfigured } from "@/lib/category-covers";
 import prismadb from "@/lib/prismadb";
 import { missingTaxonomyMessage } from "@/lib/taxonomy";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 export const maxDuration = 60;

@@ -7,7 +7,8 @@ import {
   getPublicNewsletterIssue,
   listNewsletterIssues,
 } from "@/lib/newsletter-issues";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 export async function GET(req: Request, { params }: { params: { storeId: string } }) {

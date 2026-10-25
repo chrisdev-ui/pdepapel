@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { loadBrandOptions } from "@/lib/brand-options";
 import { SUPPLIER_PICKER_SELECT } from "@/lib/public-catalog";
 import { requireStoreRead } from "@/lib/store-access";
@@ -10,6 +11,10 @@ import { notFound } from "next/navigation";
 import { ProductGroupForm } from "../../components/product-group-form";
 import { env } from "@/lib/env.mjs";
 import { GroupWorkspaceAside } from "./components/group-workspace";
+
+export const metadata: Metadata = {
+  title: "Grupo de productos | PdePapel Admin",
+};
 
 const ProductGroupPage = async ({
   params,

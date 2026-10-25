@@ -15,7 +15,7 @@ vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/store-access", () => ({
   requireStoreRead: mocks.requireStoreRead,
 }));
-vi.mock("@/lib/utils", () => ({ verifyStoreOwner: vi.fn() }));
+vi.mock("@/lib/server/utils", () => ({ verifyStoreOwner: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({ default: { product: { findFirst: mocks.findFirst, findMany: mocks.findMany } } }));
 vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: () => ({ get: mocks.redisGet, set: mocks.redisSet }) } }));
 vi.mock("@/lib/discount-engine", () => ({ getProductsPrices: mocks.prices }));

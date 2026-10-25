@@ -20,9 +20,11 @@ vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 // Las lecturas abiertas a cuentas de solo lectura pasan por este ayudante.
 vi.mock("@/lib/store-access", () => ({ requireStoreRead: mocks.requireStoreRead }));
 vi.mock("@/lib/utils", () => ({
-  verifyStoreOwner: mocks.verifyStoreOwner,
   currencyFormatter: (value: number) => `$ ${value}`,
   CACHE_HEADERS: { NO_CACHE: {}, DYNAMIC: {} },
+}));
+vi.mock("@/lib/server/utils", () => ({
+  verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 vi.mock("@/lib/prismadb", () => {
   const coupon = {

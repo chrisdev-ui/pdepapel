@@ -21,6 +21,8 @@ vi.mock("@/lib/utils", () => ({
     NO_CACHE: { "Cache-Control": "no-store" },
     STATIC: { "Cache-Control": "public, s-maxage=3600" },
   },
+}));
+vi.mock("@/lib/server/utils", () => ({
   verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 vi.mock("@/lib/prismadb", () => {

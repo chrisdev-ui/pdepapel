@@ -19,6 +19,7 @@ import { envioClickClient, type QuoteResponse } from "@/lib/envioclick";
 import { quoteWithCodFees } from "@/lib/cod-fee";
 import { qualifiesForFreeShipping } from "@/lib/order-totals";
 import { consumeRateLimit, getClientKey } from "@/lib/rate-limit";
+import { requireJsonBody } from "@/lib/request-body";
 
 /** Cotizaciones reales contra la transportadora por IP y hora. */
 const QUOTE_RATE_LIMIT = 20;
@@ -26,6 +27,13 @@ const QUOTE_RATE_WINDOW_SECONDS = 60 * 60;
 
 const getCorsHeaders = (request: Request) =>
   createCorsHeaders(request, { methods: "POST, OPTIONS" });
+
+async function readQuoteBody(req: Request) {
+  const body = await requireJsonBody(req, "QUOTE_SHIPPING");
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw ErrorFactory.InvalidRequest("La cotización necesita un objeto con el destino y los productos");
+  return body;
+}
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json({}, { headers: getCorsHeaders(req) });
@@ -49,7 +57,7 @@ export async function POST(
       // se usa `orderTotal` (la tienda de antes).
       amountBeforeShipping: rawAmountBeforeShipping,
       productSubtotal: rawProductSubtotal,
-    } = await req.json();
+    } = await readQuoteBody(req);
 
     if (!orderTotal || isNaN(orderTotal) || orderTotal <= 0)
       throw ErrorFactory.InvalidRequest("El total del pedido es inválido");

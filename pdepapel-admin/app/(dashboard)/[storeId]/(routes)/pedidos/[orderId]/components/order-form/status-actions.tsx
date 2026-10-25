@@ -19,6 +19,7 @@ import {
   OrderType,
   PaymentMethod,
   ShippingProvider,
+  ShippingStatus,
 } from "@prisma/client";
 import { useState } from "react";
 
@@ -36,6 +37,7 @@ interface StatusActionsProps {
   status: OrderStatus;
   type: OrderType;
   paymentMethod?: PaymentMethod | null;
+  shippingStatus?: ShippingStatus | null;
   shippingProvider: ShippingProvider;
   trackingCode?: string | null;
   transactionId?: string | null;
@@ -69,6 +71,7 @@ export function StatusActions({
   status,
   type,
   paymentMethod,
+  shippingStatus,
   shippingProvider,
   trackingCode,
   transactionId,
@@ -87,7 +90,7 @@ export function StatusActions({
   const [guideChoice, setGuideChoice] = useState<"now" | "later">("now");
   const [submitting, setSubmitting] = useState(false);
 
-  const actions = getStatusActions(status, { type, paymentMethod }).filter(
+  const actions = getStatusActions(status, { type, paymentMethod, shippingStatus }).filter(
     (action) => (variant === "care" ? action.destructive : !action.destructive),
   );
 

@@ -5,7 +5,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { withIdempotency } from "@/lib/idempotency";
 import { createReservation, findOpenReservationsByPhone, isReservationFilter, listReservations } from "@/lib/stock-reservations";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /** Apartados de la tienda. Solo la dueña: llevan el nombre y el celular de la clienta. */

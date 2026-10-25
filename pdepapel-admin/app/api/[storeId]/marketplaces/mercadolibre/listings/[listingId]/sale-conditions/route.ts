@@ -21,7 +21,8 @@ import {
   type MercadoLibreRemoteSaleConditions,
 } from "@/lib/mercadolibre/sale-conditions";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 type ListingRecord = {
   id: string;

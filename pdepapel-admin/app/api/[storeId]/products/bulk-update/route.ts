@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { assertEditionProductsStayArchived } from "@/lib/capsule-editions";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache, storefrontScopeOf } from "@/lib/cache";
 import { parseAvailableAt } from "@/lib/product-availability";

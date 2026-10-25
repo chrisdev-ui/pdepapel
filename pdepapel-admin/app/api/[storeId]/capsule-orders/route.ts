@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { listCapsuleQueue } from "@/lib/capsule-orders";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** Pedidos de cápsulas pagados: por sacar, sacados y su video. Solo la dueña (costo provisional y real). */
 export async function GET(_req: Request, { params }: { params: { storeId: string } }) {

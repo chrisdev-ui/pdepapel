@@ -31,12 +31,12 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import type { ResolvedStoreSettings } from "@/lib/store-settings";
 import {
   DAY_LABELS,
-  WEEK_DAYS,
   DEFAULT_DELIVERY_ESTIMATE,
-  type ResolvedStoreSettings,
-} from "@/lib/store-settings";
+  WEEK_DAYS,
+} from "@/lib/store-settings-labels";
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 

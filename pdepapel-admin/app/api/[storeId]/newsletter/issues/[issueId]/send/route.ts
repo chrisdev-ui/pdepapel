@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendNewsletterIssue } from "@/lib/newsletter-campaigns";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 /** El envío por lotes puede tardar; el resto de rutas de campaña usan el mismo tope. */
 export const maxDuration = 60;

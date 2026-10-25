@@ -7,7 +7,8 @@ import { readCategoryName, recordCategoryUse } from "@/lib/mercadolibre/category
 import { groupListingsForBackfill } from "@/lib/mercadolibre/category-profiles";
 import { getMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
 
 /**

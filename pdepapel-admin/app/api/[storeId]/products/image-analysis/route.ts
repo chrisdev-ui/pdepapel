@@ -31,7 +31,7 @@ import {
 } from "@/lib/product-image-analysis-pipeline";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/server/utils";
 
 export const maxDuration = 60;
 
