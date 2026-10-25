@@ -62,9 +62,12 @@ describe("Paginator", () => {
     mocks.search = "";
     const { container } = render(<Paginator totalPages={3} />);
 
-    const previous = container.querySelector('[aria-label="Ir a la página anterior"]');
+    const previous = screen.getByText("Ir a la página anterior").closest("a");
     expect(previous).not.toHaveAttribute("href");
     expect(previous).toHaveAttribute("aria-disabled", "true");
+    // Un <a> sin href es un elemento genérico: ahí `aria-label` está prohibido (axe aria-prohibited-attr).
+    expect(container.querySelectorAll("a[aria-label]")).toHaveLength(0);
+    expect(previous).toHaveTextContent("Ir a la página anterior");
     expect(screen.getByRole("link", { name: "Ir a la página siguiente" })).toHaveAttribute("href", "/categoria/cuadernos?page=2");
   });
 

@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { UpstreamServiceError } from "@/lib/upstream-service-error";
 import type { CapsuleEditionPublic } from "@/types/capsules";
@@ -15,7 +16,7 @@ export const getCapsuleEdition = cache(async (segment: string, previewToken?: st
   if (previewToken) url.searchParams.set("vista", previewToken);
   let response: Response;
   try {
-    response = await fetch(url, { cache: "no-store" });
+    response = await fetch(url, withUpstreamTimeout({ cache: "no-store" }));
   } catch {
     throw new UpstreamServiceError("las cápsulas");
   }

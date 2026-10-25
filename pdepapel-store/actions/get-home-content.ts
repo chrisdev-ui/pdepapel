@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { LiveHomeContent } from "@/types";
 
@@ -12,7 +13,7 @@ export const HOME_CONTENT_CACHE = {
 
 export const getHomeContent = cache(async (): Promise<LiveHomeContent> => {
   try {
-    const response = await fetch(API_URL, HOME_CONTENT_CACHE);
+    const response = await fetch(API_URL, withUpstreamTimeout(HOME_CONTENT_CACHE));
     if (!response.ok) return EMPTY;
     const data = (await response.json()) as Partial<LiveHomeContent>;
     return { hero: data.hero ?? null, campaign: data.campaign ?? null };

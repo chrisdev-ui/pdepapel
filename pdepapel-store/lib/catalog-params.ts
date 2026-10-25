@@ -43,6 +43,18 @@ export const UNAVAILABLE_RESPONSE: ProductsResponse = {
   isUnavailable: true,
 };
 
+/**
+ * Tope de productos por página. `/api/catalog` pasa `itemsPerPage` y `limit`
+ * tal cual llegan en la URL: un `?itemsPerPage=5000` hacía renderizar el
+ * catálogo entero. Lo que pase del tope se recorta, sin error.
+ */
+export const MAX_CATALOG_PAGE_SIZE = 60;
+
+export function clampCatalogPageSize(value: number | undefined): number | undefined {
+  if (value === undefined || !Number.isFinite(value) || value < 1) return undefined;
+  return Math.min(Math.floor(value), MAX_CATALOG_PAGE_SIZE);
+}
+
 /** Los mismos parámetros para el API de administración y para nuestra ruta. */
 export function buildCatalogSearchParams(query: CatalogQuery): URLSearchParams {
   const params = new URLSearchParams();
@@ -59,7 +71,8 @@ export function buildCatalogSearchParams(query: CatalogQuery): URLSearchParams {
   if (query.isFeatured !== undefined)
     params.append("isFeatured", String(query.isFeatured));
   if (query.onlyNew !== undefined) params.append("onlyNew", String(query.onlyNew));
-  if (query.limit) params.append("limit", String(query.limit));
+  const limit = clampCatalogPageSize(query.limit);
+  if (limit) params.append("limit", String(limit));
   if (query.sortOption) params.append("sortOption", query.sortOption);
   if (query.minPrice !== undefined && query.minPrice !== null)
     params.append("minPrice", String(query.minPrice));
@@ -67,7 +80,8 @@ export function buildCatalogSearchParams(query: CatalogQuery): URLSearchParams {
     params.append("maxPrice", String(query.maxPrice));
   if (query.excludeProducts) params.append("excludeProducts", query.excludeProducts);
   if (query.page) params.append("page", String(query.page));
-  if (query.itemsPerPage) params.append("itemsPerPage", String(query.itemsPerPage));
+  const itemsPerPage = clampCatalogPageSize(query.itemsPerPage);
+  if (itemsPerPage) params.append("itemsPerPage", String(itemsPerPage));
   if (query.fromShop !== undefined) params.append("fromShop", String(query.fromShop));
   if (query.search) params.append("search", query.search);
   if (query.exact) params.append("exact", "true");

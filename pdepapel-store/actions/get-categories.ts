@@ -1,3 +1,4 @@
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { Category } from "@/types";
 import { cache } from "react";
@@ -9,7 +10,7 @@ const CATALOG_CACHE = {
 
 export const getCategories = cache(async (): Promise<Category[]> => {
   try {
-    const response = await fetch(API_URL, CATALOG_CACHE);
+    const response = await fetch(API_URL, withUpstreamTimeout(CATALOG_CACHE));
     if (!response.ok) return [];
     return await response.json();
   } catch {
@@ -22,7 +23,7 @@ export const getCategories = cache(async (): Promise<Category[]> => {
  * sirviendo el último sitemap bueno en lugar de cachear uno sin categorías.
  */
 export async function getCategoriesOrThrow(): Promise<Category[]> {
-  const response = await fetch(API_URL, CATALOG_CACHE);
+  const response = await fetch(API_URL, withUpstreamTimeout(CATALOG_CACHE));
   if (!response.ok) {
     throw new Error(`No fue posible cargar categorías para el sitemap (${response.status})`);
   }

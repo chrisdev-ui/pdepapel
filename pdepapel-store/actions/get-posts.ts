@@ -1,3 +1,4 @@
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { Post } from "@/types";
 import { cache } from "react";
@@ -12,7 +13,7 @@ const POSTS_CACHE = {
 
 export const getPosts = cache(async (): Promise<Post[]> => {
   try {
-    const response = await fetch(API_URL, POSTS_CACHE);
+    const response = await fetch(API_URL, withUpstreamTimeout(POSTS_CACHE));
     if (!response.ok) return [];
     const data: unknown = await response.json();
     return Array.isArray(data) ? (data as Post[]) : [];

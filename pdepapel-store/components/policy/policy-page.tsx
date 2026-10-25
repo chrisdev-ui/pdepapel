@@ -99,7 +99,8 @@ export function PolicyPage({
           className="pointer-events-none absolute -left-16 -top-20 h-64 w-64 rounded-full bg-kawaii-lavender-light blur-3xl"
         />
         <div className="relative mx-auto flex max-w-screen-2xl flex-col gap-3">
-          <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
+          {/* slate-600 y no muted-foreground (4,4:1 sobre el rosa del encabezado, 3,7:1 donde cae el difuminado lila). */}
+          <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
             <ol className="flex items-center gap-2">
               <li>
                 <Link href={STOREFRONT_ROUTES.home} className="hover:underline">

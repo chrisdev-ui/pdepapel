@@ -35,7 +35,10 @@ describe("getProductRoute", () => {
   it("tags the detail fetch with the key the page asked for, so the panel can purge just this product", async () => {
     respond(200, { id: "p1", slug: "agenda" });
     await getProductRoute("agenda-etiqueta");
-    expect(vi.mocked(fetch).mock.calls[0][1]).toEqual({ next: { revalidate: 300, tags: ["products", "product:agenda-etiqueta"] } });
+    expect(vi.mocked(fetch).mock.calls[0][1]).toEqual({
+      next: { revalidate: 300, tags: ["products", "product:agenda-etiqueta"] },
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("returns the redirect the admin computed for an archived product", async () => {

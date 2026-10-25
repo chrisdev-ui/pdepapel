@@ -15,7 +15,7 @@ describe("getCurrentCapsuleEdition", () => {
     await expect(getCurrentCapsuleEdition()).resolves.toEqual({ salesEnabled: true, edition });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/capsulas\/actual$/);
-    expect(init).toEqual({ next: { revalidate: 300, tags: ["capsules"] } });
+    expect(init).toEqual({ next: { revalidate: 300, tags: ["capsules"] }, signal: expect.any(AbortSignal) });
   });
 
   it("sin edición a la venta, con la venta apagada (404) o si el panel falla, esconde todo", async () => {

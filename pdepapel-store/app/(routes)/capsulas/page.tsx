@@ -6,7 +6,7 @@ import { capsuleEditionPath, getCurrentCapsuleEdition } from "@/actions/get-curr
 import { Newsletter } from "@/components/newsletter";
 import { SocialIcon } from "@/components/social-icon";
 import { Container } from "@/components/ui/container";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { withUtmParams } from "@/lib/capsule-links";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { socialAriaLabel, STORE_SOCIAL_LINKS } from "@/lib/social-links";
@@ -28,7 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description: "Cápsulas sorpresa de Papelería P de Papel: cada cápsula trae el nombre de un producto de la colección. Mira cuándo sale la próxima edición.",
     alternates: { canonical: STOREFRONT_ROUTES.capsules },
     ...(salesEnabled ? {} : { robots: { index: false, follow: false } }),
-    openGraph: { title: "Cápsulas sorpresa | Papelería P de Papel", url: `${BASE_URL}${STOREFRONT_ROUTES.capsules}` },
+    openGraph: { title: "Cápsulas sorpresa | Papelería P de Papel", url: `${BASE_URL}${STOREFRONT_ROUTES.capsules}`, images: [DEFAULT_SHARE_IMAGE] },
   };
 }
 

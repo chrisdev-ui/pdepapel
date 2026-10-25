@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 
 import { legacyProductRedirects } from "./lib/legacy-product-redirects.mjs";
+import { shopSearchAliasTarget } from "./lib/listing-seo";
 import {
   accountAccessPath,
   cachedListingPath,
@@ -99,8 +100,13 @@ export default function middleware(
   );
 
   if (destinationPath) {
+    // Un origen cuyo producto se archivó va a la hermana, la categoría o el
+    // tipo con `#producto-no-disponible` (y el tipo con `?typeId=`), como la ficha.
     const destinationUrl = request.nextUrl.clone();
-    destinationUrl.pathname = destinationPath;
+    const target = new URL(destinationPath, request.url);
+    destinationUrl.pathname = target.pathname;
+    if (target.search) destinationUrl.search = target.search;
+    destinationUrl.hash = target.hash;
     return NextResponse.redirect(destinationUrl, 308);
   }
 
@@ -109,6 +115,11 @@ export default function middleware(
     const publicUrl = request.nextUrl.clone();
     publicUrl.pathname = publicPath;
     return NextResponse.redirect(publicUrl, 308);
+  }
+
+  const searchAlias = shopSearchAliasTarget(request.nextUrl.pathname, request.nextUrl.searchParams);
+  if (searchAlias) {
+    return NextResponse.redirect(new URL(searchAlias, request.url), 308);
   }
 
   const cachedPath = cachedListingPath(request.nextUrl.pathname);

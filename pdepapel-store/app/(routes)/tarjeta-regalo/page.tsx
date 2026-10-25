@@ -2,7 +2,7 @@ import { Gift, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 
 import { getGiftCardDenominations } from "@/actions/gift-cards";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { buildGiftCardJsonLd } from "@/lib/gift-card-schema";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   description:
     "Regala papelería bonita sin adivinar: una tarjeta de regalo de P de Papel llega por correo con un código para usar en la tienda en línea, entera o por partes.",
   alternates: { canonical: STOREFRONT_ROUTES.giftCard },
-  openGraph: { url: `${BASE_URL}${STOREFRONT_ROUTES.giftCard}` },
+  openGraph: { url: `${BASE_URL}${STOREFRONT_ROUTES.giftCard}`, images: [DEFAULT_SHARE_IMAGE] },
   keywords: ["tarjeta de regalo", "gift card", "bono de regalo", "papelería kawaii", "regalo"],
 };
 

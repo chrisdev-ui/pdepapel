@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 
 export interface NewsletterIssuePage {
@@ -30,7 +31,7 @@ export const getNewsletterIssue = cache(
     try {
       const response = await fetch(
         `${env.NEXT_PUBLIC_API_URL}/newsletter/issues?slug=${encodeURIComponent(slug)}`,
-        { next: { revalidate: 300, tags: ["newsletter-issues"] } },
+        withUpstreamTimeout({ next: { revalidate: 300, tags: ["newsletter-issues"] } }),
       );
       if (!response.ok) return null;
       return (await response.json()) as NewsletterIssue;

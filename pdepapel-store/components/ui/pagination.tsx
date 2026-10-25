@@ -48,17 +48,21 @@ PaginationLink.displayName = "PaginationLink";
 
 const edgeClass = "h-10 w-auto gap-1.5 rounded-full border-[1.5px] border-blue-yankees px-3 hover:bg-kawaii-lavender-light sm:px-4";
 
+// El nombre va como texto oculto y no en `aria-label`: el extremo deshabilitado
+// es un <a> sin `href` (un elemento genérico), donde `aria-label` está prohibido.
 const PaginationPrevious = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink aria-label="Ir a la página anterior" className={cn(edgeClass, className)} {...props}>
+  <PaginationLink className={cn(edgeClass, className)} {...props}>
     <ChevronLeft aria-hidden="true" className="h-4 w-4" />
-    <span className="hidden sm:inline">Anterior</span>
+    <span className="sr-only">Ir a la página anterior</span>
+    <span aria-hidden="true" className="hidden sm:inline">Anterior</span>
   </PaginationLink>
 );
 PaginationPrevious.displayName = "PaginationPrevious";
 
 const PaginationNext = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => (
-  <PaginationLink aria-label="Ir a la página siguiente" className={cn(edgeClass, className)} {...props}>
-    <span className="hidden sm:inline">Siguiente</span>
+  <PaginationLink className={cn(edgeClass, className)} {...props}>
+    <span className="sr-only">Ir a la página siguiente</span>
+    <span aria-hidden="true" className="hidden sm:inline">Siguiente</span>
     <ChevronRight aria-hidden="true" className="h-4 w-4" />
   </PaginationLink>
 );

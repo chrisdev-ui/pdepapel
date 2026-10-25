@@ -1,3 +1,4 @@
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { UpstreamServiceError } from "@/lib/upstream-service-error";
 import { Order } from "@/types";
@@ -15,10 +16,13 @@ export const getOrder = async (
   sessionToken?: string | null,
 ): Promise<Order | null> => {
   try {
-    const response = await fetch(`${API_URL}/${id}`, {
-      cache: "no-store",
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-    });
+    const response = await fetch(
+      `${API_URL}/${id}`,
+      withUpstreamTimeout({
+        cache: "no-store",
+        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+      }),
+    );
     if (response.status === 404) return null;
     if (!response.ok) {
       throw new UpstreamServiceError("tu pedido", response.status);

@@ -16,7 +16,7 @@ import Link from "next/link";
 import { ContactPage as ContactPageSchema, WithContext } from "schema-dts";
 
 import { FlagIcons, WhatsappIcon } from "@/components/icons";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { ContactForm } from "./components/contact-form";
@@ -32,6 +32,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     url: `${BASE_URL}${STOREFRONT_ROUTES.contact}`,
+    images: [DEFAULT_SHARE_IMAGE],
   },
   keywords: [
     "contacto",
@@ -75,7 +76,7 @@ const contactChannels: ContactChannel[] = [
     external: true,
     icon: <WhatsappIcon className="h-6 w-6" aria-hidden="true" />,
     tileClassName: "bg-green-50 text-green-600",
-    labelClassName: "text-green-600",
+    labelClassName: "text-green-700",
     tag: "Más rápido",
   },
   {
@@ -96,7 +97,7 @@ const contactChannels: ContactChannel[] = [
     href: `mailto:${EMAIL}`,
     icon: <Mail className="h-6 w-6" aria-hidden="true" />,
     tileClassName: "bg-pink-shell/30 text-pink-froly",
-    labelClassName: "text-pink-froly",
+    labelClassName: "text-pink-700",
   },
   {
     id: "horario",

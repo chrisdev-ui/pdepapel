@@ -10,7 +10,7 @@ import { getCategories } from "@/actions/get-categories";
 import { getCatalogOptions } from "@/actions/get-catalog-options";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
-import { getProducts } from "@/actions/get-products";
+import { getListingProducts, getProducts } from "@/actions/get-products";
 import { getTypes } from "@/actions/get-types";
 import { Newsletter } from "@/components/newsletter";
 import { BrandChipRow } from "@/components/brands/brand-chip-row";
@@ -21,6 +21,7 @@ import { BASE_URL, DEFAULT_SHARE_IMAGE, LIMIT_SHOP_ITEMS } from "@/constants";
 import { buildNavigationTypes, toFilterType, toNavigationCategory, withProducts } from "@/lib/catalog-navigation";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { parseBrandParam } from "@/lib/brand-display";
+import type { CatalogQuery } from "@/lib/catalog-params";
 import { getShopIndexing, outOfRangePageTarget, type ListingSearchParams } from "@/lib/listing-seo";
 import { categoryPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
@@ -28,12 +29,23 @@ import { TypeIcon } from "@/lib/type-icons";
 import { PageHeaderSkeleton, ShopContentSkeleton } from "./components/skeletons";
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 const SHOP_INTRO = "Cuadernos, stickers, agendas y regalos bonitos con envío a toda Colombia.";
 const HEADER_TYPES = 7;
 const HEADER_IMAGES = 3;
 
 export async function generateMetadata({ searchParams }: ShopPageProps): Promise<Metadata> {
+  // Aquí y no dentro del Suspense: los metadatos se resuelven antes de empezar
+  // a enviar la página, así que la redirección es un 307 de verdad y no una
+  // meta refresh dentro de un 200. 307 y no 308: la última página cambia con
+  // el catálogo y un 308 queda guardado en el navegador.
+  if (searchParams.page) {
+    const { totalPages } = await getProducts(shopListingQuery(searchParams));
+    const pageTarget = outOfRangePageTarget(STOREFRONT_ROUTES.shop, searchParams as unknown as ListingSearchParams, totalPages);
+    if (pageTarget) redirect(pageTarget);
+  }
+
   const { typeId, categoryId, search, minPrice, maxPrice, marca } = searchParams;
   // Next entrega cada parámetro como texto aunque el tipo diga `number`.
   const { canonical: canonicalPath, index: shouldIndex } = getShopIndexing(
@@ -110,30 +122,34 @@ interface ShopPageProps {
   };
 }
 
+function shopListingQuery(searchParams: ShopPageProps["searchParams"]): CatalogQuery {
+  return {
+    typeId: searchParams.typeId,
+    categoryId: searchParams.categoryId,
+    colorId: searchParams.colorId,
+    sizeId: searchParams.sizeId,
+    optionValueId: searchParams.optionValueId,
+    designId: searchParams.designId,
+    marca: searchParams.marca,
+    sortOption: searchParams.sortOption,
+    minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : null,
+    maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : null,
+    fromShop: true,
+    page: searchParams.page,
+    itemsPerPage: LIMIT_SHOP_ITEMS,
+    search: searchParams.search,
+    exact: searchParams.exact === "true",
+    isOnSale: searchParams.isOnSale === "true",
+    groupBy: "parents",
+  };
+}
+
 const FILTER_PARAMS = ["typeId", "categoryId", "colorId", "sizeId", "optionValueId", "designId", "marca", "isOnSale", "minPrice", "maxPrice", "search"] as const;
 
 async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProps["searchParams"] }) {
   const hasFilters = FILTER_PARAMS.some((key) => searchParams[key] !== undefined && searchParams[key] !== "");
   const [{ products, totalPages, totalItems, facets, searchCorrection }, types, catalogOptions, colors, designs, categories, catalogTotal, brands] = await Promise.all([
-    getProducts({
-      typeId: searchParams.typeId,
-      categoryId: searchParams.categoryId,
-      colorId: searchParams.colorId,
-      sizeId: searchParams.sizeId,
-      optionValueId: searchParams.optionValueId,
-      designId: searchParams.designId,
-      marca: searchParams.marca,
-      sortOption: searchParams.sortOption,
-      minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : null,
-      maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : null,
-      fromShop: true,
-      page: searchParams.page,
-      itemsPerPage: LIMIT_SHOP_ITEMS,
-      search: searchParams.search,
-      exact: searchParams.exact === "true",
-      isOnSale: searchParams.isOnSale === "true",
-      groupBy: "parents",
-    }),
+    getListingProducts(searchParams, shopListingQuery(searchParams)),
     getTypes(),
     getCatalogOptions(),
     getColors(),

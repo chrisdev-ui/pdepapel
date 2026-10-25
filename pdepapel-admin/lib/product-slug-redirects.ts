@@ -1,3 +1,5 @@
+import type { ArchivedProductRedirect } from "@/lib/archived-product-redirect";
+
 export type ProductSlugRedirectAlias = {
   slug: string;
   product: {
@@ -55,7 +57,8 @@ export type RedirectCollapseReport = {
   added: number;
 };
 
-const productSlugFromPath = (path: string) => path.replace(/^\/producto\//, "");
+const productSlugFromPath = (path: string) => path.replace(/^\/producto\//, "").replace(/#.*$/, "");
+const hashOf = (path: string) => (path.includes("#") ? path.slice(path.indexOf("#")) : "");
 
 /**
  * Rehace el mapa de redirecciones de producto contra el catálogo actual:
@@ -91,12 +94,14 @@ export function collapseProductRedirects({ legacy, aliases, products }: Redirect
       dropped.push({ ...entry, reason: "origen-es-producto-vivo" });
       continue;
     }
-    const finalSlug = resolve(productSlugFromPath(entry.destination)) ?? resolve(sourceSlug);
+    const viaDestination = resolve(productSlugFromPath(entry.destination));
+    const finalSlug = viaDestination ?? resolve(sourceSlug);
     if (!finalSlug || !SAFE_PRODUCT_SLUG.test(finalSlug) || finalSlug === sourceSlug) {
       dropped.push({ ...entry, reason: "destino-archivado-o-inexistente" });
       continue;
     }
-    const destination = `/producto/${finalSlug}`;
+    // Una hermana viva elegida en una corrida anterior conserva el aviso.
+    const destination = `/producto/${finalSlug}${viaDestination ? hashOf(entry.destination) : ""}`;
     if (destination === entry.destination) kept += 1;
     else collapsed.push({ source: entry.source, from: entry.destination, to: destination });
     redirects.set(entry.source, destination);
@@ -120,5 +125,64 @@ export function collapseProductRedirects({ legacy, aliases, products }: Redirect
     collapsed,
     dropped,
     added,
+  };
+}
+
+/** El mismo fragmento que pone la tienda (`UNAVAILABLE_PRODUCT_HASH`): muestra «Ese producto ya no está disponible». */
+export const UNAVAILABLE_PRODUCT_HASH = "producto-no-disponible";
+
+/**
+ * Destino de un origen cuyo producto final quedó archivado: el mismo que daría
+ * la ficha (`archivedProductRedirectPath` de la tienda), pero en un solo salto.
+ */
+export function archivedRedirectDestination(redirect: ArchivedProductRedirect): string {
+  const path =
+    redirect.kind === "product"
+      ? `/producto/${redirect.slug}`
+      : redirect.kind === "category"
+        ? `/categoria/${redirect.slug}`
+        : redirect.kind === "type"
+          ? `/tienda?typeId=${encodeURIComponent(redirect.id)}`
+          : "/tienda";
+  return `${path}#${UNAVAILABLE_PRODUCT_HASH}`;
+}
+
+/**
+ * Devuelve al mapa los orígenes que `collapseProductRedirects` soltó porque su
+ * producto final está archivado: Google aún los conoce y sin el mapa podían
+ * terminar en 404. Nunca devuelve un origen que sea un producto vivo.
+ */
+export function restoreArchivedSources(
+  report: RedirectCollapseReport,
+  archivedTargets: Map<string, ArchivedProductRedirect | null>,
+): { redirects: RedirectCollapseReport["redirects"]; restored: number; stillDropped: RedirectCollapseReport["dropped"] } {
+  const redirects = new Map(report.redirects.map(({ source, destination }) => [source, destination]));
+  const stillDropped: RedirectCollapseReport["dropped"] = [];
+  let restored = 0;
+  for (const entry of report.dropped) {
+    if (entry.reason !== "destino-archivado-o-inexistente" || redirects.has(entry.source)) {
+      stillDropped.push(entry);
+      continue;
+    }
+    const target = archivedTargets.get(entry.source);
+    // Una corrida anterior ya lo resolvió y la ficha original no se puede volver a buscar.
+    const destination = target
+      ? archivedRedirectDestination(target)
+      : entry.destination.startsWith("/producto/")
+        ? null
+        : entry.destination;
+    if (!destination) {
+      stillDropped.push(entry);
+      continue;
+    }
+    redirects.set(entry.source, destination);
+    restored += 1;
+  }
+  return {
+    redirects: Array.from(redirects, ([source, destination]) => ({ source, destination })).sort((left, right) =>
+      left.source.localeCompare(right.source),
+    ),
+    restored,
+    stillDropped,
   };
 }

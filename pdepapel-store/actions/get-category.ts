@@ -1,3 +1,4 @@
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { UpstreamServiceError } from "@/lib/upstream-service-error";
 import { Category } from "@/types";
@@ -12,7 +13,7 @@ export const getCategory = cache(async (
   id: string,
 ): Promise<Category | null> => {
   try {
-    const response = await fetch(`${API_URL}/${id}`, CATALOG_CACHE);
+    const response = await fetch(`${API_URL}/${id}`, withUpstreamTimeout(CATALOG_CACHE));
     if (response.status === 404) return null;
     if (!response.ok) {
       throw new UpstreamServiceError("las categorías", response.status);

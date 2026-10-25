@@ -11,7 +11,7 @@
  *   búsqueda): canónica a la base y `noindex`, sin cambios.
  */
 import { parseBrandParam } from "@/lib/brand-display";
-import { brandPath } from "@/lib/routes";
+import { brandPath, STOREFRONT_ROUTES } from "@/lib/routes";
 
 export type ListingSearchParams = Record<string, string | string[] | undefined>;
 
@@ -84,4 +84,19 @@ export function getShopIndexing(basePath: string, searchParams: ListingSearchPar
   const brandCanonical = singleBrandCanonical(searchParams);
   if (brandCanonical) return { canonical: brandCanonical, index: false };
   return getListingIndexing(basePath, searchParams, true);
+}
+
+/**
+ * `?q=` es el nombre que usan los buscadores y muchos enlaces; la tienda busca
+ * con `?search=`. Sin esto `/tienda?q=…` mostraba el catálogo entero. Devuelve
+ * la URL con `search` (si ya venía `search`, gana ese) o `null`.
+ */
+export function shopSearchAliasTarget(pathname: string, searchParams: URLSearchParams): string | null {
+  if (pathname !== STOREFRONT_ROUTES.shop || !searchParams.has("q")) return null;
+  const params = new URLSearchParams(searchParams);
+  const term = params.get("q")?.trim();
+  params.delete("q");
+  if (term && !params.get("search")) params.set("search", term);
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
 }

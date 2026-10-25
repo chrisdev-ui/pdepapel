@@ -1,5 +1,5 @@
 import { publicEnv as env } from "@/lib/public-env";
-import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
+import { CATALOG_FETCH_CACHE, withUpstreamTimeout } from "@/lib/catalog-cache";
 
 export type SitemapProduct = {
   id: string;
@@ -11,7 +11,7 @@ export type SitemapProduct = {
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products/sitemap`;
 
 export async function getSitemapProducts(): Promise<SitemapProduct[]> {
-  const response = await fetch(API_URL, CATALOG_FETCH_CACHE);
+  const response = await fetch(API_URL, withUpstreamTimeout(CATALOG_FETCH_CACHE));
   if (!response.ok) {
     throw new Error(
       `No fue posible cargar productos para sitemap (${response.status})`,

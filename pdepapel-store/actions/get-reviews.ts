@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { HomeReviewsResponse } from "@/types";
 
@@ -12,7 +13,7 @@ export const REVIEWS_CACHE = {
 
 export const getReviews = cache(async (limit = 9): Promise<HomeReviewsResponse> => {
   try {
-    const response = await fetch(`${API_URL}?limit=${limit}`, REVIEWS_CACHE);
+    const response = await fetch(`${API_URL}?limit=${limit}`, withUpstreamTimeout(REVIEWS_CACHE));
     if (!response.ok) return EMPTY;
     const data = (await response.json()) as Partial<HomeReviewsResponse>;
     return {

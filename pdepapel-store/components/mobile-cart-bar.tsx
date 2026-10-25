@@ -43,6 +43,8 @@ export function MobileCartBar() {
         visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
       )}
       aria-hidden={!visible}
+      // @ts-expect-error React 18 no tipa `inert`; como texto vacío llega al DOM y saca los botones del orden de foco.
+      inert={visible ? undefined : ""}
     >
       <div className="flex h-14 items-center gap-3 rounded-full bg-blue-yankees pl-4 pr-1.5 text-white shadow-[0_8px_24px_rgba(34,27,65,0.28)]">
         <button

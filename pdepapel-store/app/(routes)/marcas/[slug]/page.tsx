@@ -2,14 +2,14 @@ import { Metadata } from "next";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 
 import { getBrand } from "@/actions/get-brands";
-import { getProducts } from "@/actions/get-products";
+import { getListingProducts, getProducts } from "@/actions/get-products";
 import { BrandEmptyState } from "@/components/brands/brand-empty-state";
 import { BrandHeader } from "@/components/brands/brand-header";
 import { BrandLines } from "@/components/brands/brand-lines";
 import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
-import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE, LIMIT_SHOP_ITEMS } from "@/constants";
 import { getBrandPageState } from "@/lib/brand-display";
 import type { CatalogQuery } from "@/lib/catalog-params";
 import { outOfRangePageTarget, type ListingSearchParams } from "@/lib/listing-seo";
@@ -26,6 +26,7 @@ export interface BrandPageProps {
 }
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 const hasValue = (value: unknown) => value !== undefined && value !== "";
 
@@ -53,7 +54,7 @@ function brandListingQuery(slug: string, searchParams: BrandPageProps["searchPar
 export async function generateMetadata({ params, searchParams }: BrandPageProps): Promise<Metadata> {
   const brand = await resolveBrand(params.slug);
   const hasParams = Object.values(searchParams).some(hasValue);
-  const listed = (await getProducts(brandListingQuery(brand.slug, {}))).totalItems;
+  const listed = (await getListingProducts(searchParams, brandListingQuery(brand.slug, {}))).totalItems;
   const state = getBrandPageState(brand.productCount, listed);
   const index = state.kind === "products" && state.index && !hasParams;
   const canonical = `${BASE_URL}${brandPath(brand.slug)}`;
@@ -66,7 +67,7 @@ export async function generateMetadata({ params, searchParams }: BrandPageProps)
     description,
     robots: { index, follow: true, googleBot: { index, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
     alternates: { canonical },
-    openGraph: { title: `${title} | Papelería P de Papel`, description, url: canonical, siteName: "Papelería P de Papel", locale: "es_CO", type: "website" },
+    openGraph: { title: `${title} | Papelería P de Papel`, description, url: canonical, siteName: "Papelería P de Papel", locale: "es_CO", type: "website", images: [DEFAULT_SHARE_IMAGE] },
     twitter: { card: "summary_large_image", title: `${title} | Papelería P de Papel`, description },
   };
 }
@@ -76,7 +77,7 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
   const hasFilters = hasValue(searchParams.categoryId);
 
   const [{ products, totalPages, totalItems, facets, searchCorrection }, brandTotal] = await Promise.all([
-    getProducts(brandListingQuery(brand.slug, searchParams)),
+    getListingProducts(searchParams, brandListingQuery(brand.slug, searchParams)),
     hasFilters ? getProducts(brandListingQuery(brand.slug, {})).then((response) => response.totalItems) : null,
   ]);
 

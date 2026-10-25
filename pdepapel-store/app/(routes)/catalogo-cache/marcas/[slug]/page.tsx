@@ -3,9 +3,11 @@ import type { Metadata } from "next";
 import { getBrands } from "@/actions/get-brands";
 import BrandPage, { generateMetadata as brandMetadata } from "@/app/(routes)/marcas/[slug]/page";
 import { StaticUrlState } from "@/components/shop/static-url-state";
+import { CACHED_LISTING_PARAMS } from "@/lib/cached-listing";
 
 /** /marcas/<slug> sin filtros, en caché ISR (ver la copia de /tienda). */
 export const revalidate = 300;
+export const maxDuration = 30;
 
 /** Las marcas visibles con productos se generan en el build; el resto, la primera vez que alguien las pide. */
 export async function generateStaticParams() {
@@ -13,7 +15,7 @@ export async function generateStaticParams() {
   return brands.map((brand) => ({ slug: brand.slug }));
 }
 
-const NO_FILTERS = {} as Parameters<typeof BrandPage>[0]["searchParams"];
+const NO_FILTERS = CACHED_LISTING_PARAMS as Parameters<typeof BrandPage>[0]["searchParams"];
 
 export function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   return brandMetadata({ params, searchParams: NO_FILTERS });

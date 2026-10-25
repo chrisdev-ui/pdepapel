@@ -82,6 +82,8 @@ export function ProductStickyBar({ product, availability, quantity, targetRef, o
     <div
       data-testid="product-sticky-bar"
       aria-hidden={!visible}
+      // @ts-expect-error React 18 no tipa `inert`; como texto vacío llega al DOM y saca los botones del orden de foco.
+      inert={visible ? undefined : ""}
       className={cn(
         "fixed z-40 transition-all duration-200 motion-reduce:transition-none",
         "bottom-[max(1rem,env(safe-area-inset-bottom))] left-3 right-[5.25rem]",

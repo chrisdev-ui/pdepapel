@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { PolicyPage, type PolicyFact, type PolicySection } from "@/components/policy/policy-page";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { STANDARD_SHIPPING_RATE, TRANSIT_DAYS } from "@/lib/commerce-policies";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { currencyFormatter } from "@/lib/utils";
@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     url: `${BASE_URL}${STOREFRONT_ROUTES.shippingPolicy}`,
+    images: [DEFAULT_SHARE_IMAGE],
   },
 };
 

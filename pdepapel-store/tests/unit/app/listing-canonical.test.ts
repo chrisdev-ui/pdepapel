@@ -15,7 +15,7 @@ vi.mock("@/actions/get-types", () => ({ getTypes: mocks.getTypes }));
 vi.mock("@/actions/get-catalog-options", () => ({ getCatalogOptions: vi.fn() }));
 vi.mock("@/actions/get-colors", () => ({ getColors: vi.fn() }));
 vi.mock("@/actions/get-designs", () => ({ getDesigns: vi.fn() }));
-vi.mock("@/actions/get-products", () => ({ getProducts: vi.fn() }));
+vi.mock("@/actions/get-products", () => ({ getProducts: vi.fn(async () => ({ products: [], totalPages: 100, totalItems: 0 })) }));
 vi.mock("@/actions/get-brands", () => ({ getBrands: mocks.getBrands, getBrand: vi.fn() }));
 
 import { generateMetadata as categoryMetadata } from "@/app/(routes)/categoria/[slug]/page";

@@ -43,3 +43,16 @@ export const catalogFetchCache = (tags: string[]) => ({
 });
 
 export const CATALOG_FETCH_CACHE = catalogFetchCache([PRODUCTS_TAG, PRODUCT_LIST_TAG]);
+
+/**
+ * El `fetch` de Node espera los encabezados hasta 300 s, justo el límite de la
+ * función en Vercel: una conexión colgada con el panel dejaba la página
+ * esperando hasta que la mataban. La señal es nueva en cada llamada (una
+ * constante caducaría 8 s después de cargar el módulo) y no toca `next`, así
+ * que la caché y sus etiquetas siguen igual.
+ */
+export const UPSTREAM_TIMEOUT_MS = 8_000;
+
+export function withUpstreamTimeout<T extends RequestInit>(init: T): T & { signal: AbortSignal } {
+  return { ...init, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) };
+}

@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/env.mjs", () => ({ env: { NEXT_PUBLIC_API_URL: "https://admin.example.com/api/store" } }));
 vi.mock("@/lib/public-env", async () => ({ publicEnv: (await import("@/lib/env.mjs")).env }));
 vi.mock("@/actions/get-brands", () => ({ getBrand: mocks.getBrand, getBrands: mocks.getBrands }));
-vi.mock("@/actions/get-products", () => ({ getProducts: mocks.getProducts }));
+vi.mock("@/actions/get-products", () => ({
+  getProducts: mocks.getProducts,
+  getListingProducts: (_searchParams: object, query: object) => mocks.getProducts(query),
+}));
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound, permanentRedirect: mocks.permanentRedirect, redirect: vi.fn() }));
 
 import { generateStaticParams } from "@/app/(routes)/catalogo-cache/marcas/[slug]/page";

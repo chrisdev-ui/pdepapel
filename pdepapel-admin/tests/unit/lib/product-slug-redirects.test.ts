@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildProductSlugRedirects, collapseProductRedirects } from "@/lib/product-slug-redirects";
+import {
+  archivedRedirectDestination,
+  buildProductSlugRedirects,
+  collapseProductRedirects,
+  restoreArchivedSources,
+} from "@/lib/product-slug-redirects";
 
 describe("buildProductSlugRedirects", () => {
   it("exports safe aliases that do not collide with current product URLs", () => {
@@ -113,5 +118,72 @@ describe("collapseProductRedirects", () => {
     const sources = new Set(report.redirects.map((r) => r.source));
     expect(report.redirects.every((r) => !sources.has(r.destination))).toBe(true);
     expect(new Set(report.redirects.map((r) => r.destination))).toEqual(new Set(["/producto/carpeta-van-gogh-verde"]));
+  });
+});
+
+/**
+ * 2026-10-25: 27 orígenes del mapa terminaban en fichas archivadas (308 → 308)
+ * y `collapseProductRedirects` los soltaba. Ningún origen se pierde: va en un
+ * salto a donde lo mandaría la ficha archivada, con el aviso.
+ */
+describe("restoreArchivedSources", () => {
+  const products = [
+    { id: "p-live", slug: "agenda-viva", isArchived: false },
+    { id: "p-archived", slug: "agenda-archivada", isArchived: true },
+  ];
+  const legacy = [
+    { source: "/producto/agenda-vieja-m", destination: "/producto/agenda-archivada" },
+    { source: "/producto/otra-vieja-s", destination: "/producto/agenda-viva" },
+    { source: "/producto/agenda-viva", destination: "/producto/agenda-archivada" },
+  ];
+
+  it("arma el destino de la ficha archivada con el aviso", () => {
+    expect(archivedRedirectDestination({ kind: "product", slug: "hermana" })).toBe("/producto/hermana#producto-no-disponible");
+    expect(archivedRedirectDestination({ kind: "category", slug: "stickers" })).toBe("/categoria/stickers#producto-no-disponible");
+    expect(archivedRedirectDestination({ kind: "type", id: "t 1" })).toBe("/tienda?typeId=t%201#producto-no-disponible");
+    expect(archivedRedirectDestination({ kind: "shop" })).toBe("/tienda#producto-no-disponible");
+  });
+
+  it("devuelve al mapa el origen cuyo producto se archivó, sin tocar los vivos ni sombrear una ficha viva", () => {
+    const report = collapseProductRedirects({ legacy, aliases: [], products });
+    expect(report.dropped.map((entry) => entry.reason).sort()).toEqual(["destino-archivado-o-inexistente", "origen-es-producto-vivo"]);
+
+    const restored = restoreArchivedSources(
+      report,
+      new Map([["/producto/agenda-vieja-m", { kind: "category", slug: "agendas" } as const]]),
+    );
+    expect(restored.redirects).toEqual([
+      { source: "/producto/agenda-vieja-m", destination: "/categoria/agendas#producto-no-disponible" },
+      { source: "/producto/otra-vieja-s", destination: "/producto/agenda-viva" },
+    ]);
+    expect(restored.restored).toBe(1);
+    expect(restored.stillDropped).toEqual([expect.objectContaining({ reason: "origen-es-producto-vivo" })]);
+  });
+
+  it("es idempotente: una segunda corrida sobre su propio mapa no cambia ni suelta nada", () => {
+    const first = restoreArchivedSources(
+      collapseProductRedirects({ legacy, aliases: [], products }),
+      new Map([["/producto/agenda-vieja-m", { kind: "category", slug: "agendas" } as const]]),
+    ).redirects;
+    const second = restoreArchivedSources(collapseProductRedirects({ legacy: first, aliases: [], products }), new Map());
+    expect(second.redirects).toEqual(first);
+    expect(second.stillDropped).toEqual([]);
+  });
+
+  it("una hermana viva elegida antes conserva el aviso en la siguiente corrida", () => {
+    const report = collapseProductRedirects({
+      legacy: [{ source: "/producto/agenda-vieja-m", destination: "/producto/agenda-viva#producto-no-disponible" }],
+      aliases: [],
+      products,
+    });
+    expect(report.redirects).toEqual([{ source: "/producto/agenda-vieja-m", destination: "/producto/agenda-viva#producto-no-disponible" }]);
+    expect(report.kept).toBe(1);
+  });
+
+  it("sin destino conocido (nunca existió) el origen sigue fuera", () => {
+    const report = collapseProductRedirects({ legacy: [legacy[0]], aliases: [], products });
+    const restored = restoreArchivedSources(report, new Map([["/producto/agenda-vieja-m", null]]));
+    expect(restored.redirects).toEqual([]);
+    expect(restored.stillDropped).toHaveLength(1);
   });
 });

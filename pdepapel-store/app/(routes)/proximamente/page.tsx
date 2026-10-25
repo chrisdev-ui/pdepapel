@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { getProducts } from "@/actions/get-products";
 import { Newsletter } from "@/components/newsletter";
 import ProductCard from "@/components/ui/product-card";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
 
 export const revalidate = 300;
@@ -27,6 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Lo que viene | Papelería P de Papel",
       description: "Los productos que están por llegar a la tienda.",
       url: `${BASE_URL}/proximamente`,
+      images: [DEFAULT_SHARE_IMAGE],
     },
   };
 }

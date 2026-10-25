@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { StorefrontSettings } from "@/types";
 
@@ -21,9 +22,10 @@ export const EMPTY_STOREFRONT_SETTINGS: StorefrontSettings = {
 export const getStorefrontSettings = cache(
   async (): Promise<StorefrontSettings> => {
     try {
-      const response = await fetch(API_URL, {
-        next: { revalidate: 300, tags: ["storefront-settings"] },
-      });
+      const response = await fetch(
+        API_URL,
+        withUpstreamTimeout({ next: { revalidate: 300, tags: ["storefront-settings"] } }),
+      );
       if (!response.ok) return EMPTY_STOREFRONT_SETTINGS;
       const data = await response.json();
       const threshold = Number(data?.freeShippingThreshold);

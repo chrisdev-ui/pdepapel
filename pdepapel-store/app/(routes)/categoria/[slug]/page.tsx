@@ -7,7 +7,7 @@ import { getCatalogOptions } from "@/actions/get-catalog-options";
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
-import { getProducts } from "@/actions/get-products";
+import { getListingProducts, getProducts } from "@/actions/get-products";
 import { getTypes } from "@/actions/get-types";
 import { CategoryChips } from "@/components/category-chips";
 import { CategoryRail } from "@/components/home/category-rail";
@@ -44,6 +44,7 @@ interface CategoryPageProps {
 }
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 const SIBLING_CHIPS = 5;
 
@@ -69,9 +70,9 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
 }
 
 /** Sin foto de categoría, la burbuja usa la foto del producto más representativo. */
-async function resolveCover(categoryId: string, imageUrl: string | null | undefined, alt: string) {
+async function resolveCover(searchParams: CategoryPageProps["searchParams"], categoryId: string, imageUrl: string | null | undefined, alt: string) {
   if (imageUrl) return { url: imageUrl, alt };
-  const { products } = await getProducts({ categoryId, fromShop: true, page: 1, itemsPerPage: 1, sortOption: "featuredFirst", groupBy: "parents" });
+  const { products } = await getListingProducts(searchParams, { categoryId, fromShop: true, page: 1, itemsPerPage: 1, sortOption: "featuredFirst", groupBy: "parents" });
   const url = products[0]?.images?.find((image) => image.isMain)?.url ?? products[0]?.images?.[0]?.url;
   return url ? { url, alt } : null;
 }
@@ -87,7 +88,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const hasFilters = Object.entries(searchParams).some(([key, value]) => key !== "sortOption" && key !== "page" && value !== undefined && value !== "");
 
   const [{ products, totalPages, totalItems, facets, searchCorrection }, catalogOptions, colors, designs, cover, categoryTotal, brands] = await Promise.all([
-    getProducts({
+    getListingProducts(searchParams, {
       categoryId: category.id,
       colorId: searchParams.colorId,
       sizeId: searchParams.sizeId,
@@ -108,7 +109,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     getCatalogOptions(),
     getColors(),
     getDesigns(),
-    resolveCover(category.id, category.imageUrl, name),
+    resolveCover(searchParams, category.id, category.imageUrl, name),
     hasFilters ? getProducts({ categoryId: category.id, fromShop: true, page: 1, itemsPerPage: 1, groupBy: "parents" }).then((response) => response.totalItems) : null,
     getBrands(),
   ]);

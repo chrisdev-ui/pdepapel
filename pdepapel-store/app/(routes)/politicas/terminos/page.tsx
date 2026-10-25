@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 
 import { PolicyPage, POLICY_CONTACT, type PolicySection } from "@/components/policy/policy-page";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { LEGAL_VERSIONS } from "@/lib/legal-versions";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     url: `${BASE_URL}${STOREFRONT_ROUTES.termsPolicy}`,
+    images: [DEFAULT_SHARE_IMAGE],
   },
 };
 

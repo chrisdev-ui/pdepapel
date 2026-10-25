@@ -1,3 +1,4 @@
+import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { Type } from "@/types";
 import { cache } from "react";
@@ -9,7 +10,7 @@ const CATALOG_CACHE = {
 
 export const getTypes = cache(async (): Promise<Type[]> => {
   try {
-    const response = await fetch(API_URL, CATALOG_CACHE);
+    const response = await fetch(API_URL, withUpstreamTimeout(CATALOG_CACHE));
     if (!response.ok) return [];
     return await response.json();
   } catch {

@@ -3,7 +3,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { format } from "prettier";
 
-import { collapseProductRedirects } from "../lib/product-slug-redirects";
+import { findArchivedProductRedirect, type ArchivedProductRedirect } from "../lib/archived-product-redirect";
+import { collapseProductRedirects, restoreArchivedSources } from "../lib/product-slug-redirects";
+import { assertReadOnlyUser } from "./lib/read-only-user";
 
 const prismadb = new PrismaClient();
 const storeIdArgument = process.argv.find((argument) =>
@@ -39,6 +41,8 @@ async function main() {
     throw new Error("Provide the public store with --store-id=<store-id>.");
   }
 
+  await assertReadOnlyUser(prismadb);
+
   // Solo lectura: alias y productos (vivos y archivados) del catálogo actual.
   const [aliases, products] = await Promise.all([
     prismadb.productSlugAlias.findMany({
@@ -59,7 +63,22 @@ async function main() {
     legacy = [];
   }
   const report = collapseProductRedirects({ legacy, aliases, products });
-  const redirects = report.redirects;
+  // Un origen cuyo producto final quedó archivado va directo a donde lo
+  // mandaría la ficha (hermana viva, categoría, tipo o tienda), en un salto.
+  const archivedTargets = new Map<string, ArchivedProductRedirect | null>();
+  const productSlug = (path: string) => path.replace(/^\/producto\//, "").replace(/#.*$/, "");
+  for (const entry of report.dropped) {
+    if (entry.reason !== "destino-archivado-o-inexistente") continue;
+    const fromDestination = entry.destination.startsWith("/producto/")
+      ? await findArchivedProductRedirect(prismadb, storeId, productSlug(entry.destination))
+      : null;
+    archivedTargets.set(
+      entry.source,
+      fromDestination ?? (await findArchivedProductRedirect(prismadb, storeId, productSlug(entry.source))),
+    );
+  }
+  const restoredReport = restoreArchivedSources(report, archivedTargets);
+  const redirects = restoredReport.redirects;
   const nextContents = await buildModuleSource(redirects);
 
   let previousContents: string | null = null;
@@ -82,8 +101,9 @@ async function main() {
         redirectsWritten: redirects.length,
         kept: report.kept,
         collapsed: report.collapsed.length,
-        dropped: report.dropped.length,
-        droppedBecauseSourceIsLive: report.dropped.filter((entry) => entry.reason === "origen-es-producto-vivo").length,
+        restoredToArchivedTarget: restoredReport.restored,
+        dropped: restoredReport.stillDropped.length,
+        droppedBecauseSourceIsLive: restoredReport.stillDropped.filter((entry) => entry.reason === "origen-es-producto-vivo").length,
         added: report.added,
         changed: previousContents !== nextContents,
         outputPath,

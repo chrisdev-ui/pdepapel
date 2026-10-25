@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { BRANDS_TAG, brandTag, CATALOG_CACHE_REVALIDATE_SECONDS } from "@/lib/catalog-cache";
+import { BRANDS_TAG, brandTag, CATALOG_CACHE_REVALIDATE_SECONDS, withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { UpstreamServiceError } from "@/lib/upstream-service-error";
 import type { BrandPageData, BrandSummary } from "@/types";
@@ -10,9 +10,10 @@ const API_URL = `${env.NEXT_PUBLIC_API_URL}/brands`;
 /** Marcas visibles con productos activos, en el orden del panel. Sin respuesta: lista vacía (las marcas son opcionales). */
 export const getBrands = cache(async (): Promise<BrandSummary[]> => {
   try {
-    const response = await fetch(`${API_URL}?conProductos=1`, {
-      next: { revalidate: CATALOG_CACHE_REVALIDATE_SECONDS, tags: [BRANDS_TAG, "catalog"] },
-    });
+    const response = await fetch(
+      `${API_URL}?conProductos=1`,
+      withUpstreamTimeout({ next: { revalidate: CATALOG_CACHE_REVALIDATE_SECONDS, tags: [BRANDS_TAG, "catalog"] } }),
+    );
     if (!response.ok) return [];
     const payload: unknown = await response.json();
     return Array.isArray(payload) ? (payload as BrandSummary[]) : [];
@@ -27,9 +28,10 @@ export type BrandLookup = { kind: "brand"; brand: BrandPageData } | { kind: "red
 export const getBrand = cache(async (slug: string): Promise<BrandLookup> => {
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/${encodeURIComponent(slug)}`, {
-      next: { revalidate: CATALOG_CACHE_REVALIDATE_SECONDS, tags: [brandTag(slug), BRANDS_TAG, "catalog"] },
-    });
+    response = await fetch(
+      `${API_URL}/${encodeURIComponent(slug)}`,
+      withUpstreamTimeout({ next: { revalidate: CATALOG_CACHE_REVALIDATE_SECONDS, tags: [brandTag(slug), BRANDS_TAG, "catalog"] } }),
+    );
   } catch {
     throw new UpstreamServiceError("las marcas");
   }

@@ -5,11 +5,12 @@ import { getBrands } from "@/actions/get-brands";
 import { BrandLogo } from "@/components/brands/brand-logo";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { canShowBrandLogo } from "@/lib/brand-display";
 import { brandPath, STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const revalidate = 300;
+export const maxDuration = 30;
 
 const DESCRIPTION = "Las marcas originales que encuentras en Papelería P de Papel: cuadernos, colores, agendas y más, con envío a toda Colombia.";
 
@@ -22,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description: DESCRIPTION,
     robots: { index, follow: true },
     alternates: { canonical },
-    openGraph: { title: "Marcas | Papelería P de Papel", description: DESCRIPTION, url: canonical, siteName: "Papelería P de Papel", locale: "es_CO", type: "website" },
+    openGraph: { title: "Marcas | Papelería P de Papel", description: DESCRIPTION, url: canonical, siteName: "Papelería P de Papel", locale: "es_CO", type: "website", images: [DEFAULT_SHARE_IMAGE] },
   };
 }
 

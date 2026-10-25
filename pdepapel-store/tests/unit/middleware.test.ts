@@ -117,6 +117,26 @@ describe("storefront middleware", () => {
     );
     expect(clerk.handlerCalls).toBe(0);
   });
+
+  it("sends a legacy source whose product was archived to its category with the notice, in one hop", async () => {
+    const response = await run("/producto/cajita-de-sellos-capibara-capibara-amarillo-pastel-m?utm_source=x");
+    expect(response?.status).toBe(308);
+    expect(response?.headers.get("location")).toBe(
+      "https://papeleriapdepapel.com/categoria/sellos-decorativos?utm_source=x#producto-no-disponible",
+    );
+  });
+});
+
+describe("search alias", () => {
+  it("answers /tienda?q= with a 308 to the same search under ?search=", async () => {
+    const response = await run("/tienda?q=agenda+rosa&utm_source=x");
+    expect(response?.status).toBe(308);
+    expect(response?.headers.get("location")).toBe("https://papeleriapdepapel.com/tienda?utm_source=x&search=agenda+rosa");
+  });
+
+  it("does not alias other routes", async () => {
+    expect((await run("/categoria/stickers?q=rosa"))?.status).not.toBe(308);
+  });
 });
 
 describe("cached listings", () => {

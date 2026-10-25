@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { CAPSULES_TAG, CATALOG_CACHE_REVALIDATE_SECONDS } from "@/lib/catalog-cache";
+import { CAPSULES_TAG, CATALOG_CACHE_REVALIDATE_SECONDS, withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import type { CurrentCapsuleEdition } from "@/types/capsules";
 
@@ -18,9 +18,10 @@ const OFF: CurrentCapsuleState = { salesEnabled: false, edition: null };
  */
 export const getCurrentCapsuleEdition = cache(async (): Promise<CurrentCapsuleState> => {
   try {
-    const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/capsulas/actual`, {
-      next: { revalidate: CATALOG_CACHE_REVALIDATE_SECONDS, tags: [CAPSULES_TAG] },
-    });
+    const response = await fetch(
+      `${env.NEXT_PUBLIC_API_URL}/capsulas/actual`,
+      withUpstreamTimeout({ next: { revalidate: CATALOG_CACHE_REVALIDATE_SECONDS, tags: [CAPSULES_TAG] } }),
+    );
     if (!response.ok) return OFF;
     const payload = (await response.json()) as { edition?: CurrentCapsuleEdition | null };
     return { salesEnabled: true, edition: payload.edition ?? null };

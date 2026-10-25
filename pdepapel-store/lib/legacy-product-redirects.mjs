@@ -9,7 +9,8 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/agenda-acolchadita-animalitos-animalitos-pastel-m",
-    destination: "/producto/agenda-acolchadita-animalitos",
+    destination:
+      "/producto/agenda-acolchadita-maile-family-gris-animalitos#producto-no-disponible",
   },
   {
     source: "/producto/agenda-casas-escudos-hogwarts-harry-potter-multicolor-m",
@@ -669,7 +670,7 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/cajita-de-sellos-capibara-capibara-amarillo-pastel-m",
-    destination: "/producto/cajita-de-sellos-capibara",
+    destination: "/categoria/sellos-decorativos#producto-no-disponible",
   },
   {
     source: "/producto/cajita-sorpresa-snoopy-snoopy-multicolor-l",
@@ -884,6 +885,30 @@ export const legacyProductRedirects = [
     destination: "/producto/cartuchera-rosa-2",
   },
   {
+    source:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-amarillo-pastel-acolchada",
+    destination:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-amarillo-pastel",
+  },
+  {
+    source:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-azul-pastel-acolchada",
+    destination:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-azul-pastel",
+  },
+  {
+    source:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-lila-acolchada",
+    destination:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-lila",
+  },
+  {
+    source:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-rosa-pastel-acolchada",
+    destination:
+      "/producto/cartuchera-rosy-posy-sofuto-de-peluche-con-agarradera-y-cremallera-gruesa-rosa-pastel",
+  },
+  {
     source: "/producto/cartuchera-wisdom-azul-aesthetic-pastel",
     destination: "/producto/cartuchera-wisdom-azul-pastel",
   },
@@ -1043,27 +1068,27 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/cortador-de-puntas-redondas-azul-clasico-azul-s",
-    destination: "/producto/cortador-de-puntas-redondas-azul",
+    destination: "/categoria/troqueles#producto-no-disponible",
   },
   {
     source: "/producto/cortador-de-puntas-redondas-azul-clasico-s",
-    destination: "/producto/cortador-de-puntas-redondas-azul",
+    destination: "/categoria/troqueles#producto-no-disponible",
   },
   {
     source: "/producto/cortador-de-puntas-redondas-negro-clasico-negro-s",
-    destination: "/producto/cortador-de-puntas-redondas-negro",
+    destination: "/categoria/troqueles#producto-no-disponible",
   },
   {
     source: "/producto/cortador-de-puntas-redondas-negro-clasico-s",
-    destination: "/producto/cortador-de-puntas-redondas-negro",
+    destination: "/categoria/troqueles#producto-no-disponible",
   },
   {
     source: "/producto/cortador-de-puntas-redondas-rosado-clasico-rosado-s",
-    destination: "/producto/cortador-de-puntas-redondas-rosado",
+    destination: "/categoria/troqueles#producto-no-disponible",
   },
   {
     source: "/producto/cortador-de-puntas-redondas-rosado-clasico-s",
-    destination: "/producto/cortador-de-puntas-redondas-rosado",
+    destination: "/categoria/troqueles#producto-no-disponible",
   },
   {
     source: "/producto/cosedora-mediana-azul-clasico-azul-pastel-s",
@@ -1126,6 +1151,10 @@ export const legacyProductRedirects = [
   {
     source: "/producto/cuaderno-7-materias-gran-aesthetic-multicolor-l",
     destination: "/producto/cuaderno-7-materias-gran",
+  },
+  {
+    source: "/producto/cuaderno-7-materias-peq-aesthetic-multicolor-s",
+    destination: "/producto/cuaderno-7-materias-peq",
   },
   {
     source:
@@ -1406,8 +1435,12 @@ export const legacyProductRedirects = [
     destination: "/producto/folder-financiero",
   },
   {
+    source: "/producto/folder-tarjetero-kawaii",
+    destination: "/producto/folder-tarjetero-kawaii-pastel",
+  },
+  {
     source: "/producto/folder-tarjetero-kawaii-kawaii-pastel-m",
-    destination: "/producto/folder-tarjetero-kawaii",
+    destination: "/producto/folder-tarjetero-kawaii-pastel",
   },
   {
     source: "/producto/gancho-garrita-x4-gatito-multicolor-m",
@@ -1479,8 +1512,16 @@ export const legacyProductRedirects = [
     destination: "/producto/hojas-de-repuesto-cuadriculadas-x80h",
   },
   {
+    source: "/producto/impresora-termica-mini",
+    destination: "/producto/impresora-termica-mini-rosado",
+  },
+  {
     source: "/producto/impresora-termica-mini-kawaii-blanco-s",
-    destination: "/producto/impresora-termica-mini",
+    destination: "/producto/impresora-termica-mini-rosado",
+  },
+  {
+    source: "/producto/impresora-termica-mini-kawaii-celeste",
+    destination: "/producto/impresora-termica-mini-celeste",
   },
   {
     source: "/producto/jabon-en-petalos-kawaii-pastel-m",
@@ -1636,6 +1677,18 @@ export const legacyProductRedirects = [
     destination: "/producto/lamina-stickers-instrumentos",
   },
   {
+    source:
+      "/producto/laminas-acrilicas-para-llevar-washi-individual-clasico-pastel",
+    destination:
+      "/producto/laminas-acrilicas-para-llevar-washi-individual-clasico",
+  },
+  {
+    source:
+      "/producto/laminas-acrilicas-para-llevar-washi-paquete-x10-aesthetic-pastel",
+    destination:
+      "/producto/laminas-acrilicas-para-llevar-washi-paquete-x10-aesthetic",
+  },
+  {
     source: "/producto/lapicer-offi-verde-clasico-s",
     destination: "/producto/lapicer-offi-verde",
   },
@@ -1697,6 +1750,22 @@ export const legacyProductRedirects = [
     destination: "/producto/lapicero-corazon-metalizado",
   },
   {
+    source: "/producto/lapicero-de-gancho-pastel-azul-pastel-aesthetic",
+    destination: "/producto/lapicero-de-gancho-pastel-azul-pastel",
+  },
+  {
+    source: "/producto/lapicero-de-gancho-pastel-curuba-aesthetic",
+    destination: "/producto/lapicero-de-gancho-pastel-curuba",
+  },
+  {
+    source: "/producto/lapicero-de-gancho-pastel-gris-aesthetic",
+    destination: "/producto/lapicero-de-gancho-pastel-gris",
+  },
+  {
+    source: "/producto/lapicero-de-gancho-pastel-verde-pastel-aesthetic",
+    destination: "/producto/lapicero-de-gancho-pastel-verde-pastel",
+  },
+  {
     source: "/producto/lapicero-diamante-diamante-multicolor-s",
     destination: "/producto/lapicero-diamante",
   },
@@ -1720,6 +1789,10 @@ export const legacyProductRedirects = [
   {
     source: "/producto/lapicero-halloween-halloween-multicolor-s",
     destination: "/producto/lapicero-halloween-2",
+  },
+  {
+    source: "/producto/lapicero-haloween-momia-halloween-gris",
+    destination: "/producto/lapicero-haloween-momia-gris",
   },
   {
     source: "/producto/lapicero-kiut-negro-girly-negro-s",
@@ -1951,7 +2024,15 @@ export const legacyProductRedirects = [
     destination: "/producto/bloques-de-construccion-batman-negro",
   },
   {
+    source: "/producto/lego-batman-negro",
+    destination: "/producto/bloques-de-construccion-batman-negro",
+  },
+  {
     source: "/producto/lego-calamardo-animados-azul-xs",
+    destination: "/producto/bloques-de-construccion-calamardo-azul",
+  },
+  {
+    source: "/producto/lego-calamardo-azul",
     destination: "/producto/bloques-de-construccion-calamardo-azul",
   },
   {
@@ -1959,16 +2040,36 @@ export const legacyProductRedirects = [
     destination: "/producto/bloques-de-construccion-capitan-america-azul",
   },
   {
+    source: "/producto/lego-capitan-america-azul",
+    destination: "/producto/bloques-de-construccion-capitan-america-azul",
+  },
+  {
     source: "/producto/lego-luigi-animados-verde-xs",
     destination: "/producto/bloques-de-construccion-luigi-verde",
+  },
+  {
+    source: "/producto/lego-luigi-verde",
+    destination: "/producto/bloques-de-construccion-luigi-verde",
+  },
+  {
+    source: "/producto/lego-panda",
+    destination: "/producto/bloques-de-construccion-panda",
   },
   {
     source: "/producto/lego-panda-osito-panda-negro-m",
     destination: "/producto/bloques-de-construccion-panda",
   },
   {
+    source: "/producto/lego-psyduck",
+    destination: "/producto/bloques-de-construccion-psyduck",
+  },
+  {
     source: "/producto/lego-psyduck-animados-amarillo-xs",
     destination: "/producto/bloques-de-construccion-psyduck",
+  },
+  {
+    source: "/producto/lego-winnie-pooh-y-sus-amigos",
+    destination: "/producto/bloques-de-construccion-winnie-pooh-y-sus-amigos",
   },
   {
     source: "/producto/lego-winnie-pooh-y-sus-amigos-armable-multicolor-s",
@@ -2036,11 +2137,11 @@ export const legacyProductRedirects = [
   {
     source:
       "/producto/libro-para-colorear-el-gato-galletero-gatito-verde-pastel-m",
-    destination: "/producto/libro-para-colorear-el-gato-galletero",
+    destination: "/categoria/libros-de-colorear#producto-no-disponible",
   },
   {
     source: "/producto/libro-para-colorear-mandalas-elefante-azul-m",
-    destination: "/producto/libro-para-colorear-mandalas",
+    destination: "/categoria/libros-de-colorear#producto-no-disponible",
   },
   {
     source: "/producto/llavero-bluey-animados-azul-pastel-s",
@@ -2495,6 +2596,18 @@ export const legacyProductRedirects = [
   {
     source: "/producto/mug-gato-aventuras-gatito-blanco-s",
     destination: "/producto/mug-gato-aventuras",
+  },
+  {
+    source: "/producto/mug-haloween-sombrerito-calabaza-halloween-naranja",
+    destination: "/producto/mug-haloween-sombrerito-calabaza-naranja",
+  },
+  {
+    source: "/producto/mug-haloween-sombrerito-fantasma-halloween-blanco",
+    destination: "/producto/mug-haloween-sombrerito-fantasma-blanco",
+  },
+  {
+    source: "/producto/mug-haloween-sombrerito-x2-halloween-multicolor",
+    destination: "/producto/mug-haloween-sombrerito-x2-multicolor",
   },
   {
     source: "/producto/mug-happy-animals-animalitos-pastel-s",
@@ -3862,42 +3975,40 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/sticker-el-principito-moon-diveller-cafe-m",
-    destination: "/producto/sticker-el-principito-moon-diveller-cafe",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source:
       "/producto/sticker-el-principito-moon-diveller-el-principito-cafe-m",
-    destination: "/producto/sticker-el-principito-moon-diveller-cafe",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source:
       "/producto/sticker-el-principito-oxygen-forest-park-azul-fluorescente-m",
-    destination:
-      "/producto/sticker-el-principito-oxygen-forest-park-azul-fluorescente",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source:
       "/producto/sticker-el-principito-oxygen-forest-park-el-principito-azul-fluorescente-m",
-    destination:
-      "/producto/sticker-el-principito-oxygen-forest-park-azul-fluorescente",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source:
       "/producto/sticker-el-principito-prefer-the-stars-el-principito-verde-m",
-    destination: "/producto/sticker-el-principito-prefer-the-stars-verde",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/sticker-el-principito-prefer-the-stars-verde-m",
-    destination: "/producto/sticker-el-principito-prefer-the-stars-verde",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/sticker-el-principito-untie-rose-garden-azul-m",
-    destination: "/producto/sticker-el-principito-untie-rose-garden-azul",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source:
       "/producto/sticker-el-principito-untie-rose-garden-el-principito-azul-m",
-    destination: "/producto/sticker-el-principito-untie-rose-garden-azul",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/sticker-metalizado-girly-girly-fucsia-xs",
@@ -4051,27 +4162,27 @@ export const legacyProductRedirects = [
   },
   {
     source: "/producto/stickers-vintage-flores-rosadas-rosado-s",
-    destination: "/producto/stickers-vintage-flores-rosadas-rosado",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/stickers-vintage-flores-rosadas-vintage-rosado-s",
-    destination: "/producto/stickers-vintage-flores-rosadas-rosado",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/stickers-vintage-mariposas-morado-s",
-    destination: "/producto/stickers-vintage-mariposas-morado",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/stickers-vintage-mariposas-vintage-morado-s",
-    destination: "/producto/stickers-vintage-mariposas-morado",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/stickers-vintage-planetas-azul-s",
-    destination: "/producto/stickers-vintage-planetas-azul",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/stickers-vintage-planetas-vintage-azul-s",
-    destination: "/producto/stickers-vintage-planetas-azul",
+    destination: "/categoria/stickers#producto-no-disponible",
   },
   {
     source: "/producto/strap-hello-kitty-hello-kitty-rosado-s",
@@ -4196,9 +4307,19 @@ export const legacyProductRedirects = [
     destination: "/producto/troquel-formas",
   },
   {
+    source: "/producto/troqueles-de-figuras-en-maletin-x8-de-1cm",
+    destination: "/producto/troqueles-de-figuras-en-maletin-x8-de-1cm-rosado",
+  },
+  {
+    source:
+      "/producto/troqueles-de-figuras-en-maletin-x8-de-1cm-clasico-azul-acero",
+    destination:
+      "/producto/troqueles-de-figuras-en-maletin-x8-de-1cm-azul-acero",
+  },
+  {
     source:
       "/producto/troqueles-de-figuras-en-maletin-x8-de-1cm-clasico-pastel-m",
-    destination: "/producto/troqueles-de-figuras-en-maletin-x8-de-1cm",
+    destination: "/producto/troqueles-de-figuras-en-maletin-x8-de-1cm-rosado",
   },
   {
     source: "/producto/vaso-metalico-kuromi-kuromi-morado-m",

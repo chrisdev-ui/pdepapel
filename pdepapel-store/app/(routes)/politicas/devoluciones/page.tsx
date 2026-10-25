@@ -7,7 +7,7 @@ import {
   type PolicyFact,
   type PolicySection,
 } from "@/components/policy/policy-page";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, DEFAULT_SHARE_IMAGE } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { StorefrontLink } from "@/components/storefront-link";
 
@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     url: `${BASE_URL}${STOREFRONT_ROUTES.returnsPolicy}`,
+    images: [DEFAULT_SHARE_IMAGE],
   },
 };
 
