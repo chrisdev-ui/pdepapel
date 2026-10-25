@@ -5,6 +5,7 @@ import {
   settleCancelledPayment,
   settlePaidPayment,
   settlePendingPayment,
+  unappliedSettlementMessage,
   wompiTransactionMatchesOrder,
   type SettlementOrder,
 } from "@/lib/payment-settlement";
@@ -229,7 +230,7 @@ async function updateOrderData(order: SettlementOrder, transaction: any) {
     if (outcome !== "applied") {
       return NextResponse.json(
         {
-          message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
+          message: unappliedSettlementMessage(order.orderNumber, outcome),
         },
         { status: 200 },
       );

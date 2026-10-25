@@ -5,6 +5,7 @@ import {
   loadOrderForSettlement,
   settleCancelledPayment,
   settlePaidPayment,
+  unappliedSettlementMessage,
 } from "@/lib/payment-settlement";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import {
@@ -243,7 +244,7 @@ async function processBoldPayment(
 
   if (outcome !== "applied") {
     return NextResponse.json(
-      { message: `Orden ${order.orderNumber} ya fue procesada anteriormente` },
+      { message: unappliedSettlementMessage(order.orderNumber, outcome) },
       { status: 200 },
     );
   }

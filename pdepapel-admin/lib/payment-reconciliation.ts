@@ -70,6 +70,9 @@ export interface ReconciliationSummary {
   alreadyApplied: number;
   mismatched: number;
   failed: number;
+  /** Pagados que se volvieron a consultar y los que la pasarela anuló. */
+  rechecked: number;
+  voided: number;
   partial: boolean;
   gateways: Record<Provider, { lookups: number; unavailable: number; skipped: number; keyRejected: number | null; verified: boolean }>;
 }
@@ -102,6 +105,36 @@ export async function selectReconciliationCandidates(now: Date): Promise<Settlem
   return rows
     .filter(
       (order) =>
+        order.source !== OrderSource.POS &&
+        order.source !== OrderSource.FAIR &&
+        !order.payment?.details?.includes(BOLD_TERMINAL_MARKER),
+    )
+    .slice(0, RECONCILE_BATCH_SIZE);
+}
+
+/**
+ * Pedidos en línea ya pagados dentro de la misma ventana de cada pasarela,
+ * contada desde el pago. Una anulación hecha en el panel de Wompi no manda
+ * evento (probado en sandbox 2026-10-25), así que solo así se entera el panel.
+ */
+export async function selectPaidRecheckCandidates(now: Date): Promise<SettlementOrder[]> {
+  const rows = await prismadb.order.findMany({
+    where: {
+      status: OrderStatus.PAID,
+      type: { not: OrderType.POINT_OF_SALE },
+      OR: (["Wompi", "Bold"] as const).map((provider) => ({
+        payment: { method: PaymentMethod[provider] },
+        paidAt: { gte: new Date(now.getTime() - RECONCILE_MAX_AGE_MS[provider]) },
+      })),
+    },
+    include: SETTLEMENT_ORDER_INCLUDE,
+    orderBy: { paidAt: "desc" },
+    take: RECONCILE_BATCH_SIZE * 2,
+  });
+  return rows
+    .filter(
+      (order) =>
+        order.status === OrderStatus.PAID &&
         order.source !== OrderSource.POS &&
         order.source !== OrderSource.FAIR &&
         !order.payment?.details?.includes(BOLD_TERMINAL_MARKER),
@@ -196,6 +229,37 @@ function decideBold(order: SettlementOrder, voucher: BoldPaymentVoucher, now: Da
   return { action: "cancelled", transactionId, gatewayStatus: voucher.payment_status, detailsText: details(OrderStatus.CANCELLED), gateway: voucher };
 }
 
+/** Un pedido pagado se anula solo si la transacción que lo pagó (o, sin ella, todas) quedó VOIDED. */
+function decideVoided(provider: Provider, order: SettlementOrder, items: Array<WompiTransaction | BoldPaymentVoucher>): Decision {
+  const paidWith = order.payment?.transactionId ?? null;
+  if (provider === "Wompi") {
+    const transactions = items as WompiTransaction[];
+    const target = (paidWith && transactions.find((transaction) => transaction.id === paidWith)) || null;
+    const voided = target
+      ? target.status === "VOIDED"
+      : transactions.length > 0 && !transactions.some((transaction) => transaction.status === "APPROVED") && transactions.some((transaction) => transaction.status === "VOIDED");
+    if (!voided) return { action: "none" };
+    const transaction = target ?? transactions.find((entry) => entry.status === "VOIDED")!;
+    return {
+      action: "cancelled",
+      transactionId: transaction.id,
+      gatewayStatus: "VOIDED",
+      detailsText: `customer_email: ${transaction.customer_email ?? "undefined"} | payment_method_type: ${transaction.payment_method_type ?? "undefined"}`,
+      gateway: transaction,
+    };
+  }
+  const voucher = items[0] as BoldPaymentVoucher;
+  if (voucher.payment_status !== "VOIDED") return { action: "none" };
+  const transactionId = voucher.transaction_id ?? null;
+  return {
+    action: "cancelled",
+    transactionId,
+    gatewayStatus: "VOIDED",
+    detailsText: `Bold Transaction ID: ${transactionId} | Reference: ${getBoldOrderReference(order)} | Status: ${OrderStatus.CANCELLED}`,
+    gateway: voucher,
+  };
+}
+
 function freshState(configured: boolean): ProviderState {
   return { configured, lookups: 0, unavailable: 0, streak: 0, inFlight: 0, skipped: 0, lastUnavailable: null, keyRejected: null, verified: false, probed: false };
 }
@@ -235,7 +299,7 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     Wompi: freshState(!!deps.wompi.privateKey && !!deps.wompi.baseUrl),
     Bold: freshState(!!deps.bold.identityKey),
   };
-  const counts = { checked: 0, paid: 0, cancelled: 0, unchanged: 0, alreadyApplied: 0, mismatched: 0, failed: 0 };
+  const counts = { checked: 0, paid: 0, cancelled: 0, unchanged: 0, alreadyApplied: 0, mismatched: 0, failed: 0, rechecked: 0, voided: 0 };
   let partial = false;
 
   const lookup = async (provider: Provider, reference: string): Promise<GatewayLookup<WompiTransaction | BoldPaymentVoucher>> => {
@@ -340,6 +404,52 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     }
   };
 
+  const recheckPaidOne = async (order: SettlementOrder) => {
+    const provider = providerOf(order);
+    if (blocked(provider)) {
+      state[provider].skipped += 1;
+      return;
+    }
+    if (clock() - startedAt > budget) {
+      partial = true;
+      state[provider].skipped += 1;
+      return;
+    }
+    const result = await lookup(provider, provider === "Bold" ? getBoldOrderReference(order) : order.id);
+    if (result.kind !== "found" && result.kind !== "none") return;
+    counts.rechecked += 1;
+    if (result.kind === "none") return;
+    const decision = decideVoided(provider, order, result.items as Array<WompiTransaction | BoldPaymentVoucher>);
+    if (decision.action !== "cancelled") return;
+    const log = (status: PaymentWebhookEventStatus, statusCode: number, error?: string) =>
+      logReconciliation({ provider, order, gatewayStatus: decision.gatewayStatus, transactionId: decision.transactionId, gateway: decision.gateway, status, statusCode, error, now });
+    try {
+      const { outcome } = await settleCancelledPayment({
+        order,
+        provider,
+        transactionId: decision.transactionId,
+        detailsText: decision.detailsText,
+        source: "reconciliation",
+        gatewayStatus: decision.gatewayStatus,
+      });
+      if (outcome !== "applied") {
+        counts.alreadyApplied += 1;
+        return;
+      }
+      await log(PaymentWebhookEventStatus.PROCESSED, 200);
+      counts.voided += 1;
+      await sendPaymentAlert(
+        { provider: WEBHOOK_PROVIDER[provider], kind: "reconcile-voided", storeId: order.storeId, orderId: order.id, orderNumber: order.orderNumber },
+        deps.alerts,
+      );
+    } catch (error) {
+      counts.failed += 1;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[PAYMENT_RECONCILIATION] No se pudo anular ${provider} en ${order.orderNumber}:`, error);
+      await log(PaymentWebhookEventStatus.FAILED, 500, message);
+    }
+  };
+
   // Un pedido que lanza (referencia inválida, base caída) no corta la corrida.
   const reconcileSafely = (order: SettlementOrder) =>
     reconcileOne(order).catch((error) => {
@@ -362,10 +472,24 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     }),
   );
 
-  // Sin pedidos pendientes, una consulta que no puede coincidir con ninguno:
-  // una llave mala se ve en la hora siguiente al despliegue.
+  const paidRows = await selectPaidRecheckCandidates(now);
+  let nextPaid = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(RECONCILE_CONCURRENCY, paidRows.length) }, async () => {
+      while (nextPaid < paidRows.length) {
+        const order = paidRows[nextPaid++];
+        await recheckPaidOne(order).catch((error) => {
+          counts.failed += 1;
+          console.error(`[PAYMENT_RECONCILIATION] Falló la revisión del pago de ${order.orderNumber}:`, error);
+        });
+      }
+    }),
+  );
+
+  // Sin nada que consultar, una consulta que no puede coincidir con ningún
+  // pedido: una llave mala se ve en la hora siguiente al despliegue.
   for (const provider of ["Wompi", "Bold"] as const) {
-    if (byProvider[provider].length > 0 || !state[provider].configured) continue;
+    if (state[provider].lookups > 0 || !state[provider].configured) continue;
     state[provider].probed = true;
     await lookup(provider, KEY_PROBE_REFERENCE);
   }
@@ -390,6 +514,8 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     `sin cambio ${counts.unchanged}`,
     ...(counts.alreadyApplied > 0 ? [`ya aplicados ${counts.alreadyApplied}`] : []),
     ...(counts.mismatched > 0 ? [`monto distinto ${counts.mismatched}`] : []),
+    ...(counts.rechecked > 0 ? [`pagados revisados ${counts.rechecked}`] : []),
+    ...(counts.voided > 0 ? [`anulados en la pasarela ${counts.voided}`] : []),
     ...(counts.failed > 0 ? [`fallos ${counts.failed}`] : []),
     ...[wompi, bold].filter((entry) => !keyTexts.includes(entry.text)).map((entry) => entry.text),
     ...(partial ? ["parcial: se acabó el tiempo de la corrida"] : []),

@@ -493,7 +493,7 @@ describe("POST /api/webhook/bold", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      message: "Orden ORD-123 ya fue procesada anteriormente",
+      message: "Orden ORD-123 cancelada y sin reactivar (punto de venta, feria, tarjeta de regalo o fraude): el pago quedó para revisión",
     });
     expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
     // Entró plata en un pedido cancelado: se marca para revisar o reembolsar y se avisa.

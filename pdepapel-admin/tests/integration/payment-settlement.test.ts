@@ -148,6 +148,42 @@ describe("liquidación compartida de pagos (MySQL)", () => {
     expect(await testPrisma.paymentWebhookEvent.findFirst({ where: { orderId: order.id, eventType: "reconcile:APPROVED" } })).toMatchObject({ status: "PROCESSED" });
   });
 
+  it("varios pagos del mismo producto conciliados a la vez: ninguno se pierde por deadlock", async () => {
+    fixture = await createInventoryFixture();
+    const orders = await Promise.all([boldOrder(fixture, 1), boldOrder(fixture, 1), boldOrder(fixture, 1)]);
+    const summary = await reconcile(orders);
+    expect(summary).toMatchObject({ paid: 3, failed: 0 });
+    expect(await stockOf(fixture)).toBe(3);
+    for (const order of orders) expect(await saleMovements(order.id)).toBe(1);
+  });
+
+  it("un pagado que Bold anuló después: la conciliación lo cancela, reingresa una vez y no repite", async () => {
+    fixture = await createInventoryFixture();
+    const order = await boldOrder(fixture, 2);
+    expect((await webhook(order)).status).toBe(200);
+    expect(await stockOf(fixture)).toBe(4);
+    // Solo esta referencia está anulada: la revisión cubre todos los pagados recientes de la base.
+    const voided = vi.fn(async (url: string) =>
+      url.includes("bold.co") && decodeURIComponent(url.split("/").pop() ?? "") === order.orderNumber
+        ? new Response(JSON.stringify({ transaction_id: `TX-${order.orderNumber}`, reference_id: order.orderNumber, total: order.total, payment_status: "VOIDED", transaction_date: NOW.toISOString() }), { status: 200 })
+        : url.includes("bold.co")
+          ? new Response(JSON.stringify({ errors: [] }), { status: 404 })
+          : new Response(JSON.stringify({ data: [] }), { status: 200 }),
+    );
+    const { runPaymentReconciliation } = await import("@/lib/payment-reconciliation");
+    const run = () => runPaymentReconciliation({ now: NOW, fetch: voided as unknown as typeof fetch, wompi: { baseUrl: "https://sandbox.wompi.co/v1", privateKey: "prv_test" }, bold: { identityKey: "identity" }, alerts: { enabled: false } });
+
+    expect(await run()).toMatchObject({ voided: 1, failed: 0 });
+    const after = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(after.status).toBe(OrderStatus.CANCELLED);
+    expect(after.paidAt).toBeNull();
+    expect(await stockOf(fixture)).toBe(6);
+
+    expect(await run()).toMatchObject({ voided: 0 });
+    expect(await stockOf(fixture)).toBe(6);
+    expect(await testPrisma.paymentWebhookEvent.count({ where: { orderId: order.id, eventType: "reconcile:VOIDED" } })).toBe(1);
+  });
+
   it("webhook y conciliación al mismo tiempo: un solo reclamo", async () => {
     fixture = await createInventoryFixture();
     const order = await boldOrder(fixture, 1);

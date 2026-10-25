@@ -1,0 +1,65 @@
+{
+  "data": [
+    {
+      "id": "187338-1792964080-91061",
+      "created_at": "2026-10-25T21:34:40.850Z",
+      "finalized_at": "2026-10-25T21:35:03.370Z",
+      "amount_in_cents": 1800000,
+      "reference": "987c2103-45e0-4e7e-9c30-872c6e95178c",
+      "customer_email": "sandbox+c3@example.com",
+      "currency": "COP",
+      "payment_method_type": "CARD",
+      "payment_method": {
+        "type": "CARD",
+        "extra": {
+          "bin": "424242",
+          "name": "VISA-4242",
+          "brand": "VISA",
+          "issuer": "STRIPE PAYMENTS UK LIMITED",
+          "card_type": "CREDIT",
+          "last_four": "4242",
+          "card_holder": "Prueba Sandbox",
+          "is_three_ds": true,
+          "unique_code": "bbf3f7907db26da85ab4d57213a668ba9d519a3f773ff63b2ae7003393da95bc",
+          "country_iso2": "GB",
+          "three_ds_auth": {
+            "current_step": "AUTHENTICATION",
+            "current_step_status": "COMPLETED"
+          },
+          "three_ds_auth_type": null,
+          "external_identifier": "QTFRAXNtOB",
+          "processor_response_code": "00"
+        },
+        "token": "tok_test_87338_521fb32bef239199d8Bf3b622DE63789",
+        "installments": 1,
+        "is_click_to_pay": false
+      },
+      "status": "VOIDED",
+      "status_message": null,
+      "shipping_address": null,
+      "redirect_url": "https://medieval-agree-framed-conservative.trycloudflare.com/pedido/987c2103-45e0-4e7e-9c30-872c6e95178c",
+      "payment_source_id": null,
+      "payment_link_id": null,
+      "customer_data": {
+        "device_id": "f26836abfc0fcb6d64fcd1c8b85cfd05",
+        "full_name": "Prueba Sandbox",
+        "browser_info": {
+          "browser_tz": "300",
+          "browser_language": "en-US",
+          "browser_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+          "browser_color_depth": "24",
+          "browser_screen_width": "1280",
+          "browser_screen_height": "900"
+        },
+        "phone_number": "+573025556677",
+        "device_data_token": "eyJhbGciOiJIUzI1NiJ9.eyJjb21wcmVzc2VkIjoiZUp4dFZGMlA0allVL1N1V24wQktHWWRBSmtPZkdKakNhR0YyVmVhalVsV05IUHNtV0RoMjZqaXdzNlA5NzcwbUEyVzN6VU1VbjN0OXY4NjVlYWRiNyt1bkJ0eTBCT1BwaEs3dE42VTF2eG9QR09tdHVWREcyMmI3SzdrM0hqUkJnSHpla0Q5SXpGN2o4ZXQxbjB6cldzTUw1SitVdnhvbjE0TWtKYjFQeThmMUtpSmE3WUFzUU94c255eUJTdzFOTTlzNlc4RlZQSTdKaGhmY3FZOUxOUHF4a2puM25FN2VhZTdzQVRFc3JMdUpmaC9RNng1Y282eEJFMFlic01IMXpYQTRTRWJvWVJzRUt5NCtiNDZIUzA4MmlNZURhNFFsN0pXQTBQQ3BSd1M1RTF2bFFmaldCZE9UMlJsN01HZ0FVeW9Ub0s1VFJEUTNaY3ZMZ0lINTVTbGtVczNhNWtvalZIRGRRQUFlZWE3Qlh3QnphSGJlMW5UaVhRdmZJMXByN2d2cnFxNlE0NUEvUmpFVkFtcS8rbThhdy9lcTVONjZMODdXNEx5Q1ptYmJRTjdOTUtJSHlCZXJaekRTdXN0eWovRHZDSU9EZncza0pjQW5jNWo1K2ViQzJsSUQwaTRHcE5jZCtwZU9GN0dtRDR2VjNja3BJcyt0M25GRDRrRVNKTFE1cU1KdnRoeWR5Znc0YzlKYnJaN1hxQ0RralBWSmozMWwrTXpZL0s3Zmo4aWx2M1FLcWZzaGJXZjU0a0NvanRLWVJiUnc4SGNMUnJ4TkRkZHZSN21NTW93WlVhOHErR2FQekUwcmNFcndxMXRiV3RSV1JCdmhBTXlMa242TFlZWVpPMEZMVU9VMmpKT2RvVGxTZ1Y3RFVVU0Z0VHNjK1owSjFNcU9TSlNERlZ4dmtCVGs2aWRUZzdMSFV2L2ZxSENLWDBIT2IzL0N0OXpKQTNjd3MwYTB6b1htNkNRN3lYWU5sWFVJeENrcUNGeWxqaG1hR2NjZWNXMW9qYXRTQjlvdmpHc2xVQy9iYmhobmg4SWFqOXZ5SjUwNnhUVjVNa3BZQ1dRZGhMYkFId0Z1cVdud2V3bDZEeDduUng2Z0RWdTRCcU10L1N1aWJRTlRlWXY5Nzg0eWwvYkIra2ZIQTBUYjh4TFZ1c1V0Q3RudzJsNUpzTCtoOG5uSS8wNnJlblJjMnJjY09yNnJpNk10eS9NSmw4WjEycFAzRlE1MHlYRjFKelRqV2NIa01NK3pQRTFZSWxPV01wNUJjY05pbVFncHhvd044MlFraTFFS28zU003L0FTYVR4TW1CUWpmdjRsM004eFdqRk1zeVRsZVNGWUlmSlVwcU5DeUZoa2VUWVdoV1JqK3YwZm1sdTFVZz09In0.5cfJCAB_n3ghbZ3sX17c1-9SBTBNMcJKUWk1MfZrLmc"
+      },
+      "billing_data": {
+        "legal_id_type": "CC",
+        "legal_id": "1047452823"
+      },
+      "origin": null
+    }
+  ],
+  "meta": {}
+}

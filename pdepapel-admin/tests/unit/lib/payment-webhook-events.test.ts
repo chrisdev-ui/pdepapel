@@ -99,6 +99,7 @@ describe("classifyPaymentWebhookOutcome", () => {
     [404, { error: "Orden no encontrada" }, "REJECTED"],
     [200, { message: "Evento acknowledged" }, "IGNORED"],
     [200, { message: "La orden ya fue procesada anteriormente" }, "IGNORED"],
+    [200, { message: "Orden POS-1 cancelada y sin reactivar (punto de venta, feria, tarjeta de regalo o fraude): el pago quedó para revisión" }, "IGNORED"],
     [200, { message: "Pago procesado" }, "PROCESSED"],
     [200, null, "PROCESSED"],
   ])("%s with %j → %s", (status, body, expected) => {

@@ -339,3 +339,77 @@ describe("caídas, topes y tiempo", () => {
     expect(summary.detail).toContain("parcial");
   });
 });
+
+describe("pagados que la pasarela anuló después", () => {
+  const sandboxVoid = JSON.parse(fixture("wompi-transactions-voided-sandbox.json")).data[0];
+  const paidWompi = (extra: Record<string, unknown> = {}) =>
+    order(PaymentMethod.Wompi, {
+      id: sandboxVoid.reference,
+      status: OrderStatus.PAID,
+      total: sandboxVoid.amount_in_cents / 100,
+      paidAt: new Date("2026-10-26T08:00:00.000Z"),
+      payment: { method: PaymentMethod.Wompi, details: null, transactionId: sandboxVoid.id },
+      ...extra,
+    });
+
+  it("busca pagados en línea dentro de 72 h (Wompi) y 24 h (Bold) desde el pago, sin punto de venta, feria ni datáfono", async () => {
+    const { selectPaidRecheckCandidates } = await import("@/lib/payment-reconciliation");
+    mocks.findMany.mockResolvedValue([
+      paidWompi(),
+      order(PaymentMethod.Bold, { id: "pos", status: OrderStatus.PAID, source: OrderSource.POS }),
+      order(PaymentMethod.Bold, { id: "pendiente" }),
+    ]);
+    const rows = await selectPaidRecheckCandidates(now);
+    expect(rows.map((row) => row.id)).toEqual([sandboxVoid.reference]);
+    expect(mocks.findMany.mock.calls[0][0].where).toMatchObject({
+      status: OrderStatus.PAID,
+      type: { not: OrderType.POINT_OF_SALE },
+      OR: [
+        { payment: { method: PaymentMethod.Wompi }, paidAt: { gte: new Date("2026-10-23T12:00:00.000Z") } },
+        { payment: { method: PaymentMethod.Bold }, paidAt: { gte: new Date("2026-10-25T12:00:00.000Z") } },
+      ],
+    });
+  });
+
+  it("la anulación real del sandbox de Wompi (sin evento): cancela por el camino compartido, deja fila y avisa", async () => {
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([paidWompi()]);
+    const { fetch, calls } = gateways({ wompi: [ok("wompi-transactions-voided-sandbox.json")], bold: [ok("bold-voucher-no-transaction-found.json")] });
+    const summary = await runPaymentReconciliation(deps(fetch));
+    expect(calls("wompi")[0]).toContain(`reference=${sandboxVoid.reference}`);
+    expect(mocks.settleCancelledPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "Wompi", transactionId: sandboxVoid.id, gatewayStatus: "VOIDED", source: "reconciliation" }),
+    );
+    expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({ provider: "WOMPI", eventType: "reconcile:VOIDED", status: "PROCESSED" });
+    expect(summary).toMatchObject({ rechecked: 1, voided: 1, cancelled: 0 });
+    expect(summary.detail).toContain("anulados en la pasarela 1");
+    expect(send.mock.calls.map(([email]) => email.subject)).toContain("⚠️ Un pago de Wompi se anuló en la pasarela");
+  });
+
+  it("si la transacción que pagó sigue APPROVED no toca nada, aunque haya otra anulada", async () => {
+    const approvedFirst = JSON.parse(fixture("wompi-transactions-voided-sandbox.json"));
+    approvedFirst.data = [{ ...approvedFirst.data[0], status: "APPROVED" }, { ...approvedFirst.data[0], id: "otra", status: "VOIDED" }];
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([paidWompi()]);
+    const { fetch } = gateways({ wompi: [{ status: 200, body: JSON.stringify(approvedFirst) }], bold: [ok("bold-voucher-no-transaction-found.json")] });
+    const summary = await runPaymentReconciliation(deps(fetch));
+    expect(mocks.settleCancelledPayment).not.toHaveBeenCalled();
+    expect(mocks.eventCreate).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({ rechecked: 1, voided: 0 });
+  });
+
+  it("Bold VOIDED en un pedido pagado: cancela; si el webhook ya lo había anulado, ni fila ni aviso", async () => {
+    const paidBold = order(PaymentMethod.Bold, { status: OrderStatus.PAID, paidAt: new Date("2026-10-26T08:00:00.000Z") });
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([paidBold]);
+    const first = gateways({ bold: [ok("bold-voucher-voided.json")], wompi: [ok("wompi-transactions-empty.json")] });
+    expect(await runPaymentReconciliation(deps(first.fetch))).toMatchObject({ voided: 1 });
+    expect(mocks.settleCancelledPayment).toHaveBeenCalledWith(expect.objectContaining({ provider: "Bold", gatewayStatus: "VOIDED" }));
+
+    vi.clearAllMocks();
+    redisKeys.clear();
+    mocks.settleCancelledPayment.mockResolvedValue({ outcome: "already", restocked: false });
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([paidBold]);
+    const second = gateways({ bold: [ok("bold-voucher-voided.json")], wompi: [ok("wompi-transactions-empty.json")] });
+    expect(await runPaymentReconciliation(deps(second.fetch))).toMatchObject({ voided: 0, alreadyApplied: 1 });
+    expect(mocks.eventCreate).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+});

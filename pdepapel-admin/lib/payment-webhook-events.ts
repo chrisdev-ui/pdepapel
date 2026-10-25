@@ -79,7 +79,7 @@ export function classifyPaymentWebhookOutcome(
   if (statusCode >= 500) return PaymentWebhookEventStatus.FAILED;
   if (statusCode >= 400) return PaymentWebhookEventStatus.REJECTED;
   const message = typeof body?.message === "string" ? body.message : "";
-  if (/acknowledged|ya fue procesada/i.test(message)) {
+  if (/acknowledged|ya fue procesada|sin reactivar/i.test(message)) {
     return PaymentWebhookEventStatus.IGNORED;
   }
   return PaymentWebhookEventStatus.PROCESSED;

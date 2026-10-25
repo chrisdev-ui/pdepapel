@@ -13,6 +13,7 @@ import { getAmountDue } from "@/lib/gift-card-amounts";
 import { handleGiftCardOnOrderCancellation, issueGiftCardForOrder, redeemGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { createGuideInBackground } from "@/lib/guide-background";
+import { withDeadlockRetry } from "@/lib/deadlock-retry";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { blocksLatePaymentRevival, flagPaymentOnCancelledOrder, notifyLatePaymentRevival } from "@/lib/late-payment";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
@@ -93,6 +94,14 @@ export interface SettlementInput {
 
 export type SettlementOutcome = "applied" | "already" | "late-on-cancelled";
 
+/** Lo que el webhook contesta cuando no aplicó nada; la pasarela solo mira el 200. */
+export function unappliedSettlementMessage(orderNumber: string | null, outcome: SettlementOutcome): string {
+  if (outcome === "late-on-cancelled") {
+    return `Orden ${orderNumber} cancelada y sin reactivar (punto de venta, feria, tarjeta de regalo o fraude): el pago quedó para revisión`;
+  }
+  return `Orden ${orderNumber} ya fue procesada anteriormente`;
+}
+
 export interface PaidSettlement {
   outcome: SettlementOutcome;
   revived: boolean;
@@ -168,7 +177,8 @@ export async function settlePaidPayment(input: SettlementInput): Promise<PaidSet
   const blocked = blocksLatePaymentRevival(order);
   let issuedGiftCard: IssuedGiftCard | null = null;
 
-  const claimed = await prismadb.$transaction(async (tx) => {
+  const claimed = await withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
+    issuedGiftCard = null;
     const claim = await tx.order.updateMany({
       where: {
         id: order.id,
@@ -258,7 +268,7 @@ export async function settlePaidPayment(input: SettlementInput): Promise<PaidSet
     await redeemGiftCardForOrder(tx, order as any, config.createdBy);
 
     return { stockShortfall };
-  });
+  }));
 
   if (!claimed) {
     if (order.status === OrderStatus.CANCELLED && blocked) {
@@ -294,7 +304,7 @@ export async function settleCancelledPayment(input: CancelSettlementInput): Prom
   const source = input.source ?? "webhook";
   const config = PROVIDERS[provider];
 
-  const result = await prismadb.$transaction(async (tx) => {
+  const result = await withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
     // Una anulación puede llegar después de cobrar: se limpia `paidAt`, porque
     // un cancelado que la conserva sigue contando como venta en los reportes.
     const paidCancellation = await tx.order.updateMany({
@@ -374,7 +384,7 @@ export async function settleCancelledPayment(input: CancelSettlementInput): Prom
 
     await writePaymentDetails(tx, input);
     return { restocked };
-  });
+  }));
 
   if (!result) return { outcome: "already", restocked: false };
 
@@ -386,7 +396,7 @@ export async function settleCancelledPayment(input: CancelSettlementInput): Prom
 
 /** Wompi informó una transacción en curso: el pedido nuevo pasa a pendiente con su comprobante. */
 export async function settlePendingPayment(input: SettlementInput): Promise<{ outcome: "applied" | "already" }> {
-  const applied = await prismadb.$transaction(async (tx) => {
+  const applied = await withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
     const claim = await tx.order.updateMany({
       where: { id: input.order.id, status: OrderStatus.CREATED },
       data: { status: OrderStatus.PENDING },
@@ -394,7 +404,7 @@ export async function settlePendingPayment(input: SettlementInput): Promise<{ ou
     if (claim.count === 0) return false;
     await writePaymentDetails(tx, input);
     return true;
-  });
+  }));
   if (!applied) return { outcome: "already" };
   await runSettlementSideEffects(input.order.id, OrderStatus.PENDING, input.provider, input.source ?? "webhook");
   return { outcome: "applied" };

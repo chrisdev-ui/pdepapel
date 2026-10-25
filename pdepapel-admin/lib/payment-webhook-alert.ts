@@ -23,7 +23,7 @@ const KEY_VARIABLES: Record<PaymentWebhookProvider, { webhook: string; api: stri
   WOMPI: { webhook: "WOMPI_EVENTS_KEY", api: "WOMPI_API_SECRET" },
 };
 
-export type PaymentAlertKind = PaymentWebhookAlertKind | "reconcile-mismatch" | "reconcile-applied" | "key-rejected";
+export type PaymentAlertKind = PaymentWebhookAlertKind | "reconcile-mismatch" | "reconcile-applied" | "reconcile-voided" | "key-rejected";
 
 type AlertRedis = { set: (key: string, value: string, options: { nx: true; ex: number }) => Promise<unknown> };
 type Send = (email: { from: string; to: string[]; subject: string; text: string; react?: React.ReactElement }) => Promise<ResendSendResult>;
@@ -94,6 +94,13 @@ function describe(alert: PaymentAlert): { subject: string; title: string; summar
         title: `El webhook de ${label} no avisó`,
         summary: `La conciliación de cada hora encontró aprobado un pago${order} que el webhook nunca aplicó, y lo marcó pagado.`,
         action: `Revisa en el panel de ${label} que el webhook siga configurado hacia el panel.`,
+      };
+    case "reconcile-voided":
+      return {
+        subject: `⚠️ Un pago de ${label} se anuló en la pasarela`,
+        title: `${label} anuló un pago ya registrado`,
+        summary: `La conciliación de cada hora encontró anulado en ${label} un pago${order} que el panel tenía como pagado. El pedido quedó cancelado, el inventario volvió y el cupón se liberó.`,
+        action: `Si la anulación no la hiciste tú desde el panel de ${label}, revísala allí antes de despachar.`,
       };
     case "key-rejected":
       return {
