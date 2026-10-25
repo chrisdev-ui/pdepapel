@@ -34,3 +34,8 @@ test-results/
 playwright-report/
 screenshots/
 *.png.tmp
+
+# Builds locales de Next (el de las e2e y el del sandbox de pagos)
+.next/
+.next-e2e/
+.next-sandbox/

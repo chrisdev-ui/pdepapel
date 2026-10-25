@@ -33,6 +33,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next-e2e/types/**/*.ts",
+    ".next-sandbox/types/**/*.ts",
     "**/*.mjs",
   ],
   "exclude": ["node_modules"],
