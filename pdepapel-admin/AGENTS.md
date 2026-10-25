@@ -296,10 +296,14 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
     - An approved payment with a matching amount → the shared paid path, plus an alert «el webhook no avisó».
     - Declined or voided, final and older than 30 minutes → the shared cancel path.
     - Anything else → no change.
+  - **Paid orders voided at the gateway (2026-10-26):** the same run re-checks online orders PAID in the last 72 h (Wompi) / 24 h (Bold), counted from `paidAt`, same exclusions (POS, fair, card terminal). If the transaction that paid it (`PaymentDetails.transactionId`, or with none every Wompi transaction) is now VOIDED, or the Bold voucher is VOIDED → the shared cancel path (stock back once, coupon kept and decremented, «Cancelada» emails), a `reconcile:VOIDED` row and the alert «Un pago de <pasarela> se anuló en la pasarela». **Wompi sends no event when a payment is voided** (sandbox, 2026-10-25), so this is the only way the panel learns about a void made in the Wompi dashboard. The Sistemas row adds «pagados revisados N» / «anulados en la pasarela N».
+  - **Deadlocks:** two settlements of the same product at once (reconciliation runs 4 in parallel, or webhook + reconciliation) can deadlock on the stock row (MySQL 1213, seen in the sandbox). Every settlement transaction runs inside `withDeadlockRetry` (`lib/deadlock-retry.ts`, 3 attempts); the status guard makes the retry safe.
   - **What it logs:** `PaymentWebhookEvent` rows `reconcile:<STATUS>`, only when something changed.
   - **Key checks:**
     - A 401/403 counts as «Llave de <pasarela> rechazada»: a red row, one email per hour, and no more calls to that gateway in the run.
-    - With nothing pending, it still probes each key with reference `pdepapel-verificacion-de-llave`.
+    - When a gateway got no lookup in the run (nothing pending, nothing recently paid), it still probes the key with reference `pdepapel-verificacion-de-llave`.
+- **Fallback gateway («Pagar con otra pasarela segura», `POST /api/[storeId]/checkout/[orderId]`) sends no email (2026-10-26).** It used to resend «Pendiente de pago» to the customer and the admin on every click; the pending email already went out when the order was created and its content is gateway-neutral.
+- **A webhook that applied nothing answers 200 with a message** (`unappliedSettlementMessage`): «ya fue procesada anteriormente» for an order already settled, and «cancelada y sin reactivar (punto de venta, feria, tarjeta de regalo o fraude): el pago quedó para revisión» for a late approval on a blocked order. Both are logged as IGNORED.
 - **Bold** is the default gateway, **Wompi** the fallback, **PayU** legacy and deprecated. Customer-facing text stays provider-neutral: **`Pago en línea`** (keep useful payment icons; this is about text).
 - Webhook processing must be **idempotent** and must validate the provider's authenticity and state before changing an order. **Never mark an order paid from a client redirect.**
 - **Bank transfer reaches `PAID` only after manual admin verification.**
@@ -312,6 +316,43 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 - **Background work after the response goes through `runInBackground` (`lib/background.ts`, `waitUntil` from `@vercel/functions`), never `setImmediate`/fire-and-forget.** Vercel does not wait for a `setImmediate`: on 2026-10-07 an idle instance froze mid-send and a new-order email was lost (`docs/ops/2026-10-07-incidente-correo-pedido.md`). A guard test fails on any `setImmediate` under `app/api` or `lib`.
 - **Order emails** (`sendOrderEmail`, `sendShippingEmail`) send admin and customer independently through `lib/email-delivery.ts`. A Resend `{ error }` is a failure, network/429/5xx are retried twice inline, and each recipient that is not reached gets its own `FailedNotification` row (`recipient` = `admin` or `customer`, never the address). `/api/cron/notification-retry` (in «Admin scheduled tasks») resends rows from the last 48 h, at most 4 attempts per order + kind + role, claiming each row with a single `UPDATE … WHERE resolvedAt IS NULL`.
 - **EnvioClick guides created in the background** use `createGuideInBackground` (`lib/guide-background.ts`). A failure is written to `Shipping.guideError` (shown on the order) and a `GUIDE` failure row, and is **never retried automatically**: a guide is paid when created.
+
+### Payments sandbox (repeatable E2E, local only)
+
+Run this before changing anything in checkout, the webhooks, settlement or reconciliation. Kit: `scripts/payments-sandbox/` (not run by CI). It writes logs, captured emails, order ids and screenshots to `tmp/payments-sandbox/` (gitignored).
+
+- **What runs:** admin and store as **production builds** on the e2e test DB (`pdepapel_test`, seeded with `npm run test:e2e:seed-admin`). The admin gets the gateways' **test** keys, everything else stays stubbed.
+  - Production build because order emails are skipped under `next dev`.
+  - The admin server also gets `VERCEL_ENV=production`, because payment alerts only go out with it.
+- **Network** (`guard.mjs`, loaded with `--import`):
+  - only local, Clerk dev, `sandbox.wompi.co` and `payments.api.bold.co` are allowed;
+  - Resend is captured to `mail.jsonl` (never sent);
+  - EnvioClick is a stub: it quotes fixed rates and refuses every guide (`envioclick.jsonl`).
+- **Keys:** `pdepapel-admin/.env.sandbox.local` (gitignored), never printed:
+  - `WOMPI_API_URL=https://sandbox.wompi.co/v1`, `WOMPI_API_KEY` (pub_test_), `WOMPI_API_SECRET` (prv_test_), `WOMPI_EVENTS_KEY` (test_events_), `WOMPI_INTEGRITY_KEY` (test_integrity_), `BOLD_ENVIRONMENT=test`, `BOLD_SECRET_KEY`, `NEXT_PUBLIC_BOLD_IDENTITY_KEY` (Bold › Integraciones › Llaves de integración › pruebas);
+  - `admin-server.mjs` refuses to start if a prefix is not a test prefix.
+- **Order of start** (from `pdepapel-admin`, each in its own terminal):
+  1. `npm run test:db:up && npm run test:db:push && npm run test:e2e:seed-admin`, then `node scripts/with-test-env.mjs node scripts/payments-sandbox/setup.mjs alertas`.
+  2. Run `cloudflared tunnel --url http://127.0.0.1:3100` (store; Wompi's WAF rejects `redirect-url=http://localhost`). Then start the admin with that https URL: `SANDBOX_STORE_URL=<url> node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs node scripts/payments-sandbox/admin-server.mjs`.
+  3. `node scripts/payments-sandbox/cors-bridge.mjs` (in production the admin only accepts CORS from the production origins; the store talks to it through `:3102`) and `node scripts/payments-sandbox/store-server.mjs` (after the admin: the build reads its catalog).
+  4. `node scripts/payments-sandbox/webhook-switch.mjs`, then `cloudflared tunnel --url http://127.0.0.1:3011`, and write the tunnel URL to `tmp/payments-sandbox/tunnel-url.txt`.
+- **Dashboards, test settings only:**
+  - Wompi › Desarrollo › Programadores › «Activar modo de pruebas» › URL de Eventos = `<tunnel>/api/webhook/wompi`.
+  - Bold › Integraciones › Webhooks: delete the test webhook and create it again with «Webhook de prueba» switched on, pointing to `<tunnel>/api/webhook/bold`. The URL cannot be edited, and only one test webhook is allowed; a webhook created without that switch is a **production** webhook.
+  - Write down the previous values first and restore them at the end. Never touch the production URLs.
+- **Cases and tools:**
+  - `place-order.mjs <caso> online --wompi-card 4242424242424242|4111111111111111 [--coupon SANDBOX10]` runs a real store checkout and pays in Wompi's hosted sandbox checkout.
+  - `--wompi-card none` saves the checkout URL; `--pay-url-of <caso>` pays it later (late approval after a cancel).
+  - `place-order.mjs <caso> transfer` places a bank-transfer order; `cod-order.mjs order` places a COD order.
+  - `wompi.mjs tx|void|event` and `bold.mjs` send **locally signed** events. Bold's test checkout sends no webhook, and its «Probar el webhook» signs with an empty key and `amount.total = 0`, which the panel rejects on purpose (`verifyBoldWebhookSignature`).
+  - Panel actions: `panel.mjs <ESTADO> <orderId…>` and `sistemas.mjs`, through `with-e2e-env` (Clerk dev agent task).
+  - Evidence: `evidence.mjs <orderId>`, with `with-test-env`.
+  - Webhook down: `touch tmp/payments-sandbox/BLOCKED` makes the switch answer 503. Wompi retries the same URL at 30 min, 3 h and 24 h. Call the cron with `curl -H "Authorization: Bearer test-stub" http://localhost:3101/api/cron/payment-reconciliation` once the order is 15 min old.
+- **Gotchas:**
+  - The per-IP order limit (`orders:*` in the fake Redis) trips after a few orders; `place-order.mjs` clears it.
+  - Customer emails use `sandbox+<caso>@example.com`; that, the instant form fill and the repeated phone make the risk score say «Posible bot», as designed.
+  - The paid-order recheck covers every store in the DB: a test that fakes a VOIDED gateway must answer VOIDED only for its own reference.
+- **Cleanup:** stop the servers, the switch, the bridge and both tunnels; `npm run test:db:down`; remove `.env.sandbox.local`; restore both dashboards.
 
 ### Gift orders
 
