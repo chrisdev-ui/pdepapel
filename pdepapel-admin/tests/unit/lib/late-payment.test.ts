@@ -26,6 +26,8 @@ describe("pagos tardíos en pedidos cancelados", () => {
     expect(blocksLatePaymentRevival({ type: "GIFT_CARD", riskReasons: null })).toBe(true);
     expect(blocksLatePaymentRevival({ type: "STANDARD", riskReasons: "fraude-confirmado" })).toBe(true);
     expect(blocksLatePaymentRevival({ type: "STANDARD", riskReasons: "envio-rapido" })).toBe(false);
+    expect(blocksLatePaymentRevival({ type: "POINT_OF_SALE", riskReasons: null })).toBe(true);
+    expect(blocksLatePaymentRevival({ type: "FESTIVAL", riskReasons: null })).toBe(true);
   });
 
   it("marca el pedido y avisa al panel con el enlace al pedido, una sola vez", async () => {

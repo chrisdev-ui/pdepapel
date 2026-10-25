@@ -44,6 +44,8 @@ export async function recordInventoryIssues(
     orderNumber: string;
     kind: OrderInventoryIssueKind;
     failed: FailedInventoryLine[];
+    /** False cuando el que llama ya avisa del faltante en su propio correo (pago tardío revivido). */
+    notifyShortfall?: boolean;
   },
 ): Promise<number> {
   if (input.failed.length === 0) return 0;
@@ -62,7 +64,7 @@ export async function recordInventoryIssues(
   const kitIds = new Set(kits.map((kit) => kit.id));
   const failed = input.failed.filter((line) => !kitIds.has(line.productId));
   if (failed.length === 0) return 0;
-  if (input.kind === OrderInventoryIssueKind.DECREMENT && input.orderId) {
+  if (input.kind === OrderInventoryIssueKind.DECREMENT && input.orderId && input.notifyShortfall !== false) {
     scheduleStockShortfallAlert(input.storeId, input.orderId);
   }
   const created = await tx.orderInventoryIssue.createMany({

@@ -246,6 +246,8 @@ describe("POST /api/webhook/bold", () => {
       status: OrderStatus.PENDING,
       storeId: "store-id",
       shippingCost: 5000,
+      // Los financieros toman `Shipping.cost + codFee` (regla común desde 2026-10-26).
+      shipping: { cost: 5000, codFee: 0 },
       total: 80000,
       coupon: { id: "coupon-id" },
       orderItems: [
@@ -293,10 +295,11 @@ describe("POST /api/webhook/bold", () => {
       success: true,
       orderId: "order-id",
     });
+    // Un pedido normal cancelado también se reclama (pago tardío, regla común desde 2026-10-26).
     expect(transactionClient.order.updateMany).toHaveBeenCalledWith({
       where: {
         id: "order-id",
-        status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
+        status: { in: [OrderStatus.CREATED, OrderStatus.PENDING, OrderStatus.CANCELLED] },
       },
       data: { status: OrderStatus.PAID },
     });
@@ -455,7 +458,9 @@ describe("POST /api/webhook/bold", () => {
     expect(mocks.deliverGiftCard).toHaveBeenCalledWith(issued, { buyerName: "Luisa Sánchez" });
   });
 
-  it("does not resurrect a cancelled order when an old approval is replayed", async () => {
+  // Desde 2026-10-26 un pedido normal cancelado sí revive (prueba en
+  // payment-webhook-characterization); una tarjeta de regalo cancelada no.
+  it("does not resurrect a cancelled gift card when an old approval is replayed", async () => {
     const transactionClient = {
       order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
       coupon: { update: vi.fn(), updateMany: vi.fn() },
@@ -468,6 +473,7 @@ describe("POST /api/webhook/bold", () => {
       orderNumber: "ORD-123",
       payment: { method: PaymentMethod.Bold },
       status: OrderStatus.CANCELLED,
+      type: OrderType.GIFT_CARD,
       storeId: "store-id",
       total: 80000,
       orderItems: [],

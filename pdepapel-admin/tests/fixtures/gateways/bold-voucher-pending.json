@@ -1,0 +1,12 @@
+{
+  "link_id": "LNK_ABC123",
+  "transaction_id": "TX_BOLD_1",
+  "total": 80000,
+  "subtotal": 80000,
+  "description": "Orden P de Papel ORD-1",
+  "reference_id": "ORD-1",
+  "payment_method": "CARD",
+  "payer_email": "clienta@example.com",
+  "transaction_date": "2026-10-26T10:05:00.000Z",
+  "payment_status": "PENDING"
+}

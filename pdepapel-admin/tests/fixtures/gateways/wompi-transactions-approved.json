@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "id": "12345-1700000000-11111",
+      "created_at": "2026-10-26T10:00:00.000Z",
+      "finalized_at": "2026-10-26T10:05:00.000Z",
+      "amount_in_cents": 8000000,
+      "reference": "order-1",
+      "customer_email": "clienta@example.com",
+      "currency": "COP",
+      "payment_method_type": "CARD",
+      "payment_method": {
+        "type": "CARD",
+        "extra": {
+          "brand": "VISA",
+          "last_four": "4242"
+        }
+      },
+      "status": "APPROVED",
+      "status_message": null,
+      "shipping_address": null,
+      "redirect_url": "https://papeleriapdepapel.com/pedido/order-1",
+      "payment_source_id": null,
+      "payment_link_id": null,
+      "customer_data": null,
+      "billing_data": null
+    }
+  ],
+  "meta": {}
+}

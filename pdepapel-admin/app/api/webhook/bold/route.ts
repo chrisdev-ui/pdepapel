@@ -1,56 +1,24 @@
-import { sendOrderEmail } from "@/lib/email";
-import { keepTerminalMarker } from "@/lib/gateway-fees";
-import { flagPaymentOnCancelledOrder } from "@/lib/late-payment";
-import { deliverGiftCard } from "@/lib/gift-card-delivery";
+import { getBoldWebhookSecretKey, verifyBoldWebhookSignature } from "@/lib/bold";
+import { schedulePaymentWebhookAlert, schedulePaymentWebhookCrashAlert } from "@/lib/payment-webhook-alert";
 import {
-  getAmountDue,
-  handleGiftCardOnOrderCancellation,
-  issueGiftCardForOrder,
-  redeemGiftCardForOrder,
-  type IssuedGiftCard,
-} from "@/lib/gift-cards";
-import prismadb from "@/lib/prismadb";
-import { createInventoryMovementBatchResilient } from "@/lib/inventory";
-import { explodeKitMovements } from "@/lib/order-stock-movements";
-import { saleMovementType } from "@/lib/sale-movement-type";
-import {
-  releasePresaleLinesOnCancellation,
-  settlePresaleLinesOnPayment,
-} from "@/lib/presale";
-import { invalidateStoreProductsCache } from "@/lib/cache";
-import {
-  getBoldWebhookSecretKey,
-  verifyBoldWebhookSignature,
-} from "@/lib/bold";
-import {
-  OrderInventoryIssueKind,
-  OrderStatus,
-  PaymentMethod,
-  ShippingStatus,
-  OrderType,
-} from "@prisma/client";
-import { calculateOrderFinancials } from "@/lib/financial";
-import { applyCapsulePayment } from "@/lib/capsule-payment";
-import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
-import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
-import {
-  markWelcomeBenefitRedeemed,
-  releaseWelcomeBenefitReservation,
-} from "@/lib/customer-benefits";
+  boldAmountMatchesOrder,
+  loadOrderForSettlement,
+  settleCancelledPayment,
+  settlePaidPayment,
+} from "@/lib/payment-settlement";
+import { OrderStatus, PaymentMethod } from "@prisma/client";
 import {
   InvalidWebhookPayloadError,
   readWebhookStoreId,
 } from "@/lib/webhook-auth";
 import { NextResponse } from "next/server";
-import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import {
+  BOLD_INVALID_SIGNATURE_ERROR,
   completePaymentWebhookEvent,
   completePaymentWebhookEventWithError,
   PaymentWebhookContext,
   recordPaymentWebhookReceived,
 } from "@/lib/payment-webhook-events";
-import { createGuideInBackground } from "@/lib/guide-background";
-import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * La fila se escribe antes de mirar la firma y se cierra con lo que respondió
@@ -77,9 +45,11 @@ export async function POST(req: Request) {
       context,
     );
     await completePaymentWebhookEvent(eventId, response, context);
+    schedulePaymentWebhookAlert("BOLD", eventId, response, rawPayload, context);
     return response;
   } catch (error) {
     await completePaymentWebhookEventWithError(eventId, error, context);
+    schedulePaymentWebhookCrashAlert("BOLD", eventId, error, rawPayload, context);
     throw error;
   }
 }
@@ -107,7 +77,7 @@ async function handleBoldWebhook(
     if (!isValidSignature) {
       console.warn("Bold webhook rejected due to an invalid signature");
       return NextResponse.json(
-        { error: "Firma de webhook Bold inválida" },
+        { error: BOLD_INVALID_SIGNATURE_ERROR },
         { status: 400 },
       );
     }
@@ -192,11 +162,14 @@ async function processBoldPayment(
     transaction.orderId;
   context.orderReference =
     typeof orderReference === "string" ? orderReference : null;
-  context.transactionId =
+  // Sin referencia del proveedor se guarda null: inventar «BOLD-<timestamp>»
+  // dejaba en el pedido un número que parecía de Bold y no lo era.
+  const transactionId: string | null =
     transaction.payment_id ||
     transaction.id ||
     transaction.transaction_id ||
     null;
+  context.transactionId = transactionId;
 
   if (!orderReference) {
     return NextResponse.json(
@@ -205,26 +178,9 @@ async function processBoldPayment(
     );
   }
 
-  // Find order by orderNumber or ID
-  const order = await prismadb.order.findFirst({
-    where: {
-      ...(scopedStoreId ? { storeId: scopedStoreId } : {}),
-      OR: [{ id: orderReference }, { orderNumber: orderReference }],
-    },
-    include: {
-      orderItems: {
-        include: {
-          product: true,
-        },
-      },
-      payment: true,
-      coupon: {
-        select: {
-          id: true,
-          isWelcomeBenefit: true,
-        },
-      },
-    },
+  const order = await loadOrderForSettlement({
+    ...(scopedStoreId ? { storeId: scopedStoreId } : {}),
+    OR: [{ id: orderReference }, { orderNumber: orderReference }],
   });
 
   if (!order) {
@@ -245,14 +201,9 @@ async function processBoldPayment(
     );
   }
 
-  const paidAmount = Number(transaction.amount?.total);
-  const isSandboxZeroAmount =
-    process.env.BOLD_ENVIRONMENT === "test" && paidAmount === 0;
   if (
     targetStatus === OrderStatus.PAID &&
-    (!Number.isFinite(paidAmount) ||
-      (!isSandboxZeroAmount &&
-        Math.round(paidAmount) !== Math.round(getAmountDue(order))))
+    !boldAmountMatchesOrder(order, { total: transaction.amount?.total, tip: transaction.amount?.tip })
   ) {
     return NextResponse.json(
       {
@@ -273,374 +224,28 @@ async function processBoldPayment(
     );
   }
 
-  // Idempotency Guard: If order is already PAID and event is SALE_APPROVED, skip processing
-  if (order.status === OrderStatus.PAID && targetStatus === OrderStatus.PAID) {
-    try {
-      await recordPaidOrderInGoogleAnalytics(order.id);
-    } catch (analyticsError) {
-      console.error(
-        "[BOLD_WEBHOOK] GA4 purchase tracking failed:",
-        analyticsError,
-      );
-    }
-
-    return NextResponse.json(
-      { message: `Orden ${order.orderNumber} ya fue procesada anteriormente` },
-      { status: 200 },
-    );
-  }
-
-  // Sin referencia del proveedor se guarda null: inventar «BOLD-<timestamp>»
-  // dejaba en el pedido un número que parecía de Bold y no lo era.
-  const transactionId: string | null =
-    transaction.payment_id ||
-    transaction.id ||
-    transaction.transaction_id ||
-    null;
-
   if (!transactionId) {
     console.warn(
       `[BOLD_WEBHOOK] Evento sin identificador de transacción para ${order.orderNumber}`,
     );
   }
 
-  let paymentProcessed = false;
-  // Compra de tarjeta de regalo: la tarjeta se emite dentro de la misma
-  // transacción que marca el pago y el código sale por correo al confirmar.
-  let issuedGiftCard: IssuedGiftCard | null = null;
-  if (targetStatus === OrderStatus.PAID) {
-    paymentProcessed = await prismadb.$transaction(async (tx) => {
-      // Solo desde un estado sin cobrar. Con CANCELLED aquí, reenviar un
-      // webhook antiguo de aprobación resucitaba un pedido cancelado y
-      // descontaba el inventario por segunda vez.
-      const claim = await tx.order.updateMany({
-        where: {
-          id: order.id,
-          status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
-        },
-        data: { status: OrderStatus.PAID },
-      });
+  const settlement = {
+    order,
+    provider: "Bold" as const,
+    transactionId,
+    detailsText: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+  };
+  const { outcome } =
+    targetStatus === OrderStatus.PAID
+      ? await settlePaidPayment(settlement)
+      : await settleCancelledPayment({ ...settlement, gatewayStatus: targetStatus });
 
-      if (claim.count === 0) return false;
-
-      // El cupo de preventa se apunta aquí, con el stock normal y por la misma
-      // razón: hasta que no entra la plata no hay nada reservado. Devuelve las
-      // líneas de preventa que sí descuentan hoy (pago tardío sobre una
-      // campaña ya liberada); el resto espera a que Paula libere.
-      const presaleDispatchNow = await settlePresaleLinesOnPayment(
-        tx,
-        order.id,
-      );
-
-      // Los kits descuentan también sus componentes; el reingreso al anular
-      // hace lo mismo, así que ambos lados quedan simétricos.
-      const stockMovements = await explodeKitMovements(
-        tx,
-        order.orderItems
-          .filter(
-            (item: any) =>
-              item.product &&
-              (!item.isPreorder || presaleDispatchNow.has(item.id)),
-          )
-          .map((orderItem: any) => ({
-            productId: orderItem.productId,
-            storeId: order.storeId,
-            type: saleMovementType(order.type),
-            quantity: -orderItem.quantity,
-            reason:
-              order.type === OrderType.POINT_OF_SALE
-                ? `Venta presencial (datáfono): pago confirmado ${transactionId ?? "sin referencia"}`
-                : `Bold: pago confirmado ${transactionId ?? "sin referencia"}`,
-            referenceId: order.id,
-            cost: Number(orderItem.product.acqPrice) || 0,
-            price: Number(orderItem.product.price),
-            createdBy: "SYSTEM_BOLD",
-          })),
-      );
-
-      const stockResult = await createInventoryMovementBatchResilient(
-        tx,
-        stockMovements,
-      );
-      if (stockResult.failed.length > 0) {
-        console.error(
-          "[BOLD_WEBHOOK] Descuento de inventario incompleto en un pago confirmado:",
-          {
-            orderNumber: order.orderNumber,
-            transactionId,
-            failed: stockResult.failed,
-          },
-        );
-        await recordInventoryIssues(tx, {
-          storeId: order.storeId,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          kind: OrderInventoryIssueKind.DECREMENT,
-          failed: stockResult.failed,
-        });
-      }
-
-      const financials = await calculateOrderFinancials(
-        order,
-        PaymentMethod.Bold,
-        order.shippingCost || 0,
-        tx,
-      );
-
-      await tx.order.update({
-        where: { id: order.id },
-        data: {
-          ...financials,
-          paidAt: new Date(),
-        } as any,
-      });
-      await applyCapsulePayment(tx, { orderId: order.id, storeId: order.storeId });
-
-      if (order.coupon) {
-        await tx.coupon.update({
-          where: { id: order.coupon.id },
-          data: { usedCount: { increment: 1 } },
-        });
-
-        if (order.coupon.isWelcomeBenefit) {
-          await markWelcomeBenefitRedeemed(tx, {
-            couponId: order.coupon.id,
-            userId: order.userId,
-            orderId: order.id,
-          });
-        }
-      }
-
-      await tx.paymentDetails.upsert({
-        where: { orderId: order.id },
-        update: {
-          transactionId,
-          details: keepTerminalMarker(
-            order.payment?.details,
-            `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
-          ),
-        },
-        create: {
-          method: PaymentMethod.Bold,
-          transactionId,
-          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
-          store: { connect: { id: order.storeId } },
-          order: { connect: { id: order.id } },
-        },
-      });
-
-      // Una tarjeta de regalo no se empaca: no se le abre envío.
-      if (order.type !== OrderType.GIFT_CARD) {
-        await tx.shipping.upsert({
-          where: { orderId: order.id },
-          update: { status: ShippingStatus.Preparing },
-          create: {
-            status: ShippingStatus.Preparing,
-            store: { connect: { id: order.storeId } },
-            order: { connect: { id: order.id } },
-          },
-        });
-      }
-
-      issuedGiftCard = await issueGiftCardForOrder(tx, {
-        storeId: order.storeId,
-        orderId: order.id,
-        createdBy: "SYSTEM_BOLD",
-      });
-      // Si el pedido usó una tarjeta, la reserva pasa a consumo.
-      await redeemGiftCardForOrder(tx, order, "SYSTEM_BOLD");
-
-      return true;
-    });
-
-    if (!paymentProcessed) {
-      if (order.status === OrderStatus.CANCELLED) {
-        await flagPaymentOnCancelledOrder(order.id, "Bold");
-      }
-      return NextResponse.json(
-        {
-          message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
-        },
-        { status: 200 },
-      );
-    }
-
-    await invalidateStoreProductsCache(order.storeId, { orderIds: [order.id] });
-
-    if (issuedGiftCard) {
-      await deliverGiftCard(issuedGiftCard, { buyerName: order.fullName });
-    }
-  } else {
-    paymentProcessed = await prismadb.$transaction(async (tx) => {
-      // Una anulación puede llegar después de haber cobrado (VOID_APPROVED
-      // sobre un pedido ya pagado): antes se ignoraba en silencio y el pedido
-      // seguía diciendo «Pagado» con el inventario descontado.
-      const paidCancellation = await tx.order.updateMany({
-        where: { id: order.id, status: OrderStatus.PAID },
-        data: { status: targetStatus, paidAt: null },
-      });
-      const reversedPaidOrder = paidCancellation.count > 0;
-
-      if (!reversedPaidOrder) {
-        const claim = await tx.order.updateMany({
-          where: {
-            id: order.id,
-            status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
-          },
-          data: { status: targetStatus },
-        });
-
-        if (claim.count === 0) return false;
-      }
-
-      if (reversedPaidOrder) {
-        // Espejo del pago: el cupo vuelve a la preventa y solo reingresan stock
-        // las líneas que alcanzaron a liberarse, porque son las únicas que lo
-        // descontaron. Reingresar una línea que nunca descontó crearía
-        // mercancía de la nada.
-        const presaleRestock = await releasePresaleLinesOnCancellation(
-          tx,
-          order.id,
-        );
-
-        const restockMovements = await explodeKitMovements(
-          tx,
-          await withoutDrawnCapsuleUnits(tx, order.orderItems
-            .filter(
-              (item: any) =>
-                item.product &&
-                (!item.isPreorder || presaleRestock.has(item.id)),
-            )
-            .map((orderItem: any) => ({
-              productId: orderItem.productId,
-              storeId: order.storeId,
-              type: "ORDER_CANCELLED" as const,
-              quantity: orderItem.quantity,
-              reason: `Bold: pago anulado ${transactionId ?? "sin referencia"}`,
-              referenceId: order.id,
-              cost: Number(orderItem.product.acqPrice) || 0,
-              price: Number(orderItem.product.price),
-              createdBy: "SYSTEM_BOLD",
-            }))),
-        );
-
-        const restockResult = await createInventoryMovementBatchResilient(
-          tx,
-          restockMovements,
-        );
-        if (restockResult.failed.length > 0) {
-          console.error(
-            "[BOLD_WEBHOOK] Reingreso de inventario incompleto tras la anulación:",
-            {
-              orderNumber: order.orderNumber,
-              transactionId,
-              failed: restockResult.failed,
-            },
-          );
-          await recordInventoryIssues(tx, {
-            storeId: order.storeId,
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            kind: OrderInventoryIssueKind.RESTOCK,
-            failed: restockResult.failed,
-          });
-        }
-
-        if (order.coupon) {
-          await tx.coupon.updateMany({
-            where: { id: order.coupon.id, usedCount: { gt: 0 } },
-            data: { usedCount: { decrement: 1 } },
-          });
-        }
-      }
-
-      // Tarjeta de regalo: la reserva o el consumo vuelve al saldo; si el
-      // pedido compró una tarjeta sin usar, se anula.
-      await handleGiftCardOnOrderCancellation(tx, {
-        storeId: order.storeId,
-        orderId: order.id,
-        createdBy: "SYSTEM_BOLD",
-        reason: `Bold: ${targetStatus}`,
-      });
-
-      // El beneficio de bienvenida vuelve al cliente solo cuando el pedido no
-      // se cobra: aquí, no en la rama de pago confirmado.
-      if (order.coupon?.isWelcomeBenefit) {
-        await releaseWelcomeBenefitReservation(tx, {
-          couponId: order.coupon.id,
-          userId: order.userId,
-          orderId: order.id,
-        });
-      }
-
-      await tx.paymentDetails.upsert({
-        where: { orderId: order.id },
-        update: {
-          transactionId,
-          details: keepTerminalMarker(
-            order.payment?.details,
-            `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
-          ),
-        },
-        create: {
-          method: PaymentMethod.Bold,
-          transactionId,
-          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
-          store: { connect: { id: order.storeId } },
-          order: { connect: { id: order.id } },
-        },
-      });
-
-      return true;
-    });
-
-    if (!paymentProcessed) {
-      return NextResponse.json(
-        {
-          message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
-        },
-        { status: 200 },
-      );
-    }
-
-    await invalidateStoreProductsCache(order.storeId, { orderIds: [order.id] });
-  }
-
-  const updatedOrder = await prismadb.order.findUnique({
-    where: { id: order.id },
-    include: {
-      payment: true,
-      shipping: SHIPPING_WITHOUT_GUIDE_PDF,
-      orderItems: {
-        include: {
-          product: true,
-        },
-      },
-    },
-  });
-
-  if (updatedOrder) {
-    if (updatedOrder.status === OrderStatus.PAID) {
-      try {
-        await recordPaidOrderInGoogleAnalytics(updatedOrder.id);
-      } catch (analyticsError) {
-        console.error(
-          "[BOLD_WEBHOOK] GA4 purchase tracking failed:",
-          analyticsError,
-        );
-      }
-    }
-
-    if (
-      updatedOrder.status === OrderStatus.PAID &&
-      updatedOrder.shipping &&
-      !updatedOrder.shipping.envioClickIdOrder &&
-      updatedOrder.shipping.envioClickIdRate
-    ) {
-      createGuideInBackground({ orderId: updatedOrder.id, storeId: updatedOrder.storeId, source: "webhook de Bold" });
-    }
-
-    await sendOrderEmail(updatedOrder.id, targetStatus);
+  if (outcome !== "applied") {
+    return NextResponse.json(
+      { message: `Orden ${order.orderNumber} ya fue procesada anteriormente` },
+      { status: 200 },
+    );
   }
 
   return NextResponse.json(

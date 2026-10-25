@@ -1,49 +1,24 @@
-import { sendOrderEmail } from "@/lib/email";
-import { blocksLatePaymentRevival, flagPaymentOnCancelledOrder } from "@/lib/late-payment";
-import { deliverGiftCard } from "@/lib/gift-card-delivery";
-import {
-  getAmountDue,
-  handleGiftCardOnOrderCancellation,
-  issueGiftCardForOrder,
-  redeemGiftCardForOrder,
-  type IssuedGiftCard,
-} from "@/lib/gift-cards";
 import { env } from "@/lib/env.mjs";
-import prismadb from "@/lib/prismadb";
-import { createInventoryMovementBatchResilient } from "@/lib/inventory";
-import { invalidateStoreProductsCache } from "@/lib/cache";
+import { schedulePaymentWebhookAlert, schedulePaymentWebhookCrashAlert } from "@/lib/payment-webhook-alert";
 import {
-  OrderInventoryIssueKind,
-  OrderStatus,
-  PaymentMethod,
-  ShippingStatus,
-  OrderType,
-} from "@prisma/client";
-import { calculateOrderFinancials } from "@/lib/financial";
-import { applyCapsulePayment } from "@/lib/capsule-payment";
-import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
-import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
-import {
-  markWelcomeBenefitRedeemed,
-  releaseWelcomeBenefitReservation,
-} from "@/lib/customer-benefits";
-import { explodeKitMovements } from "@/lib/order-stock-movements";
-import {
-  releasePresaleLinesOnCancellation,
-  settlePresaleLinesOnPayment,
-} from "@/lib/presale";
+  loadOrderForSettlement,
+  settleCancelledPayment,
+  settlePaidPayment,
+  settlePendingPayment,
+  wompiTransactionMatchesOrder,
+  type SettlementOrder,
+} from "@/lib/payment-settlement";
+import { OrderStatus } from "@prisma/client";
 import { safeHexEquals } from "@/lib/webhook-auth";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import {
   completePaymentWebhookEvent,
   completePaymentWebhookEventWithError,
   PaymentWebhookContext,
   recordPaymentWebhookReceived,
+  WOMPI_INVALID_CHECKSUM_ERROR,
 } from "@/lib/payment-webhook-events";
-import { createGuideInBackground } from "@/lib/guide-background";
-import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 const HASH_ALGORITHM = "sha256";
 
@@ -64,9 +39,11 @@ export async function POST(req: Request) {
   try {
     const response = await handleWompiWebhook(rawBody, context);
     await completePaymentWebhookEvent(eventId, response, context);
+    schedulePaymentWebhookAlert("WOMPI", eventId, response, rawBody, context);
     return response;
   } catch (error) {
     await completePaymentWebhookEventWithError(eventId, error, context);
+    schedulePaymentWebhookCrashAlert("WOMPI", eventId, error, rawBody, context);
     throw error;
   }
 }
@@ -141,55 +118,34 @@ async function processWebhookPayment(
         typeof transaction.reference === "string"
           ? transaction.reference
           : null;
+      let order: SettlementOrder | null;
       try {
-        const order = await prismadb.order.findFirst({
-          where: {
-            id: transaction.reference,
-          },
-          include: {
-            orderItems: {
-              include: {
-                product: true,
-              },
-            },
-            payment: true,
-            coupon: {
-              select: {
-                id: true,
-                // Sin este campo, `order.coupon.isWelcomeBenefit` era siempre
-                // undefined y el beneficio de bienvenida nunca se marcaba
-                // usado ni se liberaba en los pagos por Wompi.
-                isWelcomeBenefit: true,
-              },
-            },
-            shipping: SHIPPING_WITHOUT_GUIDE_PDF,
-          },
-        });
-
-        if (!order)
-          return NextResponse.json(
-            { error: `Order not found: ${transaction.reference}` },
-            { status: 400 },
-          );
-        context.orderId = order.id;
-        context.storeId = order.storeId;
-
-        if (isPaymentValid(order, transaction)) {
-          return await updateOrderData(order, transaction);
-        } else {
-          return NextResponse.json(
-            {
-              error: `Wompi payment is not valid. TRANSACTION ID: (${transaction.id})`,
-            },
-            { status: 400 },
-          );
-        }
+        order = await loadOrderForSettlement({ id: transaction.reference });
       } catch (error) {
+        // Una caída de la base no es un rechazo: 500 para que Wompi reintente.
         return NextResponse.json(
           { error: `Error finding order for wompi webhook: ${error}` },
-          { status: 400 },
+          { status: 500 },
         );
       }
+
+      if (!order)
+        return NextResponse.json(
+          { error: `Order not found: ${transaction.reference}` },
+          { status: 400 },
+        );
+      context.orderId = order.id;
+      context.storeId = order.storeId;
+
+      if (wompiTransactionMatchesOrder(order, transaction)) {
+        return await updateOrderData(order, transaction);
+      }
+      return NextResponse.json(
+        {
+          error: `Wompi payment is not valid. TRANSACTION ID: (${transaction.id})`,
+        },
+        { status: 400 },
+      );
     } else {
       return NextResponse.json(
         { error: "Transaction not found on webhook" },
@@ -198,7 +154,7 @@ async function processWebhookPayment(
     }
   } else {
     return NextResponse.json(
-      { error: "Checksum of transaction is not valid" },
+      { error: WOMPI_INVALID_CHECKSUM_ERROR },
       { status: 400 },
     );
   }
@@ -254,401 +210,29 @@ function createHash(
   return hash;
 }
 
-function isPaymentValid(order: any, transaction: any): boolean {
-  const { total, payment } = order;
-  const amountInCents = Number(transaction?.amount_in_cents);
-  // `total` es un Float: se compara en enteros para que un céntimo de
-  // artefacto decimal no rechace un pago legítimo.
-  // Wompi cobró el total menos lo que cubrió una tarjeta de regalo.
-  const expectedCents = Math.round(getAmountDue(order) * 100);
-  const currency = transaction?.currency;
-
-  if (payment?.method !== PaymentMethod.Wompi) return false;
-  if (
-    !Number.isFinite(amountInCents) ||
-    Math.round(amountInCents) !== expectedCents
-  )
-    return false;
-  // Wompi opera en COP; otra moneda con el mismo número sería otro importe.
-  if (currency && currency !== "COP") return false;
-  return true;
-}
-
-async function updateOrderData(order: any, transaction: any) {
+async function updateOrderData(order: SettlementOrder, transaction: any) {
   try {
     const currentStatus = applyStatus(transaction.status);
-
-    /**
-     * Comprobante del pago y, solo cuando el cobro se confirma, el envío en
-     * preparación. Se escriben dentro de la misma transacción que el estado
-     * del pedido: antes iban después y una caída entre ambos dejaba un pedido
-     * pagado sin el identificador de la transacción, justo el dato que hace
-     * falta en una disputa. El envío ya no se crea para transacciones
-     * declinadas o pendientes, que mostraban «Preparando» sin haber cobrado.
-     */
-    const writePaymentArtifacts = async (tx: any, paid: boolean) => {
-      await tx.paymentDetails.upsert({
-        where: { orderId: order.id },
-        update: {
-          transactionId: transaction.id,
-          details: `customer_email: ${transaction?.customer_email ?? "undefined"} | payment_method_type: ${transaction?.payment_method_type ?? "undefined"}`,
-        },
-        create: {
-          method: PaymentMethod.Wompi,
-          transactionId: transaction.id,
-          details: `customer_email: ${transaction?.customer_email ?? "undefined"} | payment_method_type: ${transaction?.payment_method_type ?? "undefined"}`,
-          store: { connect: { id: order.storeId } },
-          order: { connect: { id: order.id } },
-        },
-      });
-
-      // Una tarjeta de regalo no se empaca: no se le abre envío.
-      if (!paid || order.type === OrderType.GIFT_CARD) return;
-
-      await tx.shipping.upsert({
-        where: { orderId: order.id },
-        update: { status: ShippingStatus.Preparing },
-        create: {
-          status: ShippingStatus.Preparing,
-          store: { connect: { id: order.storeId } },
-          order: { connect: { id: order.id } },
-        },
-      });
+    const settlement = {
+      order,
+      provider: "Wompi" as const,
+      transactionId: transaction.id,
+      detailsText: `customer_email: ${transaction?.customer_email ?? "undefined"} | payment_method_type: ${transaction?.payment_method_type ?? "undefined"}`,
     };
+    const { outcome } =
+      currentStatus === OrderStatus.PAID
+        ? await settlePaidPayment(settlement)
+        : currentStatus === OrderStatus.CANCELLED
+          ? await settleCancelledPayment({ ...settlement, gatewayStatus: transaction.status })
+          : await settlePendingPayment(settlement);
 
-    let issuedGiftCard: IssuedGiftCard | null = null;
-
-    const result = await prismadb.$transaction(async (tx) => {
-      if (currentStatus === OrderStatus.PAID) {
-        const claim = await tx.order.updateMany({
-          where: {
-            id: order.id,
-            status: {
-              in: [
-                OrderStatus.CREATED,
-                OrderStatus.PENDING,
-                ...(blocksLatePaymentRevival(order) ? [] : [OrderStatus.CANCELLED]),
-              ],
-            },
-          },
-          data: { status: OrderStatus.PAID },
-        });
-
-        if (claim.count === 0) {
-          return { processed: false, shouldInvalidateCache: false };
-        }
-
-        // El cupo de preventa se apunta aquí, con el stock normal y por la misma
-        // razón: hasta que no entra la plata no hay nada reservado. Devuelve las
-        // líneas de preventa que sí descuentan hoy (pago tardío sobre una
-        // campaña ya liberada); el resto espera a que Paula libere.
-        const presaleDispatchNow = await settlePresaleLinesOnPayment(
-          tx,
-          order.id,
-        );
-
-        // Prepare stock updates for batch processing (Sales = Negative)
-        const stockMovements = await explodeKitMovements(
-          tx,
-          order.orderItems
-            .filter(
-              (item: any) =>
-                item.product &&
-                (!item.isPreorder || presaleDispatchNow.has(item.id)),
-            )
-            .map((orderItem: any) => ({
-              productId: orderItem.productId,
-              storeId: order.storeId,
-              type: "ORDER_PLACED" as const,
-              quantity: -orderItem.quantity, // Negative for removal
-              reason: `Wompi: Pago confirmado ${transaction.id}`,
-              referenceId: order.id,
-              cost: Number(orderItem.product.acqPrice) || 0,
-              price: Number(orderItem.product.price),
-              createdBy: "SYSTEM_WOMPI",
-            })),
-        );
-
-        // Use the resilient batch update function
-        const stockResult = await createInventoryMovementBatchResilient(
-          tx,
-          stockMovements,
-        );
-        if (stockResult.failed.length > 0) {
-          console.error(
-            "[WOMPI_WEBHOOK] Descuento de inventario incompleto en un pago confirmado:",
-            {
-              orderNumber: order.orderNumber,
-              transactionId: transaction.id,
-              failed: stockResult.failed,
-            },
-          );
-          await recordInventoryIssues(tx, {
-            storeId: order.storeId,
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            kind: OrderInventoryIssueKind.DECREMENT,
-            failed: stockResult.failed,
-          });
-        }
-
-        // Calculate and persist financial metrics
-        const financials = await calculateOrderFinancials(
-          order,
-          PaymentMethod.Wompi,
-          order.shipping?.cost || 0,
-          tx,
-        );
-
-        await tx.order.update({
-          where: { id: order.id },
-          data: {
-            ...financials,
-            paidAt: new Date(),
-          } as any,
-        });
-        await applyCapsulePayment(tx, { orderId: order.id, storeId: order.storeId });
-
-        if (order.coupon) {
-          await tx.coupon.update({
-            where: { id: order.coupon.id },
-            data: { usedCount: { increment: 1 } },
-          });
-
-          if (order.coupon.isWelcomeBenefit) {
-            await markWelcomeBenefitRedeemed(tx, {
-              couponId: order.coupon.id,
-              userId: order.userId,
-              orderId: order.id,
-            });
-          }
-        }
-
-        // Log any stock update failures but don't throw errors
-        if (stockResult.failed.length > 0) {
-          console.warn("Some stock updates failed in Wompi webhook:", {
-            transactionId: transaction.id,
-            transactionStatus: transaction.status,
-            failed: stockResult.failed,
-            success: stockResult.success,
-          });
-        }
-
-        await writePaymentArtifacts(tx, true);
-        issuedGiftCard = await issueGiftCardForOrder(tx, {
-          storeId: order.storeId,
-          orderId: order.id,
-          createdBy: "SYSTEM_WOMPI",
-        });
-        await redeemGiftCardForOrder(tx, order, "SYSTEM_WOMPI");
-        return { processed: true, shouldInvalidateCache: true };
-      }
-
-      if (currentStatus === OrderStatus.CANCELLED) {
-        // Se limpia la fecha de pago: un pedido cancelado que la conserva
-        // sigue contando como venta en los reportes tributarios.
-        const paidCancellation = await tx.order.updateMany({
-          where: { id: order.id, status: OrderStatus.PAID },
-          data: { status: OrderStatus.CANCELLED, paidAt: null },
-        });
-        let restockedPaidOrder = paidCancellation.count > 0;
-
-        if (!restockedPaidOrder) {
-          const pendingCancellation = await tx.order.updateMany({
-            where: {
-              id: order.id,
-              status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
-            },
-            data: { status: OrderStatus.CANCELLED },
-          });
-
-          if (pendingCancellation.count === 0) {
-            return { processed: false, shouldInvalidateCache: false };
-          }
-        }
-
-        if (restockedPaidOrder) {
-          // Espejo del pago: el cupo vuelve a la preventa y solo reingresan
-          // stock las líneas que alcanzaron a liberarse, porque son las únicas
-          // que lo descontaron. Reingresar una línea que nunca descontó crearía
-          // mercancía de la nada.
-          const presaleRestock = await releasePresaleLinesOnCancellation(
-            tx,
-            order.id,
-          );
-
-          const stockMovements = await explodeKitMovements(
-            tx,
-            await withoutDrawnCapsuleUnits(tx, order.orderItems
-              .filter(
-                (item: any) =>
-                  item.product &&
-                  (!item.isPreorder || presaleRestock.has(item.id)),
-              )
-              .map((orderItem: any) => ({
-                productId: orderItem.productId,
-                storeId: order.storeId,
-                type: "ORDER_CANCELLED" as const,
-                quantity: orderItem.quantity, // Positive for addition (Restock)
-                reason: `Wompi: Transacción anulada/error ${transaction.id}`,
-                referenceId: order.id,
-                cost: Number(orderItem.product.acqPrice) || 0,
-                price: Number(orderItem.product.price),
-                createdBy: "SYSTEM_WOMPI",
-              }))),
-          );
-
-          const stockResult = await createInventoryMovementBatchResilient(
-            tx,
-            stockMovements,
-          );
-
-          // Log any stock update failures but don't throw errors
-          if (stockResult.failed.length > 0) {
-            console.warn("Some stock restock failed in Wompi webhook:", {
-              transactionId: transaction.id,
-              transactionStatus: transaction.status,
-              failed: stockResult.failed,
-              success: stockResult.success,
-            });
-            await recordInventoryIssues(tx, {
-              storeId: order.storeId,
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              kind: OrderInventoryIssueKind.RESTOCK,
-              failed: stockResult.failed,
-            });
-          }
-        }
-
-        if (restockedPaidOrder && order.coupon) {
-          await tx.coupon.updateMany({
-            where: { id: order.coupon.id, usedCount: { gt: 0 } },
-            data: {
-              usedCount: {
-                decrement: 1,
-              },
-            },
-          });
-
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              coupon: { disconnect: true },
-              couponDiscount: 0,
-            },
-          });
-        }
-
-        if (order.coupon?.isWelcomeBenefit) {
-          await releaseWelcomeBenefitReservation(tx, {
-            couponId: order.coupon.id,
-            userId: order.userId,
-            orderId: order.id,
-          });
-        }
-
-        await handleGiftCardOnOrderCancellation(tx, {
-          storeId: order.storeId,
-          orderId: order.id,
-          createdBy: "SYSTEM_WOMPI",
-          reason: `Wompi: ${transaction.status}`,
-        });
-
-        await writePaymentArtifacts(tx, false);
-        return {
-          processed: true,
-          shouldInvalidateCache: restockedPaidOrder,
-        };
-      }
-
-      const pendingClaim = await tx.order.updateMany({
-        where: { id: order.id, status: OrderStatus.CREATED },
-        data: { status: OrderStatus.PENDING },
-      });
-
-      if (pendingClaim.count > 0) await writePaymentArtifacts(tx, false);
-
-      return {
-        processed: pendingClaim.count > 0,
-        shouldInvalidateCache: false,
-      };
-    });
-
-    if (!result.processed) {
-      if (
-        currentStatus === OrderStatus.PAID &&
-        order.status === OrderStatus.CANCELLED &&
-        blocksLatePaymentRevival(order)
-      ) {
-        await flagPaymentOnCancelledOrder(order.id, "Wompi");
-      }
-      if (
-        currentStatus === OrderStatus.PAID &&
-        order.status === OrderStatus.PAID
-      ) {
-        try {
-          await recordPaidOrderInGoogleAnalytics(order.id);
-        } catch (analyticsError) {
-          console.error(
-            "[WOMPI_WEBHOOK] GA4 purchase tracking failed:",
-            analyticsError,
-          );
-        }
-      }
-
+    if (outcome !== "applied") {
       return NextResponse.json(
         {
           message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
         },
         { status: 200 },
       );
-    }
-
-    if (result.shouldInvalidateCache) {
-      await invalidateStoreProductsCache(order.storeId, { orderIds: [order.id] });
-    }
-
-    if (issuedGiftCard) {
-      await deliverGiftCard(issuedGiftCard, { buyerName: order.fullName });
-    }
-
-    // Fetch updated order with relations needed for the email
-    const updatedOrder = await prismadb.order.findUnique({
-      where: { id: order.id },
-      include: {
-        payment: true,
-        shipping: SHIPPING_WITHOUT_GUIDE_PDF,
-        orderItems: {
-          include: {
-            product: true,
-          },
-        },
-      },
-    });
-
-    // Send email notification (admin + customer)
-    if (updatedOrder) {
-      if (updatedOrder.status === OrderStatus.PAID) {
-        try {
-          await recordPaidOrderInGoogleAnalytics(updatedOrder.id);
-        } catch (analyticsError) {
-          console.error(
-            "[WOMPI_WEBHOOK] GA4 purchase tracking failed:",
-            analyticsError,
-          );
-        }
-      }
-
-      if (
-        updatedOrder.status === OrderStatus.PAID &&
-        updatedOrder.shipping &&
-        !updatedOrder.shipping.envioClickIdOrder &&
-        updatedOrder.shipping.envioClickIdRate
-      ) {
-        createGuideInBackground({ orderId: updatedOrder.id, storeId: updatedOrder.storeId, source: "webhook de Wompi" });
-      }
-      await sendOrderEmail(updatedOrder.id, currentStatus);
     }
     return NextResponse.json(null, { status: 200 });
   } catch (error: any) {

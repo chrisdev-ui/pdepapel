@@ -109,10 +109,10 @@ describe("métricas de redes en «Sistemas»: una fila por red", () => {
     expect(rows.find((row) => row.name === "social-sync-tiktok")).toMatchObject({ label: "Métricas de TikTok", ok: true, attention: false });
   });
 
-  it("las filas de redes dejan ver el detalle también cuando salen bien (cuántas se midieron); las demás no", () => {
+  it("las filas de redes y la conciliación de pagos dejan ver el detalle también cuando salen bien; las demás no", () => {
     const rows = buildSystemsStatus([run("social-recent", 0.5, true, "3 publicaciones medidas"), run("update-offers", 1, true, "ok")].map((item) => ({ ...item, storeId: item.name === "social-recent" ? null : item.storeId })), "store-1", now);
     expect(rows.find((row) => row.name === "social-recent")).toMatchObject({ ok: true, showDetail: true, detail: "3 publicaciones medidas" });
-    expect(rows.filter((row) => row.showDetail).map((row) => row.name).sort()).toEqual(["social-recent", "social-sync-instagram", "social-sync-tiktok"]);
+    expect(rows.filter((row) => row.showDetail).map((row) => row.name).sort()).toEqual(["payment-reconciliation", "social-recent", "social-sync-instagram", "social-sync-tiktok"]);
   });
 
   it("una red sin cuenta en la tienda no aparece", () => {

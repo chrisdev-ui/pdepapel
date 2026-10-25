@@ -7,7 +7,8 @@ import {
   COPILOT_MONTHLY_SPEND_CAP_USD,
   isCopilotConfigured,
 } from "@/lib/copiloto/config";
-import { ConversationMessageDirection, ConversationMessageSentBy } from "@prisma/client";
+import { ConversationMessageDirection, ConversationMessageSentBy, PaymentWebhookEventStatus, type Prisma } from "@prisma/client";
+import { NOT_RECONCILIATION_WHERE, UNAUTHENTICATED_REJECTION_WHERE } from "@/lib/payment-webhook-events";
 import prismadb from "@/lib/prismadb";
 import { shortMemo } from "@/lib/short-memo";
 import { requireStoreRead } from "@/lib/store-access";
@@ -37,10 +38,12 @@ export type JobName =
   | "bank-transfer-review"
   | "copilot-retention"
   | "stock-reservations"
+  | "payment-reconciliation"
   // Cifras, no tareas: ver `measureWhatsAppBotRatio` y `measureCopilotSpend`.
   | "whatsapp-bot-ratio"
   | "copilot-spend"
   | "copilot-skill-overrides"
+  | "payment-webhooks"
   // Apagado (lib/scheduled-jobs.ts): entra a JOB_DEFINITIONS al encenderlo,
   // si no «Sistemas» lo marcaría atrasado.
   | "customer-reactivation"
@@ -91,6 +94,14 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
     // Todas las cuentas en una sola corrida: una fila para la instalación.
     name: "social-recent",
     label: "Métricas recientes (cada hora)",
+    expectedEveryHours: 1,
+    perStore: false,
+    showDetail: true,
+  },
+  {
+    // Cron de Vercel a las :35 de cada hora; atrasada a las 2 h.
+    name: "payment-reconciliation",
+    label: "Conciliación de pagos en línea",
     expectedEveryHours: 1,
     perStore: false,
     showDetail: true,
@@ -345,9 +356,10 @@ async function loadSystemsStatus(
     .catch(() => []);
   const rows = buildSystemsStatus(runs, storeId, now, await socialSystemsSkip(storeId));
   const ratio = await measureWhatsAppBotRatio(storeId, now).catch(() => null);
+  const webhooks = await measurePaymentWebhookHealth(storeId, now).catch(() => null);
   const copilot = isCopilotConfigured() ? await measureCopilotSpend(storeId, getAiRoutingStore() as unknown as CopilotBudgetStore | null, now) : null;
   const overrides = isCopilotConfigured() ? await measureCopilotSkillOverrides(storeId, now).catch(() => null) : null;
-  return [...rows, ...(ratio ? [ratio] : []), ...(copilot ? [copilot] : []), ...(overrides ? [overrides] : [])];
+  return [...rows, ...(webhooks ? [webhooks] : []), ...(ratio ? [ratio] : []), ...(copilot ? [copilot] : []), ...(overrides ? [overrides] : [])];
 }
 
 /** Por debajo de un centavo, dos decimales dirían «USD 0,00» aunque haya gasto. */
@@ -479,4 +491,46 @@ export async function socialSystemsSkip(storeId: string): Promise<JobName[]> {
   if (!accounts) return Object.values(SOCIAL_JOB_BY_PLATFORM);
   const present = new Set(accounts.map((account) => account.platform));
   return (Object.keys(SOCIAL_JOB_BY_PLATFORM) as (keyof typeof SOCIAL_JOB_BY_PLATFORM)[]).filter((platform) => !present.has(platform)).map((platform) => SOCIAL_JOB_BY_PLATFORM[platform]);
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * Webhooks de pago de las últimas 24 h, medidos al cargar (una fila de
+ * `JobRun` la borraría el siguiente webhook bueno). En rojo con un 5xx, un
+ * rechazo con firma válida o una firma inválida cuya referencia era un
+ * pedido; los sondeos solo se cuentan. Las filas de la conciliación van en
+ * su propia fila.
+ */
+export async function measurePaymentWebhookHealth(storeId: string, now: Date): Promise<SystemStatusRow> {
+  const base: Prisma.PaymentWebhookEventWhereInput = {
+    OR: [{ storeId }, { storeId: null }],
+    createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+  };
+  const count = (...where: Prisma.PaymentWebhookEventWhereInput[]) =>
+    prismadb.paymentWebhookEvent.count({ where: { ...base, AND: [NOT_RECONCILIATION_WHERE, ...where] } });
+  const [applied, failed, rejected, signatureWithOrder, probes] = await Promise.all([
+    count({ status: PaymentWebhookEventStatus.PROCESSED }),
+    count({ status: PaymentWebhookEventStatus.FAILED }),
+    count({ status: PaymentWebhookEventStatus.REJECTED, NOT: UNAUTHENTICATED_REJECTION_WHERE }),
+    count({ status: PaymentWebhookEventStatus.REJECTED, orderId: { not: null } }, UNAUTHENTICATED_REJECTION_WHERE),
+    count({ status: PaymentWebhookEventStatus.REJECTED, orderId: null }, UNAUTHENTICATED_REJECTION_WHERE),
+  ]);
+  const attention = failed + rejected + signatureWithOrder > 0;
+  return {
+    name: "payment-webhooks",
+    label: "Webhooks de pago (24 h)",
+    ranAt: now,
+    ok: !attention,
+    overdue: false,
+    attention,
+    metric: true,
+    detail: [
+      plural(applied, "aplicado", "aplicados"),
+      plural(rejected, "rechazo auténtico", "rechazos auténticos"),
+      `${failed} ${failed === 1 ? "fallo" : "fallos"} (5xx)`,
+      ...(signatureWithOrder > 0 ? [plural(signatureWithOrder, "firma inválida con pedido", "firmas inválidas con pedido")] : []),
+      `${plural(probes, "firma inválida sin pedido", "firmas inválidas sin pedido")} (sondeos)`,
+    ].join(" · "),
+  };
 }

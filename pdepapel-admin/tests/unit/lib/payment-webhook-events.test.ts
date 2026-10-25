@@ -215,6 +215,26 @@ describe("countRecentPaymentWebhookIssues", () => {
     expect(where.OR).toEqual([{ storeId: "store-1" }, { storeId: null }]);
     expect(where.status).toEqual({ in: ["REJECTED", "FAILED"] });
     expect(where.createdAt.gte).toEqual(new Date("2026-09-10T12:00:00.000Z"));
+    // Sin sondeos (rechazos sin firma válida y sin pedido) ni filas de conciliación.
+    expect(where.AND).toEqual([
+      { OR: [{ eventType: null }, { NOT: { eventType: { startsWith: "reconcile:" } } }] },
+      {
+        OR: [
+          { status: "FAILED" },
+          { statusCode: { gte: 500 } },
+          { orderId: { not: null } },
+          {
+            NOT: {
+              OR: [
+                { provider: "BOLD", error: { in: ["Payload no recibido", "Firma de webhook Bold inválida"] } },
+                { provider: "WOMPI", error: { in: ["El cuerpo del webhook no es JSON válido", "Error on body request", "Checksum of transaction is not valid"] } },
+                { provider: "WOMPI", error: { startsWith: "Event not found:" } },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
   });
 
   it("returns zero when the query fails", async () => {

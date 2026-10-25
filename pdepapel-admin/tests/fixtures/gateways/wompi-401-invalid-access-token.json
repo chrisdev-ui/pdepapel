@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "INVALID_ACCESS_TOKEN",
+    "reason": "Se esperaba una llave privada pero se recibió una llave pública"
+  }
+}

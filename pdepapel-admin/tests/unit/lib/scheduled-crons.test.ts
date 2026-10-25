@@ -53,6 +53,15 @@ describe("crons de Vercel en lugar de los horarios de GitHub", () => {
     expect(paths).not.toContain("/api/cron/mercadolibre-health");
   });
 
+  it("la conciliación de pagos corre cada hora a las :35, sin chocar con las otras horarias, y Sistemas la marca atrasada a las 2 h", () => {
+    expect(vercel.crons).toContainEqual({ path: "/api/cron/payment-reconciliation", schedule: "35 * * * *" });
+    const hourlyMinutes = vercel.crons.filter((cron) => / \* \* \* \*$/.test(cron.schedule)).map((cron) => cron.schedule.split(" ")[0]);
+    expect(new Set(hourlyMinutes).size).toBe(hourlyMinutes.length);
+    const job = JOB_DEFINITIONS.find((definition) => definition.name === "payment-reconciliation")!;
+    expect(job).toMatchObject({ expectedEveryHours: 1, perStore: false });
+    expect(overdueAfterHours(job)).toBe(2);
+  });
+
   it.each(["admin-scheduled-tasks.yml", "whatsapp-volume-watch.yml"])("%s queda solo a mano, sin horario", (name) => {
     const text = workflow(name);
     expect(text).not.toMatch(/^\s*schedule:/m);

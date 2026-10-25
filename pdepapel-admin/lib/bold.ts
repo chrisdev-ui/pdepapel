@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { getAmountDue } from "@/lib/gift-card-amounts";
+import { fetchGatewayJson, type GatewayFetchOptions, type GatewayLookup } from "@/lib/payment-gateway-lookup";
 
 export interface BoldCheckoutPayload {
   orderId: string;
@@ -138,4 +139,46 @@ export function getBoldConfig() {
       ? "https://integrations.api.bold.co"
       : "https://integrations.api.bold.co", // Same base URL, governed by API Keys
   };
+}
+
+export interface BoldPaymentVoucher {
+  transaction_id?: string | null;
+  reference_id?: string | null;
+  total?: number | string | null;
+  subtotal?: number | string | null;
+  tip?: number | string | null;
+  tip_amount?: number | string | null;
+  payment_status: string;
+  payment_method?: string | null;
+  transaction_date?: string | number | null;
+}
+
+const BOLD_VOUCHER_URL = "https://payments.api.bold.co/v2/payment-voucher";
+const BOLD_AUTH_ERROR = /unauthori[sz]ed|forbidden|api[ _-]?key|credencial|llave|autenticaci/i;
+
+/**
+ * Estado de una venta del Botón de pagos por nuestra referencia
+ * (`getBoldOrderReference`), con la llave de identidad. Bold la muestra hasta
+ * 10 min después y solo durante 24 h; `NO_TRANSACTION_FOUND` y 404 son «sin
+ * intento de pago».
+ */
+export async function getBoldPaymentVoucher(
+  reference: string,
+  identityKey: string,
+  options: GatewayFetchOptions = {},
+): Promise<GatewayLookup<BoldPaymentVoucher>> {
+  const result = await fetchGatewayJson(
+    `${BOLD_VOUCHER_URL}/${encodeURIComponent(reference)}`,
+    { authorization: `x-api-key ${identityKey}` },
+    options,
+  );
+  if (!result.ok) {
+    if (result.status === 401 || result.status === 403) return { kind: "key-rejected", status: result.status };
+    if (result.status === 400 && BOLD_AUTH_ERROR.test(JSON.stringify(result.body ?? ""))) return { kind: "key-rejected", status: 400 };
+    if (result.status === 404) return { kind: "none" };
+    return { kind: "unavailable", status: result.status, reason: result.reason };
+  }
+  const voucher = result.body?.payment_status ? result.body : result.body?.data;
+  if (!voucher || typeof voucher.payment_status !== "string" || voucher.payment_status === "NO_TRANSACTION_FOUND") return { kind: "none" };
+  return { kind: "found", items: [voucher as BoldPaymentVoucher] };
 }
