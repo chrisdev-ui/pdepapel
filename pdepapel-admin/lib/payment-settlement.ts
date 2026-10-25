@@ -1,19 +1,20 @@
-import { OrderInventoryIssueKind, OrderStatus, OrderType, PaymentMethod, Prisma, ShippingStatus } from "@prisma/client";
+import { OrderInventoryIssueKind, OrderSource, OrderStatus, OrderType, PaymentMethod, Prisma, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 import { runInBackground } from "@/lib/background";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { withoutDrawnCapsuleUnits } from "@/lib/capsule-cancel";
 import { applyCapsulePayment } from "@/lib/capsule-payment";
 import { markWelcomeBenefitRedeemed, releaseWelcomeBenefitReservation } from "@/lib/customer-benefits";
-import { sendOrderEmail } from "@/lib/email";
+import { sendOrderEmail, sendPaymentDeclinedEmail } from "@/lib/email";
 import { calculateOrderFinancials } from "@/lib/financial";
-import { keepTerminalMarker } from "@/lib/gateway-fees";
+import { BOLD_TERMINAL_MARKER, keepTerminalMarker } from "@/lib/gateway-fees";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
 import { getAmountDue } from "@/lib/gift-card-amounts";
 import { handleGiftCardOnOrderCancellation, issueGiftCardForOrder, redeemGiftCardForOrder, type IssuedGiftCard } from "@/lib/gift-cards";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { createGuideInBackground } from "@/lib/guide-background";
 import { withDeadlockRetry } from "@/lib/deadlock-retry";
+import { DECLINE_RETRY_MARKER } from "@/lib/payment-decline";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { blocksLatePaymentRevival, flagPaymentOnCancelledOrder, notifyLatePaymentRevival } from "@/lib/late-payment";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
@@ -43,6 +44,11 @@ import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
  * 5. `CREATED → PENDING` solo existe para Wompi: Bold no manda eventos
  *    intermedios (los desconocidos se reconocen con 200) y la conciliación no
  *    cambia nada mientras la pasarela diga «en curso».
+ * 6. Un rechazo en el Botón de pagos no cancela: el pedido queda pendiente
+ *    para reintentar y la clienta recibe un solo correo
+ *    (`settleDeclinedPayment`); la conciliación lo cancela pasada la ventana.
+ * 7. Una anulación sobre un pagado para recoger o ya despachado no se aplica:
+ *    queda para revisión (`voidHoldReason`), sin tocar stock, cupón ni correos.
  */
 export type SettlementProvider = "Bold" | "Wompi";
 export type SettlementSource = "webhook" | "reconciliation";
@@ -92,12 +98,49 @@ export interface SettlementInput {
   source?: SettlementSource;
 }
 
-export type SettlementOutcome = "applied" | "already" | "late-on-cancelled";
+export type SettlementOutcome = "applied" | "already" | "late-on-cancelled" | "held";
+
+/**
+ * Botón de pagos de la tienda, no un cobro presencial: el punto de venta, la
+ * feria y el datáfono se quedan con su camino de siempre.
+ */
+export function isOnlineCheckoutOrder(order: Pick<SettlementOrder, "type" | "source" | "payment">): boolean {
+  return (
+    order.type !== OrderType.POINT_OF_SALE &&
+    order.source !== OrderSource.POS &&
+    order.source !== OrderSource.FAIR &&
+    !order.payment?.details?.includes(BOLD_TERMINAL_MARKER)
+  );
+}
+
+export type VoidHoldReason = "pickup" | "shipped";
+
+type ShippingForHold = { provider: ShippingProvider; status: ShippingStatus; envioClickIdOrder: number | null; guideUrl: string | null; trackingCode: string | null } | null;
+
+/**
+ * Por qué una anulación sobre un pagado no se aplica sola: un pedido para
+ * recoger pudo entregarse en mano sin que nadie lo marcara, y uno con guía o
+ * en camino ya salió. Reingresar ese stock o escribirle «Cancelada» a la
+ * clienta sería falso; lo decide Paula.
+ */
+export function voidHoldReason(order: { status: OrderStatus; shipping: ShippingForHold }): VoidHoldReason | null {
+  const { shipping } = order;
+  if (order.status === OrderStatus.SENT) return "shipped";
+  if (!shipping || shipping.provider === ShippingProvider.NONE) return "pickup";
+  if (shipping.envioClickIdOrder || shipping.guideUrl || shipping.trackingCode) return "shipped";
+  if (shipping.status !== ShippingStatus.Preparing) return "shipped";
+  return null;
+}
+
+export { DECLINE_RETRY_MARKER };
 
 /** Lo que el webhook contesta cuando no aplicó nada; la pasarela solo mira el 200. */
 export function unappliedSettlementMessage(orderNumber: string | null, outcome: SettlementOutcome): string {
   if (outcome === "late-on-cancelled") {
     return `Orden ${orderNumber} cancelada y sin reactivar (punto de venta, feria, tarjeta de regalo o fraude): el pago quedó para revisión`;
+  }
+  if (outcome === "held") {
+    return `Orden ${orderNumber} pagada y para recoger o ya despachada: la anulación quedó para revisión, sin reactivar el stock`;
   }
   return `Orden ${orderNumber} ya fue procesada anteriormente`;
 }
@@ -250,13 +293,15 @@ export async function settlePaidPayment(input: SettlementInput): Promise<PaidSet
 
     await writePaymentDetails(tx, input);
 
-    // Una tarjeta de regalo no se empaca: no se le abre envío.
+    // Una tarjeta de regalo no se empaca: no se le abre envío. Sin fila,
+    // el pedido es del panel con «Recoge en tienda» (el panel no la crea).
     if (order.type !== OrderType.GIFT_CARD) {
       await tx.shipping.upsert({
         where: { orderId: order.id },
         update: { status: ShippingStatus.Preparing },
         create: {
           status: ShippingStatus.Preparing,
+          provider: ShippingProvider.NONE,
           store: { connect: { id: order.storeId } },
           order: { connect: { id: order.id } },
         },
@@ -299,12 +344,30 @@ export interface CancelSettlementInput extends SettlementInput {
   gatewayStatus: string;
 }
 
-export async function settleCancelledPayment(input: CancelSettlementInput): Promise<{ outcome: "applied" | "already"; restocked: boolean }> {
+export interface CancelSettlement {
+  outcome: "applied" | "already" | "held";
+  restocked: boolean;
+  holdReason?: VoidHoldReason;
+}
+
+export async function settleCancelledPayment(input: CancelSettlementInput): Promise<CancelSettlement> {
   const { order, provider, transactionId } = input;
   const source = input.source ?? "webhook";
   const config = PROVIDERS[provider];
 
   const result = await withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
+    const current = await tx.order.findUnique({
+      where: { id: order.id },
+      select: {
+        status: true,
+        shipping: { select: { provider: true, status: true, envioClickIdOrder: true, guideUrl: true, trackingCode: true } },
+      },
+    });
+    if (current?.status === OrderStatus.PAID || current?.status === OrderStatus.SENT) {
+      const holdReason = voidHoldReason(current);
+      if (holdReason) return { held: holdReason };
+    }
+
     // Una anulación puede llegar después de cobrar: se limpia `paidAt`, porque
     // un cancelado que la conserva sigue contando como venta en los reportes.
     const paidCancellation = await tx.order.updateMany({
@@ -387,11 +450,67 @@ export async function settleCancelledPayment(input: CancelSettlementInput): Prom
   }));
 
   if (!result) return { outcome: "already", restocked: false };
+  if ("held" in result) return { outcome: "held", restocked: false, holdReason: result.held };
 
   // Sin reingreso no cambió ningún stock: no hay nada que refrescar en la tienda.
   if (result.restocked) await invalidateStoreProductsCache(order.storeId, { orderIds: [order.id] });
   await runSettlementSideEffects(order.id, OrderStatus.CANCELLED, provider, source);
   return { outcome: "applied", restocked: result.restocked };
+}
+
+export interface DeclineSettlement {
+  outcome: "applied" | "already";
+  /** Si este rechazo mandó el correo de reintento (el primero del pedido). */
+  emailed: boolean;
+}
+
+/**
+ * Un pago rechazado en el Botón de pagos: el pedido queda pendiente para
+ * reintentar con otra tarjeta o pasarela y la clienta recibe un solo correo
+ * con el enlace del pedido. La conciliación lo cancela pasada la ventana
+ * (`DECLINE_RETRY_WINDOW_MS`); un pago aprobado dentro de ella entra como
+ * cualquier otro, sin aviso de «reactivado». Un pedido pagado o cancelado
+ * no se toca: el rechazo de un intento viejo no deshace el bueno.
+ */
+export async function settleDeclinedPayment(input: SettlementInput): Promise<DeclineSettlement> {
+  const { order, transactionId, detailsText } = input;
+  const result = await withDeadlockRetry(() => prismadb.$transaction(async (tx) => {
+    const moved = await tx.order.updateMany({
+      where: { id: order.id, status: OrderStatus.CREATED },
+      data: { status: OrderStatus.PENDING },
+    });
+    if (moved.count === 0) {
+      const current = await tx.order.findUnique({ where: { id: order.id }, select: { status: true } });
+      if (current?.status !== OrderStatus.PENDING) return null;
+    }
+    const marked = `${detailsText} | ${DECLINE_RETRY_MARKER} (${new Date().toISOString()})`;
+    const existing = await tx.paymentDetails.findUnique({ where: { orderId: order.id }, select: { id: true } });
+    let emailed: boolean;
+    if (!existing) {
+      await tx.paymentDetails.create({
+        data: {
+          method: PROVIDERS[input.provider].method,
+          transactionId,
+          details: marked,
+          store: { connect: { id: order.storeId } },
+          order: { connect: { id: order.id } },
+        },
+      });
+      emailed = true;
+    } else {
+      // El candado del correo: solo el primer rechazo encuentra la fila sin la marca.
+      const claim = await tx.paymentDetails.updateMany({
+        where: { orderId: order.id, OR: [{ details: null }, { details: { not: { contains: DECLINE_RETRY_MARKER } } }] },
+        data: { transactionId, details: marked },
+      });
+      emailed = claim.count > 0;
+    }
+    return { emailed, changed: moved.count > 0 || emailed };
+  }));
+
+  if (!result) return { outcome: "already", emailed: false };
+  if (result.emailed) await sendPaymentDeclinedEmail(order.id);
+  return { outcome: result.changed ? "applied" : "already", emailed: result.emailed };
 }
 
 /** Wompi informó una transacción en curso: el pedido nuevo pasa a pendiente con su comprobante. */

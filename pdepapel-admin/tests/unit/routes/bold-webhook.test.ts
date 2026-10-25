@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   deliverGiftCard: vi.fn().mockResolvedValue(true),
   flagPaymentOnCancelledOrder: vi.fn().mockResolvedValue(undefined),
   transaction: vi.fn(),
+  sendPaymentDeclinedEmail: vi.fn().mockResolvedValue(undefined),
+  sendPaymentAlert: vi.fn().mockResolvedValue("sent"),
 }));
 
 vi.mock("@vercel/functions", () => ({ waitUntil: mocks.waitUntil }));
@@ -42,7 +44,11 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 
-vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail, sendPaymentDeclinedEmail: mocks.sendPaymentDeclinedEmail }));
+vi.mock("@/lib/payment-webhook-alert", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/payment-webhook-alert")>()),
+  sendPaymentAlert: mocks.sendPaymentAlert,
+}));
 // El pago de cápsulas (costo provisional y cupo) tiene su propia prueba de integración.
 vi.mock("@/lib/capsule-payment", () => ({ applyCapsulePayment: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/capsule-cancel", () => ({ withoutDrawnCapsuleUnits: async (_db: unknown, movements: unknown[]) => movements }));
@@ -82,6 +88,9 @@ vi.mock("@/lib/late-payment", async (importOriginal) => ({
 }));
 
 import { POST } from "@/app/api/webhook/bold/route";
+
+/** Un envío a domicilio que todavía no sale: la anulación se aplica sola. */
+const unshippedDelivery = { provider: "ENVIOCLICK", status: "Preparing", envioClickIdOrder: null, guideUrl: null, trackingCode: null };
 
 function createWebhookRequest(payload: unknown) {
   return new Request("https://admin.example.com/api/webhook/bold", {
@@ -513,7 +522,7 @@ describe("POST /api/webhook/bold", () => {
       .fn()
       .mockResolvedValueOnce({ count: 1 }); // la reclamación sobre el pedido pagado
     const transactionClient = {
-      order: { update: vi.fn(), updateMany: orderUpdateMany },
+      order: { findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PAID, shipping: unshippedDelivery }), update: vi.fn(), updateMany: orderUpdateMany },
       coupon: { update: vi.fn(), updateMany: vi.fn() },
       couponRedemption: { updateMany: vi.fn() },
       paymentDetails: { upsert: vi.fn() },
@@ -613,5 +622,93 @@ describe("POST /api/webhook/bold", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.findOrder).not.toHaveBeenCalled();
+  });
+});
+
+/** Lote de pagos 2026-10-26: SALE_REJECTED deja reintentar; VOID_APPROVED de algo ya despachado no se aplica solo. */
+describe("POST /api/webhook/bold · rechazos y anulaciones por revisar", () => {
+  const onlineOrder = {
+    id: "order-id",
+    orderNumber: "ORD-123",
+    payment: { method: PaymentMethod.Bold, details: null },
+    status: OrderStatus.PENDING,
+    type: OrderType.STANDARD,
+    source: "STORE",
+    storeId: "store-id",
+    total: 80000,
+    coupon: null,
+    orderItems: [{ productId: "product-id", quantity: 2, product: { acqPrice: 15000, price: 40000 } }],
+  };
+  const event = (type: string) =>
+    createWebhookRequest({ type, data: { metadata: { reference: "ORD-123" }, payment_id: "bold-tx" } });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getWebhookSecretKey.mockReturnValue("webhook-secret");
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+  });
+
+  it("SALE_REJECTED en el Botón de pagos: pendiente, un correo de reintento, sin «Cancelada»", async () => {
+    const transactionClient = {
+      order: { updateMany: vi.fn().mockResolvedValue({ count: 0 }), findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PENDING }) },
+      paymentDetails: { findUnique: vi.fn().mockResolvedValue({ id: "pay-1" }), updateMany: vi.fn().mockResolvedValue({ count: 1 }), create: vi.fn() },
+    };
+    mocks.findOrder.mockResolvedValue(onlineOrder);
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+
+    const response = await POST(event("SALE_REJECTED"));
+
+    expect(response.status).toBe(200);
+    expect(transactionClient.paymentDetails.updateMany.mock.calls[0][0].data.details).toMatch(
+      /^Bold Transaction ID: bold-tx \| Reference: ORD-123 \| Status: REJECTED \| Pago no aprobado, esperando reintento/,
+    );
+    expect(mocks.sendPaymentDeclinedEmail).toHaveBeenCalledWith("order-id");
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+    expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
+  });
+
+  it("SALE_REJECTED en el datáfono del punto de venta: sigue cancelando como siempre", async () => {
+    const orderUpdateMany = vi.fn().mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: orderUpdateMany, findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PENDING, shipping: null }) },
+      paymentDetails: { upsert: vi.fn() },
+    };
+    mocks.findOrder.mockResolvedValue({ ...onlineOrder, type: OrderType.POINT_OF_SALE, source: "POS" });
+    mocks.findUpdatedOrder.mockResolvedValue({ ...onlineOrder, status: OrderStatus.CANCELLED });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+
+    const response = await POST(event("SALE_REJECTED"));
+
+    expect(response.status).toBe(200);
+    expect(orderUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "order-id", status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] } },
+      data: { status: OrderStatus.CANCELLED },
+    });
+    expect(mocks.sendPaymentDeclinedEmail).not.toHaveBeenCalled();
+    expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-id", OrderStatus.CANCELLED);
+  });
+
+  it("VOID_APPROVED de un pagado ya despachado: nada cambia y la dueña recibe el aviso por revisar", async () => {
+    const orderUpdateMany = vi.fn();
+    const transactionClient = {
+      order: {
+        update: vi.fn(),
+        updateMany: orderUpdateMany,
+        findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PAID, shipping: { ...unshippedDelivery, trackingCode: "GUIA-1" } }),
+      },
+      paymentDetails: { upsert: vi.fn() },
+    };
+    mocks.findOrder.mockResolvedValue({ ...onlineOrder, status: OrderStatus.PAID });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+
+    const response = await POST(event("VOID_APPROVED"));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(response.status).toBe(200);
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(transactionClient.paymentDetails.upsert).not.toHaveBeenCalled();
+    expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+    expect(mocks.sendPaymentAlert).toHaveBeenCalledWith(expect.objectContaining({ provider: "BOLD", kind: "void-held", orderId: "order-id", holdReason: "shipped" }));
   });
 });

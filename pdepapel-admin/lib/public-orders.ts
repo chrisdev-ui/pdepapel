@@ -162,9 +162,9 @@ export type CustomerOrderRecord = Prisma.OrderGetPayload<{
  * Respuesta pública del pedido: cambia el id de quien lo creó por una marca
  * booleana (la tienda solo necesita saber si lo creó el panel).
  */
-export function toCustomerOrderResponse(order: CustomerOrderRecord, capsule: CapsuleReceipt | null = null) {
+export function toCustomerOrderResponse(order: CustomerOrderRecord, capsule: CapsuleReceipt | null = null, declinedAttempt = false) {
   const { createdBy, ...customerOrder } = order;
-  return { ...customerOrder, createdByAdmin: Boolean(createdBy), capsule, ...receiptMeta(order.status) };
+  return { ...customerOrder, createdByAdmin: Boolean(createdBy), capsule, ...receiptMeta(order.status, declinedAttempt) };
 }
 
 export type PaymentResult = "approved" | "declined" | "pending";
@@ -172,11 +172,14 @@ export type PaymentResult = "approved" | "declined" | "pending";
 /**
  * Cómo terminó el pago, para el aviso de la tienda al volver de Bold o Wompi.
  * Sale del estado del pedido (no del id de la transacción, que el enlace del
- * recibo dejará de mostrar), así funciona igual con las dos pasarelas.
+ * recibo dejará de mostrar), así funciona igual con las dos pasarelas. Un
+ * rechazo deja el pedido pendiente para reintentar: con `declinedAttempt`
+ * sigue siendo un rechazo para el aviso.
  */
-export function getPaymentResult(status: OrderStatus): PaymentResult {
+export function getPaymentResult(status: OrderStatus, declinedAttempt = false): PaymentResult {
   if (isPaidLike(status)) return "approved";
   if (status === OrderStatus.CANCELLED || status === OrderStatus.REJECTED) return "declined";
+  if (declinedAttempt && (status === OrderStatus.PENDING || status === OrderStatus.CREATED)) return "declined";
   return "pending";
 }
 
@@ -184,8 +187,8 @@ export function getPaymentResult(status: OrderStatus): PaymentResult {
  * Campos del recibo que la tienda usa sin depender de datos de la clienta:
  * el resultado del pago y si la respuesta viene enmascarada.
  */
-export function receiptMeta(status: OrderStatus) {
-  return { paymentResult: getPaymentResult(status), masked: false };
+export function receiptMeta(status: OrderStatus, declinedAttempt = false) {
+  return { paymentResult: getPaymentResult(status, declinedAttempt), masked: false };
 }
 
 /** «Ana María Pérez» → «Ana P.»; un solo nombre queda tal cual. */

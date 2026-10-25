@@ -5,7 +5,7 @@ import { getBoldConfig } from "@/lib/bold";
 import { requireCronAuth } from "@/lib/cron-auth";
 import { env } from "@/lib/env.mjs";
 import { recordJobRun } from "@/lib/job-runs";
-import { runPaymentReconciliation } from "@/lib/payment-reconciliation";
+import { declineRetryWindowFromEnv, runPaymentReconciliation } from "@/lib/payment-reconciliation";
 import { CACHE_HEADERS } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
     const summary = await runPaymentReconciliation({
       wompi: { baseUrl: env.WOMPI_API_URL, privateKey: env.WOMPI_API_SECRET },
       bold: { identityKey: getBoldConfig().identityKey },
+      // Solo el sandbox de pagos la define; en Vercel no existe.
+      declineRetryWindowMs: declineRetryWindowFromEnv(process.env.PAYMENT_DECLINE_RETRY_WINDOW_MINUTES),
     });
     await recordJobRun("payment-reconciliation", { ok: summary.ok, detail: summary.detail });
     const { detail: _detail, ...counts } = summary;

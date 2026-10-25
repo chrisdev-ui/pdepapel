@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   waitUntil: vi.fn(),
   redisKeys: new Set<string>(),
   resendSend: vi.fn(),
+  sendPaymentDeclinedEmail: vi.fn(),
 }));
 
 vi.mock("@upstash/redis", () => ({
@@ -66,7 +67,7 @@ vi.mock("@/lib/prismadb", () => ({
     $transaction: mocks.transaction,
   },
 }));
-vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail, sendPaymentDeclinedEmail: mocks.sendPaymentDeclinedEmail }));
 vi.mock("@/lib/capsule-payment", () => ({ applyCapsulePayment: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/capsule-cancel", () => ({ withoutDrawnCapsuleUnits: async (_db: unknown, movements: unknown[]) => movements }));
 vi.mock("@/lib/gift-cards", async (importOriginal) => ({
@@ -103,8 +104,11 @@ import { POST as wompiPOST } from "@/app/api/webhook/wompi/route";
 type Status = OrderStatus;
 
 /** Un pedido en memoria cuyo estado sí cambia con los `updateMany` con guarda, como en MySQL. */
+/** Envío a domicilio que no ha salido: una anulación sobre el pagado se aplica sola. */
+const unshippedDelivery = { provider: "ENVIOCLICK", status: "Preparing", envioClickIdOrder: null, guideUrl: null, trackingCode: null };
+
 function fakeDatabase(initial: Status) {
-  const state = { status: initial };
+  const state = { status: initial, details: null as string | null };
   const matches = (where: any) => {
     const guard = where?.status;
     if (!guard) return true;
@@ -119,9 +123,20 @@ function fakeDatabase(initial: Status) {
         if (data.status) state.status = data.status;
         return { count: 1 };
       }),
+      findUnique: vi.fn(async () => ({ status: state.status, shipping: unshippedDelivery })),
     },
     coupon: { update: vi.fn(), updateMany: vi.fn() },
-    paymentDetails: { upsert: vi.fn() },
+    paymentDetails: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(async () => ({ id: "pay-1" })),
+      create: vi.fn(),
+      // El candado del correo de reintento: solo la primera vez la fila no trae la marca.
+      updateMany: vi.fn(async ({ data }: any) => {
+        if (state.details?.includes("esperando reintento")) return { count: 0 };
+        state.details = data.details;
+        return { count: 1 };
+      }),
+    },
     shipping: { upsert: vi.fn() },
   };
   mocks.transaction.mockImplementation(async (callback: any) => callback(tx));
@@ -345,19 +360,23 @@ describe.each([
       ? boldPOST(boldRequest("VOID_APPROVED", { metadata: { reference: "ORD-1" }, payment_id: "bold-tx" }))
       : wompiPOST(wompiRequest(wompiTx("VOIDED")));
 
-  it("un rechazo sobre un pendiente cancela sin reingresar stock ni tocar el cupón", async () => {
+  // Regla F3 (2026-10-26, opción a del dueño): antes un rechazo cancelaba; ahora deja reintentar.
+  it("un rechazo sobre un pendiente lo deja pendiente, sin tocar stock, cupón ni beneficio, con un solo correo de reintento", async () => {
     const { state, tx } = fakeDatabase(OrderStatus.PENDING);
     mocks.findOrder.mockResolvedValue(baseOrder(method, OrderStatus.PENDING));
 
     expect((await decline()).status).toBe(200);
-    expect(state.status).toBe(OrderStatus.CANCELLED);
+    expect((await decline()).status).toBe(200);
+    expect(state.status).toBe(OrderStatus.PENDING);
+    expect(state.details).toContain("Pago no aprobado, esperando reintento");
     expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
     expect(tx.coupon.updateMany).not.toHaveBeenCalled();
-    expect(mocks.handleGiftCardOnOrderCancellation).toHaveBeenCalledWith(tx, expect.objectContaining({ orderId: "order-1" }));
-    expect(mocks.releaseWelcomeBenefitReservation).toHaveBeenCalledWith(tx, { couponId: "coupon-1", userId: "user-1", orderId: "order-1" });
-    expect(tx.paymentDetails.upsert).toHaveBeenCalledTimes(1);
+    expect(mocks.handleGiftCardOnOrderCancellation).not.toHaveBeenCalled();
+    expect(mocks.releaseWelcomeBenefitReservation).not.toHaveBeenCalled();
     expect(tx.shipping.upsert).not.toHaveBeenCalled();
-    expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-1", OrderStatus.CANCELLED);
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+    expect(mocks.sendPaymentDeclinedEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendPaymentDeclinedEmail).toHaveBeenCalledWith("order-1");
   });
 
   it("anular un pagado reingresa una vez, borra paidAt y conserva el cupón (regla unificada 4)", async () => {

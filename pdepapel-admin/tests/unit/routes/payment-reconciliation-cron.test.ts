@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ run: vi.fn(), recordJobRun: vi.fn() }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: { CRON_SECRET: "cron-secret", WOMPI_API_URL: "https://production.wompi.co/v1", WOMPI_API_SECRET: "prv_x" } }));
-vi.mock("@/lib/payment-reconciliation", () => ({ runPaymentReconciliation: mocks.run }));
+vi.mock("@/lib/payment-reconciliation", async (importOriginal) => ({
+  declineRetryWindowFromEnv: (await importOriginal<typeof import("@/lib/payment-reconciliation")>()).declineRetryWindowFromEnv,
+  runPaymentReconciliation: mocks.run,
+}));
 vi.mock("@/lib/job-runs", () => ({ recordJobRun: mocks.recordJobRun }));
 
 import { GET } from "@/app/api/cron/payment-reconciliation/route";
@@ -31,6 +34,16 @@ describe("GET /api/cron/payment-reconciliation", () => {
     });
     expect(mocks.recordJobRun).toHaveBeenCalledWith("payment-reconciliation", { ok: false, detail: "Llave de Wompi rechazada (HTTP 401) · Revisados 0" });
     await expect(response.json()).resolves.toEqual({ ok: false, checked: 0, paid: 0 });
+  });
+
+  it("la ventana de reintento solo se acorta con la variable del sandbox", async () => {
+    mocks.run.mockResolvedValue({ ok: true, detail: "Revisados 0", checked: 0 });
+    vi.stubEnv("PAYMENT_DECLINE_RETRY_WINDOW_MINUTES", "3");
+    await GET(request("cron-secret"));
+    expect(mocks.run.mock.calls[0][0].declineRetryWindowMs).toBe(3 * 60 * 1000);
+    vi.unstubAllEnvs();
+    await GET(request("cron-secret"));
+    expect(mocks.run.mock.calls[1][0].declineRetryWindowMs).toBeUndefined();
   });
 
   it("si la corrida lanza, Sistemas queda en rojo", async () => {

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   eventCount: vi.fn(),
   settlePaidPayment: vi.fn(),
   settleCancelledPayment: vi.fn(),
+  settleDeclinedPayment: vi.fn(),
 }));
 
 vi.mock("@/lib/prismadb", () => ({
@@ -22,15 +23,18 @@ vi.mock("@/lib/payment-settlement", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/payment-settlement")>()),
   settlePaidPayment: mocks.settlePaidPayment,
   settleCancelledPayment: mocks.settleCancelledPayment,
+  settleDeclinedPayment: mocks.settleDeclinedPayment,
 }));
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: vi.fn() }));
 vi.mock("@/lib/notification-failures", () => ({ recordFailedNotification: vi.fn() }));
 
 import { KEY_PROBE_REFERENCE } from "@/lib/payment-gateway-lookup";
-import { runPaymentReconciliation, selectReconciliationCandidates } from "@/lib/payment-reconciliation";
+import { declineRetryWindowFromEnv, runPaymentReconciliation, selectReconciliationCandidates } from "@/lib/payment-reconciliation";
 
 const now = new Date("2026-10-26T12:00:00.000Z");
+/** Los rechazos de las fixtures son de las 10:05: a las 12:10 ya pasó la ventana de 2 h. */
+const afterWindow = new Date("2026-10-26T12:10:00.000Z");
 const fixture = (name: string) => readFileSync(path.resolve(__dirname, "../../fixtures/gateways", name), "utf8");
 
 function order(method: PaymentMethod, extra: Record<string, unknown> = {}) {
@@ -100,6 +104,7 @@ beforeEach(() => {
   mocks.eventFindFirst.mockResolvedValue(null);
   mocks.settlePaidPayment.mockResolvedValue({ outcome: "applied", revived: false, stockShortfall: 0 });
   mocks.settleCancelledPayment.mockResolvedValue({ outcome: "applied", restocked: false });
+  mocks.settleDeclinedPayment.mockResolvedValue({ outcome: "applied", emailed: true });
   mocks.findMany.mockResolvedValue([]);
 });
 
@@ -166,23 +171,49 @@ describe("decisión por respuesta de Wompi", () => {
     expect(mocks.settleCancelledPayment).not.toHaveBeenCalled();
   });
 
-  it.each(["declined", "voided"])("%s con más de 30 min: el camino compartido de anulación", async (name) => {
+  it.each(["declined", "voided"])("%s pasada la ventana de 2 h: el camino compartido de anulación", async (name) => {
     mocks.findMany.mockResolvedValue([order(PaymentMethod.Wompi)]);
     const { fetch } = gateways({ wompi: [ok(`wompi-transactions-${name}.json`)], bold: [{ status: 404, body: null }] });
-    const summary = await runPaymentReconciliation(deps(fetch));
+    const summary = await runPaymentReconciliation(deps(fetch, { now: afterWindow }));
     expect(mocks.settleCancelledPayment).toHaveBeenCalledWith(expect.objectContaining({ provider: "Wompi", gatewayStatus: name.toUpperCase(), source: "reconciliation" }));
     expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({ eventType: `reconcile:${name.toUpperCase()}`, status: "PROCESSED" });
     expect(summary.cancelled).toBe(1);
   });
 
-  it("un rechazo de hace menos de 30 min no cancela: la clienta puede reintentar", async () => {
+  it("un rechazo dentro de la ventana no cancela: queda pendiente con el correo de reintento (una fila la primera vez)", async () => {
     mocks.findMany.mockResolvedValue([order(PaymentMethod.Wompi)]);
-    const recent = JSON.parse(fixture("wompi-transactions-declined.json"));
-    recent.data[0].finalized_at = "2026-10-26T11:45:00.000Z";
-    const { fetch } = gateways({ wompi: [{ status: 200, body: JSON.stringify(recent) }], bold: [{ status: 404, body: null }] });
+    const { fetch } = gateways({ wompi: [ok("wompi-transactions-declined.json")], bold: [{ status: 404, body: null }] });
+    const summary = await runPaymentReconciliation(deps(fetch));
+    expect(mocks.settleCancelledPayment).not.toHaveBeenCalled();
+    expect(mocks.settleDeclinedPayment).toHaveBeenCalledWith(expect.objectContaining({ provider: "Wompi", source: "reconciliation" }));
+    expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({ eventType: "reconcile:DECLINED", status: "PROCESSED" });
+    expect(summary).toMatchObject({ ok: true, awaitingRetry: 1, cancelled: 0 });
+    expect(summary.detail).toContain("rechazados esperando reintento 1");
+
+    // La hora siguiente el correo ya salió: ni fila nueva ni cancelación.
+    mocks.settleDeclinedPayment.mockResolvedValue({ outcome: "already", emailed: false });
+    await runPaymentReconciliation(deps(fetch));
+    expect(mocks.eventCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.settleCancelledPayment).not.toHaveBeenCalled();
+  });
+
+  it("una anulación dentro de la ventana espera; la ventana se puede acortar para el sandbox", async () => {
+    mocks.findMany.mockResolvedValue([order(PaymentMethod.Wompi)]);
+    const { fetch } = gateways({ wompi: [ok("wompi-transactions-voided.json")], bold: [{ status: 404, body: null }] });
     await runPaymentReconciliation(deps(fetch));
     expect(mocks.settleCancelledPayment).not.toHaveBeenCalled();
-    expect(mocks.eventCreate).not.toHaveBeenCalled();
+    expect(mocks.settleDeclinedPayment).not.toHaveBeenCalled();
+
+    await runPaymentReconciliation(deps(fetch, { declineRetryWindowMs: 30 * 60 * 1000 }));
+    expect(mocks.settleCancelledPayment).toHaveBeenCalledTimes(1);
+  });
+
+  it("la ventana del sandbox solo acorta: 1 a 120 min, nada más largo que 2 h", () => {
+    expect(declineRetryWindowFromEnv(undefined)).toBeUndefined();
+    expect(declineRetryWindowFromEnv("abc")).toBeUndefined();
+    expect(declineRetryWindowFromEnv("3")).toBe(3 * 60 * 1000);
+    expect(declineRetryWindowFromEnv("0")).toBe(60 * 1000);
+    expect(declineRetryWindowFromEnv("900")).toBe(2 * 60 * 60 * 1000);
   });
 
   it.each(["error", "pending", "empty"])("%s: no cambia nada ni escribe fila", async (name) => {
@@ -231,12 +262,22 @@ describe("decisión por respuesta de Bold", () => {
     expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({ provider: "BOLD", orderReference: "ORD-1", eventType: "reconcile:APPROVED" });
   });
 
-  it("REJECTED o VOIDED: anulación", async () => {
+  it("REJECTED o VOIDED pasada la ventana: anulación", async () => {
+    mocks.findMany.mockResolvedValue([order(PaymentMethod.Bold), order(PaymentMethod.Bold, { id: "order-2" })]);
+    const { fetch } = gateways({ bold: [ok("bold-voucher-rejected.json"), ok("bold-voucher-voided.json")], wompi: [ok("wompi-transactions-empty.json")] });
+    const summary = await runPaymentReconciliation(deps(fetch, { now: afterWindow }));
+    expect(mocks.settleCancelledPayment.mock.calls.map(([input]) => input.gatewayStatus)).toEqual(["REJECTED", "VOIDED"]);
+    expect(summary.cancelled).toBe(2);
+  });
+
+  it("REJECTED dentro de la ventana: pendiente con correo de reintento; VOIDED espera", async () => {
     mocks.findMany.mockResolvedValue([order(PaymentMethod.Bold), order(PaymentMethod.Bold, { id: "order-2" })]);
     const { fetch } = gateways({ bold: [ok("bold-voucher-rejected.json"), ok("bold-voucher-voided.json")], wompi: [ok("wompi-transactions-empty.json")] });
     const summary = await runPaymentReconciliation(deps(fetch));
-    expect(mocks.settleCancelledPayment.mock.calls.map(([input]) => input.gatewayStatus)).toEqual(["REJECTED", "VOIDED"]);
-    expect(summary.cancelled).toBe(2);
+    expect(mocks.settleDeclinedPayment).toHaveBeenCalledTimes(1);
+    expect(mocks.settleDeclinedPayment.mock.calls[0][0]).toMatchObject({ provider: "Bold", detailsText: "Bold Transaction ID: TX_BOLD_1 | Reference: ORD-1 | Status: REJECTED" });
+    expect(mocks.settleCancelledPayment).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({ awaitingRetry: 1, unchanged: 1 });
   });
 
   it.each(["processing", "pending", "failed", "no-transaction-found"])("%s: sin cambio", async (name) => {
@@ -394,6 +435,46 @@ describe("pagados que la pasarela anuló después", () => {
     expect(mocks.settleCancelledPayment).not.toHaveBeenCalled();
     expect(mocks.eventCreate).not.toHaveBeenCalled();
     expect(summary).toMatchObject({ rechecked: 1, voided: 0 });
+  });
+
+  it.each([
+    ["pickup", "para recoger"],
+    ["shipped", "ya despachado"],
+  ] as const)("anulado en la pasarela pero %s: no se toca, una fila IGNORED, un aviso por pedido y se ve en Sistemas", async (holdReason, words) => {
+    mocks.settleCancelledPayment.mockResolvedValue({ outcome: "held", restocked: false, holdReason });
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([paidWompi()]);
+    const { fetch } = gateways({ wompi: [ok("wompi-transactions-voided-sandbox.json")], bold: [ok("bold-voucher-no-transaction-found.json")] });
+    const summary = await runPaymentReconciliation(deps(fetch));
+    expect(summary).toMatchObject({ ok: true, heldForReview: 1, voided: 0, alreadyApplied: 0 });
+    expect(summary.detail).toContain("anulados por revisar 1");
+    expect(mocks.eventCreate.mock.calls[0][0].data).toMatchObject({ eventType: "reconcile:VOIDED", status: "IGNORED", statusCode: 200 });
+    expect(mocks.eventCreate.mock.calls[0][0].data.error).toContain(words);
+    const subjects = send.mock.calls.map(([email]) => email.subject);
+    expect(subjects).toEqual([`⚠️ Pago anulado en la pasarela: revisar pedido #ORD-${sandboxVoid.reference}`]);
+    expect(send.mock.calls[0][0].text).toContain("No se cambió nada");
+    expect(Array.from(redisKeys)).toContain(`monitor:payment-webhook:WOMPI:void-held:${sandboxVoid.reference}`);
+
+    // La hora siguiente sigue anulado: se cuenta otra vez en Sistemas, sin fila ni correo nuevos.
+    mocks.eventFindFirst.mockResolvedValue({ id: "seen" });
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([paidWompi()]);
+    const again = await runPaymentReconciliation(deps(fetch));
+    expect(again.heldForReview).toBe(1);
+    expect(mocks.eventCreate).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("dos pedidos por revisar en la misma hora: un aviso por cada uno", async () => {
+    mocks.settleCancelledPayment.mockResolvedValue({ outcome: "held", restocked: false, holdReason: "pickup" });
+    const second = JSON.parse(fixture("wompi-transactions-voided-sandbox.json"));
+    second.data[0] = { ...second.data[0], id: "tx-otro", reference: "otro" };
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      paidWompi(),
+      paidWompi({ id: "otro", orderNumber: "ORD-otro", payment: { method: PaymentMethod.Wompi, details: null, transactionId: "tx-otro" } }),
+    ]);
+    const { fetch } = gateways({ wompi: [ok("wompi-transactions-voided-sandbox.json"), { status: 200, body: JSON.stringify(second) }], bold: [ok("bold-voucher-no-transaction-found.json")] });
+    const summary = await runPaymentReconciliation(deps(fetch));
+    expect(summary.heldForReview).toBe(2);
+    expect(send).toHaveBeenCalledTimes(2);
   });
 
   it("Bold VOIDED en un pedido pagado: cancela; si el webhook ya lo había anulado, ni fila ni aviso", async () => {

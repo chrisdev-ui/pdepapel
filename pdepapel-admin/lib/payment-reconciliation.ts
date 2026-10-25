@@ -1,12 +1,13 @@
-import { OrderSource, OrderStatus, OrderType, PaymentMethod, PaymentWebhookEventStatus, type PaymentWebhookProvider } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, PaymentWebhookEventStatus, type PaymentWebhookProvider } from "@prisma/client";
 
 import { getBoldOrderReference, getBoldPaymentVoucher, type BoldPaymentVoucher } from "@/lib/bold";
-import { BOLD_TERMINAL_MARKER } from "@/lib/gateway-fees";
 import { KEY_PROBE_REFERENCE, type GatewayFetchOptions, type GatewayLookup } from "@/lib/payment-gateway-lookup";
 import {
   boldAmountMatchesOrder,
+  isOnlineCheckoutOrder,
   SETTLEMENT_ORDER_INCLUDE,
   settleCancelledPayment,
+  settleDeclinedPayment,
   settlePaidPayment,
   wompiTransactionMatchesOrder,
   type SettlementOrder,
@@ -23,8 +24,12 @@ const HOUR = 60 * MINUTE;
 export const RECONCILE_MIN_AGE_MS = 15 * MINUTE;
 /** Bold guarda la consulta 24 h; Wompi, lo que el dueño aprobó. */
 export const RECONCILE_MAX_AGE_MS: Record<"Bold" | "Wompi", number> = { Bold: 24 * HOUR, Wompi: 72 * HOUR };
-/** Un rechazo reciente puede ser un intento fallido antes del bueno: no se cancela hasta pasado este margen. */
-export const RECONCILE_CANCEL_GRACE_MS = 30 * MINUTE;
+/**
+ * Un rechazo deja el pedido pendiente para reintentar (correo «Tu pago no se
+ * aprobó»); pasado esto desde el último intento, se cancela por el camino de
+ * siempre. Las pruebas del sandbox la acortan (`declineRetryWindowMs`).
+ */
+export const DECLINE_RETRY_WINDOW_MS = 2 * HOUR;
 export const RECONCILE_BATCH_SIZE = 40;
 export const RECONCILE_CONCURRENCY = 4;
 export const RECONCILE_BUDGET_MS = 45 * 1000;
@@ -45,6 +50,15 @@ export interface ReconciliationDeps extends GatewayFetchOptions {
   bold: { identityKey: string };
   alerts?: PaymentAlertDeps;
   budgetMs?: number;
+  /** Solo para acortar la ventana de reintento (sandbox); nunca más larga que `DECLINE_RETRY_WINDOW_MS`. */
+  declineRetryWindowMs?: number;
+}
+
+/** Lee `PAYMENT_DECLINE_RETRY_WINDOW_MINUTES` (solo pruebas): 1 a 120 min, si no, la ventana normal. */
+export function declineRetryWindowFromEnv(raw: string | undefined): number | undefined {
+  const minutes = Number(raw);
+  if (!raw || !Number.isFinite(minutes)) return undefined;
+  return Math.min(Math.max(Math.round(minutes), 1), DECLINE_RETRY_WINDOW_MS / MINUTE) * MINUTE;
 }
 
 interface ProviderState {
@@ -73,6 +87,10 @@ export interface ReconciliationSummary {
   /** Pagados que se volvieron a consultar y los que la pasarela anuló. */
   rechecked: number;
   voided: number;
+  /** Pagados que la pasarela anuló pero son para recoger o ya salieron: solo aviso. */
+  heldForReview: number;
+  /** Pendientes con un rechazo, dentro de la ventana de reintento. */
+  awaitingRetry: number;
   partial: boolean;
   gateways: Record<Provider, { lookups: number; unavailable: number; skipped: number; keyRejected: number | null; verified: boolean }>;
 }
@@ -103,12 +121,7 @@ export async function selectReconciliationCandidates(now: Date): Promise<Settlem
     take: RECONCILE_BATCH_SIZE * 2,
   });
   return rows
-    .filter(
-      (order) =>
-        order.source !== OrderSource.POS &&
-        order.source !== OrderSource.FAIR &&
-        !order.payment?.details?.includes(BOLD_TERMINAL_MARKER),
-    )
+    .filter(isOnlineCheckoutOrder)
     .slice(0, RECONCILE_BATCH_SIZE);
 }
 
@@ -132,13 +145,7 @@ export async function selectPaidRecheckCandidates(now: Date): Promise<Settlement
     take: RECONCILE_BATCH_SIZE * 2,
   });
   return rows
-    .filter(
-      (order) =>
-        order.status === OrderStatus.PAID &&
-        order.source !== OrderSource.POS &&
-        order.source !== OrderSource.FAIR &&
-        !order.payment?.details?.includes(BOLD_TERMINAL_MARKER),
-    )
+    .filter((order) => order.status === OrderStatus.PAID && isOnlineCheckoutOrder(order))
     .slice(0, RECONCILE_BATCH_SIZE);
 }
 
@@ -186,10 +193,11 @@ async function logReconciliation(input: {
 type Decision =
   | { action: "paid"; transactionId: string | null; gatewayStatus: string; detailsText: string; gateway: unknown }
   | { action: "cancelled"; transactionId: string | null; gatewayStatus: string; detailsText: string; gateway: unknown }
+  | { action: "declined"; transactionId: string | null; gatewayStatus: string; detailsText: string; gateway: unknown }
   | { action: "mismatch"; transactionId: string | null; gatewayStatus: string; error: string; gateway: unknown }
   | { action: "none" };
 
-function decideWompi(order: SettlementOrder, transactions: WompiTransaction[], now: Date): Decision {
+function decideWompi(order: SettlementOrder, transactions: WompiTransaction[], now: Date, windowMs: number): Decision {
   const details = (transaction: WompiTransaction) =>
     `customer_email: ${transaction.customer_email ?? "undefined"} | payment_method_type: ${transaction.payment_method_type ?? "undefined"}`;
   const approved = transactions.filter((transaction) => transaction.status === "APPROVED");
@@ -209,11 +217,12 @@ function decideWompi(order: SettlementOrder, transactions: WompiTransaction[], n
     .map((transaction) => ({ transaction, at: parseDate(transaction.finalized_at) ?? parseDate(transaction.created_at) }))
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))[0];
   const at = newest.at ?? order.createdAt.getTime();
-  if (now.getTime() - at < RECONCILE_CANCEL_GRACE_MS) return { action: "none" };
-  return { action: "cancelled", transactionId: newest.transaction.id, gatewayStatus: newest.transaction.status, detailsText: details(newest.transaction), gateway: newest.transaction };
+  const decision = { transactionId: newest.transaction.id, gatewayStatus: newest.transaction.status, detailsText: details(newest.transaction), gateway: newest.transaction };
+  if (now.getTime() - at < windowMs) return newest.transaction.status === "DECLINED" ? { action: "declined", ...decision } : { action: "none" };
+  return { action: "cancelled", ...decision };
 }
 
-function decideBold(order: SettlementOrder, voucher: BoldPaymentVoucher, now: Date): Decision {
+function decideBold(order: SettlementOrder, voucher: BoldPaymentVoucher, now: Date, windowMs: number): Decision {
   const reference = getBoldOrderReference(order);
   const transactionId = voucher.transaction_id ?? null;
   const details = (status: OrderStatus) => `Bold Transaction ID: ${transactionId} | Reference: ${reference} | Status: ${status}`;
@@ -225,7 +234,11 @@ function decideBold(order: SettlementOrder, voucher: BoldPaymentVoucher, now: Da
   }
   if (!BOLD_CANCELLED.has(voucher.payment_status)) return { action: "none" };
   const at = parseDate(voucher.transaction_date) ?? order.createdAt.getTime();
-  if (now.getTime() - at < RECONCILE_CANCEL_GRACE_MS) return { action: "none" };
+  if (now.getTime() - at < windowMs) {
+    return voucher.payment_status === "REJECTED"
+      ? { action: "declined", transactionId, gatewayStatus: "REJECTED", detailsText: `Bold Transaction ID: ${transactionId} | Reference: ${reference} | Status: REJECTED`, gateway: voucher }
+      : { action: "none" };
+  }
   return { action: "cancelled", transactionId, gatewayStatus: voucher.payment_status, detailsText: details(OrderStatus.CANCELLED), gateway: voucher };
 }
 
@@ -294,12 +307,13 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
   const clock = deps.clock ?? Date.now;
   const startedAt = clock();
   const budget = deps.budgetMs ?? RECONCILE_BUDGET_MS;
+  const windowMs = Math.min(deps.declineRetryWindowMs ?? DECLINE_RETRY_WINDOW_MS, DECLINE_RETRY_WINDOW_MS);
   const fetchOptions: GatewayFetchOptions = { fetch: deps.fetch, timeoutMs: deps.timeoutMs };
   const state: Record<Provider, ProviderState> = {
     Wompi: freshState(!!deps.wompi.privateKey && !!deps.wompi.baseUrl),
     Bold: freshState(!!deps.bold.identityKey),
   };
-  const counts = { checked: 0, paid: 0, cancelled: 0, unchanged: 0, alreadyApplied: 0, mismatched: 0, failed: 0, rechecked: 0, voided: 0 };
+  const counts = { checked: 0, paid: 0, cancelled: 0, unchanged: 0, alreadyApplied: 0, mismatched: 0, failed: 0, rechecked: 0, voided: 0, heldForReview: 0, awaitingRetry: 0 };
   let partial = false;
 
   const lookup = async (provider: Provider, reference: string): Promise<GatewayLookup<WompiTransaction | BoldPaymentVoucher>> => {
@@ -351,8 +365,8 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     }
     const decision =
       provider === "Wompi"
-        ? decideWompi(order, result.items as WompiTransaction[], now)
-        : decideBold(order, result.items[0] as BoldPaymentVoucher, now);
+        ? decideWompi(order, result.items as WompiTransaction[], now, windowMs)
+        : decideBold(order, result.items[0] as BoldPaymentVoucher, now, windowMs);
 
     if (decision.action === "none") {
       counts.unchanged += 1;
@@ -378,6 +392,13 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
 
     try {
       const settlement = { order, provider, transactionId: decision.transactionId, detailsText: decision.detailsText, source: "reconciliation" as const };
+      if (decision.action === "declined") {
+        // Cubre el rechazo cuyo webhook nunca llegó: el correo sale una vez.
+        counts.awaitingRetry += 1;
+        const { outcome } = await settleDeclinedPayment(settlement);
+        if (outcome === "applied") await log(PaymentWebhookEventStatus.PROCESSED, 200);
+        return;
+      }
       const { outcome } =
         decision.action === "paid"
           ? await settlePaidPayment(settlement)
@@ -424,7 +445,7 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     const log = (status: PaymentWebhookEventStatus, statusCode: number, error?: string) =>
       logReconciliation({ provider, order, gatewayStatus: decision.gatewayStatus, transactionId: decision.transactionId, gateway: decision.gateway, status, statusCode, error, now });
     try {
-      const { outcome } = await settleCancelledPayment({
+      const { outcome, holdReason } = await settleCancelledPayment({
         order,
         provider,
         transactionId: decision.transactionId,
@@ -432,6 +453,20 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
         source: "reconciliation",
         gatewayStatus: decision.gatewayStatus,
       });
+      if (outcome === "held") {
+        counts.heldForReview += 1;
+        // Sigue anulado cada hora de la ventana: una fila y un aviso por pedido.
+        const seen = await prismadb.paymentWebhookEvent
+          .findFirst({ where: { orderId: order.id, eventType: `${RECONCILIATION_EVENT_PREFIX}VOIDED`, status: PaymentWebhookEventStatus.IGNORED }, select: { id: true } })
+          .catch(() => null);
+        if (seen) return;
+        await log(PaymentWebhookEventStatus.IGNORED, 200, `Pago anulado en la pasarela sobre un pedido ${holdReason === "pickup" ? "para recoger" : "ya despachado"}: queda para revisión`);
+        await sendPaymentAlert(
+          { provider: WEBHOOK_PROVIDER[provider], kind: "void-held", storeId: order.storeId, orderId: order.id, orderNumber: order.orderNumber, holdReason },
+          deps.alerts,
+        );
+        return;
+      }
       if (outcome !== "applied") {
         counts.alreadyApplied += 1;
         return;
@@ -516,6 +551,8 @@ export async function runPaymentReconciliation(deps: ReconciliationDeps): Promis
     ...(counts.mismatched > 0 ? [`monto distinto ${counts.mismatched}`] : []),
     ...(counts.rechecked > 0 ? [`pagados revisados ${counts.rechecked}`] : []),
     ...(counts.voided > 0 ? [`anulados en la pasarela ${counts.voided}`] : []),
+    ...(counts.heldForReview > 0 ? [`anulados por revisar ${counts.heldForReview}`] : []),
+    ...(counts.awaitingRetry > 0 ? [`rechazados esperando reintento ${counts.awaitingRetry}`] : []),
     ...(counts.failed > 0 ? [`fallos ${counts.failed}`] : []),
     ...[wompi, bold].filter((entry) => !keyTexts.includes(entry.text)).map((entry) => entry.text),
     ...(partial ? ["parcial: se acabó el tiempo de la corrida"] : []),

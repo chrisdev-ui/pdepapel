@@ -15,6 +15,14 @@ describe("getPaymentResult", () => {
     }
   });
 
+  it("un pendiente con un intento rechazado se avisa como rechazo; pagado o cancelado no cambia", () => {
+    expect(getPaymentResult(OrderStatus.PENDING, true)).toBe("declined");
+    expect(getPaymentResult(OrderStatus.CREATED, true)).toBe("declined");
+    expect(getPaymentResult(OrderStatus.PAID, true)).toBe("approved");
+    expect(getPaymentResult(OrderStatus.PENDING, false)).toBe("pending");
+    expect(receiptMeta(OrderStatus.PENDING, true)).toEqual({ paymentResult: "declined", masked: false });
+  });
+
   it("todavía no se enmascara nada", () => {
     expect(receiptMeta(OrderStatus.PAID)).toEqual({ paymentResult: "approved", masked: false });
   });

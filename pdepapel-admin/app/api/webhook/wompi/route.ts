@@ -1,13 +1,17 @@
 import { env } from "@/lib/env.mjs";
-import { schedulePaymentWebhookAlert, schedulePaymentWebhookCrashAlert } from "@/lib/payment-webhook-alert";
+import { runInBackground } from "@/lib/background";
+import { schedulePaymentWebhookAlert, schedulePaymentWebhookCrashAlert, sendPaymentAlert } from "@/lib/payment-webhook-alert";
 import {
+  isOnlineCheckoutOrder,
   loadOrderForSettlement,
   settleCancelledPayment,
+  settleDeclinedPayment,
   settlePaidPayment,
   settlePendingPayment,
   unappliedSettlementMessage,
   wompiTransactionMatchesOrder,
   type SettlementOrder,
+  type SettlementOutcome,
 } from "@/lib/payment-settlement";
 import { OrderStatus } from "@prisma/client";
 import { safeHexEquals } from "@/lib/webhook-auth";
@@ -220,17 +224,30 @@ async function updateOrderData(order: SettlementOrder, transaction: any) {
       transactionId: transaction.id,
       detailsText: `customer_email: ${transaction?.customer_email ?? "undefined"} | payment_method_type: ${transaction?.payment_method_type ?? "undefined"}`,
     };
-    const { outcome } =
-      currentStatus === OrderStatus.PAID
-        ? await settlePaidPayment(settlement)
-        : currentStatus === OrderStatus.CANCELLED
-          ? await settleCancelledPayment({ ...settlement, gatewayStatus: transaction.status })
-          : await settlePendingPayment(settlement);
+    let outcome: string;
+    if (currentStatus === OrderStatus.PAID) {
+      ({ outcome } = await settlePaidPayment(settlement));
+    } else if (currentStatus === OrderStatus.CANCELLED) {
+      // Un rechazo en el Botón de pagos deja reintentar; anular sigue cancelando.
+      if (transaction.status !== "VOIDED" && isOnlineCheckoutOrder(order)) {
+        ({ outcome } = await settleDeclinedPayment(settlement));
+      } else {
+        const cancelled = await settleCancelledPayment({ ...settlement, gatewayStatus: transaction.status });
+        outcome = cancelled.outcome;
+        if (cancelled.outcome === "held") {
+          runInBackground("aviso de anulación por revisar", () =>
+            sendPaymentAlert({ provider: "WOMPI", kind: "void-held", storeId: order.storeId, orderId: order.id, orderNumber: order.orderNumber, holdReason: cancelled.holdReason }),
+          );
+        }
+      }
+    } else {
+      ({ outcome } = await settlePendingPayment(settlement));
+    }
 
     if (outcome !== "applied") {
       return NextResponse.json(
         {
-          message: unappliedSettlementMessage(order.orderNumber, outcome),
+          message: unappliedSettlementMessage(order.orderNumber, outcome as SettlementOutcome),
         },
         { status: 200 },
       );

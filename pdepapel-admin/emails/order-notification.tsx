@@ -53,6 +53,8 @@ interface OrderNotificationProps {
   riskNote?: string | null;
   /** Solo en el aviso del panel: la tarjeta pagada espera aprobación. */
   giftCardHeld?: boolean;
+  /** El texto del botón principal; por defecto «Ver mi pedido». */
+  ctaLabel?: string;
 }
 
 interface Look {
@@ -142,6 +144,12 @@ function getLook(status: string, digital = false): Look {
         pill: "Entregado",
         headline: () => "Tu pedido ya está en tus manos.",
       };
+    case "PAYMENT_DECLINED":
+      return {
+        tint: "yellow",
+        pill: "Pago no aprobado",
+        headline: () => "Tu pago no se aprobó: puedes intentarlo de nuevo.",
+      };
     case "CANCELLED":
     case "Cancelled":
       return {
@@ -199,6 +207,7 @@ export const OrderNotification = ({
   digital = false,
   riskNote = null,
   giftCardHeld = false,
+  ctaLabel = "Ver mi pedido",
 }: OrderNotificationProps) => {
   const look = getLook(status, digital);
   const firstName = name ? name.split(" ")[0] : "";
@@ -323,7 +332,7 @@ export const OrderNotification = ({
         </>
       ) : null}
 
-      <Cta href={orderLink}>Ver mi pedido</Cta>
+      <Cta href={orderLink}>{ctaLabel}</Cta>
 
       {accountClaimLink ? (
         <StickerCard tint="lavender" filled>

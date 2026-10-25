@@ -23,7 +23,10 @@ const KEY_VARIABLES: Record<PaymentWebhookProvider, { webhook: string; api: stri
   WOMPI: { webhook: "WOMPI_EVENTS_KEY", api: "WOMPI_API_SECRET" },
 };
 
-export type PaymentAlertKind = PaymentWebhookAlertKind | "reconcile-mismatch" | "reconcile-applied" | "reconcile-voided" | "key-rejected";
+export type PaymentAlertKind = PaymentWebhookAlertKind | "reconcile-mismatch" | "reconcile-applied" | "reconcile-voided" | "void-held" | "key-rejected";
+
+/** Un pedido anulado para revisar sigue anulado cada hora de la ventana: se avisa una vez por pedido. */
+const VOID_HELD_COOLDOWN_SECONDS = 7 * 24 * 3600;
 
 type AlertRedis = { set: (key: string, value: string, options: { nx: true; ex: number }) => Promise<unknown> };
 type Send = (email: { from: string; to: string[]; subject: string; text: string; react?: React.ReactElement }) => Promise<ResendSendResult>;
@@ -45,6 +48,8 @@ export interface PaymentAlert {
   orderNumber?: string | null;
   statusCode?: number | null;
   error?: string | null;
+  /** «pickup» o «shipped» en un `void-held`. */
+  holdReason?: "pickup" | "shipped" | null;
 }
 
 export type PaymentAlertResult = "sent" | "cooldown" | "failed" | "skipped";
@@ -102,6 +107,13 @@ function describe(alert: PaymentAlert): { subject: string; title: string; summar
         summary: `La conciliación de cada hora encontró anulado en ${label} un pago${order} que el panel tenía como pagado. El pedido quedó cancelado, el inventario volvió y el cupón se liberó.`,
         action: `Si la anulación no la hiciste tú desde el panel de ${label}, revísala allí antes de despachar.`,
       };
+    case "void-held":
+      return {
+        subject: `⚠️ Pago anulado en la pasarela: revisar pedido #${alert.orderNumber ?? "sin número"}`,
+        title: `${label} anuló un pago ya registrado`,
+        summary: `${label} reporta anulado el pago${order}, que ${alert.holdReason === "pickup" ? "es para recoger en la tienda (pudo entregarse sin marcarlo)" : "ya tiene guía o salió de la papelería"}. No se cambió nada: el pedido sigue pagado, el inventario y el cupón quedaron igual y a la clienta no se le escribió.`,
+        action: "Revisa el pedido: si la clienta no recibió nada, cancélalo desde el panel; si ya lo tiene, coordina el cobro con ella.",
+      };
     case "key-rejected":
       return {
         subject: `⚠️ Llave de ${label} rechazada`,
@@ -135,7 +147,9 @@ export async function sendPaymentAlert(alert: PaymentAlert, deps: PaymentAlertDe
   if (!isEnabled(deps)) return "skipped";
   const now = deps.now ?? new Date();
   try {
-    const claimed = await (deps.redis ?? Redis.fromEnv()).set(`monitor:payment-webhook:${alert.provider}:${alert.kind}`, "1", { nx: true, ex: ALERT_COOLDOWN_SECONDS });
+    const perOrder = alert.kind === "void-held";
+    const key = `monitor:payment-webhook:${alert.provider}:${alert.kind}${perOrder ? `:${alert.orderId ?? "sin-pedido"}` : ""}`;
+    const claimed = await (deps.redis ?? Redis.fromEnv()).set(key, "1", { nx: true, ex: perOrder ? VOID_HELD_COOLDOWN_SECONDS : ALERT_COOLDOWN_SECONDS });
     if (claimed !== "OK") return "cooldown";
   } catch (error) {
     console.error("[PAYMENT_ALERT] No se pudo revisar la pausa del aviso; se manda igual:", error);
@@ -147,7 +161,7 @@ export async function sendPaymentAlert(alert: PaymentAlert, deps: PaymentAlertDe
     return "failed";
   }
   const { subject, title, summary, action } = describe(alert);
-  const recent = alert.kind.startsWith("reconcile") || alert.kind === "key-rejected" ? null : await countLastHour(alert.provider, now);
+  const recent = alert.kind.startsWith("reconcile") || alert.kind === "key-rejected" || alert.kind === "void-held" ? null : await countLastHour(alert.provider, now);
   const lines = [
     `Pasarela: ${PROVIDER_LABEL[alert.provider]}`,
     ...(alert.orderNumber ? [`Pedido: #${alert.orderNumber}`] : []),
@@ -156,7 +170,7 @@ export async function sendPaymentAlert(alert: PaymentAlert, deps: PaymentAlertDe
     ...(recent !== null ? [`Avisos rechazados o fallidos de ${PROVIDER_LABEL[alert.provider]} en la última hora: ${recent}`] : []),
   ];
   const link = alert.orderId && alert.storeId ? `${PANEL_URL}/${alert.storeId}/pedidos/${alert.orderId}` : PANEL_URL;
-  const note = "Este aviso sale como mucho una vez por hora.";
+  const note = alert.kind === "void-held" ? "Este aviso sale una sola vez por pedido." : "Este aviso sale como mucho una vez por hora.";
   const send: Send =
     deps.send ??
     (async (email) => {

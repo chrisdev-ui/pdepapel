@@ -100,6 +100,7 @@ describe("classifyPaymentWebhookOutcome", () => {
     [200, { message: "Evento acknowledged" }, "IGNORED"],
     [200, { message: "La orden ya fue procesada anteriormente" }, "IGNORED"],
     [200, { message: "Orden POS-1 cancelada y sin reactivar (punto de venta, feria, tarjeta de regalo o fraude): el pago quedó para revisión" }, "IGNORED"],
+    [200, { message: "Orden ORD-2 pagada y para recoger o ya despachada: la anulación quedó para revisión, sin reactivar el stock" }, "IGNORED"],
     [200, { message: "Pago procesado" }, "PROCESSED"],
     [200, null, "PROCESSED"],
   ])("%s with %j → %s", (status, body, expected) => {

@@ -1,11 +1,15 @@
 import { getBoldWebhookSecretKey, verifyBoldWebhookSignature } from "@/lib/bold";
-import { schedulePaymentWebhookAlert, schedulePaymentWebhookCrashAlert } from "@/lib/payment-webhook-alert";
+import { runInBackground } from "@/lib/background";
+import { schedulePaymentWebhookAlert, schedulePaymentWebhookCrashAlert, sendPaymentAlert } from "@/lib/payment-webhook-alert";
 import {
   boldAmountMatchesOrder,
+  isOnlineCheckoutOrder,
   loadOrderForSettlement,
   settleCancelledPayment,
+  settleDeclinedPayment,
   settlePaidPayment,
   unappliedSettlementMessage,
+  type SettlementOutcome,
 } from "@/lib/payment-settlement";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import {
@@ -124,8 +128,15 @@ async function handleBoldWebhook(
         );
 
       case "SALE_REJECTED":
-      case "VOID_APPROVED":
       case "transaction.declined":
+        return await processBoldPayment(
+          transactionData,
+          "declined",
+          scopedStoreId,
+          context,
+        );
+
+      case "VOID_APPROVED":
       case "transaction.voided":
         return await processBoldPayment(
           transactionData,
@@ -152,7 +163,8 @@ async function handleBoldWebhook(
 
 async function processBoldPayment(
   transaction: any,
-  targetStatus: OrderStatus,
+  /** «declined»: un rechazo, que deja reintentar; CANCELLED: una anulación. */
+  targetStatus: OrderStatus | "declined",
   scopedStoreId: string | null,
   context: PaymentWebhookContext,
 ) {
@@ -235,12 +247,22 @@ async function processBoldPayment(
     order,
     provider: "Bold" as const,
     transactionId,
-    detailsText: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+    detailsText: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus === "declined" ? "REJECTED" : targetStatus}`,
   };
-  const { outcome } =
-    targetStatus === OrderStatus.PAID
-      ? await settlePaidPayment(settlement)
-      : await settleCancelledPayment({ ...settlement, gatewayStatus: targetStatus });
+  let outcome: SettlementOutcome;
+  if (targetStatus === OrderStatus.PAID) {
+    ({ outcome } = await settlePaidPayment(settlement));
+  } else if (targetStatus === "declined" && isOnlineCheckoutOrder(order)) {
+    ({ outcome } = await settleDeclinedPayment(settlement));
+  } else {
+    const cancelled = await settleCancelledPayment({ ...settlement, gatewayStatus: OrderStatus.CANCELLED });
+    outcome = cancelled.outcome;
+    if (cancelled.outcome === "held") {
+      runInBackground("aviso de anulación por revisar", () =>
+        sendPaymentAlert({ provider: "BOLD", kind: "void-held", storeId: order.storeId, orderId: order.id, orderNumber: order.orderNumber, holdReason: cancelled.holdReason }),
+      );
+    }
+  }
 
   if (outcome !== "applied") {
     return NextResponse.json(

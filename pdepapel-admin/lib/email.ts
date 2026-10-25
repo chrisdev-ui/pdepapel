@@ -742,3 +742,66 @@ export const sendShippingEmail = async (
     return failedOutcomes(roles, error);
   }
 };
+
+/** Coincide con `DECLINE_RETRY_WINDOW_MS` de la conciliación. */
+const DECLINE_RETRY_HOURS = 2;
+
+/**
+ * El único correo de un pago rechazado en el Botón de pagos: el pedido sigue
+ * pendiente y la clienta puede reintentar desde su enlace. Sin «Cancelada»:
+ * ese sale solo si la ventana vence sin pago. Solo a la clienta.
+ */
+export function buildPaymentDeclinedEmail(order: EmailOrder): BuiltEmail {
+  const orderLink = getOrderLink(order.id);
+  const items = getOrderLineItems(order);
+  const summary = getOrderTotalsSummary(order);
+  const total = order.total ? currencyFormatter(order.total) : undefined;
+  const orderSummary = getOrderSummary(order);
+  const thanksParagraph = `No se hizo ningún cargo. Durante las próximas ${DECLINE_RETRY_HOURS} horas puedes volver a pagar desde tu pedido, con otra tarjeta o con otro medio de pago en línea. Si no se paga en ese tiempo, el pedido se cancela solo.`;
+  return {
+    subject: `Tu pago del pedido #${order.orderNumber} no se aprobó: puedes intentarlo de nuevo`,
+    react: OrderNotification({
+      name: order.fullName,
+      orderNumber: order.orderNumber,
+      status: "PAYMENT_DECLINED",
+      total,
+      items,
+      summary,
+      orderSummary,
+      city: order.city || undefined,
+      orderLink,
+      thanksParagraph,
+      ctaLabel: "Intentar el pago de nuevo",
+      digital: order.type === OrderType.GIFT_CARD,
+    }) as React.ReactElement,
+    text: withSocialLinks(`Tu pago del pedido #${order.orderNumber} no se aprobó: puedes intentarlo de nuevo.\n\n${thanksParagraph}\n\n${orderSummary}\n\nIntentar el pago de nuevo: ${orderLink}`),
+  };
+}
+
+export const sendPaymentDeclinedEmail = async (orderId: string): Promise<DeliveryOutcomes | undefined> => {
+  // Fuera de `order:*`: el barrido de reintentos reenviaría un correo de estado.
+  const kind = "payment-declined";
+  try {
+    if (env.NODE_ENV === "development") {
+      console.log(`[EMAIL] Skipping payment-declined email in development for order ${orderId}`);
+      return;
+    }
+    const order = await loadOrderForEmail(orderId);
+    if (!order) {
+      console.error(`[EMAIL] Order ${orderId} not found; no payment-declined email`);
+      return;
+    }
+    const to = customerRecipient(order, kind);
+    if (!to) return;
+    const built = buildPaymentDeclinedEmail(order);
+    return await deliverEmails([{ role: "customer", send: () => resend.emails.send({ from: FROM, to: [to], ...built }) }], {
+      storeId: order.storeId,
+      orderId: order.id,
+      kind,
+    });
+  } catch (error) {
+    console.error("[EMAIL] Error sending payment-declined email:", error);
+    await recordFailedNotification({ storeId: null, channel: "EMAIL", kind, recipient: "customer", orderId, error });
+    return failedOutcomes(["customer"], error);
+  }
+};

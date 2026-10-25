@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { OrderInventoryIssueKind, OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
+import { OrderInventoryIssueKind, OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
@@ -13,12 +13,13 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
  * incidencia DECREMENT («pagado sin stock»).
  */
 const alerts = vi.hoisted(() => ({ revival: vi.fn(), shortfall: vi.fn() }));
+const emails = vi.hoisted(() => ({ order: vi.fn(), declined: vi.fn() }));
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ userId: null }),
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
-vi.mock("@/lib/email", () => ({ sendOrderEmail: vi.fn().mockResolvedValue(undefined), sendShippingEmail: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/email", () => ({ sendOrderEmail: emails.order, sendPaymentDeclinedEmail: emails.declined, sendShippingEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/google-analytics", async (importOriginal) => ({ ...(await importOriginal<object>()), recordPaidOrderInGoogleAnalytics: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/cache", () => ({
   storefrontScopeOf: vi.fn().mockResolvedValue(null),
@@ -40,7 +41,8 @@ vi.mock("@/lib/bold", async (importOriginal) => ({
 
 const NOW = new Date();
 
-async function boldOrder(f: InventoryFixture, quantity: number, status: OrderStatus = OrderStatus.PENDING) {
+/** «delivery»: envío a domicilio de la tienda (EnvioClick, sin guía); «pickup»: pedido del panel sin envío. */
+async function boldOrder(f: InventoryFixture, quantity: number, status: OrderStatus = OrderStatus.PENDING, shipping: "delivery" | "pickup" = "delivery") {
   return testPrisma.order.create({
     data: {
       storeId: f.store.id,
@@ -58,6 +60,9 @@ async function boldOrder(f: InventoryFixture, quantity: number, status: OrderSta
       createdAt: new Date(NOW.getTime() - 30 * 60 * 1000),
       orderItems: { create: [{ productId: f.component.id, quantity, name: f.component.name, price: 10000, sku: f.component.sku }] },
       payment: { create: { method: PaymentMethod.Bold, storeId: f.store.id } },
+      ...(shipping === "delivery"
+        ? { shipping: { create: { storeId: f.store.id, provider: ShippingProvider.ENVIOCLICK, status: ShippingStatus.Preparing, cost: 0 } } }
+        : {}),
     },
   });
 }
@@ -85,6 +90,22 @@ function boldGateway(orders: { orderNumber: string; total: number }[]) {
       { status: 200 },
     );
   });
+}
+
+/** Bold responde `status` solo para esta referencia (las demás de la base: 404). */
+function boldVoucher(order: { orderNumber: string; total: number }, status: string, at: Date) {
+  return vi.fn(async (url: string) =>
+    url.includes("bold.co") && decodeURIComponent(url.split("/").pop() ?? "") === order.orderNumber
+      ? new Response(JSON.stringify({ transaction_id: `TX-${order.orderNumber}`, reference_id: order.orderNumber, total: order.total, payment_status: status, transaction_date: at.toISOString() }), { status: 200 })
+      : url.includes("bold.co")
+        ? new Response(JSON.stringify({ errors: [] }), { status: 404 })
+        : new Response(JSON.stringify({ data: [] }), { status: 200 }),
+  );
+}
+
+async function reconcileWith(fetchMock: ReturnType<typeof vi.fn>, now: Date = NOW) {
+  const { runPaymentReconciliation } = await import("@/lib/payment-reconciliation");
+  return runPaymentReconciliation({ now, fetch: fetchMock as unknown as typeof fetch, wompi: { baseUrl: "https://sandbox.wompi.co/v1", privateKey: "prv_test" }, bold: { identityKey: "identity" }, alerts: { enabled: false } });
 }
 
 async function reconcile(orders: { orderNumber: string; total: number }[]) {
@@ -157,7 +178,7 @@ describe("liquidación compartida de pagos (MySQL)", () => {
     for (const order of orders) expect(await saleMovements(order.id)).toBe(1);
   });
 
-  it("un pagado que Bold anuló después: la conciliación lo cancela, reingresa una vez y no repite", async () => {
+  it("un pagado a domicilio sin despachar que Bold anuló después: la conciliación lo cancela, reingresa una vez y no repite", async () => {
     fixture = await createInventoryFixture();
     const order = await boldOrder(fixture, 2);
     expect((await webhook(order)).status).toBe(200);
@@ -232,5 +253,88 @@ describe("liquidación compartida de pagos (MySQL)", () => {
     expect(after.status).toBe(OrderStatus.CANCELLED);
     expect(after.riskReasons ?? "").toContain("pago-en-cancelado");
     expect(alerts.revival).not.toHaveBeenCalled();
+  });
+
+  it("un pagado para recoger que Bold anuló: sigue pagado, sin reingreso ni correo, una fila por revisar y se cuenta cada hora", async () => {
+    fixture = await createInventoryFixture();
+    const order = await boldOrder(fixture, 2, OrderStatus.PENDING, "pickup");
+    expect((await webhook(order)).status).toBe(200);
+    // El pago abre el envío como «Recoge en tienda»: el panel no crea la fila para esos pedidos.
+    expect((await testPrisma.shipping.findUniqueOrThrow({ where: { orderId: order.id } })).provider).toBe(ShippingProvider.NONE);
+    expect(await stockOf(fixture)).toBe(4);
+    emails.order.mockClear();
+
+    const voided = boldVoucher(order, "VOIDED", NOW);
+    expect(await reconcileWith(voided)).toMatchObject({ heldForReview: 1, voided: 0, failed: 0 });
+    expect(await reconcileWith(voided)).toMatchObject({ heldForReview: 1, voided: 0 });
+
+    const after = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(after.status).toBe(OrderStatus.PAID);
+    expect(after.paidAt).toBeInstanceOf(Date);
+    expect(await stockOf(fixture)).toBe(4);
+    expect(await testPrisma.inventoryMovement.count({ where: { referenceId: order.id, quantity: { gt: 0 } } })).toBe(0);
+    expect(emails.order).not.toHaveBeenCalled();
+    expect(await testPrisma.paymentWebhookEvent.count({ where: { orderId: order.id, eventType: "reconcile:VOIDED", status: "IGNORED" } })).toBe(1);
+  });
+
+  it("un pagado ya despachado (con guía) que Bold anula por webhook: nada cambia y el webhook responde «para revisión»", async () => {
+    fixture = await createInventoryFixture();
+    const order = await boldOrder(fixture, 2);
+    await webhook(order);
+    await testPrisma.shipping.update({ where: { orderId: order.id }, data: { trackingCode: "GUIA-PRUEBA-1" } });
+    emails.order.mockClear();
+
+    const response = await webhook(order, "VOID_APPROVED");
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).message).toContain("la anulación quedó para revisión");
+    const after = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(after.status).toBe(OrderStatus.PAID);
+    expect(await stockOf(fixture)).toBe(4);
+    expect(emails.order).not.toHaveBeenCalled();
+  });
+
+  it("rechazo, otro rechazo y reintento aprobado en la ventana: pendiente con un solo correo y luego pagado normal, sin aviso de reactivado", async () => {
+    fixture = await createInventoryFixture();
+    const order = await boldOrder(fixture, 2);
+
+    expect((await webhook(order, "SALE_REJECTED")).status).toBe(200);
+    expect((await webhook(order, "SALE_REJECTED")).status).toBe(200);
+
+    const pending = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
+    expect(pending.status).toBe(OrderStatus.PENDING);
+    expect(pending.payment?.details).toContain("Pago no aprobado, esperando reintento");
+    expect(emails.declined).toHaveBeenCalledTimes(1);
+    expect(emails.order).not.toHaveBeenCalledWith(order.id, OrderStatus.CANCELLED);
+    expect(await stockOf(fixture)).toBe(6);
+
+    const { hasDeclinedPaymentAttempt } = await import("@/lib/payment-decline");
+    expect(await hasDeclinedPaymentAttempt(order.id, OrderStatus.PENDING)).toBe(true);
+
+    expect((await webhook(order)).status).toBe(200);
+    const paid = await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(paid.status).toBe(OrderStatus.PAID);
+    expect(await stockOf(fixture)).toBe(4);
+    expect(alerts.revival).not.toHaveBeenCalled();
+    expect(emails.order).toHaveBeenCalledWith(order.id, OrderStatus.PAID);
+  });
+
+  it("rechazo sin reintento: la conciliación lo deja pendiente dentro de las 2 h y lo cancela después por el camino normal", async () => {
+    fixture = await createInventoryFixture();
+    const order = await boldOrder(fixture, 2);
+    await webhook(order, "SALE_REJECTED");
+    const rejectedAt = new Date(NOW.getTime() - 10 * 60 * 1000);
+    const rejected = boldVoucher(order, "REJECTED", rejectedAt);
+
+    expect(await reconcileWith(rejected)).toMatchObject({ awaitingRetry: 1, cancelled: 0 });
+    expect((await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(OrderStatus.PENDING);
+    expect(emails.declined).toHaveBeenCalledTimes(1);
+
+    const later = new Date(rejectedAt.getTime() + 2 * 60 * 60 * 1000 + 60 * 1000);
+    expect(await reconcileWith(rejected, later)).toMatchObject({ cancelled: 1, awaitingRetry: 0 });
+    expect((await testPrisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(OrderStatus.CANCELLED);
+    expect(emails.order).toHaveBeenCalledWith(order.id, OrderStatus.CANCELLED);
+    expect(emails.declined).toHaveBeenCalledTimes(1);
+    expect(await stockOf(fixture)).toBe(6);
   });
 });

@@ -22,6 +22,7 @@ import {
 } from "@/lib/order-coupons";
 import { getOrderItemBrandNames, orderItemBrandName } from "@/lib/order-item-brand";
 import { assertCapsuleDrawsClosed } from "@/lib/capsule-shipping-guard";
+import { hasDeclinedPaymentAttempt } from "@/lib/payment-decline";
 import prismadb from "@/lib/prismadb";
 import {
   CUSTOMER_ORDER_SELECT,
@@ -120,7 +121,7 @@ export async function GET(
       const order = await prismadb.order.findFirst({ where, select: VIEWER_ORDER_DETAIL_SELECT });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-      return NextResponse.json({ ...scrubOrder(order), ...receiptMeta(order.status) }, {
+      return NextResponse.json({ ...scrubOrder(order), ...receiptMeta(order.status, await hasDeclinedPaymentAttempt(params.orderId, order.status)) }, {
         headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
       });
     }
@@ -140,7 +141,7 @@ export async function GET(
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-      return NextResponse.json({ ...order, ...receiptMeta(order.status) }, {
+      return NextResponse.json({ ...order, ...receiptMeta(order.status, await hasDeclinedPaymentAttempt(order.id, order.status)) }, {
         headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
       });
     }
@@ -156,7 +157,7 @@ export async function GET(
     // (`createdBy`) sí viajan por enlace, como los de invitada.
     if (!canCustomerViewOrder(order, userId))
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-    const receipt = toCustomerOrderResponse(order, await loadCapsuleReceipt(prismadb, order));
+    const receipt = toCustomerOrderResponse(order, await loadCapsuleReceipt(prismadb, order), await hasDeclinedPaymentAttempt(params.orderId, order.status));
     return NextResponse.json(isOrderOwnerSession(order, userId) ? receipt : maskOrderForLinkHolder(receipt), {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });

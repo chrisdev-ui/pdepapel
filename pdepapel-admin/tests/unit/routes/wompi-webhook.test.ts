@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   markWelcomeBenefitRedeemed: vi.fn(),
   releaseWelcomeBenefitReservation: vi.fn(),
   flagPaymentOnCancelledOrder: vi.fn().mockResolvedValue(undefined),
+  sendPaymentDeclinedEmail: vi.fn().mockResolvedValue(undefined),
+  sendPaymentAlert: vi.fn().mockResolvedValue("sent"),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({
@@ -40,7 +42,11 @@ vi.mock("@/lib/prismadb", () => ({
     $transaction: mocks.transaction,
   },
 }));
-vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail, sendPaymentDeclinedEmail: mocks.sendPaymentDeclinedEmail }));
+vi.mock("@/lib/payment-webhook-alert", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/payment-webhook-alert")>()),
+  sendPaymentAlert: mocks.sendPaymentAlert,
+}));
 // El pago de cápsulas (costo provisional y cupo) tiene su propia prueba de integración.
 vi.mock("@/lib/capsule-payment", () => ({ applyCapsulePayment: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/capsule-cancel", () => ({ withoutDrawnCapsuleUnits: async (_db: unknown, movements: unknown[]) => movements }));
@@ -84,6 +90,9 @@ vi.mock("@/lib/late-payment", async (importOriginal) => ({
 }));
 
 import { POST } from "@/app/api/webhook/wompi/route";
+
+/** Un envío a domicilio que todavía no sale: la anulación se aplica sola. */
+const unshippedDelivery = { provider: "ENVIOCLICK", status: "Preparing", envioClickIdOrder: null, guideUrl: null, trackingCode: null };
 
 function createWebhookRequest(transaction: Record<string, unknown>) {
   const data = { transaction };
@@ -357,6 +366,7 @@ describe("POST /api/webhook/wompi", () => {
     const transactionClient = {
       coupon: { update: vi.fn(), updateMany: vi.fn() },
       order: {
+        findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PAID, shipping: unshippedDelivery }), 
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
@@ -557,7 +567,7 @@ describe("POST /api/webhook/wompi", () => {
     const orderUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     const transactionClient = {
       coupon: { update: vi.fn(), updateMany: vi.fn() },
-      order: { update: vi.fn(), updateMany: orderUpdateMany },
+      order: { findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PAID, shipping: unshippedDelivery }), update: vi.fn(), updateMany: orderUpdateMany },
       paymentDetails: { upsert: mocks.paymentUpsert },
       shipping: { upsert: mocks.shippingUpsert },
     };
@@ -589,5 +599,113 @@ describe("POST /api/webhook/wompi", () => {
       data: { status: OrderStatus.CANCELLED, paidAt: null },
     });
     expect(mocks.releaseWelcomeBenefitReservation).toHaveBeenCalled();
+  });
+});
+
+/** Lote de pagos 2026-10-26: un rechazo deja reintentar y una anulación de algo ya entregado o despachado no se aplica sola. */
+describe("POST /api/webhook/wompi · rechazos y anulaciones por revisar", () => {
+  const pendingOrder = {
+    id: "order-id",
+    orderNumber: "ORD-123",
+    payment: { method: PaymentMethod.Wompi, details: null },
+    status: OrderStatus.PENDING,
+    type: "STANDARD",
+    source: "STORE",
+    storeId: "store-id",
+    coupon: { id: "coupon-id" },
+    total: 80000,
+    orderItems: [{ productId: "product-id", quantity: 2, product: { acqPrice: 15000, price: 40000 } }],
+  };
+  const declined = () =>
+    createWebhookRequest({ id: "wompi-declined-id", reference: "order-id", amount_in_cents: 8000000, status: "DECLINED" });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createInventoryMovementBatchResilient.mockResolvedValue({ failed: [] });
+  });
+
+  it("DECLINED deja el pedido pendiente, sin cancelar ni tocar stock ni cupón, y manda un solo correo de reintento aunque Wompi rechace otra vez", async () => {
+    const paymentClaim = vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    const orderUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const transactionClient = {
+      order: { updateMany: orderUpdateMany, findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PENDING }) },
+      paymentDetails: { findUnique: vi.fn().mockResolvedValue({ id: "pay-1" }), updateMany: paymentClaim, create: vi.fn() },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+    };
+    mocks.findOrder.mockResolvedValue(pendingOrder);
+    mocks.transaction.mockImplementation(async (callback: any) => callback(transactionClient));
+
+    const first = await POST(declined());
+    const second = await POST(declined());
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({ message: "Orden ORD-123 ya fue procesada anteriormente" });
+    // Solo el paso CREATED → PENDING; nunca a CANCELLED.
+    for (const [args] of orderUpdateMany.mock.calls) expect(args).toEqual({ where: { id: "order-id", status: OrderStatus.CREATED }, data: { status: OrderStatus.PENDING } });
+    expect(paymentClaim.mock.calls[0][0].where).toEqual({
+      orderId: "order-id",
+      OR: [{ details: null }, { details: { not: { contains: "Pago no aprobado, esperando reintento" } } }],
+    });
+    expect(paymentClaim.mock.calls[0][0].data.details).toContain("Pago no aprobado, esperando reintento");
+    expect(mocks.sendPaymentDeclinedEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendPaymentDeclinedEmail).toHaveBeenCalledWith("order-id");
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+    expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
+    expect(transactionClient.coupon.updateMany).not.toHaveBeenCalled();
+    expect(mocks.handleGiftCardOnOrderCancellation).not.toHaveBeenCalled();
+  });
+
+  it("un rechazo viejo que llega después del pago bueno no deshace nada", async () => {
+    const transactionClient = {
+      order: { updateMany: vi.fn().mockResolvedValue({ count: 0 }), findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PAID }) },
+      paymentDetails: { findUnique: vi.fn(), updateMany: vi.fn(), create: vi.fn() },
+    };
+    mocks.findOrder.mockResolvedValue({ ...pendingOrder, status: OrderStatus.PAID });
+    mocks.transaction.mockImplementation(async (callback: any) => callback(transactionClient));
+
+    const response = await POST(declined());
+
+    expect(response.status).toBe(200);
+    expect(transactionClient.paymentDetails.updateMany).not.toHaveBeenCalled();
+    expect(mocks.sendPaymentDeclinedEmail).not.toHaveBeenCalled();
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["para recoger (sin envío)", null, "pickup"],
+    ["para recoger (Recoge en tienda)", { ...unshippedDelivery, provider: "NONE" }, "pickup"],
+    ["con guía", { ...unshippedDelivery, envioClickIdOrder: 991 }, "shipped"],
+    ["ya entregado", { ...unshippedDelivery, status: "Delivered" }, "shipped"],
+  ])("VOIDED sobre un pagado %s: no cambia pedido, stock, cupón ni correos; avisa a la dueña", async (_label, shipping, holdReason) => {
+    const orderUpdateMany = vi.fn();
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: orderUpdateMany, findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PAID, shipping }) },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: mocks.paymentUpsert },
+    };
+    mocks.findOrder.mockResolvedValue({ ...pendingOrder, status: OrderStatus.PAID });
+    mocks.transaction.mockImplementation(async (callback: any) => callback(transactionClient));
+
+    const response = await POST(createWebhookRequest({ id: "wompi-void-id", reference: "order-id", amount_in_cents: 8000000, status: "VOIDED" }));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).message).toContain("la anulación quedó para revisión");
+    expect(orderUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.paymentUpsert).not.toHaveBeenCalled();
+    expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
+    expect(transactionClient.coupon.updateMany).not.toHaveBeenCalled();
+    expect(mocks.handleGiftCardOnOrderCancellation).not.toHaveBeenCalled();
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+    expect(mocks.invalidateStoreProductsCache).not.toHaveBeenCalled();
+    expect(mocks.sendPaymentAlert).toHaveBeenCalledWith({
+      provider: "WOMPI",
+      kind: "void-held",
+      storeId: "store-id",
+      orderId: "order-id",
+      orderNumber: "ORD-123",
+      holdReason,
+    });
   });
 });
