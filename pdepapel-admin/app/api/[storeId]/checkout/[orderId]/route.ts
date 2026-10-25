@@ -1,6 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
-import { sendOrderEmail } from "@/lib/email";
 import { validateStockAvailability } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, CheckoutOrder, generateWompiPayment } from "@/lib/utils";
@@ -8,7 +7,6 @@ import { processOrderItemsInBatches } from "@/lib/server/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { BATCH_SIZE } from "@/constants";
-import { runInBackground } from "@/lib/background";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 const getCorsHeaders = (request: Request) => ({
@@ -108,15 +106,8 @@ export async function POST(
       await validateStockAvailability(prismadb, stockValidationItems);
     }
 
-    // Send email notification asynchronously (same pattern as main checkout)
-    runInBackground("correo del pedido (reintento de pago)", async () => {
-      try {
-        await sendOrderEmail(order.id, OrderStatus.PENDING);
-      } catch (emailError) {
-        console.error("Failed to send order email:", emailError);
-      }
-    });
-
+    // Sin correo: el «Pendiente de pago» ya salió al crear el pedido y cada
+    // clic en «otra pasarela» lo repetía a la clienta y al panel.
     const url = await generateWompiPayment(order as CheckoutOrder);
 
     return NextResponse.json({ url }, { headers: corsHeaders });

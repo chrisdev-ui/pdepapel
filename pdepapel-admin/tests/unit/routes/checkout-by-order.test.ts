@@ -65,9 +65,21 @@ describe("POST /checkout/[orderId]", () => {
       where: { id: "pay-1" },
       data: { method: PaymentMethod.Wompi },
     });
-    // El correo sale después del cambio a Wompi y carga el pedido por su id.
     await new Promise((resolve) => setImmediate(resolve));
-    expect(mocks.sendOrderEmail).toHaveBeenCalledWith("order-1", OrderStatus.PENDING);
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+  });
+
+  it("cambiar de pasarela no repite el correo de pedido pendiente, ni al repetir el clic", async () => {
+    mocks.findOrder.mockResolvedValue({
+      ...baseOrder,
+      payment: { id: "pay-1", method: PaymentMethod.Wompi },
+    });
+
+    expect((await call()).status).toBe(200);
+    expect((await call()).status).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
   });
 
   it("no toca el método cuando el pedido ya es Wompi", async () => {
