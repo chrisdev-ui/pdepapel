@@ -6,17 +6,17 @@
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync } from "node:fs";
 
+import { assertTestDatabaseEnv } from "../lib/test-database.mjs";
 import { ADMIN, WORK } from "./paths.mjs";
 
 const require = createRequire(ADMIN + "package.json");
 const { PrismaClient } = require("@prisma/client");
+assertTestDatabaseEnv(process.env, "sandbox de pagos");
 const db = new PrismaClient();
 const storeId =
   readFileSync(ADMIN + ".env.e2e.local", "utf8").match(/^\s*(?:export\s+)?E2E_ADMIN_STORE_ID\s*=\s*"?([^"\r\n]+)"?\s*$/m)?.[1]?.trim() ?? "e2e-admin-store";
 const [command, value] = process.argv.slice(2);
 try {
-  const [{ d }] = await db.$queryRawUnsafe("SELECT DATABASE() AS d");
-  if (d !== "pdepapel_test") throw new Error("no es la base de pruebas: " + d);
   if (command === "alertas") {
     await db.storeSettings.upsert({ where: { storeId }, update: { adminNotificationEmails: "sandbox+admin@example.com" }, create: { storeId, adminNotificationEmails: "sandbox+admin@example.com" } });
     await db.coupon.upsert({

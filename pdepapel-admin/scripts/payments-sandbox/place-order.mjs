@@ -4,6 +4,7 @@
 // Wompi rechaza un redirect-url con http://localhost.
 // Uso (desde pdepapel-admin):
 //   node scripts/payments-sandbox/place-order.mjs <caso> <online|transfer> [--coupon CÓDIGO] [--wompi-card 4242…|none] [--pay-url-of <caso>]
+//   node scripts/payments-sandbox/place-order.mjs <caso> retry --of <caso> --wompi-card 4242…   (reintento desde /pedido tras un rechazo)
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 import { STORE, STORE_PORT, UPSTASH_PORT, WORK } from "./paths.mjs";
@@ -28,7 +29,15 @@ try {
   await page.route("**/api/locations**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ results: [{ value: "05001000", label: "MEDELLÍN - ANTIOQUIA", city: "MEDELLÍN", department: "ANTIOQUIA", daneCode: "05001000", raw: { locationCode: "05001000", cityName: "MEDELLÍN", departmentName: "ANTIOQUIA" } }], count: 1 }) }));
   await page.addInitScript((cart) => { localStorage.setItem("cart-storage", JSON.stringify(cart)); localStorage.removeItem("checkout-storage"); localStorage.setItem("privacy-consent", JSON.stringify({ analytics: false, decidedAt: Date.now() })); }, CART);
   const payUrlFile = opt("--pay-url-of");
-  if (payUrlFile) {
+  const retryOf = method === "retry" ? opt("--of") : null;
+  if (retryOf) {
+    const { readFileSync } = await import("node:fs");
+    const orderId = readFileSync(DIR + "order-" + retryOf + ".txt", "utf8").trim();
+    await page.goto(BASE + "/pedido/" + orderId);
+    await page.getByRole("button", { name: /Pagar ahora/ }).click({ timeout: 60_000 });
+    await page.waitForURL(/checkout\.wompi\.co/, { timeout: 60_000 });
+    console.log("RETRY_OF", orderId);
+  } else if (payUrlFile) {
     const { readFileSync } = await import("node:fs");
     await page.goto(readFileSync(DIR + "wompi-url-" + payUrlFile + ".txt", "utf8").trim());
     await page.waitForURL(/checkout\.wompi\.co/, { timeout: 60_000 });
@@ -63,8 +72,8 @@ try {
   writeFileSync(DIR + "order-" + caseName + ".txt", orderId);
   await shot("2-pedido");
   }
-  if (method === "online" && card) {
-    if (!payUrlFile) {
+  if ((method === "online" || method === "retry") && card) {
+    if (!payUrlFile && !retryOf) {
     await page.getByRole("button", { name: /Pagar con otra pasarela segura/ }).click({ timeout: 60_000 });
     await page.waitForURL(/checkout\.wompi\.co/, { timeout: 60_000 });
     }
