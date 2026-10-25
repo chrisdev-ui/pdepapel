@@ -113,6 +113,14 @@ describe("InventoryClient", () => {
     expect(push).toHaveBeenCalledWith("/store-1/movimientos-inventario/producto/p1");
   });
 
+  it("«Todo» aclara que las cápsulas sorpresa no se cuentan; las otras vistas no lo repiten", () => {
+    render(<InventoryClient list={listFor(data, "vista=todo")} threshold={5} />);
+    expect(screen.getByText(/Las cápsulas sorpresa no se cuentan aquí/)).toBeInTheDocument();
+    cleanup();
+    render(<InventoryClient list={listFor(data)} threshold={5} />);
+    expect(screen.queryByText(/cápsulas sorpresa/)).toBeNull();
+  });
+
   it("preselects the row product in the adjust modal, but not from the header button", async () => {
     const user = userEvent.setup();
     render(<InventoryClient list={listFor(data, "vista=todo")} threshold={5} />);
