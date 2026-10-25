@@ -50,6 +50,19 @@ const withClerk = clerkMiddleware(
   { signInUrl: "/iniciar-sesion" },
 );
 
+const REAL_ROOT_FILES = new Set(["/favicon.ico", "/robots.txt"]);
+
+/**
+ * `/x.php`, `/wp-login.php` o `/.env`: ningún primer segmento real lleva
+ * punto salvo los dos archivos de la raíz. Sin este corte la ruta caía en
+ * `[storeId]` y su 404 llegaba transmitido dentro de un 200.
+ */
+export function isFileProbePath(pathname: string): boolean {
+  if (REAL_ROOT_FILES.has(pathname)) return false;
+  const firstSegment = pathname.split("/")[1] ?? "";
+  return firstSegment.includes(".");
+}
+
 const isApiRequest = (request: NextRequest) =>
   request.nextUrl.pathname.startsWith("/api/");
 
@@ -72,6 +85,13 @@ export default async function middleware(
   request: NextRequest,
   event: NextFetchEvent,
 ) {
+  if (isFileProbePath(request.nextUrl.pathname)) {
+    return new NextResponse("No encontrado", {
+      status: 404,
+      headers: { "X-Robots-Tag": "noindex", "Cache-Control": "no-store" },
+    });
+  }
+
   if (isApiRequest(request) && request.method === "OPTIONS") {
     const headers: Record<string, string> = { ...publicApiCorsHeaders };
     const origin = request.headers.get("origin");
@@ -95,5 +115,11 @@ export default async function middleware(
 }
 
 export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: [
+    "/((?!.+\\.[\\w]+$|_next).*)",
+    "/",
+    "/(api|trpc)(.*)",
+    // El primero salta todo lo que termina en extensión; este devuelve al middleware los archivos de un segmento.
+    "/((?!_next|favicon\\.ico$|robots\\.txt$)[^/]*\\.[^/]+)",
+  ],
 };
