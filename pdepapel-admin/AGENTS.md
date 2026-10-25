@@ -248,6 +248,11 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 
 ### Authorization
 
+- **Bot paths never reach Clerk (2026-10-26).** `middleware.ts` answers a real 404 (`noindex`, `no-store`) before Clerk for any first path segment containing a dot (`isFileProbePath`), except `/favicon.ico` and `/robots.txt`. `assertStoreIdShape` stays in the `[storeId]` layout as a second line.
+- **Orders: Turnstile fails open (2026-10-26).**
+  - A missing token or a failed challenge logs a warning and adds the risk reason `sin-turnstile` with weight 2. That shows «Posible bot» in the order review, and a gift card bought that way waits for approval.
+  - Such an order also gets a limit of 2 per IP per hour, on top of the normal 6.
+  - Cloudflare unavailable or not configured adds nothing.
 - Clerk `middleware.ts` marks **every `/api/*` path public** and applies a CORS allowlist (`lib/cors.ts`). Authorization is enforced **inside each handler**. A new admin-only endpoint without that check is publicly writable.
 - Order of operations in a dashboard handler, before reading the body: `auth()` → 401 without a session, then the store-ownership check → 403 for a signed-in customer of another store. The storefront and the panel share one Clerk instance, so **every shop customer already has a session on the panel's domain**.
 - `lib/store-access.ts` is the authorization core: `requireStoreOwner` (writes and sensitive reads), `requireStoreRead` (owner **or** a read-only account), `getStoreAccess` (non-throwing, for UI), `requireAdminSession`, `parsePanelMetadata`. Ownership comes from `Store.userId` and is resolved **before** Clerk metadata, so an owner can never be downgraded by metadata; a read-only account is declared in Clerk `publicMetadata` as `{ "role": "viewer", "allowedStoreIds": [...] }`, and any unexpected shape fails closed.
@@ -265,6 +270,36 @@ The matching migration (`prisma/manual-migrations/20260918_add_variant_conversio
 
 ### Payments and webhooks
 
+- **One settlement path (2026-10-26).**
+  - The Bold and Wompi webhooks and the hourly reconciliation all settle through `lib/payment-settlement.ts`: `settlePaidPayment`, `settleCancelledPayment` and `settlePendingPayment`.
+  - The status-guarded claim inside `$transaction` is the only idempotency guard. Never add a second «mark paid» path.
+  - Rules shared by both gateways:
+    - Finances use `Shipping.cost + codFee`.
+    - Stock movements use `saleMovementType(order.type)`.
+    - Cancelling a paid order keeps the coupon linked and decrements its use.
+- **Late approval on a cancelled order:**
+  - It revives the order unless `blocksLatePaymentRevival` applies: gift card, fraud, or an in-person sale undone at the counter (POINT_OF_SALE/FESTIVAL). Those are flagged «pago-en-cancelado» for review or refund instead.
+  - If the stock is gone, the order still becomes PAID. `createInventoryMovementBatchResilient` never goes negative, and the missing units become an open DECREMENT issue («pagado sin stock») that blocks the guide.
+  - `notifyLatePaymentRevival` sends **one** email that also says «pagado sin stock» (`recordInventoryIssues(..., notifyShortfall: false)`). The separate «Pedido pagado sin stock» email (`notifyStockShortfall`) is only for the normal, non-revival payment path.
+- **Webhook alerts** (`lib/payment-webhook-alert.ts`, at most one per hour per provider and kind):
+  - They cover 5xx, rejections with a valid signature, and invalid signatures whose reference is a real order.
+  - Probes (unmatched invalid signatures, or rejections before the signature check) are only counted in the Sistemas row «Webhooks de pago (24 h)». Inicio uses the same filter.
+  - Wompi answers 500 when the database fails during the order lookup.
+- **Hourly reconciliation** (`/api/cron/payment-reconciliation`, Vercel `35 * * * *`, JobRun `payment-reconciliation`):
+  - **What it picks up:** Bold/Wompi orders still CREATED/PENDING after 15 minutes (Wompi up to 72 h, Bold up to 24 h, newest first, 40 per run).
+  - **How it asks:** Wompi with the **private** key (`WOMPI_API_SECRET`; the public key gets 401 on search by reference), Bold `payment-voucher` with `NEXT_PUBLIC_BOLD_IDENTITY_KEY`.
+  - **Bold amounts (webhook and reconciliation, `boldAmountMatchesOrder`):** compared against what we sent in the payment link (order total minus any gift card).
+    - Bold's webhook docs (developers.bold.co/webhook, checked 2026-10-25) say `amount.total` «includes propinas e impuestos» and that the tip comes separately in `amount.tip`. So the check uses `total − tip`.
+    - The lookup docs (developers.bold.co/pagos-en-linea/consulta-de-transacciones) only show `total`/`subtotal`. Without a tip field, up to 20% extra (`BOLD_UNREPORTED_TIP_TOLERANCE`) counts as a tip and doesn't alert.
+    - A lower amount, a larger excess, or a missing total is a mismatch.
+  - **What it does:**
+    - An approved payment with a matching amount → the shared paid path, plus an alert «el webhook no avisó».
+    - Declined or voided, final and older than 30 minutes → the shared cancel path.
+    - Anything else → no change.
+  - **What it logs:** `PaymentWebhookEvent` rows `reconcile:<STATUS>`, only when something changed.
+  - **Key checks:**
+    - A 401/403 counts as «Llave de <pasarela> rechazada»: a red row, one email per hour, and no more calls to that gateway in the run.
+    - With nothing pending, it still probes each key with reference `pdepapel-verificacion-de-llave`.
 - **Bold** is the default gateway, **Wompi** the fallback, **PayU** legacy and deprecated. Customer-facing text stays provider-neutral: **`Pago en línea`** (keep useful payment icons; this is about text).
 - Webhook processing must be **idempotent** and must validate the provider's authenticity and state before changing an order. **Never mark an order paid from a client redirect.**
 - **Bank transfer reaches `PAID` only after manual admin verification.**
@@ -908,6 +943,7 @@ One frozen Cloudinary transformation per app (`f_auto,q_auto,c_limit,w_≤1600`)
 
 ### Scheduled work and database pool
 
+- **Cron auth comes first (2026-10-26).** Every `app/api/cron/*` route calls `requireCronAuth(request)` (`lib/cron-auth.ts`, timing-safe) as its first statement, before `try` and any `recordJobRun`. So an anonymous call gets a 403 and never writes a red JobRun or overwrites the last real run (on 10-25 a plain GET turned «Limpieza de altas sin confirmar» red). `tests/unit/routes/cron-auth.test.ts` scans every cron route for this. `internal/stock-reservations/sweep` uses `isCronRequest` alongside the QStash signature.
 - **Vercel crons (corrected 2026-10-22):** the old «only two crons» note is stale. Per Vercel's «Usage & Pricing for Cron Jobs» (updated 2026-07-15), every plan allows 100 cron jobs per project. Hobby runs them at most once a day (±59 min), and a more frequent expression fails the deploy. **Pro** allows down to once a minute with per-minute precision. The team is on Pro (Christian confirmed in the Vercel dashboard). `vercel.json` has `update-coupons`, `update-offers` (daily), `social-recent` (hourly at :05) and `social-sync` (03:15/09:15/15:15/21:15 UTC, since 2026-10-23). Vercel sends `CRON_SECRET` as the Bearer token automatically.
   - **Since 2026-10-23 every daily admin job is also a Vercel cron.** GitHub started `admin-scheduled-tasks.yml` 3 to 8.5 h late on 14 days in a row, so Merchant Center fetched the previous day's feed. It also skipped some of the `whatsapp-volume-watch.yml` slots.
   - The 11 daily jobs run two minutes apart, from 13:00 to 13:20 UTC, in this order: `google-merchant-feed`, `image-health`, `notification-retry`, `db-health`, `gift-card-holds`, `bank-transfer-review`, `abc-classification`, `whatsapp-recovery`, `whatsapp-webhook-retention`, `payment-webhook-retention`, `copilot-retention`. The Merchant feed goes first because Merchant Center fetches after 13:30.
@@ -1000,7 +1036,7 @@ Each was found during an audit, judged not worth the change at the time, and rec
 - **TODO, Bold datáfono `user_email`:** `lib/bold-terminal.ts` still falls back to a code literal for the terminal's `user_email`. Leave it until the datáfono integration goes live (that path has never run in production); then it must be the Bold account's user, read from store settings, never a literal in code.
 - The outbox and WhatsApp queue claims have no concurrency test of their own. They use the same `claimQueueRow` helper that is covered against a real database for the Mercado Libre webhook processor, so the mechanism is tested but neither caller proves its own wiring.
 - **Two people share one Clerk account**, and there is no role or membership table: `Store.userId` is a single owner string. Separation of duties is not expressible, and every `createdBy` / `releasedBy` attribution records the same identity. This is an open product decision, not a pending code change.
-- **No rate limiting anywhere** except the per-customer order gap in checkout and the fixed-window quote limit. `/shipment/quote` is public and calls the carrier on a cache miss, so varying the destination turns an anonymous request into a paid external call.
+- **Rate limits are few:** the per-customer order gap in checkout, the per-IP order limits in `lib/order-rate-limit.ts` (6 per hour, 2 for orders without Turnstile), the newsletter and gift-card limits, and the fixed-window quote limit. `/shipment/quote` is public and calls the carrier on a cache miss, so varying the destination turns an anonymous request into a paid external call.
 - Failed notifications are recorded (`FailedNotification`) but never retried and never alerted on; someone has to look. The Mercado Libre queues are the shape to copy when this is worth finishing.
 - `getPositiveNumber` accepts non-integer quantities from Mercado Libre, so a hypothetical `1.5` would reach the stock decrement. Mercado Libre does not send fractional quantities today.
 - Read-only accounts: 24 reads and 5 server loaders stay owner-only by design (suppliers, conversations, shipments carrying contact data). The axios write-interceptor is a convenience, not a security boundary, and does not cover the roughly 39 sites that mutate with `fetch`.
