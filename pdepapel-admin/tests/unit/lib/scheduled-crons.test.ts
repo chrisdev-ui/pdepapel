@@ -6,7 +6,7 @@ import { DAILY_OVERDUE_HOURS, JOB_DEFINITIONS, overdueAfterHours } from "@/lib/j
 import { scheduledRequestUrl } from "@/lib/scheduled-jobs";
 
 /**
- * Los trabajos diarios corren como crons de Vercel (13:00–13:20 UTC, de dos en
+ * Los trabajos diarios corren como crons de Vercel (13:00–13:22 UTC, de dos en
  * dos minutos, el feed de Merchant primero): GitHub los arrancaba de 3 a 8,5 h
  * tarde y se saltaba franjas del conteo de WhatsApp. Los workflows quedan solo
  * a mano; si alguno vuelve a tener horario, el trabajo corre dos veces.
@@ -27,6 +27,7 @@ const DAILY = [
   ["/api/cron/whatsapp-webhook-retention", "16 13 * * *"],
   ["/api/cron/payment-webhook-retention", "18 13 * * *"],
   ["/api/cron/copilot-retention", "20 13 * * *"],
+  ["/api/cron/newsletter-retention", "22 13 * * *"],
 ] as const;
 
 describe("crons de Vercel en lugar de los horarios de GitHub", () => {

@@ -4,8 +4,10 @@ import { Check } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
 
+import { BotChallengeSlot, BotTrapField, useBotTrap } from "@/components/bot-trap";
 import { useToast } from "@/hooks/use-toast";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
+import { postNewsletterSignup } from "@/lib/newsletter-signup";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +29,7 @@ export function EarlyAccessForm({ label, source, productId, className, open = fa
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const inputId = useId();
+  const botTrap = useBotTrap();
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -37,11 +40,7 @@ export function EarlyAccessForm({ label, source, productId, className, open = fa
     try {
       setStatus("sending");
       trackCustomerEvent("newsletter_signup_submitted", { source });
-      const response = await fetch("/api/newsletter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, consent: true, source, productId, company: "" }),
-      });
+      const response = await postNewsletterSignup({ email, consent: true, source, productId, company: "" }, await botTrap.fields());
       const result = (await response.json().catch(() => null)) as { message?: string } | null;
       if (!response.ok) throw new Error(result?.message ?? "No pudimos iniciar la suscripción");
       setStatus("done");
@@ -114,6 +113,8 @@ export function EarlyAccessForm({ label, source, productId, className, open = fa
           .
         </span>
       </label>
+      <BotTrapField trap={botTrap} />
+      <BotChallengeSlot trap={botTrap} />
     </form>
   );
 }

@@ -1,5 +1,5 @@
 import { DiscountType, NewsletterSubscriberStatus } from "@prisma/client";
-import { addDays, addHours, subMinutes } from "date-fns";
+import { addDays, addHours, subHours, subMinutes } from "date-fns";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
@@ -9,9 +9,11 @@ import { env } from "@/lib/env.mjs";
 import {
   createNewsletterToken,
   hashNewsletterToken,
-  normalizeNewsletterEmail,
+  newsletterEmailKey,
+  newsletterEmailLookupKeys,
   normalizeNewsletterSource,
 } from "@/lib/newsletter-tokens";
+import { runInBackground } from "@/lib/background";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import { socialLinksText, withSocialLinks } from "@/lib/social-links";
@@ -19,7 +21,9 @@ import { socialLinksText, withSocialLinks } from "@/lib/social-links";
 export const NEWSLETTER_CONSENT_VERSION = "2026-09-01";
 export const NEWSLETTER_CONSENT_TEXT =
   "Autorizo a P de Papel a enviarme hasta dos correos al mes con novedades, lanzamientos y ofertas. Puedo cancelar mi suscripción cuando quiera.";
-const CONFIRMATION_COOLDOWN_MINUTES = 5;
+// Una por dirección al día: las altas falsas usaban direcciones de terceros y
+// cada correo de más es una queja posible contra el dominio.
+export const CONFIRMATION_COOLDOWN_HOURS = 24;
 const CONFIRMATION_EXPIRY_HOURS = 48;
 export const NEWSLETTER_WELCOME_DISCOUNT_PERCENT = 10;
 export const NEWSLETTER_WELCOME_COUPON_DAYS = 30;
@@ -152,52 +156,91 @@ async function issueWelcomeCoupon(storeId: string, subscriberId: string) {
   return null;
 }
 
+type ExistingSubscriber = { id: string; status: NewsletterSubscriberStatus };
+
+/**
+ * Las filas viejas de Gmail se guardaron con puntos (`j.ohn` en gmail): se
+ * buscan por la llave exacta y, si no aparece, entre las de Gmail que dan la
+ * misma llave nueva. Un activo o bloqueado gana sobre un pendiente.
+ */
+async function findExistingSubscribers(storeId: string, email: string): Promise<ExistingSubscriber[]> {
+  const key = newsletterEmailKey(email);
+  const exact = await prismadb.newsletterSubscriber.findMany({
+    where: { storeId, emailNormalized: { in: newsletterEmailLookupKeys(email) } },
+    select: { id: true, status: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (exact.length > 0 || !key.endsWith("@gmail.com")) return exact;
+
+  const candidates = await prismadb.newsletterSubscriber.findMany({
+    where: {
+      storeId,
+      emailNormalized: { startsWith: key.charAt(0) },
+      OR: [{ emailNormalized: { endsWith: "@gmail.com" } }, { emailNormalized: { endsWith: "@googlemail.com" } }],
+    },
+    select: { id: true, status: true, emailNormalized: true },
+    orderBy: { createdAt: "desc" },
+    take: 2000,
+  });
+  return candidates.filter((row) => newsletterEmailKey(row.emailNormalized) === key).map(({ id, status }) => ({ id, status }));
+}
+
 export async function requestNewsletterSubscription(input: {
   storeId: string;
   email: string;
   source?: string;
   interestProductId?: string | null;
 }) {
-  const emailNormalized = normalizeNewsletterEmail(input.email);
-  const existing = await prismadb.newsletterSubscriber.findUnique({
-    where: {
-      storeId_emailNormalized: { storeId: input.storeId, emailNormalized },
-    },
-    select: { id: true, status: true },
-  });
-
-  if (existing?.status === NewsletterSubscriberStatus.ACTIVE) {
-    return { accepted: true, confirmationSent: false };
-  }
-  if (existing?.status === NewsletterSubscriberStatus.SUPPRESSED) {
+  const matches = await findExistingSubscribers(input.storeId, input.email);
+  if (
+    matches.some(
+      (row) =>
+        row.status === NewsletterSubscriberStatus.ACTIVE ||
+        row.status === NewsletterSubscriberStatus.SUPPRESSED,
+    )
+  ) {
     return { accepted: true, confirmationSent: false };
   }
 
   const now = new Date();
-  const subscriber = await prismadb.newsletterSubscriber.upsert({
-    where: {
-      storeId_emailNormalized: { storeId: input.storeId, emailNormalized },
-    },
-    create: {
-      storeId: input.storeId,
-      email: input.email.trim(),
-      emailNormalized,
-      source: normalizeNewsletterSource(input.source),
-      interestProductId: input.interestProductId ?? null,
-      consentText: NEWSLETTER_CONSENT_TEXT,
-      consentVersion: NEWSLETTER_CONSENT_VERSION,
-      consentedAt: now,
-    },
-    update: {
-      email: input.email.trim(),
-      source: normalizeNewsletterSource(input.source),
-      ...(input.interestProductId ? { interestProductId: input.interestProductId } : {}),
-      consentText: NEWSLETTER_CONSENT_TEXT,
-      consentVersion: NEWSLETTER_CONSENT_VERSION,
-      consentedAt: now,
-    },
-    select: { id: true, email: true },
-  });
+  const fields = {
+    email: input.email.trim(),
+    source: normalizeNewsletterSource(input.source),
+    consentText: NEWSLETTER_CONSENT_TEXT,
+    consentVersion: NEWSLETTER_CONSENT_VERSION,
+    consentedAt: now,
+  };
+  const updateExisting = (id: string) =>
+    prismadb.newsletterSubscriber.update({
+      where: { id },
+      data: { ...fields, ...(input.interestProductId ? { interestProductId: input.interestProductId } : {}) },
+      select: { id: true, email: true },
+    });
+
+  let subscriber: { id: string; email: string };
+  if (matches[0]) {
+    subscriber = await updateExisting(matches[0].id);
+  } else {
+    try {
+      subscriber = await prismadb.newsletterSubscriber.create({
+        data: {
+          ...fields,
+          storeId: input.storeId,
+          emailNormalized: newsletterEmailKey(input.email),
+          interestProductId: input.interestProductId ?? null,
+        },
+        select: { id: true, email: true },
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== "P2002") throw error;
+      const [raced] = await findExistingSubscribers(input.storeId, input.email);
+      if (!raced) throw error;
+      if (raced.status !== NewsletterSubscriberStatus.PENDING && raced.status !== NewsletterSubscriberStatus.UNSUBSCRIBED) {
+        return { accepted: true, confirmationSent: false };
+      }
+      subscriber = await updateExisting(raced.id);
+    }
+  }
 
   const { token, tokenHash } = createNewsletterToken();
   const claim = await prismadb.newsletterSubscriber.updateMany({
@@ -210,11 +253,10 @@ export async function requestNewsletterSubscription(input: {
         ],
       },
       OR: [
-        { status: NewsletterSubscriberStatus.UNSUBSCRIBED },
         { lastConfirmationSentAt: null },
         {
           lastConfirmationSentAt: {
-            lte: subMinutes(now, CONFIRMATION_COOLDOWN_MINUTES),
+            lte: subHours(now, CONFIRMATION_COOLDOWN_HOURS),
           },
         },
       ],
@@ -247,6 +289,33 @@ export async function requestNewsletterSubscription(input: {
   return { accepted: true, confirmationSent: true };
 }
 
+export type NewsletterTokenStatus = "valid" | "already_confirmed" | "expired" | "invalid";
+
+/**
+ * El enlace del correo se queda con su hash al confirmar: así la página puede
+ * decir «ya estaba confirmada» en vez de «enlace inválido». Una baja o un
+ * nuevo envío lo borran o lo reemplazan.
+ */
+function tokenStatus(
+  subscriber: { status: NewsletterSubscriberStatus; confirmationExpiresAt: Date | null } | null,
+  now = Date.now(),
+): NewsletterTokenStatus {
+  if (!subscriber) return "invalid";
+  if (subscriber.status === NewsletterSubscriberStatus.ACTIVE) return "already_confirmed";
+  if (subscriber.status !== NewsletterSubscriberStatus.PENDING) return "invalid";
+  if (!subscriber.confirmationExpiresAt || subscriber.confirmationExpiresAt.getTime() < now) return "expired";
+  return "valid";
+}
+
+/** Solo lectura: lo que usa la página de la tienda para mostrar el botón. Un escáner de enlaces que la abra no confirma nada. */
+export async function checkNewsletterConfirmationToken(storeId: string, token: string): Promise<{ status: NewsletterTokenStatus }> {
+  const subscriber = await prismadb.newsletterSubscriber.findFirst({
+    where: { storeId, confirmationTokenHash: hashNewsletterToken(token) },
+    select: { status: true, confirmationExpiresAt: true },
+  });
+  return { status: tokenStatus(subscriber) };
+}
+
 export async function confirmNewsletterSubscription(
   storeId: string,
   token: string,
@@ -256,12 +325,9 @@ export async function confirmNewsletterSubscription(
     where: { storeId, confirmationTokenHash: tokenHash },
   });
 
-  if (!subscriber) return { status: "invalid" as const };
-  if (
-    !subscriber.confirmationExpiresAt ||
-    subscriber.confirmationExpiresAt.getTime() < Date.now()
-  ) {
-    return { status: "expired" as const };
+  const current = tokenStatus(subscriber);
+  if (!subscriber || current !== "valid") {
+    return { status: current as Exclude<NewsletterTokenStatus, "valid"> };
   }
 
   const { token: unsubscribeToken, tokenHash: unsubscribeTokenHash } =
@@ -277,14 +343,19 @@ export async function confirmNewsletterSubscription(
       status: NewsletterSubscriberStatus.ACTIVE,
       confirmedAt,
       unsubscribedAt: null,
-      confirmationTokenHash: null,
       confirmationExpiresAt: null,
       unsubscribeTokenHash,
       lastWelcomeSentAt: confirmedAt,
     },
   });
 
-  if (confirmed.count === 0) return { status: "invalid" as const };
+  if (confirmed.count === 0) {
+    const raced = await prismadb.newsletterSubscriber.findFirst({
+      where: { storeId, confirmationTokenHash: tokenHash },
+      select: { status: true, confirmationExpiresAt: true },
+    });
+    return { status: tokenStatus(raced) === "already_confirmed" ? ("already_confirmed" as const) : ("invalid" as const) };
+  }
 
   let coupon: { code: string; endDate: Date } | null = null;
   if (!subscriber.welcomeCouponId) {
@@ -427,3 +498,28 @@ export async function unsubscribeNewsletterSubscriber(
 
   if (result.count === 0) throw new Error("Suscriptor no encontrado");
 }
+
+/**
+ * Casilla «quiero el boletín» del pago: el pedido ya pasó la trampa, el reloj y
+ * Turnstile, así que el alta va del panel y no pide un segundo desafío después
+ * de pagar (antes se perdía al redirigir a la pasarela).
+ */
+export function subscribeFromStoreOrder(input: {
+  storeId: string;
+  email: unknown;
+  optIn: unknown;
+  isStoreOwner: boolean;
+}): boolean {
+  if (input.isStoreOwner || input.optIn !== true) return false;
+  const email = z.string().trim().email().max(320).safeParse(input.email);
+  if (!email.success) return false;
+  runInBackground("alta al boletín desde el pago", async () => {
+    try {
+      await requestNewsletterSubscription({ storeId: input.storeId, email: email.data, source: "/finalizar-compra" });
+    } catch (error) {
+      console.error("[NEWSLETTER] Alta desde el pago falló:", error);
+    }
+  });
+  return true;
+}
+

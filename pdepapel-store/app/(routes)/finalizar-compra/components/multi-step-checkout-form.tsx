@@ -264,22 +264,6 @@ const formSchema = z
 
 export type CheckoutFormValue = z.infer<typeof formSchema>;
 
-async function subscribeFromCheckout(email: string) {
-  try {
-    await fetch("/api/newsletter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email,
-        consent: true,
-        source: "pago",
-        company: "",
-      }),
-    });
-  } catch {
-    // La suscripción no bloquea el pedido.
-  }
-}
 
 interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
@@ -932,7 +916,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       });
     },
     onSuccess(data) {
-      const wantsNewsletter = form.getValues("newsletterOptIn");
       const email = form.getValues("email");
       // This attempt produced an order: the next attempt is a new order.
       idempotencyKeyRef.current = createIdempotencyKey();
@@ -942,7 +925,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         trackCustomerEvent("checkout_payment_redirect", {
           payment_type: PaymentMethod.Wompi,
         });
-        if (wantsNewsletter) void subscribeFromCheckout(email);
         // The cart stays until the gateway confirms the payment.
         window.location.href = data.url;
       }
@@ -952,7 +934,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         trackCustomerEvent("checkout_payment_redirect", {
           payment_type: PaymentMethod.Bold,
         });
-        if (wantsNewsletter) void subscribeFromCheckout(email);
         // The order exists but nothing has been paid: keep the cart and the
         // form, remember the order, and open the gateway from the order page
         // (where the payment SDK lives and the status is polled).
@@ -985,7 +966,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               : `Tu pedido #${order.orderNumber || order.id} quedó registrado.`,
           variant: "success",
         });
-        if (wantsNewsletter) void subscribeFromCheckout(email);
         setPendingOrder(null);
         setCompletedOrderPath(orderPath(order.id));
       }
@@ -1244,6 +1224,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         analyticsSessionId,
         analyticsConsent,
         legalConsent: legalConsentPayload(),
+        // El panel da de alta en el boletín después de crear el pedido, sin otro desafío.
+        newsletterOptIn: Boolean(form.getValues("newsletterOptIn")),
         ...(await botTrap.fields()),
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,

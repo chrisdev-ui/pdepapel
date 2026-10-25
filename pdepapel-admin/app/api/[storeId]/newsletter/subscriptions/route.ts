@@ -5,6 +5,7 @@ import {
   newsletterSubscriptionSchema,
   requestNewsletterSubscription,
 } from "@/lib/newsletter";
+import { screenNewsletterSignup, tripsNewsletterHoneypot } from "@/lib/newsletter-intake";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 
@@ -12,6 +13,15 @@ const getHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
   ...CACHE_HEADERS.NO_CACHE,
 });
+
+const ACCEPTED_MESSAGE =
+  "Si aún falta confirmar, recibirás un enlace por correo. Revisa también la carpeta de spam.";
+
+const accepted = (request: Request) =>
+  NextResponse.json(
+    { accepted: true, message: ACCEPTED_MESSAGE },
+    { status: 202, headers: getHeaders(request) },
+  );
 
 export async function OPTIONS(request: Request) {
   return new NextResponse(null, { status: 204, headers: getHeaders(request) });
@@ -23,12 +33,7 @@ export async function POST(
 ) {
   try {
     const body = await request.json();
-    if (typeof body?.company === "string" && body.company.trim()) {
-      return NextResponse.json(
-        { accepted: true },
-        { status: 202, headers: getHeaders(request) },
-      );
-    }
+    if (tripsNewsletterHoneypot(body)) return accepted(request);
 
     const parsed = newsletterSubscriptionSchema.safeParse(body);
     if (!parsed.success) {
@@ -37,6 +42,16 @@ export async function POST(
         { status: 400, headers: getHeaders(request) },
       );
     }
+
+    const screen = await screenNewsletterSignup(request, {
+      storeId: params.storeId,
+      email: parsed.data.email,
+      website: body?.website,
+      company: body?.company,
+      formStartedAt: body?.formStartedAt,
+      turnstileToken: body?.turnstileToken,
+    });
+    if (screen.action === "drop") return accepted(request);
 
     const storeExists = await prismadb.store.findUnique({
       where: { id: params.storeId },
@@ -65,14 +80,7 @@ export async function POST(
       interestProductId,
     });
 
-    return NextResponse.json(
-      {
-        accepted: true,
-        message:
-          "Si aún falta confirmar, recibirás un enlace por correo. Revisa también la carpeta de spam.",
-      },
-      { status: 202, headers: getHeaders(request) },
-    );
+    return accepted(request);
   } catch (error) {
     console.error("[NEWSLETTER_SUBSCRIPTION_POST]", error);
     return NextResponse.json(

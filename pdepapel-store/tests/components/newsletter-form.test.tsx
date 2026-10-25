@@ -93,10 +93,12 @@ describe("NewsletterForm", () => {
     );
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/newsletter",
-      expect.objectContaining({ method: "POST" }),
-    );
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(String(url)).toMatch(/\/newsletter\/subscriptions$/);
+    expect(init).toMatchObject({ method: "POST" });
+    const sent = JSON.parse(String((init as RequestInit).body));
+    expect(sent).toMatchObject({ email: "cliente@example.com", consent: true, website: "", company: "", source: "/tienda" });
+    expect(sent.formStartedAt).toEqual(expect.any(Number));
     expect(
       await screen.findByText("Revisa tu correo y confirma la suscripción."),
     ).toBeVisible();

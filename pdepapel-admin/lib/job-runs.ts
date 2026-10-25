@@ -29,6 +29,7 @@ export type JobName =
   | "whatsapp-webhook-volume"
   | "whatsapp-recovery"
   | "payment-webhook-retention"
+  | "newsletter-retention"
   | "notification-retry"
   | "gift-card-holds"
   | "db-health"
@@ -185,6 +186,13 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     name: "bank-transfer-review",
     label: "Revisión de transferencias sin pagar",
+    expectedEveryHours: 24,
+    overdueAfterHours: DAILY_OVERDUE_HOURS,
+    perStore: false,
+  },
+  {
+    name: "newsletter-retention",
+    label: "Limpieza de altas sin confirmar del boletín",
     expectedEveryHours: 24,
     overdueAfterHours: DAILY_OVERDUE_HOURS,
     perStore: false,

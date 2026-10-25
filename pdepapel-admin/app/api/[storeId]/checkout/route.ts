@@ -65,6 +65,7 @@ import {
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { runInBackground } from "@/lib/background";
+import { subscribeFromStoreOrder } from "@/lib/newsletter";
 import { createGuideInBackground } from "@/lib/guide-background";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
@@ -922,6 +923,13 @@ async function createCheckout(
 
       return createdOrder;
     })) as unknown as CheckoutOrder;
+
+    subscribeFromStoreOrder({
+      storeId: params.storeId,
+      email,
+      optIn: (body as Record<string, unknown>).newsletterOptIn,
+      isStoreOwner,
+    });
 
     if (fullyCovered) {
       // Lo que un webhook haría al confirmar el pago, sin pasarela de por medio.

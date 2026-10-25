@@ -62,6 +62,10 @@
       "schedule": "20 13 * * *"
     },
     {
+      "path": "/api/cron/newsletter-retention",
+      "schedule": "22 13 * * *"
+    },
+    {
       "path": "/api/cron/whatsapp-webhook-volume",
       "schedule": "0 2,14,18,22 * * *"
     }

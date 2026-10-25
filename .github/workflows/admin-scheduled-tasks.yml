@@ -151,6 +151,25 @@ jobs:
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/payment-webhook-retention"
 
+  newsletter-retention:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == 'all' }}
+    name: Newsletter pending-signup retention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      # Only PENDING signups older than 7 days with an expired link; confirmed
+      # and unsubscribed rows are never touched.
+      - name: Delete unconfirmed newsletter signups older than 7 days
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/newsletter-retention"
+
   notification-retry:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'notification-retry' }}
     name: Order email retry

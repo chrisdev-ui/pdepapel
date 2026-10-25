@@ -128,7 +128,11 @@ describe("newsletter subscription flow with MySQL", () => {
     });
     expect(confirmed.status).toBe(NewsletterSubscriberStatus.ACTIVE);
     expect(confirmed.confirmedAt).toBeInstanceOf(Date);
-    expect(confirmed.confirmationTokenHash).toBeNull();
+    expect(confirmed.confirmationTokenHash).toBe(hashNewsletterToken(confirmationToken));
+    expect(confirmed.confirmationExpiresAt).toBeNull();
+    await expect(
+      confirmNewsletterSubscription(fixture.store.id, confirmationToken),
+    ).resolves.toEqual({ status: "already_confirmed" });
     expect(confirmed.unsubscribeTokenHash).toHaveLength(64);
 
     await testPrisma.newsletterSubscriber.update({

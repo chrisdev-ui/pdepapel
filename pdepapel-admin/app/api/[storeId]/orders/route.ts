@@ -84,6 +84,7 @@ import {
 } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
 import { runInBackground } from "@/lib/background";
+import { subscribeFromStoreOrder } from "@/lib/newsletter";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 import { orderLegalConsentData } from "@/lib/legal-consent";
 
@@ -974,6 +975,8 @@ async function createOrder(
         );
       }
     }
+
+    subscribeFromStoreOrder({ storeId: params.storeId, email, optIn: body?.newsletterOptIn, isStoreOwner });
 
     // Queue email sending asynchronously (don't wait for it)
     if (!isStoreOwner) {

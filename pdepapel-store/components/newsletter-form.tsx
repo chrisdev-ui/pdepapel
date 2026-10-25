@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm, type FieldErrors, type Resolver } from "react-hook-form";
 import Link from "next/link";
 
+import { BotChallengeSlot, BotTrapField, useBotTrap } from "@/components/bot-trap";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
+import { postNewsletterSignup } from "@/lib/newsletter-signup";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
 
@@ -50,6 +52,7 @@ export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) 
   const signupSource = source ?? pathname;
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const botTrap = useBotTrap();
   const form = useForm<NewsletterFormValues>({
     resolver: newsletterFormResolver,
     defaultValues: {
@@ -64,11 +67,10 @@ export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) 
       setLoading(true);
       setSuccessMessage(null);
       trackCustomerEvent("newsletter_signup_submitted", { source: signupSource });
-      const response = await fetch("/api/newsletter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, source: signupSource, productId }),
-      });
+      const response = await postNewsletterSignup(
+        { email: values.email, consent: true, company: values.company ?? "", source: signupSource, productId },
+        await botTrap.fields(),
+      );
       const result = (await response.json().catch(() => null)) as {
         message?: string;
       } | null;
@@ -182,6 +184,9 @@ export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) 
             </FormItem>
           )}
         />
+
+        <BotTrapField trap={botTrap} />
+        <BotChallengeSlot trap={botTrap} />
 
         {successMessage ? (
           <p
