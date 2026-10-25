@@ -125,6 +125,7 @@ describe("los trabajos heredados del programador", () => {
     mocks.env.CRON_SECRET = undefined;
     expect((await call(handler, name, "undefined")).status).toBe(403);
     expect(mocks.writes).toEqual([]);
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 
   it("la reactivación rechaza mode=apply mientras está apagada", async () => {

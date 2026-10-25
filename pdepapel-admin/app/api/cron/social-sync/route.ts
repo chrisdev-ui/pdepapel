@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { resolveScheduledJobMode, scheduledRequestUrl } from "@/lib/scheduled-jobs";
 import { planSocialSync, startSocialSync, type PlatformFilter } from "@/lib/social/runner";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { safeSecretEquals } from "@/lib/webhook-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -21,9 +20,10 @@ const PLATFORMS: PlatformFilter[] = ["all", "instagram", "tiktok"];
  * `mode=apply`, o con el trabajo apagado, solo cuenta, sin llamar a Meta ni a TikTok.
  */
 export async function GET(request: NextRequest) {
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
+
   try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!safeSecretEquals(token, env.CRON_SECRET)) throw ErrorFactory.Unauthorized();
     const url = new URL(request.url);
     const platform = (url.searchParams.get("platform") ?? "all") as PlatformFilter;
     if (!PLATFORMS.includes(platform)) throw ErrorFactory.InvalidRequest("platform debe ser all, instagram o tiktok");

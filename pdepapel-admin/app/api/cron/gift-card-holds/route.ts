@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { releaseExpiredGiftCardHolds } from "@/lib/gift-cards";
 import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
@@ -16,10 +16,10 @@ import prismadb from "@/lib/prismadb";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
 
+  try {
     const result = await releaseExpiredGiftCardHolds(prismadb);
     if (result.failed.length > 0) {
       console.error("[GIFT_CARD_HOLDS] Some holds could not be released:", result.failed);

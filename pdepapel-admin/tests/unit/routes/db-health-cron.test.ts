@@ -36,6 +36,7 @@ describe("GET /api/cron/db-health", () => {
   it("pide el secreto del cron", async () => {
     expect((await call()).status).toBe(403);
     expect(mocks.read).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 
   it("sin avisos queda en verde en «Sistemas»", async () => {

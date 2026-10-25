@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { AppError, handleErrorResponse } from "@/lib/api-errors";
 import { applyCopilotRetention, planCopilotRetention } from "@/lib/copiloto/retention";
-import { env } from "@/lib/env.mjs";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { recordJobRun } from "@/lib/job-runs";
 import { resolveScheduledJobMode, scheduledRequestUrl } from "@/lib/scheduled-jobs";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -12,9 +12,10 @@ export const maxDuration = 60;
 
 /** Borra las conversaciones del copiloto sin actividad en 180 días. Sin `mode=apply` solo cuenta. */
 export async function GET(request: NextRequest) {
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
+
   try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
     const mode = resolveScheduledJobMode(scheduledRequestUrl(request), "copilot-retention");
 
     const result = mode === "apply" ? await applyCopilotRetention() : await planCopilotRetention();

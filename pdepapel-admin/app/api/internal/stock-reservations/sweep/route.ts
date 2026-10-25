@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { env } from "@/lib/env.mjs";
+import { isCronRequest } from "@/lib/cron-auth";
 import { sweepStockReservations } from "@/lib/stock-reservations-job";
 import { verifyStockReservationsRequest } from "@/lib/stock-reservations-schedule";
 
@@ -14,8 +14,7 @@ export const maxDuration = 60;
  */
 export async function POST(request: Request) {
   const body = await request.text();
-  const bearer = request.headers.get("authorization")?.split("Bearer ").at(1);
-  const fromCron = Boolean(bearer && env.CRON_SECRET && bearer === env.CRON_SECRET);
+  const fromCron = isCronRequest(request);
   const fromQueue =
     !fromCron &&
     (await verifyStockReservationsRequest(body, request.headers.get("upstash-signature"), request.headers.get("upstash-region")));

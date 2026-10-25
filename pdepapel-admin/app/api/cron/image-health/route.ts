@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { describeImageHealthReport, refreshImageHealth } from "@/lib/image-health";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -16,10 +16,10 @@ export const maxDuration = 60;
  * el catálogo salvo la marca `Image.brokenAt`.
  */
 export async function GET(request: NextRequest) {
-  try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
 
+  try {
     const stores = await prismadb.store.findMany({ select: { id: true } });
     const results = await Promise.allSettled(
       stores.map(async (store) => ({

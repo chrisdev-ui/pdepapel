@@ -1,6 +1,6 @@
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { invalidateStorePromotionsCache } from "@/lib/cache";
-import { env } from "@/lib/env.mjs";
 import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
 import { refreshSoldCounts } from "@/lib/sold-count";
@@ -24,12 +24,10 @@ export async function OPTIONS() {
  * en las últimas 24 h, para que los precios cambien aunque nadie edite nada.
  */
 export async function GET(req: NextRequest) {
+  const denied = requireCronAuth(req, corsHeaders);
+  if (denied) return denied;
+
   try {
-    const authToken = req.headers.get("authorization")?.split("Bearer ").at(1);
-
-    if (!authToken || authToken !== env.CRON_SECRET)
-      throw ErrorFactory.Unauthorized();
-
     const now = new Date();
     const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { recordJobRun } from "@/lib/job-runs";
 import { MAX_EMAIL_ATTEMPTS, retryFailedNotifications, RETRY_WINDOW_HOURS } from "@/lib/notification-retry";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -14,10 +14,10 @@ export const dynamic = "force-dynamic";
  * CRON_SECRET. Solo correos: las guías de EnvioClick no se reintentan.
  */
 export async function GET(request: NextRequest) {
-  try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
 
+  try {
     const summary = await retryFailedNotifications();
     const detail =
       `${summary.sent.length} reenviado(s), ${summary.failed.length} siguen fallando, ` +

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
 import { processAutomaticReactivations } from "@/lib/reactivation";
@@ -17,9 +17,10 @@ export const maxDuration = 60;
  * escribiría. La respuesta lleva cifras, nunca correos.
  */
 export async function GET(request: NextRequest) {
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
+
   try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
     const mode = resolveScheduledJobMode(request.url, "customer-reactivation");
 
     const stores = await prismadb.store.findMany({ select: { id: true } });

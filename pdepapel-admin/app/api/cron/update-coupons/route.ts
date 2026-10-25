@@ -1,5 +1,5 @@
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -22,12 +22,10 @@ export async function OPTIONS() {
  * vigencia solos por sus fechas.
  */
 export async function GET(req: NextRequest) {
+  const denied = requireCronAuth(req, corsHeaders);
+  if (denied) return denied;
+
   try {
-    const authToken = req.headers.get("authorization")?.split("Bearer ").at(1);
-
-    if (!authToken || authToken !== env.CRON_SECRET)
-      throw ErrorFactory.Unauthorized();
-
     const now = new Date();
 
     const expiredCoupons = await prismadb.coupon.updateMany({

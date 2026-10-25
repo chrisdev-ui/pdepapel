@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
 import {
@@ -21,9 +21,10 @@ export const maxDuration = 60;
  * (`SCHEDULED_JOBS`): sin `mode=apply` solo cuenta lo que cambiaría.
  */
 export async function GET(request: NextRequest) {
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
+
   try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
     const mode = resolveScheduledJobMode(scheduledRequestUrl(request), "abc-classification");
 
     const stores = await prismadb.store.findMany({ select: { id: true } });

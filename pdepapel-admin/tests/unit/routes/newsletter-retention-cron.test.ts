@@ -23,6 +23,7 @@ describe("cron newsletter-retention", () => {
     expect((await call()).status).toBe(403);
     expect((await call("otro")).status).toBe(403);
     expect(mocks.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 
   it("borra las pendientes vencidas y deja su fila en Sistemas", async () => {

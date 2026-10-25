@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
+import { handleErrorResponse } from "@/lib/api-errors";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { resolveScheduledJobMode, scheduledRequestUrl } from "@/lib/scheduled-jobs";
 import { runRecentRefresh } from "@/lib/social/runner";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { safeSecretEquals } from "@/lib/webhook-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,9 +18,10 @@ export const maxDuration = 60;
  * apagado, no llama a Meta ni a TikTok.
  */
 export async function GET(request: NextRequest) {
+  const denied = requireCronAuth(request);
+  if (denied) return denied;
+
   try {
-    const token = request.headers.get("authorization")?.split("Bearer ").at(1);
-    if (!safeSecretEquals(token, env.CRON_SECRET)) throw ErrorFactory.Unauthorized();
     const mode = resolveScheduledJobMode(scheduledRequestUrl(request), "social-recent");
     if (mode !== "apply") return NextResponse.json({ mode }, { headers: CACHE_HEADERS.NO_CACHE });
     const result = await runRecentRefresh();

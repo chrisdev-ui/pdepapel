@@ -46,7 +46,10 @@ describe("promotion crons", () => {
     expect(call.data).toEqual({ isActive: false });
     expect(call.where.isActive).toBe(true);
     expect(call.where.OR[0].endDate.lt).toBeInstanceOf(Date);
+    vi.clearAllMocks();
     expect((await coupons(request("nope"))).status).toBe(403);
+    expect((await offers(request("nope"))).status).toBe(403);
+    expect(mocks.recordJobRun).not.toHaveBeenCalled();
   });
 
   it("offers: switches off expired ones, never on, and refreshes the stores whose windows moved", async () => {
