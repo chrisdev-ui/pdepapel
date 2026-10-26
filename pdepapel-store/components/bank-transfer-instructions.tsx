@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   Copy,
@@ -28,6 +28,14 @@ import { WhatsappIcon } from "@/components/icons";
 import { PaymentIcons } from "@/components/payment-icons";
 import { currencyFormatter } from "@/lib/utils";
 import { useClipboard } from "@/hooks/use-clipboard";
+import {
+  BANK_TRANSFER_FALLBACK_TEXT,
+  formatWhatsappNumber,
+  missingBankTransferFields,
+  reportIncompleteBankTransfer,
+} from "@/lib/bank-transfer";
+import { SUPPORT_WHATSAPP_NUMBER } from "@/lib/support";
+import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 
 interface BankTransferInstructionsProps {
   order: {
@@ -45,15 +53,29 @@ export const BankTransferInstructions: React.FC<
   const { onCopy } = useClipboard();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
+  const { bankTransfer } = useStorefrontSettings();
+  const incomplete = missingBankTransferFields(bankTransfer).length > 0;
 
-  const breBKey = "@sitiowebpdepapel";
-  const bancolombiaAccount = "236-000036-64";
-  const whatsappNumber = "573132582293";
+  useEffect(() => {
+    reportIncompleteBankTransfer("página del pedido", bankTransfer);
+  }, [bankTransfer]);
+
+  const breBKey = bankTransfer.breBKey ?? "";
+  const bancolombiaAccount = bankTransfer.account ?? "";
+  // La cuenta viene «como se le dicta a una clienta»; se copia solo el número.
+  const accountToCopy =
+    bancolombiaAccount.match(/\d[\d\s.-]{5,}\d/)?.[0].replace(/\s/g, "") ??
+    bancolombiaAccount;
+  const whatsappNumber = bankTransfer.whatsappNumber ?? SUPPORT_WHATSAPP_NUMBER;
   const formattedTotal = currencyFormatter.format(order.total);
 
   const copyToClipboard = async (text: string, label: string) => {
     const copied = await onCopy(text, {
-      success: { title: "¡Copiado con éxito!", description: `${label}: ${text}`, variant: "success" },
+      success: {
+        title: "¡Copiado con éxito!",
+        description: `${label}: ${text}`,
+        variant: "success",
+      },
     });
     if (!copied) return;
     setCopiedField(label);
@@ -64,6 +86,44 @@ export const BankTransferInstructions: React.FC<
     `¡Hola P de Papel! 👋 Adjunto el comprobante de pago por transferencia para la Orden #${order.orderNumber} por valor de ${formattedTotal}.`,
   );
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
+  if (incomplete) {
+    return (
+      <Card className="w-full overflow-hidden border-2 border-purple-200/90 bg-gradient-to-b from-purple-50/40 via-white to-pink-50/20 shadow-md">
+        <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-2">
+          <CardTitle className="font-sans text-base font-bold text-purple-950 sm:text-lg">
+            Pago por transferencia
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 p-4 pt-1 sm:p-5 sm:pt-1">
+          <p className="text-sm text-purple-950">
+            Valor a transferir: <strong>{formattedTotal}</strong> · Pedido{" "}
+            <strong>{order.orderNumber}</strong>
+          </p>
+          <p
+            className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-sm text-amber-950"
+            role="status"
+          >
+            <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{BANK_TRANSFER_FALLBACK_TEXT}.</span>
+          </p>
+          <Button
+            asChild
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] text-sm font-bold text-white hover:bg-[#20bd5a]"
+          >
+            <a
+              href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`¡Hola P de Papel! Quiero pagar por transferencia la Orden #${order.orderNumber}.`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <WhatsappIcon className="h-5 w-5 text-white" />
+              Escribirnos por WhatsApp
+            </a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full overflow-hidden border-2 border-purple-200/90 bg-gradient-to-b from-purple-50/40 via-white to-pink-50/20 shadow-md dark:border-purple-900/60 dark:from-purple-950/30 dark:via-zinc-900 dark:to-pink-950/20">
@@ -303,7 +363,7 @@ export const BankTransferInstructions: React.FC<
                     className="h-8 shrink-0 border-blue-200 bg-white px-2.5 text-xs font-semibold text-blue-950 hover:bg-blue-100 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-200"
                     onClick={() =>
                       copyToClipboard(
-                        bancolombiaAccount,
+                        accountToCopy,
                         "Número de cuenta Bancolombia",
                       )
                     }
@@ -331,8 +391,8 @@ export const BankTransferInstructions: React.FC<
               </span>
               <p className="text-xs leading-relaxed text-emerald-900/80 dark:text-emerald-300">
                 Envía una foto o captura del comprobante al WhatsApp{" "}
-                <strong>313-258-2293</strong>. Así lo verificamos más rápido y
-                te confirmamos el pedido.
+                <strong>{formatWhatsappNumber(whatsappNumber)}</strong>. Así lo
+                verificamos más rápido y te confirmamos el pedido.
               </p>
             </div>
             <Button

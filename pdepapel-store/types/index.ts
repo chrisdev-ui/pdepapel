@@ -461,6 +461,14 @@ export interface ProductsResponse {
   };
 }
 
+/** Datos para pagar por transferencia, desde Configuración en el panel; null = sin configurar. */
+export interface BankTransferInfo {
+  account: string | null;
+  breBKey: string | null;
+  /** Dígitos con indicativo (57…). */
+  whatsappNumber: string | null;
+}
+
 export interface StorefrontSettings {
   /** Product subtotal (COP) from which shipping is free; null = disabled. */
   freeShippingThreshold: number | null;
@@ -471,6 +479,7 @@ export interface StorefrontSettings {
   physicalAddress: string | null;
   /** Cuánto tarda en llegar un pedido («2 a 4 días hábiles»); null si no está configurado. */
   deliveryEstimate: string | null;
+  bankTransfer: BankTransferInfo;
 }
 
 export interface SearchResult {

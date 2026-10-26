@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { EMPTY_BANK_TRANSFER, parseBankTransfer, reportIncompleteBankTransfer } from "@/lib/bank-transfer";
 import { withUpstreamTimeout } from "@/lib/catalog-cache";
 import { publicEnv as env } from "@/lib/public-env";
 import { StorefrontSettings } from "@/types";
@@ -13,6 +14,7 @@ export const EMPTY_STOREFRONT_SETTINGS: StorefrontSettings = {
   hasPhysicalStore: false,
   physicalAddress: null,
   deliveryEstimate: null,
+  bankTransfer: EMPTY_BANK_TRANSFER,
 };
 
 /**
@@ -28,6 +30,8 @@ export const getStorefrontSettings = cache(
       );
       if (!response.ok) return EMPTY_STOREFRONT_SETTINGS;
       const data = await response.json();
+      const bankTransfer = parseBankTransfer(data?.bankTransfer);
+      reportIncompleteBankTransfer("ajustes de la tienda", bankTransfer);
       const threshold = Number(data?.freeShippingThreshold);
       const label =
         typeof data?.openingHoursLabel === "string"
@@ -52,6 +56,7 @@ export const getStorefrontSettings = cache(
           data.deliveryEstimate.trim()
             ? data.deliveryEstimate.trim()
             : null,
+        bankTransfer,
       };
     } catch {
       return EMPTY_STOREFRONT_SETTINGS;

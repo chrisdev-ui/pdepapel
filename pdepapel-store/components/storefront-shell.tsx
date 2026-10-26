@@ -76,6 +76,7 @@ export async function StorefrontShell({ clerkVariant, children }: { clerkVariant
           value={{
             freeShippingThreshold: settings.freeShippingThreshold,
             deliveryEstimate: settings.deliveryEstimate,
+            bankTransfer: settings.bankTransfer,
           }}
         >
           <CartPreviewProvider>
