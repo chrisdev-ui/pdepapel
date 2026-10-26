@@ -95,7 +95,7 @@ test.describe("ciudad en el teléfono", () => {
     await cityPage(page);
     await expect(page.getByLabel(/Apartamento, torre u oficina/)).toHaveCount(0);
     const address = page.getByLabel(/^Dirección \*/);
-    await address.fill("Calle 45 sur # 23-56 Torre 3 Apartamento 502 Conjunto Los Pinos");
+    await address.fill("Calle 123 # 45-67 Torre 3 Apartamento 502 Conjunto Los Pinos");
     await address.blur();
     await expect(page.getByLabel(/Apartamento, torre u oficina/)).toBeVisible();
     await expect(page.getByText(/pon la torre, el apartamento o el barrio en los campos de abajo/)).toBeVisible();
