@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { invoiceCustomerFromOrder } from "@/lib/invoicing/invoice-customer";
 import { SimuladoProvider } from "@/lib/invoicing/providers/simulado";
 import { InvoiceStatus, DianStatus } from "@prisma/client";
 import { checkIfStoreOwner } from "@/lib/server/utils";
@@ -138,8 +139,7 @@ export async function POST(
           dianStatus: DianStatus.PENDING,
           totalAmount: order.total || 0,
           taxAmount: 0, // Should calculate from items
-          customerName: order.fullName || "Consumidor Final",
-          customerDocId: order.daneCode || null, // Best approximation if CC not separated
+          ...invoiceCustomerFromOrder(order),
           customerEmail: order.email || "noreply@pdepapel.com",
         },
       }));
