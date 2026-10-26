@@ -1101,7 +1101,7 @@ When a module's behaviour or copy changes, update **both** the Spanish guide `do
 
 ## Known gaps, deliberately left open
 
-- **WhatsApp «BAJA» is not read from the chat yet (2026-10-26).** The template footer invites it, but opt-out is only the order page's «Quitar avisos por WhatsApp». Hook a keyword in the inbound pipeline in a later batch.
+- **WhatsApp «BAJA» is not read from the chat yet (2026-10-26).** The templates carry no BAJA footer for that reason; opt-out is only the order page's «Quitar avisos por WhatsApp». Hook a keyword in the inbound pipeline in a later batch.
 - **Guides created before the 2026-10-26 deploy** get no «va en camino» (the notice is sent at creation); their next carrier event still notifies (`en_camino` / `entregado`).
 
 - **WhatsApp number still hardcoded outside the transfer instructions (2026-10-26).** The store footer, Contacto and support links use `SUPPORT_WHATSAPP_NUMBER` (`pdepapel-store/lib/support.ts`, `lib/whatsapp-prefill.ts`); only the bank-transfer block and its email read `StoreSettings.whatsappNumber`. Move them to Configuración in a later batch.

@@ -8,16 +8,14 @@ El orden de las variables importa: el panel las llena en este orden (`lib/whatsa
 
 ---
 
-## 1. `guia_creada`: «Tu pedido va en camino»
+## 1. `guia_creada`: «Tu pedido ya tiene guía»
 
 **Cuerpo:**
 
-> Hola {{1}}, tu pedido {{2}} de P de Papel ya va en camino 📦
+> Hola {{1}}, tu pedido {{2}} de P de Papel ya tiene guía de envío 📦
 > Transportadora: {{3}}
 > Número de guía: {{4}}
 > Puedes ver el estado de tu envío en el botón de abajo.
-
-**Pie (opcional):** `Responde BAJA si no quieres recibir estos avisos.`
 
 **Botón:** tipo «Visitar sitio web», texto `Ver mi pedido`, URL **dinámica**: `https://papeleriapdepapel.com/pedido/{{1}}`
 
@@ -39,8 +37,6 @@ Variables que manda el panel: {{1}} el primer nombre de la clienta, {{2}} el nú
 > Hola {{1}}, tu pedido {{2}} de P de Papel fue entregado ✅
 > Si algo no llegó bien, escríbenos por este chat y lo resolvemos.
 
-**Pie (opcional):** `Responde BAJA si no quieres recibir estos avisos.`
-
 **Botón:** tipo «Visitar sitio web», texto `Ver mi pedido`, URL **dinámica**: `https://papeleriapdepapel.com/pedido/{{1}}`
 
 **Ejemplos:** {{1}} = `Laura`, {{2}} = `ORD-1792983196243-511`, variable del botón = un id de pedido.
@@ -52,4 +48,4 @@ Variables que manda el panel: {{1}} el primer nombre de la clienta, {{2}} el nú
 2. Probar con un pedido propio que tenga la casilla marcada: crear la guía y revisar que llegue el WhatsApp y el correo.
 3. Revisar la calidad de las plantillas en WhatsApp Manager la primera semana.
 
-Pendiente aparte: «BAJA» todavía no se lee sola en el chat. Paula quita los avisos desde el pedido («Quitar avisos por WhatsApp»).
+Sin pie de «BAJA»: el chat todavía no lee esa palabra (pendiente para el próximo lote). Mientras tanto, si una clienta pide no recibir avisos, Paula los quita desde el pedido («Quitar avisos por WhatsApp»).
