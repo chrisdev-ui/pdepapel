@@ -147,7 +147,10 @@ const OrderClient: React.FC<OrderClientProps> = ({ data, counts, total, page, pa
   const today = colombiaDay();
   const filtering = hasActiveListFilters(filters);
 
-  const visibleViews = ORDER_VIEWS.filter((item) => item.id !== "con-novedad" || counts["con-novedad"] > 0 || view === "con-novedad");
+  // Las pestañas de excepción solo aparecen cuando tienen pedidos (o están abiertas).
+  const visibleViews = ORDER_VIEWS.filter(
+    (item) => !(item.id === "con-novedad" || item.id === "sin-cuadrar") || counts[item.id] > 0 || view === item.id,
+  );
 
   return (
     <div className="flex flex-col gap-4">

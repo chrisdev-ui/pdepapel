@@ -14,6 +14,7 @@ import { assertStoreIdShape } from "@/lib/store-id";
 import { isCopilotConfigured } from "@/lib/copiloto/config";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { countOrdersToAttend } from "@/lib/order-list";
 
 export default async function DashboardLayout({
   children,
@@ -50,9 +51,8 @@ export default async function DashboardLayout({
     access?.role === "viewer"
       ? Promise.resolve([{ id: store.id, name: store.name }])
       : prismadb.store.findMany({ where: { userId }, select: STORE_PICKER_SELECT }),
-    prismadb.order
-      .count({ where: { storeId: params.storeId, status: "PENDING" } })
-      .catch(() => 0),
+    // El número del menú es el de la pestaña «Por atender», con su misma regla.
+    countOrdersToAttend(prismadb, params.storeId).catch(() => 0),
     prismadb.product
       .count({
         where: { storeId: params.storeId, isArchived: false, stock: { lte: 2 } },

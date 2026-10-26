@@ -182,7 +182,7 @@ describe("dashboard today", () => {
 
   it("puts unreconciled inventory first and points at Movimientos when the orders are gone", () => {
     const withOrders = buildTodaySummary({ ...base(), inventoryIssues: { open: 2, orphans: 0 } }, "store");
-    expect(withOrders.pending[0]).toMatchObject({ kind: "inventory-issue", title: "2 líneas de inventario sin cuadrar", href: "/store/pedidos?vista=por-atender", action: "Cuadrar" });
+    expect(withOrders.pending[0]).toMatchObject({ kind: "inventory-issue", title: "2 líneas de inventario sin cuadrar", href: "/store/pedidos?vista=sin-cuadrar", action: "Cuadrar" });
 
     const orphans = buildTodaySummary({ ...base(), inventoryIssues: { open: 1, orphans: 1 } }, "store");
     expect(orphans.pending[0]).toMatchObject({ kind: "inventory-issue", title: "1 línea de inventario sin cuadrar", href: "/store/movimientos-inventario#incidencias-inventario" });

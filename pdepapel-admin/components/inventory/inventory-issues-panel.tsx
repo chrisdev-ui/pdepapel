@@ -16,6 +16,8 @@ interface InventoryIssuesPanelProps {
   issues: OpenInventoryIssue[];
   /** En la página del pedido no hace falta repetir el número de pedido. */
   showOrder?: boolean;
+  /** En la página del pedido: ofrece «Conciliar todas las líneas» de ese pedido. */
+  orderId?: string;
   className?: string;
 }
 
@@ -37,11 +39,13 @@ export function InventoryIssuesPanel({
   storeId,
   issues,
   showOrder = false,
+  orderId,
   className,
 }: InventoryIssuesPanelProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
 
   if (issues.length === 0) return null;
 
@@ -74,6 +78,21 @@ export function InventoryIssuesPanel({
     }
   };
 
+  const resolveAll = async () => {
+    if (!orderId) return;
+    setBusy("all");
+    try {
+      const response = await axios.post(`/api/${storeId}/orders/${orderId}/inventory-issues/resolve-all`);
+      toast({ description: `${response.data.resolved} líneas marcadas como conciliadas.`, variant: "success" });
+      setConfirmAll(false);
+      router.refresh();
+    } catch (error) {
+      toast({ title: "No se pudo conciliar", description: getErrorMessage(error), variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div id="incidencias-inventario" className={className}>
       <div className="flex items-start gap-3 rounded-lg border border-tint-pink bg-tint-pink/30 p-3">
@@ -94,6 +113,29 @@ export function InventoryIssuesPanel({
           </p>
         </div>
       </div>
+      {orderId && issues.length > 1 && (
+        <div className="mt-2 flex flex-col gap-2 rounded-lg border bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+          {confirmAll ? (
+            <>
+              <p className="text-sm">
+                ¿Marcar las {issues.length} líneas como conciliadas? Úsalo solo si ya contaste la bodega: no se mueve stock.
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" className="min-h-[44px]" disabled={busy !== null} isLoading={busy === "all"} onClick={resolveAll}>
+                  Sí, conciliar todas
+                </Button>
+                <Button type="button" size="sm" variant="ghost" className="min-h-[44px]" disabled={busy !== null} onClick={() => setConfirmAll(false)}>
+                  No
+                </Button>
+              </div>
+            </>
+          ) : (
+            <Button type="button" size="sm" variant="outline" className="min-h-[44px] self-start" disabled={busy !== null} onClick={() => setConfirmAll(true)}>
+              Conciliar todas las líneas ({issues.length})
+            </Button>
+          )}
+        </div>
+      )}
       <ul className="mt-2 divide-y rounded-lg border bg-white">
         {issues.map((issue) => {
           const retrying = busy === `${issue.id}:retry`;

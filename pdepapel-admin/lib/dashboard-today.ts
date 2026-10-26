@@ -275,7 +275,7 @@ export function buildTodaySummary(
       title: `${open} ${open === 1 ? "línea de inventario sin cuadrar" : "líneas de inventario sin cuadrar"}`,
       meta: "Un pedido cambió de estado pero el kardex no se movió. Reintenta o concilia antes de que el stock engañe a la tienda.",
       // Sin pedido (borrado) solo se ve en Movimientos; con pedido, la cola «Por atender» ya lo muestra.
-      href: orphans > 0 && orphans === open ? `/${storeId}/movimientos-inventario#incidencias-inventario` : `/${storeId}/pedidos?vista=por-atender`,
+      href: orphans > 0 && orphans === open ? `/${storeId}/movimientos-inventario#incidencias-inventario` : `/${storeId}/pedidos?vista=sin-cuadrar`,
       action: "Cuadrar",
       weight: -1,
     });

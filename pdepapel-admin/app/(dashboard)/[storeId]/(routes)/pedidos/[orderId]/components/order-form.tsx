@@ -978,6 +978,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <InventoryIssuesPanel
                     storeId={storeId}
                     issues={inventoryIssues}
+                    orderId={initialData?.id}
                   />
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import { OrderType, type Prisma } from "@prisma/client";
+import { OrderStatus, OrderType, ShippingStatus, type Prisma } from "@prisma/client";
 
 import {
   DEFAULT_ORDER_VIEW,
@@ -175,4 +175,28 @@ export async function listOrderPage(db: OrderListDb, storeId: string, query: Ord
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
   return paginateOrders(rows, query, now);
+}
+
+/**
+ * Cuántos pedidos hay «Por atender», para el número de «Pedidos» en el menú.
+ * Misma regla que la pestaña (`orderMatchesView`), sobre los únicos pedidos
+ * que pueden caer ahí: los cancelados, las ventas presenciales, de feria y de
+ * tarjeta de regalo y los ya entregados nunca están «Por atender», así que no
+ * se cargan. Antes el menú contaba los pedidos PENDING, que no es lo mismo.
+ */
+export async function countOrdersToAttend(db: OrderListDb, storeId: string, now = new Date()): Promise<number> {
+  const rows = await db.order.findMany({
+    where: {
+      storeId,
+      status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] },
+      type: { notIn: [OrderType.POINT_OF_SALE, OrderType.FESTIVAL, OrderType.GIFT_CARD] },
+      OR: [{ shipping: null }, { shipping: { status: { not: ShippingStatus.Delivered } } }],
+    },
+    select: ORDER_QUEUE_SELECT,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  return rows.filter((row) => {
+    const order: QueueableOrder = { ...row, openInventoryIssues: row._count.inventoryIssues };
+    return orderMatchesView(getOrderQueue(order, now), "por-atender", order, now);
+  }).length;
 }

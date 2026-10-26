@@ -25,6 +25,7 @@ export type OrderView =
   | "por-entregar"
   | "en-camino"
   | "con-novedad"
+  | "sin-cuadrar"
   | "cotizaciones"
   | "todos";
 
@@ -35,6 +36,7 @@ export const ORDER_VIEWS: { id: OrderView; label: string }[] = [
   { id: "por-entregar", label: "Por entregar en tienda" },
   { id: "en-camino", label: "En camino" },
   { id: "con-novedad", label: "Con novedad" },
+  { id: "sin-cuadrar", label: "Inventario sin cuadrar" },
   { id: "cotizaciones", label: "Cotizaciones" },
   { id: "todos", label: "Todos" },
 ];
@@ -261,13 +263,19 @@ export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new
   }
 }
 
+/** Colas en las que el pedido todavía no termina: entregado, completado y cerrado no. */
+const ACTIVE_QUEUES: OrderQueue[] = ["verify", "awaiting-payment", "dispatch", "pickup", "in-transit", "issue", "quote"];
+
 export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: QueueableOrder, now = new Date()): boolean {
   switch (view) {
     case "todos":
       return true;
     case "por-atender":
       return (
-        hasOpenInventoryIssues(order) ||
+        // La deuda de inventario pide atención mientras el pedido sigue en
+        // curso; uno ya entregado o cerrado la muestra en «Inventario sin
+        // cuadrar» y en Inicio, sin quedarse en «Por atender» para siempre.
+        (hasOpenInventoryIssues(order) && ACTIVE_QUEUES.includes(queue)) ||
         (queue === "in-transit" && Boolean(order && isShippingStale(order, now))) ||
         queue === "verify" ||
         queue === "dispatch" ||
@@ -284,6 +292,8 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
       return queue === "pickup";
     case "en-camino":
       return queue === "in-transit";
+    case "sin-cuadrar":
+      return hasOpenInventoryIssues(order);
     case "con-novedad":
       return queue === "issue" || (queue === "in-transit" && Boolean(order && isShippingStale(order, now)));
     case "cotizaciones":

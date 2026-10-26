@@ -124,7 +124,7 @@ describe("order queues", () => {
     expect(getPaymentBadge(order({ status: OrderStatus.PAID }))).toEqual({ label: "Pagado", tone: "mint" });
   });
 
-  it("keeps an order with unreconciled inventory in por-atender whatever its queue", () => {
+  it("keeps an order with unreconciled inventory in por-atender while it is still active", () => {
     const paidAndShipped = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X" }, openInventoryIssues: 2 });
     expect(getOrderQueue(paidAndShipped)).toBe("in-transit");
     expect(orderMatchesView("in-transit", "por-atender", paidAndShipped)).toBe(true);
@@ -132,6 +132,16 @@ describe("order queues", () => {
     expect(hasOpenInventoryIssues(paidAndShipped)).toBe(true);
     expect(getInventoryIssueBadge(paidAndShipped)).toEqual({ label: "Inventario sin cuadrar", tone: "pink" });
     expect(getInventoryIssueBadge(order({}))).toBeNull();
+  });
+
+  it("a delivered or closed order with unreconciled inventory leaves por-atender and shows in sin-cuadrar (the 4 orders of 2026-10-26)", () => {
+    // Pedidos de transferencia viejos, entregados, con líneas que no se descontaron: Paula ya terminó con ellos.
+    const deliveredPickup = order({ status: OrderStatus.SENT, payment: { method: PaymentMethod.BankTransfer }, shipping: { status: ShippingStatus.Delivered, provider: ShippingProvider.NONE, trackingCode: null }, openInventoryIssues: 13 });
+    expect(getOrderQueue(deliveredPickup)).toBe("delivered");
+    expect(orderMatchesView("delivered", "por-atender", deliveredPickup)).toBe(false);
+    expect(orderMatchesView("delivered", "sin-cuadrar", deliveredPickup)).toBe(true);
+    expect(orderMatchesView("delivered", "sin-cuadrar", order({ ...deliveredPickup, openInventoryIssues: 0 }))).toBe(false);
+    expect(orderMatchesView("completed", "por-atender", order({ type: OrderType.POINT_OF_SALE, status: OrderStatus.PAID, openInventoryIssues: 1 }))).toBe(false);
   });
 
   it("turns a guide with no news for days into a pink badge and a por-atender item", () => {
