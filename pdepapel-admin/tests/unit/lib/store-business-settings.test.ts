@@ -107,4 +107,11 @@ describe("validación de los datos del negocio", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("el WhatsApp del negocio tiene que ser un celular colombiano; la llave Bre-B es texto libre", () => {
+    expect(storeSettingsInputSchema.safeParse({ whatsappNumber: "300 000 0000", paymentBreBKey: "@llave" }).success).toBe(true);
+    expect(storeSettingsInputSchema.safeParse({ whatsappNumber: "+57 300 000 0000" }).success).toBe(true);
+    expect(storeSettingsInputSchema.safeParse({ whatsappNumber: "604 123 4567" }).success).toBe(false);
+    expect(storeSettingsInputSchema.safeParse({ whatsappNumber: null, paymentBreBKey: null }).success).toBe(true);
+  });
 });

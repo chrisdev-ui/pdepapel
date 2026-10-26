@@ -51,4 +51,20 @@ describe("datos personales fuera del repositorio público", () => {
     }
     expect(hits).toEqual([]);
   }, 120_000);
+
+  it("los datos de transferencia salen de Configuración: ninguna cuenta ni llave Bre-B escrita donde se arman las instrucciones (F6)", () => {
+    const files = [
+      "pdepapel-store/components/bank-transfer-instructions.tsx",
+      "pdepapel-store/components/ui/payment-method-selector.tsx",
+      "pdepapel-admin/emails/order-notification.tsx",
+      "pdepapel-admin/lib/email.ts",
+      "pdepapel-admin/lib/bank-transfer-info.ts",
+    ];
+    const quotedKey = /(["'`])@[A-Za-z0-9_-]{6,}\1/;
+    for (const path of files) {
+      const content = readFileSync(resolve(ROOT, path), "utf8");
+      expect(quotedKey.test(content), `${path}: llave Bre-B escrita`).toBe(false);
+      expect(findSensitiveValues(content).filter((hit) => hit.kind === "cuenta"), `${path}: cuenta escrita`).toEqual([]);
+    }
+  });
 });

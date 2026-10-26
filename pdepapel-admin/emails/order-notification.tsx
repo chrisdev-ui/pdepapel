@@ -55,6 +55,21 @@ interface OrderNotificationProps {
   giftCardHeld?: boolean;
   /** El texto del botón principal; por defecto «Ver mi pedido». */
   ctaLabel?: string;
+  /** Cómo pagar una transferencia: solo en el «Pendiente de pago» de la clienta. */
+  bankTransfer?: BankTransferEmailBlock | null;
+}
+
+export interface BankTransferEmailBlock {
+  amount: string;
+  reference: string;
+  account: string | null;
+  breBKey: string | null;
+  /** Enlace de WhatsApp con el mensaje del comprobante ya escrito; null sin número. */
+  whatsappUrl: string | null;
+  /** Falta algún dato en Configuración: se muestra el aviso en vez de un bloque a medias. */
+  incomplete: boolean;
+  /** La frase de abajo: cómo seguir, o el aviso cuando falta un dato. */
+  note: string;
 }
 
 interface Look {
@@ -208,6 +223,7 @@ export const OrderNotification = ({
   riskNote = null,
   giftCardHeld = false,
   ctaLabel = "Ver mi pedido",
+  bankTransfer = null,
 }: OrderNotificationProps) => {
   const look = getLook(status, digital);
   const firstName = name ? name.split(" ")[0] : "";
@@ -311,6 +327,32 @@ export const OrderNotification = ({
           <StickerCard tint={look.tint} filled>
             <CardText>{paymentMethod}</CardText>
           </StickerCard>
+        </>
+      ) : null}
+
+      {bankTransfer ? (
+        <>
+          <SectionLabel tint="yellow">Cómo pagar</SectionLabel>
+          <StickerCard tint="yellow" filled>
+            <KeyValues
+              rows={[
+                { key: "Valor a transferir", value: bankTransfer.amount },
+                { key: "Referencia", value: bankTransfer.reference },
+                ...(bankTransfer.incomplete
+                  ? []
+                  : [
+                      { key: "Cuenta", value: bankTransfer.account as string },
+                      { key: "Llave Bre-B", value: bankTransfer.breBKey as string },
+                    ]),
+              ]}
+            />
+            <CardText>{bankTransfer.note}</CardText>
+          </StickerCard>
+          {bankTransfer.whatsappUrl ? (
+            <Cta href={bankTransfer.whatsappUrl} ghost>
+              {bankTransfer.incomplete ? "Escribirnos por WhatsApp" : "Enviar el comprobante por WhatsApp"}
+            </Cta>
+          ) : null}
         </>
       ) : null}
 

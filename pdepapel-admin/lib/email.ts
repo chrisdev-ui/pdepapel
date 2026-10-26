@@ -11,7 +11,7 @@ import {
 import { GiftCardReview } from "@prisma/client";
 import type { EmailLineItem, EmailSummaryLine } from "@/emails/components";
 import { GiftNotification } from "@/emails/gift-notification";
-import { OrderNotification } from "@/emails/order-notification";
+import { OrderNotification, type BankTransferEmailBlock } from "@/emails/order-notification";
 import { getGiftNotificationEmail, isGiftOrder } from "@/lib/gift-orders";
 import { resend } from "@/lib/resend";
 import { getAdminNotificationRecipients } from "@/lib/store-email-settings";
@@ -28,6 +28,15 @@ import {
   getReadableStatus,
 } from "@/lib/utils";
 import { capsuleThanksParagraph } from "@/lib/capsule-receipt";
+import {
+  BANK_TRANSFER_FALLBACK_TEXT,
+  bankTransferInfoFrom,
+  logIncompleteBankTransfer,
+  missingBankTransferFields,
+  type BankTransferInfo,
+} from "@/lib/bank-transfer-info";
+import { getAmountDue } from "@/lib/gift-card-amounts";
+import { getStoreSettings } from "@/lib/store-settings";
 import { env } from "@/lib/env.mjs";
 import {
   createOrderAccountClaimToken,
@@ -356,10 +365,48 @@ export interface BuiltEmail {
  * real) sin tocar Resend ni escribir en la base: el enlace para guardar el
  * pedido en la cuenta lo pasa quien llama, porque crearlo escribe.
  */
+const needsTransferInstructions = (order: Pick<EmailOrder, "payment">, status: OrderStatus | ShippingStatus) =>
+  status === OrderStatus.PENDING && order.payment === PaymentMethod.BankTransfer;
+
+/**
+ * El bloque «Cómo pagar» del correo de una transferencia. Con un dato vacío en
+ * Configuración no se muestra a medias: queda el valor, la referencia y el aviso
+ * de escribir por WhatsApp.
+ */
+export function buildBankTransferBlock(
+  order: Pick<EmailOrder, "orderNumber" | "total" | "giftCardAmount">,
+  info: BankTransferInfo,
+): BankTransferEmailBlock {
+  const incomplete = missingBankTransferFields(info).length > 0;
+  const message = `Hola, envío el comprobante del pedido #${order.orderNumber}`;
+  return {
+    amount: currencyFormatter(getAmountDue(order)),
+    reference: order.orderNumber,
+    account: info.account,
+    breBKey: info.breBKey,
+    whatsappUrl: info.whatsappNumber ? `https://wa.me/${info.whatsappNumber}?text=${encodeURIComponent(message)}` : null,
+    incomplete,
+    note: incomplete
+      ? `${BANK_TRANSFER_FALLBACK_TEXT}.`
+      : "Usa el número del pedido como referencia y envíanos el comprobante por WhatsApp. Confirmamos el pago y te avisamos.",
+  };
+}
+
+function bankTransferText(block: BankTransferEmailBlock): string {
+  return [
+    "Cómo pagar",
+    `Valor a transferir: ${block.amount}`,
+    `Referencia: ${block.reference}`,
+    ...(block.incomplete ? [] : [`Cuenta: ${block.account}`, `Llave Bre-B: ${block.breBKey}`]),
+    block.note,
+    ...(block.whatsappUrl ? [`WhatsApp: ${block.whatsappUrl}`] : []),
+  ].join("\n");
+}
+
 export function buildOrderEmails(
   order: EmailOrder,
   status: OrderStatus,
-  options: { accountClaimLink?: string | null } = {},
+  options: { accountClaimLink?: string | null; bankTransfer?: BankTransferInfo | null } = {},
 ): { admin: BuiltEmail; customer: BuiltEmail | null } {
   const readableStatus = getReadableStatus(status);
   const readablePayment = getReadablePaymentMethod(order.payment);
@@ -372,6 +419,8 @@ export function buildOrderEmails(
   const orderSummary = getOrderSummary(order);
   const orderLink = getOrderLink(order.id);
   const accountClaimLink = options.accountClaimLink ?? null;
+  const transferBlock =
+    options.bankTransfer && needsTransferInstructions(order, status) ? buildBankTransferBlock(order, options.bankTransfer) : null;
   const giftRecipientName =
     isGiftOrder(order) && !digital ? order.giftRecipientName : null;
   const notificationSource = getOrderNotificationSource(status);
@@ -452,8 +501,9 @@ export function buildOrderEmails(
           accountClaimLink,
           giftRecipientName,
           digital,
+          bankTransfer: transferBlock,
         }) as React.ReactElement,
-        text: withSocialLinks(`Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`),
+        text: withSocialLinks(`Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}${transferBlock ? `\n\n${bankTransferText(transferBlock)}` : ""}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`),
       }
     : null;
 
@@ -523,7 +573,17 @@ export const sendOrderEmail = async (
       options?.accountClaim !== false
         ? await getOrderAccountClaimEmailLink(order)
         : null;
-    const built = buildOrderEmails(order, status as OrderStatus, { accountClaimLink });
+    let bankTransfer: BankTransferInfo | null = null;
+    if (roles.includes("customer") && needsTransferInstructions(order, status)) {
+      // Sin la configuración el correo sale igual, con el aviso de escribir por WhatsApp.
+      const settings = await getStoreSettings(order.storeId).catch((error: unknown) => {
+        console.error("[EMAIL] No se pudo leer la configuración de pago:", error);
+        return null;
+      });
+      bankTransfer = bankTransferInfoFrom(settings);
+      logIncompleteBankTransfer(`correo de pedido #${order.orderNumber}`, missingBankTransferFields(bankTransfer));
+    }
+    const built = buildOrderEmails(order, status as OrderStatus, { accountClaimLink, bankTransfer });
 
     // Cada destinatario por su lado (lib/email-delivery.ts): si falla el del
     // admin, el de la clienta sale igual, y cada fallo queda registrado.

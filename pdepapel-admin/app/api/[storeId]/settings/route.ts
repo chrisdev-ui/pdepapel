@@ -10,6 +10,7 @@ import {
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
+import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 
 export async function GET(
   _req: Request,
@@ -50,6 +51,8 @@ export async function PATCH(
     }
 
     await saveStoreSettings(params.storeId, parsed.data);
+    // La tienda guarda estos datos 5 min; sin esto un cambio de cuenta o de horario tarda en verse.
+    await triggerStorefrontRevalidation({ scope: { tags: ["storefront-settings"], paths: [] } });
     const settings = await getStoreSettings(params.storeId);
     return NextResponse.json(settings, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

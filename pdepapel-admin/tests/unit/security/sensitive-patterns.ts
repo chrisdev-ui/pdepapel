@@ -78,8 +78,6 @@ export const ALLOWED_ADDRESSES = new Set<string>([
  * ley exige publicar; se exceptúan por ruta para no copiarla en esta lista.
  */
 export const CUSTOMER_FACING: Record<string, { accounts?: true; phones?: true; addresses?: true }> = {
-  "pdepapel-store/components/bank-transfer-instructions.tsx": { accounts: true },
-  "pdepapel-store/components/ui/payment-method-selector.tsx": { accounts: true },
   "pdepapel-store/app/(routes)/politicas/terminos/page.tsx": { addresses: true },
   "pdepapel-store/app/(routes)/politicas/privacidad/page.tsx": { addresses: true },
 };

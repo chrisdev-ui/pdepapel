@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { bankTransferInfoFrom, logIncompleteBankTransfer, missingBankTransferFields } from "@/lib/bank-transfer-info";
 import { formatOpeningHours, getStoreSettings } from "@/lib/store-settings";
 import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
@@ -16,7 +17,8 @@ export async function OPTIONS(req: Request) {
 /**
  * Public, non-sensitive storefront settings the shop needs before the first
  * paint: the announcement bar and checkout read the free-shipping threshold
- * from here. Nothing private (owner, contact, package defaults) is exposed.
+ * from here. Nothing private (owner, contact, package defaults) is exposed;
+ * the transfer data is what /pedido already shows to every buyer.
  */
 export async function GET(
   req: Request,
@@ -57,6 +59,9 @@ export async function GET(
       },
     );
 
+    const bankTransfer = bankTransferInfoFrom(settings);
+    logIncompleteBankTransfer("API pública de la tienda", missingBankTransferFields(bankTransfer));
+
     return NextResponse.json(
       {
         storeId: store.id,
@@ -73,6 +78,7 @@ export async function GET(
         hasPhysicalStore: settings?.hasPhysicalStore ?? false,
         physicalAddress: settings?.physicalAddress ?? null,
         deliveryEstimate: settings?.deliveryEstimate ?? null,
+        bankTransfer,
       },
       { headers },
     );

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatWhatsappNumber, normalizeWhatsappNumber } from "@/lib/whatsapp-number";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BotAssistMode, MinimumOrderRule } from "@prisma/client";
 import axios from "axios";
@@ -47,6 +48,13 @@ const formSchema = z.object({
   paymentBancolombiaAccount: z.string().trim().max(300),
   paymentNequiNumber: z.string().trim().max(300),
   paymentDaviplataNumber: z.string().trim().max(300),
+  paymentBreBKey: z.string().trim().max(120),
+  whatsappNumber: z
+    .string()
+    .trim()
+    .refine((value) => !value || normalizeWhatsappNumber(value) !== null, {
+      message: "Escribe un celular colombiano: 10 dígitos que empiezan por 3",
+    }),
   paymentCardInfo: z.string().trim().max(300),
   hasPhysicalStore: z.boolean(),
   physicalAddress: z.string().trim().max(191),
@@ -89,6 +97,8 @@ export function BusinessInfoPanel({
       paymentBancolombiaAccount: settings.paymentBancolombiaAccount ?? "",
       paymentNequiNumber: settings.paymentNequiNumber ?? "",
       paymentDaviplataNumber: settings.paymentDaviplataNumber ?? "",
+      paymentBreBKey: settings.paymentBreBKey ?? "",
+      whatsappNumber: settings.whatsappNumber ? formatWhatsappNumber(settings.whatsappNumber) : "",
       paymentCardInfo: settings.paymentCardInfo ?? "",
       hasPhysicalStore: settings.hasPhysicalStore,
       physicalAddress: settings.physicalAddress ?? "",
@@ -154,6 +164,8 @@ export function BusinessInfoPanel({
         paymentBancolombiaAccount: values.paymentBancolombiaAccount || null,
         paymentNequiNumber: values.paymentNequiNumber || null,
         paymentDaviplataNumber: values.paymentDaviplataNumber || null,
+        paymentBreBKey: values.paymentBreBKey || null,
+        whatsappNumber: values.whatsappNumber || null,
         paymentCardInfo: values.paymentCardInfo || null,
         hasPhysicalStore: values.hasPhysicalStore,
         physicalAddress: values.physicalAddress || null,
@@ -359,6 +371,46 @@ export function BusinessInfoPanel({
                         <FormControl>
                           <Input disabled={loading} placeholder="31…" {...field} />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-1 border-t pt-4">
+                  <h5 className="text-sm font-medium">Datos de pago en la tienda y el correo</h5>
+                  <p className="text-sm text-muted-foreground">
+                    La página del pedido, el checkout y el correo de «Pendiente de pago» muestran la cuenta de
+                    Bancolombia de arriba, esta llave y este WhatsApp. Si alguno queda vacío, la clienta ve
+                    «Escríbenos por WhatsApp para los datos de pago».
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="paymentBreBKey"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Llave Bre-B</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="@…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="whatsappNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>WhatsApp del negocio</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} inputMode="tel" placeholder="Celular de 10 dígitos" {...field} />
+                        </FormControl>
+                        <FormDescription>Adonde la clienta manda el comprobante.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

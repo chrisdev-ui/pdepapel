@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { ErrorFactory } from "@/lib/api-errors";
 import { DAY_LABELS, DEFAULT_DELIVERY_ESTIMATE, WEEK_DAYS, type WeekDay } from "@/lib/store-settings-labels";
+import { normalizeWhatsappNumber } from "@/lib/whatsapp-number";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -136,6 +137,15 @@ export const storeSettingsInputSchema = z
     paymentBancolombiaAccount: z.string().trim().max(300).nullable().optional(),
     paymentNequiNumber: z.string().trim().max(300).nullable().optional(),
     paymentDaviplataNumber: z.string().trim().max(300).nullable().optional(),
+    paymentBreBKey: z.string().trim().max(120).nullable().optional(),
+    whatsappNumber: z
+      .string()
+      .trim()
+      .nullable()
+      .optional()
+      .refine((value) => !value || normalizeWhatsappNumber(value) !== null, {
+        message: "Escribe un celular colombiano: 10 dígitos que empiezan por 3",
+      }),
     paymentCardInfo: z.string().trim().max(300).nullable().optional(),
     botEnabled: z.boolean().optional(),
     botReadBursts: z.boolean().optional(),
@@ -191,6 +201,10 @@ export interface ResolvedStoreSettings {
   paymentBancolombiaAccount: string | null;
   paymentNequiNumber: string | null;
   paymentDaviplataNumber: string | null;
+  /** Llave Bre-B para transferir; con la cuenta y el WhatsApp arma las instrucciones de pago. */
+  paymentBreBKey: string | null;
+  /** WhatsApp del negocio en dígitos con indicativo (573…), para el comprobante. */
+  whatsappNumber: string | null;
   paymentCardInfo: string | null;
   botEnabled: boolean;
   /** Leer los mensajes seguidos de una clienta como uno solo. */
@@ -249,6 +263,8 @@ export async function getStoreSettings(
     paymentBancolombiaAccount: settings?.paymentBancolombiaAccount?.trim() || null,
     paymentNequiNumber: settings?.paymentNequiNumber?.trim() || null,
     paymentDaviplataNumber: settings?.paymentDaviplataNumber?.trim() || null,
+    paymentBreBKey: settings?.paymentBreBKey?.trim() || null,
+    whatsappNumber: normalizeWhatsappNumber(settings?.whatsappNumber),
     paymentCardInfo: settings?.paymentCardInfo?.trim() || null,
     // Sin fila guardada el bot queda APAGADO. Al revés —que una tabla vacía
     // lo diera por encendido— es como se enciende solo el día que alguien
@@ -316,6 +332,12 @@ export async function saveStoreSettings(
     ...(input.paymentCardInfo === undefined
       ? {}
       : { paymentCardInfo: input.paymentCardInfo?.trim() || null }),
+    ...(input.paymentBreBKey === undefined
+      ? {}
+      : { paymentBreBKey: input.paymentBreBKey?.trim() || null }),
+    ...(input.whatsappNumber === undefined
+      ? {}
+      : { whatsappNumber: normalizeWhatsappNumber(input.whatsappNumber) }),
   };
 
   return prismadb.storeSettings.upsert({

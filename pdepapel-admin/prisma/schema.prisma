@@ -2051,6 +2051,12 @@ model StoreSettings {
   paymentBancolombiaAccount String?          @db.Text
   paymentNequiNumber        String?          @db.Text
   paymentDaviplataNumber    String?          @db.Text
+  /// Llave Bre-B para transferencias («@…»). La leen la página del pedido, el
+  /// checkout y el correo de «Pendiente de pago» (migración 20261101).
+  paymentBreBKey            String?          @db.Text
+  /// WhatsApp del negocio, solo dígitos con indicativo (57…), para «envía el
+  /// comprobante por WhatsApp» en la tienda y en el correo.
+  whatsappNumber            String?          @db.VarChar(20)
   /// El datáfono (Bold): qué tarjetas, si hay recargo, dónde se usa.
   paymentCardInfo           String?          @db.Text
   /// Apaga el bot sin borrar sus respuestas. Apagado por defecto a propósito:

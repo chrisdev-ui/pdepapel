@@ -181,6 +181,8 @@ const ajustesBase: ResolvedStoreSettings = {
   paymentBancolombiaAccount: "Cuenta de Ahorros #00000000000",
   paymentNequiNumber: "3000000000",
   paymentDaviplataNumber: "3000000001",
+  paymentBreBKey: null,
+  whatsappNumber: null,
   paymentCardInfo: "Recibimos todas las tarjetas.",
   botEnabled: true,
   botReadBursts: false,
