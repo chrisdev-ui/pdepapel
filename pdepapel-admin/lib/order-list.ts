@@ -116,7 +116,7 @@ export const ORDER_QUEUE_SELECT = {
   paidAt: true,
   expiresAt: true,
   payment: { select: { method: true } },
-  shipping: { select: { status: true, trackingCode: true, updatedAt: true } },
+  shipping: { select: { status: true, provider: true, trackingCode: true, updatedAt: true } },
   _count: { select: { inventoryIssues: { where: { resolvedAt: null } } } },
 } satisfies Prisma.OrderSelect;
 

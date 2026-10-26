@@ -114,7 +114,11 @@ export function TodayKpis({ storeId, summary }: TodayKpisProps) {
       <Kpi
         title="Por despachar"
         value={numberFormatter.format(summary.toDispatch)}
-        note="Pagados sin guía · últimos 30 días"
+        note={
+          summary.toPickup > 0
+            ? `Pagados sin guía · ${numberFormatter.format(summary.toPickup)} por entregar en tienda`
+            : "Pagados sin guía · últimos 30 días"
+        }
         href={`${base}/pedidos?vista=por-despachar`}
         linkLabel="Crear guías"
         icon={<PackageCheck className="h-4 w-4" aria-hidden="true" />}

@@ -338,11 +338,12 @@ describe("liquidación compartida de pagos (MySQL)", () => {
     expect(await stockOf(fixture)).toBe(6);
   });
 
-  it("la fila «Recoge en tienda» que abre el pago: fuera de Envíos «Por despachar», sin guía ni correo de envío, envío 0 en finanzas; Pedidos/Inicio cuentan igual que sin fila", async () => {
+  it("la fila «Recoge en tienda» que abre el pago: fuera de Envíos «Por despachar», sin guía ni correo de envío, envío 0 en finanzas; Pedidos/Inicio la ponen en «Por entregar en tienda»", async () => {
     fixture = await createInventoryFixture();
     const pickup = await boldOrder(fixture, 2, OrderStatus.PENDING, "pickup");
-    const { dispatchQueueWhere } = await import("@/lib/order-queues");
-    const before = await testPrisma.order.count({ where: { ...dispatchQueueWhere(fixture.store.id), id: pickup.id } });
+    const { dispatchQueueWhere, pickupQueueWhere } = await import("@/lib/order-queues");
+    const count = async (where: object, id: string) => testPrisma.order.count({ where: { AND: [where, { id }] } });
+    const before = await count(pickupQueueWhere(fixture.store.id), pickup.id);
 
     expect((await webhook(pickup)).status).toBe(200);
 
@@ -361,10 +362,12 @@ describe("liquidación compartida de pagos (MySQL)", () => {
     expect(isReadyToDispatch(viewed)).toBe(false);
     expect(isReadyToDispatch({ ...viewed, provider: ShippingProvider.ENVIOCLICK })).toBe(true);
 
-    // Pedidos e Inicio no miran el proveedor: el pedido pagado cuenta igual que antes de tener fila.
-    const after = await testPrisma.order.count({ where: { ...dispatchQueueWhere(fixture.store.id), id: pickup.id } });
+    // Pedidos e Inicio: pagado, entra en «Por entregar en tienda» y nunca en «Por despachar», con fila o sin ella.
+    const after = await count(pickupQueueWhere(fixture.store.id), pickup.id);
     expect({ before, after }).toEqual({ before: 0, after: 1 });
+    expect(await count(dispatchQueueWhere(fixture.store.id), pickup.id)).toBe(0);
     const paidPickupWithoutRow = await boldOrder(fixture, 1, OrderStatus.PAID, "pickup");
-    expect(await testPrisma.order.count({ where: { ...dispatchQueueWhere(fixture.store.id), id: paidPickupWithoutRow.id } })).toBe(1);
+    expect(await count(pickupQueueWhere(fixture.store.id), paidPickupWithoutRow.id)).toBe(1);
+    expect(await count(dispatchQueueWhere(fixture.store.id), paidPickupWithoutRow.id)).toBe(0);
   });
 });

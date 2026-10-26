@@ -5,7 +5,7 @@ import {
   type OrderQueue,
   type QueueableOrder,
 } from "@/lib/order-queues";
-import { OrderStatus, OrderType, ShippingStatus } from "@prisma/client";
+import { OrderStatus, OrderType, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 /** Línea de tiempo y siguiente paso de la página del pedido. Puro y testeable. */
 
@@ -33,6 +33,7 @@ export interface TimelineOrder extends QueueableOrder {
   expiresAt?: Date | string | null;
   shipping?: {
     status: ShippingStatus;
+    provider: ShippingProvider;
     trackingCode?: string | null;
     /** Solo lectura: la guía existe pero el número no se manda. */
     hasGuide?: boolean;
@@ -304,6 +305,17 @@ export function getNextStepCard(
         primary: { label: "Ir a envío", href: "#envio" },
         consequence:
           "Con la guía creada podrás imprimir la etiqueta y el cliente recibirá el seguimiento.",
+        tone: "sky",
+      };
+    case "pickup":
+      return {
+        queue,
+        title: "Siguiente paso: entregar en la tienda",
+        description:
+          "El cliente lo recoge en persona: no lleva guía. Cuando se lo entregues, pulsa «Marcar entregado».",
+        primary: { label: "Marcar entregado", href: "#envio", action: "ship" },
+        consequence:
+          "Al confirmar: el envío queda «Entregado» y el cliente recibe el correo de pedido entregado.",
         tone: "sky",
       };
     case "in-transit":

@@ -197,3 +197,13 @@ describe("borrar un pedido con guía viva", () => {
     ).toBeNull();
   });
 });
+
+describe("pedido para recoger en la tienda", () => {
+  it("offers «Marcar entregado» instead of «Marcar como enviado»", () => {
+    const paid = getStatusActions(OrderStatus.PAID, { ...standard, pickup: true });
+    expect(paid.find((action) => action.to === OrderStatus.SENT)).toMatchObject({ label: "Marcar entregado", primary: true, confirm: "ship" });
+    expect(getStatusActions(OrderStatus.PAID, standard).find((action) => action.to === OrderStatus.SENT)?.label).toBe("Marcar como enviado");
+    const codPending = getStatusActions(OrderStatus.PENDING, { ...cod, pickup: true });
+    expect(codPending.find((action) => action.to === OrderStatus.SENT)?.label).toBe("Marcar entregado");
+  });
+});

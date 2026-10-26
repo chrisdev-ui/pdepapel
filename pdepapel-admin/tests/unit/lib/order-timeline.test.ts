@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildOrderTimeline, getNextStepCard } from "@/lib/order-timeline";
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 const now = new Date("2026-09-07T21:00:00.000Z");
 const base = {
@@ -24,7 +24,7 @@ describe("order timeline", () => {
   });
 
   it("moves to the guide step once paid and to transit once the carrier has it", () => {
-    const paid = { ...base, status: OrderStatus.PAID, paidAt: new Date("2026-09-07T20:40:00.000Z"), shipping: { status: ShippingStatus.Preparing, trackingCode: null, courier: "COORDINADORA", carrierName: "Coordinadora" } };
+    const paid = { ...base, status: OrderStatus.PAID, paidAt: new Date("2026-09-07T20:40:00.000Z"), shipping: { status: ShippingStatus.Preparing, provider: ShippingProvider.ENVIOCLICK, trackingCode: null, courier: "COORDINADORA", carrierName: "Coordinadora" } };
     expect(buildOrderTimeline(paid, now).map((s) => s.state)).toEqual(["done", "done", "now", "todo", "todo"]);
     expect(getNextStepCard(paid, "s1", now)).toMatchObject({ queue: "dispatch", primary: { href: "#envio" } });
 
@@ -36,16 +36,16 @@ describe("order timeline", () => {
   });
 
   it("does not ask for a guide on an order delivered by hand", () => {
-    const handDelivered = { ...base, status: OrderStatus.PAID, paidAt: new Date("2026-09-07T20:40:00.000Z"), shipping: { status: ShippingStatus.Delivered, trackingCode: null } };
+    const handDelivered = { ...base, status: OrderStatus.PAID, paidAt: new Date("2026-09-07T20:40:00.000Z"), shipping: { status: ShippingStatus.Delivered, provider: ShippingProvider.ENVIOCLICK, trackingCode: null } };
     const guide = buildOrderTimeline(handDelivered, now).find((s) => s.id === "guide")!;
     expect(guide).toMatchObject({ state: "done", meta: "Sin guía registrada" });
     expect(getNextStepCard(handDelivered, "s1", now)?.queue).not.toBe("dispatch");
   });
 
   it("flags carrier problems and closes delivered orders", () => {
-    const failed = { ...base, status: OrderStatus.SENT, shipping: { status: ShippingStatus.FailedDelivery, trackingCode: "X" } };
+    const failed = { ...base, status: OrderStatus.SENT, shipping: { status: ShippingStatus.FailedDelivery, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X" } };
     expect(getNextStepCard(failed, "s1", now)).toMatchObject({ queue: "issue", tone: "pink" });
-    const delivered = { ...base, status: OrderStatus.SENT, shipping: { status: ShippingStatus.Delivered, trackingCode: "X", actualDeliveryDate: new Date("2026-09-09T15:00:00.000Z") } };
+    const delivered = { ...base, status: OrderStatus.SENT, shipping: { status: ShippingStatus.Delivered, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X", actualDeliveryDate: new Date("2026-09-09T15:00:00.000Z") } };
     const steps = buildOrderTimeline(delivered, now);
     expect(steps.every((s) => s.state === "done")).toBe(true);
     expect(getNextStepCard(delivered, "s1", now)?.queue).toBe("delivered");

@@ -90,7 +90,8 @@ export function StatusActions({
   const [guideChoice, setGuideChoice] = useState<"now" | "later">("now");
   const [submitting, setSubmitting] = useState(false);
 
-  const actions = getStatusActions(status, { type, paymentMethod, shippingStatus }).filter(
+  const pickup = shippingProvider === ShippingProvider.NONE;
+  const actions = getStatusActions(status, { type, paymentMethod, shippingStatus, pickup }).filter(
     (action) => (variant === "care" ? action.destructive : !action.destructive),
   );
 
@@ -181,6 +182,13 @@ export function StatusActions({
         "El cliente recibe un correo de pago confirmado.",
       ];
     }
+    if (pending.confirm === "ship" && pickup) {
+      return [
+        "El envío queda «Entregado»: no se crea guía ni se avisa a la transportadora.",
+        "El cliente recibe un correo de pedido entregado.",
+        "El pedido sale de «Por entregar en tienda».",
+      ];
+    }
     if (pending.confirm === "ship") {
       return [
         "El cliente recibe el aviso de envío con la guía.",
@@ -259,7 +267,10 @@ export function StatusActions({
         to={
           pending
             ? {
-                label: ORDER_STATUS_LABELS[pending.to],
+                label:
+                  pickup && pending.to === OrderStatus.SENT
+                    ? "Entregado"
+                    : ORDER_STATUS_LABELS[pending.to],
                 tone: ORDER_STATUS_TONE[pending.to],
               }
             : undefined

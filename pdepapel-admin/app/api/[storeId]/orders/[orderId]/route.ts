@@ -70,6 +70,7 @@ import {
   DiscountType,
   OrderStatus,
   PaymentMethod,
+  ShippingProvider,
   ShippingStatus,
   OrderType,
 } from "@prisma/client";
@@ -301,7 +302,15 @@ export async function PATCH(
       shippingStatus: order.shipping?.status ?? null,
       requestedShippingStatus:
         (shipping?.status as ShippingStatus | undefined) ?? null,
-      context: { type: transitionType, paymentMethod: transitionMethod },
+      context: {
+        type: transitionType,
+        paymentMethod: transitionMethod,
+        // Sin envío o con «Recoge en tienda»: el mismo criterio de la cola «Por entregar en tienda».
+        pickup:
+          ((shippingProvider as ShippingProvider | undefined) ??
+            order.shipping?.provider ??
+            ShippingProvider.NONE) === ShippingProvider.NONE,
+      },
     });
     if (reconciled.status) status = reconciled.status;
     if (reconciled.shippingStatus && shipping) {

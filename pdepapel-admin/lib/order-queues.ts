@@ -1,4 +1,4 @@
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus, type Prisma } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus, type Prisma } from "@prisma/client";
 import { isFlagged, parseRiskReasons } from "@/lib/order-risk";
 
 /**
@@ -10,6 +10,7 @@ export type OrderQueue =
   | "verify" // transferencia pendiente de verificación
   | "awaiting-payment" // pago en línea que el cliente aún no completa
   | "dispatch" // pagado (o contra entrega) sin guía
+  | "pickup" // pagado, «Recoge en tienda», sin entregar
   | "in-transit" // con guía, no entregado
   | "issue" // novedad de transportadora
   | "delivered"
@@ -21,6 +22,7 @@ export type OrderView =
   | "por-atender"
   | "por-verificar"
   | "por-despachar"
+  | "por-entregar"
   | "en-camino"
   | "con-novedad"
   | "cotizaciones"
@@ -30,6 +32,7 @@ export const ORDER_VIEWS: { id: OrderView; label: string }[] = [
   { id: "por-atender", label: "Por atender" },
   { id: "por-verificar", label: "Por verificar" },
   { id: "por-despachar", label: "Por despachar" },
+  { id: "por-entregar", label: "Por entregar en tienda" },
   { id: "en-camino", label: "En camino" },
   { id: "con-novedad", label: "Con novedad" },
   { id: "cotizaciones", label: "Cotizaciones" },
@@ -62,8 +65,12 @@ export interface QueueableOrder {
   paidAt?: Date | string | null;
   expiresAt?: Date | string | null;
   payment?: { method: PaymentMethod } | null;
+  /** null = el pedido no tiene envío (en el panel, «Recoge en tienda»); undefined = no se cargó. */
   shipping?: {
     status: ShippingStatus;
+    /** «Recoge en tienda» es NONE: no hay transportadora ni guía. */
+    /** Obligatorio: sin él un pedido para recoger cae en «Por despachar» (una consulta que no lo trae no compila). */
+    provider: ShippingProvider;
     trackingCode?: string | null;
     /** Solo lectura: la guía existe pero el número no se manda (`scrubOrder`). */
     hasGuide?: boolean;
@@ -99,6 +106,15 @@ export const IN_TRANSIT_STATUSES: ShippingStatus[] = [ShippingStatus.Shipped, Sh
 /** Envíos que ya no son «por despachar» aunque no tengan guía: con novedad, en camino o entregados a mano. */
 export const NOT_DISPATCHABLE_SHIPPING_STATUSES: ShippingStatus[] = [...ISSUE_STATUSES, ShippingStatus.Delivered, ...IN_TRANSIT_STATUSES];
 const NOT_DISPATCHABLE_TYPES: OrderType[] = [OrderType.POINT_OF_SALE, OrderType.FESTIVAL, OrderType.GIFT_CARD];
+
+/**
+ * Un pedido para recoger en la tienda: sin envío (el panel no lo crea con
+ * «Recoge en tienda») o con el envío en NONE. `undefined` no cuenta: es que la
+ * consulta no trajo el envío.
+ */
+export function isPickupOrder(order: Pick<QueueableOrder, "shipping">): boolean {
+  return order.shipping === null || order.shipping?.provider === ShippingProvider.NONE;
+}
 
 const toDate = (value?: Date | string | null) => (value ? (value instanceof Date ? value : new Date(value)) : null);
 
@@ -137,13 +153,23 @@ export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQue
   if (status === OrderStatus.PENDING || status === OrderStatus.CREATED) {
     const method = order.payment?.method;
     if (method === PaymentMethod.BankTransfer) return "verify";
-    if (method === PaymentMethod.COD) return hasGuide ? "in-transit" : "dispatch";
+    // Contra entrega para recoger se cobra en el mostrador: también es «Por entregar en tienda».
+    if (method === PaymentMethod.COD) {
+      if (isPickupOrder(order)) return !shippingStatus || shippingStatus === ShippingStatus.Preparing ? "pickup" : "delivered";
+      return hasGuide ? "in-transit" : "dispatch";
+    }
     if (method === PaymentMethod.CASH) return inStore ? "completed" : "verify";
     return "awaiting-payment";
   }
 
   if (status === OrderStatus.PAID || status === OrderStatus.SENT) {
     if (inStore || digital) return "completed";
+    // Para recoger: no se despacha ni lleva guía. Entregado (pedido «Enviado»
+    // o envío fuera de «Preparando») ya no es trabajo pendiente.
+    if (isPickupOrder(order)) {
+      if (status === OrderStatus.SENT || (shippingStatus && shippingStatus !== ShippingStatus.Preparing)) return "delivered";
+      return isOlderThan(order, DISPATCH_WINDOW_DAYS, now) ? "completed" : "pickup";
+    }
     if (hasGuide || status === OrderStatus.SENT || (shippingStatus && IN_TRANSIT_STATUSES.includes(shippingStatus))) return "in-transit";
     return isOlderThan(order, DISPATCH_WINDOW_DAYS, now) ? "completed" : "dispatch";
   }
@@ -161,16 +187,13 @@ export function dispatchQueueWhere(storeId: string, now = new Date()): Prisma.Or
   return {
     storeId,
     AND: [
+      // Sin envío o con «Recoge en tienda» es «Por entregar en tienda», no «Por despachar».
       {
-        OR: [
-          { shipping: null },
-          {
-            shipping: {
-              status: { notIn: NOT_DISPATCHABLE_SHIPPING_STATUSES },
-              OR: [{ trackingCode: null }, { trackingCode: "" }],
-            },
-          },
-        ],
+        shipping: {
+          provider: { not: ShippingProvider.NONE },
+          status: { notIn: NOT_DISPATCHABLE_SHIPPING_STATUSES },
+          OR: [{ trackingCode: null }, { trackingCode: "" }],
+        },
       },
       {
         OR: [
@@ -180,6 +203,27 @@ export function dispatchQueueWhere(storeId: string, now = new Date()): Prisma.Or
             OR: [{ paidAt: { gte: since } }, { paidAt: null, createdAt: { gte: since } }],
           },
           // Contra entrega sale antes de cobrarse y sin ventana: espera su guía.
+          { status: { in: [OrderStatus.PENDING, OrderStatus.CREATED] }, payment: { method: PaymentMethod.COD } },
+        ],
+      },
+    ],
+  };
+}
+
+/** La cola «pickup» de `getOrderQueue` como filtro de Prisma: Inicio cuenta lo mismo que Pedidos → Por entregar en tienda. */
+export function pickupQueueWhere(storeId: string, now = new Date()): Prisma.OrderWhereInput {
+  const since = new Date(now.getTime() - DISPATCH_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return {
+    storeId,
+    AND: [
+      { OR: [{ shipping: null }, { shipping: { provider: ShippingProvider.NONE, status: ShippingStatus.Preparing } }] },
+      {
+        OR: [
+          {
+            status: OrderStatus.PAID,
+            type: { notIn: NOT_DISPATCHABLE_TYPES },
+            OR: [{ paidAt: { gte: since } }, { paidAt: null, createdAt: { gte: since } }],
+          },
           { status: { in: [OrderStatus.PENDING, OrderStatus.CREATED] }, payment: { method: PaymentMethod.COD } },
         ],
       },
@@ -201,6 +245,8 @@ export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new
       return { label: "Reenviar enlace de pago", primary: Boolean(order && isAwaitingPaymentStale(order, now)) };
     case "dispatch":
       return { label: "Crear guía", primary: false };
+    case "pickup":
+      return { label: "Marcar entregado", primary: true };
     case "in-transit":
       return { label: "Ver seguimiento", primary: false };
     case "issue":
@@ -225,6 +271,7 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
         (queue === "in-transit" && Boolean(order && isShippingStale(order, now))) ||
         queue === "verify" ||
         queue === "dispatch" ||
+        queue === "pickup" ||
         queue === "issue" ||
         (queue === "quote" && isExpiringSoon(order?.expiresAt, now)) ||
         (queue === "awaiting-payment" && Boolean(order && isAwaitingPaymentStale(order, now)))
@@ -233,6 +280,8 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
       return queue === "verify";
     case "por-despachar":
       return queue === "dispatch";
+    case "por-entregar":
+      return queue === "pickup";
     case "en-camino":
       return queue === "in-transit";
     case "con-novedad":
@@ -314,6 +363,7 @@ export function getShippingBadge(order: QueueableOrder, now = new Date()): Shipp
   // Una tarjeta de regalo se entrega por correo: no hay guía que mostrar.
   if (inStore || order.type === OrderType.GIFT_CARD) return null;
   const status = order.shipping?.status;
+  if (isPickupOrder(order) && (!status || status === ShippingStatus.Preparing)) return { label: "Recoge en tienda", tone: "cream" };
   if (!status || (!order.shipping?.trackingCode && status === ShippingStatus.Preparing)) return { label: "Sin guía", tone: "slate" };
   if (isShippingStale(order, now)) {
     const days = Math.floor((now.getTime() - toDate(order.shipping?.updatedAt)!.getTime()) / (24 * 60 * 60 * 1000));

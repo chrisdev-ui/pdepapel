@@ -2,7 +2,7 @@ import { EXCLUDE_BUNDLE_PRODUCTS } from "@/lib/catalog-filters";
 import { compareUrgency, computeReplenishment, describeCover } from "@/lib/replenishment";
 import { getUnitsOnOrderByProduct, getUnitsSoldByProduct } from "@/lib/replenishment-db";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
-import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS, dispatchQueueWhere } from "@/lib/order-queues";
+import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS, dispatchQueueWhere, pickupQueueWhere } from "@/lib/order-queues";
 import { countRecentPaymentWebhookIssues } from "@/lib/payment-webhook-events";
 import { ORDER_READY_TO_DISPATCH } from "@/lib/presale";
 import {
@@ -44,7 +44,7 @@ const ONLINE_METHODS: PaymentMethod[] = [PaymentMethod.Bold, PaymentMethod.Wompi
 export type SalesChannel = "tienda" | "presencial" | "feria" | "mercadolibre";
 
 export interface TodayPendingAction {
-  kind: "inventory-issue" | "shipping-issue" | "payment-webhook-issue" | "verify-payment" | "awaiting-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
+  kind: "inventory-issue" | "shipping-issue" | "payment-webhook-issue" | "verify-payment" | "awaiting-payment" | "create-guide" | "deliver-pickup" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
   title: string;
   meta: string;
   href: string;
@@ -57,6 +57,8 @@ export interface TodaySummary {
   generatedAt: Date;
   today: { net: number; orders: number; marketplaceNet: number };
   toDispatch: number;
+  /** Pagados para recoger en la tienda que aún no se entregan (misma regla que Pedidos → Por entregar en tienda). */
+  toPickup: number;
   pendingPayments: { count: number; amount: number };
   lowStock: {
     /** Productos «Por reponer» (misma regla que Inventario: cobertura por ventas, umbral como respaldo). */
@@ -108,6 +110,8 @@ export interface TodayRawInput {
   awaitingPayments?: { id: string; orderNumber: string; fullName: string; total: number; createdAt: Date; method: PaymentMethod | null }[];
   toDispatch: { id: string; orderNumber: string; fullName: string; city: string | null; paidAt: Date | null; courier: string | null }[];
   toDispatchCount: number;
+  toPickup?: { id: string; orderNumber: string; fullName: string; paidAt: Date | null }[];
+  toPickupCount?: number;
   lowStockProducts: { id: string; name: string; stock: number; coverLabel?: string }[];
   lowStockCount: number;
   outOfStockCount: number;
@@ -218,6 +222,16 @@ export function buildTodaySummary(
       meta: [who(order.fullName), order.city, order.paidAt ? `pagado ${relative(order.paidAt, now)}` : null].filter(Boolean).join(" · "),
       href: `/${storeId}/pedidos/${order.id}`,
       action: "Crear guía",
+      weight: 2,
+    });
+  }
+  for (const order of input.toPickup ?? []) {
+    pending.push({
+      kind: "deliver-pickup",
+      title: `Entregar en tienda · ${order.orderNumber}`,
+      meta: [who(order.fullName), order.paidAt ? `pagado ${relative(order.paidAt, now)}` : null].filter(Boolean).join(" · "),
+      href: `/${storeId}/pedidos/${order.id}`,
+      action: "Marcar entregado",
       weight: 2,
     });
   }
@@ -350,6 +364,7 @@ export function buildTodaySummary(
     generatedAt: now,
     today: { net: todayNet, orders: input.todayOrders.length, marketplaceNet: input.todayMarketplaceNet },
     toDispatch: input.toDispatchCount,
+    toPickup: input.toPickupCount ?? 0,
     pendingPayments: { count: input.pendingTransfers.length, amount: input.pendingTransfers.reduce((sum, o) => sum + Number(o.total), 0) },
     lowStock: {
       count: input.lowStockCount,
@@ -423,6 +438,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       ORDER_READY_TO_DISPATCH,
     ],
   };
+  const pickupWhere = { AND: [pickupQueueWhere(storeId, now), ORDER_READY_TO_DISPATCH] };
   // «Por reponer» con la misma regla que Inventario: cobertura por ventas de
   // los últimos 30 días, umbral de la tienda como respaldo, sin kits (su stock
   // sale de los componentes) ni cápsulas sorpresa (se venden en feria).
@@ -464,6 +480,8 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     awaitingPayments,
     toDispatch,
     toDispatchCount,
+    toPickup,
+    toPickupCount,
     lowStock,
     unansweredQuestions,
     expiringQuotes,
@@ -499,6 +517,13 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       select: { id: true, orderNumber: true, fullName: true, city: true, paidAt: true, shipping: { select: { courier: true } } },
     }),
     prismadb.order.count({ where: dispatchWhere }),
+    prismadb.order.findMany({
+      where: pickupWhere,
+      orderBy: { createdAt: "asc" },
+      take: 3,
+      select: { id: true, orderNumber: true, fullName: true, paidAt: true },
+    }),
+    prismadb.order.count({ where: pickupWhere }),
     lowStockBatch,
     prismadb.marketplaceQuestion
       .findMany({
@@ -545,6 +570,8 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       awaitingPayments: awaitingPayments.map((o) => ({ ...o, method: o.payment?.method ?? null })),
       toDispatch: toDispatch.map((o) => ({ ...o, courier: o.shipping?.courier ?? null })),
       toDispatchCount,
+      toPickup,
+      toPickupCount,
       lowStockProducts: lowStock.products,
       lowStockCount: lowStock.count,
       outOfStockCount: lowStock.outOfStock,

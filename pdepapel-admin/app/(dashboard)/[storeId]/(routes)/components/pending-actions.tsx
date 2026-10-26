@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import type { TodayPendingAction } from "@/lib/dashboard-today";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Clock, CreditCard, ImageOff, Link2, ListChecks, MessageCircle, PackageSearch, PackageX, Truck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, CreditCard, ImageOff, Link2, ListChecks, MessageCircle, PackageSearch, PackageX, Store, Truck } from "lucide-react";
 import Link from "next/link";
 
 const ICONS: Record<TodayPendingAction["kind"], { icon: React.ReactNode; tint: string }> = {
@@ -11,6 +11,7 @@ const ICONS: Record<TodayPendingAction["kind"], { icon: React.ReactNode; tint: s
   "verify-payment": { icon: <CreditCard className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-cream" },
   "awaiting-payment": { icon: <Link2 className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
   "create-guide": { icon: <Truck className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-sky" },
+  "deliver-pickup": { icon: <Store className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-mint" },
   "answer-question": { icon: <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-lavender" },
   restock: { icon: <AlertTriangle className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
   "expiring-quote": { icon: <Clock className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-muted" },

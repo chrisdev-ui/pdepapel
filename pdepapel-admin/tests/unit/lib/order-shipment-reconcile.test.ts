@@ -80,3 +80,22 @@ describe("reconcileShipmentStatus", () => {
     ).toEqual({});
   });
 });
+
+describe("«Marcar entregado» de un pedido para recoger", () => {
+  const pickup = { ...standard, pickup: true };
+
+  it("leaves the shipment delivered, not on its way", () => {
+    expect(
+      reconcileShipmentStatus({
+        from: OrderStatus.PAID,
+        to: OrderStatus.SENT,
+        shippingStatus: ShippingStatus.Preparing,
+        requestedShippingStatus: ShippingStatus.Preparing,
+        context: pickup,
+      }),
+    ).toEqual({ shippingStatus: ShippingStatus.Delivered });
+    expect(reconcileShipmentStatus({ from: OrderStatus.PAID, to: OrderStatus.SENT, shippingStatus: null, context: pickup })).toEqual({
+      shippingStatus: ShippingStatus.Delivered,
+    });
+  });
+});

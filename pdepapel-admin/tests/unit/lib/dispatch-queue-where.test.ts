@@ -20,8 +20,8 @@ vi.mock("@/lib/store-access", () => ({ requireStoreRead: vi.fn(async () => ({ us
 vi.mock("@/lib/payment-webhook-events", () => ({ countRecentPaymentWebhookIssues: vi.fn(async () => ({ count: 0, latest: null })) }));
 
 import { getTodaySummary } from "@/lib/dashboard-today";
-import { dispatchQueueWhere, getOrderQueue, NOT_DISPATCHABLE_SHIPPING_STATUSES, orderMatchesView, type QueueableOrder } from "@/lib/order-queues";
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { dispatchQueueWhere, getOrderQueue, NOT_DISPATCHABLE_SHIPPING_STATUSES, getNextStep, orderMatchesView, pickupQueueWhere, type QueueableOrder } from "@/lib/order-queues";
+import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 const now = new Date("2026-10-25T15:00:00.000Z");
 const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -32,6 +32,9 @@ type Fixture = QueueableOrder & {
   orderItems: { isPreorder: boolean; preorderReleasedAt: Date | null }[];
 };
 
+const shipping = (status: ShippingStatus, trackingCode: string | null = null, provider: ShippingProvider = ShippingProvider.ENVIOCLICK) => ({ status, trackingCode, provider });
+const pickup = (status: ShippingStatus = ShippingStatus.Preparing) => shipping(status, null, ShippingProvider.NONE);
+
 const order = (id: string, overrides: Partial<Fixture>): Fixture => ({
   id,
   storeId: "s1",
@@ -40,15 +43,19 @@ const order = (id: string, overrides: Partial<Fixture>): Fixture => ({
   createdAt: daysAgo(3),
   paidAt: daysAgo(2),
   payment: { method: PaymentMethod.Bold },
-  shipping: null,
+  shipping: shipping(ShippingStatus.Preparing),
   orderItems: [],
   ...overrides,
 });
 
-const shipping = (status: ShippingStatus, trackingCode: string | null = null) => ({ status, trackingCode });
-
 const FIXTURES: Fixture[] = [
-  order("sin-envio", {}),
+  order("sin-envio", { shipping: null }),
+  order("recoge", { shipping: pickup() }),
+  order("recoge-entregado", { shipping: pickup(ShippingStatus.Delivered) }),
+  order("recoge-enviado", { status: OrderStatus.SENT, shipping: pickup() }),
+  order("recoge-viejo", { paidAt: daysAgo(40), createdAt: daysAgo(41), shipping: pickup() }),
+  order("recoge-presencial", { type: OrderType.POINT_OF_SALE, payment: { method: PaymentMethod.CASH }, shipping: null }),
+  order("recoge-contra-entrega", { status: OrderStatus.PENDING, paidAt: null, payment: { method: PaymentMethod.COD }, shipping: pickup() }),
   order("preparando", { shipping: shipping(ShippingStatus.Preparing) }),
   order("guia-vacia", { shipping: shipping(ShippingStatus.Preparing, "") }),
   order("envio-cancelado", { shipping: shipping(ShippingStatus.Cancelled) }),
@@ -122,8 +129,11 @@ function matches(row: Record<string, unknown> | null | undefined, where: Record<
   });
 }
 
-const pedidosPorDespachar = (rows: Fixture[]) =>
-  rows.filter((row) => row.storeId === "s1" && orderMatchesView(getOrderQueue(row, now), "por-despachar", row, now)).map((row) => row.id);
+const pedidosEnVista = (view: "por-despachar" | "por-entregar") => (rows: Fixture[]) =>
+  rows.filter((row) => row.storeId === "s1" && orderMatchesView(getOrderQueue(row, now), view, row, now)).map((row) => row.id);
+const pedidosPorDespachar = pedidosEnVista("por-despachar");
+const pedidosPorEntregar = pedidosEnVista("por-entregar");
+const idsMatching = (where: unknown) => FIXTURES.filter((row) => matches(row as unknown as Record<string, unknown>, where as Record<string, unknown>)).map((row) => row.id);
 
 describe("dispatchQueueWhere", () => {
   it("selects exactly the orders Pedidos puts in «Por despachar»", () => {
@@ -142,6 +152,26 @@ describe("dispatchQueueWhere", () => {
   });
 });
 
+describe("pickupQueueWhere", () => {
+  it("selects exactly the orders Pedidos puts in «Por entregar en tienda»", () => {
+    const fromWhere = idsMatching(pickupQueueWhere("s1", now));
+    expect(fromWhere).toEqual(pedidosPorEntregar(FIXTURES));
+    expect([...fromWhere].sort()).toEqual(["recoge", "recoge-contra-entrega", "sin-envio"]);
+  });
+
+  it("never shares an order with «Por despachar»", () => {
+    const dispatch = new Set(idsMatching(dispatchQueueWhere("s1", now)));
+    expect(idsMatching(pickupQueueWhere("s1", now)).filter((id) => dispatch.has(id))).toEqual([]);
+  });
+
+  it("keeps pickups in «Por atender» with «Marcar entregado» as the next step", () => {
+    const row = FIXTURES.find((fixture) => fixture.id === "recoge")!;
+    const queue = getOrderQueue(row, now);
+    expect(orderMatchesView(queue, "por-atender", row, now)).toBe(true);
+    expect(getNextStep(queue, row, now)).toEqual({ label: "Marcar entregado", primary: true });
+  });
+});
+
 describe("Inicio «Por despachar»", () => {
   beforeEach(() => {
     db.order.count.mockReset().mockImplementation(async ({ where }: { where: Record<string, unknown> }) => FIXTURES.filter((row) => matches(row as unknown as Record<string, unknown>, where)).length);
@@ -151,6 +181,8 @@ describe("Inicio «Por despachar»", () => {
     const summary = await getTodaySummary("s1", now);
     expect(summary.toDispatch).toBe(pedidosPorDespachar(FIXTURES).length);
     expect(summary.toDispatch).toBeGreaterThan(0);
+    expect(summary.toPickup).toBe(pedidosPorEntregar(FIXTURES).length);
+    expect(summary.toPickup).toBe(3);
   });
 
   it("still leaves out an order waiting on a presale", async () => {

@@ -47,7 +47,7 @@ const ORDER_ROW_SELECT = {
       },
     },
   },
-  shipping: { select: { status: true, trackingCode: true, courier: true, updatedAt: true } },
+  shipping: { select: { status: true, provider: true, trackingCode: true, courier: true, updatedAt: true } },
   payment: { select: { method: true } },
   _count: { select: { inventoryIssues: { where: { resolvedAt: null } } } },
 } as const;

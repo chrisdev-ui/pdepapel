@@ -202,6 +202,48 @@ describe("ciclo de vida de un pedido pagado o enviado", () => {
     expect(after.shipping?.status).toBe(ShippingStatus.Shipped);
   });
 
+  it("«Marcar entregado» de un pedido para recoger lo deja entregado y fuera de «Por entregar en tienda»", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    await recalculateKitStock(testPrisma, [fixture.kit.id]);
+    const order = await createKitOrder(fixture, {
+      status: OrderStatus.PAID,
+      paidAt: new Date(),
+      shipping: {
+        create: {
+          storeId: fixture.store.id,
+          provider: ShippingProvider.NONE,
+          status: ShippingStatus.Preparing,
+        },
+      },
+    });
+    const { dispatchQueueWhere, getOrderQueue, pickupQueueWhere } = await import("@/lib/order-queues");
+    const inQueue = async (where: object) =>
+      testPrisma.order.count({ where: { AND: [where, { id: order.id }] } });
+    expect(await inQueue(pickupQueueWhere(fixture.store.id))).toBe(1);
+    expect(await inQueue(dispatchQueueWhere(fixture.store.id))).toBe(0);
+
+    const { PATCH } = await patchRoute();
+    const delivered = await PATCH(
+      json("PATCH", {
+        status: OrderStatus.SENT,
+        expectedStatus: OrderStatus.PAID,
+      }),
+      { params: { storeId: fixture.store.id, orderId: order.id } },
+    );
+    expect(delivered.status).toBe(200);
+
+    const after = await testPrisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+      include: { shipping: true, payment: true },
+    });
+    expect(after.status).toBe(OrderStatus.SENT);
+    expect(after.shipping?.status).toBe(ShippingStatus.Delivered);
+    expect(await inQueue(pickupQueueWhere(fixture.store.id))).toBe(0);
+    expect(getOrderQueue(after)).toBe("delivered");
+    expect(await componentStock(fixture)).toBe(6);
+  });
+
   it("poner el envío en camino desde el formulario deja el pedido pagado como «Enviado»", async () => {
     fixture = await createInventoryFixture();
     session.userId = fixture.store.userId;

@@ -43,6 +43,7 @@ import {
   ORDER_ACCOUNT_EMAIL_CLAIM_TTL_MS,
 } from "@/lib/order-account-claims";
 import { RISK_REASON_LABELS, isFlagged, parseRiskReasons } from "@/lib/order-risk";
+import { isPickupOrder } from "@/lib/order-queues";
 import { getShippingChargeState } from "@/lib/order-totals";
 import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 import prismadb from "@/lib/prismadb";
@@ -403,6 +404,8 @@ function bankTransferText(block: BankTransferEmailBlock): string {
   ].join("\n");
 }
 
+const HANDED_OVER_THANKS = "¡Esperamos que disfrutes tu compra! Si tienes algún problema con tu pedido, por favor contáctanos.";
+
 export function buildOrderEmails(
   order: EmailOrder,
   status: OrderStatus,
@@ -424,6 +427,8 @@ export function buildOrderEmails(
   const giftRecipientName =
     isGiftOrder(order) && !digital ? order.giftRecipientName : null;
   const notificationSource = getOrderNotificationSource(status);
+  // Para recoger, «Enviado» es la entrega en el mostrador: la clienta ve «Entregado», no «salió de la papelería».
+  const handedOver = status === OrderStatus.SENT && !digital && isPickupOrder(order);
 
   const giftCardTarget = order.giftRecipientEmail
     ? `al correo de ${order.giftRecipientName || "quien la recibe"}`
@@ -484,11 +489,11 @@ export function buildOrderEmails(
 
   const customer: BuiltEmail | null = order.email
     ? {
-        subject: `Tu pedido #${order.orderNumber} - ${readableStatus}`,
+        subject: handedOver ? `¡Tu pedido #${order.orderNumber} ha sido entregado!` : `Tu pedido #${order.orderNumber} - ${readableStatus}`,
         react: OrderNotification({
           name: order.fullName,
           orderNumber: order.orderNumber,
-          status,
+          status: handedOver ? ShippingStatus.Delivered : status,
           paymentMethod: readablePayment,
           trackingInfo: order.shipping?.trackingCode ?? undefined,
           total,
@@ -497,13 +502,13 @@ export function buildOrderEmails(
           orderSummary,
           city: order.city || undefined,
           orderLink,
-          thanksParagraph,
+          thanksParagraph: handedOver ? HANDED_OVER_THANKS : thanksParagraph,
           accountClaimLink,
           giftRecipientName,
           digital,
           bankTransfer: transferBlock,
         }) as React.ReactElement,
-        text: withSocialLinks(`Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}${transferBlock ? `\n\n${bankTransferText(transferBlock)}` : ""}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`),
+        text: withSocialLinks(`Tu pedido #${order.orderNumber} - ${handedOver ? getReadableStatus(ShippingStatus.Delivered) : readableStatus} para ${order.fullName}\n\n${orderSummary}${transferBlock ? `\n\n${bankTransferText(transferBlock)}` : ""}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${handedOver ? HANDED_OVER_THANKS : thanksParagraph}`),
       }
     : null;
 

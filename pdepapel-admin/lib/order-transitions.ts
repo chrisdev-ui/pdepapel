@@ -39,6 +39,8 @@ export interface TransitionContext {
   paymentMethod?: PaymentMethod | null;
   /** Estado del envío guardado: un pedido ya entregado (a mano, sin guía) no se vuelve a enviar. */
   shippingStatus?: ShippingStatus | null;
+  /** Recoge en tienda: «Enviado» es entregarlo en el mostrador. */
+  pickup?: boolean;
 }
 
 const QUOTE_OPEN: OrderStatus[] = [OrderStatus.QUOTATION, OrderStatus.VIEWED];
@@ -159,6 +161,7 @@ export function getStatusActions(
   const isOnline = ONLINE_METHODS.includes(
     context.paymentMethod as PaymentMethod,
   );
+  const sentLabel = context.pickup ? "Marcar entregado" : "Marcar como enviado";
   const actions: StatusAction[] = [];
   const push = (
     to: OrderStatus,
@@ -207,11 +210,11 @@ export function getStatusActions(
         !isCod && !isOnline,
         "pay",
       );
-      if (isCod) push(OrderStatus.SENT, "Marcar como enviado", true, "ship");
+      if (isCod) push(OrderStatus.SENT, sentLabel, true, "ship");
       break;
     case OrderStatus.PAID:
       if (!QUOTE_OPEN.includes(from))
-        push(OrderStatus.SENT, "Marcar como enviado", true, "ship");
+        push(OrderStatus.SENT, sentLabel, true, "ship");
       break;
     case OrderStatus.SENT:
       if (isCod)
@@ -289,7 +292,9 @@ export function reconcileShipmentStatus({
     (effectiveShipping === null ||
       effectiveShipping === ShippingStatus.Preparing)
   ) {
-    result.shippingStatus = ShippingStatus.Shipped;
+    result.shippingStatus = context.pickup
+      ? ShippingStatus.Delivered
+      : ShippingStatus.Shipped;
   }
 
   const orderStatusUntouched = !to || to === from;

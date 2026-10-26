@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { getInventoryIssueBadge, getNextStep, getOrderQueue, getPaymentBadge, getShippingBadge, hasOpenInventoryIssues, isAwaitingPaymentStale, isExpiringSoon, orderMatchesView } from "@/lib/order-queues";
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 const order = (overrides: Partial<Parameters<typeof getOrderQueue>[0]>) => ({
   status: OrderStatus.PENDING,
   type: OrderType.STANDARD,
   payment: { method: PaymentMethod.BankTransfer },
-  shipping: null,
+  shipping: { status: ShippingStatus.Preparing, trackingCode: null, provider: ShippingProvider.ENVIOCLICK },
   ...overrides,
 });
+const pickup = (status: ShippingStatus = ShippingStatus.Preparing) => ({ status, trackingCode: null, provider: ShippingProvider.NONE });
 
 describe("order queues", () => {
   it("puts pending transfers in verify and pending online payments in awaiting", () => {
@@ -20,9 +21,9 @@ describe("order queues", () => {
 
   it("sends paid orders without a guide to dispatch and with a guide to in-transit", () => {
     expect(getOrderQueue(order({ status: OrderStatus.PAID }))).toBe("dispatch");
-    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: { status: ShippingStatus.Preparing, trackingCode: null } }))).toBe("dispatch");
-    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: { status: ShippingStatus.Preparing, trackingCode: "ABC" } }))).toBe("in-transit");
-    expect(getOrderQueue(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "ABC" } }))).toBe("in-transit");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: { status: ShippingStatus.Preparing, provider: ShippingProvider.ENVIOCLICK, trackingCode: null } }))).toBe("dispatch");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: { status: ShippingStatus.Preparing, provider: ShippingProvider.ENVIOCLICK, trackingCode: "ABC" } }))).toBe("in-transit");
+    expect(getOrderQueue(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, provider: ShippingProvider.ENVIOCLICK, trackingCode: "ABC" } }))).toBe("in-transit");
   });
 
   it("ages paid orders without a guide out of dispatch after 30 days", () => {
@@ -35,12 +36,34 @@ describe("order queues", () => {
 
   it("treats cash on delivery as dispatch before the guide exists", () => {
     expect(getOrderQueue(order({ payment: { method: PaymentMethod.COD } }))).toBe("dispatch");
-    expect(getOrderQueue(order({ payment: { method: PaymentMethod.COD }, shipping: { status: ShippingStatus.Shipped, trackingCode: "X" } }))).toBe("in-transit");
+    expect(getOrderQueue(order({ payment: { method: PaymentMethod.COD }, shipping: { status: ShippingStatus.Shipped, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X" } }))).toBe("in-transit");
+  });
+
+  it("puts paid pickups in «Por entregar en tienda» until they are handed over", () => {
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: null }))).toBe("pickup");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: pickup() }))).toBe("pickup");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: pickup(ShippingStatus.Delivered) }))).toBe("delivered");
+    expect(getOrderQueue(order({ status: OrderStatus.SENT, shipping: pickup() }))).toBe("delivered");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, type: OrderType.GIFT_CARD, shipping: null }))).toBe("completed");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, type: OrderType.POINT_OF_SALE, payment: { method: PaymentMethod.CASH }, shipping: null }))).toBe("completed");
+    const old = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, paidAt: old, shipping: pickup() }))).toBe("completed");
+    expect(getOrderQueue(order({ payment: { method: PaymentMethod.COD }, shipping: pickup() }))).toBe("pickup");
+    expect(getOrderQueue(order({ shipping: null }))).toBe("verify");
+    expect(getNextStep("pickup")).toEqual({ label: "Marcar entregado", primary: true });
+    expect(getShippingBadge(order({ status: OrderStatus.PAID, shipping: pickup() }))).toEqual({ label: "Recoge en tienda", tone: "cream" });
+    expect(getShippingBadge(order({ status: OrderStatus.PAID, shipping: null }))).toEqual({ label: "Recoge en tienda", tone: "cream" });
+    expect(getShippingBadge(order({ status: OrderStatus.SENT, shipping: pickup(ShippingStatus.Delivered) }))).toEqual({ label: "Entregado", tone: "mint" });
+    expect(getShippingBadge(order({ status: OrderStatus.PAID }))).toEqual({ label: "Sin guía", tone: "slate" });
+    expect(orderMatchesView("pickup", "por-atender")).toBe(true);
+    expect(orderMatchesView("pickup", "por-entregar")).toBe(true);
+    expect(orderMatchesView("pickup", "por-despachar")).toBe(false);
+    expect(orderMatchesView("dispatch", "por-entregar")).toBe(false);
   });
 
   it("flags carrier problems, deliveries, counter sales, quotes and closed orders", () => {
-    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: { status: ShippingStatus.FailedDelivery, trackingCode: "X" } }))).toBe("issue");
-    expect(getOrderQueue(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.Delivered, trackingCode: "X" } }))).toBe("delivered");
+    expect(getOrderQueue(order({ status: OrderStatus.PAID, shipping: { status: ShippingStatus.FailedDelivery, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X" } }))).toBe("issue");
+    expect(getOrderQueue(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.Delivered, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X" } }))).toBe("delivered");
     expect(getOrderQueue(order({ status: OrderStatus.PAID, type: OrderType.POINT_OF_SALE, payment: { method: PaymentMethod.CASH } }))).toBe("completed");
     expect(getOrderQueue(order({ status: OrderStatus.QUOTATION, type: OrderType.QUOTATION, payment: null }))).toBe("quote");
     expect(getOrderQueue(order({ status: OrderStatus.CANCELLED }))).toBe("closed");
@@ -86,7 +109,7 @@ describe("order queues", () => {
     expect(getPaymentBadge(order({}))).toEqual({ label: "Por verificar", tone: "cream" });
     expect(getPaymentBadge(order({ status: OrderStatus.PAID }))).toEqual({ label: "Pagado", tone: "mint" });
     expect(getShippingBadge(order({ status: OrderStatus.PAID }))).toEqual({ label: "Sin guía", tone: "slate" });
-    expect(getShippingBadge(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.OutForDelivery, trackingCode: "X" } }))).toEqual({ label: "En reparto", tone: "sky" });
+    expect(getShippingBadge(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.OutForDelivery, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X" } }))).toEqual({ label: "En reparto", tone: "sky" });
     expect(getShippingBadge(order({ type: OrderType.POINT_OF_SALE, status: OrderStatus.PAID }))).toBeNull();
   });
 
@@ -102,7 +125,7 @@ describe("order queues", () => {
   });
 
   it("keeps an order with unreconciled inventory in por-atender whatever its queue", () => {
-    const paidAndShipped = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "X" }, openInventoryIssues: 2 });
+    const paidAndShipped = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X" }, openInventoryIssues: 2 });
     expect(getOrderQueue(paidAndShipped)).toBe("in-transit");
     expect(orderMatchesView("in-transit", "por-atender", paidAndShipped)).toBe(true);
     expect(orderMatchesView("in-transit", "por-atender", order({ ...paidAndShipped, openInventoryIssues: 0 }))).toBe(false);
@@ -114,8 +137,8 @@ describe("order queues", () => {
   it("turns a guide with no news for days into a pink badge and a por-atender item", () => {
     const now = new Date("2026-09-10T12:00:00.000Z");
     const days = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
-    const stale = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "X", updatedAt: days(7) } });
-    const fresh = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "X", updatedAt: days(1) } });
+    const stale = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X", updatedAt: days(7) } });
+    const fresh = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, provider: ShippingProvider.ENVIOCLICK, trackingCode: "X", updatedAt: days(1) } });
     expect(getShippingBadge(stale, now)).toEqual({ label: "Sin novedades hace 7 días", tone: "pink" });
     expect(getShippingBadge(fresh, now)).toEqual({ label: "En camino", tone: "sky" });
     expect(orderMatchesView("in-transit", "con-novedad", stale, now)).toBe(true);
