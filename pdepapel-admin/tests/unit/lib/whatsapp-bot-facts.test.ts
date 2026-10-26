@@ -71,6 +71,9 @@ const completa: ResolvedStoreSettings = {
   botHoldingText: null,
   botHoldingNightText: null,
   waitingReminderEmail: false,
+  whatsappOrderUpdatesEnabled: false,
+  whatsappTemplateGuide: null,
+  whatsappTemplateDelivered: null,
 };
 
 const con = (cambios: Partial<ResolvedStoreSettings>): ResolvedStoreSettings => ({

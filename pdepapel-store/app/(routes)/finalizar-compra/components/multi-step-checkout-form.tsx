@@ -2,6 +2,7 @@
 
 import { LegalConsent } from "@/components/legal/legal-consent";
 import { legalConsentPayload } from "@/lib/legal-versions";
+import { whatsappOptInPayload } from "@/lib/whatsapp-opt-in";
 import { checkLiveStock } from "@/actions/check-live-stock";
 import { safeStockPrecheck } from "@/lib/checkout-precheck";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -206,6 +207,8 @@ const formSchema = z
     // Tarjeta de regalo: el cupón rebaja el total; la tarjeta paga lo que queda.
     giftCardCode: z.string().optional().or(z.literal("")),
     newsletterOptIn: z.boolean().default(false),
+    // Consentimiento: nunca se recupera de una sesión anterior.
+    whatsappOptIn: z.boolean().default(false),
     // Regalo: quien recibe. Los datos de arriba siguen siendo de quien compra.
     isGift: z.boolean().default(false),
     giftRecipientName: z
@@ -443,6 +446,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         couponCode: storedFormData.couponCode ?? "",
         giftCardCode: "",
         newsletterOptIn: storedFormData.newsletterOptIn ?? false,
+        whatsappOptIn: false,
         isGift: storedFormData.isGift ?? false,
         giftRecipientName: storedFormData.giftRecipientName ?? "",
         giftRecipientEmail: storedFormData.giftRecipientEmail ?? "",
@@ -1239,6 +1243,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         legalConsent: legalConsentPayload(),
         // El panel da de alta en el boletín después de crear el pedido, sin otro desafío.
         newsletterOptIn: Boolean(form.getValues("newsletterOptIn")),
+        whatsappOptIn: whatsappOptInPayload(Boolean(form.getValues("whatsappOptIn"))),
         ...(await botTrap.fields()),
         saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,

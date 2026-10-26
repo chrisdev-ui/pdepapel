@@ -276,6 +276,12 @@ export const INTERNAL_ORDER_FIELDS = [
   "legalPrivacyVersion",
   "legalConsentAt",
   "legalConsentChannel",
+  "whatsappOptInAt",
+  "whatsappOptInVersion",
+  "whatsappOptInSource",
+  "whatsappOptInBy",
+  "whatsappOptOutAt",
+  "providerMessageId",
 ] as const;
 
 /** Lista «Mis pedidos» de la tienda: lo que pintan el historial y el resumen de la cuenta. */

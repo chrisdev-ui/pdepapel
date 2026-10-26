@@ -72,6 +72,7 @@ import { createGuideInBackground } from "@/lib/guide-background";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 import { orderLegalConsentData } from "@/lib/legal-consent";
+import { orderWhatsAppOptInData } from "@/lib/whatsapp-opt-in";
 import { requireJsonBody } from "@/lib/request-body";
 
 const getCorsHeaders = (request: Request) => ({
@@ -766,6 +767,7 @@ async function createCheckout(
           orderNumber: orderNumber,
           source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
           ...orderLegalConsentData({ isStoreOwner, legalConsent: body?.legalConsent }),
+          ...orderWhatsAppOptInData({ isStoreOwner, whatsappOptIn: body?.whatsappOptIn }),
           // Cubierto entero por la tarjeta: nace pagado y nunca va a la pasarela.
           status: fullyCovered ? OrderStatus.PAID : OrderStatus.PENDING,
           giftCardId,

@@ -59,6 +59,12 @@ export const VIEWER_HIDDEN_ORDER_FIELDS = [
   "legalPrivacyVersion",
   "legalConsentAt",
   "legalConsentChannel",
+  "whatsappOptInAt",
+  "whatsappOptInVersion",
+  "whatsappOptInSource",
+  "whatsappOptInBy",
+  "whatsappOptOutAt",
+  "providerMessageId",
 ] as const;
 
 /**

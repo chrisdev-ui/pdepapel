@@ -66,6 +66,9 @@ const formSchema = z.object({
   botFallbackMode: z.nativeEnum(BotAssistMode),
   botHoldingMode: z.nativeEnum(BotAssistMode),
   waitingReminderEmail: z.boolean(),
+  whatsappOrderUpdatesEnabled: z.boolean(),
+  whatsappTemplateGuide: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
+  whatsappTemplateDelivered: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
   botHoldingText: z.string().trim().max(500),
   botHoldingNightText: z.string().trim().max(500),
   days: z.record(
@@ -112,6 +115,9 @@ export function BusinessInfoPanel({
       botFallbackMode: settings.botFallbackMode,
       botHoldingMode: settings.botHoldingMode,
       waitingReminderEmail: settings.waitingReminderEmail,
+      whatsappOrderUpdatesEnabled: settings.whatsappOrderUpdatesEnabled,
+      whatsappTemplateGuide: settings.whatsappTemplateGuide ?? "",
+      whatsappTemplateDelivered: settings.whatsappTemplateDelivered ?? "",
       botHoldingText: settings.botHoldingText ?? "",
       botHoldingNightText: settings.botHoldingNightText ?? "",
       days: Object.fromEntries(
@@ -179,6 +185,9 @@ export function BusinessInfoPanel({
         botFallbackMode: values.botFallbackMode,
         botHoldingMode: values.botHoldingMode,
         waitingReminderEmail: values.waitingReminderEmail,
+        whatsappOrderUpdatesEnabled: values.whatsappOrderUpdatesEnabled,
+        whatsappTemplateGuide: values.whatsappTemplateGuide.trim() || null,
+        whatsappTemplateDelivered: values.whatsappTemplateDelivered.trim() || null,
         botHoldingText: values.botHoldingText.trim() || null,
         botHoldingNightText: values.botHoldingNightText.trim() || null,
         openingHours: Object.fromEntries(
@@ -726,6 +735,58 @@ export function BusinessInfoPanel({
                 </FormItem>
               )}
             />
+          </div>
+
+          <div className="grid gap-4 rounded-lg border p-4">
+            <div>
+              <h3 className="text-sm font-semibold">Avisos de envío por WhatsApp</h3>
+              <p className="text-sm text-muted-foreground">
+                Solo a quien marcó «Recibir avisos de mi pedido por WhatsApp» en la tienda, o lo pidió en el chat y lo
+                anotaste en el pedido. El correo sale siempre. Enciéndelo cuando las dos plantillas estén aprobadas en
+                WhatsApp Manager.
+              </p>
+            </div>
+            <FormField
+              control={form.control}
+              name="whatsappOrderUpdatesEnabled"
+              render={({ field }) => (
+                <FormItem className="flex flex-col gap-2">
+                  <FormLabel>Mandar avisos de envío por WhatsApp</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} disabled={loading} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="whatsappTemplateGuide"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plantilla «va en camino»</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} placeholder="guia_creada" autoComplete="off" />
+                    </FormControl>
+                    <FormDescription>El nombre exacto, como aparece en WhatsApp Manager.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="whatsappTemplateDelivered"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plantilla «entregado»</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} placeholder="pedido_entregado" autoComplete="off" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </div>
 
           <Button type="submit" disabled={loading} className="self-start">

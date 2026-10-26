@@ -53,6 +53,11 @@ export const CheckoutSkeleton = ({ isGuest = true }: { isGuest?: boolean }) => (
                   <Skeleton className="h-5 w-3/4" />
                 </div>
 
+                <div className="flex items-start gap-2.5">
+                  <Skeleton className="mt-0.5 h-5 w-5 shrink-0 rounded" />
+                  <Skeleton className="h-5 w-2/3" />
+                </div>
+
                 <Skeleton className="h-4 w-56" />
               </div>
             </div>

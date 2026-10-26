@@ -146,4 +146,20 @@ describe("checkout contra entrega con EnvioClick (MySQL)", () => {
     expect(envioclick.quoteShipment.mock.calls[0][0]).not.toHaveProperty("codValue");
     await expect(savedShipping(response)).resolves.toEqual({ envioClickIdRate: 1001, carrierName: "ENVIA", isCOD: false, cost: 16500 });
   });
+
+  it("la casilla de avisos por WhatsApp queda en el pedido con hora y versión; sin casilla, nada", async () => {
+    fixture = await createInventoryFixture();
+    respond([], [rate(1001, "ENVIA", 16500, false)]);
+
+    const marked = await checkout({ ...checkoutBody(fixture, PaymentMethod.BankTransfer, { idRate: 999, carrierName: "ENVIA", cost: 16500, isCOD: false }), whatsappOptIn: { version: "2026-10-26" } });
+    expect(marked.status).toBe(200);
+    const markedId = ((await marked.json()) as { id?: string; order?: { id: string } }).id;
+    await expect(
+      testPrisma.order.findFirstOrThrow({ where: { storeId: fixture.store.id, ...(markedId ? { id: markedId } : {}) }, select: { whatsappOptInAt: true, whatsappOptInVersion: true, whatsappOptInSource: true, whatsappOptInBy: true } }),
+    ).resolves.toMatchObject({ whatsappOptInAt: expect.any(Date), whatsappOptInVersion: "2026-10-26", whatsappOptInSource: "CHECKOUT", whatsappOptInBy: null });
+
+    const unmarked = await checkout(checkoutBody(fixture, PaymentMethod.BankTransfer, { idRate: 999, carrierName: "ENVIA", cost: 16500, isCOD: false }));
+    const unmarkedId = ((await unmarked.json()) as { id?: string; order?: { id: string } }).id ?? "";
+    await expect(testPrisma.order.findUniqueOrThrow({ where: { id: unmarkedId }, select: { whatsappOptInAt: true } })).resolves.toEqual({ whatsappOptInAt: null });
+  });
 });

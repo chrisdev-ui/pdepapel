@@ -14,7 +14,7 @@ import { Form } from "@/components/ui/form";
 
 function Harness(props: { freeShippingThreshold?: number | null; freeShipping?: boolean }) {
   const form = useForm<CheckoutFormValue>({
-    defaultValues: { fullName: "", email: "", telephone: "", newsletterOptIn: false, isGift: false } as Partial<CheckoutFormValue> as CheckoutFormValue,
+    defaultValues: { fullName: "", email: "", telephone: "", newsletterOptIn: false, whatsappOptIn: false, isGift: false } as Partial<CheckoutFormValue> as CheckoutFormValue,
   });
   return (
     <Form {...form}>
@@ -45,5 +45,11 @@ describe("checkout · Tus datos", () => {
     expect(shippingTeaser(null, false)).toBe("El valor del envío, en el siguiente paso.");
     expect(shippingTeaser(0, false)).toBe("El valor del envío, en el siguiente paso.");
     expect(shippingTeaser(150000, true)).toBe("Tu envío es gratis.");
+  });
+
+  it("ofrece los avisos por WhatsApp en una casilla sin marcar", () => {
+    render(<Harness freeShippingThreshold={150000} />);
+    const box = screen.getByRole("checkbox", { name: "Recibir avisos de mi pedido por WhatsApp" });
+    expect(box).not.toBeChecked();
   });
 });

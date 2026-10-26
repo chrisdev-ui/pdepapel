@@ -136,5 +136,13 @@ describe("datos del negocio", () => {
     await saveStoreSettings(storeId, { waitingReminderEmail: false });
     expect(await getStoreSettings(storeId)).toMatchObject({ waitingReminderEmail: false });
   });
+
+  it("avisos por WhatsApp: apagados por defecto, se guardan con las plantillas y no se pierden si el formulario no los manda", async () => {
+    expect(await getStoreSettings(storeId)).toMatchObject({ whatsappOrderUpdatesEnabled: false });
+    await saveStoreSettings(storeId, { whatsappOrderUpdatesEnabled: true, whatsappTemplateGuide: "guia_creada", whatsappTemplateDelivered: "pedido_entregado" });
+    expect(await getStoreSettings(storeId)).toMatchObject({ whatsappOrderUpdatesEnabled: true, whatsappTemplateGuide: "guia_creada", whatsappTemplateDelivered: "pedido_entregado" });
+    await saveStoreSettings(storeId, { cityName: "Medellín" });
+    expect(await getStoreSettings(storeId)).toMatchObject({ whatsappOrderUpdatesEnabled: true, whatsappTemplateGuide: "guia_creada" });
+  });
 });
 

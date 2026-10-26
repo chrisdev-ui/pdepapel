@@ -3,10 +3,12 @@ import { getDaneLocations } from "@/actions/get-dane-locations";
 import { getOrderCapsuleSection } from "@/lib/capsule-order-section";
 import { buildOrderTimeline, getNextStepCard } from "@/lib/order-timeline";
 import { getShippingChargeState } from "@/lib/order-totals";
+import { getOrderNotificationsView } from "@/lib/order-notifications-view";
 import prismadb from "@/lib/prismadb";
 import { getStoreAccess } from "@/lib/store-access";
 import { CapsuleOrderCard } from "./components/capsule-order-card";
 import { OrderForm } from "./components/order-form";
+import { OrderNotificationsCard } from "./components/order-notifications-card";
 import { OrderWorkspaceHeader } from "./components/order-workspace-header";
 import { ShippingInfo } from "./components/shipping-info";
 import { getAvailableCustomers } from "./server/get-available-customers";
@@ -39,6 +41,7 @@ export default async function OrderPage({
     boxes,
     storeSettings,
     capsule,
+    notifications,
   ] = await Promise.all([
     getOrder(params.orderId, params.storeId),
     getCoupons(params.storeId),
@@ -52,6 +55,7 @@ export default async function OrderPage({
       })
       .catch(() => null),
     access ? getOrderCapsuleSection(prismadb, { storeId: params.storeId, orderId: params.orderId, isViewer: access.role === "viewer" }) : Promise.resolve(null),
+    canWrite ? getOrderNotificationsView(prismadb, { storeId: params.storeId, orderId: params.orderId }) : Promise.resolve(null),
   ]);
 
   const freeShippingThreshold = storeSettings?.freeShippingThreshold ?? null;
@@ -77,6 +81,7 @@ export default async function OrderPage({
           />
         )}
         {capsule && <CapsuleOrderCard storeId={params.storeId} orderId={params.orderId} capsule={capsule} />}
+        {notifications && <OrderNotificationsCard storeId={params.storeId} orderId={params.orderId} view={notifications} />}
         <OrderForm
           storeId={params.storeId}
           products={products}

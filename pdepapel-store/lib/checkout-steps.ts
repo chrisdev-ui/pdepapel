@@ -15,6 +15,7 @@ export const CHECKOUT_FIELD_STEPS: Record<string, number> = {
   email: 1,
   telephone: 1,
   newsletterOptIn: 1,
+  whatsappOptIn: 1,
   isGift: 1,
   giftRecipientName: 1,
   giftRecipientEmail: 1,

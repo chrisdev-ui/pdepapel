@@ -154,6 +154,10 @@ export const storeSettingsInputSchema = z
     botHoldingText: z.string().trim().max(500).nullable().optional(),
     botHoldingNightText: z.string().trim().max(500).nullable().optional(),
     waitingReminderEmail: z.boolean().optional(),
+    whatsappOrderUpdatesEnabled: z.boolean().optional(),
+    // El nombre exacto de la plantilla aprobada en WhatsApp Manager.
+    whatsappTemplateGuide: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
+    whatsappTemplateDelivered: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
   })
   .refine(
     (input) =>
@@ -218,6 +222,10 @@ export interface ResolvedStoreSettings {
   botHoldingNightText: string | null;
   /** «Avisarme por correo cuando un cliente espere»; apagado por defecto. */
   waitingReminderEmail: boolean;
+  /** Avisos de envío por WhatsApp (plantillas de utilidad); apagado por defecto. El correo sale siempre. */
+  whatsappOrderUpdatesEnabled: boolean;
+  whatsappTemplateGuide: string | null;
+  whatsappTemplateDelivered: string | null;
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
   botFactsVersion: string | null;
@@ -277,6 +285,9 @@ export async function getStoreSettings(
     botHoldingText: settings?.botHoldingText?.trim() || null,
     botHoldingNightText: settings?.botHoldingNightText?.trim() || null,
     waitingReminderEmail: settings?.waitingReminderEmail ?? false,
+    whatsappOrderUpdatesEnabled: settings?.whatsappOrderUpdatesEnabled ?? false,
+    whatsappTemplateGuide: settings?.whatsappTemplateGuide?.trim() || null,
+    whatsappTemplateDelivered: settings?.whatsappTemplateDelivered?.trim() || null,
     botFactsApprovedAt: settings?.botFactsApprovedAt ?? null,
     botFactsVersion: settings?.botFactsVersion ?? null,
     botProductsApprovedAt: settings?.botProductsApprovedAt ?? null,
@@ -312,6 +323,9 @@ export async function saveStoreSettings(
     ...(input.botHoldingText === undefined ? {} : { botHoldingText: input.botHoldingText?.trim() || null }),
     ...(input.botHoldingNightText === undefined ? {} : { botHoldingNightText: input.botHoldingNightText?.trim() || null }),
     ...(input.waitingReminderEmail === undefined ? {} : { waitingReminderEmail: input.waitingReminderEmail }),
+    ...(input.whatsappOrderUpdatesEnabled === undefined ? {} : { whatsappOrderUpdatesEnabled: input.whatsappOrderUpdatesEnabled }),
+    ...(input.whatsappTemplateGuide === undefined ? {} : { whatsappTemplateGuide: input.whatsappTemplateGuide?.trim() || null }),
+    ...(input.whatsappTemplateDelivered === undefined ? {} : { whatsappTemplateDelivered: input.whatsappTemplateDelivered?.trim() || null }),
     // Un campo que no venga se deja como estaba, en vez de borrarlo.
     ...(input.deliveryEstimate === undefined
       ? {}

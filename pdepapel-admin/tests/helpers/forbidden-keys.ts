@@ -90,6 +90,12 @@ const VIEWER_KEYS = [
   "legalPrivacyVersion",
   "legalConsentAt",
   "legalConsentChannel",
+  "whatsappOptInAt",
+  "whatsappOptInVersion",
+  "whatsappOptInSource",
+  "whatsappOptInBy",
+  "whatsappOptOutAt",
+  "providerMessageId",
   // Reseñas: quién escribió y la moderación.
   "userId",
   "moderationNote",
@@ -135,6 +141,12 @@ const LINK_HOLDER_KEYS = [
   "legalPrivacyVersion",
   "legalConsentAt",
   "legalConsentChannel",
+  "whatsappOptInAt",
+  "whatsappOptInVersion",
+  "whatsappOptInSource",
+  "whatsappOptInBy",
+  "whatsappOptOutAt",
+  "providerMessageId",
 ];
 
 export type PayloadRole = "owner" | "viewer" | "linkHolder";

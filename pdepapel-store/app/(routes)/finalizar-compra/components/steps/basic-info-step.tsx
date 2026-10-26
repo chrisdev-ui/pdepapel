@@ -17,6 +17,7 @@ import { Gift, Lock, Truck, UserRound } from "lucide-react";
 import { UseFormReturn, useWatch } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
 import { StorefrontLink } from "@/components/storefront-link";
+import { WHATSAPP_OPT_IN_LABEL } from "@/lib/whatsapp-opt-in";
 
 const GIFT_MESSAGE_MAX = 300;
 
@@ -329,6 +330,26 @@ export const BasicInfoStep = ({
             <FormLabel className="text-xs font-medium leading-5 text-foreground/80">
               Quiero enterarme de lo nuevo por correo (máximo dos correos al
               mes; puedo cancelar cuando quiera).
+            </FormLabel>
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="whatsappOptIn"
+        render={({ field }) => (
+          <FormItem className="flex items-start gap-2.5 space-y-0">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                disabled={isLoading}
+                className="mt-0.5 h-5 w-5 border-blue-yankees bg-white"
+              />
+            </FormControl>
+            <FormLabel className="text-xs font-medium leading-5 text-foreground/80">
+              {WHATSAPP_OPT_IN_LABEL}
             </FormLabel>
           </FormItem>
         )}

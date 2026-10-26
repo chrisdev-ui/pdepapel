@@ -197,6 +197,9 @@ const ajustesBase: ResolvedStoreSettings = {
   botHoldingText: null,
   botHoldingNightText: null,
   waitingReminderEmail: false,
+  whatsappOrderUpdatesEnabled: false,
+  whatsappTemplateGuide: null,
+  whatsappTemplateDelivered: null,
 };
 
 describe("keyword matching", () => {

@@ -89,6 +89,7 @@ import { runInBackground } from "@/lib/background";
 import { subscribeFromStoreOrder } from "@/lib/newsletter";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 import { orderLegalConsentData } from "@/lib/legal-consent";
+import { orderWhatsAppOptInData } from "@/lib/whatsapp-opt-in";
 import { queueShipmentMilestone } from "@/lib/shipment-notifications";
 
 type StoreFreight = {
@@ -773,6 +774,7 @@ async function createOrder(
         createdBy: isStoreOwner ? userLogged : null,
         source: isStoreOwner ? OrderSource.PANEL : OrderSource.STORE,
         ...orderLegalConsentData({ isStoreOwner, legalConsent: body?.legalConsent }),
+        ...orderWhatsAppOptInData({ isStoreOwner, whatsappOptIn: body?.whatsappOptIn }),
         ...(normalizedAnalyticsClientId
           ? { analyticsClientId: normalizedAnalyticsClientId }
           : {}),
