@@ -58,7 +58,8 @@ export const BasicInfoStep = ({
         <h2 className="font-serif text-2xl font-bold text-blue-yankees sm:text-3xl">
           Tus datos
         </h2>
-        <p className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="checkout-shipping-teaser">
+        {/* Alto fijo (dos líneas en el teléfono): el texto depende del umbral y el esqueleto no lo conoce. */}
+        <p className="flex min-h-10 items-center gap-2 text-sm text-muted-foreground sm:min-h-5" data-testid="checkout-shipping-teaser">
           <Truck className="h-4 w-4 shrink-0 text-blue-yankees" aria-hidden="true" />
           {shippingTeaser(freeShippingThreshold, freeShipping)}
         </p>
@@ -74,8 +75,8 @@ export const BasicInfoStep = ({
               className="font-semibold underline underline-offset-4"
             >
               Inicia sesión
-            </StorefrontLink>{" "}
-            y llenamos tus datos.
+            </StorefrontLink>
+            .
           </span>
         </p>
       )}

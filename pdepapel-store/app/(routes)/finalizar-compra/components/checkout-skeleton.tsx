@@ -33,7 +33,7 @@ export const CheckoutSkeleton = ({ isGuest = true }: { isGuest?: boolean }) => (
               <div className="space-y-5 sm:space-y-6">
                 <div className="space-y-1">
                   <Skeleton className="h-8 w-40 sm:h-9" />
-                  <Skeleton className="h-5 w-full max-w-sm" />
+                  <Skeleton className="h-10 w-full max-w-sm sm:h-5" />
                 </div>
 
                 {isGuest && <Skeleton className="h-[38px] w-full rounded-xl" />}

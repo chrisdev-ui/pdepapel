@@ -166,6 +166,14 @@ async function seedCheckout(page: Page) {
   await throttle(page);
   await observeCls(page);
   await skipPrivacyBanner(page);
+  // Las ciudades salen del DANE por un servicio externo que el entorno local
+  // aislado no alcanza; se sirven fijas, como en las demás pruebas del checkout.
+  await page.route("**/api/locations**", (route) =>
+    json(route, 200, {
+      results: [{ value: "05001000", label: "MEDELLÍN - ANTIOQUIA", city: "MEDELLÍN", department: "ANTIOQUIA", daneCode: "05001000" }],
+      count: 1,
+    }),
+  );
   await page.addInitScript((cart) => {
     if (window.sessionStorage.getItem("pdp-e2e-cls-seeded")) return;
     window.sessionStorage.setItem("pdp-e2e-cls-seeded", "1");
