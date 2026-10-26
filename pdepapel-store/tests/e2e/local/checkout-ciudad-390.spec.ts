@@ -134,3 +134,33 @@ test.describe("factura a nombre de la clienta", () => {
     expect(stored).not.toContain("1047452823");
   });
 });
+
+test.describe("avisos del pedido por WhatsApp", () => {
+  test.describe.configure({ timeout: 180_000 });
+
+  async function submit(page: Page, check: boolean) {
+    let body: Record<string, unknown> | null = null;
+    await startCheckout(page);
+    const box = page.getByRole("checkbox", { name: "Recibir avisos de mi pedido por WhatsApp" });
+    await expect(box).toBeVisible();
+    await expect(box).not.toBeChecked();
+    if (check) await page.getByText("Recibir avisos de mi pedido por WhatsApp").click();
+    await fillContact(page);
+    await fillDeliveryWithoutCarrier(page);
+    await page.route("**/checkout", async (route) => {
+      if (route.request().method() === "POST") body = route.request().postDataJSON();
+      await route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+    });
+    await formButton(page, /Confirmar pedido|Pagar \$/).click();
+    await expect.poll(() => body, { timeout: 20_000 }).not.toBeNull();
+    return body as unknown as Record<string, unknown>;
+  }
+
+  test("sin marcar no viaja nada", async ({ page }) => {
+    expect(await submit(page, false)).not.toHaveProperty("whatsappOptIn");
+  });
+
+  test("marcada viaja con la versión del texto", async ({ page }) => {
+    expect((await submit(page, true)).whatsappOptIn).toEqual({ version: "2026-10-26" });
+  });
+});

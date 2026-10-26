@@ -363,6 +363,9 @@
         <li>Si al recotizar cambia el precio o la transportadora, sale un aviso antes de crear la guía. La guía queda en el pedido, se imprime desde Envíos y el cliente recibe el seguimiento.</li>
       </ol>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedido-envio" alt="La sección «Envío y empaque»: tipo de envío, cotización guardada y el único botón de crear guía." loading="lazy" width="1440" height="900"></div><figcaption>La sección «Envío y empaque»: tipo de envío, cotización guardada y el único botón de crear guía.</figcaption></figure>
+      <h3>Avisos a la clienta</h3>
+      <p>Cuando se crea la guía (con EnvioClick o escribiendo el número de otra transportadora), la clienta recibe <strong>«Tu pedido va en camino»</strong> con la transportadora, el número de guía y el enlace para seguirlo. Después le llegan <strong>en tránsito</strong>, <strong>sale a entrega</strong>, <strong>entregado</strong> o <strong>novedad</strong>, una sola vez cada uno. Tú recibes copia solo de las entregas y las novedades.</p>
+      <p>La tarjeta <strong>Avisos a la clienta</strong> del pedido muestra qué salió, qué falló y por qué. <strong>Reenviar</strong> lo manda otra vez. Si la clienta pidió los avisos por WhatsApp en el chat (solo pedidos que llegaron por WhatsApp), pulsa <strong>Los pidió en el chat</strong>; si ya no los quiere, <strong>Quitar avisos por WhatsApp</strong>. En la tienda ella misma marca la casilla. El WhatsApp sale solo con las plantillas aprobadas y el interruptor encendido en Configuración; el correo sale siempre.</p>
       <h3>Cuando el pedido es un regalo</h3>
       <p>Una clienta puede comprar para otra persona, desde la tienda (la casilla <strong>¿Es un regalo?</strong> en «Tus datos») o desde el panel. En la sección <strong>Regalo</strong>, debajo de Cliente, enciende <strong>Es un regalo</strong> y escribe <strong>quién lo recibe</strong> (obligatorio); su correo, su teléfono y el mensaje son opcionales.</p>
       <ul class="list">
@@ -557,6 +560,14 @@
       </ol>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/envios-estado" alt="Cambiar el estado de varios envíos a la vez desde la barra de selección." loading="lazy" width="1440" height="900"></div><figcaption>Cambiar el estado de varios envíos a la vez desde la barra de selección.</figcaption></figure>
       <div class="note tip"><strong>Con novedad</strong><p>Esta vista reúne entregas fallidas, devoluciones y excepciones. Revísala a diario: casi siempre hay que llamar al cliente o a la transportadora.</p></div>
+      <h3>Guías de EnvioClick sin pedido</h3>
+      <p>Si una guía se hizo directo en envioclick.com (por ejemplo, una venta cerrada por WhatsApp), EnvioClick avisa sus movimientos pero el panel no sabe de qué pedido es: la clienta no recibe avisos y la venta no cuenta en inventario ni en ventas. Esas guías aparecen arriba en Envíos, en <strong>Guías de EnvioClick sin pedido</strong>, y en Inicio.</p>
+      <ol class="steps">
+        <li><strong>Vincular a un pedido</strong>: escribe el número del pedido (ORD-…). La guía queda en el pedido con su estado real y la clienta recibe un solo aviso, el de ese estado.</li>
+        <li><strong>Crear pedido desde esta guía</strong>: abre un pedido nuevo; al guardarlo queda con esa guía. No cotices ni crees otra guía.</li>
+        <li><strong>Descartar</strong>: para guías de prueba o anuladas. Sale de la lista y no vuelve.</li>
+      </ol>
+      <div class="note tip"><strong>Mejor desde el panel</strong><p>Si creas la guía desde el pedido, nada de esto hace falta: el aviso sale solo.</p></div>
     </section>
 
     <!-- 9 -->
@@ -1086,6 +1097,8 @@
       <p><strong>Inventario</strong> es una sola lista con todo el stock activo valorado al costo de compra. Las tarjetas resumen el valor a costo, los productos activos, el stock crítico y los productos sin costo registrado (que no entran en la valorización). Las vistas separan <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Sin costo</strong> y <strong>Kits</strong>.</p>
       <p>La lista muestra <strong>25 productos por página</strong>, como Productos. La vista, la búsqueda (sin importar tildes ni el orden de las palabras), el orden y «Agrupar por proveedor» quedan en el enlace: se puede compartir, recargar o volver con Atrás. Las cifras de arriba siempre son de toda la tienda; el número de cada pestaña sigue a la búsqueda.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/inventario" alt="La lista de inventario valorada al costo, con el último movimiento de cada producto." loading="lazy" width="1440" height="900"></div><figcaption>La lista de inventario valorada al costo, con el último movimiento de cada producto.</figcaption></figure>
+      <h3>Inventario sin cuadrar</h3>
+      <p>Si un pedido se pagó o se envió sin stock, sus líneas quedan «sin cuadrar». Mientras el pedido está en curso aparece en <strong>Por atender</strong>; ya entregado o cerrado, pasa a la pestaña <strong>Inventario sin cuadrar</strong> de Pedidos (y a Inicio). En el pedido, <strong>Reintentar</strong> mueve el stock si ya hay; si ya contaste la bodega, <strong>Marcar como conciliado</strong> en cada línea o <strong>Conciliar todas las líneas</strong> de una vez (no mueve stock).</p>
       <h3>Ajustar inventario</h3>
       <ol class="steps">
         <li>Pulsa <strong>Ajustar inventario</strong> (o «Ajustar» en el menú de una fila).</li>
