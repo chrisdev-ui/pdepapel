@@ -6,6 +6,7 @@ import { MetadataRoute } from "next";
  * de ella (`/pedido` cubre `/pedido/<id>`).
  */
 const PRIVATE_PATHS = [
+  "/equipo",
   "/order",
   "/orders",
   "/checkout",

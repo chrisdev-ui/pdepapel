@@ -39,12 +39,12 @@ export function EarlyAccessForm({ label, source, productId, className, open = fa
     }
     try {
       setStatus("sending");
-      trackCustomerEvent("newsletter_signup_submitted", { source });
+      trackCustomerEvent("newsletter_signup_submitted", { ui_source: source });
       const response = await postNewsletterSignup({ email, consent: true, source, productId, company: "" }, await botTrap.fields());
       const result = (await response.json().catch(() => null)) as { message?: string } | null;
       if (!response.ok) throw new Error(result?.message ?? "No pudimos iniciar la suscripción");
       setStatus("done");
-      trackCustomerEvent("newsletter_confirmation_requested", { source });
+      trackCustomerEvent("newsletter_confirmation_requested", { ui_source: source });
     } catch (error) {
       setStatus("open");
       toast({

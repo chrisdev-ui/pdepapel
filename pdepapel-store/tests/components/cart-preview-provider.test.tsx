@@ -101,7 +101,7 @@ describe("CartPreviewProvider", () => {
     ).toHaveAttribute("href", "/finalizar-compra");
     expect(analyticsMock).toHaveBeenCalledWith("cart_preview_view", {
       presentation: "full",
-      source: "product_detail",
+      ui_source: "product_detail",
     });
     const preview = screen.getByRole("complementary", {
       name: "Producto agregado al carrito",
@@ -159,7 +159,7 @@ describe("CartPreviewProvider", () => {
     expect(analyticsMock).toHaveBeenCalledWith("cart_preview_dismiss", {
       presentation: "full",
       reason: "scroll",
-      source: "product_detail",
+      ui_source: "product_detail",
     });
   });
 
@@ -188,7 +188,7 @@ describe("CartPreviewProvider", () => {
     );
     expect(analyticsMock).toHaveBeenLastCalledWith("cart_preview_view", {
       presentation: "compact",
-      source: "product_detail",
+      ui_source: "product_detail",
     });
   });
 
@@ -232,7 +232,7 @@ describe("CartPreviewProvider", () => {
     expect(analyticsMock).toHaveBeenCalledWith("cart_preview_dismiss", {
       presentation: "full",
       reason: "manual",
-      source: "product_detail",
+      ui_source: "product_detail",
     });
   });
 });

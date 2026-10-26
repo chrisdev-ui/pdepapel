@@ -221,7 +221,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
       trackCustomerEvent("add_to_cart", {
         currency: "COP",
         items: [item],
-        source: "product_card",
+        ui_source: "product_card",
         value: getAnalyticsValue([item]),
       });
       trackTikTokEvent("AddToCart", tiktokProductParameters([item]));

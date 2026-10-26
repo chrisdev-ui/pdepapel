@@ -83,7 +83,7 @@ export function ReorderButton({
 
     trackCustomerEvent("add_to_cart", {
       currency: "COP",
-      source: "order_reorder",
+      ui_source: "order_reorder",
       items: reorderable.map(({ product, quantity }) => ({
         item_id: product.id,
         item_name: product.name,

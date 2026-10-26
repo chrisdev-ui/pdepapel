@@ -2,6 +2,8 @@
 // de recordatorio no se muestra.
 export const CART_TOUCHED_KEY = "pdp_cart_touched";
 export const CART_REMINDER_DISMISSED_KEY = "pdp_cart_reminder_dismissed";
+/** La franja ya se contó como vista en esta visita. */
+export const CART_REMINDER_VIEWED_KEY = "pdp_cart_reminder_viewed";
 
 export function readSessionFlag(key: string): boolean {
   try {

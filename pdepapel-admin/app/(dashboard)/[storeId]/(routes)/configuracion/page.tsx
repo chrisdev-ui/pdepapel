@@ -19,6 +19,7 @@ import { IntegrationsPanel } from "./components/integrations-panel";
 import { MercadoLibreProfilesPanel } from "./components/mercadolibre-profiles-panel";
 import { PaymentsPanel } from "./components/payments-panel";
 import { SettingsForm } from "./components/settings-form";
+import { TeamBrowserCard } from "./components/team-browser-card";
 
 export const revalidate = 0;
 
@@ -136,6 +137,7 @@ export default async function SettingsPage({
             falta en el día a día.
           </p>
           <SettingsForm initialData={store} section="avanzado" />
+          <TeamBrowserCard storeId={params.storeId} />
           <section className="rounded-xl border bg-white p-4">
             <h2 className="mb-1 text-base font-semibold text-primary">
               Caché de cotizaciones de EnvioClick

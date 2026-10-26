@@ -85,7 +85,7 @@ export function CartPreviewProvider({
       trackCustomerEvent("cart_preview_dismiss", {
         presentation: currentPreview.presentation,
         reason,
-        source: currentPreview.source,
+        ui_source: currentPreview.source,
       });
     }
   }, []);
@@ -110,7 +110,7 @@ export function CartPreviewProvider({
       markCartTouched();
       trackCustomerEvent("cart_preview_view", {
         presentation,
-        source: input.source,
+        ui_source: input.source,
       });
     },
     [scrollPosition],
@@ -132,7 +132,7 @@ export function CartPreviewProvider({
       trackCustomerEvent("cart_preview_action", {
         action,
         presentation: currentPreview.presentation,
-        source: currentPreview.source,
+        ui_source: currentPreview.source,
       });
 
       // cart_preview_action se queda como estaba —hay informes colgando de

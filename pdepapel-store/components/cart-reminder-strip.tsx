@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useCart } from "@/hooks/use-cart";
-import { CART_REMINDER_DISMISSED_KEY, CART_TOUCHED_KEY, readSessionFlag, writeSessionFlag } from "@/lib/cart-session";
+import { CART_REMINDER_DISMISSED_KEY, CART_REMINDER_VIEWED_KEY, CART_TOUCHED_KEY, readSessionFlag, writeSessionFlag } from "@/lib/cart-session";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { calculateTotals, currencyFormatter } from "@/lib/utils";
@@ -24,13 +24,21 @@ export function CartReminderStrip() {
     }
     const show = !readSessionFlag(CART_TOUCHED_KEY) && !readSessionFlag(CART_REMINDER_DISMISSED_KEY);
     setVisible(show);
-    if (show) trackCustomerEvent("cart_reminder_view", { item_count: items.length });
     // Solo al montar: si la clienta agrega algo después, la franja ya cumplió.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onHome = pathname === STOREFRONT_ROUTES.home;
-  if (!visible || !onHome || items.length === 0) return null;
+  const isShown = visible && onHome && items.length > 0;
+
+  // Se cuenta lo que de verdad se vio (solo en Inicio) y una vez por visita:
+  // antes cada página contaba una «vista» aunque la franja no apareciera.
+  useEffect(() => {
+    if (!isShown || readSessionFlag(CART_REMINDER_VIEWED_KEY)) return;
+    writeSessionFlag(CART_REMINDER_VIEWED_KEY);
+    trackCustomerEvent("cart_reminder_view", { item_count: items.length });
+  }, [isShown, items.length]);
+  if (!isShown) return null;
 
   const count = items.reduce((total, item) => total + Number(item.quantity ?? 1), 0);
   const { total } = calculateTotals(items, null);

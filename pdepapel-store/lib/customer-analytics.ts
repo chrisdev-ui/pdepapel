@@ -5,6 +5,7 @@ import { redactAnalyticsPath, redactAnalyticsTitle, redactAnalyticsUrl } from "@
 import { brandDataName } from "@/lib/product-brand";
 import { trackMicrosoftClarityEvent } from "@/lib/microsoft-clarity";
 import { getStructuredProductSize } from "@/lib/product-options";
+import { isTeamBrowser } from "@/lib/team-browser";
 import { Product } from "@/types";
 
 declare global {
@@ -47,10 +48,31 @@ interface PendingGoogleEvent {
  */
 let pendingGoogleEvents: PendingGoogleEvent[] = [];
 
-function sendOrQueueGoogleEvent(
+/**
+ * Parámetros que GA4 lee como campaña: un evento con `source` reescribía la
+ * fuente de la sesión («product_card / (not set)») y llenaba «Unassigned».
+ */
+export const GA4_RESERVED_CAMPAIGN_PARAMS = ["source", "medium", "campaign", "campaign_id", "term", "content"] as const;
+
+export function withoutReservedCampaignParams(
   name: string,
   parameters: AnalyticsEventParameters,
+): AnalyticsEventParameters {
+  const reserved = GA4_RESERVED_CAMPAIGN_PARAMS.filter((key) => key in parameters);
+  if (reserved.length === 0) return parameters;
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(`[analytics] «${name}» lleva ${reserved.join(", ")}: GA4 lo toma como campaña; se quita.`);
+  }
+  const copy = { ...parameters };
+  for (const key of reserved) delete copy[key];
+  return copy;
+}
+
+function sendOrQueueGoogleEvent(
+  name: string,
+  rawParameters: AnalyticsEventParameters,
 ): void {
+  const parameters = withoutReservedCampaignParams(name, rawParameters);
   if (window.gtag) {
     window.gtag("event", name, parameters);
     return;
@@ -180,6 +202,8 @@ export function enableGoogleAnalytics(measurementId: string): void {
   window.gtag?.("config", measurementId, {
     anonymize_ip: true,
     send_page_view: false,
+    // El filtro «Internal Traffic» de GA4 excluye lo que llega así.
+    ...(isTeamBrowser() ? { traffic_type: "internal" } : {}),
   });
   // Después de `config`: `dataLayer` se procesa en orden y un evento que
   // llegue antes no tendría a qué propiedad pertenecer.

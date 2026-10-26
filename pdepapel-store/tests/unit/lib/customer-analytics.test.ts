@@ -6,6 +6,7 @@ import {
   enableGoogleAnalytics,
   getAnalyticsValue,
   toAnalyticsItem,
+  withoutReservedCampaignParams,
 } from "@/lib/customer-analytics";
 import { Product } from "@/types";
 
@@ -110,5 +111,37 @@ describe("Google Analytics initialization", () => {
         src: "https://www.googletagmanager.com/gtag/js?id=G-TEST123",
       },
     ]);
+  });
+});
+
+describe("navegador del equipo y parámetros de campaña", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("marca el tráfico como interno en la configuración de GA4", () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("document", {
+      cookie: "otra=1; pdepapel_equipo=1",
+      createElement: vi.fn(() => ({})),
+      getElementById: vi.fn(() => null),
+      head: { appendChild: vi.fn() },
+    });
+
+    enableGoogleAnalytics("G-TEST123");
+
+    expect(Array.from((window.dataLayer ?? [])[3] as IArguments)).toEqual([
+      "config",
+      "G-TEST123",
+      { anonymize_ip: true, send_page_view: false, traffic_type: "internal" },
+    ]);
+  });
+
+  it("quita los parámetros que GA4 toma como campaña antes de mandar un evento", () => {
+    expect(
+      withoutReservedCampaignParams("add_to_cart", { source: "product_card", medium: "x", campaign: "y", ui_source: "product_card", value: 1 }),
+    ).toEqual({ ui_source: "product_card", value: 1 });
+    const clean = { ui_source: "product_card" };
+    expect(withoutReservedCampaignParams("add_to_cart", clean)).toBe(clean);
   });
 });

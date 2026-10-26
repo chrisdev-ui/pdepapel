@@ -54,7 +54,7 @@ const CHECKOUT_FIELD_GROUPS: Record<string, string> = {
   couponCode: "cupon",
   daneCode: "ubicacion_entrega",
   department: "ubicacion_entrega",
-  documentId: "informacion_contacto",
+  documentId: "facturacion",
   email: "informacion_contacto",
   envioClickIdRate: "tarifa_envio",
   firstName: "informacion_contacto",
@@ -71,10 +71,15 @@ export function getCheckoutStepName(step: number): CheckoutStepName | null {
   return CHECKOUT_STEP_NAMES[step as CheckoutStepNumber] ?? null;
 }
 
+/** GA4 corta los valores de parámetros en 100 caracteres. */
+const GA4_PARAM_VALUE_MAX = 100;
+
 export function summarizeCheckoutValidationErrors(
   step: number,
   invalidFields: string[],
 ) {
+  // Solo nombres de campo, nunca lo que la persona escribió.
+  const fieldNames = Array.from(new Set(invalidFields)).sort().join(",");
   const errorGroups = Array.from(
     new Set(
       invalidFields.map(
@@ -89,6 +94,7 @@ export function summarizeCheckoutValidationErrors(
     error_group_count: errorGroups.length,
     error_groups: errorGroups.join(",") || "desconocido",
     invalid_field_count: invalidFields.length,
+    invalid_fields: fieldNames.slice(0, GA4_PARAM_VALUE_MAX) || "desconocido",
   };
 }
 

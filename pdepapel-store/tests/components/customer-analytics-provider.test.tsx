@@ -156,6 +156,21 @@ describe("CustomerAnalyticsProvider", () => {
     expect(tiktokMocks.loadTikTokPixel).toHaveBeenCalledTimes(1);
   });
 
+  it("en un navegador del equipo no graba con Clarity aunque haya permiso", async () => {
+    document.cookie = "pdepapel_equipo=1; path=/";
+    try {
+      renderProvider();
+      fireEvent.click(await screen.findByRole("button", { name: "Aceptar todo" }));
+      await waitFor(() => {
+        expect(analyticsMocks.enableGoogleAnalytics).toHaveBeenCalledWith("G-8X3M77ZB3Z");
+      });
+      runIdle();
+      expect(clarityMocks.initializeMicrosoftClarity).not.toHaveBeenCalled();
+    } finally {
+      document.cookie = "pdepapel_equipo=; Max-Age=0; path=/";
+    }
+  });
+
   it("reserves space below the page while the banner is visible", async () => {
     renderProvider();
 

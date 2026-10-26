@@ -81,7 +81,7 @@ export function WelcomeBenefitCard({
           disabled={isApplying}
           onClick={() => {
             trackCustomerEvent("welcome_benefit_apply_clicked", {
-              source: "checkout_review",
+              ui_source: "checkout_review",
               benefit_type: benefit.type,
             });
             onApply(benefit.code);

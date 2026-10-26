@@ -34,7 +34,7 @@ export function useAddProductToCart(source: string) {
       }
 
       const item = toAnalyticsItem(product, requested);
-      trackCustomerEvent("add_to_cart", { currency: "COP", items: [item], source, value: getAnalyticsValue([item]) });
+      trackCustomerEvent("add_to_cart", { currency: "COP", items: [item], ui_source: source, value: getAnalyticsValue([item]) });
       trackTikTokEvent("AddToCart", tiktokProductParameters([item]));
       markCartTouched();
       onAdded?.();

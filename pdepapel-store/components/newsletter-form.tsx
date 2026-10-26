@@ -66,7 +66,7 @@ export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) 
     try {
       setLoading(true);
       setSuccessMessage(null);
-      trackCustomerEvent("newsletter_signup_submitted", { source: signupSource });
+      trackCustomerEvent("newsletter_signup_submitted", { ui_source: signupSource });
       const response = await postNewsletterSignup(
         { email: values.email, consent: true, company: values.company ?? "", source: signupSource, productId },
         await botTrap.fields(),
@@ -84,7 +84,7 @@ export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) 
       setSuccessMessage(message);
       form.reset();
       trackCustomerEvent("newsletter_confirmation_requested", {
-        source: signupSource,
+        ui_source: signupSource,
       });
       toast({
         title: "Revisa tu correo",

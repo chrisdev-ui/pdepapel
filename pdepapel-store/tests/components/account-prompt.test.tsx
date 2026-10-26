@@ -55,7 +55,7 @@ describe("AccountPrompt", () => {
     await user.click(signUp);
     expect(trackCustomerEvent).toHaveBeenCalledWith(
       "account_registration_cta_clicked",
-      { source: "cart_page" },
+      { ui_source: "cart_page" },
     );
   });
 
@@ -80,7 +80,7 @@ describe("AccountPrompt", () => {
     await user.click(signIn);
     expect(trackCustomerEvent).toHaveBeenCalledWith(
       "account_sign_in_cta_clicked",
-      { source: "cart_drawer" },
+      { ui_source: "cart_drawer" },
     );
     expect(
       screen.getByText(/también puedes comprar como invitado/i),

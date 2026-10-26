@@ -104,7 +104,7 @@ describe("NewsletterForm", () => {
     ).toBeVisible();
     expect(trackCustomerEvent).toHaveBeenCalledWith(
       "newsletter_confirmation_requested",
-      { source: "/tienda" },
+      { ui_source: "/tienda" },
     );
     expect(JSON.stringify(trackCustomerEvent.mock.calls)).not.toContain(
       "cliente@example.com",

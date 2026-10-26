@@ -28,6 +28,7 @@ import {
   isClarityEligiblePath,
   updateMicrosoftClarityContext,
 } from "@/lib/microsoft-clarity";
+import { isTeamBrowser } from "@/lib/team-browser";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -141,7 +142,9 @@ export function CustomerAnalyticsProvider({
     if (
       !hasClarity ||
       !consent?.analytics ||
-      !isClarityEligiblePath(pathname)
+      !isClarityEligiblePath(pathname) ||
+      // Las grabaciones del equipo llenaban el embudo del checkout.
+      isTeamBrowser()
     ) {
       return;
     }

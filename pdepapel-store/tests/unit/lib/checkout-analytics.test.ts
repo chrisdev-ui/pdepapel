@@ -30,7 +30,17 @@ describe("checkout analytics", () => {
       error_group_count: 3,
       error_groups: "direccion_entrega,tarifa_envio,ubicacion_entrega",
       invalid_field_count: 4,
+      invalid_fields: "address1,city,daneCode,envioClickIdRate",
     });
+  });
+
+  it("names the failing fields, never their values, within GA4's 100 characters", () => {
+    const summary = summarizeCheckoutValidationErrors(1, ["email", "telephone", "email", "fullName"]);
+    expect(summary.invalid_fields).toBe("email,fullName,telephone");
+    expect(summary.error_groups).toBe("informacion_contacto");
+    expect(summarizeCheckoutValidationErrors(3, ["documentId"]).error_groups).toBe("facturacion");
+    const many = Array.from({ length: 30 }, (_, index) => `field${index}`);
+    expect(summarizeCheckoutValidationErrors(2, many).invalid_fields.length).toBeLessThanOrEqual(100);
   });
 
   it("classifies request failures without exposing server messages", () => {

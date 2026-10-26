@@ -70,7 +70,7 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
     if (!canClaimOrder || isClaimed) return;
 
     trackCustomerEvent("order_account_prompt_viewed", {
-      source: "order_detail",
+      ui_source: "order_detail",
     });
   }, [canClaimOrder, isClaimed]);
 
@@ -99,7 +99,7 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
 
       setIsClaimed(true);
       trackCustomerEvent("order_account_claimed", {
-        source: hasEmailClaim ? "order_email" : "order_detail",
+        ui_source: hasEmailClaim ? "order_email" : "order_detail",
       });
       toast({
         title: "Pedido guardado en tu cuenta",
@@ -138,7 +138,7 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
           getOrderAccountClaimStorageKey(orderId),
           token,
         );
-        trackCustomerEvent(eventName, { source: "order_detail" });
+        trackCustomerEvent(eventName, { ui_source: "order_detail" });
 
         window.location.assign(
           `${destination}?redirect_url=${encodeURIComponent(
@@ -169,7 +169,7 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
         token,
       );
       trackCustomerEvent("order_account_claim_clicked", {
-        source: "order_detail",
+        ui_source: "order_detail",
       });
       await claimPendingOrder();
     } catch {
