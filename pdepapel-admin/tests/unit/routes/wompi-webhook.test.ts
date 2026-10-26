@@ -656,6 +656,21 @@ describe("POST /api/webhook/wompi · rechazos y anulaciones por revisar", () => 
     expect(mocks.handleGiftCardOnOrderCancellation).not.toHaveBeenCalled();
   });
 
+  it("ERROR se trata como un rechazo: pendiente y correo de reintento, sin cancelar", async () => {
+    const transactionClient = {
+      order: { updateMany: vi.fn().mockResolvedValue({ count: 0 }), findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PENDING }) },
+      paymentDetails: { findUnique: vi.fn().mockResolvedValue({ id: "pay-1" }), updateMany: vi.fn().mockResolvedValue({ count: 1 }), create: vi.fn() },
+    };
+    mocks.findOrder.mockResolvedValue(pendingOrder);
+    mocks.transaction.mockImplementation(async (callback: any) => callback(transactionClient));
+
+    const response = await POST(createWebhookRequest({ id: "wompi-error-id", reference: "order-id", amount_in_cents: 8000000, status: "ERROR" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.sendPaymentDeclinedEmail).toHaveBeenCalledWith("order-id");
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled();
+  });
+
   it("un rechazo viejo que llega después del pago bueno no deshace nada", async () => {
     const transactionClient = {
       order: { updateMany: vi.fn().mockResolvedValue({ count: 0 }), findUnique: vi.fn().mockResolvedValue({ status: OrderStatus.PAID }) },

@@ -216,7 +216,18 @@ describe("decisión por respuesta de Wompi", () => {
     expect(declineRetryWindowFromEnv("900")).toBe(2 * 60 * 60 * 1000);
   });
 
-  it.each(["error", "pending", "empty"])("%s: no cambia nada ni escribe fila", async (name) => {
+  it("ERROR es un rechazo: dentro de la ventana, correo de reintento; pasada, la anulación de siempre", async () => {
+    mocks.findMany.mockResolvedValue([order(PaymentMethod.Wompi)]);
+    const { fetch } = gateways({ wompi: [ok("wompi-transactions-error.json")], bold: [{ status: 404, body: null }] });
+    expect(await runPaymentReconciliation(deps(fetch))).toMatchObject({ awaitingRetry: 1, cancelled: 0 });
+    expect(mocks.settleDeclinedPayment).toHaveBeenCalledWith(expect.objectContaining({ provider: "Wompi" }));
+
+    const later = await runPaymentReconciliation(deps(fetch, { now: afterWindow }));
+    expect(later).toMatchObject({ cancelled: 1 });
+    expect(mocks.settleCancelledPayment).toHaveBeenCalledWith(expect.objectContaining({ gatewayStatus: "ERROR" }));
+  });
+
+  it.each(["pending", "empty"])("%s: no cambia nada ni escribe fila", async (name) => {
     mocks.findMany.mockResolvedValue([order(PaymentMethod.Wompi)]);
     const { fetch } = gateways({ wompi: [ok(`wompi-transactions-${name}.json`)], bold: [{ status: 404, body: null }] });
     const summary = await runPaymentReconciliation(deps(fetch));

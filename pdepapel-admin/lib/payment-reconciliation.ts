@@ -36,7 +36,8 @@ export const RECONCILE_BUDGET_MS = 45 * 1000;
 /** Tantas consultas seguidas sin respuesta y esa pasarela se deja por esta corrida. */
 export const RECONCILE_UNAVAILABLE_STREAK = 3;
 
-const WOMPI_CANCELLED = new Set(["DECLINED", "VOIDED"]);
+// ERROR también es final: el webhook lo trata como rechazo y aquí se cancela pasada la ventana.
+const WOMPI_CANCELLED = new Set(["DECLINED", "ERROR", "VOIDED"]);
 const BOLD_CANCELLED = new Set(["REJECTED", "VOIDED"]);
 
 type Provider = "Bold" | "Wompi";
@@ -218,7 +219,7 @@ function decideWompi(order: SettlementOrder, transactions: WompiTransaction[], n
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))[0];
   const at = newest.at ?? order.createdAt.getTime();
   const decision = { transactionId: newest.transaction.id, gatewayStatus: newest.transaction.status, detailsText: details(newest.transaction), gateway: newest.transaction };
-  if (now.getTime() - at < windowMs) return newest.transaction.status === "DECLINED" ? { action: "declined", ...decision } : { action: "none" };
+  if (now.getTime() - at < windowMs) return newest.transaction.status !== "VOIDED" ? { action: "declined", ...decision } : { action: "none" };
   return { action: "cancelled", ...decision };
 }
 
