@@ -35,6 +35,11 @@ export const env = createEnv({
     NEXT_PUBLIC_CLARITY_ENABLED: requiredInProduction(z.enum(["true", "false"])),
     // Opcional: sin ella los formularios de pedido no cargan el desafío de Turnstile.
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
+    // Opcional y solo en Production: sin ella el píxel de TikTok no carga (lib/analytics/tiktok.ts).
+    NEXT_PUBLIC_TIKTOK_PIXEL_ID: z
+      .string()
+      .regex(/^[A-Z0-9]+$/, "Debe ser un ID de píxel de TikTok válido")
+      .optional(),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
@@ -51,5 +56,6 @@ export const env = createEnv({
     NEXT_PUBLIC_CLARITY_PROJECT_ID: process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID,
     NEXT_PUBLIC_CLARITY_ENABLED: process.env.NEXT_PUBLIC_CLARITY_ENABLED,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+    NEXT_PUBLIC_TIKTOK_PIXEL_ID: process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID,
   },
 });

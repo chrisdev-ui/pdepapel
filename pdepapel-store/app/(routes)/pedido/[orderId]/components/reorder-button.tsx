@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useCartSheet } from "@/hooks/use-cart-sheet";
 import { useToast } from "@/hooks/use-toast";
-import { trackCustomerEvent } from "@/lib/customer-analytics";
+import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
+import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { cn } from "@/lib/utils";
 import { useCartPreview } from "@/providers/cart-preview-provider";
 import type { OrderItem, Product } from "@/types";
@@ -90,6 +91,11 @@ export function ReorderButton({
         price: Number(product.price),
       })),
     });
+    // TikTok con la referencia de los feeds (sku || id), no el id interno de arriba.
+    trackTikTokEvent(
+      "AddToCart",
+      tiktokProductParameters(reorderable.map(({ product, quantity }) => toAnalyticsItem(product, quantity))),
+    );
     markCartTouched();
 
     const notes: string[] = [];

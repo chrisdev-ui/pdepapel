@@ -23,6 +23,7 @@ import {
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
+import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
 import {
   CardBadge,
   getAverageRating,
@@ -223,6 +224,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         source: "product_card",
         value: getAnalyticsValue([item]),
       });
+      trackTikTokEvent("AddToCart", tiktokProductParameters([item]));
       showCartPreview({
         product: result.item,
         quantity: result.item.quantity ?? 1,

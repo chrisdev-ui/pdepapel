@@ -7,7 +7,7 @@
  */
 export const LEGAL_VERSIONS = {
   terms: "2026-10-21",
-  privacy: "2026-10-21",
+  privacy: "2026-10-26",
 } as const;
 
 export type LegalConsentVersions = { terms: string; privacy: string };

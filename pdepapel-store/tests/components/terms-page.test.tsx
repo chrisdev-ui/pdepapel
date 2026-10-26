@@ -52,7 +52,7 @@ describe("Términos y condiciones", () => {
     const terms = responsibleData();
     cleanup();
     render(<PrivacyPage />);
-    expect(screen.getByText("21 de octubre de 2026")).toBeInTheDocument();
+    expect(screen.getByText("26 de octubre de 2026")).toBeInTheDocument();
     expect(responsibleData()).toBe(terms);
     expect(terms).toMatch(/^Paula Fernanda Morales Rodriguez \(nombre comercial: Papelería P de Papel\), NIT .+ Dirección de notificación: .+ Contacto: papeleria\.pdepapel@gmail\.com\.$/);
   });

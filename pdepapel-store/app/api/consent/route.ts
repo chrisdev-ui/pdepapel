@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
  * Mirrors the visitor's analytics decision into a cookie set by the server.
  * Safari/iOS caps script-written storage (local storage, document.cookie) at
  * 7 days without a visit, but keeps cookies set in HTTP responses, so this
- * keeps returning visitors from being asked again. It stores only the boolean
- * decision and its timestamp: no identifiers, no personal data.
+ * keeps returning visitors from being asked again. It stores only the two
+ * boolean decisions and their timestamp: no identifiers, no personal data.
  */
 export async function POST(request: Request) {
   if (request.headers.get("sec-fetch-site") === "cross-site") {
@@ -23,10 +23,10 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
   const candidate =
     body && typeof body === "object"
-      ? (body as { analytics?: unknown; updatedAt?: unknown })
+      ? (body as { analytics?: unknown; marketing?: unknown; updatedAt?: unknown })
       : {};
 
-  if (typeof candidate.analytics !== "boolean") {
+  if (typeof candidate.analytics !== "boolean" || typeof candidate.marketing !== "boolean") {
     return NextResponse.json(
       { message: "Preferencia de analítica inválida" },
       { status: 400 },
@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       : new Date().toISOString();
   const consent = parseAnalyticsConsent({
     analytics: candidate.analytics,
+    marketing: candidate.marketing,
     updatedAt,
   });
 

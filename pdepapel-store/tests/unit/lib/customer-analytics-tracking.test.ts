@@ -37,7 +37,7 @@ const baseProduct = {
 function grantConsent(analytics = true) {
   window.localStorage.setItem(
     ANALYTICS_CONSENT_STORAGE_KEY,
-    JSON.stringify({ analytics, updatedAt: "2026-09-04T00:00:00.000Z" }),
+    JSON.stringify({ analytics, marketing: false, updatedAt: "2026-09-04T00:00:00.000Z" }),
   );
 }
 

@@ -1,4 +1,4 @@
-export const ANALYTICS_CONSENT_VERSION = "v2";
+export const ANALYTICS_CONSENT_VERSION = "v3";
 export const ANALYTICS_CONSENT_STORAGE_KEY = `pdepapel:analytics-consent:${ANALYTICS_CONSENT_VERSION}`;
 export const ANALYTICS_CONSENT_COOKIE_NAME = `pdepapel_analytics_consent_${ANALYTICS_CONSENT_VERSION}`;
 export const ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
@@ -8,8 +8,10 @@ export const OPEN_PRIVACY_PREFERENCES_EVENT =
 /** Se emite al guardar la decisión, para quien mide solo con permiso. */
 export const ANALYTICS_CONSENT_CHANGED_EVENT = "pdepapel:analytics-consent-changed";
 
+/** v3 (2026-10): «Publicidad» va aparte de «Analítica»; un «sí» de v2 no cubre anuncios. */
 export interface AnalyticsConsent {
   analytics: boolean;
+  marketing: boolean;
   updatedAt: string;
 }
 
@@ -19,6 +21,7 @@ export function parseAnalyticsConsent(value: unknown): AnalyticsConsent | null {
   const candidate = value as Partial<AnalyticsConsent>;
   if (
     typeof candidate.analytics !== "boolean" ||
+    typeof candidate.marketing !== "boolean" ||
     typeof candidate.updatedAt !== "string" ||
     Number.isNaN(Date.parse(candidate.updatedAt))
   ) {
@@ -27,6 +30,7 @@ export function parseAnalyticsConsent(value: unknown): AnalyticsConsent | null {
 
   return {
     analytics: candidate.analytics,
+    marketing: candidate.marketing,
     updatedAt: candidate.updatedAt,
   };
 }
@@ -167,6 +171,10 @@ export function saveAnalyticsConsent(
 
 export function hasAnalyticsConsent(): boolean {
   return readAnalyticsConsent()?.analytics === true;
+}
+
+export function hasMarketingConsent(): boolean {
+  return readAnalyticsConsent()?.marketing === true;
 }
 
 export function openPrivacyPreferences(): void {

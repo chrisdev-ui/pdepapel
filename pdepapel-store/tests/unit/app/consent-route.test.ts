@@ -20,7 +20,7 @@ function post(body: unknown, headers: Record<string, string> = {}) {
 describe("consent cookie route", () => {
   it("sets a long-lived, non-HttpOnly, same-site cookie with the decision", async () => {
     const response = await post({
-      analytics: true,
+      analytics: true, marketing: false,
       updatedAt: "2026-09-04T15:16:52.640Z",
     });
     const setCookie = response.headers.get("set-cookie") ?? "";
@@ -35,17 +35,17 @@ describe("consent cookie route", () => {
     expect(setCookie).toMatch(/samesite=lax/i);
     expect(setCookie).not.toMatch(/httponly/i);
     expect(readAnalyticsConsentFromCookieHeader(setCookie)).toEqual({
-      analytics: true,
+      analytics: true, marketing: false,
       updatedAt: "2026-09-04T15:16:52.640Z",
     });
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
-      consent: { analytics: true, updatedAt: "2026-09-04T15:16:52.640Z" },
+      consent: { analytics: true, marketing: false, updatedAt: "2026-09-04T15:16:52.640Z" },
     });
   });
 
   it("stores a rejection the same way so the visitor is not asked again", async () => {
-    const response = await post({ analytics: false });
+    const response = await post({ analytics: false, marketing: false });
     const cookie = readAnalyticsConsentFromCookieHeader(
       response.headers.get("set-cookie"),
     );
@@ -56,7 +56,7 @@ describe("consent cookie route", () => {
   });
 
   it("replaces an invalid timestamp with the current time", async () => {
-    const response = await post({ analytics: true, updatedAt: "ayer" });
+    const response = await post({ analytics: true, marketing: false, updatedAt: "ayer" });
     const cookie = readAnalyticsConsentFromCookieHeader(
       response.headers.get("set-cookie"),
     );
@@ -82,7 +82,7 @@ describe("consent cookie route", () => {
 
   it("rejects cross-site requests", async () => {
     const response = await post(
-      { analytics: true },
+      { analytics: true, marketing: false },
       { "sec-fetch-site": "cross-site" },
     );
 

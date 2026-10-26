@@ -55,6 +55,7 @@ import {
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
+import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
 import { readEarlyAccessCookie } from "@/lib/early-access";
 import { normalizePhoneForInput } from "@/lib/phone";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
@@ -576,6 +577,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       items: analyticsItems,
       value: getAnalyticsValue(analyticsItems),
     });
+    trackTikTokEvent("InitiateCheckout", tiktokProductParameters(analyticsItems));
   }, [analyticsItems]);
 
   useEffect(() => {
@@ -1244,6 +1246,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         payment_type: paymentMethod,
         value: getAnalyticsValue(analyticsItems),
       });
+      trackTikTokEvent("AddPaymentInfo", tiktokProductParameters(analyticsItems));
       trackCustomerEvent("checkout_order_submitted", {
         browser_context: getBrowserContext(navigator.userAgent),
         currency: "COP",

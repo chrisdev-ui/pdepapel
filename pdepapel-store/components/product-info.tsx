@@ -30,6 +30,7 @@ import {
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
+import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
 import { getProductAvailability } from "@/lib/product-availability";
 import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
@@ -125,6 +126,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       items: [item],
       value: getAnalyticsValue([item]),
     });
+    trackTikTokEvent("ViewContent", tiktokProductParameters([item]));
   }, [data]);
 
   const uniqueDesigns = useMemo(() => {

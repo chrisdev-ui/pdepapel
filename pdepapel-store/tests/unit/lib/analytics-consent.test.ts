@@ -15,7 +15,7 @@ import {
   syncAnalyticsConsentCookie,
 } from "@/lib/analytics-consent";
 
-const accepted = { analytics: true, updatedAt: "2026-08-27T17:52:42.293Z" };
+const accepted = { analytics: true, marketing: false, updatedAt: "2026-08-27T17:52:42.293Z" };
 
 function setConsentCookie(value: string) {
   document.cookie = `${ANALYTICS_CONSENT_COOKIE_NAME}=${value}; path=/`;
@@ -60,12 +60,12 @@ describe("analytics consent persistence", () => {
   it("prefers the decision stored in local storage", () => {
     window.localStorage.setItem(
       ANALYTICS_CONSENT_STORAGE_KEY,
-      JSON.stringify({ analytics: false, updatedAt: "2026-09-01T00:00:00.000Z" }),
+      JSON.stringify({ analytics: false, marketing: false, updatedAt: "2026-09-01T00:00:00.000Z" }),
     );
     setConsentCookie(serializeAnalyticsConsentCookie(accepted));
 
     expect(readAnalyticsConsent()).toEqual({
-      analytics: false,
+      analytics: false, marketing: false,
       updatedAt: "2026-09-01T00:00:00.000Z",
     });
     expect(hasAnalyticsConsent()).toBe(false);
@@ -92,13 +92,13 @@ describe("analytics consent persistence", () => {
   it("announces every saved decision so consent-gated measurement can start", () => {
     const listener = vi.fn();
     window.addEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, listener);
-    saveAnalyticsConsent({ analytics: true });
+    saveAnalyticsConsent({ analytics: true, marketing: false });
     window.removeEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, listener);
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("saves the decision locally and asks the server for the long-lived cookie", () => {
-    const consent = saveAnalyticsConsent({ analytics: true });
+    const consent = saveAnalyticsConsent({ analytics: true, marketing: false });
 
     expect(consent.analytics).toBe(true);
     expect(Number.isNaN(Date.parse(consent.updatedAt))).toBe(false);
@@ -130,7 +130,7 @@ describe("analytics consent persistence", () => {
     syncAnalyticsConsentCookie(accepted);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const newer = { analytics: false, updatedAt: "2026-09-04T15:00:00.000Z" };
+    const newer = { analytics: false, marketing: false, updatedAt: "2026-09-04T15:00:00.000Z" };
     syncAnalyticsConsentCookie(newer);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
@@ -142,6 +142,6 @@ describe("analytics consent persistence", () => {
   it("never throws when the network call fails", () => {
     fetchMock.mockRejectedValueOnce(new Error("offline"));
 
-    expect(() => saveAnalyticsConsent({ analytics: false })).not.toThrow();
+    expect(() => saveAnalyticsConsent({ analytics: false, marketing: false })).not.toThrow();
   });
 });

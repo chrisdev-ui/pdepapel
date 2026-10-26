@@ -24,7 +24,7 @@ const ORDER_NUMBER = "ORD-1792000000000-123";
 const SECRETS = [ORDER_ID, PREVIOUS_ORDER_ID, TRANSACTION, ORDER_NUMBER, "bold-order-id", "bold-tx-status"];
 
 const grantConsent = () =>
-  window.localStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, JSON.stringify({ analytics: true, updatedAt: "2026-10-20T00:00:00.000Z" }));
+  window.localStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, JSON.stringify({ analytics: true, marketing: false, updatedAt: "2026-10-20T00:00:00.000Z" }));
 const setReferrer = (value: string) => Object.defineProperty(document, "referrer", { configurable: true, value });
 const sentToGoogle = () => JSON.stringify((window.dataLayer ?? []).map((entry) => Array.from(entry as IArguments)));
 

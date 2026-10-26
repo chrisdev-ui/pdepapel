@@ -55,6 +55,8 @@ import { OrderItemsCard } from "./order-items-card";
 import { OrderShippingCard } from "./order-shipping-card";
 import { OrderSummaryCard } from "./order-summary-card";
 import { OrderTimeline } from "./order-timeline";
+import { ANALYTICS_CONSENT_CHANGED_EVENT } from "@/lib/analytics-consent";
+import { isTikTokCompletePayment, trackTikTokCompletePayment } from "@/lib/analytics/tiktok";
 
 interface SingleOrderPageProps {
   order: Order;
@@ -120,6 +122,27 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       duration: 10000,
     });
   }, [paymentReturn, paymentResult, order.id, toast, fireConfetti]);
+
+  // TikTok «CompletePayment»: pagado por pasarela o cubierto entero por una
+  // tarjeta de regalo; nunca transferencia ni contra entrega. Una vez por
+  // pedido (lib/analytics/tiktok.ts); si «Publicidad» llega con la página
+  // abierta, se intenta otra vez.
+  useEffect(() => {
+    if (!isTikTokCompletePayment(activeOrder)) return;
+    const send = () =>
+      trackTikTokCompletePayment(
+        activeOrder,
+        activeOrder.orderItems.map((item) => ({
+          item_id: item.sku || item.product?.sku || item.productId || item.id,
+          item_name: item.name ?? item.product?.name ?? "",
+          quantity: item.quantity,
+          price: Number(item.price ?? 0),
+        })),
+      );
+    send();
+    window.addEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, send);
+    return () => window.removeEventListener(ANALYTICS_CONSENT_CHANGED_EVENT, send);
+  }, [activeOrder]);
 
   // The checkout keeps the cart until the gateway confirms the payment. Once
   // this order is PAID, the cart and the saved checkout are cleared here —

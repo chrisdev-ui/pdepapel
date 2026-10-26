@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -9,6 +10,13 @@ import {
   saveAnalyticsConsent,
   syncAnalyticsConsentCookie,
 } from "@/lib/analytics-consent";
+import {
+  isTikTokPixelLoaded,
+  loadTikTokPixel,
+  revokeTikTokConsent,
+  tiktokPixelId,
+  trackTikTokPage,
+} from "@/lib/analytics/tiktok";
 import {
   disableGoogleAnalytics,
   enableGoogleAnalytics,
@@ -22,6 +30,7 @@ import {
 } from "@/lib/microsoft-clarity";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -32,10 +41,13 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useStorefrontPathname } from "@/hooks/use-storefront-pathname";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 const initialPreferences = {
   analytics: false,
+  marketing: false,
 };
+const acceptAll = { analytics: true, marketing: true };
 
 interface CustomerAnalyticsProviderProps {
   measurementId?: string;
@@ -74,7 +86,7 @@ export function CustomerAnalyticsProvider({
   const bannerRef = useRef<HTMLElement | null>(null);
 
   const hasClarity = Boolean(clarityEnabled && clarityProjectId);
-  const hasOptionalAnalytics = Boolean(measurementId || hasClarity);
+  const hasOptionalAnalytics = Boolean(measurementId || hasClarity || tiktokPixelId());
   const showBanner =
     hasOptionalAnalytics && isReady && !consent && !isPreferencesOpen;
 
@@ -86,6 +98,7 @@ export function CustomerAnalyticsProvider({
       persistedConsent
         ? {
             analytics: persistedConsent.analytics,
+            marketing: persistedConsent.marketing,
           }
         : initialPreferences,
     );
@@ -144,6 +157,30 @@ export function CustomerAnalyticsProvider({
     trackGooglePageView(pathname, document.title);
   }, [consent?.analytics, isReady, measurementId, pathname]);
 
+  // Píxel de TikTok solo con «Publicidad», cargado cuando el navegador está
+  // libre (como Clarity) para no competir con el LCP. La carga manda la
+  // primera vista; aquí solo las navegaciones siguientes, sin repetirla.
+  const tiktokPathRef = useRef<string | null>(null);
+  const latestPathRef = useRef(pathname);
+  latestPathRef.current = pathname;
+  useEffect(() => {
+    if (!isReady) return;
+    if (!consent?.marketing) {
+      revokeTikTokConsent();
+      tiktokPathRef.current = null;
+      return;
+    }
+    if (!isTikTokPixelLoaded()) {
+      return scheduleWhenIdle(() => {
+        if (loadTikTokPixel()) tiktokPathRef.current = latestPathRef.current;
+      });
+    }
+    if (tiktokPathRef.current !== pathname) {
+      tiktokPathRef.current = pathname;
+      trackTikTokPage();
+    }
+  }, [consent?.marketing, isReady, pathname]);
+
   // The banner is fixed to the bottom of the viewport. Reserve the same
   // height below the page and in the scroll padding so controls near the
   // bottom (for example the mobile "Filtros" button) can still be reached
@@ -177,8 +214,10 @@ export function CustomerAnalyticsProvider({
   }, [showBanner]);
 
   const persistPreferences = (preferences: typeof initialPreferences) => {
+    // Retirar un permiso recarga: lo que ya cargó (GA, Clarity, el píxel) no se descarga solo.
     const requiresReload = Boolean(
-      consent?.analytics && !preferences.analytics,
+      (consent?.analytics && !preferences.analytics) ||
+        (consent?.marketing && !preferences.marketing),
     );
     const savedConsent = saveAnalyticsConsent(preferences);
     setConsent(savedConsent);
@@ -200,37 +239,34 @@ export function CustomerAnalyticsProvider({
           aria-label="Preferencias de privacidad"
           className="fixed inset-x-2 bottom-2 z-[10000] mx-auto max-w-2xl rounded-2xl border border-blue-baby bg-background p-4 shadow-xl sm:inset-x-4 sm:bottom-4 sm:p-6"
         >
-          <h2 className="font-serif text-lg font-bold sm:text-xl">
-            Tu privacidad, tus decisiones
-          </h2>
-          <p className="mt-1.5 text-xs text-muted-foreground sm:mt-2 sm:text-sm">
-            Con tu permiso usamos métricas y reproducciones técnicas de la
-            navegación para mejorar la tienda y entender qué dificulta una
-            compra. Ocultamos los campos personales y nunca usamos estos datos
-            para procesar tu pago.
+          <p className="text-sm text-foreground sm:text-base">
+            Usamos cookies para analizar la tienda y medir nuestros anuncios.
           </p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:flex sm:justify-end">
-            <Button
+          <div className="mt-3 flex flex-col gap-2 sm:mt-4 sm:flex-row sm:items-center">
+            <button
               type="button"
-              variant="ghost"
-              className="order-last col-span-2 h-9 sm:order-none sm:col-span-1 sm:h-10"
+              className="order-last min-h-11 self-start text-sm font-medium text-primary underline underline-offset-4 hover:text-primary/80 sm:order-none sm:mr-auto"
               onClick={() => setIsPreferencesOpen(true)}
             >
-              Personalizar
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => persistPreferences(initialPreferences)}
-            >
-              Rechazar opcionales
-            </Button>
-            <Button
-              type="button"
-              onClick={() => persistPreferences({ analytics: true })}
-            >
-              Aceptar y continuar
-            </Button>
+              Configurar
+            </button>
+            <div className="grid grid-cols-2 gap-2 sm:w-[22rem]">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-2 border-primary font-semibold text-primary"
+                onClick={() => persistPreferences(initialPreferences)}
+              >
+                Solo necesarias
+              </Button>
+              <Button
+                type="button"
+                className="border-2 border-primary font-semibold"
+                onClick={() => persistPreferences(acceptAll)}
+              >
+                Aceptar todo
+              </Button>
+            </div>
           </div>
         </section>
       )}
@@ -240,58 +276,73 @@ export function CustomerAnalyticsProvider({
           <DialogHeader>
             <DialogTitle>Preferencias de privacidad</DialogTitle>
             <DialogDescription>
-              Puedes cambiar esta decisión cuando quieras desde el pie de
-              página. Las funciones esenciales para comprar siguen activas.
+              Elige qué permites. Puedes cambiarlo cuando quieras desde
+              «Preferencias de privacidad», en el pie de página. Comprar
+              funciona igual con todo apagado. Más detalles en la{" "}
+              <Link
+                href={STOREFRONT_ROUTES.dataPolicy}
+                className="font-medium text-primary underline underline-offset-4"
+                onClick={() => setIsPreferencesOpen(false)}
+              >
+                política de privacidad
+              </Link>
+              .
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 rounded-lg border p-4">
               <Checkbox checked disabled aria-label="Funciones esenciales" />
               <span>
                 <span className="block font-medium">Funciones esenciales</span>
                 <span className="block text-sm text-muted-foreground">
                   Necesarias para el carrito, el pedido, la seguridad y el pago.
+                  Siempre activas.
                 </span>
               </span>
-            </label>
-            {hasOptionalAnalytics && (
-              <div className="flex items-start gap-3 rounded-lg border p-4">
-                <Checkbox
-                  id="analytics-consent"
-                  checked={draftPreferences.analytics}
+            </div>
+            {[
+              {
+                key: "analytics" as const,
+                id: "consent-analytics",
+                title: "Analítica",
+                description:
+                  "Métricas de visitas y de cómo se usa la tienda (Google Analytics y Microsoft Clarity), con tus datos personales ocultos. Nos ayuda a mejorarla.",
+              },
+              {
+                key: "marketing" as const,
+                id: "consent-marketing",
+                title: "Publicidad",
+                description:
+                  "Compartimos con TikTok qué productos ves, agregas al carrito o compras, para medir nuestros anuncios. Sin tu nombre, correo, teléfono ni dirección.",
+              },
+            ].map((category) => (
+              <div key={category.key} className="flex items-start justify-between gap-3 rounded-lg border p-4">
+                <Label htmlFor={category.id} className="cursor-pointer">
+                  <span className="block text-base font-medium">{category.title}</span>
+                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                    {category.description}
+                  </span>
+                </Label>
+                <Switch
+                  id={category.id}
+                  checked={draftPreferences[category.key]}
                   onCheckedChange={(checked) =>
                     setDraftPreferences((preferences) => ({
                       ...preferences,
-                      analytics: checked === true,
+                      [category.key]: checked,
                     }))
                   }
                 />
-                <Label htmlFor="analytics-consent" className="cursor-pointer">
-                  <span className="block font-medium">
-                    Analítica y mejora de experiencia
-                  </span>
-                  <span className="mt-1 block text-sm font-normal text-muted-foreground">
-                    Nos ayuda a entender páginas vistas, productos, carrito y
-                    pasos del proceso de compra mediante métricas y sesiones
-                    técnicas con los datos personales ocultos.
-                  </span>
-                </Label>
               </div>
-            )}
+            ))}
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               type="button"
-              variant="outline"
-              onClick={() => persistPreferences(initialPreferences)}
-            >
-              Rechazar opcionales
-            </Button>
-            <Button
-              type="button"
+              className="w-full sm:w-auto sm:min-w-40"
               onClick={() => persistPreferences(draftPreferences)}
             >
-              Guardar preferencias
+              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>

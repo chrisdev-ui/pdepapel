@@ -10,6 +10,7 @@ import useSearchProducts from "@/hooks/use-search-products";
 import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { NavigationType } from "@/lib/catalog-navigation";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
+import { trackTikTokEvent } from "@/lib/analytics/tiktok";
 import { forgetSearch, getRecentSearches, rememberSearch } from "@/lib/recent-searches";
 import { categoryPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { TypeIcon } from "@/lib/type-icons";
@@ -128,6 +129,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({ variant = "inline", placeh
         return;
       }
       trackCustomerEvent("search", { search_term: sanitizeSearchTerm(term) });
+      const tiktokQuery = sanitizeSearchTerm(term);
+      if (tiktokQuery) trackTikTokEvent("Search", { query: tiktokQuery });
       setRecents(rememberSearch(term));
       close();
       inputRef.current?.blur();

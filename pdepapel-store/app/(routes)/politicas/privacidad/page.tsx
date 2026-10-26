@@ -126,6 +126,10 @@ const sections: PolicySection[] = [
             <strong>Analítica</strong> (Google Analytics 4 y Microsoft Clarity):
             solo con tu autorización, como se explica abajo.
           </li>
+          <li>
+            <strong>Publicidad</strong> (TikTok, del grupo ByteDance): solo con
+            tu autorización, como se explica en «Publicidad».
+          </li>
         </ul>
         <p>
           Algunos de estos proveedores operan fuera de Colombia con garantías
@@ -162,6 +166,39 @@ const sections: PolicySection[] = [
           Guardamos tu decisión en este navegador durante 12 meses, en el
           almacenamiento local y en una cookie de preferencia sin
           identificadores, para no volver a preguntarte en cada visita.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: "publicidad",
+    title: "Publicidad",
+    content: (
+      <ul>
+        <li>
+          Solo si lo aceptas en <strong>Preferencias de privacidad</strong>,
+          usamos el píxel de TikTok (TikTok, del grupo ByteDance) para medir y
+          mejorar nuestros anuncios en TikTok.
+        </li>
+        <li>
+          <strong>Qué se comparte:</strong> las páginas que visitas en la
+          tienda; los productos que ves, agregas al carrito o compras,
+          identificados por su referencia; y el valor del pedido. El píxel
+          también recoge datos técnicos del navegador, como la dirección IP y
+          el tipo de dispositivo. No enviamos tu nombre, correo, teléfono,
+          dirección, documento ni datos de pago.
+        </li>
+        <li>
+          <strong>Dónde se tratan:</strong> TikTok procesa estos datos fuera de
+          Colombia y también los usa según su propia política de privacidad.
+          Al aceptar Publicidad autorizas esta transferencia internacional de
+          datos.
+        </li>
+        <li>
+          <strong>Cómo retirarlo:</strong> cuando quieras, desde{" "}
+          <strong>Preferencias de privacidad</strong>, en el pie de página.
+          Desde ese momento dejamos de enviarle datos. Rechazarlo no te impide
+          comprar.
         </li>
       </ul>
     ),

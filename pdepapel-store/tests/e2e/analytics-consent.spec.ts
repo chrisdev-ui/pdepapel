@@ -12,8 +12,8 @@ const analyticsEnabled = analyticsMode
 test("respeta la bandera local de analítica", async ({ page }) => {
   await gotoPublicPage(page, "/");
 
-  const privacyHeading = page.getByRole("heading", {
-    name: "Tu privacidad, tus decisiones",
+  const privacyHeading = page.getByRole("region", {
+    name: "Preferencias de privacidad",
   });
 
   if (analyticsEnabled) {
@@ -23,21 +23,21 @@ test("respeta la bandera local de analítica", async ({ page }) => {
   }
 });
 
-test("no carga GA ni Clarity antes del consentimiento", async ({ page }) => {
+test("no carga GA, Clarity ni TikTok antes del consentimiento", async ({ page }) => {
   test.skip(
     !analyticsEnabled,
     "Requiere la bandera local de analítica activa.",
   );
 
   const analyticsRequests: string[] = [];
-  await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {
+  await page.route(/(googletagmanager\.com|clarity\.ms|analytics\.tiktok\.com)/, async (route) => {
     analyticsRequests.push(route.request().url());
     await route.abort();
   });
 
   await gotoPublicPage(page, "/");
   await expect(
-    page.getByRole("heading", { name: "Tu privacidad, tus decisiones" }),
+    page.getByRole("region", { name: "Preferencias de privacidad" }),
   ).toBeVisible();
   await page.waitForTimeout(2_200);
 
@@ -53,13 +53,13 @@ test("carga los proveedores configurados solo después de aceptar", async ({
   );
 
   const analyticsRequests: string[] = [];
-  await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {
+  await page.route(/(googletagmanager\.com|clarity\.ms|analytics\.tiktok\.com)/, async (route) => {
     analyticsRequests.push(route.request().url());
     await route.abort();
   });
 
   await gotoPublicPage(page, "/");
-  await page.getByRole("button", { name: "Aceptar y continuar" }).click();
+  await page.getByRole("button", { name: "Aceptar todo" }).click();
 
   await expect
     .poll(
@@ -76,9 +76,18 @@ test("carga los proveedores configurados solo después de aceptar", async ({
       { timeout: 8_000 },
     )
     .toBeTruthy();
+  if (process.env.E2E_EXPECT_TIKTOK_PIXEL !== "0") {
+    // El píxel de TikTok solo con «Aceptar todo» (o «Publicidad»); la petición se corta aquí.
+    await expect
+      .poll(
+        () => analyticsRequests.some((url) => url.includes("analytics.tiktok.com/i18n/pixel/events.js?sdkid=")),
+        { timeout: 8_000 },
+      )
+      .toBeTruthy();
+  }
 });
 
-test("rechazar opcionales mantiene ambos proveedores apagados", async ({
+test("«Solo necesarias» mantiene apagados GA, Clarity y TikTok", async ({
   page,
 }) => {
   test.skip(
@@ -87,13 +96,13 @@ test("rechazar opcionales mantiene ambos proveedores apagados", async ({
   );
 
   const analyticsRequests: string[] = [];
-  await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {
+  await page.route(/(googletagmanager\.com|clarity\.ms|analytics\.tiktok\.com)/, async (route) => {
     analyticsRequests.push(route.request().url());
     await route.abort();
   });
 
   await gotoPublicPage(page, "/");
-  await page.getByRole("button", { name: "Rechazar opcionales" }).click();
+  await page.getByRole("button", { name: "Solo necesarias" }).click();
   await page.waitForTimeout(2_200);
 
   expect(analyticsRequests).toEqual([]);
@@ -108,15 +117,15 @@ test("recuerda la decisión de quien vuelve, incluso si Safari borra el almacena
     "Requiere la bandera local de analítica activa.",
   );
 
-  const cookieName = "pdepapel_analytics_consent_v2";
-  const storageKey = "pdepapel:analytics-consent:v2";
+  const cookieName = "pdepapel_analytics_consent_v3";
+  const storageKey = "pdepapel:analytics-consent:v3";
   const analyticsRequests: string[] = [];
-  await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {
+  await page.route(/(googletagmanager\.com|clarity\.ms|analytics\.tiktok\.com)/, async (route) => {
     analyticsRequests.push(route.request().url());
     await route.abort();
   });
-  const privacyHeading = page.getByRole("heading", {
-    name: "Tu privacidad, tus decisiones",
+  const privacyHeading = page.getByRole("region", {
+    name: "Preferencias de privacidad",
   });
   const gtagWasRequested = () =>
     analyticsRequests.some((url) =>
@@ -131,7 +140,7 @@ test("recuerda la decisión de quien vuelve, incluso si Safari borra el almacena
       new URL(response.url()).pathname === "/api/consent" &&
       response.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Aceptar y continuar" }).click();
+  await page.getByRole("button", { name: "Aceptar todo" }).click();
   expect((await consentResponse).status()).toBe(200);
 
   const consentCookie = (await context.cookies()).find(
@@ -172,12 +181,12 @@ test("el aviso de privacidad no bloquea los controles del catálogo en móvil", 
     "Solo aplica al aviso fijo sobre la vista móvil.",
   );
 
-  await page.route(/(googletagmanager\.com|clarity\.ms)/, (route) =>
+  await page.route(/(googletagmanager\.com|clarity\.ms|analytics\.tiktok\.com)/, (route) =>
     route.abort(),
   );
   await gotoPublicPage(page, "/tienda");
   await expect(
-    page.getByRole("heading", { name: "Tu privacidad, tus decisiones" }),
+    page.getByRole("region", { name: "Preferencias de privacidad" }),
   ).toBeVisible();
 
   // The banner reserves its own height in the page's scroll padding, so

@@ -4,6 +4,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useCartSheet } from "@/hooks/use-cart-sheet";
 import { toast } from "@/hooks/use-toast";
 import { getAnalyticsValue, toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
+import { tiktokProductParameters, trackTikTokEvent } from "@/lib/analytics/tiktok";
 import { useCartPreview } from "@/providers/cart-preview-provider";
 import { Product } from "@/types";
 
@@ -34,6 +35,7 @@ export function useAddProductToCart(source: string) {
 
       const item = toAnalyticsItem(product, requested);
       trackCustomerEvent("add_to_cart", { currency: "COP", items: [item], source, value: getAnalyticsValue([item]) });
+      trackTikTokEvent("AddToCart", tiktokProductParameters([item]));
       markCartTouched();
       onAdded?.();
       openCartSheet(result.item.id);

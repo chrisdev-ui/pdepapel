@@ -38,9 +38,10 @@ export async function skipPrivacyBanner(page: Page, analytics = false) {
       }
     },
     {
-      key: "pdepapel:analytics-consent:v2",
+      key: "pdepapel:analytics-consent:v3",
       value: JSON.stringify({
         analytics,
+        marketing: false,
         updatedAt: "2026-09-04T00:00:00.000Z",
       }),
     },
