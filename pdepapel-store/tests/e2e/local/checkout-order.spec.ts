@@ -84,7 +84,9 @@ test.describe("pedido real contra la administración local", () => {
     expect(stockAfter).toBe(stockBefore - QUANTITY);
   });
 
-  test("el pago rechazado cancela el pedido y no lo marca pagado", async ({
+  // Desde 2026-10-26 un rechazo deja el pedido pendiente 2 h para reintentar
+  // desde /pedido; la conciliación lo cancela después.
+  test("el pago rechazado deja el pedido pendiente para reintentar y no lo marca pagado", async ({
     page,
   }) => {
     const orderId = await placeOnlineOrder(page);
@@ -99,7 +101,7 @@ test.describe("pedido real contra la administración local", () => {
     expect(webhook.status).toBe(200);
 
     const rejected = await readOrderFromAdmin(SEEDED_STORE_ID, orderId);
-    expect(rejected.status).toBe("CANCELLED");
+    expect(rejected.status).toBe("PENDING");
     expect(rejected.paidAt).toBeFalsy();
     expect(rejected.paymentResult).toBe("declined");
 
