@@ -14,7 +14,7 @@ import type { OrderNotificationsView } from "@/lib/order-notifications-view";
 import type { ShipmentMilestone } from "@/lib/shipment-milestones";
 
 const MILESTONE_LABEL: Record<ShipmentMilestone, string> = {
-  guia_creada: "Va en camino (guía creada)",
+  guia_creada: "Ya tiene guía de envío",
   en_camino: "En tránsito",
   en_reparto: "Sale a entrega",
   entregado: "Entregado",

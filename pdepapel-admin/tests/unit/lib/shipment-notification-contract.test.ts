@@ -54,3 +54,52 @@ describe("toda ruta que crea una guía o mueve un envío avisa a la clienta", ()
     },
   );
 });
+
+/**
+ * Regresión del 26 oct (hotfix): el cambio en lote del estado del envío desde
+ * la lista de Pedidos escribía `updateData.shipping` sin avisar, y la prueba de
+ * arriba no lo veía porque solo busca las funciones que crean guías. Toda
+ * escritura de un estado de envío (que no sea volver a «Preparando») tiene que
+ * avisar en el mismo handler exportado que la hace.
+ */
+const SHIPPING_WRITE = /(\bshipping\.(?:update|updateMany|upsert)\(|updateData\.shipping\s*=|\bshipping:\s*\{\s*(?:update|upsert)\s*:)/g;
+const EXPORTED = /^export (?:async )?function \w+|^export const \w+ = async/gm;
+
+function exportedBlocks(text: string): string[] {
+  const starts = Array.from(text.matchAll(EXPORTED), (m) => m.index ?? 0);
+  if (starts.length === 0) return [text];
+  return starts.map((start, i) => text.slice(start, starts[i + 1] ?? text.length));
+}
+
+function writesShippingStatus(block: string): boolean {
+  for (const match of Array.from(block.matchAll(SHIPPING_WRITE))) {
+    const window = block.slice(match.index ?? 0, (match.index ?? 0) + 400);
+    const status = /\bstatus\s*:\s*([^,}\n]+)/.exec(window);
+    if (status && !/^ShippingStatus\.Preparing\b/.test(status[1].trim())) return true;
+  }
+  return false;
+}
+
+describe("toda escritura de un estado de envío avisa en el mismo handler", () => {
+  const offenders = (rel: string) =>
+    exportedBlocks(readFileSync(join(ROOT, rel), "utf8")).filter((block) => writesShippingStatus(block) && !NOTIFIES.test(block));
+  const writers = SOURCES.flatMap((dir) => walk(join(ROOT, dir)))
+    .map((path) => relative(ROOT, path))
+    .filter((rel) => !DEFINITIONS.has(rel) && exportedBlocks(readFileSync(join(ROOT, rel), "utf8")).some(writesShippingStatus));
+
+  it("encuentra la página del pedido y la lista de pedidos", () => {
+    expect(writers).toEqual(expect.arrayContaining(["app/api/[storeId]/orders/[orderId]/route.ts", "app/api/[storeId]/orders/route.ts"]));
+  });
+
+  it.each(writers)("%s avisa donde mueve el envío", (rel) => {
+    expect(offenders(rel).map((block) => block.slice(0, 60))).toEqual([]);
+  });
+
+  it("detecta el caso del lote sin aviso", () => {
+    const bulkWithoutNotice = "export async function PATCH() {\n  if (shipping) {\n    updateData.shipping = { update: { status: shipping } };\n  }\n}\n";
+    expect(writesShippingStatus(bulkWithoutNotice)).toBe(true);
+    expect(NOTIFIES.test(bulkWithoutNotice)).toBe(false);
+    expect(writesShippingStatus("await tx.shipping.update({ data: { status: ShippingStatus.Preparing } })")).toBe(false);
+  });
+});
+

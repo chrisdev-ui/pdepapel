@@ -5,6 +5,7 @@ import {
   PaymentMethod,
   Prisma,
   type PrismaClient,
+  ShippingProvider,
   ShippingStatus,
   OrderType,
 } from "@prisma/client";
@@ -533,6 +534,27 @@ function failedOutcomes(roles: readonly EmailRole[], error: unknown): DeliveryOu
  * Recibe el id, no el pedido: lo carga aquí con `ORDER_EMAIL_INCLUDE`, así
  * ninguna llamada puede volver a mandar un correo sin artículos ni totales.
  */
+/**
+ * «Enviado» de un pedido que ya tiene número de guía de una transportadora: «ya tiene
+ * guía de envío» y los hitos del envío (lib/shipment-notifications.ts) ya se
+ * lo cuentan a la clienta, y el correo de estado le sumaba un segundo aviso
+ * (2026-10-26). Recoger en tienda («Enviado» es su «entregado») y «Enviado»
+ * sin guía siguen yendo por aquí. Los estados del envío nunca salen por aquí.
+ */
+export function statusEmailCoveredByShipmentNotices(
+  order: { shipping: { provider: ShippingProvider; trackingCode: string | null } | null },
+  status: OrderStatus | ShippingStatus,
+): boolean {
+  const shipping = order.shipping;
+  return (
+    status === OrderStatus.SENT &&
+    shipping !== null &&
+    shipping.provider !== ShippingProvider.NONE &&
+    // La misma condición con la que avisa el notificador: sin número de guía no avisa él.
+    Boolean(shipping.trackingCode)
+  );
+}
+
 export const sendOrderEmail = async (
   orderId: string,
   status: OrderStatus | ShippingStatus,
@@ -604,7 +626,11 @@ export const sendOrderEmail = async (
       }
     }
     const customer = built.customer;
-    const to = wanted.has("customer") ? customerRecipient(order, kind) : null;
+    const coveredByShipmentNotices = statusEmailCoveredByShipmentNotices(order, status);
+    if (coveredByShipmentNotices && wanted.has("customer")) {
+      console.info(`[EMAIL] ${kind} pedido #${order.orderNumber}: tiene guía, a la clienta le avisan los hitos del envío`);
+    }
+    const to = wanted.has("customer") && !coveredByShipmentNotices ? customerRecipient(order, kind) : null;
     if (customer && to) {
       jobs.push({ role: "customer", send: () => resend.emails.send({ from: FROM, to: [to], ...customer }) });
     }
@@ -811,8 +837,8 @@ export const sendShippingEmail = async (
 
 const MILESTONE_COPY: Record<ShipmentMilestone, { subject: (orderNumber: string) => string; thanks: string }> = {
   guia_creada: {
-    subject: (n) => `Tu pedido #${n} va en camino`,
-    thanks: "Tu pedido ya está empacado y tiene guía. La transportadora lo recoge en los próximos días hábiles; con el número de guía puedes seguirlo cuando quieras.",
+    subject: (n) => `Tu pedido #${n} ya tiene guía de envío`,
+    thanks: "Tu pedido ya está empacado y tiene guía de envío. Con la transportadora y el número de guía puedes consultar su estado, y te avisamos cuando la transportadora lo recoja.",
   },
   en_camino: {
     subject: (n) => `Tu pedido #${n} está en tránsito`,
@@ -849,6 +875,8 @@ function trackingHrefFor(shipping: EmailOrder["shipping"]): string | null | unde
 /** Arma los avisos de un hito de envío (lib/shipment-notifications.ts), sin mandarlos. */
 export function buildShipmentMilestoneEmails(order: EmailOrder, milestone: ShipmentMilestone): { admin: BuiltEmail; customer: BuiltEmail } {
   const look = milestone === "novedad" ? (order.shipping?.status ?? ShippingStatus.Exception) : MILESTONE_LOOK[milestone];
+  // Con la guía recién creada el paquete sigue en la papelería: no se dice «salió».
+  const customerLook = milestone === "guia_creada" ? "GuideCreated" : look;
   const copy = MILESTONE_COPY[milestone];
   const items = getOrderLineItems(order);
   const summary = getOrderTotalsSummary(order);
@@ -868,7 +896,7 @@ export function buildShipmentMilestoneEmails(order: EmailOrder, milestone: Shipm
     react: OrderNotification({
       name: order.fullName,
       orderNumber: order.orderNumber,
-      status: look,
+      status: customerLook,
       paymentMethod,
       trackingInfo,
       carrierName,

@@ -138,6 +138,12 @@ function getLook(status: string, digital = false): Look {
         pill: "Preparando tu envío",
         headline: () => "Estamos empacando tu pedido.",
       };
+    case "GuideCreated":
+      return {
+        tint: "blue",
+        pill: "Guía creada",
+        headline: () => "Tu pedido ya tiene guía de envío.",
+      };
     case "SENT":
     case "SHIPPED":
     case "Shipped":

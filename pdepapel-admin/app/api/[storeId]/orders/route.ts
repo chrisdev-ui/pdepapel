@@ -90,7 +90,7 @@ import { subscribeFromStoreOrder } from "@/lib/newsletter";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 import { orderLegalConsentData } from "@/lib/legal-consent";
 import { orderWhatsAppOptInData } from "@/lib/whatsapp-opt-in";
-import { queueShipmentMilestone } from "@/lib/shipment-notifications";
+import { queueShipmentMilestone, queueShipmentStatusChange } from "@/lib/shipment-notifications";
 import { linkOrphanGuide } from "@/lib/orphan-guides";
 
 type StoreFreight = {
@@ -1316,6 +1316,7 @@ export async function PATCH(
 
     const issuedGiftCards: IssuedGiftCard[] = [];
     let purgeCacheAfterCommit = false;
+    const shippingBefore = new Map<string, ShippingStatus>();
     const result = await prismadb.$transaction(async (tx) => {
       const orders = await tx.order.findMany({
         where: {
@@ -1339,6 +1340,9 @@ export async function PATCH(
         throw ErrorFactory.NotFound(
           "Algunas órdenes no se han encontrado en esta tienda",
         );
+      }
+      for (const order of orders) {
+        if (order.shipping) shippingBefore.set(order.id, order.shipping.status);
       }
 
       // Misma guarda que la página del pedido: las ventas presenciales
@@ -1625,6 +1629,14 @@ export async function PATCH(
       await deliverGiftCard(issued, { buyerName: buyer?.fullName ?? null });
     }
 
+    // El estado del envío cambiado en lote avisa su hito, como el webhook y Envíos.
+    if (shipping) {
+      for (const order of result) {
+        const previous = shippingBefore.get(order.id);
+        if (previous) queueShipmentStatusChange({ orderId: order.id, storeId: params.storeId, previous, next: shipping, source: "lista de pedidos" });
+      }
+    }
+
     // Send email notifications asynchronously
     runInBackground("correos de la actualización masiva", async () => {
       try {
@@ -1634,9 +1646,6 @@ export async function PATCH(
             await sendOrderEmail(order.id, status, { notifyAdmin: false });
           }
 
-          if (shipping) {
-            await sendOrderEmail(order.id, shipping, { notifyAdmin: false });
-          }
         });
 
         await Promise.allSettled(emailPromises);

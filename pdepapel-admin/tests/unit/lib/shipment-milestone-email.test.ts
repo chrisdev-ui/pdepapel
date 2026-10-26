@@ -36,10 +36,13 @@ function order(shipping: Partial<NonNullable<EmailOrder["shipping"]>>): EmailOrd
 }
 
 describe("correos de hitos de envío", () => {
-  it("guía creada: «va en camino», con transportadora, guía y rastreo de EnvioClick", async () => {
+  it("guía creada: «ya tiene guía de envío», con transportadora, guía y rastreo de EnvioClick, sin decir que salió", async () => {
     const { customer, admin } = buildShipmentMilestoneEmails(order({}), "guia_creada");
-    expect(customer.subject).toBe("Tu pedido #ORD-HITO-1 va en camino");
+    expect(customer.subject).toBe("Tu pedido #ORD-HITO-1 ya tiene guía de envío");
     const html = await render(customer.react);
+    expect(html).toContain("Tu pedido ya tiene guía de envío.");
+    expect(html).not.toMatch(/va en camino|salió de la papelería/);
+    expect(customer.text).not.toMatch(/va en camino|salió/);
     expect(html).toContain("ENVIA");
     expect(html).toContain("014151234567");
     expect(html).toContain("envioclick.com/co/track/014151234567");

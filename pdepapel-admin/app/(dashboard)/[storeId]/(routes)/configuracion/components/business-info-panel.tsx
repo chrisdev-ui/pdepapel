@@ -764,7 +764,7 @@ export function BusinessInfoPanel({
                 name="whatsappTemplateGuide"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Plantilla «va en camino»</FormLabel>
+                    <FormLabel>Plantilla «ya tiene guía»</FormLabel>
                     <FormControl>
                       <Input {...field} disabled={loading} placeholder="guia_creada" autoComplete="off" />
                     </FormControl>

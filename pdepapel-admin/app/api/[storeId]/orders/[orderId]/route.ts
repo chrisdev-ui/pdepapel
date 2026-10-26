@@ -1199,7 +1199,7 @@ export async function PATCH(
         if (!current) return;
 
         // Guía nueva (automática al pagar, o el número de una transportadora
-        // manual escrito a mano): «Tu pedido va en camino», una vez por guía.
+        // manual escrito a mano): «Tu pedido ya tiene guía de envío», una vez por guía.
         if (guideCreation.success || (current.shipping?.trackingCode && current.shipping.trackingCode !== originalTrackingCode)) {
           await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "pedido del panel" });
         }
