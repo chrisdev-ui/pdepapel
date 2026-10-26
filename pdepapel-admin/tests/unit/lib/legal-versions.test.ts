@@ -18,6 +18,14 @@ describe("versiones legales: copia de la tienda", () => {
     expect(KNOWN_LEGAL_VERSIONS.terms[0]).toBe(terms);
   });
 
+  it("acepta la política próxima antes de que sea la vigente (la tienda puede desplegar primero)", () => {
+    expect(LEGAL_VERSIONS.privacy).toBe("2026-10-21");
+    expect(parseLegalVersions({ terms: "2026-10-21", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-21", privacy: "2026-10-26" });
+    expect(orderLegalConsentData({ isStoreOwner: false, legalConsent: { terms: "2026-10-21", privacy: "2026-10-26" }, now: new Date("2026-10-26T15:00:00Z") })).toMatchObject({
+      legalPrivacyVersion: "2026-10-26",
+    });
+  });
+
   it("solo acepta pares conocidos", () => {
     expect(parseLegalVersions({ terms: "2026-10-21", privacy: "2026-10-21" })).toEqual({ terms: "2026-10-21", privacy: "2026-10-21" });
     for (const value of [null, "2026-10-21", {}, { terms: "2026-10-21" }, { terms: "2099-01-01", privacy: "2026-10-21" }, { terms: 1, privacy: 2 }]) {

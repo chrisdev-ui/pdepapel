@@ -4,11 +4,14 @@
  * un despliegue la tienda puede ir una versión adelante o atrás; por eso se
  * aceptan las anteriores. Al publicar una política nueva se agrega su fecha
  * al principio de la lista (tests/unit/lib/legal-versions.test.ts compara con
- * la tienda).
+ * la tienda). Una fecha que va a salir en el próximo despliegue se agrega
+ * antes AL FINAL: aceptada pero no vigente, así la tienda puede llegar primero
+ * sin que un pedido quede sin consentimiento.
  */
 export const KNOWN_LEGAL_VERSIONS = {
   terms: ["2026-10-21"],
-  privacy: ["2026-10-21"],
+  // 2026-10-26: «Publicidad» (TikTok); pasa al principio cuando la tienda la publique.
+  privacy: ["2026-10-21", "2026-10-26"],
 } as const;
 
 export const LEGAL_VERSIONS = {
