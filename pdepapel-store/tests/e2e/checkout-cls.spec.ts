@@ -216,7 +216,6 @@ async function fillContact(page: Page) {
   await page.getByLabel(/Nombre y apellidos/).fill("Paula Andrea Restrepo");
   await page.getByLabel(/Correo electrónico/).fill("paula@ejemplo.com");
   await page.getByRole("textbox", { name: /Teléfono/ }).fill("3025556677");
-  await page.getByLabel(/Documento de identidad/).fill("1047452823");
   await next.click();
   await expect(
     page.getByRole("heading", { name: "¿A dónde lo enviamos?" }),

@@ -2,11 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { PaymentMethodSelector } from "@/components/ui/payment-method-selector";
 import { PresaleCartNotice } from "@/components/presale-cart-notice";
 import { WelcomeBenefitCard } from "@/components/welcome-benefit-card";
@@ -284,7 +286,7 @@ export const PaymentInfoStep = ({
               <p className="text-muted-foreground">{values.telephone}</p>
               {values.documentId && (
                 <p className="text-muted-foreground">
-                  Documento {values.documentId}
+                  Factura a nombre de {values.documentId}
                 </p>
               )}
             </div>
@@ -383,6 +385,34 @@ export const PaymentInfoStep = ({
           </p>
         ) : null}
       </div>
+
+      <FormField
+        control={form.control}
+        name="documentId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-foreground/90">
+              ¿Necesitas factura a tu nombre? (cédula o NIT)
+            </FormLabel>
+            <FormControl>
+              <Input
+                className="bg-blue-purple/20 invalid:bg-pink-froly/20"
+                disabled={isLoading}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="Opcional"
+                {...field}
+                value={field.value ?? ""}
+              />
+            </FormControl>
+            <FormDescription>
+              Opcional. Si lo dejas vacío, la factura sale a consumidor final.
+            </FormDescription>
+            <FormMessage reserveSpace />
+          </FormItem>
+        )}
+      />
     </div>
   );
 };

@@ -42,6 +42,7 @@ import {
 } from "@/lib/checkout-analytics";
 import {
   CHECKOUT_FIELD_STEPS,
+  ADDRESS_MAX_LENGTH,
   CHECKOUT_TOTAL_STEPS,
   getFirstInvalidStep,
   getStepFields,
@@ -156,7 +157,10 @@ const formSchema = z
       .string()
       .trim()
       .min(2, "Escribe tu dirección con número")
-      .max(50, "La dirección debe tener menos de 50 caracteres"),
+      .max(
+        ADDRESS_MAX_LENGTH,
+        "Máximo 50 caracteres: pon la torre, el apartamento o el barrio en los campos de abajo",
+      ),
     address2: optionalText(2, 50, "El apartamento o torre"),
     neighborhood: optionalText(2, 30, "El barrio"),
     addressReference: optionalText(2, 25, "La referencia"),
@@ -178,12 +182,19 @@ const formSchema = z
         8,
         "Elige tu ciudad y departamento de la lista. Si no aparece, escríbenos por WhatsApp.",
       ),
+    // Solo para quien pide factura a su nombre. Nada más lo usa: ni la
+    // transportadora ni las pasarelas.
     documentId: z
       .string()
-      .trim()
-      .min(5, "Escribe el número de tu documento")
-      .max(15, "El documento debe tener menos de 15 caracteres")
-      .regex(/^[A-Za-z0-9.-]+$/, "Escribe solo números, sin espacios"),
+      .transform((value) => value.replace(/[\s.]/g, ""))
+      .pipe(
+        z
+          .string()
+          .max(15, "El documento debe tener menos de 15 caracteres")
+          .regex(/^[A-Za-z0-9-]*$/, "Escribe solo números y letras")
+          .refine((value) => value.length === 0 || value.length >= 5, "Revisa el número: tiene muy pocos dígitos"),
+      )
+      .optional(),
     saveAddress: z.boolean().default(false),
     savedAddressId: z.string().max(191).optional().or(z.literal("")),
     addressLabel: z
@@ -417,7 +428,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           storedFormData.telephone ?? currentUser?.telephone,
         ),
         email: storedFormData.email ?? currentUser?.email ?? "",
-        documentId: storedFormData.documentId ?? "",
+        documentId: "",
         address1: storedFormData.address1 ?? "",
         address2: storedFormData.address2 ?? "",
         neighborhood: storedFormData.neighborhood ?? "",
@@ -1201,7 +1212,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         neighborhood,
         addressReference,
         company,
-        documentId,
+        ...(documentId ? { documentId } : {}),
         shippingProvider,
         shippingOptionType,
         envioClickIdRate,
@@ -1652,6 +1663,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                           form={form}
                           isLoading={isPendingSubmit}
                           isGuest={isGuest}
+                          freeShippingThreshold={freeShippingThreshold}
+                          freeShipping={freeShipping}
                         />
                       )}
                       {currentStep === 2 && (

@@ -1,3 +1,4 @@
+import { filterLocations, findExactLocation } from "@/lib/location-search";
 import { cn } from "@/lib/utils";
 import { LocationOption } from "@/types";
 import { Command as CommandPrimitive } from "cmdk";
@@ -11,6 +12,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { Button } from "./button";
 import {
@@ -31,6 +33,10 @@ interface AutocompleteLocationProps {
   isLoading?: boolean;
   onSearch?: (value: string) => void;
   emptyMessage?: string;
+  /** Lo que se ofrece debajo de «No se encontraron ciudades» (p. ej. WhatsApp). */
+  emptyAction?: ReactNode;
+  /** Aviso bajo el campo cuando hay texto escrito pero ninguna ciudad elegida. */
+  unselectedHint?: string;
   defaultDisplayValue?: string;
   /**
    * Accessible name of the text input. cmdk owns the input's id and
@@ -43,13 +49,6 @@ interface AutocompleteLocationProps {
   "aria-invalid"?: boolean;
 }
 
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
 export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
   options,
   value,
@@ -60,6 +59,8 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
   placeholder = "Seleccionar ciudad...",
   isLoading = false,
   emptyMessage = "No se encontraron ciudades.",
+  emptyAction,
+  unselectedHint = "Toca tu ciudad en la lista para elegirla.",
   defaultDisplayValue,
   label = "Ciudad y departamento",
   id,
@@ -68,134 +69,153 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
+  const hintId = useId();
 
   const [isOpen, setOpen] = useState(false);
   const [selected, setSelected] = useState<LocationOption | undefined>(
     () => options?.find((location) => location.value === value),
   );
-
   const [inputValue, setInputValue] = useState<string>(
     selected?.label || defaultDisplayValue || "",
   );
+  const [showHint, setShowHint] = useState(false);
+
+  // El valor que este mismo campo acaba de soltar al editar el texto: ese
+  // cambio a vacío no debe borrar lo que la persona está escribiendo.
+  const releasedByTypingRef = useRef(false);
+  const previousValueRef = useRef(value);
 
   const deferredInputValue = useDeferredValue(inputValue);
 
-  // Sync internal state when value or options change (e.g., after page refresh when options load)
+  // Solo dos cosas cambian el texto desde fuera: llega la ciudad guardada
+  // (al volver al checkout) o alguien la borra. Nunca la llegada de
+  // resultados: antes eso vaciaba el campo en cada letra.
   useEffect(() => {
-    if (value && options && options.length > 0) {
-      const matchedLocation = options.find(
-        (location) => location.value === value,
-      );
+    const previous = previousValueRef.current;
+    previousValueRef.current = value;
+
+    if (value) {
+      const matchedLocation = options?.find((location) => location.value === value);
       if (matchedLocation && matchedLocation.value !== selected?.value) {
         setSelected(matchedLocation);
         setInputValue(matchedLocation.label);
+      } else if (!matchedLocation && value !== previous && defaultDisplayValue) {
+        // Ciudad puesta desde fuera (dirección guardada) que no está en la lista visible.
+        setInputValue(defaultDisplayValue);
       }
-    } else if (!value) {
-      // Clear internal state if value is cleared externally
+      return;
+    }
+
+    if (previous && !value) {
+      if (releasedByTypingRef.current) {
+        releasedByTypingRef.current = false;
+        return;
+      }
       setSelected(undefined);
       setInputValue("");
     }
-  }, [value, options, selected?.value]);
+  }, [value, options, selected?.value, defaultDisplayValue]);
 
-  // Memoize filtered results to avoid re-filtering on every render
   const filteredOptions = useMemo(() => {
-    // Show first 50 results if input is empty or too short
-    if (!deferredInputValue || deferredInputValue.trim().length < 2) {
-      return options?.slice(0, 50);
+    const list = options ?? [];
+    if (!deferredInputValue || deferredInputValue.trim().length < 2 || selected?.label === deferredInputValue) {
+      return list.slice(0, 50);
     }
+    return filterLocations(list, deferredInputValue).slice(0, 100);
+  }, [options, deferredInputValue, selected?.label]);
 
-    const normalized = normalizeText(deferredInputValue);
+  const selectOption = useCallback(
+    (option: LocationOption) => {
+      setInputValue(option.label);
+      setSelected(option);
+      setShowHint(false);
+      onChange(option.value, option);
+    },
+    [onChange],
+  );
 
-    // Filter and limit to 100 results for performance
-    const matches = options?.filter((option) => {
-      const normalizedCity = normalizeText(option.city);
-      const normalizedDepartment = normalizeText(option.department);
-      const normalizedDaneCode = option.daneCode;
-
-      return (
-        normalizedCity.includes(normalized) ||
-        normalizedDepartment.includes(normalized) ||
-        normalizedDaneCode.includes(normalized)
-      );
-    });
-
-    // Prioritize exact matches and matches at the beginning
-    matches.sort((a, b) => {
-      const aCityNorm = normalizeText(a.city);
-      const bCityNorm = normalizeText(b.city);
-
-      // Exact match comes first
-      if (aCityNorm === normalized) return -1;
-      if (bCityNorm === normalized) return 1;
-
-      // Starts with query comes next
-      if (aCityNorm.startsWith(normalized)) return -1;
-      if (bCityNorm.startsWith(normalized)) return 1;
-
-      // Alphabetical order
-      return a.city.localeCompare(b.city);
-    });
-
-    return matches.slice(0, 100);
-  }, [options, deferredInputValue]);
+  /** Si lo escrito es exactamente una ciudad de la lista, se elige sola. */
+  const selectExactMatch = useCallback(() => {
+    const exact = findExactLocation(options ?? [], inputValue);
+    if (exact) {
+      selectOption(exact);
+      return true;
+    }
+    return false;
+  }, [inputValue, options, selectOption]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       const input = inputRef.current;
-      if (!input) {
-        return;
-      }
+      if (!input) return;
 
-      // Keep the options displayed when the user is typing
-      if (!isOpen) {
-        setOpen(true);
-      }
+      if (!isOpen) setOpen(true);
 
-      // This is not a default behaviour of the <input /> field
-      if (event.key === "Enter" && input.value !== "") {
-        const optionToSelect = filteredOptions.find(
-          (option) => option.label === input.value,
-        );
+      if (event.key === "Enter" && input.value !== "" && selected?.label !== input.value) {
+        const optionToSelect =
+          filteredOptions.find((option) => option.label === input.value) ??
+          findExactLocation(options ?? [], input.value);
         if (optionToSelect) {
-          setSelected(optionToSelect);
-          onChange(optionToSelect.value, optionToSelect);
+          event.preventDefault();
+          selectOption(optionToSelect);
         }
       }
 
-      if (event.key === "Escape") {
-        input.blur();
-      }
+      if (event.key === "Escape") input.blur();
     },
-    [isOpen, filteredOptions, onChange],
+    [isOpen, filteredOptions, options, selected?.label, selectOption],
   );
 
   const handleBlur = useCallback(() => {
     setOpen(false);
-    setInputValue(selected?.label || "");
-  }, [selected]);
+    if (!inputValue.trim()) {
+      setShowHint(false);
+      return;
+    }
+    if (selected && selected.label === inputValue) return;
+    // El texto se queda: borrarlo era lo que hacía que la ciudad «desapareciera».
+    setShowHint(!selectExactMatch());
+  }, [inputValue, selected, selectExactMatch]);
 
   const handleSelectOption = useCallback(
     (selectedOption: LocationOption) => {
-      setInputValue(selectedOption.label);
-      setSelected(selectedOption);
-      onChange(selectedOption.value, selectedOption);
-
+      selectOption(selectedOption);
       // This is a hack to prevent the input from being focused after the user selects an option
       // We can call this hack: "The next tick"
       setTimeout(() => {
         inputRef?.current?.blur();
       }, 0);
     },
-    [onChange],
+    [selectOption],
+  );
+
+  const handleValueChange = useCallback(
+    (text: string) => {
+      setInputValue(text);
+      setShowHint(false);
+      onSearch?.(text);
+      // Al cambiar el texto de una ciudad ya elegida, esa ciudad deja de valer.
+      if (selected && text !== selected.label) {
+        setSelected(undefined);
+        if (value) {
+          releasedByTypingRef.current = true;
+          onChange("", undefined);
+        }
+      }
+    },
+    [onChange, onSearch, selected, value],
   );
 
   const handleClear = useCallback(() => {
     setInputValue("");
     setSelected(undefined);
+    setShowHint(false);
     onChange("", undefined);
     onClear?.();
     inputRef?.current?.focus();
   }, [onChange, onClear]);
+
+  const describedBy = [ariaDescribedBy, showHint ? hintId : null].filter(Boolean).join(" ") || undefined;
 
   return (
     <CommandPrimitive
@@ -207,10 +227,7 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
         <CommandInput
           ref={inputRef}
           value={inputValue}
-          onValueChange={(val) => {
-            setInputValue(val);
-            onSearch?.(val);
-          }}
+          onValueChange={handleValueChange}
           onBlur={handleBlur}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
@@ -220,17 +237,17 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
           aria-expanded={isOpen}
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-describedby={ariaDescribedBy}
+          aria-describedby={describedBy}
           aria-invalid={ariaInvalid}
           autoCapitalize="words"
-          className={selected ? "pr-11" : undefined}
+          className={selected || inputValue ? "pr-11" : undefined}
         />
-        {selected && !disabled && (
+        {(selected || inputValue) && !disabled && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="Borrar ciudad seleccionada"
+            aria-label="Borrar ciudad"
             className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full p-0 hover:bg-muted"
             onClick={handleClear}
             // Fires before the input blur closes the list on touch screens.
@@ -240,6 +257,11 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
           </Button>
         )}
       </div>
+      {showHint && !isOpen ? (
+        <p id={hintId} role="status" className="mt-1.5 text-sm font-medium text-blue-yankees">
+          {unselectedHint}
+        </p>
+      ) : null}
       <div className="relative mt-1">
         <div
           id={listId}
@@ -249,14 +271,14 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
           )}
         >
           <CommandList className="rounded-lg ring-1 ring-slate-200">
-            {isLoading ? (
+            {isLoading && filteredOptions.length === 0 ? (
               <CommandPrimitive.Loading>
                 <div className="p-1">
                   <Skeleton className="h-8 w-full" />
                 </div>
               </CommandPrimitive.Loading>
             ) : null}
-            {filteredOptions.length > 0 && !isLoading ? (
+            {filteredOptions.length > 0 ? (
               <CommandGroup className="max-h-[300px] overflow-y-auto">
                 {filteredOptions.map((location) => {
                   const isSelected = selected?.value === location.value;
@@ -296,8 +318,17 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
               </CommandGroup>
             ) : null}
             {!isLoading ? (
-              <CommandPrimitive.Empty className="select-none rounded-sm px-2 py-3 text-center text-sm">
-                {emptyMessage}
+              <CommandPrimitive.Empty className="select-none rounded-sm px-3 py-3 text-center text-sm">
+                <p>{emptyMessage}</p>
+                {emptyAction ? (
+                  <div
+                    className="mt-2"
+                    // El enlace se toca antes de que el campo pierda el foco y cierre la lista.
+                    onPointerDown={(event) => event.preventDefault()}
+                  >
+                    {emptyAction}
+                  </div>
+                ) : null}
               </CommandPrimitive.Empty>
             ) : null}
           </CommandList>

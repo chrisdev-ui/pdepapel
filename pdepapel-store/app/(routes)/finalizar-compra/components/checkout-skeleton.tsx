@@ -30,16 +30,16 @@ export const CheckoutSkeleton = ({ isGuest = true }: { isGuest?: boolean }) => (
         <MultiStepForm steps={FORM_STEPS} currentStep={1}>
           <div className="space-y-6">
             <div className="relative min-h-[300px]">
-              <div className="space-y-6">
+              <div className="space-y-5 sm:space-y-6">
                 <div className="space-y-1">
                   <Skeleton className="h-8 w-40 sm:h-9" />
                   <Skeleton className="h-5 w-full max-w-sm" />
                 </div>
 
-                {isGuest && <Skeleton className="h-[68px] w-full rounded-xl" />}
+                {isGuest && <Skeleton className="h-[38px] w-full rounded-xl" />}
 
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  {Array.from({ length: 4 }, (_, index) => (
+                  {Array.from({ length: 3 }, (_, index) => (
                     <div key={index} className="space-y-2">
                       <Skeleton className="h-5 w-32" />
                       <Skeleton className="h-11 w-full" />

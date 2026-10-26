@@ -7,11 +7,13 @@
  */
 export const CHECKOUT_TOTAL_STEPS = 3;
 
+/** Lo que acepta EnvioClick en la dirección principal (`pdepapel-admin/lib/envioclick.ts`). */
+export const ADDRESS_MAX_LENGTH = 50;
+
 export const CHECKOUT_FIELD_STEPS: Record<string, number> = {
   fullName: 1,
   email: 1,
   telephone: 1,
-  documentId: 1,
   newsletterOptIn: 1,
   isGift: 1,
   giftRecipientName: 1,
@@ -34,6 +36,8 @@ export const CHECKOUT_FIELD_STEPS: Record<string, number> = {
   envioClickIdRate: 2,
   shipping: 2,
   paymentMethod: 3,
+  // Solo si pide factura a su nombre: va con el pago, no con los datos.
+  documentId: 3,
   couponCode: 3,
   giftCardCode: 3,
 };

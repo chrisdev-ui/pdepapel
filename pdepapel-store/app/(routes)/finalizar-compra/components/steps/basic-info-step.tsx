@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { currencyFormatter } from "@/lib/utils";
 import { useAuth } from "@clerk/nextjs";
-import { Gift, Lock, UserRound } from "lucide-react";
+import { Gift, Lock, Truck, UserRound } from "lucide-react";
 import { UseFormReturn, useWatch } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
 import { StorefrontLink } from "@/components/storefront-link";
@@ -24,12 +25,27 @@ interface BasicInfoStepProps {
   isLoading?: boolean;
   /** Server's answer, used until Clerk loads so the hint does not pop in late. */
   isGuest?: boolean;
+  /** Umbral de envío gratis de Configuración (COP); null = no hay. */
+  freeShippingThreshold?: number | null;
+  /** El pedido ya alcanza el envío gratis. */
+  freeShipping?: boolean;
+}
+
+/** Lo primero que se pregunta quien entra al checkout: cuánto cuesta el envío. */
+export function shippingTeaser(threshold: number | null | undefined, freeShipping: boolean): string {
+  if (freeShipping) return "Tu envío es gratis.";
+  if (threshold && threshold > 0) {
+    return `Envío gratis desde ${currencyFormatter.format(threshold)} · el valor exacto en el siguiente paso`;
+  }
+  return "El valor del envío, en el siguiente paso.";
 }
 
 export const BasicInfoStep = ({
   form,
   isLoading,
   isGuest = true,
+  freeShippingThreshold = null,
+  freeShipping = false,
 }: BasicInfoStepProps) => {
   const { isLoaded, userId } = useAuth();
   const showSignInHint = isLoaded ? !userId : isGuest;
@@ -37,29 +53,29 @@ export const BasicInfoStep = ({
   const giftMessage = useWatch({ control: form.control, name: "giftMessage" });
 
   return (
-    <div className="space-y-6 duration-500 animate-in fade-in-0 slide-in-from-right-4">
+    <div className="space-y-5 duration-500 animate-in fade-in-0 slide-in-from-right-4 sm:space-y-6">
       <div className="space-y-1">
         <h2 className="font-serif text-2xl font-bold text-blue-yankees sm:text-3xl">
           Tus datos
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Solo lo necesario para contactarte y generar la guía de envío.
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="checkout-shipping-teaser">
+          <Truck className="h-4 w-4 shrink-0 text-blue-yankees" aria-hidden="true" />
+          {shippingTeaser(freeShippingThreshold, freeShipping)}
         </p>
       </div>
 
       {showSignInHint && (
-        <p className="flex items-center gap-3 rounded-xl border border-blue-baby bg-blue-purple/10 p-3 text-sm text-blue-yankees">
-          <UserRound className="h-5 w-5 shrink-0" aria-hidden="true" />
+        <p className="flex items-center gap-2 rounded-xl border border-blue-baby bg-blue-purple/10 px-3 py-2 text-sm text-blue-yankees">
+          <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            ¿Ya tienes cuenta?{" "}
+            ¿Tienes cuenta?{" "}
             <StorefrontLink
               href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${encodeURIComponent(STOREFRONT_ROUTES.checkout)}`}
               className="font-semibold underline underline-offset-4"
             >
               Inicia sesión
             </StorefrontLink>{" "}
-            y completamos tus datos y direcciones. También puedes comprar como
-            invitada.
+            y llenamos tus datos.
           </span>
         </p>
       )}
@@ -137,32 +153,6 @@ export const BasicInfoStep = ({
               </FormControl>
               <FormDescription>
                 Te escribimos solo si hay novedades con tu pedido.
-              </FormDescription>
-              <FormMessage reserveSpace />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="documentId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground/90">
-                Documento de identidad *
-              </FormLabel>
-              <FormControl>
-                <Input
-                  className="bg-blue-purple/20 invalid:bg-pink-froly/20"
-                  disabled={isLoading}
-                  inputMode="numeric"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="Ej. 1234567890"
-                  {...field}
-                />
-              </FormControl>
-              <FormDescription>
-                Lo pide la transportadora para entregar el paquete.
               </FormDescription>
               <FormMessage reserveSpace />
             </FormItem>

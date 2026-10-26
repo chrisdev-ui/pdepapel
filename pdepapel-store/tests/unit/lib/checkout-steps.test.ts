@@ -37,8 +37,13 @@ describe("getFirstInvalidStep", () => {
 describe("getStepFields", () => {
   it("agrupa los campos del paso de contacto", () => {
     expect(getStepFields(1)).toEqual(
-      expect.arrayContaining(["fullName", "email", "telephone", "documentId"]),
+      expect.arrayContaining(["fullName", "email", "telephone"]),
     );
+  });
+
+  it("la cédula ya no se pide en los datos: va con el pago, solo para factura", () => {
+    expect(getStepFields(1)).not.toContain("documentId");
+    expect(getStepFields(3)).toContain("documentId");
   });
 
   it("cubre todos los campos del formulario", () => {

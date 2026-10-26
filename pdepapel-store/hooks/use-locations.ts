@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import {
   EMPTY_DANE_RESPONSE,
@@ -27,10 +27,16 @@ async function fetchLocations(
   return await response.json();
 }
 
+/** Con menos de dos letras se muestran las ciudades frecuentes, no las 1.100. */
+export const LOCATION_QUERY_MIN_LENGTH = 2;
+
 export function useLocations(q?: string, limit: number = 50) {
+  const query = q && q.trim().length >= LOCATION_QUERY_MIN_LENGTH ? q.trim() : undefined;
   return useQuery({
-    queryKey: ["locations", q, limit],
-    queryFn: ({ signal }) => fetchLocations(q, limit, signal),
+    queryKey: ["locations", query, limit],
+    queryFn: ({ signal }) => fetchLocations(query, limit, signal),
+    // Mientras llega la búsqueda nueva se ve la anterior: la lista no parpadea.
+    placeholderData: keepPreviousData,
     staleTime: 60 * 60 * 1000, // 1 hour
     refetchOnWindowFocus: false,
     refetchOnMount: false,

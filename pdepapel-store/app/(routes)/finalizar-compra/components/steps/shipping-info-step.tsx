@@ -24,7 +24,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ShippingStatus } from "@/constants";
 import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useCityNotFoundReport } from "@/hooks/use-city-not-found-report";
 import { useLocations } from "@/hooks/use-locations";
+import { ADDRESS_MAX_LENGTH } from "@/lib/checkout-steps";
+import { buildWhatsAppUrl } from "@/lib/whatsapp-prefill";
 import { useShippingQuote } from "@/hooks/use-shipping-quote";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { normalizePhoneForInput } from "@/lib/phone";
@@ -58,6 +61,9 @@ import {
 } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
+import type { LocationOption } from "@/types";
+
+const EMPTY_LOCATIONS: LocationOption[] = [];
 
 interface ShippingInfoStepProps {
   form: UseFormReturn<CheckoutFormValue>;
@@ -134,8 +140,19 @@ export const ShippingInfoStep = ({
   const ratesLabelId = useId();
   const modeLabelId = useId();
 
-  const { data: { results: locations } = {}, isLoading: isLoadingLocations } =
-    useLocations(debouncedQuery);
+  const {
+    data: { results: locations } = {},
+    isLoading: isLoadingLocations,
+    isPlaceholderData: isStaleLocationList,
+  } = useLocations(debouncedQuery);
+  const locationOptions = locations ?? EMPTY_LOCATIONS;
+
+  useCityNotFoundReport({
+    query: debouncedQuery,
+    results: locations,
+    isLoading: isLoadingLocations,
+    isStale: isStaleLocationList,
+  });
 
   const selectedDaneCode = form.watch("daneCode");
   const isGift = form.watch("isGift");
@@ -157,6 +174,12 @@ export const ShippingInfoStep = ({
     address2 || neighborhood || company || addressReference,
   );
   const [showDetails, setShowDetails] = useState(hasOptionalDetails);
+  // Una dirección larga casi siempre trae torre o apartamento: se abre el
+  // espacio donde van, en vez de solo marcar el error.
+  const addressTooLong = (address1?.length ?? 0) > ADDRESS_MAX_LENGTH;
+  useEffect(() => {
+    if (addressTooLong) setShowDetails(true);
+  }, [addressTooLong]);
   useEffect(() => {
     if (hasOptionalDetails) setShowDetails(true);
   }, [hasOptionalDetails]);
@@ -703,7 +726,7 @@ export const ShippingInfoStep = ({
                 </FormLabel>
                 <FormControl>
                   <AutocompleteLocation
-                    options={locations || []}
+                    options={locationOptions}
                     value={field.value || ""}
                     defaultDisplayValue={
                       selectedCity && selectedDept
@@ -717,8 +740,21 @@ export const ShippingInfoStep = ({
                         form.setValue("city", location.city);
                         form.setValue("department", location.department);
                         await form.trigger(["city", "department", "daneCode"]);
+                      } else {
+                        form.setValue("city", "");
+                        form.setValue("department", "");
                       }
                     }}
+                    emptyAction={
+                      <a
+                        href={buildWhatsAppUrl({ pageType: "general" })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-blue-yankees underline underline-offset-4"
+                      >
+                        ¿No aparece? Escríbenos por WhatsApp
+                      </a>
+                    }
                     onClear={() => {
                       form.setValue("city", "");
                       form.setValue("department", "");

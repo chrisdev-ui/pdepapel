@@ -89,7 +89,6 @@ async function fillContact(page: Page) {
   await page.getByLabel(/Nombre y apellidos/).fill("Paula Andrea Restrepo");
   await page.getByLabel(/Correo electrónico/).fill("paula@ejemplo.com");
   await page.getByRole("textbox", { name: /Teléfono/ }).fill("3025556677");
-  await page.getByLabel(/Documento de identidad/).fill("1047452823");
   await next.click();
   await expect(
     page.getByRole("heading", { name: "¿A dónde lo enviamos?" }),
@@ -131,7 +130,8 @@ test.describe("checkout en tres pasos", () => {
     await next.click();
     await expect(page.getByText("Escribe tu nombre y apellidos")).toBeVisible();
     await expect(page.getByText(PHONE_ERROR)).toBeVisible();
-    await expect(page.getByText("Escribe el número de tu documento")).toBeVisible();
+    // La cédula ya no se pide en los datos (solo en el pago, si quiere factura).
+    await expect(page.getByLabel(/Documento de identidad/)).toHaveCount(0);
 
     await fillContact(page);
     await expect(page.getByText("Paso 2", { exact: false })).toHaveCount(0);

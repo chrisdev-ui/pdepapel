@@ -1,7 +1,10 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from "vitest";
 
 import {
   CHECKOUT_FORM_MAX_AGE_MS,
+  CHECKOUT_STORAGE_VERSION,
   expireCheckoutStorage,
   isPendingOrderUsable,
   migrateCheckoutStorage,
@@ -67,7 +70,26 @@ describe("migrateCheckoutStorage", () => {
 
   it("no toca un estado ya en la versión actual", () => {
     const state = { formData: { fullName: "Ana" }, currentStep: 2 };
-    expect(migrateCheckoutStorage(state, 2)).toBe(state);
+    expect(migrateCheckoutStorage(state, CHECKOUT_STORAGE_VERSION)).toBe(state);
+  });
+
+  it("de la versión 2 a la 3 borra la cédula guardada y deja lo demás", () => {
+    const state = {
+      formData: { fullName: "Ana", documentId: "1047452823", city: "MEDELLÍN" },
+      currentStep: 2,
+    };
+    const migrated = migrateCheckoutStorage(state, 2);
+    expect(migrated.formData).toEqual({ fullName: "Ana", city: "MEDELLÍN" });
+    expect(migrated.currentStep).toBe(2);
+  });
+
+  it("la cédula nunca sobrevive a la hidratación ni a guardar el formulario", () => {
+    expect(
+      sanitizeCheckoutStorage({ formData: { fullName: "Ana", documentId: "123456" } }).formData,
+    ).toEqual({ fullName: "Ana" });
+    useCheckoutStore.getState().setFormData({ fullName: "Ana", documentId: "123456" } as never);
+    expect(useCheckoutStore.getState().formData).not.toHaveProperty("documentId");
+    expect(window.localStorage.getItem("checkout-storage") ?? "").not.toContain("123456");
   });
 });
 

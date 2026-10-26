@@ -24,7 +24,17 @@ export const PENDING_ORDER_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 /** Form data saved longer ago than this is dropped on the next visit. */
 export const CHECKOUT_FORM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-export const CHECKOUT_STORAGE_VERSION = 2;
+// 3: la cédula deja de guardarse en el navegador (2026-10-26).
+export const CHECKOUT_STORAGE_VERSION = 3;
+
+/** Campos que nunca se escriben en `localStorage`. */
+const UNPERSISTED_FORM_FIELDS = ["documentId"] as const;
+
+function withoutUnpersistedFields<T extends Record<string, unknown>>(formData: T): T {
+  const copy = { ...formData };
+  for (const field of UNPERSISTED_FORM_FIELDS) delete copy[field];
+  return copy;
+}
 
 interface CheckoutStore {
   currentStep: number;
@@ -95,7 +105,11 @@ export function normalizeCouponState(value: unknown): CouponState {
 export function sanitizeCheckoutStorage(
   state: PersistedCheckoutState,
 ): PersistedCheckoutState {
-  return { ...state, couponState: normalizeCouponState(state.couponState) };
+  return {
+    ...state,
+    ...(state.formData ? { formData: withoutUnpersistedFields(state.formData) } : {}),
+    couponState: normalizeCouponState(state.couponState),
+  };
 }
 
 /**
@@ -110,6 +124,9 @@ export function migrateCheckoutStorage(
 ): PersistedCheckoutState {
   const state = (persisted ?? {}) as PersistedCheckoutState;
   if (version >= CHECKOUT_STORAGE_VERSION) return state;
+  if (version === 2) {
+    return { ...state, formData: withoutUnpersistedFields(state.formData ?? {}) };
+  }
 
   const { firstName, lastName, ...restFormData } = state.formData ?? {};
   const fullName =
@@ -152,7 +169,7 @@ export const useCheckoutStore = create(
       setCurrentStep: (step) => set({ currentStep: step, updatedAt: Date.now() }),
       setFormData: (data) =>
         set((state) => ({
-          formData: { ...state.formData, ...data },
+          formData: withoutUnpersistedFields({ ...state.formData, ...data }),
           updatedAt: Date.now(),
         })),
       setCouponState: (state) =>
