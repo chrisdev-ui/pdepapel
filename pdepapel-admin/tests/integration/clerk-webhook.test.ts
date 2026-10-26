@@ -58,7 +58,7 @@ describe("webhook de Clerk: consentimiento al crear la cuenta", () => {
     expect(body).toEqual({ ok: true, recorded: true });
     assertNoForbiddenKeys(body, "viewer");
     const [row] = await records(event.data.id as string);
-    expect(row).toMatchObject({ channel: "REGISTRO", termsVersion: "2026-10-21", privacyVersion: "2026-10-21", evidence: "legal_accepted_at" });
+    expect(row).toMatchObject({ channel: "REGISTRO", termsVersion: "2026-10-21", privacyVersion: "2026-10-26", evidence: "legal_accepted_at" });
     expect(row.consentedAt.getTime()).toBe(1792630123000);
     expect(JSON.stringify(row)).not.toMatch(/persona@prueba|Persona/);
   });

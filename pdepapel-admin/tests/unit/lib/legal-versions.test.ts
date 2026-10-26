@@ -18,8 +18,9 @@ describe("versiones legales: copia de la tienda", () => {
     expect(KNOWN_LEGAL_VERSIONS.terms[0]).toBe(terms);
   });
 
-  it("acepta la política próxima antes de que sea la vigente (la tienda puede desplegar primero)", () => {
-    expect(LEGAL_VERSIONS.privacy).toBe("2026-10-21");
+  it("la política 2026-10-26 es la vigente y la anterior se sigue aceptando (la tienda puede llegar después)", () => {
+    expect(LEGAL_VERSIONS.privacy).toBe("2026-10-26");
+    expect(parseLegalVersions({ terms: "2026-10-21", privacy: "2026-10-21" })).toEqual({ terms: "2026-10-21", privacy: "2026-10-21" });
     expect(parseLegalVersions({ terms: "2026-10-21", privacy: "2026-10-26" })).toEqual({ terms: "2026-10-21", privacy: "2026-10-26" });
     expect(orderLegalConsentData({ isStoreOwner: false, legalConsent: { terms: "2026-10-21", privacy: "2026-10-26" }, now: new Date("2026-10-26T15:00:00Z") })).toMatchObject({
       legalPrivacyVersion: "2026-10-26",
