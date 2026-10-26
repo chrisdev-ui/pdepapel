@@ -4,6 +4,11 @@
  * Caché con Upstash Redis para producción en Vercel
  */
 
+import {
+  locationSearchTokens,
+  matchesLocationTokens,
+  rankLocations,
+} from "@/lib/dane-search";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { Redis } from "@upstash/redis";
@@ -360,7 +365,8 @@ export async function getCacheStats() {
 }
 
 /**
- * Busca ubicaciones por query general (ciudad o ciudad + departamento)
+ * Busca ubicaciones por palabras (ciudad, departamento o los dos, con o sin
+ * «D.C.»). Regla compartida con la tienda en `lib/dane-search.ts`.
  * Útil para autocomplete
  */
 export async function searchLocations(
@@ -369,49 +375,36 @@ export async function searchLocations(
 ): Promise<DaneLocation[]> {
   try {
     const allLocations = await getAllLocationsWithCache();
+    const tokens = locationSearchTokens(query);
 
-    if (!query || query.trim().length < 2) {
-      return allLocations;
+    if (tokens.length === 0) {
+      return allLocations.slice(0, limit);
     }
 
-    const normalizedQuery = normalizeText(query);
+    const matches = allLocations.filter(
+      (location) =>
+        matchesLocationTokens(
+          { city: location.locationName, department: location.departmentOrStateName },
+          tokens,
+        ) ||
+        (location.deprisaName
+          ? matchesLocationTokens(
+              { city: location.deprisaName, department: location.departmentOrStateName },
+              tokens,
+            )
+          : false),
+    );
 
-    // Filtrar ubicaciones que coincidan con el query
-    const matches = allLocations.filter((location) => {
-      const normalizedLocationName = normalizeText(location.locationName);
-      const normalizedDeprisaName = location.deprisaName
-        ? normalizeText(location.deprisaName)
-        : "";
-      const normalizedDepartment = normalizeText(
-        location.departmentOrStateName,
-      );
+    const ranked = rankLocations(
+      matches.map((location) => ({
+        location,
+        city: location.locationName,
+        department: location.departmentOrStateName,
+      })),
+      tokens,
+    ).map(({ location }) => location);
 
-      // Buscar en ciudad, deprisaName o departamento
-      return (
-        normalizedLocationName.includes(normalizedQuery) ||
-        normalizedDeprisaName.includes(normalizedQuery) ||
-        normalizedDepartment.includes(normalizedQuery)
-      );
-    });
-
-    // Ordenar por relevancia (coincidencias exactas primero)
-    const sorted = matches.sort((a, b) => {
-      const aCityNorm = normalizeText(a.locationName);
-      const bCityNorm = normalizeText(b.locationName);
-
-      // Priorizar coincidencias exactas
-      if (aCityNorm === normalizedQuery) return -1;
-      if (bCityNorm === normalizedQuery) return 1;
-
-      // Priorizar coincidencias que empiezan con el query
-      if (aCityNorm.startsWith(normalizedQuery)) return -1;
-      if (bCityNorm.startsWith(normalizedQuery)) return 1;
-
-      // Alfabético
-      return a.locationName.localeCompare(b.locationName);
-    });
-
-    return sorted.slice(0, limit);
+    return ranked.slice(0, limit);
   } catch (error) {
     console.error(`[DANE API] Error searching locations:`, error);
     return [];
