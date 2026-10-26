@@ -2,7 +2,10 @@
  * `google_product_category` de los feeds: el ID numérico de la taxonomía de
  * Google (versión 2021-09-21), que Meta y Pinterest aceptan sin depender del
  * idioma. Una categoría que no está aquí (nueva, o con slug nuevo) cae al ID
- * de su tipo: más general, pero correcto.
+ * de su tipo: más general, pero correcto. Pinterest avisa (Warning 126) con
+ * 1–2 niveles: se baja al nodo más profundo que de verdad describe los
+ * productos, y los que no pueden bajar sin mentir van en
+ * `SHALLOW_GOOGLE_CATEGORY_REASONS`.
  */
 export const GOOGLE_CATEGORY_BY_CATEGORY_SLUG: Record<string, number> = {
   "accesorios-de-escritorio": 939,
@@ -69,6 +72,13 @@ export const GOOGLE_CATEGORY_BY_CATEGORY_SLUG: Record<string, number> = {
   troqueles: 504640,
   "washi-tape": 505419,
   "kits-de-journal-scrap": 503758,
+  "kits-de-lectura": 922,
+  "kits-de-oficina": 922,
+  "kits-escolares": 922,
+  "kits-kawaii": 922,
+  "kits-para-regalar-o-regalarse": 922,
+  "kits-sorpresa": 922,
+  "kits-universitarios": 922,
   colores: 6068,
   lapices: 6068,
   minas: 4472,
@@ -98,7 +108,7 @@ export const GOOGLE_CATEGORY_BY_CATEGORY_SLUG: Record<string, number> = {
   cinta: 934,
   clips: 936,
   correctores: 2591,
-  guillotinas: 2014,
+  guillotinas: 504642,
   "juegos-geometricos": 505392,
   "notas-adhesivas": 2689,
   pegante: 503745,
@@ -123,6 +133,17 @@ export const GOOGLE_CATEGORY_BY_TYPE_SLUG: Record<string, number> = {
   oficina: 922,
   "planeacion-organizacion": 923,
   utiles: 932,
+};
+
+/**
+ * IDs de 1–2 niveles que se quedan así a propósito: bajar sería un nodo
+ * equivocado, peor para Meta y Pinterest que uno general pero cierto.
+ */
+export const SHALLOW_GOOGLE_CATEGORY_REASONS: Record<number, string> = {
+  922: "kits: combos de papelería mezclada (libreta, lapiceros, notas…); la taxonomía no tiene nodo de combos",
+  167: "accesorios-personales: medias y una pulsera en la misma categoría; no hay nodo común más profundo",
+  2986: "herramientas-de-oficina: grapadoras, perforadoras, dispensador, lupa, ganchos e impresora térmica; ramas distintas",
+  1253: "squishy: la versión 2021-09-21 no tiene juguetes antiestrés ni sensoriales",
 };
 
 type CategoryRef = { slug: string; type?: { slug: string } | null } | null | undefined;
