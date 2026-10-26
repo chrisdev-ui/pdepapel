@@ -46,6 +46,8 @@ const ISSUE_STATUSES: ReadonlySet<string> = new Set([
 
 type StageSource = Pick<Order, "status"> & {
   type?: string | null;
+  /** Lo dice la administración: un pendiente con un intento rechazado llega como «declined». */
+  paymentResult?: Order["paymentResult"];
   payment?: Pick<Order["payment"], "method"> | null;
   shipping?: Pick<Shipping, "status" | "provider"> | null;
 };
@@ -130,6 +132,22 @@ export function getOrderStage(order: StageSource): OrderStageInfo {
       description:
         "Pagarás en efectivo cuando la transportadora entregue tu pedido.",
       tone: "info",
+    };
+  }
+
+  // Un rechazo deja el pedido pendiente 2 h para reintentar: sigue cobrable,
+  // pero ya no se está «confirmando» nada.
+  if (
+    order.status === OrderStatus.PENDING &&
+    paymentMethod !== PaymentMethod.BankTransfer &&
+    order.paymentResult === "declined"
+  ) {
+    return {
+      stage: "verifying",
+      label: "Pago no aprobado",
+      description:
+        "No se hizo ningún cargo. Puedes volver a pagar con otra tarjeta o con otro medio de pago en línea; si no se paga en 2 horas, el pedido se cancela solo.",
+      tone: "warning",
     };
   }
 

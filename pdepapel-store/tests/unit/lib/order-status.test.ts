@@ -44,6 +44,15 @@ describe("getOrderStage", () => {
     expect(stage.label).toBe("Transferencia por verificar");
   });
 
+  it("a pending online order with a declined attempt says so and stays payable", () => {
+    const declined = { ...base, status: OrderStatus.PENDING, payment: { method: PaymentMethod.Wompi }, paymentResult: "declined" as const };
+    const stage = getOrderStage(declined);
+    expect(stage).toMatchObject({ stage: "verifying", label: "Pago no aprobado" });
+    expect(stage.description).toContain("No se hizo ningún cargo");
+    expect(isAwaitingPayment(declined)).toBe(true);
+    expect(getOrderStage({ ...declined, paymentResult: "pending" }).label).toBe("Pago en proceso");
+  });
+
   it("treats cash on delivery as its own stage", () => {
     const stage = getOrderStage({
       ...base,

@@ -191,6 +191,7 @@ When a change touches authentication or authorization, verify that route list **
 ### Payments and checkout
 
 - Customer-facing text stays provider-neutral: **`Pago en línea`**, not "pay with Bold/Wompi/PayU". Keep useful payment icons; this rule is about text. Bold is the default, Wompi the fallback, PayU legacy and removed from this app.
+- **Declined card (2026-10-26):** a decline no longer cancels the order; it stays PENDING for 2 h so the customer can retry from `/pedido/[id]`. The admin sends `paymentResult: "declined"` for such an order, so the return from the gateway shows «¡Hubo un fallo en tu intento de pago!» and `getOrderStage` shows «Pago no aprobado» (still `verifying`, so «Pagar ahora» stays). After 2 h the admin's reconciliation cancels it.
 - `lib/payment-router.ts` must stay in sync with the admin's `PaymentMethod` enum.
 - Bank transfer is confirmed manually by an admin; the selector and instructions must say so.
 - **Never mark an order paid from a client redirect.** Payment state comes from the admin's provider webhooks. Online payment keeps the cart until the order is genuinely `PAID`.
