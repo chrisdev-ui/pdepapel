@@ -7,6 +7,7 @@ import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import { queueShipmentMilestone } from "@/lib/shipment-notifications";
 
 export async function POST(
   req: Request,
@@ -80,6 +81,9 @@ export async function POST(
       },
     });
 
+    if (shipping.trackingCode) {
+      queueShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "guía manual" });
+    }
     return NextResponse.json(shipping, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error: any) {
     return handleErrorResponse(error, "CREATE_MANUAL_SHIPPING", {

@@ -6,6 +6,7 @@ import { describeGuideBlock } from "@/lib/order-transitions";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { ResourceBusyError, withResourceLock } from "@/lib/resource-lock";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import { queueShipmentMilestone } from "@/lib/shipment-notifications";
 
 export async function POST(
   req: Request,
@@ -90,6 +91,8 @@ export async function POST(
         return createGuideForOrder(params.orderId, params.storeId);
       },
     );
+
+    queueShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "crear guía" });
 
     return NextResponse.json(
       {

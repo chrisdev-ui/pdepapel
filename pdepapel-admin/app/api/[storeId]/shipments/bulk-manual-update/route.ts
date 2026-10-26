@@ -11,6 +11,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { requireJsonBody } from "@/lib/request-body";
+import { queueAppliedShipmentChanges } from "@/lib/shipment-notifications";
 
 const bodySchema = z.object({
   fromStatus: z.nativeEnum(ShippingStatus, { errorMap: () => ({ message: "Elige el estado actual de los envíos a corregir." }) }),
@@ -62,9 +63,11 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     let updated = 0;
     let ordersUpdated = 0;
     const stockProductIds = new Set<string>();
+    const applied: Awaited<ReturnType<typeof applyShipmentStatus>>[] = [];
     await prismadb.$transaction(async (tx) => {
       for (const target of targets) {
         const result = await applyShipmentStatus(tx, { shippingId: target.id, storeId: params.storeId, status: toStatus });
+        applied.push(result);
         result?.stockProductIds.forEach((id) => stockProductIds.add(id));
         if (result?.shipmentChanged) updated += 1;
         if (result?.orderChanged) ordersUpdated += 1;
@@ -73,6 +76,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (stockProductIds.size > 0) {
       await invalidateStoreProductsCache(params.storeId, { productIds: Array.from(stockProductIds) });
     }
+    queueAppliedShipmentChanges(params.storeId, applied, "envíos manuales en lote");
 
     return NextResponse.json({ count: targets.length, updated, ordersUpdated }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

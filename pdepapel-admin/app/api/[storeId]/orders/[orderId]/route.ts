@@ -7,6 +7,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { sendOrderEmail } from "@/lib/email";
+import { milestoneForStatus } from "@/lib/shipment-milestones";
+import { notifyShipmentMilestone } from "@/lib/shipment-notifications";
 import { normalizeGiftFields } from "@/lib/gift-orders";
 import { deliverGiftCard } from "@/lib/gift-card-delivery";
 import {
@@ -448,6 +450,7 @@ export async function PATCH(
     // Store original status before update
     const originalStatus = order.status;
     const originalShippingStatus = order.shipping?.status;
+    const originalTrackingCode = order.shipping?.trackingCode ?? null;
 
     // Validate Required Fields for Active Orders
     const targetStatus = status || order.status;
@@ -1190,10 +1193,16 @@ export async function PATCH(
         // correo con estos campos y salía sin artículos (2026-10-07).
         const current = await prismadb.order.findUnique({
           where: { id: params.orderId },
-          select: { status: true, shipping: { select: { status: true } } },
+          select: { status: true, shipping: { select: { status: true, trackingCode: true } } },
         });
 
         if (!current) return;
+
+        // Guía nueva (automática al pagar, o el número de una transportadora
+        // manual escrito a mano): «Tu pedido va en camino», una vez por guía.
+        if (guideCreation.success || (current.shipping?.trackingCode && current.shipping.trackingCode !== originalTrackingCode)) {
+          await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "pedido del panel" });
+        }
 
         // Status change notification
         // Sin enlace de «guardar en tu cuenta»: desde el panel nunca se creó.
@@ -1204,16 +1213,14 @@ export async function PATCH(
           });
         }
 
-        // Shipping status change
-        if (
-          shipping?.status &&
-          current.shipping?.status &&
-          current.shipping.status !== originalShippingStatus
-        ) {
-          await sendOrderEmail(params.orderId, current.shipping.status, {
-            notifyAdmin: false,
-            accountClaim: false,
-          });
+        // Cambio del estado del envío a mano: el aviso del hito, como el webhook.
+        // Antes iba a sendOrderEmail, que descarta los estados de envío.
+        const milestone =
+          shipping?.status && current.shipping?.status && current.shipping.status !== originalShippingStatus
+            ? milestoneForStatus(current.shipping.status)
+            : null;
+        if (milestone) {
+          await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone, source: "pedido del panel" });
         }
       } catch (emailError) {
         console.error("Email sending failed:", emailError);

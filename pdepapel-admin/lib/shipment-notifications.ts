@@ -199,6 +199,18 @@ export function queueShipmentStatusChange(input: { orderId: string; storeId: str
   queueShipmentMilestone({ orderId: input.orderId, storeId: input.storeId, milestone, source: input.source });
 }
 
+/** Avisa los envíos que cambiaron en un lote, ya confirmado. */
+export function queueAppliedShipmentChanges(
+  storeId: string,
+  applied: ReadonlyArray<{ orderId: string; previousStatus: string; status: string; shipmentChanged: boolean } | null | undefined>,
+  source: string,
+): void {
+  for (const result of applied) {
+    if (!result?.shipmentChanged) continue;
+    queueShipmentStatusChange({ orderId: result.orderId, storeId, previous: result.previousStatus, next: result.status, source });
+  }
+}
+
 /**
  * Reintento del barrido (lib/notification-retry.ts) para un correo de hito que
  * falló: vuelve a mandarlo y deja la fila del aviso en SENT si salió.

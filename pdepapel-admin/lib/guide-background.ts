@@ -4,6 +4,7 @@ import { recordFailedNotification } from "@/lib/notification-failures";
 import { CAPSULE_DRAW_PENDING_MESSAGE, ordersWithPendingCapsuleDraw } from "@/lib/capsule-shipping-guard";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
+import { notifyShipmentMilestone } from "@/lib/shipment-notifications";
 
 /**
  * Crea la guía de EnvioClick sin retrasar la respuesta (pago confirmado por
@@ -56,6 +57,9 @@ export async function createGuideRecordingFailure(params: { orderId: string; sto
   }
   try {
     await createGuideForOrder(params.orderId, params.storeId);
+    await notifyShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: params.source }).catch((error) =>
+      console.error(`[GUIDE] ${params.source}: guía creada pero el aviso falló (pedido ${params.orderId}):`, error),
+    );
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -21,6 +21,8 @@ export interface ApplyShipmentStatusInput {
 }
 
 export interface ApplyShipmentStatusResult {
+  /** Para avisar a la clienta después de la transacción (lib/shipment-notifications.ts). */
+  orderId: string;
   shipmentChanged: boolean;
   previousStatus: ShippingStatus;
   status: ShippingStatus;
@@ -90,5 +92,5 @@ export async function applyShipmentStatus(db: Db, input: ApplyShipmentStatusInpu
     }
   }
 
-  return { shipmentChanged, previousStatus, status: input.status, orderStatus, orderChanged, stockProductIds };
+  return { orderId: shipping.orderId, shipmentChanged, previousStatus, status: input.status, orderStatus, orderChanged, stockProductIds };
 }

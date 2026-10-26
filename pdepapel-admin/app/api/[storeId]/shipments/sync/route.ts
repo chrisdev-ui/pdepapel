@@ -10,6 +10,8 @@ import { mapEnvioClickStatus } from "@/lib/shipment-status";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
+import { nextShipmentStatus } from "@/lib/shipment-milestones";
+import { queueAppliedShipmentChanges } from "@/lib/shipment-notifications";
 
 const BATCH_SIZE = 50;
 
@@ -56,7 +58,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
             errors.push({ id: shipment.id, error: trackInfo });
             continue;
           }
-          const newStatus = mapEnvioClickStatus(trackInfo?.status, shipment.status);
+          const newStatus = nextShipmentStatus(shipment.status, mapEnvioClickStatus(trackInfo?.status, shipment.status));
           if (newStatus === shipment.status) continue;
           const result = await prismadb.$transaction((tx) =>
             applyShipmentStatus(tx, { shippingId: shipment.id, storeId: params.storeId, status: newStatus }),
@@ -64,6 +66,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
           if (result?.shipmentChanged) updated += 1;
           if (result?.orderChanged) ordersUpdated += 1;
           result?.stockProductIds.forEach((id) => stockProductIds.add(id));
+          queueAppliedShipmentChanges(params.storeId, [result], "sincronización de envíos");
         }
       } catch (error) {
         console.error("[SHIPMENT_SYNC] batch error:", error);

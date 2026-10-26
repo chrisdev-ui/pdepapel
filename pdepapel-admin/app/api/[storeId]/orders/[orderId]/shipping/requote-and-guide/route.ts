@@ -15,6 +15,7 @@ import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { readOptionalJsonBody } from "@/lib/request-body";
+import { queueShipmentMilestone } from "@/lib/shipment-notifications";
 
 /**
  * Recotizar y crear la guía de una vez.
@@ -159,6 +160,8 @@ export async function POST(
         return createGuideForOrder(params.orderId, params.storeId);
       },
     );
+
+    queueShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "recotizar y crear guía" });
 
     return NextResponse.json(
       {

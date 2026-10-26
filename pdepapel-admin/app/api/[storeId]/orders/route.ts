@@ -89,6 +89,7 @@ import { runInBackground } from "@/lib/background";
 import { subscribeFromStoreOrder } from "@/lib/newsletter";
 import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout";
 import { orderLegalConsentData } from "@/lib/legal-consent";
+import { queueShipmentMilestone } from "@/lib/shipment-notifications";
 
 type StoreFreight = {
   idRate: number;
@@ -965,6 +966,7 @@ async function createOrder(
       try {
         await createGuideForOrder(order.id, params.storeId);
         guideCreationResult.success = true;
+        queueShipmentMilestone({ orderId: order.id, storeId: params.storeId, milestone: "guia_creada", source: "pedido nuevo del panel" });
         console.log(
           `[ADMIN_ORDER_CREATE] Guide created for order ${order.orderNumber}`,
         );

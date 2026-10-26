@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   findUpdatedOrder: vi.fn(),
-  sendShippingEmail: vi.fn(),
+  queueShipmentStatusChange: vi.fn(),
   createOrphanEvent: vi.fn(),
 }));
 
@@ -17,7 +17,7 @@ vi.mock("@/lib/prismadb", () => ({
     shippingWebhookEvent: { create: mocks.createOrphanEvent },
   },
 }));
-vi.mock("@/lib/email", () => ({ sendShippingEmail: mocks.sendShippingEmail }));
+vi.mock("@/lib/shipment-notifications", () => ({ queueShipmentStatusChange: mocks.queueShipmentStatusChange }));
 
 import { GET, POST } from "@/app/api/webhook/envioclick/route";
 
@@ -140,7 +140,7 @@ describe("POST /api/webhook/envioclick", () => {
     expect(data.status).toBe("Delivered");
   });
 
-  it("hands the shipping email only the order id, after the update commits", async () => {
+  it("asks the notifier for the new milestone after the update commits", async () => {
     const tx = txClient();
     mocks.transaction.mockImplementation(async (cb: any) => cb(tx));
     mocks.findUpdatedOrder.mockResolvedValue({ id: "order-id", storeId: "store-id" });
@@ -151,8 +151,22 @@ describe("POST /api/webhook/envioclick", () => {
     });
     await new Promise((resolve) => setImmediate(resolve));
 
-    // El correo carga el pedido con sus artículos (lib/email.ts).
-    expect(mocks.sendShippingEmail).toHaveBeenCalledWith("order-id", "Delivered");
+    // El notificador carga el pedido con sus artículos y avisa una sola vez (lib/shipment-notifications.ts).
+    expect(mocks.queueShipmentStatusChange).toHaveBeenCalledWith(
+      expect.objectContaining({ storeId: expect.any(String), next: "Delivered", source: "webhook EnvioClick" }),
+    );
+  });
+
+  it("«Pendiente de recolección» after a panel guide keeps the shipment as Shipped", async () => {
+    const tx = txClient({ ...shippingRow, status: "Shipped" });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(tx));
+
+    await post({
+      idOrder: 132456,
+      events: [{ statusStep: "Pendiente de recolección", timestamp: "2026-09-10T10:00:00Z" }],
+    });
+
+    expect(mocks.queueShipmentStatusChange).toHaveBeenCalledWith(expect.objectContaining({ previous: "Shipped", next: "Shipped" }));
   });
 
   it("moves the order to sent only within its own store", async () => {

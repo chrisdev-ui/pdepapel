@@ -16,6 +16,8 @@ import { checkIfStoreOwner } from "@/lib/server/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { requireJsonBody } from "@/lib/request-body";
+import { nextShipmentStatus } from "@/lib/shipment-milestones";
+import { queueAppliedShipmentChanges } from "@/lib/shipment-notifications";
 
 const getCorsHeaders = (request: Request) =>
   createCorsHeaders(request, { methods: "POST, OPTIONS" });
@@ -89,7 +91,7 @@ export async function POST(
       const sortedEvents = [...trackingData.data].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
-      newStatus = mapEnvioClickStatus(sortedEvents[0]?.status, shipping.status);
+      newStatus = nextShipmentStatus(shipping.status, mapEnvioClickStatus(sortedEvents[0]?.status, shipping.status));
 
       for (const event of trackingData.data) {
         const existingEvent = await prismadb.shippingTrackingEvent.findFirst({
@@ -123,6 +125,7 @@ export async function POST(
     if (applied?.stockProductIds.length) {
       await invalidateStoreProductsCache(params.storeId, { productIds: applied.stockProductIds });
     }
+    queueAppliedShipmentChanges(params.storeId, [applied], "rastreo de la clienta");
     const [updatedShipping, events] = await Promise.all([
       prismadb.shipping.findFirst({
         where: { id: shipping.id, storeId: params.storeId },

@@ -9,6 +9,7 @@ import { isShipmentTransitionAllowed } from "@/lib/shipment-status";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
+import { queueAppliedShipmentChanges } from "@/lib/shipment-notifications";
 
 /** Cambio de estado sobre una selección de envíos; el pedido de cada uno sigue al envío. */
 export async function PATCH(req: Request, { params }: { params: { storeId: string } }) {
@@ -42,9 +43,11 @@ export async function PATCH(req: Request, { params }: { params: { storeId: strin
     let updated = 0;
     let ordersUpdated = 0;
     const stockProductIds = new Set<string>();
+    const applied: Awaited<ReturnType<typeof applyShipmentStatus>>[] = [];
     await prismadb.$transaction(async (tx) => {
       for (const shipment of shipments) {
         const result = await applyShipmentStatus(tx, { shippingId: shipment.id, storeId: params.storeId, status });
+        applied.push(result);
         result?.stockProductIds.forEach((id) => stockProductIds.add(id));
         if (result?.shipmentChanged) updated += 1;
         if (result?.orderChanged) ordersUpdated += 1;
@@ -53,6 +56,7 @@ export async function PATCH(req: Request, { params }: { params: { storeId: strin
     if (stockProductIds.size > 0) {
       await invalidateStoreProductsCache(params.storeId, { productIds: Array.from(stockProductIds) });
     }
+    queueAppliedShipmentChanges(params.storeId, applied, "edición en lote");
 
     return NextResponse.json({ success: true, updated, ordersUpdated }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

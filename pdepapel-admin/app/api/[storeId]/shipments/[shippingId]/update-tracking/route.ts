@@ -11,6 +11,8 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import { nextShipmentStatus } from "@/lib/shipment-milestones";
+import { queueAppliedShipmentChanges } from "@/lib/shipment-notifications";
 
 /**
  * «Actualizar rastreo» de un envío de EnvioClick desde el panel. Escribe solo
@@ -46,9 +48,9 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     let realDeliveryDate: string | null | undefined;
     if (Array.isArray(trackingData) && trackingData.length > 0) {
       const latest = [...trackingData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      newStatus = mapEnvioClickStatus(latest?.status, shipping.status);
+      newStatus = nextShipmentStatus(shipping.status, mapEnvioClickStatus(latest?.status, shipping.status));
     } else if (trackingData && typeof trackingData === "object" && "status" in trackingData) {
-      newStatus = mapEnvioClickStatus((trackingData as { status?: string }).status, shipping.status);
+      newStatus = nextShipmentStatus(shipping.status, mapEnvioClickStatus((trackingData as { status?: string }).status, shipping.status));
       realDeliveryDate = (trackingData as { realDeliveryDate?: string | null }).realDeliveryDate ?? undefined;
     }
 
@@ -67,6 +69,7 @@ export async function POST(req: Request, { params }: { params: { storeId: string
     if (result?.stockProductIds.length) {
       await invalidateStoreProductsCache(params.storeId, { productIds: result.stockProductIds });
     }
+    queueAppliedShipmentChanges(params.storeId, [result], "rastreo manual");
 
     const updatedShipping = await prismadb.shipping.findFirst({
       where: { id: shipping.id, storeId: params.storeId },

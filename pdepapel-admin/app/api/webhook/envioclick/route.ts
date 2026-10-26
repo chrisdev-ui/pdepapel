@@ -1,10 +1,11 @@
 import { handleErrorResponse } from "@/lib/api-errors";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { sendShippingEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { applyShipmentStatus } from "@/lib/shipment-status-apply";
 import { mapEnvioClickStatus } from "@/lib/shipment-status";
+import { nextShipmentStatus } from "@/lib/shipment-milestones";
+import { queueShipmentStatusChange } from "@/lib/shipment-notifications";
 import {
   InvalidWebhookPayloadError,
   parseProviderDate,
@@ -13,8 +14,6 @@ import {
   safeSecretEquals,
 } from "@/lib/webhook-auth";
 import { NextResponse } from "next/server";
-import { runInBackground } from "@/lib/background";
-import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 
 /**
  * EnvioClick no firma sus webhooks, así que la URL configurada en su panel
@@ -136,8 +135,10 @@ export async function POST(req: Request) {
 
       // Get the latest status from events (most recent first)
       const latestEvent = events.length > 0 ? events[0] : null;
+      // Solo hacia adelante: «Pendiente de recolección» después de crear la
+      // guía, o un evento viejo que llega tarde, no hacen retroceder el envío.
       const newStatus = latestEvent
-        ? mapEnvioClickStatus(latestEvent.statusStep ?? latestEvent.status, shipping.status)
+        ? nextShipmentStatus(shipping.status, mapEnvioClickStatus(latestEvent.statusStep ?? latestEvent.status, shipping.status))
         : shipping.status;
 
       console.log("[ENVIOCLICK_WEBHOOK] Processing update:", {
@@ -265,36 +266,15 @@ export async function POST(req: Request) {
       await invalidateStoreProductsCache(result.shipping.storeId, { productIds: result.stockProductIds });
     }
 
-    // Send email notification if status changed
-    // This is done outside the transaction to avoid side effects being rolled back (impossible for email)
-    // or blocking the transaction.
-    if (result.newStatus !== result.shipping.status) {
-      const updatedOrder = await prismadb.order.findUnique({
-        where: { id: result.shipping.orderId },
-        include: {
-          payment: true,
-          shipping: SHIPPING_WITHOUT_GUIDE_PDF,
-          orderItems: {
-            include: {
-              product: true,
-            },
-          },
-        },
-      });
-
-      if (updatedOrder) {
-        runInBackground("correo de envío (EnvioClick)", async () => {
-          try {
-            await sendShippingEmail(updatedOrder.id, result.newStatus);
-          } catch (emailError) {
-            console.error(
-              "[ENVIOCLICK_WEBHOOK] Failed to send email:",
-              emailError,
-            );
-          }
-        });
-      }
-    }
+    // El aviso sale después de la transacción y una sola vez por guía y hito
+    // (lib/shipment-notifications.ts), aunque EnvioClick repita el evento.
+    queueShipmentStatusChange({
+      orderId: result.shipping.orderId,
+      storeId: result.shipping.storeId,
+      previous: result.shipping.status,
+      next: result.newStatus,
+      source: "webhook EnvioClick",
+    });
 
     console.log("[ENVIOCLICK_WEBHOOK] Successfully processed webhook");
     return NextResponse.json(
