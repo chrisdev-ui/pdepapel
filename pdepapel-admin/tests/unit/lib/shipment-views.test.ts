@@ -51,6 +51,16 @@ describe("shipment-views", () => {
     expect(ready(shipment({ status: ShippingStatus.Shipped }))).toBe(false);
   });
 
+  it("«Recoge en tienda» no es un envío por despachar: fuera de la cola y de la lista de recogida, sigue en «Todos»", () => {
+    const pickup = shipment({ provider: ShippingProvider.NONE });
+    expect(isReadyToDispatch(pickup, NOW)).toBe(false);
+    expect(shipmentMatchesView(pickup, "por-despachar", NOW)).toBe(false);
+    expect(shipmentMatchesView(pickup, "todos", NOW)).toBe(true);
+    for (const provider of [ShippingProvider.ENVIOCLICK, ShippingProvider.MANUAL]) {
+      expect(isReadyToDispatch(shipment({ provider }), NOW)).toBe(true);
+    }
+  });
+
   it("leaves shipments older than the dispatch window out of the daily queue", () => {
     const old = shipment({ createdAt: new Date("2026-07-01T14:00:00Z") });
     expect(isStaleDispatch(old, NOW)).toBe(true);

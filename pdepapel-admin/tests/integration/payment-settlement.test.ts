@@ -13,13 +13,13 @@ import { createInventoryFixture, deleteInventoryFixture, testPrisma, type Invent
  * incidencia DECREMENT («pagado sin stock»).
  */
 const alerts = vi.hoisted(() => ({ revival: vi.fn(), shortfall: vi.fn() }));
-const emails = vi.hoisted(() => ({ order: vi.fn(), declined: vi.fn() }));
+const emails = vi.hoisted(() => ({ order: vi.fn(), declined: vi.fn(), shipping: vi.fn(), guide: vi.fn() }));
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ userId: null }),
   clerkClient: async () => ({ users: { getUser: vi.fn().mockResolvedValue(null) } }),
 }));
-vi.mock("@/lib/email", () => ({ sendOrderEmail: emails.order, sendPaymentDeclinedEmail: emails.declined, sendShippingEmail: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/email", () => ({ sendOrderEmail: emails.order, sendPaymentDeclinedEmail: emails.declined, sendShippingEmail: emails.shipping }));
 vi.mock("@/lib/google-analytics", async (importOriginal) => ({ ...(await importOriginal<object>()), recordPaidOrderInGoogleAnalytics: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/cache", () => ({
   storefrontScopeOf: vi.fn().mockResolvedValue(null),
@@ -27,7 +27,7 @@ vi.mock("@/lib/cache", () => ({
   invalidateStoreProductsCache: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn().mockResolvedValue({ data: { id: "x" }, error: null }) } } }));
-vi.mock("@/lib/shipping-helpers", () => ({ createGuideForOrder: vi.fn() }));
+vi.mock("@/lib/shipping-helpers", () => ({ createGuideForOrder: emails.guide }));
 vi.mock("@/lib/stock-review-alerts", () => ({ notifyStockShortfall: alerts.shortfall, notifyUnbackedReservations: vi.fn() }));
 vi.mock("@/lib/late-payment", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/late-payment")>()),
@@ -336,5 +336,35 @@ describe("liquidación compartida de pagos (MySQL)", () => {
     expect(emails.order).toHaveBeenCalledWith(order.id, OrderStatus.CANCELLED);
     expect(emails.declined).toHaveBeenCalledTimes(1);
     expect(await stockOf(fixture)).toBe(6);
+  });
+
+  it("la fila «Recoge en tienda» que abre el pago: fuera de Envíos «Por despachar», sin guía ni correo de envío, envío 0 en finanzas; Pedidos/Inicio cuentan igual que sin fila", async () => {
+    fixture = await createInventoryFixture();
+    const pickup = await boldOrder(fixture, 2, OrderStatus.PENDING, "pickup");
+    const { dispatchQueueWhere } = await import("@/lib/order-queues");
+    const before = await testPrisma.order.count({ where: { ...dispatchQueueWhere(fixture.store.id), id: pickup.id } });
+
+    expect((await webhook(pickup)).status).toBe(200);
+
+    const row = await testPrisma.shipping.findUniqueOrThrow({ where: { orderId: pickup.id } });
+    expect(row).toMatchObject({ provider: ShippingProvider.NONE, status: ShippingStatus.Preparing, cost: null, codFee: null, envioClickIdRate: null, envioClickIdOrder: null });
+    const paid = await testPrisma.order.findUniqueOrThrow({ where: { id: pickup.id } });
+    expect(paid.status).toBe(OrderStatus.PAID);
+    expect(paid.shippingCost).toBe(0);
+    expect(paid.netProfit).toBeCloseTo(paid.total - (paid.totalProductCost ?? 0) - (paid.gatewayFee ?? 0), 2);
+    expect(emails.guide).not.toHaveBeenCalled();
+    expect(emails.shipping).not.toHaveBeenCalled();
+
+    // Envíos: la lista y la cola de despacho leen la fila con su proveedor.
+    const { isReadyToDispatch } = await import("@/lib/shipment-views");
+    const viewed = { ...row, order: { status: paid.status, type: paid.type, paymentMethod: PaymentMethod.Bold } };
+    expect(isReadyToDispatch(viewed)).toBe(false);
+    expect(isReadyToDispatch({ ...viewed, provider: ShippingProvider.ENVIOCLICK })).toBe(true);
+
+    // Pedidos e Inicio no miran el proveedor: el pedido pagado cuenta igual que antes de tener fila.
+    const after = await testPrisma.order.count({ where: { ...dispatchQueueWhere(fixture.store.id), id: pickup.id } });
+    expect({ before, after }).toEqual({ before: 0, after: 1 });
+    const paidPickupWithoutRow = await boldOrder(fixture, 1, OrderStatus.PAID, "pickup");
+    expect(await testPrisma.order.count({ where: { ...dispatchQueueWhere(fixture.store.id), id: paidPickupWithoutRow.id } })).toBe(1);
   });
 });

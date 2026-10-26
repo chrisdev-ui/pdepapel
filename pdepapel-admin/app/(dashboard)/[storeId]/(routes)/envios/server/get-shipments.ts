@@ -100,6 +100,7 @@ export async function getDispatchQueue(storeId: string) {
       carrierName: true,
       courier: true,
       status: true,
+      provider: true,
       createdAt: true,
       updatedAt: true,
       order: {

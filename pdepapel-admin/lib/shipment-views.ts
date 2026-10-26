@@ -28,6 +28,7 @@ export function isShipmentView(value: string | null | undefined): value is Shipm
 
 export interface ViewableShipment {
   status: ShippingStatus;
+  provider?: ShippingProvider;
   createdAt: Date;
   updatedAt: Date;
   /** Primer evento de rastreo, cuando existe: la salida real del paquete. */
@@ -100,6 +101,8 @@ export function isStaleDispatch(shipment: ViewableShipment, now = new Date()): b
  */
 export function isReadyToDispatch(shipment: ViewableShipment, now = new Date()): boolean {
   if (shipment.status !== ShippingStatus.Preparing) return false;
+  // «Recoge en tienda» no sale con transportadora: ni guía ni lista de recogida.
+  if (shipment.provider === ShippingProvider.NONE) return false;
   if (isStaleDispatch(shipment, now)) return false;
   const order = shipment.order;
   if (!order) return false;

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BulkActions } from "@/app/(dashboard)/[storeId]/(routes)/envios/components/bulk-actions";
 import type { ShipmentColumn } from "@/app/(dashboard)/[storeId]/(routes)/envios/components/columns";
 import type { DispatchShipment } from "@/app/(dashboard)/[storeId]/(routes)/envios/server/get-shipments";
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ storeId: "store-1" }),
@@ -22,6 +22,7 @@ const dispatchShipment = (id: string): DispatchShipment => ({
   carrierName: null,
   courier: null,
   status: ShippingStatus.Preparing,
+  provider: ShippingProvider.ENVIOCLICK,
   createdAt: new Date(),
   updatedAt: new Date(),
   order: {

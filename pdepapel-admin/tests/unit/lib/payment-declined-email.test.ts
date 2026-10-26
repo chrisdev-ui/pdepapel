@@ -7,7 +7,9 @@ vi.mock("@/lib/resend", () => ({ resend: { emails: { send: vi.fn() } } }));
 vi.mock("@/lib/notification-failures", () => ({ recordFailedNotification: vi.fn() }));
 vi.mock("@/lib/prismadb", () => ({ default: {} }));
 
-import { buildPaymentDeclinedEmail } from "@/lib/email";
+import { ShippingProvider } from "@prisma/client";
+
+import { buildPaymentDeclinedEmail, getOrderTotalsSummary } from "@/lib/email";
 
 const order = {
   id: "order-1",
@@ -49,5 +51,14 @@ describe("correo de pago no aprobado", () => {
     expect(email.text).toContain("https://papeleriapdepapel.com/pedido/order-1");
     expect(email.text).toContain("próximas 2 horas");
     for (const body of [html, email.text, email.subject]) expect(body).not.toMatch(/Cancelad/);
+  });
+});
+
+describe("resumen de totales con «Recoge en tienda»", () => {
+  const withShipping = (provider: ShippingProvider) =>
+    ({ ...(order as object), subtotal: 300000, total: 300000, shipping: { provider, cost: null, codFee: null, isCOD: false, envioClickIdRate: null } }) as never;
+
+  it("la fila «Recoge en tienda» que abre el pago (costo nulo, sin cotización) no agrega línea de envío al correo", () => {
+    expect(getOrderTotalsSummary(withShipping(ShippingProvider.NONE)).map((line) => line.label)).not.toContain("Envío");
   });
 });
