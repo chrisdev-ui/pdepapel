@@ -336,6 +336,33 @@ async function postToChakra(
   }
 }
 
+/**
+ * Plantilla aprobada en Meta (avisos de pedido, categoría Utilidad). Solo así se
+ * le puede escribir a alguien fuera de la ventana de 24 h. `buttonUrlSuffix` es
+ * la variable del botón de URL (lo que va al final del enlace de la plantilla).
+ */
+export async function sendWhatsAppTemplateMessage(
+  to: string,
+  template: { name: string; language: string; bodyParams: string[]; buttonUrlSuffix?: string },
+  environment: SendEnvironment = env,
+): Promise<WhatsAppSendResult> {
+  if (!to.trim() || !template.name.trim()) {
+    return { ok: false, error: "destinatario o plantilla vacía" };
+  }
+  const components: Record<string, unknown>[] = [];
+  if (template.bodyParams.length > 0) {
+    components.push({ type: "body", parameters: template.bodyParams.map((text) => ({ type: "text", text })) });
+  }
+  if (template.buttonUrlSuffix) {
+    components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: template.buttonUrlSuffix }] });
+  }
+  return postToChakra(
+    to,
+    { type: "template", template: { name: template.name, language: { code: template.language }, components } },
+    environment,
+  );
+}
+
 /** Mensaje de texto normal. */
 export async function sendWhatsAppTextMessage(
   to: string,

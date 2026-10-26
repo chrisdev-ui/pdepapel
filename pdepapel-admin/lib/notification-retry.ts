@@ -3,6 +3,8 @@ import type { PrismaClient } from "@prisma/client";
 import { EMAIL_ROLES, type DeliveryOutcome, type EmailRole } from "@/lib/email-delivery";
 import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 import prismadb from "@/lib/prismadb";
+import { isShipmentMilestone, milestoneStillCurrent, type ShipmentMilestone } from "@/lib/shipment-milestones";
+import { retryShipmentMilestoneEmail } from "@/lib/shipment-notifications";
 
 /**
  * Barrido de correos de pedido que no salieron (FailedNotification), desde
@@ -45,6 +47,7 @@ export interface RetryDependencies {
   limit?: number;
   sendOrderEmail?: SendFn;
   sendShippingEmail?: SendFn;
+  sendMilestoneEmail?: (orderId: string, milestone: ShipmentMilestone, roles: EmailRole[]) => Promise<Partial<Record<EmailRole, DeliveryOutcome>>>;
 }
 
 export interface RetrySummary {
@@ -58,9 +61,11 @@ export interface RetrySummary {
 
 const isRole = (value: string | null): value is EmailRole => value === "admin" || value === "customer";
 
-export function parseNotificationKind(kind: string): { type: "order" | "shipping"; status: string } | null {
-  const match = /^(order|shipping):(.+)$/.exec(kind);
-  return match ? { type: match[1] as "order" | "shipping", status: match[2] } : null;
+export function parseNotificationKind(kind: string): { type: "order" | "shipping" | "milestone"; status: string } | null {
+  const match = /^(order|shipping|milestone):(.+)$/.exec(kind);
+  if (!match) return null;
+  if (match[1] === "milestone" && !isShipmentMilestone(match[2])) return null;
+  return { type: match[1] as "order" | "shipping" | "milestone", status: match[2] };
 }
 
 export async function retryFailedNotifications(deps: RetryDependencies = {}): Promise<RetrySummary> {
@@ -69,6 +74,7 @@ export async function retryFailedNotifications(deps: RetryDependencies = {}): Pr
   const limit = deps.limit ?? 25;
   const sendOrder = deps.sendOrderEmail ?? ((await import("@/lib/email")).sendOrderEmail as unknown as SendFn);
   const sendShipping = deps.sendShippingEmail ?? ((await import("@/lib/email")).sendShippingEmail as unknown as SendFn);
+  const sendMilestone = deps.sendMilestoneEmail ?? ((orderId: string, milestone: ShipmentMilestone, roles: EmailRole[]) => retryShipmentMilestoneEmail(orderId, milestone, roles));
   const since = new Date(now.getTime() - RETRY_WINDOW_HOURS * 60 * 60 * 1000);
 
   const summary: RetrySummary = { scanned: 0, sent: [], failed: [], superseded: 0, exhausted: 0, alreadyClaimed: 0 };
@@ -78,7 +84,7 @@ export async function retryFailedNotifications(deps: RetryDependencies = {}): Pr
       resolvedAt: null,
       orderId: { not: null },
       createdAt: { gte: since },
-      OR: [{ kind: { startsWith: "order:" } }, { kind: { startsWith: "shipping:" } }],
+      OR: [{ kind: { startsWith: "order:" } }, { kind: { startsWith: "shipping:" } }, { kind: { startsWith: "milestone:" } }],
     },
     orderBy: { createdAt: "asc" },
     take: limit,
@@ -120,7 +126,12 @@ export async function retryFailedNotifications(deps: RetryDependencies = {}): Pr
       select: { status: true, email: true, shipping: { select: { status: true } } },
     });
     const current = parsed.type === "order" ? order?.status : order?.shipping?.status;
-    if (!order || current !== parsed.status) {
+    // Un hito vale mientras el envío siga en ese paso y el pedido no esté cancelado.
+    const stillApplies =
+      parsed.type === "milestone"
+        ? Boolean(order) && order?.status !== "CANCELLED" && milestoneStillCurrent(parsed.status as ShipmentMilestone, order?.shipping?.status)
+        : current === parsed.status;
+    if (!order || !stillApplies) {
       // El pedido ya no existe o cambió de estado: ese aviso ya no aplica.
       summary.superseded += 1;
       continue;
@@ -129,7 +140,10 @@ export async function retryFailedNotifications(deps: RetryDependencies = {}): Pr
     const send = parsed.type === "order" ? sendOrder : sendShipping;
     let outcomes: Partial<Record<EmailRole, DeliveryOutcome>> | void;
     try {
-      outcomes = await send(orderId, parsed.status as never, { roles, recordFailures: false });
+      outcomes =
+        parsed.type === "milestone"
+          ? await sendMilestone(orderId, parsed.status as ShipmentMilestone, roles)
+          : await send(orderId, parsed.status as never, { roles, recordFailures: false });
     } catch (error) {
       outcomes = Object.fromEntries(
         roles.map((role) => [role, { ok: false, attempts: 0, error: String(error), retryable: true }]),

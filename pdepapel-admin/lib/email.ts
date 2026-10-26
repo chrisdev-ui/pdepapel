@@ -19,6 +19,7 @@ import { recordFailedNotification } from "@/lib/notification-failures";
 import {
   deliverEmails,
   EMAIL_ROLES,
+  type DeliveryOutcome,
   type EmailJob,
   type EmailRole,
 } from "@/lib/email-delivery";
@@ -48,6 +49,7 @@ import { getShippingChargeState } from "@/lib/order-totals";
 import { isPlaceholderEmail } from "@/lib/placeholder-emails";
 import prismadb from "@/lib/prismadb";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
+import type { ShipmentMilestone } from "@/lib/shipment-milestones";
 import { socialLinksText, withSocialLinks } from "@/lib/social-links";
 
 /**
@@ -205,8 +207,7 @@ export function shouldNotifyAdmin(
   return options.notifyAdmin !== false || isGiftCardAwaitingReview(order, status);
 }
 
-function getOrderLink(orderId: string) {
-  // Adjust this URL to your frontend order details page
+export function getOrderLink(orderId: string) {
   return `https://papeleriapdepapel.com/pedido/${orderId}`;
 }
 
@@ -807,6 +808,146 @@ export const sendShippingEmail = async (
     return failedOutcomes(roles, error);
   }
 };
+
+const MILESTONE_COPY: Record<ShipmentMilestone, { subject: (orderNumber: string) => string; thanks: string }> = {
+  guia_creada: {
+    subject: (n) => `Tu pedido #${n} va en camino`,
+    thanks: "Tu pedido ya está empacado y tiene guía. La transportadora lo recoge en los próximos días hábiles; con el número de guía puedes seguirlo cuando quieras.",
+  },
+  en_camino: {
+    subject: (n) => `Tu pedido #${n} está en tránsito`,
+    thanks: "La transportadora ya tiene tu pedido y va hacia tu ciudad. Te avisamos cuando salga a entrega.",
+  },
+  en_reparto: {
+    subject: (n) => `¡Tu pedido #${n} sale hoy a entrega!`,
+    thanks: "Tu pedido está en reparto y se entrega hoy. Asegúrate de que alguien pueda recibirlo.",
+  },
+  entregado: {
+    subject: (n) => `¡Tu pedido #${n} ha sido entregado!`,
+    thanks: "¡Esperamos que disfrutes tu compra! Si tienes algún problema con tu pedido, por favor contáctanos.",
+  },
+  novedad: {
+    subject: (n) => `Hay una novedad con el envío de tu pedido #${n}`,
+    thanks: "La transportadora reportó una novedad con la entrega. Escríbenos por WhatsApp y la coordinamos contigo.",
+  },
+};
+
+const MILESTONE_LOOK: Record<Exclude<ShipmentMilestone, "novedad">, ShippingStatus> = {
+  guia_creada: ShippingStatus.Shipped,
+  en_camino: ShippingStatus.InTransit,
+  en_reparto: ShippingStatus.OutForDelivery,
+  entregado: ShippingStatus.Delivered,
+};
+
+/** Dónde consultar la guía: EnvioClick para sus guías; la URL de la transportadora manual si la hay, si no, ninguna. */
+function trackingHrefFor(shipping: EmailOrder["shipping"]): string | null | undefined {
+  if (!shipping) return null;
+  if (shipping.provider === "ENVIOCLICK") return undefined;
+  return shipping.trackingUrl || null;
+}
+
+/** Arma los avisos de un hito de envío (lib/shipment-notifications.ts), sin mandarlos. */
+export function buildShipmentMilestoneEmails(order: EmailOrder, milestone: ShipmentMilestone): { admin: BuiltEmail; customer: BuiltEmail } {
+  const look = milestone === "novedad" ? (order.shipping?.status ?? ShippingStatus.Exception) : MILESTONE_LOOK[milestone];
+  const copy = MILESTONE_COPY[milestone];
+  const items = getOrderLineItems(order);
+  const summary = getOrderTotalsSummary(order);
+  const total = order.total ? currencyFormatter(order.total) : undefined;
+  const orderSummary = getOrderSummary(order);
+  const orderLink = getOrderLink(order.id);
+  const trackingInfo = order.shipping?.trackingCode ?? undefined;
+  const carrierName = order.shipping?.carrierName || order.shipping?.courier || null;
+  const trackingHref = trackingHrefFor(order.shipping);
+  const giftRecipientName = isGiftOrder(order) ? order.giftRecipientName : null;
+  const paymentMethod = getReadablePaymentMethod(order.payment);
+  const subject = copy.subject(order.orderNumber);
+  const trackingLine = trackingInfo ? `\n\n${carrierName ? `Transportadora: ${carrierName}\n` : ""}Guía: ${trackingInfo}` : "";
+
+  const customer: BuiltEmail = {
+    subject,
+    react: OrderNotification({
+      name: order.fullName,
+      orderNumber: order.orderNumber,
+      status: look,
+      paymentMethod,
+      trackingInfo,
+      carrierName,
+      trackingHref,
+      total,
+      items,
+      summary,
+      orderSummary,
+      city: order.city || undefined,
+      orderLink,
+      thanksParagraph: copy.thanks,
+      giftRecipientName,
+    }) as React.ReactElement,
+    text: withSocialLinks(`${subject}\n\n${copy.thanks}${trackingLine}\n\n${orderSummary}\n\nVer tu pedido: ${orderLink}`),
+  };
+  const admin: BuiltEmail = {
+    subject: `[Admin] Pedido #${order.orderNumber} - ${getReadableStatus(look)}`,
+    react: OrderNotification({
+      name: order.fullName,
+      orderNumber: order.orderNumber,
+      status: look,
+      isAdminEmail: true,
+      paymentMethod,
+      trackingInfo,
+      carrierName,
+      trackingHref,
+      email: order.email || undefined,
+      total,
+      address: order.address,
+      city: order.city || undefined,
+      phone: order.phone,
+      items,
+      summary,
+      orderSummary,
+      orderLink,
+      thanksParagraph: copy.thanks,
+      notificationSource: SHIPPING_SOURCE,
+      giftRecipientName,
+    }) as React.ReactElement,
+    text: `Pedido #${order.orderNumber} - ${getReadableStatus(look)} para ${order.fullName}\nOrigen del aviso: ${SHIPPING_SOURCE}${trackingLine}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
+  };
+  return { admin, customer };
+}
+
+/**
+ * Manda el correo de un hito a los roles pedidos. Lo llama solo el notificador,
+ * que ya reclamó el aviso; aquí no se deduplica. Nunca lanza.
+ * `null` en un rol: ese destinatario no existe (sin correo, o de relleno).
+ */
+export async function sendShipmentMilestoneEmail(
+  order: EmailOrder,
+  milestone: ShipmentMilestone,
+  roles: EmailRole[],
+  options: { recordFailures?: boolean } = {},
+): Promise<Partial<Record<EmailRole, DeliveryOutcome | null>>> {
+  const kind = `milestone:${milestone}`;
+  const built = buildShipmentMilestoneEmails(order, milestone);
+  const jobs: EmailJob[] = [];
+  const result: Partial<Record<EmailRole, DeliveryOutcome | null>> = {};
+  if (roles.includes("admin")) {
+    const adminTo = await getAdminNotificationRecipients(order.storeId);
+    if (adminTo.length > 0) jobs.push({ role: "admin", send: () => resend.emails.send({ from: FROM, to: adminTo, ...built.admin }) });
+    else result.admin = null;
+  }
+  if (roles.includes("customer")) {
+    const to = customerRecipient(order, kind);
+    if (to) jobs.push({ role: "customer", send: () => resend.emails.send({ from: FROM, to: [to], ...built.customer }) });
+    else result.customer = null;
+  }
+  if (env.NODE_ENV === "development") {
+    console.log(`[EMAIL] Skipping ${kind} in development for order ${order.orderNumber}`);
+    for (const job of jobs) result[job.role] = { ok: false, attempts: 0, error: "development", retryable: false };
+    return result;
+  }
+  const outcomes = await deliverEmails(jobs, { storeId: order.storeId, orderId: order.id, kind, recordFailures: options.recordFailures });
+  // Quien recibe el regalo sigue el paquete con el mismo aviso, sin precios.
+  if (roles.includes("customer") && order.shipping?.status) await sendGiftNotification(order, order.shipping.status);
+  return { ...result, ...outcomes };
+}
 
 /** Coincide con `DECLINE_RETRY_WINDOW_MS` de la conciliación. */
 const DECLINE_RETRY_HOURS = 2;

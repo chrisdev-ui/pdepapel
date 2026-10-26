@@ -134,6 +134,7 @@ model Store {
   settings                        StoreSettings?
   jobRuns                         JobRun[]
   shippingWebhookEvents           ShippingWebhookEvent[]
+  orderNotifications              OrderNotification[]
   paymentWebhookEvents            PaymentWebhookEvent[]
   scannerSessions                 ScannerSession[]
 }
@@ -1274,10 +1275,19 @@ model Order {
   source    OrderSource?
 
   /// Prueba de consentimiento (Ley 1581): versiones que la frase encima del botón de pago mostró y hora del servidor. Solo el checkout de la tienda; null en todo lo demás.
-  legalTermsVersion   String?              @db.VarChar(20)
-  legalPrivacyVersion String?              @db.VarChar(20)
-  legalConsentAt      DateTime?
-  legalConsentChannel LegalConsentChannel?
+  legalTermsVersion    String?              @db.VarChar(20)
+  legalPrivacyVersion  String?              @db.VarChar(20)
+  legalConsentAt       DateTime?
+  legalConsentChannel  LegalConsentChannel?
+  /// Avisos del pedido por WhatsApp (plantillas de utilidad). Sin `whatsappOptInAt`, o con
+  /// `whatsappOptOutAt`, no sale ninguno; el correo sale siempre. La versión es la del texto
+  /// de la casilla (`lib/whatsapp-opt-in.ts`). `whatsappOptInBy` solo existe si lo anotó el
+  /// panel (id de Clerk de quien lo anotó), nunca se expone fuera del panel.
+  whatsappOptInAt      DateTime?
+  whatsappOptInVersion String?              @db.VarChar(20)
+  whatsappOptInSource  WhatsAppOptInSource?
+  whatsappOptInBy      String?              @db.VarChar(191)
+  whatsappOptOutAt     DateTime?
 
   quoteRequests     QuoteRequest[]
   conversations     Conversation[]
@@ -1287,6 +1297,7 @@ model Order {
   stockReservations StockReservation[]
   capsuleOrder      CapsuleOrder?
   capsuleSlips      CapsuleSlip[]
+  notifications     OrderNotification[]
 
   @@index([storeId])
   @@index([couponId])
@@ -2083,6 +2094,13 @@ model StoreSettings {
   botFactsApprovedBy String?
   botFactsVersion    String?   @db.VarChar(64)
 
+  /// Avisos de envío por WhatsApp con plantillas de utilidad aprobadas en Meta.
+  /// Apagado por defecto: se enciende cuando las dos plantillas estén aprobadas
+  /// y sus nombres escritos aquí. El correo sale siempre, encendido o no.
+  whatsappOrderUpdatesEnabled Boolean @default(false)
+  whatsappTemplateGuide       String? @db.VarChar(100)
+  whatsappTemplateDelivered   String? @db.VarChar(100)
+
   /// Lo mismo, pero para las respuestas sobre productos. Va aparte del visto
   /// bueno de los datos del negocio a propósito: si compartieran versión,
   /// añadir respuestas nuevas retiraría sin querer la aprobación de las viejas.
@@ -2147,12 +2165,18 @@ model ShippingWebhookEvent {
   reason              String
   createdAt           DateTime  @default(now())
   resolvedAt          DateTime?
+  /// Quién cerró la guía sin pedido (id de Clerk) y cómo: LINKED (vinculada a un
+  /// pedido) o DISMISSED (descartada: guía de prueba o anulada en EnvioClick).
+  resolvedBy          String?   @db.VarChar(191)
+  resolution          String?   @db.VarChar(20)
+  linkedOrderId       String?
 
   store Store? @relation(fields: [storeId], references: [id])
 
   @@index([storeId, resolvedAt])
   @@index([idOrder])
   @@index([myShipmentReference])
+  @@index([linkedOrderId])
 }
 
 /// Cada llamada de Bold o Wompi al webhook de pagos, incluidas las rechazadas.
@@ -4020,4 +4044,55 @@ model LegalConsentRecord {
   createdAt      DateTime            @default(now())
 
   @@unique([clerkUserId, channel])
+}
+
+enum WhatsAppOptInSource {
+  /// La casilla «Recibir avisos de mi pedido por WhatsApp» del checkout.
+  CHECKOUT
+  /// La clienta lo pidió en el chat y el panel lo anotó (quién y cuándo).
+  PANEL_CHAT
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum OrderNotificationStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// Cada aviso de envío de un pedido, por canal y destinatario (lib/shipment-notifications.ts).
+/// `dedupeKey` es único: insertar la fila es lo que reclama el envío, así un aviso sale una
+/// sola vez aunque dos rutas lo pidan a la vez. Sin direcciones ni teléfonos: solo el rol.
+model OrderNotification {
+  id                String                  @id @default(uuid())
+  storeId           String
+  orderId           String
+  shippingId        String?
+  /// guia_creada, en_camino, en_reparto, entregado, novedad.
+  milestone         String                  @db.VarChar(40)
+  channel           NotificationChannel
+  /// customer o admin.
+  role              String                  @db.VarChar(20)
+  dedupeKey         String                  @unique @db.VarChar(191)
+  status            OrderNotificationStatus
+  /// Por qué no salió o por qué se saltó (sin datos de la clienta).
+  reason            String?                 @db.VarChar(500)
+  /// Id de Resend o wamid de WhatsApp.
+  providerMessageId String?                 @db.VarChar(191)
+  trackingCode      String?                 @db.VarChar(100)
+  /// Id de Clerk cuando lo pidió alguien del panel («Reenviar»).
+  createdBy         String?                 @db.VarChar(191)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id])
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
+  @@index([orderId, createdAt])
+  @@index([shippingId])
 }

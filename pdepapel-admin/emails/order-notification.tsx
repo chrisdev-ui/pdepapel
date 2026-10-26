@@ -27,6 +27,13 @@ interface OrderNotificationProps {
   isAdminEmail?: boolean;
   paymentMethod?: string;
   trackingInfo?: string;
+  /** Transportadora de la guía («Envía», «Coordinadora»), si se conoce. */
+  carrierName?: string | null;
+  /**
+   * Dónde consultar la guía. Sin definir: el rastreo de EnvioClick (los avisos de
+   * siempre). `null`: sin enlace externo (una transportadora manual sin rastreo).
+   */
+  trackingHref?: string | null;
   address?: string;
   phone?: string;
   email?: string;
@@ -206,6 +213,8 @@ export const OrderNotification = ({
   isAdminEmail = false,
   paymentMethod,
   trackingInfo,
+  carrierName,
+  trackingHref,
   address,
   phone,
   email,
@@ -251,6 +260,7 @@ export const OrderNotification = ({
     if (total) rows.push({ key: "Total", value: total });
     if (giftRecipientName)
       rows.push({ key: "Regalo para", value: giftRecipientName });
+    if (hasTracking && carrierName) rows.push({ key: "Transportadora", value: carrierName });
     if (hasTracking) rows.push({ key: "Guía", value: trackingInfo as string });
     if (notificationSource)
       rows.push({ key: "Origen del aviso", value: notificationSource });
@@ -361,14 +371,24 @@ export const OrderNotification = ({
           <SectionLabel tint="blue">Seguimiento</SectionLabel>
           <StickerCard tint="blue" filled>
             <CardText>
+              {carrierName ? (
+                <>
+                  Transportadora: <strong>{carrierName}</strong>
+                  <br />
+                </>
+              ) : null}
               Guía de envío: <strong>{trackingInfo}</strong>
-              <br />
-              <Link
-                href={`https://www.envioclick.com/co/track/${trackingInfo}`}
-                style={link}
-              >
-                Consultar el estado del envío
-              </Link>
+              {trackingHref === null ? null : (
+                <>
+                  <br />
+                  <Link
+                    href={trackingHref ?? `https://www.envioclick.com/co/track/${trackingInfo}`}
+                    style={link}
+                  >
+                    Consultar el estado del envío
+                  </Link>
+                </>
+              )}
             </CardText>
           </StickerCard>
         </>
