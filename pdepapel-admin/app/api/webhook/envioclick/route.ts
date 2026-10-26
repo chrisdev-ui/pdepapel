@@ -6,6 +6,7 @@ import { applyShipmentStatus } from "@/lib/shipment-status-apply";
 import { mapEnvioClickStatus } from "@/lib/shipment-status";
 import { nextShipmentStatus } from "@/lib/shipment-milestones";
 import { queueShipmentStatusChange } from "@/lib/shipment-notifications";
+import { isDismissedGuide } from "@/lib/orphan-guides";
 import {
   InvalidWebhookPayloadError,
   parseProviderDate,
@@ -232,6 +233,9 @@ export async function POST(req: Request) {
       // no debe reintentar contra un envío que no tenemos), pero el aviso queda
       // guardado para que alguien lo revise.
       try {
+        const orphanId = idOrder === undefined || idOrder === null ? null : String(idOrder);
+        // Una guía que Paula descartó (de prueba, anulada) no vuelve a la lista.
+        const dismissed = await isDismissedGuide(prismadb, { storeId: scopedStoreId ?? null, idOrder: orphanId });
         await prismadb.shippingWebhookEvent.create({
           data: {
             storeId: scopedStoreId ?? null,
@@ -244,6 +248,7 @@ export async function POST(req: Request) {
               : null,
             payload,
             reason: "shipping_not_found",
+            ...(dismissed ? { resolvedAt: new Date(), resolution: "DISMISSED" } : {}),
           },
         });
       } catch (error) {

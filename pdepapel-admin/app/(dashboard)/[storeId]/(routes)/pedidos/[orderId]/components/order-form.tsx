@@ -165,6 +165,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const { toast } = useToast();
 
   const requestedType = TYPE_PARAM[searchParams.get("tipo") ?? ""] ?? null;
+  // «Crear pedido desde esta guía» (Envíos → Guías sin pedido): solo al crear.
+  const orphanGuideId = !initialData && /^\d{1,15}$/.test(searchParams.get("guia") ?? "") ? searchParams.get("guia") : null;
   const [chosenType, setChosenType] = useState<CreatableOrderType | null>(
     initialData ? null : requestedType,
   );
@@ -334,6 +336,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         expectedStatus: initialData?.status,
         userId: finalUserId,
         guestId: finalGuestId,
+        ...(orphanGuideId ? { orphanGuideId } : {}),
         payment: {
           ...data.payment,
           ...(options.transactionId
@@ -395,6 +398,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             description: `${response.data.orderNumber} · ${currencyFormatter(Number(response.data.total))}. Abriendo el pedido…`,
             variant: "success",
           });
+          if (response.data.guideLink && !response.data.guideLink.linked) {
+            toast({
+              title: "La guía no quedó vinculada",
+              description: `${response.data.guideLink.error ?? ""} Vincúlala desde Envíos → Guías sin pedido.`,
+              variant: "warning",
+            });
+          }
           startNavigation(() => {
             router.push(`/${storeId}/pedidos/${response.data.id}`);
           });
@@ -807,6 +817,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">{preset.description}</p>
+        </div>
+      )}
+
+      {orphanGuideId && (
+        <div role="note" className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm" data-testid="orphan-guide-banner">
+          Este pedido es para la guía de EnvioClick {orphanGuideId}, que ya existe. Al guardarlo queda vinculada: no
+          cotices ni crees otra guía. La clienta recibe el aviso del estado actual del envío.
         </div>
       )}
 

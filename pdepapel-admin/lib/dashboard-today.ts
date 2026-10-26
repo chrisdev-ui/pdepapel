@@ -9,6 +9,7 @@ import {
   TRANSFER_WINDOW_DAYS as VENTANA_TRANSFERENCIA,
   getColombiaDayBounds as limitesDelDia,
 } from "@/lib/dashboard-windows";
+import { countOrphanGuides } from "@/lib/orphan-guides";
 import prismadb from "@/lib/prismadb";
 import { requireStoreRead } from "@/lib/store-access";
 import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
@@ -44,7 +45,7 @@ const ONLINE_METHODS: PaymentMethod[] = [PaymentMethod.Bold, PaymentMethod.Wompi
 export type SalesChannel = "tienda" | "presencial" | "feria" | "mercadolibre";
 
 export interface TodayPendingAction {
-  kind: "inventory-issue" | "shipping-issue" | "payment-webhook-issue" | "verify-payment" | "awaiting-payment" | "create-guide" | "deliver-pickup" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
+  kind: "inventory-issue" | "shipping-issue" | "payment-webhook-issue" | "verify-payment" | "awaiting-payment" | "create-guide" | "deliver-pickup" | "answer-question" | "restock" | "expiring-quote" | "broken-image" | "orphan-guide";
   title: string;
   meta: string;
   href: string;
@@ -122,6 +123,8 @@ export interface TodayRawInput {
   lowStockThresholdFromSettings?: boolean;
   /** Productos activos con alguna imagen que ya no existe en Cloudinary. */
   brokenImageProducts?: number;
+  /** Guías de EnvioClick hechas fuera del panel que llegan al webhook sin pedido. */
+  orphanGuides?: number;
   /** Líneas de inventario que fallaron al mover y siguen abiertas; `orphans` son las de pedidos ya borrados. */
   inventoryIssues?: { open: number; orphans: number };
   /** Envíos con novedad de la transportadora o en tránsito sin cambios en más de STALE_IN_TRANSIT_DAYS. */
@@ -318,6 +321,17 @@ export function buildTodaySummary(
       weight: 3,
     });
   }
+  if ((input.orphanGuides ?? 0) > 0) {
+    const count = input.orphanGuides ?? 0;
+    pending.push({
+      kind: "orphan-guide",
+      title: `${count} ${count === 1 ? "guía de EnvioClick sin pedido" : "guías de EnvioClick sin pedido"}`,
+      meta: "Se hicieron directo en EnvioClick: sin pedido, la clienta no recibe avisos y no cuentan en inventario ni ventas.",
+      href: `/${storeId}/envios#guias-sin-pedido`,
+      action: "Vincular",
+      weight: 1.5,
+    });
+  }
   pending.sort((a, b) => a.weight - b.weight);
 
   // Semana: 7 días terminando hoy, por día en hora de Colombia.
@@ -495,6 +509,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     orphanInventoryIssues,
     shippingIssueSample,
     shippingIssueCount,
+    orphanGuides,
   ] = await Promise.all([
     prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, type: { notIn: NON_REVENUE_ORDER_TYPES }, ...paidWithin(dayStart, dayEnd) }, select: { total: true } }),
     prismadb.marketplaceOrder.findMany({ where: createSettledMarketplaceSalesWhere(storeId, { start: dayStart, end: dayEnd }), select: { netAmount: true } }),
@@ -557,6 +572,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       select: { orderNumber: true, fullName: true, shipping: { select: { status: true, updatedAt: true } } },
     }),
     prismadb.order.count({ where: shippingIssueWhere }),
+    countOrphanGuides(prismadb, storeId).catch(() => 0),
   ]);
 
   const paymentWebhookIssues = await countRecentPaymentWebhookIssues(storeId, now);
@@ -588,6 +604,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       previousWeekMarketplaceNet: previousWeekMarketplace.reduce((sum, o) => sum + Number(o.netAmount ?? 0), 0),
       weekItems,
       brokenImageProducts,
+      orphanGuides,
       inventoryIssues: { open: openInventoryIssues, orphans: orphanInventoryIssues },
       paymentWebhookIssues,
       shippingIssues: {

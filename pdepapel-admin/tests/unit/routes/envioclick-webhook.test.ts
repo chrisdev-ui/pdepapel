@@ -14,7 +14,7 @@ vi.mock("@/lib/prismadb", () => ({
   default: {
     $transaction: mocks.transaction,
     order: { findUnique: mocks.findUpdatedOrder },
-    shippingWebhookEvent: { create: mocks.createOrphanEvent },
+    shippingWebhookEvent: { create: mocks.createOrphanEvent, findFirst: vi.fn().mockResolvedValue(null) },
   },
 }));
 vi.mock("@/lib/shipment-notifications", () => ({ queueShipmentStatusChange: mocks.queueShipmentStatusChange }));

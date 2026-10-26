@@ -91,6 +91,7 @@ import { reserveCapsuleOrder, resolveCapsuleOrder } from "@/lib/capsule-checkout
 import { orderLegalConsentData } from "@/lib/legal-consent";
 import { orderWhatsAppOptInData } from "@/lib/whatsapp-opt-in";
 import { queueShipmentMilestone } from "@/lib/shipment-notifications";
+import { linkOrphanGuide } from "@/lib/orphan-guides";
 
 type StoreFreight = {
   idRate: number;
@@ -958,8 +959,13 @@ async function createOrder(
       error: null as string | null,
     };
 
+    // «Crear pedido desde esta guía» (Envíos → Guías sin pedido): la guía ya
+    // existe en EnvioClick; crear otra la pagaría dos veces.
+    const orphanGuideId = isStoreOwner && typeof body?.orphanGuideId === "string" && /^\d{1,15}$/.test(body.orphanGuideId) ? body.orphanGuideId : null;
+
     if (
       isStoreOwner &&
+      !orphanGuideId &&
       status === OrderStatus.PAID &&
       shippingProvider === ShippingProvider.ENVIOCLICK &&
       envioClickIdRate
@@ -982,6 +988,20 @@ async function createOrder(
       }
     }
 
+    let guideLink: { linked: boolean; error: string | null } | null = null;
+    if (orphanGuideId) {
+      try {
+        const linked = await prismadb.$transaction((tx) =>
+          linkOrphanGuide(tx, { storeId: params.storeId, idOrder: orphanGuideId, order: { id: order.id }, userId: userLogged as string }),
+        );
+        if (linked.milestone) queueShipmentMilestone({ orderId: order.id, storeId: params.storeId, milestone: linked.milestone, source: "pedido desde guía" });
+        guideLink = { linked: true, error: null };
+      } catch (error) {
+        // El pedido ya existe: se avisa y la guía sigue en la lista para vincularla a mano.
+        guideLink = { linked: false, error: error instanceof Error ? error.message : "No se pudo vincular la guía" };
+      }
+    }
+
     subscribeFromStoreOrder({ storeId: params.storeId, email, optIn: body?.newsletterOptIn, isStoreOwner });
 
     // Queue email sending asynchronously (don't wait for it)
@@ -998,7 +1018,7 @@ async function createOrder(
     }
 
     return NextResponse.json(
-      { ...order, guideCreation: guideCreationResult },
+      { ...order, guideCreation: guideCreationResult, guideLink },
       {
         headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
       },

@@ -271,4 +271,10 @@ describe("dashboard today", () => {
       expect(summary.lowStock).toMatchObject({ count: 0, threshold: DEFAULT_LOW_STOCK_THRESHOLD, thresholdFromSettings: false });
     });
   });
+
+  it("las guías de EnvioClick sin pedido salen como pendiente que lleva a Envíos; sin guías, nada", () => {
+    const withGuides = buildTodaySummary({ ...base(), orphanGuides: 2 }, "s1").pending.find((p) => p.kind === "orphan-guide");
+    expect(withGuides).toMatchObject({ title: "2 guías de EnvioClick sin pedido", href: "/s1/envios#guias-sin-pedido", action: "Vincular" });
+    expect(buildTodaySummary({ ...base(), orphanGuides: 0 }, "s1").pending.some((p) => p.kind === "orphan-guide")).toBe(false);
+  });
 });

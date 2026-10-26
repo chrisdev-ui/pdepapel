@@ -10,8 +10,11 @@ import { describe, expect, it } from "vitest";
  */
 const ROOT = join(__dirname, "..", "..", "..");
 const SOURCES = ["app", "lib"];
-const DEFINITIONS = new Set(["lib/shipping-helpers.ts", "lib/shipment-status-apply.ts"]);
-const MOVES = /\b(createGuideForOrder|applyShipmentStatus)\(/;
+// Definiciones, y `orphan-guides`: vincula dentro de la transacción de quien
+// llama, así que el aviso lo manda quien llama después de confirmar (y
+// `linkOrphanGuide(` está en MOVES para exigírselo).
+const DEFINITIONS = new Set(["lib/shipping-helpers.ts", "lib/shipment-status-apply.ts", "lib/orphan-guides.ts"]);
+const MOVES = /\b(createGuideForOrder|applyShipmentStatus|linkOrphanGuide)\(/;
 const NOTIFIES = /\b(notifyShipmentMilestone|queueShipmentMilestone|queueShipmentStatusChange|queueAppliedShipmentChanges)\(/;
 
 function walk(dir: string): string[] {
@@ -39,6 +42,7 @@ describe("toda ruta que crea una guía o mueve un envío avisa a la clienta", ()
         "app/api/[storeId]/orders/[orderId]/shipping/create-guide/route.ts",
         "app/api/[storeId]/orders/[orderId]/shipping/requote-and-guide/route.ts",
         "lib/guide-background.ts",
+        "app/api/[storeId]/shipments/orphan-guides/[idOrder]/route.ts",
       ]),
     );
   });
