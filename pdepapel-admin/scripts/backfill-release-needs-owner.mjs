@@ -3,8 +3,8 @@
  * del bot de antes del 2026-10-27 (reglas en `scripts/lib/needs-owner-release-backfill.mjs`).
  * Solo imprime conteos e ids internos: ni nombres, ni teléfonos, ni mensajes.
  *
- * REQUISITO: el código del lote «estabilidad del bot» desplegado (el bot
- * contesta en el paso 0 y medio a las que quedan en «owner_window»).
+ * Deja cada una como la deja el bot al liberarla (paso 0 y medio): OPEN y sin
+ * motivo. REQUISITO: el lote «estabilidad del bot» desplegado.
  *
  *   node --env-file=.env scripts/backfill-release-needs-owner.mjs
  *       ENSAYO con el usuario de solo lectura: cuántas, por antigüedad, y las
@@ -20,7 +20,7 @@ import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { applyNeedsOwnerRelease, planNeedsOwnerRelease, summarizeByAge, undoStatements } from "./lib/needs-owner-release-backfill.mjs";
+import { RELEASE_CHANGES, applyNeedsOwnerRelease, planNeedsOwnerRelease, summarizeByAge, undoStatements } from "./lib/needs-owner-release-backfill.mjs";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -48,6 +48,10 @@ try {
   const plan = await planNeedsOwnerRelease(db, { storeId, now });
   console.log(`Alcance: ${storeId ?? "todas las tiendas"} · modo ${apply ? "APLICAR" : "ENSAYO (sin escribir)"}`);
   console.log(`Conversaciones a liberar: ${plan.rows.length} · por último mensaje de Paula: ${JSON.stringify(summarizeByAge(plan.rows, now))}`);
+  const cambios = Object.entries(RELEASE_CHANGES)
+    .map(([campo, { from, to }]) => `${campo}: ${from} → ${to}`)
+    .join(" · ");
+  console.log(`Cambio por fila (todas iguales): ${cambios} · waitAttendedAt sin tocar · nada se envía`);
 
   const dir = join(homedir(), "pdepapel-backups", now.toISOString().slice(0, 10));
   mkdirSync(dir, { recursive: true });

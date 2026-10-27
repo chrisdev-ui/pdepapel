@@ -48,13 +48,16 @@ describe("backfill de NEEDS_OWNER viejos (MySQL)", () => {
 
     expect(await applyNeedsOwnerRelease(testPrisma, plan)).toBe(1);
     const after = await testPrisma.conversation.findMany({ where: { id: { in: [stale, recent, botLast, pause, open, withOrder] } }, select: { id: true, status: true, needsOwnerReason: true } });
-    expect(after.find((row) => row.id === stale)).toMatchObject({ status: "NEEDS_OWNER", needsOwnerReason: "owner_window" });
+    // Igual que el bot al liberar (paso 0 y medio): sale de «Esperando a Paula».
+    expect(after.find((row) => row.id === stale)).toMatchObject({ status: "OPEN", needsOwnerReason: null });
+    expect(after.find((row) => row.id === pause)).toMatchObject({ status: "NEEDS_OWNER", needsOwnerReason: "owner_window" });
+    expect(after.filter((row) => ![stale, open].includes(row.id)).every((row) => row.status === "NEEDS_OWNER")).toBe(true);
     expect(after.filter((row) => row.id !== stale && row.id !== pause).every((row) => row.needsOwnerReason === null)).toBe(true);
 
     expect((await planNeedsOwnerRelease(testPrisma, { storeId: fixture.store.id })).rows).toHaveLength(0);
 
     for (const statement of undoStatements(plan.rows)) await testPrisma.$executeRawUnsafe(statement);
-    await expect(testPrisma.conversation.findUniqueOrThrow({ where: { id: stale }, select: { needsOwnerReason: true } })).resolves.toEqual({ needsOwnerReason: null });
+    await expect(testPrisma.conversation.findUniqueOrThrow({ where: { id: stale }, select: { status: true, needsOwnerReason: true } })).resolves.toEqual({ status: "NEEDS_OWNER", needsOwnerReason: null });
     await expect(testPrisma.conversation.findUniqueOrThrow({ where: { id: pause }, select: { needsOwnerReason: true } })).resolves.toEqual({ needsOwnerReason: "owner_window" });
     expect((await planNeedsOwnerRelease(testPrisma, { storeId: fixture.store.id })).rows).toHaveLength(1);
 
@@ -68,7 +71,7 @@ describe("backfill de NEEDS_OWNER viejos (MySQL)", () => {
     expect(plan.rows.length).toBeGreaterThanOrEqual(1);
     await testPrisma.conversation.update({ where: { id: a }, data: { status: "OPEN" } });
     await expect(applyNeedsOwnerRelease(testPrisma, plan)).rejects.toThrow(/se revierte/);
-    const untouched = await testPrisma.conversation.findMany({ where: { id: { in: plan.rows.map((row: { id: string }) => row.id) } }, select: { needsOwnerReason: true } });
-    expect(untouched.every((row) => row.needsOwnerReason === null)).toBe(true);
+    const untouched = await testPrisma.conversation.findMany({ where: { id: { in: plan.rows.map((row: { id: string }) => row.id).filter((id: string) => id !== a) } }, select: { status: true, needsOwnerReason: true } });
+    expect(untouched.every((row) => row.status === "NEEDS_OWNER" && row.needsOwnerReason === null)).toBe(true);
   });
 });

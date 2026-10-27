@@ -8,9 +8,10 @@
  *   status NEEDS_OWNER, needsOwnerReason vacío, sin pedido enlazado,
  *   Paula escribió por última vez hace más de 7 días y lo último que salió es suyo.
  *
- * Solo cambia `needsOwnerReason` a «owner_window»: la conversación sigue en
- * NEEDS_OWNER (el panel no cambia) hasta el siguiente mensaje de la clienta,
- * que el bot ya contesta (paso 0 y medio). No manda nada a nadie.
+ * Hace lo mismo que el bot al liberar una conversación (paso 0 y medio):
+ * `status` OPEN y `needsOwnerReason` vacío. Sale de «Esperando a Paula» y el
+ * siguiente mensaje de la clienta lo contesta el bot. No toca «Marcar como
+ * atendido» (`waitAttendedAt`) ni manda nada a nadie.
  *
  * Puro: lo usan `scripts/backfill-release-needs-owner.mjs` y sus pruebas.
  */
@@ -59,11 +60,19 @@ export function summarizeByAge(rows, now = new Date()) {
   return buckets;
 }
 
+/** Lo que cambia en cada fila, campo por campo, para el ensayo. */
+export const RELEASE_CHANGES = {
+  status: { from: "NEEDS_OWNER", to: "OPEN" },
+  needsOwnerReason: { from: null, to: null },
+};
+
 /** Las líneas para volver atrás, a mano y con el mismo motivo aprobado. */
 export function undoStatements(rows) {
   if (!rows.length) return [];
   const ids = rows.map((row) => `'${String(row.id).replace(/'/g, "")}'`).join(", ");
-  return [`UPDATE \`Conversation\` SET \`needsOwnerReason\` = NULL WHERE \`id\` IN (${ids}) AND \`needsOwnerReason\` = 'owner_window';`];
+  return [
+    `UPDATE \`Conversation\` SET \`status\` = 'NEEDS_OWNER', \`needsOwnerReason\` = NULL WHERE \`id\` IN (${ids}) AND \`status\` = 'OPEN' AND \`needsOwnerReason\` IS NULL;`,
+  ];
 }
 
 /**
@@ -77,7 +86,7 @@ export async function applyNeedsOwnerRelease(db, plan) {
   return db.$transaction(async (tx) => {
     const updated = await tx.conversation.updateMany({
       where: { id: { in: ids }, status: "NEEDS_OWNER", needsOwnerReason: null, orderId: null, lastOwnerAt: { lt: plan.cutoff } },
-      data: { needsOwnerReason: "owner_window" },
+      data: { status: "OPEN", needsOwnerReason: null },
     });
     if (updated.count !== ids.length) {
       throw new Error(`needs-owner-release: el plan tenía ${ids.length} y se cambiaron ${updated.count}; se revierte. Repite el ensayo.`);
