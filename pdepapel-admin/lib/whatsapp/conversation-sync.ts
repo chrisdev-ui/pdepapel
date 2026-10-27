@@ -13,6 +13,8 @@ import { claimQueueRow } from "@/lib/atomic-claim";
 import { runInBackground } from "@/lib/background";
 import { normalizePhone } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
+import { runSelfChatCommands } from "@/lib/whatsapp/admin-commands";
+import { businessPhoneOf, loadSelfChatIdentity, scanSelfChat } from "@/lib/whatsapp/self-chat";
 import { NO_MATCH_ACKNOWLEDGEMENT, handOffAfterBotError, runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
 import { isBurstModeOn } from "@/lib/whatsapp/bot-guards";
 import { inboundKindOf, type InboundKind } from "@/lib/whatsapp/message-kinds";
@@ -987,6 +989,18 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
 
   try {
     const storeId = await resolveStoreId(event.connection?.storeId);
+    // Chat de Paula consigo misma: ni sus ecos ni un mensaje que entre desde
+    // el número del negocio se archivan como conversación (la entrada ya
+    // cierra los cuerpos que son solo eso; esto cubre los mezclados).
+    const payloadRecord = event.payload && typeof event.payload === "object" && !Array.isArray(event.payload) ? (event.payload as Record<string, unknown>) : {};
+    const selfEchoIds = new Set<string>();
+    if (extracted.ownerEchoes.length > 0) {
+      const scan = scanSelfChat(payloadRecord, (await loadSelfChatIdentity(storeId)).bsuid);
+      for (const echo of scan.echoes) if (echo.selfChat && echo.id) selfEchoIds.add(echo.id);
+    }
+    const businessPhone = extracted.messages.length > 0 ? businessPhoneOf(payloadRecord) : null;
+    if (businessPhone) extracted.messages = extracted.messages.filter((message) => message.phone !== businessPhone);
+    if (selfEchoIds.size > 0) extracted.ownerEchoes = extracted.ownerEchoes.filter((echo) => !(echo.externalId && selfEchoIds.has(echo.externalId)));
     let statusesApplied = 0;
     let echoesFiled = 0;
     const botResults: WhatsAppBotResult[] = [];
@@ -1070,6 +1084,9 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
       const stale = backlog || now.getTime() - (echo.sentAt ?? event.createdAt).getTime() > WHATSAPP_STALE_AFTER_MS;
       if (await fileOwnerEcho(storeId, echo, event.id, { stale })) echoesFiled += 1;
     }
+
+    // Nunca lanza por un comando: cada fila guarda su propio fallo.
+    if (selfEchoIds.size > 0) await runSelfChatCommands(storeId, Array.from(selfEchoIds), { backlog });
 
     for (const status of extracted.statuses) {
       if (!status.status) {

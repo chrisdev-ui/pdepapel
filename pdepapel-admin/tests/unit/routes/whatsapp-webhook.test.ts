@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 const VERIFY_TOKEN = "test-whatsapp-verify-token-0123456789";
 const APP_SECRET = "meta-app-secret";
@@ -17,7 +17,13 @@ const mocks = vi.hoisted(() => ({
   convUpdateMany: vi.fn(),
   stash: vi.fn(),
   sweep: vi.fn(),
-  env: { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789", WHATSAPP_APP_SECRET: undefined as string | undefined },
+  connectionUpdate: vi.fn(),
+  commandCreate: vi.fn(),
+  env: {
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789",
+    WHATSAPP_APP_SECRET: undefined as string | undefined,
+    CHAKRA_WEBHOOK_SECRET: undefined as string | undefined,
+  },
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
@@ -26,7 +32,8 @@ vi.mock("@/lib/whatsapp/webhook-replay", () => ({ stashFailedWhatsAppWebhook: mo
 vi.mock("@/lib/whatsapp/recovery", () => ({ sweepWhatsAppEventsQuietly: mocks.sweep }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
-    marketplaceConnection: { findFirst: mocks.findFirst },
+    marketplaceConnection: { findFirst: mocks.findFirst, update: mocks.connectionUpdate },
+    whatsAppAdminCommand: { create: mocks.commandCreate },
     marketplaceWebhookEvent: {
       upsert: mocks.upsert,
       findUniqueOrThrow: mocks.findUniqueOrThrow,
@@ -451,5 +458,114 @@ describe("POST /api/webhook/whatsapp — eco de Paula", () => {
     const response = await post(metaBody);
     expect(response.status).toBe(401);
     expect(mocks.stash).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/webhook/whatsapp — firma de Chakra y chat consigo misma", () => {
+  const CHAKRA_SECRET = "chakra-test-secret";
+  const BUSINESS = "573009999999";
+  const sign = (raw: string) => createHmac("sha256", CHAKRA_SECRET).update(raw).digest("hex");
+  const selfEchoBody = (text: string) =>
+    JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "WABA-123",
+          changes: [
+            {
+              field: "smb_message_echoes",
+              value: {
+                metadata: { phone_number_id: "PHONE-9", display_phone_number: "+57 300 9999999" },
+                message_echoes: [
+                  { from: BUSINESS, to: BUSINESS, to_user_id: "CO.7000000000000001", id: "wamid.SELF", timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body: text } },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+  let info: MockInstance<(...args: unknown[]) => void>;
+  let warn: MockInstance<(...args: unknown[]) => void>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.env.WHATSAPP_APP_SECRET = undefined;
+    mocks.env.CHAKRA_WEBHOOK_SECRET = CHAKRA_SECRET;
+    mocks.findFirst.mockResolvedValue({ id: "conn-1", storeId: "store-1", selfPhone: null, selfBsuid: null });
+    mocks.upsert.mockResolvedValue({ id: "event-self", connectionId: "conn-1" });
+    mocks.ignoredFindFirst.mockResolvedValue(null);
+    mocks.enqueue.mockResolvedValue(true);
+    mocks.eventUpdate.mockResolvedValue({});
+    mocks.connectionUpdate.mockResolvedValue({});
+    mocks.commandCreate.mockResolvedValue({});
+    info = vi.spyOn(console, "info").mockImplementation(() => {}) as unknown as MockInstance<(...args: unknown[]) => void>;
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {}) as unknown as MockInstance<(...args: unknown[]) => void>;
+  });
+
+  afterEach(() => {
+    info.mockRestore();
+    warn.mockRestore();
+    mocks.env.CHAKRA_WEBHOOK_SECRET = undefined;
+  });
+
+  const authLog = () => info.mock.calls.find((call: unknown[]) => call[0] === "[WHATSAPP_WEBHOOK] auth")?.[1];
+
+  it("con el secreto puesto, un cuerpo falsificado con el token pero sin firma se rechaza sin tocar la base", async () => {
+    const response = await post(selfEchoBody("/estado ORD-1"), { url: `${BASE}?token=${VERIFY_TOKEN}` });
+    expect(response.status).toBe(401);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.commandCreate).not.toHaveBeenCalled();
+    expect(authLog()).toEqual({ method: "rejected", tokenVia: "query", chakraSignature: "absent" });
+  });
+
+  it("una firma de Chakra inválida se rechaza aunque el token sea bueno", async () => {
+    const response = await post(metaBody, { headers: { "x-webhook-token": VERIFY_TOKEN, "x-chakra-signature-256": "0".repeat(64) } });
+    expect(response.status).toBe(401);
+    expect(authLog()).toEqual({ method: "rejected", tokenVia: "header", chakraSignature: "present" });
+  });
+
+  it("acepta la firma de Chakra (hex sin prefijo) y el registro solo dice el método, nunca valores", async () => {
+    const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}`, headers: { "x-chakra-signature-256": sign(metaBody) } });
+    expect(response.status).toBe(200);
+    expect(authLog()).toEqual({ method: "chakra_hmac", tokenVia: "query", chakraSignature: "present" });
+    const logged = JSON.stringify(info.mock.calls);
+    expect(logged).not.toContain(VERIFY_TOKEN);
+    expect(logged).not.toContain(CHAKRA_SECRET);
+    expect(logged).not.toContain(sign(metaBody));
+  });
+
+  it("sin el secreto sigue aceptando el token como hoy, dice por dónde llegó y avisa una sola vez", async () => {
+    mocks.env.CHAKRA_WEBHOOK_SECRET = undefined;
+    expect((await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` })).status).toBe(200);
+    expect(authLog()).toEqual({ method: "token_query", tokenVia: "query", chakraSignature: "absent" });
+    info.mockClear();
+    expect((await post(metaBody, { headers: { "x-webhook-token": VERIFY_TOKEN } })).status).toBe(200);
+    expect(authLog()).toEqual({ method: "token_header", tokenVia: "header", chakraSignature: "absent" });
+    const missing = warn.mock.calls.filter((call: unknown[]) => String(call[0]).includes("CHAKRA_WEBHOOK_SECRET"));
+    expect(missing.length).toBeLessThanOrEqual(1);
+  });
+
+  it("firmado: guarda el comando, aprende el número del negocio y lo encola en la fila propia", async () => {
+    const raw = selfEchoBody("/ayuda");
+    const response = await post(raw, { headers: { "x-chakra-signature-256": sign(raw) } });
+    expect(response.status).toBe(200);
+    expect(mocks.commandCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ storeId: "store-1", echoId: "wamid.SELF", command: "ayuda", args: null }) });
+    expect(mocks.connectionUpdate).toHaveBeenCalledWith({ where: { id: "conn-1" }, data: { selfPhone: BUSINESS, selfBsuid: "CO.7000000000000001" } });
+    expect(mocks.enqueue).toHaveBeenCalledWith("event-self", "self:store-1");
+    // Nunca toca la conversación (no marca lastOwnerAt del propio número).
+    expect(mocks.convUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("sin firma (solo token): no guarda comando ni aprende nada, y cierra el evento sin encolar", async () => {
+    mocks.env.CHAKRA_WEBHOOK_SECRET = undefined;
+    const response = await post(selfEchoBody("/ayuda"), { headers: { "x-webhook-token": VERIFY_TOKEN } });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ queued: false, selfChat: true });
+    expect(mocks.commandCreate).not.toHaveBeenCalled();
+    expect(mocks.connectionUpdate).not.toHaveBeenCalled();
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+    expect(mocks.eventUpdate.mock.calls[0][0].data).toMatchObject({ status: "PROCESSED" });
   });
 });

@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ count: vi.fn(), answers: vi.fn() }));
 
 vi.mock("@/lib/prismadb", () => ({
-  default: { conversationMessage: { count: mocks.count }, assistantMessage: { count: mocks.answers } },
+  default: {
+    conversationMessage: { count: mocks.count },
+    assistantMessage: { count: mocks.answers },
+    marketplaceConnection: { findUnique: vi.fn().mockResolvedValue(null) },
+  },
 }));
 
 import { measureWhatsAppBotRatio, WHATSAPP_BOT_RATIO_LIMIT } from "@/lib/job-runs";

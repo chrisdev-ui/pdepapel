@@ -1,6 +1,7 @@
 import { ConversationMessageDirection, ConversationMessageStatus, Prisma } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import { loadSelfChatIdentity, notSelfChatSql } from "@/lib/whatsapp/self-chat";
 import { NO_MATCH_ACKNOWLEDGEMENT, TALK_TO_OWNER_ACKNOWLEDGEMENT, UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, UNREADABLE_MEDIA_ACKNOWLEDGEMENT } from "@/lib/whatsapp/bot-acknowledgements";
 import { WAITING_BADGE_AFTER_MS, currentWait, type Wait, type WaitMessage } from "@/lib/whatsapp/waiting";
 
@@ -122,6 +123,8 @@ export async function findWaitingConversations(
              AND (c.\`lastOutboundAt\` IS NULL OR m.\`createdAt\` >= c.\`lastOutboundAt\`)
              AND (c.\`waitAttendedAt\` IS NULL OR m.\`createdAt\` > c.\`waitAttendedAt\`))`
       : Prisma.empty;
+  // Lista, insignia, aviso push y recordatorio salen de aquí: el chat consigo misma nunca espera.
+  const notSelf = notSelfChatSql(await loadSelfChatIdentity(storeId));
   const candidates = await prismadb.$queryRaw<{ id: string; waitAttendedAt: Date | null }[]>`
     SELECT c.\`id\`, c.\`waitAttendedAt\` FROM \`Conversation\` c
      WHERE c.\`storeId\` = ${storeId}
@@ -131,6 +134,7 @@ export async function findWaitingConversations(
        AND (c.\`lastOutboundAt\` IS NULL OR c.\`lastInboundAt\` > c.\`lastOutboundAt\`)
        AND (c.\`waitAttendedAt\` IS NULL OR c.\`lastInboundAt\` > c.\`waitAttendedAt\`)
        ${oldMessage}
+       ${notSelf}
      ORDER BY c.\`lastInboundAt\` DESC
      LIMIT ${CANDIDATE_LIMIT}`;
   const waiting = new Map<string, WaitingEntry>();

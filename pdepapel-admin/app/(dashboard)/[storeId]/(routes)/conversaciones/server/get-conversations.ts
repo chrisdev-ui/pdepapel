@@ -4,6 +4,7 @@ import { ConversationMessageSentBy } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 import { parseCartMetadata, previewMessage, type ConversationRow } from "@/lib/conversations";
+import { loadSelfChatIdentity, notSelfChatWhere } from "@/lib/whatsapp/self-chat";
 import { findWaitingConversations } from "@/lib/whatsapp/waiting-list";
 
 /**
@@ -12,8 +13,10 @@ import { findWaitingConversations } from "@/lib/whatsapp/waiting-list";
  */
 export async function getConversations(storeId: string): Promise<ConversationRow[]> {
   await requireStoreOwner(storeId);
+  // El chat de Paula consigo misma no es una clienta: fuera de la lista.
+  const self = await loadSelfChatIdentity(storeId);
   const conversations = await prismadb.conversation.findMany({
-    where: { storeId },
+    where: { storeId, ...notSelfChatWhere(self) },
     select: {
       id: true,
       phone: true,

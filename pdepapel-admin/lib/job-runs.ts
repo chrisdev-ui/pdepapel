@@ -10,6 +10,7 @@ import {
 import { ConversationMessageDirection, ConversationMessageSentBy, PaymentWebhookEventStatus, type Prisma } from "@prisma/client";
 import { NOT_RECONCILIATION_WHERE, UNAUTHENTICATED_REJECTION_WHERE } from "@/lib/payment-webhook-events";
 import prismadb from "@/lib/prismadb";
+import { loadSelfChatIdentity, notSelfChatWhere } from "@/lib/whatsapp/self-chat";
 import { shortMemo } from "@/lib/short-memo";
 import { requireStoreRead } from "@/lib/store-access";
 
@@ -452,7 +453,8 @@ export const WHATSAPP_BOT_RATIO_LIMIT = 0.5;
  */
 export async function measureWhatsAppBotRatio(storeId: string, now: Date): Promise<SystemStatusRow> {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const base = { conversation: { storeId }, createdAt: { gte: since } };
+  const self = await loadSelfChatIdentity(storeId);
+  const base = { conversation: { storeId, ...notSelfChatWhere(self) }, createdAt: { gte: since } };
   const [inbound, bot] = await Promise.all([
     prismadb.conversationMessage.count({
       where: { ...base, direction: ConversationMessageDirection.INBOUND, sentBy: ConversationMessageSentBy.CUSTOMER },

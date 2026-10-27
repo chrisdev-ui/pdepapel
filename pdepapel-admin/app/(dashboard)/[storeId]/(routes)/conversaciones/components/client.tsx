@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
-import { Bot, CheckCheck, Hourglass } from "lucide-react";
+import { Bot, CheckCheck, Hourglass, Terminal } from "lucide-react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { columns } from "./columns";
@@ -70,13 +70,22 @@ const ConversationClient: React.FC<ConversationClientProps> = ({ data }) => {
               : "Historial de WhatsApp. Contesta desde tu celular como siempre; aquí queda todo guardado."
           }
         />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push(`/${storeId}/conversaciones/respuestas`)}
-        >
-          <Bot className="mr-2 h-4 w-4" /> Respuestas automáticas
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/${storeId}/conversaciones/comandos`)}
+          >
+            <Terminal className="mr-2 h-4 w-4" aria-hidden="true" /> Comandos
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/${storeId}/conversaciones/respuestas`)}
+          >
+            <Bot className="mr-2 h-4 w-4" /> Respuestas automáticas
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button

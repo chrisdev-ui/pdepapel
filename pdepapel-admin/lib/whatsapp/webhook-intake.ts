@@ -12,6 +12,8 @@ import {
 } from "@/lib/whatsapp/ignored-contacts";
 import { markOwnerActivity } from "@/lib/whatsapp/owner-activity";
 import { enqueueWhatsAppWebhookEvent } from "@/lib/whatsapp/queue";
+import { recordSelfChatCommands } from "@/lib/whatsapp/admin-commands";
+import { businessPhoneOf, scanSelfChat } from "@/lib/whatsapp/self-chat";
 import {
   classifyWhatsAppWebhookEvent,
   getWhatsAppWebhookConversationKey,
@@ -40,7 +42,15 @@ export async function resolveFallbackStoreId(identity: {
  * Guarda un cuerpo ya autenticado y lo encola. La usan el webhook y el
  * reintento firmado; lanza si la base no lo puede guardar.
  */
-export async function ingestWhatsAppWebhook(body: string) {
+/** Nota de los eventos que son solo chat de Paula consigo misma: se guardan y no se archivan como conversación. */
+export const SELF_CHAT_EVENT_NOTE = "Chat consigo misma: no es una conversación con clienta.";
+
+/**
+ * `signed`: la entrega traía firma válida (Chakra o Meta). Solo entonces se
+ * aprende el número del negocio y se guardan comandos; el reintento interno
+ * no la conserva y por eso nunca ejecuta comandos.
+ */
+export async function ingestWhatsAppWebhook(body: string, options: { signed?: boolean } = {}) {
   const payload = parseWhatsAppWebhookPayload(body);
   const { topic, resource, sellerId, eventKey } =
     classifyWhatsAppWebhookEvent(payload);
@@ -48,7 +58,7 @@ export async function ingestWhatsAppWebhook(body: string) {
   const connection = sellerId
     ? await prismadb.marketplaceConnection.findFirst({
         where: { provider: MarketplaceProvider.WHATSAPP, sellerId },
-        select: { id: true, storeId: true },
+        select: { id: true, storeId: true, selfPhone: true, selfBsuid: true },
       })
     : null;
 
@@ -94,6 +104,35 @@ export async function ingestWhatsAppWebhook(body: string) {
     } else {
       throw error;
     }
+  }
+
+  /*
+   * Chat consigo misma. Va antes de los ignorados y de marcar el eco de
+   * Paula: no es una clienta y no debe crear ni tocar conversaciones.
+   */
+  const selfChat = await handleSelfChat(payload, event.id, connection, Boolean(options.signed));
+  if (selfChat.closed || (selfChat.ownLane && connection)) {
+    let queued = false;
+    if (!selfChat.closed && connection) {
+      // Solo comandos: a su fila, sin pasar por ignorados ni por la marca del eco de Paula.
+      queued = await enqueueWhatsAppWebhookEvent(event.id, `self:${connection.storeId}`).catch((error: unknown) => {
+        console.error("[WHATSAPP_WEBHOOK] No se pudo encolar el comando", {
+          eventId: event.id,
+          message: error instanceof Error ? error.message : "unknown",
+        });
+        return false;
+      });
+    }
+    return {
+      received: true,
+      stored: true,
+      eventId: event.id,
+      topic,
+      connectedAccount: Boolean(event.connectionId),
+      queued,
+      ignored: false,
+      selfChat: true,
+    };
   }
 
   /*
@@ -218,4 +257,74 @@ export async function ingestWhatsAppWebhook(body: string) {
     queued,
     ignored: false,
   };
+}
+
+/**
+ * Aprende el número y el BSUID del negocio (solo de entregas firmadas: con
+ * el token, alguien podría hacer pasar a una clienta por el negocio y sacarla
+ * de las listas), guarda los comandos y cierra el evento si todo él es chat
+ * consigo misma y no trae comandos que ejecutar.
+ */
+async function handleSelfChat(
+  payload: ReturnType<typeof parseWhatsAppWebhookPayload>,
+  eventId: string,
+  connection: { id: string; storeId: string; selfPhone: string | null; selfBsuid: string | null } | null,
+  signed: boolean,
+): Promise<{ closed: boolean; ownLane: boolean }> {
+  const scan = scanSelfChat(payload, connection?.selfBsuid ?? null);
+  const selfEchoes = scan.echoes.filter((echo) => echo.selfChat);
+
+  if (signed && connection) {
+    const phone = scan.learned.phone ?? businessPhoneOf(payload);
+    const bsuid = scan.learned.bsuid;
+    const data = {
+      ...(phone && phone !== connection.selfPhone ? { selfPhone: phone } : {}),
+      ...(bsuid && bsuid !== connection.selfBsuid ? { selfBsuid: bsuid } : {}),
+    };
+    if (Object.keys(data).length > 0) {
+      await prismadb.marketplaceConnection.update({ where: { id: connection.id }, data }).catch((error: unknown) => {
+        console.error("[WHATSAPP_WEBHOOK] No se pudo guardar el número del negocio", {
+          message: error instanceof Error ? error.message : "unknown",
+        });
+      });
+    }
+  }
+
+  if (selfEchoes.length === 0) return { closed: false, ownLane: false };
+
+  let commands = 0;
+  if (signed && connection) {
+    try {
+      commands = await recordSelfChatCommands(connection.storeId, selfEchoes);
+    } catch (error) {
+      // Sin la fila no hay comando: se pierde ese, pero el webhook no falla.
+      console.error("[WHATSAPP_WEBHOOK] No se pudo guardar el comando", {
+        eventId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  } else if (selfEchoes.some((echo) => echo.text?.trim().startsWith("/"))) {
+    console.warn("[WHATSAPP_WEBHOOK] Comando sin firma: no se ejecuta", { eventId });
+  }
+
+  // Un cuerpo mezclado (nunca visto) sigue en la fila de la clienta; el procesador salta los ecos propios.
+  if (!scan.onlySelfChat || commands > 0) return { closed: false, ownLane: scan.onlySelfChat };
+
+  await prismadb.marketplaceWebhookEvent
+    .update({
+      where: { id: eventId },
+      data: {
+        status: MarketplaceWebhookEventStatus.PROCESSED,
+        processedAt: new Date(),
+        nextRetryAt: null,
+        lastError: SELF_CHAT_EVENT_NOTE,
+      },
+    })
+    .catch((error: unknown) => {
+      console.error("[WHATSAPP_WEBHOOK] No se pudo cerrar el evento del chat consigo misma", {
+        eventId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+  return { closed: true, ownLane: true };
 }

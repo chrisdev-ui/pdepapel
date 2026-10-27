@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { env } from "@/lib/env.mjs";
-import { readWebhookToken, safeSecretEquals } from "@/lib/webhook-auth";
+import { safeSecretEquals } from "@/lib/webhook-auth";
 import {
   classifyWhatsAppWebhookEvent,
   parseWhatsAppWebhookPayload,
-  verifyWhatsAppWebhookSignature,
 } from "@/lib/whatsapp/webhook";
+import { authenticateWhatsAppWebhook } from "@/lib/whatsapp/webhook-auth";
 import { runInBackground } from "@/lib/background";
 import { sweepWhatsAppEventsQuietly } from "@/lib/whatsapp/recovery";
 import { ingestWhatsAppWebhook } from "@/lib/whatsapp/webhook-intake";
@@ -53,21 +53,7 @@ export async function GET(request: Request) {
   );
 }
 
-function isAuthenticated(request: Request, rawBody: string): boolean {
-  if (
-    safeSecretEquals(
-      readWebhookToken(request),
-      env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
-    )
-  ) {
-    return true;
-  }
-  return verifyWhatsAppWebhookSignature(
-    rawBody,
-    request.headers.get("x-hub-signature-256"),
-    env.WHATSAPP_APP_SECRET,
-  );
-}
+let warnedMissingChakraSecret = false;
 
 export async function POST(request: Request) {
   const contentLength = Number(request.headers.get("content-length"));
@@ -89,7 +75,19 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isAuthenticated(request, body)) {
+  const auth = authenticateWhatsAppWebhook(request, body, env);
+  // Solo el método y de dónde vino el token, nunca valores: dice si alguna
+  // entrega usa `?token=` antes de rotar WHATSAPP_WEBHOOK_VERIFY_TOKEN.
+  console.info("[WHATSAPP_WEBHOOK] auth", {
+    method: auth.method,
+    tokenVia: auth.tokenVia,
+    chakraSignature: auth.chakraSignature,
+  });
+  if (!env.CHAKRA_WEBHOOK_SECRET && !warnedMissingChakraSecret) {
+    warnedMissingChakraSecret = true;
+    console.warn("[WHATSAPP_WEBHOOK] CHAKRA_WEBHOOK_SECRET no está configurado: se acepta el token sin firma y los comandos no corren");
+  }
+  if (auth.method === "rejected") {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
@@ -98,7 +96,7 @@ export async function POST(request: Request) {
   );
 
   try {
-    const ingested = await ingestWhatsAppWebhook(body);
+    const ingested = await ingestWhatsAppWebhook(body, { signed: auth.signed });
     // Ya guardado: de paso se recupera lo atascado (como mucho cada 2 min),
     // sin demorar ni tumbar esta respuesta.
     runInBackground("whatsapp-recovery", () => sweepWhatsAppEventsQuietly());

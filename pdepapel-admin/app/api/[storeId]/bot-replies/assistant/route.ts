@@ -9,6 +9,7 @@ import { logModelUsage } from "@/lib/ai-usage";
 import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { loadSelfChatIdentity, notSelfChatWhere } from "@/lib/whatsapp/self-chat";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { parseStoredTriggers } from "@/lib/whatsapp/bot-replies";
@@ -143,7 +144,7 @@ export async function POST(
     if (payload.mode === "conversations") {
       const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
       const conversations = await prismadb.conversation.findMany({
-        where: { storeId: params.storeId },
+        where: { storeId: params.storeId, ...notSelfChatWhere(await loadSelfChatIdentity(params.storeId)) },
         // `lastInboundAt` es lo que importa aquí (y tiene índice): buscamos
         // conversaciones donde la clienta escribió, no donde escribimos nosotros.
         orderBy: { lastInboundAt: "desc" },

@@ -98,6 +98,7 @@ model Store {
   newsletterSubscribers           NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
   conversations                   Conversation[]                  @relation("StoreToConversation")
   webPushSubscriptions            WebPushSubscription[]
+  whatsAppAdminCommands           WhatsAppAdminCommand[]
   ignoredContacts                 IgnoredContact[]
   assistantConversations          AssistantConversation[]
   assistantKnowledgeNotes         AssistantKnowledgeNote[]
@@ -2649,6 +2650,10 @@ model MarketplaceConnection {
   recoveryScheduleId    String?
   lastSyncedAt          DateTime?
   lastError             String?                     @db.Text
+  /// WhatsApp: el número del propio negocio (solo dígitos) y su BSUID, aprendidos
+  /// de entregas firmadas. Sacan el chat consigo misma de listas y métricas.
+  selfPhone             String?                     @db.VarChar(32)
+  selfBsuid             String?                     @db.VarChar(64)
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
 
@@ -4127,4 +4132,35 @@ model WebPushSubscription {
 
   @@index([storeId])
   @@index([storeId, userId])
+}
+
+/// Comando escrito en el chat de WhatsApp consigo misma («/estado …»). Solo
+/// de entregas firmadas. Sin texto, teléfono ni nombre de clientas: el
+/// argumento es como mucho un número de pedido.
+model WhatsAppAdminCommand {
+  id        String    @id @default(uuid())
+  storeId   String
+  /// wamid del eco: un reenvío del mismo mensaje no corre dos veces.
+  echoId    String    @unique @db.VarChar(191)
+  /// Primera palabra sin la barra, en minúsculas («estado», «ayuda», o la desconocida, recortada).
+  command   String    @db.VarChar(32)
+  /// Número de pedido de `/estado`; nada para los demás.
+  args      String?   @db.VarChar(64)
+  /// RECEIVED → RUNNING → DONE | STALE | RATE_LIMITED | FAILED.
+  status    String    @default("RECEIVED") @db.VarChar(16)
+  /// ok | unknown_command | missing_order | order_not_found | stale | rate_limited | error.
+  outcome   String?   @db.VarChar(32)
+  /// La respuesta tal cual llegó en el aviso push.
+  reply     String?   @db.Text
+  orderId   String?
+  /// Aparatos a los que llegó el aviso.
+  delivered Int       @default(0)
+  /// Hora del mensaje según WhatsApp.
+  sentAt    DateTime
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, createdAt])
 }

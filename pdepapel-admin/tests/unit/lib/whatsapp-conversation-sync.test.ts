@@ -41,6 +41,8 @@ vi.mock("@/lib/prismadb", () => ({
       update: mocks.updateEvent,
     },
     store: { findFirst: mocks.storeFindFirst },
+    // Sin número del negocio aprendido: ningún eco es el chat consigo misma.
+    marketplaceConnection: { findUnique: vi.fn().mockResolvedValue(null) },
     conversation: {
       upsert: mocks.conversationUpsert,
       findUnique: mocks.conversationFindUnique,
