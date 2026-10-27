@@ -29,7 +29,7 @@ export function WaitingCustomers({ storeId, summary, now }: WaitingCustomersProp
         </div>
         <Link
           href={`/${storeId}/conversaciones?esperando=1`}
-          className="inline-flex min-h-[44px] items-center text-[13px] font-semibold text-primary hover:underline"
+          className="inline-flex min-h-11 items-center text-[13px] font-semibold text-primary hover:underline"
         >
           Ver en Conversaciones
         </Link>
@@ -47,7 +47,7 @@ export function WaitingCustomers({ storeId, summary, now }: WaitingCustomersProp
               <li key={item.conversationId}>
                 <Link
                   href={`/${storeId}/conversaciones/${item.conversationId}`}
-                  className="flex min-h-[44px] items-center gap-3 px-4 py-2 text-sm hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+                  className="flex min-h-11 items-center gap-3 px-4 py-2 text-sm hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
                 >
                   <span className="min-w-0 flex-1 truncate">
                     <span className="font-semibold text-primary">Conversación</span>

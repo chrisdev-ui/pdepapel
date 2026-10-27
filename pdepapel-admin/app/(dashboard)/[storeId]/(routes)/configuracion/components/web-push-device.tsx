@@ -134,11 +134,11 @@ export function WebPushDevice({ storeId, minutes }: { storeId: string; minutes: 
       )}
       <div className="flex flex-wrap gap-2">
         {state === "on" ? (
-          <Button type="button" variant="outline" className="min-h-[44px]" onClick={deactivate} disabled={busy}>
+          <Button type="button" variant="outline" className="min-h-11" onClick={deactivate} disabled={busy}>
             Desactivar
           </Button>
         ) : (
-          <Button type="button" className="min-h-[44px]" onClick={activate} disabled={busy || state !== "off"}>
+          <Button type="button" className="min-h-11" onClick={activate} disabled={busy || state !== "off"}>
             Activar avisos en este aparato
           </Button>
         )}

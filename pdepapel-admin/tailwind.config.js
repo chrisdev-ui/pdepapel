@@ -20,7 +20,9 @@ module.exports = {
       spacing: {
         3.5: "0.875rem",
       },
-      minHeight: '(theme) => ({\n        ...theme("spacing"),\n      })',
+      minHeight: ({ theme }) => ({
+        ...theme("spacing"),
+      }),
       colors: {
         kawaii: {
           baby: "hsl(var(--baby-blue) / <alpha-value>)",
