@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
   findFirst: vi.fn(),
   count: vi.fn(),
+  typeFindMany: vi.fn(async () => [] as { name: string }[]),
+  categoryFindMany: vi.fn(async () => [] as { name: string; slug: string }[]),
   generateText: vi.fn(),
   createGoogle: vi.fn(() => () => "gemini-model"),
 }));
@@ -14,7 +16,10 @@ vi.mock("@/lib/prismadb", () => ({
       findMany: mocks.findMany,
       count: mocks.count,
       findFirst: mocks.findFirst,
+      fields: { reservedUnits: "campo:reservedUnits" },
     },
+    type: { findMany: mocks.typeFindMany },
+    category: { findMany: mocks.categoryFindMany },
   },
 }));
 vi.mock("ai", async (importOriginal) => ({
@@ -49,6 +54,13 @@ import {
   PRODUCT_MATCH_LIMIT,
   PRODUCT_TEMPLATES_VERSION,
   answerProductQuestion,
+  answerProductQuestionDetailed,
+  intentWithoutModel,
+  looksLikeProductQuestionForStore,
+  renderCheapSearch,
+  renderCeilingMiss,
+  renderNoResults,
+  buildCheapListBody,
   areProductAnswersApproved,
   buildSearchQuery,
   fallbackQueryFromMessage,
@@ -73,6 +85,7 @@ import {
   resolveProductSearch,
   trimForWhatsApp,
 } from "@/lib/whatsapp/bot-products";
+import { STATIC_TERM_INDEX, parseSearchIntent, resetCatalogTermCache } from "@/lib/whatsapp/search-intent";
 import {
   productNameTokenSearchWhere,
   productTokenSearchWhere,
@@ -920,8 +933,9 @@ describe("las dos intenciones nuevas, de la pregunta al texto", () => {
         character: null,
       },
     });
+    // Con «Stitch», que no es del catálogo, la pregunta sí pasa por el modelo.
     expect(
-      await answerProductQuestion("store-1", "cuánto cuesta el cuaderno"),
+      await answerProductQuestion("store-1", "cuánto cuesta el cuaderno de Stitch"),
     ).toBeNull();
     expect(mocks.findMany).not.toHaveBeenCalled();
   });
@@ -1614,7 +1628,8 @@ describe("cuando el modelo tarda", () => {
       ]);
       mocks.count.mockResolvedValue(1);
 
-      const pendiente = answerProductQuestion("store-1", "tienen lapiceros?", {
+      // «gel» no es del catálogo: la pregunta pasa por el modelo, que tarda.
+      const pendiente = answerProductQuestion("store-1", "tienen lapiceros de gel?", {
         onSlow: () => Promise.reject(new Error("Meta dijo que no")),
       });
       await vi.advanceTimersByTimeAsync(PRODUCT_CLASSIFIER_SLOW_NOTICE_MS + 10);
@@ -1822,7 +1837,7 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
     expect(r?.decision?.outcome).toBe("partial");
   });
 
-  it("si ni el tipo aparece, NO dice que no lo tiene: lo confirma con Paula", async () => {
+  it("si ni el tipo aparece, NO dice que no lo tiene: manda el enlace y ofrece a Paula", async () => {
     mocks.generateText.mockResolvedValue({
       output: {
         intent: "product.search",
@@ -1838,9 +1853,12 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
       "store-1",
       "tienes esos manteles de plástico?",
     );
-    expect(r?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+    expect(r?.text).toBe(
+      "No encontré mantel de plástico por aquí 💛 Puedes buscarlo en la tienda: https://papeleriapdepapel.com/tienda?search=mantel%20pl%C3%A1stico\n¿Quieres que Paula te ayude?",
+    );
     expect(r?.text).not.toMatch(/no lo tengo/i);
-    expect(r?.handoff).toBe(true);
+    expect(r?.handoff).toBeFalsy();
+    expect(r?.noMatchReason).toBe("zero_results");
     expect(r?.shownIds).toBeUndefined();
     expect(r?.list).toBeUndefined();
     expect(r?.decision).toEqual({
@@ -1854,12 +1872,33 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
       total: 0,
       retry: { query: "mantel", total: 0 },
       outcome: "unsure",
+      reason: "zero_results",
     });
     // Dos pasadas por la consulta entera y dos por el tipo.
     expect(mocks.count).toHaveBeenCalledTimes(4);
   });
 
-  it("sin tipo separado no hay segunda búsqueda: va derecho a Paula", async () => {
+  it("si quien llama dice que ya hubo un fallo, vuelve a pasárselo a Paula", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: {
+        intent: "product.search",
+        productType: "mantel",
+        character: null,
+        descriptor: "de plástico",
+      },
+    });
+    mocks.count.mockResolvedValue(0);
+    mocks.findMany.mockResolvedValue([]);
+
+    const r = await answerProductQuestion("store-1", "tienes esos manteles de plástico?", {
+      handoffOnMiss: true,
+    });
+    expect(r?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+    expect(r?.handoff).toBe(true);
+    expect(r?.decision?.reason).toBe("zero_results");
+  });
+
+  it("sin tipo separado no hay segunda búsqueda: va derecho al enlace", async () => {
     mocks.generateText.mockResolvedValue({
       output: {
         intent: "product.search",
@@ -1875,7 +1914,8 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
       "store-1",
       "¿tienen algo de Kuromi rosado?",
     );
-    expect(r?.handoff).toBe(true);
+    expect(r?.handoff).toBeFalsy();
+    expect(r?.noMatchReason).toBe("zero_results");
     expect(r?.decision?.retry).toBeUndefined();
     expect(r?.decision?.outcome).toBe("unsure");
     expect(mocks.count).toHaveBeenCalledTimes(2);
@@ -1894,12 +1934,15 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
     mocks.findMany.mockResolvedValue([]);
 
     const r = await answerProductQuestion("store-1", "¿tienen tote bag?");
-    expect(r?.handoff).toBe(true);
+    expect(r?.handoff).toBeFalsy();
     expect(r?.decision?.retry).toBeUndefined();
+    // «tote bag» son dos palabras del catálogo: se busca sin el modelo.
+    expect(r?.decision?.source).toBe("catalog");
+    expect(mocks.generateText).not.toHaveBeenCalled();
     expect(mocks.count).toHaveBeenCalledTimes(2);
   });
 
-  it("la disponibilidad y las características también caen en la cautela", async () => {
+  it("la disponibilidad y las características también mandan el enlace", async () => {
     for (const intent of [
       "product.availability",
       "product.features",
@@ -1920,8 +1963,8 @@ describe("el fallo del tote bag de perrito (30 de septiembre de 2026)", () => {
         "store-1",
         "¿queda el mantel de plástico? mándame foto",
       );
-      expect(r?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
-      expect(r?.handoff).toBe(true);
+      expect(r?.text).toMatch(/^No encontré mantel de plástico por aquí 💛 .*tienda\?search=/);
+      expect(r?.handoff).toBeFalsy();
       expect(r?.decision?.intent).toBe(intent);
     }
   });
@@ -2070,5 +2113,260 @@ describe("los textos de lo parcial", () => {
       /ningún lado/.test(p.label),
     );
     expect(cauteloso?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+  });
+});
+
+// ============ «marcadores baratos» (27 de octubre de 2026) ============
+
+const fila = (id: string, name: string, price: number, extra: Record<string, unknown> = {}) => ({
+  id,
+  name,
+  price,
+  stock: 3,
+  reservedUnits: 0,
+  categoryId: "cat",
+  productGroupId: null,
+  images: [],
+  ...extra,
+});
+
+describe("lo barato, el tope y una sola palabra del catálogo", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetCatalogTermCache();
+    mocks.typeFindMany.mockResolvedValue([]);
+    mocks.categoryFindMany.mockResolvedValue([]);
+  });
+
+  it("el portero deja pasar «marcadores baratos» y «resaltadores», no un saludo", async () => {
+    expect(looksLikeProductQuestion("marcadores baratos")).toBe(false);
+    expect(await looksLikeProductQuestionForStore("store-1", "marcadores baratos")).toBe(true);
+    expect(await looksLikeProductQuestionForStore("store-1", "resaltadores")).toBe(true);
+    expect(await looksLikeProductQuestionForStore("store-1", "gracias!!")).toBe(false);
+    expect(await looksLikeProductQuestionForStore("store-1", "hola buenas")).toBe(false);
+  });
+
+  it("también reconoce las categorías de la tienda, leídas de la base", async () => {
+    mocks.categoryFindMany.mockResolvedValue([{ name: "🎨 Acuarelas", slug: "acuarelas" }]);
+    expect(await looksLikeProductQuestionForStore("store-2", "acuarelas baratas")).toBe(true);
+  });
+
+  it("la intención sin modelo: búsqueda, precio y disponibilidad sí; fotos y detalles no", () => {
+    const p = (b: string) => parseSearchIntent(b, STATIC_TERM_INDEX);
+    expect(intentWithoutModel("marcadores baratos", p("marcadores baratos"))).toBe("product.search");
+    expect(intentWithoutModel("cuánto valen los colores", p("cuánto valen los colores"))).toBe("product.price");
+    expect(intentWithoutModel("¿quedan resaltadores?", p("¿quedan resaltadores?"))).toBe("product.availability");
+    expect(intentWithoutModel("muéstrame fotos de marcadores", p("muéstrame fotos de marcadores"))).toBeNull();
+    expect(intentWithoutModel("marcadores de Stitch", p("marcadores de Stitch"))).toBeNull();
+    // Con señal de pregunta pasa el portero, pero lo decide el modelo.
+    expect(intentWithoutModel("gracias, ¿tienen marcadores?", p("gracias, ¿tienen marcadores?"))).toBeNull();
+  });
+
+  it("«marcadores baratos»: sin modelo, solo lo que hay, del más económico al más caro", async () => {
+    mocks.findMany.mockResolvedValue([
+      fila("m1", "Micropunta negra", 1500),
+      fila("m2", "Resaltador pastel", 2500),
+      fila("m3", "Marcador doble punta", 4000),
+      fila("m4", "Marcador apartado", 1000, { stock: 2, reservedUnits: 2 }),
+    ]);
+    mocks.count.mockResolvedValue(14);
+
+    const { answer, reason } = await answerProductQuestionDetailed("store-1", "marcadores baratos");
+
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(reason).toBeNull();
+    const consulta = mocks.findMany.mock.calls[0][0];
+    expect(consulta.orderBy).toEqual([{ price: "asc" }, { soldCount: "desc" }]);
+    expect(consulta.where.stock).toEqual({ gt: "campo:reservedUnits" });
+    expect(consulta.where.price).toBeUndefined();
+    // «marcadores» trae también resaltadores y micropuntas.
+    const familia = JSON.stringify(consulta.where.AND[0]);
+    expect(familia).toContain("resaltador");
+    expect(familia).toContain("micropunta");
+
+    expect(answer?.text).toBe(
+      "Estos son los más económicos que tengo 💛\n• Micropunta negra — $1.500\n• Resaltador pastel — $2.500\n• Marcador doble punta — $4.000\n…y 11 más. Dime cuál te interesa y te cuento.",
+    );
+    expect(answer?.text).not.toMatch(/más salen|baratos no tengo/i);
+    expect(answer?.shownIds).toEqual(["m1", "m2", "m3"]);
+    expect(answer?.shownPrices).toEqual([1500, 2500, 4000]);
+    expect(answer?.list?.body).toBe(
+      "Estos son los 3 más económicos que tengo 💛 Me quedan 11 más. Toca el que te guste, o dime algo más preciso y te busco mejor.",
+    );
+    expect(answer?.handoff).toBeFalsy();
+    expect(answer?.decision).toMatchObject({
+      intent: "product.search",
+      query: "marcadores",
+      source: "catalog",
+      price: { sort: "cheapest", maxPrice: null },
+      outcome: "match",
+    });
+  });
+
+  it("si el modelo mete «barato» en una ranura, se quita: nunca «De baratos no tengo»", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "marcador", character: "Stitch", descriptor: "baratos" },
+    });
+    // Cuatro ceros: la consulta con precio (nombre y descripción) y la misma
+    // sin filtro, que dice si es que todo estaba agotado. Luego, el tipo solo.
+    for (let i = 0; i < 4; i += 1) {
+      mocks.count.mockResolvedValueOnce(0);
+      mocks.findMany.mockResolvedValueOnce([]);
+    }
+    mocks.count.mockResolvedValue(2);
+    mocks.findMany.mockResolvedValue([fila("m1", "Micropunta negra", 1500), fila("m3", "Marcador doble punta", 4000)]);
+
+    const r = await answerProductQuestion("store-1", "¿tienen marcadores de Stitch baratos?");
+
+    expect(mocks.generateText).toHaveBeenCalledOnce();
+    expect(r?.decision?.query).toBe("marcador Stitch");
+    expect(r?.text.startsWith("De Stitch no tengo por ahora 💛 Pero de marcador sí, mira:")).toBe(true);
+    expect(r?.text).not.toMatch(/barat/i);
+    // La segunda búsqueda, solo por el tipo, también va por precio.
+    expect(mocks.findMany.mock.calls[4][0].orderBy).toEqual([{ price: "asc" }, { soldCount: "desc" }]);
+  });
+
+  it("una sola palabra del catálogo se contesta; una que no es del catálogo, no", async () => {
+    mocks.findMany.mockResolvedValue([fila("r1", "Resaltador pastel", 2500), fila("r2", "Resaltador neón", 3000)]);
+    mocks.count.mockResolvedValue(2);
+    const si = await answerProductQuestionDetailed("store-1", "resaltadores");
+    expect(si.answer?.text).toContain("Resaltador pastel");
+    expect(si.reason).toBeNull();
+
+    vi.clearAllMocks();
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "útiles", character: null, descriptor: null },
+    });
+    const no = await answerProductQuestionDetailed("store-1", "¿tienen útiles?");
+    expect(no).toEqual({ answer: null, reason: "few_tokens" });
+    expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+
+  it("«carpeta baja» no es precio: pasa por el modelo y se busca tal cual", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "carpeta", character: null, descriptor: "baja" },
+    });
+    mocks.findMany.mockResolvedValue([fila("c1", "Carpeta baja azul", 9000)]);
+    mocks.count.mockResolvedValue(1);
+    const r = await answerProductQuestion("store-1", "carpeta baja");
+    expect(mocks.generateText).toHaveBeenCalledOnce();
+    expect(r?.decision?.query).toBe("carpeta baja");
+    expect(r?.decision?.price).toBeUndefined();
+    const consulta = mocks.findMany.mock.calls[0][0];
+    expect(consulta.orderBy).toEqual([{ soldCount: "desc" }, { createdAt: "desc" }]);
+    expect(consulta.where.stock).toBeUndefined();
+  });
+
+  it("«cuadernos de menos de 10 mil»: tope en la base y texto con el tope", async () => {
+    mocks.findMany.mockResolvedValue([fila("c1", "Libreta mini", 6000), fila("c2", "Cuaderno cosido", 9500)]);
+    mocks.count.mockResolvedValue(2);
+    const r = await answerProductQuestion("store-1", "cuadernos de menos de 10 mil");
+    expect(mocks.findMany.mock.calls[0][0].where.price).toEqual({ lte: 10000 });
+    expect(r?.text).toBe("Hasta $10.000 tengo estos 💛\n• Libreta mini — $6.000\n• Cuaderno cosido — $9.500\n¿Cuál te interesa?");
+    expect(r?.list?.body).toBe("Hasta $10.000 tengo 2 que te pueden servir 💛 Míralos y escoge el que quieras.");
+  });
+
+  it("todo pasa del tope: lo más económico que sí hay, y el motivo es «filtered_out»", async () => {
+    mocks.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValue(1);
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValue([fila("c2", "Cuaderno cosido", 9500)]);
+    const { answer, reason } = await answerProductQuestionDetailed("store-1", "cuadernos de menos de 2 mil");
+    expect(reason).toBe("filtered_out");
+    expect(answer?.text).toBe(
+      "Hasta $2.000 no tengo por ahora 💛 Lo más económico que tengo es Cuaderno cosido en $9.500. ¿Te sirve?",
+    );
+    expect(answer?.noMatchReason).toBe("filtered_out");
+    expect(answer?.handoff).toBeFalsy();
+  });
+
+  it("todo agotado: se dice que se agotó, con el motivo «filtered_out»", async () => {
+    mocks.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValue(1);
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValue([fila("m9", "Marcador dorado", 5000, { stock: 0 })]);
+    const { answer, reason } = await answerProductQuestionDetailed("store-1", "marcadores baratos");
+    expect(reason).toBe("filtered_out");
+    expect(answer?.text).toBe(PRODUCT_TEMPLATES["availability.one.no"]("Marcador dorado"));
+  });
+
+  it("cero resultados: un mensaje con la categoría más cercana y su enlace, sin pasar a Paula", async () => {
+    mocks.categoryFindMany.mockResolvedValue([{ name: "🖍️ Marcadores", slug: "marcadores" }]);
+    mocks.count.mockResolvedValue(0);
+    mocks.findMany.mockResolvedValue([]);
+    const { answer, reason } = await answerProductQuestionDetailed("store-3", "plumones");
+    expect(reason).toBe("zero_results");
+    expect(answer?.text).toBe(
+      "No encontré plumones por aquí 💛 Mira lo que tengo en Marcadores: https://papeleriapdepapel.com/categoria/marcadores\n¿Quieres que Paula te ayude?",
+    );
+    expect(answer?.handoff).toBeFalsy();
+    expect(answer?.list).toBeUndefined();
+    expect(answer?.decision?.reason).toBe("zero_results");
+  });
+
+  it("los motivos de no contestar: sin señal, modelo caído y «other»", async () => {
+    expect(await answerProductQuestionDetailed("store-1", "hola buenas")).toEqual({ answer: null, reason: "no_signal" });
+    expect(mocks.generateText).not.toHaveBeenCalled();
+
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.generateText.mockRejectedValue(new Error("You exceeded your current quota"));
+    expect(await answerProductQuestionDetailed("store-1", "¿tienen algo de Kuromi?")).toEqual({
+      answer: null,
+      reason: "classifier_failed",
+      detail: "quota",
+    });
+
+    mocks.generateText.mockResolvedValue({ output: { intent: "other", productType: null, character: null } });
+    expect(await answerProductQuestionDetailed("store-1", "¿tienen envío gratis?")).toEqual({
+      answer: null,
+      reason: "classifier_other",
+    });
+  });
+});
+
+describe("los textos nuevos, para Paula", () => {
+  const tres = {
+    matches: [
+      { name: "A", price: 1500 },
+      { name: "B", price: 2500 },
+      { name: "C", price: 4000 },
+    ],
+    total: 3,
+    hasMore: false,
+  };
+
+  it("lo barato sin tope y con pocos usa la lista de siempre, que no dice «los que más salen»", () => {
+    const t = renderCheapSearch(tres, { sort: "cheapest", maxPrice: null });
+    expect(t).toBe(PRODUCT_TEMPLATES["search.few"]("• A — $1.500\n• B — $2.500\n• C — $4.000"));
+    expect(buildCheapListBody(3, 3, { sort: "cheapest", maxPrice: null })).toBe(PRODUCT_TEMPLATES["list.body.few"](3));
+  });
+
+  it("ningún texto de precio dice «los que más salen»", () => {
+    for (const price of [{ sort: "cheapest" as const, maxPrice: null }, { sort: "cheapest" as const, maxPrice: 8000 }]) {
+      expect(renderCheapSearch({ ...tres, total: 20, hasMore: true }, price)).not.toMatch(/más salen/);
+      expect(buildCheapListBody(3, 20, price)).not.toMatch(/más salen/);
+    }
+    expect(renderCeilingMiss(1000, tres)).toContain("Hasta $1.000 no tengo por ahora");
+  });
+
+  it("cero resultados sin categoría: la búsqueda de la tienda", () => {
+    expect(renderNoResults("mantel de plástico", null)).toBe(
+      "No encontré mantel de plástico por aquí 💛 Puedes buscarlo en la tienda: https://papeleriapdepapel.com/tienda?search=mantel%20pl%C3%A1stico\n¿Quieres que Paula te ayude?",
+    );
+  });
+
+  it("Paula ve cada texto nuevo en la vista previa", () => {
+    const todo = previewProductTemplates().map((p) => p.text).join("\n");
+    for (const fragmento of [
+      "Estos son los más económicos que tengo",
+      "Hasta $10.000 tengo estos",
+      "Hasta $10.000, estos son los más económicos",
+      "Hasta $1.000 no tengo por ahora 💛 Lo más económico que tengo es Micropunta",
+      "Hasta $1.000 no tengo por ahora 💛 Lo más económico que tengo es:",
+      "Hasta $1.000 no tengo por ahora 💛 Estos son los 3",
+      "Mira lo que tengo en Marcadores",
+      "Puedes buscarlo en la tienda",
+      "Estos son los 3 más económicos que tengo",
+      "Hasta $10.000 tengo 3 que te pueden servir",
+      "Hasta $10.000 tengo varios",
+    ]) {
+      expect(todo).toContain(fragmento);
+    }
   });
 });

@@ -506,7 +506,7 @@ describe("textos aprobados", () => {
     const { ORDER_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-order-request");
     expect([BUSINESS_FACT_TEMPLATES_VERSION, PRODUCT_TEMPLATES_VERSION, ORDER_TEMPLATES_VERSION]).toEqual([
       "493534d795d3db094db50c6717bd37d8",
-      "5e9eba30e3824418709032e7c5b4be86",
+      "89f652e5b9f556fdc412d10833917908",
       "8898b8057694e3cd3ef9685f8606c997",
     ]);
   });

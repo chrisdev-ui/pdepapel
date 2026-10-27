@@ -3,9 +3,10 @@ import { Prisma } from "@prisma/client";
 /**
  * Sinónimos de papelería tal como los escribe la clientela colombiana. Cada
  * grupo se expande en ambos sentidos: «libreta» encuentra cuadernos y
- * «cuaderno» encuentra libretas.
+ * «cuaderno» encuentra libretas. Se exporta solo para que el bot reconozca
+ * estas palabras (`lib/whatsapp/search-intent.ts`); ampliarlo cambia la tienda.
  */
-const SYNONYM_GROUPS: string[][] = [
+export const SYNONYM_GROUPS: string[][] = [
   ["cuaderno", "libreta", "block", "bloc"],
   ["bolígrafo", "lapicero", "esfero", "pluma", "birome"],
   ["resaltador", "subrayador", "highlighter"],

@@ -296,14 +296,16 @@ describe("cuando la consulta entera da cero", () => {
     });
   });
 
-  it("ni el tipo existe: lo confirma con Paula en vez de negar", async () => {
+  it("ni el tipo existe: manda el enlace de la tienda y ofrece a Paula, sin negar", async () => {
     clasifica({ intent: "product.search", productType: "mantel", character: null, descriptor: "de plástico" });
 
     const r = await answerProductQuestion(storeId, "Linda, tu tienes esos manteles de plastico?");
 
-    expect(r?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+    expect(r?.text).toBe(
+      "No encontré mantel de plástico por aquí 💛 Puedes buscarlo en la tienda: https://papeleriapdepapel.com/tienda?search=mantel%20pl%C3%A1stico\n¿Quieres que Paula te ayude?",
+    );
     expect(r?.text).not.toMatch(/no lo tengo/i);
-    expect(r?.handoff).toBe(true);
+    expect(r?.handoff).toBeFalsy();
     expect(r?.decision).toEqual({
       intent: "product.search",
       slots: { productType: "mantel", character: null, descriptor: "de plástico" },
@@ -311,6 +313,16 @@ describe("cuando la consulta entera da cero", () => {
       total: 0,
       retry: { query: "mantel", total: 0 },
       outcome: "unsure",
+      reason: "zero_results",
     });
+  });
+
+  it("si ya hubo un fallo antes, lo confirma con Paula como siempre", async () => {
+    clasifica({ intent: "product.search", productType: "mantel", character: null, descriptor: "de plástico" });
+
+    const r = await answerProductQuestion(storeId, "Linda, tu tienes esos manteles de plastico?", { handoffOnMiss: true });
+
+    expect(r?.text).toBe(PRODUCT_TEMPLATES["search.unsure"]());
+    expect(r?.handoff).toBe(true);
   });
 });

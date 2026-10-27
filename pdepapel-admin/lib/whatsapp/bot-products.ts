@@ -1,4 +1,5 @@
 import { availableStock } from "@/lib/available-stock";
+import { availableStockWhere } from "@/lib/available-stock-where";
 import { logModelUsage } from "@/lib/ai-usage";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -8,11 +9,31 @@ import prismadb from "@/lib/prismadb";
 import { priceLines } from "@/lib/product-pricing";
 import { getCloudinaryImageUrl } from "@/lib/cloudinary-image-loader";
 import {
+  formCondition,
+  nameForms,
   productNameTokenSearchWhere,
   productTokenSearchWhere,
   searchTokens,
+  wordForms,
 } from "@/lib/search-terms";
 import { type FactValue } from "@/lib/whatsapp/bot-facts";
+import {
+  type CatalogTermIndex,
+  type ParsedSearchIntent,
+  type PriceIntent,
+  type ProductNoMatchReason,
+  categoryUrl,
+  closestCategory,
+  isKnownTerm,
+  loadCatalogTermIndex,
+  looksLikeCatalogQuery,
+  parsePriceIntent,
+  parseSearchIntent,
+  relatedTerms,
+  storeSearchUrl,
+  stripPriceWords,
+  taxonomyCategoryIds,
+} from "@/lib/whatsapp/search-intent";
 import {
   TALK_TO_OWNER_BUTTON_ID,
   TALK_TO_OWNER_BUTTON_TITLE,
@@ -25,6 +46,9 @@ import {
 } from "@/lib/whatsapp/send";
 import { createAiProviders, getAiRoutingStore } from "@/lib/ai-model-providers";
 import { classifyModelError, runStructured } from "@/lib/ai-provider";
+import type { Prisma } from "@prisma/client";
+
+export type { ProductNoMatchReason } from "@/lib/whatsapp/search-intent";
 
 /**
  * Preguntas sobre productos por WhatsApp: si tienen algo y si queda.
@@ -50,7 +74,11 @@ export const PRODUCT_CLASSIFIER_TIMEOUT_MS = 20000;
 /** A partir de aquí la espera se nota y se avisa. */
 export const PRODUCT_CLASSIFIER_SLOW_NOTICE_MS = 3500;
 
-/** Una sola palabra —«útiles», «papel»— describe un estante entero. */
+/**
+ * Una sola palabra —«útiles», «papel»— describe un estante entero. Salvo que
+ * sea un tipo o una categoría del catálogo («marcadores», «resaltadores»):
+ * ahí la lista ES la respuesta.
+ */
 export const MIN_SEARCH_TOKENS = 2;
 /** Meta admite diez filas; la décima es la de Paula. */
 export const PRODUCT_MATCH_LIMIT = 9;
@@ -114,13 +142,13 @@ export const productClassificationSchema = z.object({
 
 export type ProductClassification = z.infer<typeof productClassificationSchema>;
 
-export const PRODUCT_CLASSIFIER_PROMPT_VERSION = "productos-v1";
+export const PRODUCT_CLASSIFIER_PROMPT_VERSION = "productos-v2";
 
 export const PRODUCT_CLASSIFIER_SYSTEM = `Clasificas mensajes de WhatsApp de una papelería colombiana (artículos kawaii, Sanrio, anime).
 Tu única tarea es decir de qué va el mensaje y qué se busca.
 
 intent:
-- "product.search": pregunta si tienen algo ("¿tienen algo de Kuromi?", "manejan stickers?")
+- "product.search": pregunta si tienen algo ("¿tienen algo de Kuromi?", "manejan stickers?"), o solo nombra un artículo ("marcadores baratos", "resaltadores")
 - "product.availability": pregunta si queda o está disponible ("¿queda la cartuchera de capibara?")
 - "product.price": pregunta cuánto cuesta ("¿cuánto vale el cuaderno de Stitch?")
 - "product.features": pregunta cómo es el producto: material, tamaño, qué trae, cuántas hojas
@@ -133,6 +161,7 @@ descriptor: lo que distingue ese producto de otro igual —color, tamaño, mater
   tal como lo dijo la clienta y con todas sus palabras ("morado pastel", "grande", "de tela",
   "de rayas"). null si no lo dice. Importante: si menciona un color o un tamaño, va SIEMPRE aquí,
   aunque no diga de qué artículo habla.
+Las palabras de precio ("barato", "económico", "menos de 10 mil") no van en ninguna ranura.
 
 Si dudas, responde "other".`;
 
@@ -201,17 +230,13 @@ export async function classifyProductQuestion(
  * Quedarse corta no rompe nada —el mensaje sigue a las palabras clave y de
  * ahí a Paula— pero pasarse gasta cuota que le hace falta a quien sí pregunta.
  */
-const PRODUCT_SIGNALS = [
-  // Si hay / si queda.
+const SEARCH_SIGNALS = [
   "tiene",
   "tienen",
   "tienes",
   "maneja",
   "manejan",
   "hay ",
-  "queda",
-  "quedan",
-  "disponible",
   "busco",
   "buscaba",
   "necesito",
@@ -223,15 +248,21 @@ const PRODUCT_SIGNALS = [
   "algun",
   "alguna",
   "cuentan con",
-  "les queda",
-  // Cuánto vale.
+];
+
+const AVAILABILITY_SIGNALS = ["queda", "quedan", "disponible", "les queda"];
+
+const PRICE_SIGNALS = [
   "cuanto",
   "precio",
   "vale",
   "cuesta",
   "valen",
   "cuestan",
-  // Cómo es.
+];
+
+/** Cómo es y enséñamelo: sin el modelo no se sabe de cuál, así que siempre pasan por él. */
+const DETAIL_SIGNALS = [
   "material",
   "tamano",
   "medida",
@@ -263,12 +294,78 @@ const PRODUCT_SIGNALS = [
   "enviame",
 ];
 
-export function looksLikeProductQuestion(body: string): boolean {
-  const text = body
+const PRODUCT_SIGNALS = [
+  ...SEARCH_SIGNALS,
+  ...AVAILABILITY_SIGNALS,
+  ...PRICE_SIGNALS,
+  ...DETAIL_SIGNALS,
+];
+
+const sinTildes = (body: string) =>
+  body
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-  return PRODUCT_SIGNALS.some((signal) => matchesSignal(text, signal));
+
+const conSenal = (text: string, signals: string[]) =>
+  signals.some((signal) => matchesSignal(text, signal));
+
+/**
+ * Solo las señales de pregunta, sin mirar el catálogo. Es la versión que no
+ * consulta nada; `looksLikeProductQuestionForStore` es la completa.
+ */
+export function looksLikeProductQuestion(body: string): boolean {
+  return conSenal(sinTildes(body), PRODUCT_SIGNALS);
+}
+
+export interface ProductQuestionGate {
+  pass: boolean;
+  parsed: ParsedSearchIntent;
+  index: CatalogTermIndex;
+}
+
+/**
+ * El portero completo: una señal de pregunta, o un mensaje corto que nombra
+ * algo del catálogo («marcadores baratos», «resaltadores»). Los términos se
+ * leen una vez cada pocos minutos por tienda, no por mensaje.
+ */
+export async function productQuestionGate(
+  storeId: string,
+  body: string,
+): Promise<ProductQuestionGate> {
+  const index = await loadCatalogTermIndex(storeId);
+  const parsed = parseSearchIntent(body, index);
+  return {
+    pass: looksLikeProductQuestion(body) || looksLikeCatalogQuery(parsed),
+    parsed,
+    index,
+  };
+}
+
+export async function looksLikeProductQuestionForStore(
+  storeId: string,
+  body: string,
+): Promise<boolean> {
+  return (await productQuestionGate(storeId, body)).pass;
+}
+
+/**
+ * La intención cuando se puede saber sin el modelo: todas las palabras que
+ * quedan son del catálogo y no pide detalles ni fotos de uno en concreto.
+ * «marcadores baratos», «¿tienen resaltadores?», «cuánto valen los colores».
+ * Ahorra los 8 a 30 s del clasificador y su cuota, y no depende de que el
+ * modelo no conteste «other» a algo que no trae verbo.
+ */
+export function intentWithoutModel(
+  body: string,
+  parsed: ParsedSearchIntent,
+): ProductIntent | null {
+  if (!parsed.allKnown || parsed.conversational) return null;
+  const text = sinTildes(parsePriceIntent(body).rest);
+  if (conSenal(text, DETAIL_SIGNALS)) return null;
+  if (conSenal(text, PRICE_SIGNALS)) return "product.price";
+  if (conSenal(text, AVAILABILITY_SIGNALS)) return "product.availability";
+  return "product.search";
 }
 
 /**
@@ -400,27 +497,130 @@ export async function effectiveUnitPrices(storeId: string, rows: PricedRow[], qu
  * El orden importa: ampliar solo puede añadir productos, nunca quitarlos, así
  * que se hace cuando falta algo, no cuando sobra.
  */
+interface SearchOptions {
+  withDescription?: boolean;
+  /** Con intención de precio: solo lo que hay para vender, lo más económico primero. */
+  price?: PriceIntent | null;
+}
+
 async function runSearch(
   storeId: string,
   query: string,
-  options: { withDescription?: boolean } = {},
+  options: SearchOptions = {},
 ) {
-  const porNombre = productNameTokenSearchWhere(query);
+  // En caché unos minutos por tienda: no suma una consulta por mensaje.
+  const index = await loadCatalogTermIndex(storeId);
+  const porNombre = botTokenWhere(query, false, index);
   if (porNombre.length === 0) return null;
 
   const primera = await buscarCon(storeId, porNombre, options);
   if (primera.total > 0) return primera;
 
   // El nombre no encontró nada: puede que la palabra esté en la descripción.
-  return buscarCon(storeId, productTokenSearchWhere(query), options);
+  return buscarCon(storeId, botTokenWhere(query, true, index), options);
 }
+
+/**
+ * Las condiciones de cada palabra, más su familia de WhatsApp: «marcadores»
+ * también trae resaltadores y micropuntas (ver `relatedTerms`). Sin familia
+ * es exactamente la condición de `search-terms`.
+ */
+function botTokenWhere(
+  query: string,
+  withDescription: boolean,
+  index: CatalogTermIndex,
+): Prisma.ProductWhereInput[] {
+  const base = withDescription ? productTokenSearchWhere : productNameTokenSearchWhere;
+  return searchTokens(query).flatMap((token) => {
+    const taxonomia = taxonomyCategoryIds(index, token);
+    if (taxonomia) return [taxonomyTokenWhere(token, taxonomia, withDescription)];
+    const [propia] = token.toLocaleLowerCase("es-CO") === "colores" ? [COLORES_WHERE] : base(token);
+    if (!propia) return [];
+    const familia = relatedTerms(token)
+      .map((term) => base(term))
+      .filter((conds) => conds.length > 0)
+      .map((conds) => (conds.length === 1 ? conds[0] : { AND: conds }));
+    return [familia.length > 0 ? { OR: [propia, ...familia] } : propia];
+  });
+}
+
+/**
+ * La palabra nombra un tipo o una categoría de la tienda: manda la taxonomía.
+ *
+ * Con igualdad exacta («cuadernos» = tipo «Cuadernos», «colores» = categoría
+ * «Colores») entran esas categorías y, de fuera, solo lo que lleva en el
+ * nombre una palabra de su familia de WhatsApp (los resaltadores y las
+ * micropuntas de «marcadores»). Ni la palabra misma ni sus sinónimos se
+ * buscan en el nombre: en producción «colores» traía almohadillas «de
+ * colores» y plastilina, y «cuadernos», por el sinónimo «block», blocks de
+ * origami y antes el foami de «Blocks de papel».
+ *
+ * Si solo hay categorías que EMPIEZAN por la palabra («Cuadernos de
+ * lettering»), se suman a lo de siempre en el nombre, con sinónimos.
+ */
+function taxonomyTokenWhere(
+  token: string,
+  taxonomia: { ids: string[]; exact: boolean },
+  withDescription: boolean,
+): Prisma.ProductWhereInput {
+  const colores = token.toLocaleLowerCase("es-CO") === "colores";
+  const enNombre = (palabra: string): Prisma.ProductWhereInput =>
+    palabra.toLocaleLowerCase("es-CO") === "colores"
+      ? { name: { contains: "colores" } }
+      : { OR: nameForms(palabra).map((f) => formCondition("name", f) as Prisma.ProductWhereInput) };
+  const familia = relatedTerms(token).map((term) => {
+    const partes = searchTokens(term).map(enNombre);
+    return partes.length === 1 ? partes[0] : { AND: partes };
+  });
+  const enCategorias: Prisma.ProductWhereInput = { categoryId: { in: taxonomia.ids } };
+  if (taxonomia.exact) return { OR: [enCategorias, ...familia] };
+  return {
+    OR: [
+      enCategorias,
+      enNombre(token),
+      ...familia,
+      ...(withDescription && !colores
+        ? wordForms(token).map((f) => formCondition("description", f) as Prisma.ProductWhereInput)
+        : []),
+    ],
+  };
+}
+
+/**
+ * «colores» a secas son colores para pintar. Con la condición de siempre,
+ * «color» encontraba todo lo que tiene el color «Multicolor» en la ficha y
+ * cualquier «multicolor» en el nombre. Ni la descripción entra: «viene en
+ * varios colores» lo dicen muchas.
+ */
+const COLORES_WHERE: Prisma.ProductWhereInput = {
+  OR: [
+    { name: { contains: "colores" } },
+    { category: { is: { name: { contains: "colores" } } } },
+    { productGroup: { is: { name: { contains: "colores" } } } },
+  ],
+};
+
+/**
+ * Con intención de precio se piden más candidatos de los que se enseñan: se
+ * ordenan por precio de lista en la base y luego por el precio que de verdad
+ * se cobra (con ofertas). Un producto con lista por encima del tope y oferta
+ * por debajo no entra; es el precio con que se filtra en la base.
+ */
+const PRICE_CANDIDATES = 30;
 
 async function buscarCon(
   storeId: string,
-  tokens: ReturnType<typeof productTokenSearchWhere>,
-  options: { withDescription?: boolean },
+  tokens: Prisma.ProductWhereInput[],
+  options: SearchOptions,
 ) {
-  const where = { storeId, isArchived: false, AND: tokens };
+  const price = options.price ?? null;
+  const where: Prisma.ProductWhereInput = {
+    storeId,
+    isArchived: false,
+    AND: tokens,
+    ...(price ? availableStockWhere() : {}),
+    ...(price?.maxPrice ? { price: { lte: price.maxPrice } } : {}),
+  };
   const [rows, total] = (await Promise.all([
     prismadb.product.findMany({
       where,
@@ -439,9 +639,12 @@ async function buscarCon(
         },
       },
       // El buscador de la tienda ordena por relevancia calculada en SQL, que
-      // aquí no aplica. Lo más vendido primero es lo que más suele servir.
-      orderBy: [{ soldCount: "desc" }, { createdAt: "desc" }],
-      take: PRODUCT_MATCH_LIMIT,
+      // aquí no aplica. Lo más vendido primero es lo que más suele servir,
+      // salvo que haya pedido lo barato.
+      orderBy: price
+        ? [{ price: "asc" as const }, { soldCount: "desc" as const }]
+        : [{ soldCount: "desc" as const }, { createdAt: "desc" as const }],
+      take: price ? PRICE_CANDIDATES : PRODUCT_MATCH_LIMIT,
     }),
     prismadb.product.count({ where }),
   ])) as [
@@ -459,7 +662,14 @@ async function buscarCon(
     number,
   ];
   const prices = await effectiveUnitPrices(storeId, rows);
-  return { rows: rows.map((row) => ({ ...row, price: prices.get(row.id) ?? row.price })), total };
+  const conPrecio = rows.map((row) => ({ ...row, price: prices.get(row.id) ?? row.price }));
+  if (!price) return { rows: conPrecio, total };
+  const ordenados = conPrecio
+    .filter((row) => availableStock(row) > 0)
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => a.row.price - b.row.price || a.i - b.i)
+    .map(({ row }) => row);
+  return { rows: ordenados.slice(0, PRODUCT_MATCH_LIMIT), total };
 }
 
 /** El ancho que ya usan la tienda y el panel; pedir otro crearía copias nuevas. */
@@ -486,8 +696,9 @@ export function pickPhoto(
 export async function resolveProductSearch(
   storeId: string,
   classification: ProductClassification,
+  options: { price?: PriceIntent | null } = {},
 ): Promise<FactValue<SearchResult<ProductMatch>>> {
-  const found = await runSearch(storeId, buildSearchQuery(classification));
+  const found = await runSearch(storeId, buildSearchQuery(classification), options);
   // Sin nada que buscar no se sabe. Cero resultados SÍ se sabe: es «no lo tengo».
   if (!found) return { known: false };
   return {
@@ -569,10 +780,11 @@ export async function resolveAvailability(
 export async function resolveProductPrice(
   storeId: string,
   classification: ProductClassification,
+  options: { price?: PriceIntent | null } = {},
 ): Promise<FactValue<SearchResult<ProductMatch>>> {
   // Mismo resultado que la búsqueda: para el precio hace falta lo mismo, y la
   // lista de desambiguación ya lleva los precios, así que sirve de respuesta.
-  return resolveProductSearch(storeId, classification);
+  return resolveProductSearch(storeId, classification, options);
 }
 
 export interface FeaturesMatch {
@@ -675,6 +887,33 @@ export const PRODUCT_TEMPLATES = {
     `Sí, mira 💛 Tengo estos:\n${lineas}\n¿Cuál te interesa?`,
   "search.many": (lineas: string, resto: number) =>
     `Sí, tengo varios 💛 Estos son los que más salen:\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  /**
+   * Pidió lo barato: la lista va del más económico al más caro y solo con lo
+   * que hay para vender. Por eso no dice «los que más salen», que aquí sería
+   * mentira, ni hay umbral de «barato»: es un orden, no una cifra.
+   */
+  "search.cheap.many": (lineas: string, resto: number) =>
+    `Estos son los más económicos que tengo 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  // Dijo un tope («menos de 10 mil», «hasta 5.000»).
+  "search.ceiling.few": (tope: string, lineas: string) =>
+    `Hasta ${tope} tengo estos 💛\n${lineas}\n¿Cuál te interesa?`,
+  "search.ceiling.many": (tope: string, lineas: string, resto: number) =>
+    `Hasta ${tope}, estos son los más económicos que tengo 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  // Con el tope no queda nada, pero sí hay del tipo: se enseña lo más económico.
+  "search.ceiling.none.one": (tope: string, name: string, price: string) =>
+    `Hasta ${tope} no tengo por ahora 💛 Lo más económico que tengo es ${name} en ${price}. ¿Te sirve?`,
+  "search.ceiling.none": (tope: string, lineas: string) =>
+    `Hasta ${tope} no tengo por ahora 💛 Lo más económico que tengo es:\n${lineas}\n¿Te sirve alguno?`,
+  /**
+   * Cero resultados la primera vez: no se pasa a Paula de una. Se manda UN
+   * mensaje con el enlace dentro (nunca otro aparte: ya hubo un incidente de
+   * enlaces repetidos) y se le ofrece Paula, que además tiene su botón.
+   * «No encontré» y no «no tengo»: la búsqueda pudo fallar (el tote bag).
+   */
+  "search.none.category": (busqueda: string, categoria: string, url: string) =>
+    `No encontré ${busqueda} por aquí 💛 Mira lo que tengo en ${categoria}: ${url}\n¿Quieres que Paula te ayude?`,
+  "search.none.store": (busqueda: string, url: string) =>
+    `No encontré ${busqueda} por aquí 💛 Puedes buscarlo en la tienda: ${url}\n¿Quieres que Paula te ayude?`,
   "availability.one.yes": (name: string) =>
     `¡Sí! Tengo ${name} disponible 💛 ¿Lo quieres?`,
   "availability.one.no": (name: string) =>
@@ -719,6 +958,14 @@ export const PRODUCT_TEMPLATES = {
     resto: number,
   ) =>
     `De ${faltante} no tengo por ahora 💛 Pero de ${tipo} tengo varios: aquí van ${cuantos} y me quedan ${resto} más. Toca el que te guste.`,
+  "list.body.cheap.many": (cuantos: number, resto: number) =>
+    `Estos son los ${cuantos} más económicos que tengo 💛 Me quedan ${resto} más. Toca el que te guste, o dime algo más preciso y te busco mejor.`,
+  "list.body.ceiling": (tope: string, cuantos: number) =>
+    `Hasta ${tope} tengo ${cuantos} que te pueden servir 💛 Míralos y escoge el que quieras.`,
+  "list.body.ceiling.many": (tope: string, cuantos: number, resto: number) =>
+    `Hasta ${tope} tengo varios 💛 Aquí van los ${cuantos} más económicos, y me quedan ${resto} más. Toca el que te guste.`,
+  "list.body.ceiling.none": (tope: string, cuantos: number) =>
+    `Hasta ${tope} no tengo por ahora 💛 Estos son los ${cuantos} más económicos que sí tengo. Toca el que te guste.`,
   "list.button": () => `Ver opciones`,
   "list.section": () => `Elige uno`,
   "list.footer": () => `O escríbeme y te ayudo`,
@@ -772,6 +1019,15 @@ export function previewProductTemplates(): { label: string; text: string }[] {
     total: 0,
     hasMore: false,
   };
+  const baratos: SearchResult<ProductMatch> = {
+    matches: [
+      { name: "Micropunta negra 0.4", price: 1500 },
+      { name: "Resaltador pastel", price: 2500 },
+      { name: "Marcador doble punta", price: 4000 },
+    ],
+    total: 14,
+    hasMore: true,
+  };
 
   const dispUno = (inStock: boolean): SearchResult<AvailabilityMatch> => ({
     matches: [{ name: "Cartuchera Capibara", inStock }],
@@ -804,8 +1060,47 @@ export function previewProductTemplates(): { label: string; text: string }[] {
       }),
     },
     {
-      label: "Busca algo que no aparece por ningún lado",
+      label: "Busca algo que no aparece por ningún lado (si Paula ya está avisada)",
       text: renderProductSearch(sinNada),
+    },
+    {
+      label: "Busca algo que no aparece y hay una categoría parecida (p. ej. «plumones metálicos»)",
+      text: renderNoResults("plumones metálicos", { name: "Marcadores", slug: "marcadores" }),
+    },
+    {
+      label: "Busca algo que no aparece y no hay categoría parecida (p. ej. «mantel de plástico»)",
+      text: renderNoResults("mantel de plástico", null),
+    },
+    {
+      label: "Pide lo barato y hay muchos (p. ej. «marcadores baratos»)",
+      text: renderCheapSearch(baratos, { sort: "cheapest", maxPrice: null }),
+    },
+    {
+      label: "Pide lo barato y hay muchos: la lista para tocar",
+      text: buildCheapListBody(3, 14, { sort: "cheapest", maxPrice: null }),
+    },
+    {
+      label: "Dice un tope y hay pocos (p. ej. «cuadernos de menos de 10 mil»)",
+      text: renderCheapSearch({ ...baratos, total: 3, hasMore: false }, { sort: "cheapest", maxPrice: 10000 }),
+    },
+    {
+      label: "Dice un tope y hay muchos",
+      text: renderCheapSearch(baratos, { sort: "cheapest", maxPrice: 10000 }),
+    },
+    {
+      label: "Dice un tope: la lista para tocar, con pocos y con muchos",
+      text: [
+        buildCheapListBody(3, 3, { sort: "cheapest", maxPrice: 10000 }),
+        buildCheapListBody(3, 14, { sort: "cheapest", maxPrice: 10000 }),
+      ].join("\n\n"),
+    },
+    {
+      label: "Dice un tope y no hay nada por debajo: lo más económico que sí hay",
+      text: [
+        renderCeilingMiss(1000, { ...baratos, matches: baratos.matches.slice(0, 1), total: 1, hasMore: false }),
+        renderCeilingMiss(1000, { ...baratos, total: 3, hasMore: false }),
+        PRODUCT_TEMPLATES["list.body.ceiling.none"](formatCOP(1000), 3),
+      ].join("\n\n"),
     },
     {
       label: "Pregunta si queda y sí",
@@ -1027,6 +1322,84 @@ export function buildPartialListBody(
     : PRODUCT_TEMPLATES["list.body.partial"](faltante, tipo, mostrados);
 }
 
+/**
+ * La lista cuando pidió lo barato o dijo un tope: ya viene ordenada del más
+ * económico al más caro y solo con lo que hay para vender.
+ */
+export function renderCheapSearch(
+  result: SearchResult<ProductMatch>,
+  price: PriceIntent,
+): string {
+  const t = PRODUCT_TEMPLATES;
+  if (result.total <= 1) return renderProductSearch(result);
+  const lineas = result.matches
+    .map((m) => linea(m.name, formatCOP(m.price)))
+    .join("\n");
+  const resto = result.total - result.matches.length;
+  if (price.maxPrice !== null) {
+    const tope = formatCOP(price.maxPrice);
+    return result.hasMore
+      ? t["search.ceiling.many"](tope, lineas, resto)
+      : t["search.ceiling.few"](tope, lineas);
+  }
+  return result.hasMore ? t["search.cheap.many"](lineas, resto) : t["search.few"](lineas);
+}
+
+export function buildCheapListBody(
+  mostrados: number,
+  total: number,
+  price: PriceIntent,
+): string {
+  const t = PRODUCT_TEMPLATES;
+  if (price.maxPrice !== null) {
+    const tope = formatCOP(price.maxPrice);
+    return total > mostrados
+      ? t["list.body.ceiling.many"](tope, mostrados, total - mostrados)
+      : t["list.body.ceiling"](tope, mostrados);
+  }
+  return total > mostrados
+    ? t["list.body.cheap.many"](mostrados, total - mostrados)
+    : t["list.body.few"](mostrados);
+}
+
+/** Con el tope no quedó nada: lo más económico que sí hay, diciendo que pasa del tope. */
+export function renderCeilingMiss(
+  maxPrice: number,
+  result: SearchResult<ProductMatch>,
+): string {
+  const t = PRODUCT_TEMPLATES;
+  const tope = formatCOP(maxPrice);
+  if (result.total === 1) {
+    const only = result.matches[0];
+    return t["search.ceiling.none.one"](tope, only.name, formatCOP(only.price));
+  }
+  const lineas = result.matches
+    .map((m) => linea(m.name, formatCOP(m.price)))
+    .join("\n");
+  return t["search.ceiling.none"](tope, lineas);
+}
+
+/**
+ * Cero resultados: un solo mensaje con la categoría más cercana, o la búsqueda
+ * de la tienda si ninguna encaja, y Paula ofrecida (no llamada).
+ */
+export function renderNoResults(
+  busqueda: string,
+  categoria: { name: string; slug: string } | null,
+): string {
+  const t = PRODUCT_TEMPLATES;
+  const frase = busqueda.trim();
+  if (categoria?.slug) {
+    return t["search.none.category"](
+      frase,
+      // Tal como está en el catálogo: «Sanrio» no se puede escribir en minúscula.
+      categoria.name,
+      categoryUrl(categoria.slug),
+    );
+  }
+  return t["search.none.store"](frase, storeSearchUrl(searchTokens(frase).join(" ") || frase));
+}
+
 export function renderAvailability(
   result: SearchResult<AvailabilityMatch>,
 ): string {
@@ -1208,8 +1581,14 @@ export interface ProductDecision {
   total: number;
   /** La segunda búsqueda, solo por el tipo, cuando la primera dio cero. */
   retry?: { query: string; total: number };
-  /** Cómo acabó: con lo pedido, con lo que sí hay, o pasándoselo a Paula. */
+  /** Cómo acabó: con lo pedido, con lo que sí hay, o sin nada (enlace o Paula). */
   outcome: "match" | "partial" | "unsure";
+  /** Solo cuando no salió lo pedido: por qué. */
+  reason?: ProductNoMatchReason;
+  /** Pidió lo barato o un tope. */
+  price?: PriceIntent;
+  /** «catalog»: se buscó sin preguntarle al modelo (todas las palabras eran del catálogo). */
+  source?: "catalog";
 }
 
 /** Los precios que dice el texto, cuando todos los productos llevan uno (búsqueda, precio, foto). */
@@ -1244,13 +1623,10 @@ export interface ProductAnswer {
    * rechaza la lista: perder la lista es un detalle, callar no.
    */
   list?: { body: string; rows: WhatsAppListRow[] };
+  /** No salió lo pedido: cero resultados, o nada que pasara el filtro de precio o existencias. */
+  noMatchReason?: ProductNoMatchReason;
 }
 
-/**
- * La respuesta sobre productos, o `null` si aquí no hay nada que contestar:
- * el mensaje no iba de esto, el modelo no pudo, o no se entendió qué buscaba.
- * Un `null` nunca es el final del camino, solo significa «que siga».
- */
 const MARCA_LENTA = Symbol("lenta");
 
 /**
@@ -1295,33 +1671,70 @@ async function clasificarAvisandoSiTarda(
   return clasificando;
 }
 
-export async function answerProductQuestion(
+export interface ProductAnswerResult {
+  answer: ProductAnswer | null;
+  /** Por qué no hubo respuesta con productos; null cuando la hubo. */
+  reason: ProductNoMatchReason | null;
+  /** El matiz: el motivo del clasificador («quota», «timeout»…). Solo para el archivo. */
+  detail?: string;
+}
+
+/**
+ * Como `answerProductQuestion`, pero diciendo por qué no hubo respuesta. Es
+ * la que conviene llamar desde `bot.ts` para archivar el motivo.
+ *
+ * `handoffOnMiss`: con cero resultados se contesta con el enlace y SIN pasar
+ * a Paula. Si quien llama sabe que ya hubo un fallo antes en la conversación,
+ * lo pide y se vuelve al «déjame confirmarlo con Paula» de siempre.
+ */
+export async function answerProductQuestionDetailed(
   storeId: string,
   body: string,
-  options: { onSlow?: () => Promise<void> } = {},
-): Promise<ProductAnswer | null> {
-  if (!looksLikeProductQuestion(body)) return null;
+  options: { onSlow?: () => Promise<void>; handoffOnMiss?: boolean } = {},
+): Promise<ProductAnswerResult> {
+  const gate = await productQuestionGate(storeId, body);
+  if (!gate.pass) return { answer: null, reason: "no_signal" };
+  const { parsed, index } = gate;
+  const price = parsed.price;
 
-  const classified = await clasificarAvisandoSiTarda(body, options.onSlow);
-  if (!classified.ok) {
-    // Sin cuota es lo esperable en horas punta, no una avería: se anota flojito
-    // y el mensaje sigue. Lo demás sí merece mirarse.
-    const log = classified.reason === "quota" ? console.warn : console.error;
-    log("[WHATSAPP_BOT] no se pudo clasificar la pregunta de producto", {
-      storeId,
-      reason: classified.reason,
-    });
-    return null;
+  let c: ProductClassification;
+  let source: "catalog" | "classifier";
+  const fija = intentWithoutModel(body, parsed);
+  if (fija) {
+    source = "catalog";
+    c = { intent: fija, productType: parsed.query, character: null, descriptor: null };
+  } else {
+    source = "classifier";
+    const classified = await clasificarAvisandoSiTarda(body, options.onSlow);
+    if (!classified.ok) {
+      // Sin cuota es lo esperable en horas punta, no una avería: se anota flojito
+      // y el mensaje sigue. Lo demás sí merece mirarse.
+      const log = classified.reason === "quota" ? console.warn : console.error;
+      log("[WHATSAPP_BOT] no se pudo clasificar la pregunta de producto", {
+        storeId,
+        reason: classified.reason,
+      });
+      return { answer: null, reason: "classifier_failed", detail: classified.reason };
+    }
+    if (classified.value.intent === "other") {
+      return { answer: null, reason: "classifier_other" };
+    }
+    // «barato» en una ranura se buscaría como parte del nombre y daría cero,
+    // y luego «De baratos no tengo». El precio ya está en `price`.
+    c = {
+      ...classified.value,
+      productType: stripPriceWords(classified.value.productType),
+      character: stripPriceWords(classified.value.character),
+      descriptor: stripPriceWords(classified.value.descriptor),
+    };
   }
-
-  const c = classified.value;
-  if (c.intent === "other") return null;
+  const intent = c.intent as ProductIntent;
 
   // Si las tres ranuras vienen vacías, se busca el mensaje en crudo antes de
   // darse por vencido: casi siempre queda ahí lo que hace falta.
   let consulta = buildSearchQuery(c);
   if (searchTokens(consulta).length === 0) {
-    consulta = fallbackQueryFromMessage(body);
+    consulta = parsed.query;
     if (consulta) {
       console.info("[WHATSAPP_BOT] Sin ranuras; se busca el mensaje en crudo", {
         storeId,
@@ -1329,21 +1742,22 @@ export async function answerProductQuestion(
       });
     }
   }
-  // Con UNA sola palabra no se contesta.
+  // Con UNA sola palabra no se contesta, salvo que sea del catálogo.
   //
   // «útiles» encontraba ocho productos y se los enseñaba como si fueran la
-  // respuesta; era un listado al azar con cara de respuesta. Nombrar algo
-  // concreto lleva casi siempre dos palabras —«lapiceros gel», «cuaderno
-  // Stitch»—, y con una sola lo honesto es pasárselo a Paula, que sí puede
-  // preguntar qué necesita.
-  if (searchTokens(consulta).length < MIN_SEARCH_TOKENS) {
-    if (searchTokens(consulta).length > 0) {
+  // respuesta; era un listado al azar con cara de respuesta. Pero
+  // «marcadores» o «resaltadores» nombran un estante concreto de la tienda, y
+  // la lista de ese estante sí contesta.
+  const tokens = searchTokens(consulta);
+  const unaDelCatalogo = tokens.length === 1 && isKnownTerm(index, tokens[0]);
+  if (tokens.length < MIN_SEARCH_TOKENS && !unaDelCatalogo) {
+    if (tokens.length > 0) {
       console.info("[WHATSAPP_BOT] Pregunta demasiado vaga; no se adivina", {
         storeId,
         consulta,
       });
     }
-    return null;
+    return { answer: null, reason: "few_tokens" };
   }
   // A partir de aquí se busca `consulta`, no las ranuras sueltas.
   const buscar: ProductClassification = {
@@ -1352,7 +1766,6 @@ export async function answerProductQuestion(
     character: null,
     descriptor: null,
   };
-  const intent = c.intent;
   const decision: ProductDecision = {
     intent,
     slots: {
@@ -1363,23 +1776,35 @@ export async function answerProductQuestion(
     query: consulta,
     total: 0,
     outcome: "match",
+    ...(source === "catalog" ? { source } : {}),
+    ...(price ? { price } : {}),
   };
 
-  const resuelto = await resolverSegunIntencion(storeId, intent, buscar);
-  if (!resuelto) return null;
-  const { value, text, rows } = resuelto;
+  const resuelto = await resolverSegunIntencion(storeId, intent, buscar, price);
+  if (!resuelto) return { answer: null, reason: null, detail: "sin_descripcion_util" };
+  const { value, text, rows, listBody } = resuelto;
   decision.total = value.total;
 
   if (value.total > 0) {
     return {
-      intent,
-      text,
-      photo: value.photo,
-      shownIds: value.ids,
-      shownPrices: quotedPrices(value.matches),
-      list: listaSiHayVarios(value, rows),
-      decision,
+      answer: {
+        intent,
+        text,
+        photo: value.photo,
+        shownIds: value.ids,
+        shownPrices: quotedPrices(value.matches),
+        list: listaSiHayVarios(value, rows, listBody),
+        decision,
+      },
+      reason: null,
     };
+  }
+
+  // Pidió lo barato o un tope y no quedó nada: ¿es que no hay, o que no pasa
+  // el filtro? Si hay, se enseña con lo que falla dicho, no se esconde.
+  if (price) {
+    const filtrado = await filtradoPorPrecio(storeId, intent, buscar, price, decision);
+    if (filtrado) return { answer: filtrado, reason: "filtered_out" };
   }
 
   // Cero. Antes esto era «no lo tengo», y se dijo con un producto activo y
@@ -1388,50 +1813,145 @@ export async function answerProductQuestion(
   //
   // Se prueba una segunda vez solo con el tipo: si «tote bag de dinosaurio» no
   // da nada pero «tote bag» sí, se dice lo que falta y se enseña lo que hay.
-  // Y si ni el tipo aparece, se le pasa a Paula con un «déjame confirmar», que
-  // es lo único que se sabe con certeza.
   const soloTipo = tipoSolo(c, consulta);
   if (soloTipo) {
-    const fact = await resolveProductSearch(storeId, {
-      ...c,
-      productType: soloTipo.tipo,
-      character: null,
-      descriptor: null,
-    });
+    const fact = await resolveProductSearch(
+      storeId,
+      { ...c, productType: soloTipo.tipo, character: null, descriptor: null },
+      { price },
+    );
     if (fact.known) {
       decision.retry = { query: soloTipo.tipo, total: fact.value.total };
       if (fact.value.total > 0) {
         const v = fact.value;
         const filas = buildProductRows(v.matches, v.ids ?? []);
         return {
-          intent,
-          text: renderPartialSearch(soloTipo.faltante, soloTipo.tipo, v),
-          photo: v.photo,
-          shownIds: v.ids,
-          shownPrices: quotedPrices(v.matches),
-          list:
-            v.total >= 2 && filas.length >= 2
-              ? {
-                  body: buildPartialListBody(
-                    soloTipo.faltante,
-                    soloTipo.tipo,
-                    filas.length,
-                    v.total,
-                  ),
-                  rows: filas,
-                }
-              : undefined,
-          decision: { ...decision, outcome: "partial" },
+          answer: {
+            intent,
+            text: renderPartialSearch(soloTipo.faltante, soloTipo.tipo, v),
+            photo: v.photo,
+            shownIds: v.ids,
+            shownPrices: quotedPrices(v.matches),
+            list:
+              v.total >= 2 && filas.length >= 2
+                ? {
+                    body: buildPartialListBody(
+                      soloTipo.faltante,
+                      soloTipo.tipo,
+                      filas.length,
+                      v.total,
+                    ),
+                    rows: filas,
+                  }
+                : undefined,
+            decision: { ...decision, outcome: "partial" },
+          },
+          reason: null,
         };
       }
     }
   }
 
+  // Ni el tipo aparece. Si Paula ya está en camino por un fallo anterior, se
+  // le pasa con el «déjame confirmar» de siempre; si no, se manda el enlace
+  // y se le ofrece Paula, sin llamarla todavía.
+  if (options.handoffOnMiss) {
+    return {
+      answer: {
+        intent,
+        text: PRODUCT_TEMPLATES["search.unsure"](),
+        handoff: true,
+        noMatchReason: "zero_results",
+        decision: { ...decision, outcome: "unsure", reason: "zero_results" },
+      },
+      reason: "zero_results",
+    };
+  }
+  const categoria = closestCategory(index, searchTokens(soloTipo?.tipo ?? consulta));
+  return {
+    answer: {
+      intent,
+      text: renderNoResults(consulta, categoria),
+      noMatchReason: "zero_results",
+      decision: { ...decision, outcome: "unsure", reason: "zero_results" },
+    },
+    reason: "zero_results",
+  };
+}
+
+/**
+ * La respuesta sobre productos, o `null` si aquí no hay nada que contestar:
+ * el mensaje no iba de esto, el modelo no pudo, o no se entendió qué buscaba.
+ * Un `null` nunca es el final del camino, solo significa «que siga».
+ */
+export async function answerProductQuestion(
+  storeId: string,
+  body: string,
+  options: { onSlow?: () => Promise<void>; handoffOnMiss?: boolean } = {},
+): Promise<ProductAnswer | null> {
+  return (await answerProductQuestionDetailed(storeId, body, options)).answer;
+}
+
+/**
+ * Con precio no salió nada. Dos casos que se distinguen:
+ *  - dijo un tope y todo pasa de él: lo más económico que sí hay, diciéndolo;
+ *  - todo lo que hay está agotado: se dice así, producto por producto, con
+ *    las plantillas de siempre.
+ * `null` si sin el filtro tampoco hay nada: entonces es cero de verdad.
+ */
+async function filtradoPorPrecio(
+  storeId: string,
+  intent: ProductIntent,
+  buscar: ProductClassification,
+  price: PriceIntent,
+  decision: ProductDecision,
+): Promise<ProductAnswer | null> {
+  if (price.maxPrice !== null) {
+    const sinTope = await resolveProductSearch(storeId, buscar, {
+      price: { sort: "cheapest", maxPrice: null },
+    });
+    if (sinTope.known && sinTope.value.total > 0) {
+      const v = sinTope.value;
+      const filas = buildProductRows(v.matches, v.ids ?? []);
+      return {
+        intent,
+        text: renderCeilingMiss(price.maxPrice, v),
+        photo: v.photo,
+        shownIds: v.ids,
+        shownPrices: quotedPrices(v.matches),
+        list:
+          v.total >= 2 && filas.length >= 2
+            ? {
+                body: PRODUCT_TEMPLATES["list.body.ceiling.none"](formatCOP(price.maxPrice), filas.length),
+                rows: filas,
+              }
+            : undefined,
+        noMatchReason: "filtered_out",
+        decision: {
+          ...decision,
+          retry: { query: decision.query, total: v.total },
+          outcome: "partial",
+          reason: "filtered_out",
+        },
+      };
+    }
+  }
+  const agotados = await resolveAvailability(storeId, buscar);
+  if (!agotados.known || agotados.value.total === 0) return null;
+  const v = agotados.value;
   return {
     intent,
-    text: PRODUCT_TEMPLATES["search.unsure"](),
-    handoff: true,
-    decision: { ...decision, outcome: "unsure" },
+    text: renderAvailability(v),
+    photo: v.photo,
+    shownIds: v.ids,
+    list: listaSiHayVarios(v, buildAvailabilityRows(v.matches, v.ids ?? [])),
+    noMatchReason: "filtered_out",
+    decision: {
+      ...decision,
+      retry: { query: decision.query, total: v.total },
+      outcome: "partial",
+      reason: "filtered_out",
+    },
   };
 }
 
@@ -1444,11 +1964,28 @@ async function resolverSegunIntencion(
   storeId: string,
   intent: ProductIntent,
   buscar: ProductClassification,
+  price: PriceIntent | null = null,
 ): Promise<{
   value: SearchResult<ProductMatch | AvailabilityMatch | FeaturesMatch>;
   text: string;
   rows: WhatsAppListRow[];
+  listBody?: string;
 } | null> {
+  // Con precio da igual cómo lo preguntó: la respuesta es la lista ordenada
+  // por precio, y solo con lo que hay (así que «si queda» ya está contestado).
+  // La foto de un único producto sigue saliendo como foto.
+  if (price) {
+    const fact = await resolveProductSearch(storeId, buscar, { price });
+    if (!fact.known) return null;
+    const v = fact.value;
+    const rows = buildProductRows(v.matches, v.ids ?? []);
+    return {
+      value: v,
+      text: intent === "product.photo" && v.total === 1 ? renderProductPhoto(v) : renderCheapSearch(v, price),
+      rows,
+      listBody: buildCheapListBody(rows.length, v.total, price),
+    };
+  }
   if (intent === "product.availability") {
     const fact = await resolveAvailability(storeId, buscar);
     if (!fact.known) return null;
@@ -1520,9 +2057,10 @@ export function tipoSolo(
 function listaSiHayVarios(
   result: { total: number; ids?: string[] },
   rows: WhatsAppListRow[],
+  body?: string,
 ): { body: string; rows: WhatsAppListRow[] } | undefined {
   if (result.total < 2 || rows.length < 2) return undefined;
-  return { body: buildListBody(rows.length, result.total), rows };
+  return { body: body ?? buildListBody(rows.length, result.total), rows };
 }
 
 /**
