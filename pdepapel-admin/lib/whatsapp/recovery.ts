@@ -176,6 +176,12 @@ export async function sweepWhatsAppEvents(
     .catch((error: unknown) => {
       console.warn("[WHATSAPP_RECOVERY] No se pudo revisar «Esperando a Paula»", { message: error instanceof Error ? error.message : "unknown" });
     });
+  // Y los avisos push que una revisión en cola no alcanzó a mandar (una vez por espera).
+  await import("@/lib/whatsapp/waiting-alert")
+    .then(({ alertWaitingFromSweep }) => alertWaitingFromSweep(now))
+    .catch((error: unknown) => {
+      console.warn("[WHATSAPP_RECOVERY] No se pudieron revisar los avisos de clientas esperando", { message: error instanceof Error ? error.message : "unknown" });
+    });
 
   await recordJobRun("whatsapp-recovery", {
     ok: !result.publishFailed && result.stuck.pending + result.stuck.retryOverdue === 0,

@@ -38,6 +38,9 @@ import {
   DEFAULT_DELIVERY_ESTIMATE,
   WEEK_DAYS,
 } from "@/lib/store-settings-labels";
+import { ALERT_MINUTES_MAX, ALERT_MINUTES_MIN } from "@/lib/whatsapp/waiting";
+
+import { WebPushDevice } from "./web-push-device";
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -66,6 +69,13 @@ const formSchema = z.object({
   botFallbackMode: z.nativeEnum(BotAssistMode),
   botHoldingMode: z.nativeEnum(BotAssistMode),
   waitingReminderEmail: z.boolean(),
+  waitingAlertMinutes: z
+    .string()
+    .trim()
+    .refine((value) => {
+      const minutes = Number(value);
+      return /^\d+$/.test(value) && minutes >= ALERT_MINUTES_MIN && minutes <= ALERT_MINUTES_MAX;
+    }, `Escribe un número entero de ${ALERT_MINUTES_MIN} a ${ALERT_MINUTES_MAX}`),
   whatsappOrderUpdatesEnabled: z.boolean(),
   whatsappTemplateGuide: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
   whatsappTemplateDelivered: z.string().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _"),
@@ -115,6 +125,7 @@ export function BusinessInfoPanel({
       botFallbackMode: settings.botFallbackMode,
       botHoldingMode: settings.botHoldingMode,
       waitingReminderEmail: settings.waitingReminderEmail,
+      waitingAlertMinutes: String(settings.waitingAlertMinutes),
       whatsappOrderUpdatesEnabled: settings.whatsappOrderUpdatesEnabled,
       whatsappTemplateGuide: settings.whatsappTemplateGuide ?? "",
       whatsappTemplateDelivered: settings.whatsappTemplateDelivered ?? "",
@@ -139,6 +150,7 @@ export function BusinessInfoPanel({
   const regla = form.watch("minOrderRule");
   const hayTienda = form.watch("hasPhysicalStore");
   const todaHora = form.watch("alwaysOpen");
+  const minutosAviso = Number(form.watch("waitingAlertMinutes")) || settings.waitingAlertMinutes;
 
   const onSubmit = async (values: FormValue) => {
     if (!values.alwaysOpen)
@@ -185,6 +197,7 @@ export function BusinessInfoPanel({
         botFallbackMode: values.botFallbackMode,
         botHoldingMode: values.botHoldingMode,
         waitingReminderEmail: values.waitingReminderEmail,
+        waitingAlertMinutes: Number(values.waitingAlertMinutes),
         whatsappOrderUpdatesEnabled: values.whatsappOrderUpdatesEnabled,
         whatsappTemplateGuide: values.whatsappTemplateGuide.trim() || null,
         whatsappTemplateDelivered: values.whatsappTemplateDelivered.trim() || null,
@@ -735,6 +748,35 @@ export function BusinessInfoPanel({
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="waitingAlertMinutes"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <FormLabel htmlFor="waitingAlertMinutes">Avisarme cuando una clienta lleve</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        id="waitingAlertMinutes"
+                        className="h-11 w-24"
+                        inputMode="numeric"
+                        disabled={loading}
+                        aria-describedby="waitingAlertMinutes-help"
+                      />
+                    </FormControl>
+                    <span className="text-sm font-medium">min sin respuesta</span>
+                  </div>
+                  <FormDescription id="waitingAlertMinutes-help">
+                    De {ALERT_MINUTES_MIN} a {ALERT_MINUTES_MAX} minutos. Con este número cuentan la tarjeta «Clientas
+                    esperando» de Inicio, el número de Conversaciones en el menú y los avisos en tus aparatos. Incluye las
+                    conversaciones en las que el bot está pausado porque escribiste.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <WebPushDevice storeId={String(params.storeId)} minutes={minutosAviso} />
           </div>
 
           <div className="grid gap-4 rounded-lg border p-4">

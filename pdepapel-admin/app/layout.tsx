@@ -18,6 +18,9 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  // Instalable en iPhone para recibir los avisos push del panel (app/manifest.ts).
+  appleWebApp: { capable: true, title: "P de Papel", statusBarStyle: "default" },
+  icons: { icon: "/favicon.ico", apple: "/icons/apple-touch-icon.png" },
 };
 
 export default function RootLayout({

@@ -90,6 +90,55 @@ export const isReminderHours = (now: Date) => {
   return hour >= 8 && hour <= 22;
 };
 
+/** Aviso a la dueña (Inicio, número de «Conversaciones» y push): minutos sin respuesta, 30 por defecto. */
+export const ALERT_MINUTES_DEFAULT = 30;
+export const ALERT_MINUTES_MIN = 5;
+export const ALERT_MINUTES_MAX = 240;
+/** Un valor guardado fuera de rango (o corrupto) se lleva al rango en vez de apagar el aviso. */
+export function clampAlertMinutes(value: number | null | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return ALERT_MINUTES_DEFAULT;
+  return Math.min(ALERT_MINUTES_MAX, Math.max(ALERT_MINUTES_MIN, Math.round(value)));
+}
+/** El push no avisa esperas más viejas: después de un despliegue o de una cola caída no llueven avisos de días atrás. */
+export const ALERT_MAX_WAIT_MS = 24 * 60 * 60 * 1000;
+/** 22:00–06:59 en Bogotá: sin push. La tarjeta de Inicio y el número siguen contando. */
+export const isAlertQuietHours = (now: Date) => {
+  const hour = bogotaHour(now);
+  return hour >= 22 || hour < 7;
+};
+
+export type AlertDecision = { decision: "send"; reason: null } | { decision: "skip"; reason: "too_early" | "quiet_hours" | "too_old" };
+
+/**
+ * El aviso a la dueña, una vez por espera. A propósito sin `commonGuard`: el
+ * bot apagado, la pausa de 24 h o el tope de mensajes no le quitan el aviso a
+ * Paula. Si cae en horas de silencio no se manda después: la espera queda en
+ * la tarjeta de Inicio y en el número del menú.
+ */
+export function decideAlert(input: { wait: Wait; now: Date; minutes: number }): AlertDecision {
+  const age = input.now.getTime() - input.wait.since.getTime();
+  if (age < input.minutes * 60 * 1000) return { decision: "skip", reason: "too_early" };
+  if (age > ALERT_MAX_WAIT_MS) return { decision: "skip", reason: "too_old" };
+  if (isAlertQuietHours(input.now)) return { decision: "skip", reason: "quiet_hours" };
+  return { decision: "send", reason: null };
+}
+
+/** Lo que dice el push: sin nombre, teléfono ni texto de la clienta. */
+export function waitingAlertPush(input: { storeId: string; since: Date; now: Date }) {
+  const minutes = Math.max(1, Math.floor((input.now.getTime() - input.since.getTime()) / 60000));
+  return { title: "P de Papel", body: `Una clienta lleva ${minutes} min esperando`, url: `/${input.storeId}/conversaciones?esperando=1` };
+}
+
+/** «hace 42 min», «hace 3 h», «hace 2 días»: lo que dice cada fila de «Clientas esperando». */
+export function formatWaitingAgo(since: Date, now: Date): string {
+  const minutes = Math.max(0, Math.floor((now.getTime() - since.getTime()) / 60000));
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `hace ${days} ${days === 1 ? "día" : "días"}`;
+}
+
 export interface AssistContext {
   mode: AssistMode;
   /** Interruptor general del bot. */

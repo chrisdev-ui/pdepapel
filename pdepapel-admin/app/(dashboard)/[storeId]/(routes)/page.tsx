@@ -14,6 +14,7 @@ import { getSystemsStatus } from "@/lib/job-runs";
 import { getRecentEarlyAlerts } from "@/lib/social/early-alert";
 import { getSocialReconnectNeeds } from "@/lib/social/reconnect";
 import { getColombiaDate } from "@/lib/date-utils";
+import { getWaitingAlertSummary } from "@/lib/whatsapp/waiting-alert";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { ScanLine } from "lucide-react";
@@ -27,6 +28,7 @@ import { SocialReconnectBanner } from "./components/social-reconnect-banner";
 import { SystemsStatus } from "./components/systems-status";
 import { TodayKpis } from "./components/today-kpis";
 import { TopProducts } from "./components/top-products";
+import { WaitingCustomers } from "./components/waiting-customers";
 import { WeekSummary } from "./components/week-summary";
 
 export const maxDuration = 60;
@@ -55,13 +57,15 @@ export default async function DashboardPage({
   const year = searchParams.year
     ? parseInt(searchParams.year)
     : new Date().getFullYear();
-  const [summary, graphRevenue, salesCount, systems, reconnect, earlyAlerts] = await Promise.all([
+  const [summary, graphRevenue, salesCount, systems, reconnect, earlyAlerts, waiting] = await Promise.all([
     getTodaySummary(params.storeId),
     getGraphRevenue(params.storeId, year),
     getSalesCount(params.storeId, year),
     getSystemsStatus(params.storeId),
     canSeeCosts ? getSocialReconnectNeeds(params.storeId) : Promise.resolve([]),
     canSeeCosts ? getRecentEarlyAlerts(params.storeId) : Promise.resolve([]),
+    // Conversaciones es solo de la dueña: la cuenta de solo lectura no ve la tarjeta ni sus enlaces.
+    canSeeCosts ? getWaitingAlertSummary(params.storeId).catch(() => null) : Promise.resolve(null),
   ]);
   const local = getColombiaDate(summary.generatedAt);
   const title = `Hoy, ${format(local, "EEEE d 'de' MMMM", { locale: es })}`;
@@ -89,6 +93,8 @@ export default async function DashboardPage({
 
       <SocialReconnectBanner storeId={params.storeId} platforms={reconnect} />
       <SocialEarlyAlerts storeId={params.storeId} alerts={earlyAlerts} />
+
+      {waiting && <WaitingCustomers storeId={params.storeId} summary={waiting} now={summary.generatedAt} />}
 
       <TodayKpis storeId={params.storeId} summary={summary} />
 

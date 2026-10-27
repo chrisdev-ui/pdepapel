@@ -17,6 +17,9 @@ export const publicRoutes = [
   // Aceptar una invitación ocurre sin sesión; la propia página exige el
   // billete de invitación y, sin él, no muestra nada (lib/invitation-ticket.ts).
   "/aceptar-invitacion(.*)",
+  // El navegador los pide sin sesión (el manifiesto, sin cookies): avisos push e instalación en iPhone.
+  "/sw.js",
+  "/manifest.webmanifest",
 ];
 
 const isPublicRoute = createRouteMatcher(publicRoutes);
@@ -50,11 +53,11 @@ const withClerk = clerkMiddleware(
   { signInUrl: "/iniciar-sesion" },
 );
 
-const REAL_ROOT_FILES = new Set(["/favicon.ico", "/robots.txt"]);
+const REAL_ROOT_FILES = new Set(["/favicon.ico", "/robots.txt", "/sw.js", "/manifest.webmanifest"]);
 
 /**
  * `/x.php`, `/wp-login.php` o `/.env`: ningún primer segmento real lleva
- * punto salvo los dos archivos de la raíz. Sin este corte la ruta caía en
+ * punto salvo los archivos reales de la raíz. Sin este corte la ruta caía en
  * `[storeId]` y su 404 llegaba transmitido dentro de un 200.
  */
 export function isFileProbePath(pathname: string): boolean {

@@ -97,6 +97,7 @@ model Store {
   customerReactivations           CustomerReactivation[]          @relation("StoreToCustomerReactivation")
   newsletterSubscribers           NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
   conversations                   Conversation[]                  @relation("StoreToConversation")
+  webPushSubscriptions            WebPushSubscription[]
   ignoredContacts                 IgnoredContact[]
   assistantConversations          AssistantConversation[]
   assistantKnowledgeNotes         AssistantKnowledgeNote[]
@@ -2085,6 +2086,8 @@ model StoreSettings {
   botHoldingNightText       String?          @db.Text
   /// Correo «clientas esperando» (lib/whatsapp/waiting-reminder.ts). Apagado por defecto: Paula no lo quiso (2026-10-15).
   waitingReminderEmail      Boolean          @default(false)
+  /// Minutos sin respuesta a una clienta antes de avisar a la dueña (tarjeta de Inicio, número del menú y aviso push). Incluye la pausa de Paula.
+  waitingAlertMinutes       Int              @default(30)
 
   /// Visto bueno de Paula a los textos con los que el bot contesta los datos
   /// del negocio. `botFactsVersion` guarda la versión aprobada: si se edita
@@ -4095,4 +4098,30 @@ model OrderNotification {
   @@index([storeId, createdAt])
   @@index([orderId, createdAt])
   @@index([shippingId])
+}
+
+/// Un navegador de la dueña que aceptó avisos push del panel (lib/web-push.ts).
+/// Solo lo que pide el estándar para mandar: el endpoint del servicio de push y
+/// sus dos llaves. Un 404/410 del servicio borra la fila.
+model WebPushSubscription {
+  id            String    @id @default(uuid())
+  storeId       String
+  /// Usuario de Clerk que lo activó en ese aparato.
+  userId        String    @db.VarChar(191)
+  /// sha256 del endpoint: la llave única (el endpoint puede pasar de 500 caracteres).
+  endpointHash  String    @unique @db.VarChar(64)
+  endpoint      String    @db.Text
+  p256dh        String    @db.VarChar(255)
+  auth          String    @db.VarChar(255)
+  /// Navegador y sistema, para que la dueña reconozca el aparato. Sin datos de clientas.
+  deviceLabel   String?   @db.VarChar(120)
+  lastSuccessAt DateTime?
+  failureCount  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+  @@index([storeId, userId])
 }

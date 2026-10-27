@@ -94,6 +94,19 @@ const nextConfig = {
       "/[storeId]/copiloto/conocimiento": ["./content/copiloto/conocimiento/*.md"],
     },
   },
+  async headers() {
+    // El navegador revisa el service worker con cada registro: sin caché, un
+    // cambio en sw.js llega en la siguiente visita.
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       {

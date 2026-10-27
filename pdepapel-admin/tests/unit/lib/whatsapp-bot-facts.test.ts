@@ -71,6 +71,7 @@ const completa: ResolvedStoreSettings = {
   botHoldingText: null,
   botHoldingNightText: null,
   waitingReminderEmail: false,
+  waitingAlertMinutes: 30,
   whatsappOrderUpdatesEnabled: false,
   whatsappTemplateGuide: null,
   whatsappTemplateDelivered: null,

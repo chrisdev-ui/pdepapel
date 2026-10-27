@@ -44,8 +44,8 @@ export type NavBadgeKey =
   | "pendingOrders"
   | "lowStock"
   | "marketplacePending"
-  /** Conversaciones de WhatsApp esperando a que conteste una persona. */
-  | "conversationsNeedOwner"
+  /** «Clientas esperando»: conversaciones sin respuesta hace `waitingAlertMinutes` o más (la misma cuenta de Inicio). */
+  | "conversationsWaiting"
   /** Preventas cuya fecha prometida ya pasó sin liberar. */
   | "presalesOverdue"
   /** Apartados «sin respaldo»: una venta pagada se llevó sus unidades. */
@@ -205,7 +205,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Conversaciones",
         icon: MessagesSquare,
         segment: "conversaciones",
-        badge: "conversationsNeedOwner",
+        badge: "conversationsWaiting",
         children: [
           { label: "Conversaciones", segment: "conversaciones" },
           { label: "Respuestas automáticas", segment: "conversaciones/respuestas" },

@@ -25,6 +25,8 @@ import {
   type Wait,
   type WaitMessage,
 } from "@/lib/whatsapp/waiting";
+import { getWebPushConfig } from "@/lib/web-push";
+import { getWaitingAlertMinutes, runAlertCheck } from "@/lib/whatsapp/waiting-alert";
 import { loadWait } from "@/lib/whatsapp/waiting-list";
 import { maybeSendWaitingReminder } from "@/lib/whatsapp/waiting-reminder";
 
@@ -73,7 +75,7 @@ const notFinal = (decision: AssistDecision) => decision.decision === "skip" && (
 
 export interface WaitCheckResult {
   kind: WhatsAppWaitCheck["kind"];
-  decision: AssistDecision["decision"] | "no_wait" | "claimed_elsewhere";
+  decision: AssistDecision["decision"] | "no_wait" | "claimed_elsewhere" | "no_devices";
   reason?: string | null;
 }
 
@@ -110,6 +112,14 @@ export async function scheduleWaitChecks(conversationId: string): Promise<{ sche
   const now = Date.now();
   const check = (kind: WhatsAppWaitCheck["kind"]): WhatsAppWaitCheck => ({ conversationId, messageId: wait.startMessageId, kind });
   await enqueueWhatsAppWaitCheck(check("fallback"), contactKey, delayUntil(new Date(wait.since.getTime() + FALLBACK_AFTER_MS), now), dedup("fallback", wait.startMessageId));
+  // El aviso a la dueña va aparte de la respuesta del bot: no depende de lo que esta decida. Sin aparatos, ni se publica.
+  const [minutes, devices] = await Promise.all([
+    getWaitingAlertMinutes(conversation.storeId),
+    getWebPushConfig() ? prismadb.webPushSubscription.count({ where: { storeId: conversation.storeId } }) : Promise.resolve(0),
+  ]);
+  if (devices > 0) {
+    await enqueueWhatsAppWaitCheck(check("alert"), contactKey, delayUntil(new Date(wait.since.getTime() + minutes * 60 * 1000), now), dedup("alert", wait.startMessageId));
+  }
   // De noche el mensaje de espera va enseguida; de día lo programa la revisión de los 10 min si la espera sigue abierta.
   if (holdingDueAt(wait.since).getTime() <= now) await runWaitCheck(check("holding"));
   return { scheduled: true };
@@ -125,6 +135,19 @@ export async function runWaitCheck(check: WhatsAppWaitCheck, now = new Date()): 
   if (check.kind === "reminder") {
     await maybeSendWaitingReminder(conversation.storeId, now);
     return { kind: "reminder", decision: "skip", reason: null };
+  }
+  if (check.kind === "alert") {
+    const result = await runAlertCheck(conversation, check.messageId, now);
+    // Paula subió el umbral después de programarla: se corre a la nueva hora (otro id, o QStash la descartaría).
+    if (result.decision === "skip" && result.reason === "too_early" && result.dueAt) {
+      await enqueueWhatsAppWaitCheck(
+        check,
+        conversation.bsuid ?? conversation.phone,
+        delayUntil(result.dueAt, now.getTime()),
+        dedup("alert", check.messageId, String(result.dueAt.getTime())),
+      );
+    }
+    return { kind: "alert", decision: result.decision, reason: "reason" in result ? result.reason : "outcome" in result ? result.outcome : null };
   }
   const settings = await getStoreSettings(conversation.storeId);
   const loaded = await loadWait(conversation.id);

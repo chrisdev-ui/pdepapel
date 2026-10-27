@@ -1,4 +1,4 @@
-import { ConversationMessageDirection, ConversationMessageStatus, type Prisma } from "@prisma/client";
+import { ConversationMessageDirection, ConversationMessageStatus, Prisma } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 import { NO_MATCH_ACKNOWLEDGEMENT, TALK_TO_OWNER_ACKNOWLEDGEMENT, UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, UNREADABLE_MEDIA_ACKNOWLEDGEMENT } from "@/lib/whatsapp/bot-acknowledgements";
@@ -96,24 +96,42 @@ export interface WaitingEntry {
 /**
  * `includeFailedSends`: un envío fallido entra enseguida, sin esperar los 15
  * min. Solo la lista y su insignia; el correo de recordatorio no lo usa.
+ *
+ * `onlyWithOldMessage`: descarta ya en SQL las candidatas sin un mensaje de la
+ * clienta de hace `minAgeMs` o más después de la última salida y de «Marcar
+ * como atendido». El inicio de la espera es uno de esos mensajes, así que no
+ * cambia el resultado; solo lee menos conversaciones (Inicio y el menú lo
+ * piden en cada carga). No sirve con `includeFailedSends`.
  */
 export async function findWaitingConversations(
   storeId: string,
   now = new Date(),
   minAgeMs = WAITING_BADGE_AFTER_MS,
   maxAgeMs = Infinity,
-  options: { includeFailedSends?: boolean } = {},
+  options: { includeFailedSends?: boolean; onlyWithOldMessage?: boolean } = {},
 ): Promise<Map<string, WaitingEntry>> {
   const oldest = Number.isFinite(maxAgeMs) ? new Date(now.getTime() - maxAgeMs) : new Date(0);
+  const oldMessage =
+    options.onlyWithOldMessage && !options.includeFailedSends
+      ? Prisma.sql`AND EXISTS (
+          SELECT 1 FROM \`ConversationMessage\` m
+           WHERE m.\`conversationId\` = c.\`id\`
+             AND m.\`direction\` = 'INBOUND'
+             AND m.\`sentBy\` = 'CUSTOMER'
+             AND m.\`createdAt\` <= ${new Date(now.getTime() - minAgeMs)}
+             AND (c.\`lastOutboundAt\` IS NULL OR m.\`createdAt\` >= c.\`lastOutboundAt\`)
+             AND (c.\`waitAttendedAt\` IS NULL OR m.\`createdAt\` > c.\`waitAttendedAt\`))`
+      : Prisma.empty;
   const candidates = await prismadb.$queryRaw<{ id: string; waitAttendedAt: Date | null }[]>`
-    SELECT \`id\`, \`waitAttendedAt\` FROM \`Conversation\`
-     WHERE \`storeId\` = ${storeId}
-       AND \`lastInboundAt\` IS NOT NULL
-       AND \`lastInboundAt\` <= ${now}
-       AND \`lastInboundAt\` >= ${oldest}
-       AND (\`lastOutboundAt\` IS NULL OR \`lastInboundAt\` > \`lastOutboundAt\`)
-       AND (\`waitAttendedAt\` IS NULL OR \`lastInboundAt\` > \`waitAttendedAt\`)
-     ORDER BY \`lastInboundAt\` DESC
+    SELECT c.\`id\`, c.\`waitAttendedAt\` FROM \`Conversation\` c
+     WHERE c.\`storeId\` = ${storeId}
+       AND c.\`lastInboundAt\` IS NOT NULL
+       AND c.\`lastInboundAt\` <= ${now}
+       AND c.\`lastInboundAt\` >= ${oldest}
+       AND (c.\`lastOutboundAt\` IS NULL OR c.\`lastInboundAt\` > c.\`lastOutboundAt\`)
+       AND (c.\`waitAttendedAt\` IS NULL OR c.\`lastInboundAt\` > c.\`waitAttendedAt\`)
+       ${oldMessage}
+     ORDER BY c.\`lastInboundAt\` DESC
      LIMIT ${CANDIDATE_LIMIT}`;
   const waiting = new Map<string, WaitingEntry>();
   for (const { id, waitAttendedAt } of candidates) {

@@ -67,6 +67,9 @@ describe("authentication middleware", () => {
       "/sin-acceso(.*)",
       // Aceptar una invitación ocurre sin sesión; la página exige el billete.
       "/aceptar-invitacion(.*)",
+      // El service worker y el manifiesto de los avisos push.
+      "/sw.js",
+      "/manifest.webmanifest",
     ]);
     expect(mocks.options).toEqual({ signInUrl: "/iniciar-sesion" });
   });
@@ -174,6 +177,13 @@ describe("rutas de archivo en el panel", () => {
       expect(isFileProbePath(path)).toBe(false);
     },
   );
+
+  it.each(["/sw.js", "/manifest.webmanifest"])("%s se sirve sin sesión y sin el 404 de sondeo", async (path) => {
+    expect(isFileProbePath(path)).toBe(false);
+    const response = await run(path, { headers: { accept: "*/*" } });
+    expect(response?.status ?? 200).toBe(200);
+    expect(mocks.redirectToSignIn).not.toHaveBeenCalled();
+  });
 
   it("una tienda real y /sign-in siguen el camino normal de Clerk", async () => {
     expect(reachesMiddleware(`/${STORE_ID}`)).toBe(true);

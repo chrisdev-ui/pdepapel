@@ -115,13 +115,15 @@ export async function enqueueWhatsAppBotRerun(
   return true;
 }
 
-/** Una revisión de espera (lib/whatsapp/wait-assist.ts): respuesta a los 10 min o mensaje de espera. */
+/** Una revisión de espera (lib/whatsapp/wait-assist.ts): respuesta a los 10 min, mensaje de espera, correo o aviso push a la dueña. */
 export interface WhatsAppWaitCheck {
   conversationId: string;
   /** El mensaje de la clienta que la programó (para la respuesta, el último de la espera). */
   messageId: string;
-  kind: "fallback" | "holding" | "reminder";
+  kind: "fallback" | "holding" | "reminder" | "alert";
 }
+
+export const WHATSAPP_WAIT_CHECK_KINDS: ReadonlySet<string> = new Set<WhatsAppWaitCheck["kind"]>(["fallback", "holding", "reminder", "alert"]);
 
 /**
  * Programa una revisión de espera por la misma fila de la clienta, para que

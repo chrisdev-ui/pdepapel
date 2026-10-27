@@ -103,6 +103,11 @@ export const env = createEnv({
     // Signs the early-access links sent to newsletter subscribers. Optional:
     // without it the early-access campaign cannot be sent.
     NEWSLETTER_EARLY_ACCESS_SECRET: z.string().min(16).optional(),
+    // Avisos push del panel a la dueña (lib/web-push.ts). Opcionales: sin las
+    // tres, Configuración dice «no configurado» y no se manda nada.
+    WEB_PUSH_VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+    // mailto:… o https://…; otro valor cuenta como «no configurado», no tumba el build.
+    WEB_PUSH_VAPID_SUBJECT: z.string().optional(),
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
@@ -114,6 +119,8 @@ export const env = createEnv({
     NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME: z.string().optional(),
     // "1" solo en local: las fotos de Cloudinary se sustituyen por un marcador.
     NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS: z.enum(["0", "1"]).optional(),
+    // La mitad pública de la llave VAPID; la privada nunca lleva NEXT_PUBLIC_.
+    NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
@@ -130,5 +137,7 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME,
     NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS:
       process.env.NEXT_PUBLIC_CLOUDINARY_PLACEHOLDERS,
+    NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY:
+      process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY,
   },
 });

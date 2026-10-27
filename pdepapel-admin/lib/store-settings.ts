@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ErrorFactory } from "@/lib/api-errors";
 import { DAY_LABELS, DEFAULT_DELIVERY_ESTIMATE, WEEK_DAYS, type WeekDay } from "@/lib/store-settings-labels";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp-number";
+import { ALERT_MINUTES_MAX, ALERT_MINUTES_MIN, clampAlertMinutes } from "@/lib/whatsapp/waiting";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -154,6 +155,12 @@ export const storeSettingsInputSchema = z
     botHoldingText: z.string().trim().max(500).nullable().optional(),
     botHoldingNightText: z.string().trim().max(500).nullable().optional(),
     waitingReminderEmail: z.boolean().optional(),
+    waitingAlertMinutes: z
+      .number({ invalid_type_error: "Escribe los minutos con números" })
+      .int("Escribe los minutos sin decimales")
+      .min(ALERT_MINUTES_MIN, `El aviso necesita al menos ${ALERT_MINUTES_MIN} minutos`)
+      .max(ALERT_MINUTES_MAX, `El aviso puede esperar como mucho ${ALERT_MINUTES_MAX} minutos`)
+      .optional(),
     whatsappOrderUpdatesEnabled: z.boolean().optional(),
     // El nombre exacto de la plantilla aprobada en WhatsApp Manager.
     whatsappTemplateGuide: z.string().trim().max(100).regex(/^[a-z0-9_]*$/, "Solo minúsculas, números y _").nullable().optional(),
@@ -222,6 +229,8 @@ export interface ResolvedStoreSettings {
   botHoldingNightText: string | null;
   /** «Avisarme por correo cuando un cliente espere»; apagado por defecto. */
   waitingReminderEmail: boolean;
+  /** Minutos sin respuesta para «Clientas esperando» (Inicio, menú y aviso push); 30 por defecto. */
+  waitingAlertMinutes: number;
   /** Avisos de envío por WhatsApp (plantillas de utilidad); apagado por defecto. El correo sale siempre. */
   whatsappOrderUpdatesEnabled: boolean;
   whatsappTemplateGuide: string | null;
@@ -285,6 +294,7 @@ export async function getStoreSettings(
     botHoldingText: settings?.botHoldingText?.trim() || null,
     botHoldingNightText: settings?.botHoldingNightText?.trim() || null,
     waitingReminderEmail: settings?.waitingReminderEmail ?? false,
+    waitingAlertMinutes: clampAlertMinutes(settings?.waitingAlertMinutes),
     whatsappOrderUpdatesEnabled: settings?.whatsappOrderUpdatesEnabled ?? false,
     whatsappTemplateGuide: settings?.whatsappTemplateGuide?.trim() || null,
     whatsappTemplateDelivered: settings?.whatsappTemplateDelivered?.trim() || null,
@@ -323,6 +333,7 @@ export async function saveStoreSettings(
     ...(input.botHoldingText === undefined ? {} : { botHoldingText: input.botHoldingText?.trim() || null }),
     ...(input.botHoldingNightText === undefined ? {} : { botHoldingNightText: input.botHoldingNightText?.trim() || null }),
     ...(input.waitingReminderEmail === undefined ? {} : { waitingReminderEmail: input.waitingReminderEmail }),
+    ...(input.waitingAlertMinutes === undefined ? {} : { waitingAlertMinutes: input.waitingAlertMinutes }),
     ...(input.whatsappOrderUpdatesEnabled === undefined ? {} : { whatsappOrderUpdatesEnabled: input.whatsappOrderUpdatesEnabled }),
     ...(input.whatsappTemplateGuide === undefined ? {} : { whatsappTemplateGuide: input.whatsappTemplateGuide?.trim() || null }),
     ...(input.whatsappTemplateDelivered === undefined ? {} : { whatsappTemplateDelivered: input.whatsappTemplateDelivered?.trim() || null }),

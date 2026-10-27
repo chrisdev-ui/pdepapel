@@ -2,7 +2,6 @@ import { canCreateStore } from "@/lib/admin-access";
 import { AppShell } from "@/components/shell/app-shell";
 import { StoreInitializer } from "@/components/store-initializer";
 import { env } from "@/lib/env.mjs";
-import { ConversationStatus } from "@prisma/client";
 
 import { countOpenMercadoLibreAlerts } from "@/lib/mercadolibre/health-alerts";
 import { overduePresaleWhere } from "@/lib/presale";
@@ -15,6 +14,7 @@ import { isCopilotConfigured } from "@/lib/copiloto/config";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { countOrdersToAttend } from "@/lib/order-list";
+import { getWaitingAlertSummary } from "@/lib/whatsapp/waiting-alert";
 
 export default async function DashboardLayout({
   children,
@@ -45,7 +45,7 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
-  const [stores, pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending, reservationsUnbacked] =
+  const [stores, pendingOrders, lowStock, conversationsWaiting, presalesOverdue, marketplacePending, reservationsUnbacked] =
     await Promise.all([
     // El selector de tiendas de una cuenta de solo lectura muestra solo esta.
     access?.role === "viewer"
@@ -58,13 +58,13 @@ export default async function DashboardLayout({
         where: { storeId: params.storeId, isArchived: false, stock: { lte: 2 } },
       })
       .catch(() => 0),
-    // Conversaciones que el bot dejó para una persona. Usa el índice
-    // [storeId, status, lastInboundAt], así que es una cuenta barata.
-    prismadb.conversation
-      .count({
-        where: { storeId: params.storeId, status: ConversationStatus.NEEDS_OWNER },
-      })
-      .catch(() => 0),
+    // «Clientas esperando»: la misma cuenta y el mismo umbral que la tarjeta
+    // de Inicio. Conversaciones es solo de la dueña.
+    access?.role === "viewer"
+      ? Promise.resolve(0)
+      : getWaitingAlertSummary(params.storeId)
+          .then((summary) => summary.count)
+          .catch(() => 0),
     // Preventas con la fecha prometida ya vencida: le debemos un aviso a una
     // clienta que ya pagó, así que es lo más urgente de la barra.
     prismadb.productPresale
@@ -91,7 +91,7 @@ export default async function DashboardLayout({
         canCreateStore={canCreateStore(userId)}
         role={access?.role ?? null}
         storeUrl={env.FRONTEND_STORE_URL}
-        counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue, marketplacePending, reservationsUnbacked }}
+        counts={{ pendingOrders, lowStock, conversationsWaiting, presalesOverdue, marketplacePending, reservationsUnbacked }}
         copilot={isCopilotConfigured()}
       >
         {children}

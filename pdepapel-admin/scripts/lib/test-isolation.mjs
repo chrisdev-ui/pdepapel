@@ -123,7 +123,14 @@ export const SOCIAL_TEST_ENV_STUBS = Object.freeze(
  * en las pruebas tampoco: un valor de prueba los encendería.
  * `tests/setup-isolation.ts` los borra después de que Prisma copie `.env`.
  */
-export const ABSENT_IN_TESTS = Object.freeze(["RAILWAY_METRICS_TOKEN", "TURNSTILE_SECRET_KEY"]);
+export const ABSENT_IN_TESTS = Object.freeze([
+  "RAILWAY_METRICS_TOKEN",
+  "TURNSTILE_SECRET_KEY",
+  // Avisos push: un valor de prueba los encendería con llaves inválidas.
+  "NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY",
+  "WEB_PUSH_VAPID_PRIVATE_KEY",
+  "WEB_PUSH_VAPID_SUBJECT",
+]);
 
 /** Lo que pone el arnés de pruebas (la base local) o el proceso, nunca un secreto. */
 export const NOT_STUBBED = new Set(["NODE_ENV", "DATABASE_URL", "COPILOT_DATABASE_URL", "TEST_DATABASE_URL", "PRISMA_LOG", "CI"]);
