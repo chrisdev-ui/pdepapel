@@ -55,8 +55,14 @@ export function phoneTail(phone: string | null | undefined): string | null {
 export async function recordWhatsAppOptOut(storeId: string, phone: string | null | undefined, at = new Date()): Promise<number> {
   const tail = phoneTail(phone);
   if (!tail) return 0;
+  // Solo dígitos: hay pedidos con el teléfono escrito con espacios o guiones («300 123 4567»).
+  const rows = await prismadb.$queryRaw<{ id: string }[]>`
+    SELECT \`id\` FROM \`Order\`
+     WHERE \`storeId\` = ${storeId} AND \`whatsappOptOutAt\` IS NULL
+       AND REGEXP_REPLACE(COALESCE(\`phone\`, ''), '[^0-9]', '') LIKE ${`%${tail}`}`;
+  if (rows.length === 0) return 0;
   const result = await prismadb.order.updateMany({
-    where: { storeId, phone: { endsWith: tail }, whatsappOptOutAt: null },
+    where: { id: { in: rows.map((row) => row.id) }, whatsappOptOutAt: null },
     data: { whatsappOptOutAt: at },
   });
   return result.count;

@@ -177,6 +177,8 @@ describe("«BAJA» en el chat", () => {
     const { OPT_OUT_CONFIRMATION } = await import("@/lib/whatsapp/opt-out");
     const chat = await conversation({ lastOwnerAt: ago(HOUR) });
     const own = await order(chat.phone);
+    // Escrito a mano con espacios: también es suyo.
+    const spaced = await testPrisma.order.update({ where: { id: (await order(chat.phone)).id }, data: { phone: `+57 ${chat.phone.slice(2, 5)} ${chat.phone.slice(5, 8)} ${chat.phone.slice(8)}` } });
     const other = await order("573009999999");
     const first = await run(chat, await inbound(chat.id, "BAJA"));
     expect(first.outcome).toBe("replied_opt_out");
@@ -185,8 +187,9 @@ describe("«BAJA» en el chat", () => {
     expect(again.outcome).toBe("replied_opt_out");
     expect(sent.messages).toHaveLength(1);
     expect((await testPrisma.order.findUniqueOrThrow({ where: { id: own.id } })).whatsappOptOutAt).not.toBeNull();
+    expect((await testPrisma.order.findUniqueOrThrow({ where: { id: spaced.id } })).whatsappOptOutAt).not.toBeNull();
     expect((await testPrisma.order.findUniqueOrThrow({ where: { id: other.id } })).whatsappOptOutAt).toBeNull();
-    await testPrisma.order.deleteMany({ where: { id: { in: [own.id, other.id] } } });
+    await testPrisma.order.deleteMany({ where: { id: { in: [own.id, spaced.id, other.id] } } });
   });
 
   it("«¿tienen la carpeta baja?» es una pregunta, no una baja", async () => {
