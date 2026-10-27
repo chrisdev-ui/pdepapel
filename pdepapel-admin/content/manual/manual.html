@@ -734,6 +734,21 @@
         <li>Solo para los avisos de pedidos. Los <strong>correos le siguen llegando</strong> y el bot le sigue contestando sus preguntas.</li>
       </ul>
       <div class="note care"><strong>Si cambia de opinión</strong><p>Escribir otra vez en el chat no vuelve a encender los avisos solo. En un pedido que llegó por WhatsApp, abre el pedido y pulsa <strong>Los pidió en el chat</strong> en la tarjeta «Avisos a la clienta». En un pedido de la tienda no se puede encender desde el panel: en su próxima compra ella vuelve a marcar la casilla de avisos por WhatsApp.</p></div>
+      <h3 id="comandos-whatsapp">Comandos por WhatsApp</h3>
+      <p>Puedes consultar un pedido desde tu celular sin abrir el panel. Se escribe en <strong>tu chat contigo misma</strong> en WhatsApp Business (el que aparece como «Tú» o con tu propio número), empezando con <strong>/</strong>:</p>
+      <ul class="list">
+        <li><strong>/ayuda</strong>: la lista de comandos con un ejemplo.</li>
+        <li><strong>/estado</strong> y el número del pedido, por ejemplo <em>/estado ORD-1791998787841-915</em>: estado del pedido, cómo se pagó, envío con transportadora y guía, el último movimiento de la guía y el enlace al pedido.</li>
+      </ul>
+      <p>WhatsApp no deja que el negocio se escriba a sí mismo, así que <strong>la respuesta no llega al chat</strong>: llega como aviso a los aparatos donde activaste <a href="#avisos-aparato">avisos</a> y queda guardada en <strong>Conversaciones → Comandos</strong>. Ahí ves cada comando, la respuesta y, en un <em>/estado</em>, el botón <strong>Ver pedido</strong>.</p>
+      <ul class="list">
+        <li>Un comando que llega con más de 10 minutos de retraso no se ejecuta: queda como «Llegó tarde» y te pide repetirlo.</li>
+        <li>Más de 20 comandos en 10 minutos: los siguientes esperan a que pase la ventana. Te avisa una sola vez.</li>
+        <li>Un comando que no existe te contesta cómo pedir la lista con <em>/ayuda</em>.</li>
+        <li>Tu chat contigo misma no aparece en Conversaciones, ni en «Esperando a Paula», ni en las cifras del bot. Puedes usarlo también para tus notas.</li>
+        <li>La respuesta nunca trae el nombre ni los datos de la clienta: solo el número del pedido, porque el aviso se ve con el celular bloqueado.</li>
+      </ul>
+      <div class="note care"><strong>Nunca en el chat de una clienta</strong><p>Si escribes <em>/estado</em> dentro de la conversación de una clienta, <strong>ese mensaje se le envía a ella</strong> y no se ejecuta nada: para el sistema es una respuesta tuya más. WhatsApp no deja borrarlo de su lado sin que vea «Se eliminó este mensaje». Los comandos van siempre en tu chat contigo misma.</p></div>
       <h3>Respuestas automáticas</h3>
       <p>Desde el botón <strong>Respuestas automáticas</strong> defines qué contesta el bot solo. Funciona por palabra clave: si el mensaje de la clienta contiene alguna de las frases que escribiste, contesta lo que hayas puesto. Si no coincide ninguna, <strong>no contesta nada</strong> y te deja la conversación marcada.</p>
       <ol class="steps">
