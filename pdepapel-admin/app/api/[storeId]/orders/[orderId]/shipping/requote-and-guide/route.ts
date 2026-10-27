@@ -5,17 +5,14 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { describeGuideBlock } from "@/lib/order-transitions";
 import prismadb from "@/lib/prismadb";
-import { withResourceLock, ResourceBusyError } from "@/lib/resource-lock";
-import {
-  createGuideForOrder,
-  requoteCartShipping,
-} from "@/lib/shipping-helpers";
+import { createGuideWithRate } from "@/lib/guide-with-rate";
+import { ResourceBusyError } from "@/lib/resource-lock";
+import { requoteCartShipping } from "@/lib/shipping-helpers";
 import { reconcileShippingRate } from "@/lib/shipping-rate-reconcile";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { verifyStoreOwner } from "@/lib/server/utils";
 import { SHIPPING_WITHOUT_GUIDE_PDF } from "@/lib/shipping-guide-pdf";
 import { readOptionalJsonBody } from "@/lib/request-body";
-import { queueShipmentMilestone } from "@/lib/shipment-notifications";
 
 /**
  * Recotizar y crear la guía de una vez.
@@ -133,35 +130,13 @@ export async function POST(
 
     const rate = reconciled.rate;
 
-    // Crear una guía cobra dinero: el mismo candado que usa «Crear guía ahora».
-    const result = await withResourceLock(
-      `guide:${params.orderId}`,
-      "Ya se está creando la guía de este pedido. Espera unos segundos y recarga la página.",
-      async () => {
-        const fresh = await prismadb.shipping.findUnique({
-          where: { id: order.shipping!.id },
-          select: { envioClickIdOrder: true },
-        });
-        if (fresh?.envioClickIdOrder) {
-          throw ErrorFactory.Conflict("La orden ya tiene una guía creada");
-        }
-        await prismadb.shipping.update({
-          where: { id: order.shipping!.id },
-          data: {
-            envioClickIdRate: rate.idRate,
-            carrierName: rate.carrier,
-            courier: rate.carrier,
-            productName: rate.product,
-            cost: rate.totalCost,
-            flete: rate.flete,
-            minimumInsurance: rate.minimumInsurance,
-          },
-        });
-        return createGuideForOrder(params.orderId, params.storeId);
-      },
-    );
-
-    queueShipmentMilestone({ orderId: params.orderId, storeId: params.storeId, milestone: "guia_creada", source: "recotizar y crear guía" });
+    const result = await createGuideWithRate({
+      orderId: params.orderId,
+      storeId: params.storeId,
+      shippingId: order.shipping.id,
+      rate,
+      source: "recotizar y crear guía",
+    });
 
     return NextResponse.json(
       {

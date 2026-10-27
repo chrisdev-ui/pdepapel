@@ -219,13 +219,13 @@ describe("comandos por WhatsApp desde el chat consigo misma", () => {
     await recordSelfChatCommands(storeId, [
       { id: "wamid.nf", text: "/estado ORD-NO-EXISTE", timestamp: nowSeconds() },
       { id: "wamid.missing", text: "/estado", timestamp: nowSeconds() },
-      { id: "wamid.unknown", text: "/pedido 30000", timestamp: nowSeconds() },
+      { id: "wamid.unknown", text: "/reporte semanal", timestamp: nowSeconds() },
     ]);
     await runSelfChatCommands(storeId, ["wamid.nf", "wamid.missing", "wamid.unknown"]);
     const byEcho = Object.fromEntries((await commands()).map((row) => [row.echoId, row]));
     expect(byEcho["wamid.nf"]).toMatchObject({ outcome: "order_not_found" });
     expect(byEcho["wamid.missing"]).toMatchObject({ outcome: "missing_order" });
-    expect(byEcho["wamid.unknown"]).toMatchObject({ command: "pedido", args: null, outcome: "unknown_command" });
+    expect(byEcho["wamid.unknown"]).toMatchObject({ command: "reporte", args: null, outcome: "unknown_command" });
     expect(byEcho["wamid.unknown"].reply).toContain("/ayuda");
   });
 

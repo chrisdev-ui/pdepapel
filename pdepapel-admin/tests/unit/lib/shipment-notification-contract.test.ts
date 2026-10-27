@@ -40,7 +40,8 @@ describe("toda ruta que crea una guía o mueve un envío avisa a la clienta", ()
         "app/api/[storeId]/shipments/sync/route.ts",
         "app/api/[storeId]/shipment/track/route.ts",
         "app/api/[storeId]/orders/[orderId]/shipping/create-guide/route.ts",
-        "app/api/[storeId]/orders/[orderId]/shipping/requote-and-guide/route.ts",
+        // «Recotizar y crear guía» y «/confirmar» por WhatsApp crean la guía aquí, y aquí se avisa.
+        "lib/guide-with-rate.ts",
         "lib/guide-background.ts",
         "app/api/[storeId]/shipments/orphan-guides/[idOrder]/route.ts",
       ]),
