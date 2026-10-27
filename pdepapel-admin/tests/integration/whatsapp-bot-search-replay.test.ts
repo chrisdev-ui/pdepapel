@@ -51,19 +51,23 @@ beforeAll(async () => {
   storeId = store.id;
   const type = await testPrisma.type.create({ data: { name: "✏️ Escritura", slug: `escritura-rep-${suffix}`, storeId } });
   const cat = await testPrisma.category.create({ data: { name: "🖍️ Marcadores", slug: `marcadores-rep-${suffix}`, storeId, typeId: type.id } });
+  // Como en producción: micropuntas y resaltadores viven en su propia categoría.
+  const micropuntas = await testPrisma.category.create({ data: { name: "Micropuntas", slug: `micropuntas-rep-${suffix}`, storeId, typeId: type.id } });
+  const resaltadores = await testPrisma.category.create({ data: { name: "Resaltadores", slug: `resaltadores-rep-${suffix}`, storeId, typeId: type.id } });
   const design = await testPrisma.design.create({ data: { name: "Clásico", storeId } });
   const color = await testPrisma.color.create({ data: { name: "Negro", value: `#n-${suffix}`.slice(0, 20), storeId } });
   const size = await testPrisma.size.create({ data: { name: "U", value: `u-rep-${suffix}`, storeId } });
-  const products: [string, number, number][] = [
-    ["Set de marcadores x12", 16000, 50],
-    ["Marcador doble punta", 4000, 10],
-    ["Micropunta negra 0.4", 1500, 1],
-    ["Resaltador pastel", 2500, 2],
+  const products: [string, number, number, string][] = [
+    ["Set de marcadores x12", 16000, 50, cat.id],
+    ["Marcador doble punta", 4000, 10, cat.id],
+    ["Marcador permanente delgado", 2000, 3, cat.id],
+    ["Micropunta negra 0.4", 1500, 1, micropuntas.id],
+    ["Resaltador pastel", 2500, 2, resaltadores.id],
   ];
   for (let index = 0; index < products.length; index += 1) {
-    const [name, price, soldCount] = products[index];
+    const [name, price, soldCount, categoryId] = products[index];
     await testPrisma.product.create({
-      data: { name, slug: `rep-${suffix}-${index}`, description: "<p>Prueba</p>", stock: 3, price, acqPrice: 500, soldCount, sku: `REP-${suffix}-${index}`, storeId, categoryId: cat.id, colorId: color.id, sizeId: size.id, designId: design.id },
+      data: { name, slug: `rep-${suffix}-${index}`, description: "<p>Prueba</p>", stock: 3, price, acqPrice: 500, soldCount, sku: `REP-${suffix}-${index}`, storeId, categoryId, colorId: color.id, sizeId: size.id, designId: design.id },
     });
   }
   const { BUSINESS_FACT_TEMPLATES_VERSION } = await import("@/lib/whatsapp/bot-facts");
@@ -98,11 +102,17 @@ beforeEach(async () => {
 const order = (text: string, names: string[]) => names.map((name) => text.indexOf(name));
 
 describe("«marcadores baratos» por el bot entero", () => {
-  it("contesta con productos, del más económico al más caro, sin el clasificador", async () => {
+  it("contesta primero con los marcadores de verdad, del más económico al más caro, y luego micropuntas y resaltadores, sin el clasificador", async () => {
     const result = await ask(await chat(), "marcadores baratos");
     expect(result.outcome).toBe("replied_product");
     expect(mocks.sent).toHaveLength(1);
-    const positions = order(mocks.sent[0], ["Micropunta negra", "Resaltador pastel", "Marcador doble punta", "Set de marcadores"]);
+    const positions = order(mocks.sent[0], [
+      "Marcador permanente delgado",
+      "Marcador doble punta",
+      "Set de marcadores",
+      "Micropunta negra",
+      "Resaltador pastel",
+    ]);
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     expect(mocks.generateText).not.toHaveBeenCalled();
@@ -113,7 +123,7 @@ describe("«marcadores baratos» por el bot entero", () => {
     const result = await ask(await chat(), "Hola, ¿tienen marcadores baratos?", [saludo]);
     expect(result.outcome).toBe("replied_product");
     expect(mocks.sent[0]).toMatch(/^¡Hola! /);
-    expect(mocks.sent[0]).toContain("Micropunta negra");
+    expect(mocks.sent[0]).toContain("Marcador permanente delgado");
     expect(mocks.sent[0]).not.toContain("Cuéntame qué estás buscando");
   });
 

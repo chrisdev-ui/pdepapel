@@ -512,12 +512,47 @@ async function runSearch(
   const index = await loadCatalogTermIndex(storeId);
   const porNombre = botTokenWhere(query, false, index);
   if (porNombre.length === 0) return null;
+  const seccion = options.price ? seccionExacta(index, query) : null;
+  const buscar = (tokens: Prisma.ProductWhereInput[]) =>
+    seccion ? buscarPorNiveles(storeId, tokens, seccion, options) : buscarCon(storeId, tokens, options);
 
-  const primera = await buscarCon(storeId, porNombre, options);
+  const primera = await buscar(porNombre);
   if (primera.total > 0) return primera;
 
   // El nombre no encontró nada: puede que la palabra esté en la descripción.
-  return buscarCon(storeId, botTokenWhere(query, true, index), options);
+  return buscar(botTokenWhere(query, true, index));
+}
+
+/** Las categorías de la primera palabra que nombra EXACTAMENTE un tipo o una categoría. */
+function seccionExacta(index: CatalogTermIndex, query: string): string[] | null {
+  for (const token of searchTokens(query)) {
+    const t = taxonomyCategoryIds(index, token);
+    if (t?.exact) return t.ids;
+  }
+  return null;
+}
+
+/**
+ * Con precio y una sección exacta, dos niveles que no se mezclan: primero lo
+ * que ES de esa sección (los marcadores de «Marcadores»), del más económico
+ * al más caro; después la familia de fuera (micropuntas, resaltadores), igual
+ * ordenada. Si no, una micropunta de $1.500 tapaba a los marcadores de
+ * verdad. El total cuenta los dos, en ese orden.
+ */
+async function buscarPorNiveles(
+  storeId: string,
+  tokens: Prisma.ProductWhereInput[],
+  categoryIds: string[],
+  options: SearchOptions,
+) {
+  const [dentro, fuera] = await Promise.all([
+    buscarCon(storeId, [...tokens, { categoryId: { in: categoryIds } }], options),
+    buscarCon(storeId, [...tokens, { categoryId: { notIn: categoryIds } }], options),
+  ]);
+  return {
+    rows: [...dentro.rows, ...fuera.rows].slice(0, PRODUCT_MATCH_LIMIT),
+    total: dentro.total + fuera.total,
+  };
 }
 
 /**

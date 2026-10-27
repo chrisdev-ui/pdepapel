@@ -2286,6 +2286,42 @@ describe("lo barato, el tope y una sola palabra del catálogo", () => {
     expect(answer?.text).toBe(PRODUCT_TEMPLATES["availability.one.no"]("Marcador dorado"));
   });
 
+  it("con precio y una categoría exacta, dos niveles: la categoría primero y la familia después", async () => {
+    mocks.categoryFindMany.mockResolvedValue([
+      { id: "cat-marc", name: "🖍️ Marcadores", slug: "marcadores", typeId: "t1" },
+    ]);
+    mocks.findMany.mockImplementation(async ({ where }: { where: { AND: Record<string, unknown>[] } }) => {
+      const dentro = JSON.stringify(where.AND.at(-1)) === JSON.stringify({ categoryId: { in: ["cat-marc"] } });
+      return dentro
+        ? [fila("m2", "Marcador permanente delgado", 2000), fila("m3", "Marcador doble punta", 4000)]
+        : [fila("m1", "Micropunta negra", 1500)];
+    });
+    mocks.count.mockImplementation(async ({ where }: { where: { AND: Record<string, unknown>[] } }) =>
+      JSON.stringify(where.AND.at(-1)) === JSON.stringify({ categoryId: { in: ["cat-marc"] } }) ? 2 : 1,
+    );
+
+    for (const body of ["marcadores baratos", "plumones económicos"]) {
+      resetCatalogTermCache();
+      const { answer } = await answerProductQuestionDetailed("store-4", body);
+      expect(answer?.shownIds).toEqual(["m2", "m3", "m1"]);
+      expect(answer?.decision?.total).toBe(3);
+    }
+    const condiciones = mocks.findMany.mock.calls.map((c) => JSON.stringify(c[0].where.AND.at(-1)));
+    expect(condiciones).toContain(JSON.stringify({ categoryId: { in: ["cat-marc"] } }));
+    expect(condiciones).toContain(JSON.stringify({ categoryId: { notIn: ["cat-marc"] } }));
+  });
+
+  it("sin precio, la misma categoría exacta no parte en niveles: sigue lo más vendido", async () => {
+    mocks.categoryFindMany.mockResolvedValue([
+      { id: "cat-marc", name: "Marcadores", slug: "marcadores", typeId: "t1" },
+    ]);
+    mocks.findMany.mockResolvedValue([fila("m3", "Set de marcadores", 16000)]);
+    mocks.count.mockResolvedValue(1);
+    await answerProductQuestionDetailed("store-5", "marcadores");
+    expect(mocks.findMany).toHaveBeenCalledTimes(1);
+    expect(mocks.findMany.mock.calls[0][0].orderBy).toEqual([{ soldCount: "desc" }, { createdAt: "desc" }]);
+  });
+
   it("cero resultados: un mensaje con la categoría más cercana y su enlace, sin pasar a Paula", async () => {
     mocks.categoryFindMany.mockResolvedValue([{ name: "🖍️ Marcadores", slug: "marcadores" }]);
     mocks.count.mockResolvedValue(0);

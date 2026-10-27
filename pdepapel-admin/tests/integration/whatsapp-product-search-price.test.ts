@@ -148,9 +148,13 @@ beforeAll(async () => {
 
   await t.producto("set", "Set de marcadores x12", marcadores, { price: 16000, soldCount: 50 });
   await t.producto("doble", "Marcador doble punta", marcadores, { price: 4000, soldCount: 10 });
+  await t.producto("permanente", "Marcador permanente delgado", marcadores, { price: 2000, soldCount: 3 });
+  // Como en producción, micropuntas y resaltadores tienen su propia categoría.
+  const micropuntas = await t.categoria("Micropuntas");
+  const resaltadores = await t.categoria("Resaltadores");
   // No se llaman «marcador»: llegan por la familia.
-  await t.producto("micro", "Micropunta negra 0.4", lapiceros, { price: 1500, soldCount: 1 });
-  await t.producto("resaltador", "Resaltador pastel", lapiceros, { price: 2500, soldCount: 2 });
+  await t.producto("micro", "Micropunta negra 0.4", micropuntas, { price: 1500, soldCount: 1 });
+  await t.producto("resaltador", "Resaltador pastel", resaltadores, { price: 2500, soldCount: 2 });
   // Más baratos, pero no se pueden vender.
   await t.producto("agotado", "Marcador metálico", marcadores, { price: 900, stock: 0 });
   await t.producto("apartado", "Marcador neón", marcadores, { price: 1000, stock: 2, reservedUnits: 2 });
@@ -216,16 +220,17 @@ beforeEach(() => {
 });
 
 describe("lo barato primero, y solo lo que hay", () => {
-  it("«marcadores baratos»: la oferta, micropuntas y resaltadores primero, sin modelo y sin agotados", async () => {
+  it("«marcadores baratos»: primero los marcadores de verdad, después micropuntas y resaltadores; sin modelo ni agotados", async () => {
     const { answer, reason } = await answerProductQuestionDetailed(storeId, "marcadores baratos");
 
     expect(mocks.generateText).not.toHaveBeenCalled();
     expect(reason).toBeNull();
-    // El de la oferta va primero por lo que de verdad se cobra, no por la lista.
-    expect(answer?.shownIds).toEqual([ids.promo, ids.micro, ids.resaltador, ids.doble, ids.set]);
-    expect(answer?.shownPrices).toEqual([1000, 1500, 2500, 4000, 16000]);
+    // Nivel 1, la categoría «Marcadores», por lo que de verdad se cobra (la
+    // oferta va primera); nivel 2, la familia, también del más económico.
+    expect(answer?.shownIds).toEqual([ids.promo, ids.permanente, ids.doble, ids.set, ids.micro, ids.resaltador]);
+    expect(answer?.shownPrices).toEqual([1000, 2000, 4000, 16000, 1500, 2500]);
     expect(answer?.text).toBe(
-      "Sí, mira 💛 Tengo estos:\n• Marcador en promoción — $1.000\n• Micropunta negra 0.4 — $1.500\n• Resaltador pastel — $2.500\n• Marcador doble punta — $4.000\n• Set de marcadores x12 — $16.000\n¿Cuál te interesa?",
+      "Sí, mira 💛 Tengo estos:\n• Marcador en promoción — $1.000\n• Marcador permanente delgado — $2.000\n• Marcador doble punta — $4.000\n• Set de marcadores x12 — $16.000\n• Micropunta negra 0.4 — $1.500\n• Resaltador pastel — $2.500\n¿Cuál te interesa?",
     );
     expect(answer?.text).not.toMatch(/más salen|baratos no tengo|Ajeno|metálico|neón|retirado/i);
     expect(answer?.handoff).toBeFalsy();
@@ -256,7 +261,23 @@ describe("lo barato primero, y solo lo que hay", () => {
 
   it("el tope se aplica al precio de lista: la oferta que baja de él no entra (aceptado)", async () => {
     const { answer } = await answerProductQuestionDetailed(storeId, "marcadores de menos de 3 mil");
-    expect(answer?.shownIds).toEqual([ids.micro, ids.resaltador]);
+    expect(answer?.shownIds).toEqual([ids.permanente, ids.micro, ids.resaltador]);
+  });
+
+  it("«plumones económicos» es «Marcadores»: los mismos dos niveles", async () => {
+    const { answer } = await answerProductQuestionDetailed(storeId, "plumones económicos");
+    expect(answer?.shownIds).toEqual([ids.promo, ids.permanente, ids.doble, ids.set, ids.micro, ids.resaltador]);
+  });
+
+  it("«resaltadores baratos»: la categoría «Resaltadores»; su familia está vacía, así que no hay nivel 2", async () => {
+    const { answer } = await answerProductQuestionDetailed(storeId, "resaltadores baratos");
+    expect(answer?.shownIds).toEqual([ids.resaltador]);
+  });
+
+  it("con más de una página, el total suma los dos niveles y la primera página empieza por el nivel 1", async () => {
+    const { answer } = await answerProductQuestionDetailed(storeId, "marcadores baratos");
+    expect(answer?.decision?.total).toBe(6);
+    expect(answer?.shownIds?.slice(0, 4)).toEqual([ids.promo, ids.permanente, ids.doble, ids.set]);
   });
 
   it("«colores baratos»: la categoría «Colores», ni Multicolor, ni el grupo «Lapicero … de colores», ni nombres «de colores»", async () => {

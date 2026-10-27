@@ -290,6 +290,21 @@ function buildTaxonomy(
  * también las que empiezan por ella («cuadernos» trae el tipo «Cuadernos» y
  * «Cuadernos de lettering»). Sin igualdad, solo las que empiezan por ella.
  */
+/**
+ * Palabras que nombran la misma sección de la tienda aunque la categoría se
+ * llame de otra forma. En Colombia el plumón ES el marcador: «plumones
+ * económicos» tiene que caer en la categoría «Marcadores», con su mismo orden.
+ */
+const TAXONOMY_ALIASES: Record<string, string> = {
+  plumon: "marcador",
+};
+
+function llavesDeTaxonomia(token: string): string[] {
+  const propias = llaves(token);
+  const alias = propias.map((k) => TAXONOMY_ALIASES[k]).filter(Boolean);
+  return Array.from(new Set([...propias, ...alias.flatMap(llaves)]));
+}
+
 export function taxonomyCategoryIds(
   index: CatalogTermIndex,
   token: string,
@@ -297,7 +312,7 @@ export function taxonomyCategoryIds(
   if (!index.taxonomy) return null;
   const ids = new Set<string>();
   let exact = false;
-  for (const k of llaves(token)) {
+  for (const k of llavesDeTaxonomia(token)) {
     const exactas = index.taxonomy.exact.get(k);
     if (exactas?.size) exact = true;
     exactas?.forEach((id) => ids.add(id));
