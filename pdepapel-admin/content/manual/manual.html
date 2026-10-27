@@ -739,6 +739,8 @@
       <ul class="list">
         <li><strong>/ayuda</strong>: la lista de comandos con un ejemplo.</li>
         <li><strong>/estado</strong> y el número del pedido, por ejemplo <em>/estado ORD-1791998787841-915</em>: estado del pedido, cómo se pagó, envío con transportadora y guía, el último movimiento de la guía y el enlace al pedido.</li>
+        <li><strong>/pedido</strong>: crea un borrador de pedido. Mira <a href="#pedido-whatsapp">Crear pedido por WhatsApp</a>.</li>
+        <li><strong>/guia</strong> y <strong>/confirmar</strong>: crean la guía de un pedido en dos pasos. Mira <a href="#guia-whatsapp">Crear guía por WhatsApp</a>.</li>
       </ul>
       <p>WhatsApp no deja que el negocio se escriba a sí mismo, así que <strong>la respuesta no llega al chat</strong>: llega como aviso a los aparatos donde activaste <a href="#avisos-aparato">avisos</a> y queda guardada en <strong>Conversaciones → Comandos</strong>. Ahí ves cada comando, la respuesta y, en un <em>/estado</em>, el botón <strong>Ver pedido</strong>.</p>
       <ul class="list">
@@ -749,6 +751,39 @@
         <li>La respuesta nunca trae el nombre ni los datos de la clienta: solo el número del pedido, porque el aviso se ve con el celular bloqueado.</li>
       </ul>
       <div class="note care"><strong>Nunca en el chat de una clienta</strong><p>Si escribes <em>/estado</em> dentro de la conversación de una clienta, <strong>ese mensaje se le envía a ella</strong> y no se ejecuta nada: para el sistema es una respuesta tuya más. WhatsApp no deja borrarlo de su lado sin que vea «Se eliminó este mensaje». Los comandos van siempre en tu chat contigo misma.</p></div>
+      <h3 id="pedido-whatsapp">Crear pedido por WhatsApp</h3>
+      <p>Cuando cierras una venta por chat, deja el pedido apuntado sin abrir el panel. En tu chat contigo misma escribe <strong>/pedido</strong>, el celular de la clienta (o su <strong>@usuario</strong> si no ves su número), el valor acordado y, si quieres, una nota:</p>
+      <ul class="list">
+        <li><em>/pedido 300 123 4567 30 mil agenda stitch</em></li>
+        <li><em>/pedido +57 3001234567 30.000</em></li>
+        <li><em>/pedido @mariana.dibuja 25k</em>: para la clienta que te escribe con nombre de usuario y sin número visible.</li>
+      </ul>
+      <p>El valor se puede escribir como <em>30000</em>, <em>30.000</em>, <em>30 mil</em> o <em>30k</em>. El celular es de 10 cifras, con o sin +57. Te llega un aviso como «Borrador ORD-… creado para …4567 por $30.000 → completar en el panel» con el enlace al pedido, y queda en <strong>Conversaciones → Comandos</strong>.</p>
+      <ul class="list">
+        <li>Si hay un chat con ese número o ese usuario, el borrador queda <strong>ligado a su conversación</strong>. Si no lo hay, el borrador se crea igual y el aviso te lo dice.</li>
+        <li>Si su chat ya tiene otro pedido, el borrador queda aparte y no toca el otro.</li>
+        <li>También puedes crearlo desde el panel: en <strong>Conversaciones</strong>, abre el chat y pulsa <strong>Crear pedido</strong>. Si el chat tiene carrito, el pedido sale con esos productos; si no, sale un borrador vacío ligado al chat. Si el chat ya tiene un pedido, te abre ese.</li>
+      </ul>
+      <p>Después, en el panel:</p>
+      <ol class="steps">
+        <li>Abre el borrador (desde el enlace del aviso o desde <strong>Pedidos</strong>). Arriba ves el valor que acordaste, como referencia.</li>
+        <li>Agrega los productos. <strong>Van con el precio de la tienda</strong>: no se escribe un precio a mano. Si acordaste menos, aplica un <strong>descuento</strong>.</li>
+        <li>Completa la ciudad, la dirección y el pago, y pulsa <strong>Confirmar pedido</strong>. Ahí se revisan las existencias y los precios como en cualquier pedido.</li>
+      </ol>
+      <div class="note"><strong>Mientras es borrador</strong><p>No aparta inventario, no cobra y no le escribe nada a la clienta. Tampoco cuenta en ventas ni en «Por atender». Un borrador de más de 7 días aparece en <strong>Pedidos → Borradores viejos</strong> para que decidas si lo confirmas o lo cancelas: nunca se borra solo.</p></div>
+      <h3 id="guia-whatsapp">Crear guía por WhatsApp</h3>
+      <p>La guía se crea en dos pasos, para que nunca salga una por un error de escritura:</p>
+      <ol class="steps">
+        <li>Escribe <strong>/guia</strong> y el número del pedido, por ejemplo <em>/guia ORD-1791998787841-915</em>. Te llega la transportadora, el valor del envío y un <strong>código de 4 cifras</strong>: «ORD-…: COORDINADORA $12.300. Para crear la guía escribe /confirmar 4821 (vence en 10 min)».</li>
+        <li>Si está bien, escribe <strong>/confirmar</strong> y el código, por ejemplo <em>/confirmar 4821</em>. Se crea la guía y te llega el número de guía. La clienta recibe el aviso de guía como siempre.</li>
+      </ol>
+      <ul class="list">
+        <li>El pedido tiene que estar listo para guía con las reglas de siempre: pagado, o contra entrega con valor por recaudar; con ciudad y dirección; y sin guía. Si no, el aviso dice qué falta y no da código.</li>
+        <li>El código vence a los 10 minutos. Uno equivocado o vencido no hace nada; a los 3 equivocados la cotización se anula y hay que pedir <em>/guia</em> otra vez.</li>
+        <li>Si el valor cambió desde que se cotizó en el panel, el aviso muestra el anterior entre paréntesis.</li>
+        <li>Máximo 5 cotizaciones de guía por hora; si necesitas más, créala desde el panel.</li>
+        <li>El código no se guarda: en Conversaciones → Comandos aparece como «····».</li>
+      </ul>
       <h3>Respuestas automáticas</h3>
       <p>Desde el botón <strong>Respuestas automáticas</strong> defines qué contesta el bot solo. Funciona por palabra clave: si el mensaje de la clienta contiene alguna de las frases que escribiste, contesta lo que hayas puesto. Si no coincide ninguna, <strong>no contesta nada</strong> y te deja la conversación marcada.</p>
       <ol class="steps">
