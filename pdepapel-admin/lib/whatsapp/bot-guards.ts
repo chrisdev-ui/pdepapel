@@ -97,6 +97,7 @@ export async function exceededBotCap(
   conversationId: string,
   inboundAt: Date | null,
   now = new Date(),
+  options: { handoff?: boolean } = {},
 ): Promise<BotCap | null> {
   const fromBot = {
     conversationId,
@@ -109,6 +110,10 @@ export async function exceededBotCap(
     });
     if (sinceInbound >= BOT_MAX_MESSAGES_PER_INBOUND) return "per_inbound";
   }
+  // El aviso de que Paula escribe no lo frena el tope de la ventana: sin él la
+  // clienta queda esperando sin saberlo (91a47461, 2026-10-26). El tope por
+  // mensaje sí lo frena.
+  if (options.handoff) return null;
   const inWindow = await prismadb.conversationMessage.count({
     where: { ...fromBot, createdAt: { gte: new Date(now.getTime() - BOT_MESSAGE_WINDOW_MS) } },
   });

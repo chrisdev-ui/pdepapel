@@ -144,6 +144,13 @@ describe("exceededBotCap", () => {
     await expect(exceededBotCap("c-1", llego)).resolves.toBe("per_window");
   });
 
+  it("el aviso de que Paula escribe no lo frena la ventana, sí el tope por mensaje", async () => {
+    mocks.count.mockResolvedValueOnce(0);
+    await expect(exceededBotCap("c-1", llego, new Date(), { handoff: true })).resolves.toBeNull();
+    mocks.count.mockResolvedValueOnce(BOT_MAX_MESSAGES_PER_INBOUND);
+    await expect(exceededBotCap("c-1", llego, new Date(), { handoff: true })).resolves.toBe("per_inbound");
+  });
+
   it("por debajo de los dos topes", async () => {
     mocks.count.mockResolvedValueOnce(1).mockResolvedValueOnce(3);
     await expect(exceededBotCap("c-1", llego)).resolves.toBeNull();

@@ -2,6 +2,7 @@ import { MarketplaceWebhookEventStatus } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  handOff: vi.fn(),
   claimRow: vi.fn(),
   findEvent: vi.fn(),
   claim: vi.fn(),
@@ -27,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   order: [] as string[],
 }));
 
-vi.mock("@/lib/whatsapp/bot", () => ({ runWhatsAppBot: mocks.runBot, NO_MATCH_ACKNOWLEDGEMENT: "Esa no me la sé" }));
+vi.mock("@/lib/whatsapp/bot", () => ({ runWhatsAppBot: mocks.runBot, handOffAfterBotError: mocks.handOff, NO_MATCH_ACKNOWLEDGEMENT: "Esa no me la sé" }));
 vi.mock("@/lib/whatsapp/shadow/run", () => ({ runWhatsAppBotShadow: mocks.shadow }));
 vi.mock("@/lib/background", () => ({ runInBackground: (_label: string, task: () => Promise<unknown>) => void task() }));
 
@@ -1150,6 +1151,8 @@ describe("processWhatsAppWebhookEvent", () => {
         data: expect.objectContaining({ status: "PROCESSED" }),
       }),
     );
+    // Nunca en silencio: la conversación pasa a Paula.
+    expect(mocks.handOff).toHaveBeenCalled();
   });
 
   it("gives up when another worker claimed the event first", async () => {

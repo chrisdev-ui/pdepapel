@@ -25,3 +25,7 @@ export const UNREADABLE_MEDIA_ACKNOWLEDGEMENT =
 /** Cuando el botón apunta a una respuesta que ya no está disponible. */
 export const UNAVAILABLE_OPTION_ACKNOWLEDGEMENT =
   "Esa opción ya no está disponible 💛 Le aviso a Paula para que te ayude.";
+
+/** Va delante de la respuesta de productos cuando la pregunta llegó con un saludo («Hola, ¿tienen…?»). */
+export const GREETING_REPLY_PREFIX = "¡Hola!";
+

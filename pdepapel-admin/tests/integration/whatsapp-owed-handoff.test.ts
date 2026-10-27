@@ -312,16 +312,18 @@ describe("aviso de escalada debido", () => {
     expect((await botMessages(chat.id)).map((row) => row.body)).not.toContain(formatBotReply(NO_MATCH_ACKNOWLEDGEMENT));
   });
 
-  it("con el tope de 4 mensajes en 10 minutos ya lleno, no sale y queda descartado", async () => {
+  // Desde el 2026-10-27 el tope de la ventana no frena el aviso de que Paula
+  // escribe (91a47461: la clienta se quedó sin saber que la pasaron a Paula).
+  it("con el tope de 4 mensajes en 10 minutos ya lleno, el aviso debido sale una vez igual", async () => {
     const chat = await conversation();
     for (let index = 0; index < 4; index += 1) {
       await testPrisma.conversationMessage.create({ data: { conversationId: chat.id, direction: "OUTBOUND", sentBy: "BOT", status: "SENT", body: `respuesta ${index}`, createdAt: new Date(Date.now() - 60_000 + index) } });
     }
     await handoffCancelledByBurst(chat);
     const next = await inbound(chat.id, "hola?", later(5_000));
-    expect((await answer(chat, next)).outcome).toBe("skipped_needs_owner");
+    expect((await answer(chat, next)).outcome).toBe("escalated_owed_notice");
     const again = await inbound(chat.id, "?", later(6_000));
     expect((await answer(chat, again)).outcome).toBe("skipped_needs_owner");
-    expect(sent.messages).toHaveLength(0);
+    expect(sent.messages).toHaveLength(1);
   });
 });

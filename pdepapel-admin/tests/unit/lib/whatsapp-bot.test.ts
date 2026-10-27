@@ -56,11 +56,20 @@ vi.mock("@/lib/whatsapp/bot-guards", async (importOriginal) => ({
   welcomeSentRecently: mocks.welcomeRecently,
   isBurstModeOn: mocks.burstMode,
 }));
-vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/whatsapp/bot-products")>()),
+vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/whatsapp/bot-products")>();
+  return {
+  ...actual,
   answerProductQuestion: mocks.answerProduct,
+  // El bot llama la versión con motivo y el portero con catálogo; aquí sin base.
+  answerProductQuestionDetailed: async (storeId: string, body: string, options: unknown) => {
+    const answer = await mocks.answerProduct(storeId, body, options);
+    return { answer, reason: answer ? null : "classifier_failed" };
+  },
+  looksLikeProductQuestionForStore: async (_storeId: string, body: string) => actual.looksLikeProductQuestion(body),
   answerAboutProduct: mocks.answerAboutProduct,
-}));
+};
+});
 // `detectProductReference` se deja real: es puro y es justo lo que decide si
 // el mensaje entra en esta etapa.
 vi.mock("@/lib/whatsapp/bot-references", async (importOriginal) => ({
@@ -197,6 +206,7 @@ const ajustesBase: ResolvedStoreSettings = {
   botHoldingText: null,
   botHoldingNightText: null,
   waitingReminderEmail: false,
+  waitingAlertMinutes: 30,
   whatsappOrderUpdatesEnabled: false,
   whatsappTemplateGuide: null,
   whatsappTemplateDelivered: null,
@@ -363,8 +373,10 @@ describe("runWhatsAppBot", () => {
       expect(mocks.conversationUpdate).toHaveBeenCalledWith({ where: { id: "conversation-1" }, data: { status: "OPEN", needsOwnerReason: null }, select: { id: true } });
     });
 
-    it("una escalada del bot no vence sola", async () => {
-      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER", needsOwnerReason: null, storeId: "store-1", lastOwnerAt: HACE(25 * 60) });
+    // Desde el 2026-10-27 una escalada del bot vence con la regla de la pausa:
+    // 24 h desde lo último que salió (antes no vencía nunca).
+    it("una escalada reciente del bot sigue callada aunque Paula escribiera hace más de 24 h", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER", needsOwnerReason: null, storeId: "store-1", lastOwnerAt: HACE(25 * 60), lastOutboundAt: HACE(30) });
       await expect(runWhatsAppBot(input)).resolves.toEqual({ outcome: "skipped_needs_owner" });
       expect(mocks.send).not.toHaveBeenCalled();
     });
@@ -624,7 +636,7 @@ describe("runWhatsAppBot", () => {
 
       await expect(
         runWhatsAppBot({ ...input, inboundAt: new Date("2026-09-21T19:52:00.000Z") }),
-      ).resolves.toEqual({ outcome: "skipped_owner_active" });
+      ).resolves.toEqual({ outcome: "skipped_superseded" });
       expect(mocks.send).not.toHaveBeenCalled();
     });
   });
@@ -1546,7 +1558,7 @@ describe("ritmo humano", () => {
           interactiveReplyId: TALK_TO_OWNER_BUTTON_ID,
           inboundAt: LLEGO,
         }),
-      ).resolves.toEqual({ outcome: "skipped_owner_active" });
+      ).resolves.toEqual({ outcome: "skipped_superseded" });
       expect(mocks.conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "NEEDS_OWNER", needsOwnerReason: null } }));
       expect(mocks.sendText).not.toHaveBeenCalled();
       expect(mocks.send).not.toHaveBeenCalled();
@@ -2528,7 +2540,7 @@ describe("seguridad del bot: cuántos mensajes salen de verdad", () => {
     const r2 = await runWhatsAppBot({ ...input, body: "Buenas", settings: ajustesBase, inboundAt: new Date(t0.getTime() + 4000), ...enFila("e2", new Date(t0.getTime() + 4000)) });
     const r3 = await runWhatsAppBot({ ...input, body: "¿Cuál es el horario?", inboundAt: new Date(t0.getTime() + 9000), ...enFila("e3", new Date(t0.getTime() + 9000)) });
 
-    expect([r1.outcome, r2.outcome]).toEqual(["skipped_owner_active", "skipped_owner_active"]);
+    expect([r1.outcome, r2.outcome]).toEqual(["skipped_superseded", "skipped_superseded"]);
     expect(r3).toEqual({ outcome: "replied", trigger: "horario" });
     expect(totalEnvios()).toBe(1);
     expect(mocks.send).toHaveBeenCalledWith("573001234567", "Abrimos de 9 a 6.", ESCAPE);

@@ -13,7 +13,7 @@ import { claimQueueRow } from "@/lib/atomic-claim";
 import { runInBackground } from "@/lib/background";
 import { normalizePhone } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
-import { NO_MATCH_ACKNOWLEDGEMENT, runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
+import { NO_MATCH_ACKNOWLEDGEMENT, handOffAfterBotError, runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
 import { isBurstModeOn } from "@/lib/whatsapp/bot-guards";
 import { inboundKindOf, type InboundKind } from "@/lib/whatsapp/message-kinds";
 import { isShadowCandidate } from "@/lib/whatsapp/shadow/candidate";
@@ -241,11 +241,23 @@ function getCustomerEdit(message: JsonRecord): { of: string; text: string } | nu
 }
 
 /** Lo que deja a la clienta esperando a Paula sin respuesta del bot: ahí se programan las revisiones de espera. */
-const WAITING_OUTCOMES = new Set<WhatsAppBotResult["outcome"]>(["skipped_owner_active", "skipped_needs_owner", "skipped_bot_disabled", "skipped_filler"]);
+//  Un envío que se calló (ráfaga, tope, turno, Paula en la fila) también: si
+//  la respuesta que lo reemplazaba tampoco salió, la espera es lo único que la
+//  saca del silencio. Programarla dos veces no pasa: la espera se marca una vez.
+const WAITING_OUTCOMES = new Set<WhatsAppBotResult["outcome"]>([
+  "skipped_owner_active",
+  "skipped_needs_owner",
+  "skipped_bot_disabled",
+  "skipped_filler",
+  "skipped_superseded",
+  "skipped_cap",
+  "skipped_lease_lost",
+  "skipped_pending_owner",
+]);
 
 /** Nunca hace fallar el archivo ni la respuesta: si la cola falla, la clienta queda como hoy. */
-async function scheduleWaitIfSilent(conversationId: string, outcome: WhatsAppBotResult["outcome"]) {
-  if (!WAITING_OUTCOMES.has(outcome)) return;
+async function scheduleWaitIfSilent(conversationId: string, outcome: WhatsAppBotResult["outcome"] | "bot_error") {
+  if (outcome !== "bot_error" && !WAITING_OUTCOMES.has(outcome)) return;
   // Import diferido: la espera arrastra el correo y su entorno, que el archivo de mensajes no necesita.
   await import("@/lib/whatsapp/wait-assist")
     .then(({ scheduleWaitChecks }) => scheduleWaitChecks(conversationId))
@@ -985,6 +997,8 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
       interactiveReplyId: string | null;
       inboundMessageId: string | null;
       mediaForOwner?: boolean;
+      captionedMedia?: boolean;
+      bodilessType?: string | null;
       inboundAt?: Date | null;
       eventId: string;
       eventCreatedAt: Date;
@@ -1014,10 +1028,14 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
       // el bot no lo ve. Con pie («¿tienen este cuaderno?») el pie es lo que
       // preguntó y se contesta por el camino de siempre.
       const paraPaula = isMediaForOwner(message.mediaType) && !message.body?.trim();
+      const captionedMedia = isMediaForOwner(message.mediaType) && Boolean(message.body?.trim());
       // Una edición solo se lee con el modo ráfaga: sin él no trae cuerpo y no se contesta.
       const edit = message.metadata?.edit;
       const burstEdit = Boolean(edit && (await isBurstModeOn(storeId)));
-      if (!message.body && !paraPaula && !burstEdit) continue;
+      // Sticker, ubicación, contacto o «unsupported»: antes se descartaban sin respuesta ni espera.
+      const bodilessType =
+        !message.body && !paraPaula && !burstEdit && !edit && message.kind !== "signal" ? message.mediaType : null;
+      if (!message.body && !paraPaula && !burstEdit && !bodilessType) continue;
       // Sin teléfono se contesta al BSUID; `fileInboundMessage` ya garantizó
       // que al menos uno de los dos existe.
       const recipient = message.phone ?? message.bsuid;
@@ -1041,6 +1059,8 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
         customerBsuid: message.bsuid,
         webOrigin: message.metadata?.webOrigin ?? null,
         ...(paraPaula ? { mediaForOwner: true } : {}),
+        ...(captionedMedia ? { captionedMedia: true } : {}),
+        ...(bodilessType ? { bodilessType } : {}),
       });
     }
 
@@ -1088,6 +1108,17 @@ export async function processWhatsAppWebhookEvent(eventId: string, options: { ba
           conversationId: candidate.conversationId,
           message: error instanceof Error ? error.message : "unknown",
         });
+        // Nunca en silencio: la conversación pasa a Paula y se programa la
+        // espera, que es la que avisa a la dueña. A la clienta no le sale nada.
+        try {
+          await handOffAfterBotError(candidate.conversationId);
+        } catch (handoffError) {
+          console.error("[WHATSAPP_SYNC] No se pudo pasar a Paula tras el fallo del bot", {
+            conversationId: candidate.conversationId,
+            message: handoffError instanceof Error ? handoffError.message : "unknown",
+          });
+        }
+        await scheduleWaitIfSilent(candidate.conversationId, "bot_error");
       }
     }
 

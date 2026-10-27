@@ -178,7 +178,8 @@ export function chooseFromBurst(messages: BurstMessage[], ctx: BurstContext): Bu
     text: indexes.map((index) => messages[index].text).join(" "),
     intent: top,
     position: indexes[0] + 1,
-    webOrigin: top === "web" ? detectWebOrigin(messages[indexes[0]].text) : null,
+    // El botón de la página de un producto trae «hola» y queda como saludo o dato: el origen web no se pierde por eso.
+    webOrigin: indexes.map((index) => detectWebOrigin(messages[index].text)).find(Boolean) ?? null,
     intents,
   });
   if (top === "order") {

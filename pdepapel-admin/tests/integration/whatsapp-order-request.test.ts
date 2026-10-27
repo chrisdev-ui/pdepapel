@@ -265,7 +265,7 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
       await inbound(id, "Hablar con Paula", new Date(Date.now() + 500));
     };
     const yes = await inbound(id, "sí");
-    expect((await answer(id, yes)).outcome).toBe("skipped_owner_active");
+    expect((await answer(id, yes)).outcome).toBe("skipped_superseded");
     expect(sent.messages).toEqual([]);
     // La respuesta no salió, pero el pedido queda en el mensaje de la clienta y la conversación es de Paula.
     expect(await state(id)).toMatchObject({ status: "NEEDS_OWNER", orders: 1, cardsOn: ["CUSTOMER:sí"] });
@@ -298,7 +298,7 @@ describe("pedido por WhatsApp: «sí» al producto ofrecido", () => {
       sent.onTyping = null;
       await inbound(id, "Hablar con Paula", new Date(Date.now() + 500));
     };
-    expect((await answer(id, await inbound(id, "y también 2 lapiceros"))).outcome).toBe("skipped_owner_active");
+    expect((await answer(id, await inbound(id, "y también 2 lapiceros"))).outcome).toBe("skipped_superseded");
     expect(sent.messages).toEqual([]);
     const after = await state(id);
     expect(after.cardsOn.at(-1)).toBe("CUSTOMER:y también 2 lapiceros");

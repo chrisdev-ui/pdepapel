@@ -13,6 +13,7 @@ import {
 import {
   OWNER_TAKEOVER_WINDOW_HOURS,
   describeBotPause,
+  handoffExpired,
 } from "@/lib/conversation-bot-pause";
 import prismadb from "@/lib/prismadb";
 import {
@@ -25,7 +26,8 @@ import {
 } from "@/lib/whatsapp/bot-guards";
 import { assembleBurst, chooseFromBurst, claimBurst, loadBurstContext, loadBurstRows, markAnswered, type BurstChoice } from "@/lib/whatsapp/burst";
 import { isFillerText, plainBotText } from "@/lib/whatsapp/filler";
-import { NO_MATCH_ACKNOWLEDGEMENT, TALK_TO_OWNER_ACKNOWLEDGEMENT, UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, UNREADABLE_MEDIA_ACKNOWLEDGEMENT } from "@/lib/whatsapp/bot-acknowledgements";
+import { handleOptOutMessage, isOptOutMessage } from "@/lib/whatsapp/opt-out";
+import { GREETING_REPLY_PREFIX, NO_MATCH_ACKNOWLEDGEMENT, TALK_TO_OWNER_ACKNOWLEDGEMENT, UNAVAILABLE_OPTION_ACKNOWLEDGEMENT, UNREADABLE_MEDIA_ACKNOWLEDGEMENT } from "@/lib/whatsapp/bot-acknowledgements";
 import { acquireBotLease, claimBotLease, newBotLease, releaseBotLease, type BotLease } from "@/lib/whatsapp/bot-lease";
 import { realInboundWhere } from "@/lib/whatsapp/message-kinds";
 import { enqueueWhatsAppBotRerun } from "@/lib/whatsapp/queue";
@@ -57,16 +59,18 @@ import {
   parsePaymentOption,
   renderBusinessFact,
   renderPaymentOption,
+  splitLeadingGreeting,
 } from "@/lib/whatsapp/bot-facts";
 import {
   PRODUCT_TEMPLATES,
   areProductAnswersApproved,
   answerAboutProduct,
-  answerProductQuestion,
+  answerProductQuestionDetailed,
+  looksLikeProductQuestionForStore,
+  type ProductNoMatchReason,
   buildOwnerRow,
   effectiveUnitPrices,
   formatCOP,
-  looksLikeProductQuestion,
   resolveProductSearch,
   type ProductDecision,
 } from "@/lib/whatsapp/bot-products";
@@ -191,13 +195,57 @@ export type WhatsAppBotOutcome =
   /** Solo «ok», «gracias», «listo»: no pide nada; el bot no contesta ni la pasa a Paula. */
   | "skipped_filler"
   /** Respuesta de espera (10 min sin respuesta): lo que llegó no es algo que el bot conteste bien. */
-  | "skipped_assist_unrecognized";
+  | "skipped_assist_unrecognized"
+  /** Se calló por un tope de envíos (por mensaje o por ventana). */
+  | "skipped_cap"
+  /** Otra corrida tomó el turno de envío; esa contesta. */
+  | "skipped_lease_lost"
+  /** De Paula ya llegó algo que espera en la fila. */
+  | "skipped_pending_owner"
+  /** Escribió «BAJA»: se anotó la baja de los avisos de sus pedidos y se le confirmó. */
+  | "replied_opt_out";
 
 export interface WhatsAppBotResult {
   outcome: WhatsAppBotOutcome;
   /** Palabra clave que disparó la respuesta, si hubo. */
   trigger?: string;
   error?: string;
+}
+
+/** Por qué no hubo productos: el de la búsqueda, o que Paula no ha aprobado los textos. */
+type NoMatchRecord = { reason: ProductNoMatchReason | "not_approved"; detail?: string };
+
+/** ¿Lo último que dijo el bot fue «no lo encontré» con el enlace? Un segundo fallo ya va a Paula. */
+async function lastBotSearchMissed(conversationId: string): Promise<boolean> {
+  const last = await prismadb.conversationMessage.findFirst({
+    where: { conversationId, direction: ConversationMessageDirection.OUTBOUND, sentBy: ConversationMessageSentBy.BOT },
+    orderBy: { createdAt: "desc" },
+    select: { metadata: true },
+  });
+  const record = asRecord(last?.metadata ?? null).noMatch as { reason?: string } | undefined;
+  return record?.reason === "zero_results";
+}
+
+/**
+ * Por qué no salió un envío, con su motivo real. Antes todo era
+ * `skipped_owner_active` y eso escondía los topes y los turnos perdidos.
+ */
+function abortedOutcome(sent: { reason?: QuietReason }): WhatsAppBotResult {
+  switch (sent.reason) {
+    case "per_inbound":
+    case "per_window":
+      return { outcome: "skipped_cap" };
+    case "superseded":
+      return { outcome: "skipped_superseded" };
+    case "lease_lost":
+      return { outcome: "skipped_lease_lost" };
+    case "pending_owner":
+      return { outcome: "skipped_pending_owner" };
+    case "bot_disabled":
+      return { outcome: "skipped_bot_disabled" };
+    default:
+      return { outcome: "skipped_owner_active" };
+  }
 }
 
 /**
@@ -408,6 +456,7 @@ type QuietReason = "bot_disabled" | "owner_active" | "superseded" | "pending_own
 async function shouldStayQuiet(
   conversationId: string,
   pace: Pacing,
+  options: { handoff?: boolean } = {},
 ): Promise<QuietReason | null> {
   if (pace.storeId && !(await isBotEnabled(pace.storeId))) return "bot_disabled";
   const actual = await prismadb.conversation.findUnique({
@@ -434,7 +483,7 @@ async function shouldStayQuiet(
     if (pending === "owner_message") return "pending_owner";
     if (pending === "customer_message") return "superseded";
   }
-  return exceededBotCap(conversationId, pace.inboundAt);
+  return exceededBotCap(conversationId, pace.inboundAt, new Date(), options);
 }
 
 /** Corta a propósito: si vuelve a preguntar lo mismo, merece respuesta. */
@@ -464,6 +513,15 @@ async function escalate(conversationId: string, reason: "owner_window" | null = 
     data: { status: ConversationStatus.NEEDS_OWNER, needsOwnerReason: reason },
     select: { id: true },
   });
+}
+
+/**
+ * El bot falló a mitad de camino: la conversación queda para Paula. Nada para
+ * la clienta (un texto automático tras un error fue peor que callar, 2026-10-10);
+ * la revisión de espera y el aviso a la dueña hacen el resto.
+ */
+export async function handOffAfterBotError(conversationId: string): Promise<void> {
+  await escalate(conversationId);
 }
 
 /**
@@ -500,6 +558,10 @@ async function decideAndAnswer(input: {
   interactiveReplyId?: string | null;
   /** Una foto, un audio, un video o un documento: lo mira Paula. */
   mediaForOwner?: boolean;
+  /** Una foto o un documento CON pie: el pie es la pregunta y no entra a la ráfaga, que solo lee texto. */
+  captionedMedia?: boolean;
+  /** Un sticker, una ubicación, un contacto o un tipo que Meta no deja leer: sin texto que contestar. */
+  bodilessType?: string | null;
   /** Cuándo llegó este mensaje, para saber si ya llegó otro después. */
   inboundAt?: Date | null;
   /** `wamid` del mensaje entrante: hace falta para «escribiendo…». */
@@ -547,10 +609,22 @@ async function decideAndAnswer(input: {
 }): Promise<WhatsAppBotResult> {
   const conversation = await prismadb.conversation.findUnique({
     where: { id: input.conversationId },
-    select: { id: true, status: true, storeId: true, lastOwnerAt: true, needsOwnerReason: true },
+    select: { id: true, status: true, storeId: true, lastOwnerAt: true, lastOutboundAt: true, needsOwnerReason: true },
   });
   if (!conversation) return { outcome: "skipped_needs_owner" };
   input = { ...input, storeId: conversation.storeId };
+
+  // «BAJA»: no quiere más avisos de sus pedidos. Se anota y se le confirma
+  // una vez, con el bot encendido o apagado y aunque Paula esté en la pausa.
+  if (!input.assist && !input.interactiveReplyId && isOptOutMessage(input.body)) {
+    const optOut = await handleOptOutMessage({
+      storeId: conversation.storeId,
+      conversationId: conversation.id,
+      recipient: input.recipient,
+      customerPhone: input.customerPhone,
+    });
+    return optOut.error ? { outcome: "replied_opt_out", error: optOut.error } : { outcome: "replied_opt_out" };
+  }
 
   // Interruptor de Configuración, leído en cada mensaje. Apagado, el bot no
   // manda nada —ni «escribiendo…»— y la conversación queda en la fila de
@@ -575,7 +649,11 @@ async function decideAndAnswer(input: {
   // 0 y medio. Quedó en «es de Paula» solo por su pausa, y la pausa ya venció:
   //    vuelve a ser del bot. Una escalada del bot (ya le dijo a la clienta que
   //    Paula escribe) no vence así.
-  if (conversation.status === ConversationStatus.NEEDS_OWNER && conversation.needsOwnerReason === "owner_window") {
+  //    Un traspaso del bot vence igual, 24 h después de lo último que salió.
+  if (
+    conversation.status === ConversationStatus.NEEDS_OWNER &&
+    (conversation.needsOwnerReason === "owner_window" || handoffExpired(conversation, new Date()))
+  ) {
     await prismadb.conversation.update({
       where: { id: conversation.id },
       data: { status: ConversationStatus.OPEN, needsOwnerReason: null },
@@ -604,7 +682,7 @@ async function decideAndAnswer(input: {
 
   // 0 ter. Modo ráfaga: con lo que escribió seguido se elige qué contestar, y
   //    todo lo de abajo sigue igual con ese texto.
-  if (!input.assist && !buttonIdOf(input) && !input.mediaForOwner && (await isBurstModeOn(conversation.storeId))) {
+  if (!input.assist && !buttonIdOf(input) && !input.mediaForOwner && !input.captionedMedia && !input.bodilessType && (await isBurstModeOn(conversation.storeId))) {
     const keywords = input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
     const choice = await readBurst(conversation.id, input, keywords);
     if (!choice) return { outcome: "skipped_superseded" };
@@ -629,7 +707,7 @@ async function decideAndAnswer(input: {
       { omitOwnerButton: true, handoff: "owner_requested" },
     );
     await escalate(conversation.id);
-    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.aborted) return abortedOutcome(sent);
     return sent.ok
       ? { outcome: "escalated_owner_requested" }
       : { outcome: "escalated_owner_requested", error: sent.error };
@@ -681,7 +759,7 @@ async function decideAndAnswer(input: {
           : null,
       },
     );
-    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.aborted) return abortedOutcome(sent);
     if (sent.ok) {
       return { outcome: "replied_product_reference", trigger: answer.intent };
     }
@@ -733,7 +811,7 @@ async function decideAndAnswer(input: {
           : {}),
       },
     );
-    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.aborted) return abortedOutcome(sent);
     if (sent.ok) {
       return { outcome: "replied_business_fact", trigger: `payment.${paymentTarget}` };
     }
@@ -782,7 +860,7 @@ async function decideAndAnswer(input: {
       pacing(input),
       filas.length > 0 ? { list: { body: answer, rows: filas } } : {},
     );
-    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.aborted) return abortedOutcome(sent);
     if (sent.ok) {
       return { outcome: "replied_business_fact", trigger: factTarget };
     }
@@ -807,6 +885,17 @@ async function decideAndAnswer(input: {
     return { outcome: "skipped_needs_owner" };
   }
 
+  // 2 bis (sin texto). Un sticker, una ubicación, un contacto o un tipo que no
+  //    se puede leer. Si es lo primero que escribe, se saluda como a un «hola»;
+  //    si no, va a Paula como una foto. Antes se descartaban sin respuesta.
+  if (input.bodilessType) {
+    const previous = await prismadb.conversationMessage.count({
+      where: { conversationId: conversation.id, direction: ConversationMessageDirection.OUTBOUND },
+    });
+    if (previous === 0) input = { ...input, body: "hola", bodilessType: null };
+    else input = { ...input, mediaForOwner: true };
+  }
+
   // 2 bis. Una foto o un audio: lo que importa está dentro y el bot no lo ve.
   //    Va tras el portón de arriba para no acusar recibo dos veces.
   if (input.mediaForOwner) {
@@ -823,7 +912,7 @@ async function decideAndAnswer(input: {
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
       { omitOwnerButton: true, handoff: "media" },
     );
-    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.aborted) return abortedOutcome(sent);
     return sent.ok
       ? { outcome: "escalated_unprocessable_media" }
       : { outcome: "escalated_unprocessable_media", error: sent.error };
@@ -899,7 +988,7 @@ async function decideAndAnswer(input: {
           pacing(input),
           filas.length > 0 ? { list: { body: answer, rows: filas } } : {},
         );
-        if (sent.aborted) return { outcome: "skipped_owner_active" };
+        if (sent.aborted) return abortedOutcome(sent);
     if (sent.ok) {
           return { outcome: "replied_business_fact", trigger: factIntent };
         }
@@ -931,7 +1020,7 @@ async function decideAndAnswer(input: {
         pacing(input),
         { omitOwnerButton: true },
       );
-      if (sent.aborted) return { outcome: "skipped_owner_active" };
+      if (sent.aborted) return abortedOutcome(sent);
       return sent.ok ? { outcome: "replied_shipping_quote" } : { outcome: "escalated_send_failed", error: sent.error };
     }
   }
@@ -974,7 +1063,7 @@ async function decideAndAnswer(input: {
               list: answer.list,
             },
           );
-          if (sent.aborted) return { outcome: "skipped_owner_active" };
+          if (sent.aborted) return abortedOutcome(sent);
     if (sent.ok) {
             return {
               outcome: "replied_product_reference",
@@ -998,7 +1087,7 @@ async function decideAndAnswer(input: {
           [],
           pacing(input),
         );
-        if (sent.aborted) return { outcome: "skipped_owner_active" };
+        if (sent.aborted) return abortedOutcome(sent);
         if (sent.ok) return { outcome: "replied_reference_lost" };
         await escalate(conversation.id);
         return { outcome: "escalated_send_failed", error: sent.error };
@@ -1044,7 +1133,7 @@ async function decideAndAnswer(input: {
             }
           : { kind: "welcome" },
       );
-      if (sent.aborted) return { outcome: "skipped_owner_active" };
+      if (sent.aborted) return abortedOutcome(sent);
       if (sent.ok) {
         return { outcome: "replied_business_fact", trigger: "welcome" };
       }
@@ -1060,9 +1149,15 @@ async function decideAndAnswer(input: {
   }
 
   // 5. Lo que Paula escribió gana al catálogo: va antes que la búsqueda.
+  //    Con un saludo delante («Hola, ¿tienen X?») cuenta lo que pregunta: su
+  //    «Saludo» respondía a todo lo que empezara con «hola» y la pregunta por
+  //    productos se perdía. Si quitado el saludo otra respuesta de Paula
+  //    coincide («Hola, ¿me imprimen…?»), esa gana; si no, va la búsqueda.
   const keywords =
     input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
-  const match = matchWhatsAppKeyword(input.body, keywords);
+  const saludo = splitLeadingGreeting(input.body);
+  const greetedProductQuestion = saludo && (await looksLikeProductQuestionForStore(conversation.storeId, saludo.rest)) ? saludo : null;
+  const match = matchWhatsAppKeyword(greetedProductQuestion ? greetedProductQuestion.rest : input.body, keywords);
   if (match) {
     return respond(
       conversation.id,
@@ -1072,17 +1167,26 @@ async function decideAndAnswer(input: {
       pacing(input),
     );
   }
+  // Si la búsqueda no logra contestar, el saludo de Paula sigue siendo mejor que «Esa no me la sé».
+  const greetingKeyword = greetedProductQuestion ? matchWhatsAppKeyword(input.body, keywords) : null;
+  const productBody = greetedProductQuestion ? greetedProductQuestion.rest : input.body;
+  const withGreeting = (text: string) => (greetedProductQuestion ? `${GREETING_REPLY_PREFIX} ${text}` : text);
 
   // 6. Productos: si tienen algo y si queda. A diferencia del paso 4, aquí
   //    hace falta un modelo para entender la pregunta, así que TODO lo que
   //    pueda salir mal —sin clave, sin cuota, lento, o una respuesta que no
   //    cuadra— acaba igual: sin contestar aquí y siguiendo al paso 6.
-  if (looksLikeProductQuestion(input.body)) {
+  //    Por qué no hubo productos, para contarlo después (no se enseña nunca).
+  let noMatch: NoMatchRecord | null = { reason: "no_signal" };
+  if (await looksLikeProductQuestionForStore(conversation.storeId, productBody)) {
+    noMatch = null;
     const productSettings =
       input.settings ?? (await readSettings(conversation.storeId));
-    const answer =
-      productSettings && areProductAnswersApproved(productSettings)
-        ? await answerProductQuestion(conversation.storeId, input.body, {
+    const approved = Boolean(productSettings && areProductAnswersApproved(productSettings));
+    const detailed = approved
+      ? await answerProductQuestionDetailed(conversation.storeId, productBody, {
+            // Un segundo «no lo encontré» seguido ya no manda el enlace otra vez: pasa a Paula.
+            handoffOnMiss: await lastBotSearchMissed(conversation.id),
             // Sale solo si la clasificación se hace larga. Sin lista y sin
             // pausa humana: ya se ha esperado bastante, y `deliver` no le
             // pone `shown`, así que no estorba a «el primero» —la etapa de
@@ -1104,7 +1208,9 @@ async function decideAndAnswer(input: {
               }
             },
           })
-        : null;
+      : null;
+    const answer = detailed?.answer ?? null;
+    if (!answer) noMatch = detailed ? { reason: detailed.reason ?? "classifier_other", ...(detailed.detail ? { detail: detailed.detail } : {}) } : { reason: "not_approved" };
     if (answer) {
       // Sin nada seguro que decir, el texto promete que Paula escribe: se
       // marca ANTES de mandar, igual que en el paso 7, para que un segundo
@@ -1113,7 +1219,7 @@ async function decideAndAnswer(input: {
       const sent = await deliver(
         conversation.id,
         input.recipient,
-        answer.text,
+        withGreeting(answer.text),
         [],
         pacing(input),
         {
@@ -1121,12 +1227,13 @@ async function decideAndAnswer(input: {
           shown: answer.shownIds
             ? { ids: answer.shownIds, intent: answer.intent, ...(answer.shownPrices ? { prices: answer.shownPrices } : {}) }
             : null,
-          list: answer.list,
+          list: answer.list ? { ...answer.list, body: withGreeting(answer.list.body) } : answer.list,
           decision: answer.decision,
           omitOwnerButton: Boolean(answer.handoff),
+          noMatch: answer.noMatchReason ? { reason: answer.noMatchReason } : null,
         },
       );
-      if (sent.aborted) return { outcome: "skipped_owner_active" };
+      if (sent.aborted) return abortedOutcome(sent);
       if (sent.ok) {
         return {
           outcome: answer.handoff ? "replied_product_unsure" : "replied_product",
@@ -1140,6 +1247,10 @@ async function decideAndAnswer(input: {
         error: sent.error,
       };
     }
+  }
+
+  if (greetingKeyword) {
+    return respond(conversation.id, input.recipient, greetingKeyword.keyword, greetingKeyword.trigger, pacing(input));
   }
 
   // 6 bis. Escribió a mano lo que dice el botón. Hoy no pasa —los 23 «Hablar
@@ -1158,7 +1269,7 @@ async function decideAndAnswer(input: {
       // escribe, y la escalada acaba de pasar aquí mismo. Ver `deliver`.
       { omitOwnerButton: true, handoff: "owner_requested" },
     );
-    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.aborted) return abortedOutcome(sent);
     await escalate(conversation.id);
     return sent.ok
       ? { outcome: "escalated_owner_requested" }
@@ -1189,7 +1300,7 @@ async function decideAndAnswer(input: {
     NO_MATCH_ACKNOWLEDGEMENT,
     [],
     pacing(input),
-    { handoff: "no_match" },
+    { handoff: "no_match", noMatch },
   );
   return { outcome: "escalated_no_match" };
 }
@@ -1299,7 +1410,7 @@ async function answerWebOrigin(
       omitOwnerButton: true,
       kind: "welcome",
     });
-    if (sent.aborted) return { outcome: "skipped_owner_active" };
+    if (sent.aborted) return abortedOutcome(sent);
     return sent.ok ? { outcome: "replied_web_origin", trigger: "order" } : { outcome: "escalated_send_failed", error: sent.error };
   }
 
@@ -1322,7 +1433,7 @@ async function answerWebOrigin(
           ...(greeted ? {} : { kind: "welcome" as const }),
         },
       );
-      if (sent.aborted) return { outcome: "skipped_owner_active" };
+      if (sent.aborted) return abortedOutcome(sent);
       return sent.ok ? { outcome: "replied_web_origin", trigger: "product" } : { outcome: "escalated_send_failed", error: sent.error };
     }
   }
@@ -1331,7 +1442,7 @@ async function answerWebOrigin(
   if (greeted) return { outcome: "skipped_welcome_repeat" };
   const text = web.pageType === "cart" ? ORDER_TEMPLATES["web.cart"]() : ORDER_TEMPLATES["web.general"]();
   const sent = await deliver(conversation.id, input.recipient, text, [], pacing(input), { kind: "welcome" });
-  if (sent.aborted) return { outcome: "skipped_owner_active" };
+  if (sent.aborted) return abortedOutcome(sent);
   return sent.ok
     ? { outcome: "replied_web_origin", trigger: web.pageType === "cart" ? "cart" : "general" }
     : { outcome: "escalated_send_failed", error: sent.error };
@@ -1379,7 +1490,7 @@ async function handOffOrderRequest(
   const sent = await deliver(conversation.id, input.recipient, text, [], pacing(input), { omitOwnerButton: true, orderRequest: record });
   if (sent.aborted) {
     await keepOrderRequestOnInbound(conversation.id, { externalId: input.inboundMessageId ?? null, at }, record);
-    return { outcome: "skipped_owner_active" };
+    return abortedOutcome(sent);
   }
   return sent.ok ? { outcome: "replied_order_request" } : { outcome: "escalated_send_failed", error: sent.error };
 }
@@ -1422,7 +1533,7 @@ async function appendToOrderRequest(
   );
   if (sent.aborted) {
     await keepOrderRequestOnInbound(conversation.id, { externalId: input.inboundMessageId ?? null, at }, updated);
-    return { outcome: "skipped_owner_active" };
+    return abortedOutcome(sent);
   }
   return sent.ok ? { outcome: "replied_order_appended" } : { outcome: "escalated_send_failed", error: sent.error };
 }
@@ -1579,9 +1690,10 @@ async function sendOwedHandoff(
   const notice = HANDOFF_NOTICES[owed.notice];
   const sent = await deliver(conversation.id, input.recipient, notice.text, [], pacing(input), {
     omitOwnerButton: notice.omitOwnerButton,
+    owedNotice: true,
   });
   if (sent.aborted) {
-    await moveOwedHandoff(row.id, "sending", sent.reason === "superseded" ? "owed" : "dropped");
+    await moveOwedHandoff(row.id, "sending", sent.reason === "superseded" || sent.reason === "per_inbound" ? "owed" : "dropped");
     return false;
   }
   await moveOwedHandoff(row.id, "sending", sent.ok ? "sent" : "failed");
@@ -1603,7 +1715,7 @@ async function respond(
     keyword.buttons ?? [],
     pace,
   );
-  if (sent.aborted) return { outcome: "skipped_owner_active" };
+  if (sent.aborted) return abortedOutcome(sent);
   if (!sent.ok) {
     await escalate(conversationId);
     return { outcome: "escalated_send_failed", trigger, error: sent.error };
@@ -1662,11 +1774,16 @@ async function deliver(
     kind?: "welcome";
     /** El pedido que se le pasó a Paula; el panel lo enseña como tarjeta. */
     orderRequest?: OrderRequestRecord;
-    /** Es el aviso de que Paula escribe: si se cancela por la ráfaga, queda debido. */
+    /** Es el aviso de que Paula escribe: si se cancela por la ráfaga o un tope, queda debido. */
     handoff?: HandoffNotice;
+    /** Es un aviso debido que se vuelve a mandar: tampoco lo frena el tope de la ventana. */
+    owedNotice?: boolean;
+    /** Por qué la búsqueda no encontró productos; se archiva para contarlo. */
+    noMatch?: NoMatchRecord | null;
   } = {},
 ): Promise<{ ok: boolean; error?: string; aborted?: boolean; reason?: QuietReason }> {
-  const { photo, shown, list, omitOwnerButton, decision, kind, orderRequest, handoff } = extras;
+  const { photo, shown, list, omitOwnerButton, decision, kind, orderRequest, handoff, owedNotice, noMatch } = extras;
+  const quietOptions = { handoff: Boolean(handoff || owedNotice) };
   const metadata = {
     // «El bot contestó por ti» en el hilo del panel.
     ...(pace.assist ? { fallback: true } : {}),
@@ -1674,6 +1791,7 @@ async function deliver(
     ...(shown && shown.ids.length > 0 ? { shown } : {}),
     ...(decision ? { decision } : {}),
     ...(kind ? { kind } : {}),
+    ...(noMatch ? { noMatch } : {}),
   };
   const reply = formatBotReply(answer);
 
@@ -1710,14 +1828,14 @@ async function deliver(
   //
   // Al abortar NO se toca el estado: el eco acaba de dejar la conversación
   // como ella la quiere y pelearse con él sería volver al problema anterior.
-  const frenada = await shouldStayQuiet(conversationId, pace);
+  const frenada = await shouldStayQuiet(conversationId, pace, quietOptions);
   if (frenada) {
     const tope = frenada === "per_inbound" || frenada === "per_window";
     console[tope ? "warn" : "info"](
       tope ? "[WHATSAPP_BOT] Envío descartado por tope" : "[WHATSAPP_BOT] Se calla: la conversación cambió durante la pausa",
       { conversationId, motivo: frenada },
     );
-    if (handoff && frenada === "superseded") await recordOwedHandoff(conversationId, pace, handoff);
+    if (handoff && (frenada === "superseded" || tope)) await recordOwedHandoff(conversationId, pace, handoff);
     return { ok: true, aborted: true, reason: frenada };
   }
 
@@ -1748,7 +1866,7 @@ async function deliver(
   let quietBeforeRetry: QuietReason | null = null;
   // Como en la mirada de antes de enviar: si la clienta escribió, el aviso de escalada queda debido.
   const quietAfterFailure = async (reason: QuietReason) => {
-    if (handoff && reason === "superseded") await recordOwedHandoff(conversationId, pace, handoff);
+    if (handoff && (reason === "superseded" || reason === "per_inbound")) await recordOwedHandoff(conversationId, pace, handoff);
     return { ok: true, aborted: true, reason };
   };
   const attempt = async (send: () => Promise<WhatsAppSendResult>): Promise<WhatsAppSendResult> => {
@@ -1758,7 +1876,7 @@ async function deliver(
     retryLeft -= 1;
     await sleep(SEND_RETRY_DELAY_MS);
     // Mientras se esperaba pudo escribir Paula o la clienta: entonces no se repite.
-    quietBeforeRetry = await shouldStayQuiet(conversationId, pace);
+    quietBeforeRetry = await shouldStayQuiet(conversationId, pace, quietOptions);
     if (quietBeforeRetry) return first;
     attempts += 1;
     return send();
@@ -1793,7 +1911,10 @@ async function deliver(
         conversationId,
         code: sent.code ?? null,
       });
-      if (await shouldStayQuiet(conversationId, pace)) return { ok: true, aborted: true };
+      {
+        const callada = await shouldStayQuiet(conversationId, pace, quietOptions);
+        if (callada) return quietAfterFailure(callada);
+      }
       sent = await attempt(enviarTexto);
     }
   } else {
@@ -1812,7 +1933,10 @@ async function deliver(
       conversationId,
       code: sent.code ?? null,
     });
-    if (await shouldStayQuiet(conversationId, pace)) return { ok: true, aborted: true };
+    {
+        const callada = await shouldStayQuiet(conversationId, pace, quietOptions);
+        if (callada) return quietAfterFailure(callada);
+      }
     salioConFoto = false;
     sent = await attempt(enviarTexto);
     if (quietBeforeRetry) return quietAfterFailure(quietBeforeRetry);

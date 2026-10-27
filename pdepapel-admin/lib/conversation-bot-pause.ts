@@ -62,6 +62,24 @@ export function formatBotPause(pause: BotPause): string | null {
 }
 
 /**
+ * «Es de Paula» por un traspaso del bot (`needsOwnerReason` vacío) vence con
+ * la misma regla que su pausa: 24 h desde lo último que salió, sea de Paula o
+ * el aviso del bot. Antes no vencía nunca y una clienta que volvía semanas
+ * después no recibía nada (21 conversaciones el 2026-10-26).
+ */
+export function handoffExpired(
+  conversation: { needsOwnerReason?: string | null; lastOwnerAt?: Date | string | null; lastOutboundAt?: Date | string | null },
+  now: Date = new Date(),
+): boolean {
+  if (conversation.needsOwnerReason) return false;
+  const times = [conversation.lastOwnerAt, conversation.lastOutboundAt]
+    .map((value) => (value ? new Date(value).getTime() : Number.NaN))
+    .filter((time) => !Number.isNaN(time));
+  if (times.length === 0) return false;
+  return now.getTime() - Math.max(...times) >= WINDOW_MS;
+}
+
+/**
  * ¿Tiene sentido ofrecer «Devolver al bot»? Sí con la pausa de Paula puesta, y
  * también con la conversación esperándola (`NEEDS_OWNER`) aunque la pausa ya
  * venció: ahí el bot no contesta mensajes escritos hasta que alguien la

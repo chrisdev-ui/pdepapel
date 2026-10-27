@@ -75,6 +75,14 @@ describe("assembleBurst", () => {
   it("las fotos y audios no entran como texto", () => {
     expect(texts([row(0, "mira esta", { mediaType: "image" } as Partial<BurstRow>), row(5, "Tienes esta agenda?")])).toEqual(["Tienes esta agenda?"]);
   });
+
+  // Por esto una foto CON pie no pasa por la ráfaga (bot.ts, `captionedMedia`): si
+  // es el mensaje que se contesta, la ráfaga queda vacía y el pie se perdía en
+  // silencio (`skipped_superseded`, 2026-10-26). El pie se contesta por el camino de siempre.
+  it("una foto con pie como mensaje actual deja la ráfaga vacía", () => {
+    const rows = [row(0, "¿tienen este cuaderno?", { mediaType: "image" } as Partial<BurstRow>)];
+    expect(assembleBurst(rows, rows[0].id)).toEqual([]);
+  });
 });
 
 describe("chooseFromBurst", () => {

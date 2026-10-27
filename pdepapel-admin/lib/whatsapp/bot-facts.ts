@@ -304,6 +304,26 @@ const WELCOME_TRIGGER_WORDS: string[][] = WELCOME_TRIGGERS.flatMap((keyword) =>
  * Paula (paso 5) y no al menú de bienvenida. Antes bastaba con que el saludo
  * apareciera en cualquier parte, y el menú se comía «imprimir».
  */
+const LEADING_GREETING = /^\s*[¡!]*\s*(?:hola+|holi+s?|hello|hey|buen[oa]s?(?:\s+(?:d[ií]as?|tardes?|noches?))?|buen\s+d[ií]a|saludos|qu[eé]\s+tal)(?![a-z0-9áéíóúüñ])[\s,.!?:;~-]*/i;
+
+/**
+ * «Hola, ¿tienen marcadores?» → saludo «Hola» y la pregunta. Hasta tres
+ * saludos seguidos («hola buenas tardes»). `null` si no empieza saludando o
+ * si después del saludo no queda nada.
+ */
+export function splitLeadingGreeting(body: string): { greeting: string; rest: string } | null {
+  let rest = body;
+  let consumed = "";
+  for (let i = 0; i < 3; i += 1) {
+    const found = LEADING_GREETING.exec(rest);
+    if (!found || found[0].length === 0) break;
+    consumed += found[0];
+    rest = rest.slice(found[0].length);
+  }
+  rest = rest.trim();
+  return consumed && rest ? { greeting: consumed.trim(), rest } : null;
+}
+
 export function isWelcomeGreeting(body: string): boolean {
   if (isCjkGreeting(body)) return true;
   const words = comparableWords(body);
