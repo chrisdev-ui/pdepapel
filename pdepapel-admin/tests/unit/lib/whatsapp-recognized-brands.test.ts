@@ -12,7 +12,8 @@ describe("marcas reconocidas", () => {
   it("cuenta por el campo de marca y por la marca madre de una línea", () => {
     expect(isRecognizedBrand({ name: "Norma" })).toBe(true);
     expect(isRecognizedBrand({ name: "Flower Power", parent: { name: "Primavera" } })).toBe(true);
-    expect(isRecognizedBrand({ name: "Gipao" })).toBe(false);
+    expect(isRecognizedBrand({ name: "Gipao" })).toBe(true);
+    expect(isRecognizedBrand({ name: "Rosy Posy" })).toBe(false);
   });
 
   it.each([
@@ -20,6 +21,7 @@ describe("marcas reconocidas", () => {
     ["Marcador Sharpie fino negro", "Sharpie"],
     ["Set de colores triangulares Offi-Esco 12 colores", "Offi-Esco"],
     ["Lápiz Mirado No. 2", "Mirado"],
+    ["Cuaderno Gipao tapa dura", "Gipao"],
     ["Marcador doble punta TOMBOW", "Tombow"],
   ])("«%s» la nombra (%s)", (name, marca) => {
     expect(recognizedBrandInName(name)).toBe(marca);
@@ -42,8 +44,8 @@ describe("marcas reconocidas", () => {
     expect(isRecognizedBrand({ name: name.split(" ").pop()! })).toBe(false);
   });
 
-  it("las pendientes de Paula no cuentan todavía", () => {
-    for (const name of ["Gipao", "Rosy Posy", "Mycardcol", "Formas Futuro"]) {
+  it("las que Paula dejó fuera (calidad media) no cuentan", () => {
+    for (const name of ["Rosy Posy", "Mycardcol", "Formas Futuro"]) {
       expect(recognizedBrandSource({ name: `Producto ${name}`, brandRef: { name } })).toBeNull();
     }
   });

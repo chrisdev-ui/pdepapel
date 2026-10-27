@@ -209,13 +209,34 @@ describe("rango y piso", () => {
 });
 
 describe("sin palabra de producto", () => {
-  it("«algo barato»: todo el catálogo que hay, del más económico", async () => {
-    const { answer, reason } = await pedir("algo barato");
+  // Sin palabra de producto ya no se lista el catálogo: las 5 secciones más
+  // vendidas con existencias, con su precio más bajo; nunca empaques.
+  const MENU_BARATO = [
+    "Tengo cositas económicas en varias secciones 💛",
+    "Marcadores desde $2.000",
+    "Cosidos desde $6.000",
+    "Micropuntas desde $1.500",
+    "Agendas desde $7.000",
+    "Kits escolares desde $15.000",
+    "¿Qué estás buscando?",
+  ].join("\n");
+
+  it.each(["algo barato", "buenos y baratos", "qué tienen económico"])("«%s»: el menú de secciones, no el catálogo", async (body) => {
+    const { answer, reason } = await pedir(body);
     expect(reason).toBeNull();
-    expect(answer?.shownIds?.slice(0, 3)).toEqual([ids.micro, ids.micro2, ids.perm]);
-    const precios = answer?.shownPrices ?? [];
-    expect([...precios].sort((a, b) => a - b)).toEqual(precios);
-    expect(answer?.decision?.scope).toBe("all");
+    expect(answer?.text.replace(/\u00a0/g, " ")).toBe(MENU_BARATO);
+    expect(answer?.shownIds ?? []).toEqual([]);
+    expect(answer?.list).toBeUndefined();
+    expect(answer?.decision?.menu).toEqual(["Marcadores", "Cosidos", "Micropuntas", "Agendas", "Kits escolares"]);
+    expect(answer?.text).not.toContain("Empaques");
+  });
+
+  it("«cuál me recomiendas» sin decir de qué: las mismas secciones, sin precios", async () => {
+    const { answer } = await pedir("cuál me recomiendas");
+    expect(answer?.text).toBe(
+      ["Te ayudo a escoger 💛 ¿Qué estás buscando?", "Marcadores", "Cosidos", "Micropuntas", "Agendas", "Kits escolares"].join("\n"),
+    );
+    expect(answer?.text).not.toMatch(/\$/);
   });
 
   it("«tengo 20 mil para un regalo»: solo Kits y la categoría de regalar, hasta 20.000; nunca empaques", async () => {
@@ -272,7 +293,7 @@ describe("calidad y valor", () => {
     const { answer } = await pedir("cuadernos buenos de menos de 20 mil");
     expect(answer?.shownIds).toEqual([ids.cFeat, ids.cNorma, ids.cSold]);
     expect(answer?.shownIds).not.toContain(ids.cCaro);
-    expect(answer?.text).toContain("Primero te muestro los que te recomendamos, los de marcas reconocidas y los que más se llevan");
+    expect(answer?.text).toContain("Hasta $20.000, primero te muestro los que te recomendamos, los de marcas reconocidas y los que más se llevan");
   });
 
   it("solo con ventas entre los enseñados, el texto no dice «marcas reconocidas»", async () => {
@@ -296,5 +317,38 @@ describe("calidad y valor", () => {
     expect(answer?.decision?.total).toBe(12);
     expect(answer?.text).toContain(`…y 3 más`);
     expect(formatCOP(answer?.shownPrices?.[0] ?? 0)).toBe("$2.000");
+  });
+});
+
+describe("sin palabra de producto y sin resultados", () => {
+  it("«es para un regalo» sin kits en existencia: el menú para escoger, nunca «No encontré eso»", async () => {
+    const s = randomUUID().slice(0, 8);
+    const store = await testPrisma.store.create({ data: { name: `Menu ${s}`, userId: `test-user-menu-${s}` } });
+    try {
+      const kitsTipo = await testPrisma.type.create({ data: { name: "Kits", slug: `kits-${s}`, storeId: store.id } });
+      const cuadernosTipo = await testPrisma.type.create({ data: { name: "Cuadernos", slug: `cuadernos-${s}`, storeId: store.id } });
+      const kitsCat = await testPrisma.category.create({ data: { name: "Kits escolares", slug: `k-${s}`, storeId: store.id, typeId: kitsTipo.id } });
+      const cuadernos = await testPrisma.category.create({ data: { name: "Cuadernos", slug: `c-${s}`, storeId: store.id, typeId: cuadernosTipo.id } });
+      const design = await testPrisma.design.create({ data: { name: "Clásico", storeId: store.id } });
+      const color = await testPrisma.color.create({ data: { name: "Negro", value: `#m-${s}`.slice(0, 20), storeId: store.id } });
+      const size = await testPrisma.size.create({ data: { name: "U", value: `m-${s}`, storeId: store.id } });
+      const base = { acqPrice: 500, description: "<p>Prueba.</p>", storeId: store.id, colorId: color.id, sizeId: size.id, designId: design.id };
+      await testPrisma.product.create({ data: { ...base, name: "Kit agotado", price: 15000, stock: 0, slug: `menu-${s}-1`, sku: `MENU-${s}-1`, categoryId: kitsCat.id } });
+      await testPrisma.product.create({ data: { ...base, name: "Cuaderno rayado", price: 6000, stock: 4, soldCount: 3, slug: `menu-${s}-2`, sku: `MENU-${s}-2`, categoryId: cuadernos.id } });
+
+      resetCatalogTermCache();
+      const { answer, reason } = await answerProductQuestionDetailed(store.id, "es para un regalo");
+      expect(reason).toBe("zero_results");
+      expect(answer?.text).toBe(["Te ayudo a escoger 💛 ¿Qué estás buscando?", "Cuadernos"].join("\n"));
+      expect(answer?.text).not.toContain("No encontré");
+    } finally {
+      await testPrisma.product.deleteMany({ where: { storeId: store.id } });
+      await testPrisma.design.deleteMany({ where: { storeId: store.id } });
+      await testPrisma.color.deleteMany({ where: { storeId: store.id } });
+      await testPrisma.size.deleteMany({ where: { storeId: store.id } });
+      await testPrisma.category.deleteMany({ where: { storeId: store.id } });
+      await testPrisma.type.deleteMany({ where: { storeId: store.id } });
+      await testPrisma.store.delete({ where: { id: store.id } });
+    }
   });
 });

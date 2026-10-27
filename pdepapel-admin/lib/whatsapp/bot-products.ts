@@ -1,5 +1,6 @@
 import { availableStock } from "@/lib/available-stock";
 import { availableStockWhere } from "@/lib/available-stock-where";
+import { loadMenuSections } from "@/lib/whatsapp/section-menu";
 import { logModelUsage } from "@/lib/ai-usage";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -586,8 +587,9 @@ export interface PriceText {
  */
 export function priceTextFor(price: PriceIntent, fallback?: "quality.none" | "value.cheap"): PriceText {
   if (fallback === "quality.none") return { mode: "quality.none" };
-  if (price.sort === "quality") return { mode: "quality" };
-  if (price.sort === "value" && fallback !== "value.cheap") return { mode: "value" };
+  const tope = price.kind === "ceiling" && price.maxPrice !== null ? { tope: price.maxPrice } : {};
+  if (price.sort === "quality") return { mode: "quality", ...tope };
+  if (price.sort === "value" && fallback !== "value.cheap") return { mode: "value", ...tope };
   switch (price.kind) {
     case "ceiling":
       return price.maxPrice !== null ? { mode: "ceiling", tope: price.maxPrice } : { mode: "cheap" };
@@ -1263,6 +1265,25 @@ export const PRODUCT_TEMPLATES = {
     `Entre ${partes}, estos son los más económicos 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
   "search.quality.none": (lineas: string) =>
     `No tengo cómo decirte cuál es mejor 💛 Pero mira lo que tengo:\n${lineas}\nDime cuál te interesa y te cuento cómo es.`,
+  // Calidad o valor con tope («cuadernos buenos de menos de 20 mil»): el tope se dice.
+  "search.quality.ceiling.few": (tope: string, partes: string, lineas: string) =>
+    `Hasta ${tope}, primero te muestro ${partes} 💛\n${lineas}\n¿Cuál te interesa?`,
+  "search.quality.ceiling.many": (tope: string, partes: string, lineas: string, resto: number) =>
+    `Hasta ${tope}, primero te muestro ${partes} 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  "search.value.ceiling.few": (tope: string, partes: string, lineas: string) =>
+    `Hasta ${tope}, entre ${partes}, estos son los más económicos 💛\n${lineas}\n¿Cuál te interesa?`,
+  "search.value.ceiling.many": (tope: string, partes: string, lineas: string, resto: number) =>
+    `Hasta ${tope}, entre ${partes}, estos son los más económicos 💛\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
+  /**
+   * Sin palabra de producto («algo barato», «buenos y baratos», «qué tienen
+   * económico») no se lista el catálogo entero: lo más barato de todo eran
+   * sobres de manila. Se ofrecen las secciones que más se venden.
+   */
+  "search.sections.cheap": (lineas: string) =>
+    `Tengo cositas económicas en varias secciones 💛\n${lineas}\n¿Qué estás buscando?`,
+  "search.sections.line": (seccion: string, precio: string) => `${seccion} desde ${precio}`,
+  // Pidió calidad sin decir de qué: las mismas secciones, sin precios.
+  "search.sections.choose": (lineas: string) => `Te ayudo a escoger 💛 ¿Qué estás buscando?\n${lineas}`,
   /**
    * Cero resultados la primera vez: no se pasa a Paula de una. Se manda UN
    * mensaje con el enlace dentro (nunca otro aparte: ya hubo un incidente de
@@ -1530,8 +1551,31 @@ export function previewProductTemplates(): { label: string; text: string }[] {
       text: renderPriceSearch({ ...baratos, total: 3, hasMore: false }, { mode: "quality.none" }),
     },
     {
-      label: "Pide algo sin decir qué («algo barato») y no hay nada",
-      text: renderNoResults("eso", null, `${STORE_ORIGIN}/tienda`),
+      label: "Pide calidad o bueno y barato con tope («cuadernos buenos de menos de 20 mil»)",
+      text: [
+        renderPriceSearch({ ...conSenales(["brand"], ["sales"], ["sales"]), total: 3, hasMore: false }, { mode: "quality", tope: 20000 }),
+        renderPriceSearch(conSenales(["brand"], ["sales"], ["sales"]), { mode: "value", tope: 20000 }),
+      ].join("\n\n"),
+    },
+    {
+      label: "Pide algo barato sin decir qué («algo barato», «buenos y baratos»): las secciones que más se venden",
+      text: PRODUCT_TEMPLATES["search.sections.cheap"](
+        [
+          ["Cuadernos", 1700],
+          ["Stickers", 1500],
+          ["Marcadores", 2000],
+          ["Agendas", 10000],
+          ["Kits para regalar o regalarse", 9000],
+        ]
+          .map(([seccion, precio]) => PRODUCT_TEMPLATES["search.sections.line"](String(seccion), formatCOP(Number(precio))))
+          .join("\n"),
+      ),
+    },
+    {
+      label: "Pide calidad sin decir de qué («cuál me recomiendas»): las mismas secciones, sin precios",
+      text: PRODUCT_TEMPLATES["search.sections.choose"](
+        ["Cuadernos", "Stickers", "Marcadores", "Agendas", "Kits para regalar o regalarse"].join("\n"),
+      ),
     },
     {
       label: "Dice un tope y no hay nada por debajo: lo más económico que sí hay",
@@ -1790,10 +1834,22 @@ export function renderPriceSearch(result: SearchResult<ProductMatch>, pt: PriceT
       return muchos ? t["search.around.many"](formatCOP(pt.cerca ?? 0), lineas, resto) : t["search.few"](lineas);
     case "quality": {
       const partes = qualityParts(result.ranking?.slice(0, Math.min(QUALITY_CLAIM_ROWS, result.matches.length)));
+      if (pt.tope !== undefined) {
+        const tope = formatCOP(pt.tope);
+        return muchos
+          ? t["search.quality.ceiling.many"](tope, partes, lineas, resto)
+          : t["search.quality.ceiling.few"](tope, partes, lineas);
+      }
       return muchos ? t["search.quality.many"](partes, lineas, resto) : t["search.quality.few"](partes, lineas);
     }
     case "value": {
       const partes = qualityParts(result.ranking?.slice(0, Math.min(QUALITY_CLAIM_ROWS, result.matches.length)));
+      if (pt.tope !== undefined) {
+        const tope = formatCOP(pt.tope);
+        return muchos
+          ? t["search.value.ceiling.many"](tope, partes, lineas, resto)
+          : t["search.value.ceiling.few"](tope, partes, lineas);
+      }
       return muchos ? t["search.value.many"](partes, lineas, resto) : t["search.value.few"](partes, lineas);
     }
     case "quality.none":
@@ -2087,6 +2143,8 @@ export interface ProductDecision {
   ranking?: RankingEntry[];
   /** Sin palabra de producto: «all» todo el catálogo, «gift» lo de regalo. */
   scope?: "all" | "gift";
+  /** Sin palabra de producto: las secciones que se ofrecieron en vez de una lista. */
+  menu?: string[];
   /** «catalog»: se buscó sin preguntarle al modelo (todas las palabras eran del catálogo). */
   source?: "catalog";
 }
@@ -2284,6 +2342,13 @@ export async function answerProductQuestionDetailed(
     ...(sinProducto ? { scope: regalo ? ("gift" as const) : ("all" as const) } : {}),
   };
 
+  // «algo barato», «buenos y baratos», «qué tienen económico»: sin palabra de
+  // producto (y sin regalo) se ofrecen las secciones, no el catálogo entero.
+  if (sinProducto && !parsed.gift && price && (price.kind === "cheapest" || price.kind === null)) {
+    const menu = await sectionMenuAnswer(storeId, intent, price, decision);
+    if (menu) return { answer: menu, reason: null };
+  }
+
   const resuelto = await resolverSegunIntencion(storeId, intent, buscar, price, extra);
   if (!resuelto) return { answer: null, reason: null, detail: "sin_descripcion_util" };
   const { value, text, rows, listBody } = resuelto;
@@ -2376,6 +2441,10 @@ export async function answerProductQuestionDetailed(
       reason: "zero_results",
     };
   }
+  if (sinProducto) {
+    const menu = await sectionMenuAnswer(storeId, intent, price, decision);
+    if (menu) return { answer: { ...menu, noMatchReason: "zero_results" }, reason: "zero_results" };
+  }
   const categoria = sinProducto ? null : closestCategory(index, searchTokens(soloTipo?.tipo ?? consulta));
   return {
     answer: {
@@ -2387,6 +2456,31 @@ export async function answerProductQuestionDetailed(
       decision: { ...decision, outcome: "unsure", reason: "zero_results" },
     },
     reason: "zero_results",
+  };
+}
+
+/**
+ * El menú de secciones (`lib/whatsapp/section-menu.ts`). Con precio dice
+ * «desde $X»; si pidió calidad sin precio, o no habló de precio, solo los
+ * nombres: no se promete nada económico que no pidió.
+ */
+async function sectionMenuAnswer(
+  storeId: string,
+  intent: ProductIntent,
+  price: PriceIntent | null,
+  decision: ProductDecision,
+): Promise<ProductAnswer | null> {
+  const secciones = await loadMenuSections(storeId, (rows) => effectiveUnitPrices(storeId, rows));
+  if (secciones.length === 0) return null;
+  const t = PRODUCT_TEMPLATES;
+  const conPrecio = price !== null && price.sort !== "quality";
+  const text = conPrecio
+    ? t["search.sections.cheap"](secciones.map((s) => t["search.sections.line"](s.name, formatCOP(s.from))).join("\n"))
+    : t["search.sections.choose"](secciones.map((s) => s.name).join("\n"));
+  return {
+    intent,
+    text,
+    decision: { ...decision, outcome: "match", total: secciones.length, menu: secciones.map((s) => s.name) },
   };
 }
 

@@ -9,8 +9,9 @@ import prismadb from "@/lib/prismadb";
  * marca (Brand con padre) cuenta si su marca madre está en la lista.
  *
  * Las licencias de personajes (Stitch, Sanrio, Hello Kitty, Kuromi, Disney,
- * Pokémon) NO son señal de calidad y no van aquí. Gipao, Rosy Posy, Mycardcol
- * y Formas Futuro quedan fuera hasta que Paula decida.
+ * Pokémon) NO son señal de calidad y no van aquí. Gipao entró por decisión de
+ * Paula (27 de octubre); Rosy Posy, Mycardcol y Formas Futuro quedan fuera
+ * (calidad media, también decisión suya).
  *
  * Solo 70 de 891 productos tenían la marca puesta ese día, así que también se
  * reconoce por el NOMBRE del producto («Cuaderno Norma …»), al consultar y sin
@@ -34,6 +35,7 @@ export const RECOGNIZED_BRANDS: readonly string[] = [
   "Tombow",
   "Mirado",
   "Studmark",
+  "Gipao",
 ];
 
 /** Minúsculas, sin tildes y con todo lo que no es letra o número como espacio. */

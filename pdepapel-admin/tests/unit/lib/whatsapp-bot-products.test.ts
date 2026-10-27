@@ -2534,3 +2534,35 @@ describe("los textos por modo: cada uno solo cuando lo que dice es verdad", () =
     expect(intentWithoutModel("tengo 20 mil para un regalo", p("tengo 20 mil para un regalo"))).toBe("product.search");
   });
 });
+
+describe("calidad y valor con tope", () => {
+  const filas = {
+    matches: [
+      { name: "A", price: 10000 },
+      { name: "B", price: 8000 },
+      { name: "C", price: 12900 },
+    ],
+    total: 3,
+    hasMore: false,
+    ranking: [
+      { name: "A", signal: "brand" as const, signals: ["brand", "sales"] as const },
+      { name: "B", signal: "brand" as const, signals: ["brand"] as const },
+      { name: "C", signal: "sales" as const, signals: ["sales"] as const },
+    ],
+  };
+
+  it("el tope va delante: «Hasta $20.000, primero te muestro …»", () => {
+    const calidad = renderPriceSearch(filas as never, { mode: "quality", tope: 20000 });
+    expect(calidad.split("\n")[0].replace(/ /g, " ")).toBe(
+      "Hasta $20.000, primero te muestro los de marcas reconocidas y los que más se llevan 💛",
+    );
+    const valor = renderPriceSearch(filas as never, { mode: "value", tope: 20000 });
+    expect(valor.split("\n")[0].replace(/ /g, " ")).toBe(
+      "Hasta $20.000, entre los de marcas reconocidas y los que más se llevan, estos son los más económicos 💛",
+    );
+  });
+
+  it("sin tope no cambia", () => {
+    expect(renderPriceSearch(filas as never, { mode: "quality" }).startsWith("Primero te muestro")).toBe(true);
+  });
+});
